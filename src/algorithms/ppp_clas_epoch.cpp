@@ -413,6 +413,21 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         if (allow_hybrid_fallback) {
             return fallback_to_standard("insufficient_osr");
         }
+        // Dynamics mode: prepareEpochState already ran predictFilterState,
+        // which propagated pos += vel*dt and inflated the covariance for
+        // this interval, so the processed-time bookkeeping MUST advance
+        // before this early return. Otherwise the next epoch's dt spans
+        // this interval AGAIN and the same coast is re-applied every epoch:
+        // across a low-satellite stretch dt grows unboundedly (observed
+        // 2.2 s -> 15+ s at 5 Hz approaching the tokyo_run2 bridge outage)
+        // and the repeated vel*dt over-propagation drags the float
+        // kilometers away (the 4.5 km post-bridge blunder). White-noise
+        // mode keeps historical behavior (its per-epoch SPP re-anchor of
+        // position and clock bounds the damage of a stale dt).
+        if (ppp_config_.use_dynamics_model) {
+            has_last_processed_time_ = true;
+            last_processed_time_ = obs.time;
+        }
         solution = seed;
         return solution;
     }
@@ -452,6 +467,12 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     if (!epoch_update.updated) {
         if (allow_hybrid_fallback) {
             return fallback_to_standard("measurement_update");
+        }
+        // Same dt-bookkeeping requirement as the insufficient_osr early
+        // return above: the predict for this interval already happened.
+        if (ppp_config_.use_dynamics_model) {
+            has_last_processed_time_ = true;
+            last_processed_time_ = obs.time;
         }
         solution = seed;
         return solution;

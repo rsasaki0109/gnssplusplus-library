@@ -1076,6 +1076,18 @@ ClasSlipDetectionStats detectClasCycleSlips(
         threshold_scale;
     const double mw_threshold_cycles = kMinimumMwSlipThresholdCycles * threshold_scale;
     const bool outage_gap = dt_seconds > kClasOutageGapResetS;
+    // Dynamics mode: a receiver-wide data outage (bridge/tunnel) almost
+    // certainly broke carrier lock on every satellite, and the GF/MW
+    // detectors cannot see it (their history is cleared by the outage
+    // branch below, so the first epoch back has nothing to difference
+    // against). RTKLIB handles this via the per-satellite outage counter
+    // (udbias: outage > maxout resets the bias); mirror that by treating
+    // the gap itself as a slip on every satellite. White-noise mode keeps
+    // its historical behavior (position/clock are re-anchored to SPP each
+    // epoch there, which bounds the damage of a stale ambiguity until the
+    // residual gates catch it).
+    const bool outage_resets_ambiguity =
+        outage_gap && config.use_dynamics_model && !config.low_dynamics_mode;
 
     for (const auto& osr : osr_corrections) {
         if (!osr.valid || osr.num_frequencies < 2) {
@@ -1158,7 +1170,7 @@ ClasSlipDetectionStats detectClasCycleSlips(
             ambiguity.has_last_melbourne_wubbena = true;
         }
 
-        if (!lli_slip && !gf_slip && !mw_slip) {
+        if (!lli_slip && !gf_slip && !mw_slip && !outage_resets_ambiguity) {
             continue;
         }
 
@@ -1210,6 +1222,12 @@ ClasSlipDetectionStats detectClasCycleSlips(
                     reason += "+";
                 }
                 reason += "mw";
+            }
+            if (outage_resets_ambiguity) {
+                if (!reason.empty()) {
+                    reason += "+";
+                }
+                reason += "outage";
             }
             std::cerr << "[CLAS-SLIP] " << osr.satellite.toString()
                       << " tow=" << obs.time.tow
@@ -1350,16 +1368,25 @@ void predictFilterState(
                 velocity_q;
         }
     }
-    // In dynamics mode the clock is not reseeded from SPP each epoch (see
-    // the `!use_dynamic_prediction` guards above/below), so clas_clock_variance
-    // -- an initialization-style "unknown" variance meant to be immediately
-    // overwritten by a hard reseed -- is the wrong quantity to inject as an
-    // ongoing per-epoch process noise: it is many orders of magnitude too
-    // large and poisons the ambiguity float covariance during measurement
-    // updates. Use the dedicated, appropriately-sized dynamics clock
-    // process noise instead.
-    const double clock_process_noise = use_dynamic_prediction
-        ? config.clas_dynamic_clock_process_noise
+    // Receiver clock temporal update. Both modes treat the clock as WHITE
+    // NOISE re-initialized from the SPP solution each epoch, mirroring
+    // RTKLIB/MRTKLIB PPP udclk_ppp (mrtk_ppp.c:822: initx(CLIGHT*dtr,
+    // VAR_CLK) every epoch; VAR_CLK = 60^2 m^2). A random-walk clock model
+    // is NOT viable for consumer receivers: this class of hardware drifts
+    // ~150 m/s (measured -30.5 m per 0.2 s epoch on the PPC tokyo_run2
+    // rover), so any Q small enough to keep the ambiguity float covariance
+    // well-conditioned lags the true clock, and a multi-second data outage
+    // (bridge) accumulates hundreds of meters of clock error against a
+    // few-meter sigma -- a guaranteed rejection spiral.
+    //
+    // When the SPP seed is unavailable (deep urban canyon, <4 usable
+    // satellites), the dynamics filter coasts the clock state and must
+    // inflate its variance by the drift accumulated over dt: the drift is
+    // quasi-deterministic, so the coast variance grows with dt^2, not dt.
+    const bool clock_coasting = use_dynamic_prediction && !seed_valid;
+    const double clock_coast_drift_m = config.clas_dynamic_clock_coast_drift_mps * dt;
+    const double clock_process_noise = clock_coasting
+        ? clock_coast_drift_m * clock_coast_drift_m
         : config.clas_clock_variance;
     Q(filter_state.clock_index, filter_state.clock_index) = clock_process_noise;
     Q(filter_state.glo_clock_index, filter_state.glo_clock_index) = clock_process_noise;
@@ -1384,7 +1411,12 @@ void predictFilterState(
         }
     }
     filter_state.covariance = F * filter_state.covariance * F.transpose() + Q;
-    if (seed_valid && !use_dynamic_prediction) {
+    // White-noise clock: re-initialize the clock STATE from the SPP
+    // solution every epoch in both position models (RTKLIB PPP udclk_ppp
+    // semantics -- dynamics in udpos_ppp only ever applies to pos/vel/acc,
+    // never to the clock). In dynamics mode the measurement update then
+    // refines the clock within the reseed variance set below.
+    if (seed_valid) {
         const double gps_clock_before = filter_state.state(filter_state.clock_index);
         filter_state.state(filter_state.clock_index) = seed_receiver_clock_bias_m;
         filter_state.state(filter_state.glo_clock_index) = seed_receiver_clock_bias_m;
@@ -1404,19 +1436,20 @@ void predictFilterState(
     // zeroing the *carried-forward* cross-covariance each predict step only
     // discards stale, epoch-old correlation.
     //
-    // The diagonal (clock's own variance) is a different story. In
-    // white-noise mode the clock state is hard-reseeded from SPP every
-    // epoch (see the `!use_dynamic_prediction` guard above), so treating its
-    // post-reseed variance as exactly 0 is correct: it was just overwritten
-    // with a trusted external value. In dynamics mode the clock is NOT
-    // reseeded, so it can only be estimated through the Kalman measurement
-    // update. Because H has a direct 1.0 entry for the clock column, the
-    // per-state gain K_ci = P(ci,ci)*H(ci)/S only needs P(ci,ci) > 0 (cross
-    // terms are not required for this). Zeroing the diagonal here as well
-    // would permanently drive K_ci to zero, freezing the clock at its
-    // initial value forever while the true receiver clock drifts, forcing
-    // all pseudorange/phase residuals to absorb a growing common-mode bias
-    // that the filter then wrongly attributes to position/velocity.
+    // The diagonal (clock's own variance) differs by mode:
+    //  - White-noise mode: the clock was just hard-reseeded from SPP, and
+    //    position is also re-anchored to SPP each epoch, so the clock is
+    //    treated as exactly known (variance 0; measurement update leaves it
+    //    at the SPP value).
+    //  - Dynamics mode with a valid seed: RTKLIB VAR_CLK semantics -- the
+    //    reseeded SPP clock is a prior with ~60 m sigma and the measurement
+    //    update refines it each epoch. The variance must NOT be zeroed
+    //    (that would freeze the clock at the SPP value; worse, on epochs
+    //    where the reseed is skipped it would freeze the clock entirely,
+    //    which was the original divergence root cause) and must not be left
+    //    at clas_clock_variance=1e8 either (destroys LAMBDA conditioning).
+    //  - Dynamics mode coasting (no SPP seed): keep the propagated
+    //    variance, which already includes the dt^2 drift inflation from Q.
     if (config.clas_decouple_clock_position) {
         const int ci = filter_state.clock_index;
         const int gi = filter_state.glo_clock_index;
@@ -1432,6 +1465,9 @@ void predictFilterState(
         if (!use_dynamic_prediction) {
             filter_state.covariance(ci, ci) = 0;
             filter_state.covariance(gi, gi) = 0;
+        } else if (seed_valid) {
+            filter_state.covariance(ci, ci) = config.clas_dynamic_clock_reseed_variance;
+            filter_state.covariance(gi, gi) = config.clas_dynamic_clock_reseed_variance;
         }
     }
 }

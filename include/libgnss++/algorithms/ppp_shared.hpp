@@ -171,18 +171,20 @@ struct PPPConfig {
     double clas_trop_process_noise = 1e-6;        // Small: CLAS grid trop is stable
     double clas_initial_position_variance = 100.0; // Position covariance at filter init
     double clas_clock_variance = 1e8;             // Clock state variance (reset each epoch)
-    // Dynamics-mode clock random-walk process noise (m^2, added to Q each
-    // predict step, NOT scaled by dt -- mirrors clas_clock_variance's
-    // convention). clas_clock_variance itself is an INITIALIZATION-style
-    // "unknown" variance intended to be immediately superseded by a hard
-    // SPP reseed (white-noise mode); it is far too large (1e8) to reuse as
-    // an ongoing per-epoch process noise once the clock is actually
-    // estimated through the Kalman measurement update (dynamics mode, no
-    // reseed) -- doing so poisons the ambiguity float covariance every
-    // epoch (all states share the same measurement rows as the clock) and
-    // makes LAMBDA/AR search combinatorially slow. This value should be
-    // sized to the expected epoch-to-epoch receiver clock drift instead.
-    double clas_dynamic_clock_process_noise = 25.0;
+    // Dynamics-mode receiver clock model (white-noise clock, RTKLIB PPP
+    // udclk_ppp semantics: state reseeded from SPP every epoch, then the
+    // measurement update refines it within this prior variance). 3600 m^2
+    // matches RTKLIB VAR_CLK = SQR(60.0). Do not raise toward
+    // clas_clock_variance (1e8): that destroys the LAMBDA float-covariance
+    // conditioning; do not shrink toward 0: that freezes the clock at the
+    // (meter-level noisy) SPP value and biases all phase residuals.
+    double clas_dynamic_clock_reseed_variance = 3600.0;
+    // Clock coast drift bound (m/s) used only in dynamics mode on epochs
+    // where no SPP seed is available (deep canyon): the clock variance is
+    // inflated by (drift * dt)^2 because consumer receiver clock drift is
+    // quasi-deterministic (grows with dt^2, not dt). Measured drift on the
+    // PPC tokyo_run2 rover is ~152 m/s; 200 gives headroom.
+    double clas_dynamic_clock_coast_drift_mps = 200.0;
     double clas_iono_prior_variance = 0.25;       // Ionosphere pseudo-observation variance
     double clas_ambiguity_reinit_threshold = 3000.0; // Re-init ambiguity when cov exceeds this
     double clas_anchor_sigma = 5.0;               // SPP anchor constraint sigma (m)
