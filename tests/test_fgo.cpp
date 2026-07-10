@@ -1384,3 +1384,148 @@ TEST(FGOTest, CmcArcResetAlsoResetsBaseline) {
 
     EXPECT_EQ(problem.diagnostics.code_minus_carrier_level_exclusions, 0u);
 }
+
+// --- Elevation-dependent DD sigma ("varerr", FGOConfig::use_elevation_
+// dependent_sigma) -- port of the inuex35 reference's preprocess/prefit.py
+// varerr_dd_sigma / buildfactor/factors.py pair_sigma. See the knob's doc
+// comment in fgo.hpp for the full formula and dt_s/undifferenced-PR
+// decisions.
+
+TEST(FGOTest, ElevationDependentSigmaDefaultOffMatchesFlatFormula) {
+    const NavigationData nav = makeSyntheticGpsNavigation(2);
+    const Vector3d rover_position(1113194.0, -4841695.0, 3985350.0);
+    const Vector3d base_position = rover_position + Vector3d(-320.0, 180.0, 45.0);
+
+    const std::vector<std::array<double, 2>> bias = {{0.0, 0.0}, {0.0, 0.0}};
+    const auto rover_epochs = makeCmcObservationEpochs(nav, rover_position, bias, 0.5);
+    const auto base_epochs = makeCmcObservationEpochs(nav, base_position, bias, 0.5);
+
+    FGOProcessor::FGOConfig config = makeCmcTestConfig();
+    config.use_code_minus_carrier_screening = false;
+    ASSERT_FALSE(config.use_elevation_dependent_sigma);  // default OFF
+
+    FGOProcessor processor(config);
+    const auto problem = processor.buildDoubleDifferenceProblem(
+        rover_epochs, base_epochs, nav, base_position);
+
+    // With the knob off, DD PR/CP sigma must be bit-for-bit the pre-existing
+    // flat/elevation-power formula: band_scale(=1, single-freq GPS L1CA) *
+    // sigma_m / sqrt(max(0.1, sin(own elevation))).
+    ASSERT_FALSE(problem.double_difference_pseudorange_factors.empty());
+    ASSERT_FALSE(problem.double_difference_carrier_factors.empty());
+    for (const auto& f : problem.double_difference_pseudorange_factors) {
+        const double sin_el = std::max(0.1, std::sin(f.elevation_rad));
+        const double expected =
+            std::max(1e-3, config.double_difference_pseudorange_sigma_m) /
+            std::sqrt(sin_el);
+        EXPECT_DOUBLE_EQ(f.sigma_m, expected) << "epoch " << f.epoch_index;
+    }
+    for (const auto& f : problem.double_difference_carrier_factors) {
+        const double sin_el = std::max(0.1, std::sin(f.elevation_rad));
+        const double expected =
+            std::max(1e-4, config.double_difference_carrier_sigma_m) /
+            std::sqrt(sin_el);
+        EXPECT_DOUBLE_EQ(f.sigma_m, expected) << "epoch " << f.epoch_index;
+    }
+}
+
+TEST(FGOTest, ElevationDependentSigmaMatchesPortedVarerrFormula) {
+    const NavigationData nav = makeSyntheticGpsNavigation(2);
+    const Vector3d rover_position(1113194.0, -4841695.0, 3985350.0);
+    const Vector3d base_position = rover_position + Vector3d(-320.0, 180.0, 45.0);
+
+    // dt_s = 0.5 s (deliberately different from the 0.2 s epoch-0 fallback)
+    // so epoch 1's clock term proves the ACTUAL measured rover epoch spacing
+    // is used, not just the fallback default.
+    constexpr double kDtS = 0.5;
+    const std::vector<std::array<double, 2>> bias = {{0.0, 0.0}, {0.0, 0.0}};
+    const auto rover_epochs = makeCmcObservationEpochs(nav, rover_position, bias, kDtS);
+    const auto base_epochs = makeCmcObservationEpochs(nav, base_position, bias, kDtS);
+
+    FGOProcessor::FGOConfig config = makeCmcTestConfig();
+    config.use_code_minus_carrier_screening = false;
+    config.use_elevation_dependent_sigma = true;
+    // Reference defaults (config.py): these ran DEFAULT-ON in every
+    // reference benchmark.
+    config.elevation_sigma_err_a_m = 0.001;
+    config.elevation_sigma_err_b_m = 0.001;
+    config.elevation_sigma_pseudorange_ratio = 100.0;
+    config.elevation_sigma_clock_stability = 5e-12;
+
+    FGOProcessor processor(config);
+    const auto problem = processor.buildDoubleDifferenceProblem(
+        rover_epochs, base_epochs, nav, base_position);
+
+    ASSERT_FALSE(problem.double_difference_pseudorange_factors.empty());
+    ASSERT_FALSE(problem.double_difference_carrier_factors.empty());
+
+    const double el_min_rad = M_PI / 180.0 * std::max(1.0, config.min_elevation_deg);
+    constexpr double kSpeedOfLightMps = 299792458.0;
+
+    // Independent oracle re-implementing the exact ported formula (fgo.hpp's
+    // use_elevation_dependent_sigma doc comment / varerrDdSigma in fgo.cpp),
+    // so this test would catch a broken port even if it coincidentally
+    // matched at one particular elevation.
+    auto expectedSigma = [&](bool is_pseudorange, double el_pair_rad, double epoch_dt_s) {
+        const double fact = is_pseudorange ? config.elevation_sigma_pseudorange_ratio : 1.0;
+        const double a = fact * config.elevation_sigma_err_a_m;
+        const double b = fact * config.elevation_sigma_err_b_m;
+        const double d = kSpeedOfLightMps * config.elevation_sigma_clock_stability * epoch_dt_s;
+        const double sinel = std::max(std::sin(el_pair_rad), 0.05);
+        const double var_sd = 2.0 * (a * a + b * b / (sinel * sinel)) + d * d;
+        return std::sqrt(2.0 * var_sd);
+    };
+
+    auto findReferenceElevationRad = [&](std::size_t epoch_index,
+                                         const SatelliteId& reference_satellite,
+                                         SignalType signal) {
+        for (const auto& reference_observation :
+             problem.double_difference_reference_observations) {
+            if (reference_observation.epoch_index == epoch_index &&
+                reference_observation.satellite == reference_satellite &&
+                reference_observation.signal == signal) {
+                return reference_observation.elevation_rad;
+            }
+        }
+        ADD_FAILURE() << "no matching reference observation for epoch "
+                      << epoch_index;
+        return 0.0;
+    };
+
+    // Epoch 0 has no preceding epoch, so the port's epoch_dt_s is still at
+    // its initial 0.2 s default (see the fgo.hpp doc comment); epoch 1's
+    // measured spacing is exactly kDtS.
+    for (const auto& f : problem.double_difference_pseudorange_factors) {
+        const double epoch_dt_s = (f.epoch_index == 0) ? 0.2 : kDtS;
+        const double reference_el_rad = findReferenceElevationRad(
+            f.epoch_index, f.reference_satellite, f.signal);
+        const double el_pair_rad =
+            std::max(std::min(reference_el_rad, f.elevation_rad), el_min_rad);
+        const double expected = expectedSigma(/*is_pseudorange=*/true, el_pair_rad, epoch_dt_s);
+        EXPECT_NEAR(f.sigma_m, expected, 1e-9 * std::max(1.0, expected))
+            << "PR epoch " << f.epoch_index;
+    }
+    double pr_sigma_at_epoch0 = 0.0;
+    double cp_sigma_at_epoch0 = 0.0;
+    for (const auto& f : problem.double_difference_carrier_factors) {
+        const double epoch_dt_s = (f.epoch_index == 0) ? 0.2 : kDtS;
+        const double reference_el_rad = findReferenceElevationRad(
+            f.epoch_index, f.reference_satellite, f.signal);
+        const double el_pair_rad =
+            std::max(std::min(reference_el_rad, f.elevation_rad), el_min_rad);
+        const double expected = expectedSigma(/*is_pseudorange=*/false, el_pair_rad, epoch_dt_s);
+        EXPECT_NEAR(f.sigma_m, expected, 1e-9 * std::max(1.0, expected))
+            << "CP epoch " << f.epoch_index;
+        if (f.epoch_index == 0) cp_sigma_at_epoch0 = f.sigma_m;
+    }
+    for (const auto& f : problem.double_difference_pseudorange_factors) {
+        if (f.epoch_index == 0) pr_sigma_at_epoch0 = f.sigma_m;
+    }
+    // PR is roughly eratio_pr (100x) the CP sigma at the same pair-elevation
+    // -- not exactly 100x, because the additive clock term d^2 does NOT
+    // scale by eratio_pr in the reference formula (see fgo.hpp's doc
+    // comment); at these defaults d^2 is a small correction, so the ratio is
+    // close to but not exactly 100.
+    ASSERT_GT(cp_sigma_at_epoch0, 0.0);
+    EXPECT_NEAR(pr_sigma_at_epoch0 / cp_sigma_at_epoch0, 100.0, 1.0);
+}

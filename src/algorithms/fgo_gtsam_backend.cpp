@@ -794,14 +794,35 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
     // Deviation (see fgo.hpp): substitute for the reference's unported
     // CP-vs-PR innovation-consistency reject counter (rejc_cp_pr). Persistent
     // per-(satellite, signal) count of THIS backend's own FDE carrier
-    // rejections; never reset (no analogue of the reference's unported
-    // cp_pr_rejc_max wipe). Structurally empty/0 whenever use_fde is off.
-    std::map<std::pair<SatelliteId, SignalType>, int> sb_fde_cp_reject_count;
+    // rejections.
+    //
+    // CLAMPED-variant deviation (fgo.hpp sat_badness_cppr_decay): unlike the
+    // faithful port (which never reset this and let it grow forever), this
+    // is now a decayed float -- cppr[s,sig] = decay*prev + this_epoch_rejects
+    // -- applied once per epoch by runFde() below (decay=1.0 reproduces the
+    // old ever-growing-counter behaviour exactly). Structurally empty/0
+    // whenever use_fde is off.
+    std::map<std::pair<SatelliteId, SignalType>, double> sb_fde_cp_reject_count;
+
+    // CLAMPED-variant helper (fgo.hpp sat_badness_residual_clamp_m): caps a
+    // per-satellite post-fit DDPR residual before it feeds any badness term.
+    // Applied only at badness's OWN reads/snapshots of per_sat_res (see the
+    // per-epoch state-update block below) -- never to the shared per_sat_res
+    // map itself, which use_epoch_quality_gates/use_cp_hold_recovery also
+    // consume raw and which must stay numerically untouched by this knob.
+    // 0 = no clamp = faithful (returns r unchanged).
+    auto sbClampResidual = [&](double r) -> double {
+        return config.sat_badness_residual_clamp_m > 0.0
+                   ? std::min(r, config.sat_badness_residual_clamp_m)
+                   : r;
+    };
 
     // Continuous per-(reference, target, signal) badness score (0 when the
     // master switch is off). `ref_sat` non-null adds the directional-pair
     // term (only when sat_badness_alpha_recent_pair > 0 -- see fgo.hpp
-    // deviation 5). Mirrors SatQualityState.sat_badness() term-for-term.
+    // deviation 5). Mirrors SatQualityState.sat_badness() term-for-term, then
+    // (CLAMPED-variant deviation, fgo.hpp sat_badness_score_cap) caps the
+    // total before returning it -- 0 = no cap = faithful.
     auto satBadness = [&](SatelliteId sat_id, SignalType freq,
                           const SatelliteId* ref_sat) -> double {
         if (!config.use_sat_badness_downweight) return 0.0;
@@ -831,8 +852,8 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
         }
         {
             const auto it = sb_fde_cp_reject_count.find(std::make_pair(sat_id, freq));
-            const int cppr = it != sb_fde_cp_reject_count.end() ? it->second : 0;
-            if (cppr > 0) score += alpha_cppr * (static_cast<double>(cppr) / cppr_thr);
+            const double cppr = it != sb_fde_cp_reject_count.end() ? it->second : 0.0;
+            if (cppr > 0.0) score += alpha_cppr * (cppr / cppr_thr);
         }
         {
             const auto it = sb_recent_cppr.find(sat_id);
@@ -878,7 +899,11 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
             const double penalty = std::max(0.0, std::min(1.0, (snr_ref_dbhz - snr) / snr_span_db));
             score += alpha_snr * penalty;
         }
-        return std::max(0.0, score);
+        score = std::max(0.0, score);
+        if (config.sat_badness_score_cap > 0.0) {
+            score = std::min(score, config.sat_badness_score_cap);
+        }
+        return score;
     };
 
     // --- CP-hold / sanity FSM state (use_cp_hold_recovery) ---
@@ -1045,6 +1070,26 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
         const bool iterative = max_iter > 1;
         std::size_t total_rejected = 0;
 
+        // CLAMPED-variant deviation (fgo.hpp sat_badness_cppr_decay): this
+        // call's rejects, by (satellite, signal), accumulated across every
+        // FDE round below and folded into sb_fde_cp_reject_count's decay
+        // exactly once (at applyCpprDecay()'s call sites, one per return
+        // path) before this lambda returns.
+        std::map<std::pair<SatelliteId, SignalType>, int> sb_cppr_delta_this_call;
+        auto applyCpprDecay = [&]() {
+            const double decay = std::min(1.0, std::max(0.0, config.sat_badness_cppr_decay));
+            std::set<std::pair<SatelliteId, SignalType>> keys;
+            for (const auto& kv : sb_fde_cp_reject_count) keys.insert(kv.first);
+            for (const auto& kv : sb_cppr_delta_this_call) keys.insert(kv.first);
+            for (const auto& k : keys) {
+                const double prev = sb_fde_cp_reject_count.count(k) ? sb_fde_cp_reject_count[k] : 0.0;
+                const double add = sb_cppr_delta_this_call.count(k)
+                                        ? static_cast<double>(sb_cppr_delta_this_call.at(k))
+                                        : 0.0;
+                sb_fde_cp_reject_count[k] = decay * prev + add;
+            }
+        };
+
         struct FdeEntry {
             std::size_t graph_idx;
             bool is_carrier;
@@ -1189,6 +1234,7 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                         cp_hold_release_streak = 0;
                         ++result.diagnostics.cp_hold_triggers;
                     }
+                    applyCpprDecay();
                     return total_rejected;  // 0: FDE skipped entirely this epoch
                 }
             }
@@ -1222,7 +1268,7 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 // when config.use_sat_badness_downweight is true.
                 if (amb_idx < problem.ambiguity_states.size()) {
                     const auto& amb = problem.ambiguity_states[amb_idx];
-                    ++sb_fde_cp_reject_count[std::make_pair(amb.satellite, amb.signal)];
+                    ++sb_cppr_delta_this_call[std::make_pair(amb.satellite, amb.signal)];
                 }
             }
 
@@ -1252,9 +1298,11 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
             total_rejected += reject_entries.size();
 
             if (!iterative) {
+                applyCpprDecay();
                 return total_rejected;  // single removal batch, done
             }
         }
+        applyCpprDecay();
         return total_rejected;
     };
 
@@ -1974,7 +2022,10 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 for (SatelliteId r : active_refs) {
                     const double prev = sb_recent_ref_bad.count(r) ? sb_recent_ref_bad[r] : 0.0;
                     const auto it = per_sat_res.find(r);
-                    const double res = it != per_sat_res.end() ? it->second : 0.0;
+                    // CLAMPED-variant deviation (fgo.hpp sat_badness_residual_
+                    // clamp_m): clamp upstream of the reference's own existing
+                    // min(2,.) increment limit below (left unchanged).
+                    const double res = it != per_sat_res.end() ? sbClampResidual(it->second) : 0.0;
                     const double incr = res > 0.0 ? std::min(2.0, res / thr) : 0.0;
                     sb_recent_ref_bad[r] = decay * prev + incr;
                 }
@@ -1997,9 +2048,19 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 double worst_val = -1.0;
                 for (const auto& [sid, rmax] : per_sat_res) {
                     seen.insert(sid);
+                    // CLAMPED-variant deviation (fgo.hpp sat_badness_residual_
+                    // clamp_m): clamp the residual before it feeds the EWMA
+                    // input or the bad-streak comparison -- both direct
+                    // badness inputs. The "worst satellite" argmax just below
+                    // deliberately keeps the RAW rmax: clamping is monotonic
+                    // (order-preserving), so it cannot change which satellite
+                    // is identified as worst, and per_sat_res itself (read by
+                    // use_epoch_quality_gates/use_cp_hold_recovery elsewhere)
+                    // is never touched.
+                    const double rmax_c = sbClampResidual(rmax);
                     const double prev = sb_obsq_ewma.count(sid) ? sb_obsq_ewma[sid] : 0.0;
-                    sb_obsq_ewma[sid] = prev <= 0.0 ? rmax : ((1.0 - alpha) * prev + alpha * rmax);
-                    if (rmax > thr_obsq) {
+                    sb_obsq_ewma[sid] = prev <= 0.0 ? rmax_c : ((1.0 - alpha) * prev + alpha * rmax_c);
+                    if (rmax_c > thr_obsq) {
                         sb_obsq_bad_streak[sid] = (sb_obsq_bad_streak.count(sid) ? sb_obsq_bad_streak[sid] : 0) + 1;
                     } else {
                         sb_obsq_bad_streak[sid] = 0;
@@ -2025,7 +2086,7 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 std::map<SatelliteId, double> cppr_this_epoch;
                 for (const auto& [key, cnt] : sb_fde_cp_reject_count) {
                     double& v = cppr_this_epoch[key.first];
-                    v = std::max(v, static_cast<double>(cnt));
+                    v = std::max(v, cnt);
                 }
 
                 std::set<SatelliteId> active_sats(seen);
@@ -2075,7 +2136,10 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                     const auto key = std::make_tuple(ref, sat, freq);
                     seen_pairs.insert(key);
                     const double prev = sb_recent_pair_bad.count(key) ? sb_recent_pair_bad[key] : 0.0;
-                    const double incr = res > 0.0 ? std::min(2.0, res / thr) : 0.0;
+                    // CLAMPED-variant deviation (fgo.hpp sat_badness_residual_
+                    // clamp_m): same upstream clamp as recent_ref_bad above,
+                    // ahead of the reference's own existing min(2,.) limit.
+                    const double incr = res > 0.0 ? std::min(2.0, sbClampResidual(res) / thr) : 0.0;
                     sb_recent_pair_bad[key] = decay * prev + incr;
                 }
                 for (auto& [key, v] : sb_recent_pair_bad) {
@@ -2086,7 +2150,14 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
             // (d) Snapshot THIS epoch's (pre-FDE) per_sat_res as "last epoch"
             // for the NEXT epoch's res_s term (reference: tc._mres_signals.
             // per_sat, set from this same pre-FDE per_sat_res pass).
-            sb_last_ddpr_per_sat = per_sat_res;
+            // CLAMPED-variant deviation (fgo.hpp sat_badness_residual_clamp_m):
+            // the snapshot itself is clamped -- this is the direct res_s term
+            // satBadness() reads next epoch -- while per_sat_res (the shared
+            // map other features also read) stays raw.
+            sb_last_ddpr_per_sat.clear();
+            for (const auto& [sid, r] : per_sat_res) {
+                sb_last_ddpr_per_sat[sid] = sbClampResidual(r);
+            }
         }
 
         // --- Per-epoch quality gates (port of the reference's gate.py /

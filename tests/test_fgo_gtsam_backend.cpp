@@ -1246,6 +1246,21 @@ void dropSatelliteAtEpoch(FGOProcessor::FGOProblem& problem, std::size_t epoch_i
              cps.end());
 }
 
+// Injects a raw carrier bias into ONE (epoch, satellite)'s DD carrier factor,
+// mutating the same raw model field the GTSAM factor is built from AND
+// observed_dd_carrier_m -- the carrier analogue of injectPseudorangeOutlier
+// above. Used (with config.use_fde on) to engineer genuine single-satellite
+// carrier outliers for FDE to reject, which is what populates
+// sb_fde_cp_reject_count (the CLAMPED variant's decayed cppr substitute).
+void injectCarrierOutlier(FGOProcessor::FGOProblem& problem, std::size_t epoch_index,
+                          uint8_t satellite_prn, double bias_m) {
+    for (auto& cp : problem.double_difference_carrier_factors) {
+        if (cp.epoch_index != epoch_index || cp.satellite.prn != satellite_prn) continue;
+        cp.rover_satellite_model.corrected_carrier_m += bias_m;
+        cp.observed_dd_carrier_m += bias_m;
+    }
+}
+
 }  // namespace
 
 TEST(FGOSatBadnessTest, DefaultOffIsNoOp) {
@@ -1282,6 +1297,11 @@ TEST(FGOSatBadnessTest, ChronicallyBadSatelliteScoresHigherThanCleanRun) {
 
     FGOProcessor::FGOConfig config = makeCpHoldBaseConfig();
     config.use_sat_badness_downweight = true;
+    // CLAMPED-variant deviation: this test's invariant is about the score's
+    // ORDERING (chronic vs clean), not about the cap -- disable it so the
+    // new default sat_badness_score_cap (3.0) can't flatten both sides to
+    // the same capped value and make the comparison vacuous.
+    config.sat_badness_score_cap = 0.0;
 
     FGOProcessor bad_processor(config);
     const auto bad_result = bad_processor.optimizeProblem(bad_problem);
@@ -1375,6 +1395,10 @@ TEST(FGOSatBadnessTest, NotSeenThisEpochHardResetsBeatsContinuousAccumulation) {
 
     FGOProcessor::FGOConfig config = makeCpHoldBaseConfig();
     config.use_sat_badness_downweight = true;
+    // CLAMPED-variant deviation: disable the new default score cap so it
+    // can't flatten both sides to the same capped value (see the analogous
+    // note in ChronicallyBadSatelliteScoresHigherThanCleanRun above).
+    config.sat_badness_score_cap = 0.0;
 
     FGOProcessor continuous_processor(config);
     const auto continuous_result = continuous_processor.optimizeProblem(continuous_problem);
@@ -1403,6 +1427,10 @@ TEST(FGOSatBadnessTest, RecentPairAlphaGatesPairMemoryContribution) {
     FGOProcessor::FGOConfig off_config = makeCpHoldBaseConfig();
     off_config.use_sat_badness_downweight = true;
     ASSERT_EQ(off_config.sat_badness_alpha_recent_pair, 0.0);
+    // CLAMPED-variant deviation: disable the new default score cap so it
+    // can't flatten both sides to the same capped value (see the analogous
+    // note in ChronicallyBadSatelliteScoresHigherThanCleanRun above).
+    off_config.sat_badness_score_cap = 0.0;
     FGOProcessor off_processor(off_config);
     const auto off_result = off_processor.optimizeProblem(problem);
 
@@ -1414,6 +1442,181 @@ TEST(FGOSatBadnessTest, RecentPairAlphaGatesPairMemoryContribution) {
     EXPECT_GT(pair_result.diagnostics.sat_badness_max_score_seen,
               off_result.diagnostics.sat_badness_max_score_seen)
         << "raising alpha_recent_pair from its inert default must raise the observed score";
+}
+
+// ============================================================================
+// CLAMPED variant (fgo.hpp: sat_badness_residual_clamp_m / sat_badness_
+// score_cap / sat_badness_cppr_decay) -- deliberate DEVIATION from the
+// reference bounding the faithful port's feedback loop. See fgo.hpp's
+// comment on these three knobs for the mechanistic rationale (the reference
+// port is harmless in the reference's own ~1-2 m FLOAT regime but explodes
+// on this codebase's 100s-of-meters deep-urban FLOAT excursions).
+// ============================================================================
+
+TEST(FGOSatBadnessClampedTest, ResidualClampMakesHugeResidualBehaveLikeTheClampValue) {
+    // Two configs sharing the SAME clamp (15 m, the shipped default) but with
+    // wildly different raw biases (100 m vs 10000 m) on the same corrupted
+    // satellite/epochs. Both raw residuals land far above the clamp, so
+    // EVERY badness term that reads the per-satellite residual (obsq EWMA,
+    // obsq bad-streak, the next-epoch res_s snapshot, recent_ref_bad's
+    // upstream input) must see the SAME hard-clamped-to-15 value in both --
+    // i.e. a 100 m residual "behaves as" a 15 m one, regardless of how much
+    // further it overshoots. (Comparing against a genuine, unclamped 15 m
+    // bias instead is NOT a valid equivalence: the graph's Huber-robustified
+    // least-squares absorbs a small fraction of ANY bias into the state, and
+    // that absorbed fraction is itself bias-size-dependent near the Huber
+    // knee -- so a real 15 m case and a clamped-from-100 m case are not
+    // expected to match bit-for-bit. Two biases that both clamp is the clean
+    // invariant.) Score cap disabled in both so it can't hide a mismatch.
+    CpHoldTestOptions huge_opt;
+    huge_opt.num_epochs = 25;
+    for (std::size_t e = 10; e <= 19; ++e) huge_opt.pr_corrupt_epochs.insert(e);
+    huge_opt.pr_dominant_extra_bias_m = 100.0;
+    auto huge_problem = makeCpHoldFixedLagProblem(huge_opt);
+
+    CpHoldTestOptions astronomical_opt;
+    astronomical_opt.num_epochs = 25;
+    for (std::size_t e = 10; e <= 19; ++e) astronomical_opt.pr_corrupt_epochs.insert(e);
+    astronomical_opt.pr_dominant_extra_bias_m = 10000.0;
+    auto astronomical_problem = makeCpHoldFixedLagProblem(astronomical_opt);
+
+    FGOProcessor::FGOConfig config = makeCpHoldBaseConfig();
+    config.use_sat_badness_downweight = true;
+    ASSERT_EQ(config.sat_badness_residual_clamp_m, 15.0)
+        << "test assumes the shipped default clamp";
+    config.sat_badness_score_cap = 0.0;  // isolate the clamp from the cap
+
+    FGOProcessor huge_processor(config);
+    const auto huge_result = huge_processor.optimizeProblem(huge_problem);
+    FGOProcessor astronomical_processor(config);
+    const auto astronomical_result = astronomical_processor.optimizeProblem(astronomical_problem);
+
+    EXPECT_NEAR(huge_result.diagnostics.sat_badness_max_score_seen,
+                astronomical_result.diagnostics.sat_badness_max_score_seen, 1e-6)
+        << "once the raw residual clears the clamp, growing it further (100m -> 10000m) must not "
+           "change the score at all -- both must behave as exactly the clamp value (100m="
+        << huge_result.diagnostics.sat_badness_max_score_seen
+        << ", 10000m=" << astronomical_result.diagnostics.sat_badness_max_score_seen << ")";
+    EXPECT_GT(huge_result.diagnostics.sat_badness_max_score_seen, 0.0)
+        << "sanity: the corrupted satellite must actually register a nonzero score";
+}
+
+TEST(FGOSatBadnessClampedTest, ScoreCapBoundsTheFinalScore) {
+    // An extreme 100 m bias with the clamp at its default (15 m) still lets
+    // several additive terms in satBadness() accumulate substantially; the
+    // score cap must nonetheless bound the value actually consumed for sigma
+    // inflation. Compare against the SAME fixture with the cap disabled to
+    // prove the cap is doing real work here, not just trivially satisfied.
+    CpHoldTestOptions opt;
+    opt.num_epochs = 25;
+    for (std::size_t e = 5; e <= 19; ++e) opt.pr_corrupt_epochs.insert(e);
+    opt.pr_dominant_extra_bias_m = 100.0;
+    auto problem = makeCpHoldFixedLagProblem(opt);
+
+    FGOProcessor::FGOConfig capped_config = makeCpHoldBaseConfig();
+    capped_config.use_sat_badness_downweight = true;
+    ASSERT_EQ(capped_config.sat_badness_score_cap, 3.0) << "test assumes the shipped default cap";
+    FGOProcessor capped_processor(capped_config);
+    const auto capped_result = capped_processor.optimizeProblem(problem);
+
+    FGOProcessor::FGOConfig uncapped_config = capped_config;
+    uncapped_config.sat_badness_score_cap = 0.0;  // 0 = no cap = faithful
+    FGOProcessor uncapped_processor(uncapped_config);
+    const auto uncapped_result = uncapped_processor.optimizeProblem(problem);
+
+    EXPECT_LE(capped_result.diagnostics.sat_badness_max_score_seen,
+              capped_config.sat_badness_score_cap + 1e-9)
+        << "the capped run's score must never exceed sat_badness_score_cap (observed="
+        << capped_result.diagnostics.sat_badness_max_score_seen << ")";
+    EXPECT_GT(uncapped_result.diagnostics.sat_badness_max_score_seen,
+              capped_config.sat_badness_score_cap)
+        << "sanity: on this fixture the uncapped score must actually exceed the cap, otherwise "
+           "the cap assertion above is vacuous (uncapped="
+        << uncapped_result.diagnostics.sat_badness_max_score_seen << ")";
+}
+
+TEST(FGOSatBadnessClampedTest, CpprDecayFadesAfterFdeRejectsStop) {
+    // Two well-separated bursts of genuine single-satellite carrier outliers
+    // (PRN 2), each big enough that FDE (config.use_fde) rejects that DD
+    // carrier factor outright, feeding sb_fde_cp_reject_count. With
+    // sat_badness_cppr_decay=1.0 (never decays, the old faithful-port
+    // behaviour) the SECOND burst's score carries the FIRST burst's count
+    // forward undiminished; with the default 0.8 decay, ~25 clean epochs in
+    // between decay that carry-over most of the way to zero. Every other
+    // badness knob is identical between the two runs (same fixture, same
+    // everything else), so any score difference is attributable to this one
+    // knob.
+    constexpr uint8_t kPrn = 2;
+    constexpr double kBiasM = 5.0;  // >> fde_carrier_threshold_m default (0.5 m)
+    CpHoldTestOptions opt;
+    opt.num_epochs = 40;
+    auto problem = makeCpHoldFixedLagProblem(opt);
+    for (std::size_t e = 5; e <= 7; ++e) injectCarrierOutlier(problem, e, kPrn, kBiasM);
+    for (std::size_t e = 30; e <= 32; ++e) injectCarrierOutlier(problem, e, kPrn, kBiasM);
+
+    FGOProcessor::FGOConfig base_config = makeCpHoldBaseConfig();
+    base_config.use_fde = true;
+    base_config.use_sat_badness_downweight = true;
+    base_config.sat_badness_score_cap = 0.0;  // isolate the decay: don't let the cap flatten it
+
+    FGOProcessor::FGOConfig never_decay_config = base_config;
+    never_decay_config.sat_badness_cppr_decay = 1.0;  // faithful: never decays
+    FGOProcessor never_decay_processor(never_decay_config);
+    const auto never_decay_result = never_decay_processor.optimizeProblem(problem);
+
+    FGOProcessor::FGOConfig decay_config = base_config;
+    ASSERT_EQ(decay_config.sat_badness_cppr_decay, 0.8) << "test assumes the shipped default decay";
+    FGOProcessor decay_processor(decay_config);
+    const auto decay_result = decay_processor.optimizeProblem(problem);
+
+    ASSERT_GT(never_decay_result.diagnostics.fde_carrier_rejections, 0u)
+        << "sanity: the injected outliers must actually get FDE-rejected in both bursts";
+    ASSERT_GT(decay_result.diagnostics.fde_carrier_rejections, 0u);
+
+    EXPECT_GT(never_decay_result.diagnostics.sat_badness_max_score_seen,
+              decay_result.diagnostics.sat_badness_max_score_seen)
+        << "an ever-growing (never-decaying) reject counter must score higher at the second "
+           "burst than one that decayed away in between (never_decay="
+        << never_decay_result.diagnostics.sat_badness_max_score_seen
+        << ", decay=0.8=" << decay_result.diagnostics.sat_badness_max_score_seen << ")";
+}
+
+TEST(FGOSatBadnessClampedTest, FaithfulEscapeHatchReproducesUnboundedScoring) {
+    // clamp=0, cap=0, cppr_decay=1.0 together must disable all three CLAMPED-
+    // variant bounds at once, reproducing the original faithful port's
+    // unbounded scoring exactly. Demonstrated here by contrast: on an extreme
+    // 100 m bias fixture, the escape-hatch config's score must blow well past
+    // both the shipped clamp (15 m) and cap (3.0) -- if any bound were still
+    // silently active, the score could not grow this large.
+    CpHoldTestOptions opt;
+    opt.num_epochs = 25;
+    for (std::size_t e = 5; e <= 19; ++e) opt.pr_corrupt_epochs.insert(e);
+    opt.pr_dominant_extra_bias_m = 100.0;
+    auto problem = makeCpHoldFixedLagProblem(opt);
+
+    FGOProcessor::FGOConfig default_config = makeCpHoldBaseConfig();
+    default_config.use_sat_badness_downweight = true;
+    ASSERT_EQ(default_config.sat_badness_residual_clamp_m, 15.0);
+    ASSERT_EQ(default_config.sat_badness_score_cap, 3.0);
+    ASSERT_EQ(default_config.sat_badness_cppr_decay, 0.8);
+    FGOProcessor default_processor(default_config);
+    const auto default_result = default_processor.optimizeProblem(problem);
+
+    FGOProcessor::FGOConfig escape_config = default_config;
+    escape_config.sat_badness_residual_clamp_m = 0.0;  // no clamp
+    escape_config.sat_badness_score_cap = 0.0;         // no cap
+    escape_config.sat_badness_cppr_decay = 1.0;        // never decays
+    FGOProcessor escape_processor(escape_config);
+    const auto escape_result = escape_processor.optimizeProblem(problem);
+
+    EXPECT_LE(default_result.diagnostics.sat_badness_max_score_seen,
+              default_config.sat_badness_score_cap + 1e-9)
+        << "sanity: the default (bounded) run must respect its own cap";
+    EXPECT_GT(escape_result.diagnostics.sat_badness_max_score_seen,
+              default_config.sat_badness_score_cap * 2.0)
+        << "the escape hatch must let the score run well past the shipped cap (escape="
+        << escape_result.diagnostics.sat_badness_max_score_seen
+        << ", default(bounded)=" << default_result.diagnostics.sat_badness_max_score_seen << ")";
 }
 
 #endif  // GNSSPP_HAS_GTSAM

@@ -99,6 +99,15 @@ struct Args {
     double sat_badness_cp_scale = -1.0;   // >=0: override sat_badness_carrier_sigma_scale
     double sat_badness_pr_scale = -1.0;   // >=0: override sat_badness_pseudorange_sigma_scale
     double sat_badness_ddpr_thresh = -1.0; // >=0: override sat_badness_ddpr_threshold_m
+    // CLAMPED-variant overrides (see FGOConfig's sat_badness_residual_clamp_m /
+    // sat_badness_score_cap / sat_badness_cppr_decay for the full rationale).
+    double sat_badness_clamp = -1.0;      // >=0: override sat_badness_residual_clamp_m (0 = no clamp = faithful)
+    double sat_badness_cap = -1.0;        // >=0: override sat_badness_score_cap (0 = no cap = faithful)
+    double sat_badness_cppr_decay = -1.0; // >=0: override sat_badness_cppr_decay (1.0 = never decays = faithful)
+    bool varerr = false;           // elevation-dependent DD sigma (RTKLIB-demo5 varerr port)
+    double varerr_a = -1.0;        // >=0: override elevation_sigma_err_a_m
+    double varerr_b = -1.0;        // >=0: override elevation_sigma_err_b_m
+    double varerr_eratio = -1.0;   // >=0: override elevation_sigma_pseudorange_ratio
 };
 
 Args parseArgs(int argc, char** argv) {
@@ -235,6 +244,20 @@ Args parseArgs(int argc, char** argv) {
             args.sat_badness_pr_scale = std::stod(argv[++i]);
         } else if (a == "--sat-badness-ddpr-thresh" && i + 1 < argc) {
             args.sat_badness_ddpr_thresh = std::stod(argv[++i]);
+        } else if (a == "--sat-badness-clamp" && i + 1 < argc) {
+            args.sat_badness_clamp = std::stod(argv[++i]);
+        } else if (a == "--sat-badness-cap" && i + 1 < argc) {
+            args.sat_badness_cap = std::stod(argv[++i]);
+        } else if (a == "--sat-badness-cppr-decay" && i + 1 < argc) {
+            args.sat_badness_cppr_decay = std::stod(argv[++i]);
+        } else if (a == "--varerr") {
+            args.varerr = true;
+        } else if (a == "--varerr-a" && i + 1 < argc) {
+            args.varerr_a = std::stod(argv[++i]);
+        } else if (a == "--varerr-b" && i + 1 < argc) {
+            args.varerr_b = std::stod(argv[++i]);
+        } else if (a == "--varerr-eratio" && i + 1 < argc) {
+            args.varerr_eratio = std::stod(argv[++i]);
         } else {
             std::cerr << "Unknown/incomplete arg: " << a << "\n";
             std::exit(2);
@@ -886,6 +909,27 @@ int main(int argc, char** argv) {
     if (args.sat_badness_ddpr_thresh >= 0.0) {
         config.sat_badness_ddpr_threshold_m = args.sat_badness_ddpr_thresh;
     }
+    if (args.sat_badness_clamp >= 0.0) {
+        config.sat_badness_residual_clamp_m = args.sat_badness_clamp;
+    }
+    if (args.sat_badness_cap >= 0.0) {
+        config.sat_badness_score_cap = args.sat_badness_cap;
+    }
+    if (args.sat_badness_cppr_decay >= 0.0) {
+        config.sat_badness_cppr_decay = args.sat_badness_cppr_decay;
+    }
+    if (args.varerr) {
+        config.use_elevation_dependent_sigma = true;
+    }
+    if (args.varerr_a >= 0.0) {
+        config.elevation_sigma_err_a_m = args.varerr_a;
+    }
+    if (args.varerr_b >= 0.0) {
+        config.elevation_sigma_err_b_m = args.varerr_b;
+    }
+    if (args.varerr_eratio >= 0.0) {
+        config.elevation_sigma_pseudorange_ratio = args.varerr_eratio;
+    }
     const libgnss::FGOProcessor builder(config);
     const libgnss::FGOProcessor::FGOProblem problem =
         builder.buildDoubleDifferenceProblem(rover_epochs, base_epochs, nav, base_position);
@@ -1095,7 +1139,16 @@ int main(int argc, char** argv) {
                   << "  sat-badness down-weighting: " << (args.sat_badness ? "on" : "off")
                   << " (downweighted_factors=" << fl.diagnostics.sat_badness_downweighted_factors
                   << ", max_score_seen=" << fl.diagnostics.sat_badness_max_score_seen
-                  << ")\n";
+                  << ", clamp_m=" << config.sat_badness_residual_clamp_m
+                  << ", score_cap=" << config.sat_badness_score_cap
+                  << ", cppr_decay=" << config.sat_badness_cppr_decay
+                  << ")\n"
+                  << "  varerr elevation-dependent DD sigma: " << (args.varerr ? "on" : "off")
+                  << " (err_a=" << config.elevation_sigma_err_a_m
+                  << " m, err_b=" << config.elevation_sigma_err_b_m
+                  << " m, eratio_pr=" << config.elevation_sigma_pseudorange_ratio
+                  << ", sclkstab=" << config.elevation_sigma_clock_stability
+                  << " s/s)\n";
         if (!ref_rows.empty()) {
             std::cout << "  horizontal error vs reference.csv:\n"
                       << "    FLOAT: n=" << he.n_float << " rms=" << he.float_rms

@@ -468,6 +468,30 @@ struct ActiveCarrierSegment {
     std::size_t last_epoch_index = 0;
 };
 
+// --- Elevation-dependent DD sigma ("varerr") ---
+//
+// Port of the inuex35 reference's preprocess/prefit.py varerr_dd_sigma
+// (itself a port of RTKLIB-demo5's rtkpos.c:402 varerr()), gated by
+// FGOConfig::use_elevation_dependent_sigma (see that knob's doc comment in
+// fgo.hpp for the full formula, dt_s mapping, and composition-order
+// rationale). `is_pseudorange` selects the reference's `fact` term
+// (elevation_sigma_pseudorange_ratio for pseudorange, 1.0 for carrier);
+// `el_pair_rad` is the caller-computed max(min(el_ref, el_target), el_min);
+// `dt_s` is the rover epoch-to-epoch interval.
+double varerrDdSigma(bool is_pseudorange, double el_pair_rad, double dt_s,
+                     const FGOProcessor::FGOConfig& config) {
+    // No clamping on the ratio -- faithful to the reference's
+    // `fact = cfg.err_eratio_pr if code else 1.0` (no floor/ceiling there).
+    const double fact =
+        is_pseudorange ? config.elevation_sigma_pseudorange_ratio : 1.0;
+    const double a = fact * config.elevation_sigma_err_a_m;
+    const double b = fact * config.elevation_sigma_err_b_m;
+    const double d = constants::SPEED_OF_LIGHT * config.elevation_sigma_clock_stability * dt_s;
+    const double sinel = std::max(std::sin(el_pair_rad), 0.05);
+    const double var_sd = 2.0 * (a * a + b * b / (sinel * sinel)) + d * d;
+    return std::sqrt(2.0 * var_sd);
+}
+
 struct FixedAmbiguityConstraint {
     std::size_t ambiguity_index = 0;
     double fixed_ambiguity_m = 0.0;
@@ -1512,6 +1536,17 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
         std::max(1e-3, config_.double_difference_pseudorange_sigma_m);
     const double carrier_sigma =
         std::max(1e-4, config_.double_difference_carrier_sigma_m);
+    // Elevation-dependent DD sigma ("varerr", FGOConfig::use_elevation_
+    // dependent_sigma): el_min_rad is the pair-elevation floor (reference:
+    // np.radians(max(1.0, cfg.el_mask_deg))); epoch_dt_s is the rover
+    // epoch-to-epoch interval fed to the clock-stability term, persisted
+    // across the epoch loop below and only updated on a positive delta --
+    // mirroring the reference's tc._epoch_dt / _update_epoch_dt exactly
+    // (state carried across epochs, default 0.2 s until the first update;
+    // see the knob's doc comment in fgo.hpp for why 0.2 s is also the right
+    // fallback for this dataset).
+    const double el_min_rad = M_PI / 180.0 * std::max(1.0, config_.min_elevation_deg);
+    double epoch_dt_s = 0.2;
     const double max_segment_gap = std::max(0.0, config_.max_tdcp_gap_s);
     std::map<DoubleDifferenceAmbiguityKey, ActiveCarrierSegment>
         active_dd_segments;
@@ -1535,6 +1570,16 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
     std::size_t cmc_level_exclusion_total = 0;
 
     for (std::size_t epoch_index = 0; epoch_index < problem.epochs.size(); ++epoch_index) {
+        // Reference: tc._update_epoch_dt(obs) runs unconditionally at the top
+        // of every epoch's processing, before any DD-eligibility gates below
+        // -- mirrored here the same way (only meaningful when varerr is on).
+        if (config_.use_elevation_dependent_sigma && epoch_index > 0) {
+            const double dt = problem.epochs[epoch_index].time -
+                              problem.epochs[epoch_index - 1].time;
+            if (dt > 0.0) {
+                epoch_dt_s = dt;
+            }
+        }
         const auto rover_it = rover_carriers_by_epoch.find(epoch_index);
         const auto rover_pseudorange_it =
             rover_pseudoranges_by_epoch.find(epoch_index);
@@ -1855,9 +1900,22 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                                    config_
                                        .double_difference_secondary_pseudorange_sigma_scale)
                         : 1.0;
+                // Base DD-PR sigma: varerr (FGOConfig::use_elevation_
+                // dependent_sigma) when enabled, else the pre-existing flat/
+                // elevation-power fallback -- see the knob's doc comment in
+                // fgo.hpp for the full rationale/composition order. The
+                // secondary-band scale above still multiplies on top either
+                // way (unchanged).
+                double pseudorange_base_sigma = pseudorange_sigma / satellite_sqrt_sin_el;
+                if (config_.use_elevation_dependent_sigma) {
+                    const double el_pair_rad = std::max(
+                        std::min(reference->elevation_rad, satellite->elevation_rad),
+                        el_min_rad);
+                    pseudorange_base_sigma = varerrDdSigma(
+                        /*is_pseudorange=*/true, el_pair_rad, epoch_dt_s, config_);
+                }
                 pseudorange_factor.sigma_m =
-                    pseudorange_band_scale * pseudorange_sigma /
-                    satellite_sqrt_sin_el;
+                    pseudorange_band_scale * pseudorange_base_sigma;
                 pseudorange_factor.elevation_rad = satellite->elevation_rad;
                 pseudorange_factor.rover_satellite_model =
                     satellite->model_debug;
@@ -1950,8 +2008,20 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                                    config_
                                        .double_difference_secondary_carrier_sigma_scale)
                         : 1.0;
-                factor.sigma_m =
-                    carrier_band_scale * carrier_sigma / satellite_sqrt_sin_el;
+                // Base DD-CP sigma: varerr when enabled, else the
+                // pre-existing flat/elevation-power fallback -- same source
+                // switch as the DD-PR site above (see that comment and the
+                // knob's doc comment in fgo.hpp). Secondary-band scale still
+                // multiplies on top either way.
+                double carrier_base_sigma = carrier_sigma / satellite_sqrt_sin_el;
+                if (config_.use_elevation_dependent_sigma) {
+                    const double el_pair_rad = std::max(
+                        std::min(reference->elevation_rad, satellite->elevation_rad),
+                        el_min_rad);
+                    carrier_base_sigma = varerrDdSigma(
+                        /*is_pseudorange=*/false, el_pair_rad, epoch_dt_s, config_);
+                }
+                factor.sigma_m = carrier_band_scale * carrier_base_sigma;
                 factor.elevation_rad = satellite->elevation_rad;
                 factor.rover_satellite_model = satellite->model_debug;
                 factor.rover_reference_model = reference->model_debug;

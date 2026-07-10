@@ -167,6 +167,75 @@ public:
         double single_difference_tdcp_sigma_m = 0.003;
         double double_difference_pseudorange_sigma_m = 1.0;
         double double_difference_carrier_sigma_m = 0.02;
+
+        // --- Elevation-dependent DD sigma (RTKLIB-demo5 "varerr", rtkpos.c:402)
+        // ---
+        // Port of the inuex35 reference's preprocess/prefit.py varerr_dd_sigma
+        // + buildfactor/factors.py pair_sigma. This was a previously-UNPORTED
+        // piece: it ran DEFAULT-ON in every reference benchmark (its enable
+        // flag, config.py's varerr_enable, is a dataclass default of 1, never
+        // toggled by the benchmark profile dicts we had scraped), so earlier
+        // parity work missed it entirely.
+        //
+        // When enabled, the DD pseudorange/carrier base sigma (fed to BOTH
+        // double_difference_pseudorange_factor.sigma_m and
+        // double_difference_carrier_factor.sigma_m, before the secondary-band
+        // scale and sat-badness inflation multiply on top -- see
+        // buildDoubleDifferenceProblem in fgo.cpp) is, per (reference,target)
+        // pair:
+        //
+        //   el_pair  = max(min(el_ref_rad, el_target_rad), el_min_rad)
+        //   el_min_rad = radians(max(1.0, min_elevation_deg))
+        //   fact     = elevation_sigma_pseudorange_ratio (pseudorange) | 1.0 (carrier)
+        //   a        = fact * elevation_sigma_err_a_m
+        //   b        = fact * elevation_sigma_err_b_m
+        //   d        = SPEED_OF_LIGHT * elevation_sigma_clock_stability * dt_s
+        //   sinel    = max(sin(el_pair), 0.05)   // cap below ~3 deg
+        //   var_sd   = 2*(a*a + b*b/(sinel*sinel)) + d*d   // single-difference variance
+        //   sigma_dd = sqrt(2 * var_sd)                    // DD = difference of 2 SDs
+        //
+        // dt_s mapping decision: the reference's tc._epoch_dt is "actual
+        // seconds since the runner's last process() call" -- i.e. the ROVER's
+        // own epoch-to-epoch interval (defaults to 0.2 s / 5 Hz until the
+        // first real update; see runner.py's _update_epoch_dt), NOT the
+        // rover-base differential/interpolation age. Our port mirrors this
+        // exactly: dt_s is the elapsed time between the current and the
+        // immediately-preceding ROVER epoch in the batch (problem.epochs[i].time
+        // - problem.epochs[i-1].time), persisted across epochs and only
+        // updated when positive (same "keep last known dt" behaviour as the
+        // reference), defaulting to 0.2 s before the first update -- which
+        // also happens to match the tokyo PPC dataset's actual 0.200 s rover
+        // observation interval (data/PPC-Dataset/tokyo/run*/rover.obs
+        // INTERVAL header). The clock term's contribution is small next to
+        // the a/b terms at these defaults, so this default's exact value is
+        // not performance-critical.
+        //
+        // Undifferenced-PR decision: the reference's varerr_dd_sigma /
+        // pair_sigma are only ever called from factors.py's DD pseudorange
+        // and DD carrier factor builders -- nothing in the reference feeds
+        // varerr into the undifferenced (single-receiver SPP-style)
+        // pseudorange factor. This port matches that: use_elevation_dependent_sigma
+        // affects ONLY the DD pseudorange/carrier sigma_m computed in
+        // buildDoubleDifferenceProblem; FGOConfig::pseudorange_sigma_m and the
+        // undifferenced PseudorangeFactor path (buildPseudorangeProblem) are
+        // untouched.
+        //
+        // Default OFF (use_elevation_dependent_sigma = false): bit-identical
+        // to the pre-existing flat/elevation-power sigma
+        // (band_scale * double_difference_{pseudorange,carrier}_sigma_m /
+        // sqrt(sin(el))). Turning it on switches the DD base-sigma SOURCE only;
+        // composition order with the other sigma multipliers is unchanged:
+        // varerr (or the flat fallback) -> secondary-band scale
+        // (double_difference_secondary_{carrier,pseudorange}_sigma_scale,
+        // still multiplies on top) -> sat-badness EWMA inflation (still
+        // multiplies factor.sigma_m in the GTSAM backend, unaffected by this
+        // knob) -> robust/Huber wrapping (unaffected).
+        bool use_elevation_dependent_sigma = false;
+        double elevation_sigma_err_a_m = 0.001;             ///< reference err_a (RTKLIB err[1]=0.003)
+        double elevation_sigma_err_b_m = 0.001;              ///< reference err_b (RTKLIB err[2]=0.003)
+        double elevation_sigma_pseudorange_ratio = 100.0;    ///< reference err_eratio_pr (RTKLIB eratio[0]=300)
+        double elevation_sigma_clock_stability = 5e-12;      ///< reference err_sclkstab [s/s]
+
         double pseudorange_huber_threshold_sigma = 4.0;
         double carrier_phase_huber_threshold_sigma = 4.0;
         double tdcp_huber_threshold_sigma = 4.0;
@@ -722,6 +791,76 @@ public:
         double sat_badness_recent_cppr_decay = 0.8;             ///< reference obsq_recent_cppr_decay
         double sat_badness_recent_ref_decay = 0.85;             ///< reference obsq_recent_ref_decay
         double sat_badness_recent_pair_decay = 0.85;            ///< reference obsq_recent_pair_decay
+
+        // --- CLAMPED variant (DEVIATION from the reference; first
+        // non-port invention in this series -- see fgo_gtsam_backend.cpp's
+        // satBadness()/runFde() change-sites for the exact mechanics). ---
+        //
+        // Measured failure of the faithful port above: sat_badness() is
+        // uncapped and directly proportional to the raw post-fit DDPR
+        // residual. In the reference's own operating regime (FLOAT error
+        // stays ~1-2 m) that self-limits to O(1) scores -> a gentle 2-5x
+        // carrier-sigma inflation. This codebase's deep-urban FLOAT
+        // excursions instead reach 100s of meters, driving scores into the
+        // hundreds to low thousands -> carrier sigma inflated ~1000x
+        // graph-wide -> AR starves -> FLOAT never recovers (positive
+        // feedback with no exit). Full-run verdict when shipped faithfully
+        // (use_sat_badness_downweight on, these three knobs at their
+        // faithful/no-op values below): fix-rate 39/63/66% -> 6/8/6%.
+        //
+        // These three knobs bound that feedback loop by construction while
+        // leaving the reference's own gentle regime numerically untouched
+        // (a run whose residuals/rejects never approach the clamp/cap is
+        // bit-identical to the faithful port). Each defaults to a bound
+        // (clamp=15 m, cap=3.0, cppr_decay=0.8); setting clamp=0, cap=0,
+        // cppr_decay=1.0 together is the exact faithful-port escape hatch.
+        // All three are no-ops whenever use_sat_badness_downweight is off.
+        //
+        // 1. Residual input clamp: caps the per-satellite post-fit DDPR
+        //    residual BEFORE it feeds any badness term, at the single point
+        //    (per_sat_res) all of them read it: the obsq EWMA input, the
+        //    obsq bad-streak comparison, the next-epoch res_s term (via the
+        //    sb_last_ddpr_per_sat snapshot), and the recent_ref_bad/
+        //    recent_pair_bad increment inputs (both already separately
+        //    min(2,.)-limited by the reference -- that existing limit is
+        //    left in place; this clamp is strictly upstream of it). Chosen
+        //    at 15 m = this codebase's own CP-hold/sanity FSM catastrophic
+        //    residual threshold, i.e. "residual big enough that OUR OWN
+        //    other recovery machinery already treats this epoch as
+        //    catastrophic" -- beyond that point, charging MORE badness to
+        //    the reference satellite for a residual that is almost
+        //    certainly a FLOAT-wide problem (not that satellite's fault)
+        //    is exactly the poisoning mechanism above. Does NOT touch the
+        //    shared per_sat_res map itself (that map is also read raw by
+        //    use_epoch_quality_gates/use_cp_hold_recovery, which must stay
+        //    numerically untouched) -- only badness's own reads of it.
+        //    0 = no clamp = faithful.
+        double sat_badness_residual_clamp_m = 15.0;
+        // 2. Final score cap: applied to sat_badness()'s returned score,
+        //    after every additive term (including the now-clamped residual
+        //    term above) but before the caller multiplies it into a sigma
+        //    scale. At the defaults, max carrier-sigma inflation becomes
+        //    1 + 1.5*3.0 = 5.5x -- the reference's own gentle regime,
+        //    versus the uncapped port's observed 400-1550 (~1000x). Bounds
+        //    the OTHER additive terms too (recent_worst/recent_ref/etc.),
+        //    not just the residual one, since those can also accumulate.
+        //    0 = no cap = faithful.
+        double sat_badness_score_cap = 3.0;
+        // 3. FDE-carrier-reject counter decay: the faithful port's cppr
+        //    substitute (sb_fde_cp_reject_count; see use_sat_badness_
+        //    downweight's deviation 1 above) is a persistent per-(satellite,
+        //    signal) integer count that NEVER resets -- a second, independent
+        //    source of unbounded growth alongside the residual-proportional
+        //    term. This turns it into a decayed float, updated once per
+        //    epoch as cppr[s,sig] = decay*prev + this_epoch_rejects (the
+        //    number of that satellite/signal's FDE carrier rejections
+        //    DURING that epoch's runFde() call, not cumulative). Feeds both
+        //    sat_badness()'s direct cppr term and (via cppr_this_epoch)
+        //    recent_cppr's own separate decay (sat_badness_recent_cppr_decay,
+        //    unchanged) -- previously that decay chased an ever-growing
+        //    target and could never plateau either. 1.0 = never decays =
+        //    exactly the old (faithful) ever-growing-counter behaviour.
+        double sat_badness_cppr_decay = 0.8;
     };
 
     struct EpochSeed {
