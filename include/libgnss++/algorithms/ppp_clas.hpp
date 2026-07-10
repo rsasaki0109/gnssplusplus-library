@@ -33,6 +33,15 @@ struct FixValidationStats {
 struct FixValidationOptions {
     double outlier_sigma_gate = 0.0;  ///< 0 disables outlier exclusion
     bool mrtklib_chisq_fallback = false;
+    /// MRTKLIB filter2_/residual_test innovation-variance basis
+    /// (mrtk_ppp_rtk.c:1125, Q = H'*P*H + R): when non-null, each DD phase
+    /// residual's gate/chi-square variance adds the state-projected term
+    /// h_dd' P h_dd (position, troposphere, ionosphere and ambiguity
+    /// partials) computed from this covariance. MRTKLIB evaluates post-fix
+    /// residuals at xa but forms Q from the FLOAT posterior Pp, so callers
+    /// should pass the float filter covariance here. Null keeps the
+    /// historical measurement-only (R) basis.
+    const MatrixXd* innovation_covariance = nullptr;
 };
 
 using TropMappingFunction =

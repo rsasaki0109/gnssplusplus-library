@@ -635,6 +635,18 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             fix_validation_options.outlier_sigma_gate =
                 kMrtklibPhaseResidualSigmaGate;
             fix_validation_options.mrtklib_chisq_fallback = true;
+            // MRTKLIB parity (dynamics path only): the post-fix residual
+            // gate/chi-square normalize by the innovation covariance
+            // H'*P*H + R formed from the FLOAT posterior covariance
+            // (mrtk_ppp_rtk.c:2296-2313 -> filter2_ -> residual_test), not
+            // by the measurement variance alone. Under the tight Stage-2
+            // varerr an R-only basis rejects every centimeter-level DD
+            // residual and drives fix% to zero.
+            if (ppp_config_.clas_mrtklib_float_parity &&
+                ppp_config_.use_dynamics_model) {
+                fix_validation_options.innovation_covariance =
+                    &clas_float_filter_state.covariance;
+            }
             const auto fix_validation = ppp_clas::validateFixedSolution(
                 obs,
                 osr_corrections,

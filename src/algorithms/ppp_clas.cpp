@@ -57,6 +57,14 @@ struct PhaseResidualInfo {
     double variance_m2 = 0.0;
     double frequency_hz = 0.0;
     double wavelength_m = 0.0;
+    // Sparse measurement partials for the MRTKLIB innovation-variance basis
+    // (h-row entries; the receiver clock is omitted because it cancels in
+    // the same-system DDs where these are consumed).
+    Vector3d unit_vector = Vector3d::Zero();  ///< d(range)/d(receiver pos)
+    double trop_mapping = 0.0;
+    int iono_index = -1;
+    double iono_scale = 0.0;  ///< mu_f = (lambda_f/lambda_1)^2, phase sign applied at use
+    int ambiguity_index = -1;
 };
 
 struct PhasePairInfo {
@@ -2362,15 +2370,61 @@ FixValidationStats validateFixedSolution(
                  filter_state.state(ambiguity_index));
             const double variance =
                 clasPhaseVariance(config, osr.elevation, f, osr.frequencies[f]);
-            phase_residuals.push_back({
-                ambiguity_satellite,
-                osr.satellite,
-                residual,
-                variance,
-                osr.frequencies[f],
-                osr.wavelengths[f]});
+            PhaseResidualInfo info;
+            info.ambiguity_satellite = ambiguity_satellite;
+            info.real_satellite = osr.satellite;
+            info.residual_m = residual;
+            info.variance_m2 = variance;
+            info.frequency_hz = osr.frequencies[f];
+            info.wavelength_m = osr.wavelengths[f];
+            const double range = std::max(geo, 1.0);
+            info.unit_vector =
+                (receiver_position - osr.satellite_position) / range;
+            info.trop_mapping = trop_mapping;
+            info.iono_index =
+                iono_scale > 0.0 ? iono_it->second : -1;
+            info.iono_scale = iono_scale;
+            info.ambiguity_index = ambiguity_index;
+            phase_residuals.push_back(std::move(info));
         }
     }
+
+    // MRTKLIB innovation-variance basis: h_dd' P h_dd for one DD phase row
+    // (reference r minus satellite s within the same system group; receiver
+    // clock cancels). h entries: position (u_r - u_s), troposphere zenith
+    // (m_r - m_s), per-satellite ionosphere (-mu_r at r, +mu_s at s; phase
+    // sign), ambiguity states (+1 at r, -1 at s; states are in meters).
+    const auto dd_state_variance =
+        [&](const PhaseResidualInfo& r, const PhaseResidualInfo& s) -> double {
+        const MatrixXd& P = *options.innovation_covariance;
+        const int n = static_cast<int>(P.rows());
+        std::array<std::pair<int, double>, 9> h{};
+        size_t k = 0;
+        for (int axis = 0; axis < 3; ++axis) {
+            h[k++] = {filter_state.pos_index + axis,
+                      r.unit_vector(axis) - s.unit_vector(axis)};
+        }
+        h[k++] = {filter_state.trop_index, r.trop_mapping - s.trop_mapping};
+        if (r.iono_index >= 0 && r.iono_index < n) {
+            h[k++] = {r.iono_index, -r.iono_scale};
+        }
+        if (s.iono_index >= 0 && s.iono_index < n) {
+            h[k++] = {s.iono_index, s.iono_scale};
+        }
+        if (r.ambiguity_index >= 0 && r.ambiguity_index < n) {
+            h[k++] = {r.ambiguity_index, 1.0};
+        }
+        if (s.ambiguity_index >= 0 && s.ambiguity_index < n) {
+            h[k++] = {s.ambiguity_index, -1.0};
+        }
+        double quad = 0.0;
+        for (size_t i = 0; i < k; ++i) {
+            for (size_t j = 0; j < k; ++j) {
+                quad += h[i].second * P(h[i].first, h[j].first) * h[j].second;
+            }
+        }
+        return std::max(quad, 0.0);
+    };
 
     std::map<std::pair<GNSSSystem, int>, std::vector<PhaseResidualInfo>> dd_groups;
     for (const auto& phase_residual : phase_residuals) {
@@ -2397,16 +2451,42 @@ FixValidationStats validateFixedSolution(
         for (size_t index = 1; index < residuals.size(); ++index) {
             const auto& residual = residuals[index];
             const double dd_residual = reference.residual_m - residual.residual_m;
-            const double dd_variance = reference.variance_m2 + residual.variance_m2;
+            double dd_variance = reference.variance_m2 + residual.variance_m2;
+            if (options.innovation_covariance != nullptr &&
+                options.innovation_covariance->rows() ==
+                    filter_state.total_states) {
+                // MRTKLIB filter2_ basis (mrtk_ppp_rtk.c:1125): the residual
+                // gate and chi-square normalize by the innovation covariance
+                // Q = H'*P*H + R, not by R alone.
+                dd_variance += dd_state_variance(reference, residual);
+            }
             const double sigma = std::sqrt(std::max(dd_variance, 1e-12));
 
             // MRTKLIB residual_test() (mrtk_ppp_rtk.c:1040-1058): individual
             // residuals beyond the rejionno1 sigma gate are excluded from the
-            // chi-square sum instead of failing the whole validation.
+            // chi-square sum instead of failing the whole validation. D2 rule
+            // (mrtk_ppp_rtk.c:1046-1050): the gate (not the chi-square) is
+            // inflated 10x for rows whose phase-bias state is still at its
+            // initialization variance.
+            double gate_scale = 1.0;
+            if (options.innovation_covariance != nullptr &&
+                options.innovation_covariance->rows() ==
+                    filter_state.total_states) {
+                const MatrixXd& P_gate = *options.innovation_covariance;
+                const double init_var = 1e4;  // MRTKLIB SQR(std[0]=100)
+                for (const int amb_idx :
+                     {reference.ambiguity_index, residual.ambiguity_index}) {
+                    if (amb_idx >= 0 && amb_idx < P_gate.rows() &&
+                        std::abs(P_gate(amb_idx, amb_idx) - init_var) <
+                            1e-3 * init_var) {
+                        gate_scale = 10.0;
+                    }
+                }
+            }
             if (options.outlier_sigma_gate > 0.0 &&
                 dd_residual * dd_residual >
                     options.outlier_sigma_gate * options.outlier_sigma_gate *
-                        dd_variance) {
+                        gate_scale * gate_scale * dd_variance) {
                 ++stats.phase_outlier_rows;
                 continue;
             }

@@ -149,7 +149,14 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
         (ppp_config_.use_clas_osr_filter && ppp_config_.kinematic_mode)
             ? 4
             : ppp_config_.min_satellites_for_ar;
-    if (wl_summary.fixed_count < min_wl_fixes) {
+    // MRTKLIB literal-port track: the direct ddmat-style state-DD fix has no
+    // wide-lane prerequisite (mrtk_ppp_rtk.c ddmat admits every locked
+    // satellite), so the WL-fixed floor does not apply on that path.
+    const bool direct_state_dd_path =
+        ppp_config_.clas_mrtklib_float_parity &&
+        ppp_config_.use_clas_osr_filter && ppp_config_.kinematic_mode &&
+        !ppp_config_.low_dynamics_mode && ppp_config_.use_dynamics_model;
+    if (!direct_state_dd_path && wl_summary.fixed_count < min_wl_fixes) {
         if (pppDebugEnabled()) {
             std::cerr << "[PPP-WLNL] insufficient WL fixes: " << wl_summary.fixed_count
                       << " n=" << n << " max_mw=" << wl_summary.max_mw_count << "\n";

@@ -1077,8 +1077,16 @@ int main(int argc, char* argv[]) {
         double atmospheric_iono_meters = 0.0;
         double ionex_meters = 0.0;
         double dcb_meters = 0.0;
+        // TEMP-DEBUG (remove before merge): skip obs epochs before a GPS TOW.
+        const char* skip_until_env = std::getenv("GNSS_PPP_SKIP_UNTIL_TOW");
+        const double skip_until_tow =
+            skip_until_env != nullptr ? std::atof(skip_until_env) : -1.0;
         while ((options.max_epochs == 0 || processed_epochs < options.max_epochs) &&
                obs_reader.readObservationEpoch(observation_data)) {
+            if (skip_until_tow >= 0.0 &&
+                observation_data.time.tow < skip_until_tow) {
+                continue;
+            }
             if (obs_header.approximate_position.norm() > 0.0) {
                 observation_data.receiver_position = obs_header.approximate_position;
             }
