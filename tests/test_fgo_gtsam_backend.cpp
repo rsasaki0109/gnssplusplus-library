@@ -1619,4 +1619,148 @@ TEST(FGOSatBadnessClampedTest, FaithfulEscapeHatchReproducesUnboundedScoring) {
         << ", default(bounded)=" << default_result.diagnostics.sat_badness_max_score_seen << ")";
 }
 
+// --- IMU preintegration-covariance value semantics + per-epoch inflation
+// (port of the inuex35 reference's buildfactor/imu_preintegration.py's
+// _apply_mres_integ_cov_override + config.py's imu_integ_cov /
+// imu_integ_cov_max -- see FGOConfig::imu_integration_covariance's comment
+// in fgo.hpp for the full mapping). ---
+
+TEST(FGOImuIntegrationCovarianceTest, DefaultsMatchPortedReferenceMapping) {
+    const FGOProcessor::FGOConfig config;
+    // 1e-6 == sq(1e-3), the harness's hardcoded (pre-port) effective
+    // covariance -- this default alone must not change any existing run.
+    EXPECT_DOUBLE_EQ(config.imu_integration_covariance, 1e-6);
+    EXPECT_FALSE(config.use_imu_integration_covariance_inflation);
+    EXPECT_DOUBLE_EQ(config.imu_integration_covariance_max, 0.5);   // reference imu_integ_cov_max
+    EXPECT_EQ(config.imu_integration_covariance_stale_epochs, 2);
+}
+
+namespace {
+// Pure reimplementation of the exact formula documented on
+// FGOConfig::use_imu_integration_covariance_inflation (and applied in
+// fgo_gtsam_backend.cpp's optimizeProblemFixedLag immediately before each
+// epoch's PIM is constructed), so this test can check hand-computed values
+// without depending on gtsam internals or a full nonlinear solve.
+double expectedIntegEff(double default_cov, double cap, int stale_epochs,
+                        long long epoch, long long last_mres_epoch,
+                        double last_mres, double dt) {
+    const bool is_stale =
+        stale_epochs > 0 && (epoch - last_mres_epoch) > stale_epochs;
+    if (is_stale) return default_cov;
+    double integ_eff = std::max(default_cov, (last_mres * last_mres) / std::max(dt, 1e-3));
+    if (cap > 0.0) integ_eff = std::min(integ_eff, cap);
+    return integ_eff;
+}
+}  // namespace
+
+TEST(FGOImuIntegrationCovarianceTest, InflationFormulaMaxCapAndStalenessHandComputed) {
+    const double default_cov = 1e-3;  // reference imu_integ_cov value
+    const double cap = 0.5;           // reference imu_integ_cov_max default
+
+    // (a) Clean residual (mres=0): floor wins regardless of dt.
+    EXPECT_DOUBLE_EQ(expectedIntegEff(default_cov, cap, 2, 10, 9, 0.0, 1.0), default_cov);
+
+    // (b) Small residual that doesn't clear the floor: mres=0.02 m, dt=1.0 s
+    // -> mres^2/dt = 4e-4 < default_cov (1e-3), so the floor still wins.
+    EXPECT_DOUBLE_EQ(expectedIntegEff(default_cov, cap, 2, 10, 9, 0.02, 1.0), default_cov);
+
+    // (c) Moderate residual that clears the floor but stays under the cap:
+    // mres=0.1 m, dt=1.0 s -> mres^2/dt = 0.01, between 1e-3 and 0.5.
+    EXPECT_DOUBLE_EQ(expectedIntegEff(default_cov, cap, 2, 10, 9, 0.1, 1.0), 0.01);
+
+    // (d) Large residual that would blow past the cap: mres=5.0 m, dt=1.0 s
+    // -> mres^2/dt = 25.0, clamped down to imu_integ_cov_max (0.5).
+    EXPECT_DOUBLE_EQ(expectedIntegEff(default_cov, cap, 2, 10, 9, 5.0, 1.0), cap);
+
+    // (e) Same large residual but a shorter dt makes it even larger pre-cap
+    // (mres^2/dt = 25.0/0.2 = 125.0) -- still clamped to the same cap.
+    EXPECT_DOUBLE_EQ(expectedIntegEff(default_cov, cap, 2, 10, 9, 5.0, 0.2), cap);
+
+    // (f) Staleness: the same large residual as (d), but recorded 5 epochs
+    // ago with stale_epochs=2 (5 > 2) -- the signal is stale, so the
+    // inflation is skipped entirely and the static floor is used, even
+    // though mres^2/dt alone would blow past both the floor and the cap.
+    EXPECT_DOUBLE_EQ(expectedIntegEff(default_cov, cap, 2, 10, 5, 5.0, 1.0), default_cov);
+
+    // (g) Exactly at the staleness boundary (epoch - last_mres_epoch ==
+    // stale_epochs) is NOT stale (reference: `> stale_max`, strict): the
+    // inflation still applies.
+    EXPECT_DOUBLE_EQ(expectedIntegEff(default_cov, cap, 2, 10, 8, 5.0, 1.0), cap);
+
+    // (h) stale_epochs<=0 disables the staleness check entirely (reference:
+    // `stale_max > 0 and ...`) -- inflation applies no matter how old the
+    // residual is.
+    EXPECT_DOUBLE_EQ(expectedIntegEff(default_cov, cap, 0, 10, -1000000, 0.1, 1.0), 0.01);
+
+    // (i) cap<=0 disables the cap entirely (reference: `if cap > 0`).
+    EXPECT_DOUBLE_EQ(expectedIntegEff(default_cov, 0.0, 2, 10, 9, 5.0, 1.0), 25.0);
+}
+
+TEST(FGOImuIntegrationCovarianceTest, InflationIsNoOpOnCleanResidualsRegardlessOfSwitch) {
+    // With no injected corruption, the post-fit DDPR RMS stays effectively
+    // zero every epoch, so the inflation formula's max(default_cov, mres^2/dt)
+    // collapses to default_cov on every epoch -- turning the switch on must
+    // not perturb a clean run at all (wiring sanity + "default-off unchanged"
+    // companion: this shows the ON path degenerates to the OFF path when the
+    // residual signal has nothing to say).
+    CpHoldTestOptions opt;
+    opt.num_epochs = 25;  // clean, stationary, no corruption
+    const auto problem = makeCpHoldFixedLagProblem(opt);
+
+    FGOProcessor::FGOConfig off_config = makeCpHoldBaseConfig();
+    off_config.imu_integration_covariance = 1e-3;
+    ASSERT_FALSE(off_config.use_imu_integration_covariance_inflation);
+    FGOProcessor off_processor(off_config);
+    const auto off_result = off_processor.optimizeProblem(problem);
+
+    FGOProcessor::FGOConfig on_config = off_config;
+    on_config.use_imu_integration_covariance_inflation = true;
+    FGOProcessor on_processor(on_config);
+    const auto on_result = on_processor.optimizeProblem(problem);
+
+    ASSERT_EQ(off_result.solution.solutions.size(), on_result.solution.solutions.size());
+    for (std::size_t i = 0; i < off_result.solution.solutions.size(); ++i) {
+        const auto& a = off_result.solution.solutions[i];
+        const auto& b = on_result.solution.solutions[i];
+        EXPECT_TRUE(a.position_ecef.isApprox(b.position_ecef, 0.0) || a.position_ecef == b.position_ecef)
+            << "epoch " << i << " position diverged with a clean (zero-residual) run";
+    }
+}
+
+TEST(FGOImuIntegrationCovarianceTest, ValuePassthroughNotSquaredAffectsDragResistance) {
+    // Reuses the CP-hold FSM's "wrong basin" fixture: a self-consistent
+    // erroneous carrier-phase hypothesis drags the graph pose away from the
+    // (stationary) true position during the corrupt window. A TIGHTER
+    // integration covariance makes the IMU chain stiffer (more resistant to
+    // being dragged by the erroneous carrier pull); a LOOSER one lets the
+    // carrier win more easily. If the backend still squared this field
+    // internally (the pre-port bug), configuring 1e-3 would silently become
+    // a covariance of 1e-6 -- identical to the "tight" run below -- so this
+    // comparison would collapse to no difference and the test would fail.
+    CpHoldTestOptions opt;
+    opt.carrier_corrupt_epochs = {5, 6, 7, 8, 9, 10, 11, 12};
+    const auto problem = makeCpHoldFixedLagProblem(opt);
+    const Vector3d true_position(1113194.0, -4841695.0, 3985350.0);
+    constexpr std::size_t kProbeEpoch = 9;
+
+    FGOProcessor::FGOConfig tight_config = makeCpHoldBaseConfig();
+    tight_config.imu_integration_covariance = 1e-6;  // shipped default
+    FGOProcessor tight_processor(tight_config);
+    const auto tight_result = tight_processor.optimizeProblem(problem);
+    const double tight_dev =
+        (tight_result.solution.solutions[kProbeEpoch].position_ecef - true_position).norm();
+
+    FGOProcessor::FGOConfig loose_config = makeCpHoldBaseConfig();
+    loose_config.imu_integration_covariance = 1e-3;  // reference imu_integ_cov, applied directly
+    FGOProcessor loose_processor(loose_config);
+    const auto loose_result = loose_processor.optimizeProblem(problem);
+    const double loose_dev =
+        (loose_result.solution.solutions[kProbeEpoch].position_ecef - true_position).norm();
+
+    EXPECT_GT(loose_dev, tight_dev)
+        << "a 1000x-looser integration covariance (applied directly, not squared) must let the "
+           "erroneous carrier pull drag the pose further from truth than the tight default "
+           "(tight_dev=" << tight_dev << " m, loose_dev=" << loose_dev << " m)";
+}
+
 #endif  // GNSSPP_HAS_GTSAM

@@ -289,6 +289,74 @@ public:
         // for gauge. Ignored unless use_pose3_state is also set. Default OFF.
         bool use_imu = false;
 
+        // --- Reference parity: IMU preintegration covariance value semantics
+        // + residual-driven per-epoch inflation (port of the inuex35
+        // reference's buildfactor/imu_preintegration.py's
+        // _apply_mres_integ_cov_override + config.py's imu_integ_cov /
+        // imu_integ_cov_max). Fixed-lag GTSAM path only
+        // (optimizeProblemFixedLag in fgo_gtsam_backend.cpp); the batch path
+        // (optimizeProblemWithGtsam) is untouched. ---
+        //
+        // The reference passes imu_integ_cov (dataclass default 1e-3)
+        // DIRECTLY to gtsam's setIntegrationCovariance (utils/imu.py:44,
+        // `p.setIntegrationCovariance(integ_cov * np.eye(3))`) -- i.e. it IS
+        // the covariance, not a sigma to be squared. This backend's
+        // ImuNoiseParams::integration_sigma is instead squared before that
+        // same GTSAM call (`sq(problem.imu.noise.integration_sigma)`); this
+        // field replaces that computation for the fixed-lag path so the
+        // value semantics match exactly (no squaring). Default 1e-6
+        // reproduces the harness's current hardcoded covariance
+        // (integration_sigma=1e-3, squared) bit-for-bit, so leaving this
+        // field untouched changes nothing.
+        double imu_integration_covariance = 1e-6;
+
+        // Per-epoch inflation (reference _apply_mres_integ_cov_override,
+        // imu_preintegration.py:53-72). Before building EACH epoch's PIM the
+        // reference recomputes:
+        //   is_stale = stale_max > 0 && (epoch - last_mres_epoch) > stale_max
+        //   integ_eff = is_stale ? imu_integ_cov
+        //                        : clamp(max(imu_integ_cov, last_mres^2 / dt),
+        //                                upper = imu_integ_cov_max)
+        // and mutates the ONE shared PreintegrationCombinedParams instance in
+        // place (tc.imu_params) before gtsam::PreintegratedCombinedMeasurements
+        // is constructed for the interval -- this backend mirrors that
+        // exactly: imu_params (this function's local shared_ptr, built once)
+        // is mutated in place immediately before each epoch's PIM object is
+        // constructed, so it affects only the PIM about to be integrated,
+        // never factors already linearized into the graph.
+        //
+        //   last_mres  = the PREVIOUS epoch's post-fit main DDPR RMS residual
+        //                [m] -- reference tc._last_main_ddpr_res /
+        //                _mres_signals.last_res, written once per epoch in
+        //                optimize/stage.py's _compute_postfit_diagnostics
+        //                immediately after main_ddpr_residuals() runs (i.e.
+        //                AFTER that epoch's ISAM2 update, using the smoothed
+        //                estimate, pre-FDE). This backend's equivalent is
+        //                the existing `last_ddpr_rms` local (already
+        //                computed under use_cp_hold_recovery /
+        //                use_epoch_quality_gates / use_sat_badness_downweight
+        //                for the CP-hold FSM) -- no new residual computation
+        //                needed, just a new consumer of the same value.
+        //   dt         = real elapsed seconds since the previous epoch
+        //                (reference tc._epoch_dt) -- this backend's
+        //                (epoch[i].time - epoch[i-1].time), floored the same
+        //                way (max(dt, 1e-3)).
+        //   stale_max  = imu_integration_covariance_stale_epochs (reference
+        //                reuses its unrelated-by-name
+        //                ddcp_res_weight_stale_max_epochs config field for
+        //                this same staleness test; ported here as its own
+        //                dedicated field since the two features are
+        //                independent in this backend). A long IMU-only
+        //                outage (no recent DDPR solve) must not carry
+        //                forward a possibly ancient inflation value, so the
+        //                override falls back to the static floor instead.
+        //
+        // Requires imu_integration_covariance to be set as the static floor.
+        // Master switch, default OFF (bit-identical baseline without it).
+        bool use_imu_integration_covariance_inflation = false;
+        double imu_integration_covariance_max = 0.5;       ///< reference imu_integ_cov_max
+        int imu_integration_covariance_stale_epochs = 2;   ///< reference ddcp_res_weight_stale_max_epochs
+
         // --- Phase 2 milestone 2c: incremental fixed-lag smoother ---
         // When true AND use_imu (implies use_pose3_state, GTSAM backend), the
         // GTSAM backend streams the graph through a

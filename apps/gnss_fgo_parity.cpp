@@ -108,6 +108,22 @@ struct Args {
     double varerr_a = -1.0;        // >=0: override elevation_sigma_err_a_m
     double varerr_b = -1.0;        // >=0: override elevation_sigma_err_b_m
     double varerr_eratio = -1.0;   // >=0: override elevation_sigma_pseudorange_ratio
+    // H1: IMU noise-grade alignment vs the reference's IMU_PRESETS['tactical']
+    // (config.py ~line 32). -1 = leave buildImuInput()'s current default.
+    double imu_accel_noise = -1.0;  // >=0: override accel_noise_sigma [m/s^2/sqrt(Hz)]
+    double imu_gyro_noise = -1.0;   // >=0: override gyro_noise_sigma [rad/s/sqrt(Hz)]
+    double imu_accel_bias = -1.0;   // >=0: override accel_bias_rw_sigma [m/s^3/sqrt(Hz)]
+    double imu_gyro_bias = -1.0;    // >=0: override gyro_bias_rw_sigma [rad/s^2/sqrt(Hz)]
+    bool imu_preset_tactical = false;  // convenience: apply all four tactical-grade values at once
+    // Reference parity: IMU integration-covariance value semantics + per-
+    // epoch inflation (FGOConfig::imu_integration_covariance /
+    // use_imu_integration_covariance_inflation, fgo.hpp) and gravity
+    // (ImuNoiseParams::gravity_mps2, currently hardcoded 9.80665 in
+    // buildImuInput() vs the reference's utils/imu.py:39 9.81).
+    double integ_cov = -1.0;       // >=0: override config.imu_integration_covariance (reference imu_integ_cov; 1e-3 is the reference value)
+    bool integ_cov_inflate = false;  // enable use_imu_integration_covariance_inflation
+    double integ_cov_max = -1.0;   // >=0: override config.imu_integration_covariance_max (reference imu_integ_cov_max, default 0.5)
+    double gravity_mps2 = -1.0;    // >=0: override problem.imu.noise.gravity_mps2 (reference 9.81; ours defaults 9.80665)
 };
 
 Args parseArgs(int argc, char** argv) {
@@ -258,6 +274,24 @@ Args parseArgs(int argc, char** argv) {
             args.varerr_b = std::stod(argv[++i]);
         } else if (a == "--varerr-eratio" && i + 1 < argc) {
             args.varerr_eratio = std::stod(argv[++i]);
+        } else if (a == "--imu-accel-noise" && i + 1 < argc) {
+            args.imu_accel_noise = std::stod(argv[++i]);
+        } else if (a == "--imu-gyro-noise" && i + 1 < argc) {
+            args.imu_gyro_noise = std::stod(argv[++i]);
+        } else if (a == "--imu-accel-bias" && i + 1 < argc) {
+            args.imu_accel_bias = std::stod(argv[++i]);
+        } else if (a == "--imu-gyro-bias" && i + 1 < argc) {
+            args.imu_gyro_bias = std::stod(argv[++i]);
+        } else if (a == "--imu-preset-tactical") {
+            args.imu_preset_tactical = true;
+        } else if (a == "--integ-cov" && i + 1 < argc) {
+            args.integ_cov = std::stod(argv[++i]);
+        } else if (a == "--integ-cov-inflate") {
+            args.integ_cov_inflate = true;
+        } else if (a == "--integ-cov-max" && i + 1 < argc) {
+            args.integ_cov_max = std::stod(argv[++i]);
+        } else if (a == "--gravity" && i + 1 < argc) {
+            args.gravity_mps2 = std::stod(argv[++i]);
         } else {
             std::cerr << "Unknown/incomplete arg: " << a << "\n";
             std::exit(2);
@@ -692,6 +726,28 @@ bool buildImuInput(const std::string& imu_path,
     return true;
 }
 
+// H1: apply CLI IMU noise overrides on top of buildImuInput()'s defaults.
+// --imu-preset-tactical sets all four to the reference's IMU_PRESETS['tactical']
+// (gnss_fgo/config.py ~line 32); individual --imu-accel-noise etc. win over the
+// preset when both are given, so a preset + single-field sweep composes cleanly.
+void applyImuNoiseOverrides(const Args& args, libgnss::FGOProcessor::FGOProblem& problem) {
+    if (args.imu_preset_tactical) {
+        problem.imu.noise.accel_noise_sigma = 2.84e-4;
+        problem.imu.noise.gyro_noise_sigma = 4.01e-5;
+        problem.imu.noise.accel_bias_rw_sigma = 3.14e-4;
+        problem.imu.noise.gyro_bias_rw_sigma = 9.70e-6;
+    }
+    if (args.imu_accel_noise >= 0.0) problem.imu.noise.accel_noise_sigma = args.imu_accel_noise;
+    if (args.imu_gyro_noise >= 0.0) problem.imu.noise.gyro_noise_sigma = args.imu_gyro_noise;
+    if (args.imu_accel_bias >= 0.0) problem.imu.noise.accel_bias_rw_sigma = args.imu_accel_bias;
+    if (args.imu_gyro_bias >= 0.0) problem.imu.noise.gyro_bias_rw_sigma = args.imu_gyro_bias;
+    // Gravity measured variant (see Args::gravity_mps2): the reference's
+    // utils/imu.py:39 uses gtsam::PreintegrationCombinedParams::MakeSharedU(9.81);
+    // buildImuInput() here defaults to 9.80665. Not applied silently -- only
+    // when --gravity is passed.
+    if (args.gravity_mps2 >= 0.0) problem.imu.noise.gravity_mps2 = args.gravity_mps2;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -930,6 +986,15 @@ int main(int argc, char** argv) {
     if (args.varerr_eratio >= 0.0) {
         config.elevation_sigma_pseudorange_ratio = args.varerr_eratio;
     }
+    if (args.integ_cov >= 0.0) {
+        config.imu_integration_covariance = args.integ_cov;
+    }
+    if (args.integ_cov_inflate) {
+        config.use_imu_integration_covariance_inflation = true;
+    }
+    if (args.integ_cov_max >= 0.0) {
+        config.imu_integration_covariance_max = args.integ_cov_max;
+    }
     const libgnss::FGOProcessor builder(config);
     const libgnss::FGOProcessor::FGOProblem problem =
         builder.buildDoubleDifferenceProblem(rover_epochs, base_epochs, nav, base_position);
@@ -1066,6 +1131,7 @@ int main(int argc, char** argv) {
             std::cerr << "Error: could not build IMU input for fixed-lag run.\n";
             return 1;
         }
+        applyImuNoiseOverrides(args, problem_imu);
         std::vector<RefRow> ref_rows;
         if (!args.ref_path.empty()) ref_rows = loadReference(args.ref_path);
 
@@ -1148,7 +1214,12 @@ int main(int argc, char** argv) {
                   << " m, err_b=" << config.elevation_sigma_err_b_m
                   << " m, eratio_pr=" << config.elevation_sigma_pseudorange_ratio
                   << ", sclkstab=" << config.elevation_sigma_clock_stability
-                  << " s/s)\n";
+                  << " s/s)\n"
+                  << "  IMU integration covariance: value=" << config.imu_integration_covariance
+                  << " m^2/s, inflation=" << (args.integ_cov_inflate ? "on" : "off")
+                  << " (cap=" << config.imu_integration_covariance_max
+                  << ", stale_epochs=" << config.imu_integration_covariance_stale_epochs
+                  << "), gravity=" << problem_imu.imu.noise.gravity_mps2 << " m/s^2\n";
         if (!ref_rows.empty()) {
             std::cout << "  horizontal error vs reference.csv:\n"
                       << "    FLOAT: n=" << he.n_float << " rms=" << he.float_rms
@@ -1349,6 +1420,7 @@ int main(int argc, char** argv) {
     if (!args.imu_path.empty()) {
         libgnss::FGOProcessor::FGOProblem problem_imu = problem;
         if (buildImuInput(args.imu_path, problem_imu)) {
+            applyImuNoiseOverrides(args, problem_imu);
             std::vector<RefRow> ref_rows;
             if (!args.ref_path.empty()) ref_rows = loadReference(args.ref_path);
 

@@ -713,7 +713,13 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
     const auto sq = [](double s) { return s * s; };
     imu_params->setAccelerometerCovariance(gtsam::I_3x3 * sq(problem.imu.noise.accel_noise_sigma));
     imu_params->setGyroscopeCovariance(gtsam::I_3x3 * sq(problem.imu.noise.gyro_noise_sigma));
-    imu_params->setIntegrationCovariance(gtsam::I_3x3 * sq(problem.imu.noise.integration_sigma));
+    // Reference parity (FGOConfig::imu_integration_covariance, fgo.hpp):
+    // imu_integration_covariance IS the covariance directly (reference
+    // imu_integ_cov value semantics -- no squaring), replacing the
+    // sq(integration_sigma) computation for this fixed-lag path. Default
+    // 1e-6 reproduces the harness's hardcoded integration_sigma=1e-3 squared,
+    // so this is bit-identical unless the new knob is overridden.
+    imu_params->setIntegrationCovariance(gtsam::I_3x3 * config.imu_integration_covariance);
     imu_params->setBiasAccCovariance(gtsam::I_3x3 * sq(problem.imu.noise.accel_bias_rw_sigma));
     imu_params->setBiasOmegaCovariance(gtsam::I_3x3 * sq(problem.imu.noise.gyro_bias_rw_sigma));
     const auto& imu_samples = problem.imu.samples_body_flu;
@@ -960,6 +966,12 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
     int cp_hold_release_streak = 0;  ///< consecutive clean epochs while held (reference _recov_cp_release_streak)
     int ddpr_bad_count = 0;          ///< consecutive bad epochs (reference _ddpr_bad_count)
     double last_ddpr_rms = 0.0;      ///< previous epoch's post-fit DDPR RMS (reference _last_main_ddpr_res)
+    // Epoch index at which last_ddpr_rms was last written (reference
+    // _last_main_ddpr_epoch / _mres_signals.epoch); sentinel far in the past
+    // so the very first epochs are always treated as stale (reference inits
+    // to -10**9). Feeds the imu_integration_covariance_inflation staleness
+    // test below.
+    long long last_ddpr_rms_epoch = -1000000000LL;
     bool pim_discontinuity = false;  ///< one-shot: break the IMU chain at the NEXT epoch (reference _pim_discontinuity)
     // DDPR-anchor bootstrap re-seed countdown (use_ddpr_anchor; reference
     // tc._tc_bootstrap_ddpr_epochs). While > 0, every epoch gets a
@@ -1406,6 +1418,28 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 ++sample_cursor;
             }
             win_begin = sample_cursor;
+            // Reference parity: residual-driven per-epoch integration-
+            // covariance inflation (FGOConfig::
+            // use_imu_integration_covariance_inflation; port of
+            // imu_preintegration.py's _apply_mres_integ_cov_override). Mutate
+            // the SHARED imu_params in place immediately before this epoch's
+            // PIM is constructed -- integrateMeasurement() below bakes the
+            // covariance in at integration time, so this affects only the
+            // PIM about to be built, never any already-linearized factor.
+            if (config.use_imu_integration_covariance_inflation) {
+                const int stale_max = config.imu_integration_covariance_stale_epochs;
+                const bool is_stale = stale_max > 0 &&
+                    (static_cast<long long>(i) - last_ddpr_rms_epoch) > stale_max;
+                const double default_cov = config.imu_integration_covariance;
+                double integ_eff = default_cov;
+                if (!is_stale) {
+                    const double dt_epoch = std::max(t1 - t0, 1e-3);
+                    integ_eff = std::max(default_cov, sq(last_ddpr_rms) / dt_epoch);
+                    const double cap = config.imu_integration_covariance_max;
+                    if (cap > 0.0) integ_eff = std::min(integ_eff, cap);
+                }
+                imu_params->setIntegrationCovariance(gtsam::I_3x3 * integ_eff);
+            }
             gtsam::PreintegratedCombinedMeasurements pim(imu_params, prev_bias);
             std::size_t j = sample_cursor;
             GNSSTime prev_time = t0;
@@ -1931,7 +1965,8 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
         // knobs but share this one (possibly expensive) residual pass. ---
         const bool need_ddpr_residuals =
             config.use_epoch_quality_gates || config.use_cp_hold_recovery ||
-            config.use_sat_badness_downweight;
+            config.use_sat_badness_downweight ||
+            config.use_imu_integration_covariance_inflation;
         int nsat = 0;
         double gdop = std::numeric_limits<double>::infinity();
         double ddpr_rms = 0.0;
@@ -2671,6 +2706,7 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 ddpr_bad_count = 0;
             }
             last_ddpr_rms = ddpr_rms;
+            last_ddpr_rms_epoch = static_cast<long long>(i);
         }
     }
     result.diagnostics.partial_lambda_ambiguity_fix_used = held_epoch_count > 0;
