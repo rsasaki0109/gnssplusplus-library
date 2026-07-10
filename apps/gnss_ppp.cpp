@@ -894,6 +894,14 @@ int main(int argc, char* argv[]) {
             // std) is still loose enough to capture urban-drive dynamics
             // but keeps that transient much smaller.
             ppp_config.initial_velocity_variance = 4.0;
+            // MRTKLIB literal-port track: the dynamics-model kinematic CLAS
+            // path is the MRTKLIB-equivalence path, so it uses MRTKLIB's
+            // varerr measurement variance model. Env kill switch for A/B:
+            // GNSS_PPP_CLAS_MRTKLIB_FLOAT_PARITY=0 restores the flat model.
+            const char* parity_env =
+                std::getenv("GNSS_PPP_CLAS_MRTKLIB_FLOAT_PARITY");
+            ppp_config.clas_mrtklib_float_parity =
+                parity_env == nullptr || std::string(parity_env) != "0";
         }
         ppp_config.emit_solution_epoch_time = options.emit_epoch_time;
         ppp_config.apply_static_anchor_blend = options.apply_static_anchor_blend;

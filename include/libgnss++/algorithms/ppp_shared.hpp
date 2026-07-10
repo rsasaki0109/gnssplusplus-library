@@ -190,6 +190,13 @@ struct PPPConfig {
     double clas_anchor_sigma = 5.0;               // SPP anchor constraint sigma (m)
     double clas_outlier_sigma_scale = 50.0;       // Inflate variance when residual > N*sigma
     bool clas_decouple_clock_position = true;      // Zero clock cross-covariance each epoch
+    // MRTKLIB literal-port track (kinematic CLAS + dynamics model only):
+    // when set, the float chain uses MRTKLIB's varerr() measurement
+    // variance model (elevation-dependent, code = 50x phase, L2 phase
+    // factor) instead of the historical flat clas_phase_variance /
+    // clas_code_variance_scale weighting. White-noise kinematic, static
+    // and all non-CLAS paths ignore this flag entirely.
+    bool clas_mrtklib_float_parity = false;
 
     bool apply_ocean_loading = false;
     bool apply_solid_earth_tides = true;

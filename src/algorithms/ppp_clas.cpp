@@ -75,6 +75,60 @@ double elevationWeight(double elevation_rad) {
     return 1.0 / (s * s);
 }
 
+// ---------------------------------------------------------------------------
+// MRTKLIB varerr() parity (mrtk_ppp_rtk.c:322) with the CLAS benchmark
+// constants from conf/benchmark/clas.toml [kalman_filter.measurement_error]:
+//   phase = 0.01 m (err[1]), phase_elevation = 0.005 m (err[2]),
+//   code_phase_ratio_L1 = 50 (eratio[0]);
+//   var = a^2 + b^2 / sin^2(el),  code rows multiply a,b by eratio;
+//   GPS/QZS L2-slot phase rows get x(2.55/1.55)^2 (mrtk_ppp_rtk.c:1633);
+//   EFACT is 1.0 for GPS/Galileo/QZSS (mrtk_const.h) so it is omitted.
+// Only active on the dynamics-model kinematic CLAS path (the MRTKLIB
+// equivalence track); white-noise/static keep the historical flat
+// clas_code_variance_scale / clas_phase_variance / (1/sin^2 el) model.
+constexpr double kMrtklibPhaseErrConstM = 0.01;
+constexpr double kMrtklibPhaseErrElevM = 0.005;
+constexpr double kMrtklibCodePhaseRatio = 50.0;
+constexpr double kMrtklibL2PhaseVarFactor = (2.55 / 1.55) * (2.55 / 1.55);
+constexpr double kL2FrequencyHz = 1227.60e6;
+
+bool clasMrtklibFloatParity(const ppp_shared::PPPConfig& config) {
+    return config.clas_mrtklib_float_parity &&
+           config.kinematic_mode && !config.low_dynamics_mode &&
+           config.use_clas_osr_filter && config.use_dynamics_model;
+}
+
+bool isMrtklibL2Slot(int freq_index, double frequency_hz) {
+    return freq_index > 0 && std::abs(frequency_hz - kL2FrequencyHz) < 1.0e6;
+}
+
+double clasPhaseVariance(const ppp_shared::PPPConfig& config,
+                         double elevation_rad,
+                         int freq_index,
+                         double frequency_hz) {
+    if (!clasMrtklibFloatParity(config)) {
+        return config.clas_phase_variance * elevationWeight(elevation_rad);
+    }
+    const double s = std::sin(elevation_rad);
+    double var = kMrtklibPhaseErrConstM * kMrtklibPhaseErrConstM +
+                 (kMrtklibPhaseErrElevM * kMrtklibPhaseErrElevM) / (s * s);
+    if (isMrtklibL2Slot(freq_index, frequency_hz)) {
+        var *= kMrtklibL2PhaseVarFactor;
+    }
+    return var;
+}
+
+double clasCodeVariance(const ppp_shared::PPPConfig& config,
+                        double elevation_rad) {
+    if (!clasMrtklibFloatParity(config)) {
+        return config.clas_code_variance_scale * elevationWeight(elevation_rad);
+    }
+    const double s = std::sin(elevation_rad);
+    const double a = kMrtklibCodePhaseRatio * kMrtklibPhaseErrConstM;
+    const double b = kMrtklibCodePhaseRatio * kMrtklibPhaseErrElevM;
+    return a * a + (b * b) / (s * s);
+}
+
 int receiverClockStateIndex(const ppp_shared::PPPState& filter_state,
                             const SatelliteId& satellite) {
     switch (satellite.system) {
@@ -405,8 +459,7 @@ void dumpClasCodeRows(
                 geo - sat_clk_m + receiver_clock_m + code_trop_model +
                 iono_scale * iono_state_l1_m;
             const double residual = corrected_p - predicted;
-            const double variance =
-                config.clas_code_variance_scale * elevationWeight(osr.elevation);
+            const double variance = clasCodeVariance(config, osr.elevation);
             const bool have_atmos_ref =
                 osr.atmos_reference_time.week != 0 ||
                 std::abs(osr.atmos_reference_time.tow) > 0.0;
@@ -641,7 +694,7 @@ void dumpClasPhaseRows(
                 predicted_no_amb + filter_state.state(amb_idx);
             const double residual = l_corr - predicted;
             const double variance =
-                config.clas_phase_variance * elevationWeight(osr.elevation);
+                clasPhaseVariance(config, osr.elevation, f, osr.frequencies[f]);
             const bool have_atmos_ref =
                 osr.atmos_reference_time.week != 0 ||
                 std::abs(osr.atmos_reference_time.tow) > 0.0;
@@ -1008,12 +1061,17 @@ void initializeFilterState(
             config.clas_clock_variance;
     }
     filter_state.iono_index = isb_start;
+    // MRTKLIB literal-port track: clas.toml [kalman_filter.initial_std]
+    // ionosphere = 0.01 m (the state is residual iono after the CLAS grid
+    // STEC correction; mrtk_ppp_rtk.c:498 initx(1e-6, SQR(std[1]))).
+    const double iono_initial_variance = clasMrtklibFloatParity(config)
+        ? 0.01 * 0.01
+        : std::min(config.initial_ionosphere_variance, 1.0);
     for (size_t index = 0; index < iono_satellites.size(); ++index) {
         const int state_index = filter_state.iono_index + static_cast<int>(index);
         filter_state.ionosphere_indices[iono_satellites[index]] = state_index;
         filter_state.state(state_index) = 0.0;
-        filter_state.covariance(state_index, state_index) =
-            std::min(config.initial_ionosphere_variance, 1.0);
+        filter_state.covariance(state_index, state_index) = iono_initial_variance;
     }
     filter_state.amb_index = base;
     filter_state.total_states = base;
@@ -1428,18 +1486,29 @@ void predictFilterState(
     }
     Q(filter_state.trop_index, filter_state.trop_index) =
         effectiveClasTropProcessNoise(config) * dt;
+    // MRTKLIB literal-port track: clas.toml [kalman_filter.process_noise]
+    // ionosphere = 0.001 (std, m/sqrt(s)) and bias = 0.001 -> Q = 1e-6*dt
+    // (mrtk_ppp_rtk.c:505-517 udion with adaptive filter disabled, and
+    // :752 udbias). The historical path keeps its existing tuning.
+    const bool mrtklib_parity = clasMrtklibFloatParity(config);
+    constexpr double kMrtklibIonoProcessNoise = 0.001 * 0.001;   // (m^2/s)
+    constexpr double kMrtklibBiasProcessNoise = 0.001 * 0.001;   // (m^2/s)
     if (config.estimate_ionosphere) {
-        const double iono_process_noise =
-            effectiveClasIonoProcessNoise(config);
+        const double iono_process_noise = mrtklib_parity
+            ? kMrtklibIonoProcessNoise
+            : effectiveClasIonoProcessNoise(config);
         for (const auto& [_, state_index] : filter_state.ionosphere_indices) {
             if (state_index >= 0 && state_index < nx) {
                 Q(state_index, state_index) = iono_process_noise * dt;
             }
         }
     }
+    const double bias_process_noise = mrtklib_parity
+        ? kMrtklibBiasProcessNoise
+        : config.process_noise_ambiguity;
     for (const auto& [_, state_index] : filter_state.ambiguity_indices) {
         if (state_index >= 0 && state_index < nx) {
-            Q(state_index, state_index) = config.process_noise_ambiguity * dt;
+            Q(state_index, state_index) = bias_process_noise * dt;
         }
     }
     filter_state.covariance = F * filter_state.covariance * F.transpose() + Q;
@@ -1705,7 +1774,7 @@ MeasurementBuildResult buildEpochMeasurements(
                     result.observed_iono_states.insert(osr.satellite);
                 }
                 row.residual = residual;
-                row.variance = config.clas_code_variance_scale * el_weight;
+                row.variance = clasCodeVariance(config, osr.elevation);
                 row.satellite = osr.satellite;
                 row.is_phase = false;
                 row.freq_index = f;
@@ -1830,7 +1899,8 @@ MeasurementBuildResult buildEpochMeasurements(
                 }
                 row.H(amb_idx) = 1.0;
                 row.residual = residual;
-                row.variance = config.clas_phase_variance * el_weight;
+                row.variance =
+                    clasPhaseVariance(config, osr.elevation, f, osr.frequencies[f]);
                 row.satellite = osr.satellite;
                 row.is_phase = true;
                 row.freq_index = f;
@@ -2290,7 +2360,8 @@ FixValidationStats validateFixedSolution(
                 (carrier_phase_m - applied_corrections.carrier_phase_correction_m) -
                 (phase_predicted - iono_scale * iono_state_m +
                  filter_state.state(ambiguity_index));
-            const double variance = config.clas_phase_variance * el_weight;
+            const double variance =
+                clasPhaseVariance(config, osr.elevation, f, osr.frequencies[f]);
             phase_residuals.push_back({
                 ambiguity_satellite,
                 osr.satellite,

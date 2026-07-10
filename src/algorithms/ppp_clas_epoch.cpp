@@ -331,6 +331,19 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
 
     PositionSolution seed = spp_processor_.processEpoch(obs, nav);
     detectCycleSlips(obs, nav);
+    // MRTKLIB literal-port track: clas.toml [kalman_filter.initial_std]
+    // bias = 100 -> initial ambiguity variance 1e4 m^2 (mrtk_ppp_rtk.c:792
+    // initx(..., SQR(rtk->opt.std[0]), ...)). Dynamics-model kinematic CLAS
+    // only; other paths keep the historical 3600 / 1e6 values.
+    const bool clas_mrtklib_parity =
+        ppp_config_.clas_mrtklib_float_parity &&
+        ppp_config_.kinematic_mode && !ppp_config_.low_dynamics_mode &&
+        ppp_config_.use_clas_osr_filter && ppp_config_.use_dynamics_model;
+    const double clas_ambiguity_initial_variance =
+        precise_products_loaded_
+            ? 1e6
+            : (clas_mrtklib_parity ? 1e4
+                                   : ppp_config_.initial_ambiguity_variance);
     const auto epoch_preparation = ppp_clas::prepareEpochState(
         obs,
         seed,
@@ -347,7 +360,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         ambiguity_states_,
         clas_dispersion_compensation_,
         clas_phase_bias_repair_,
-        precise_products_loaded_ ? 1e6 : ppp_config_.initial_ambiguity_variance);
+        clas_ambiguity_initial_variance);
     if (!epoch_preparation.ready) {
         if (allow_hybrid_fallback) {
             return fallback_to_standard("prepare_epoch_state");
@@ -388,7 +401,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             [&](const SatelliteId& satellite, SignalType signal) {
                 resetAmbiguity(satellite, signal);
             },
-            precise_products_loaded_ ? 1e6 : ppp_config_.initial_ambiguity_variance,
+            clas_ambiguity_initial_variance,
             pppDebugEnabled());
         if (slip_stats.total_resets > 0) {
             clas_dd_accumulator_ = {};
@@ -432,7 +445,8 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         return solution;
     }
 
-    ppp_clas::ensureAmbiguityStates(filter_state_, osr_corrections);
+    ppp_clas::ensureAmbiguityStates(
+        filter_state_, osr_corrections, clas_ambiguity_initial_variance);
     if (pppEnvOverrides().clas_nl_datum_reset &&
         ppp_config_.enable_ambiguity_resolution &&
         ppp_config_.ar_method == PPPConfig::ARMethod::DD_WLNL &&
