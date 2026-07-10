@@ -100,6 +100,7 @@ struct ClasSlipDetectionStats {
     int gf_count = 0;
     int mw_count = 0;
     int outage_resets = 0;
+    int per_sat_outage_resets = 0;
     int total_resets = 0;
 };
 

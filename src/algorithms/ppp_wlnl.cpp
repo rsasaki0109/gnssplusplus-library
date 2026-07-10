@@ -130,6 +130,7 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
             std::cerr << "[PPP-WLNL] insufficient candidates: " << n
                       << " (total_amb=" << eligible_ambiguities.total_ambiguities
                       << " reinit=" << eligible_ambiguities.skipped_reinitialization
+                      << " slipwin=" << eligible_ambiguities.skipped_slip_window
                       << " lock=" << eligible_ambiguities.skipped_lock
                       << " scale=" << eligible_ambiguities.skipped_scale
                       << " idx=" << eligible_ambiguities.skipped_index << ")\n";
@@ -138,7 +139,17 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
     }
 
     const auto& wl_summary = wlnl_preparation.wl_summary;
-    if (wl_summary.fixed_count < ppp_config_.min_satellites_for_ar) {
+    // MRTKLIB parity (kinematic CLAS): resamb_LAMBDA needs minamb = 6 DD rows
+    // = 3 dual-band DD pairs = 4 satellites sharing a system reference. The
+    // WL-fixed count only tallies real (L1) satellites, so requiring
+    // min_satellites_for_ar (6) here demanded 6 WL-fixed satellites -- two
+    // more than the DD geometry MRTKLIB fixes with (median 7 tracked sats,
+    // SNR-masked subset). Non-kinematic paths keep the historical floor.
+    const int min_wl_fixes =
+        (ppp_config_.use_clas_osr_filter && ppp_config_.kinematic_mode)
+            ? 4
+            : ppp_config_.min_satellites_for_ar;
+    if (wl_summary.fixed_count < min_wl_fixes) {
         if (pppDebugEnabled()) {
             std::cerr << "[PPP-WLNL] insufficient WL fixes: " << wl_summary.fixed_count
                       << " n=" << n << " max_mw=" << wl_summary.max_mw_count << "\n";

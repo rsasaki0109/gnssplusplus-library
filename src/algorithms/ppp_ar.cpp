@@ -80,7 +80,7 @@ EligibleAmbiguities collectEligibleAmbiguities(
         if (time.week > 0 && ambiguity.has_last_slip_time &&
             slip_ar_exclusion_seconds > 0.0 &&
             (time - ambiguity.last_slip_time) < slip_ar_exclusion_seconds) {
-            ++eligible.skipped_reinitialization;
+            ++eligible.skipped_slip_window;
             continue;
         }
         if (!std::isfinite(ambiguity.ambiguity_scale_m) || ambiguity.ambiguity_scale_m <= 0.0) {
@@ -156,8 +156,19 @@ WlnlPreparation prepareWlnlCandidates(
     preparation.min_lock_count = use_ssr_products
         ? std::max(1, config.wl_min_averaging_epochs)
         : config.convergence_min_epochs;
+    // MRTKLIB parity (kinematic CLAS): post-slip AR re-eligibility is purely
+    // lock-count based -- a slip sets lock = -minlock and the satellite
+    // becomes DD-eligible again once lock > 0 (minlock+1 = 6 epochs = 1.2 s at
+    // 5 Hz; mrtk_ppp_rtk.c:875/1718/2561). resetAmbiguity() already zeroes
+    // lock_count on every slip, so the min_lock_count check above provides the
+    // same behaviour; the additional 10 s wall-clock exclusion has no MRTKLIB
+    // counterpart and starves urban AR (50 epochs at 5 Hz vs MRTKLIB's 6).
+    // Non-kinematic paths keep the historical 10 s window.
+    const double slip_ar_exclusion_seconds =
+        (config.use_clas_osr_filter && config.kinematic_mode) ? 0.0 : 10.0;
     preparation.eligible_ambiguities = collectEligibleAmbiguities(
-        filter_state, ambiguity_states, preparation.min_lock_count, time);
+        filter_state, ambiguity_states, preparation.min_lock_count, time,
+        slip_ar_exclusion_seconds);
     preparation.wl_summary = applyWideLaneFixes(
         config, ambiguity_states, preparation.eligible_ambiguities.satellites, debug_enabled);
     return preparation;
@@ -480,6 +491,47 @@ bool validStateDdEndpoint(int state_index, double scale_m, int total_states) {
            scale_m > 0.0;
 }
 
+// Resolve a satellite's L2 ambiguity state endpoint. The generic per-freq
+// path registers L2 states in ambiguity_l2_indices, but the CLAS per-freq
+// path stores them as prn+100 pseudo-satellites inside ambiguity_indices --
+// leaving ambiguity_l2_indices empty and (before this fallback) silently
+// dropping every L2 row from the state-DD system: measured on tokyo_run2
+// dynamics, all 13k+ resamb attempts and every hold constraint were L1-only,
+// i.e. LAMBDA searched half of MRTKLIB's nb with no L2 integer constraint.
+bool resolveL2StateEndpoint(
+    const ppp_shared::PPPState& filter_state,
+    const std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
+    const SatelliteId& satellite,
+    double wavelength_l2_hint,
+    bool allow_pseudo_states,
+    int& state_index,
+    double& scale_m) {
+    const auto l2_it = filter_state.ambiguity_l2_indices.find(satellite);
+    if (l2_it != filter_state.ambiguity_l2_indices.end()) {
+        state_index = l2_it->second;
+        scale_m = wavelength_l2_hint;
+        return validStateDdEndpoint(state_index, scale_m,
+                                    filter_state.total_states);
+    }
+    if (!allow_pseudo_states) {
+        return false;
+    }
+    const SatelliteId l2_satellite(
+        satellite.system,
+        static_cast<uint8_t>(
+            std::min(255, static_cast<int>(satellite.prn) + 100)));
+    const auto idx_it = filter_state.ambiguity_indices.find(l2_satellite);
+    const auto amb_it = ambiguity_states.find(l2_satellite);
+    if (idx_it == filter_state.ambiguity_indices.end() ||
+        amb_it == ambiguity_states.end()) {
+        return false;
+    }
+    state_index = idx_it->second;
+    scale_m = amb_it->second.ambiguity_scale_m;
+    return validStateDdEndpoint(state_index, scale_m,
+                                filter_state.total_states);
+}
+
 bool conditionWlnlFilterStateDd(
     const ppp_shared::PPPConfig& config,
     const ppp_shared::PPPState& filter_state,
@@ -545,25 +597,30 @@ bool conditionWlnlFilterStateDd(
             });
         }
 
-        const auto ref_l2_state_it = filter_state.ambiguity_l2_indices.find(ref_sat);
-        const auto sat_l2_state_it = filter_state.ambiguity_l2_indices.find(sat);
-        const double ref_l2_scale = ref_amb_it->second.wavelength_l2;
-        const double sat_l2_scale = sat_amb_it->second.wavelength_l2;
-        if (ref_l2_state_it != filter_state.ambiguity_l2_indices.end() &&
-            sat_l2_state_it != filter_state.ambiguity_l2_indices.end() &&
-            validStateDdEndpoint(
-                ref_l2_state_it->second,
-                ref_l2_scale,
-                filter_state.total_states) &&
-            validStateDdEndpoint(
-                sat_l2_state_it->second,
-                sat_l2_scale,
-                filter_state.total_states)) {
+        // Dynamics-gated: the L2 pseudo-state rows change LAMBDA's system;
+        // the white-noise CLAS path keeps its historical L1-only resamb
+        // (verified: with L2 rows enabled the white-noise ratio never clears
+        // the table and its fix rate collapses to zero).
+        const bool allow_l2_pseudo =
+            config.use_clas_osr_filter && config.kinematic_mode &&
+            config.use_dynamics_model && !config.low_dynamics_mode;
+        int ref_l2_state = -1;
+        int sat_l2_state = -1;
+        double ref_l2_scale = 0.0;
+        double sat_l2_scale = 0.0;
+        if (resolveL2StateEndpoint(filter_state, ambiguity_states, ref_sat,
+                                   ref_amb_it->second.wavelength_l2,
+                                   allow_l2_pseudo,
+                                   ref_l2_state, ref_l2_scale) &&
+            resolveL2StateEndpoint(filter_state, ambiguity_states, sat,
+                                   sat_amb_it->second.wavelength_l2,
+                                   allow_l2_pseudo,
+                                   sat_l2_state, sat_l2_scale)) {
             rows.push_back({
                 ref_sat,
                 sat,
-                ref_l2_state_it->second,
-                sat_l2_state_it->second,
+                ref_l2_state,
+                sat_l2_state,
                 ref_l2_scale,
                 sat_l2_scale,
                 l2_fixed_cycles,
@@ -574,6 +631,11 @@ bool conditionWlnlFilterStateDd(
 
     const int nb = static_cast<int>(rows.size());
     attempt.state_dd_count = nb;
+    // Historical 4-row floor. MRTKLIB's minamb = 6 counts DD rows in a state
+    // where every satellite carries valid L1 and L2 bias states; our state-DD
+    // rows are sparser (L2 endpoints are frequently invalid), so 6 here would
+    // be effectively stricter than MRTKLIB -- measured on tokyo_run2
+    // white-noise it eliminated every fix (row count peaked at 5).
     if (nb < 4) {
         if (debug_enabled) {
             std::cerr << "[PPP-WLNL-RESAMB] insufficient state DD rows: "
@@ -651,7 +713,14 @@ bool conditionWlnlFilterStateDd(
     attempt.state_lambda_solved = true;
     attempt.state_lambda_ratio = state_ratio;
     attempt.state_required_ratio = config.ar_ratio_threshold;
-    if (config.use_clas_osr_filter) {
+    if (config.use_clas_osr_filter && config.kinematic_mode) {
+        // MRTKLIB parity: the ratio threshold is the nb-dependent F-test
+        // table ONLY (mrtk_ppp_rtk.c:2062-2063, thres = qf[alpha][nb-1] with
+        // clas.toml alpha = "10%"); opt.thresar plays no role when alpha is
+        // configured. Taking max(3.0, table) was stricter than MRTKLIB for
+        // every nb >= 7 (table drops to 2.78 at nb=7, 2.15 at nb=12).
+        attempt.state_required_ratio = claslibRatioThresholdForNb(nb);
+    } else if (config.use_clas_osr_filter) {
         attempt.state_required_ratio =
             std::max(attempt.state_required_ratio, claslibRatioThresholdForNb(nb));
     }
@@ -857,7 +926,15 @@ WlnlFixAttempt tryWlnlFix(
 
     const int dd_pair_count = static_cast<int>(dd_pairs.size());
     attempt.nb = dd_pair_count;
-    if (dd_pair_count < 4) {
+    // MRTKLIB parity (kinematic CLAS): resamb_LAMBDA requires minamb = 6 DD
+    // ROWS counting L1 and L2 separately (mrtk_ppp_rtk.c:2015, clas.toml
+    // partial_ar.min_ambiguities = 6), i.e. 3 dual-band DD pairs. The
+    // state-DD builder below enforces the 6-row floor; here 3 NL pairs
+    // suffice. Non-kinematic paths keep the historical 4-pair floor.
+    const bool kinematic_clas_nb_parity =
+        config.use_clas_osr_filter && config.kinematic_mode;
+    const int min_dd_pairs = kinematic_clas_nb_parity ? 3 : 4;
+    if (dd_pair_count < min_dd_pairs) {
         if (debug_enabled) {
             std::cerr << "[PPP-WLNL] insufficient DD NL pairs: "
                       << dd_pair_count << "\n";
@@ -892,7 +969,7 @@ WlnlFixAttempt tryWlnlFix(
         }
     }
 
-    if (valid_dd < 4) {
+    if (valid_dd < min_dd_pairs) {
         if (debug_enabled) {
             std::cerr << "[PPP-WLNL] insufficient valid DD NL: " << valid_dd << "\n";
         }
@@ -1070,9 +1147,13 @@ WlnlFixAttempt tryWlnlFixWithPar(
               });
 
     std::set<SatelliteId> excluded_real_satellites;
+    // MRTKLIB partial AR floor (clas.toml): max_excluded_sats = 4,
+    // min_ambiguities = 6 DD rows = 3 dual-band pairs = 4 real satellites.
+    constexpr int kMrtklibParMinRealSatellites = 4;
     const int max_exclusions = std::min(
         4,
-        std::max(0, static_cast<int>(par_candidates.size()) - config.min_satellites_for_ar));
+        std::max(0, static_cast<int>(par_candidates.size()) -
+                        kMrtklibParMinRealSatellites));
 
     for (int iteration = 0; iteration < max_exclusions && !best_attempt.fixed; ++iteration) {
         SatelliteId best_exclusion;
@@ -1418,7 +1499,8 @@ bool buildWlnlHoldConstraints(
     const ppp_shared::PPPState& fixed_state,
     const std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
     const std::map<SatelliteId, double>& satellite_elevations_rad,
-    std::vector<WlnlHoldConstraint>& constraints) {
+    std::vector<WlnlHoldConstraint>& constraints,
+    bool allow_l2_pseudo_states) {
     constraints.clear();
 
     std::vector<SatelliteId> fixed_satellites;
@@ -1506,23 +1588,24 @@ bool buildWlnlHoldConstraints(
             sat_el_it != satellite_elevations_rad.end() ? sat_el_it->second : 0.0;
         constraints.push_back(constraint);
 
-        const auto ref_l2_state_it = fixed_state.ambiguity_l2_indices.find(ref_satellite);
-        const auto sat_l2_state_it = fixed_state.ambiguity_l2_indices.find(sat_satellite);
-        const double ref_l2_scale = ref_amb_it->second.wavelength_l2;
-        const double sat_l2_scale = sat_amb_it->second.wavelength_l2;
-        if (ref_l2_state_it != fixed_state.ambiguity_l2_indices.end() &&
-            sat_l2_state_it != fixed_state.ambiguity_l2_indices.end() &&
-            validStateDdEndpoint(
-                ref_l2_state_it->second, ref_l2_scale, fixed_state.total_states) &&
-            validStateDdEndpoint(
-                sat_l2_state_it->second, sat_l2_scale, fixed_state.total_states) &&
-            ref_l2_scale > 0.0 && sat_l2_scale > 0.0) {
+        int ref_l2_state = -1;
+        int sat_l2_state = -1;
+        double ref_l2_scale = 0.0;
+        double sat_l2_scale = 0.0;
+        if (resolveL2StateEndpoint(fixed_state, ambiguity_states, ref_satellite,
+                                   ref_amb_it->second.wavelength_l2,
+                                   allow_l2_pseudo_states,
+                                   ref_l2_state, ref_l2_scale) &&
+            resolveL2StateEndpoint(fixed_state, ambiguity_states, sat_satellite,
+                                   sat_amb_it->second.wavelength_l2,
+                                   allow_l2_pseudo_states,
+                                   sat_l2_state, sat_l2_scale)) {
             const double l2_fixed_dd_m =
-                fixed_state.state(ref_l2_state_it->second) -
-                fixed_state.state(sat_l2_state_it->second);
+                fixed_state.state(ref_l2_state) -
+                fixed_state.state(sat_l2_state);
             WlnlHoldConstraint l2_constraint;
-            l2_constraint.ref_state = ref_l2_state_it->second;
-            l2_constraint.sat_state = sat_l2_state_it->second;
+            l2_constraint.ref_state = ref_l2_state;
+            l2_constraint.sat_state = sat_l2_state;
             l2_constraint.fixed_dd_m = l2_fixed_dd_m;
             l2_constraint.ambiguity_scale_m = ref_l2_scale;
             l2_constraint.ref_satellite = ref_satellite;

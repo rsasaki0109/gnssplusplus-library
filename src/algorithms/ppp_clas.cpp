@@ -1023,6 +1023,12 @@ namespace {
 
 constexpr double kClasNominalEpochIntervalS = 0.2;
 constexpr double kClasOutageGapResetS = 2.0;
+// MRTKLIB clas.toml out_count = 1 (opt.maxout): reset a satellite's ambiguity
+// once its observations were missing for MORE than maxout consecutive epochs
+// (outc = 2 triggers the reset, mrtk_ppp_rtk.c:865). Expressed as a gap in
+// units of the current epoch cadence: present = 1*dt, missed one epoch =
+// 2*dt (kept), missed two = 3*dt (reset); threshold 2.5*dt separates them.
+constexpr double kClasPerSatOutageEpochs = 2.0;
 constexpr double kMinimumGeometryFreeSlipThresholdMeters = 0.05;
 // MRTKLIB uses GF-only slip at 0.05 m; MW-mean is native-only. Raised from 0.5
 // to reduce Galileo burst false slips (see gnss_mrtklib_diff_report.md Q4).
@@ -1127,6 +1133,25 @@ ClasSlipDetectionStats detectClasCycleSlips(
         bool gf_slip = false;
         bool mw_slip = false;
 
+        // MRTKLIB per-satellite outage reset (mrtk_ppp_rtk.c:865-875,
+        // clas.toml out_count = 1): a satellite whose observations were
+        // missing (or whose measurement update failed) for more than maxout
+        // consecutive epochs gets its ambiguity fully reset and lock
+        // restarted. Without this a satellite blocked for a few seconds
+        // returns with its stale ambiguity still AR-eligible -- the GF/MW
+        // detectors compare against seconds-old history and can miss the
+        // integer break, producing self-consistent wrong fixes. The global
+        // outage_gap branch below only covers receiver-wide gaps.
+        bool per_sat_outage = false;
+        if (config.use_clas_osr_filter && !outage_gap &&
+            ambiguity.last_time.week > 0 && dt_seconds > 0.0) {
+            const double sat_gap_s = obs.time - ambiguity.last_time;
+            if (sat_gap_s > kClasPerSatOutageEpochs * dt_seconds + 0.5 * dt_seconds) {
+                per_sat_outage = true;
+                ++stats.per_sat_outage_resets;
+            }
+        }
+
         if (outage_gap) {
             ++stats.outage_resets;
             ambiguity.has_last_geometry_free = false;
@@ -1170,7 +1195,8 @@ ClasSlipDetectionStats detectClasCycleSlips(
             ambiguity.has_last_melbourne_wubbena = true;
         }
 
-        if (!lli_slip && !gf_slip && !mw_slip && !outage_resets_ambiguity) {
+        if (!lli_slip && !gf_slip && !mw_slip && !outage_resets_ambiguity &&
+            !per_sat_outage) {
             continue;
         }
 
@@ -1228,6 +1254,12 @@ ClasSlipDetectionStats detectClasCycleSlips(
                     reason += "+";
                 }
                 reason += "outage";
+            }
+            if (per_sat_outage) {
+                if (!reason.empty()) {
+                    reason += "+";
+                }
+                reason += "outage_sat";
             }
             std::cerr << "[CLAS-SLIP] " << osr.satellite.toString()
                       << " tow=" << obs.time.tow

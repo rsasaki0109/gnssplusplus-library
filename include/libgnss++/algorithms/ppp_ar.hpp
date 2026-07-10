@@ -46,7 +46,8 @@ bool buildWlnlHoldConstraints(
     const ppp_shared::PPPState& fixed_state,
     const std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
     const std::map<SatelliteId, double>& satellite_elevations_rad,
-    std::vector<WlnlHoldConstraint>& constraints);
+    std::vector<WlnlHoldConstraint>& constraints,
+    bool allow_l2_pseudo_states = false);
 
 bool applyWlnlHoldAmbiguity(
     ppp_shared::PPPState& filter_state,
@@ -79,6 +80,7 @@ struct EligibleAmbiguities {
     int total_ambiguities = 0;
     int skipped_reinitialization = 0;
     int skipped_lock = 0;
+    int skipped_slip_window = 0;
     int skipped_scale = 0;
     int skipped_index = 0;
 };

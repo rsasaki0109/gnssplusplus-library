@@ -656,11 +656,25 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
                         last_clas_constrained_fixed_state_,
                         ambiguity_states_,
                         clas_satellite_elevations_rad,
-                        hold_constraints)) {
+                        hold_constraints,
+                        ppp_config_.use_dynamics_model &&
+                            !ppp_config_.low_dynamics_mode)) {
                     clas_wlnl_hold_.constraints = std::move(hold_constraints);
                     clas_wlnl_hold_.active = true;
-                    ppp_ar::applyWlnlHoldAmbiguity(
+                    const bool hold_applied = ppp_ar::applyWlnlHoldAmbiguity(
                         filter_state_, clas_wlnl_hold_.constraints);
+                    if (pppDebugEnabled()) {
+                        std::cerr << "[CLAS-WLNL-HOLD] applied=" << hold_applied
+                                  << " constraints="
+                                  << clas_wlnl_hold_.constraints.size()
+                                  << " nfix="
+                                  << clas_wlnl_hold_.consecutive_fix_count
+                                  << " chisq=" << phase_chisq << "\n";
+                    }
+                } else if (pppDebugEnabled()) {
+                    std::cerr << "[CLAS-WLNL-HOLD] skipped nfix="
+                              << clas_wlnl_hold_.consecutive_fix_count
+                              << " chisq=" << phase_chisq << "\n";
                 }
             }
         } else {
