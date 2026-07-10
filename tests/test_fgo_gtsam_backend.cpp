@@ -287,11 +287,18 @@ struct CpHoldTestOptions {
     std::set<std::size_t> pr_corrupt_epochs;
     double pr_baseline_bias_m = 0.0;       ///< applied to every target satellite
     double pr_dominant_extra_bias_m = 0.0;  ///< additional bias, satellite index 1 only
+    // Satellite geometry override; empty = gtsamParitySatelliteGeometry().
+    // The fixed-lag per-epoch LAMBDA has a hard floor of 6 candidate
+    // ambiguities (min_candidates in fgo_gtsam_backend.cpp), which the
+    // default 6-satellite geometry (5 ambiguities) never reaches -- tests
+    // that need LAMBDA/fix-and-hold to actually run must pass a bigger set.
+    std::vector<Vector3d> satellites;
 };
 
 FGOProcessor::FGOProblem makeCpHoldFixedLagProblem(const CpHoldTestOptions& opt) {
     FGOProcessor::FGOProblem problem;
-    const auto satellites = gtsamParitySatelliteGeometry();
+    const auto satellites =
+        opt.satellites.empty() ? gtsamParitySatelliteGeometry() : opt.satellites;
     const double wavelength = constants::GPS_L1_WAVELENGTH;
 
     const Vector3d true_position(1113194.0, -4841695.0, 3985350.0);
@@ -664,6 +671,110 @@ TEST(FGOCpHoldFsmTest, MultipathDominatedEpochIsSkipped) {
     EXPECT_GT(result.diagnostics.sanity_multipath_skips, 0u);
     EXPECT_EQ(result.diagnostics.sanity_mass_resets, 0u)
         << "the multipath skip must prevent the persist path from ever resetting";
+}
+
+// ----------------------------------------------------------------------------
+// Leaky persist accumulator (FGOConfig::use_cp_hold_leaky_persist) -- C1.
+// Scenario: an INTERMITTENTLY-bad stretch (corrupt/clean epochs alternating
+// one-for-one) never reaches cp_hold_persist_epochs CONSECUTIVE bad epochs
+// under the reference's hard reset, so the persist path never fires. With
+// leaky decay smaller than the per-bad-epoch increment (+1), the counter
+// survives the interleaved clean epochs and accumulates net credit toward
+// the threshold.
+// ----------------------------------------------------------------------------
+
+// Intermittent-bad fixture: a UNIFORM (diffuse -- not single-satellite)
+// pseudorange-only bias on alternating epochs. Carriers stay clean (tight
+// 0.02 m sigma), so the graph pose never leaves truth and the injected bias
+// shows up directly and ONLY on the flagged epoch's own post-fit DD PR
+// residual -- no cross-epoch memory/decay tail to confound the persist
+// counter's consecutive-vs-intermittent distinction (unlike a carrier/pose
+// corruption, which the fixed-lag window forgets only gradually).
+FGOProcessor::FGOProblem makeLeakyPersistIntermittentProblem() {
+    CpHoldTestOptions opt;
+    opt.num_epochs = 20;
+    opt.pr_corrupt_epochs = {5, 7, 9};
+    opt.pr_baseline_bias_m = 12.0;  // uniform on every target -> diffuse, > 3 m threshold
+    return makeCpHoldFixedLagProblem(opt);
+}
+
+TEST(FGOCpHoldFsmTest, LeakyPersistDefaultOffIsNoOp) {
+    const auto problem = makeLeakyPersistIntermittentProblem();
+
+    FGOProcessor::FGOConfig config = makeCpHoldBaseConfig();
+    config.use_cp_hold_recovery = true;
+    config.cp_hold_main_residual_threshold_m = 3.0;
+    config.cp_hold_persist_epochs = 3;
+    config.cp_hold_catastrophic_threshold_m = 1.0e6;  // never take the fast path here
+    config.cp_hold_multipath_median_ratio = 0.0;      // diffuse bias, no multipath skip
+    config.cp_hold_max_gdop = 0.0;
+    ASSERT_FALSE(config.use_cp_hold_leaky_persist);
+    ASSERT_DOUBLE_EQ(config.cp_hold_persist_decay, 1.0);
+
+    FGOProcessor processor(config);
+    const auto result = processor.optimizeProblem(problem);
+
+    EXPECT_EQ(result.diagnostics.sanity_mass_resets, 0u)
+        << "fixture sanity: one-for-one alternating bad/clean epochs never "
+           "reach 3 CONSECUTIVE bad epochs under the hard reset";
+    for (const auto& sol : result.solution.solutions) {
+        EXPECT_TRUE(sol.position_ecef.allFinite());
+    }
+}
+
+TEST(FGOCpHoldFsmTest, LeakyPersistAccumulatesAcrossIntermittentBadEpochs) {
+    const auto problem = makeLeakyPersistIntermittentProblem();
+
+    FGOProcessor::FGOConfig base = makeCpHoldBaseConfig();
+    base.use_cp_hold_recovery = true;
+    base.cp_hold_main_residual_threshold_m = 3.0;
+    base.cp_hold_persist_epochs = 3;
+    base.cp_hold_catastrophic_threshold_m = 1.0e6;
+    base.cp_hold_multipath_median_ratio = 0.0;
+    base.cp_hold_max_gdop = 0.0;
+
+    // OFF (hard reset): the alternating pattern never crosses the persist
+    // threshold (see LeakyPersistDefaultOffIsNoOp above).
+    FGOProcessor off_processor(base);
+    const auto off_result = off_processor.optimizeProblem(problem);
+    ASSERT_EQ(off_result.diagnostics.sanity_mass_resets, 0u);
+
+    // ON: decay (0.5) smaller than the +1-per-bad-epoch increment lets bad
+    // epochs interleaved with clean ones accumulate net credit past the
+    // persist_epochs=3 threshold.
+    FGOProcessor::FGOConfig on_config = base;
+    on_config.use_cp_hold_leaky_persist = true;
+    on_config.cp_hold_persist_decay = 0.5;
+    FGOProcessor on_processor(on_config);
+    const auto on_result = on_processor.optimizeProblem(problem);
+
+    EXPECT_GT(on_result.diagnostics.sanity_mass_resets, 0u)
+        << "leaky decay must let intermittent bad epochs accumulate past the "
+           "persist threshold where the hard reset never does";
+}
+
+TEST(FGOCpHoldFsmTest, LeakyPersistDecayAtPersistThresholdMatchesHardReset) {
+    // cp_hold_persist_decay >= cp_hold_persist_epochs drains the counter to 0
+    // in a single clean epoch -- reproducing the hard reset exactly -- even
+    // though the knob is nominally "on".
+    const auto problem = makeLeakyPersistIntermittentProblem();
+
+    FGOProcessor::FGOConfig config = makeCpHoldBaseConfig();
+    config.use_cp_hold_recovery = true;
+    config.cp_hold_main_residual_threshold_m = 3.0;
+    config.cp_hold_persist_epochs = 3;
+    config.cp_hold_catastrophic_threshold_m = 1.0e6;
+    config.cp_hold_multipath_median_ratio = 0.0;
+    config.cp_hold_max_gdop = 0.0;
+    config.use_cp_hold_leaky_persist = true;
+    config.cp_hold_persist_decay = 3.0;  // == cp_hold_persist_epochs
+
+    FGOProcessor processor(config);
+    const auto result = processor.optimizeProblem(problem);
+
+    EXPECT_EQ(result.diagnostics.sanity_mass_resets, 0u)
+        << "decay >= persist_epochs drains a single clean epoch fully, just "
+           "like the hard reset -- alternation must still never accumulate";
 }
 
 // ============================================================================
@@ -1761,6 +1872,616 @@ TEST(FGOImuIntegrationCovarianceTest, ValuePassthroughNotSquaredAffectsDragResis
         << "a 1000x-looser integration covariance (applied directly, not squared) must let the "
            "erroneous carrier pull drag the pose further from truth than the tight default "
            "(tight_dev=" << tight_dev << " m, loose_dev=" << loose_dev << " m)";
+}
+
+// ============================================================================
+// Stale-pin invalidation (FGOConfig::use_stale_pin_invalidation) -- per-arc
+// fix-and-hold pin release at the CP-hold FSM trigger. Reuses
+// makeCpHoldFixedLagProblem/makeCpHoldBaseConfig.
+//
+// Scenario: LAMBDA + fix-and-hold pin all 5 arcs during the clean opening
+// epochs, then a DOMINANT single-satellite PSEUDORANGE bias (carriers stay
+// clean, so the tight carrier constraints keep the pose at truth and the
+// bias shows up as that satellite's per-sat post-fit residual) pushes the
+// epoch DDPR RMS over the trigger threshold. The FSM's escalation paths are
+// all disabled (persist unreachable, catastrophic unreachable, cp_hold_epochs
+// = 0 so no carrier suppression / held-epoch generation bumps), leaving
+// stale-pin invalidation as the ONLY mechanism that may bump a generation --
+// so ambiguity_generation_bumps == stale_pin_invalidations proves the
+// release was per-arc, not a mass reset.
+// ============================================================================
+namespace {
+
+// 8 satellites -> 7 ambiguities: clears the fixed-lag per-epoch LAMBDA's
+// hard floor of 6 candidates (the default 6-satellite geometry never fixes).
+std::vector<Vector3d> lambdaCapableSatelliteGeometry() {
+    auto satellites = gtsamParitySatelliteGeometry();
+    satellites.emplace_back(-20000000.0, 10000000.0, 12000000.0);
+    satellites.emplace_back(9000000.0, 20000000.0, 15000000.0);
+    return satellites;
+}
+
+FGOProcessor::FGOConfig makeStalePinBaseConfig() {
+    FGOProcessor::FGOConfig config = makeCpHoldBaseConfig();
+    // Fix-and-hold (pins must exist to be released).
+    config.use_lambda_ambiguity_fix = true;
+    config.use_ambiguity_hold = true;
+    config.lambda_ratio_threshold = 1.5;  // easily cleared by noise-free synthetic data
+    config.ambiguity_hold_ratio_threshold = 1.5;
+    config.ambiguity_hold_min_fixed = 4;
+    config.min_fixed_ambiguities = 5;
+    // FSM on (the trigger is the mechanism's hook) but every escalation off.
+    config.use_cp_hold_recovery = true;
+    config.cp_hold_main_residual_threshold_m = 3.0;
+    config.cp_hold_persist_epochs = 1000;             // persist path unreachable
+    config.cp_hold_catastrophic_threshold_m = 1.0e6;  // fast path unreachable
+    config.cp_hold_multipath_median_ratio = 0.0;      // no multipath skip (single-sat scenario)
+    config.cp_hold_epochs = 0;                        // no carrier suppression on trigger
+    config.cp_hold_max_gdop = 0.0;
+    return config;
+}
+
+FGOProcessor::FGOProblem makeStalePinProblem() {
+    CpHoldTestOptions opt;
+    opt.satellites = lambdaCapableSatelliteGeometry();
+    opt.num_epochs = 30;
+    // Corruption starts well after the pins form (noise-free geometry fixes
+    // within a handful of epochs): dominant PR bias on satellite index 1
+    // (PRN2, ambiguity_index 0) only.
+    for (std::size_t e = 15; e <= 24; ++e) opt.pr_corrupt_epochs.insert(e);
+    opt.pr_baseline_bias_m = 0.0;
+    opt.pr_dominant_extra_bias_m = 12.0;  // per-sat res ~12 m; epoch RMS ~12/sqrt(5) > 3
+    return makeCpHoldFixedLagProblem(opt);
+}
+
+}  // namespace
+
+TEST(FGOStalePinTest, DefaultOffIsNoOp) {
+    const auto problem = makeStalePinProblem();
+
+    FGOProcessor::FGOConfig config = makeStalePinBaseConfig();
+    ASSERT_FALSE(config.use_stale_pin_invalidation);
+
+    FGOProcessor processor(config);
+    const auto result = processor.optimizeProblem(problem);
+
+    EXPECT_EQ(result.diagnostics.stale_pin_invalidations, 0u);
+    // With every other generation-bumping mechanism disabled in this config
+    // (no FDE, no mass/fast reset, cp_hold_epochs=0 so no held-epoch bumps),
+    // the generation overlay must stay untouched too.
+    EXPECT_EQ(result.diagnostics.ambiguity_generation_bumps, 0u);
+    EXPECT_GT(result.diagnostics.ambiguity_hold_arcs, 0u)
+        << "sanity: pins must actually form for this fixture to test anything";
+    EXPECT_EQ(result.solution.solutions.size(), problem.epochs.size());
+}
+
+TEST(FGOStalePinTest, ReleasesOnlyOffendingPinAtTrigger) {
+    const auto problem = makeStalePinProblem();
+
+    FGOProcessor::FGOConfig config = makeStalePinBaseConfig();
+    config.use_stale_pin_invalidation = true;
+    config.stale_pin_per_sat_residual_m = 2.0;
+
+    FGOProcessor processor(config);
+    const auto result = processor.optimizeProblem(problem);
+
+    EXPECT_GT(result.diagnostics.stale_pin_invalidations, 0u)
+        << "the dominant-satellite pin must be released at a trigger epoch";
+    // Per-arc, not mass: the only generation bumps allowed in this config
+    // are the stale-pin releases themselves.
+    EXPECT_EQ(result.diagnostics.ambiguity_generation_bumps,
+              result.diagnostics.stale_pin_invalidations);
+    EXPECT_EQ(result.diagnostics.sanity_mass_resets, 0u);
+    EXPECT_EQ(result.diagnostics.sanity_fast_resets, 0u);
+    // Only PRN2's arc ever exceeds the per-sat threshold, and it can be
+    // re-pinned/re-released at most once per corrupt epoch (10 of them).
+    EXPECT_LE(result.diagnostics.stale_pin_invalidations, 10u);
+    for (const auto& sol : result.solution.solutions) {
+        EXPECT_TRUE(sol.position_ecef.allFinite());
+    }
+}
+
+TEST(FGOStalePinTest, ReleasesPinOnMultipathDominatedEpoch) {
+    // The dominant-single-satellite scenario is exactly what the FSM's
+    // multipath skip catches (one bad satellite is not a wrong basin, so no
+    // MASS reset) -- but a per-arc release of that satellite's pin is the
+    // right-sized response, so stale-pin invalidation must still fire there.
+    const auto problem = makeStalePinProblem();
+
+    FGOProcessor::FGOConfig config = makeStalePinBaseConfig();
+    config.cp_hold_multipath_median_ratio = 1.5;  // multipath skip ACTIVE
+    config.cp_hold_multipath_min_satellites = 6;
+    config.use_stale_pin_invalidation = true;
+    config.stale_pin_per_sat_residual_m = 2.0;
+
+    FGOProcessor processor(config);
+    const auto result = processor.optimizeProblem(problem);
+
+    EXPECT_GT(result.diagnostics.sanity_multipath_skips, 0u)
+        << "fixture sanity: the dominant-satellite epochs must be classified "
+           "multipath-dominated";
+    EXPECT_GT(result.diagnostics.stale_pin_invalidations, 0u)
+        << "the per-arc release must fire on multipath-dominated trigger epochs";
+    EXPECT_EQ(result.diagnostics.sanity_mass_resets, 0u);
+    EXPECT_EQ(result.diagnostics.sanity_fast_resets, 0u);
+}
+
+TEST(FGOStalePinTest, MinHoldAgeGuardsFreshPins) {
+    const auto problem = makeStalePinProblem();
+
+    FGOProcessor::FGOConfig config = makeStalePinBaseConfig();
+    config.use_stale_pin_invalidation = true;
+    config.stale_pin_per_sat_residual_m = 2.0;
+    config.stale_pin_min_hold_age_epochs = 1000;  // no pin can ever be old enough
+
+    FGOProcessor processor(config);
+    const auto result = processor.optimizeProblem(problem);
+
+    EXPECT_EQ(result.diagnostics.stale_pin_invalidations, 0u)
+        << "an unreachable min-hold-age must suppress every release";
+    EXPECT_EQ(result.diagnostics.ambiguity_generation_bumps, 0u);
+}
+
+TEST(FGOStalePinTest, PerSatThresholdRespected) {
+    const auto problem = makeStalePinProblem();
+
+    FGOProcessor::FGOConfig config = makeStalePinBaseConfig();
+    config.use_stale_pin_invalidation = true;
+    config.stale_pin_per_sat_residual_m = 1.0e6;  // nothing ever exceeds this
+
+    FGOProcessor processor(config);
+    const auto result = processor.optimizeProblem(problem);
+
+    EXPECT_EQ(result.diagnostics.stale_pin_invalidations, 0u);
+    EXPECT_EQ(result.diagnostics.ambiguity_generation_bumps, 0u);
+}
+
+// ============================================================================
+// Fix plausibility demotion (FGOConfig::use_fix_plausibility_demotion) --
+// label-level IMU-gap check, independent of the CP-hold FSM. Reuses
+// makeCpHoldFixedLagProblem.
+//
+// Scenario: LAMBDA + fix-and-hold pin all arcs during the clean opening
+// epochs, then a single-epoch "wrong basin" carrier corruption (all
+// satellites, +20 m self-consistent hypothesis). Because the ambiguities
+// are PINNED at the clean integers, the corrupted (tight-sigma) carrier
+// factors drag the graph pose toward the wrong position while the
+// IMU-predicted pose (dead-reckoned from the clean previous epoch,
+// stationary rover) stays at truth -- an epoch labelled FIXED (via held
+// integers) whose fixed position is implausibly far from the IMU
+// prediction, exactly the label M2 must demote. The FSM stays OFF to prove
+// independence.
+// ============================================================================
+namespace {
+
+FGOProcessor::FGOConfig makeFixDemoteBaseConfig() {
+    FGOProcessor::FGOConfig config = makeCpHoldBaseConfig();
+    config.use_lambda_ambiguity_fix = true;
+    config.use_ambiguity_hold = true;
+    config.use_epoch_lambda_fixed_output = true;  // fresh LAMBDA fixes also labelled FIXED
+    config.lambda_ratio_threshold = 1.5;
+    config.ambiguity_hold_ratio_threshold = 1.5;
+    config.ambiguity_hold_min_fixed = 4;
+    config.min_fixed_ambiguities = 5;
+    // NO CP-hold FSM: M2 must work without it.
+    config.use_cp_hold_recovery = false;
+    return config;
+}
+
+}  // namespace
+
+TEST(FGOFixDemoteTest, DefaultOffIsNoOp) {
+    CpHoldTestOptions opt;
+    opt.satellites = lambdaCapableSatelliteGeometry();
+    opt.num_epochs = 25;
+    opt.carrier_corrupt_epochs = {15};
+    const auto problem = makeCpHoldFixedLagProblem(opt);
+
+    FGOProcessor::FGOConfig config = makeFixDemoteBaseConfig();
+    ASSERT_FALSE(config.use_fix_plausibility_demotion);
+
+    FGOProcessor processor(config);
+    const auto result = processor.optimizeProblem(problem);
+
+    EXPECT_EQ(result.diagnostics.fix_plausibility_demotions, 0u);
+    EXPECT_EQ(result.diagnostics.fix_plausibility_hold_skips, 0u);
+    EXPECT_EQ(result.solution.solutions.size(), problem.epochs.size());
+}
+
+TEST(FGOFixDemoteTest, DemotesImplausibleFixedEpochToFloat) {
+    const Vector3d true_position(1113194.0, -4841695.0, 3985350.0);
+    constexpr std::size_t kBadEpoch = 15;
+    constexpr std::size_t kCleanProbeEpoch = 10;
+
+    CpHoldTestOptions opt;
+    opt.satellites = lambdaCapableSatelliteGeometry();
+    opt.num_epochs = 25;
+    opt.carrier_corrupt_epochs = {kBadEpoch};
+    opt.carrier_corrupt_offset_ecef = Vector3d(20.0, 0.0, 0.0);
+    const auto problem = makeCpHoldFixedLagProblem(opt);
+
+    // OFF: the corrupted epoch is labelled FIXED (held integers) with a large
+    // position error -- the exact failure mode.
+    FGOProcessor::FGOConfig off_config = makeFixDemoteBaseConfig();
+    FGOProcessor off_processor(off_config);
+    const auto off_result = off_processor.optimizeProblem(problem);
+    ASSERT_EQ(off_result.solution.solutions.size(), problem.epochs.size());
+    const auto& off_bad = off_result.solution.solutions[kBadEpoch];
+    ASSERT_EQ(off_bad.status, SolutionStatus::FIXED)
+        << "fixture sanity: the corrupt epoch must be (wrongly) labelled FIXED without M2";
+    const double off_err = (off_bad.position_ecef - true_position).norm();
+    ASSERT_GT(off_err, 5.0)
+        << "fixture sanity: the wrong-basin drag must exceed the demotion distance";
+
+    // ON: same epoch demoted to FLOAT; clean epochs keep their FIXED label.
+    FGOProcessor::FGOConfig on_config = makeFixDemoteBaseConfig();
+    on_config.use_fix_plausibility_demotion = true;
+    on_config.fix_demote_distance_m = 5.0;
+    FGOProcessor on_processor(on_config);
+    const auto on_result = on_processor.optimizeProblem(problem);
+    ASSERT_EQ(on_result.solution.solutions.size(), problem.epochs.size());
+
+    EXPECT_GT(on_result.diagnostics.fix_plausibility_demotions, 0u);
+    EXPECT_NE(on_result.solution.solutions[kBadEpoch].status, SolutionStatus::FIXED)
+        << "the implausible FIXED label must be demoted";
+    EXPECT_EQ(on_result.solution.solutions[kCleanProbeEpoch].status, SolutionStatus::FIXED)
+        << "plausible fixes must keep their FIXED label";
+}
+
+TEST(FGOFixDemoteTest, AnchorGapDemotesWhenImuGapCheckIsBlind) {
+    // Isolate the anchor-gap path: the IMU-gap threshold is set unreachably
+    // high (simulating the "IMU prediction rides the wrong basin" blindness
+    // measured on tokyo run2), so ONLY a trusted DDPR-LS anchor -- re-solved
+    // from this epoch's clean DD pseudoranges at the true position -- can
+    // notice that the (wrong-basin) FIXED position is implausible.
+    constexpr std::size_t kBadEpoch = 15;
+
+    CpHoldTestOptions opt;
+    opt.satellites = lambdaCapableSatelliteGeometry();
+    opt.num_epochs = 25;
+    opt.carrier_corrupt_epochs = {kBadEpoch};
+    opt.carrier_corrupt_offset_ecef = Vector3d(20.0, 0.0, 0.0);
+    const auto problem = makeCpHoldFixedLagProblem(opt);
+
+    FGOProcessor::FGOConfig config = makeFixDemoteBaseConfig();
+    config.use_fix_plausibility_demotion = true;
+    config.fix_demote_distance_m = 1.0e9;  // IMU-gap check blind
+    config.use_ddpr_anchor = true;         // anchor plumbing available
+    config.fix_demote_use_ddpr_anchor = true;
+    config.fix_demote_anchor_distance_m = 3.0;
+
+    FGOProcessor processor(config);
+    const auto result = processor.optimizeProblem(problem);
+    ASSERT_EQ(result.solution.solutions.size(), problem.epochs.size());
+
+    EXPECT_GT(result.diagnostics.fix_plausibility_anchor_demotions, 0u)
+        << "the trusted anchor at truth must veto the wrong-basin FIXED label";
+    EXPECT_NE(result.solution.solutions[kBadEpoch].status, SolutionStatus::FIXED);
+    EXPECT_EQ(result.solution.solutions[10].status, SolutionStatus::FIXED)
+        << "clean epochs (anchor agrees with the fix) keep their FIXED label";
+}
+
+// ----------------------------------------------------------------------------
+// Gross-offender gate on the anchor-gap variant (FGOConfig::
+// fix_demote_anchor_gross) -- C2. Round-1/2 measured the ungated anchor-gap
+// variant catastrophic on tokyo run1 (1662 false demotions): run1's failure
+// mode is DIFFUSE multipath, which drags the (non-robust) anchor by the same
+// few metres as a genuinely wrong-basin fix, with every tracked satellite's
+// per-sat residual roughly the same order (no single dominant offender). The
+// gate is meant to let a GROSS single-satellite-offender epoch (tokyo run3's
+// actual band signature) through while suppressing a diffuse one (run1's).
+// Both tests reuse AnchorGapDemotesWhenImuGapCheckIsBlind's wrong-basin
+// carrier-corruption fixture (all satellites, a shared +20 m hypothesis --
+// the diffuse shape) and turn on use_epoch_quality_gates with thresholds too
+// loose to ever gate, purely to activate the shared per-sat residual pass
+// (per_sat_res) the gate reads -- exactly as ExtremeResidualDemotesRegardless
+// OfImuAgreement below does for the same reason.
+// ----------------------------------------------------------------------------
+
+TEST(FGOFixDemoteTest, AnchorGrossGateSuppressesDiffuseFalseVeto) {
+    constexpr std::size_t kBadEpoch = 15;
+
+    CpHoldTestOptions opt;
+    opt.satellites = lambdaCapableSatelliteGeometry();
+    opt.num_epochs = 25;
+    opt.carrier_corrupt_epochs = {kBadEpoch};
+    opt.carrier_corrupt_offset_ecef = Vector3d(20.0, 0.0, 0.0);  // diffuse: all satellites
+    const auto problem = makeCpHoldFixedLagProblem(opt);
+
+    FGOProcessor::FGOConfig config = makeFixDemoteBaseConfig();
+    config.use_epoch_quality_gates = true;  // activate the shared per_sat_res pass
+    config.gate_gdop_max = 1e9;
+    config.gate_min_satellites = 0;
+    config.gate_ddpr_res_max_m = 1e9;
+    config.gate_per_sat_res_max_m = 1e9;
+    config.use_fix_plausibility_demotion = true;
+    config.fix_demote_distance_m = 1.0e9;  // IMU-gap check blind
+    config.use_ddpr_anchor = true;
+    config.fix_demote_use_ddpr_anchor = true;
+    config.fix_demote_anchor_distance_m = 3.0;
+    config.fix_demote_anchor_gross = true;
+    // A shared +20 m position error shows up as roughly the SAME order of
+    // residual on every tracked satellite (diffuse) -- nowhere near a
+    // 50 m single-satellite abs floor, so the abs criterion alone (which the
+    // gate requires ANDed with the ratio criterion) never clears regardless
+    // of how the ratio happens to fall out on this geometry.
+    config.fix_demote_anchor_gross_ratio = 10.0;
+    config.fix_demote_anchor_gross_abs_m = 50.0;
+
+    FGOProcessor processor(config);
+    const auto result = processor.optimizeProblem(problem);
+    ASSERT_EQ(result.solution.solutions.size(), problem.epochs.size());
+
+    EXPECT_GT(result.diagnostics.fix_plausibility_anchor_gross_gated, 0u)
+        << "the diffuse epoch must never clear the gross-offender signature";
+    EXPECT_EQ(result.diagnostics.fix_plausibility_anchor_demotions, 0u)
+        << "gated out: the anchor-gap check must never even be evaluated";
+    EXPECT_EQ(result.solution.solutions[kBadEpoch].status, SolutionStatus::FIXED)
+        << "without the (gated-out) anchor veto the wrong-basin label stands "
+           "-- the false-positive this gate exists to suppress";
+}
+
+TEST(FGOFixDemoteTest, AnchorGrossGateLetsThroughSingleSatelliteOffender) {
+    constexpr std::size_t kBadEpoch = 15;
+
+    CpHoldTestOptions opt;
+    opt.satellites = lambdaCapableSatelliteGeometry();
+    opt.num_epochs = 25;
+    // Same wrong-basin carrier corruption as the diffuse case (so the FIXED
+    // label is equally implausible and equally worth vetoing), PLUS a huge
+    // ADDITIONAL pseudorange-only bias on satellite index 1 at the same
+    // epoch. PR sigma is loose (0.5 m) vs the carrier's tight 0.02 m, so this
+    // barely moves the graph pose -- it only inflates that one satellite's
+    // post-fit DD residual, giving the epoch a gross single-satellite
+    // signature on top of the same underlying wrong-basin fix.
+    opt.carrier_corrupt_epochs = {kBadEpoch};
+    opt.carrier_corrupt_offset_ecef = Vector3d(20.0, 0.0, 0.0);
+    opt.pr_corrupt_epochs = {kBadEpoch};
+    opt.pr_baseline_bias_m = 0.0;
+    opt.pr_dominant_extra_bias_m = 300.0;
+    const auto problem = makeCpHoldFixedLagProblem(opt);
+
+    FGOProcessor::FGOConfig config = makeFixDemoteBaseConfig();
+    config.use_epoch_quality_gates = true;
+    config.gate_gdop_max = 1e9;
+    config.gate_min_satellites = 0;
+    config.gate_ddpr_res_max_m = 1e9;
+    config.gate_per_sat_res_max_m = 1e9;
+    config.use_fix_plausibility_demotion = true;
+    config.fix_demote_distance_m = 1.0e9;  // IMU-gap check blind
+    config.use_ddpr_anchor = true;
+    config.fix_demote_use_ddpr_anchor = true;
+    config.fix_demote_anchor_distance_m = 3.0;
+    config.fix_demote_anchor_gross = true;
+    config.fix_demote_anchor_gross_ratio = 10.0;
+    config.fix_demote_anchor_gross_abs_m = 50.0;
+
+    FGOProcessor processor(config);
+    const auto result = processor.optimizeProblem(problem);
+    ASSERT_EQ(result.solution.solutions.size(), problem.epochs.size());
+
+    EXPECT_GT(result.diagnostics.fix_plausibility_anchor_demotions, 0u)
+        << "the gross single-satellite signature must open the gate and let "
+           "the (robust-retried) anchor veto the wrong-basin FIXED label";
+    EXPECT_NE(result.solution.solutions[kBadEpoch].status, SolutionStatus::FIXED);
+    EXPECT_EQ(result.solution.solutions[10].status, SolutionStatus::FIXED)
+        << "clean epochs keep their FIXED label";
+}
+
+TEST(FGOFixDemoteTest, AnchorGrossGateDefaultOffMatchesUngatedBaseline) {
+    // fix_demote_anchor_gross must be a strict no-op when off: bit-identical
+    // demotion outcome to the pre-existing (ungated) anchor-gap variant.
+    constexpr std::size_t kBadEpoch = 15;
+
+    CpHoldTestOptions opt;
+    opt.satellites = lambdaCapableSatelliteGeometry();
+    opt.num_epochs = 25;
+    opt.carrier_corrupt_epochs = {kBadEpoch};
+    opt.carrier_corrupt_offset_ecef = Vector3d(20.0, 0.0, 0.0);
+    const auto problem = makeCpHoldFixedLagProblem(opt);
+
+    FGOProcessor::FGOConfig config = makeFixDemoteBaseConfig();
+    config.use_fix_plausibility_demotion = true;
+    config.fix_demote_distance_m = 1.0e9;
+    config.use_ddpr_anchor = true;
+    config.fix_demote_use_ddpr_anchor = true;
+    config.fix_demote_anchor_distance_m = 3.0;
+    ASSERT_FALSE(config.fix_demote_anchor_gross);
+
+    FGOProcessor processor(config);
+    const auto result = processor.optimizeProblem(problem);
+
+    EXPECT_EQ(result.diagnostics.fix_plausibility_anchor_gross_gated, 0u);
+    EXPECT_GT(result.diagnostics.fix_plausibility_anchor_demotions, 0u)
+        << "fixture sanity: matches AnchorGapDemotesWhenImuGapCheckIsBlind's "
+           "ungated outcome";
+    EXPECT_NE(result.solution.solutions[kBadEpoch].status, SolutionStatus::FIXED);
+}
+
+TEST(FGOFixDemoteTest, ExtremeResidualDemotesRegardlessOfImuAgreement) {
+    // fix_demote_res_m path: pseudorange-corrupted epochs push the post-fit
+    // DDPR RMS far above the threshold while the pose (pinned by clean
+    // carriers) stays at truth -- so the IMU gap is ~0 and the IMU/anchor
+    // checks would never demote. The extreme-residual check must strip the
+    // FIXED label anyway.
+    CpHoldTestOptions opt;
+    opt.satellites = lambdaCapableSatelliteGeometry();
+    opt.num_epochs = 25;
+    for (std::size_t e = 15; e <= 18; ++e) opt.pr_corrupt_epochs.insert(e);
+    opt.pr_baseline_bias_m = 0.0;
+    opt.pr_dominant_extra_bias_m = 40.0;  // epoch RMS ~40/sqrt(7) >> 5
+    const auto problem = makeCpHoldFixedLagProblem(opt);
+
+    // The shared post-fit residual pass only runs when a consumer feature is
+    // enabled; use the quality-gates flag with thresholds too loose to ever
+    // gate, so ONLY the residual computation is activated.
+    FGOProcessor::FGOConfig base = makeFixDemoteBaseConfig();
+    base.use_epoch_quality_gates = true;
+    base.gate_gdop_max = 1e9;
+    base.gate_min_satellites = 0;
+    base.gate_ddpr_res_max_m = 1e9;
+    base.gate_per_sat_res_max_m = 1e9;
+
+    FGOProcessor off_processor(base);
+    const auto off_result = off_processor.optimizeProblem(problem);
+    ASSERT_EQ(off_result.solution.solutions[16].status, SolutionStatus::FIXED)
+        << "fixture sanity: the corrupt epoch stays FIXED without the residual demotion";
+
+    FGOProcessor::FGOConfig on_config = base;
+    on_config.use_fix_plausibility_demotion = true;
+    on_config.fix_demote_distance_m = 1.0e9;  // IMU-gap check blind
+    on_config.fix_demote_res_m = 5.0;
+    FGOProcessor on_processor(on_config);
+    const auto on_result = on_processor.optimizeProblem(problem);
+
+    EXPECT_GT(on_result.diagnostics.fix_plausibility_demotions, 0u);
+    EXPECT_NE(on_result.solution.solutions[16].status, SolutionStatus::FIXED);
+    EXPECT_EQ(on_result.solution.solutions[10].status, SolutionStatus::FIXED)
+        << "clean epochs keep their FIXED label";
+}
+
+TEST(FGOFixDemoteTest, RelativeResidualDemotesExcursionButToleratesChronicNoise) {
+    // fix_demote_res_rel semantics: (1) a residual EXCURSION over a quiet
+    // ambient demotes; (2) the SAME absolute residual level, when it is the
+    // run's chronic normal (median high), does not -- the protection that
+    // lets one preset serve both a chronically-noisy run (tokyo run1) and a
+    // quiet run with wrong-basin excursions (run2/run3).
+    FGOProcessor::FGOConfig base = makeFixDemoteBaseConfig();
+    base.use_epoch_quality_gates = true;  // activate the shared residual pass
+    base.gate_gdop_max = 1e9;
+    base.gate_min_satellites = 0;
+    base.gate_ddpr_res_max_m = 1e9;
+    base.gate_per_sat_res_max_m = 1e9;
+    base.use_fix_plausibility_demotion = true;
+    base.fix_demote_distance_m = 1.0e9;  // isolate the relative criterion
+    base.fix_demote_res_rel = 4.0;
+
+    // (1) Quiet ambient, then a corrupt stretch: rms jumps from ~0 to ~15
+    // (> floor 3.0, > 4x median) -- must demote.
+    {
+        CpHoldTestOptions opt;
+        opt.satellites = lambdaCapableSatelliteGeometry();
+        opt.num_epochs = 40;
+        for (std::size_t e = 30; e <= 33; ++e) opt.pr_corrupt_epochs.insert(e);
+        opt.pr_dominant_extra_bias_m = 40.0;
+        const auto problem = makeCpHoldFixedLagProblem(opt);
+        FGOProcessor processor(base);
+        const auto result = processor.optimizeProblem(problem);
+        EXPECT_GT(result.diagnostics.fix_plausibility_demotions, 0u)
+            << "an excursion far above the quiet ambient must demote";
+        EXPECT_NE(result.solution.solutions[31].status, SolutionStatus::FIXED);
+    }
+    // (2) Chronic noise: after a clean opening (pins/fixes established), a
+    // moderate bias on every target row persists for the rest of the run.
+    // Epoch RMS sits at ~4.5 m -- above the 3.0 m absolute floor, so an
+    // ABSOLUTE criterion at that level would demote every remaining epoch.
+    // The relative test may demote around the step's ONSET (a genuine
+    // excursion over the clean median) but must stop once the rolling
+    // median has adapted: late epochs keep their FIXED label.
+    {
+        CpHoldTestOptions opt;
+        opt.satellites = lambdaCapableSatelliteGeometry();
+        opt.num_epochs = 80;
+        for (std::size_t e = 10; e < opt.num_epochs; ++e) opt.pr_corrupt_epochs.insert(e);
+        opt.pr_baseline_bias_m = 4.5;
+        const auto problem = makeCpHoldFixedLagProblem(opt);
+        FGOProcessor processor(base);
+        const auto result = processor.optimizeProblem(problem);
+        const auto& last = result.solution.solutions[opt.num_epochs - 1];
+        EXPECT_EQ(last.status, SolutionStatus::FIXED)
+            << "once the rolling median reflects the run's chronic normal, "
+               "fixes at that level must keep their label";
+        EXPECT_LT(result.diagnostics.fix_plausibility_demotions, 40u)
+            << "only the onset may demote -- never the whole chronic stretch";
+    }
+}
+
+TEST(FGOFixDemoteTest, PostHoldCooldownDemotesFixesRightAfterRelease) {
+    // fix_demote_posthold_epochs path: engage a real CP-hold via the FSM
+    // (persist path on a corrupt stretch), then verify that the fixes
+    // validated within the cooldown window after the hold releases are
+    // demoted, while later fixes (cooldown expired) keep their label.
+    CpHoldTestOptions opt;
+    opt.satellites = lambdaCapableSatelliteGeometry();
+    opt.num_epochs = 40;
+    for (std::size_t e = 10; e <= 12; ++e) opt.carrier_corrupt_epochs.insert(e);
+    const auto problem = makeCpHoldFixedLagProblem(opt);
+
+    FGOProcessor::FGOConfig base = makeFixDemoteBaseConfig();
+    base.use_cp_hold_recovery = true;
+    base.cp_hold_main_residual_threshold_m = 3.0;
+    base.cp_hold_persist_epochs = 3;
+    base.cp_hold_catastrophic_threshold_m = 1.0e6;
+    base.cp_hold_multipath_median_ratio = 0.0;
+    base.cp_hold_max_gdop = 0.0;
+    base.cp_hold_epochs = 3;
+    base.cp_hold_release_threshold_m = 2.0;
+    base.cp_hold_release_count = 1;
+
+    FGOProcessor off_processor(base);
+    const auto off_result = off_processor.optimizeProblem(problem);
+    ASSERT_GT(off_result.diagnostics.cp_hold_epochs_held, 0u)
+        << "fixture sanity: a hold must actually engage";
+    std::size_t off_fixed = 0;
+    for (const auto& sol : off_result.solution.solutions) {
+        if (sol.status == SolutionStatus::FIXED) ++off_fixed;
+    }
+    ASSERT_GT(off_fixed, 0u);
+
+    FGOProcessor::FGOConfig on_config = base;
+    on_config.use_fix_plausibility_demotion = true;
+    on_config.fix_demote_distance_m = 1.0e9;  // isolate the cooldown criterion
+    on_config.fix_demote_posthold_epochs = 5;
+    FGOProcessor on_processor(on_config);
+    const auto on_result = on_processor.optimizeProblem(problem);
+
+    EXPECT_GT(on_result.diagnostics.fix_plausibility_demotions, 0u)
+        << "fixes validated within 5 epochs of the released hold must be demoted";
+    std::size_t on_fixed = 0;
+    for (const auto& sol : on_result.solution.solutions) {
+        if (sol.status == SolutionStatus::FIXED) ++on_fixed;
+    }
+    EXPECT_LT(on_fixed, off_fixed);
+    EXPECT_EQ(on_result.solution.solutions[problem.epochs.size() - 1].status,
+              SolutionStatus::FIXED)
+        << "fixes far past the cooldown keep their FIXED label";
+}
+
+TEST(FGOFixDemoteTest, ExtremeThresholdNeverPinsAndDemotesEveryFix) {
+    // Clean data + an (absurd) near-zero plausibility distance: EVERY fix is
+    // "implausible", so no epoch may end up FIXED and -- via the hold-skip
+    // half of the mechanism -- no arc may ever be pinned.
+    CpHoldTestOptions opt;
+    opt.satellites = lambdaCapableSatelliteGeometry();
+    opt.num_epochs = 20;
+    const auto problem = makeCpHoldFixedLagProblem(opt);
+
+    // Sanity control: without M2 this fixture produces FIXED epochs and pins.
+    FGOProcessor::FGOConfig off_config = makeFixDemoteBaseConfig();
+    FGOProcessor off_processor(off_config);
+    const auto off_result = off_processor.optimizeProblem(problem);
+    std::size_t off_fixed = 0;
+    for (const auto& sol : off_result.solution.solutions) {
+        if (sol.status == SolutionStatus::FIXED) ++off_fixed;
+    }
+    ASSERT_GT(off_fixed, 0u);
+    ASSERT_GT(off_result.diagnostics.ambiguity_hold_arcs, 0u);
+
+    FGOProcessor::FGOConfig on_config = makeFixDemoteBaseConfig();
+    on_config.use_fix_plausibility_demotion = true;
+    on_config.fix_demote_distance_m = 1e-9;
+    FGOProcessor on_processor(on_config);
+    const auto on_result = on_processor.optimizeProblem(problem);
+
+    EXPECT_GT(on_result.diagnostics.fix_plausibility_demotions, 0u);
+    EXPECT_GT(on_result.diagnostics.fix_plausibility_hold_skips, 0u)
+        << "the hold-skip half must fire: validated integers on an implausible "
+           "epoch are never pinned";
+    EXPECT_EQ(on_result.diagnostics.ambiguity_hold_arcs, 0u)
+        << "no arc may ever be pinned when every epoch fails the plausibility check";
+    for (const auto& sol : on_result.solution.solutions) {
+        EXPECT_NE(sol.status, SolutionStatus::FIXED);
+    }
 }
 
 #endif  // GNSSPP_HAS_GTSAM

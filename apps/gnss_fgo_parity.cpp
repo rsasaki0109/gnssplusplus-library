@@ -21,6 +21,7 @@
 #include <libgnss++/io/rinex.hpp>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstddef>
@@ -29,6 +30,7 @@
 #include <map>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -66,6 +68,7 @@ struct Args {
     bool gates = false;            // per-epoch quality gates (reference gate.py/postfit.py port)
     double gate_res = -1.0;        // >=0: override gate_ddpr_res_max_m (0 disables)
     double gate_sat_res = -1.0;    // >=0: override gate_per_sat_res_max_m (0 disables)
+    int gate_min_sat = 0;          // >0: override gate_min_satellites
     double gate_gdop = 0.0;        // >0: override gate_gdop_max
     bool cmc = false;              // Code-Minus-Carrier multipath screening (slip_detect.py port)
     double cmc_jump = -1.0;        // >=0: override code_minus_carrier_jump_threshold_m
@@ -124,6 +127,26 @@ struct Args {
     bool integ_cov_inflate = false;  // enable use_imu_integration_covariance_inflation
     double integ_cov_max = -1.0;   // >=0: override config.imu_integration_covariance_max (reference imu_integ_cov_max, default 0.5)
     double gravity_mps2 = -1.0;    // >=0: override problem.imu.noise.gravity_mps2 (reference 9.81; ours defaults 9.80665)
+    bool fixed_err_hist = false;      // print FIXED-epoch horizontal-error histogram + worst offenders
+    double partial_ar_frac = -1.0;    // >=0: override fixed_lag_partial_lambda_min_fraction (default 0.7)
+    double hold_sigma = -1.0;         // >=0: override ambiguity_hold_sigma_cycles (default 1e-3 cycles)
+    bool stale_pin = false;           // M1: enable use_stale_pin_invalidation
+    double stale_pin_res = -1.0;      // >=0: override stale_pin_per_sat_residual_m (default 2.0)
+    int stale_pin_age = -1;           // >=0: override stale_pin_min_hold_age_epochs (default 0)
+    bool fix_demote = false;          // M2: enable use_fix_plausibility_demotion
+    double fix_demote_dist = -1.0;    // >=0: override fix_demote_distance_m (default 5.0)
+    bool fix_demote_anchor = false;   // M2b: enable fix_demote_use_ddpr_anchor (needs --ddpr-anchor)
+    double fix_demote_anchor_dist = -1.0;  // >=0: override fix_demote_anchor_distance_m (default 3.0)
+    double fix_demote_anchor_res = -1.0;   // >=0: override fix_demote_anchor_trust_res_m (0 = FSM gate)
+    double fix_demote_res = -1.0;          // >=0: override fix_demote_res_m (0 = off)
+    int fix_demote_posthold = -1;          // >=0: override fix_demote_posthold_epochs (0 = off)
+    double fix_demote_res_rel = -1.0;      // >=0: override fix_demote_res_rel (0 = off)
+    bool leaky_persist = false;             // C1: enable use_cp_hold_leaky_persist
+    double leaky_persist_decay = -1.0;      // >=0: override cp_hold_persist_decay (default 1.0)
+    bool fix_demote_anchor_gross = false;   // C2: enable fix_demote_anchor_gross
+    double fix_demote_anchor_gross_ratio = -1.0;  // >=0: override fix_demote_anchor_gross_ratio (default 10.0)
+    double fix_demote_anchor_gross_abs = -1.0;    // >=0: override fix_demote_anchor_gross_abs_m (default 20.0)
+    std::string dump_csv_path;  // debug: per-epoch CSV dump (tow/status/E-N-U err/horiz err/E-N pos) for plotting
 };
 
 Args parseArgs(int argc, char** argv) {
@@ -196,6 +219,8 @@ Args parseArgs(int argc, char** argv) {
             args.gate_sat_res = std::stod(argv[++i]);
         } else if (a == "--gate-gdop" && i + 1 < argc) {
             args.gate_gdop = std::stod(argv[++i]);
+        } else if (a == "--gate-min-sat" && i + 1 < argc) {
+            args.gate_min_sat = std::stoi(argv[++i]);
         } else if (a == "--cmc") {
             args.cmc = true;
         } else if (a == "--cmc-jump" && i + 1 < argc) {
@@ -292,6 +317,46 @@ Args parseArgs(int argc, char** argv) {
             args.integ_cov_max = std::stod(argv[++i]);
         } else if (a == "--gravity" && i + 1 < argc) {
             args.gravity_mps2 = std::stod(argv[++i]);
+        } else if (a == "--fixed-err-hist") {
+            args.fixed_err_hist = true;
+        } else if (a == "--partial-ar-frac" && i + 1 < argc) {
+            args.partial_ar_frac = std::stod(argv[++i]);
+        } else if (a == "--hold-sigma" && i + 1 < argc) {
+            args.hold_sigma = std::stod(argv[++i]);
+        } else if (a == "--stale-pin") {
+            args.stale_pin = true;
+        } else if (a == "--stale-pin-res" && i + 1 < argc) {
+            args.stale_pin_res = std::stod(argv[++i]);
+        } else if (a == "--stale-pin-age" && i + 1 < argc) {
+            args.stale_pin_age = std::stoi(argv[++i]);
+        } else if (a == "--fix-demote") {
+            args.fix_demote = true;
+        } else if (a == "--fix-demote-dist" && i + 1 < argc) {
+            args.fix_demote_dist = std::stod(argv[++i]);
+        } else if (a == "--fix-demote-anchor") {
+            args.fix_demote_anchor = true;
+        } else if (a == "--fix-demote-anchor-dist" && i + 1 < argc) {
+            args.fix_demote_anchor_dist = std::stod(argv[++i]);
+        } else if (a == "--fix-demote-anchor-res" && i + 1 < argc) {
+            args.fix_demote_anchor_res = std::stod(argv[++i]);
+        } else if (a == "--fix-demote-res" && i + 1 < argc) {
+            args.fix_demote_res = std::stod(argv[++i]);
+        } else if (a == "--fix-demote-posthold" && i + 1 < argc) {
+            args.fix_demote_posthold = std::stoi(argv[++i]);
+        } else if (a == "--fix-demote-res-rel" && i + 1 < argc) {
+            args.fix_demote_res_rel = std::stod(argv[++i]);
+        } else if (a == "--leaky-persist") {
+            args.leaky_persist = true;
+        } else if (a == "--leaky-persist-decay" && i + 1 < argc) {
+            args.leaky_persist_decay = std::stod(argv[++i]);
+        } else if (a == "--fix-demote-anchor-gross") {
+            args.fix_demote_anchor_gross = true;
+        } else if (a == "--fix-demote-anchor-gross-ratio" && i + 1 < argc) {
+            args.fix_demote_anchor_gross_ratio = std::stod(argv[++i]);
+        } else if (a == "--fix-demote-anchor-gross-abs" && i + 1 < argc) {
+            args.fix_demote_anchor_gross_abs = std::stod(argv[++i]);
+        } else if (a == "--dump-csv" && i + 1 < argc) {
+            args.dump_csv_path = argv[++i];
         } else {
             std::cerr << "Unknown/incomplete arg: " << a << "\n";
             std::exit(2);
@@ -560,6 +625,12 @@ struct HorizError {
     double float_rms = 0.0, float_max = 0.0;
     double fixed_rms = 0.0, fixed_max = 0.0;
     double frac_all_under_50cm = 0.0;  ///< fraction of all (float+fixed) epochs with horiz<0.5 m
+    // Diagnostics only (populated regardless; cheap): FIXED-epoch horizontal
+    // error histogram + the worst offenders, so we can tell whether FIXED RMS
+    // mass comes from a broad inflation or a handful of gross outliers.
+    std::array<std::size_t, 6> fixed_hist{};  // bins: <0.5, 0.5-1, 1-2, 2-5, 5-10, >=10 m
+    std::array<double, 6> fixed_hist_sumsq{};  // sum(horiz^2) per bin -- where the RMS mass sits
+    std::vector<std::pair<double, double>> fixed_worst;  // (time.tow-ish sod, horiz), top 15
 };
 
 HorizError horizontalErrorVsRef(const libgnss::FGOProcessor::FGOResult& r,
@@ -588,6 +659,16 @@ HorizError horizontalErrorVsRef(const libgnss::FGOProcessor::FGOResult& r,
             xsum += horiz * horiz;
             he.fixed_max = std::max(he.fixed_max, horiz);
             ++he.n_fixed;
+            std::size_t bin = 0;
+            if (horiz < 0.5) bin = 0;
+            else if (horiz < 1.0) bin = 1;
+            else if (horiz < 2.0) bin = 2;
+            else if (horiz < 5.0) bin = 3;
+            else if (horiz < 10.0) bin = 4;
+            else bin = 5;
+            ++he.fixed_hist[bin];
+            he.fixed_hist_sumsq[bin] += horiz * horiz;
+            he.fixed_worst.emplace_back(s.time.tow, horiz);
         } else {
             fsum += horiz * horiz;
             he.float_max = std::max(he.float_max, horiz);
@@ -597,7 +678,64 @@ HorizError horizontalErrorVsRef(const libgnss::FGOProcessor::FGOResult& r,
     if (he.n_float > 0) he.float_rms = std::sqrt(fsum / double(he.n_float));
     if (he.n_fixed > 0) he.fixed_rms = std::sqrt(xsum / double(he.n_fixed));
     if (n_all > 0) he.frac_all_under_50cm = double(n_all_under50) / double(n_all);
+    std::sort(he.fixed_worst.begin(), he.fixed_worst.end(),
+              [](const auto& a, const auto& b) { return a.second > b.second; });
+    if (he.fixed_worst.size() > 15) he.fixed_worst.resize(15);
     return he;
+}
+
+// Debug/plotting aid: one row per solved epoch (status != NONE), reusing the
+// exact same nearest-in-time reference cursor as horizontalErrorVsRef() so the
+// per-epoch numbers are consistent with the printed headline metrics. Columns:
+//   tow,status,e_err_m,n_err_m,u_err_m,horiz_err_m,e_pos_m,n_pos_m,ref_e_pos_m,ref_n_pos_m
+// where *_err_m is the ENU delta vs the time-matched reference.csv row (the
+// same quantity the fix-rate/RMS metrics are computed from) and *_pos_m is the
+// solution/reference position in local ENU relative to the trajectory start
+// (ref.front()), for ground-track plots. status is FIXED/FLOAT after all
+// demotions -- i.e. exactly the label horizontalErrorVsRef() buckets on.
+void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
+                  const std::vector<RefRow>& ref,
+                  const std::string& path) {
+    if (ref.empty()) {
+        std::cerr << "Warning: --dump-csv requires --ref reference.csv; skipping dump.\n";
+        return;
+    }
+    std::ofstream out(path);
+    if (!out) {
+        std::cerr << "Error: cannot open --dump-csv output file " << path << "\n";
+        return;
+    }
+    double lat0 = 0.0, lon0 = 0.0, h0 = 0.0;
+    libgnss::ecef2geodetic(ref.front().ecef, lat0, lon0, h0);
+    // Fixed-point with millisecond/millimeter resolution: default ostream
+    // precision (6 significant digits) truncates sub-second tow at these
+    // magnitudes (~1.8e5), collapsing 0.2s epochs onto the same displayed tow.
+    out << std::fixed;
+    out.precision(3);
+    out << "tow,status,e_err_m,n_err_m,u_err_m,horiz_err_m,e_pos_m,n_pos_m,"
+           "ref_e_pos_m,ref_n_pos_m\n";
+    std::size_t ri = 0;
+    for (const auto& s : r.solution.solutions) {
+        if (s.status == libgnss::SolutionStatus::NONE || !s.position_ecef.allFinite()) continue;
+        while (ri + 1 < ref.size() &&
+               std::abs(ref[ri + 1].time - s.time) < std::abs(ref[ri].time - s.time)) {
+            ++ri;
+        }
+        if (std::abs(ref[ri].time - s.time) > 0.11) continue;
+        const libgnss::Vector3d err_enu =
+            libgnss::ecef2enu(s.position_ecef - ref[ri].ecef, lat0, lon0);
+        const libgnss::Vector3d pos_enu =
+            libgnss::ecef2enu(s.position_ecef - ref.front().ecef, lat0, lon0);
+        const libgnss::Vector3d ref_pos_enu =
+            libgnss::ecef2enu(ref[ri].ecef - ref.front().ecef, lat0, lon0);
+        const double horiz = std::hypot(err_enu.x(), err_enu.y());
+        const char* status =
+            s.status == libgnss::SolutionStatus::FIXED ? "FIXED" : "FLOAT";
+        out << s.time.tow << ',' << status << ','
+            << err_enu.x() << ',' << err_enu.y() << ',' << err_enu.z() << ','
+            << horiz << ',' << pos_enu.x() << ',' << pos_enu.y() << ','
+            << ref_pos_enu.x() << ',' << ref_pos_enu.y() << '\n';
+    }
 }
 
 // Populate problem.imu from an imu.csv + the already-built FGOProblem epochs.
@@ -842,6 +980,60 @@ int main(int argc, char** argv) {
     if (args.partial_ar) {
         config.use_fixed_lag_partial_lambda = true;
     }
+    if (args.partial_ar_frac >= 0.0) {
+        config.fixed_lag_partial_lambda_min_fraction = args.partial_ar_frac;
+    }
+    if (args.hold_sigma >= 0.0) {
+        config.ambiguity_hold_sigma_cycles = args.hold_sigma;
+    }
+    if (args.stale_pin) {
+        config.use_stale_pin_invalidation = true;
+    }
+    if (args.stale_pin_res >= 0.0) {
+        config.stale_pin_per_sat_residual_m = args.stale_pin_res;
+    }
+    if (args.stale_pin_age >= 0) {
+        config.stale_pin_min_hold_age_epochs = args.stale_pin_age;
+    }
+    if (args.fix_demote) {
+        config.use_fix_plausibility_demotion = true;
+    }
+    if (args.fix_demote_dist >= 0.0) {
+        config.fix_demote_distance_m = args.fix_demote_dist;
+    }
+    if (args.fix_demote_anchor) {
+        config.fix_demote_use_ddpr_anchor = true;
+    }
+    if (args.fix_demote_anchor_dist >= 0.0) {
+        config.fix_demote_anchor_distance_m = args.fix_demote_anchor_dist;
+    }
+    if (args.fix_demote_anchor_res >= 0.0) {
+        config.fix_demote_anchor_trust_res_m = args.fix_demote_anchor_res;
+    }
+    if (args.fix_demote_res >= 0.0) {
+        config.fix_demote_res_m = args.fix_demote_res;
+    }
+    if (args.fix_demote_posthold >= 0) {
+        config.fix_demote_posthold_epochs = args.fix_demote_posthold;
+    }
+    if (args.fix_demote_res_rel >= 0.0) {
+        config.fix_demote_res_rel = args.fix_demote_res_rel;
+    }
+    if (args.leaky_persist) {
+        config.use_cp_hold_leaky_persist = true;
+    }
+    if (args.leaky_persist_decay >= 0.0) {
+        config.cp_hold_persist_decay = args.leaky_persist_decay;
+    }
+    if (args.fix_demote_anchor_gross) {
+        config.fix_demote_anchor_gross = true;
+    }
+    if (args.fix_demote_anchor_gross_ratio >= 0.0) {
+        config.fix_demote_anchor_gross_ratio = args.fix_demote_anchor_gross_ratio;
+    }
+    if (args.fix_demote_anchor_gross_abs >= 0.0) {
+        config.fix_demote_anchor_gross_abs_m = args.fix_demote_anchor_gross_abs;
+    }
     if (args.no_gal_ar) {
         config.exclude_galileo_ambiguity_fixing = true;
     }
@@ -868,6 +1060,9 @@ int main(int argc, char** argv) {
     }
     if (args.gate_gdop > 0.0) {
         config.gate_gdop_max = args.gate_gdop;
+    }
+    if (args.gate_min_sat > 0) {
+        config.gate_min_satellites = args.gate_min_sat;
     }
     if (args.cmc) {
         config.use_code_minus_carrier_screening = true;
@@ -1147,6 +1342,9 @@ int main(int argc, char** argv) {
         const std::size_t fl_fixed = countFixedEpochs(fl);
         const std::size_t ne = fl.solution.solutions.size();
         const HorizError he = horizontalErrorVsRef(fl, ref_rows);
+        if (!args.dump_csv_path.empty()) {
+            dumpEpochCsv(fl, ref_rows, args.dump_csv_path);
+        }
 
         std::cout << "\n=== (a4) MILESTONE 2c: IncrementalFixedLagSmoother (full-scale) ===\n"
                   << "  lag=" << args.fixed_lag_s << " s, epochs=" << ne
@@ -1182,6 +1380,31 @@ int main(int argc, char** argv) {
                   << ", multipath_skips=" << fl.diagnostics.sanity_multipath_skips
                   << ", gdop_skips=" << fl.diagnostics.sanity_gdop_skips
                   << ", generation_bumps=" << fl.diagnostics.ambiguity_generation_bumps
+                  << ")\n"
+                  << "  stale-pin invalidation: " << (args.stale_pin ? "on" : "off")
+                  << " (invalidations=" << fl.diagnostics.stale_pin_invalidations
+                  << ", per_sat_res_m=" << config.stale_pin_per_sat_residual_m
+                  << ", min_hold_age=" << config.stale_pin_min_hold_age_epochs
+                  << ")\n"
+                  << "  fix plausibility demotion: " << (args.fix_demote ? "on" : "off")
+                  << " (demotions=" << fl.diagnostics.fix_plausibility_demotions
+                  << ", anchor_demotions=" << fl.diagnostics.fix_plausibility_anchor_demotions
+                  << ", hold_skips=" << fl.diagnostics.fix_plausibility_hold_skips
+                  << ", distance_m=" << config.fix_demote_distance_m
+                  << ", anchor=" << (args.fix_demote_anchor ? "on" : "off")
+                  << ", anchor_distance_m=" << config.fix_demote_anchor_distance_m
+                  << ", anchor_trust_res_m=" << config.fix_demote_anchor_trust_res_m
+                  << ", res_m=" << config.fix_demote_res_m
+                  << ", posthold=" << config.fix_demote_posthold_epochs
+                  << ", res_rel=" << config.fix_demote_res_rel
+                  << ", anchor_gross=" << (args.fix_demote_anchor_gross ? "on" : "off")
+                  << ", anchor_gross_ratio=" << config.fix_demote_anchor_gross_ratio
+                  << ", anchor_gross_abs_m=" << config.fix_demote_anchor_gross_abs_m
+                  << ", anchor_gross_gated=" << fl.diagnostics.fix_plausibility_anchor_gross_gated
+                  << ")\n"
+                  << "  leaky persist (C1): " << (args.leaky_persist ? "on" : "off")
+                  << " (decay=" << config.cp_hold_persist_decay
+                  << ", persist_epochs=" << config.cp_hold_persist_epochs
                   << ")\n"
                   << "  exception recovery: " << (args.exc_recovery ? "on" : "off")
                   << " (smoother_recovery_epochs=" << fl.diagnostics.smoother_recovery_epochs
@@ -1229,6 +1452,31 @@ int main(int argc, char** argv) {
                       << "    ALL (float+fixed) <50cm rate=" << (100.0 * he.frac_all_under_50cm)
                       << "%\n"
                       << "    (inuex35 truth target run1: FixRMS 0.815 m / fix 49.5% / <50cm 56.7%)\n";
+            if (args.fixed_err_hist) {
+                std::cout << "    FIXED error histogram: <0.5m=" << he.fixed_hist[0]
+                          << " 0.5-1m=" << he.fixed_hist[1] << " 1-2m=" << he.fixed_hist[2]
+                          << " 2-5m=" << he.fixed_hist[3] << " 5-10m=" << he.fixed_hist[4]
+                          << " >=10m=" << he.fixed_hist[5] << "\n";
+                const double tot_sumsq = he.fixed_rms * he.fixed_rms * double(he.n_fixed);
+                std::cout << "    FIXED sum(err^2) by bin [pct of total " << tot_sumsq << " m^2]: "
+                          << "<0.5m=" << he.fixed_hist_sumsq[0] << " (" << (tot_sumsq > 0 ? 100.0*he.fixed_hist_sumsq[0]/tot_sumsq : 0.0) << "%) "
+                          << "0.5-1m=" << he.fixed_hist_sumsq[1] << " (" << (tot_sumsq > 0 ? 100.0*he.fixed_hist_sumsq[1]/tot_sumsq : 0.0) << "%) "
+                          << "1-2m=" << he.fixed_hist_sumsq[2] << " (" << (tot_sumsq > 0 ? 100.0*he.fixed_hist_sumsq[2]/tot_sumsq : 0.0) << "%) "
+                          << "2-5m=" << he.fixed_hist_sumsq[3] << " (" << (tot_sumsq > 0 ? 100.0*he.fixed_hist_sumsq[3]/tot_sumsq : 0.0) << "%) "
+                          << "5-10m=" << he.fixed_hist_sumsq[4] << " (" << (tot_sumsq > 0 ? 100.0*he.fixed_hist_sumsq[4]/tot_sumsq : 0.0) << "%) "
+                          << ">=10m=" << he.fixed_hist_sumsq[5] << " (" << (tot_sumsq > 0 ? 100.0*he.fixed_hist_sumsq[5]/tot_sumsq : 0.0) << "%)\n";
+                double tail_sumsq = 0.0;
+                for (const auto& [tow, err] : he.fixed_worst) tail_sumsq += err * err;
+                std::cout << "    FIXED worst-15 sum(err^2)=" << tail_sumsq
+                          << " m^2 of total=" << (he.fixed_rms * he.fixed_rms * double(he.n_fixed))
+                          << " m^2 (" << (he.n_fixed > 0 ? 100.0 * tail_sumsq /
+                                (he.fixed_rms * he.fixed_rms * double(he.n_fixed)) : 0.0)
+                          << "%)\n    FIXED worst offenders (tow, horiz_m):";
+                for (const auto& [tow, err] : he.fixed_worst) {
+                    std::cout << " (" << tow << "," << err << ")";
+                }
+                std::cout << "\n";
+            }
             // Stationary-epoch velocity: should collapse to ~0 with ZUPT.
             if (!fl.epoch_velocity_nav_mps.empty()) {
                 double vsum = 0.0, vmax = 0.0;

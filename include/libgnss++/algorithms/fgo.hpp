@@ -546,6 +546,38 @@ public:
         double cp_hold_catastrophic_threshold_m = 15.0;    ///< reference main_ddpr_res_catastrophic
         double cp_hold_fast_worst_satellite_min_m = 10.0;  ///< reference ddpr_fast_worst_sat_min (tokyo profile)
         int cp_hold_persist_epochs = 3;                    ///< reference ddpr_sanity_persist
+        // --- Leaky persist accumulator (DEVIATION from the reference; this
+        // port's own addition -- see the .cpp change-site beside
+        // ddpr_bad_count for the exact mechanics). ---
+        //
+        // The reference hard-resets _ddpr_bad_count to 0 on the FIRST clean
+        // epoch (ddpr_rms <= cp_hold_main_residual_threshold_m); this port
+        // matches that faithfully whenever use_cp_hold_leaky_persist is
+        // false (bit-identical baseline). Measured failure mode on tokyo
+        // run3: an INTERMITTENTLY-bad wrong-integer-basin stretch (one bad
+        // epoch, one borderline-clean epoch, repeat) never accumulates
+        // cp_hold_persist_epochs CONSECUTIVE bad epochs -- every other
+        // epoch resets the counter to 0 -- so the mass reset that would
+        // flush the bad basin never fires, even though the run's own
+        // trigger rate at that stretch is high. When true, a clean epoch
+        // instead LEAKS the counter down by cp_hold_persist_decay
+        // (ddpr_bad_count = max(0, ddpr_bad_count - cp_hold_persist_decay))
+        // rather than zeroing it, so bad epochs interleaved with
+        // borderline-clean ones can still accumulate net "credit" toward
+        // the persist threshold. cp_hold_persist_decay >=
+        // cp_hold_persist_epochs reproduces the hard reset in a single
+        // clean epoch (matching the reference exactly at that setting);
+        // smaller decay (0.25 / 0.5 / 1.0 swept) lets the counter survive
+        // multiple clean epochs. The mass/fast reset firing itself still
+        // zeroes ddpr_bad_count outright (resetAmbiguitiesWithCpHold();
+        // unrelated to this clean-epoch decay and unaffected by this
+        // knob) -- only the "epoch judged clean, no reset fired" path
+        // changes. ddpr_bad_count is a double specifically to support
+        // fractional decay values without precision loss for the
+        // integer-valued default path. Requires use_cp_hold_recovery
+        // (there is no persist counter otherwise). Default OFF.
+        bool use_cp_hold_leaky_persist = false;
+        double cp_hold_persist_decay = 1.0;
         int cp_hold_epochs = 5;                            ///< reference recov_cp_hold
         double cp_hold_release_threshold_m = 2.0;          ///< reference recov_cp_release_thresh (tokyo profile)
         int cp_hold_release_count = 5;                     ///< reference recov_cp_release_count (tokyo profile)
@@ -564,6 +596,166 @@ public:
         // dataclass default to 100.0 m -- i.e. barely constrain translation at
         // all after a wrong-basin reset).
         double cp_hold_imu_break_translation_sigma_m = 100.0;
+
+        // --- Stale-pin invalidation (per-arc hold release at the FSM trigger)
+        // ---
+        // The FSM above only mass-resets after cp_hold_persist_epochs
+        // CONSECUTIVE bad epochs (or on the catastrophic fast path). Measured
+        // failure mode on tokyo run2: a wrong / still-converging integer got
+        // pinned by fix-and-hold and produced a ~3 m offset for ~270 s -- the
+        // post-fit DDPR RMS hovers around the trigger threshold, the persist
+        // counter keeps resetting, and the stale pin rides for minutes with
+        // no escalation. This mechanism acts at the trigger itself: on every
+        // trigger epoch (post-fit DDPR RMS above
+        // cp_hold_main_residual_threshold_m) that did NOT already mass-reset
+        // -- INCLUDING multipath-dominated epochs, where the FSM skips the
+        // mass reset precisely because one bad satellite does not justify
+        // resetting everything, but releasing THAT satellite's pin per-arc
+        // is the right-sized response --
+        // any arc currently PINNED by fix-and-hold whose own satellite's
+        // per-satellite post-fit DD pseudorange residual exceeds
+        // stale_pin_per_sat_residual_m has its live factors (hold prior
+        // included) removed via the same factor-removal path the mass reset
+        // uses -- but per-arc -- and its generation bumped so the next
+        // observation re-enters as a fresh float arc. No CP-hold engages
+        // beyond what the trigger already did, no IMU-chain break, and every
+        // other arc's pin survives: the consistent pins keep carrying the
+        // solution while only the offenders re-float. Requires
+        // use_cp_hold_recovery (trigger + generation overlay) and
+        // use_ambiguity_hold (there are no pins otherwise).
+        // Default OFF (bit-identical baseline when false).
+        bool use_stale_pin_invalidation = false;
+        // Per-satellite post-fit DDPR residual [m] above which that
+        // satellite's pinned arc is released at a trigger epoch.
+        double stale_pin_per_sat_residual_m = 2.0;
+        // Only release pins at least this many epochs old (0 = any age).
+        // Guards against churning a pin created this very epoch before it
+        // ever had a chance to prove itself.
+        int stale_pin_min_hold_age_epochs = 0;
+
+        // --- Fix plausibility demotion (label-level IMU gap check) ---
+        // Measured failure mode on tokyo run1: sparse, isolated single-epoch
+        // FIXED outliers (worst: 45.8 m) dominate the FIXED-only RMS, but the
+        // legitimate fixes routinely show 5-20 m post-fit DDPR residuals so
+        // no residual threshold separates them. The IMU prediction does:
+        // after the epoch's AR / fix-and-hold labeling, if the epoch is
+        // labelled FIXED but its fixed antenna position is farther than
+        // fix_demote_distance_m from the IMU-predicted position for this
+        // epoch (pose_seed -- the same prediction the FSM's pose-replacement
+        // stage compares against), demote the LABEL to FLOAT. Mirrors the
+        // pose-replacement logic (cp_hold_pose_replace_threshold_m, 5 m) but
+        // acts on the label/hold only: the graph, the reported position and
+        // pre-existing pins are untouched. Additionally, an epoch failing
+        // the same check never PINS its freshly-validated integers
+        // (fix-and-hold skip), so an implausible fix cannot poison the rest
+        // of the arc. Independent of use_cp_hold_recovery (the IMU seed
+        // always exists on the fixed-lag IMU path).
+        // Default OFF (bit-identical baseline when false).
+        bool use_fix_plausibility_demotion = false;
+        // Max distance [m] between the fixed position and the IMU-predicted
+        // position for the FIXED label to stand.
+        double fix_demote_distance_m = 5.0;
+        // Anchor-referenced variant of the same demotion (requires
+        // use_ddpr_anchor for the anchor plumbing). The IMU prediction is
+        // dead-reckoned from the PREVIOUS solved epoch, so once the window
+        // has already converged into a wrong integer basin the prediction
+        // rides along with it and the IMU-gap check above goes blind
+        // (measured on tokyo run2: a ~190-epoch wrong-basin FIXED stretch at
+        // ~3.4 m with IMU gap ~0 -- pin release and IMU-gap demotion both
+        // left it intact). The per-epoch DDPR-LS anchor is the one reference
+        // that does NOT ride the basin: it is re-solved from THIS epoch's DD
+        // pseudoranges alone, which stay unbiased when the carrier-driven
+        // pose is wrong. When a TRUSTED anchor (>= ddpr_anchor_min_factors
+        // active rows, res_rms <= ddpr_anchor_max_residual_m -- the same
+        // trust test the FSM's anchor stage uses) disagrees with a FIXED
+        // epoch's position by more than fix_demote_anchor_distance_m, the
+        // FIXED label is demoted exactly like the IMU-gap case. On epochs
+        // where the fix is legitimate but pseudoranges are multipath-heavy
+        // (tokyo run1's 5-20 m post-fit DDPR residuals on true fixes), the
+        // anchor fails its own residual trust gate and never demotes.
+        // Default OFF.
+        bool fix_demote_use_ddpr_anchor = false;
+        double fix_demote_anchor_distance_m = 3.0;
+        // Anchor trust ceiling for the DEMOTION check only [m]. 0 = reuse
+        // ddpr_anchor_max_residual_m (2.0). The FSM's 2.0 m trust gate is
+        // tuned for authorizing mass resets; for a label-only veto a looser
+        // ceiling is acceptable (worst case: a FIXED label is demoted to
+        // FLOAT -- no graph change), and on tokyo run2 part of the
+        // wrong-basin stretch only shows anchors in the 2-4 m residual band.
+        double fix_demote_anchor_trust_res_m = 0.0;
+        // --- Gross-offender gate on the anchor-gap variant (DEVIATION; this
+        // port's own addition -- see the .cpp change-site for exact
+        // mechanics). ---
+        //
+        // Evaluated unconditionally, the anchor-gap variant above measured
+        // catastrophic on tokyo run1 (1662 false demotions of legitimate
+        // fixes, fix-rate 50.0% -> 35.4%): run1's failure mode is DIFFUSE
+        // multipath (several satellites moderately bad at once), which also
+        // drags the anchor's own (non-robust) LS solve by ~3 m, so even a
+        // "trusted" (>= min_factors rows, res_rms under the trust ceiling)
+        // anchor disagrees with a perfectly good fix by more than
+        // fix_demote_anchor_distance_m. Tokyo run3's actual wrong-basin
+        // bands (tow ~180804, ~181065) instead show a GROSS single-
+        // satellite offender signature per epoch. When true, the anchor-gap
+        // check (anchor solve, trust test, gap compare) is only EVALUATED on
+        // epochs whose pre-FDE per-satellite post-fit DD residual signature
+        // is gross: max(per_sat_res) > fix_demote_anchor_gross_abs_m AND
+        // max(per_sat_res) > fix_demote_anchor_gross_ratio *
+        // median(per_sat_res). Epochs without that signature never reach the
+        // anchor solve for this variant at all (fail-safe: no solve => no
+        // demotion via this path; the IMU-gap/absolute/relative-residual
+        // variants above are untouched by this gate). No-op unless
+        // fix_demote_use_ddpr_anchor is also true. Default OFF (bit-
+        // identical to the ungated anchor-gap variant when false).
+        bool fix_demote_anchor_gross = false;
+        double fix_demote_anchor_gross_ratio = 10.0;
+        double fix_demote_anchor_gross_abs_m = 20.0;
+        // Extreme-residual demotion [m]: demote the FIXED label when THIS
+        // epoch's post-fit DD pseudorange RMS exceeds this. 0 = off. Unlike
+        // use_epoch_quality_gates' gate_ddpr_res_max_m (which suppresses the
+        // whole fixing pipeline -- LAMBDA, holds -- and thereby starves the
+        // fix rate on runs whose legitimate fixes ride 5-20 m multipath
+        // residuals), this only strips the LABEL of the extreme epoch
+        // itself. Measured separation on the PPC tokyo set: legitimate
+        // deep-urban fixes show post-fit DDPR RMS up to ~20 m (run1), while
+        // run2's wrong-basin FIXED stretch rides at 32-60 m -- a threshold
+        // in the 25-30 m band separates them cleanly where no absolute
+        // FIXING gate could. Needs use_cp_hold_recovery or
+        // use_epoch_quality_gates (or any feature that computes the shared
+        // post-fit residual pass); without those the residual is 0 and this
+        // check never fires.
+        double fix_demote_res_m = 0.0;
+        // Post-CP-hold cooldown [epochs]: demote any FIXED label produced
+        // within this many epochs of the last carrier-suppressed (CP-hold)
+        // epoch. 0 = off; needs use_cp_hold_recovery (no holds otherwise).
+        // Rationale (measured, tokyo run1 tow 188395.4 -- the single epoch
+        // carrying ~40% of run1's FIXED sum-of-squares at 45.8 m error): a
+        // fix validated moments after a hold releases is built on arcs the
+        // hold's generation-regeneration just re-created, i.e. sub-second
+        // float history in exactly the conditions (recovering from a
+        // wrong-basin / multipath episode) where LAMBDA's ratio test is
+        // least trustworthy. That epoch passed EVERY local plausibility
+        // witness (post-fit DDPR RMS 5.7 m, IMU gap 0.73 m, trusted DDPR-LS
+        // anchor gap 0.78 m) because the whole local window had excursed
+        // together -- only its position in time relative to the hold gives
+        // it away. Label-only, like the other demotion criteria.
+        int fix_demote_posthold_epochs = 0;
+        // RELATIVE residual demotion: demote the FIXED label when THIS
+        // epoch's post-fit DDPR RMS exceeds fix_demote_res_rel times the
+        // rolling MEDIAN of the last fix_demote_res_rel_window epochs' RMS
+        // (and also exceeds cp_hold_main_residual_threshold_m as an absolute
+        // floor, so a quiet run's noise never triggers it). 0 = off. This is
+        // the run-adaptive complement to the absolute fix_demote_res_m:
+        // tokyo run1's legitimate fixes ride 5-20 m residuals CHRONICALLY
+        // (median high -> relative test stays quiet), while run3's bad fixed
+        // stretches sit at 4.7-13.3 m over a 0.7-1.8 m ambient (a 4-19x
+        // excursion) and run2's wrong-basin band at 32-60 m over a ~1-3 m
+        // ambient -- exactly the "suddenly much worse than this run's own
+        // recent normal" signature. Median (not mean) so the excursion
+        // epochs themselves do not drag the baseline up. Needs the shared
+        // post-fit residual pass (see fix_demote_res_m).
+        double fix_demote_res_rel = 0.0;
+        int fix_demote_res_rel_window = 100;  ///< rolling window [epochs]; >=20 history required
 
         // --- Exception recovery (port of recovery.py's handle_solve_exception)
         // ---
@@ -1226,6 +1418,13 @@ public:
         std::size_t sanity_multipath_skips = 0;   ///< bad epochs skipped as single-satellite multipath
         std::size_t sanity_gdop_skips = 0;        ///< persist-eligible resets skipped for weak geometry
         std::size_t ambiguity_generation_bumps = 0;  ///< total per-arc generation bumps (fresh symbols)
+        // --- Stale-pin invalidation diagnostics (use_stale_pin_invalidation) ---
+        std::size_t stale_pin_invalidations = 0;  ///< pinned arcs released per-arc at a trigger epoch
+        // --- Fix plausibility demotion diagnostics (use_fix_plausibility_demotion) ---
+        std::size_t fix_plausibility_demotions = 0;  ///< FIXED epochs demoted to FLOAT (IMU gap or anchor gap)
+        std::size_t fix_plausibility_anchor_demotions = 0;  ///< of which via the DDPR-LS anchor gap
+        std::size_t fix_plausibility_anchor_gross_gated = 0;  ///< anchor-gap evaluations skipped by the gross-offender gate (fix_demote_anchor_gross)
+        std::size_t fix_plausibility_hold_skips = 0;  ///< fix-and-hold pinnings skipped on implausible epochs
         // --- Exception recovery diagnostics (use_solve_exception_recovery) ---
         std::size_t solve_exception_recoveries = 0;   ///< loose-prior retries that succeeded
         std::size_t solve_exception_warm_resets = 0;  ///< full smoother re-creations
