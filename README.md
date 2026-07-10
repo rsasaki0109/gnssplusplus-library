@@ -21,7 +21,7 @@ handling without an external RTKLIB runtime.
 | Area | Public comparison | Evidence / status |
 |---|---|---|
 | RTK | PPC Tokyo/Nagoya vs RTKLIB `demo5` | +17.0 pp positioning, +28.1 pp official score, -11.96 m P95 H delta |
-| GNSS/IMU FGO | PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | Higher <50 cm fraction (avg +5.2 pp) and fix-rate (avg +11.7 pp) on all 3 runs |
+| GNSS/IMU FGO | PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | Higher <50 cm fraction (avg +5.3 pp) and fix-rate (avg +7.9 pp) on all 3 runs; fixed-only RMS also wins 2 of 3 runs |
 | CLAS PPP | QZSS CLAS vs CLASLIB | Historical `--claslib-parity` result: 3.57 mm vs 7.29 mm RMS 3D. Current native DD filter remains default-off at A5 STOP. |
 | Urban RTK | UrbanNav Tokyo Odaiba vs RTKLIB `demo5` | More fixes, lower Hp95/Vp95; `--preset odaiba` closes Hmed |
 | SPP | PPC SPP adaptive robust + policy gate | No P95 regression with <=1 pp positioning drop |
@@ -60,19 +60,26 @@ versus [inuex35/tightly-coupled-gnss-imu-fgo](https://github.com/inuex35/tightly
 
 | Run | libgnss++ <50cm | Reference <50cm | libgnss++ fix | Reference fix | libgnss++ fixed RMS | Reference fixed RMS |
 |---|---:|---:|---:|---:|---:|---:|
-| Tokyo run1 | **56.8%** | 56.7% | **54.7%** | 49.5% | 0.89 m | **0.82 m** |
-| Tokyo run2 | **80.5%** | 69.9% | **78.0%** | 60.8% | 0.63 m | **0.28 m** |
-| Tokyo run3 | **72.8%** | 67.9% | **72.2%** | 59.4% | 0.29 m | **0.21 m** |
+| Tokyo run1 | **56.9%** | 56.7% | **50.0%** | 49.5% | **0.655 m** | 0.815 m |
+| Tokyo run2 | **80.6%** | 69.9% | **71.5%** | 60.8% | **0.261 m** | 0.277 m |
+| Tokyo run3 | **72.8%** | 67.9% | **71.8%** | 59.4% | 0.272 m | **0.211 m** |
 
-Higher <50 cm fraction and fix-rate on all three runs; fixed-only RMS is
-slightly behind, measured over the larger fixed populations. Every feature is
-opt-in and the library is unchanged when built without GTSAM. Reproduce with
-`gnss_fgo_parity` (requires a GTSAM build) and the recommended preset:
+![Tokyo run1 GNSS/IMU FGO](docs/gnss_imu_fgo_tokyo_run1.png)
+![Tokyo run2 GNSS/IMU FGO](docs/gnss_imu_fgo_tokyo_run2.png)
+![Tokyo run3 GNSS/IMU FGO](docs/gnss_imu_fgo_tokyo_run3.png)
+
+libgnss++ beats the reference on <50 cm fraction and fix-rate on all three
+runs, and on fixed-only RMS on two of three runs (run3's fixed RMS remains
+behind the reference, over the largest fixed population of the three: 10973
+epochs). Every feature is opt-in and the library is unchanged when built
+without GTSAM. Reproduce with `gnss_fgo_parity` (requires a GTSAM build) and
+the shipping preset:
 
 ```
 --imu <run>/imu.csv --fixed-lag 5 --multi-freq --partial-ar --hold \
 --elev-mask 25 --snr-mask 30 --imu-preset-tactical --cmc --cmc-level 0.75 \
---cp-hold --cp-hold-res 2.0 --exc-recovery --ddpr-anchor --fde --varerr
+--cp-hold --cp-hold-res 2.0 --exc-recovery --ddpr-anchor --fde --varerr \
+--fix-demote --fix-demote-dist 5 --fix-demote-res 25 --fix-demote-posthold 5
 ```
 
 ### Historical CLAS PPP vs CLASLIB

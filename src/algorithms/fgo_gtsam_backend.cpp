@@ -59,6 +59,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <deque>
 #include <limits>
 #include <map>
 #include <numeric>
@@ -631,10 +632,24 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
     // evaluation (the reference rebuilds a second "non-robust" graph for
     // eval only because ITS default solve pass may be robust; ours already
     // isn't, so one graph suffices for both).
-    auto solveDdprAnchor = [&](std::size_t epoch_idx, const Pose3& pose_init) -> DdprAnchorResult {
+    // `exclude_sats` (optional): drop every DD PR row involving one of these
+    // satellites BEFORE solving. Used only by the fix-plausibility demotion's
+    // robust retry (a single gross multipath satellite can sit at the FDE
+    // floor below and poison both the pose and the residual trust test);
+    // nullptr for every pre-existing call site -- bit-identical behaviour.
+    auto solveDdprAnchor = [&](std::size_t epoch_idx, const Pose3& pose_init,
+                               const std::set<SatelliteId>* exclude_sats =
+                                   nullptr) -> DdprAnchorResult {
         DdprAnchorResult out;
-        std::vector<const FGOProcessor::DoubleDifferencePseudorangeFactor*> active(
-            pr_by_epoch[epoch_idx].begin(), pr_by_epoch[epoch_idx].end());
+        std::vector<const FGOProcessor::DoubleDifferencePseudorangeFactor*> active;
+        active.reserve(pr_by_epoch[epoch_idx].size());
+        for (const auto* fp : pr_by_epoch[epoch_idx]) {
+            if (exclude_sats && (exclude_sats->count(fp->satellite) ||
+                                 exclude_sats->count(fp->reference_satellite))) {
+                continue;
+            }
+            active.push_back(fp);
+        }
         if (active.size() < static_cast<std::size_t>(std::max(1, config.ddpr_anchor_min_factors))) {
             return out;
         }
@@ -928,6 +943,11 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
     // use_cp_hold_recovery is false.
     std::map<std::size_t, int> amb_generation;
     std::map<std::pair<std::size_t, int>, std::size_t> amb_symbol_id;
+    // Epoch at which each pinned symbol's hold prior was created (keyed by
+    // graph symbol id, which is never reused across generations). Feeds
+    // use_stale_pin_invalidation's min-hold-age guard only; recording it is
+    // unconditional but behaviour-neutral.
+    std::map<std::size_t, std::size_t> pin_created_epoch;
     std::size_t next_free_amb_symbol_id = problem.ambiguity_states.size();
     // Ambiguity indices with a symbol currently live in the graph (added under
     // their CURRENT generation); mass reset removes exactly these factors and
@@ -964,7 +984,12 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
 
     int cp_hold_counter = 0;         ///< remaining epochs with carrier suppressed (reference _recov_cp_hold)
     int cp_hold_release_streak = 0;  ///< consecutive clean epochs while held (reference _recov_cp_release_streak)
-    int ddpr_bad_count = 0;          ///< consecutive bad epochs (reference _ddpr_bad_count)
+    // Consecutive bad epochs (reference _ddpr_bad_count). Double-valued (not
+    // int) so use_cp_hold_leaky_persist's fractional decay (e.g. 0.25/0.5)
+    // never loses precision; every write in the default (non-leaky) path
+    // stores exact integer values, so this is bit-identical to an int
+    // counter whenever the knob is off.
+    double ddpr_bad_count = 0.0;
     double last_ddpr_rms = 0.0;      ///< previous epoch's post-fit DDPR RMS (reference _last_main_ddpr_res)
     // Epoch index at which last_ddpr_rms was last written (reference
     // _last_main_ddpr_epoch / _mres_signals.epoch); sentinel far in the past
@@ -972,6 +997,13 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
     // to -10**9). Feeds the imu_integration_covariance_inflation staleness
     // test below.
     long long last_ddpr_rms_epoch = -1000000000LL;
+    // Most recent epoch whose carrier was CP-hold-suppressed; feeds the
+    // fix_demote_posthold_epochs cooldown only (sentinel far in the past).
+    long long last_held_epoch = -1000000000LL;
+    // Rolling history of per-epoch post-fit DDPR RMS values (previous epochs
+    // only; the current epoch is pushed AFTER its own demotion check so an
+    // excursion never dilutes its own baseline). Feeds fix_demote_res_rel.
+    std::deque<double> recent_ddpr_rms;
     bool pim_discontinuity = false;  ///< one-shot: break the IMU chain at the NEXT epoch (reference _pim_discontinuity)
     // DDPR-anchor bootstrap re-seed countdown (use_ddpr_anchor; reference
     // tc._tc_bootstrap_ddpr_epochs). While > 0, every epoch gets a
@@ -1049,6 +1081,68 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
         ddpr_bad_count = 0;
         if (config.cp_hold_break_imu_chain) pim_discontinuity = true;
         ++result.diagnostics.cp_hold_triggers;
+        return remove_indices.size();
+    };
+
+    // Per-arc variant of the mass reset above (FGOConfig::
+    // use_stale_pin_invalidation): remove ONLY the listed arcs'
+    // current-generation live factors (fix-and-hold prior included) via the
+    // same removeFactorIndices path, bump their generations so the next
+    // observation re-enters as a fresh float arc, and drop them from the
+    // pinned/live bookkeeping. Unlike resetAmbiguitiesWithCpHold this
+    // engages no CP-hold, breaks no IMU chain, resets no counters and
+    // leaves every other arc's pin in place. Returns factors removed.
+    auto invalidateArcs = [&](const std::vector<std::size_t>& arc_indices) -> std::size_t {
+        if (arc_indices.empty()) return 0;
+        std::set<gtsam::Key> purge_keys;
+        for (std::size_t idx : arc_indices) {
+            purge_keys.insert(ambiguityKey(ambSymbolId(idx)));
+        }
+        // Remove ONLY each arc's fix-and-hold PIN -- the unary
+        // PriorFactor<double> whose sigma is the (tight)
+        // ambiguity_hold_sigma_cycles. Everything else stays: the fresh-arc
+        // SEED prior keeps the variable determined no matter what later
+        // removes its carrier factors (FDE relies on that invariant -- an
+        // earlier variant that also stripped the seed prior produced
+        // indeterminate-system cascades and a hard crash on run1), and the
+        // DD carrier factors keep contributing, so the arc simply RE-FLOATS
+        // within the window -- the point of the release.
+        const double pin_sigma_ceiling = config.ambiguity_hold_sigma_cycles * 1.5;
+        gtsam::FactorIndices remove_indices;
+        const auto& factors = smoother.getISAM2().getFactorsUnsafe();
+        for (std::size_t fi = 0; fi < factors.size(); ++fi) {
+            const auto& f = factors[fi];
+            if (!f || f->keys().size() != 1 || !purge_keys.count(f->keys()[0])) continue;
+            const auto* pf = dynamic_cast<const gtsam::PriorFactor<double>*>(f.get());
+            if (!pf) continue;
+            double sigma = std::numeric_limits<double>::infinity();
+            if (const auto iso = std::dynamic_pointer_cast<gtsam::noiseModel::Isotropic>(
+                    pf->noiseModel())) {
+                sigma = iso->sigma();
+            } else if (const auto diag = std::dynamic_pointer_cast<gtsam::noiseModel::Diagonal>(
+                           pf->noiseModel())) {
+                sigma = diag->sigma(0);
+            }
+            if (sigma <= pin_sigma_ceiling) remove_indices.push_back(fi);
+        }
+        for (std::size_t idx : arc_indices) {
+            const std::size_t old_sid = ambSymbolId(idx);  // resolve BEFORE bumping
+            ++amb_generation[idx];
+            ++result.diagnostics.ambiguity_generation_bumps;
+            pinned_ambiguities.erase(old_sid);
+            live_ambiguity_indices.erase(idx);
+        }
+        if (!remove_indices.empty()) {
+            try {
+                smoother.update(gtsam::NonlinearFactorGraph(), gtsam::Values(),
+                                gtsam::FixedLagSmoother::KeyTimestampMap(), remove_indices);
+                ++result.diagnostics.smoother_updates;
+            } catch (const std::exception& e) {
+                std::fprintf(stderr,
+                             "[fgo_gtsam_backend] stale-pin factor removal threw: %s\n",
+                             e.what());
+            }
+        }
         return remove_indices.size();
     };
 
@@ -1585,6 +1679,7 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
         if (config.use_cp_hold_recovery) {
             skip_cp_now = cp_hold_counter > 0;
             if (skip_cp_now) {
+                last_held_epoch = static_cast<long long>(i);
                 --cp_hold_counter;
                 ++result.diagnostics.cp_hold_epochs_held;
                 const double release_thr = config.cp_hold_release_threshold_m;
@@ -2463,10 +2558,31 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                         // integers would poison the arc for its whole
                         // remaining lifetime if any are wrong (measured on
                         // tokyo1 full-run deep urban: FIXED rms 6.2 m). ---
+                        // Fix plausibility (use_fix_plausibility_demotion):
+                        // never PIN integers from an epoch whose fixed
+                        // position is implausibly far from the IMU
+                        // prediction -- the demotion pass below the hold
+                        // block strips the FIXED label; skipping the hold
+                        // here additionally stops the (likely wrong)
+                        // integers from poisoning the arc's remaining
+                        // lifetime. Evaluated lazily (last && operand) so
+                        // the skip counter only counts epochs that would
+                        // otherwise actually have held.
+                        const auto holdBlockedByPlausibility = [&]() -> bool {
+                            if (!config.use_fix_plausibility_demotion) return false;
+                            const Point3 fix_ant = epoch_has_fixed[i]
+                                                       ? Point3(epoch_fixed_position[i])
+                                                       : antennaOf(pose_i);
+                            const double gap = (fix_ant - antennaOf(pose_seed)).norm();
+                            if (gap <= config.fix_demote_distance_m) return false;
+                            ++result.diagnostics.fix_plausibility_hold_skips;
+                            return true;
+                        };
                         if (config.use_ambiguity_hold &&
                             subset == attempt_n &&
                             ratio > config.ambiguity_hold_ratio_threshold &&
-                            subset >= config.ambiguity_hold_min_fixed) {
+                            subset >= config.ambiguity_hold_min_fixed &&
+                            !holdBlockedByPlausibility()) {
                             gtsam::NonlinearFactorGraph hold_factors;
                             const auto hold_noise = gtsam::noiseModel::Isotropic::Sigma(
                                 1, config.ambiguity_hold_sigma_cycles);
@@ -2478,6 +2594,7 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                                 hold_factors.addPrior(ambiguityKey(sym_idx),
                                                       static_cast<double>(fi), hold_noise);
                                 pinned_ambiguities.insert(sym_idx);
+                                pin_created_epoch[sym_idx] = i;
                             }
                             if (hold_factors.size() > 0) {
                                 try {
@@ -2532,6 +2649,158 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                     }
                 }
             }
+        }
+
+        // --- Fix plausibility demotion (use_fix_plausibility_demotion). Runs
+        // AFTER all FIXED labeling (fresh per-epoch LAMBDA above AND the
+        // held-arc path) and BEFORE the sanity FSM, so a demoted epoch feeds
+        // the FSM's catastrophic fast path with nb == 0 exactly like a
+        // genuinely unfixed epoch. Mirrors the FSM's pose-replacement gap
+        // test (fixed/graph position vs the IMU-predicted pose_seed) but
+        // acts on the LABEL only: graph values, the reported float position
+        // and pre-existing pins are untouched. (New pins from THIS epoch
+        // were already suppressed by holdBlockedByPlausibility above.) ---
+        if (config.use_fix_plausibility_demotion && epoch_fixed[i]) {
+            const Point3 fix_ant =
+                epoch_has_fixed[i] ? Point3(epoch_fixed_position[i]) : antennaOf(pose_i);
+            const double gap = (fix_ant - antennaOf(pose_seed)).norm();
+            bool demote = gap > config.fix_demote_distance_m;
+            // Extreme-residual variant (fix_demote_res_m): an epoch whose own
+            // post-fit DDPR RMS is in the tens of metres cannot be a
+            // trustworthy fix regardless of what the IMU/anchor say (see the
+            // knob's comment for the measured legit-vs-wrong-basin
+            // separation). Label-only, this epoch only.
+            if (!demote && config.fix_demote_res_m > 0.0 && ddpr_rms > config.fix_demote_res_m) {
+                demote = true;
+            }
+            // Post-hold cooldown variant (fix_demote_posthold_epochs): a fix
+            // validated within k epochs of the last carrier-suppressed epoch
+            // stands on arcs the hold's regeneration just re-created --
+            // sub-second float history in exactly the conditions where the
+            // ratio test is least trustworthy (see the knob's comment for
+            // the measured 45.8 m case that no local witness catches).
+            if (!demote && config.fix_demote_posthold_epochs > 0 &&
+                static_cast<long long>(i) - last_held_epoch <=
+                    static_cast<long long>(config.fix_demote_posthold_epochs)) {
+                demote = true;
+            }
+            // Relative-residual variant (fix_demote_res_rel): "suddenly much
+            // worse than this run's own recent normal" -- run-adaptive where
+            // the absolute fix_demote_res_m cannot be (see the knob's
+            // comment for the measured per-run separations). Previous-epoch
+            // history only; absolute floor = the FSM trigger threshold.
+            if (!demote && config.fix_demote_res_rel > 0.0 && recent_ddpr_rms.size() >= 20) {
+                std::vector<double> h(recent_ddpr_rms.begin(), recent_ddpr_rms.end());
+                std::nth_element(h.begin(), h.begin() + h.size() / 2, h.end());
+                const double med = h[h.size() / 2];
+                if (ddpr_rms > config.cp_hold_main_residual_threshold_m &&
+                    ddpr_rms > config.fix_demote_res_rel * med) {
+                    demote = true;
+                }
+            }
+            // Anchor-gap variant (fix_demote_use_ddpr_anchor): the IMU
+            // prediction rides an already-converged wrong basin, but the
+            // per-epoch DDPR-LS anchor is re-solved from this epoch's DD
+            // pseudoranges alone and does not. Only a TRUSTED anchor (same
+            // trust test as the FSM's anchor stage) may veto the label; an
+            // untrusted anchor (multipath-heavy pseudoranges under a
+            // legitimate fix) never demotes.
+            // Gross-offender gate (fix_demote_anchor_gross): the anchor-gap
+            // check below is only EVALUATED on epochs whose pre-FDE per-
+            // satellite post-fit DD residual signature shows one dominant
+            // offender (max > fix_demote_anchor_gross_abs_m AND max >
+            // fix_demote_anchor_gross_ratio * median) -- see the knob's
+            // comment in fgo.hpp for why this separates tokyo run3's actual
+            // wrong-basin bands from run1's diffuse-multipath false-veto
+            // signature. No-op (gate always open) when the knob is off.
+            bool anchor_gross_gate_open = true;
+            if (config.fix_demote_use_ddpr_anchor && config.fix_demote_anchor_gross) {
+                anchor_gross_gate_open = false;
+                if (!per_sat_res.empty()) {
+                    std::vector<double> gross_vals;
+                    gross_vals.reserve(per_sat_res.size());
+                    double gross_max = 0.0;
+                    for (const auto& [sid, r] : per_sat_res) {
+                        (void)sid;
+                        gross_vals.push_back(r);
+                        gross_max = std::max(gross_max, r);
+                    }
+                    std::sort(gross_vals.begin(), gross_vals.end());
+                    const double gross_median = gross_vals[gross_vals.size() / 2];
+                    if (gross_max > config.fix_demote_anchor_gross_abs_m &&
+                        (gross_median <= 1e-9 ||
+                         gross_max > config.fix_demote_anchor_gross_ratio * gross_median)) {
+                        anchor_gross_gate_open = true;
+                    }
+                }
+                if (!anchor_gross_gate_open) {
+                    ++result.diagnostics.fix_plausibility_anchor_gross_gated;
+                }
+            }
+            if (!demote && config.fix_demote_use_ddpr_anchor && config.use_ddpr_anchor &&
+                anchor_gross_gate_open) {
+                ++result.diagnostics.ddpr_anchor_solves;
+                const double trust_res = config.fix_demote_anchor_trust_res_m > 0.0
+                                             ? config.fix_demote_anchor_trust_res_m
+                                             : config.ddpr_anchor_max_residual_m;
+                DdprAnchorResult anchor = solveDdprAnchor(i, pose_seed);
+                // Robust retry: a single gross multipath satellite (measured
+                // on run2's wrong-basin stretch: one ~120 m per-sat residual
+                // over a ~1 m median) both drags the anchor pose (the anchor
+                // LS is non-robust) and fails its residual trust test, while
+                // the anchor's own internal FDE cannot drop the row once at
+                // its min-factors floor. Excluding the worst per-sat
+                // offender(s) up front restores a trustworthy anchor exactly
+                // on those epochs; a genuinely inconsistent epoch stays
+                // untrusted after the retries and never demotes (fail-safe:
+                // the FIXED label stands).
+                if (!(anchor.ok && anchor.n_active >= config.ddpr_anchor_min_factors &&
+                      anchor.res_rms <= trust_res) &&
+                    !per_sat_res.empty()) {
+                    std::vector<std::pair<double, SatelliteId>> worst_sats;
+                    worst_sats.reserve(per_sat_res.size());
+                    for (const auto& [sid, r] : per_sat_res) worst_sats.emplace_back(r, sid);
+                    std::sort(worst_sats.begin(), worst_sats.end(),
+                              [](const auto& a, const auto& b) { return a.first > b.first; });
+                    std::set<SatelliteId> excl;
+                    for (std::size_t w = 0; w < worst_sats.size() && w < 2; ++w) {
+                        if (worst_sats[w].first <= trust_res) break;  // nothing gross left
+                        excl.insert(worst_sats[w].second);
+                        const DdprAnchorResult retry = solveDdprAnchor(i, pose_seed, &excl);
+                        if (retry.ok && retry.n_active >= config.ddpr_anchor_min_factors &&
+                            retry.res_rms <= trust_res) {
+                            anchor = retry;
+                            break;
+                        }
+                    }
+                }
+                if (anchor.ok && anchor.n_active >= config.ddpr_anchor_min_factors &&
+                    anchor.res_rms <= trust_res) {
+                    ++result.diagnostics.ddpr_anchor_successes;
+                    const double anchor_gap = (fix_ant - antennaOf(anchor.pose)).norm();
+                    if (anchor_gap > config.fix_demote_anchor_distance_m) {
+                        demote = true;
+                        ++result.diagnostics.fix_plausibility_anchor_demotions;
+                    }
+                }
+            }
+            if (demote) {
+                epoch_fixed[i] = false;
+                epoch_fixed_count[i] = 0;
+                epoch_has_fixed[i] = false;
+                ++result.diagnostics.fix_plausibility_demotions;
+            }
+        }
+
+        // Rolling per-epoch RMS history for fix_demote_res_rel (previous
+        // epochs only -- pushed AFTER this epoch's own demotion check so an
+        // excursion never dilutes its own baseline).
+        if (config.use_fix_plausibility_demotion && config.fix_demote_res_rel > 0.0 &&
+            need_ddpr_residuals && !per_sat_res.empty()) {
+            recent_ddpr_rms.push_back(ddpr_rms);
+            const std::size_t win = static_cast<std::size_t>(
+                std::max(20, config.fix_demote_res_rel_window));
+            while (recent_ddpr_rms.size() > win) recent_ddpr_rms.pop_front();
         }
 
         // --- CP-hold / sanity FSM (use_cp_hold_recovery). Runs LAST, after
@@ -2702,8 +2971,60 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                         epoch_float_position[i] = report_ant;
                     }
                 }
+
+                // Stage (opt-in, this port's own addition): stale-pin
+                // invalidation (use_stale_pin_invalidation). The persist
+                // stage above requires CONSECUTIVE bad epochs and never
+                // fires on the "wrong pin at ~3 m, residuals hovering around
+                // the trigger threshold" failure mode, so a stale
+                // fix-and-hold pin can ride for minutes; and a
+                // multipath-dominated epoch (skipped above precisely because
+                // a MASS reset would be overkill for one bad satellite) is
+                // exactly the case where releasing THAT satellite's pin
+                // per-arc is the right-sized response. So this stage runs on
+                // EVERY trigger epoch -- multipath-dominated or not --
+                // releasing only the pinned arcs whose own satellite's
+                // per-sat post-fit residual exceeds the threshold (per-arc
+                // removal + generation bump via invalidateArcs); every other
+                // pin, the CP-hold state and the persist counter are
+                // untouched. Skipped when a mass/fast reset already cleared
+                // every arc this epoch.
+                if (config.use_stale_pin_invalidation && !did_reset &&
+                    !pinned_ambiguities.empty()) {
+                    std::vector<std::size_t> stale_arcs;
+                    for (std::size_t idx : live_ambiguity_indices) {
+                        const std::size_t sid = ambSymbolId(idx);
+                        if (!pinned_ambiguities.count(sid)) continue;
+                        if (config.stale_pin_min_hold_age_epochs > 0) {
+                            const auto ait = pin_created_epoch.find(sid);
+                            if (ait != pin_created_epoch.end() &&
+                                i - ait->second < static_cast<std::size_t>(
+                                                      config.stale_pin_min_hold_age_epochs)) {
+                                continue;  // pin too young to judge
+                            }
+                        }
+                        const auto rit =
+                            per_sat_res.find(problem.ambiguity_states[idx].satellite);
+                        if (rit == per_sat_res.end()) continue;  // not observed this epoch
+                        if (rit->second > config.stale_pin_per_sat_residual_m) {
+                            stale_arcs.push_back(idx);
+                        }
+                    }
+                    if (!stale_arcs.empty()) {
+                        invalidateArcs(stale_arcs);
+                        result.diagnostics.stale_pin_invalidations += stale_arcs.size();
+                    }
+                }
+            } else if (config.use_cp_hold_leaky_persist) {
+                // Leaky decay (deliberate deviation from the reference's
+                // hard reset -- see FGOConfig::use_cp_hold_leaky_persist).
+                // A clean epoch drains the counter by cp_hold_persist_decay
+                // instead of zeroing it outright, so an intermittently-bad
+                // stretch's bad epochs can accumulate net credit across the
+                // interleaved clean ones.
+                ddpr_bad_count = std::max(0.0, ddpr_bad_count - config.cp_hold_persist_decay);
             } else {
-                ddpr_bad_count = 0;
+                ddpr_bad_count = 0.0;
             }
             last_ddpr_rms = ddpr_rms;
             last_ddpr_rms_epoch = static_cast<long long>(i);
