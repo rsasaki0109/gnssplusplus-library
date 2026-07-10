@@ -67,6 +67,14 @@ if(GTest_FOUND)
         target_sources(gnss_run_tests PRIVATE test_rtk_legacy.cpp)
     endif()
 
+    # GTSAM FGO backend parity tests (guarded at both CMake and #ifdef level:
+    # the source itself is a no-op TU when GNSSPP_HAS_GTSAM isn't defined, but
+    # we still only add it to the build when GTSAM was actually found so a
+    # GTSAM-less build doesn't pay for an always-empty translation unit).
+    if(GTSAM_FOUND)
+        target_sources(gnss_run_tests PRIVATE test_fgo_gtsam_backend.cpp)
+    endif()
+
     set_target_properties(gnss_run_tests PROPERTIES OUTPUT_NAME run_tests)
     # Backward-compatible alias for CI/scripts that build --target run_tests.
     # Skipped for Visual Studio generators, where the name collides with

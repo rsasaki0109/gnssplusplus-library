@@ -4,6 +4,7 @@
 #include <libgnss++/core/observation.hpp>
 #include <libgnss++/core/solution.hpp>
 #include <libgnss++/core/types.hpp>
+#include <libgnss++/io/imu.hpp>
 
 #include <cstddef>
 #include <map>
@@ -12,6 +13,22 @@
 #include <vector>
 
 namespace libgnss {
+
+/**
+ * @brief Selects which numerical backend FGOProcessor::optimizeProblem uses.
+ *
+ * `Eigen` (default) is the native dense/sparse Gauss-Newton-ish solver
+ * implemented directly in fgo.cpp. `GTSAM` delegates to a GTSAM
+ * NonlinearFactorGraph + LevenbergMarquardtOptimizer built in
+ * fgo_gtsam_backend.cpp (only available when the library is built with
+ * GTSAM found, i.e. GNSSPP_HAS_GTSAM is defined). Selecting GTSAM when the
+ * library was built without it is a no-op: optimizeProblem falls back to the
+ * Eigen backend.
+ */
+enum class FGOBackend {
+    Eigen,
+    GTSAM,
+};
 
 /**
  * @brief Batch pseudorange factor-graph optimizer.
@@ -23,6 +40,7 @@ namespace libgnss {
 class FGOProcessor {
 public:
     struct FGOConfig {
+        FGOBackend backend = FGOBackend::Eigen;
         int max_iterations = 8;
         double convergence_threshold_m = 1e-4;
         double relative_cost_convergence_threshold = 0.0;
@@ -46,6 +64,81 @@ public:
         bool use_tdcp_factors = true;
         bool use_carrier_phase_factors = false;
         bool use_double_difference_factors = false;
+        // When true (default) AND use_double_difference_factors, the DD
+        // problem builder emits DD pseudorange + carrier factors for
+        // secondary-band signals too (GPS L2C/L5, Galileo E5A/E5B/E6, BeiDou
+        // B2I/B3I/B2A, QZSS L2C/L5), not just the primary band (L1CA/E1/B1I).
+        // Each (satellite, signal, arc) still gets its own AmbiguityState /
+        // ambiguity index with its own wavelength (see signals.hpp), and the
+        // reference satellite is selected independently per (system, signal)
+        // group so a band with fewer tracked satellites doesn't starve. This
+        // is the front-end lever for closing the fix-rate gap vs multi-
+        // frequency references (inuex35 runs NF=3): feeding the raw per-
+        // frequency DD carrier factors to the joint LAMBDA search already
+        // exploits the inter-frequency information without needing explicit
+        // widelane/narrowlane combinations. GLONASS is unaffected: its DD
+        // factors are already skipped upstream (FDMA, no shared wavelength).
+        // Ignored when use_multi_constellation is false (single GPS-L1 mode).
+        //
+        // Default OFF: on the tokyo1 low-cost PPC data, adding raw L2/L5 DD
+        // measurements REGRESSES the DD-RTK solution vs single-frequency
+        // (fix-rate 52.5% -> 47%, FLOAT 1.6 m -> 7.8 m, <50cm 58% -> 37% on the
+        // first-2500 good-geometry subset), and neither per-band weighting nor
+        // the LAMBDA-independence lever below recovers it (best multi-freq
+        // fix-rate 43.9% still < 52.5%). The secondary-band DD carries a
+        // systematic bias that degrades the float even when correctly
+        // down-weighted -- most consistent with a rover/base observation-CODE
+        // mismatch per band (RINEX C2W/C2L at the rover vs C2W/C2X at the base
+        // both collapse to GPS_L2C, leaving an uncancelled inter-code/DCB bias
+        // in the DD). The capability is fully wired; enable it only after the
+        // secondary-band measurement hygiene (identical code selection at
+        // rover+base, or DCB correction) lands. A wide-lane combination would
+        // INHERIT the same bias, so it is not the right next step.
+        bool use_multi_frequency_double_difference = false;
+
+        // --- MF hygiene: secondary-band observation-code alignment ---
+        // Port of the cssrlib/inuex35 (RTKLIB-style) signal-selection policy:
+        // each receiver uses exactly ONE RINEX observation code per (system,
+        // band) for the whole file (chosen from its own data by an RTKLIB
+        // code-priority table), so all satellites contribute the same code per
+        // band and the between-satellite difference cancels the receiver-side
+        // inter-code bias. Cures the mixed-code DD bias (rover GPS L2 mixing
+        // C2W/C2L across satellites; base BDS B2I C7D vs rover C7I) diagnosed
+        // as the multi-frequency FLOAT blowup. Secondary bands only; the
+        // primary-band single-frequency path is untouched. No-op when
+        // use_multi_frequency_double_difference is false.
+        bool use_double_difference_secondary_code_alignment = true;
+
+        // --- MF-AR step 1: multi-frequency ambiguity-resolution robustness ---
+        // Per-band DD measurement weighting. Secondary-band (L2C/L5/E5a/E5b/
+        // B2I/B2a/...) DD carrier & pseudorange factors are noisier and more
+        // slip-prone on low-cost receivers; adding them at L1-identical sigma
+        // over-weights them and drags the float (observed: naive multi-freq
+        // blew the FLOAT RMS 1.6 m -> 7.8 m). The per-factor sigma is
+        // multiplied by these scales for secondary-band signals only, on top
+        // of the existing elevation weighting. 1.0 = no de-weighting (the old
+        // behaviour). No-op for single-frequency DD (no secondary factors).
+        double double_difference_secondary_carrier_sigma_scale = 3.0;
+        double double_difference_secondary_pseudorange_sigma_scale = 2.0;
+        // LAMBDA candidate independence. When true, the per-epoch LAMBDA
+        // ratio-test candidate set keeps at most one ambiguity per satellite
+        // (primary band preferred, else the longest-wavelength secondary), so
+        // the integer set spans INDEPENDENT satellites instead of multiple
+        // highly-correlated bands of the same satellite. Multiple bands of one
+        // satellite share the same line-of-sight, so they add little to the DD
+        // geometry but do inflate the all-or-nothing ratio test and lower the
+        // ratio (observed: naive multi-freq dropped fix-rate 52.5% -> 47.0%).
+        // The dropped bands' DD factors still constrain the float; they are
+        // just not forced into the integer ratio test. No-op for single-
+        // frequency DD (one band per satellite already).
+        //
+        // Default OFF: measured net-harmful on tokyo1. Because this pipeline's
+        // fix-rate is dominated by fix-and-hold (pinning many arcs early), a
+        // SMALLER integer candidate set pins fewer arcs and lowers the
+        // sustained fix-rate (observed: enabling it dropped multi-freq fix-rate
+        // from 47% to 29%). Kept as an opt-in knob for a future partial-AR
+        // scheme that fixes independent satellites first, then adds bands.
+        bool double_difference_lambda_one_band_per_satellite = false;
         bool use_single_difference_doppler_factors = false;
         bool use_single_difference_tdcp_factors = false;
         bool use_velocity_states = false;
@@ -74,6 +167,75 @@ public:
         double single_difference_tdcp_sigma_m = 0.003;
         double double_difference_pseudorange_sigma_m = 1.0;
         double double_difference_carrier_sigma_m = 0.02;
+
+        // --- Elevation-dependent DD sigma (RTKLIB-demo5 "varerr", rtkpos.c:402)
+        // ---
+        // Port of the inuex35 reference's preprocess/prefit.py varerr_dd_sigma
+        // + buildfactor/factors.py pair_sigma. This was a previously-UNPORTED
+        // piece: it ran DEFAULT-ON in every reference benchmark (its enable
+        // flag, config.py's varerr_enable, is a dataclass default of 1, never
+        // toggled by the benchmark profile dicts we had scraped), so earlier
+        // parity work missed it entirely.
+        //
+        // When enabled, the DD pseudorange/carrier base sigma (fed to BOTH
+        // double_difference_pseudorange_factor.sigma_m and
+        // double_difference_carrier_factor.sigma_m, before the secondary-band
+        // scale and sat-badness inflation multiply on top -- see
+        // buildDoubleDifferenceProblem in fgo.cpp) is, per (reference,target)
+        // pair:
+        //
+        //   el_pair  = max(min(el_ref_rad, el_target_rad), el_min_rad)
+        //   el_min_rad = radians(max(1.0, min_elevation_deg))
+        //   fact     = elevation_sigma_pseudorange_ratio (pseudorange) | 1.0 (carrier)
+        //   a        = fact * elevation_sigma_err_a_m
+        //   b        = fact * elevation_sigma_err_b_m
+        //   d        = SPEED_OF_LIGHT * elevation_sigma_clock_stability * dt_s
+        //   sinel    = max(sin(el_pair), 0.05)   // cap below ~3 deg
+        //   var_sd   = 2*(a*a + b*b/(sinel*sinel)) + d*d   // single-difference variance
+        //   sigma_dd = sqrt(2 * var_sd)                    // DD = difference of 2 SDs
+        //
+        // dt_s mapping decision: the reference's tc._epoch_dt is "actual
+        // seconds since the runner's last process() call" -- i.e. the ROVER's
+        // own epoch-to-epoch interval (defaults to 0.2 s / 5 Hz until the
+        // first real update; see runner.py's _update_epoch_dt), NOT the
+        // rover-base differential/interpolation age. Our port mirrors this
+        // exactly: dt_s is the elapsed time between the current and the
+        // immediately-preceding ROVER epoch in the batch (problem.epochs[i].time
+        // - problem.epochs[i-1].time), persisted across epochs and only
+        // updated when positive (same "keep last known dt" behaviour as the
+        // reference), defaulting to 0.2 s before the first update -- which
+        // also happens to match the tokyo PPC dataset's actual 0.200 s rover
+        // observation interval (data/PPC-Dataset/tokyo/run*/rover.obs
+        // INTERVAL header). The clock term's contribution is small next to
+        // the a/b terms at these defaults, so this default's exact value is
+        // not performance-critical.
+        //
+        // Undifferenced-PR decision: the reference's varerr_dd_sigma /
+        // pair_sigma are only ever called from factors.py's DD pseudorange
+        // and DD carrier factor builders -- nothing in the reference feeds
+        // varerr into the undifferenced (single-receiver SPP-style)
+        // pseudorange factor. This port matches that: use_elevation_dependent_sigma
+        // affects ONLY the DD pseudorange/carrier sigma_m computed in
+        // buildDoubleDifferenceProblem; FGOConfig::pseudorange_sigma_m and the
+        // undifferenced PseudorangeFactor path (buildPseudorangeProblem) are
+        // untouched.
+        //
+        // Default OFF (use_elevation_dependent_sigma = false): bit-identical
+        // to the pre-existing flat/elevation-power sigma
+        // (band_scale * double_difference_{pseudorange,carrier}_sigma_m /
+        // sqrt(sin(el))). Turning it on switches the DD base-sigma SOURCE only;
+        // composition order with the other sigma multipliers is unchanged:
+        // varerr (or the flat fallback) -> secondary-band scale
+        // (double_difference_secondary_{carrier,pseudorange}_sigma_scale,
+        // still multiplies on top) -> sat-badness EWMA inflation (still
+        // multiplies factor.sigma_m in the GTSAM backend, unaffected by this
+        // knob) -> robust/Huber wrapping (unaffected).
+        bool use_elevation_dependent_sigma = false;
+        double elevation_sigma_err_a_m = 0.001;             ///< reference err_a (RTKLIB err[1]=0.003)
+        double elevation_sigma_err_b_m = 0.001;              ///< reference err_b (RTKLIB err[2]=0.003)
+        double elevation_sigma_pseudorange_ratio = 100.0;    ///< reference err_eratio_pr (RTKLIB eratio[0]=300)
+        double elevation_sigma_clock_stability = 5e-12;      ///< reference err_sclkstab [s/s]
+
         double pseudorange_huber_threshold_sigma = 4.0;
         double carrier_phase_huber_threshold_sigma = 4.0;
         double tdcp_huber_threshold_sigma = 4.0;
@@ -95,6 +257,678 @@ public:
         bool use_troposphere_model = true;
         bool use_multi_constellation = true;
         bool collect_lambda_debug = false;
+
+        // --- Phase 2 milestone 2a (docs/gtsam_backend_design.md) ---
+        // When true AND backend == FGOBackend::GTSAM, the GTSAM backend keys
+        // the rover state as a body gtsam::Pose3 (translation + attitude) per
+        // epoch instead of a bare gtsam::Point3, and builds the DD factors
+        // with the lever-arm '...FactorArm' variants (antenna_ecef =
+        // pose.translation() + pose.rotation() * pose3_lever_arm_body_m).
+        // Attitude is unobservable from GNSS DD alone (no IMU until
+        // milestone 2b) and is pinned near its identity seed by a dedicated
+        // rotation-only prior; only the recovered ANTENNA position is a
+        // validated output of this mode. Ignored by the native Eigen backend
+        // and by the GTSAM backend when false (existing Point3 path,
+        // unchanged). Default OFF.
+        bool use_pose3_state = false;
+        // Body-frame (FLU) translation from the body/IMU origin to the GNSS
+        // antenna, used only when use_pose3_state is true. Zero means the
+        // Pose3 state's translation IS the antenna (degenerate lever arm).
+        Vector3d pose3_lever_arm_body_m = Vector3d::Zero();
+
+        // --- Phase 2 milestone 2b: IMU tight coupling ---
+        // When true AND use_pose3_state AND the GTSAM backend AND the problem
+        // carries a valid ImuInput, the GTSAM backend augments each epoch with
+        // a Vector3 velocity node V(i) and an imuBias::ConstantBias node B(i),
+        // links consecutive epochs with a gtsam::CombinedImuFactor built from
+        // PreintegratedCombinedMeasurements, and interprets the per-epoch Pose3
+        // as body-in-nav (local ENU) with the DD '...FactorArm' consuming it
+        // through ecef_T_nav (the same Pose3 is shared with the IMU factor).
+        // Attitude/velocity become observable, so the per-epoch 2a rotation pin
+        // is dropped in favour of first-state priors (attitude/velocity/bias)
+        // for gauge. Ignored unless use_pose3_state is also set. Default OFF.
+        bool use_imu = false;
+
+        // --- Reference parity: IMU preintegration covariance value semantics
+        // + residual-driven per-epoch inflation (port of the inuex35
+        // reference's buildfactor/imu_preintegration.py's
+        // _apply_mres_integ_cov_override + config.py's imu_integ_cov /
+        // imu_integ_cov_max). Fixed-lag GTSAM path only
+        // (optimizeProblemFixedLag in fgo_gtsam_backend.cpp); the batch path
+        // (optimizeProblemWithGtsam) is untouched. ---
+        //
+        // The reference passes imu_integ_cov (dataclass default 1e-3)
+        // DIRECTLY to gtsam's setIntegrationCovariance (utils/imu.py:44,
+        // `p.setIntegrationCovariance(integ_cov * np.eye(3))`) -- i.e. it IS
+        // the covariance, not a sigma to be squared. This backend's
+        // ImuNoiseParams::integration_sigma is instead squared before that
+        // same GTSAM call (`sq(problem.imu.noise.integration_sigma)`); this
+        // field replaces that computation for the fixed-lag path so the
+        // value semantics match exactly (no squaring). Default 1e-6
+        // reproduces the harness's current hardcoded covariance
+        // (integration_sigma=1e-3, squared) bit-for-bit, so leaving this
+        // field untouched changes nothing.
+        double imu_integration_covariance = 1e-6;
+
+        // Per-epoch inflation (reference _apply_mres_integ_cov_override,
+        // imu_preintegration.py:53-72). Before building EACH epoch's PIM the
+        // reference recomputes:
+        //   is_stale = stale_max > 0 && (epoch - last_mres_epoch) > stale_max
+        //   integ_eff = is_stale ? imu_integ_cov
+        //                        : clamp(max(imu_integ_cov, last_mres^2 / dt),
+        //                                upper = imu_integ_cov_max)
+        // and mutates the ONE shared PreintegrationCombinedParams instance in
+        // place (tc.imu_params) before gtsam::PreintegratedCombinedMeasurements
+        // is constructed for the interval -- this backend mirrors that
+        // exactly: imu_params (this function's local shared_ptr, built once)
+        // is mutated in place immediately before each epoch's PIM object is
+        // constructed, so it affects only the PIM about to be integrated,
+        // never factors already linearized into the graph.
+        //
+        //   last_mres  = the PREVIOUS epoch's post-fit main DDPR RMS residual
+        //                [m] -- reference tc._last_main_ddpr_res /
+        //                _mres_signals.last_res, written once per epoch in
+        //                optimize/stage.py's _compute_postfit_diagnostics
+        //                immediately after main_ddpr_residuals() runs (i.e.
+        //                AFTER that epoch's ISAM2 update, using the smoothed
+        //                estimate, pre-FDE). This backend's equivalent is
+        //                the existing `last_ddpr_rms` local (already
+        //                computed under use_cp_hold_recovery /
+        //                use_epoch_quality_gates / use_sat_badness_downweight
+        //                for the CP-hold FSM) -- no new residual computation
+        //                needed, just a new consumer of the same value.
+        //   dt         = real elapsed seconds since the previous epoch
+        //                (reference tc._epoch_dt) -- this backend's
+        //                (epoch[i].time - epoch[i-1].time), floored the same
+        //                way (max(dt, 1e-3)).
+        //   stale_max  = imu_integration_covariance_stale_epochs (reference
+        //                reuses its unrelated-by-name
+        //                ddcp_res_weight_stale_max_epochs config field for
+        //                this same staleness test; ported here as its own
+        //                dedicated field since the two features are
+        //                independent in this backend). A long IMU-only
+        //                outage (no recent DDPR solve) must not carry
+        //                forward a possibly ancient inflation value, so the
+        //                override falls back to the static floor instead.
+        //
+        // Requires imu_integration_covariance to be set as the static floor.
+        // Master switch, default OFF (bit-identical baseline without it).
+        bool use_imu_integration_covariance_inflation = false;
+        double imu_integration_covariance_max = 0.5;       ///< reference imu_integ_cov_max
+        int imu_integration_covariance_stale_epochs = 2;   ///< reference ddcp_res_weight_stale_max_epochs
+
+        // --- Phase 2 milestone 2c: incremental fixed-lag smoother ---
+        // When true AND use_imu (implies use_pose3_state, GTSAM backend), the
+        // GTSAM backend streams the graph through a
+        // gtsam::IncrementalFixedLagSmoother instead of a single batch LM
+        // solve: each epoch's Pose3/Vel/Bias + factors are added incrementally
+        // with key timestamps, and states older than fixed_lag_smoother_lag_s
+        // (relative to the newest epoch) are marginalized. This bounds memory
+        // and makes per-epoch LAMBDA feasible at full-dataset scale (the batch
+        // gtsam::Marginals hit bad_alloc at ~25k vars). Ignored unless use_imu.
+        // Default OFF (batch LM path unchanged).
+        bool use_fixed_lag_smoother = false;
+        // Smoother lag in seconds. States (and ambiguity/clock nodes) whose
+        // last timestamp is older than this window are marginalized out.
+        double fixed_lag_smoother_lag_s = 5.0;
+
+        // --- Phase 2 milestone 2d: NHC + ZUPT pseudo-measurements ---
+        // Applied per-epoch in the IMU-coupled fixed-lag path (gated), mirror
+        // inuex35 buildfactor/nhc.py + zupt.py. Default OFF.
+        //
+        // NHC: a ground vehicle's body-frame lateral (left) and vertical (up)
+        // velocity is ~0. Binary factor on (Pose3(i), Vel(i)) with residual
+        // [v_body.y, v_body.z] = [ (R^T v_nav).y, (R^T v_nav).z ]. Gated to
+        // moving, non-turning epochs so it never fights legitimate lateral
+        // motion.
+        bool use_nhc = false;
+        double nhc_min_speed_mps = 2.0;          ///< only apply NHC above this speed
+        double nhc_max_yaw_rate_radps = 0.20;    ///< skip NHC when |yaw rate| exceeds this (turn)
+        double nhc_sigma_lateral_mps = 0.3;      ///< body-lateral velocity sigma
+        double nhc_sigma_vertical_mps = 0.2;     ///< body-vertical velocity sigma
+        // ZUPT: when the epoch's IMU window is stationary, pin Vel(i) ~ 0 with a
+        // PriorFactor. Stationary detection mirrors the Stage-1 ESKF detector
+        // (accel_std / gyro_std / gyro_median of bias-referenced IMU samples).
+        bool use_zupt = false;
+        double zupt_sigma_mps = 0.05;            ///< zero-velocity prior sigma
+        // Velocity gate (mirrors inuex35): only fire ZUPT when the current
+        // (IMU-predicted) speed is already below this. Without it, a quiet
+        // accelerometer during CONSTANT-VELOCITY cruising is misread as
+        // stationary and ZUPT freezes the vehicle (observed: FLOAT max 94 m).
+        // 0 disables the gate.
+        double zupt_max_speed_mps = 0.5;
+        double zupt_max_accel_std = 0.55;        ///< stationary gate: accel deviation std [m/s^2]
+        double zupt_max_gyro_std = 0.030;        ///< stationary gate: gyro deviation std [rad/s]
+        double zupt_max_gyro_median = 0.020;     ///< stationary gate: gyro deviation median [rad/s]
+        int zupt_min_samples = 5;                ///< minimum IMU samples in window to test
+
+        // --- Phase 2 milestone 2e: fix-and-hold ambiguity resolution ---
+        // In the fixed-lag path, once an arc's DD ambiguity is validated-fixed
+        // (LAMBDA ratio above ambiguity_hold_ratio_threshold), pin it in the
+        // graph with a tight prior at the integer for the remainder of the arc.
+        // Held ambiguities have ~zero variance, so subsequent per-epoch LAMBDA
+        // over the remaining floats passes far more often (fix-rate lever) and
+        // the held integers stabilize the float. Reset is automatic: a cycle
+        // slip / gap makes the problem builder assign a NEW ambiguity index
+        // (fgo.cpp segments arcs on loss_of_lock), which is not in the held set.
+        // Gated; default OFF.
+        bool use_ambiguity_hold = false;
+        double ambiguity_hold_ratio_threshold = 3.0;  ///< min ratio to hold (stricter than fix)
+        double ambiguity_hold_sigma_cycles = 1e-3;    ///< tight prior sigma at the held integer
+        int ambiguity_hold_min_fixed = 4;             ///< min ambiguities in a passing epoch to hold
+
+        // --- MF-AR step 2: partial AR in the fixed-lag per-epoch LAMBDA ---
+        // Port of the native Eigen path's use_partial_lambda_ambiguity_fix
+        // semantics into the GTSAM fixed-lag smoother's per-epoch LAMBDA:
+        // rank the epoch's ambiguity candidates best-first by (fractional
+        // cycles from the nearest integer, then float variance), cap the set
+        // at max_lambda_ambiguities, and when the ratio test fails retry on
+        // shrinking best-ranked prefixes down to min_fixed_ambiguities. The
+        // validated subset is marked FIXED (and pinned by fix-and-hold as
+        // usual); dropped candidates simply stay float. This is the
+        // all-or-nothing -> partial upgrade: with multipath-corrupted arcs in
+        // the window (urban), P(the ENTIRE candidate set validates) collapses
+        // as the set grows, which is what capped multi-frequency fix-rates.
+        // Separate knob from use_partial_lambda_ambiguity_fix (which is
+        // default-ON and consumed by the Eigen batch path) so the existing
+        // fixed-lag behaviour stays bit-identical unless opted in.
+        bool use_fixed_lag_partial_lambda = false;
+        // Partial-AR subset floor as a fraction of the (capped) candidate
+        // set. Classic partial AR drops a FEW outliers, never the majority:
+        // in deep urban the ratio test over an arbitrarily shrunken subset of
+        // multipath-corrupted candidates passes by chance and labels wrong
+        // integers FIXED (measured on tokyo1 full-run: FIXED rms 5-11 m when
+        // subsets may shrink to min_fixed_ambiguities). The subset never
+        // shrinks below ceil(min_fraction * candidates) (and never below
+        // min_fixed_ambiguities). 1.0 degenerates to all-or-nothing.
+        double fixed_lag_partial_lambda_min_fraction = 0.7;
+        // Exclude Galileo arcs from the LAMBDA candidate set / fix-and-hold
+        // (their DD factors still constrain the float). On tokyo1 the truth-
+        // trajectory DD residuals show ~50% of Galileo arcs (E1 AND E5a) are
+        // multipath-corrupted (vs ~75-90% integer-consistent for GPS/BDS/QZS),
+        // so Galileo candidates mostly poison the all-or-nothing ratio test.
+        bool exclude_galileo_ambiguity_fixing = false;
+
+        // --- Code-Minus-Carrier (CMC) multipath screening ---
+        // Port of the inuex35 reference's preprocess/slip_detect.py CMC logic
+        // (single-difference CMC = (PR_rover - PR_base) - (CP_rover -
+        // CP_base) * wavelength, per (satellite, signal), computed only when
+        // the DD builder already has both rover and base pseudorange+carrier
+        // for that pair this epoch). Two independent checks:
+        //  1. Jump check (this port's primary target): |cmc - previous_epoch
+        //     cmc| > code_minus_carrier_jump_threshold_m forces the SAME arc
+        //     break the existing loss-of-lock / gap logic already performs
+        //     (new ambiguity_index at the next DD carrier factor for that
+        //     (satellite, signal)) -- a multipath jump breaks the integer N
+        //     just like a cycle slip does.
+        //  2. Sustained-level check (reference default OFF via level_thresh
+        //     == 0.0, ported for parity but not expected to be the lever):
+        //     maintains a per-(satellite, signal) baseline (seeded by the
+        //     first observation, running-averaged for
+        //     code_minus_carrier_warmup_epochs, then EWMA-updated with
+        //     code_minus_carrier_baseline_alpha in steady state); a
+        //     steady-state baseline deviation beyond
+        //     code_minus_carrier_level_threshold_m excludes THAT (satellite,
+        //     signal) pair's DD pseudorange AND carrier factors for the
+        //     epoch (both, matching the reference's single `continue` before
+        //     either is built) without updating the baseline.
+        //
+        // Deliberate deviation from the reference: whenever the arc for a
+        // (satellite, signal) resets for ANY reason (CMC jump, cycle slip /
+        // loss-of-lock, or outage -- i.e. the rover-side single-receiver
+        // carrier arc restarts and a fresh ambiguity_index is assigned), this
+        // port ALSO resets that (satellite, signal)'s CMC baseline/warmup
+        // count/previous-epoch value. CMC embeds a -wavelength*N term, so a
+        // new ambiguity invalidates any baseline computed under the old one;
+        // the reference does not reset it (state.cmc / cmc_baseline survive
+        // amb_key resets in slip_detect.py), which looks like an oversight --
+        // it is harmless there only because the reference ships the level
+        // check OFF by default.
+        //
+        // Default OFF: bit-identical to the pre-port baseline when false.
+        bool use_code_minus_carrier_screening = false;
+        double code_minus_carrier_jump_threshold_m = 3.0;
+        double code_minus_carrier_level_threshold_m = 0.0;  ///< 0 = level check off (reference default)
+        int code_minus_carrier_warmup_epochs = 5;
+        double code_minus_carrier_baseline_alpha = 0.05;
+
+        // --- Per-epoch quality gates (port of the inuex35 reference's
+        // preprocess/gate.py + validation/postfit.py policy) ---
+        // The reference never lets the integer search run on a corrupt epoch:
+        // a GDOP/nsat gate skips weak-geometry epochs entirely, per-satellite
+        // post-fit DD-pseudorange residuals drop multipath satellites from
+        // the NEXT epoch's LAMBDA tree, and a main-DDPR-RMS sanity threshold
+        // suppresses carrier fixing while the solution is inconsistent.
+        // This port applies the same three screens to the fixed-lag path as
+        // FIXING gates: DD factors still enter the graph (robust loss handles
+        // them), but a gated epoch attempts no LAMBDA, adds no holds, and is
+        // never labelled FIXED via held integers -- killing the meaningless
+        // deep-urban FIXED labels measured on tokyo1 full-run (FIXED rms 6-11
+        // m). Thresholds default to the reference's config.py values.
+        // Master switch, default OFF (bit-identical baseline without it).
+        bool use_epoch_quality_gates = false;
+        double gate_gdop_max = 10.0;          ///< reference gdop_max
+        int gate_min_satellites = 6;          ///< reference nsat_min
+        double gate_ddpr_res_max_m = 3.0;     ///< reference main_ddpr_res_thresh
+        double gate_per_sat_res_max_m = 3.0;  ///< reference per_sat_res_thresh
+
+        // --- CP-hold / sanity FSM (port of the inuex35 reference's
+        // validation/postfit.py + validation/recovery.py + state.py +
+        // preprocess/gate.py "wrong integer basin" recovery policy) ---
+        //
+        // The quality gates above (use_epoch_quality_gates) stop the pipeline
+        // from FIXING on a corrupt epoch, but do nothing when the graph has
+        // already locked onto a WRONG integer basin (a bad LAMBDA fix earlier
+        // got pinned by fix-and-hold and now poisons every subsequent epoch's
+        // float, since the held priors keep dragging the solution back to the
+        // wrong integers). This FSM detects that condition from post-fit DD
+        // pseudorange residuals (which see the wrong-basin float pose, not the
+        // held carrier terms) and recovers by mass-invalidating every current
+        // ambiguity: bump each arc's "generation" so the next observation gets
+        // a FRESH graph symbol (new prior, no held integer -- see the
+        // per-ambiguity generation-overlay comment beside ambSymbolId() in
+        // fgo_gtsam_backend.cpp), and suspend carrier fixing (CP-hold) for a
+        // configured number of epochs so the float can re-converge on
+        // pseudorange alone before AR is attempted again.
+        //
+        // NOTE: this port originally skipped the DDPR-LS anchor stages
+        // (_ddpr_sanity_fetch_anchor / _anchor_vs_imu in postfit.py). They are
+        // now ported below (FGOConfig::use_ddpr_anchor) -- see that switch's
+        // comment for why the anchor turns out to be diagnostic-only in
+        // THIS particular slot (the reference's own control flow converges
+        // on the same reset regardless of anchor trust) and for where the
+        // anchor position actually changes behaviour (exception recovery +
+        // bootstrap re-seed).
+        //
+        // Master switch, default OFF (bit-identical baseline without it).
+        bool use_cp_hold_recovery = false;
+        double cp_hold_main_residual_threshold_m = 3.0;    ///< reference main_ddpr_res_thresh
+        double cp_hold_catastrophic_threshold_m = 15.0;    ///< reference main_ddpr_res_catastrophic
+        double cp_hold_fast_worst_satellite_min_m = 10.0;  ///< reference ddpr_fast_worst_sat_min (tokyo profile)
+        int cp_hold_persist_epochs = 3;                    ///< reference ddpr_sanity_persist
+        int cp_hold_epochs = 5;                            ///< reference recov_cp_hold
+        double cp_hold_release_threshold_m = 2.0;          ///< reference recov_cp_release_thresh (tokyo profile)
+        int cp_hold_release_count = 5;                     ///< reference recov_cp_release_count (tokyo profile)
+        double cp_hold_pose_replace_threshold_m = 5.0;     ///< reference sanity_pose_replace_thresh
+        double cp_hold_multipath_median_ratio = 5.0;       ///< reference sanity_max_median_ratio
+        int cp_hold_multipath_min_satellites = 6;          ///< reference sanity_max_median_min_sats
+        double cp_hold_max_gdop = 5.0;                     ///< reference sanity_max_gdop (tokyo profile)
+        // Break the IMU preintegration chain at the epoch after a mass/fast
+        // reset (reference sanity_break_pim, default on): the next epoch adds
+        // a loose PriorPose3/PriorVector seeded at the IMU prediction instead
+        // of a CombinedImuFactor linking back to the pre-reset state, so a
+        // wrong pre-reset pose cannot drag the post-reset solution back.
+        bool cp_hold_break_imu_chain = true;
+        // Translation sigma [m] of that loose post-reset pose prior (reference
+        // pim_break_trans_sigma; the tokyo profile widens this from the 1.0 m
+        // dataclass default to 100.0 m -- i.e. barely constrain translation at
+        // all after a wrong-basin reset).
+        double cp_hold_imu_break_translation_sigma_m = 100.0;
+
+        // --- Exception recovery (port of recovery.py's handle_solve_exception)
+        // ---
+        // Independent switch: when the smoother throws (numerical failure,
+        // e.g. IndeterminantLinearSystemException from a rank-deficient
+        // epoch) and use_ddpr_anchor is OFF, retry the epoch with ONLY loose
+        // re-seed priors (pose sigma 1.0 m, vel sigma 1.0 m/s, bias sigma 0.1)
+        // at the IMU-predicted state, discarding that epoch's GNSS/IMU
+        // factors. When use_ddpr_anchor is ON, the reference's actual first
+        // choice (recovery.handle_solve_exception: try_ddpr_reset before the
+        // loose-prior fallback) is tried FIRST instead -- see
+        // use_ddpr_anchor's comment. If THAT retry also
+        // throws, perform a full warm reset: destroy and recreate the
+        // IncrementalFixedLagSmoother from scratch (reference
+        // warm_reset_phase2) with fresh priors at the last good (or
+        // IMU-predicted) pose -- rotation sigma from
+        // cp_hold_warm_reset_rotation_sigma_deg, position sigma [2,2,3] m
+        // (ENU), velocity isotropic 3.0 m/s (seeded to zero), bias isotropic
+        // 0.01 -- bump every tracked ambiguity's generation, and engage
+        // CP-hold. This targets the known IndeterminantLinearSystemException
+        // tail failure on the tokyo run2 dataset (~epoch 6390): the retry lets
+        // a single bad epoch pass without giving up on the whole run, and the
+        // warm reset recovers from a genuinely poisoned linearization point.
+        // Default OFF (bit-identical baseline without it).
+        bool use_solve_exception_recovery = false;
+        double solve_exception_pose_sigma_m = 1.0;
+        double solve_exception_velocity_sigma_mps = 1.0;
+        double solve_exception_bias_sigma = 0.1;
+        double cp_hold_warm_reset_rotation_sigma_deg = 1.0;  ///< reference body_rot_std
+
+        // --- DDPR-LS anchor (port of the inuex35 reference's
+        // utils/ls_solvers.py ddpr_only_position + the anchor stages of
+        // validation/postfit.py/recovery.py/optimize/stage.py that the
+        // CP-hold FSM port above deliberately skipped). ---
+        //
+        // The anchor is a standalone DDPR-only least-squares position solve
+        // (single Pose3 key, THIS epoch's DD pseudorange factors only, no
+        // carrier/IMU/ambiguity coupling) built by reusing the same
+        // DoubleDifferencePseudorangeFactorArm construction the main graph
+        // uses (see solveDdprAnchor() in fgo_gtsam_backend.cpp): a tight-
+        // rotation/loose-translation PriorPose3 around the IMU-predicted
+        // pose, plain (non-robust -- matching the reference's huber_pr=0
+        // default) noise, LevenbergMarquardt (max 10 iterations), then up to
+        // 3 rounds of single-pass FDE (drop factors with raw residual >
+        // ddpr_anchor_fde_threshold_m while >= ddpr_anchor_min_factors
+        // remain, re-solve).
+        //
+        // It is wired into THREE places:
+        //  1. Diagnostics inside the CP-hold FSM's persist (mass-reset) path
+        //     (postfit.py's _ddpr_sanity_fetch_anchor / _anchor_vs_imu).
+        //     IMPORTANT / faithfully-ported reference quirk: in the
+        //     reference, EVERY branch of run_ddpr_sanity past the persist
+        //     gate -- anchor untrusted, anchor disagrees with the IMU
+        //     prediction, or anchor agrees -- converges on the exact same
+        //     _apply_sanity_reset() call with the exact same arguments (the
+        //     anchor ECEF itself is never read by _apply_sanity_reset). So
+        //     this stage does NOT gate whether the mass reset fires here --
+        //     it only records whether the anchor WOULD have been trusted /
+        //     agreed with the IMU (diagnostics: ddpr_anchor_gated_resets_
+        //     skipped/allowed), exactly mirroring the reference's info-dict-
+        //     only behaviour. Requires use_cp_hold_recovery.
+        //  2. Exception recovery (recovery.py's handle_solve_exception /
+        //     try_ddpr_reset): here the anchor's POSITION does matter. When
+        //     the smoother throws, this is now tried FIRST -- warm-reset the
+        //     smoother seeded at (anchor translation, IMU-predicted
+        //     rotation, zero velocity) -- and only when the anchor is
+        //     untrusted (solve failed, too few factors, or res_rms too high)
+        //     does control fall through to the existing loose-prior retry /
+        //     IMU-seeded full warm reset. Requires use_solve_exception_recovery.
+        //  3. Bootstrap re-seed (optimize/stage.py's BOOT_DDPR_EPOCHS /
+        //     tightly_coupled.py's Phase-2-init arming): our primary lever
+        //     against the CP-hold FSM's known FLOAT-degradation cost. Once
+        //     armed (see cp_hold_bootstrap_after_mass_reset below), every
+        //     epoch for ddpr_anchor_bootstrap_epochs epochs gets a
+        //     translation-only PriorPose3 at that epoch's anchor position
+        //     (rotation sigma ~unconstrained, translation sigma
+        //     ddpr_anchor_bootstrap_sigma_m) added alongside the normal
+        //     graph -- a pull-back channel to truth that does not depend on
+        //     carrier/AR recovering first. The countdown decrements every
+        //     armed epoch regardless of whether that epoch's anchor solve
+        //     succeeds (matches the reference: stage.py decrements outside
+        //     the try/except). While armed, effective CP-hold length is
+        //     forced to 0 (bootstrap and CP-hold are mutually exclusive in
+        //     the reference's state.effective_cp_hold_epochs -- bootstrap
+        //     wins) via effectiveCpHoldEpochs() in the .cpp.
+        //
+        // Deliberate deviation from the reference: the reference only arms
+        // the bootstrap countdown once, at Phase-2 initialization (there is
+        // no equivalent "Phase 2 init" moment in this backend -- it runs the
+        // TC graph from epoch 0). This port instead arms it after EVERY full
+        // warm reset (both the anchor-seeded and IMU-seeded paths, since
+        // both destroy and recreate the smoother from scratch) and,
+        // opt-in via cp_hold_bootstrap_after_mass_reset, after the CP-hold
+        // FSM's mass/fast ambiguity resets too (those do NOT recreate the
+        // smoother, but DO invalidate every held integer, which is the same
+        // "float needs a pull-back channel" situation the bootstrap targets).
+        // Shipped default for cp_hold_bootstrap_after_mass_reset: FALSE.
+        // Measured on the tokyo full runs (FSM+anchor, boot-after-mass on,
+        // reference-default sigma 0.5 m / 20 epochs): mass/fast resets fire
+        // hundreds of times per run, concentrated in exactly the deepest-
+        // multipath sections, so arming there injects sub-metre-sigma
+        // anchor priors at the LEAST trustworthy DDPR-LS positions AND (per
+        // the reference's bootstrap-suppresses-CP-hold rule) disables the
+        // FSM's protective carrier suppression in those same sections --
+        // run1 FLOAT RMS 26.9 -> 95.9 m and FIXED RMS 0.80 -> 17.7 m; run2
+        // FLOAT 6.9 -> 26.4 m, FIXED 0.50 -> 4.05 m. The reference's arming
+        // moment (Phase-2 init, right after a window of verified-good fixes
+        // in workable sky) has no analogue at a mid-canyon mass reset. With
+        // this false the bootstrap still arms after full warm resets (rare:
+        // solver-exception recovery), where the smoother has genuinely lost
+        // its history and the anchor is the only absolute-position channel.
+        //
+        // Master switch, default OFF (bit-identical baseline without it;
+        // when true, requires use_cp_hold_recovery and/or
+        // use_solve_exception_recovery to actually do anything -- see above).
+        bool use_ddpr_anchor = false;
+        double ddpr_anchor_max_residual_m = 2.0;       ///< reference ddpr_max_res
+        double ddpr_anchor_fde_threshold_m = 4.0;      ///< reference fde_pr
+        int ddpr_anchor_min_factors = 4;               ///< reference ddpr_only_position's hard floor
+        double ddpr_anchor_imu_max_gap_m = 20.0;       ///< reference anchor_imu_max_gap
+        double ddpr_anchor_imu_hard_max_m = 200.0;     ///< reference anchor_imu_hard_max
+        double ddpr_anchor_clean_residual_m = 1.0;     ///< reference anchor_imu_clean_res / ddpr_clean_res
+        double ddpr_anchor_clean_main_residual_m = 15.0;  ///< reference anchor_imu_clean_main_res
+        int ddpr_anchor_persist_override = 6;          ///< reference ddpr_bad_persist_override
+        int ddpr_anchor_bootstrap_epochs = 20;         ///< reference BOOT_DDPR_EPOCHS
+        double ddpr_anchor_bootstrap_sigma_m = 0.5;    ///< reference BOOT_DDPR_SIGMA
+        bool cp_hold_bootstrap_after_mass_reset = false;  ///< see deviation + validation note above
+
+        // --- FDE: GICI-style Fault Detection and Exclusion (port of the
+        // inuex35 reference's validation/postfit.py apply_fde + its call
+        // site in optimize/stage.py's _compute_postfit_diagnostics). Runs
+        // AFTER this epoch's main iSAM2 solve but BEFORE the per-epoch
+        // LAMBDA / fix-and-hold block (reference: apply_fde is called
+        // right after the shared main_ddpr_residuals diagnostics pass --
+        // which is what feeds BOTH the quality gates and the CP-hold/
+        // sanity FSM trigger -- and strictly before _run_lambda_ar), so
+        // ambiguity resolution sees a float already cleaned of gross
+        // outliers while the sanity FSM's residual INPUT stays pre-FDE
+        // (see fgo_gtsam_backend.cpp's insertion point for the exact
+        // ordering rationale).
+        //
+        // Evaluates each of THIS epoch's just-added DD pseudorange/
+        // carrier factors at the current (post-solve, pre-FDE) estimate via
+        // evaluateError() -- NOT factor->error() -- to get the raw
+        // (unwhitened) residual in meters directly. This is a deliberate
+        // improvement over a literal port of the reference's res_m =
+        // sqrt(2*err)*cfg.sigma_pr*sqrt(2) (which reconstructs the raw
+        // residual from factor->error()'s chi-squared value and the
+        // factor's own sigma): factor->error() runs the noise model's
+        // loss(), which for a Robust/Huber-wrapped factor returns the
+        // DOWN-WEIGHTED loss rather than the raw chi-squared distance,
+        // silently weakening outlier detection for exactly the large
+        // residuals FDE exists to catch. The reference sidesteps this only
+        // in main_ddpr_residuals (its _ddpr_factor_error has a
+        // rebuild_for_robust branch that bypasses error() the same way)
+        // but NOT in apply_fde's own _fde_collect_residuals -- harmless
+        // there only because the reference's DD factors default to
+        // non-robust (huber_pr=0.0). Our use_robust_loss defaults to TRUE,
+        // so evaluateError() is used unconditionally here to stay correct
+        // under both settings.
+        //
+        // SINGLE-PASS (fde_max_iterations<=1, the reference default):
+        // scans ONLY this epoch's own DD PR/CP factors (their live graph
+        // indices, resolved precisely via ISAM2Result::newFactorsIndices
+        // -- strictly more precise than the reference's "last g3.size()
+        // slots of the live factor array" heuristic, which can
+        // mis-attribute a factor when findUnusedFactorSlots recycles an
+        // older, now-unused slot). Rejects every PR entry with res_m >
+        // fde_pseudorange_threshold_m and every CP entry with res_m >
+        // fde_carrier_threshold_m (optional per-group median subtraction,
+        // default off, mirroring the reference's FDE_MEDIAN_SUB env
+        // knob). If the rejected count exceeds
+        // fde_max_rejected_fraction * nv (nv = this epoch's own PR+CP
+        // factor count), FDE is abandoned entirely for the epoch and
+        // (mirroring the reference's trigger_cp_hold(...,
+        // skip_if_active=True)) CP-hold is engaged at full strength
+        // UNLESS it is already active. Deliberate deviation: when
+        // use_cp_hold_recovery is off there is no hold to engage, so the
+        // safeguard then simply skips FDE for the epoch with no other
+        // effect.
+        //
+        // ITERATIVE (fde_max_iterations>1): scans the WHOLE live graph by
+        // factor type (refreshed every iteration, so a removal never
+        // leaves a stale index dangling) and removes only the single
+        // worst |res-median| exceeder per round, re-estimating between
+        // rounds; no safeguard (matching the reference, which only
+        // guards the single-pass branch).
+        //
+        // Every rejected CP factor is treated as a cycle slip (reference
+        // _fde_reset_rejected_amb): release any fix-and-hold pin for that
+        // arc and bump its ambiguity generation so the next observation
+        // gets a fresh graph symbol (see the ambSymbolId overlay). PR
+        // rejects get no ambiguity-side action, matching the reference.
+        //
+        // Master switch, default OFF (bit-identical baseline without it).
+        bool use_fde = false;
+        double fde_pseudorange_threshold_m = 4.0;   ///< reference fde_pr
+        double fde_carrier_threshold_m = 0.5;       ///< reference fde_cp
+        double fde_max_rejected_fraction = 0.5;     ///< reference fde_max_frac
+        int fde_max_iterations = 1;                 ///< reference fde_max_iter (1 = single-pass, the reference default)
+        bool fde_median_subtraction = false;        ///< reference FDE_MEDIAN_SUB env knob (default off)
+
+        // --- Sat-badness EWMA down-weighting (port of the inuex35 reference's
+        // preprocess/sat_quality.py SatQualityState.sat_badness() score and its
+        // consumption in buildfactor/factors.py's DD sigma inflation
+        // (_add_ddpr_factor / _compute_cp_sigma)). ---
+        //
+        // A continuous per-(reference, target, signal) "badness" score, built
+        // from persistent per-satellite quality memory that the GTSAM backend
+        // now tracks alongside the existing CP-hold/sanity FSM and FDE state
+        // (see fgo_gtsam_backend.cpp's optimizeProblemFixedLag): an EWMA and a
+        // consecutive-bad-epoch streak of last-epoch's post-fit per-sat DDPR
+        // residual, a decayed "was this the worst satellite" indicator, a
+        // decayed "bad while serving as DD reference" indicator, an optional
+        // decayed directional-pair indicator, and (when the data reaches the
+        // backend -- see below) an elevation and SNR penalty. At each DD
+        // factor's build time, bad_pair = max(badness(ref_sat), badness(
+        // target_sat, paired with ref_sat)) inflates that factor's sigma
+        // BEFORE robust-loss wrapping: sigma *= (1 + scale * bad_pair). This
+        // mirrors the reference's timing exactly: the state feeding a given
+        // epoch's bad_pair is always the PREVIOUS epoch's post-fit residuals
+        // (postfit-then-next-epoch-factor-build), never the current epoch's
+        // own not-yet-computed residual.
+        //
+        // Master switch, default OFF (bit-identical baseline without it: the
+        // score is forced to 0.0 and every sigma computation is a no-op
+        // multiply-by-one that is skipped entirely).
+        //
+        // Deliberate deviations from the reference (see the .cpp change-site
+        // comments for the exact mechanics):
+        //  1. cppr / recent_cppr: the reference's direct-and-recent "CP-vs-PR
+        //     innovation consistency" reject terms are fed by a gate
+        //     (factors.py's rejc_cp_pr) this codebase never ported. Both
+        //     terms are instead fed by a persistent per-(satellite, signal)
+        //     count of THIS backend's own FDE carrier rejections
+        //     (use_fde) -- the closest existing analogue (both flag a
+        //     specific arc's carrier observation as inconsistent with the
+        //     rest of the solution). Unlike the reference's gate, this count
+        //     is never reset (no analogue of the reference's unported
+        //     cp_pr_rejc_max-triggered wipe), so it behaves like the
+        //     reference run with that reset gate disabled. Structurally 0
+        //     whenever use_fde is off, matching "reference with the gate
+        //     disabled" behaviour.
+        //  2. Satellite/pair identity: keyed by this backend's SatelliteId
+        //     and SignalType (the AmbiguityState / DoubleDifference*Factor
+        //     structs already carry per-factor satellite/reference_satellite/
+        //     signal identity) instead of the reference's raw integer sat id
+        //     -- a representational substitution only, not a behavioural one.
+        //  3. Elevation is wired: DoubleDifferencePseudorangeFactor already
+        //     carries the target satellite's elevation_rad, and the
+        //     reference satellite's elevation is available via
+        //     rover_reference_model.elevation_rad -- both populated upstream
+        //     in fgo.cpp, so the el penalty term needed no new plumbing.
+        //  4. SNR required a small addition: ObservationModelDebug gained a
+        //     snr_dbhz field (populated from Observation::snr at both
+        //     model_debug construction sites in fgo.cpp) so the backend can
+        //     read rover_satellite_model.snr_dbhz / rover_reference_model.
+        //     snr_dbhz per DD factor. Deemed small enough to do rather than
+        //     skip (per the port's own scoping note); the snr penalty term
+        //     defaults nonzero like the reference profile.
+        //  5. update_pair_quality's per-(ref, target, signal) memory is only
+        //     updated when sat_badness_alpha_recent_pair > 0 (the reference
+        //     profile ships it at 0.0, i.e. contributing nothing); gating the
+        //     UPDATE itself (not just its consumption) on the alpha avoids
+        //     bookkeeping a term that is provably inert at the shipped
+        //     defaults. No behavioural difference at any alpha value.
+        // Sats not observed in a given epoch hard-reset (not decay) their
+        // EWMA/streak entries to 0/0, exactly matching the reference.
+        bool use_sat_badness_downweight = false;
+        double sat_badness_ddpr_threshold_m = 1.0;        ///< reference sat_badness_ddpr_thresh
+        int sat_badness_cppr_threshold = 1;               ///< reference sat_badness_cppr_thresh
+        double sat_badness_alpha_ddpr = 1.0;
+        double sat_badness_alpha_cppr = 1.0;
+        double sat_badness_alpha_recent_cppr = 0.25;
+        double sat_badness_alpha_recent_worst = 0.75;
+        double sat_badness_alpha_recent_ref = 0.5;
+        double sat_badness_alpha_recent_pair = 0.0;       ///< reference profile default: inert (see deviation 5)
+        double sat_badness_alpha_el = 0.05;
+        double sat_badness_alpha_snr = 0.05;
+        double sat_badness_carrier_sigma_scale = 1.5;     ///< reference sigma_scale_cp
+        double sat_badness_pseudorange_sigma_scale = 0.0; ///< reference sigma_scale_pr
+        double sat_badness_el_ref_deg = 30.0;
+        double sat_badness_snr_ref_dbhz = 40.0;
+        double sat_badness_snr_span_db = 10.0;
+        // --- obsq_* (reference SatQualityState/TcConfig dataclass defaults) ---
+        double sat_badness_obsq_res_threshold_m = 2.0;         ///< reference obsq_res_thresh
+        int sat_badness_obsq_bad_streak_cap = 8;               ///< reference obsq_bad_streak_cap
+        double sat_badness_alpha_obsq_ewma = 1.0;
+        double sat_badness_alpha_obsq_streak = 0.5;
+        double sat_badness_obsq_ewma_alpha = 0.2;               ///< reference obsq_ewma_alpha (getattr default)
+        double sat_badness_obsq_bad_streak_threshold_m = 2.0;   ///< reference obsq_bad_streak_thresh
+        double sat_badness_recent_worst_decay = 0.8;            ///< reference obsq_recent_worst_decay
+        double sat_badness_recent_cppr_decay = 0.8;             ///< reference obsq_recent_cppr_decay
+        double sat_badness_recent_ref_decay = 0.85;             ///< reference obsq_recent_ref_decay
+        double sat_badness_recent_pair_decay = 0.85;            ///< reference obsq_recent_pair_decay
+
+        // --- CLAMPED variant (DEVIATION from the reference; first
+        // non-port invention in this series -- see fgo_gtsam_backend.cpp's
+        // satBadness()/runFde() change-sites for the exact mechanics). ---
+        //
+        // Measured failure of the faithful port above: sat_badness() is
+        // uncapped and directly proportional to the raw post-fit DDPR
+        // residual. In the reference's own operating regime (FLOAT error
+        // stays ~1-2 m) that self-limits to O(1) scores -> a gentle 2-5x
+        // carrier-sigma inflation. This codebase's deep-urban FLOAT
+        // excursions instead reach 100s of meters, driving scores into the
+        // hundreds to low thousands -> carrier sigma inflated ~1000x
+        // graph-wide -> AR starves -> FLOAT never recovers (positive
+        // feedback with no exit). Full-run verdict when shipped faithfully
+        // (use_sat_badness_downweight on, these three knobs at their
+        // faithful/no-op values below): fix-rate 39/63/66% -> 6/8/6%.
+        //
+        // These three knobs bound that feedback loop by construction while
+        // leaving the reference's own gentle regime numerically untouched
+        // (a run whose residuals/rejects never approach the clamp/cap is
+        // bit-identical to the faithful port). Each defaults to a bound
+        // (clamp=15 m, cap=3.0, cppr_decay=0.8); setting clamp=0, cap=0,
+        // cppr_decay=1.0 together is the exact faithful-port escape hatch.
+        // All three are no-ops whenever use_sat_badness_downweight is off.
+        //
+        // 1. Residual input clamp: caps the per-satellite post-fit DDPR
+        //    residual BEFORE it feeds any badness term, at the single point
+        //    (per_sat_res) all of them read it: the obsq EWMA input, the
+        //    obsq bad-streak comparison, the next-epoch res_s term (via the
+        //    sb_last_ddpr_per_sat snapshot), and the recent_ref_bad/
+        //    recent_pair_bad increment inputs (both already separately
+        //    min(2,.)-limited by the reference -- that existing limit is
+        //    left in place; this clamp is strictly upstream of it). Chosen
+        //    at 15 m = this codebase's own CP-hold/sanity FSM catastrophic
+        //    residual threshold, i.e. "residual big enough that OUR OWN
+        //    other recovery machinery already treats this epoch as
+        //    catastrophic" -- beyond that point, charging MORE badness to
+        //    the reference satellite for a residual that is almost
+        //    certainly a FLOAT-wide problem (not that satellite's fault)
+        //    is exactly the poisoning mechanism above. Does NOT touch the
+        //    shared per_sat_res map itself (that map is also read raw by
+        //    use_epoch_quality_gates/use_cp_hold_recovery, which must stay
+        //    numerically untouched) -- only badness's own reads of it.
+        //    0 = no clamp = faithful.
+        double sat_badness_residual_clamp_m = 15.0;
+        // 2. Final score cap: applied to sat_badness()'s returned score,
+        //    after every additive term (including the now-clamped residual
+        //    term above) but before the caller multiplies it into a sigma
+        //    scale. At the defaults, max carrier-sigma inflation becomes
+        //    1 + 1.5*3.0 = 5.5x -- the reference's own gentle regime,
+        //    versus the uncapped port's observed 400-1550 (~1000x). Bounds
+        //    the OTHER additive terms too (recent_worst/recent_ref/etc.),
+        //    not just the residual one, since those can also accumulate.
+        //    0 = no cap = faithful.
+        double sat_badness_score_cap = 3.0;
+        // 3. FDE-carrier-reject counter decay: the faithful port's cppr
+        //    substitute (sb_fde_cp_reject_count; see use_sat_badness_
+        //    downweight's deviation 1 above) is a persistent per-(satellite,
+        //    signal) integer count that NEVER resets -- a second, independent
+        //    source of unbounded growth alongside the residual-proportional
+        //    term. This turns it into a decayed float, updated once per
+        //    epoch as cppr[s,sig] = decay*prev + this_epoch_rejects (the
+        //    number of that satellite/signal's FDE carrier rejections
+        //    DURING that epoch's runFde() call, not cumulative). Feeds both
+        //    sat_badness()'s direct cppr term and (via cppr_this_epoch)
+        //    recent_cppr's own separate decay (sat_badness_recent_cppr_decay,
+        //    unchanged) -- previously that decay chased an ever-growing
+        //    target and could never plateau either. 1.0 = never decays =
+        //    exactly the old (faithful) ever-growing-counter behaviour.
+        double sat_badness_cppr_decay = 0.8;
     };
 
     struct EpochSeed {
@@ -115,6 +949,12 @@ public:
         double geometric_range_m = 0.0;
         double elevation_rad = 0.0;
         double azimuth_rad = 0.0;
+        // Raw rover-receiver SNR/CN0 [dB-Hz] for this observation (Observation::snr
+        // at the point this model_debug was built). Added for the sat-badness
+        // EWMA down-weighting port's elevation/SNR penalty terms (see
+        // FGOConfig::use_sat_badness_downweight); unused elsewhere. 0.0 when the
+        // source Observation carried no SNR.
+        double snr_dbhz = 0.0;
     };
 
     struct PseudorangeFactor {
@@ -259,10 +1099,61 @@ public:
         std::size_t tdcp_rejected_missing_previous = 0;
         std::size_t tdcp_rejected_loss_of_lock = 0;
         std::size_t tdcp_rejected_code_phase_jump = 0;
+        std::size_t code_minus_carrier_jump_resets = 0;       ///< CMC screening: arc breaks forced
+        std::size_t code_minus_carrier_level_exclusions = 0;  ///< CMC screening: (sat,signal) epochs excluded
+    };
+
+    // --- Phase 2 milestone 2b: IMU preintegration inputs ---
+    //
+    // Continuous-time IMU noise densities + bias random-walk for the GTSAM
+    // PreintegrationCombinedParams. Sigmas, not covariances; the backend
+    // squares them. Defaults are a reasonable consumer/industrial MEMS grade
+    // (order of the tokyo low-cost preset) and can be overridden by the caller.
+    // Defaults are the (deliberately conservative) values validated on tokyo1
+    // in milestone 2b; final tuning is deferred to 2c/2e.
+    struct ImuNoiseParams {
+        double accel_noise_sigma = 1.0e-1;      ///< accel white noise [m/s^2/sqrt(Hz)]
+        double gyro_noise_sigma = 1.0e-2;       ///< gyro white noise [rad/s/sqrt(Hz)]
+        double accel_bias_rw_sigma = 1.0e-2;    ///< accel bias random walk [m/s^3/sqrt(Hz)]
+        double gyro_bias_rw_sigma = 1.0e-3;     ///< gyro bias random walk [rad/s^2/sqrt(Hz)]
+        double integration_sigma = 1.0e-2;      ///< integration uncertainty [m/s/sqrt(Hz)]
+        double gravity_mps2 = 9.80665;          ///< local gravity magnitude
+    };
+
+    // Everything the GTSAM backend needs to add IMU factors, computed by the
+    // caller (harness): the local nav (ENU) frame definition, the per-sample
+    // IMU stream already remapped to body FLU with gyro in rad/s, the initial
+    // navigation state (from Stage-1 alignment) and its prior sigmas, and the
+    // preintegration noise. The nav frame is ENU (Z-up); gravity points to -Z.
+    struct ImuInput {
+        bool valid = false;
+        // Local ENU nav-frame origin: pose translations are expressed as the
+        // body/IMU origin in this ENU frame, and ecef_T_nav maps them to ECEF.
+        Vector3d nav_origin_ecef = Vector3d::Zero();
+        double nav_origin_lat_rad = 0.0;
+        double nav_origin_lon_rad = 0.0;
+        // Time-sorted IMU samples, already body-FLU (ImuAxisConvention applied)
+        // with gyro converted to rad/s. The backend preintegrates the samples
+        // falling in each [epoch[i].time, epoch[i+1].time) interval.
+        std::vector<ImuSample> samples_body_flu;
+        // Initial navigation state (first epoch), nav = ENU frame. Attitude is
+        // the body->nav rotation from Stage-1 static leveling + heading align.
+        Matrix3d init_attitude_body_to_nav = Matrix3d::Identity();
+        Vector3d init_velocity_nav = Vector3d::Zero();
+        Vector3d init_accel_bias = Vector3d::Zero();
+        Vector3d init_gyro_bias = Vector3d::Zero();
+        // First-state prior sigmas (gauge/anchor for the IMU chain).
+        double init_attitude_sigma_roll_pitch_rad = 0.02;
+        double init_attitude_sigma_yaw_rad = 0.5;
+        double init_velocity_sigma_mps = 0.5;
+        double init_accel_bias_sigma = 0.05;
+        double init_gyro_bias_sigma = 0.01;
+        ImuNoiseParams noise;
     };
 
     struct FGOProblem {
         std::vector<EpochSeed> epochs;
+        ImuInput imu;  ///< Milestone 2b IMU inputs (valid only when populated).
         std::vector<bool> clock_jumps;
         std::vector<PseudorangeFactor> pseudorange_factors;
         std::vector<TimeDifferencedCarrierFactor> tdcp_factors;
@@ -315,6 +1206,44 @@ public:
         std::size_t robust_tdcp_factors = 0;
         std::size_t graph_factors = 0;
         std::size_t graph_values = 0;
+        std::size_t imu_intervals = 0;  ///< 2b: CombinedImuFactors added between epochs
+        std::size_t smoother_max_window_vars = 0;  ///< 2c: peak in-window variable count
+        std::size_t smoother_updates = 0;          ///< 2c: number of smoother.update() calls
+        std::size_t smoother_recovery_epochs = 0;  ///< 2e: epochs re-anchored after an indeterminate update
+        std::size_t nhc_epochs = 0;   ///< 2d: epochs an NHC factor was applied
+        std::size_t zupt_epochs = 0;  ///< 2d: epochs a ZUPT prior was applied
+        std::size_t ambiguity_hold_epochs = 0;  ///< 2e: epochs FIXED via held (not fresh) integers
+        std::size_t ambiguity_hold_arcs = 0;    ///< 2e: distinct arcs pinned at their integer
+        std::size_t quality_gated_epochs = 0;   ///< epochs where the quality gates suppressed fixing
+        std::size_t code_minus_carrier_jump_resets = 0;       ///< CMC screening: arc breaks forced
+        std::size_t code_minus_carrier_level_exclusions = 0;  ///< CMC screening: (sat,signal) epochs excluded
+        // --- CP-hold / sanity FSM diagnostics (use_cp_hold_recovery) ---
+        std::size_t cp_hold_triggers = 0;         ///< times CP-hold was (re)engaged/extended
+        std::size_t cp_hold_epochs_held = 0;      ///< cumulative epochs with carrier suppressed
+        std::size_t sanity_mass_resets = 0;       ///< persist-path (3 consecutive bad) resets
+        std::size_t sanity_fast_resets = 0;       ///< catastrophic fast-path resets
+        std::size_t sanity_pose_replacements = 0; ///< epochs where the reported pose was IMU-predicted
+        std::size_t sanity_multipath_skips = 0;   ///< bad epochs skipped as single-satellite multipath
+        std::size_t sanity_gdop_skips = 0;        ///< persist-eligible resets skipped for weak geometry
+        std::size_t ambiguity_generation_bumps = 0;  ///< total per-arc generation bumps (fresh symbols)
+        // --- Exception recovery diagnostics (use_solve_exception_recovery) ---
+        std::size_t solve_exception_recoveries = 0;   ///< loose-prior retries that succeeded
+        std::size_t solve_exception_warm_resets = 0;  ///< full smoother re-creations
+        // --- DDPR-LS anchor diagnostics (use_ddpr_anchor) ---
+        std::size_t ddpr_anchor_solves = 0;         ///< mini DDPR-LS solve attempts (any of the 3 call sites)
+        std::size_t ddpr_anchor_successes = 0;      ///< of which trusted (n>=min_factors, res_rms<=max)
+        std::size_t ddpr_anchor_gated_resets_skipped = 0;  ///< diagnostic-only: gate would have rejected the reset (persist path; the reset still fires -- see use_ddpr_anchor comment)
+        std::size_t ddpr_anchor_gated_resets_allowed = 0;  ///< diagnostic-only: gate would have accepted the reset
+        std::size_t ddpr_anchored_warm_resets = 0;  ///< exception recoveries that used the DDPR anchor (vs the IMU-seeded fallback)
+        std::size_t ddpr_anchor_bootstrap_prior_epochs = 0;  ///< epochs an anchor bootstrap translation prior was actually added
+        // --- FDE diagnostics (use_fde) ---
+        std::size_t fde_pseudorange_rejections = 0;  ///< total DD PR factors removed
+        std::size_t fde_carrier_rejections = 0;      ///< total DD CP factors removed
+        std::size_t fde_safeguard_skips = 0;         ///< epochs where the reject-fraction safeguard aborted FDE
+        std::size_t fde_epochs = 0;                  ///< epochs where >=1 factor was actually removed
+        // --- Sat-badness EWMA down-weighting diagnostics (use_sat_badness_downweight) ---
+        std::size_t sat_badness_downweighted_factors = 0;  ///< DD PR/CP factors whose sigma was inflated (bad_pair>0 and its scale>0)
+        double sat_badness_max_score_seen = 0.0;            ///< max bad_pair score observed across the run
         std::size_t float_rejected_seed_position_divergence = 0;
         std::size_t float_rejected_position_jump = 0;
         bool fixed_solution = false;
@@ -401,6 +1330,12 @@ public:
         std::vector<Vector3d> epoch_velocities_ecef_mps;
         std::vector<LambdaDebugEntry> lambda_debug_entries;
         std::vector<CostTraceEntry> cost_trace_entries;
+        // Milestone 2b (populated only by the GTSAM IMU-coupled path):
+        // per-epoch estimated attitude as [roll, pitch, heading] in degrees
+        // (body FLU -> nav ENU; heading is clockwise from North) and estimated
+        // velocity in the ENU nav frame [m/s].
+        std::vector<Vector3d> epoch_attitude_rpy_deg;
+        std::vector<Vector3d> epoch_velocity_nav_mps;
     };
 
     FGOProcessor() = default;

@@ -29,6 +29,15 @@ if(GTSAM_FOUND)
     target_link_libraries(gnss_fgo PRIVATE gtsam)
 endif()
 
+# Real-data Eigen-vs-GTSAM FGO backend parity harness. Only meaningful when the
+# library is built with the GTSAM backend (otherwise FGOBackend::GTSAM falls
+# back to Eigen). gnss_lib_noopt carries the gtsam link + /FORCE:MULTIPLE as an
+# INTERFACE requirement, so this target inherits both automatically.
+if(GTSAM_FOUND)
+    add_executable(gnss_fgo_parity gnss_fgo_parity.cpp)
+    target_link_libraries(gnss_fgo_parity PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
+endif()
+
 add_executable(gnss_fuse gnss_fuse.cpp)
 target_link_libraries(gnss_fuse PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
 
