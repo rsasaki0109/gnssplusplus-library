@@ -3198,11 +3198,20 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
         }
 
         if (search_drop_subsets) {
+            // A full-set fix already passed the Ratio/AR-filter gates. Keep the
+            // legacy six-step refinement ceiling in that case so an opt-in
+            // deeper search cannot replace a healthy solution with a much
+            // smaller, higher-Ratio subset and perturb subsequent filter
+            // states. Deeper Partial AR remains available when the full set
+            // failed, which is the recovery case the wider search targets.
+            const int max_progressive_drop_steps =
+                rtk_ar_evaluation::progressiveDropStepLimit(
+                    rtk_config_.max_subset_drop_steps_for_ar, fixed);
             const auto progressive_subsets =
                 rtk_ar_selection::buildProgressiveVarianceDropSubsets(
                     descriptors,
                     min_subset_pairs_for_ar,
-                    std::max(0, rtk_config_.max_subset_drop_steps_for_ar));
+                    max_progressive_drop_steps);
             for (const auto& subset : progressive_subsets) {
                 try_subset(subset);
             }
