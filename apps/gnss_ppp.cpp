@@ -1263,6 +1263,7 @@ int main(int argc, char* argv[]) {
                     << "  \"clas_atmos_selection\": \"" << jsonEscape(options.clas_atmos_selection) << "\",\n"
                     << "  \"clas_atmos_stale_after_seconds\": " << options.clas_atmos_stale_after_seconds << ",\n"
                     << "  \"ambiguity_resolution_enabled\": " << (options.enable_ar ? "true" : "false") << ",\n"
+                    << "  \"ar_method\": \"" << jsonEscape(options.ar_method) << "\",\n"
                     << "  \"ar_ratio_threshold\": " << options.ar_ratio_threshold << ",\n"
                     << "  \"processed_epochs\": " << processed_epochs << ",\n"
                     << "  \"valid_solutions\": " << valid_solutions << ",\n"

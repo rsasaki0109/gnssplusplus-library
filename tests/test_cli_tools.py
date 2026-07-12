@@ -4706,6 +4706,7 @@ class CLIToolsTest(unittest.TestCase):
             temp_root = Path(temp_dir)
             obs_path, sp3_path, clk_path, _ = build_synthetic_ppp_inputs(temp_root)
             out_path = temp_root / "ppp_ar_solution.pos"
+            summary_path = temp_root / "ppp_ar_summary.json"
 
             result = self.run_gnss(
                 "ppp",
@@ -4724,12 +4725,16 @@ class CLIToolsTest(unittest.TestCase):
                 "--no-estimate-troposphere",
                 "--out",
                 str(out_path),
+                "--summary-json",
+                str(summary_path),
                 "--max-epochs",
                 "8",
             )
 
             self.assertEqual(result.returncode, 0, msg=result.stderr)
             self.assertIn("ambiguity resolution: on", result.stdout)
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(summary["ar_method"], "iflc")
             self.assertIn("PPP fixed solutions:", result.stdout)
             records = self.read_pos_records(out_path)
             self.assertEqual(len(records), 8)
