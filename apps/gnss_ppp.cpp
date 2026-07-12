@@ -180,7 +180,8 @@ void printUsage(const char* program_name) {
         << "  --disable-ar            Disable PPP ambiguity fixing (default)\n"
         << "  --ar-ratio-threshold <value>\n"
         << "                          Ratio threshold for PPP ambiguity fixing (default: 3.0)\n"
-        << "  --ar-method <name>      AR method: iflc, wlnl, per-freq (default: iflc)\n"
+        << "  --ar-method <name>      AR method: iflc, wlnl, per-freq (default: iflc);\n"
+        << "                          per-freq enables uncombined estimated-STEC states\n"
         << "  --process-noise-iono <v>\n"
         << "                          KF process noise for per-satellite ionosphere states,\n"
         << "                          m^2/s (default: 1e-4 for MADOCA per-frequency mode,\n"
@@ -886,8 +887,9 @@ int main(int argc, char* argv[]) {
         ppp_config.antex_file_path = options.antex_path;
         ppp_config.ocean_loading_file_path = options.blq_path;
         ppp_config.estimate_troposphere = options.estimate_troposphere;
-        ppp_config.estimate_ionosphere = options.estimate_ionosphere;
-        ppp_config.use_ionosphere_free = options.use_ionosphere_free;
+        const bool per_frequency_ar = options.ar_method == "per-freq";
+        ppp_config.estimate_ionosphere = options.estimate_ionosphere || per_frequency_ar;
+        ppp_config.use_ionosphere_free = options.use_ionosphere_free && !per_frequency_ar;
         ppp_config.use_clas_osr_filter = options.use_clas_osr_filter;
         ppp_config.clas_epoch_policy =
             parseClasEpochPolicy(options.clas_epoch_policy);
@@ -1264,6 +1266,10 @@ int main(int argc, char* argv[]) {
                     << "  \"clas_atmos_stale_after_seconds\": " << options.clas_atmos_stale_after_seconds << ",\n"
                     << "  \"ambiguity_resolution_enabled\": " << (options.enable_ar ? "true" : "false") << ",\n"
                     << "  \"ar_method\": \"" << jsonEscape(options.ar_method) << "\",\n"
+                    << "  \"estimate_ionosphere\": "
+                    << (ppp_config.estimate_ionosphere ? "true" : "false") << ",\n"
+                    << "  \"use_ionosphere_free\": "
+                    << (ppp_config.use_ionosphere_free ? "true" : "false") << ",\n"
                     << "  \"ar_ratio_threshold\": " << options.ar_ratio_threshold << ",\n"
                     << "  \"processed_epochs\": " << processed_epochs << ",\n"
                     << "  \"valid_solutions\": " << valid_solutions << ",\n"

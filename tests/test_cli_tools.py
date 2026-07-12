@@ -4712,6 +4712,8 @@ class CLIToolsTest(unittest.TestCase):
                 "ppp",
                 "--kinematic",
                 "--enable-ar",
+                "--ar-method",
+                "per-freq",
                 "--convergence-min-epochs",
                 "4",
                 "--ar-ratio-threshold",
@@ -4734,7 +4736,9 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, msg=result.stderr)
             self.assertIn("ambiguity resolution: on", result.stdout)
             summary = json.loads(summary_path.read_text(encoding="utf-8"))
-            self.assertEqual(summary["ar_method"], "iflc")
+            self.assertEqual(summary["ar_method"], "per-freq")
+            self.assertTrue(summary["estimate_ionosphere"])
+            self.assertFalse(summary["use_ionosphere_free"])
             self.assertIn("PPP fixed solutions:", result.stdout)
             records = self.read_pos_records(out_path)
             self.assertEqual(len(records), 8)
