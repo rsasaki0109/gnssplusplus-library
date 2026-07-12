@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <libgnss++/algorithms/ppp.hpp>
+#include <libgnss++/algorithms/madoca_core.hpp>
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/models/troposphere.hpp>
 
@@ -1608,6 +1609,45 @@ TEST(PPPTest, ProcessorLoadsRtcmSsrCodeBiasFromFile) {
     EXPECT_DOUBLE_EQ(ura_sigma_m, 0.0);
 
     std::filesystem::remove(rtcm_path);
+}
+
+TEST(PPPTest, MadocaL6dShadowSelectsFreshCausalSatelliteCorrections) {
+    const GNSSTime epoch(2414, 345600.0);
+    io::MadocaIonoSnapshot snapshot;
+    snapshot.decode_time = algorithms::madoca_core::madocaGtimeFromGpsTime(epoch);
+    snapshot.updated_region_id = 7;
+    snapshot.correction.rid = 7;
+    snapshot.correction.anum = 3;
+    const int gps1 = algorithms::madoca_core::rtklibSatelliteNumber(
+        SatelliteId(GNSSSystem::GPS, 1));
+    ASSERT_GT(gps1, 0);
+    snapshot.correction.t0[gps1 - 1] = snapshot.decode_time;
+    snapshot.correction.dly[gps1 - 1] = 1.25;
+    snapshot.correction.std[gps1 - 1] = 0.15;
+
+    io::MadocaIonoProducts products;
+    ASSERT_TRUE(products.addSnapshot(snapshot));
+    PPPProcessor processor;
+    processor.setMadocaIonoProductsForShadow(products);
+
+    const auto fresh = processor.inspectMadocaL6dShadow(
+        {SatelliteId(GNSSSystem::GPS, 1), SatelliteId(GNSSSystem::GPS, 2)},
+        epoch + 5.0, 10.0);
+    EXPECT_TRUE(fresh.snapshot_available);
+    EXPECT_FALSE(fresh.stale);
+    EXPECT_DOUBLE_EQ(fresh.age_s, 5.0);
+    EXPECT_EQ(fresh.region_id, 7);
+    EXPECT_EQ(fresh.area_number, 3);
+    EXPECT_EQ(fresh.matched_satellites, 1);
+
+    const auto stale = processor.inspectMadocaL6dShadow(
+        {SatelliteId(GNSSSystem::GPS, 1)}, epoch + 11.0, 10.0);
+    EXPECT_FALSE(stale.snapshot_available);
+    EXPECT_TRUE(stale.stale);
+    const auto before = processor.inspectMadocaL6dShadow(
+        {SatelliteId(GNSSSystem::GPS, 1)}, epoch - 1.0, 10.0);
+    EXPECT_FALSE(before.snapshot_available);
+    EXPECT_FALSE(before.stale);
 }
 
 TEST(PPPTest, ProcessorProducesConvergedFloatSolutionWithSyntheticPreciseProducts) {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <libgnss++/core/types.hpp>
+#include <libgnss++/io/madoca_l6.hpp>
 
 #include <cstdint>
 #include <optional>
@@ -49,6 +50,11 @@ std::vector<int> compactSsrSignalCodes(int compact_ssr_system_id, std::uint16_t 
 
 // RTCM/MADOCA SSR URA indicator to one-sigma standard deviation in meters.
 double ssrUraIndicatorToSigmaMeters(int ura_index);
+
+// Convert libgnss++ time/satellite identities to the RTKLIB-compatible forms
+// used by the native L6D correction arrays. Invalid inputs return zero.
+io::MadocaGtime madocaGtimeFromGpsTime(const GNSSTime& time);
+int rtklibSatelliteNumber(const SatelliteId& satellite);
 
 // MADOCA-PPP code/phase-bias code selection. The system argument uses the
 // RTKLIB SYS_* bit constants mirrored in madoca_parity.hpp.

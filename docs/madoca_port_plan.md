@@ -798,6 +798,9 @@ Phase 5, PPP application:
 
 - Wire MADOCA correction products into the existing PPP pipeline only after the
   correction objects are independently testable.
+- Start with measurement-neutral L6D shadow lookup: select only causal/fresh
+  snapshots and report matched satellites plus region, area, and age before
+  enabling any code/phase or STEC-state update.
 - Keep CLAS and MADOCA profiles explicit.
 - Add runtime knobs as narrow, documented options, not broad solver rewrites.
 - Compare sample `exec_ppp` and `exec_pppar` windows against MADOCALIB output.
