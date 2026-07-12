@@ -154,6 +154,10 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_madoca_residual_component_summary.py
     )
     add_test(
+        NAME python_madoca_glonass_phase_audit_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_madoca_glonass_phase_audit.py
+    )
+    add_test(
         NAME python_madoca_materialization_diff_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_madoca_materialization_diff.py
     )

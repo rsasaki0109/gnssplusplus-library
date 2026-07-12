@@ -43,6 +43,14 @@ and GLONASS code carries large FDMA inter-frequency biases too.  MADOCA SSR
 provides no GLONASS phase-bias product, so default GLONASS-phase-off is correct
 (matches MADOCALIB excluding GLO from the precise phase/AR solution).
 
+Generate the evidence with `GNSS_PPP_MADOCA_GLONASS_PHASE=1` and
+`GNSS_PPP_MADOCA_POSTFIT_SHADOW=<csv>`, then run
+`scripts/analysis/madoca_glonass_phase_audit.py <csv> --json-out <json>`.
+The `madoca_glonass_phase_audit.v1` report records per-satellite raw and
+demeaned RMS, residual span, duration, and residual/elevation correlation.
+The shadow CSV header includes the signal-family, RINEX-code, and RTKLIB-code
+columns emitted by each data row so these residual fields remain aligned.
+
 Open MADOCA levers (measured, none yet a default win): PPP-AR parity
 (`exec_pppar` window); QZSS atmosphere row-set.
 
