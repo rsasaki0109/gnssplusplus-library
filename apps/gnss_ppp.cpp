@@ -59,6 +59,7 @@ struct Options {
     double clas_atmos_stale_after_seconds = 15.0;
     bool madocalib_bridge = false;
     std::string madocalib_config_path;
+    std::string madocalib_profile = "ppp";
     std::vector<std::string> madocalib_l6_paths;
     std::vector<std::string> madocalib_mdciono_paths;
     std::string madocalib_start_time;
@@ -156,6 +157,8 @@ void printUsage(const char* program_name) {
         << "                          Extra MADOCA L6D ionosphere file; repeat up to three\n"
         << "  --madocalib-config <file>\n"
         << "                          MADOCALIB rnx2rtkp config (default: sample.conf)\n"
+        << "  --madocalib-profile <ppp|pppar|pppar-ion>\n"
+        << "                          Select a bundled MADOCALIB sample config (default: ppp)\n"
         << "  --madocalib-start <time>\n"
         << "                          MADOCALIB start time, e.g. '2025/04/01 00:00:00'\n"
         << "  --madocalib-end <time>  MADOCALIB end time, e.g. '2025/04/01 00:59:30'\n"
@@ -325,6 +328,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.madocalib_mdciono_paths.push_back(argv[++i]);
         } else if (arg == "--madocalib-config" && i + 1 < argc) {
             options.madocalib_config_path = argv[++i];
+        } else if (arg == "--madocalib-profile" && i + 1 < argc) {
+            options.madocalib_profile = argv[++i];
         } else if (arg == "--madocalib-start" && i + 1 < argc) {
             options.madocalib_start_time = argv[++i];
         } else if (arg == "--madocalib-end" && i + 1 < argc) {
@@ -441,6 +446,17 @@ Options parseArguments(int argc, char* argv[]) {
     }
     if (options.madocalib_trace_level < 0) {
         argumentError("--madocalib-trace must be non-negative", argv[0]);
+    }
+    if (options.madocalib_profile != "ppp" &&
+        options.madocalib_profile != "pppar" &&
+        options.madocalib_profile != "pppar-ion") {
+        argumentError("--madocalib-profile must be one of: ppp, pppar, pppar-ion", argv[0]);
+    }
+    if (!options.madocalib_config_path.empty() && options.madocalib_profile != "ppp") {
+        argumentError("--madocalib-config cannot be combined with a non-default --madocalib-profile", argv[0]);
+    }
+    if (options.madocalib_profile == "pppar-ion" && options.madocalib_mdciono_paths.empty()) {
+        argumentError("--madocalib-profile pppar-ion requires --madocalib-mdciono", argv[0]);
     }
     if (options.clas_epoch_policy != "strict-osr" &&
         options.clas_epoch_policy != "hybrid-standard-ppp") {
@@ -693,6 +709,15 @@ int main(int argc, char* argv[]) {
             bridge_options.nav_path = options.nav_path;
             bridge_options.out_path = options.out_path;
             bridge_options.config_path = options.madocalib_config_path;
+            if (bridge_options.config_path.empty() && options.madocalib_profile != "ppp") {
+                const std::string filename =
+                    options.madocalib_profile == "pppar"
+                        ? "sample_pppar.conf"
+                        : "sample_pppar_iono.conf";
+                bridge_options.config_path =
+                    (std::filesystem::path(madocalib::defaultRootDir()) /
+                     "app/consapp/rnx2rtkp/gcc_mingw" / filename).string();
+            }
             bridge_options.antenna_path = options.antex_path;
             bridge_options.start_time = options.madocalib_start_time;
             bridge_options.end_time = options.madocalib_end_time;
@@ -767,6 +792,8 @@ int main(int argc, char* argv[]) {
                         << "  \"out\": \"" << jsonEscape(options.out_path) << "\",\n"
                         << "  \"madocalib_bridge\": true,\n"
                         << "  \"madocalib_bridge_status\": " << bridge_status << ",\n"
+                        << "  \"madocalib_profile\": \""
+                        << jsonEscape(options.madocalib_profile) << "\",\n"
                         << "  \"madocalib_config\": "
                         << (options.madocalib_config_path.empty() ?
                                 "null" :

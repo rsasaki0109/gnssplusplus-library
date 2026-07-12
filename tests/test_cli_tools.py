@@ -4031,9 +4031,26 @@ class CLIToolsTest(unittest.TestCase):
         self.assertIn("--madocalib-bridge", result.stdout)
         self.assertIn("--madocalib-l6", result.stdout)
         self.assertIn("--madocalib-mdciono", result.stdout)
+        self.assertIn("--madocalib-profile", result.stdout)
         self.assertIn("--madoca-l6d-shadow", result.stdout)
         self.assertIn("--madoca-materialization-dump", result.stdout)
         self.assertIn("--madoca-materialization-dump-only", result.stdout)
+
+    def test_ppp_cli_rejects_unknown_madocalib_profile(self) -> None:
+        result = self.run_gnss(
+            "ppp",
+            "--obs",
+            "missing.obs",
+            "--nav",
+            "missing.nav",
+            "--out",
+            "unused.pos",
+            "--madocalib-bridge",
+            "--madocalib-profile",
+            "unknown",
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("--madocalib-profile must be one of", result.stderr)
 
     def test_ppp_cli_rejects_madoca_materialization_dump_only_without_dump_path(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppp_madoca_materialization_dump_only_cli_") as temp_dir:

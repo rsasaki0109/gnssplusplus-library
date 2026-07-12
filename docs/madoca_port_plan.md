@@ -444,6 +444,11 @@ Batch examples show the intended scenarios:
 - `exec_pppar_ion.bat`: PPP-AR plus L6D ionosphere with PRNs 200 and 201.
 - `exec_cssr2ssr.bat`: `cssr2ssr` conversion from L6E to RTCM3/debug text.
 
+The bridge CLI exposes these bundled configurations through
+`--madocalib-profile ppp`, `pppar`, and `pppar-ion`.  The MADOCA parity CI runs
+the one-hour `pppar` profile and requires at least one fixed solution, preventing
+an AR comparison from silently falling back to the default float-PPP config.
+
 These sample files should become the first whole-run oracle candidates after
 helper parity exists.
 
