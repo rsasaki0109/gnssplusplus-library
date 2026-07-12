@@ -55,6 +55,13 @@ CSV schema is
 `madoca_materialization_snapshot.v1` and records satellite key, system/PRN,
 correction epoch, orbit/clock reference epochs, IODE/SSR IOD, RAC orbit,
 clock, code-bias ids/values, phase-bias ids/values, and discontinuity counters.
+
+For measurement-neutral L6D coverage inspection, repeat
+`--madoca-l6d-shadow <file>` for the PRN 200/201 inputs. The PPP summary JSON
+records loaded state, causal/fresh snapshot epochs, stale epochs, matched
+satellites, maximum age, and the last selected region/area without modifying
+code, phase, ionosphere states, or the position solution.
+
 This is the M3 boundary between decoded L6E content and solver row construction:
 use it before residual or state/covariance tuning so decoder-vs-materializer
 identity/time/IOD mistakes are visible as artifacts.  The option changes no
@@ -798,6 +805,9 @@ Phase 5, PPP application:
 
 - Wire MADOCA correction products into the existing PPP pipeline only after the
   correction objects are independently testable.
+- Start with measurement-neutral L6D shadow lookup: select only causal/fresh
+  snapshots and report matched satellites plus region, area, and age before
+  enabling any code/phase or STEC-state update.
 - Keep CLAS and MADOCA profiles explicit.
 - Add runtime knobs as narrow, documented options, not broad solver rewrites.
 - Compare sample `exec_ppp` and `exec_pppar` windows against MADOCALIB output.

@@ -220,6 +220,25 @@ bool PPPProcessor::loadMadocaL6Products(const std::vector<std::string>& l6_files
     return ssr_products_loaded_;
 }
 
+bool PPPProcessor::loadMadocaL6dProducts(const std::vector<std::string>& l6d_files,
+                                         const double reference_epoch[6],
+                                         const double receiver_ecef[3]) {
+    madoca_iono_products_.clear();
+    if (l6d_files.empty()) {
+        return false;
+    }
+    for (const auto& file : l6d_files) {
+        std::vector<io::MadocaIonoSnapshot> snapshots;
+        if (!io::decodeMadocaL6dFileToSnapshots(
+                file, reference_epoch, receiver_ecef, snapshots)) {
+            madoca_iono_products_.clear();
+            return false;
+        }
+        madoca_iono_products_.addSnapshots(snapshots);
+    }
+    return !madoca_iono_products_.empty();
+}
+
 bool PPPProcessor::loadIONEXProducts(const std::string& ionex_file) {
     ionex_products_.clear();
     if (ionex_file.empty()) {

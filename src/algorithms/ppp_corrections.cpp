@@ -1,6 +1,7 @@
 #include "ppp_internal.hpp"
 
 #include <libgnss++/algorithms/ppp_correction_contract.hpp>
+#include <libgnss++/algorithms/madoca_core.hpp>
 
 #include <libgnss++/algorithms/ppp_bias_identity.hpp>
 #include <libgnss++/algorithms/ppp_atmosphere.hpp>
@@ -32,6 +33,44 @@
 namespace libgnss {
 
 using namespace ppp_internal;
+
+MadocaL6dShadowStatus PPPProcessor::inspectMadocaL6dShadow(
+    const std::vector<SatelliteId>& satellites,
+    const GNSSTime& time,
+    double max_age_s) const {
+    MadocaL6dShadowStatus status;
+    const auto query_time = algorithms::madoca_core::madocaGtimeFromGpsTime(time);
+    if (query_time.time == 0 || madoca_iono_products_.empty()) {
+        return status;
+    }
+    const auto* causal = madoca_iono_products_.latestAtOrBefore(query_time);
+    if (causal == nullptr) {
+        return status;
+    }
+    const auto* snapshot = madoca_iono_products_.latestAtOrBefore(query_time, max_age_s);
+    if (snapshot == nullptr) {
+        status.stale = true;
+        return status;
+    }
+    status.snapshot_available = true;
+    status.age_s = static_cast<double>(query_time.time - snapshot->decode_time.time) +
+        query_time.sec - snapshot->decode_time.sec;
+    status.region_id = snapshot->correction.rid;
+    status.area_number = snapshot->correction.anum;
+    for (const auto& satellite : satellites) {
+        const int sat = algorithms::madoca_core::rtklibSatelliteNumber(satellite);
+        if (sat <= 0 || sat > io::MadocaIonoCorr::kMaxSat) {
+            continue;
+        }
+        const int index = sat - 1;
+        if (snapshot->correction.t0[index].time != 0 &&
+            std::isfinite(snapshot->correction.dly[index]) &&
+            std::isfinite(snapshot->correction.std[index])) {
+            ++status.matched_satellites;
+        }
+    }
+    return status;
+}
 
 namespace {
 
@@ -778,6 +817,16 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
     const Vector3d receiver_marker_position = applyGeophysicalCorrections(
         filter_state_.state.segment(filter_state_.pos_index, 3), time);
     const double elevation_mask = config_.elevation_mask * kDegreesToRadians;
+
+    std::vector<SatelliteId> shadow_satellites;
+    shadow_satellites.reserve(observations.size());
+    for (const auto& observation : observations) {
+        if (observation.valid) {
+            shadow_satellites.push_back(observation.satellite);
+        }
+    }
+    last_madoca_l6d_shadow_status_ =
+        inspectMadocaL6dShadow(shadow_satellites, time);
 
     // Pre-fetch epoch-wide atmosphere tokens from any satellite that has them.
     // CLAS atmosphere corrections are network-wide, not per-satellite, so we

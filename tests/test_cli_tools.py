@@ -4031,6 +4031,7 @@ class CLIToolsTest(unittest.TestCase):
         self.assertIn("--madocalib-bridge", result.stdout)
         self.assertIn("--madocalib-l6", result.stdout)
         self.assertIn("--madocalib-mdciono", result.stdout)
+        self.assertIn("--madoca-l6d-shadow", result.stdout)
         self.assertIn("--madoca-materialization-dump", result.stdout)
         self.assertIn("--madoca-materialization-dump-only", result.stdout)
 

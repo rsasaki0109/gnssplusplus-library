@@ -510,6 +510,7 @@ PositionSolution PPPProcessor::processEpochStandard(
     last_applied_dcb_corrections_ = 0;
     last_applied_ionex_m_ = 0.0;
     last_applied_dcb_m_ = 0.0;
+    last_madoca_l6d_shadow_status_ = {};
     if (require_coherent_ssr_ && ssr_products_loaded_ &&
         !hasEnoughCoherentSsrObservations(obs, nav)) {
         return finalizeSolution(solution);
@@ -748,6 +749,7 @@ void PPPProcessor::reset() {
     last_applied_dcb_corrections_ = 0;
     last_applied_ionex_m_ = 0.0;
     last_applied_dcb_m_ = 0.0;
+    last_madoca_l6d_shadow_status_ = {};
 
     std::lock_guard<std::mutex> lock(stats_mutex_);
     total_epochs_processed_ = 0;

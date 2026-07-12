@@ -10,6 +10,7 @@
 #include "ppp_shared.hpp"
 #include "ppp_clas_sd.hpp"
 #include "ppp_osr_types.hpp"
+#include "../io/madoca_l6d.hpp"
 #include "spp.hpp"
 #include "../iers/eop_table.hpp"
 #include "../iers/tides.hpp"
@@ -39,6 +40,15 @@ struct ReceiverPcvGrid {
     double zen2_deg = 90.0;
     double dzen_deg = 5.0;
     std::vector<double> noazi_m;  // PCV at each zenith node (metres)
+};
+
+struct MadocaL6dShadowStatus {
+    bool snapshot_available = false;
+    bool stale = false;
+    double age_s = 0.0;
+    int region_id = -1;
+    int area_number = 0;
+    int matched_satellites = 0;
 };
 
 /**
@@ -96,6 +106,23 @@ public:
      * were produced. Distinct from loadL6Products (CLAS-oriented decoder).
      */
     bool loadMadocaL6Products(const std::vector<std::string>& l6_files);
+
+    // Load receiver-specific L6D ionosphere snapshots for diagnostic shadow
+    // lookup. This does not change PPP measurements or filter state.
+    bool loadMadocaL6dProducts(const std::vector<std::string>& l6d_files,
+                               const double reference_epoch[6],
+                               const double receiver_ecef[3]);
+    void setMadocaIonoProductsForShadow(const io::MadocaIonoProducts& products) {
+        madoca_iono_products_ = products;
+    }
+    MadocaL6dShadowStatus inspectMadocaL6dShadow(
+        const std::vector<SatelliteId>& satellites,
+        const GNSSTime& time,
+        double max_age_s = 300.0) const;
+    const MadocaL6dShadowStatus& getLastMadocaL6dShadowStatus() const {
+        return last_madoca_l6d_shadow_status_;
+    }
+    bool hasLoadedMadocaL6dProducts() const { return !madoca_iono_products_.empty(); }
 
     /**
      * @brief Load IONEX ionosphere products for future PPP hooks.
@@ -228,6 +255,7 @@ private:
     SSRProducts ssr_products_;
     IONEXProducts ionex_products_;
     DCBProducts dcb_products_;
+    io::MadocaIonoProducts madoca_iono_products_;
     
     PPPState filter_state_;
     bool filter_initialized_ = false;
@@ -278,6 +306,7 @@ private:
     int last_applied_dcb_corrections_ = 0;
     double last_applied_ionex_m_ = 0.0;
     double last_applied_dcb_m_ = 0.0;
+    MadocaL6dShadowStatus last_madoca_l6d_shadow_status_;
     bool last_clas_hybrid_fallback_used_ = false;
     std::string last_clas_hybrid_fallback_reason_;
     
