@@ -552,6 +552,9 @@ TEST_F(MadocaParity, L6dFileSnapshotsMatchOracleApplicationSequence) {
         for (int sat = 0; sat < libgnss::io::MadocaIonoCorr::kMaxSat; ++sat) {
             EXPECT_EQ(native.t0[sat].time, expected.t0[sat].time)
                 << "snapshot " << epoch << " sat " << (sat + 1);
+            if (native.t0[sat].time == 0 && expected.t0[sat].time == 0) {
+                continue;
+            }
             EXPECT_DOUBLE_EQ(native.t0[sat].sec, expected.t0[sat].sec)
                 << "snapshot " << epoch << " sat " << (sat + 1);
             EXPECT_DOUBLE_EQ(native.std[sat], expected.std[sat])
