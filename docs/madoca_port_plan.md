@@ -454,6 +454,10 @@ summary JSON, and generates `madoca_pppar_solution_diff.json` plus a matched-row
 CSV against the oracle trajectory.  This initial baseline requires successful
 execution and common epochs but deliberately does not impose an accuracy or
 native-fix-rate threshold until the measured artifact has been reviewed.
+Selecting native `--ar-method per-freq` also selects the state model required
+by that algorithm: uncombined observations with estimated per-satellite STEC.
+Previously the CLI changed only the AR enum, so the dedicated per-frequency
+resolver was unreachable unless two extra ionosphere flags were supplied.
 
 These sample files should become the first whole-run oracle candidates after
 helper parity exists.
