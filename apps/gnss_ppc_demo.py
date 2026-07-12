@@ -245,6 +245,11 @@ def parse_args() -> argparse.Namespace:
         help="Optional RTK ambiguity ratio threshold passed through to gnss solve when --solver rtk.",
     )
     parser.add_argument(
+        "--sat-count-ratio",
+        action="store_true",
+        help="Use experimental satellite-count-aware RTK Ratio thresholds.",
+    )
+    parser.add_argument(
         "--max-subset-ar-drop-steps",
         type=int,
         default=None,
@@ -1209,6 +1214,8 @@ def run_solver(
             command.extend(["--iono", args.iono])
         if getattr(args, "ratio", None) is not None:
             command.extend(["--ratio", str(args.ratio)])
+        if getattr(args, "sat_count_ratio", False):
+            command.extend(["--ratio", "sat-count"])
         if getattr(args, "max_subset_ar_drop_steps", None) is not None:
             command.extend(
                 ["--max-subset-ar-drop-steps", str(args.max_subset_ar_drop_steps)]
@@ -1650,6 +1657,9 @@ def build_summary_payload(
         "receiver_observation_provenance": ppc_receiver_observation_provenance(args._dataset_city),
         "rtk_iono": getattr(args, "iono", None) if args.solver == "rtk" else None,
         "rtk_ratio_threshold": getattr(args, "ratio", None) if args.solver == "rtk" else None,
+        "rtk_satellite_count_ratio": (
+            bool(getattr(args, "sat_count_ratio", False)) if args.solver == "rtk" else False
+        ),
         "rtk_max_subset_ar_drop_steps": (
             getattr(args, "max_subset_ar_drop_steps", None)
             if args.solver == "rtk"

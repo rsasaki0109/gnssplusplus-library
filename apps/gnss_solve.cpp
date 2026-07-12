@@ -99,6 +99,7 @@ struct SolveConfig {
     std::string diagnostics_csv_path;
     double rtk_update_outlier_threshold = 0.0;
     double ratio_threshold = 3.0;
+    bool enable_satellite_count_ratio_threshold = false;
     bool enable_ar_filter = false;
     bool has_ar_filter_override = false;
     double ar_filter_margin = 0.25;
@@ -563,7 +564,7 @@ public:
         }
         file_ << "gps_week,tow,status,num_sats,ratio,baseline_m,"
               << "ar_attempted,input_pair_count,pair_count,max_ambiguity_variance,"
-              << "effective_ratio_threshold,min_subset_pair_count,min_full_ratio_for_subset_ar,"
+              << "effective_ratio_threshold,ratio_satellite_count,min_subset_pair_count,min_full_ratio_for_subset_ar,"
               << "subset_candidates_evaluated,subset_candidates_rejected_by_full_ratio,"
               << "subset_candidates_rejected_by_diversity,"
               << "bsr_guided_candidates_evaluated,bsr_guided_candidates_accepted,"
@@ -607,6 +608,7 @@ public:
         writeNumber(telemetry.max_ambiguity_variance);
         file_ << ",";
         writeNumber(telemetry.effective_ratio_threshold);
+        file_ << ',' << telemetry.ratio_satellite_count;
         file_ << ","
               << telemetry.min_subset_pair_count << ","
               << telemetry.min_full_ratio_for_subset_ar << ","
@@ -696,7 +698,7 @@ void printUsage(const char* program_name) {
         << "  --mode <auto|kinematic|static|moving-base>\n"
         << "                             Position mode (default: auto)\n"
         << "  --iono <auto|off|iflc|est> Ionosphere option (default: auto)\n"
-        << "  --ratio <value>            Ambiguity ratio threshold (default: 3.0)\n"
+        << "  --ratio <value|sat-count>  Fixed or satellite-count-aware Ratio threshold\n"
         << "  --preset <survey|low-cost|moving-base|odaiba>\n"
         << "                             Apply a named RTK tuning preset\n"
         << "  --arfilter                 Require extra ratio margin for subset AR fixes\n"
@@ -1155,7 +1157,11 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         } else if (arg == "--iono" && i + 1 < argc) {
             config.iono = parseIonoChoice(argv[++i], argv[0]);
         } else if (arg == "--ratio" && i + 1 < argc) {
-            config.ratio_threshold = std::stod(argv[++i]);
+            const std::string ratio_value = argv[++i];
+            config.enable_satellite_count_ratio_threshold = ratio_value == "sat-count";
+            config.ratio_threshold = config.enable_satellite_count_ratio_threshold
+                ? 3.0
+                : std::stod(ratio_value);
             config.ratio_threshold_set = true;
         } else if (arg == "--preset" && i + 1 < argc) {
             config.preset = parseRTKTuningPreset(argv[++i], argv[0]);
@@ -1840,6 +1846,8 @@ int main(int argc, char* argv[]) {
         rtk_config.ar_mode = libgnss::RTKProcessor::RTKConfig::AmbiguityResolutionMode::CONTINUOUS;
         rtk_config.ratio_threshold = config.ratio_threshold;
         rtk_config.ambiguity_ratio_threshold = config.ratio_threshold;
+        rtk_config.enable_satellite_count_ratio_threshold =
+            config.enable_satellite_count_ratio_threshold;
         rtk_config.hold_ambiguity_ratio_threshold = config.hold_ratio_threshold;
         rtk_config.enable_ar_filter = config.enable_ar_filter;
         rtk_config.ar_filter_margin = config.ar_filter_margin;

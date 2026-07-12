@@ -53,6 +53,7 @@ public:
 
         double ratio_threshold = 3.0;
         double ambiguity_ratio_threshold = 3.0;
+        bool enable_satellite_count_ratio_threshold = false;
         double validation_threshold = 0.15;
         bool enable_ar_filter = false;
         double ar_filter_margin = 0.25;
@@ -432,6 +433,7 @@ public:
         int pair_count = 0;
         double max_ambiguity_variance = std::numeric_limits<double>::quiet_NaN();
         double effective_ratio_threshold = std::numeric_limits<double>::quiet_NaN();
+        int ratio_satellite_count = 0;
         int min_subset_pair_count = 0;
         double min_full_ratio_for_subset_ar = std::numeric_limits<double>::quiet_NaN();
         int subset_candidates_evaluated = 0;

@@ -2580,6 +2580,24 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
 
     // Use lower ratio threshold when holdamb is active (more confidence in solution)
     double effective_ratio_threshold = rtk_config_.ambiguity_ratio_threshold;
+    if (rtk_config_.enable_satellite_count_ratio_threshold) {
+        std::set<SatelliteId> ratio_satellites;
+        for (const auto& pair : dd_pairs) {
+            ratio_satellites.insert(pair.ref_sat);
+            ratio_satellites.insert(pair.sat);
+        }
+        const int satellite_count = static_cast<int>(ratio_satellites.size());
+        debug_telemetry_.ratio_satellite_count = satellite_count;
+        if (satellite_count >= 20) {
+            effective_ratio_threshold = 1.5;
+        } else if (satellite_count >= 15) {
+            effective_ratio_threshold = 2.0;
+        } else if (satellite_count >= 10) {
+            effective_ratio_threshold = 2.5;
+        } else {
+            effective_ratio_threshold = 3.0;
+        }
+    }
     if (rtk_config_.ar_policy != RTKConfig::ARPolicy::DEMO5_CONTINUOUS) {
         if (consecutive_fix_count_ >= rtk_config_.min_hold_count && has_last_fixed_position_) {
             // WP7 dead-knob fix: honor the configured hold-ambiguity ratio

@@ -148,6 +148,11 @@ def parse_args() -> argparse.Namespace:
         help="Optional RTK ambiguity ratio threshold passed to each ppc-demo run.",
     )
     parser.add_argument(
+        "--sat-count-ratio",
+        action="store_true",
+        help="Use experimental satellite-count-aware RTK Ratio thresholds.",
+    )
+    parser.add_argument(
         "--max-subset-ar-drop-steps",
         type=int,
         default=None,
@@ -417,6 +422,8 @@ def build_ppc_demo_command(
         command.extend(["--iono", args.iono])
     if getattr(args, "ratio", None) is not None:
         command.extend(["--ratio", str(args.ratio)])
+    if getattr(args, "sat_count_ratio", False):
+        command.extend(["--ratio", "sat-count"])
     if getattr(args, "max_subset_ar_drop_steps", None) is not None:
         command.extend(["--max-subset-ar-drop-steps", str(args.max_subset_ar_drop_steps)])
     if getattr(args, "max_hold_div", None) is not None:
