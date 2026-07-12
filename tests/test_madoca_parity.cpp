@@ -499,6 +499,83 @@ TEST_F(MadocaParity, L6dIonoCorrMatchesOracle) {
     EXPECT_GT(dly_checks, 0) << "no non-GLONASS slant delay compared";
 }
 
+TEST_F(MadocaParity, L6dFileSnapshotsMatchOracleApplicationSequence) {
+    namespace mp = libgnss::algorithms::madoca_parity;
+    const std::string root = libgnss::external::madocalib::defaultRootDir();
+    if (root.empty()) {
+        GTEST_SKIP() << "MADOCALIB root unavailable";
+    }
+    const std::string l6_path =
+        root + "/sample_data/data/l6_is-qzss-mdc-004/2025/091/2025091A.200.l6";
+    std::ifstream in(l6_path, std::ios::binary);
+    if (!in) {
+        GTEST_SKIP() << "L6D sample missing: " << l6_path;
+    }
+    const std::vector<std::uint8_t> bytes(
+        (std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    ASSERT_FALSE(bytes.empty());
+
+    const double ref_ep[6] = {2025.0, 4.0, 1.0, 0.0, 0.0, 0.0};
+    // Region 4 coverage (-6.8N, 107.0E), shared with the lower-level oracle
+    // application test above.
+    const double receiver_ecef[3] = {
+        -1851755.8575, 6056820.4953, -750176.3609,
+    };
+    std::vector<libgnss::io::MadocaIonoSnapshot> native_snapshots;
+    std::string error;
+    ASSERT_TRUE(libgnss::io::decodeMadocaL6dFileToSnapshots(
+        l6_path, ref_ep, receiver_ecef, native_snapshots, &error)) << error;
+    ASSERT_FALSE(native_snapshots.empty());
+
+    void* oracle = libgnss::external::madocalib_oracle::l6dAppCreate(ref_ep);
+    ASSERT_NE(oracle, nullptr);
+    std::vector<libgnss::io::MadocaIonoCorr> oracle_corrections;
+    for (std::uint8_t byte : bytes) {
+        if (libgnss::external::madocalib_oracle::l6dAppInputByte(oracle, byte) != 10) {
+            continue;
+        }
+        libgnss::io::MadocaIonoCorr correction;
+        if (libgnss::external::madocalib_oracle::l6dAppGetCorr(
+                oracle, receiver_ecef, &correction) != 0) {
+            oracle_corrections.push_back(correction);
+        }
+    }
+    libgnss::external::madocalib_oracle::l6dAppDestroy(oracle);
+
+    ASSERT_EQ(native_snapshots.size(), oracle_corrections.size());
+    int compared_delays = 0;
+    for (std::size_t epoch = 0; epoch < native_snapshots.size(); ++epoch) {
+        const auto& native = native_snapshots[epoch].correction;
+        const auto& expected = oracle_corrections[epoch];
+        EXPECT_EQ(native.rid, expected.rid) << "snapshot " << epoch;
+        EXPECT_EQ(native.anum, expected.anum) << "snapshot " << epoch;
+        for (int sat = 0; sat < libgnss::io::MadocaIonoCorr::kMaxSat; ++sat) {
+            EXPECT_EQ(native.t0[sat].time, expected.t0[sat].time)
+                << "snapshot " << epoch << " sat " << (sat + 1);
+            EXPECT_DOUBLE_EQ(native.t0[sat].sec, expected.t0[sat].sec)
+                << "snapshot " << epoch << " sat " << (sat + 1);
+            EXPECT_DOUBLE_EQ(native.std[sat], expected.std[sat])
+                << "snapshot " << epoch << " sat " << (sat + 1);
+            int prn = 0;
+            if (native.t0[sat].time != 0 &&
+                mp::satsys(sat + 1, &prn) != mp::kSysGlo) {
+                EXPECT_DOUBLE_EQ(native.dly[sat], expected.dly[sat])
+                    << "snapshot " << epoch << " sat " << (sat + 1);
+                ++compared_delays;
+            }
+        }
+    }
+    EXPECT_GT(compared_delays, 0);
+
+    libgnss::io::MadocaIonoProducts products;
+    EXPECT_EQ(products.addSnapshots(native_snapshots), native_snapshots.size());
+    const auto* latest = products.latestAtOrBefore(
+        native_snapshots.back().decode_time, 0.0);
+    ASSERT_NE(latest, nullptr);
+    EXPECT_EQ(latest->correction.rid, native_snapshots.back().correction.rid);
+    EXPECT_EQ(latest->correction.anum, native_snapshots.back().correction.anum);
+}
+
 TEST_F(MadocaParity, L6eSnapshotConvertsToSsrProducts) {
     // Decode the PRN-204 L6E channel, convert the resulting per-satellite
     // Compact SSR snapshot into native SSRProducts, and confirm every field is
