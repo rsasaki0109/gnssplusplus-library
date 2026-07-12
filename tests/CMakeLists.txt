@@ -44,6 +44,7 @@ if(GTest_FOUND)
         test_ppp.cpp
         test_rinex_writer.cpp
         test_madoca_core.cpp
+        test_madoca_l6d_snapshots.cpp
         test_madoca_parity.cpp
         test_spp.cpp
         test_spp_velocity.cpp
