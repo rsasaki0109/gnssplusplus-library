@@ -898,6 +898,16 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
 
 
 class PPCCoverageMatrixTest(unittest.TestCase):
+    def test_default_profile_uses_guarded_deep_partial_ar(self) -> None:
+        with mock.patch.object(
+            sys,
+            "argv",
+            ["gnss_ppc_coverage_matrix.py", "--dataset-root", "data/PPC-Dataset"],
+        ):
+            args = ppc_coverage_matrix.parse_args()
+
+        self.assertEqual(args.max_subset_ar_drop_steps, 18)
+
     def test_parse_args_loads_config_toml_profile_and_allows_cli_overrides(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppc_coverage_config_") as temp_dir:
             temp_root = Path(temp_dir)

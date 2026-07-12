@@ -155,8 +155,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--max-subset-ar-drop-steps",
         type=int,
-        default=None,
-        help="Optional max worst-variance DD pairs dropped by RTK subset AR.",
+        default=18,
+        help=(
+            "Max worst-variance DD pairs dropped by RTK subset AR "
+            "(default: 18; deep drops run only after full-set failure)."
+        ),
     )
     parser.add_argument(
         "--max-hold-div",
