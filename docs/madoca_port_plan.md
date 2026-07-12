@@ -448,6 +448,12 @@ The bridge CLI exposes these bundled configurations through
 `--madocalib-profile ppp`, `pppar`, and `pppar-ion`.  The MADOCA parity CI runs
 the one-hour `pppar` profile and requires at least one fixed solution, preventing
 an AR comparison from silently falling back to the default float-PPP config.
+The same lane runs native `--enable-ar --ar-method per-freq` for the first 120
+MIZU epochs, records the selected AR method and native fixed/float counts in its
+summary JSON, and generates `madoca_pppar_solution_diff.json` plus a matched-row
+CSV against the oracle trajectory.  This initial baseline requires successful
+execution and common epochs but deliberately does not impose an accuracy or
+native-fix-rate threshold until the measured artifact has been reviewed.
 
 These sample files should become the first whole-run oracle candidates after
 helper parity exists.
