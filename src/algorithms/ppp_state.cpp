@@ -92,7 +92,8 @@ public:
         }
         if (!header_written_) {
             out_ << "record,week,tow,iteration_count,row,row_count,"
-                    "sat,system,signal_type,signal_band,obs_type,"
+                    "sat,system,signal_type,signal_band,signal_family,"
+                    "rinex_code,rtklib_code,obs_type,"
                     "residual_m,variance_m2,sigma_m,abs_norm,elevation_deg,"
                     "azimuth_deg,glonass_fcn,primary_frequency_hz,"
                     "secondary_frequency_hz,primary_if_coeff,secondary_if_coeff,"
