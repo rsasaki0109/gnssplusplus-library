@@ -26,6 +26,7 @@ if(GTest_FOUND)
         test_ppp_osr.cpp
         test_ppp_ar.cpp
         test_ppp_atmosphere.cpp
+        test_ppp_correction_contract.cpp
         test_rtk_ar_evaluation.cpp
         test_rtk_ar_selection.cpp
         test_nlos_weights.cpp
