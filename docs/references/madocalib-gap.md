@@ -50,10 +50,10 @@ Relevant code entrypoints today:
 | Gap | Current libgnss++ state | Why it matters |
 |---|---|---|
 | Native in-core `L6E/L6D -> correction object` path | Current CLAS/MADOCA transport still depends on Python-side preprocessing in `gnss_clas_ppp.py` / `gnss_qzss_l6_info.py` before the C++ PPP core sees sampled corrections | A first-class C++ path would make correction handling easier to test, replay, and profile |
-| First-class `IONEX / DCB` workflow | No in-tree `IONEX` or `DCB` loader is present today | `MADOCALIB`-style PPP studies often assume a fuller product pipeline than `SP3/CLK` alone |
+| First-class `IONEX / DCB` workflow | Native loaders and PPP hooks are implemented; production workflow and sign-off coverage remain narrower than SP3/CLK | `MADOCALIB`-style PPP studies need these products to be reproducible across normal CLI and validation workflows |
 | Explicit multi-frequency PPP beyond the current IF-centric path | Current solver structure is centered on ionosphere-free combinations and PPP ambiguity state handling in `ppp.cpp` | A wider multi-frequency story needs to be explicit before claiming parity with richer PPP references |
 | Broader PPP-AR reference matrix | Current real-data sign-off is useful but still relatively narrow compared with a dedicated upstream PPP reference stack | `PPP-AR` robustness needs more dataset coverage before it can be considered mature |
-| Correction ordering audit against upstream reference behavior | The current code works, but the exact correction-application order has not yet been documented as a deliberate compatibility target | This is the kind of subtle mismatch that creates hard-to-debug centimeter-level differences |
+| Correction ordering audit against upstream reference behavior | The native order is now an explicit, tested contract in `ppp_correction_contract.hpp`; whole-run parity still guards numerical behavior | Future reordering is reviewable because it changes a named contract rather than incidental control flow |
 
 ## What should *not* be copied directly
 
@@ -76,8 +76,10 @@ and **not** a direct code transplant.
 
 ## Immediate work items derived from this gap
 
-1. Document the current PPP correction-application order inside `ppp.cpp`.
-2. Decide whether `IONEX` and `DCB` belong in the first product expansion wave.
+1. Keep the correction-order contract and its MADOCALIB sign conventions covered
+   when adding new correction sources.
+2. Finish integrating the existing `IONEX` and `DCB` loaders across production
+   workflows and sign-off datasets.
 3. Move more `CLAS/MADOCA` transport handling from Python preprocessing toward
    native C++ product ingestion.
 4. Widen PPP-AR sign-off datasets and keep the results as checked artifacts.

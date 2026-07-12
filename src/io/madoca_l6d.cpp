@@ -3,6 +3,8 @@
 #include <libgnss++/algorithms/madoca_parity.hpp>
 
 #include <cmath>
+#include <fstream>
+#include <memory>
 
 namespace libgnss::io {
 namespace {
@@ -527,6 +529,99 @@ int MadocaIonoStore::getCorr(const double rr[3], const MadocaGtime& decode_time,
         out.std[i] = stecUraStd(area->sat[i].sqi);
     }
     return 1;
+}
+
+bool appendMadocaIonoSnapshot(const MadocaIonoStore& store,
+                              const double receiver_ecef[3],
+                              const MadocaGtime& decode_time,
+                              int updated_region_id,
+                              std::vector<MadocaIonoSnapshot>& snapshots,
+                              const double* gloFreqHz) {
+    if (receiver_ecef == nullptr || decode_time.time == 0 ||
+        updated_region_id < 0 || updated_region_id >= MadocaIonoStore::kMaxRid) {
+        return false;
+    }
+    MadocaIonoSnapshot snapshot;
+    snapshot.decode_time = decode_time;
+    snapshot.updated_region_id = updated_region_id;
+    if (store.getCorr(receiver_ecef, decode_time, snapshot.correction, gloFreqHz) == 0) {
+        return false;
+    }
+    snapshots.push_back(snapshot);
+    return true;
+}
+
+bool decodeMadocaL6dFileToSnapshots(
+    const std::string& path,
+    const double reference_epoch[6],
+    const double receiver_ecef[3],
+    std::vector<MadocaIonoSnapshot>& snapshots,
+    std::string* error_message,
+    const double* gloFreqHz) {
+    snapshots.clear();
+    const auto fail = [error_message](const std::string& message) {
+        if (error_message != nullptr) {
+            *error_message = message;
+        }
+        return false;
+    };
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+    if (path.empty() || reference_epoch == nullptr || receiver_ecef == nullptr) {
+        return fail("invalid L6D snapshot input");
+    }
+    for (int i = 0; i < 6; ++i) {
+        if (!std::isfinite(reference_epoch[i])) {
+            return fail("invalid L6D reference epoch");
+        }
+    }
+    double receiver_norm_sq = 0.0;
+    for (int i = 0; i < 3; ++i) {
+        if (!std::isfinite(receiver_ecef[i])) {
+            return fail("invalid L6D receiver position");
+        }
+        receiver_norm_sq += receiver_ecef[i] * receiver_ecef[i];
+    }
+    if (receiver_norm_sq == 0.0) {
+        return fail("invalid L6D receiver position");
+    }
+
+    std::ifstream input(path, std::ios::binary);
+    if (!input.is_open()) {
+        return fail("failed to open L6D file: " + path);
+    }
+
+    // Decoder scratch regions and the persistent 256-region store are large;
+    // keep them off the caller's stack (notably the 1 MiB default on Windows).
+    auto decoder = std::make_unique<MadocaL6dDecoder>();
+    decoder->setReferenceEpoch(reference_epoch);
+    auto store = std::make_unique<MadocaIonoStore>();
+    std::size_t completed_messages = 0;
+    char byte = 0;
+    while (input.get(byte)) {
+        const int result = decoder->inputByte(static_cast<std::uint8_t>(byte));
+        if (result < 0) {
+            snapshots.clear();
+            return fail("invalid L6D message in file: " + path);
+        }
+        if (result != 10) {
+            continue;
+        }
+        ++completed_messages;
+        store->update(decoder->regionId(), decoder->region());
+        appendMadocaIonoSnapshot(*store, receiver_ecef, decoder->decodeTime(),
+                                 decoder->regionId(), snapshots, gloFreqHz);
+        decoder->clearRegionAfterUse();
+    }
+    if (input.bad()) {
+        snapshots.clear();
+        return fail("failed while reading L6D file: " + path);
+    }
+    if (completed_messages == 0) {
+        return fail("no complete L6D messages in file: " + path);
+    }
+    return true;
 }
 
 }  // namespace libgnss::io

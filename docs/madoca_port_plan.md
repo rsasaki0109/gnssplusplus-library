@@ -783,6 +783,9 @@ Phase 4, L6D ionosphere foundation:
 
 - Implement coverage and correction message parsing separately from L6E.
 - Implement area selection and STEC delay/std calculation.
+- Materialize completed region updates as receiver-specific, timestamped
+  `MadocaIonoSnapshot` rows; this is the tested product boundary for later PPP
+  ingestion and keeps raw file replay out of the solver.
 - Add sample-driven tests for PRNs 200 and 201.
 - Keep PRN 197 only where it is needed for compatibility or fixture coverage.
 - Do not feed L6D products into PPP until decoder-level values match the oracle
