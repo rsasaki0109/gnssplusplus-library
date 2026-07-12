@@ -423,7 +423,7 @@ def build_ppc_demo_command(
     if getattr(args, "ratio", None) is not None:
         command.extend(["--ratio", str(args.ratio)])
     if getattr(args, "sat_count_ratio", False):
-        command.extend(["--ratio", "sat-count"])
+        command.append("--sat-count-ratio")
     if getattr(args, "max_subset_ar_drop_steps", None) is not None:
         command.extend(["--max-subset-ar-drop-steps", str(args.max_subset_ar_drop_steps)])
     if getattr(args, "max_hold_div", None) is not None:
