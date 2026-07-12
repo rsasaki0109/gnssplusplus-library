@@ -607,6 +607,8 @@ jobs:
           grep -q '"ar_method": "per-freq"' native_pppar_smoke.json
           grep -q '"estimate_ionosphere": true' native_pppar_smoke.json
           grep -q '"use_ionosphere_free": false' native_pppar_smoke.json
+          grep -q '"convergence_gate_reason":' native_pppar_smoke.json
+          grep -q '"convergence_max_position_deviation_m":' native_pppar_smoke.json
           python3 "${GITHUB_WORKSPACE}/scripts/analysis/madoca_solution_diff.py" \
             madocalib_pppar_smoke.pos \
             native_pppar_smoke.pos \

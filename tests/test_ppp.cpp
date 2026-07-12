@@ -1918,6 +1918,11 @@ TEST(PPPTest, ProcessorFixesSyntheticAmbiguitiesWithPreciseProducts) {
     EXPECT_LT((last_solution.position_ecef - true_receiver_position).norm(), 1.0);
     EXPECT_GE(last_solution.ratio, 0.0);
     EXPECT_GE(last_solution.num_fixed_ambiguities, 0);
+    const auto& convergence = processor.getConvergenceTelemetry();
+    EXPECT_GE(convergence.evaluated_epochs, 4u);
+    EXPECT_EQ(convergence.required_window_epochs, 4u);
+    EXPECT_EQ(convergence.position_deviation_threshold_m, 0.2);
+    EXPECT_NE(convergence.gate_reason, "not_evaluated");
     if (saw_fixed_solution) {
         EXPECT_GE(best_fixed_ambiguities, 1);
         EXPECT_GT(best_ratio, 2.0);
