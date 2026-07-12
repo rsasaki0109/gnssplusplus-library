@@ -69,3 +69,61 @@ TEST(MadocaL6dSnapshotTest, RejectsMissingAndIncompleteFiles) {
     EXPECT_NE(error.find("no complete L6D messages"), std::string::npos);
     std::filesystem::remove(path);
 }
+
+namespace {
+
+MadocaIonoSnapshot makeSnapshot(std::int64_t time, double sec, int region,
+                                double delay) {
+    MadocaIonoSnapshot snapshot;
+    snapshot.decode_time = {time, sec};
+    snapshot.updated_region_id = region;
+    snapshot.correction.rid = region;
+    snapshot.correction.dly[0] = delay;
+    return snapshot;
+}
+
+}  // namespace
+
+TEST(MadocaIonoProductsTest, OrdersMultipleSourcesAndNeverSelectsFuture) {
+    MadocaIonoProducts products;
+    const std::vector<MadocaIonoSnapshot> second_source = {
+        makeSnapshot(1'700'000'030, 0.0, 8, 3.0),
+        makeSnapshot(1'700'000'010, 0.0, 8, 1.0),
+    };
+    const std::vector<MadocaIonoSnapshot> first_source = {
+        makeSnapshot(1'700'000'020, 0.0, 7, 2.0),
+    };
+    EXPECT_EQ(products.addSnapshots(second_source), 2u);
+    EXPECT_EQ(products.addSnapshots(first_source), 1u);
+    ASSERT_EQ(products.size(), 3u);
+    EXPECT_EQ(products.snapshots()[0].decode_time.time, 1'700'000'010);
+    EXPECT_EQ(products.snapshots()[1].decode_time.time, 1'700'000'020);
+    EXPECT_EQ(products.snapshots()[2].decode_time.time, 1'700'000'030);
+
+    EXPECT_EQ(products.latestAtOrBefore({1'700'000'009, 0.9}), nullptr);
+    const auto* selected = products.latestAtOrBefore({1'700'000'025, 0.0});
+    ASSERT_NE(selected, nullptr);
+    EXPECT_DOUBLE_EQ(selected->correction.dly[0], 2.0);
+}
+
+TEST(MadocaIonoProductsTest, ReplacesDuplicateAndAppliesFreshnessGate) {
+    MadocaIonoProducts products;
+    ASSERT_TRUE(products.addSnapshot(makeSnapshot(1'700'000'000, 0.5, 7, 1.0)));
+    ASSERT_TRUE(products.addSnapshot(makeSnapshot(1'700'000'000, 0.5, 7, 4.0)));
+    EXPECT_EQ(products.size(), 1u);
+
+    const auto* fresh = products.latestAtOrBefore({1'700'000'005, 0.5}, 5.0);
+    ASSERT_NE(fresh, nullptr);
+    EXPECT_DOUBLE_EQ(fresh->correction.dly[0], 4.0);
+    EXPECT_EQ(products.latestAtOrBefore({1'700'000'005, 0.6}, 5.0), nullptr);
+    EXPECT_NE(products.latestAtOrBefore({1'700'100'000, 0.0}), nullptr);
+}
+
+TEST(MadocaIonoProductsTest, RejectsInvalidSnapshotKeysAndQueries) {
+    MadocaIonoProducts products;
+    EXPECT_FALSE(products.addSnapshot(makeSnapshot(0, 0.0, 7, 1.0)));
+    EXPECT_FALSE(products.addSnapshot(makeSnapshot(1'700'000'000, 1.0, 7, 1.0)));
+    EXPECT_FALSE(products.addSnapshot(makeSnapshot(1'700'000'000, 0.0, -1, 1.0)));
+    EXPECT_TRUE(products.empty());
+    EXPECT_EQ(products.latestAtOrBefore({1'700'000'000, 0.0}), nullptr);
+}
