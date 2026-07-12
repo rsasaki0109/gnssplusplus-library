@@ -2,8 +2,10 @@
 
 #include <libgnss++/algorithms/madoca_parity.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <fstream>
+#include <iterator>
 #include <memory>
 
 namespace libgnss::io {
@@ -549,6 +551,85 @@ bool appendMadocaIonoSnapshot(const MadocaIonoStore& store,
     }
     snapshots.push_back(snapshot);
     return true;
+}
+
+namespace {
+
+bool ionoSnapshotTimeLess(const MadocaGtime& lhs, const MadocaGtime& rhs) {
+    return lhs.time < rhs.time ||
+        (lhs.time == rhs.time && lhs.sec < rhs.sec);
+}
+
+bool ionoSnapshotTimeEqual(const MadocaGtime& lhs, const MadocaGtime& rhs) {
+    return lhs.time == rhs.time && lhs.sec == rhs.sec;
+}
+
+double ionoSnapshotAgeSeconds(const MadocaGtime& newer,
+                              const MadocaGtime& older) {
+    return static_cast<double>(newer.time - older.time) + newer.sec - older.sec;
+}
+
+}  // namespace
+
+bool MadocaIonoProducts::addSnapshot(const MadocaIonoSnapshot& snapshot) {
+    if (snapshot.decode_time.time == 0 || !std::isfinite(snapshot.decode_time.sec) ||
+        snapshot.decode_time.sec < 0.0 || snapshot.decode_time.sec >= 1.0 ||
+        snapshot.updated_region_id < 0 ||
+        snapshot.updated_region_id >= MadocaIonoStore::kMaxRid) {
+        return false;
+    }
+
+    const auto duplicate = std::find_if(
+        snapshots_.begin(), snapshots_.end(), [&](const MadocaIonoSnapshot& existing) {
+            return ionoSnapshotTimeEqual(existing.decode_time, snapshot.decode_time) &&
+                existing.updated_region_id == snapshot.updated_region_id;
+        });
+    if (duplicate != snapshots_.end()) {
+        *duplicate = snapshot;
+        return true;
+    }
+
+    const auto insertion = std::upper_bound(
+        snapshots_.begin(), snapshots_.end(), snapshot.decode_time,
+        [](const MadocaGtime& time, const MadocaIonoSnapshot& existing) {
+            return ionoSnapshotTimeLess(time, existing.decode_time);
+        });
+    snapshots_.insert(insertion, snapshot);
+    return true;
+}
+
+std::size_t MadocaIonoProducts::addSnapshots(
+    const std::vector<MadocaIonoSnapshot>& snapshots) {
+    std::size_t accepted = 0;
+    for (const auto& snapshot : snapshots) {
+        if (addSnapshot(snapshot)) {
+            ++accepted;
+        }
+    }
+    return accepted;
+}
+
+const MadocaIonoSnapshot* MadocaIonoProducts::latestAtOrBefore(
+    const MadocaGtime& query_time, double max_age_s) const {
+    if (snapshots_.empty() || query_time.time == 0 ||
+        !std::isfinite(query_time.sec) || query_time.sec < 0.0 ||
+        query_time.sec >= 1.0 || !std::isfinite(max_age_s)) {
+        return nullptr;
+    }
+    const auto after = std::upper_bound(
+        snapshots_.begin(), snapshots_.end(), query_time,
+        [](const MadocaGtime& time, const MadocaIonoSnapshot& snapshot) {
+            return ionoSnapshotTimeLess(time, snapshot.decode_time);
+        });
+    if (after == snapshots_.begin()) {
+        return nullptr;
+    }
+    const auto& selected = *std::prev(after);
+    const double age_s = ionoSnapshotAgeSeconds(query_time, selected.decode_time);
+    if (age_s < 0.0 || (max_age_s >= 0.0 && age_s > max_age_s)) {
+        return nullptr;
+    }
+    return &selected;
 }
 
 bool decodeMadocaL6dFileToSnapshots(

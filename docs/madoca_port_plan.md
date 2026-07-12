@@ -786,6 +786,9 @@ Phase 4, L6D ionosphere foundation:
 - Materialize completed region updates as receiver-specific, timestamped
   `MadocaIonoSnapshot` rows; this is the tested product boundary for later PPP
   ingestion and keeps raw file replay out of the solver.
+- Merge snapshots from replay sources through `MadocaIonoProducts`, which owns
+  chronological ordering, duplicate replacement, causal lookup, and the
+  explicit correction-age gate used by later PPP ingestion.
 - Add sample-driven tests for PRNs 200 and 201.
 - Keep PRN 197 only where it is needed for compatibility or fixture coverage.
 - Do not feed L6D products into PPP until decoder-level values match the oracle
