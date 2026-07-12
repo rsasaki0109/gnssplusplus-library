@@ -51,6 +51,17 @@ struct MadocaL6dShadowStatus {
     int matched_satellites = 0;
 };
 
+struct PPPConvergenceTelemetry {
+    size_t evaluated_epochs = 0;
+    size_t insufficient_history_epochs = 0;
+    size_t unstable_position_epochs = 0;
+    size_t window_epochs = 0;
+    size_t required_window_epochs = 0;
+    double max_position_deviation_m = 0.0;
+    double position_deviation_threshold_m = 0.0;
+    std::string gate_reason = "not_evaluated";
+};
+
 /**
  * @brief Precise Point Positioning (PPP) processor
  *
@@ -244,6 +255,9 @@ public:
      * @brief Get convergence time
      */
     double getConvergenceTime() const { return convergence_time_; }
+    const PPPConvergenceTelemetry& getConvergenceTelemetry() const {
+        return convergence_telemetry_;
+    }
 
 private:
     void applyEnvironmentOverridesToPPPConfig();
@@ -298,6 +312,7 @@ private:
     bool has_static_anchor_position_ = false;
     double last_ar_ratio_ = 0.0;
     int last_fixed_ambiguities_ = 0;
+    PPPConvergenceTelemetry convergence_telemetry_;
     int last_applied_atmos_trop_corrections_ = 0;
     int last_applied_atmos_iono_corrections_ = 0;
     double last_applied_atmos_trop_m_ = 0.0;

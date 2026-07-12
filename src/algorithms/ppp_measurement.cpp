@@ -478,12 +478,21 @@ void PPPProcessor::checkConvergence(const GNSSTime& current_time) {
         return;
     }
 
+    ++convergence_telemetry_.evaluated_epochs;
+    convergence_telemetry_.required_window_epochs =
+        static_cast<size_t>(ppp_config_.convergence_min_epochs);
+    convergence_telemetry_.position_deviation_threshold_m =
+        ppp_config_.convergence_threshold_horizontal;
+
     recent_positions_.push_back(filter_state_.state.segment(filter_state_.pos_index, 3));
     if (recent_positions_.size() > static_cast<size_t>(ppp_config_.convergence_min_epochs)) {
         recent_positions_.erase(recent_positions_.begin());
     }
+    convergence_telemetry_.window_epochs = recent_positions_.size();
 
     if (recent_positions_.size() < static_cast<size_t>(ppp_config_.convergence_min_epochs)) {
+        ++convergence_telemetry_.insufficient_history_epochs;
+        convergence_telemetry_.gate_reason = "insufficient_history";
         return;
     }
 
@@ -497,10 +506,15 @@ void PPPProcessor::checkConvergence(const GNSSTime& current_time) {
     for (const auto& position : recent_positions_) {
         max_deviation = std::max(max_deviation, (position - mean).norm());
     }
+    convergence_telemetry_.max_position_deviation_m = max_deviation;
 
     if (max_deviation < ppp_config_.convergence_threshold_horizontal) {
         converged_ = true;
         convergence_time_ = current_time - convergence_start_time_;
+        convergence_telemetry_.gate_reason = "converged";
+    } else {
+        ++convergence_telemetry_.unstable_position_epochs;
+        convergence_telemetry_.gate_reason = "position_deviation";
     }
 }
 

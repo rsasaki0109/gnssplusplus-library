@@ -1200,6 +1200,7 @@ int main(int argc, char* argv[]) {
         }
 
         const auto stats = processor.getStats();
+        const auto& convergence = processor.getConvergenceTelemetry();
         const double ppp_solution_rate =
             valid_solutions > 0 ?
                 100.0 * static_cast<double>(ppp_float_solutions + ppp_fixed_solutions) /
@@ -1319,6 +1320,19 @@ int main(int argc, char* argv[]) {
             summary << "},\n"
                     << "  \"converged\": " << (processor.hasConverged() ? "true" : "false") << ",\n"
                     << "  \"convergence_time_s\": " << processor.getConvergenceTime() << ",\n"
+                    << "  \"convergence_gate_reason\": \"" << jsonEscape(convergence.gate_reason) << "\",\n"
+                    << "  \"convergence_evaluated_epochs\": " << convergence.evaluated_epochs << ",\n"
+                    << "  \"convergence_insufficient_history_epochs\": "
+                    << convergence.insufficient_history_epochs << ",\n"
+                    << "  \"convergence_unstable_position_epochs\": "
+                    << convergence.unstable_position_epochs << ",\n"
+                    << "  \"convergence_window_epochs\": " << convergence.window_epochs << ",\n"
+                    << "  \"convergence_required_window_epochs\": "
+                    << convergence.required_window_epochs << ",\n"
+                    << "  \"convergence_max_position_deviation_m\": "
+                    << convergence.max_position_deviation_m << ",\n"
+                    << "  \"convergence_position_deviation_threshold_m\": "
+                    << convergence.position_deviation_threshold_m << ",\n"
                     << "  \"average_processing_time_ms\": " << stats.average_processing_time_ms << "\n"
                     << "}\n";
         }
