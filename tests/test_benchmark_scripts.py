@@ -1032,6 +1032,7 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                 preset="low-cost",
                 iono="iflc",
                 ratio=2.4,
+                elevation_mask_deg=22.5,
                 max_subset_ar_drop_steps=18,
                 max_hold_div=5.0,
                 max_pos_jump=20.0,
@@ -1110,6 +1111,8 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertIn("--iono", command)
             self.assertIn("iflc", command)
             self.assertIn("--ratio", command)
+            self.assertIn("--elevation-mask-deg", command)
+            self.assertIn("22.5", command)
             self.assertIn("2.4", command)
             self.assertIn("--max-subset-ar-drop-steps", command)
             self.assertIn("18", command)
