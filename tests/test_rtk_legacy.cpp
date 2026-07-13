@@ -692,6 +692,7 @@ TEST(RTKLegacyCompatibilityStandaloneTest, SubsetArFullRatioGateDefaultDisabled)
     RTKProcessor processor;
     EXPECT_EQ(processor.getRTKConfig().min_subset_pairs_for_ar, 4);
     EXPECT_EQ(processor.getRTKConfig().max_subset_drop_steps_for_ar, 6);
+    EXPECT_FALSE(processor.getRTKConfig().enable_paper_constellation_fallback_ar);
     EXPECT_EQ(processor.getRTKConfig().min_subset_sats_for_ar, 0);
     EXPECT_EQ(processor.getRTKConfig().min_subset_systems_for_ar, 0);
     EXPECT_EQ(processor.getRTKConfig().min_subset_frequencies_for_ar, 0);

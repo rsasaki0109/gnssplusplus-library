@@ -151,6 +151,9 @@ public:
         /// Maximum number of worst-variance DD pairs to drop while searching
         /// progressive subset AR candidates. 6 preserves existing behavior.
         int max_subset_drop_steps_for_ar = 6;
+        /// Try the paper's GQEBR -> GQEB -> GQER -> GQE -> GQB -> GQ
+        /// constellation sequence after a full-set AR failure.
+        bool enable_paper_constellation_fallback_ar = false;
 
         /// Minimum distinct non-reference satellites required for subset AR.
         /// 0 (default) disables the gate and preserves existing subset behavior.
