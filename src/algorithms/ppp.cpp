@@ -24,6 +24,21 @@ using namespace ppp_internal;
 
 namespace {
 
+ObservationData legacyDualFrequencySeedView(const ObservationData& obs) {
+    ObservationData seed_obs = obs;
+    seed_obs.observations.clear();
+    seed_obs.observations.reserve(obs.observations.size());
+
+    std::map<SatelliteId, int> observations_per_satellite;
+    for (const auto& observation : obs.observations) {
+        if (observations_per_satellite[observation.satellite]++ >= 2) {
+            continue;
+        }
+        seed_obs.observations.push_back(observation);
+    }
+    return seed_obs;
+}
+
 std::string normalizeStationName(const std::string& station_name) {
     return normalizeAntennaType(station_name);
 }
@@ -524,6 +539,12 @@ PositionSolution PPPProcessor::processEpochStandard(
         !filter_initialized_;
     const PositionSolution* seed_ptr = nullptr;
     const auto runSeedSpp = [&]() {
+        // Multi-frequency RINEX ingestion retains L3/L4 for PPP ambiguity
+        // lifecycle and future filter rows. Keep the embedded SPP seed on its
+        // historical primary/secondary view: its Doppler solver treats every
+        // observation as an independent row, so extra bands would otherwise
+        // reweight the initial kinematic velocity before PPP consumes them.
+        const ObservationData seed_obs = legacyDualFrequencySeedView(obs);
         const SPPProcessor::SPPConfig original_spp_config = spp_processor_.getSPPConfig();
         if (ssr_products_loaded_ && original_spp_config.enable_raim_fde) {
             SPPProcessor::SPPConfig seed_spp_config = original_spp_config;
@@ -533,7 +554,7 @@ PositionSolution PPPProcessor::processEpochStandard(
             seed_spp_config.enable_raim_fde = false;
             spp_processor_.setSPPConfig(seed_spp_config);
             try {
-                PositionSolution seed = spp_processor_.processEpoch(obs, nav);
+                PositionSolution seed = spp_processor_.processEpoch(seed_obs, nav);
                 spp_processor_.setSPPConfig(original_spp_config);
                 return seed;
             } catch (...) {
@@ -541,7 +562,7 @@ PositionSolution PPPProcessor::processEpochStandard(
                 throw;
             }
         }
-        return spp_processor_.processEpoch(obs, nav);
+        return spp_processor_.processEpoch(seed_obs, nav);
     };
 
     try {

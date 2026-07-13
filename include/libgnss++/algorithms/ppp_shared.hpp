@@ -311,6 +311,14 @@ struct PPPState {
     int total_states = 9;
 };
 
+struct PPPFrequencyAmbiguityLifecycle {
+    double last_phase = 0.0;
+    GNSSTime last_time;
+    int lock_count = 0;
+    double quality_indicator = 0.0;
+    bool has_last_phase = false;
+};
+
 struct PPPAmbiguityInfo {
     double float_value = 0.0;
     double fixed_value = 0.0;
@@ -344,6 +352,23 @@ struct PPPAmbiguityInfo {
     double float_value_l2 = 0.0;
     double wavelength_l1 = 0.0;
     double wavelength_l2 = 0.0;
+    // Per-signal observation lifecycle used by multi-frequency PPP-AR. The
+    // satellite-level fields above remain the primary/secondary compatibility
+    // view until every ambiguity state is keyed by frequency.
+    std::map<SignalType, PPPFrequencyAmbiguityLifecycle> frequency_lifecycle;
 };
+
+inline void updateFrequencyAmbiguityLifecycle(PPPAmbiguityInfo& ambiguity,
+                                              SignalType signal,
+                                              double carrier_phase,
+                                              const GNSSTime& time,
+                                              double quality_indicator) {
+    auto& frequency = ambiguity.frequency_lifecycle[signal];
+    frequency.last_phase = carrier_phase;
+    frequency.last_time = time;
+    frequency.lock_count++;
+    frequency.quality_indicator = quality_indicator;
+    frequency.has_last_phase = true;
+}
 
 }  // namespace libgnss::ppp_shared

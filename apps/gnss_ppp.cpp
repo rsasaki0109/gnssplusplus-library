@@ -859,6 +859,9 @@ int main(int argc, char* argv[]) {
 
         libgnss::io::RINEXReader obs_reader;
         const auto& ppp_env_overrides = libgnss::pppEnvOverrides();
+        if (options.ar_method == "per-freq") {
+            obs_reader.setPreserveAdditionalFrequencyBands(true);
+        }
         if (!options.madoca_l6_paths.empty() &&
             !ppp_env_overrides.qzss_prefer_l1l_present) {
             obs_reader.setQzssL1Preference(true);

@@ -1312,11 +1312,26 @@ void PPPProcessor::pruneStaleEstStecStates(const std::set<SatelliteId>& observed
 }
 
 void PPPProcessor::updateAmbiguityStates(const ObservationData& obs) {
+    std::map<SatelliteId, int> compatibility_updates;
     for (const auto& measurement : obs.observations) {
         if (!measurement.valid || !measurement.has_carrier_phase) {
             continue;
         }
         auto& ambiguity = ambiguity_states_[measurement.satellite];
+        ppp_shared::updateFrequencyAmbiguityLifecycle(
+            ambiguity,
+            measurement.signal,
+            measurement.carrier_phase,
+            obs.time,
+            measurement.snr);
+
+        // The historical satellite-level lifecycle is updated once for each of
+        // the reader's primary and secondary observations. Additional bands are
+        // recorded above but must not accelerate lock_count or overwrite the
+        // compatibility phase datum before L3/L4 states consume them directly.
+        if (compatibility_updates[measurement.satellite]++ >= 2) {
+            continue;
+        }
         ambiguity.last_phase = measurement.carrier_phase;
         ambiguity.last_time = obs.time;
         ambiguity.lock_count++;
