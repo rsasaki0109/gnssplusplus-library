@@ -607,6 +607,7 @@ jobs:
           grep -q '"ar_method": "per-freq"' native_pppar_smoke.json
           grep -q '"estimate_ionosphere": true' native_pppar_smoke.json
           grep -q '"use_ionosphere_free": false' native_pppar_smoke.json
+          grep -q '"phase_measurement_min_lock_count": 0' native_pppar_smoke.json
           grep -q '"convergence_gate_reason":' native_pppar_smoke.json
           grep -q '"convergence_max_position_deviation_m":' native_pppar_smoke.json
           grep -q '"convergence_max_horizontal_position_deviation_m":' native_pppar_smoke.json

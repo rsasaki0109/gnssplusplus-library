@@ -238,6 +238,24 @@ from 4.391 m to 2.194 m, maximum delta falls from 14.78 m to 5.79 m, horizontal
 RMS is 1.396 m, Up RMS is 1.692 m, and final-30-minute RMS is 1.091 m.  M2 remains
 open because status agreement and fixed-position thresholds are not yet met.
 
+#### M2d -- First-epoch carrier-phase admission
+
+MADOCALIB initializes each per-frequency ambiguity before `ppp_res()` and uses
+the corresponding carrier-phase row in that same epoch.  Native previously
+required one completed ambiguity-lifecycle update, so its first usable MADOCA
+epoch contained 31 code rows and no phase rows.  Coherent MADOCA per-frequency
+mode now uses a zero minimum lock count while the shared non-MADOCA default
+remains one.
+
+On the pinned MIZU probe, the first native equation grows to 72 code and 68
+phase rows and its first-epoch native/oracle 3D delta falls from 1.320 m to
+0.770 m.  Across all 118 aligned solution epochs, native produces 47 complete
+fixes, all inside oracle Fix epochs, with no wrong Fix.  Full-window 3D delta
+RMS is 2.358 m, maximum is 5.907 m, and final-30-minute RMS is 1.125 m.  The
+full-window RMS is higher than M2c's 2.194 m, so this row-contract correction
+does not close M2; remaining native-only rows and state priors must be aligned
+before judging its combined trajectory effect.
+
 ### M3 -- Apply L6D ionosphere products
 
 - Promote the proven snapshot lookup from shadow telemetry to an explicit
