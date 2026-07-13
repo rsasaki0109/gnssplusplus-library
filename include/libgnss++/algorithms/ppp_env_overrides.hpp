@@ -113,9 +113,9 @@ struct PPPEnvOverrides {
     // GNSS_PPP_TIDE_ITRS_SUN_MOON: rotate sun/moon vectors to ITRS before IERS
     // solid tide when present. Default false.
     bool tide_itrs_sun_moon = false;
-    // GNSS_PPP_PF_CODE_VAR_SCALE: per-frequency code variance scale.
-    // Default 9.0.
-    double pf_code_var_scale = 9.0;
+    // GNSS_PPP_PF_CODE_VAR_SCALE: diagnostic per-frequency code variance
+    // scale applied after the RTKLIB error-ratio model. Default 1.0.
+    double pf_code_var_scale = 1.0;
     // GNSS_PPP_PF_RX_ANTENNA: enable per-frequency receiver antenna correction
     // when present. Default false.
     bool pf_rx_antenna = false;

@@ -214,6 +214,30 @@ and no wrong fix.  The full-window native/oracle 3D delta RMS improves from
 10.923 m to 4.391 m; the final 30-minute RMS is 1.046 m.  The M2 exit criteria
 are not yet met.
 
+#### M2c -- Measurement variance parity
+
+The coherent MADOCA CLI already applies MADOCALIB's 300:1 code-to-phase error
+ratio.  The per-frequency filter then multiplied the resulting code variance by
+the legacy diagnostic default of 9.0, making code sigma exactly three times the
+oracle value.  That scale now defaults to 1.0 and remains available only as an
+explicit diagnostic override.
+
+Two other variance terms were missing.  MADOCALIB adds `0.01^2 m^2` estimated-
+troposphere model variance to every code and phase row and adds 0.1 times the
+SSR URA variance.  Native now applies both terms on the coherent MADOCA path.
+The L6E decoder already retained subtype-7 URA indices, but product conversion
+dropped them; conversion now carries the DF389/MADOCALIB sigma into the SSR
+correction.  A focused unit test pins the complete URA-index mapping.
+
+At GPS week 2360, TOW 173010, native/oracle sigmas now agree at trace precision:
+G04 code/phase are 2.2719/0.0143 m, G08 are 1.8963/0.0136 m, and G16 are
+1.3174/0.0129 m.  On the pinned 120-input-epoch probe, all 118 solution epochs
+remain aligned.  Native publishes 38 complete fixes, all within the oracle's
+fixed epochs, with no wrong fix.  Full-window native/oracle 3D delta RMS improves
+from 4.391 m to 2.194 m, maximum delta falls from 14.78 m to 5.79 m, horizontal
+RMS is 1.396 m, Up RMS is 1.692 m, and final-30-minute RMS is 1.091 m.  M2 remains
+open because status agreement and fixed-position thresholds are not yet met.
+
 ### M3 -- Apply L6D ionosphere products
 
 - Promote the proven snapshot lookup from shadow telemetry to an explicit
@@ -282,14 +306,8 @@ remains open.
 
 ## Immediate Slice
 
-M1 begins with a measurement correction, not a threshold increase:
-
-1. compute ECEF deltas from the convergence-window mean;
-2. rotate them to local ENU at the mean position;
-3. track maximum horizontal norm and maximum absolute Up separately;
-4. preserve the legacy 3D metric for compatibility telemetry;
-5. add a typed kinematic convergence policy and focused unit tests; and
-6. rerun the pinned 118-epoch native/oracle case before selecting thresholds.
-
-This prevents the current mislabeled metric from turning a parameter sweep into
-an accidental change of meaning.
+Continue M2 from the now-matched measurement variance surface.  Compare the
+remaining float-state initialization/process-noise and ambiguity candidate-row
+differences before changing admission thresholds.  Preserve the two hard
+guards established so far: never publish a wide-lane-only result as Fix, and
+never publish a native Fix outside an oracle Fix epoch.

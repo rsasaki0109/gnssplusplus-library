@@ -166,7 +166,7 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
     overrides.ssr_discnt_slip = envPresent("GNSS_PPP_SSR_DISCNT_SLIP");
     overrides.no_solid_tide = envPresent("GNSS_PPP_NO_SOLID_TIDE");
     overrides.tide_itrs_sun_moon = envPresent("GNSS_PPP_TIDE_ITRS_SUN_MOON");
-    overrides.pf_code_var_scale = envDoubleOr("GNSS_PPP_PF_CODE_VAR_SCALE", 9.0);
+    overrides.pf_code_var_scale = envDoubleOr("GNSS_PPP_PF_CODE_VAR_SCALE", 1.0);
     overrides.pf_rx_antenna = envPresent("GNSS_PPP_PF_RX_ANTENNA");
     overrides.pf_wet_trop = envPresent("GNSS_PPP_PF_WET_TROP");
 

@@ -628,7 +628,7 @@ TEST_F(MadocaParity, L6eSnapshotConvertsToSsrProducts) {
             default: return libgnss::GNSSSystem::UNKNOWN;
         }
     };
-    int orbit_checks = 0, clock_checks = 0, bias_checks = 0;
+    int orbit_checks = 0, clock_checks = 0, ura_checks = 0, bias_checks = 0;
     for (int sat = 1; sat <= libgnss::io::MadocaL6eDecoder::kMaxSat; ++sat) {
         const auto& c = decoder.correction(sat);
         if (c.t0[0].time == 0 && c.t0[1].time == 0) {
@@ -660,6 +660,13 @@ TEST_F(MadocaParity, L6eSnapshotConvertsToSsrProducts) {
             EXPECT_TRUE(corr.clock_valid);
             EXPECT_DOUBLE_EQ(corr.clock_correction_m, c.dclk[0]);
             ++clock_checks;
+        }
+        if (c.t0[3].time != 0) {
+            EXPECT_TRUE(corr.ura_valid);
+            EXPECT_DOUBLE_EQ(
+                corr.ura_sigma_m,
+                libgnss::io::madocaSsrUraSigmaMeters(c.ura));
+            ++ura_checks;
         }
         // Mirror the converter's effective key policy. Coherent MADOCA keeps
         // the original tracking-code identity for constellations that need
@@ -702,6 +709,7 @@ TEST_F(MadocaParity, L6eSnapshotConvertsToSsrProducts) {
     }
     EXPECT_GT(orbit_checks, 0) << "no orbit corrections converted";
     EXPECT_GT(clock_checks, 0) << "no clock corrections converted";
+    EXPECT_GT(ura_checks, 0) << "no URA corrections converted";
     EXPECT_GT(bias_checks, 0) << "no code biases converted";
 }
 
@@ -734,6 +742,13 @@ TEST(MadocaParityDefault, OracleDisabledInDefaultBuild) {
 }
 
 #endif
+
+TEST(MadocaL6eUra, MatchesMadocalibDf389Sigma) {
+    EXPECT_DOUBLE_EQ(libgnss::io::madocaSsrUraSigmaMeters(0), 0.15);
+    EXPECT_DOUBLE_EQ(libgnss::io::madocaSsrUraSigmaMeters(1), 0.00025);
+    EXPECT_DOUBLE_EQ(libgnss::io::madocaSsrUraSigmaMeters(5), 0.00125);
+    EXPECT_DOUBLE_EQ(libgnss::io::madocaSsrUraSigmaMeters(63), 5.4665);
+}
 
 // Pure mapping check (no oracle / no sample): MADOCA Compact SSR bias codes
 // (RTKLIB CODE_* values) must re-key to the RTCM SSR signal ids that the PPP
