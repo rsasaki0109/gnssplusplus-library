@@ -614,6 +614,37 @@ jobs:
           grep -q '"convergence_policy": "legacy-3d"' native_pppar_smoke.json
           grep -q '"ar_stage_last":' native_pppar_smoke.json
           grep -q '"ar_per_frequency_attempts":' native_pppar_smoke.json
+          ./apps/gnss_ppp \
+            --kinematic \
+            --enable-ar \
+            --ar-method per-freq \
+            --ar-ratio-threshold 1.5 \
+            --convergence-policy local-enu \
+            --convergence-threshold-horizontal 0.75 \
+            --convergence-threshold-vertical 1.25 \
+            --obs "$ROOT/sample_data/data/rinex/MIZU00JPN_R_20250910000_01D_30S_MO.rnx" \
+            --nav "$ROOT/sample_data/data/rinex/BRDM00DLR_S_20250910000_01D_MN.rnx" \
+            --madoca-l6 "$ROOT/sample_data/data/l6_is-qzss-mdc-004/2025/091/2025091A.204.l6" \
+            --madoca-l6 "$ROOT/sample_data/data/l6_is-qzss-mdc-004/2025/091/2025091A.206.l6" \
+            --antex "$ROOT/sample_data/data/igs20.atx" \
+            --max-epochs 120 \
+            --emit-epoch-time \
+            --out native_pppar_wl_only_smoke.pos \
+            --summary-json native_pppar_wl_only_smoke.json \
+            --quiet
+          grep -q '"convergence_policy": "local-enu"' native_pppar_wl_only_smoke.json
+          grep -q '"ar_n1_fixed_epochs": 0' native_pppar_wl_only_smoke.json
+          grep -q '"ppp_fixed_solutions": 0' native_pppar_wl_only_smoke.json
+          wl_only="$(python3 -c 'import json; print(json.load(open("native_pppar_wl_only_smoke.json"))["ar_wide_lane_only_epochs"])')"
+          test "$wl_only" -gt 0
+          valid="$(python3 -c 'import json; print(json.load(open("native_pppar_wl_only_smoke.json"))["valid_solutions"])')"
+          float_solutions="$(python3 -c 'import json; print(json.load(open("native_pppar_wl_only_smoke.json"))["ppp_float_solutions"])')"
+          test "$valid" -gt 0
+          test "$float_solutions" -eq "$valid"
+          rows="$(awk '$0 !~ /^%/ && NF > 0 {n++} END {print n+0}' native_pppar_wl_only_smoke.pos)"
+          test "$rows" -eq "$valid"
+          non_float="$(awk '$0 !~ /^%/ && NF > 0 && $9 != 5 {n++} END {print n+0}' native_pppar_wl_only_smoke.pos)"
+          test "$non_float" -eq 0
           python3 "${GITHUB_WORKSPACE}/scripts/analysis/madoca_solution_diff.py" \
             madocalib_pppar_smoke.pos \
             native_pppar_smoke.pos \
@@ -633,6 +664,8 @@ jobs:
           build-madoca-parity/madocalib_pppar_smoke.json
           build-madoca-parity/native_pppar_smoke.pos
           build-madoca-parity/native_pppar_smoke.json
+          build-madoca-parity/native_pppar_wl_only_smoke.pos
+          build-madoca-parity/native_pppar_wl_only_smoke.json
           build-madoca-parity/madoca_pppar_solution_diff.json
           build-madoca-parity/madoca_pppar_solution_matches.csv
         if-no-files-found: warn

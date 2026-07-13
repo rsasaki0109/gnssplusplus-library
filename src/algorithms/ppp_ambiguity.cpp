@@ -21,6 +21,7 @@ using namespace ppp_internal;
 bool PPPProcessor::resolveAmbiguities(const ObservationData& obs, const NavigationData& nav) {
     last_ar_ratio_ = 0.0;
     last_fixed_ambiguities_ = 0;
+    last_ar_wide_lane_only_ = false;
 
     if (!ppp_config_.enable_ambiguity_resolution || (!precise_products_loaded_ && !ssr_products_loaded_)) {
         if (pppDebugEnabled()) {
@@ -569,7 +570,8 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
         ++ar_stage_telemetry_.wide_lane_only_epochs;
         ar_stage_telemetry_.last_n1_candidates = static_cast<int>(n1_sel.size());
         ar_stage_telemetry_.last_stage = "wide_lane_only_insufficient_n1";
-        return true;
+        last_ar_wide_lane_only_ = true;
+        return false;
     }
     const int nb = static_cast<int>(n1_sel.size());
     ar_stage_telemetry_.last_n1_candidates = nb;
@@ -607,7 +609,8 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
         ++ar_stage_telemetry_.wide_lane_only_epochs;
         ++ar_stage_telemetry_.n1_lambda_failure_epochs;
         ar_stage_telemetry_.last_stage = "wide_lane_only_lambda_failure";
-        return true;
+        last_ar_wide_lane_only_ = true;
+        return false;
     }
     ar_stage_telemetry_.last_n1_ratio = ratio;
     if (env_overrides_.pfdump) {
@@ -620,7 +623,8 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
         ++ar_stage_telemetry_.wide_lane_only_epochs;
         ++ar_stage_telemetry_.n1_ratio_rejection_epochs;
         ar_stage_telemetry_.last_stage = "wide_lane_only_ratio_rejected";
-        return true;
+        last_ar_wide_lane_only_ = true;
+        return false;
     }
 
     // 5) Apply the fixed N1 double differences as a tight Kalman pseudo-obs on
@@ -646,7 +650,8 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
         last_fixed_ambiguities_ = nwl;
         ++ar_stage_telemetry_.wide_lane_only_epochs;
         ar_stage_telemetry_.last_stage = "wide_lane_only_n1_update_failure";
-        return true;
+        last_ar_wide_lane_only_ = true;
+        return false;
     }
     const MatrixXd Kn = HPn.transpose() * Sn_inv;  // nx x nb
     filter_state_.state += Kn * vn;

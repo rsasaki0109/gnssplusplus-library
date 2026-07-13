@@ -173,6 +173,25 @@ native Fix count is at least the oracle's 108; matched fixed-epoch 3D delta RMS
 is at most 0.20 m and maximum is at most 1.0 m.  If upstream numerical limits
 make one threshold infeasible, change it only in a dedicated evidence PR.
 
+#### M2a -- Wide-lane-only admission contract
+
+The pinned MADOCALIB source returns `1` for a wide-lane-only result and `2` for
+a complete narrow-lane fix (`src/ppp_ar.c`).  `src/ppp.c` uses the temporary
+wide-lane-constrained state for that epoch's position, maps `SOLQ_FIX_WL` back
+to `SOLQ_PPP`, and only holds the ambiguity state for `SOLQ_FIX`.  Native follows
+the same contract: a wide-lane-only result publishes its temporary position as
+`PPP_FLOAT`, reports zero fixed ambiguities and zero ratio, then restores the
+pre-AR float filter state.
+
+On the pinned 120-input-epoch MIZU Windows Release probe this changes 78
+incorrectly labelled Fix rows to Float without changing any of the 118
+published positions (before versus after 3D delta RMS and maximum are both
+0 m).  The stage counts remain 78 wide-lane-only attempts and zero complete N1
+fixes.  The Linux parity build currently publishes 84 Float rows with 44
+wide-lane-only attempts, exposing a remaining platform/state-trajectory delta
+for M2b.  A dedicated parity CI gate rejects any published Fix on every valid
+row while no complete N1 fix exists, independently of that row-count delta.
+
 ### M3 -- Apply L6D ionosphere products
 
 - Promote the proven snapshot lookup from shadow telemetry to an explicit
