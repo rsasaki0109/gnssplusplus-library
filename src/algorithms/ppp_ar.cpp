@@ -36,7 +36,17 @@ SatelliteId clasRealSatellite(const SatelliteId& satellite) {
 }
 
 std::pair<GNSSSystem, int> ambiguityDdGroup(const SatelliteId& satellite) {
-    return {satellite.system, satellite.prn > 100 ? 1 : 0};
+    const bool clas_virtual = satellite.prn > 100;
+    const int real_prn = clas_virtual
+        ? std::max(1, static_cast<int>(satellite.prn) - 100)
+        : static_cast<int>(satellite.prn);
+    int group = clas_virtual ? 1 : 0;
+    if (satellite.system == GNSSSystem::BeiDou) {
+        // MADOCALIB's NC(opt) has distinct BDS-3 (SYS_CMP) and BDS-2
+        // (SYS_BD2) clock/datum groups. PRN 19 is the pinned boundary.
+        group += real_prn < 19 ? 2 : 4;
+    }
+    return {satellite.system, group};
 }
 
 double claslibRatioThresholdForNb(int nb) {

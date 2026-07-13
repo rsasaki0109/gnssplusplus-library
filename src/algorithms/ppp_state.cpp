@@ -1,5 +1,7 @@
 #include "ppp_internal.hpp"
 
+#include <libgnss++/algorithms/ppp_multifrequency.hpp>
+
 #include <libgnss++/algorithms/ppp_utils.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
@@ -286,6 +288,7 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
     filter_state_.gal_clock_index = -1;
     filter_state_.qzs_clock_index = -1;
     filter_state_.bds_clock_index = -1;
+    filter_state_.bds2_clock_index = -1;
     // Without these states QZSS/Galileo/BeiDou share the GPS clock and any
     // receiver inter-system hardware bias leaks into code residuals. Native
     // MADOCA coherent mode needs QZSS by default because the L6 stream carries
@@ -311,8 +314,12 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
         visible_systems.count(GNSSSystem::QZSS)) {
         filter_state_.qzs_clock_index = isb_start++;
     }
-    if (env_overrides_.estimate_isb_bds && visible_systems.count(GNSSSystem::BeiDou)) {
+    if ((env_overrides_.estimate_isb_bds || require_coherent_ssr_) &&
+        visible_systems.count(GNSSSystem::BeiDou)) {
         filter_state_.bds_clock_index = isb_start++;
+        if (require_coherent_ssr_) {
+            filter_state_.bds2_clock_index = isb_start++;
+        }
     }
 
     // Reserve ionosphere states for visible satellites.
@@ -326,6 +333,8 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
         !ppp_config_.use_clas_osr_filter;
     int n_iono_states = 0;
     filter_state_.ionosphere_indices.clear();
+    filter_state_.additional_ambiguity_indices.clear();
+    filter_state_.receiver_frequency_bias_indices.clear();
     if (ppp_config_.estimate_ionosphere && !madoca_per_freq_est_stec) {
         filter_state_.iono_index = isb_start;
         for (const auto& sat : obs.getSatellites()) {
@@ -349,6 +358,8 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
         filter_state_.state(filter_state_.qzs_clock_index) = initial_clock_bias_m;
     if (filter_state_.bds_clock_index >= 0)
         filter_state_.state(filter_state_.bds_clock_index) = initial_clock_bias_m;
+    if (filter_state_.bds2_clock_index >= 0)
+        filter_state_.state(filter_state_.bds2_clock_index) = initial_clock_bias_m;
     filter_state_.state(filter_state_.trop_index) =
         ppp_config_.estimate_troposphere ?
             modeledZenithTroposphereDelayMeters(initial_position, obs.time) :
@@ -375,6 +386,10 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
             system_clock_initial_variance;
     if (filter_state_.bds_clock_index >= 0)
         filter_state_.covariance(filter_state_.bds_clock_index, filter_state_.bds_clock_index) =
+            system_clock_initial_variance;
+    if (filter_state_.bds2_clock_index >= 0)
+        filter_state_.covariance(
+            filter_state_.bds2_clock_index, filter_state_.bds2_clock_index) =
             system_clock_initial_variance;
     // Initialize per-satellite ionosphere states. GNSS_PPP_INIT_IONO_VAR (>0)
     // overrides the per-satellite initial ionosphere covariance. The est-stec
@@ -459,6 +474,9 @@ void PPPProcessor::predictState(double dt, const PositionSolution* seed_solution
     if (filter_state_.bds_clock_index >= 0)
         Q(filter_state_.bds_clock_index, filter_state_.bds_clock_index) =
             env_overrides_.isb_process_noise * dt;
+    if (filter_state_.bds2_clock_index >= 0)
+        Q(filter_state_.bds2_clock_index, filter_state_.bds2_clock_index) =
+            env_overrides_.isb_process_noise * dt;
     Q(filter_state_.trop_index, filter_state_.trop_index) =
         ppp_config_.process_noise_troposphere * dt;
     // Ambiguity process noise for every appended state. Ionosphere states may
@@ -500,6 +518,7 @@ void PPPProcessor::predictState(double dt, const PositionSolution* seed_solution
             reinitializeSystemClock(filter_state_.gal_clock_index);
             reinitializeSystemClock(filter_state_.qzs_clock_index);
             reinitializeSystemClock(filter_state_.bds_clock_index);
+            reinitializeSystemClock(filter_state_.bds2_clock_index);
         }
         if (ppp_config_.kinematic_mode &&
             !ppp_config_.low_dynamics_mode &&
@@ -967,6 +986,24 @@ void PPPProcessor::ensureAmbiguityStates(const std::vector<IonosphereFreeObs>& o
             if (observation.has_carrier_phase_l2) {
                 getOrCreateAmbiguityStateL2(observation);
             }
+            for (const auto& frequency : observation.additional_frequencies) {
+                if (!frequency.valid) {
+                    continue;
+                }
+                getOrCreateReceiverFrequencyBiasState(
+                    observation.satellite, frequency.ordinal);
+                if (frequency.has_carrier_phase) {
+                    getOrCreateAdditionalAmbiguityState(observation, frequency);
+                }
+                if (env_overrides_.res_dump) {
+                    std::cerr << "[PPP-FREQ-STATE] "
+                              << observation.satellite.toString()
+                              << " ordinal=" << frequency.ordinal
+                              << " valid=" << frequency.valid
+                              << " phase=" << frequency.has_carrier_phase
+                              << "\n";
+                }
+            }
         }
         getOrCreateAmbiguityState(observation);
     }
@@ -1055,6 +1092,7 @@ void PPPProcessor::recoverLowDynamicsBroadcastState(const ObservationData& obs,
     reinitializeSystemClock(filter_state_.gal_clock_index);
     reinitializeSystemClock(filter_state_.qzs_clock_index);
     reinitializeSystemClock(filter_state_.bds_clock_index);
+    reinitializeSystemClock(filter_state_.bds2_clock_index);
     reinitializeScalarState(
         filter_state_.trop_index,
         modeledZenithTroposphereDelayMeters(anchored_position, obs.time),
@@ -1088,6 +1126,9 @@ int PPPProcessor::receiverClockStateIndex(const SatelliteId& satellite) const {
             return filter_state_.qzs_clock_index >= 0
                 ? filter_state_.qzs_clock_index : filter_state_.clock_index;
         case GNSSSystem::BeiDou:
+            if (satellite.prn < 19 && filter_state_.bds2_clock_index >= 0) {
+                return filter_state_.bds2_clock_index;
+            }
             return filter_state_.bds_clock_index >= 0
                 ? filter_state_.bds_clock_index : filter_state_.clock_index;
         default:
@@ -1226,6 +1267,72 @@ int PPPProcessor::getOrCreateAmbiguityStateL2(const IonosphereFreeObs& observati
     return index;
 }
 
+int PPPProcessor::getOrCreateReceiverFrequencyBiasState(
+    const SatelliteId& satellite,
+    int frequency_ordinal) {
+    const auto key =
+        algorithms::ppp_multifrequency::receiverFrequencyBiasKey(
+            satellite, frequency_ordinal);
+    const auto existing = filter_state_.receiver_frequency_bias_indices.find(key);
+    if (existing != filter_state_.receiver_frequency_bias_indices.end()) {
+        return existing->second;
+    }
+    const int index = filter_state_.total_states++;
+    filter_state_.state.conservativeResize(filter_state_.total_states);
+    filter_state_.covariance.conservativeResize(
+        filter_state_.total_states, filter_state_.total_states);
+    filter_state_.covariance.row(index).setZero();
+    filter_state_.covariance.col(index).setZero();
+    filter_state_.state(index) = 1e-6;
+    filter_state_.covariance(index, index) = 30.0 * 30.0;
+    filter_state_.receiver_frequency_bias_indices[key] = index;
+    return index;
+}
+
+int PPPProcessor::getOrCreateAdditionalAmbiguityState(
+    const IonosphereFreeObs& observation,
+    const IonosphereFreeObs::AdditionalFrequencyObs& frequency) {
+    const auto key = std::make_pair(observation.satellite, frequency.signal);
+    const auto existing = filter_state_.additional_ambiguity_indices.find(key);
+    auto& lifecycle =
+        ambiguity_states_[observation.satellite].frequency_lifecycle[frequency.signal];
+    if (existing != filter_state_.additional_ambiguity_indices.end()) {
+        if (lifecycle.state_index != existing->second) {
+            const double ion = observation.has_iono_init ? observation.iono_init_m : 0.0;
+            filter_state_.state(existing->second) =
+                algorithms::ppp_multifrequency::ambiguitySeedMeters(
+                    frequency.carrier_phase, frequency.pseudorange, ion,
+                    observation.freq_l1, frequency.frequency);
+            filter_state_.covariance.row(existing->second).setZero();
+            filter_state_.covariance.col(existing->second).setZero();
+            filter_state_.covariance(existing->second, existing->second) =
+                60.0 * 60.0;
+        }
+        lifecycle.float_value_m = filter_state_.state(existing->second);
+        lifecycle.wavelength_m = frequency.wavelength;
+        lifecycle.state_index = existing->second;
+        return existing->second;
+    }
+    const int index = filter_state_.total_states++;
+    filter_state_.state.conservativeResize(filter_state_.total_states);
+    filter_state_.covariance.conservativeResize(
+        filter_state_.total_states, filter_state_.total_states);
+    filter_state_.covariance.row(index).setZero();
+    filter_state_.covariance.col(index).setZero();
+    const double ion = observation.has_iono_init ? observation.iono_init_m : 0.0;
+    filter_state_.state(index) =
+        algorithms::ppp_multifrequency::ambiguitySeedMeters(
+            frequency.carrier_phase, frequency.pseudorange, ion,
+            observation.freq_l1, frequency.frequency);
+    filter_state_.covariance(index, index) =
+        60.0 * 60.0;
+    filter_state_.additional_ambiguity_indices[key] = index;
+    lifecycle.float_value_m = filter_state_.state(index);
+    lifecycle.wavelength_m = frequency.wavelength;
+    lifecycle.state_index = index;
+    return index;
+}
+
 void PPPProcessor::pruneStaleEstStecStates(const std::set<SatelliteId>& observed) {
     if (ppp_config_.use_ionosphere_free || !ppp_config_.estimate_ionosphere ||
         ppp_config_.use_clas_osr_filter) {
@@ -1258,6 +1365,12 @@ void PPPProcessor::pruneStaleEstStecStates(const std::set<SatelliteId>& observed
         collect(filter_state_.ambiguity_indices, sat);
         collect(filter_state_.ambiguity_l2_indices, sat);
         collect(filter_state_.ionosphere_indices, sat);
+        for (const auto& [key, index] : filter_state_.additional_ambiguity_indices) {
+            if (key.first == sat && index >= filter_state_.amb_index &&
+                index < filter_state_.total_states) {
+                remove.insert(index);
+            }
+        }
     }
     const int old_n = filter_state_.total_states;
     std::vector<int> new_index(static_cast<size_t>(old_n), -1);
@@ -1305,6 +1418,32 @@ void PPPProcessor::pruneStaleEstStecStates(const std::set<SatelliteId>& observed
     reindex(filter_state_.ambiguity_indices);
     reindex(filter_state_.ambiguity_l2_indices);
     reindex(filter_state_.ionosphere_indices);
+    for (auto it = filter_state_.additional_ambiguity_indices.begin();
+         it != filter_state_.additional_ambiguity_indices.end();) {
+        const int ni = (it->second >= 0 && it->second < old_n)
+                           ? new_index[static_cast<size_t>(it->second)] : -1;
+        if (ni < 0) {
+            it = filter_state_.additional_ambiguity_indices.erase(it);
+        } else {
+            it->second = ni;
+            ++it;
+        }
+    }
+    for (auto& [key, index] : filter_state_.receiver_frequency_bias_indices) {
+        (void)key;
+        index = new_index[static_cast<size_t>(index)];
+    }
+    for (const auto& [key, index] :
+         filter_state_.additional_ambiguity_indices) {
+        auto sat_it = ambiguity_states_.find(key.first);
+        if (sat_it == ambiguity_states_.end()) {
+            continue;
+        }
+        auto lifecycle_it = sat_it->second.frequency_lifecycle.find(key.second);
+        if (lifecycle_it != sat_it->second.frequency_lifecycle.end()) {
+            lifecycle_it->second.state_index = index;
+        }
+    }
     for (const auto& sat : drop) {
         ambiguity_states_.erase(sat);
         est_stec_outage_.erase(sat);
@@ -1324,6 +1463,15 @@ void PPPProcessor::updateAmbiguityStates(const ObservationData& obs) {
             measurement.carrier_phase,
             obs.time,
             measurement.snr);
+        const auto extra_state = filter_state_.additional_ambiguity_indices.find(
+            {measurement.satellite, measurement.signal});
+        if (extra_state != filter_state_.additional_ambiguity_indices.end() &&
+            extra_state->second >= 0 &&
+            extra_state->second < filter_state_.total_states) {
+            auto& lifecycle = ambiguity.frequency_lifecycle[measurement.signal];
+            lifecycle.state_index = extra_state->second;
+            lifecycle.float_value_m = filter_state_.state(extra_state->second);
+        }
 
         // The historical satellite-level lifecycle is updated once for each of
         // the reader's primary and secondary observations. Additional bands are
@@ -1408,6 +1556,21 @@ void PPPProcessor::resetAmbiguity(const SatelliteId& satellite, SignalType signa
             filter_state_.covariance(l2_index, l2_index) =
                 precise_products_loaded_ ? 1e6 : ppp_config_.initial_ambiguity_variance;
         }
+    }
+    for (const auto& [key, index] : filter_state_.additional_ambiguity_indices) {
+        if (key.first != satellite || index < 0 ||
+            index >= filter_state_.total_states) {
+            continue;
+        }
+        filter_state_.state(index) = 0.0;
+        filter_state_.covariance.row(index).setZero();
+        filter_state_.covariance.col(index).setZero();
+        filter_state_.covariance(index, index) =
+            precise_products_loaded_ ? 1e6 : ppp_config_.initial_ambiguity_variance;
+    }
+    for (auto& [frequency, lifecycle] : ambiguity.frequency_lifecycle) {
+        (void)frequency;
+        lifecycle.state_index = -1;
     }
 }
 
