@@ -661,18 +661,25 @@ TEST_F(MadocaParity, L6eSnapshotConvertsToSsrProducts) {
             EXPECT_DOUBLE_EQ(corr.clock_correction_m, c.dclk[0]);
             ++clock_checks;
         }
-        // Group decoded code biases by target RTCM id, mirroring the converter's
-        // ascending-code last-wins. Most ids have a single source code (exact
-        // value check); a few RTCM ids are coarser than MADOCA tracking codes
-        // (e.g. GPS L5I/L5Q/L5X all map to id 22), so the stored value must be
-        // one of the candidates.
+        // Mirror the converter's effective key policy. Coherent MADOCA keeps
+        // the original tracking-code identity for constellations that need
+        // distinct code/phase biases (notably BDS-3 B2a). The compatibility
+        // path and GLONASS still collapse codes onto RTCM SSR signal ids, where
+        // ascending-code last-wins and the stored value must be one candidate.
+        const bool preserve_bias_identity =
+            decoder.envOverrides().madoca_bias_identity &&
+            (gsys == libgnss::GNSSSystem::GPS ||
+             gsys == libgnss::GNSSSystem::Galileo ||
+             gsys == libgnss::GNSSSystem::QZSS ||
+             gsys == libgnss::GNSSSystem::BeiDou);
         std::map<std::uint8_t, std::vector<double>> expected;
         for (int k = 0; k < libgnss::io::MadocaSsrCorrection::kMaxCode; ++k) {
             if (!c.vcbias[k]) {
                 continue;
             }
-            const std::uint8_t rid =
-                libgnss::io::madocaBiasCodeToRtcmSsrId(gsys, k + 1);
+            const std::uint8_t rid = preserve_bias_identity
+                ? static_cast<std::uint8_t>(k + 1)
+                : libgnss::io::madocaBiasCodeToRtcmSsrId(gsys, k + 1);
             if (rid != 0) {
                 expected[rid].push_back(c.cbias[k]);
             }
