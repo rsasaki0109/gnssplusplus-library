@@ -36,6 +36,25 @@ class MadocaMaterializationSelfdiffTest(unittest.TestCase):
             self.assertEqual(config.madocalib_ref, selfdiff.DEFAULT_MADOCALIB_REF)
             self.assertEqual(config.min_rows, selfdiff.DEFAULT_MIN_ROWS)
             self.assertEqual(config.required_systems, selfdiff.DEFAULT_REQUIRED_SYSTEMS)
+            self.assertEqual(
+                selfdiff.DEFAULT_REQUIRED_BIAS_IDS,
+                (
+                    "1",
+                    "2",
+                    "8",
+                    "12",
+                    "18",
+                    "20",
+                    "25",
+                    "26",
+                    "27",
+                    "29",
+                    "31",
+                    "40",
+                    "42",
+                    "58",
+                ),
+            )
             self.assertEqual(config.required_code_bias_ids, selfdiff.DEFAULT_REQUIRED_BIAS_IDS)
             self.assertEqual(config.required_phase_bias_ids, selfdiff.DEFAULT_REQUIRED_BIAS_IDS)
 
@@ -120,8 +139,12 @@ class MadocaMaterializationSelfdiffTest(unittest.TestCase):
                     "systems": {"GPS": 2, "GLONASS": 1, "Galileo": 1, "QZSS": 1, "BeiDou": 1},
                     "row_key": {"groups": 2, "duplicate_groups": 0, "max_duplicate_occurrences": 1},
                     "bias_identity": {
-                        "code_bias_ids": {"2": 2, "8": 1, "9": 1, "14": 1, "22": 1},
-                        "phase_bias_ids": {"2": 2, "8": 1, "9": 1, "14": 1, "22": 1},
+                        "code_bias_ids": {
+                            signal_id: 1 for signal_id in selfdiff.DEFAULT_REQUIRED_BIAS_IDS
+                        },
+                        "phase_bias_ids": {
+                            signal_id: 1 for signal_id in selfdiff.DEFAULT_REQUIRED_BIAS_IDS
+                        },
                     },
                 },
                 selfdiff_report={
