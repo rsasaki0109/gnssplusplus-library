@@ -1,5 +1,10 @@
 # MADOCA Port Plan
 
+> **Active plan:** [MADOCALIB Native Migration Ledger](madocalib_native_migration.md)
+> is the current issue-#148 capability table, frozen oracle contract, milestone
+> plan, and acceptance gate.  This document retains the detailed migration
+> history and earlier design analysis.
+
 This plan scopes a MADOCA foundation pass.  The goal is to capture what should
 be ported from MADOCALIB, what should be shared with the existing CLAS work,
 and how to build oracle parity without dragging reference code into production.
