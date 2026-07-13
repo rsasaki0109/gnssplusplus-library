@@ -298,6 +298,7 @@ struct PPPState {
     int gal_clock_index = -1;
     int qzs_clock_index = -1;
     int bds_clock_index = -1;
+    int bds2_clock_index = -1;
     int trop_index = 8;
     int iono_index = 9;
     int amb_index = 9;
@@ -308,6 +309,12 @@ struct PPPState {
     // amb_index/total_states and the ambiguity_indices layout are byte-identical
     // to the ionosphere-free path. L1 ambiguities stay in ambiguity_indices.
     std::map<SatelliteId, int> ambiguity_l2_indices;
+    // Third/fourth-frequency ambiguity states use the actual signal as part of
+    // the key because the available band depends on the constellation.
+    std::map<std::pair<SatelliteId, SignalType>, int> additional_ambiguity_indices;
+    // MADOCALIB I3/I4 receiver inter-frequency code biases. The integer key is
+    // the zero-based additional-frequency ordinal (2 = L3, 3 = L4).
+    std::map<std::pair<GNSSSystem, int>, int> receiver_frequency_bias_indices;
     int total_states = 9;
 };
 
@@ -317,6 +324,9 @@ struct PPPFrequencyAmbiguityLifecycle {
     int lock_count = 0;
     double quality_indicator = 0.0;
     bool has_last_phase = false;
+    double float_value_m = 0.0;
+    double wavelength_m = 0.0;
+    int state_index = -1;
 };
 
 struct PPPAmbiguityInfo {

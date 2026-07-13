@@ -928,7 +928,8 @@ bool useMadocaBiasIdentityKey(libgnss::GNSSSystem system,
     }
     return system == libgnss::GNSSSystem::GPS ||
            system == libgnss::GNSSSystem::Galileo ||
-           system == libgnss::GNSSSystem::QZSS;
+           system == libgnss::GNSSSystem::QZSS ||
+           system == libgnss::GNSSSystem::BeiDou;
 }
 
 const char* gnssSystemName(libgnss::GNSSSystem system) {

@@ -1029,6 +1029,29 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
             if (atmos_tokens.empty() && !epoch_atmos_tokens.empty()) {
                 atmos_tokens = epoch_atmos_tokens;
             }
+            if (require_coherent_ssr_) {
+                // MADOCALIB corr_meas() drops an individual raw observable
+                // when its SSR bias is unavailable. Keep a usable L1/L2
+                // satellite while applying that rule independently to L3/L4.
+                for (auto& extra : observation.additional_frequencies) {
+                    if (!ssrBiasPresent(
+                            code_bias_m, observation.satellite.system,
+                            extra.signal, extra.observation_type,
+                            madoca_bias_identity)) {
+                        extra.valid = false;
+                        extra.has_carrier_phase = false;
+                        continue;
+                    }
+                    if (observation.satellite.system != GNSSSystem::GLONASS &&
+                        extra.has_carrier_phase &&
+                        !ssrBiasPresent(
+                            phase_bias_m, observation.satellite.system,
+                            extra.signal, extra.observation_type,
+                            madoca_bias_identity)) {
+                        extra.has_carrier_phase = false;
+                    }
+                }
+            }
             if (require_coherent_ssr_ &&
                 (!ssr_ok ||
                  !madocaSsrCorrectionIsCoherent(ssr_status, time) ||
@@ -1115,6 +1138,18 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                         observation.pseudorange_l2 += ssr_bias_sign * cb_l2;
                         observation.code_bias_l2_m = cb_l2;
                     }
+                    for (auto& extra : observation.additional_frequencies) {
+                        if (!extra.valid) {
+                            continue;
+                        }
+                        const double cb = observationCodeBiasMeters(
+                            observation.satellite.system, extra.signal,
+                            SignalType::SIGNAL_TYPE_COUNT, false, code_bias_m,
+                            1.0, 0.0, extra.observation_type, std::string(),
+                            madoca_bias_identity);
+                        extra.pseudorange += ssr_bias_sign * cb;
+                        extra.code_bias_m = cb;
+                    }
                     // MADOCALIB ppp.c:451 ADDS the SSR phase bias to the carrier
                     // phase (L[i]+=pb); applying it with the opposite sign pushes
                     // the per-frequency ambiguity away from its integer. Non-MADOCA
@@ -1149,6 +1184,18 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                                 madoca_bias_identity);
                             observation.carrier_phase_l2 += phase_bias_sign * pb_l2;
                             observation.phase_bias_l2_m = pb_l2;
+                        }
+                        for (auto& extra : observation.additional_frequencies) {
+                            if (!extra.valid || !extra.has_carrier_phase) {
+                                continue;
+                            }
+                            const double pb = observationPhaseBiasMeters(
+                                observation.satellite.system, extra.signal,
+                                SignalType::SIGNAL_TYPE_COUNT, false, phase_bias_m,
+                                1.0, 0.0, extra.observation_type, std::string(),
+                                madoca_bias_identity);
+                            extra.carrier_phase += phase_bias_sign * pb;
+                            extra.phase_bias_m = pb;
                         }
                     }
                     // Re-derive the ionosphere seed from bias-corrected codes.
@@ -1487,6 +1534,19 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                         receiverAntennaPcvMeters(observation.secondary_signal,
                                                  observation.elevation);
                 }
+                const auto l1_it = ant_it->second.find(observation.primary_signal);
+                for (auto& extra : observation.additional_frequencies) {
+                    const auto extra_it = ant_it->second.find(extra.signal);
+                    double pco_delta_m = 0.0;
+                    if (l1_it != ant_it->second.end() && extra_it != ant_it->second.end()) {
+                        const Vector3d delta_ecef =
+                            enu2ecef(extra_it->second - l1_it->second, rx_lat, rx_lon);
+                        pco_delta_m = -los_unit.dot(delta_ecef);
+                    }
+                    extra.rx_ant_corr_m =
+                        pco_delta_m +
+                        receiverAntennaPcvMeters(extra.signal, observation.elevation);
+                }
             }
         }
 
@@ -1524,6 +1584,11 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                 }
                 if (observation.has_carrier_phase_l2 && observation.wavelength_l2 > 0.0) {
                     observation.carrier_phase_l2 -= new_windup * observation.wavelength_l2;
+                }
+                for (auto& extra : observation.additional_frequencies) {
+                    if (extra.has_carrier_phase && extra.wavelength > 0.0) {
+                        extra.carrier_phase -= new_windup * extra.wavelength;
+                    }
                 }
             }
         }

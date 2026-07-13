@@ -2,6 +2,9 @@
 
 #include <libgnss++/algorithms/ppp.hpp>
 #include <libgnss++/algorithms/madoca_core.hpp>
+#include <libgnss++/algorithms/ppp_ar.hpp>
+#include <libgnss++/algorithms/ppp_bias_identity.hpp>
+#include <libgnss++/algorithms/ppp_multifrequency.hpp>
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/models/troposphere.hpp>
 
@@ -1948,4 +1951,93 @@ TEST(PPPTest, ConvergenceWindowReportsEcefHorizontalAndVerticalComponents) {
     EXPECT_NEAR(metrics.max_ecef_3d_m, std::sqrt(29.0), 1e-6);
     EXPECT_NEAR(metrics.max_horizontal_m, 5.0, 1e-6);
     EXPECT_NEAR(metrics.max_vertical_m, 2.0, 1e-6);
+}
+
+TEST(PPPMultifrequencyTest, UsesMadocalibFrequencyOrdinalOrder) {
+    using algorithms::ppp_multifrequency::signalsForFrequencyOrdinal;
+
+    EXPECT_EQ(signalsForFrequencyOrdinal(SatelliteId(GNSSSystem::GPS, 1), 2),
+              std::vector<SignalType>({SignalType::GPS_L5}));
+    EXPECT_EQ(signalsForFrequencyOrdinal(SatelliteId(GNSSSystem::Galileo, 1), 2),
+              std::vector<SignalType>({SignalType::GAL_E5B}));
+    EXPECT_EQ(signalsForFrequencyOrdinal(SatelliteId(GNSSSystem::Galileo, 1), 3),
+              std::vector<SignalType>({SignalType::GAL_E6}));
+    EXPECT_EQ(signalsForFrequencyOrdinal(SatelliteId(GNSSSystem::QZSS, 1), 2),
+              std::vector<SignalType>({SignalType::QZS_L2C}));
+    EXPECT_EQ(signalsForFrequencyOrdinal(SatelliteId(GNSSSystem::BeiDou, 18), 2),
+              std::vector<SignalType>({SignalType::BDS_B2I}));
+    EXPECT_EQ(signalsForFrequencyOrdinal(SatelliteId(GNSSSystem::BeiDou, 19), 2),
+              std::vector<SignalType>({SignalType::BDS_B2A}));
+    EXPECT_TRUE(signalsForFrequencyOrdinal(
+                    SatelliteId(GNSSSystem::BeiDou, 19), 3).empty());
+}
+
+TEST(PPPMultifrequencyTest, PreservesMadocalibBeiDouExactBiasIdentity) {
+    namespace identity = algorithms::ppp_bias_identity;
+    namespace parity = algorithms::madoca_parity;
+
+    EXPECT_EQ(identity::rtklibCodeForObservationType("C2I"), parity::kCodeL2I);
+    EXPECT_EQ(identity::rtklibCodeForObservationType("L2I"), parity::kCodeL2I);
+    EXPECT_EQ(identity::rtklibCodeForObservationType("C6I"), parity::kCodeL6I);
+    EXPECT_EQ(identity::rtklibCodeForObservationType("L6I"), parity::kCodeL6I);
+    EXPECT_EQ(identity::rtklibCodeForObservationType("C5P"), parity::kCodeL5P);
+    EXPECT_EQ(identity::rtklibCodeForObservationType("L5P"), parity::kCodeL5P);
+    EXPECT_EQ(identity::madocaBiasIdentityIdForObservation(
+                  GNSSSystem::BeiDou, SignalType::BDS_B1I, "C2I", true),
+              static_cast<std::uint8_t>(parity::kCodeL2I));
+}
+
+TEST(PPPMultifrequencyTest, SeparatesMadocalibBeiDouGenerationsForDoubleDifferences) {
+    const auto bds2 = ppp_ar::ambiguityDdGroup(
+        SatelliteId(GNSSSystem::BeiDou, 18));
+    const auto bds3 = ppp_ar::ambiguityDdGroup(
+        SatelliteId(GNSSSystem::BeiDou, 19));
+
+    EXPECT_NE(bds2, bds3);
+    EXPECT_EQ(ppp_ar::ambiguityDdGroup(SatelliteId(GNSSSystem::GPS, 19)),
+              std::make_pair(GNSSSystem::GPS, 0));
+    EXPECT_NE(algorithms::ppp_multifrequency::receiverFrequencyBiasKey(
+                  SatelliteId(GNSSSystem::BeiDou, 18), 2),
+              algorithms::ppp_multifrequency::receiverFrequencyBiasKey(
+                  SatelliteId(GNSSSystem::BeiDou, 19), 2));
+}
+
+TEST(PPPMultifrequencyTest, MatchesMadocalibIonosphereAndAmbiguityEquations) {
+    using algorithms::ppp_multifrequency::ambiguitySeedMeters;
+    using algorithms::ppp_multifrequency::ionosphereScale;
+
+    constexpr double f1 = 1575.42e6;
+    constexpr double f3 = 1207.14e6;
+    constexpr double ion_l1 = 4.25;
+    constexpr double carrier_m = 20200012.5;
+    constexpr double code_m = 20200003.0;
+    const double expected_scale = (f1 / f3) * (f1 / f3);
+
+    EXPECT_NEAR(ionosphereScale(f1, f3), expected_scale, 1e-15);
+    EXPECT_NEAR(ambiguitySeedMeters(carrier_m, code_m, ion_l1, f1, f3),
+                carrier_m - code_m + 2.0 * ion_l1 * expected_scale,
+                1e-12);
+    EXPECT_EQ(ionosphereScale(0.0, f3), 0.0);
+}
+
+TEST(PPPMultifrequencyTest, MatchesMadocalibExtraWideLaneDoubleDifference) {
+    using algorithms::ppp_multifrequency::extraWideLaneDoubleDifferenceCycles;
+
+    constexpr double lambda2 = 0.2442102134;
+    constexpr double lambda3 = 0.2548280488;
+    constexpr double ref_n2_cycles = 120.25;
+    constexpr double ref_n3_cycles = 80.10;
+    constexpr double sat_n2_cycles = 105.05;
+    constexpr double sat_n3_cycles = 65.02;
+    const double value = extraWideLaneDoubleDifferenceCycles(
+        ref_n2_cycles * lambda2, lambda2,
+        ref_n3_cycles * lambda3, lambda3,
+        sat_n2_cycles * lambda2, lambda2,
+        sat_n3_cycles * lambda3, lambda3);
+
+    EXPECT_NEAR(value,
+                (ref_n2_cycles - ref_n3_cycles) -
+                    (sat_n2_cycles - sat_n3_cycles),
+                1e-12);
+    EXPECT_NEAR(value, 0.12, 1e-12);
 }

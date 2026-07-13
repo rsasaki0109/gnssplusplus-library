@@ -2,12 +2,14 @@
 
 #include <libgnss++/algorithms/lambda.hpp>
 #include <libgnss++/algorithms/ppp_ar.hpp>
+#include <libgnss++/algorithms/ppp_multifrequency.hpp>
 #include <libgnss++/algorithms/ppp_utils.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/core/signals.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <iostream>
 #include <limits>
@@ -394,6 +396,8 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
         int l2_index = -1;
         double lambda1 = 0.0;
         double lambda2 = 0.0;
+        std::array<int, 2> extra_indices{{-1, -1}};
+        std::array<double, 2> extra_wavelengths{{0.0, 0.0}};
         double elevation = -M_PI_2;
         int wl_int = 0;
         bool wl_fixed = false;
@@ -437,6 +441,28 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
         c.l2_index = l2_it->second;
         c.lambda1 = lam1;
         c.lambda2 = lam2;
+        for (int ordinal = 2; ordinal <= 3; ++ordinal) {
+            const auto signals =
+                algorithms::ppp_multifrequency::signalsForFrequencyOrdinal(
+                    sat, ordinal);
+            for (const SignalType signal : signals) {
+                const auto state_it =
+                    filter_state_.additional_ambiguity_indices.find({sat, signal});
+                const auto lifecycle_it =
+                    amb_it->second.frequency_lifecycle.find(signal);
+                if (state_it == filter_state_.additional_ambiguity_indices.end() ||
+                    lifecycle_it == amb_it->second.frequency_lifecycle.end() ||
+                    state_it->second < 0 ||
+                    state_it->second >= filter_state_.total_states ||
+                    !(lifecycle_it->second.wavelength_m > 0.0)) {
+                    continue;
+                }
+                const size_t slot = static_cast<size_t>(ordinal - 2);
+                c.extra_indices[slot] = state_it->second;
+                c.extra_wavelengths[slot] = lifecycle_it->second.wavelength_m;
+                break;
+            }
+        }
 
         Vector3d satellite_position;
         Vector3d satellite_velocity;
@@ -467,6 +493,14 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
         }
         c.elevation = std::asin(
             line_of_sight.normalized().dot(receiver_position.normalized()));
+        // Frozen MADOCALIB pppar profile: pos2-arelmask=15 degrees. The
+        // measurement filter still uses the 10-degree observation mask, but
+        // gen_sat_sd() excludes lower satellites from integer candidates.
+        constexpr double kMadocalibArElevationMaskRad = 15.0 * M_PI / 180.0;
+        if (ssr_products_loaded_ &&
+            c.elevation < kMadocalibArElevationMaskRad) {
+            continue;
+        }
         cands.push_back(c);
     }
     ar_stage_telemetry_.last_satellite_candidates = static_cast<int>(cands.size());
@@ -479,19 +513,175 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
     // 2) Wide-lane integer per satellite, double-differenced against the
     //    highest-elevation candidate of each system.
     //    WL_s = x[L1]/lambda1 - x[L2]/lambda2 (cycles).
-    std::map<GNSSSystem, int> ref_of_system;
+    std::map<std::pair<GNSSSystem, int>, int> ref_of_group;
     for (size_t i = 0; i < cands.size(); ++i) {
+        // MADOCALIB gen_sat_sd() never uses the BDS IGSO satellites as the
+        // datum, although they remain eligible as non-reference candidates.
+        if (cands[i].sat.system == GNSSSystem::BeiDou &&
+            cands[i].sat.prn >= 38 && cands[i].sat.prn <= 40) {
+            continue;
+        }
+        const auto group = ppp_ar::ambiguityDdGroup(cands[i].sat);
         const auto [it, inserted] =
-            ref_of_system.emplace(cands[i].sat.system, static_cast<int>(i));
+            ref_of_group.emplace(group, static_cast<int>(i));
         if (!inserted &&
             cands[i].elevation > cands[static_cast<size_t>(it->second)].elevation) {
             it->second = static_cast<int>(i);
         }
     }
-    struct DdPair { int ref = -1; int sat = -1; int wl_int = 0; };
+    struct DdPair {
+        int ref = -1;
+        int sat = -1;
+        int wl_int = 0;
+        double constraint_sigma_cycles = 0.01;
+    };
     std::vector<DdPair> wl_pairs;
     const VectorXd& x = filter_state_.state;
     const MatrixXd& P = filter_state_.covariance;
+    const int nx = filter_state_.total_states;
+
+    if (env_overrides_.pfdump) {
+        for (size_t i = 0; i < cands.size(); ++i) {
+            const auto ref_it = ref_of_group.find(
+                ppp_ar::ambiguityDdGroup(cands[i].sat));
+            if (ref_it == ref_of_group.end()) {
+                continue;
+            }
+            const int ref_idx = ref_it->second;
+            if (ref_idx == static_cast<int>(i)) {
+                continue;
+            }
+            const Cand& ref = cands[static_cast<size_t>(ref_idx)];
+            const Cand& sat = cands[i];
+            const double wl_dd =
+                (x(ref.l1_index) / ref.lambda1 -
+                 x(ref.l2_index) / ref.lambda2) -
+                (x(sat.l1_index) / sat.lambda1 -
+                 x(sat.l2_index) / sat.lambda2);
+            std::cerr << "[PFWL-PRE-EWL] " << ref.sat.toString() << "-"
+                      << sat.sat.toString() << " wl=" << wl_dd
+                      << " frac=" << std::abs(std::round(wl_dd) - wl_dd)
+                      << "\n";
+        }
+    }
+
+    // MADOCALIB STEP_EWL: condition the extra-frequency states with accepted
+    // F2-F3 and F2-F4 integer double differences before ordinary F1-F2 WL.
+    struct EwlPair {
+        int ref = -1;
+        int sat = -1;
+        int slot = 0;
+        int integer = 0;
+        double sigma_cycles = 0.10;
+    };
+    std::vector<EwlPair> ewl_pairs;
+    constexpr double kMaxFracEwl = 0.20;
+    constexpr double kMaxStdEwl = 1.0;
+    for (size_t i = 0; i < cands.size(); ++i) {
+        const auto ref_it = ref_of_group.find(
+            ppp_ar::ambiguityDdGroup(cands[i].sat));
+        if (ref_it == ref_of_group.end()) {
+            continue;
+        }
+        const int ref_idx = ref_it->second;
+        if (ref_idx == static_cast<int>(i)) {
+            continue;
+        }
+        const Cand& ref = cands[static_cast<size_t>(ref_idx)];
+        const Cand& sat = cands[i];
+        for (int slot = 0; slot < 2; ++slot) {
+            const int ref_extra = ref.extra_indices[static_cast<size_t>(slot)];
+            const int sat_extra = sat.extra_indices[static_cast<size_t>(slot)];
+            const double ref_lambda =
+                ref.extra_wavelengths[static_cast<size_t>(slot)];
+            const double sat_lambda =
+                sat.extra_wavelengths[static_cast<size_t>(slot)];
+            if (ref_extra < 0 || sat_extra < 0 || !(ref_lambda > 0.0) ||
+                !(sat_lambda > 0.0)) {
+                continue;
+            }
+            const double ewl_dd =
+                algorithms::ppp_multifrequency::extraWideLaneDoubleDifferenceCycles(
+                    x(ref.l2_index), ref.lambda2, x(ref_extra), ref_lambda,
+                    x(sat.l2_index), sat.lambda2, x(sat_extra), sat_lambda);
+            const double integer = std::round(ewl_dd);
+            const double frac = std::abs(integer - ewl_dd);
+            const auto single_sat_variance = [&](int l2_index,
+                                                 double lambda2,
+                                                 int extra_index,
+                                                 double extra_lambda) {
+                return P(l2_index, l2_index) / (lambda2 * lambda2) +
+                       P(extra_index, extra_index) /
+                           (extra_lambda * extra_lambda) -
+                       2.0 * P(l2_index, extra_index) /
+                           (lambda2 * extra_lambda);
+            };
+            // Match search_amb_ewl(): sum the two single-satellite variances.
+            const double variance =
+                single_sat_variance(
+                    ref.l2_index, ref.lambda2, ref_extra, ref_lambda) +
+                single_sat_variance(
+                    sat.l2_index, sat.lambda2, sat_extra, sat_lambda);
+            const double std_cycles = variance > 0.0
+                ? std::sqrt(variance) : std::numeric_limits<double>::infinity();
+            if (env_overrides_.pfdump) {
+                std::cerr << "[PFEWL] " << ref.sat.toString() << "-"
+                          << sat.sat.toString() << " F2-F" << (slot + 3)
+                          << " value=" << ewl_dd << " frac=" << frac
+                          << " std=" << std_cycles << "\n";
+            }
+            if (std_cycles > kMaxStdEwl || frac > kMaxFracEwl) {
+                continue;
+            }
+            double constraint_sigma = 0.01;
+            if (sat.sat.system == GNSSSystem::GPS ||
+                sat.sat.system == GNSSSystem::BeiDou ||
+                (sat.sat.system == GNSSSystem::Galileo && slot == 1)) {
+                constraint_sigma = 0.10;
+            }
+            ewl_pairs.push_back({
+                ref_idx, static_cast<int>(i), slot,
+                static_cast<int>(integer), constraint_sigma});
+        }
+    }
+    if (env_overrides_.pfdump) {
+        std::cerr << "[PFEWL-SUM] fixed=" << ewl_pairs.size() << "\n";
+    }
+    if (!ewl_pairs.empty()) {
+        const int ne = static_cast<int>(ewl_pairs.size());
+        MatrixXd Hewl = MatrixXd::Zero(ne, nx);
+        VectorXd vewl = VectorXd::Zero(ne);
+        MatrixXd Rewl = MatrixXd::Zero(ne, ne);
+        for (int k = 0; k < ne; ++k) {
+            const EwlPair& pair = ewl_pairs[static_cast<size_t>(k)];
+            const Cand& ref = cands[static_cast<size_t>(pair.ref)];
+            const Cand& sat = cands[static_cast<size_t>(pair.sat)];
+            const size_t slot = static_cast<size_t>(pair.slot);
+            Hewl(k, ref.l2_index) += 1.0 / ref.lambda2;
+            Hewl(k, ref.extra_indices[slot]) +=
+                -1.0 / ref.extra_wavelengths[slot];
+            Hewl(k, sat.l2_index) += -1.0 / sat.lambda2;
+            Hewl(k, sat.extra_indices[slot]) +=
+                1.0 / sat.extra_wavelengths[slot];
+            const double float_value = (Hewl.row(k) * filter_state_.state)(0);
+            vewl(k) = static_cast<double>(pair.integer) - float_value;
+            Rewl(k, k) = pair.sigma_cycles * pair.sigma_cycles;
+        }
+        const MatrixXd HP = Hewl * filter_state_.covariance;
+        const MatrixXd innovation_covariance =
+            HP * Hewl.transpose() + Rewl;
+        const MatrixXd inverse = innovation_covariance.ldlt().solve(
+            MatrixXd::Identity(ne, ne));
+        if (!inverse.allFinite()) {
+            return false;
+        }
+        const MatrixXd gain = HP.transpose() * inverse;
+        filter_state_.state += gain * vewl;
+        filter_state_.covariance -= gain * HP;
+        filter_state_.covariance = 0.5 *
+            (filter_state_.covariance + filter_state_.covariance.transpose());
+    }
+
     auto wl_cycles = [&](const Cand& c) {
         return x(c.l1_index) / c.lambda1 - x(c.l2_index) / c.lambda2;
     };
@@ -500,7 +690,12 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
     int wl_fix_count = 0;
     double wl_frac_sum = 0.0;
     for (size_t i = 0; i < cands.size(); ++i) {
-        const int ref_idx = ref_of_system[cands[i].sat.system];
+        const auto ref_it = ref_of_group.find(
+            ppp_ar::ambiguityDdGroup(cands[i].sat));
+        if (ref_it == ref_of_group.end()) {
+            continue;
+        }
+        const int ref_idx = ref_it->second;
         if (ref_idx == static_cast<int>(i)) {
             continue;
         }
@@ -509,23 +704,34 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
         const double wl_dd = wl_cycles(ref) - wl_cycles(sat);
         const double n = std::round(wl_dd);
         const double frac = std::abs(n - wl_dd);
-        // Variance of the WL DD (cycles^2) from the 4 contributing states.
-        const double cr1 = 1.0 / ref.lambda1, cr2 = -1.0 / ref.lambda2;
-        const double cs1 = -1.0 / sat.lambda1, cs2 = 1.0 / sat.lambda2;
+        // Match search_amb_wl(): sum each satellite's internal WL variance.
+        // The oracle intentionally omits cross-satellite covariance terms in
+        // this integer-admission gate, even though the subsequent Kalman
+        // constraint uses the complete covariance matrix.
         const int ir1 = ref.l1_index, ir2 = ref.l2_index;
         const int is1 = sat.l1_index, is2 = sat.l2_index;
-        double var = cr1 * cr1 * P(ir1, ir1) + cr2 * cr2 * P(ir2, ir2) +
-                     cs1 * cs1 * P(is1, is1) + cs2 * cs2 * P(is2, is2) +
-                     2.0 * (cr1 * cr2 * P(ir1, ir2) + cr1 * cs1 * P(ir1, is1) +
-                            cr1 * cs2 * P(ir1, is2) + cr2 * cs1 * P(ir2, is1) +
-                            cr2 * cs2 * P(ir2, is2) + cs1 * cs2 * P(is1, is2));
+        const auto wl_variance = [&](int l1_index,
+                                     double lambda1,
+                                     int l2_index,
+                                     double lambda2) {
+            return P(l1_index, l1_index) / (lambda1 * lambda1) +
+                   P(l2_index, l2_index) / (lambda2 * lambda2) -
+                   2.0 * P(l1_index, l2_index) / (lambda1 * lambda2);
+        };
+        const double var =
+            wl_variance(ir1, ref.lambda1, ir2, ref.lambda2) +
+            wl_variance(is1, sat.lambda1, is2, sat.lambda2);
         const double sd = var > 0.0 ? std::sqrt(var) : 9.9;
         if (env_overrides_.pfdump) {
             std::cerr << "[PFWL] " << ref.sat.toString() << "-" << sat.sat.toString()
                       << " wl=" << wl_dd << " frac=" << frac << " std=" << sd << "\n";
         }
         if (frac < kMaxFracWl && sd < kMaxStdWl) {
-            wl_pairs.push_back({ref_idx, static_cast<int>(i), static_cast<int>(n)});
+            const double constraint_sigma =
+                sat.sat.system == GNSSSystem::BeiDou ? 0.05 : 0.01;
+            wl_pairs.push_back({
+                ref_idx, static_cast<int>(i), static_cast<int>(n),
+                constraint_sigma});
             wl_fix_count++;
             wl_frac_sum += frac;
         }
@@ -543,16 +749,10 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
 
     // 3) Apply the fixed wide-lane integers as a batched Kalman pseudo-measurement
     //    (cycles). Tight but not rigid so a wrong WL does not lock the filter.
-    const int nx = filter_state_.total_states;
     const int nwl = static_cast<int>(wl_pairs.size());
     MatrixXd Hwl = MatrixXd::Zero(nwl, nx);
     VectorXd vwl = VectorXd::Zero(nwl);
     MatrixXd Rwl = MatrixXd::Zero(nwl, nwl);
-    // Until the oracle's preceding extra-WL (L2/L3) stage is ported, retain a
-    // 0.10-cycle guard against over-constraining a marginal WL integer.  The
-    // pinned oracle uses this value for EWL and tightens ordinary WL to 0.01
-    // only after EWL has conditioned the extra-frequency states.
-    constexpr double kWlConstraintSigmaCyc = 0.10;
     for (int k = 0; k < nwl; ++k) {
         const Cand& ref = cands[static_cast<size_t>(wl_pairs[static_cast<size_t>(k)].ref)];
         const Cand& sat = cands[static_cast<size_t>(wl_pairs[static_cast<size_t>(k)].sat)];
@@ -562,7 +762,9 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
         Hwl(k, sat.l2_index) += 1.0 / sat.lambda2;
         const double wl_dd_float = wl_cycles(ref) - wl_cycles(sat);
         vwl(k) = static_cast<double>(wl_pairs[static_cast<size_t>(k)].wl_int) - wl_dd_float;
-        Rwl(k, k) = kWlConstraintSigmaCyc * kWlConstraintSigmaCyc;
+        const double sigma =
+            wl_pairs[static_cast<size_t>(k)].constraint_sigma_cycles;
+        Rwl(k, k) = sigma * sigma;
     }
     // Standard Kalman update written as P -= K (H P) to avoid the O(nx^3)
     // Joseph form on the large per-frequency state (nx ~ 300). The fix is
@@ -579,6 +781,11 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
     filter_state_.covariance -= Kwl * HPwl;
     filter_state_.covariance =
         0.5 * (filter_state_.covariance + filter_state_.covariance.transpose());
+
+    // MADOCALIB snapshots the WL-conditioned float state before N1 and
+    // restores it when the final fixed-position covariance gate rejects.
+    const VectorXd wide_lane_state = filter_state_.state;
+    const MatrixXd wide_lane_covariance = filter_state_.covariance;
 
     // 4) Narrow-lane N1: LAMBDA on the L1 ambiguity double differences for the
     //    WL-fixed pairs, read from the (now WL-tightened) L1 states. Mirrors the
@@ -773,16 +980,18 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
     MatrixXd Hn = MatrixXd::Zero(nb, nx);
     VectorXd vn = VectorXd::Zero(nb);
     MatrixXd Rn = MatrixXd::Zero(nb, nb);
-    constexpr double kN1ConstraintSigmaCyc = 0.01;
     for (int k = 0; k < nb; ++k) {
-        const Cand& rk = cands[static_cast<size_t>(wl_pairs[static_cast<size_t>(n1_sel[static_cast<size_t>(k)])].ref)];
-        const Cand& sk = cands[static_cast<size_t>(wl_pairs[static_cast<size_t>(n1_sel[static_cast<size_t>(k)])].sat)];
+        const DdPair& pair =
+            wl_pairs[static_cast<size_t>(n1_sel[static_cast<size_t>(k)])];
+        const Cand& rk = cands[static_cast<size_t>(pair.ref)];
+        const Cand& sk = cands[static_cast<size_t>(pair.sat)];
         Hn(k, rk.l1_index) += 1.0 / rk.lambda1;
         Hn(k, sk.l1_index) += -1.0 / sk.lambda1;
         vn(k) = n1_fixed(k) -
                 (filter_state_.state(rk.l1_index) / rk.lambda1 -
                  filter_state_.state(sk.l1_index) / sk.lambda1);
-        Rn(k, k) = kN1ConstraintSigmaCyc * kN1ConstraintSigmaCyc;
+        const double sigma = pair.constraint_sigma_cycles;
+        Rn(k, k) = sigma * sigma;
     }
     const MatrixXd HPn = Hn * filter_state_.covariance;  // nb x nx
     MatrixXd Sn = HPn * Hn.transpose() + Rn;
@@ -799,6 +1008,27 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
     filter_state_.covariance -= Kn * HPn;
     filter_state_.covariance =
         0.5 * (filter_state_.covariance + filter_state_.covariance.transpose());
+
+    double fixed_position_std_norm_sq = 0.0;
+    for (int axis = 0; axis < 3; ++axis) {
+        fixed_position_std_norm_sq += std::max(
+            0.0,
+            filter_state_.covariance(
+                filter_state_.pos_index + axis,
+                filter_state_.pos_index + axis));
+    }
+    constexpr double kMaxFixedPositionStdNormM = 0.15;
+    if (std::sqrt(fixed_position_std_norm_sq) >
+        kMaxFixedPositionStdNormM) {
+        filter_state_.state = wide_lane_state;
+        filter_state_.covariance = wide_lane_covariance;
+        last_fixed_ambiguities_ = nwl;
+        ++ar_stage_telemetry_.wide_lane_only_epochs;
+        ar_stage_telemetry_.last_stage =
+            "wide_lane_only_fixed_position_std_gate";
+        last_ar_wide_lane_only_ = true;
+        return false;
+    }
 
     for (const int selected : n1_sel) {
         const DdPair& pair = wl_pairs[static_cast<size_t>(selected)];

@@ -1,11 +1,13 @@
 #include "ppp_internal.hpp"
 
 #include <libgnss++/algorithms/ppp_bias_identity.hpp>
+#include <libgnss++/algorithms/ppp_multifrequency.hpp>
 #include <libgnss++/algorithms/ppp_utils.hpp>
 #include <libgnss++/core/signal_policy.hpp>
 #include <libgnss++/core/signals.hpp>
 
 #include <cmath>
+#include <iostream>
 #include <vector>
 
 namespace libgnss {
@@ -15,7 +17,12 @@ using namespace ppp_internal;
 namespace {
 
 std::vector<SignalType> secondarySignalsForObservation(const SatelliteId& sat,
-                                                       bool prefer_qzss_l5) {
+                                                       bool prefer_qzss_l5,
+                                                       bool madoca_frequency_order) {
+    if (madoca_frequency_order && sat.system == GNSSSystem::BeiDou) {
+        return {SignalType::BDS_B3I, SignalType::BDS_B2I,
+                SignalType::BDS_B2A};
+    }
     if (prefer_qzss_l5 && sat.system == GNSSSystem::QZSS) {
         return {SignalType::QZS_L5, SignalType::QZS_L2C};
     }
@@ -63,9 +70,6 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
     for (const auto& sat : obs.getSatellites()) {
         // Keep the native MADOCA parity path on systems whose L6 SSR handling is
         // coherent with the MADOCALIB bridge for this loader.
-        if (require_coherent_ssr_ && sat.system == GNSSSystem::BeiDou) {
-            continue;
-        }
         if (require_coherent_ssr_ && sat.system == GNSSSystem::GLONASS &&
             !env_overrides_.madoca_glonass) {
             continue;
@@ -149,7 +153,8 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
         const bool prefer_qzss_l5 =
             require_coherent_ssr_ && env_overrides_.madoca_qzss_l5;
         const Observation* secondary = findObservationForSignals(
-            obs, sat, secondarySignalsForObservation(sat, prefer_qzss_l5));
+            obs, sat, secondarySignalsForObservation(
+                sat, prefer_qzss_l5, require_coherent_ssr_));
 
         // Per-frequency mode: carry BOTH L1 and L2 raw observables.
         // SSR corrections (orbit/clock/bias/iono) still applied below.
@@ -202,6 +207,60 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
                         }
                     }
                 }
+            }
+            // MADOCALIB indexes frequencies by constellation-specific obsdef
+            // order, not by the order in which RINEX observations were read.
+            for (int ordinal = 2; ordinal <= 3; ++ordinal) {
+                const auto signals =
+                    algorithms::ppp_multifrequency::signalsForFrequencyOrdinal(
+                        sat, ordinal);
+                const Observation* candidate =
+                    findObservationForSignals(obs, sat, signals);
+                if (candidate == nullptr || candidate == primary ||
+                    candidate == secondary) {
+                    continue;
+                }
+                const double frequency_hz = signalFrequencyHz(candidate->signal, eph);
+                if (!(frequency_hz > 0.0)) {
+                    continue;
+                }
+                IonosphereFreeObs::AdditionalFrequencyObs extra;
+                extra.ordinal = ordinal;
+                extra.signal = candidate->signal;
+                extra.observation_type = candidate->exactBiasObservationType();
+                extra.pseudorange_observation_type =
+                    candidate->pseudorange_observation_type;
+                extra.carrier_phase_observation_type =
+                    candidate->carrier_phase_observation_type;
+                extra.pseudorange_rtklib_code =
+                    algorithms::ppp_bias_identity::rtklibCodeForObservationType(
+                        candidate->pseudorange_observation_type);
+                extra.carrier_phase_rtklib_code =
+                    algorithms::ppp_bias_identity::rtklibCodeForObservationType(
+                        candidate->carrier_phase_observation_type);
+                extra.pseudorange = candidate->pseudorange;
+                extra.frequency = frequency_hz;
+                extra.wavelength = signalWavelengthMeters(candidate->signal, eph);
+                extra.variance_pr = safeVariance(
+                    ppp_config_.pseudorange_sigma * ppp_config_.pseudorange_sigma,
+                    1e-6);
+                extra.variance_cp = safeVariance(
+                    ppp_config_.carrier_phase_sigma * ppp_config_.carrier_phase_sigma,
+                    1e-8);
+                if (candidate->has_carrier_phase && extra.wavelength > 0.0) {
+                    extra.carrier_phase = candidate->carrier_phase * extra.wavelength;
+                    extra.has_carrier_phase = true;
+                }
+                extra.valid = true;
+                entry.additional_frequencies.push_back(std::move(extra));
+            }
+            if (env_overrides_.res_dump && !entry.additional_frequencies.empty()) {
+                std::cerr << "[PPP-FREQ] " << sat.toString() << " extra=";
+                for (const auto& frequency : entry.additional_frequencies) {
+                    std::cerr << ' ' << static_cast<int>(frequency.signal)
+                              << '@' << frequency.frequency;
+                }
+                std::cerr << "\n";
             }
             entry.valid = true;
             combined.push_back(entry);

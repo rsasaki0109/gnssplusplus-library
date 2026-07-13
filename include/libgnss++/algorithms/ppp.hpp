@@ -424,6 +424,26 @@ private:
      * @brief Form ionosphere-free combinations
      */
     struct IonosphereFreeObs {
+        struct AdditionalFrequencyObs {
+            int ordinal = 2;
+            SignalType signal = SignalType::SIGNAL_TYPE_COUNT;
+            std::string observation_type;
+            std::string pseudorange_observation_type;
+            std::string carrier_phase_observation_type;
+            int pseudorange_rtklib_code = 0;
+            int carrier_phase_rtklib_code = 0;
+            double pseudorange = 0.0;
+            double carrier_phase = 0.0;
+            double wavelength = 0.0;
+            double frequency = 0.0;
+            double variance_pr = 0.0;
+            double variance_cp = 0.0;
+            double code_bias_m = 0.0;
+            double phase_bias_m = 0.0;
+            double rx_ant_corr_m = 0.0;
+            bool has_carrier_phase = false;
+            bool valid = false;
+        };
         SatelliteId satellite;
         SignalType primary_signal = SignalType::SIGNAL_TYPE_COUNT;
         SignalType secondary_signal = SignalType::SIGNAL_TYPE_COUNT;
@@ -504,6 +524,7 @@ private:
         bool has_iono_init = false;
         bool has_l2 = false;
         bool has_carrier_phase_l2 = false;
+        std::vector<AdditionalFrequencyObs> additional_frequencies;
         // Wet mapping function and a priori zenith hydrostatic delay for the
         // RTKLIB-style split trop model (est-stec): trop = m_h*ZHD + m_w*(ZTD-ZHD).
         double trop_mapping_wet = 0.0;
@@ -564,6 +585,11 @@ private:
      * @brief Get or create the per-frequency L2 ambiguity state (est-stec only).
      */
     int getOrCreateAmbiguityStateL2(const IonosphereFreeObs& observation);
+    int getOrCreateAdditionalAmbiguityState(
+        const IonosphereFreeObs& observation,
+        const IonosphereFreeObs::AdditionalFrequencyObs& frequency);
+    int getOrCreateReceiverFrequencyBiasState(const SatelliteId& satellite,
+                                              int frequency_ordinal);
 
     /**
      * @brief Get or create the per-satellite ionosphere (STEC) state, seeded
