@@ -1211,7 +1211,12 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                     }
                 }
                 if (ura_sigma_m > 0.0 && std::isfinite(ura_sigma_m)) {
-                    const double ura_variance = ura_sigma_m * ura_sigma_m;
+                    // sample_pppar.conf uses stats-uraratio=0.1, and
+                    // MADOCALIB applies that ratio to var_urassr() in ppp_res.
+                    const double ura_variance_ratio =
+                        require_coherent_ssr_ ? 0.1 : 1.0;
+                    const double ura_variance =
+                        ura_variance_ratio * ura_sigma_m * ura_sigma_m;
                     deferred_variance_pr += ura_variance;
                     deferred_variance_cp += ura_variance;
                 }
@@ -1476,14 +1481,22 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
             observation.variance_pr = measurementVariance(observation, false);
             observation.variance_cp = measurementVariance(observation, true);
         }
+        // MADOCALIB trop_model_prec() contributes a 1 cm model sigma to every
+        // code and phase row while ZTD is estimated (ppp.c:982-1003, 1176-1178).
+        // Omitting it makes the native per-frequency covariance overconfident.
+        if (require_coherent_ssr_ &&
+            !ppp_config_.use_ionosphere_free &&
+            ppp_config_.estimate_ionosphere &&
+            ppp_config_.estimate_troposphere) {
+            constexpr double kMadocalibEstimatedTropVarianceM2 = 0.01 * 0.01;
+            deferred_variance_pr += kMadocalibEstimatedTropVarianceM2;
+            deferred_variance_cp += kMadocalibEstimatedTropVarianceM2;
+        }
         observation.variance_pr = safeVariance(observation.variance_pr + deferred_variance_pr, 1e-6);
         observation.variance_cp = safeVariance(observation.variance_cp + deferred_variance_cp, 1e-8);
-        // Per-frequency (est-stec) code de-weighting: the uncombined L1/L2 code
-        // carries a systematic (multipath / residual code-bias) error that, when
-        // trusted as tightly as the elevation model implies, biases the converged
-        // position (observed E+0.37 m at MIZU). The IFLC path implicitly de-weights
-        // code via the 3x ionosphere-free noise amplification; mirror that here so
-        // phase drives the converged solution. Env-overridable for tuning.
+        // Optional diagnostic scaling after the RTKLIB code/phase ratio. The
+        // coherent MADOCA CLI already selects the oracle's ratio=300, so the
+        // default scale must remain one rather than de-weighting code twice.
         if (!ppp_config_.use_ionosphere_free && ppp_config_.estimate_ionosphere &&
             !ppp_config_.use_clas_osr_filter) {
             observation.variance_pr *= env_overrides_.pf_code_var_scale;
