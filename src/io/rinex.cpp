@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <iostream>
 #include <cmath>
+#include <set>
 
 namespace libgnss {
 namespace io {
@@ -265,6 +266,35 @@ void maybeAssignSelectedObservation(ObservationSelection& selection,
                            lli,
                            signal_strength);
     selection.has_data = true;
+}
+
+void appendSelectedObservations(
+    const ObservationSelection& primary,
+    const ObservationSelection& secondary,
+    const std::map<int, ObservationSelection>& by_band,
+    bool preserve_additional_bands,
+    const std::map<SatelliteId, int>& glonass_frequency_channels,
+    ObservationData& observations) {
+    std::set<int> emitted_bands;
+    const auto append = [&](const ObservationSelection& selection) {
+        if (!selection.has_data || emitted_bands.count(selection.band) != 0) {
+            return;
+        }
+        Observation observation = selection.observation;
+        annotateGlonassFrequencyChannel(observation, glonass_frequency_channels);
+        observations.addObservation(observation);
+        emitted_bands.insert(selection.band);
+    };
+
+    append(primary);
+    append(secondary);
+    if (!preserve_additional_bands) {
+        return;
+    }
+    for (const auto& [band, selection] : by_band) {
+        (void)band;
+        append(selection);
+    }
 }
 
 char rinexCharForSystem(GNSSSystem system) {
@@ -995,6 +1025,7 @@ bool RINEXReader::parseObservationEpochV2(const std::string& line, ObservationDa
 
         ObservationSelection primary_selection;
         ObservationSelection secondary_selection;
+        std::map<int, ObservationSelection> band_selections;
 
         for (size_t i = 0; i < header_.observation_types.size() && i < obs_values.size(); ++i) {
             const std::string& obs_type = header_.observation_types[i];
@@ -1016,19 +1047,22 @@ bool RINEXReader::parseObservationEpochV2(const std::string& line, ObservationDa
                                            qzss_prefer_l1l_,
                                            qzss_prefer_l5_secondary_,
                                            false);
+            if (preserve_additional_frequency_bands_) {
+                const int band = rinexBand(obs_type);
+                const bool primary_band = isPrimaryBand(sat.system, band);
+                if (primary_band || isSecondaryBand(sat.system, band)) {
+                    maybeAssignSelectedObservation(
+                        band_selections[band], sat, obs_type, obs_values[i],
+                        lli_flags[i], signal_strength[i], qzss_prefer_l1l_,
+                        qzss_prefer_l5_secondary_, primary_band);
+                }
+            }
         }
 
-        // Add observations if they have data
-        if (primary_selection.has_data) {
-            annotateGlonassFrequencyChannel(primary_selection.observation,
-                                            header_.glonass_frequency_channels);
-            obs_data.addObservation(primary_selection.observation);
-        }
-        if (secondary_selection.has_data) {
-            annotateGlonassFrequencyChannel(secondary_selection.observation,
-                                            header_.glonass_frequency_channels);
-            obs_data.addObservation(secondary_selection.observation);
-        }
+        appendSelectedObservations(
+            primary_selection, secondary_selection, band_selections,
+            preserve_additional_frequency_bands_,
+            header_.glonass_frequency_channels, obs_data);
     }
 
     return true;
@@ -1136,6 +1170,7 @@ bool RINEXReader::parseObservationEpochV3(const std::string& epoch_line, Observa
 
             ObservationSelection primary_selection;
             ObservationSelection secondary_selection;
+            std::map<int, ObservationSelection> band_selections;
 
             for (size_t i = 0; i < obs_types.size() && i < obs_values.size(); ++i) {
                 const std::string& obs_type = obs_types[i];
@@ -1157,18 +1192,22 @@ bool RINEXReader::parseObservationEpochV3(const std::string& epoch_line, Observa
                                                qzss_prefer_l1l_,
                                                qzss_prefer_l5_secondary_,
                                                false);
+                if (preserve_additional_frequency_bands_) {
+                    const int band = rinexBand(obs_type);
+                    const bool primary_band = isPrimaryBand(sat.system, band);
+                    if (primary_band || isSecondaryBand(sat.system, band)) {
+                        maybeAssignSelectedObservation(
+                            band_selections[band], sat, obs_type, obs_values[i],
+                            lli_flags[i], signal_strength[i], qzss_prefer_l1l_,
+                            qzss_prefer_l5_secondary_, primary_band);
+                    }
+                }
             }
 
-            if (primary_selection.has_data) {
-                annotateGlonassFrequencyChannel(primary_selection.observation,
-                                                header_.glonass_frequency_channels);
-                obs_data.addObservation(primary_selection.observation);
-            }
-            if (secondary_selection.has_data) {
-                annotateGlonassFrequencyChannel(secondary_selection.observation,
-                                                header_.glonass_frequency_channels);
-                obs_data.addObservation(secondary_selection.observation);
-            }
+            appendSelectedObservations(
+                primary_selection, secondary_selection, band_selections,
+                preserve_additional_frequency_bands_,
+                header_.glonass_frequency_channels, obs_data);
         }
 
     } catch (const std::exception& e) {

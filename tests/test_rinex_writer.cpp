@@ -565,3 +565,60 @@ TEST(RINEXReaderTest, QzssSecondaryL5PreferenceSelectsL5Q) {
 
     std::filesystem::remove(temp_path);
 }
+
+TEST(RINEXReaderTest, AdditionalFrequencyModePreservesFourGalileoBands) {
+    const auto temp_path = std::filesystem::temp_directory_path() /
+        "libgnss_galileo_four_frequency_test.obs";
+    std::filesystem::remove(temp_path);
+
+    std::ofstream output(temp_path);
+    ASSERT_TRUE(output.is_open());
+    output << rinexHeaderLine(
+        "     3.04           OBSERVATION DATA    M",
+        "RINEX VERSION / TYPE");
+    output << rinexHeaderLine(
+        "E    8 C1C L1C C5Q L5Q C7Q L7Q C6C L6C",
+        "SYS / # / OBS TYPES");
+    output << rinexHeaderLine("", "END OF HEADER");
+    output << "> 2025 04 01 00 00 00.0000000  0  1\n";
+    output << "E09"
+           << rinexObsField("21000001.000")
+           << rinexObsField("110000001.000")
+           << rinexObsField("22000002.000")
+           << rinexObsField("120000002.000")
+           << rinexObsField("23000003.000")
+           << rinexObsField("130000003.000")
+           << rinexObsField("24000004.000")
+           << rinexObsField("140000004.000")
+           << "\n";
+    output.close();
+
+    const auto read_epoch = [&](bool preserve_additional_bands) {
+        io::RINEXReader reader;
+        reader.setPreserveAdditionalFrequencyBands(preserve_additional_bands);
+        EXPECT_TRUE(reader.open(temp_path.string()));
+        io::RINEXReader::RINEXHeader header;
+        EXPECT_TRUE(reader.readHeader(header));
+        ObservationData epoch;
+        EXPECT_TRUE(reader.readObservationEpoch(epoch));
+        reader.close();
+        return epoch;
+    };
+
+    const SatelliteId galileo_9(GNSSSystem::Galileo, 9);
+    const ObservationData default_epoch = read_epoch(false);
+    EXPECT_EQ(default_epoch.getObservations(galileo_9).size(), 2U);
+    EXPECT_NE(default_epoch.getObservation(galileo_9, SignalType::GAL_E1), nullptr);
+    EXPECT_NE(default_epoch.getObservation(galileo_9, SignalType::GAL_E5A), nullptr);
+    EXPECT_EQ(default_epoch.getObservation(galileo_9, SignalType::GAL_E5B), nullptr);
+    EXPECT_EQ(default_epoch.getObservation(galileo_9, SignalType::GAL_E6), nullptr);
+
+    const ObservationData four_frequency_epoch = read_epoch(true);
+    EXPECT_EQ(four_frequency_epoch.getObservations(galileo_9).size(), 4U);
+    EXPECT_NE(four_frequency_epoch.getObservation(galileo_9, SignalType::GAL_E1), nullptr);
+    EXPECT_NE(four_frequency_epoch.getObservation(galileo_9, SignalType::GAL_E5A), nullptr);
+    EXPECT_NE(four_frequency_epoch.getObservation(galileo_9, SignalType::GAL_E5B), nullptr);
+    EXPECT_NE(four_frequency_epoch.getObservation(galileo_9, SignalType::GAL_E6), nullptr);
+
+    std::filesystem::remove(temp_path);
+}
