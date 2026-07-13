@@ -576,6 +576,19 @@ TEST(RTKLegacyCompatibilityStandaloneTest, MaxPostfixResidualRmsDefaultDisabled)
     EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_postfix_residual_rms, 0.0);
 }
 
+TEST(RTKLegacyCompatibilityStandaloneTest, DopplerFloatSeedDefaultDisabled) {
+    RTKProcessor processor;
+    EXPECT_FALSE(processor.getRTKConfig().use_doppler_float_seed);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().doppler_float_seed_max_age_s, 6.0);
+
+    auto config = processor.getRTKConfig();
+    config.use_doppler_float_seed = true;
+    config.doppler_float_seed_max_age_s = 3.0;
+    processor.setRTKConfig(config);
+    EXPECT_TRUE(processor.getRTKConfig().use_doppler_float_seed);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().doppler_float_seed_max_age_s, 3.0);
+}
+
 TEST(RTKLegacyCompatibilityStandaloneTest, MaxPostfixResidualRmsConfigurable) {
     RTKProcessor processor;
 
