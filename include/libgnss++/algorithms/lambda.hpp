@@ -27,4 +27,16 @@ using Eigen::MatrixXd;
 bool lambdaSearch(const VectorXd& float_amb, const MatrixXd& Q_amb,
                   VectorXd& fixed_amb, double& ratio);
 
+/**
+ * LAMBDA search returning both integer candidates used by the ratio test.
+ *
+ * This is useful for partial ambiguity resolution, where ambiguities that
+ * differ between the best and second-best candidates are removed before a
+ * retry.  lambdaSearch() remains the compatibility wrapper for callers that
+ * only need the best candidate.
+ */
+bool lambdaSearchCandidates(const VectorXd& float_amb, const MatrixXd& Q_amb,
+                            VectorXd& best_amb, VectorXd& second_amb,
+                            double& ratio);
+
 } // namespace libgnss

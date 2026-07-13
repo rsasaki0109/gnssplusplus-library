@@ -68,9 +68,9 @@ struct PPPEnvOverrides {
     // GNSS_PPP_MADOCA_QZSS_CLOCK: allow default QZSS ISB clock in coherent
     // MADOCA unless set exactly to "0". Default true.
     bool madoca_qzss_clock = true;
-    // GNSS_PPP_MADOCA_QZSS_PHASE: allow QZSS phase rows in MADOCA when set
-    // exactly to "1". Default false.
-    bool madoca_qzss_phase = false;
+    // GNSS_PPP_MADOCA_QZSS_PHASE: allow QZSS phase rows in coherent MADOCA.
+    // Default true for MADOCALIB parity; set exactly to "0" to opt out.
+    bool madoca_qzss_phase = true;
     // GNSS_PPP_MADOCA_QZSS_L5: prefer QZSS L1/L5 over L1/L2 in coherent
     // MADOCA when set exactly to "1". Default false while measured.
     bool madoca_qzss_l5 = false;

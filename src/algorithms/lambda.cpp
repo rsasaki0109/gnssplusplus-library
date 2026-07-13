@@ -149,10 +149,8 @@ static int search(int n, int m, const double* L, const double* D,
     return 0;
 }
 
-// Solve Z' * f = e for the best integer candidate only.
-// We only need the first candidate because the second-best solution is used
-// only for the ratio test in z-space (s[1]/s[0]), not for back-transform.
-static int solveBestZt(int n, const double* Z, const double* e, double* f) {
+// Back-transform one integer candidate from z-space by solving Z' * f = e.
+static int solveZt(int n, const double* Z, const double* e, double* f) {
     // Build Eigen matrices (column-major, matching RTKLIB storage)
     Eigen::Map<const Eigen::MatrixXd> Zm(Z, n, n);
     Eigen::MatrixXd Zt = Zm.transpose();
@@ -170,13 +168,21 @@ static int solveBestZt(int n, const double* Z, const double* e, double* f) {
 
 bool lambdaSearch(const VectorXd& float_amb, const MatrixXd& Q_amb,
                   VectorXd& fixed_amb, double& ratio) {
+    VectorXd second_amb;
+    return lambdaSearchCandidates(
+        float_amb, Q_amb, fixed_amb, second_amb, ratio);
+}
+
+bool lambdaSearchCandidates(const VectorXd& float_amb, const MatrixXd& Q_amb,
+                            VectorXd& best_amb, VectorXd& second_amb,
+                            double& ratio) {
     int n = float_amb.size();
     int m = 2;  // find 2 best solutions for ratio test
     if (n <= 0) return false;
 
     // Convert to column-major flat arrays (RTKLIB convention)
     std::vector<double> Q(n * n), L(n * n, 0.0), D(n), Z(n * n, 0.0);
-    std::vector<double> a(n), z(n), E(n * m), F(n), s(m);
+    std::vector<double> a(n), z(n), E(n * m), F(n * m), s(m);
 
     // Q: column-major
     for (int i = 0; i < n; ++i)
@@ -205,13 +211,20 @@ bool lambdaSearch(const VectorXd& float_amb, const MatrixXd& Q_amb,
     info = search(n, m, L.data(), D.data(), z.data(), E.data(), s.data());
     if (info != 0) return false;
 
-    // Only the best integer solution needs back-transform.
-    info = solveBestZt(n, Z.data(), E.data(), F.data());
-    if (info != 0) return false;
+    // Back-transform both candidates.  Their component-wise disagreement is
+    // the satellite exclusion signal used by MADOCALIB partial AR.
+    for (int candidate = 0; candidate < m; ++candidate) {
+        info = solveZt(n, Z.data(), E.data() + candidate * n,
+                       F.data() + candidate * n);
+        if (info != 0) return false;
+    }
 
-    // Extract best solution
-    fixed_amb.resize(n);
-    for (int i = 0; i < n; ++i) fixed_amb(i) = F[i];
+    best_amb.resize(n);
+    second_amb.resize(n);
+    for (int i = 0; i < n; ++i) {
+        best_amb(i) = F[i];
+        second_amb(i) = F[i + n];
+    }
 
     // Ratio test
     ratio = (s[0] > 0.0) ? s[1] / s[0] : 0.0;

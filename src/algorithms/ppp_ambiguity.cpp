@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <set>
 #include <vector>
@@ -367,15 +368,8 @@ bool PPPProcessor::resolveAmbiguitiesDecoupledIf(const ObservationData& obs,
 
 bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
                                              const NavigationData& nav) {
-    (void)nav;
     last_ar_ratio_ = 0.0;
     last_fixed_ambiguities_ = 0;
-    // Only attempt AR once the float has converged: a wide, ill-conditioned
-    // ambiguity covariance makes the LAMBDA integer search explore an enormous
-    // volume (effectively unbounded run time).
-    if (!converged_) {
-        return false;
-    }
     ++ar_stage_telemetry_.per_frequency_attempts;
     ar_stage_telemetry_.last_stage = "collect_candidates";
     ar_stage_telemetry_.last_satellite_candidates = 0;
@@ -400,6 +394,7 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
         int l2_index = -1;
         double lambda1 = 0.0;
         double lambda2 = 0.0;
+        double elevation = -M_PI_2;
         int wl_int = 0;
         bool wl_fixed = false;
     };
@@ -408,6 +403,12 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
         : ppp_config_.convergence_min_epochs;
     std::vector<Cand> cands;
     for (const auto& [sat, l1_index] : filter_state_.ambiguity_indices) {
+        // MADOCALIB gen_sat_sd excludes GLONASS from PPP-AR even when it is
+        // present in the float solution; its FDMA ambiguities must not create
+        // a separate reference group here.
+        if (sat.system == GNSSSystem::GLONASS) {
+            continue;
+        }
         if (observed_now.count(sat) == 0) {
             continue;
         }
@@ -436,6 +437,36 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
         c.l2_index = l2_it->second;
         c.lambda1 = lam1;
         c.lambda2 = lam2;
+
+        Vector3d satellite_position;
+        Vector3d satellite_velocity;
+        double satellite_clock = 0.0;
+        double satellite_clock_drift = 0.0;
+        if (!nav.calculateSatelliteState(
+                sat, obs.time, satellite_position, satellite_velocity,
+                satellite_clock, satellite_clock_drift)) {
+            continue;
+        }
+        if (ssr_products_loaded_) {
+            Vector3d orbit_correction;
+            double clock_correction = 0.0;
+            if (ssr_products_.interpolateCorrection(
+                    sat, obs.time, orbit_correction, clock_correction)) {
+                if (ssr_products_.orbitCorrectionsAreRac()) {
+                    orbit_correction = ssrRacToEcef(
+                        satellite_position, satellite_velocity, orbit_correction);
+                }
+                satellite_position += orbit_correction;
+            }
+        }
+        const Vector3d receiver_position =
+            filter_state_.state.segment(filter_state_.pos_index, 3);
+        const Vector3d line_of_sight = satellite_position - receiver_position;
+        if (line_of_sight.norm() <= 0.0 || receiver_position.norm() <= 0.0) {
+            continue;
+        }
+        c.elevation = std::asin(
+            line_of_sight.normalized().dot(receiver_position.normalized()));
         cands.push_back(c);
     }
     ar_stage_telemetry_.last_satellite_candidates = static_cast<int>(cands.size());
@@ -445,11 +476,17 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
         return false;
     }
 
-    // 2) Wide-lane integer per satellite, double-differenced against the first
-    //    candidate of each system. WL_s = x[L1]/lambda1 - x[L2]/lambda2 (cycles).
+    // 2) Wide-lane integer per satellite, double-differenced against the
+    //    highest-elevation candidate of each system.
+    //    WL_s = x[L1]/lambda1 - x[L2]/lambda2 (cycles).
     std::map<GNSSSystem, int> ref_of_system;
     for (size_t i = 0; i < cands.size(); ++i) {
-        ref_of_system.emplace(cands[i].sat.system, static_cast<int>(i));
+        const auto [it, inserted] =
+            ref_of_system.emplace(cands[i].sat.system, static_cast<int>(i));
+        if (!inserted &&
+            cands[i].elevation > cands[static_cast<size_t>(it->second)].elevation) {
+            it->second = static_cast<int>(i);
+        }
     }
     struct DdPair { int ref = -1; int sat = -1; int wl_int = 0; };
     std::vector<DdPair> wl_pairs;
@@ -511,6 +548,10 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
     MatrixXd Hwl = MatrixXd::Zero(nwl, nx);
     VectorXd vwl = VectorXd::Zero(nwl);
     MatrixXd Rwl = MatrixXd::Zero(nwl, nwl);
+    // Until the oracle's preceding extra-WL (L2/L3) stage is ported, retain a
+    // 0.10-cycle guard against over-constraining a marginal WL integer.  The
+    // pinned oracle uses this value for EWL and tightens ordinary WL to 0.01
+    // only after EWL has conditioned the extra-frequency states.
     constexpr double kWlConstraintSigmaCyc = 0.10;
     for (int k = 0; k < nwl; ++k) {
         const Cand& ref = cands[static_cast<size_t>(wl_pairs[static_cast<size_t>(k)].ref)];
@@ -542,28 +583,32 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
     // 4) Narrow-lane N1: LAMBDA on the L1 ambiguity double differences for the
     //    WL-fixed pairs, read from the (now WL-tightened) L1 states. Mirrors the
     //    oracle gen_sd_matrix_n1 (a = x[IB(s,0)]/lambda1 differenced).
-    //    Partial AR: cap the LAMBDA dimension at the lowest-variance pairs so the
-    //    integer search stays bounded (and only fix high-confidence ambiguities).
-    constexpr int kMaxN1Dim = 12;
-    constexpr double kMaxN1VarCyc2 = 0.25;  // include only pairs with N1 std < 0.5 cycle
-    auto n1_var_of = [&](int k) {
-        const Cand& rk = cands[static_cast<size_t>(wl_pairs[static_cast<size_t>(k)].ref)];
-        const Cand& sk = cands[static_cast<size_t>(wl_pairs[static_cast<size_t>(k)].sat)];
-        return filter_state_.covariance(rk.l1_index, rk.l1_index) / (rk.lambda1 * rk.lambda1) +
-               filter_state_.covariance(sk.l1_index, sk.l1_index) / (sk.lambda1 * sk.lambda1);
-    };
+    //    MADOCALIB gen_sd_matrix_n1 admits every pair that survived the WL
+    //    search.  Candidate reduction is performed only by the subsequent
+    //    ratio-driven partial-AR loop, not by a per-pair variance cutoff.
+    //    Its NL search starts only when the norm of the three position-state
+    //    standard deviations is below pos2-arthres1 (1.5 m in the pinned
+    //    oracle config).  This replaces the unrelated solution-stability gate,
+    //    while still protecting LAMBDA from an unbounded early covariance.
+    double position_std_norm_sq = 0.0;
+    for (int axis = 0; axis < 3; ++axis) {
+        const double variance = filter_state_.covariance(
+            filter_state_.pos_index + axis, filter_state_.pos_index + axis);
+        position_std_norm_sq += std::max(0.0, variance);
+    }
+    constexpr double kMaxPositionStdNormM = 1.5;
+    if (std::sqrt(position_std_norm_sq) >= kMaxPositionStdNormM) {
+        last_fixed_ambiguities_ = nwl;
+        ++ar_stage_telemetry_.wide_lane_only_epochs;
+        ar_stage_telemetry_.last_stage = "wide_lane_only_position_std_gate";
+        last_ar_wide_lane_only_ = true;
+        return false;
+    }
+
     std::vector<int> n1_sel;
     n1_sel.reserve(wl_pairs.size());
     for (int k = 0; k < nwl; ++k) {
-        if (n1_var_of(k) < kMaxN1VarCyc2) {
-            n1_sel.push_back(k);
-        }
-    }
-    // Keep only the lowest-variance pairs so the integer search stays bounded.
-    if (static_cast<int>(n1_sel.size()) > kMaxN1Dim) {
-        std::sort(n1_sel.begin(), n1_sel.end(),
-                  [&](int a, int b) { return n1_var_of(a) < n1_var_of(b); });
-        n1_sel.resize(kMaxN1Dim);
+        n1_sel.push_back(k);
     }
     if (static_cast<int>(n1_sel.size()) < ppp_config_.min_satellites_for_ar) {
         last_fixed_ambiguities_ = nwl;  // wide-lane already applied
@@ -573,56 +618,152 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
         last_ar_wide_lane_only_ = true;
         return false;
     }
-    const int nb = static_cast<int>(n1_sel.size());
-    ar_stage_telemetry_.last_n1_candidates = nb;
-    VectorXd n1_float = VectorXd::Zero(nb);
-    MatrixXd n1_cov = MatrixXd::Zero(nb, nb);
-    for (int k = 0; k < nb; ++k) {
-        const Cand& rk = cands[static_cast<size_t>(wl_pairs[static_cast<size_t>(n1_sel[static_cast<size_t>(k)])].ref)];
-        const Cand& sk = cands[static_cast<size_t>(wl_pairs[static_cast<size_t>(n1_sel[static_cast<size_t>(k)])].sat)];
-        n1_float(k) = filter_state_.state(rk.l1_index) / rk.lambda1 -
-                      filter_state_.state(sk.l1_index) / sk.lambda1;
-        for (int l = 0; l < nb; ++l) {
-            const Cand& rl = cands[static_cast<size_t>(wl_pairs[static_cast<size_t>(n1_sel[static_cast<size_t>(l)])].ref)];
-            const Cand& sl = cands[static_cast<size_t>(wl_pairs[static_cast<size_t>(n1_sel[static_cast<size_t>(l)])].sat)];
-            n1_cov(k, l) =
-                filter_state_.covariance(rk.l1_index, rl.l1_index) / (rk.lambda1 * rl.lambda1) -
-                filter_state_.covariance(rk.l1_index, sl.l1_index) / (rk.lambda1 * sl.lambda1) -
-                filter_state_.covariance(sk.l1_index, rl.l1_index) / (sk.lambda1 * rl.lambda1) +
-                filter_state_.covariance(sk.l1_index, sl.l1_index) / (sk.lambda1 * sl.lambda1);
-        }
-    }
-    if (env_overrides_.pfdump) {
-        for (int k = 0; k < nb; ++k) {
-            const Cand& rk = cands[static_cast<size_t>(wl_pairs[static_cast<size_t>(n1_sel[static_cast<size_t>(k)])].ref)];
-            const Cand& sk = cands[static_cast<size_t>(wl_pairs[static_cast<size_t>(n1_sel[static_cast<size_t>(k)])].sat)];
-            const double frac = n1_float(k) - std::round(n1_float(k));
-            std::cerr << "[PFN1-DD] " << rk.sat.toString() << "-" << sk.sat.toString()
-                      << " n1=" << n1_float(k) << " frac=" << frac
-                      << " sigma=" << std::sqrt(std::max(0.0, n1_cov(k, k))) << "\n";
-        }
-    }
-    VectorXd n1_fixed = VectorXd::Zero(nb);
+    constexpr int kMinN1Ambiguities = 4;
+    constexpr int kMaxPartialArIterations = 10;
+    constexpr double kDimensionThresholdFactors[] = {5.0, 5.0, 3.0, 2.0, 1.5};
+    VectorXd n1_fixed;
+    VectorXd n1_second;
     double ratio = 0.0;
-    if (!lambdaSearch(n1_float, n1_cov, n1_fixed, ratio) || !std::isfinite(ratio)) {
-        last_fixed_ambiguities_ = nwl;  // wide-lane already applied
-        ++ar_stage_telemetry_.wide_lane_only_epochs;
-        ++ar_stage_telemetry_.n1_lambda_failure_epochs;
-        ar_stage_telemetry_.last_stage = "wide_lane_only_lambda_failure";
-        last_ar_wide_lane_only_ = true;
-        return false;
+    double effective_threshold = ppp_config_.ar_ratio_threshold;
+    bool n1_accepted = false;
+    bool lambda_failed = false;
+
+    // MADOCALIB partial AR: when the ratio test rejects the full set, remove
+    // one non-reference satellite implicated by the disagreement between the
+    // first and second LAMBDA candidates, then retry.  QZSS and BDS IGSO are
+    // deliberately removed before the ordinary lowest-elevation candidate.
+    for (int iteration = 0; iteration < kMaxPartialArIterations; ++iteration) {
+        const int trial_nb = static_cast<int>(n1_sel.size());
+        if (trial_nb < kMinN1Ambiguities) {
+            break;
+        }
+
+        VectorXd n1_float = VectorXd::Zero(trial_nb);
+        MatrixXd n1_cov = MatrixXd::Zero(trial_nb, trial_nb);
+        for (int k = 0; k < trial_nb; ++k) {
+            const DdPair& pair_k =
+                wl_pairs[static_cast<size_t>(n1_sel[static_cast<size_t>(k)])];
+            const Cand& rk = cands[static_cast<size_t>(pair_k.ref)];
+            const Cand& sk = cands[static_cast<size_t>(pair_k.sat)];
+            n1_float(k) = filter_state_.state(rk.l1_index) / rk.lambda1 -
+                          filter_state_.state(sk.l1_index) / sk.lambda1;
+            for (int l = 0; l < trial_nb; ++l) {
+                const DdPair& pair_l =
+                    wl_pairs[static_cast<size_t>(n1_sel[static_cast<size_t>(l)])];
+                const Cand& rl = cands[static_cast<size_t>(pair_l.ref)];
+                const Cand& sl = cands[static_cast<size_t>(pair_l.sat)];
+                n1_cov(k, l) =
+                    filter_state_.covariance(rk.l1_index, rl.l1_index) /
+                        (rk.lambda1 * rl.lambda1) -
+                    filter_state_.covariance(rk.l1_index, sl.l1_index) /
+                        (rk.lambda1 * sl.lambda1) -
+                    filter_state_.covariance(sk.l1_index, rl.l1_index) /
+                        (sk.lambda1 * rl.lambda1) +
+                    filter_state_.covariance(sk.l1_index, sl.l1_index) /
+                        (sk.lambda1 * sl.lambda1);
+            }
+        }
+        if (env_overrides_.pfdump) {
+            for (int k = 0; k < trial_nb; ++k) {
+                const DdPair& pair =
+                    wl_pairs[static_cast<size_t>(n1_sel[static_cast<size_t>(k)])];
+                const Cand& rk = cands[static_cast<size_t>(pair.ref)];
+                const Cand& sk = cands[static_cast<size_t>(pair.sat)];
+                const double frac = n1_float(k) - std::round(n1_float(k));
+                std::cerr << "[PFN1-DD] " << rk.sat.toString() << "-"
+                          << sk.sat.toString() << " n1=" << n1_float(k)
+                          << " frac=" << frac << " sigma="
+                          << std::sqrt(std::max(0.0, n1_cov(k, k))) << "\n";
+            }
+        }
+
+        if (!lambdaSearchCandidates(
+                n1_float, n1_cov, n1_fixed, n1_second, ratio) ||
+            !std::isfinite(ratio)) {
+            lambda_failed = true;
+            break;
+        }
+
+        effective_threshold = ppp_config_.ar_ratio_threshold;
+        const int dimension_offset = trial_nb - kMinN1Ambiguities;
+        if (dimension_offset >= 0 && dimension_offset < 5) {
+            effective_threshold *= kDimensionThresholdFactors[dimension_offset];
+        }
+        int matching_candidates = 0;
+        for (int k = 0; k < trial_nb; ++k) {
+            if (std::abs(n1_fixed(k) - n1_second(k)) < 0.001) {
+                ++matching_candidates;
+            }
+        }
+        const double match_rate =
+            static_cast<double>(matching_candidates) / trial_nb;
+        if (match_rate > 0.90) {
+            effective_threshold *= 0.8;
+        }
+        if (match_rate < 0.10) {
+            effective_threshold = 99.99;
+        }
+        ar_stage_telemetry_.last_n1_candidates = trial_nb;
+        ar_stage_telemetry_.last_n1_ratio = ratio;
+        if (env_overrides_.pfdump) {
+            std::cerr << "[PFN1] iter=" << iteration << " nb=" << trial_nb
+                      << " ratio=" << ratio
+                      << " threshold=" << effective_threshold
+                      << " match_rate=" << match_rate << "\n";
+        }
+        if (ratio >= effective_threshold) {
+            n1_accepted = true;
+            break;
+        }
+
+        int exclude_position = -1;
+        double lowest_priority_elevation = std::numeric_limits<double>::infinity();
+        for (int k = 0; k < trial_nb; ++k) {
+            if (std::abs(n1_fixed(k) - n1_second(k)) < 0.001) {
+                continue;
+            }
+            const DdPair& pair =
+                wl_pairs[static_cast<size_t>(n1_sel[static_cast<size_t>(k)])];
+            const Cand& candidate = cands[static_cast<size_t>(pair.sat)];
+            double priority_elevation = candidate.elevation;
+            const bool prioritized = candidate.sat.system == GNSSSystem::QZSS ||
+                (candidate.sat.system == GNSSSystem::BeiDou &&
+                 candidate.sat.prn >= 38 && candidate.sat.prn <= 40);
+            if (prioritized) {
+                priority_elevation -= 0.5 * M_PI;
+            }
+            if (priority_elevation < lowest_priority_elevation) {
+                lowest_priority_elevation = priority_elevation;
+                exclude_position = k;
+            }
+        }
+        if (exclude_position < 0) {
+            break;
+        }
+        if (env_overrides_.pfdump) {
+            const DdPair& excluded_pair = wl_pairs[static_cast<size_t>(
+                n1_sel[static_cast<size_t>(exclude_position)])];
+            std::cerr << "[PFN1-PAR] excluded="
+                      << cands[static_cast<size_t>(excluded_pair.sat)].sat.toString()
+                      << " elevation="
+                      << cands[static_cast<size_t>(excluded_pair.sat)].elevation
+                      << "\n";
+        }
+        n1_sel.erase(n1_sel.begin() + exclude_position);
     }
-    ar_stage_telemetry_.last_n1_ratio = ratio;
-    if (env_overrides_.pfdump) {
-        std::cerr << "[PFN1] nb=" << nb << " ratio=" << ratio
-                  << " threshold=" << ppp_config_.ar_ratio_threshold << "\n";
-    }
-    if (ratio < ppp_config_.ar_ratio_threshold) {
+
+    const int nb = static_cast<int>(n1_sel.size());
+    if (!n1_accepted) {
         last_ar_ratio_ = ratio;
         last_fixed_ambiguities_ = nwl;
         ++ar_stage_telemetry_.wide_lane_only_epochs;
-        ++ar_stage_telemetry_.n1_ratio_rejection_epochs;
-        ar_stage_telemetry_.last_stage = "wide_lane_only_ratio_rejected";
+        if (lambda_failed) {
+            ++ar_stage_telemetry_.n1_lambda_failure_epochs;
+            ar_stage_telemetry_.last_stage = "wide_lane_only_lambda_failure";
+        } else {
+            ++ar_stage_telemetry_.n1_ratio_rejection_epochs;
+            ar_stage_telemetry_.last_stage = "wide_lane_only_ratio_rejected";
+        }
         last_ar_wide_lane_only_ = true;
         return false;
     }
@@ -632,7 +773,7 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
     MatrixXd Hn = MatrixXd::Zero(nb, nx);
     VectorXd vn = VectorXd::Zero(nb);
     MatrixXd Rn = MatrixXd::Zero(nb, nb);
-    constexpr double kN1ConstraintSigmaCyc = 0.03;
+    constexpr double kN1ConstraintSigmaCyc = 0.01;
     for (int k = 0; k < nb; ++k) {
         const Cand& rk = cands[static_cast<size_t>(wl_pairs[static_cast<size_t>(n1_sel[static_cast<size_t>(k)])].ref)];
         const Cand& sk = cands[static_cast<size_t>(wl_pairs[static_cast<size_t>(n1_sel[static_cast<size_t>(k)])].sat)];
@@ -659,9 +800,16 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
     filter_state_.covariance =
         0.5 * (filter_state_.covariance + filter_state_.covariance.transpose());
 
-    for (const auto& p : wl_pairs) {
-        ambiguity_states_[cands[static_cast<size_t>(p.ref)].sat].is_fixed = true;
-        ambiguity_states_[cands[static_cast<size_t>(p.sat)].sat].is_fixed = true;
+    for (const int selected : n1_sel) {
+        const DdPair& pair = wl_pairs[static_cast<size_t>(selected)];
+        auto& reference_state =
+            ambiguity_states_[cands[static_cast<size_t>(pair.ref)].sat];
+        auto& satellite_state =
+            ambiguity_states_[cands[static_cast<size_t>(pair.sat)].sat];
+        reference_state.is_fixed = true;
+        reference_state.nl_is_fixed = true;
+        satellite_state.is_fixed = true;
+        satellite_state.nl_is_fixed = true;
     }
     last_ar_ratio_ = ratio;
     last_fixed_ambiguities_ = nb;
