@@ -136,6 +136,28 @@ Exit: after warm-up, at least one epoch reaches the per-frequency ambiguity
 candidate stage; telemetry distinguishes warm-up, horizontal, vertical, and
 candidate-stage rejection; default PPP/CLAS/MADOCA tests do not regress.
 
+#### M1 implementation evidence (2026-07-13)
+
+The native convergence window now reports the legacy ECEF 3D deviation plus
+local horizontal and vertical deviations.  `legacy-3d` remains the default, so
+existing admission behavior is unchanged; `local-enu` is an explicit diagnostic
+policy with separate horizontal and vertical thresholds.
+
+On the pinned MIZU 120-input-epoch smoke (118 published solutions), the legacy
+window reached maxima of 1.17008 m ECEF 3D, 0.660907 m horizontal, and 1.15825 m
+vertical and did not admit AR.  The strict 0.10 m horizontal / 0.20 m vertical
+policy also did not admit AR.  A bounded threshold sweep reached the native
+per-frequency resolver at 0.75 m horizontal / 1.25 m vertical (1200 s) and at
+1.50 m / 2.00 m (1080 s); these relaxed values are evidence probes, not new
+defaults.
+
+The 0.75 m / 1.25 m probe produced 78 resolver attempts.  All 78 stopped at
+`wide_lane_only_insufficient_n1`; zero reached a complete N1 integer fix.  The
+current solver nevertheless published those 78 epochs as `PPP_FIXED`.  M1
+therefore proves resolver reachability and identifies the exact next boundary:
+M2 must separate wide-lane-only updates from complete N1 Fix admission before
+any native Fix-rate or trajectory-parity claim is accepted.
+
 ### M2 -- Port `exec_pppar` ambiguity behavior
 
 - Compare ambiguity eligibility, frequency pairs, datum/reference selection,

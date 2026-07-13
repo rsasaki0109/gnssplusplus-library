@@ -473,6 +473,37 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
     return equation;
 }
 
+PPPConvergenceWindowMetrics evaluatePPPConvergenceWindow(
+    const std::vector<Vector3d>& positions_ecef) {
+    PPPConvergenceWindowMetrics metrics;
+    if (positions_ecef.empty()) {
+        return metrics;
+    }
+
+    Vector3d mean = Vector3d::Zero();
+    for (const auto& position : positions_ecef) {
+        mean += position;
+    }
+    mean /= static_cast<double>(positions_ecef.size());
+
+    double latitude = 0.0;
+    double longitude = 0.0;
+    double height = 0.0;
+    ecef2geodetic(mean, latitude, longitude, height);
+    (void)height;
+
+    for (const auto& position : positions_ecef) {
+        const Vector3d delta_ecef = position - mean;
+        const Vector3d delta_enu = ecef2enu(delta_ecef, latitude, longitude);
+        metrics.max_ecef_3d_m = std::max(metrics.max_ecef_3d_m, delta_ecef.norm());
+        metrics.max_horizontal_m =
+            std::max(metrics.max_horizontal_m, delta_enu.head<2>().norm());
+        metrics.max_vertical_m =
+            std::max(metrics.max_vertical_m, std::abs(delta_enu.z()));
+    }
+    return metrics;
+}
+
 void PPPProcessor::checkConvergence(const GNSSTime& current_time) {
     if (converged_) {
         return;
@@ -483,6 +514,14 @@ void PPPProcessor::checkConvergence(const GNSSTime& current_time) {
         static_cast<size_t>(ppp_config_.convergence_min_epochs);
     convergence_telemetry_.position_deviation_threshold_m =
         ppp_config_.convergence_threshold_horizontal;
+    convergence_telemetry_.horizontal_position_deviation_threshold_m =
+        ppp_config_.convergence_threshold_horizontal;
+    convergence_telemetry_.vertical_position_deviation_threshold_m =
+        ppp_config_.convergence_threshold_vertical;
+    convergence_telemetry_.policy =
+        ppp_config_.convergence_policy == ppp_shared::ConvergencePolicy::LOCAL_ENU_COMPONENTS
+            ? "local-enu"
+            : "legacy-3d";
 
     recent_positions_.push_back(filter_state_.state.segment(filter_state_.pos_index, 3));
     if (recent_positions_.size() > static_cast<size_t>(ppp_config_.convergence_min_epochs)) {
@@ -496,25 +535,44 @@ void PPPProcessor::checkConvergence(const GNSSTime& current_time) {
         return;
     }
 
-    Vector3d mean = Vector3d::Zero();
-    for (const auto& position : recent_positions_) {
-        mean += position;
-    }
-    mean /= static_cast<double>(recent_positions_.size());
+    const PPPConvergenceWindowMetrics metrics =
+        evaluatePPPConvergenceWindow(recent_positions_);
+    convergence_telemetry_.max_position_deviation_m = metrics.max_ecef_3d_m;
+    convergence_telemetry_.max_horizontal_position_deviation_m =
+        metrics.max_horizontal_m;
+    convergence_telemetry_.max_vertical_position_deviation_m = metrics.max_vertical_m;
 
-    double max_deviation = 0.0;
-    for (const auto& position : recent_positions_) {
-        max_deviation = std::max(max_deviation, (position - mean).norm());
-    }
-    convergence_telemetry_.max_position_deviation_m = max_deviation;
+    const bool horizontal_stable =
+        metrics.max_horizontal_m < ppp_config_.convergence_threshold_horizontal;
+    const bool vertical_stable =
+        metrics.max_vertical_m < ppp_config_.convergence_threshold_vertical;
+    const bool legacy_stable =
+        metrics.max_ecef_3d_m < ppp_config_.convergence_threshold_horizontal;
+    const bool local_enu_policy =
+        ppp_config_.convergence_policy == ppp_shared::ConvergencePolicy::LOCAL_ENU_COMPONENTS;
+    const bool stable = local_enu_policy
+        ? horizontal_stable && vertical_stable
+        : legacy_stable;
 
-    if (max_deviation < ppp_config_.convergence_threshold_horizontal) {
+    if (stable) {
         converged_ = true;
         convergence_time_ = current_time - convergence_start_time_;
         convergence_telemetry_.gate_reason = "converged";
     } else {
         ++convergence_telemetry_.unstable_position_epochs;
-        convergence_telemetry_.gate_reason = "position_deviation";
+        if (local_enu_policy && !horizontal_stable) {
+            ++convergence_telemetry_.unstable_horizontal_epochs;
+        }
+        if (local_enu_policy && !vertical_stable) {
+            ++convergence_telemetry_.unstable_vertical_epochs;
+        }
+        if (!local_enu_policy) {
+            convergence_telemetry_.gate_reason = "position_deviation";
+        } else if (!horizontal_stable) {
+            convergence_telemetry_.gate_reason = "horizontal_position_deviation";
+        } else {
+            convergence_telemetry_.gate_reason = "vertical_position_deviation";
+        }
     }
 }
 

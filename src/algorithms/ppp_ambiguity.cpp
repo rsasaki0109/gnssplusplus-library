@@ -375,6 +375,12 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
     if (!converged_) {
         return false;
     }
+    ++ar_stage_telemetry_.per_frequency_attempts;
+    ar_stage_telemetry_.last_stage = "collect_candidates";
+    ar_stage_telemetry_.last_satellite_candidates = 0;
+    ar_stage_telemetry_.last_wide_lane_pairs = 0;
+    ar_stage_telemetry_.last_n1_candidates = 0;
+    ar_stage_telemetry_.last_n1_ratio = 0.0;
 
     // Restrict AR to satellites observed this epoch (the persistent ambiguity
     // map accumulates set satellites whose stale states must not enter the DD).
@@ -431,7 +437,10 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
         c.lambda2 = lam2;
         cands.push_back(c);
     }
+    ar_stage_telemetry_.last_satellite_candidates = static_cast<int>(cands.size());
     if (static_cast<int>(cands.size()) < ppp_config_.min_satellites_for_ar) {
+        ++ar_stage_telemetry_.insufficient_satellite_epochs;
+        ar_stage_telemetry_.last_stage = "insufficient_satellites";
         return false;
     }
 
@@ -488,8 +497,11 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
                   << " mean_frac=" << (wl_fix_count ? wl_frac_sum / wl_fix_count : 0.0) << "\n";
     }
     if (wl_pairs.empty()) {
+        ++ar_stage_telemetry_.no_wide_lane_epochs;
+        ar_stage_telemetry_.last_stage = "no_wide_lane";
         return false;
     }
+    ar_stage_telemetry_.last_wide_lane_pairs = static_cast<int>(wl_pairs.size());
 
     // 3) Apply the fixed wide-lane integers as a batched Kalman pseudo-measurement
     //    (cycles). Tight but not rigid so a wrong WL does not lock the filter.
@@ -554,9 +566,13 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
     }
     if (static_cast<int>(n1_sel.size()) < ppp_config_.min_satellites_for_ar) {
         last_fixed_ambiguities_ = nwl;  // wide-lane already applied
+        ++ar_stage_telemetry_.wide_lane_only_epochs;
+        ar_stage_telemetry_.last_n1_candidates = static_cast<int>(n1_sel.size());
+        ar_stage_telemetry_.last_stage = "wide_lane_only_insufficient_n1";
         return true;
     }
     const int nb = static_cast<int>(n1_sel.size());
+    ar_stage_telemetry_.last_n1_candidates = nb;
     VectorXd n1_float = VectorXd::Zero(nb);
     MatrixXd n1_cov = MatrixXd::Zero(nb, nb);
     for (int k = 0; k < nb; ++k) {
@@ -588,8 +604,12 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
     double ratio = 0.0;
     if (!lambdaSearch(n1_float, n1_cov, n1_fixed, ratio) || !std::isfinite(ratio)) {
         last_fixed_ambiguities_ = nwl;  // wide-lane already applied
+        ++ar_stage_telemetry_.wide_lane_only_epochs;
+        ++ar_stage_telemetry_.n1_lambda_failure_epochs;
+        ar_stage_telemetry_.last_stage = "wide_lane_only_lambda_failure";
         return true;
     }
+    ar_stage_telemetry_.last_n1_ratio = ratio;
     if (env_overrides_.pfdump) {
         std::cerr << "[PFN1] nb=" << nb << " ratio=" << ratio
                   << " threshold=" << ppp_config_.ar_ratio_threshold << "\n";
@@ -597,6 +617,9 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
     if (ratio < ppp_config_.ar_ratio_threshold) {
         last_ar_ratio_ = ratio;
         last_fixed_ambiguities_ = nwl;
+        ++ar_stage_telemetry_.wide_lane_only_epochs;
+        ++ar_stage_telemetry_.n1_ratio_rejection_epochs;
+        ar_stage_telemetry_.last_stage = "wide_lane_only_ratio_rejected";
         return true;
     }
 
@@ -621,6 +644,8 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
     const MatrixXd Sn_inv = Sn.ldlt().solve(MatrixXd::Identity(nb, nb));
     if (!Sn_inv.allFinite()) {
         last_fixed_ambiguities_ = nwl;
+        ++ar_stage_telemetry_.wide_lane_only_epochs;
+        ar_stage_telemetry_.last_stage = "wide_lane_only_n1_update_failure";
         return true;
     }
     const MatrixXd Kn = HPn.transpose() * Sn_inv;  // nx x nb
@@ -635,6 +660,8 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
     }
     last_ar_ratio_ = ratio;
     last_fixed_ambiguities_ = nb;
+    ++ar_stage_telemetry_.n1_fixed_epochs;
+    ar_stage_telemetry_.last_stage = "n1_fixed";
     return true;
 }
 

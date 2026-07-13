@@ -41,6 +41,9 @@ struct Options {
     std::string kml_path;
     int max_epochs = 0;
     int convergence_min_epochs = 20;
+    std::string convergence_policy = "legacy-3d";
+    double convergence_threshold_horizontal = 0.1;
+    double convergence_threshold_vertical = 0.2;
     double ssr_step_seconds = 1.0;
     bool estimate_troposphere = true;
     bool estimate_ionosphere = false;
@@ -124,6 +127,12 @@ void printUsage(const char* program_name) {
         << "  --max-epochs <count>     Limit processed epochs (default: all)\n"
         << "  --convergence-min-epochs <count>\n"
         << "                          Minimum epochs before PPP convergence/AR checks (default: 20)\n"
+        << "  --convergence-policy <legacy-3d|local-enu>\n"
+        << "                          Convergence metric policy (default: legacy-3d)\n"
+        << "  --convergence-threshold-horizontal <m>\n"
+        << "                          Horizontal threshold for local-enu policy (default: 0.1)\n"
+        << "  --convergence-threshold-vertical <m>\n"
+        << "                          Absolute Up threshold for local-enu policy (default: 0.2)\n"
         << "  --no-estimate-troposphere\n"
         << "                          Disable zenith troposphere estimation\n"
         << "  --estimate-troposphere  Enable zenith troposphere estimation (default)\n"
@@ -291,6 +300,12 @@ Options parseArguments(int argc, char* argv[]) {
             options.max_epochs = std::stoi(argv[++i]);
         } else if (arg == "--convergence-min-epochs" && i + 1 < argc) {
             options.convergence_min_epochs = std::stoi(argv[++i]);
+        } else if (arg == "--convergence-policy" && i + 1 < argc) {
+            options.convergence_policy = argv[++i];
+        } else if (arg == "--convergence-threshold-horizontal" && i + 1 < argc) {
+            options.convergence_threshold_horizontal = std::stod(argv[++i]);
+        } else if (arg == "--convergence-threshold-vertical" && i + 1 < argc) {
+            options.convergence_threshold_vertical = std::stod(argv[++i]);
         } else if (arg == "--ssr-step-seconds" && i + 1 < argc) {
             options.ssr_step_seconds = std::stod(argv[++i]);
         } else if (arg == "--no-estimate-troposphere") {
@@ -432,6 +447,16 @@ Options parseArguments(int argc, char* argv[]) {
     }
     if (options.convergence_min_epochs <= 0) {
         argumentError("--convergence-min-epochs must be positive", argv[0]);
+    }
+    if (options.convergence_policy != "legacy-3d" &&
+        options.convergence_policy != "local-enu") {
+        argumentError("--convergence-policy must be one of: legacy-3d, local-enu", argv[0]);
+    }
+    if (options.convergence_threshold_horizontal <= 0.0) {
+        argumentError("--convergence-threshold-horizontal must be positive", argv[0]);
+    }
+    if (options.convergence_threshold_vertical <= 0.0) {
+        argumentError("--convergence-threshold-vertical must be positive", argv[0]);
     }
     if (options.ar_ratio_threshold <= 0.0) {
         argumentError("--ar-ratio-threshold must be positive", argv[0]);
@@ -931,6 +956,14 @@ int main(int argc, char* argv[]) {
         }
         ppp_config.enable_ambiguity_resolution = options.enable_ar;
         ppp_config.convergence_min_epochs = options.convergence_min_epochs;
+        ppp_config.convergence_policy =
+            options.convergence_policy == "local-enu"
+                ? libgnss::ppp_shared::ConvergencePolicy::LOCAL_ENU_COMPONENTS
+                : libgnss::ppp_shared::ConvergencePolicy::LEGACY_ECEF_3D;
+        ppp_config.convergence_threshold_horizontal =
+            options.convergence_threshold_horizontal;
+        ppp_config.convergence_threshold_vertical =
+            options.convergence_threshold_vertical;
         ppp_config.ar_ratio_threshold = options.ar_ratio_threshold;
         using ARMethod = libgnss::PPPProcessor::PPPConfig::ARMethod;
         if (options.ar_method == "iflc") {
@@ -1201,6 +1234,7 @@ int main(int argc, char* argv[]) {
 
         const auto stats = processor.getStats();
         const auto& convergence = processor.getConvergenceTelemetry();
+        const auto& ar_stage = processor.getARStageTelemetry();
         const double ppp_solution_rate =
             valid_solutions > 0 ?
                 100.0 * static_cast<double>(ppp_float_solutions + ppp_fixed_solutions) /
@@ -1326,13 +1360,47 @@ int main(int argc, char* argv[]) {
                     << convergence.insufficient_history_epochs << ",\n"
                     << "  \"convergence_unstable_position_epochs\": "
                     << convergence.unstable_position_epochs << ",\n"
+                    << "  \"convergence_unstable_horizontal_epochs\": "
+                    << convergence.unstable_horizontal_epochs << ",\n"
+                    << "  \"convergence_unstable_vertical_epochs\": "
+                    << convergence.unstable_vertical_epochs << ",\n"
                     << "  \"convergence_window_epochs\": " << convergence.window_epochs << ",\n"
                     << "  \"convergence_required_window_epochs\": "
                     << convergence.required_window_epochs << ",\n"
                     << "  \"convergence_max_position_deviation_m\": "
                     << convergence.max_position_deviation_m << ",\n"
+                    << "  \"convergence_max_horizontal_position_deviation_m\": "
+                    << convergence.max_horizontal_position_deviation_m << ",\n"
+                    << "  \"convergence_max_vertical_position_deviation_m\": "
+                    << convergence.max_vertical_position_deviation_m << ",\n"
                     << "  \"convergence_position_deviation_threshold_m\": "
                     << convergence.position_deviation_threshold_m << ",\n"
+                    << "  \"convergence_horizontal_position_deviation_threshold_m\": "
+                    << convergence.horizontal_position_deviation_threshold_m << ",\n"
+                    << "  \"convergence_vertical_position_deviation_threshold_m\": "
+                    << convergence.vertical_position_deviation_threshold_m << ",\n"
+                    << "  \"convergence_policy\": \"" << convergence.policy << "\",\n"
+                    << "  \"ar_stage_last\": \"" << jsonEscape(ar_stage.last_stage) << "\",\n"
+                    << "  \"ar_per_frequency_attempts\": "
+                    << ar_stage.per_frequency_attempts << ",\n"
+                    << "  \"ar_insufficient_satellite_epochs\": "
+                    << ar_stage.insufficient_satellite_epochs << ",\n"
+                    << "  \"ar_no_wide_lane_epochs\": "
+                    << ar_stage.no_wide_lane_epochs << ",\n"
+                    << "  \"ar_wide_lane_only_epochs\": "
+                    << ar_stage.wide_lane_only_epochs << ",\n"
+                    << "  \"ar_n1_lambda_failure_epochs\": "
+                    << ar_stage.n1_lambda_failure_epochs << ",\n"
+                    << "  \"ar_n1_ratio_rejection_epochs\": "
+                    << ar_stage.n1_ratio_rejection_epochs << ",\n"
+                    << "  \"ar_n1_fixed_epochs\": " << ar_stage.n1_fixed_epochs << ",\n"
+                    << "  \"ar_last_satellite_candidates\": "
+                    << ar_stage.last_satellite_candidates << ",\n"
+                    << "  \"ar_last_wide_lane_pairs\": "
+                    << ar_stage.last_wide_lane_pairs << ",\n"
+                    << "  \"ar_last_n1_candidates\": "
+                    << ar_stage.last_n1_candidates << ",\n"
+                    << "  \"ar_last_n1_ratio\": " << ar_stage.last_n1_ratio << ",\n"
                     << "  \"average_processing_time_ms\": " << stats.average_processing_time_ms << "\n"
                     << "}\n";
         }

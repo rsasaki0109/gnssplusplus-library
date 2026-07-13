@@ -1922,6 +1922,7 @@ TEST(PPPTest, ProcessorFixesSyntheticAmbiguitiesWithPreciseProducts) {
     EXPECT_GE(convergence.evaluated_epochs, 4u);
     EXPECT_EQ(convergence.required_window_epochs, 4u);
     EXPECT_EQ(convergence.position_deviation_threshold_m, 0.2);
+    EXPECT_EQ(convergence.policy, "legacy-3d");
     EXPECT_NE(convergence.gate_reason, "not_evaluated");
     if (saw_fixed_solution) {
         EXPECT_GE(best_fixed_ambiguities, 1);
@@ -1930,4 +1931,21 @@ TEST(PPPTest, ProcessorFixesSyntheticAmbiguitiesWithPreciseProducts) {
 
     std::filesystem::remove(sp3_path);
     std::filesystem::remove(clk_path);
+}
+
+TEST(PPPTest, ConvergenceWindowReportsEcefHorizontalAndVerticalComponents) {
+    const double latitude = 35.0 * M_PI / 180.0;
+    const double longitude = 139.0 * M_PI / 180.0;
+    const Vector3d center = geodetic2ecef(latitude, longitude, 45.0);
+    const Vector3d offset_enu(3.0, 4.0, 2.0);
+    const std::vector<Vector3d> positions = {
+        center + enu2ecef(offset_enu, latitude, longitude),
+        center - enu2ecef(offset_enu, latitude, longitude),
+    };
+
+    const PPPConvergenceWindowMetrics metrics =
+        evaluatePPPConvergenceWindow(positions);
+    EXPECT_NEAR(metrics.max_ecef_3d_m, std::sqrt(29.0), 1e-6);
+    EXPECT_NEAR(metrics.max_horizontal_m, 5.0, 1e-6);
+    EXPECT_NEAR(metrics.max_vertical_m, 2.0, 1e-6);
 }

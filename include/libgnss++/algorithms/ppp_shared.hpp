@@ -10,6 +10,11 @@
 
 namespace libgnss::ppp_shared {
 
+enum class ConvergencePolicy {
+    LEGACY_ECEF_3D,
+    LOCAL_ENU_COMPONENTS,
+};
+
 /// Check if PPP debug output is enabled via GNSS_PPP_DEBUG.
 inline bool pppDebugEnabled() {
     return pppEnvOverrides().debug;
@@ -269,6 +274,7 @@ struct PPPConfig {
     bool apply_relativity = true;
 
     // Convergence criteria
+    ConvergencePolicy convergence_policy = ConvergencePolicy::LEGACY_ECEF_3D;
     double convergence_threshold_horizontal = 0.1;
     double convergence_threshold_vertical = 0.2;
     int convergence_min_epochs = 20;
