@@ -47,6 +47,25 @@ TEST(RTKArSelectionTest, BuildsPreferredConstellationSubsets) {
     EXPECT_EQ(subsets[2], (std::vector<int>{0, 1, 3}));
 }
 
+TEST(RTKArSelectionTest, BuildsPaperConstellationFallbackSequence) {
+    const std::vector<rtk_ar_selection::PairDescriptor> pairs = {
+        {GNSSSystem::GPS, 0.01},
+        {GNSSSystem::QZSS, 0.02},
+        {GNSSSystem::Galileo, 0.03},
+        {GNSSSystem::BeiDou, 0.04},
+        {GNSSSystem::GLONASS, 0.05},
+    };
+
+    const auto subsets =
+        rtk_ar_selection::buildPaperConstellationFallbackSubsets(pairs);
+    ASSERT_EQ(subsets.size(), 5U);
+    EXPECT_EQ(subsets[0], (std::vector<int>{0, 1, 2, 3}));  // GQEB
+    EXPECT_EQ(subsets[1], (std::vector<int>{0, 1, 2, 4}));  // GQER
+    EXPECT_EQ(subsets[2], (std::vector<int>{0, 1, 2}));     // GQE
+    EXPECT_EQ(subsets[3], (std::vector<int>{0, 1, 3}));     // GQB
+    EXPECT_EQ(subsets[4], (std::vector<int>{0, 1}));        // GQ
+}
+
 TEST(RTKArSelectionTest, BuildsProgressiveWorstVarianceDropSubsets) {
     const std::vector<rtk_ar_selection::PairDescriptor> pairs = {
         {GNSSSystem::GPS, 0.01},

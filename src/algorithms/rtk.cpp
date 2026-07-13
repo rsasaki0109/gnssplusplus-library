@@ -3203,8 +3203,11 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
         }
 
         const std::vector<std::vector<int>> preferred_subsets =
-            rtk_ar_selection::buildPreferredSubsets(descriptors);
+            rtk_config_.enable_paper_constellation_fallback_ar
+                ? rtk_ar_selection::buildPaperConstellationFallbackSubsets(descriptors)
+                : rtk_ar_selection::buildPreferredSubsets(descriptors);
         const bool compare_preferred_subsets =
+            rtk_config_.enable_paper_constellation_fallback_ar ||
             usesGlonassAutocal(rtk_config_) ||
             std::any_of(dd_pairs.begin(), dd_pairs.end(), [](const DDPair& pair) {
                 return pair.ref_sat.system == GNSSSystem::GLONASS ||

@@ -20,6 +20,11 @@ std::vector<int> filterPairsByRelativeVariance(const std::vector<PairDescriptor>
 
 std::vector<std::vector<int>> buildPreferredSubsets(const std::vector<PairDescriptor>& pairs);
 
+// Okada/Sasaki/Ando constellation fallback after the full GQEBR set:
+// GQEB -> GQER -> GQE -> GQB -> GQ. QZSS is retained with GPS.
+std::vector<std::vector<int>> buildPaperConstellationFallbackSubsets(
+    const std::vector<PairDescriptor>& pairs);
+
 std::vector<std::vector<int>> buildProgressiveVarianceDropSubsets(
     const std::vector<PairDescriptor>& pairs,
     int minimum_pairs = 4,
