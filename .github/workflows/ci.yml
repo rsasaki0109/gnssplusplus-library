@@ -629,30 +629,38 @@ jobs:
             --antex "$ROOT/sample_data/data/igs20.atx" \
             --max-epochs 120 \
             --emit-epoch-time \
-            --out native_pppar_wl_only_smoke.pos \
-            --summary-json native_pppar_wl_only_smoke.json \
+            --out native_pppar_partial_ar_smoke.pos \
+            --summary-json native_pppar_partial_ar_smoke.json \
             --quiet
-          grep -q '"convergence_policy": "local-enu"' native_pppar_wl_only_smoke.json
-          grep -q '"ar_n1_fixed_epochs": 0' native_pppar_wl_only_smoke.json
-          grep -q '"ppp_fixed_solutions": 0' native_pppar_wl_only_smoke.json
-          wl_only="$(python3 -c 'import json; print(json.load(open("native_pppar_wl_only_smoke.json"))["ar_wide_lane_only_epochs"])')"
+          grep -q '"convergence_policy": "local-enu"' native_pppar_partial_ar_smoke.json
+          n1_fixed="$(python3 -c 'import json; print(json.load(open("native_pppar_partial_ar_smoke.json"))["ar_n1_fixed_epochs"])')"
+          fixed_solutions="$(python3 -c 'import json; print(json.load(open("native_pppar_partial_ar_smoke.json"))["ppp_fixed_solutions"])')"
+          test "$n1_fixed" -gt 0
+          test "$fixed_solutions" -eq "$n1_fixed"
+          wl_only="$(python3 -c 'import json; print(json.load(open("native_pppar_partial_ar_smoke.json"))["ar_wide_lane_only_epochs"])')"
           test "$wl_only" -gt 0
-          valid="$(python3 -c 'import json; print(json.load(open("native_pppar_wl_only_smoke.json"))["valid_solutions"])')"
-          float_solutions="$(python3 -c 'import json; print(json.load(open("native_pppar_wl_only_smoke.json"))["ppp_float_solutions"])')"
+          valid="$(python3 -c 'import json; print(json.load(open("native_pppar_partial_ar_smoke.json"))["valid_solutions"])')"
+          float_solutions="$(python3 -c 'import json; print(json.load(open("native_pppar_partial_ar_smoke.json"))["ppp_float_solutions"])')"
           test "$valid" -gt 0
-          test "$float_solutions" -eq "$valid"
-          rows="$(awk '$0 !~ /^%/ && NF > 0 {n++} END {print n+0}' native_pppar_wl_only_smoke.pos)"
+          test "$((float_solutions + fixed_solutions))" -eq "$valid"
+          rows="$(awk '$0 !~ /^%/ && NF > 0 {n++} END {print n+0}' native_pppar_partial_ar_smoke.pos)"
           test "$rows" -eq "$valid"
-          non_float="$(awk '$0 !~ /^%/ && NF > 0 && $9 != 5 {n++} END {print n+0}' native_pppar_wl_only_smoke.pos)"
-          test "$non_float" -eq 0
+          fixed_rows="$(awk '$0 !~ /^%/ && NF > 0 && $9 == 6 {n++} END {print n+0}' native_pppar_partial_ar_smoke.pos)"
+          test "$fixed_rows" -eq "$fixed_solutions"
+          unexpected_status="$(awk '$0 !~ /^%/ && NF > 0 && $9 != 5 && $9 != 6 {n++} END {print n+0}' native_pppar_partial_ar_smoke.pos)"
+          test "$unexpected_status" -eq 0
           python3 "${GITHUB_WORKSPACE}/scripts/analysis/madoca_solution_diff.py" \
             madocalib_pppar_smoke.pos \
-            native_pppar_smoke.pos \
+            native_pppar_partial_ar_smoke.pos \
             --reference-ecef -3857167.6484 3108694.9138 4004041.6876 \
             --base-label bridge-pppar \
-            --candidate-label native-per-freq \
+            --candidate-label native-per-freq-partial-ar \
             --json-out madoca_pppar_solution_diff.json \
             --match-csv madoca_pppar_solution_matches.csv
+          matched_epochs="$(awk -F, 'NR > 1 {n++} END {print n+0}' madoca_pppar_solution_matches.csv)"
+          test "$matched_epochs" -gt 0
+          wrong_fixes="$(awk -F, 'NR > 1 && $6 == 6 && $5 != 1 {n++} END {print n+0}' madoca_pppar_solution_matches.csv)"
+          test "$wrong_fixes" -eq 0
 
     - name: Upload MADOCA PPP-AR baseline
       if: always()
@@ -664,8 +672,8 @@ jobs:
           build-madoca-parity/madocalib_pppar_smoke.json
           build-madoca-parity/native_pppar_smoke.pos
           build-madoca-parity/native_pppar_smoke.json
-          build-madoca-parity/native_pppar_wl_only_smoke.pos
-          build-madoca-parity/native_pppar_wl_only_smoke.json
+          build-madoca-parity/native_pppar_partial_ar_smoke.pos
+          build-madoca-parity/native_pppar_partial_ar_smoke.json
           build-madoca-parity/madoca_pppar_solution_diff.json
           build-madoca-parity/madoca_pppar_solution_matches.csv
         if-no-files-found: warn
