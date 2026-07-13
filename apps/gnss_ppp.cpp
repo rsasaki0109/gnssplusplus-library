@@ -957,6 +957,14 @@ int main(int argc, char* argv[]) {
             ppp_config.code_phase_error_ratio_l1 = 300.0;
             ppp_config.code_phase_error_ratio_l2 = 300.0;
         }
+        if (!options.madoca_l6_paths.empty() && per_frequency_ar) {
+            // MADOCALIB initializes each per-frequency ambiguity immediately
+            // before ppp_res() and admits that epoch's carrier-phase row.  The
+            // shared native default waits for one completed lifecycle update,
+            // making the first usable MADOCA epoch code-only and shifting the
+            // float-state trajectory by one epoch.
+            ppp_config.phase_measurement_min_lock_count = 0;
+        }
         ppp_config.enable_ambiguity_resolution = options.enable_ar;
         ppp_config.convergence_min_epochs = options.convergence_min_epochs;
         ppp_config.convergence_policy =
@@ -1308,6 +1316,8 @@ int main(int argc, char* argv[]) {
                     << (ppp_config.estimate_ionosphere ? "true" : "false") << ",\n"
                     << "  \"use_ionosphere_free\": "
                     << (ppp_config.use_ionosphere_free ? "true" : "false") << ",\n"
+                    << "  \"phase_measurement_min_lock_count\": "
+                    << ppp_config.phase_measurement_min_lock_count << ",\n"
                     << "  \"ar_ratio_threshold\": " << options.ar_ratio_threshold << ",\n"
                     << "  \"processed_epochs\": " << processed_epochs << ",\n"
                     << "  \"valid_solutions\": " << valid_solutions << ",\n"

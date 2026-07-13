@@ -4745,6 +4745,7 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(summary["ar_method"], "per-freq")
             self.assertTrue(summary["estimate_ionosphere"])
             self.assertFalse(summary["use_ionosphere_free"])
+            self.assertEqual(summary["phase_measurement_min_lock_count"], 1)
             self.assertEqual(summary["convergence_policy"], "local-enu")
             self.assertEqual(
                 summary["convergence_horizontal_position_deviation_threshold_m"],
