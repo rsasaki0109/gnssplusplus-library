@@ -4,6 +4,38 @@
 
 using namespace libgnss;
 
+TEST(PPPArTest, FrequencyLifecycleTracksSignalsIndependently) {
+    ppp_shared::PPPAmbiguityInfo ambiguity;
+    const GNSSTime first_time(2360, 100.0);
+    const GNSSTime second_time(2360, 130.0);
+
+    ppp_shared::updateFrequencyAmbiguityLifecycle(
+        ambiguity, SignalType::GPS_L1CA, 123.5, first_time, 42.0);
+    ppp_shared::updateFrequencyAmbiguityLifecycle(
+        ambiguity, SignalType::GPS_L5, 456.25, first_time, 39.0);
+    ppp_shared::updateFrequencyAmbiguityLifecycle(
+        ambiguity, SignalType::GPS_L1CA, 124.0, second_time, 43.0);
+
+    ASSERT_EQ(ambiguity.frequency_lifecycle.size(), 2u);
+    const auto& l1 = ambiguity.frequency_lifecycle.at(SignalType::GPS_L1CA);
+    EXPECT_EQ(l1.lock_count, 2);
+    EXPECT_DOUBLE_EQ(l1.last_phase, 124.0);
+    EXPECT_EQ(l1.last_time.week, second_time.week);
+    EXPECT_DOUBLE_EQ(l1.last_time.tow, second_time.tow);
+    EXPECT_DOUBLE_EQ(l1.quality_indicator, 43.0);
+    EXPECT_TRUE(l1.has_last_phase);
+
+    const auto& l5 = ambiguity.frequency_lifecycle.at(SignalType::GPS_L5);
+    EXPECT_EQ(l5.lock_count, 1);
+    EXPECT_DOUBLE_EQ(l5.last_phase, 456.25);
+    EXPECT_DOUBLE_EQ(l5.quality_indicator, 39.0);
+    EXPECT_TRUE(l5.has_last_phase);
+
+    // The per-signal helper must not mutate the legacy satellite-level view.
+    EXPECT_EQ(ambiguity.lock_count, 0);
+    EXPECT_DOUBLE_EQ(ambiguity.last_phase, 0.0);
+}
+
 TEST(PPPArTest, WlnlPreparationTracksEligibilitySkipReasons) {
     ppp_shared::PPPConfig config;
     config.convergence_min_epochs = 3;
