@@ -192,6 +192,28 @@ wide-lane-only attempts, exposing a remaining platform/state-trajectory delta
 for M2b.  A dedicated parity CI gate rejects any published Fix on every valid
 row while no complete N1 fix exists, independently of that row-count delta.
 
+#### M2b -- One covariance update per MADOCA epoch
+
+The pinned MADOCALIB `pppos()` loop copies `rtk->x` and `rtk->P` into its
+temporary state before every residual-screening pass and commits the first
+accepted result.  It therefore applies an epoch's measurement covariance
+update once.  Native previously fed the already-updated covariance into as
+many as eight relinearization iterations, repeatedly consuming the same rows
+and becoming overconfident before ambiguity resolution.
+
+The opt-in `GNSS_PPP_PFDUMP` trace now reports the position covariance norm at
+the pre-EWL, post-EWL, and post-WL boundaries with GPS week/TOW.  At 00:03:00
+the native post-WL norm changes from 0.962 m to 2.281 m, versus 2.49 m in the
+MADOCALIB trace.  At 00:03:30 it changes from 0.742 m to 1.812 m, versus
+2.28 m.  Remaining float-state differences are tracked separately; this slice
+only removes the proven repeated-update mismatch.
+
+On the pinned 120-input-epoch MIZU probe, all 118 solution epochs remain
+aligned.  Native produces 31 complete fixes, all inside MADOCALIB fixed epochs,
+and no wrong fix.  The full-window native/oracle 3D delta RMS improves from
+10.923 m to 4.391 m; the final 30-minute RMS is 1.046 m.  The M2 exit criteria
+are not yet met.
+
 ### M3 -- Apply L6D ionosphere products
 
 - Promote the proven snapshot lookup from shadow telemetry to an explicit

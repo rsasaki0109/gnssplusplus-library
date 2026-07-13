@@ -14,6 +14,15 @@ namespace libgnss::ppp_internal {
 
 inline constexpr double kDefaultZenithDelayMeters = 2.3;
 
+inline int filterIterationCount(bool madoca_per_frequency_update,
+                                bool precise_products_loaded,
+                                int configured_iterations) {
+    if (madoca_per_frequency_update) {
+        return 1;
+    }
+    return precise_products_loaded ? 3 : configured_iterations;
+}
+
 inline std::string trimCopy(const std::string& text) {
     const auto is_not_space = [](unsigned char ch) {
         return !std::isspace(ch);

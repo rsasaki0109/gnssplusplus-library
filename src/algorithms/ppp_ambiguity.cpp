@@ -379,6 +379,26 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
     ar_stage_telemetry_.last_n1_candidates = 0;
     ar_stage_telemetry_.last_n1_ratio = 0.0;
 
+    const auto dump_position_covariance = [&](const char* stage) {
+        if (!env_overrides_.pfdump) {
+            return;
+        }
+        double variance_sum = 0.0;
+        for (int axis = 0; axis < 3; ++axis) {
+            variance_sum += std::max(
+                0.0,
+                filter_state_.covariance(
+                    filter_state_.pos_index + axis,
+                    filter_state_.pos_index + axis));
+        }
+        std::cerr << "[PFCOV] week=" << obs.time.week
+                  << " tow=" << obs.time.tow
+                  << " stage=" << stage
+                  << " pos_std_norm=" << std::sqrt(variance_sum)
+                  << "\n";
+    };
+    dump_position_covariance("pre_ewl");
+
     // Restrict AR to satellites observed this epoch (the persistent ambiguity
     // map accumulates set satellites whose stale states must not enter the DD).
     std::set<SatelliteId> observed_now;
@@ -681,6 +701,7 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
         filter_state_.covariance = 0.5 *
             (filter_state_.covariance + filter_state_.covariance.transpose());
     }
+    dump_position_covariance("post_ewl");
 
     auto wl_cycles = [&](const Cand& c) {
         return x(c.l1_index) / c.lambda1 - x(c.l2_index) / c.lambda2;
@@ -781,6 +802,7 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
     filter_state_.covariance -= Kwl * HPwl;
     filter_state_.covariance =
         0.5 * (filter_state_.covariance + filter_state_.covariance.transpose());
+    dump_position_covariance("post_wl");
 
     // MADOCALIB snapshots the WL-conditioned float state before N1 and
     // restores it when the final fixed-position covariance gate rejects.

@@ -8,6 +8,8 @@
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/models/troposphere.hpp>
 
+#include "../src/algorithms/ppp_internal.hpp"
+
 #include <chrono>
 #include <cmath>
 #include <ctime>
@@ -22,6 +24,12 @@
 using namespace libgnss;
 
 namespace {
+
+TEST(PPPFilterIterations, MadocaPerFrequencyCommitsOneUpdatePerEpoch) {
+    EXPECT_EQ(ppp_internal::filterIterationCount(true, false, 8), 1);
+    EXPECT_EQ(ppp_internal::filterIterationCount(false, true, 8), 3);
+    EXPECT_EQ(ppp_internal::filterIterationCount(false, false, 8), 8);
+}
 
 GNSSTime makeTime(int year, int month, int day, int hour, int minute, double second) {
     std::tm epoch_tm{};
