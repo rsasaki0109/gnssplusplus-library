@@ -4716,6 +4716,12 @@ class CLIToolsTest(unittest.TestCase):
                 "per-freq",
                 "--convergence-min-epochs",
                 "4",
+                "--convergence-policy",
+                "local-enu",
+                "--convergence-threshold-horizontal",
+                "10.0",
+                "--convergence-threshold-vertical",
+                "20.0",
                 "--ar-ratio-threshold",
                 "2.0",
                 "--obs",
@@ -4739,6 +4745,19 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(summary["ar_method"], "per-freq")
             self.assertTrue(summary["estimate_ionosphere"])
             self.assertFalse(summary["use_ionosphere_free"])
+            self.assertEqual(summary["convergence_policy"], "local-enu")
+            self.assertEqual(
+                summary["convergence_horizontal_position_deviation_threshold_m"],
+                10.0,
+            )
+            self.assertEqual(
+                summary["convergence_vertical_position_deviation_threshold_m"],
+                20.0,
+            )
+            self.assertIn("convergence_max_horizontal_position_deviation_m", summary)
+            self.assertIn("convergence_max_vertical_position_deviation_m", summary)
+            self.assertIn("ar_stage_last", summary)
+            self.assertIn("ar_per_frequency_attempts", summary)
             self.assertIn("PPP fixed solutions:", result.stdout)
             records = self.read_pos_records(out_path)
             self.assertEqual(len(records), 8)

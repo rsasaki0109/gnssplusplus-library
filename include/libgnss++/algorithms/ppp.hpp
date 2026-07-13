@@ -55,12 +55,43 @@ struct PPPConvergenceTelemetry {
     size_t evaluated_epochs = 0;
     size_t insufficient_history_epochs = 0;
     size_t unstable_position_epochs = 0;
+    size_t unstable_horizontal_epochs = 0;
+    size_t unstable_vertical_epochs = 0;
     size_t window_epochs = 0;
     size_t required_window_epochs = 0;
     double max_position_deviation_m = 0.0;
+    double max_horizontal_position_deviation_m = 0.0;
+    double max_vertical_position_deviation_m = 0.0;
     double position_deviation_threshold_m = 0.0;
+    double horizontal_position_deviation_threshold_m = 0.0;
+    double vertical_position_deviation_threshold_m = 0.0;
+    std::string policy = "legacy-3d";
     std::string gate_reason = "not_evaluated";
 };
+
+struct PPPConvergenceWindowMetrics {
+    double max_ecef_3d_m = 0.0;
+    double max_horizontal_m = 0.0;
+    double max_vertical_m = 0.0;
+};
+
+struct PPPARStageTelemetry {
+    size_t per_frequency_attempts = 0;
+    size_t insufficient_satellite_epochs = 0;
+    size_t no_wide_lane_epochs = 0;
+    size_t wide_lane_only_epochs = 0;
+    size_t n1_lambda_failure_epochs = 0;
+    size_t n1_ratio_rejection_epochs = 0;
+    size_t n1_fixed_epochs = 0;
+    int last_satellite_candidates = 0;
+    int last_wide_lane_pairs = 0;
+    int last_n1_candidates = 0;
+    double last_n1_ratio = 0.0;
+    std::string last_stage = "not_attempted";
+};
+
+PPPConvergenceWindowMetrics evaluatePPPConvergenceWindow(
+    const std::vector<Vector3d>& positions_ecef);
 
 /**
  * @brief Precise Point Positioning (PPP) processor
@@ -258,6 +289,9 @@ public:
     const PPPConvergenceTelemetry& getConvergenceTelemetry() const {
         return convergence_telemetry_;
     }
+    const PPPARStageTelemetry& getARStageTelemetry() const {
+        return ar_stage_telemetry_;
+    }
 
 private:
     void applyEnvironmentOverridesToPPPConfig();
@@ -313,6 +347,7 @@ private:
     double last_ar_ratio_ = 0.0;
     int last_fixed_ambiguities_ = 0;
     PPPConvergenceTelemetry convergence_telemetry_;
+    PPPARStageTelemetry ar_stage_telemetry_;
     int last_applied_atmos_trop_corrections_ = 0;
     int last_applied_atmos_iono_corrections_ = 0;
     double last_applied_atmos_trop_m_ = 0.0;

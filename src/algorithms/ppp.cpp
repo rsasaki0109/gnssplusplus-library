@@ -738,6 +738,7 @@ void PPPProcessor::reset() {
     last_ar_ratio_ = 0.0;
     last_fixed_ambiguities_ = 0;
     convergence_telemetry_ = {};
+    ar_stage_telemetry_ = {};
     ppp_ar::clearWlnlHoldState(clas_wlnl_hold_);
     last_clas_constrained_fixed_state_valid_ = false;
     clas_kinematic_fix_candidate_streak_ = 0;
