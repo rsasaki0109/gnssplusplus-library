@@ -85,6 +85,21 @@ public:
      * @brief Check whether QZSS secondary L5 preference is enabled.
      */
     bool qzssSecondaryL5Preference() const { return qzss_prefer_l5_secondary_; }
+
+    /**
+     * @brief Preserve one selected observation for every supported frequency band.
+     *
+     * The default reader contract emits only the primary and secondary signals.
+     * Per-frequency PPP-AR callers can enable this mode so L3/L4 observations
+     * needed by extra-wide-lane ambiguity resolution are not discarded at ingest.
+     */
+    void setPreserveAdditionalFrequencyBands(bool preserve) {
+        preserve_additional_frequency_bands_ = preserve;
+    }
+
+    bool preservesAdditionalFrequencyBands() const {
+        return preserve_additional_frequency_bands_;
+    }
     
     /**
      * @brief Open RINEX file
@@ -142,6 +157,7 @@ private:
     int current_line_ = 0;
     bool qzss_prefer_l1l_ = false;
     bool qzss_prefer_l5_secondary_ = false;
+    bool preserve_additional_frequency_bands_ = false;
 
     // State for parsing RINEX 3 "SYS / # / OBS TYPES" records that span
     // continuation lines (systems with more than 13 observation types, e.g.
