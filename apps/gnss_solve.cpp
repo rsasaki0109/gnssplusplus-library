@@ -95,6 +95,8 @@ struct SolveConfig {
     libgnss::io::SolutionWriter::Format output_format = libgnss::io::SolutionWriter::Format::POS;
     double max_baseline_length_m = 20000.0;
     bool prefer_trusted_seed = false;
+    bool use_doppler_float_seed = false;
+    double doppler_float_seed_max_age_s = 6.0;
     std::string rover_seed_pos_path;
     std::string diagnostics_csv_path;
     double rtk_update_outlier_threshold = 0.0;
@@ -980,6 +982,10 @@ void printUsage(const char* program_name) {
         << "  --max-epochs <n>           Stop after n rover epochs\n"
         << "  --debug-epoch-log <csv>    Write per-epoch AR/debug telemetry CSV\n"
         << "  --prefer-trusted-seed      Prefer recent trusted/fixed solution as seed\n"
+        << "  --doppler-float-seed       Propagate trusted position with Doppler velocity\n"
+        << "                             during short FLOAT gaps (default: off)\n"
+        << "  --doppler-float-seed-max-age <s>\n"
+        << "                             Maximum trusted-anchor age (default: 6)\n"
         << "  --rover-seed-pos <file>    Inject ECEF seed positions from .pos file per epoch\n"
         << "  --diagnostics-csv <file>   Write per-epoch RTK candidate diagnostics CSV (PPC pipeline format)\n"
         << "  --rtk-update-outlier-threshold <v>\n"
@@ -1436,6 +1442,10 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.debug_epoch_log_path = argv[++i];
         } else if (arg == "--prefer-trusted-seed") {
             config.prefer_trusted_seed = true;
+        } else if (arg == "--doppler-float-seed") {
+            config.use_doppler_float_seed = true;
+        } else if (arg == "--doppler-float-seed-max-age" && i + 1 < argc) {
+            config.doppler_float_seed_max_age_s = std::stod(argv[++i]);
         } else if (arg == "--rover-seed-pos" && i + 1 < argc) {
             config.rover_seed_pos_path = argv[++i];
         } else if (arg == "--diagnostics-csv" && i + 1 < argc) {
@@ -1697,6 +1707,10 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     if (config.skip_epochs < 0) {
         argumentError("--skip-epochs must be >= 0", argv[0]);
     }
+    if (!std::isfinite(config.doppler_float_seed_max_age_s) ||
+        config.doppler_float_seed_max_age_s <= 0.0) {
+        argumentError("--doppler-float-seed-max-age must be > 0", argv[0]);
+    }
 
     return config;
 }
@@ -1837,6 +1851,8 @@ int main(int argc, char* argv[]) {
         libgnss::SPPProcessor spp_processor;
         libgnss::RTKProcessor::RTKConfig rtk_config;
         rtk_config.prefer_trusted_position_seed = config.prefer_trusted_seed;
+        rtk_config.use_doppler_float_seed = config.use_doppler_float_seed;
+        rtk_config.doppler_float_seed_max_age_s = config.doppler_float_seed_max_age_s;
         rtk_config.prefer_rover_position_seed =
             config.prefer_trusted_seed || !rover_seed_positions.empty();
         if (config.rtk_update_outlier_threshold > 0.0) {

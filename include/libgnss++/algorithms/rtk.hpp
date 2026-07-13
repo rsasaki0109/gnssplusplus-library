@@ -86,6 +86,13 @@ public:
         bool prefer_trusted_position_seed = false;
         bool prefer_rover_position_seed = false;
 
+        /// Propagate the latest trusted position with the most recent
+        /// Doppler-derived rover velocity when reseeding a kinematic epoch.
+        /// This mirrors the short FLOAT-gap strategy in Fredeluces et al.
+        /// false (default) preserves the existing seed policy.
+        bool use_doppler_float_seed = false;
+        double doppler_float_seed_max_age_s = 6.0;
+
         // Kalman filter parameters
         double process_noise_position = 1e-4;       // m^2/s for static baseline
         double process_noise_ambiguity = 1e-8;    // cycles^2/s (very small - ambiguities are constant)
@@ -567,6 +574,9 @@ private:
     SPPProcessor spp_processor_;
     EpochDebugTelemetry debug_telemetry_;
     double doppler_velocity_sigma_mps_ = 0.5;
+    Vector3d last_doppler_velocity_ecef_ = Vector3d::Zero();
+    GNSSTime last_doppler_velocity_time_;
+    bool has_last_doppler_velocity_ = false;
 
     /**
      * @brief The original processRTKEpoch() body (DD-RTK float/fixed solve).

@@ -481,6 +481,8 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional RTK post-fix residual RMS rejection threshold in meters.",
     )
+    parser.add_argument("--doppler-float-seed", action="store_true")
+    parser.add_argument("--doppler-float-seed-max-age", type=float, default=None)
     parser.add_argument(
         "--enable-wide-lane-ar",
         action="store_true",
@@ -1429,6 +1431,12 @@ def run_solver(
             command.extend(["--max-consec-nonfix-reset", str(args.max_consec_nonfix_reset)])
         if getattr(args, "max_postfix_rms", None) is not None:
             command.extend(["--max-postfix-rms", str(args.max_postfix_rms)])
+        if getattr(args, "doppler_float_seed", False):
+            command.append("--doppler-float-seed")
+        if getattr(args, "doppler_float_seed_max_age", None) is not None:
+            command.extend(
+                ["--doppler-float-seed-max-age", str(args.doppler_float_seed_max_age)]
+            )
         if getattr(args, "enable_wide_lane_ar", False):
             command.append("--enable-wide-lane-ar")
         if getattr(args, "wide_lane_threshold", None) is not None:
@@ -1826,6 +1834,14 @@ def build_summary_payload(
         ),
         "rtk_max_postfix_residual_rms_m": (
             getattr(args, "max_postfix_rms", None) if args.solver == "rtk" else None
+        ),
+        "rtk_doppler_float_seed": (
+            bool(getattr(args, "doppler_float_seed", False)) if args.solver == "rtk" else False
+        ),
+        "rtk_doppler_float_seed_max_age_s": (
+            getattr(args, "doppler_float_seed_max_age", None)
+            if args.solver == "rtk"
+            else None
         ),
         "rtk_wide_lane_ar_enabled": bool(
             args.solver == "rtk" and getattr(args, "enable_wide_lane_ar", False)

@@ -328,6 +328,7 @@ void RTKProcessor::reset() {
     has_last_epoch_ = false;
     has_last_trusted_time_ = false;
     has_prev_trusted_position_ = false;
+    has_last_doppler_velocity_ = false;
     current_epoch_nlos_fraction_ = std::numeric_limits<double>::quiet_NaN();
     current_sat_data_.clear();
     gf_l1l2_history_.clear();
@@ -1502,7 +1503,23 @@ void RTKProcessor::resetPositionToSPP(const ObservationData& rover_obs, const Na
         }
     } else {
         bool seeded = false;
-        if (rtk_config_.prefer_trusted_position_seed &&
+        if (rtk_config_.use_doppler_float_seed &&
+            has_last_trusted_position_ && has_last_trusted_time_ &&
+            has_last_doppler_velocity_) {
+            const double anchor_age = rover_obs.time - last_trusted_time_;
+            const double velocity_age = rover_obs.time - last_doppler_velocity_time_;
+            if (std::isfinite(anchor_age) && anchor_age >= 0.0 &&
+                anchor_age <= rtk_config_.doppler_float_seed_max_age_s &&
+                std::isfinite(velocity_age) && velocity_age >= 0.0 &&
+                velocity_age <= 1.0 && last_doppler_velocity_ecef_.allFinite()) {
+                rover_pos = last_trusted_position_ +
+                            last_doppler_velocity_ecef_ * anchor_age;
+                var_pos = std::max(25.0,
+                    std::pow(doppler_velocity_sigma_mps_ * std::max(anchor_age, 0.2), 2.0));
+                seeded = true;
+            }
+        }
+        if (!seeded && rtk_config_.prefer_trusted_position_seed &&
             has_last_trusted_position_ && has_last_trusted_time_) {
             const double dt = rover_obs.time - last_trusted_time_;
             if (std::isfinite(dt) && dt >= 0.0 && dt <= 1.0) {
@@ -1649,6 +1666,12 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
             solution.has_velocity = true;
             solution.receiver_clock_drift = velocity_result.receiver_clock_drift;
         }
+    }
+
+    if (solution.isValid() && solution.has_velocity && solution.velocity_ecef.allFinite()) {
+        last_doppler_velocity_ecef_ = solution.velocity_ecef;
+        last_doppler_velocity_time_ = rover_obs.time;
+        has_last_doppler_velocity_ = true;
     }
 
     return solution;

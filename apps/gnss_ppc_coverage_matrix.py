@@ -297,6 +297,8 @@ def parse_args() -> argparse.Namespace:
         help="Optional RTK ambiguity reset after N consecutive non-FIX epochs.",
     )
     parser.add_argument("--max-postfix-rms", type=float, default=None)
+    parser.add_argument("--doppler-float-seed", action="store_true")
+    parser.add_argument("--doppler-float-seed-max-age", type=float, default=None)
     parser.add_argument("--enable-wide-lane-ar", action="store_true")
     parser.add_argument("--wide-lane-threshold", type=float, default=None)
     parser.add_argument("--enable-wlnl-fallback", action="store_true")
@@ -633,6 +635,12 @@ def build_ppc_demo_command(
         command.extend(["--max-consec-nonfix-reset", str(args.max_consec_nonfix_reset)])
     if getattr(args, "max_postfix_rms", None) is not None:
         command.extend(["--max-postfix-rms", str(args.max_postfix_rms)])
+    if getattr(args, "doppler_float_seed", False):
+        command.append("--doppler-float-seed")
+    if getattr(args, "doppler_float_seed_max_age", None) is not None:
+        command.extend(
+            ["--doppler-float-seed-max-age", str(args.doppler_float_seed_max_age)]
+        )
     if getattr(args, "enable_wide_lane_ar", False):
         command.append("--enable-wide-lane-ar")
     if getattr(args, "wide_lane_threshold", None) is not None:
@@ -978,6 +986,10 @@ def build_matrix_payload(args: argparse.Namespace, runs: list[dict[str, object]]
         "max_consec_float_reset": getattr(args, "max_consec_float_reset", None),
         "max_consec_nonfix_reset": getattr(args, "max_consec_nonfix_reset", None),
         "max_postfix_rms": getattr(args, "max_postfix_rms", None),
+        "doppler_float_seed": bool(getattr(args, "doppler_float_seed", False)),
+        "doppler_float_seed_max_age_s": getattr(
+            args, "doppler_float_seed_max_age", None
+        ),
         "enable_wide_lane_ar": getattr(args, "enable_wide_lane_ar", False),
         "wide_lane_threshold": getattr(args, "wide_lane_threshold", None),
         "enable_wlnl_fallback": getattr(args, "enable_wlnl_fallback", False),
