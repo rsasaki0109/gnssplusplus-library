@@ -9,6 +9,44 @@ using namespace libgnss;
 
 namespace {
 
+TEST(RTKValidation, IndependentDDAmbiguityUsesPaperPdopThresholds) {
+    EXPECT_DOUBLE_EQ(rtk_validation::independentDDAmbiguityThresholdCycles(0.9), 0.1);
+    EXPECT_DOUBLE_EQ(rtk_validation::independentDDAmbiguityThresholdCycles(1.0), 0.2);
+    EXPECT_DOUBLE_EQ(rtk_validation::independentDDAmbiguityThresholdCycles(2.0), 0.2);
+    EXPECT_DOUBLE_EQ(rtk_validation::independentDDAmbiguityThresholdCycles(2.1), 0.3);
+    EXPECT_TRUE(std::isnan(rtk_validation::independentDDAmbiguityThresholdCycles(-1.0)));
+    EXPECT_TRUE(std::isnan(rtk_validation::independentDDAmbiguityThresholdCycles(
+        std::numeric_limits<double>::quiet_NaN())));
+}
+
+TEST(RTKValidation, IndependentDDAmbiguityRecalculatesIntegerDistance) {
+    const double wavelength_m = 0.2;
+    const double geometry_dd_m = 4.0;
+    const double phase_dd_cycles = 32.18;  // 32.18 - 4/0.2 = 12.18 cycles
+
+    const auto urban = rtk_validation::validateIndependentDDAmbiguity(
+        phase_dd_cycles, geometry_dd_m, wavelength_m, 1.5);
+    ASSERT_TRUE(urban.valid);
+    EXPECT_TRUE(urban.passed);
+    EXPECT_NEAR(urban.ambiguity_cycles, 12.18, 1e-12);
+    EXPECT_DOUBLE_EQ(urban.nearest_integer_cycles, 12.0);
+    EXPECT_NEAR(urban.fractional_distance_cycles, 0.18, 1e-12);
+    EXPECT_DOUBLE_EQ(urban.threshold_cycles, 0.2);
+
+    const auto open_sky = rtk_validation::validateIndependentDDAmbiguity(
+        phase_dd_cycles, geometry_dd_m, wavelength_m, 0.9);
+    ASSERT_TRUE(open_sky.valid);
+    EXPECT_FALSE(open_sky.passed);
+    EXPECT_DOUBLE_EQ(open_sky.threshold_cycles, 0.1);
+}
+
+TEST(RTKValidation, IndependentDDAmbiguityRejectsInvalidInputs) {
+    EXPECT_FALSE(rtk_validation::validateIndependentDDAmbiguity(
+        10.0, 1.0, 0.0, 1.5).valid);
+    EXPECT_FALSE(rtk_validation::validateIndependentDDAmbiguity(
+        10.0, 1.0, 0.2, -1.0).valid);
+}
+
 PositionSolution makeValidationSolution(double tow,
                                         SolutionStatus status,
                                         const Eigen::Vector3d& position,
