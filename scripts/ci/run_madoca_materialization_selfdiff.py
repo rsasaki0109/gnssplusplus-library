@@ -26,7 +26,25 @@ DEFAULT_MADOCALIB_REPO = "https://github.com/QZSS-Strategy-Office/madocalib.git"
 DEFAULT_MADOCALIB_REF = "0089f7dc97e8e2ba283a40be2edf4b73a140df6c"
 DEFAULT_MIN_ROWS = 1000
 DEFAULT_REQUIRED_SYSTEMS = ("GPS", "GLONASS", "Galileo", "QZSS", "BeiDou")
-DEFAULT_REQUIRED_BIAS_IDS = ("2", "8", "9", "14", "22")
+# Exact MADOCA tracking-code identities present in the pinned public sample:
+# GPS 1/12/18/20/25/26, Galileo 12/26/29/31, QZSS 1/12/18/26,
+# BeiDou 26/27/40/42/58, plus GLONASS compatibility ids 2/8.
+DEFAULT_REQUIRED_BIAS_IDS = (
+    "1",
+    "2",
+    "8",
+    "12",
+    "18",
+    "20",
+    "25",
+    "26",
+    "27",
+    "29",
+    "31",
+    "40",
+    "42",
+    "58",
+)
 REQUIRED_DATA_FILES = (
     "sample_data/data/rinex/BRDM00DLR_S_20250910000_01D_MN.rnx",
     "sample_data/data/l6/2025/091/2025091A.204.l6",
