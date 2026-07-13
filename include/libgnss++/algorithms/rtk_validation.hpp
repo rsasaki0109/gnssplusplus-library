@@ -64,6 +64,28 @@ struct FixedBridgeBurstGuardResult {
     int rejected_epochs = 0;
 };
 
+/// Result of the independent post-ratio DD ambiguity check described by
+/// Fredeluces et al. (Sensors 2024, 24, 2712). The carrier observation must
+/// come from a satellite intentionally held out of the position/AR solve.
+struct IndependentDDAmbiguityResult {
+    bool valid = false;
+    bool passed = false;
+    double ambiguity_cycles = 0.0;
+    double nearest_integer_cycles = 0.0;
+    double fractional_distance_cycles = 0.0;
+    double threshold_cycles = 0.0;
+};
+
+double independentDDAmbiguityThresholdCycles(double pdop);
+
+/// phase_dd_cycles and geometric_dd_m both use the orientation
+/// (rover_ref-base_ref) - (rover_sat-base_sat).
+IndependentDDAmbiguityResult validateIndependentDDAmbiguity(
+    double phase_dd_cycles,
+    double geometric_dd_m,
+    double wavelength_m,
+    double pdop);
+
 double normalizedDt(double dt_seconds, double fallback_dt_seconds = 1.0);
 
 double adaptiveJumpLimit(double dt_seconds, double min_jump_m, double rate_m_per_s);

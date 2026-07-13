@@ -3,9 +3,42 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 namespace libgnss::rtk_validation {
+
+double independentDDAmbiguityThresholdCycles(double pdop) {
+    if (!std::isfinite(pdop) || pdop < 0.0) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    if (pdop < 1.0) return 0.1;
+    if (pdop <= 2.0) return 0.2;
+    return 0.3;
+}
+
+IndependentDDAmbiguityResult validateIndependentDDAmbiguity(
+    double phase_dd_cycles,
+    double geometric_dd_m,
+    double wavelength_m,
+    double pdop) {
+    IndependentDDAmbiguityResult result;
+    result.threshold_cycles = independentDDAmbiguityThresholdCycles(pdop);
+    if (!std::isfinite(phase_dd_cycles) || !std::isfinite(geometric_dd_m) ||
+        !std::isfinite(wavelength_m) || wavelength_m <= 0.0 ||
+        !std::isfinite(result.threshold_cycles)) {
+        return result;
+    }
+
+    result.ambiguity_cycles = phase_dd_cycles - geometric_dd_m / wavelength_m;
+    result.nearest_integer_cycles = std::round(result.ambiguity_cycles);
+    result.fractional_distance_cycles =
+        std::abs(result.ambiguity_cycles - result.nearest_integer_cycles);
+    result.valid = std::isfinite(result.fractional_distance_cycles);
+    result.passed = result.valid &&
+                    result.fractional_distance_cycles <= result.threshold_cycles;
+    return result;
+}
 
 namespace {
 
