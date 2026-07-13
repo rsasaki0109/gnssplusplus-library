@@ -598,7 +598,11 @@ PositionSolution PPPProcessor::processEpochStandard(
                 const auto float_ambiguity_states = ambiguity_states_;
                 const bool fixed =
                     ppp_config_.enable_ambiguity_resolution && resolveAmbiguities(obs, nav);
-                solution = fixed ? generateSolution(obs.time, corrected_if_obs) : float_solution;
+                const bool wide_lane_only =
+                    ppp_config_.enable_ambiguity_resolution && last_ar_wide_lane_only_;
+                solution = (fixed || wide_lane_only)
+                    ? generateSolution(obs.time, corrected_if_obs)
+                    : float_solution;
                 solution.status = fixed ? SolutionStatus::PPP_FIXED : SolutionStatus::PPP_FLOAT;
                 solution.ratio = fixed ? last_ar_ratio_ : 0.0;
                 solution.num_fixed_ambiguities = fixed ? last_fixed_ambiguities_ : 0;
@@ -650,7 +654,13 @@ PositionSolution PPPProcessor::processEpochStandard(
                     solution.position_geodetic = GeodeticCoord(latitude, longitude, height);
                 }
                 had_fixed_last_epoch_ = accepted_fixed_solution;
-                if (fixed && !accepted_fixed_solution) {
+                if (wide_lane_only) {
+                    // MADOCALIB SOLQ_FIX_WL parity: publish the current epoch
+                    // from the WL-constrained working state as PPP/FLOAT, but
+                    // do not hold that temporary constraint in the float filter.
+                    filter_state_ = float_filter_state;
+                    ambiguity_states_ = float_ambiguity_states;
+                } else if (fixed && !accepted_fixed_solution) {
                     filter_state_ = float_filter_state;
                     ambiguity_states_ = float_ambiguity_states;
                 } else if (accepted_fixed_solution && ppp_config_.ar_method != PPPConfig::ARMethod::DD_WLNL) {
@@ -737,6 +747,7 @@ void PPPProcessor::reset() {
     has_static_anchor_position_ = false;
     last_ar_ratio_ = 0.0;
     last_fixed_ambiguities_ = 0;
+    last_ar_wide_lane_only_ = false;
     convergence_telemetry_ = {};
     ar_stage_telemetry_ = {};
     ppp_ar::clearWlnlHoldState(clas_wlnl_hold_);
