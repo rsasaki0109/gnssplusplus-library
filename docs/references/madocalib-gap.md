@@ -1,5 +1,9 @@
 # MADOCALIB Gap Analysis
 
+For the active issue-#148 execution status and quantitative exit gates, see the
+[MADOCALIB Native Migration Ledger](../madocalib_native_migration.md).  This
+page remains the broader architectural gap analysis.
+
 This page compares the current `libgnss++` PPP stack against the areas where
 `MADOCALIB` is the most relevant primary reference.
 
