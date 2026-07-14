@@ -326,7 +326,7 @@ COMMANDS = {
     },
     "pos2kml": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_pos2kml"),
+        "target": os.path.join(APPS_DIR, "compat", "gnss_pos2kml"),
         "summary": "Convert libgnss++ or RTKLIB .pos output into KML.",
     },
     "driving-compare": {

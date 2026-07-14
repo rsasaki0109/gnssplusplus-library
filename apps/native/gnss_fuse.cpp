@@ -540,7 +540,7 @@ int runSppFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
 
 // RTK path (--base provided): drives libgnss::RTKProcessor over the
 // rover/base RINEX pair using the exact same epoch-alignment helpers
-// (libgnss_apps::interpolateBaseEpoch et al.) apps/gnss_solve.cpp uses, so
+// (libgnss_apps::interpolateBaseEpoch et al.) apps/native/gnss_solve.cpp uses, so
 // the GNSS half of `gnss fuse` is the same RTK pipeline as `gnss solve`
 // rather than a re-implementation (docs/design.md 5). Solution quality
 // flows into the fusion filter for free: RTKProcessor already populates
@@ -673,7 +673,7 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
     // pairs are used (not FLOAT/SPP) so an ambiguity reconvergence jump
     // never gets misread as a real velocity.
     // Deliberately tight: the "low-cost" preset's raw (unguarded --
-    // apps/gnss_solve.cpp's own nonfix-drift/float-bridge/jump guards are
+    // apps/native/gnss_solve.cpp's own nonfix-drift/float-bridge/jump guards are
     // solve-specific output polish this app does not replicate, see the
     // runRtkFusion doc comment above) FIXED stream occasionally contains a
     // wrong-fix epoch. A wrong-fix differenced against its FIXED neighbor

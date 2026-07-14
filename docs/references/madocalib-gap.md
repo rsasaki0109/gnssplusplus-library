@@ -32,7 +32,7 @@ Relevant code entrypoints today:
 - `src/algorithms/ppp.cpp`
 - `include/libgnss++/algorithms/ppp_atmosphere.hpp`
 - `src/core/navigation.cpp`
-- `apps/gnss_ppp.cpp`
+- `apps/native/gnss_ppp.cpp`
 - `apps/gnss_clas_ppp.py`
 - `apps/gnss_ppp_static_signoff.py`
 

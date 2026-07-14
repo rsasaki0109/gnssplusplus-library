@@ -5,8 +5,8 @@ import sys
 
 
 def main():
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    tool = os.path.join(root, "tools", "compare_rtklib.py")
+    root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    tool = os.path.join(root, "tools", "rtk_stats.py")
     os.environ["GNSS_CLI_NAME"] = os.path.basename(sys.argv[0])
     runpy.run_path(tool, run_name="__main__")
 
