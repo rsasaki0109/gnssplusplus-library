@@ -52,6 +52,9 @@ TEST(FusionProcessorSyntheticTest, AppliesTightlyCoupledDDRowsToLiveINSState) {
     LooseCouplingProcessor::Config config;
     config.align_static_window_s = 0.1;
     config.zupt_enable = false;
+    // This test exercises the committed joint code/carrier path explicitly;
+    // production remains shadow-only unless this research flag is enabled.
+    config.tight_dd_commit_carrier_updates = true;
     LooseCouplingProcessor processor(config);
 
     GNSSTime time(2200, 100000.0);
@@ -83,9 +86,11 @@ TEST(FusionProcessorSyntheticTest, AppliesTightlyCoupledDDRowsToLiveINSState) {
     row.geometry_enu = Eigen::RowVector3d::UnitX();
     row.code_residual_m = 1.0;
     row.code_variance_m2 = 0.25;
-    row.carrier_residual_m = 0.19 * 12.1;
-    row.carrier_variance_m2 = 0.0025;
     row.wavelength_m = 0.19;
+    // Keep the synthetic ambiguity exactly integral so the test isolates the
+    // processor integration path instead of exercising an innovation boundary.
+    row.carrier_residual_m = row.wavelength_m * 12.0;
+    row.carrier_variance_m2 = 0.0025;
     row.elevation_rad = 0.8;
     row.lock_count = 100;
 
