@@ -1,7 +1,9 @@
 cmake_minimum_required(VERSION 3.14)
 project(gnss_lib VERSION 0.1.0 LANGUAGES C CXX)
 
-set(CMAKE_CXX_STANDARD 20)
+set(GNSSPP_CXX_STANDARD 20 CACHE STRING
+    "C++ standard (use 17 with legacy Eigen 3.3 toolchains that reject C++20 rewritten comparisons)")
+set(CMAKE_CXX_STANDARD ${GNSSPP_CXX_STANDARD})
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 if(MSVC)
@@ -17,8 +19,11 @@ include(CMakePackageConfigHelpers)
 find_package(Eigen3 REQUIRED)
 find_package(Threads REQUIRED)
 find_package(Doxygen QUIET)
-find_package(Python3 COMPONENTS Interpreter Development.Module REQUIRED)
-find_package(pybind11 CONFIG REQUIRED)
+option(GNSSPP_BUILD_PYTHON_BINDINGS "Build the optional pybind11 Python module" ON)
+if(GNSSPP_BUILD_PYTHON_BINDINGS)
+    find_package(Python3 COMPONENTS Interpreter Development.Module REQUIRED)
+    find_package(pybind11 CONFIG REQUIRED)
+endif()
 find_package(ament_cmake QUIET)
 find_package(rclcpp QUIET)
 find_package(sensor_msgs QUIET)
@@ -84,6 +89,7 @@ set(GNSS_SOURCES
     src/fusion/fusion_update.cpp
     src/fusion/fusion_initialization.cpp
     src/fusion/fusion_processor.cpp
+    src/fusion/dd_imu_bridge.cpp
     src/algorithms/ppp_ar.cpp
     src/algorithms/ppp_atmosphere.cpp
     src/algorithms/ppp_clas.cpp
@@ -368,7 +374,9 @@ target_include_directories(gnss_kml_lib PUBLIC
 # Add subdirectories
 add_subdirectory(examples)
 add_subdirectory(apps)
-add_subdirectory(python)
+if(GNSSPP_BUILD_PYTHON_BINDINGS)
+    add_subdirectory(python)
+endif()
 if(ament_cmake_FOUND AND rclcpp_FOUND AND sensor_msgs_FOUND AND geometry_msgs_FOUND AND nav_msgs_FOUND AND std_msgs_FOUND)
     set(GNSSPP_HAS_ROS2 ON)
     add_subdirectory(ros2)

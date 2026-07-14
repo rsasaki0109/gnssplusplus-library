@@ -186,6 +186,10 @@ struct SatelliteId {
     bool operator==(const SatelliteId& other) const {
         return system == other.system && prn == other.prn;
     }
+
+    bool operator!=(const SatelliteId& other) const {
+        return !(*this == other);
+    }
 };
 
 /**
