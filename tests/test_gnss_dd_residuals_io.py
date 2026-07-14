@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
-APPS_DIR = ROOT_DIR / "apps"
+APPS_DIR = ROOT_DIR / "apps" / "commands"
 sys.path.insert(0, str(APPS_DIR))
 
 from support import gnss_dd_residuals_io as dd_io  # noqa: E402

@@ -33,8 +33,8 @@ Relevant code entrypoints today:
 - `include/libgnss++/algorithms/ppp_atmosphere.hpp`
 - `src/core/navigation.cpp`
 - `apps/native/gnss_ppp.cpp`
-- `apps/gnss_clas_ppp.py`
-- `apps/gnss_ppp_static_signoff.py`
+- `apps/commands/positioning/gnss_clas_ppp.py`
+- `apps/commands/positioning/gnss_ppp_static_signoff.py`
 
 ## Already aligned enough to build on
 

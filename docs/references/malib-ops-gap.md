@@ -24,13 +24,13 @@ validation, and replay ergonomics**, not for native solver architecture.
 
 Relevant code entrypoints today:
 
-- `apps/gnss_live_signoff.py`
-- `apps/gnss_ppp_static_signoff.py`
-- `apps/gnss_ppp_kinematic_signoff.py`
-- `apps/gnss_rtk_kinematic_signoff.py`
-- `apps/gnss_ppc_demo.py`
-- `apps/gnss_ppc_rtk_signoff.py`
-- `apps/gnss_web.py`
+- `apps/commands/positioning/gnss_live_signoff.py`
+- `apps/commands/positioning/gnss_ppp_static_signoff.py`
+- `apps/commands/positioning/gnss_ppp_kinematic_signoff.py`
+- `apps/commands/positioning/gnss_rtk_kinematic_signoff.py`
+- `apps/commands/benchmarks/gnss_ppc_demo.py`
+- `apps/commands/benchmarks/gnss_ppc_rtk_signoff.py`
+- `apps/commands/visualization/gnss_web.py`
 - `tests/test_packaging.py`
 - `tests/test_web_ui.py`
 - `.github/workflows/ci.yml`

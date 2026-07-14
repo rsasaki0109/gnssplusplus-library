@@ -26,8 +26,8 @@ transport and application boundary**, not just for low-level packet parsing.
 
 Relevant code entrypoints today:
 
-- `apps/gnss_qzss_l6_info.py`
-- `apps/gnss_clas_ppp.py`
+- `apps/commands/receivers/gnss_qzss_l6_info.py`
+- `apps/commands/positioning/gnss_clas_ppp.py`
 - `include/libgnss++/algorithms/ppp_atmosphere.hpp`
 - `src/algorithms/ppp_atmosphere.cpp`
 - `src/algorithms/ppp.cpp`

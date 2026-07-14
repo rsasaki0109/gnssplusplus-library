@@ -23,8 +23,12 @@ import numpy as np
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
-APPS_DIR = ROOT_DIR / "apps"
+COMMANDS_DIR = ROOT_DIR / "apps" / "commands"
+APPS_DIR = ROOT_DIR / "apps" / "commands" / "positioning"
 SCRIPTS_DIR = ROOT_DIR / "scripts"
+for command_path in (COMMANDS_DIR, COMMANDS_DIR / "receivers"):
+    if str(command_path) not in sys.path:
+        sys.path.insert(0, str(command_path))
 if str(APPS_DIR) not in sys.path:
     sys.path.insert(0, str(APPS_DIR))
 if str(SCRIPTS_DIR) not in sys.path:

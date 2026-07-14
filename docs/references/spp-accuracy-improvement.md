@@ -43,7 +43,7 @@ Tokyo `run1` SPP baseline command:
   --out output/ppc_tokyo_run1_spp_full.pos \
   --summary-json output/ppc_tokyo_run1_spp_full_summary.json
 
-python3 apps/gnss_ppc_demo.py \
+python3 apps/commands/benchmarks/gnss_ppc_demo.py \
   --dataset-root data/PPC-Dataset \
   --city tokyo \
   --run run1 \
@@ -75,7 +75,7 @@ Optional Huber-style robust WLS weighting can now be enabled without changing
 the default broadcast-SPP path:
 
 ```bash
-python3 apps/gnss_ppc_demo.py \
+python3 apps/commands/benchmarks/gnss_ppc_demo.py \
   --dataset-root data/PPC-Dataset \
   --city tokyo \
   --run run1 \
@@ -109,7 +109,7 @@ An optional kinematic position-jump gate is now available for SPP output
 screening:
 
 ```bash
-python3 apps/gnss_ppc_demo.py \
+python3 apps/commands/benchmarks/gnss_ppc_demo.py \
   --dataset-root data/PPC-Dataset \
   --city tokyo \
   --run run1 \

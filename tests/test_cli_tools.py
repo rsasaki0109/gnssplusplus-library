@@ -13584,7 +13584,8 @@ class CLIToolsTest(unittest.TestCase):
 
     def test_scorpion_cache_filename_preserves_zenodo_zip_name(self) -> None:
         sys_path_backup = sys.path[:]
-        sys.path.insert(0, str(ROOT_DIR / "apps"))
+        sys.path.insert(0, str(ROOT_DIR / "apps" / "commands"))
+        sys.path.insert(0, str(ROOT_DIR / "apps" / "commands" / "positioning"))
         try:
             import gnss_scorpion_moving_base_signoff as scorpion_signoff
 
@@ -15185,7 +15186,9 @@ class CLIToolsTest(unittest.TestCase):
             l6_path = f"{data_dir}/2019239Q.l6"
             expanded_csv = temp_root / "expanded.csv"
             sys_path_backup = sys.path[:]
-            sys.path.insert(0, str(ROOT_DIR / "apps"))
+            sys.path.insert(0, str(ROOT_DIR / "apps" / "commands"))
+            sys.path.insert(0, str(ROOT_DIR / "apps" / "commands" / "receivers"))
+            sys.path.insert(0, str(ROOT_DIR / "apps" / "commands" / "positioning"))
             try:
                 from gnss_clas_ppp import expand_qzss_l6_source
                 expand_qzss_l6_source(l6_path, 2068, expanded_csv)

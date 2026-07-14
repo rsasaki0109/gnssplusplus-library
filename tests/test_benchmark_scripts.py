@@ -18,11 +18,16 @@ import numpy as np
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
-APPS_DIR = ROOT_DIR / "apps"
+COMMANDS_DIR = ROOT_DIR / "apps" / "commands"
 SCRIPTS_DIR = ROOT_DIR / "scripts"
 CI_SCRIPTS_DIR = SCRIPTS_DIR / "ci"
 
-sys.path.insert(0, str(APPS_DIR))
+for command_group in (
+    "benchmarks", "positioning", "products", "receivers",
+    "visualization", "diagnostics",
+):
+    sys.path.insert(0, str(COMMANDS_DIR / command_group))
+sys.path.insert(0, str(COMMANDS_DIR))
 sys.path.insert(0, str(SCRIPTS_DIR))
 sys.path.insert(0, str(CI_SCRIPTS_DIR))
 

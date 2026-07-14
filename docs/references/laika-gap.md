@@ -27,8 +27,8 @@ Relevant code entrypoints today:
 - `src/core/navigation.cpp`
 - `include/libgnss++/core/navigation.hpp`
 - `apps/native/gnss_ppp.cpp`
-- `apps/gnss_ppp_static_signoff.py`
-- `apps/gnss_ppp_kinematic_signoff.py`
+- `apps/commands/positioning/gnss_ppp_static_signoff.py`
+- `apps/commands/positioning/gnss_ppp_kinematic_signoff.py`
 
 ## Already aligned enough to build on
 
