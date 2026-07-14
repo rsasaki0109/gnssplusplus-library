@@ -111,6 +111,14 @@ TEST(MadocaBridgeConfig, AvailabilityMatchesBuildFlag) {
 #endif
 }
 
+TEST(MadocaBridgeConfig, TideOracleIsAlsoOptIn) {
+#if GNSSPP_HAS_MADOCALIB_ORACLE
+    EXPECT_TRUE(libgnss::external::madocalib_oracle::tideAvailable());
+#else
+    EXPECT_FALSE(libgnss::external::madocalib_oracle::tideAvailable());
+#endif
+}
+
 TEST(MadocaMaterializationDump, WritesStableCsvContract) {
     libgnss::SSRProducts products;
     products.setOrbitCorrectionsAreRac(true);
