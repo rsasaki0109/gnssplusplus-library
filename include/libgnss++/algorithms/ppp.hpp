@@ -422,11 +422,17 @@ private:
      * @brief Predict filter state
      */
     void predictState(double dt, const PositionSolution* seed_solution = nullptr);
+
+    struct IonosphereFreeObs;
     
     /**
      * @brief Update filter with measurements
      */
-    bool updateFilter(const ObservationData& obs, const NavigationData& nav);
+    bool updateFilter(const ObservationData& obs, const NavigationData& nav,
+                      double dt, bool apply_iono_prediction = true);
+
+    void updateMadocaPerFrequencyIonospherePrediction(
+        const std::vector<IonosphereFreeObs>& observations, double dt);
 
     bool hasEnoughCoherentSsrObservations(const ObservationData& obs,
                                           const NavigationData& nav);

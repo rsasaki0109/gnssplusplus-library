@@ -57,6 +57,32 @@ inline bool alwaysRestoreArTrialState(PPPProcessor::PPPConfig::ARMethod method) 
     return method == PPPProcessor::PPPConfig::ARMethod::DD_PER_FREQ;
 }
 
+inline double madocaCarrierIonosphereMeters(double phase_l1_m,
+                                            double phase_l2_m,
+                                            double frequency_l1_hz,
+                                            double frequency_l2_hz) {
+    if (!(frequency_l1_hz > 0.0) || !(frequency_l2_hz > 0.0)) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    const double ratio = frequency_l1_hz / frequency_l2_hz;
+    const double denominator = 1.0 - ratio * ratio;
+    if (std::abs(denominator) < 1e-12) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    // MADOCALIB udiono_ppp(): ionc = -(L1-L2)/(1-(f1/f2)^2).
+    return -(phase_l1_m - phase_l2_m) / denominator;
+}
+
+inline double madocaIonosphereProcessVariance(double zenith_variance_per_second,
+                                              double elevation_rad,
+                                              double dt_seconds) {
+    constexpr double kMinimumElevationRad = 5.0 * M_PI / 180.0;
+    const double sin_elevation = std::sin(std::max(elevation_rad,
+                                                   kMinimumElevationRad));
+    return zenith_variance_per_second * std::abs(dt_seconds) /
+           (sin_elevation * sin_elevation);
+}
+
 inline std::string trimCopy(const std::string& text) {
     const auto is_not_space = [](unsigned char ch) {
         return !std::isspace(ch);

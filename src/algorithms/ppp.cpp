@@ -588,7 +588,7 @@ PositionSolution PPPProcessor::processEpochStandard(
             detectCycleSlips(obs, nav);
             predictState(dt, seed_ptr);
 
-            bool updated = updateFilter(obs, nav);
+            bool updated = updateFilter(obs, nav, dt);
             if (!updated && ppp_config_.enable_ambiguity_resolution) {
                 bool had_fixed_ambiguities = false;
                 for (auto& [satellite, ambiguity] : ambiguity_states_) {
@@ -602,7 +602,7 @@ PositionSolution PPPProcessor::processEpochStandard(
                     if (pppDebugEnabled()) {
                         std::cerr << "[PPP-AR] retry update after resetting fixed ambiguities\n";
                     }
-                    updated = updateFilter(obs, nav);
+                    updated = updateFilter(obs, nav, dt, false);
                 }
             }
 
