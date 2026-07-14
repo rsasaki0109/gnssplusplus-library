@@ -83,9 +83,13 @@ TEST(FusionProcessorSyntheticTest, AppliesTightlyCoupledDDRowsToLiveINSState) {
     row.geometry_enu = Eigen::RowVector3d::UnitX();
     row.code_residual_m = 1.0;
     row.code_variance_m2 = 0.25;
-    row.carrier_residual_m = 0.19 * 12.1;
-    row.carrier_variance_m2 = 0.0025;
     row.wavelength_m = 0.19;
+    // Keep the synthetic ambiguity exactly integral.  A fractional 12.1-cycle
+    // residual sat close enough to the joint gate for Eigen/compiler rounding
+    // to select the healthy-code fallback on Linux while accepting both rows
+    // on MSVC, making the observation-count assertion platform-dependent.
+    row.carrier_residual_m = row.wavelength_m * 12.0;
+    row.carrier_variance_m2 = 0.0025;
     row.elevation_rad = 0.8;
     row.lock_count = 100;
 
