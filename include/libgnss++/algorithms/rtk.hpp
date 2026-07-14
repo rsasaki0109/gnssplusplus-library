@@ -11,6 +11,7 @@
 #include "rtk_slip_detection.hpp"
 #include "rtk_validation.hpp"
 #include "spp.hpp"
+#include <libgnss++/fusion/dd_imu_bridge.hpp>
 #include <Eigen/Dense>
 #include <limits>
 #include <memory>
@@ -555,6 +556,21 @@ public:
     const RTKConfig& getRTKConfig() const { return rtk_config_; }
     const EpochDebugTelemetry& getLastDebugTelemetry() const { return debug_telemetry_; }
 
+    /** Assemble real rover/base DD rows at an INS-propagated position.
+     *
+     * The returned Jacobians are expressed in the bridge's local ENU frame;
+     * code/carrier residuals remain observed-minus-predicted.  This is the
+     * operational boundary between the RTK observation machinery and the
+     * tightly coupled DD/IMU error-state filter.
+     */
+    std::vector<dd_imu_bridge::DDObservation> formTightlyCoupledObservations(
+        const ObservationData& rover_obs,
+        const ObservationData& base_obs,
+        const NavigationData& nav,
+        const Vector3d& rover_position_ecef,
+        const Matrix3d& ecef_to_enu,
+        const Eigen::Quaterniond& attitude_body_to_enu = Eigen::Quaterniond::Identity());
+
     /// WP7: inject an optional per-epoch per-satellite NLOS weight table.
     /// A null/empty table (the default) is equivalent to not calling this
     /// at all; the table is only consulted when rtk_config_.nlos_weight_mode
@@ -1006,6 +1022,11 @@ private:
         Vector3d unit_vector = Vector3d::Zero();
         double elevation = 0.0;
         double variance = 0.0;
+        double code_variance = 0.0;
+        double wavelength = 0.0;
+        int frequency_index = -1;
+        int lock_count = 0;
+        bool cycle_slip = false;
         bool valid = false;
     };
     struct AmbiguityInfo {
@@ -1019,7 +1040,7 @@ private:
     std::map<SatelliteId, std::map<SignalType, AmbiguityInfo>> ambiguity_states_;
     std::vector<DoubleDifference> formDoubleDifferences(
         const ObservationData& rover_obs, const ObservationData& base_obs,
-        const NavigationData& nav);
+        const NavigationData& nav, const Vector3d* evaluation_rover_position_ecef = nullptr);
     void detectCycleSlips(const ObservationData& rover_obs,
                         const ObservationData& base_obs);
     bool resolveAmbiguities(int dummy);

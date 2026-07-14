@@ -4078,7 +4078,8 @@ bool RTKProcessor::updateFilter(const ObservationData&, const ObservationData&, 
 
 // Legacy stubs
 std::vector<RTKProcessor::DoubleDifference> RTKProcessor::formDoubleDifferences(
-    const ObservationData& rover_obs, const ObservationData& base_obs, const NavigationData& nav) {
+    const ObservationData& rover_obs, const ObservationData& base_obs, const NavigationData& nav,
+    const Vector3d* evaluation_rover_position_ecef) {
     if (!base_position_known_) {
         if (base_obs.receiver_position.norm() > 1e6) {
             const_cast<RTKProcessor*>(this)->setBasePosition(base_obs.receiver_position);
@@ -4093,16 +4094,21 @@ std::vector<RTKProcessor::DoubleDifference> RTKProcessor::formDoubleDifferences(
         }
     }
 
-    const auto sat_data =
-        const_cast<RTKProcessor*>(this)->collectSatelliteData(rover_obs, base_obs, nav);
+    const bool reuse_processed_epoch = !current_sat_data_.empty() &&
+        std::abs(current_epoch_time_ - rover_obs.time) <= 1e-6;
+    const auto sat_data = reuse_processed_epoch
+        ? current_sat_data_
+        : const_cast<RTKProcessor*>(this)->collectSatelliteData(rover_obs, base_obs, nav);
     if (sat_data.size() < 4) {
         return {};
     }
 
-    const_cast<RTKProcessor*>(this)->current_sat_data_ = sat_data;
-    const double bias_dt =
-        has_last_epoch_ ? std::max(rover_obs.time - last_epoch_time_, 1e-3) : 1.0;
-    const_cast<RTKProcessor*>(this)->updateBias(sat_data, bias_dt);
+    if (!reuse_processed_epoch) {
+        const_cast<RTKProcessor*>(this)->current_sat_data_ = sat_data;
+        const double bias_dt =
+            has_last_epoch_ ? std::max(rover_obs.time - last_epoch_time_, 1e-3) : 1.0;
+        const_cast<RTKProcessor*>(this)->updateBias(sat_data, bias_dt);
+    }
 
     std::vector<DoubleDifference> measurements;
     const auto dd_pairs = buildDoubleDifferencePairs(sat_data, 0);
@@ -4110,7 +4116,9 @@ std::vector<RTKProcessor::DoubleDifference> RTKProcessor::formDoubleDifferences(
         return measurements;
     }
 
-    const Vector3d rover_pos = base_position_ + filter_state_.state.head<3>();
+    const Vector3d rover_pos = evaluation_rover_position_ecef != nullptr
+        ? *evaluation_rover_position_ecef
+        : base_position_ + filter_state_.state.head<3>();
     for (const auto& pair : dd_pairs) {
         const auto ref_it = sat_data.find(pair.ref_sat);
         const auto sat_it = sat_data.find(pair.sat);
@@ -4162,11 +4170,77 @@ std::vector<RTKProcessor::DoubleDifference> RTKProcessor::formDoubleDifferences(
             : combinedSnrDbHz(sd.rover_l2_snr, sd.base_l2_snr);
         const double dd_snr = combinedSnrDbHz(ref_snr, sat_snr);
         measurement.variance = varerr(measurement.elevation, true, dd_snr);
+        measurement.code_variance = varerr(measurement.elevation, false, dd_snr);
+        measurement.wavelength = use_l1 ? sd.l1_wavelength : sd.l2_wavelength;
+        measurement.frequency_index = pair.freq;
+        const auto& locks = use_l1 ? lock_count_l1_ : lock_count_l2_;
+        const auto sat_lock = locks.find(pair.sat);
+        const auto ref_lock = locks.find(pair.ref_sat);
+        measurement.lock_count = std::min(
+            sat_lock == locks.end() ? 0 : sat_lock->second,
+            ref_lock == locks.end() ? 0 : ref_lock->second);
+        measurement.cycle_slip =
+            (use_l1 ? (sd.l1_lli | ref_sd.l1_lli) : (sd.l2_lli | ref_sd.l2_lli)) != 0 ||
+            measurement.lock_count <= 0;
         measurement.valid = true;
         measurements.push_back(std::move(measurement));
     }
 
     return measurements;
+}
+
+std::vector<dd_imu_bridge::DDObservation> RTKProcessor::formTightlyCoupledObservations(
+    const ObservationData& rover_obs, const ObservationData& base_obs,
+    const NavigationData& nav, const Vector3d& rover_position_ecef,
+    const Matrix3d& ecef_to_enu, const Eigen::Quaterniond& attitude_body_to_enu) {
+    std::vector<dd_imu_bridge::DDObservation> rows;
+    if (!rover_position_ecef.allFinite() || !ecef_to_enu.allFinite() ||
+        !attitude_body_to_enu.coeffs().allFinite()) {
+        return rows;
+    }
+    const auto measurements = formDoubleDifferences(
+        rover_obs, base_obs, nav, &rover_position_ecef);
+    rows.reserve(measurements.size());
+    for (const auto& measurement : measurements) {
+        if (!measurement.valid || !(measurement.wavelength > 0.0) ||
+            !std::isfinite(measurement.geometric_range)) {
+            continue;
+        }
+        dd_imu_bridge::DDObservation row;
+        row.key.satellite_prn = measurement.satellite.prn;
+        row.key.frequency_index = measurement.frequency_index;
+        row.key.satellite_system = static_cast<int>(measurement.satellite.system);
+        row.key.reference_satellite_prn = measurement.reference_satellite.prn;
+        row.key.reference_satellite_system =
+            static_cast<int>(measurement.reference_satellite.system);
+        row.key.signal_type = static_cast<int>(measurement.signal);
+        const Vector3d geometry_enu = ecef_to_enu * measurement.unit_vector;
+        row.geometry_enu = geometry_enu.transpose();
+        row.code_residual_m = measurement.pseudorange_dd - measurement.geometric_range;
+        row.code_variance_m2 = measurement.code_variance;
+        row.carrier_residual_m =
+            measurement.carrier_phase_dd * measurement.wavelength -
+            measurement.geometric_range;
+        // A newly formed DD arc can appear numerically precise while its
+        // reference relationship and slip history are not yet stable. Keep
+        // code rows active immediately, but delay carrier/ambiguity state
+        // augmentation until roughly one minute at 5 Hz.
+        constexpr int kTightCarrierMinLockCount = 300;
+        row.carrier_variance_m2 = measurement.lock_count >= kTightCarrierMinLockCount
+            ? measurement.variance
+            : 0.0;
+        row.wavelength_m = measurement.wavelength;
+        row.elevation_rad = measurement.elevation;
+        const Vector3d geometry_body = attitude_body_to_enu.conjugate() * geometry_enu;
+        row.body_azimuth_rad = std::atan2(geometry_body.y(), geometry_body.x());
+        const double ambiguity_cycles = row.carrier_residual_m / row.wavelength_m;
+        row.posterior_abs_residual_m = row.wavelength_m *
+            std::abs(ambiguity_cycles - std::round(ambiguity_cycles));
+        row.lock_count = measurement.lock_count;
+        row.cycle_slip = measurement.cycle_slip;
+        rows.push_back(std::move(row));
+    }
+    return rows;
 }
 void RTKProcessor::detectCycleSlips(const ObservationData&, const ObservationData&) {}
 bool RTKProcessor::resolveAmbiguities(int) { return resolveAmbiguities(); }

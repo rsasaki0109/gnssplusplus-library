@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <fstream>
 #include <iomanip>
@@ -55,6 +56,8 @@ struct FuseOptions {
     // (fusion_initialization::tryAlignHeading is a one-shot, ungated
     // correction).
     bool derive_velocity_from_fixed = false;
+    bool tightly_coupled_dd_imu = false;
+    bool tightly_coupled_dd_code_only = false;
 
     libgnss::LooseCouplingProcessor::Config fusion_config;
     int max_epochs = 0;
@@ -185,6 +188,13 @@ void printUsage(const char* program_name) {
         << "                                Doppler-derived velocity solve (the default source of\n"
         << "                                has_velocity) is unavailable. Experimental -- see\n"
         << "                                docs/design.md notes on wrong-fix sensitivity. Default: off.\n"
+        << "  --tight-dd-imu               Opt-in DD + IMU ESKF update. Code DD is committed; carrier DD\n"
+        << "                                and ambiguity/partial-AR updates are shadow-gated by default\n"
+        << "  --tight-dd-carrier-experimental\n"
+        << "                                Commit carrier/ambiguity updates that pass the innovation\n"
+        << "                                gate (research ablation; real-data validation found instability)\n"
+        << "  --tight-dd-code-only         Diagnostic ablation: disable DD carrier/PAR rows\n"
+        << "                                (requires --base; default: off)\n"
         << "  --max-epochs <n>             Stop after n GNSS observation epochs (0 = no limit)\n"
         << "  --verbose                    Print periodic per-epoch progress\n"
         << "  --quiet                      Suppress run summary\n"
@@ -390,6 +400,14 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             options.enable_base_interpolation = false;
         } else if (arg == "--derive-velocity-from-fixed") {
             options.derive_velocity_from_fixed = true;
+        } else if (arg == "--tight-dd-imu") {
+            options.tightly_coupled_dd_imu = true;
+        } else if (arg == "--tight-dd-carrier-experimental") {
+            options.tightly_coupled_dd_imu = true;
+            options.fusion_config.tight_dd_commit_carrier_updates = true;
+        } else if (arg == "--tight-dd-code-only") {
+            options.tightly_coupled_dd_imu = true;
+            options.tightly_coupled_dd_code_only = true;
         } else if (arg == "--max-epochs") {
             options.max_epochs = std::stoi(requireValue(arg, i, argc, argv));
         } else if (arg == "--verbose") {
@@ -413,6 +431,9 @@ FuseOptions parseArguments(int argc, char* argv[]) {
     if (options.rover_path.empty()) argumentError("--rover is required", argv[0]);
     if (options.nav_path.empty()) argumentError("--nav is required", argv[0]);
     if (options.imu_path.empty()) argumentError("--imu is required", argv[0]);
+    if (options.tightly_coupled_dd_imu && options.base_path.empty()) {
+        argumentError("--tight-dd-imu requires --base", argv[0]);
+    }
     if (options.max_epochs < 0) argumentError("--max-epochs must be non-negative", argv[0]);
 
     return options;
@@ -621,6 +642,17 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
     int interpolated_base_epochs = 0;
     int skipped_rover_epochs = 0;
     int derived_velocity_updates = 0;
+    int tight_dd_epochs = 0;
+    int tight_dd_accepted = 0;
+    int tight_dd_rejected = 0;
+    int tight_dd_carrier_fallbacks = 0;
+    int tight_dd_rows = 0;
+    int tight_dd_partial_ar_epochs = 0;
+    int tight_dd_fixed_ambiguities = 0;
+    int tight_dd_soft_resets = 0;
+    int tight_dd_nis_samples = 0;
+    double tight_dd_nis_sum = 0.0;
+    double tight_dd_nis_max = 0.0;
 
     // RTKProcessor::processRTKEpoch() now populates PositionSolution::
     // has_velocity from a real Doppler-derived least squares solve
@@ -746,6 +778,47 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
             }
 
             fusion_processor.processGnssSolution(pos_solution);
+            if (options.tightly_coupled_dd_imu && fusion_processor.isOriginSet()) {
+                const auto propagated_solution = fusion_processor.toPositionSolution();
+                const auto rotation = fusion_processor.ecefToLocalEnuRotation();
+                auto dd_rows = rtk_processor.formTightlyCoupledObservations(
+                    rover_obs, aligned_base_obs, nav_data,
+                    propagated_solution.position_ecef, rotation,
+                    fusion_processor.state().nominal.attitude_body_to_enu);
+                if (options.tightly_coupled_dd_code_only) {
+                    for (auto& row : dd_rows) row.carrier_variance_m2 = 0.0;
+                }
+                if (!dd_rows.empty()) {
+                    const auto dd_result = fusion_processor.processTightlyCoupledDD(
+                        dd_rows, &pos_solution);
+                    ++tight_dd_epochs;
+                    tight_dd_rows += static_cast<int>(dd_rows.size());
+                    if (std::isfinite(dd_result.update.nis_per_observation)) {
+                        ++tight_dd_nis_samples;
+                        tight_dd_nis_sum += dd_result.update.nis_per_observation;
+                        tight_dd_nis_max = std::max(
+                            tight_dd_nis_max,
+                            dd_result.update.nis_per_observation);
+                    }
+                    if (dd_result.update.ok) {
+                        ++tight_dd_accepted;
+                    }
+                    if (dd_result.update.rejected_by_innovation_gate) {
+                        ++tight_dd_rejected;
+                    }
+                    if (dd_result.update.carrier_fallback_used) {
+                        ++tight_dd_carrier_fallbacks;
+                    }
+                    if (dd_result.partial_ar.fixed) {
+                        ++tight_dd_partial_ar_epochs;
+                        tight_dd_fixed_ambiguities += dd_result.partial_ar.fixed_count;
+                    }
+                    if (dd_result.reset_action !=
+                        libgnss::dd_imu_bridge::SoftResetAction::REJECTED) {
+                        ++tight_dd_soft_resets;
+                    }
+                }
+            }
             ++valid_solutions;
             if (pos_solution.isFixed()) {
                 ++fixed_solutions;
@@ -805,6 +878,23 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
         std::cout << "Interpolated base epochs: " << interpolated_base_epochs << "\n";
         std::cout << "Skipped rover epochs (no aligned base): " << skipped_rover_epochs << "\n";
         std::cout << "Derived FIXED-to-FIXED velocity updates: " << derived_velocity_updates << "\n";
+        if (options.tightly_coupled_dd_imu) {
+            std::cout << "Tight DD/IMU epochs: " << tight_dd_epochs
+                      << " (accepted=" << tight_dd_accepted
+                      << ", innovation_rejected=" << tight_dd_rejected << ")\n";
+            std::cout << "Tight DD rows: " << tight_dd_rows << "\n";
+            std::cout << "Carrier-to-code fallbacks: "
+                      << tight_dd_carrier_fallbacks << "\n";
+            std::cout << "Tight DD NIS/observation mean/max: "
+                      << (tight_dd_nis_samples > 0
+                              ? tight_dd_nis_sum / tight_dd_nis_samples
+                              : 0.0)
+                      << "/" << tight_dd_nis_max << "\n";
+            std::cout << "Partial-AR epochs/fixed ambiguities: "
+                      << tight_dd_partial_ar_epochs << "/"
+                      << tight_dd_fixed_ambiguities << "\n";
+            std::cout << "Innovation-gated soft resets: " << tight_dd_soft_resets << "\n";
+        }
         std::cout << "Fused epochs written: " << fused_solution.size() << "\n";
         std::cout << "Fusion initialized: " << (fusion_processor.isInitialized() ? "yes" : "no") << "\n";
         // isHeadingAligned() only means "a latch has happened at some point"

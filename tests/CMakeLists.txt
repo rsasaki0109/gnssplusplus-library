@@ -22,6 +22,7 @@ if(GTest_FOUND)
         test_fusion_nhc.cpp
         test_fusion_initialization.cpp
         test_fusion_processor_synthetic.cpp
+        test_dd_imu_bridge.cpp
         test_ppp_clas.cpp
         test_ppp_osr.cpp
         test_ppp_ar.cpp

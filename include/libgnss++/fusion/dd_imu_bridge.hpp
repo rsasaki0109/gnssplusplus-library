@@ -1,38 +1,5 @@
 #pragma once
 
-// Stage 2 (design-only, docs/design.md 4): tightly-coupled DD-RTK + IMU path.
-//
-// This header intentionally declares NO functions and has NO corresponding
-// .cpp -- it exists purely to record, in compilable form, the struct shapes a
-// future tightly-coupled extension would need, per the integration decisions
-// in docs/design.md 4.1-4.2 and 7:
-//
-//   - Run a SEPARATE, parallel 15-state ESKF (fusion::FusionState) rather
-//     than extending RTKProcessor's own fixed-size state layout
-//     (rtk.hpp's MAXSAT-indexed ambiguity/iono slots), to avoid an invasive
-//     rewrite of that delicate, already-well-tested machinery.
-//   - The parallel filter would CALL INTO RTKProcessor's existing
-//     double-difference measurement construction
-//     (rtk_measurement::assembleMeasurementSystem /
-//     RTKProcessor::buildMeasurementBlocks) re-derived against the fused
-//     position instead of RTKProcessor's own baseline-only state, then hand
-//     the resulting (design_matrix, residuals, covariance) triple to
-//     fusion_update::applyDenseUpdate (docs/design.md 4.2) instead of
-//     rtk_update::applyMeasurementUpdate.
-//   - Ambiguity state augmentation mirrors RTKProcessor's existing
-//     getOrCreateN1Index/getOrCreateN2Index seeding + lock-count/hold
-//     lifecycle bookkeeping (rtk.hpp) close to verbatim, since that
-//     bookkeeping is about *which DD pairs exist and are trustworthy*, not
-//     about *which estimator consumes them* (docs/design.md 4.1).
-//   - Cycle-slip detection (rtk_slip_detection.hpp) and post-hoc validation
-//     (rtk_validation.hpp's PositionSolution-stream guards) are already
-//     estimator-agnostic and would be reused unmodified.
-//
-// See docs/design.md 4.3 for why fgo.hpp is NOT the near-term host for IMU
-// preintegration (no SO(3)/manifold state or retraction step exists in the
-// optimizer core today) -- the sequential ESKF above is the recommended
-// vehicle for both Stage 1 (this module) and Stage 2.
-
 #include <vector>
 
 #include <Eigen/Dense>
@@ -42,32 +9,130 @@
 namespace libgnss {
 namespace dd_imu_bridge {
 
-/**
- * @brief Stage 2 sketch: one live double-difference ambiguity, appended as an
- * extra scalar block to the parallel ESKF's covariance on first sight of a
- * (satellite, frequency) pair -- the ESKF-side analogue of
- * RTKProcessor::getOrCreateN1Index/getOrCreateN2Index's seeding formula, not
- * a new bookkeeping concept.
- */
-struct AmbiguityErrorState {
+struct AmbiguityKey {
     int satellite_prn = 0;
     int frequency_index = -1;
-    int generation = 0;      ///< bumped on cycle slip / forced reset, forces a fresh scalar slot
-    double float_value_cycles = 0.0;
-    double variance_cycles2 = 0.0;
-    bool held = false;       ///< fixed-and-held: folded into the DD measurement as a constant
+    int generation = 0;
+    // PRN is not globally unique and a DD ambiguity also changes when its
+    // reference satellite changes.  Keep these fields after the legacy three
+    // so existing aggregate initializers remain source-compatible.
+    int satellite_system = 0;
+    int reference_satellite_prn = 0;
+    int reference_satellite_system = 0;
+    int reference_generation = 0;
+    int signal_type = 0;
+
+    bool operator==(const AmbiguityKey& other) const {
+        return satellite_prn == other.satellite_prn &&
+               frequency_index == other.frequency_index && generation == other.generation &&
+               satellite_system == other.satellite_system &&
+               reference_satellite_prn == other.reference_satellite_prn &&
+               reference_satellite_system == other.reference_satellite_system &&
+               reference_generation == other.reference_generation &&
+               signal_type == other.signal_type;
+    }
 };
 
-/**
- * @brief Stage 2 sketch: the augmented state a tightly-coupled filter would
- * carry -- the existing 15-state FusionState plus a variable-length block of
- * live DD ambiguities. Deliberately NOT wired into FusionState itself (which
- * stays exactly 15-wide for Stage 1) since the ambiguity block's size changes
- * every epoch as satellites rise/set/slip.
- */
+struct AmbiguityErrorState {
+    AmbiguityKey key;
+    double float_value_cycles = 0.0;
+    double variance_cycles2 = 100.0;
+    bool held = false;
+};
+
 struct TightlyCoupledState {
     FusionState eskf;
     std::vector<AmbiguityErrorState> ambiguities;
+    /// [15-state INS error, ambiguity errors], including all cross-covariances.
+    Eigen::MatrixXd augmented_covariance;
+};
+
+/** One already differenced RTK observation, evaluated at eskf.nominal.
+ * geometry_enu is d(predicted DD range)/d(position error).  Carrier residual
+ * is observed-minus-predicted range before subtracting wavelength*N.
+ */
+struct DDObservation {
+    AmbiguityKey key;
+    Eigen::RowVector3d geometry_enu = Eigen::RowVector3d::Zero();
+    double code_residual_m = 0.0;
+    double code_variance_m2 = 0.0;       ///< <=0 disables the code row
+    double carrier_residual_m = 0.0;
+    double carrier_variance_m2 = 0.0;    ///< <=0 disables the carrier row
+    double wavelength_m = 0.0;
+    double elevation_rad = 0.0;
+    double body_azimuth_rad = 0.0;
+    double posterior_abs_residual_m = 0.0;
+    int lock_count = 0;
+    bool cycle_slip = false;
+};
+
+struct BridgeConfig {
+    bool commit_carrier_updates = true;
+    double max_nis_per_observation = 16.0;
+    double lambda_ratio_threshold = 3.0;
+    int partial_ar_min_ambiguities = 3;
+    int partial_ar_min_lock_count = 300;
+    double fixed_ambiguity_sigma_cycles = 0.01;
+    double soft_reset_max_innovation_m = 30.0;
+    double soft_reset_position_sigma_m = 5.0;
+    double rejected_reset_covariance_scale = 4.0;
+    int soft_reset_rejection_patience = 30;
+    double soft_reset_max_position_variance_m2 = 100.0;
+};
+
+struct UpdateResult {
+    bool ok = false;
+    bool rejected_by_innovation_gate = false;
+    bool carrier_update_accepted = false;
+    bool carrier_fallback_used = false;
+    int observation_count = 0;
+    double nis_per_observation = 0.0;
+    double joint_nis_per_observation = 0.0;
+};
+
+struct PartialARResult {
+    bool fixed = false;
+    int attempted = 0;
+    int fixed_count = 0;
+    double ratio = 0.0;
+};
+
+enum class SoftResetAction { REJECTED, MEASUREMENT_UPDATE, COVARIANCE_INFLATION };
+
+class DDIMUBridge {
+public:
+    explicit DDIMUBridge(const FusionState& initial, BridgeConfig config = {});
+
+    const TightlyCoupledState& state() const { return state_; }
+
+    /// Install an externally mechanized INS state and propagate ambiguity cross-covariance.
+    void acceptPropagatedINS(const FusionState& propagated,
+                             const Eigen::Matrix<double, 15, 15>& transition);
+
+    /// Build live ambiguity slots, apply joint DD code/carrier update, and inject errors.
+    UpdateResult update(const std::vector<DDObservation>& observations);
+
+    /// Quality-ordered sequential partial AR; never holds a subset that fails LAMBDA ratio.
+    PartialARResult resolvePartialAmbiguities(const std::vector<DDObservation>& observations);
+
+    /// Preserve a valid propagated state during reacquisition; never hard-overwrite position.
+    SoftResetAction softResetPosition(const Eigen::Vector3d& spp_position_enu,
+                                      bool propagated_state_valid);
+
+private:
+    int findAmbiguity(const AmbiguityKey& key) const;
+    int findSignalAmbiguity(const AmbiguityKey& key) const;
+    void removeAmbiguity(int index);
+    int ensureAmbiguity(const DDObservation& observation);
+    UpdateResult applyLinearUpdate(const Eigen::MatrixXd& h,
+                                   const Eigen::VectorXd& residual,
+                                   const Eigen::MatrixXd& covariance,
+                                   double max_nis_per_observation);
+    void inject(const Eigen::VectorXd& correction);
+
+    TightlyCoupledState state_;
+    BridgeConfig config_;
+    int consecutive_innovation_rejections_ = 0;
 };
 
 }  // namespace dd_imu_bridge

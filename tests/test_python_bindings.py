@@ -7,7 +7,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import libgnsspp
+import pytest
+
+libgnsspp = pytest.importorskip(
+    "libgnsspp",
+    reason="optional pybind11 extension is not built in this test environment",
+)
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
