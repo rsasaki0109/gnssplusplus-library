@@ -316,6 +316,7 @@ void LooseCouplingProcessor::processImuSample(const ImuSample& sample_body_flu) 
                                               Eigen::Vector3d(0.0, 0.0, -kStandardGravityMps2));
     state_.covariance = phi * state_.covariance * phi.transpose() + qd;
     state_.covariance = 0.5 * (state_.covariance + state_.covariance.transpose());
+    dd_transition_since_update_ = phi * dd_transition_since_update_;
 
     zupt_window_.push_back(sample_body_flu);
     while (zupt_window_.size() > kZuptWindowSize) {
@@ -412,6 +413,41 @@ void LooseCouplingProcessor::processGnssSolution(const PositionSolution& solutio
     }
 }
 
+LooseCouplingProcessor::TightlyCoupledDDResult
+LooseCouplingProcessor::processTightlyCoupledDD(
+    const std::vector<dd_imu_bridge::DDObservation>& observations,
+    const PositionSolution* recovery_solution) {
+    TightlyCoupledDDResult result;
+    if (!initialized_ || !origin_set_ || observations.empty()) {
+        return result;
+    }
+    if (!dd_imu_bridge_) {
+        dd_imu_bridge::BridgeConfig bridge_config;
+        bridge_config.commit_carrier_updates =
+            config_.tight_dd_commit_carrier_updates;
+        dd_imu_bridge_.reset(new dd_imu_bridge::DDIMUBridge(state_, bridge_config));
+    } else {
+        dd_imu_bridge_->acceptPropagatedINS(state_, dd_transition_since_update_);
+    }
+    dd_transition_since_update_.setIdentity();
+
+    result.update = dd_imu_bridge_->update(observations);
+    if (result.update.ok && result.update.carrier_update_accepted) {
+        result.partial_ar = dd_imu_bridge_->resolvePartialAmbiguities(observations);
+    } else if (result.update.rejected_by_innovation_gate &&
+               recovery_solution != nullptr && recovery_solution->isValid()) {
+        const Eigen::Matrix3d r_e2n = ecefToEnuRotation(origin_lat_, origin_lon_);
+        const Eigen::Vector3d antenna_enu =
+            r_e2n * (recovery_solution->position_ecef - origin_ecef_);
+        const Eigen::Vector3d imu_position_enu = antenna_enu -
+            state_.nominal.attitude_body_to_enu * config_.lever_arm_body;
+        result.reset_action = dd_imu_bridge_->softResetPosition(
+            imu_position_enu, /*propagated_state_valid=*/true);
+    }
+    state_ = dd_imu_bridge_->state().eskf;
+    return result;
+}
+
 PositionSolution LooseCouplingProcessor::toPositionSolution() const {
     PositionSolution solution;
     solution.time = state_.nominal.time;
@@ -440,6 +476,11 @@ PositionSolution LooseCouplingProcessor::toPositionSolution() const {
     }
 
     return solution;
+}
+
+Eigen::Matrix3d LooseCouplingProcessor::ecefToLocalEnuRotation() const {
+    return origin_set_ ? ecefToEnuRotation(origin_lat_, origin_lon_)
+                       : Eigen::Matrix3d::Identity();
 }
 
 }  // namespace libgnss

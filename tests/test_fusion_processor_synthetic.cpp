@@ -48,6 +48,61 @@ PhaseCommand commandAt(double t) {
     return kPhases.back();
 }
 
+TEST(FusionProcessorSyntheticTest, AppliesTightlyCoupledDDRowsToLiveINSState) {
+    LooseCouplingProcessor::Config config;
+    config.align_static_window_s = 0.1;
+    config.zupt_enable = false;
+    // This test exercises the committed joint code/carrier path explicitly;
+    // production remains shadow-only unless this research flag is enabled.
+    config.tight_dd_commit_carrier_updates = true;
+    LooseCouplingProcessor processor(config);
+
+    GNSSTime time(2200, 100000.0);
+    for (int i = 0; i < 20; ++i) {
+        ImuSample sample;
+        sample.time = time;
+        sample.accel_raw = Eigen::Vector3d(0.0, 0.0, kGravity);
+        sample.gyro_raw_radps.setZero();
+        processor.processImuSample(sample);
+        time = time + kDt;
+    }
+    ASSERT_TRUE(processor.isInitialized());
+
+    PositionSolution anchor;
+    anchor.time = time;
+    anchor.status = SolutionStatus::FIXED;
+    anchor.num_satellites = 10;
+    anchor.position_ecef = geodetic2ecef(35.6 * M_PI / 180.0,
+                                         139.7 * M_PI / 180.0, 50.0);
+    anchor.position_covariance = Eigen::Matrix3d::Identity();
+    processor.processGnssSolution(anchor);
+    ASSERT_TRUE(processor.isOriginSet());
+
+    dd_imu_bridge::DDObservation row;
+    row.key = {3, 0, 0};
+    row.key.satellite_system = static_cast<int>(GNSSSystem::GPS);
+    row.key.reference_satellite_prn = 20;
+    row.key.reference_satellite_system = static_cast<int>(GNSSSystem::GPS);
+    row.geometry_enu = Eigen::RowVector3d::UnitX();
+    row.code_residual_m = 1.0;
+    row.code_variance_m2 = 0.25;
+    row.wavelength_m = 0.19;
+    // Keep the synthetic ambiguity exactly integral so the test isolates the
+    // processor integration path instead of exercising an innovation boundary.
+    row.carrier_residual_m = row.wavelength_m * 12.0;
+    row.carrier_variance_m2 = 0.0025;
+    row.elevation_rad = 0.8;
+    row.lock_count = 100;
+
+    const double before_x = processor.state().nominal.position_enu.x();
+    const auto result = processor.processTightlyCoupledDD({row}, &anchor);
+    EXPECT_TRUE(result.update.ok);
+    EXPECT_EQ(result.update.observation_count, 2);
+    EXPECT_GT(processor.state().nominal.position_enu.x(), before_x);
+    const Eigen::Matrix3d rotation = processor.ecefToLocalEnuRotation();
+    EXPECT_TRUE((rotation * rotation.transpose()).isApprox(Eigen::Matrix3d::Identity(), 1e-12));
+}
+
 TEST(FusionProcessorSyntheticTest, TracksSyntheticTrajectoryThroughTurnAndDropout) {
     const double origin_lat = 35.6 * M_PI / 180.0;
     const double origin_lon = 139.7 * M_PI / 180.0;

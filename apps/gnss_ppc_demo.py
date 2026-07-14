@@ -245,6 +245,17 @@ def parse_args() -> argparse.Namespace:
         help="Optional RTK ambiguity ratio threshold passed through to gnss solve when --solver rtk.",
     )
     parser.add_argument(
+        "--elevation-mask-deg",
+        type=float,
+        default=None,
+        help="Optional RTK elevation mask in degrees.",
+    )
+    parser.add_argument(
+        "--sat-count-ratio",
+        action="store_true",
+        help="Use experimental satellite-count-aware RTK Ratio thresholds.",
+    )
+    parser.add_argument(
         "--max-subset-ar-drop-steps",
         type=int,
         default=None,
@@ -470,6 +481,8 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional RTK post-fix residual RMS rejection threshold in meters.",
     )
+    parser.add_argument("--doppler-float-seed", action="store_true")
+    parser.add_argument("--doppler-float-seed-max-age", type=float, default=None)
     parser.add_argument(
         "--enable-wide-lane-ar",
         action="store_true",
@@ -1209,6 +1222,10 @@ def run_solver(
             command.extend(["--iono", args.iono])
         if getattr(args, "ratio", None) is not None:
             command.extend(["--ratio", str(args.ratio)])
+        if getattr(args, "elevation_mask_deg", None) is not None:
+            command.extend(["--elevation-mask-deg", str(args.elevation_mask_deg)])
+        if getattr(args, "sat_count_ratio", False):
+            command.extend(["--ratio", "sat-count"])
         if getattr(args, "max_subset_ar_drop_steps", None) is not None:
             command.extend(
                 ["--max-subset-ar-drop-steps", str(args.max_subset_ar_drop_steps)]
@@ -1414,6 +1431,12 @@ def run_solver(
             command.extend(["--max-consec-nonfix-reset", str(args.max_consec_nonfix_reset)])
         if getattr(args, "max_postfix_rms", None) is not None:
             command.extend(["--max-postfix-rms", str(args.max_postfix_rms)])
+        if getattr(args, "doppler_float_seed", False):
+            command.append("--doppler-float-seed")
+        if getattr(args, "doppler_float_seed_max_age", None) is not None:
+            command.extend(
+                ["--doppler-float-seed-max-age", str(args.doppler_float_seed_max_age)]
+            )
         if getattr(args, "enable_wide_lane_ar", False):
             command.append("--enable-wide-lane-ar")
         if getattr(args, "wide_lane_threshold", None) is not None:
@@ -1650,6 +1673,12 @@ def build_summary_payload(
         "receiver_observation_provenance": ppc_receiver_observation_provenance(args._dataset_city),
         "rtk_iono": getattr(args, "iono", None) if args.solver == "rtk" else None,
         "rtk_ratio_threshold": getattr(args, "ratio", None) if args.solver == "rtk" else None,
+        "rtk_elevation_mask_deg": (
+            getattr(args, "elevation_mask_deg", None) if args.solver == "rtk" else None
+        ),
+        "rtk_satellite_count_ratio": (
+            bool(getattr(args, "sat_count_ratio", False)) if args.solver == "rtk" else False
+        ),
         "rtk_max_subset_ar_drop_steps": (
             getattr(args, "max_subset_ar_drop_steps", None)
             if args.solver == "rtk"
@@ -1805,6 +1834,14 @@ def build_summary_payload(
         ),
         "rtk_max_postfix_residual_rms_m": (
             getattr(args, "max_postfix_rms", None) if args.solver == "rtk" else None
+        ),
+        "rtk_doppler_float_seed": (
+            bool(getattr(args, "doppler_float_seed", False)) if args.solver == "rtk" else False
+        ),
+        "rtk_doppler_float_seed_max_age_s": (
+            getattr(args, "doppler_float_seed_max_age", None)
+            if args.solver == "rtk"
+            else None
         ),
         "rtk_wide_lane_ar_enabled": bool(
             args.solver == "rtk" and getattr(args, "enable_wide_lane_ar", False)

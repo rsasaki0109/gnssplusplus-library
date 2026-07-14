@@ -1,5 +1,10 @@
 # MADOCA Port Plan
 
+> **Active plan:** [MADOCALIB Native Migration Ledger](madocalib_native_migration.md)
+> is the current issue-#148 capability table, frozen oracle contract, milestone
+> plan, and acceptance gate.  This document retains the detailed migration
+> history and earlier design analysis.
+
 This plan scopes a MADOCA foundation pass.  The goal is to capture what should
 be ported from MADOCALIB, what should be shared with the existing CLAS work,
 and how to build oracle parity without dragging reference code into production.
@@ -31,7 +36,8 @@ second station (ALIC, neutral) with 1 h/6 h staying byte-exact.  The interim
 byte-identical under commit); the #144 spike guard (100 m) is kept as the
 opt-out-path safety net.  GLONASS
 phase, QZSS L5, SSR-replay, bias-identity, and pair-selection hypotheses were
-each measured and closed (default-off knobs kept where they were preview-only).
+each measured.  QZSS L5 was later promoted for M2 three-frequency row parity;
+the remaining preview-only knobs stay default-off.
 The repro harness and per-slice history live in the memory note
 `madoca-ppp-frontier` and in issue #148.
 
@@ -42,6 +48,14 @@ variance collapses to ~0.03 within ~38 epochs and can no longer track the drift,
 and GLONASS code carries large FDMA inter-frequency biases too.  MADOCA SSR
 provides no GLONASS phase-bias product, so default GLONASS-phase-off is correct
 (matches MADOCALIB excluding GLO from the precise phase/AR solution).
+
+Generate the evidence with `GNSS_PPP_MADOCA_GLONASS_PHASE=1` and
+`GNSS_PPP_MADOCA_POSTFIT_SHADOW=<csv>`, then run
+`scripts/analysis/madoca_glonass_phase_audit.py <csv> --json-out <json>`.
+The `madoca_glonass_phase_audit.v1` report records per-satellite raw and
+demeaned RMS, residual span, duration, and residual/elevation correlation.
+The shadow CSV header includes the signal-family, RINEX-code, and RTKLIB-code
+columns emitted by each data row so these residual fields remain aligned.
 
 Open MADOCA levers (measured, none yet a default win): PPP-AR parity
 (`exec_pppar` window); QZSS atmosphere row-set.
@@ -55,6 +69,13 @@ CSV schema is
 `madoca_materialization_snapshot.v1` and records satellite key, system/PRN,
 correction epoch, orbit/clock reference epochs, IODE/SSR IOD, RAC orbit,
 clock, code-bias ids/values, phase-bias ids/values, and discontinuity counters.
+
+For measurement-neutral L6D coverage inspection, repeat
+`--madoca-l6d-shadow <file>` for the PRN 200/201 inputs. The PPP summary JSON
+records loaded state, causal/fresh snapshot epochs, stale epochs, matched
+satellites, maximum age, and the last selected region/area without modifying
+code, phase, ionosphere states, or the position solution.
+
 This is the M3 boundary between decoded L6E content and solver row construction:
 use it before residual or state/covariance tuning so decoder-vs-materializer
 identity/time/IOD mistakes are visible as artifacts.  The option changes no
@@ -429,6 +450,21 @@ Batch examples show the intended scenarios:
 - `exec_pppar_ion.bat`: PPP-AR plus L6D ionosphere with PRNs 200 and 201.
 - `exec_cssr2ssr.bat`: `cssr2ssr` conversion from L6E to RTCM3/debug text.
 
+The bridge CLI exposes these bundled configurations through
+`--madocalib-profile ppp`, `pppar`, and `pppar-ion`.  The MADOCA parity CI runs
+the one-hour `pppar` profile and requires at least one fixed solution, preventing
+an AR comparison from silently falling back to the default float-PPP config.
+The same lane runs native `--enable-ar --ar-method per-freq` for the first 120
+MIZU epochs, records the selected AR method and native fixed/float counts in its
+summary JSON, and generates `madoca_pppar_solution_diff.json` plus a matched-row
+CSV against the oracle trajectory.  This initial baseline requires successful
+execution and common epochs but deliberately does not impose an accuracy or
+native-fix-rate threshold until the measured artifact has been reviewed.
+Selecting native `--ar-method per-freq` also selects the state model required
+by that algorithm: uncombined observations with estimated per-satellite STEC.
+Previously the CLI changed only the AR enum, so the dedicated per-frequency
+resolver was unreachable unless two extra ionosphere flags were supplied.
+
 These sample files should become the first whole-run oracle candidates after
 helper parity exists.
 
@@ -783,6 +819,12 @@ Phase 4, L6D ionosphere foundation:
 
 - Implement coverage and correction message parsing separately from L6E.
 - Implement area selection and STEC delay/std calculation.
+- Materialize completed region updates as receiver-specific, timestamped
+  `MadocaIonoSnapshot` rows; this is the tested product boundary for later PPP
+  ingestion and keeps raw file replay out of the solver.
+- Merge snapshots from replay sources through `MadocaIonoProducts`, which owns
+  chronological ordering, duplicate replacement, causal lookup, and the
+  explicit correction-age gate used by later PPP ingestion.
 - Add sample-driven tests for PRNs 200 and 201.
 - Keep PRN 197 only where it is needed for compatibility or fixture coverage.
 - Do not feed L6D products into PPP until decoder-level values match the oracle
@@ -792,6 +834,9 @@ Phase 5, PPP application:
 
 - Wire MADOCA correction products into the existing PPP pipeline only after the
   correction objects are independently testable.
+- Start with measurement-neutral L6D shadow lookup: select only causal/fresh
+  snapshots and report matched satellites plus region, area, and age before
+  enabling any code/phase or STEC-state update.
 - Keep CLAS and MADOCA profiles explicit.
 - Add runtime knobs as narrow, documented options, not broad solver rewrites.
 - Compare sample `exec_ppp` and `exec_pppar` windows against MADOCALIB output.

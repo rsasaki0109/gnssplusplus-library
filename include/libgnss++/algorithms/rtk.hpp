@@ -4,13 +4,17 @@
 #include "../core/observation.hpp"
 #include "../core/navigation.hpp"
 #include "../core/solution.hpp"
+#include "nlos_weights.hpp"
+#include "float_trust_policy.hpp"
 #include "rtk_measurement.hpp"
 #include "rtk_selection.hpp"
 #include "rtk_slip_detection.hpp"
 #include "rtk_validation.hpp"
 #include "spp.hpp"
+#include <libgnss++/fusion/dd_imu_bridge.hpp>
 #include <Eigen/Dense>
 #include <limits>
+#include <memory>
 #include <mutex>
 #include <set>
 #include <string>
@@ -50,6 +54,7 @@ public:
 
         double ratio_threshold = 3.0;
         double ambiguity_ratio_threshold = 3.0;
+        bool enable_satellite_count_ratio_threshold = false;
         double validation_threshold = 0.15;
         bool enable_ar_filter = false;
         double ar_filter_margin = 0.25;
@@ -73,6 +78,21 @@ public:
             MOVING_BASE = 2 // kinematic relative baseline against a time-varying base position
         };
         PositionMode position_mode = PositionMode::KINEMATIC;
+
+        // Initial-position seed sources (default off preserves legacy SPP-only seed).
+        // When prefer_trusted_position_seed is set, kinematic re-seeds prefer the
+        // most recent trusted/fixed solution (within a 1s window) over an SPP fix.
+        // When prefer_rover_position_seed is set, the rover RINEX header position
+        // (if magnitude > 1e6 m, i.e. real ECEF) is used before SPP.
+        bool prefer_trusted_position_seed = false;
+        bool prefer_rover_position_seed = false;
+
+        /// Propagate the latest trusted position with the most recent
+        /// Doppler-derived rover velocity when reseeding a kinematic epoch.
+        /// This mirrors the short FLOAT-gap strategy in Fredeluces et al.
+        /// false (default) preserves the existing seed policy.
+        bool use_doppler_float_seed = false;
+        double doppler_float_seed_max_age_s = 6.0;
 
         // Kalman filter parameters
         double process_noise_position = 1e-4;       // m^2/s for static baseline
@@ -111,6 +131,12 @@ public:
         double glonass_icb_l1_m_per_mhz = 0.0;
         double glonass_icb_l2_m_per_mhz = 0.0;
 
+        // Phase 18 Step 3: enable L5 measurement collection.
+        // When false (default), collectSatelliteData populates only L1/L2 — L5 obs are ignored.
+        // When true, L5-class obs (GPS_L5/QZS_L5/GAL_E5A/BDS_B2A) are populated into
+        // SatelliteData.l5_* fields. Step 4+ will add residual/Jacobian/cycle-slip handling.
+        bool enable_l5 = false;
+
         /// AR policy gate.
         /// EXTENDED (default): all hold/subset/fallback/regularization extras active.
         /// DEMO5_CONTINUOUS:   demo5-equivalent simple AR — no relaxed hold ratio,
@@ -126,6 +152,9 @@ public:
         /// Maximum number of worst-variance DD pairs to drop while searching
         /// progressive subset AR candidates. 6 preserves existing behavior.
         int max_subset_drop_steps_for_ar = 6;
+        /// Try the paper's GQEBR -> GQEB -> GQER -> GQE -> GQB -> GQ
+        /// constellation sequence after a full-set AR failure.
+        bool enable_paper_constellation_fallback_ar = false;
 
         /// Minimum distinct non-reference satellites required for subset AR.
         /// 0 (default) disables the gate and preserves existing subset behavior.
@@ -282,6 +311,99 @@ public:
 
         /// Max pairs to drop progressively in BSR-guided decimation.
         int bsr_guided_max_drop_steps = 6;
+
+        /// WP7: NLOS/multipath measurement-weighting sigma-inflation mapping.
+        /// OFF (default) preserves pre-WP7 behavior bit-for-bit — the lookup
+        /// table injected via setNlosWeightTable() is never consulted, even
+        /// if one is set. Enable with --nlos-weight-mode {two-tier,continuous}
+        /// in gnss_solve (requires --nlos-weights <csv>).
+        nlos_weights::NlosWeightMode nlos_weight_mode = nlos_weights::NlosWeightMode::OFF;
+
+        /// TWO_TIER: satellites with los_prob below this are treated as NLOS
+        /// and get nlos_two_tier_sigma_inflation applied to sigma.
+        double nlos_two_tier_los_threshold = 0.5;
+
+        /// TWO_TIER: sigma multiplier applied to NLOS-classified satellites
+        /// (variance multiplier is this value squared). >= 1.0.
+        double nlos_two_tier_sigma_inflation = 3.0;
+
+        /// CONTINUOUS: floor applied to los_prob before the 1/sqrt(...) sigma
+        /// mapping, so a satellite with los_prob == 0 still gets a finite
+        /// (if large) sigma inflation instead of infinite.
+        double nlos_continuous_los_prob_floor = 0.05;
+
+        /// Tolerance (seconds) used when matching the current epoch's tow
+        /// against the NLOS weight table's tow keys.
+        double nlos_tow_tolerance_s = 0.05;
+
+        /// WP8: EXCLUDE mode threshold — satellites with los_prob strictly
+        /// below this are dropped from DD formation entirely (both the
+        /// float KF and the AR candidate set), instead of just having their
+        /// sigma inflated. No effect unless nlos_weight_mode == EXCLUDE.
+        double nlos_exclude_threshold = 0.5;
+
+        /// WP8: EXCLUDE mode safety guard — if excluding NLOS satellites
+        /// this epoch would leave fewer than this many satellites in the
+        /// candidate set, skip exclusion for the epoch entirely (keep every
+        /// satellite) rather than degrade geometry below solvability.
+        int nlos_min_sats = 5;
+
+        /// WP9: float-filter trust/reset policy. LEGACY (default) preserves
+        /// resetPositionToSPP()'s pre-WP9 unconditional wide-reset-unless-
+        /// trusted behavior bit-for-bit. See float_trust_policy.hpp for the
+        /// CV_PREDICT/SCALED_RESET math and rtk.cpp's resetPositionToSPP()
+        /// for the wiring; both alternate policies only ever engage once
+        /// trust has lapsed (float_trust_policy::hasTrustLapsed()), so they
+        /// are a strict no-op on every epoch of a healthy segment.
+        float_trust_policy::FloatTrustPolicy float_trust_policy =
+            float_trust_policy::FloatTrustPolicy::LEGACY;
+
+        /// WP9: process-noise rate (m^2/s) used by both CV_PREDICT (linear
+        /// covariance growth per second of elapsed dt) and SCALED_RESET
+        /// (quadratic growth in time-since-trust). No effect when
+        /// float_trust_policy == LEGACY.
+        double trust_lapse_qpos_m2_per_s = 10.0;
+
+        /// WP9 optional lever: relax rememberSolution()'s FLOAT trust-
+        /// refresh jump gate (rtk.cpp, "refresh_trusted = trusted_jump <=
+        /// max(3.0, 6.0*dt)") by 2x when more than half of this epoch's
+        /// tracked satellites are NLOS-flagged per the loaded NLOS weight
+        /// table. false (default) is a no-op; also has no effect unless a
+        /// weight table has been injected via setNlosWeightTable(),
+        /// independent of nlos_weight_mode (this lever only reads the
+        /// table's LOS/NLOS classification, it does not require sigma
+        /// inflation/exclusion to also be enabled).
+        bool trust_gate_nlos_relax = false;
+
+        /// WP10: gate (seconds) used by float_trust_policy == LAPSE_GATED.
+        /// Below this many seconds of continuous trust lapse, resetPositionToSPP()
+        /// behaves exactly like LEGACY; at or beyond it, SCALED_RESET's law
+        /// (base 25 m^2 + trust_lapse_qpos_m2_per_s * dt_since_trust^2,
+        /// capped at 900) takes over. No effect unless float_trust_policy
+        /// == LAPSE_GATED. See float_trust_policy::lapseGateExceeded().
+        double trust_lapse_gate_s = 5.0;
+
+        /// WP10 optional second trigger (own flag, default off via the
+        /// negative sentinel): when >= 0 and a NLOS weight table is
+        /// loaded, ALSO switch LAPSE_GATED to the SCALED_RESET law
+        /// (regardless of how long the lapse has been continuous) on any
+        /// epoch whose NLOS-flagged satellite fraction exceeds this
+        /// value. Read from current_epoch_nlos_fraction_, which carries a
+        /// one-epoch lag here (see rtk.cpp resetPositionToSPP()'s WP10
+        /// comment) since resetPositionToSPP() runs before this epoch's
+        /// own satellite set is collected. No effect unless
+        /// float_trust_policy == LAPSE_GATED.
+        double trust_lapse_gate_nlos_frac = -1.0;
+
+        /// WP10 (WP8 recommendation 2): AR-acceptance-side gate, entirely
+        /// independent of nlos_weight_mode/EXCLUDE -- never touches the
+        /// float-KF measurement update (buildMeasurementBlocks()), only
+        /// vetoes attempting/accepting an ambiguity-resolution fix for an
+        /// epoch when fewer than this many of the AR candidate set's
+        /// satellites are LOS-flagged per the loaded NLOS weight table.
+        /// <= 0 (default) disables the gate. No effect without
+        /// --nlos-weights (a loaded weight table).
+        int nlos_min_los_sats = 0;
     };
 
     /// Reason why AR was silently skipped or failed in resolveAmbiguities().
@@ -294,6 +416,11 @@ public:
         DD_PAIRS_LT_4_AFTER_VAR_FILTER,
         LAMBDA_FAILED,
         RATIO_COMPUTATION_FAILED,
+        /// WP10: --nlos-min-los-sats vetoed this epoch's AR attempt --
+        /// fewer than nlos_min_los_sats of the AR candidate set's
+        /// satellites are LOS-flagged. Never set unless nlos_min_los_sats
+        /// > 0 and --nlos-weights is loaded.
+        TOO_FEW_LOS_SATS,
     };
 
     /// Convert ARSkipReason to a short ASCII string suitable for CSV output.
@@ -306,6 +433,7 @@ public:
             case ARSkipReason::DD_PAIRS_LT_4_AFTER_VAR_FILTER:  return "dd_lt4_after_var";
             case ARSkipReason::LAMBDA_FAILED:                  return "lambda_failed";
             case ARSkipReason::RATIO_COMPUTATION_FAILED:       return "ratio_computation_failed";
+            case ARSkipReason::TOO_FEW_LOS_SATS:               return "too_few_los_sats";
             default:                                           return "unknown";
         }
     }
@@ -316,6 +444,7 @@ public:
         int pair_count = 0;
         double max_ambiguity_variance = std::numeric_limits<double>::quiet_NaN();
         double effective_ratio_threshold = std::numeric_limits<double>::quiet_NaN();
+        int ratio_satellite_count = 0;
         int min_subset_pair_count = 0;
         double min_full_ratio_for_subset_ar = std::numeric_limits<double>::quiet_NaN();
         int subset_candidates_evaluated = 0;
@@ -337,12 +466,17 @@ public:
         int gf_slip_count = 0;
         int doppler_slip_l1_count = 0;
         int doppler_slip_l2_count = 0;
+        int doppler_slip_l5_count = 0;  // Phase 18 Step 5
         int code_slip_l1_count = 0;
         int code_slip_l2_count = 0;
+        int code_slip_l5_count = 0;  // Phase 18 Step 5
         int lli_slip_l1_count = 0;
         int lli_slip_l2_count = 0;
+        int lli_slip_l5_count = 0;  // Phase 18 Step 5
         int ambiguity_reset_l1_count = 0;
         int ambiguity_reset_l2_count = 0;
+        int ambiguity_reset_l5_count = 0;  // Phase 18 Step 5
+        int gf_slip_l1l5_count = 0;       // Phase 18 Step 5: GF combination L1-L5
         bool adaptive_dynamic_slip_active = false;
         int consecutive_nonfix_before_bias_update = 0;
         int adaptive_dynamic_slip_hold_remaining = 0;
@@ -368,6 +502,24 @@ public:
         bool final_fixed_applied = false;
         std::string reject_reason;
         ARSkipReason ar_skip_reason{ARSkipReason::NONE};
+
+        // WP8 canyon forensics: mirrors RTKProcessor::RTKUpdateDiagnostics
+        // (private, updateFilter()-local) into the public per-epoch debug
+        // log so --debug-epoch-log can distinguish "wide float covariance
+        // absorbing a large residual" from "tight/overconfident covariance
+        // rejecting or barely budging against it" without needing a
+        // separate instrumentation pass.
+        int float_update_observation_count = 0;
+        double float_update_prefit_residual_rms_m = std::numeric_limits<double>::quiet_NaN();
+        double float_update_post_suppression_residual_rms_m =
+            std::numeric_limits<double>::quiet_NaN();
+        double float_update_nis_per_observation = std::numeric_limits<double>::quiet_NaN();
+        int float_update_suppressed_outliers = 0;
+        // Trace (sum of diagonal) of the float filter's 3x3 ECEF position
+        // covariance block, sampled just after this epoch's measurement
+        // update -- a direct, model-based answer to "is the float position
+        // covariance collapsing (overconfident)".
+        double float_position_covariance_trace_m2 = std::numeric_limits<double>::quiet_NaN();
     };
 
     RTKProcessor();
@@ -404,6 +556,29 @@ public:
     const RTKConfig& getRTKConfig() const { return rtk_config_; }
     const EpochDebugTelemetry& getLastDebugTelemetry() const { return debug_telemetry_; }
 
+    /** Assemble real rover/base DD rows at an INS-propagated position.
+     *
+     * The returned Jacobians are expressed in the bridge's local ENU frame;
+     * code/carrier residuals remain observed-minus-predicted.  This is the
+     * operational boundary between the RTK observation machinery and the
+     * tightly coupled DD/IMU error-state filter.
+     */
+    std::vector<dd_imu_bridge::DDObservation> formTightlyCoupledObservations(
+        const ObservationData& rover_obs,
+        const ObservationData& base_obs,
+        const NavigationData& nav,
+        const Vector3d& rover_position_ecef,
+        const Matrix3d& ecef_to_enu,
+        const Eigen::Quaterniond& attitude_body_to_enu = Eigen::Quaterniond::Identity());
+
+    /// WP7: inject an optional per-epoch per-satellite NLOS weight table.
+    /// A null/empty table (the default) is equivalent to not calling this
+    /// at all; the table is only consulted when rtk_config_.nlos_weight_mode
+    /// != OFF.
+    void setNlosWeightTable(std::shared_ptr<const nlos_weights::NlosWeightTable> table) {
+        nlos_weight_table_ = std::move(table);
+    }
+
 public:
     bool lambdaMethod(const VectorXd& float_ambiguities,
                      const MatrixXd& covariance_matrix,
@@ -418,6 +593,9 @@ private:
     SPPProcessor spp_processor_;
     EpochDebugTelemetry debug_telemetry_;
     double doppler_velocity_sigma_mps_ = 0.5;
+    Vector3d last_doppler_velocity_ecef_ = Vector3d::Zero();
+    GNSSTime last_doppler_velocity_time_;
+    bool has_last_doppler_velocity_ = false;
 
     /**
      * @brief The original processRTKEpoch() body (DD-RTK float/fixed solve).
@@ -435,7 +613,10 @@ private:
     Vector3d base_position_;
     bool base_position_known_ = false;
 
-    // Fixed-size state: [pos(3), glo_hw_bias(2), iono(MAXSAT), N1(MAXSAT), N2(MAXSAT)]
+    // Fixed-size state: [pos(3), glo_hw_bias(2), iono(MAXSAT), N1(MAXSAT), N2(MAXSAT), N5(MAXSAT)]
+    // Phase 18 Step 2 (2026-05-09): N5 freq slot reserved (IB(sat, freq=2)).
+    // Currently N5 entries stay 0 / unconfirmed; populated by Steps 3+ when L5 enabled.
+    // Existing L1/L2-only path is unchanged: N5 slots default to 0 with zero covariance.
     // Satellite slots are system-aware so G01/E01/Q01 do not collide.
     static constexpr int BASE_STATES = 3;
     static constexpr int GLO_HWBIAS_STATES = 2;
@@ -444,7 +625,8 @@ private:
     static constexpr int MAXSAT = SATS_PER_SYSTEM * SUPPORTED_SYSTEM_BLOCKS;
     static constexpr int REAL_STATES = BASE_STATES + GLO_HWBIAS_STATES;
     static constexpr int IONO_STATES = MAXSAT;
-    static constexpr int NX = REAL_STATES + IONO_STATES + MAXSAT * 2;  // total state size
+    static constexpr int FREQ_SLOTS = 3;  // L1, L2, L5 (Phase 18 Step 2)
+    static constexpr int NX = REAL_STATES + IONO_STATES + MAXSAT * FREQ_SLOTS;  // total state size
 
     static int systemSlotBase(GNSSSystem system) {
         switch (system) {
@@ -484,6 +666,9 @@ private:
         std::map<SatelliteId, int> iono_indices;
         std::map<SatelliteId, int> n1_indices;
         std::map<SatelliteId, int> n2_indices;
+        // Phase 18 Step 2: N5 ambiguity index map (parallel to n1/n2_indices).
+        // Populated only when L5 measurements present (Step 3+); remains empty for L1/L2-only path.
+        std::map<SatelliteId, int> n5_indices;
         int next_state_idx = BASE_STATES;
     };
 
@@ -493,6 +678,8 @@ private:
     // Lock count per satellite per frequency (for AR eligibility)
     std::map<SatelliteId, int> lock_count_l1_;
     std::map<SatelliteId, int> lock_count_l2_;
+    // Phase 18 Step 2: L5 lock count (parallel to L1/L2). Stays empty in L1/L2-only path.
+    std::map<SatelliteId, int> lock_count_l5_;
 
     // Reference satellite tracking
     SatelliteId current_ref_satellite_;
@@ -562,6 +749,20 @@ private:
     bool has_last_epoch_ = false;
     GNSSTime last_trusted_time_;
     bool has_last_trusted_time_ = false;
+    // WP9: the trusted position/time recorded just *before* the current
+    // last_trusted_position_/last_trusted_time_ (i.e. the previous trust
+    // refresh). Used only by float_trust_policy::CV_PREDICT to derive a
+    // constant-velocity estimate from the last two trusted deltas; unused
+    // (and never read) when float_trust_policy == LEGACY.
+    Vector3d prev_trusted_position_ = Vector3d::Zero();
+    GNSSTime prev_trusted_time_;
+    bool has_prev_trusted_position_ = false;
+    // WP9 optional lever: fraction of this epoch's tracked satellites
+    // classified NLOS (los_prob < 0.5), computed in processRTKEpoch (where
+    // sat_data is available) and cached for rememberSolution() to read.
+    // NaN unless trust_gate_nlos_relax is enabled and a weight table is
+    // loaded, so std::isfinite() gates every use of this field.
+    double current_epoch_nlos_fraction_ = std::numeric_limits<double>::quiet_NaN();
 
     // Statistics
     mutable std::mutex stats_mutex_;
@@ -590,10 +791,13 @@ private:
         SatelliteId satellite;
         SignalType l1_signal = SignalType::GPS_L1CA;
         SignalType l2_signal = SignalType::GPS_L2C;
+        SignalType l5_signal = SignalType::GPS_L5;
         double l1_wavelength = 0.0;
         double l2_wavelength = 0.0;
+        double l5_wavelength = 0.0;
         double l1_frequency_hz = 0.0;
         double l2_frequency_hz = 0.0;
+        double l5_frequency_hz = 0.0;
         // L1
         double rover_l1_phase = 0.0;  // cycles
         double rover_l1_code = 0.0;   // meters
@@ -618,6 +822,18 @@ private:
         bool has_l2 = false;
         bool has_l2_doppler = false;
         int l2_lli = 0;
+        // L5 (Phase 18 — populated when --enable-l5 set; default off, no effect on L1/L2 path)
+        double rover_l5_phase = 0.0;
+        double rover_l5_code = 0.0;
+        double rover_l5_doppler = 0.0;
+        double rover_l5_snr = 0.0;
+        double base_l5_phase = 0.0;
+        double base_l5_code = 0.0;
+        double base_l5_doppler = 0.0;
+        double base_l5_snr = 0.0;
+        bool has_l5 = false;
+        bool has_l5_doppler = false;
+        int l5_lli = 0;
         // Geometry
         Vector3d sat_pos;          // satellite position for rover (RTKLIB satposs from rover PR)
         Vector3d sat_pos_base;     // satellite position for base (RTKLIB satposs from base PR)
@@ -626,13 +842,22 @@ private:
         bool has_ephemeris = false;
     };
 
+    // WP7: current epoch's time (tow), used to look up the NLOS weight
+    // table from buildMeasurementBlocks() (a const method with no direct
+    // access to rover_obs). Set at the top of processRTKEpoch/processEpoch.
+    GNSSTime current_epoch_time_;
+    std::shared_ptr<const nlos_weights::NlosWeightTable> nlos_weight_table_;
+
     // Current epoch satellite data (cached for use across functions)
     std::map<SatelliteId, SatelliteData> current_sat_data_;
     std::map<SatelliteId, double> gf_l1l2_history_;
+    std::map<SatelliteId, double> gf_l1l5_history_;  // Phase 18 Step 5: GF L1-L5 combination
     std::map<SatelliteId, double> doppler_phase_history_l1_m_;
     std::map<SatelliteId, double> doppler_phase_history_l2_m_;
+    std::map<SatelliteId, double> doppler_phase_history_l5_m_;  // Phase 18 Step 5
     std::map<SatelliteId, double> code_phase_history_l1_m_;
     std::map<SatelliteId, double> code_phase_history_l2_m_;
+    std::map<SatelliteId, double> code_phase_history_l5_m_;  // Phase 18 Step 5
 
     /**
      * Collect all satellite data for an epoch (L1+L2 for rover and base)
@@ -755,6 +980,7 @@ private:
      */
     int getOrCreateN1Index(const SatelliteId& sat, double initial_value);
     int getOrCreateN2Index(const SatelliteId& sat, double initial_value);
+    int getOrCreateN5Index(const SatelliteId& sat, double initial_value);  // Phase 18 Step 4
     int getOrCreateIonoIndex(const SatelliteId& sat, double initial_value);
 
     bool selectSystemReferenceSatellite(const std::map<SatelliteId, SatelliteData>& sat_data,
@@ -796,6 +1022,11 @@ private:
         Vector3d unit_vector = Vector3d::Zero();
         double elevation = 0.0;
         double variance = 0.0;
+        double code_variance = 0.0;
+        double wavelength = 0.0;
+        int frequency_index = -1;
+        int lock_count = 0;
+        bool cycle_slip = false;
         bool valid = false;
     };
     struct AmbiguityInfo {
@@ -809,7 +1040,7 @@ private:
     std::map<SatelliteId, std::map<SignalType, AmbiguityInfo>> ambiguity_states_;
     std::vector<DoubleDifference> formDoubleDifferences(
         const ObservationData& rover_obs, const ObservationData& base_obs,
-        const NavigationData& nav);
+        const NavigationData& nav, const Vector3d* evaluation_rover_position_ecef = nullptr);
     void detectCycleSlips(const ObservationData& rover_obs,
                         const ObservationData& base_obs);
     bool resolveAmbiguities(int dummy);

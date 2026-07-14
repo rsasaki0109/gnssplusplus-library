@@ -22,12 +22,16 @@ if(GTest_FOUND)
         test_fusion_nhc.cpp
         test_fusion_initialization.cpp
         test_fusion_processor_synthetic.cpp
+        test_dd_imu_bridge.cpp
         test_ppp_clas.cpp
         test_ppp_osr.cpp
         test_ppp_ar.cpp
         test_ppp_atmosphere.cpp
+        test_ppp_correction_contract.cpp
         test_rtk_ar_evaluation.cpp
         test_rtk_ar_selection.cpp
+        test_nlos_weights.cpp
+        test_float_trust_policy.cpp
         test_rtk_slip_detection.cpp
         test_rtk_measurement.cpp
         test_rtk_update.cpp
@@ -41,6 +45,7 @@ if(GTest_FOUND)
         test_ppp.cpp
         test_rinex_writer.cpp
         test_madoca_core.cpp
+        test_madoca_l6d_snapshots.cpp
         test_madoca_parity.cpp
         test_spp.cpp
         test_spp_velocity.cpp
@@ -65,6 +70,14 @@ if(GTest_FOUND)
     # trick only works on Itanium-ABI compilers (GCC/Clang).
     if(NOT MSVC)
         target_sources(gnss_run_tests PRIVATE test_rtk_legacy.cpp)
+    endif()
+
+    # GTSAM FGO backend parity tests (guarded at both CMake and #ifdef level:
+    # the source itself is a no-op TU when GNSSPP_HAS_GTSAM isn't defined, but
+    # we still only add it to the build when GTSAM was actually found so a
+    # GTSAM-less build doesn't pay for an always-empty translation unit).
+    if(GTSAM_FOUND)
+        target_sources(gnss_run_tests PRIVATE test_fgo_gtsam_backend.cpp)
     endif()
 
     set_target_properties(gnss_run_tests PROPERTIES OUTPUT_NAME run_tests)
@@ -140,6 +153,10 @@ if(GTest_FOUND)
     add_test(
         NAME python_madoca_residual_component_summary_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_madoca_residual_component_summary.py
+    )
+    add_test(
+        NAME python_madoca_glonass_phase_audit_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_madoca_glonass_phase_audit.py
     )
     add_test(
         NAME python_madoca_materialization_diff_tests

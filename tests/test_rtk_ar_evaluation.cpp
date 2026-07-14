@@ -16,6 +16,13 @@ TEST(RTKArEvaluationTest, SearchPoliciesTrackRatioAndVarianceThresholds) {
     EXPECT_FALSE(rtk_ar_evaluation::shouldSearchDropSubsets(true, 4.0, 3.0, 0.05));
 }
 
+TEST(RTKArEvaluationTest, DeepProgressiveDropsOnlyRecoverFailedFullSet) {
+    EXPECT_EQ(rtk_ar_evaluation::progressiveDropStepLimit(18, false), 18);
+    EXPECT_EQ(rtk_ar_evaluation::progressiveDropStepLimit(18, true), 6);
+    EXPECT_EQ(rtk_ar_evaluation::progressiveDropStepLimit(4, true), 4);
+    EXPECT_EQ(rtk_ar_evaluation::progressiveDropStepLimit(-3, false), 0);
+}
+
 TEST(RTKArEvaluationTest, ArFilterRequiresExtraRatioMarginOnlyWhenEnabled) {
     EXPECT_TRUE(rtk_ar_evaluation::passesArFilter(false, 3.05, 3.0, 0.25));
     EXPECT_FALSE(rtk_ar_evaluation::passesArFilter(true, 3.05, 3.0, 0.25));

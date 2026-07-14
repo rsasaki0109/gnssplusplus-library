@@ -4031,8 +4031,26 @@ class CLIToolsTest(unittest.TestCase):
         self.assertIn("--madocalib-bridge", result.stdout)
         self.assertIn("--madocalib-l6", result.stdout)
         self.assertIn("--madocalib-mdciono", result.stdout)
+        self.assertIn("--madocalib-profile", result.stdout)
+        self.assertIn("--madoca-l6d-shadow", result.stdout)
         self.assertIn("--madoca-materialization-dump", result.stdout)
         self.assertIn("--madoca-materialization-dump-only", result.stdout)
+
+    def test_ppp_cli_rejects_unknown_madocalib_profile(self) -> None:
+        result = self.run_gnss(
+            "ppp",
+            "--obs",
+            "missing.obs",
+            "--nav",
+            "missing.nav",
+            "--out",
+            "unused.pos",
+            "--madocalib-bridge",
+            "--madocalib-profile",
+            "unknown",
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("--madocalib-profile must be one of", result.stderr)
 
     def test_ppp_cli_rejects_madoca_materialization_dump_only_without_dump_path(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppp_madoca_materialization_dump_only_cli_") as temp_dir:
@@ -4688,13 +4706,22 @@ class CLIToolsTest(unittest.TestCase):
             temp_root = Path(temp_dir)
             obs_path, sp3_path, clk_path, _ = build_synthetic_ppp_inputs(temp_root)
             out_path = temp_root / "ppp_ar_solution.pos"
+            summary_path = temp_root / "ppp_ar_summary.json"
 
             result = self.run_gnss(
                 "ppp",
                 "--kinematic",
                 "--enable-ar",
+                "--ar-method",
+                "per-freq",
                 "--convergence-min-epochs",
                 "4",
+                "--convergence-policy",
+                "local-enu",
+                "--convergence-threshold-horizontal",
+                "10.0",
+                "--convergence-threshold-vertical",
+                "20.0",
                 "--ar-ratio-threshold",
                 "2.0",
                 "--obs",
@@ -4706,12 +4733,32 @@ class CLIToolsTest(unittest.TestCase):
                 "--no-estimate-troposphere",
                 "--out",
                 str(out_path),
+                "--summary-json",
+                str(summary_path),
                 "--max-epochs",
                 "8",
             )
 
             self.assertEqual(result.returncode, 0, msg=result.stderr)
             self.assertIn("ambiguity resolution: on", result.stdout)
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(summary["ar_method"], "per-freq")
+            self.assertTrue(summary["estimate_ionosphere"])
+            self.assertFalse(summary["use_ionosphere_free"])
+            self.assertEqual(summary["phase_measurement_min_lock_count"], 1)
+            self.assertEqual(summary["convergence_policy"], "local-enu")
+            self.assertEqual(
+                summary["convergence_horizontal_position_deviation_threshold_m"],
+                10.0,
+            )
+            self.assertEqual(
+                summary["convergence_vertical_position_deviation_threshold_m"],
+                20.0,
+            )
+            self.assertIn("convergence_max_horizontal_position_deviation_m", summary)
+            self.assertIn("convergence_max_vertical_position_deviation_m", summary)
+            self.assertIn("ar_stage_last", summary)
+            self.assertIn("ar_per_frequency_attempts", summary)
             self.assertIn("PPP fixed solutions:", result.stdout)
             records = self.read_pos_records(out_path)
             self.assertEqual(len(records), 8)

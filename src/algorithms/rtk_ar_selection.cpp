@@ -65,6 +65,18 @@ std::vector<std::vector<int>> buildPreferredSubsets(const std::vector<PairDescri
     };
 }
 
+std::vector<std::vector<int>> buildPaperConstellationFallbackSubsets(
+    const std::vector<PairDescriptor>& pairs) {
+    return {
+        buildSubsetExcluding(pairs, {GNSSSystem::GLONASS}),
+        buildSubsetExcluding(pairs, {GNSSSystem::BeiDou}),
+        buildSubsetExcluding(pairs, {GNSSSystem::GLONASS, GNSSSystem::BeiDou}),
+        buildSubsetExcluding(pairs, {GNSSSystem::GLONASS, GNSSSystem::Galileo}),
+        buildSubsetExcluding(
+            pairs, {GNSSSystem::GLONASS, GNSSSystem::Galileo, GNSSSystem::BeiDou}),
+    };
+}
+
 std::vector<std::vector<int>> buildBSRGuidedDropSubsets(
     const std::vector<PairDescriptor>& pairs,
     const Eigen::MatrixXd& Qb,

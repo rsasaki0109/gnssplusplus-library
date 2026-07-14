@@ -170,10 +170,11 @@ public:
     /**
      * @brief Get best ephemeris matching a desired IODE.
      *
-     * When desired_iode >= 0, prefer the ephemeris whose IODE equals it (so the
-     * broadcast orbit matches the IODE an SSR orbit correction references, as
-     * RTKLIB's ephpos(...,ssr->iode,...) does). Falls back to the nearest-age
-     * ephemeris when no IODE match exists or desired_iode < 0.
+     * When desired_iode >= 0, require the ephemeris referenced by an SSR orbit
+     * correction, as RTKLIB's ephpos(...,ssr->iode,...) does. BeiDou SSR IODE
+     * is matched against the broadcast toe modulo 2048 seconds. Returns null
+     * when no matching valid ephemeris exists. When desired_iode < 0, uses the
+     * ordinary nearest-age selection.
      */
     const Ephemeris* getEphemeris(const SatelliteId& sat, const GNSSTime& time,
                                   int desired_iode) const;
@@ -202,7 +203,7 @@ public:
                                double& clock_drift) const;
 
     /**
-     * @brief Calculate satellite state using the IODE-matched ephemeris.
+     * @brief Calculate satellite state using the strictly IODE-matched ephemeris.
      */
     bool calculateSatelliteState(const SatelliteId& sat,
                                const GNSSTime& time,

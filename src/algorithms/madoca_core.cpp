@@ -159,6 +159,39 @@ double ssrUraIndicatorToSigmaMeters(int ura_index) {
            1e-3;
 }
 
+io::MadocaGtime madocaGtimeFromGpsTime(const GNSSTime& time) {
+    constexpr std::int64_t kGpsEpochUnixSeconds = 315964800;
+    constexpr double kWeekSeconds = 604800.0;
+    if (time.week < 0 || !std::isfinite(time.tow) ||
+        time.tow < 0.0 || time.tow >= kWeekSeconds) {
+        return {};
+    }
+    const double whole_tow = std::floor(time.tow);
+    io::MadocaGtime converted;
+    converted.time = kGpsEpochUnixSeconds +
+        static_cast<std::int64_t>(time.week) * 604800 +
+        static_cast<std::int64_t>(whole_tow);
+    converted.sec = time.tow - whole_tow;
+    return converted;
+}
+
+int rtklibSatelliteNumber(const SatelliteId& satellite) {
+    int system = 0;
+    int prn = satellite.prn;
+    switch (satellite.system) {
+        case GNSSSystem::GPS: system = madoca_parity::kSysGps; break;
+        case GNSSSystem::GLONASS: system = madoca_parity::kSysGlo; break;
+        case GNSSSystem::Galileo: system = madoca_parity::kSysGal; break;
+        case GNSSSystem::BeiDou: system = madoca_parity::kSysCmp; break;
+        case GNSSSystem::QZSS:
+            system = madoca_parity::kSysQzs;
+            prn += 192;
+            break;
+        default: return 0;
+    }
+    return madoca_parity::satno(system, prn);
+}
+
 int selectBiasCode(int rtklib_system, int rtklib_code) {
     return madoca_parity::mcssrSelBiascode(rtklib_system, rtklib_code);
 }

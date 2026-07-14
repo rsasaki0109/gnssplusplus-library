@@ -1,4 +1,6 @@
 #include <algorithm>
+#include <chrono>
+#include <ctime>
 #include <exception>
 #include <filesystem>
 #include <fstream>
@@ -25,6 +27,7 @@ struct Options {
     std::string ssr_path;
     std::string ssr_rtcm_path;
     std::vector<std::string> madoca_l6_paths;
+    std::vector<std::string> madoca_l6d_shadow_paths;
     std::string madoca_materialization_dump_path;
     bool madoca_materialization_dump_only = false;
     std::string ionex_path;
@@ -38,6 +41,9 @@ struct Options {
     std::string kml_path;
     int max_epochs = 0;
     int convergence_min_epochs = 20;
+    std::string convergence_policy = "legacy-3d";
+    double convergence_threshold_horizontal = 0.1;
+    double convergence_threshold_vertical = 0.2;
     double ssr_step_seconds = 1.0;
     bool estimate_troposphere = true;
     bool estimate_ionosphere = false;
@@ -56,6 +62,7 @@ struct Options {
     double clas_atmos_stale_after_seconds = 15.0;
     bool madocalib_bridge = false;
     std::string madocalib_config_path;
+    std::string madocalib_profile = "ppp";
     std::vector<std::string> madocalib_l6_paths;
     std::vector<std::string> madocalib_mdciono_paths;
     std::string madocalib_start_time;
@@ -94,6 +101,9 @@ void printUsage(const char* program_name) {
         << "                          RTCM SSR source converted/read for PPP use\n"
         << "  --madoca-l6 <file>       Native MADOCA L6E SSR channel (repeatable,\n"
         << "                          e.g. PRN 204 and 206); requires --nav\n"
+        << "  --madoca-l6d-shadow <file>\n"
+        << "                          Native L6D ionosphere shadow input (repeatable);\n"
+        << "                          reports lookup diagnostics without changing PPP\n"
         << "  --madoca-materialization-dump <csv>\n"
         << "                          Dump native MADOCA L6E SSRProducts materialization\n"
         << "                          rows before PPP processing\n"
@@ -117,6 +127,12 @@ void printUsage(const char* program_name) {
         << "  --max-epochs <count>     Limit processed epochs (default: all)\n"
         << "  --convergence-min-epochs <count>\n"
         << "                          Minimum epochs before PPP convergence/AR checks (default: 20)\n"
+        << "  --convergence-policy <legacy-3d|local-enu>\n"
+        << "                          Convergence metric policy (default: legacy-3d)\n"
+        << "  --convergence-threshold-horizontal <m>\n"
+        << "                          Horizontal threshold for local-enu policy (default: 0.1)\n"
+        << "  --convergence-threshold-vertical <m>\n"
+        << "                          Absolute Up threshold for local-enu policy (default: 0.2)\n"
         << "  --no-estimate-troposphere\n"
         << "                          Disable zenith troposphere estimation\n"
         << "  --estimate-troposphere  Enable zenith troposphere estimation (default)\n"
@@ -150,6 +166,8 @@ void printUsage(const char* program_name) {
         << "                          Extra MADOCA L6D ionosphere file; repeat up to three\n"
         << "  --madocalib-config <file>\n"
         << "                          MADOCALIB rnx2rtkp config (default: sample.conf)\n"
+        << "  --madocalib-profile <ppp|pppar|pppar-ion>\n"
+        << "                          Select a bundled MADOCALIB sample config (default: ppp)\n"
         << "  --madocalib-start <time>\n"
         << "                          MADOCALIB start time, e.g. '2025/04/01 00:00:00'\n"
         << "  --madocalib-end <time>  MADOCALIB end time, e.g. '2025/04/01 00:59:30'\n"
@@ -171,7 +189,8 @@ void printUsage(const char* program_name) {
         << "  --disable-ar            Disable PPP ambiguity fixing (default)\n"
         << "  --ar-ratio-threshold <value>\n"
         << "                          Ratio threshold for PPP ambiguity fixing (default: 3.0)\n"
-        << "  --ar-method <name>      AR method: iflc, wlnl, per-freq (default: iflc)\n"
+        << "  --ar-method <name>      AR method: iflc, wlnl, per-freq (default: iflc);\n"
+        << "                          per-freq enables uncombined estimated-STEC states\n"
         << "  --process-noise-iono <v>\n"
         << "                          KF process noise for per-satellite ionosphere states,\n"
         << "                          m^2/s (default: 1e-4 for MADOCA per-frequency mode,\n"
@@ -253,6 +272,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.ssr_rtcm_path = argv[++i];
         } else if (arg == "--madoca-l6" && i + 1 < argc) {
             options.madoca_l6_paths.push_back(argv[++i]);
+        } else if (arg == "--madoca-l6d-shadow" && i + 1 < argc) {
+            options.madoca_l6d_shadow_paths.push_back(argv[++i]);
         } else if (arg == "--madoca-materialization-dump" && i + 1 < argc) {
             options.madoca_materialization_dump_path = argv[++i];
         } else if (arg == "--madoca-materialization-dump-only") {
@@ -279,6 +300,12 @@ Options parseArguments(int argc, char* argv[]) {
             options.max_epochs = std::stoi(argv[++i]);
         } else if (arg == "--convergence-min-epochs" && i + 1 < argc) {
             options.convergence_min_epochs = std::stoi(argv[++i]);
+        } else if (arg == "--convergence-policy" && i + 1 < argc) {
+            options.convergence_policy = argv[++i];
+        } else if (arg == "--convergence-threshold-horizontal" && i + 1 < argc) {
+            options.convergence_threshold_horizontal = std::stod(argv[++i]);
+        } else if (arg == "--convergence-threshold-vertical" && i + 1 < argc) {
+            options.convergence_threshold_vertical = std::stod(argv[++i]);
         } else if (arg == "--ssr-step-seconds" && i + 1 < argc) {
             options.ssr_step_seconds = std::stod(argv[++i]);
         } else if (arg == "--no-estimate-troposphere") {
@@ -317,6 +344,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.madocalib_mdciono_paths.push_back(argv[++i]);
         } else if (arg == "--madocalib-config" && i + 1 < argc) {
             options.madocalib_config_path = argv[++i];
+        } else if (arg == "--madocalib-profile" && i + 1 < argc) {
+            options.madocalib_profile = argv[++i];
         } else if (arg == "--madocalib-start" && i + 1 < argc) {
             options.madocalib_start_time = argv[++i];
         } else if (arg == "--madocalib-end" && i + 1 < argc) {
@@ -419,6 +448,16 @@ Options parseArguments(int argc, char* argv[]) {
     if (options.convergence_min_epochs <= 0) {
         argumentError("--convergence-min-epochs must be positive", argv[0]);
     }
+    if (options.convergence_policy != "legacy-3d" &&
+        options.convergence_policy != "local-enu") {
+        argumentError("--convergence-policy must be one of: legacy-3d, local-enu", argv[0]);
+    }
+    if (options.convergence_threshold_horizontal <= 0.0) {
+        argumentError("--convergence-threshold-horizontal must be positive", argv[0]);
+    }
+    if (options.convergence_threshold_vertical <= 0.0) {
+        argumentError("--convergence-threshold-vertical must be positive", argv[0]);
+    }
     if (options.ar_ratio_threshold <= 0.0) {
         argumentError("--ar-ratio-threshold must be positive", argv[0]);
     }
@@ -433,6 +472,17 @@ Options parseArguments(int argc, char* argv[]) {
     }
     if (options.madocalib_trace_level < 0) {
         argumentError("--madocalib-trace must be non-negative", argv[0]);
+    }
+    if (options.madocalib_profile != "ppp" &&
+        options.madocalib_profile != "pppar" &&
+        options.madocalib_profile != "pppar-ion") {
+        argumentError("--madocalib-profile must be one of: ppp, pppar, pppar-ion", argv[0]);
+    }
+    if (!options.madocalib_config_path.empty() && options.madocalib_profile != "ppp") {
+        argumentError("--madocalib-config cannot be combined with a non-default --madocalib-profile", argv[0]);
+    }
+    if (options.madocalib_profile == "pppar-ion" && options.madocalib_mdciono_paths.empty()) {
+        argumentError("--madocalib-profile pppar-ion requires --madocalib-mdciono", argv[0]);
     }
     if (options.clas_epoch_policy != "strict-osr" &&
         options.clas_epoch_policy != "hybrid-standard-ppp") {
@@ -685,6 +735,15 @@ int main(int argc, char* argv[]) {
             bridge_options.nav_path = options.nav_path;
             bridge_options.out_path = options.out_path;
             bridge_options.config_path = options.madocalib_config_path;
+            if (bridge_options.config_path.empty() && options.madocalib_profile != "ppp") {
+                const std::string filename =
+                    options.madocalib_profile == "pppar"
+                        ? "sample_pppar.conf"
+                        : "sample_pppar_iono.conf";
+                bridge_options.config_path =
+                    (std::filesystem::path(madocalib::defaultRootDir()) /
+                     "app/consapp/rnx2rtkp/gcc_mingw" / filename).string();
+            }
             bridge_options.antenna_path = options.antex_path;
             bridge_options.start_time = options.madocalib_start_time;
             bridge_options.end_time = options.madocalib_end_time;
@@ -759,6 +818,8 @@ int main(int argc, char* argv[]) {
                         << "  \"out\": \"" << jsonEscape(options.out_path) << "\",\n"
                         << "  \"madocalib_bridge\": true,\n"
                         << "  \"madocalib_bridge_status\": " << bridge_status << ",\n"
+                        << "  \"madocalib_profile\": \""
+                        << jsonEscape(options.madocalib_profile) << "\",\n"
                         << "  \"madocalib_config\": "
                         << (options.madocalib_config_path.empty() ?
                                 "null" :
@@ -798,6 +859,9 @@ int main(int argc, char* argv[]) {
 
         libgnss::io::RINEXReader obs_reader;
         const auto& ppp_env_overrides = libgnss::pppEnvOverrides();
+        if (options.ar_method == "per-freq") {
+            obs_reader.setPreserveAdditionalFrequencyBands(true);
+        }
         if (!options.madoca_l6_paths.empty() &&
             !ppp_env_overrides.qzss_prefer_l1l_present) {
             obs_reader.setQzssL1Preference(true);
@@ -856,8 +920,9 @@ int main(int argc, char* argv[]) {
         ppp_config.antex_file_path = options.antex_path;
         ppp_config.ocean_loading_file_path = options.blq_path;
         ppp_config.estimate_troposphere = options.estimate_troposphere;
-        ppp_config.estimate_ionosphere = options.estimate_ionosphere;
-        ppp_config.use_ionosphere_free = options.use_ionosphere_free;
+        const bool per_frequency_ar = options.ar_method == "per-freq";
+        ppp_config.estimate_ionosphere = options.estimate_ionosphere || per_frequency_ar;
+        ppp_config.use_ionosphere_free = options.use_ionosphere_free && !per_frequency_ar;
         ppp_config.use_clas_osr_filter = options.use_clas_osr_filter;
         ppp_config.clas_epoch_policy =
             parseClasEpochPolicy(options.clas_epoch_policy);
@@ -915,8 +980,24 @@ int main(int argc, char* argv[]) {
             ppp_config.code_phase_error_ratio_l1 = 300.0;
             ppp_config.code_phase_error_ratio_l2 = 300.0;
         }
+        if (!options.madoca_l6_paths.empty() && per_frequency_ar) {
+            // MADOCALIB initializes each per-frequency ambiguity immediately
+            // before ppp_res() and admits that epoch's carrier-phase row.  The
+            // shared native default waits for one completed lifecycle update,
+            // making the first usable MADOCA epoch code-only and shifting the
+            // float-state trajectory by one epoch.
+            ppp_config.phase_measurement_min_lock_count = 0;
+        }
         ppp_config.enable_ambiguity_resolution = options.enable_ar;
         ppp_config.convergence_min_epochs = options.convergence_min_epochs;
+        ppp_config.convergence_policy =
+            options.convergence_policy == "local-enu"
+                ? libgnss::ppp_shared::ConvergencePolicy::LOCAL_ENU_COMPONENTS
+                : libgnss::ppp_shared::ConvergencePolicy::LEGACY_ECEF_3D;
+        ppp_config.convergence_threshold_horizontal =
+            options.convergence_threshold_horizontal;
+        ppp_config.convergence_threshold_vertical =
+            options.convergence_threshold_vertical;
         ppp_config.ar_ratio_threshold = options.ar_ratio_threshold;
         using ARMethod = libgnss::PPPProcessor::PPPConfig::ARMethod;
         if (options.ar_method == "iflc") {
@@ -1074,6 +1155,41 @@ int main(int argc, char* argv[]) {
             std::cerr << "Error: failed to load MADOCA L6E corrections\n";
             return 1;
         }
+        if (!options.madoca_l6d_shadow_paths.empty()) {
+            if (obs_header.first_obs.week <= 0 ||
+                obs_header.approximate_position.norm() <= 1e3) {
+                std::cerr << "Error: --madoca-l6d-shadow requires RINEX first-observation "
+                             "time and approximate receiver position\n";
+                return 1;
+            }
+            const auto reference_tp = obs_header.first_obs.toSystemTime();
+            const std::time_t reference_time =
+                std::chrono::system_clock::to_time_t(reference_tp);
+            std::tm reference_tm{};
+#if defined(_WIN32)
+            gmtime_s(&reference_tm, &reference_time);
+#else
+            gmtime_r(&reference_time, &reference_tm);
+#endif
+            const double reference_epoch[6] = {
+                static_cast<double>(reference_tm.tm_year + 1900),
+                static_cast<double>(reference_tm.tm_mon + 1),
+                static_cast<double>(reference_tm.tm_mday),
+                static_cast<double>(reference_tm.tm_hour),
+                static_cast<double>(reference_tm.tm_min),
+                static_cast<double>(reference_tm.tm_sec),
+            };
+            const double receiver_ecef[3] = {
+                obs_header.approximate_position.x(),
+                obs_header.approximate_position.y(),
+                obs_header.approximate_position.z(),
+            };
+            if (!processor.loadMadocaL6dProducts(
+                    options.madoca_l6d_shadow_paths, reference_epoch, receiver_ecef)) {
+                std::cerr << "Error: failed to load MADOCA L6D shadow corrections\n";
+                return 1;
+            }
+        }
 
         libgnss::Solution solutions;
         libgnss::ObservationData observation_data;
@@ -1087,6 +1203,12 @@ int main(int argc, char* argv[]) {
         int ionex_corrections = 0;
         int dcb_corrections = 0;
         int clas_hybrid_fallback_epochs = 0;
+        int madoca_l6d_shadow_snapshot_epochs = 0;
+        int madoca_l6d_shadow_stale_epochs = 0;
+        int madoca_l6d_shadow_matched_satellites = 0;
+        double madoca_l6d_shadow_max_age_s = 0.0;
+        int madoca_l6d_shadow_last_region = -1;
+        int madoca_l6d_shadow_last_area = 0;
         std::map<std::string, int> clas_hybrid_fallback_reasons;
         double atmospheric_trop_meters = 0.0;
         double atmospheric_iono_meters = 0.0;
@@ -1119,6 +1241,17 @@ int main(int argc, char* argv[]) {
                 processor.getLastAppliedAtmosphericIonosphereMeters();
             ionex_meters += processor.getLastAppliedIonexMeters();
             dcb_meters += processor.getLastAppliedDcbMeters();
+            const auto& l6d_shadow = processor.getLastMadocaL6dShadowStatus();
+            if (l6d_shadow.snapshot_available) {
+                ++madoca_l6d_shadow_snapshot_epochs;
+                madoca_l6d_shadow_matched_satellites += l6d_shadow.matched_satellites;
+                madoca_l6d_shadow_max_age_s =
+                    std::max(madoca_l6d_shadow_max_age_s, l6d_shadow.age_s);
+                madoca_l6d_shadow_last_region = l6d_shadow.region_id;
+                madoca_l6d_shadow_last_area = l6d_shadow.area_number;
+            } else if (l6d_shadow.stale) {
+                ++madoca_l6d_shadow_stale_epochs;
+            }
             if (processor.getLastClasHybridFallbackUsed()) {
                 ++clas_hybrid_fallback_epochs;
                 ++clas_hybrid_fallback_reasons[processor.getLastClasHybridFallbackReason()];
@@ -1152,6 +1285,8 @@ int main(int argc, char* argv[]) {
         }
 
         const auto stats = processor.getStats();
+        const auto& convergence = processor.getConvergenceTelemetry();
+        const auto& ar_stage = processor.getARStageTelemetry();
         const double ppp_solution_rate =
             valid_solutions > 0 ?
                 100.0 * static_cast<double>(ppp_float_solutions + ppp_fixed_solutions) /
@@ -1217,6 +1352,13 @@ int main(int argc, char* argv[]) {
                     << "  \"clas_atmos_selection\": \"" << jsonEscape(options.clas_atmos_selection) << "\",\n"
                     << "  \"clas_atmos_stale_after_seconds\": " << options.clas_atmos_stale_after_seconds << ",\n"
                     << "  \"ambiguity_resolution_enabled\": " << (options.enable_ar ? "true" : "false") << ",\n"
+                    << "  \"ar_method\": \"" << jsonEscape(options.ar_method) << "\",\n"
+                    << "  \"estimate_ionosphere\": "
+                    << (ppp_config.estimate_ionosphere ? "true" : "false") << ",\n"
+                    << "  \"use_ionosphere_free\": "
+                    << (ppp_config.use_ionosphere_free ? "true" : "false") << ",\n"
+                    << "  \"phase_measurement_min_lock_count\": "
+                    << ppp_config.phase_measurement_min_lock_count << ",\n"
                     << "  \"ar_ratio_threshold\": " << options.ar_ratio_threshold << ",\n"
                     << "  \"processed_epochs\": " << processed_epochs << ",\n"
                     << "  \"valid_solutions\": " << valid_solutions << ",\n"
@@ -1240,6 +1382,20 @@ int main(int argc, char* argv[]) {
                     << "  \"dcb_entries\": " << processor.getLoadedDCBEntryCount() << ",\n"
                     << "  \"dcb_corrections\": " << dcb_corrections << ",\n"
                     << "  \"dcb_meters\": " << dcb_meters << ",\n"
+                    << "  \"madoca_l6d_shadow_loaded\": "
+                    << (processor.hasLoadedMadocaL6dProducts() ? "true" : "false") << ",\n"
+                    << "  \"madoca_l6d_shadow_snapshot_epochs\": "
+                    << madoca_l6d_shadow_snapshot_epochs << ",\n"
+                    << "  \"madoca_l6d_shadow_stale_epochs\": "
+                    << madoca_l6d_shadow_stale_epochs << ",\n"
+                    << "  \"madoca_l6d_shadow_matched_satellites\": "
+                    << madoca_l6d_shadow_matched_satellites << ",\n"
+                    << "  \"madoca_l6d_shadow_max_age_s\": "
+                    << madoca_l6d_shadow_max_age_s << ",\n"
+                    << "  \"madoca_l6d_shadow_last_region\": "
+                    << madoca_l6d_shadow_last_region << ",\n"
+                    << "  \"madoca_l6d_shadow_last_area\": "
+                    << madoca_l6d_shadow_last_area << ",\n"
                     << "  \"clas_hybrid_fallback_reasons\": {";
             bool first_reason = true;
             for (const auto& [reason, count] : clas_hybrid_fallback_reasons) {
@@ -1252,6 +1408,53 @@ int main(int argc, char* argv[]) {
             summary << "},\n"
                     << "  \"converged\": " << (processor.hasConverged() ? "true" : "false") << ",\n"
                     << "  \"convergence_time_s\": " << processor.getConvergenceTime() << ",\n"
+                    << "  \"convergence_gate_reason\": \"" << jsonEscape(convergence.gate_reason) << "\",\n"
+                    << "  \"convergence_evaluated_epochs\": " << convergence.evaluated_epochs << ",\n"
+                    << "  \"convergence_insufficient_history_epochs\": "
+                    << convergence.insufficient_history_epochs << ",\n"
+                    << "  \"convergence_unstable_position_epochs\": "
+                    << convergence.unstable_position_epochs << ",\n"
+                    << "  \"convergence_unstable_horizontal_epochs\": "
+                    << convergence.unstable_horizontal_epochs << ",\n"
+                    << "  \"convergence_unstable_vertical_epochs\": "
+                    << convergence.unstable_vertical_epochs << ",\n"
+                    << "  \"convergence_window_epochs\": " << convergence.window_epochs << ",\n"
+                    << "  \"convergence_required_window_epochs\": "
+                    << convergence.required_window_epochs << ",\n"
+                    << "  \"convergence_max_position_deviation_m\": "
+                    << convergence.max_position_deviation_m << ",\n"
+                    << "  \"convergence_max_horizontal_position_deviation_m\": "
+                    << convergence.max_horizontal_position_deviation_m << ",\n"
+                    << "  \"convergence_max_vertical_position_deviation_m\": "
+                    << convergence.max_vertical_position_deviation_m << ",\n"
+                    << "  \"convergence_position_deviation_threshold_m\": "
+                    << convergence.position_deviation_threshold_m << ",\n"
+                    << "  \"convergence_horizontal_position_deviation_threshold_m\": "
+                    << convergence.horizontal_position_deviation_threshold_m << ",\n"
+                    << "  \"convergence_vertical_position_deviation_threshold_m\": "
+                    << convergence.vertical_position_deviation_threshold_m << ",\n"
+                    << "  \"convergence_policy\": \"" << convergence.policy << "\",\n"
+                    << "  \"ar_stage_last\": \"" << jsonEscape(ar_stage.last_stage) << "\",\n"
+                    << "  \"ar_per_frequency_attempts\": "
+                    << ar_stage.per_frequency_attempts << ",\n"
+                    << "  \"ar_insufficient_satellite_epochs\": "
+                    << ar_stage.insufficient_satellite_epochs << ",\n"
+                    << "  \"ar_no_wide_lane_epochs\": "
+                    << ar_stage.no_wide_lane_epochs << ",\n"
+                    << "  \"ar_wide_lane_only_epochs\": "
+                    << ar_stage.wide_lane_only_epochs << ",\n"
+                    << "  \"ar_n1_lambda_failure_epochs\": "
+                    << ar_stage.n1_lambda_failure_epochs << ",\n"
+                    << "  \"ar_n1_ratio_rejection_epochs\": "
+                    << ar_stage.n1_ratio_rejection_epochs << ",\n"
+                    << "  \"ar_n1_fixed_epochs\": " << ar_stage.n1_fixed_epochs << ",\n"
+                    << "  \"ar_last_satellite_candidates\": "
+                    << ar_stage.last_satellite_candidates << ",\n"
+                    << "  \"ar_last_wide_lane_pairs\": "
+                    << ar_stage.last_wide_lane_pairs << ",\n"
+                    << "  \"ar_last_n1_candidates\": "
+                    << ar_stage.last_n1_candidates << ",\n"
+                    << "  \"ar_last_n1_ratio\": " << ar_stage.last_n1_ratio << ",\n"
                     << "  \"average_processing_time_ms\": " << stats.average_processing_time_ms << "\n"
                     << "}\n";
         }
@@ -1291,6 +1494,14 @@ int main(int argc, char* argv[]) {
             if (!options.madoca_materialization_dump_path.empty()) {
                 std::cout << "  MADOCA materialization dump: "
                           << options.madoca_materialization_dump_path << "\n";
+            }
+            if (processor.hasLoadedMadocaL6dProducts()) {
+                std::cout << "  MADOCA L6D shadow snapshot epochs: "
+                          << madoca_l6d_shadow_snapshot_epochs << "\n";
+                std::cout << "  MADOCA L6D shadow stale epochs: "
+                          << madoca_l6d_shadow_stale_epochs << "\n";
+                std::cout << "  MADOCA L6D shadow matched satellites: "
+                          << madoca_l6d_shadow_matched_satellites << "\n";
             }
             if (atmospheric_trop_corrections > 0 || atmospheric_iono_corrections > 0) {
                 std::cout << "  atmospheric trop corrections: "

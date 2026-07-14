@@ -1,7 +1,9 @@
 cmake_minimum_required(VERSION 3.14)
 project(gnss_lib VERSION 0.1.0 LANGUAGES C CXX)
 
-set(CMAKE_CXX_STANDARD 20)
+set(GNSSPP_CXX_STANDARD 20 CACHE STRING
+    "C++ standard (use 17 with legacy Eigen 3.3 toolchains that reject C++20 rewritten comparisons)")
+set(CMAKE_CXX_STANDARD ${GNSSPP_CXX_STANDARD})
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 if(MSVC)
@@ -17,8 +19,11 @@ include(CMakePackageConfigHelpers)
 find_package(Eigen3 REQUIRED)
 find_package(Threads REQUIRED)
 find_package(Doxygen QUIET)
-find_package(Python3 COMPONENTS Interpreter Development.Module REQUIRED)
-find_package(pybind11 CONFIG REQUIRED)
+option(GNSSPP_BUILD_PYTHON_BINDINGS "Build the optional pybind11 Python module" ON)
+if(GNSSPP_BUILD_PYTHON_BINDINGS)
+    find_package(Python3 COMPONENTS Interpreter Development.Module REQUIRED)
+    find_package(pybind11 CONFIG REQUIRED)
+endif()
 find_package(ament_cmake QUIET)
 find_package(rclcpp QUIET)
 find_package(sensor_msgs QUIET)
@@ -32,6 +37,11 @@ if(GTSAM_FOUND)
 else()
     message(STATUS "GTSAM not found; optional FGO GTSAM backend disabled")
 endif()
+# GNSSPP_HAS_GTSAM (compile definition, exported PUBLIC below) gates all
+# GTSAM-dependent code (see src/algorithms/fgo_gtsam_backend.cpp and the
+# FGOProcessor::optimizeProblem backend selector in src/algorithms/fgo.cpp).
+# A build without GTSAM_FOUND is unchanged: FGOBackend::GTSAM silently falls
+# back to the native Eigen backend.
 option(GNSSPP_USE_CHOLMOD "Use CHOLMOD for optional FGO sparse covariance solves" ON)
 if(GNSSPP_USE_CHOLMOD)
     find_path(CHOLMOD_INCLUDE_DIR
@@ -79,6 +89,7 @@ set(GNSS_SOURCES
     src/fusion/fusion_update.cpp
     src/fusion/fusion_initialization.cpp
     src/fusion/fusion_processor.cpp
+    src/fusion/dd_imu_bridge.cpp
     src/algorithms/ppp_ar.cpp
     src/algorithms/ppp_atmosphere.cpp
     src/algorithms/ppp_clas.cpp
@@ -110,6 +121,8 @@ set(GNSS_SOURCES
 set(GNSS_SOURCES_NO_OPTIMIZATION
     src/algorithms/rtk_ar_selection.cpp
     src/algorithms/rtk_ar_evaluation.cpp
+    src/algorithms/nlos_weights.cpp
+    src/algorithms/float_trust_policy.cpp
     src/algorithms/rtk_measurement.cpp
     src/algorithms/rtk_selection.cpp
     src/algorithms/rtk_update.cpp
@@ -246,6 +259,28 @@ if(CHOLMOD_INCLUDE_DIR AND CHOLMOD_LIBRARY)
     target_compile_definitions(gnss_lib_noopt PRIVATE GNSSPP_HAS_CHOLMOD=1)
     target_link_libraries(gnss_lib_noopt PRIVATE ${CHOLMOD_LIBRARY})
 endif()
+if(GTSAM_FOUND)
+    # fgo.cpp (FGOProcessor::optimizeProblem) lives in gnss_lib_noopt, so the
+    # GTSAM backend TU and the gtsam link dependency must live here too, not
+    # on gnss_lib, otherwise the backend-selector forward declaration in
+    # fgo.cpp would be an unresolved symbol at link time.
+    target_sources(gnss_lib_noopt PRIVATE src/algorithms/fgo_gtsam_backend.cpp)
+    target_link_libraries(gnss_lib_noopt PUBLIC gtsam)
+    target_compile_definitions(gnss_lib_noopt PUBLIC GNSSPP_HAS_GTSAM=1)
+    if(MSVC)
+        # gtsam.dll dllexports a handful of STL template instantiations that back
+        # its Key containers (std::map<uint64,uint64>, std::vector<uint64>, ...).
+        # Those same instantiations also appear as COMDAT symbols in our own
+        # object files (e.g. fgo.obj), so every executable that links both
+        # gnss_lib_noopt and gtsam hits LNK2005 "already defined". /FORCE:MULTIPLE
+        # tells the linker to keep the first definition and drop the duplicates;
+        # this is the standard GTSAM-on-Windows shared-build workaround and is
+        # safe here because the colliding symbols are identical inline STL code.
+        # Propagated as an INTERFACE option so every consumer (apps, tests) that
+        # transitively links gtsam through gnss_lib_noopt inherits it.
+        target_link_options(gnss_lib_noopt INTERFACE /FORCE:MULTIPLE)
+    endif()
+endif()
 
 set(GNSS_INSTALL_TARGETS gnss_lib gnss_lib_noopt sofa ginan_iers2010)
 if(MADOCALIB_PARITY_LINK)
@@ -359,7 +394,9 @@ target_include_directories(gnss_kml_lib PUBLIC
 # Add subdirectories
 add_subdirectory(examples)
 add_subdirectory(apps)
-add_subdirectory(python)
+if(GNSSPP_BUILD_PYTHON_BINDINGS)
+    add_subdirectory(python)
+endif()
 if(ament_cmake_FOUND AND rclcpp_FOUND AND sensor_msgs_FOUND AND geometry_msgs_FOUND AND nav_msgs_FOUND AND std_msgs_FOUND)
     set(GNSSPP_HAS_ROS2 ON)
     add_subdirectory(ros2)

@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <libgnss++/algorithms/lambda.hpp>
 #include <libgnss++/algorithms/rtk.hpp>
 #include <libgnss++/algorithms/spp.hpp>
 #include <libgnss++/io/rinex.hpp>
@@ -491,6 +492,23 @@ TEST(LAMBDATest, AmbiguousCase) {
     std::cout << "LAMBDA ambiguous case: ok=" << ok
               << " success_rate=" << success_rate << std::endl;
     // This case should either fail or have low success rate
+}
+
+TEST(LAMBDATest, ExposesBothRatioCandidates) {
+    VectorXd float_amb(3);
+    float_amb << 1.02, -2.97, 5.01;
+    MatrixXd cov = MatrixXd::Identity(3, 3) * 0.01;
+
+    VectorXd best;
+    VectorXd second;
+    double ratio = 0.0;
+    ASSERT_TRUE(lambdaSearchCandidates(float_amb, cov, best, second, ratio));
+
+    ASSERT_EQ(best.size(), 3);
+    ASSERT_EQ(second.size(), 3);
+    EXPECT_TRUE(best.isApprox((VectorXd(3) << 1.0, -3.0, 5.0).finished()));
+    EXPECT_FALSE(best.isApprox(second));
+    EXPECT_GT(ratio, 1.0);
 }
 
 // ============================================================================

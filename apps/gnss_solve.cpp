@@ -7,9 +7,13 @@
 #include <iostream>
 #include <limits>
 #include <map>
+#include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
 
+#include <libgnss++/algorithms/nlos_weights.hpp>
+#include <libgnss++/algorithms/float_trust_policy.hpp>
 #include <libgnss++/algorithms/rtk.hpp>
 #include <libgnss++/algorithms/rtk_validation.hpp>
 #include <libgnss++/algorithms/spp.hpp>
@@ -90,7 +94,14 @@ struct SolveConfig {
     IonoChoice iono = IonoChoice::AUTO;
     libgnss::io::SolutionWriter::Format output_format = libgnss::io::SolutionWriter::Format::POS;
     double max_baseline_length_m = 20000.0;
+    bool prefer_trusted_seed = false;
+    bool use_doppler_float_seed = false;
+    double doppler_float_seed_max_age_s = 6.0;
+    std::string rover_seed_pos_path;
+    std::string diagnostics_csv_path;
+    double rtk_update_outlier_threshold = 0.0;
     double ratio_threshold = 3.0;
+    bool enable_satellite_count_ratio_threshold = false;
     bool enable_ar_filter = false;
     bool has_ar_filter_override = false;
     double ar_filter_margin = 0.25;
@@ -126,6 +137,7 @@ struct SolveConfig {
     bool carrier_phase_sigma_set = false;
     bool enable_glonass = true;
     bool enable_beidou = true;
+    bool enable_l5 = false;  // Phase 18 Step 3: opt-in L5 measurement collection
     GlonassARChoice glonass_ar = GlonassARChoice::OFF;
     double glonass_icb_l1_m_per_mhz = 0.0;
     double glonass_icb_l2_m_per_mhz = 0.0;
@@ -212,6 +224,32 @@ struct SolveConfig {
     bool enable_bsr_guided_decimation = false;
     int bsr_guided_worst_axes = 3;
     int bsr_guided_max_drop_steps = 6;
+    // WP7: NLOS/multipath measurement weighting. Empty path / OFF mode
+    // (both defaults) mean the feature is entirely inert.
+    std::string nlos_weights_csv_path;
+    libgnss::nlos_weights::NlosWeightMode nlos_weight_mode =
+        libgnss::nlos_weights::NlosWeightMode::OFF;
+    double nlos_two_tier_los_threshold = 0.5;
+    double nlos_two_tier_sigma_inflation = 3.0;
+    double nlos_continuous_los_prob_floor = 0.05;
+    double nlos_tow_tolerance_s = 0.05;
+    // WP8: hard exclusion mode threshold/safety-guard. No effect unless
+    // --nlos-weight-mode exclude.
+    double nlos_exclude_threshold = 0.5;
+    int nlos_min_sats = 5;
+    // WP9: float-filter trust/reset policy. LEGACY (default) is
+    // bit-identical to pre-WP9 behavior.
+    libgnss::float_trust_policy::FloatTrustPolicy float_trust_policy =
+        libgnss::float_trust_policy::FloatTrustPolicy::LEGACY;
+    double trust_lapse_qpos_m2_per_s = 10.0;
+    bool trust_gate_nlos_relax = false;
+    // WP10: lapse-gated trust policy + optional NLOS-fraction trigger.
+    // No effect unless --float-trust-policy lapse-gated.
+    double trust_lapse_gate_s = 5.0;
+    double trust_lapse_gate_nlos_frac = -1.0;
+    // WP10 (WP8 rec 2): AR-acceptance-only min-LOS-satellites gate.
+    // <= 0 (default) disables it; requires --nlos-weights.
+    int nlos_min_los_sats = 0;
 };
 
 using libgnss_apps::timeDiffSeconds;
@@ -322,6 +360,200 @@ std::string outputFormatString(libgnss::io::SolutionWriter::Format format) {
     return "pos";
 }
 
+// PPC pipeline 互換の診断 CSV ライター。 my-branch と同じ列構成を維持し、
+// develop に存在しないフィールド (alt_lambda_*, glonass_icb_*, cascade_*) は
+// 0/NaN/空でスタブ出力 (forward-compat: cascade branch では実値が入る)。
+struct EpochDiagnostics {
+    int epoch_index = 0;
+    int gps_week = 0;
+    double tow = 0.0;
+    bool exact_base = false;
+    bool interpolated_base = false;
+    bool initial_valid = false;
+    int initial_status = 0;
+    int initial_sats = 0;
+    double initial_ratio = 0.0;
+    double initial_pdop = 999.9;
+    double initial_baseline_m = 0.0;
+    double initial_residual_rms = 0.0;
+    double initial_residual_abs_max = 0.0;
+    int initial_update_rows = 0;
+    int initial_suppressed_outliers = 0;
+    bool final_valid = false;
+    int final_status = 0;
+    int final_sats = 0;
+    double final_ratio = 0.0;
+    double final_pdop = 999.9;
+    double final_baseline_m = 0.0;
+    double final_residual_rms = 0.0;
+    double final_residual_abs_max = 0.0;
+    int final_update_rows = 0;
+    int final_suppressed_outliers = 0;
+    bool spp_valid = false;
+    int spp_sats = 0;
+    double spp_pdop = 999.9;
+    double candidate_vs_spp_m = std::numeric_limits<double>::quiet_NaN();
+    double candidate_jump_m = std::numeric_limits<double>::quiet_NaN();
+    double last_output_dt_s = std::numeric_limits<double>::quiet_NaN();
+    double nonfixed_jump_guard_m = std::numeric_limits<double>::quiet_NaN();
+    double drift_from_fixed_m = std::numeric_limits<double>::quiet_NaN();
+    double height_from_fixed_m = std::numeric_limits<double>::quiet_NaN();
+    double dt_since_fixed_s = std::numeric_limits<double>::quiet_NaN();
+    double fixed_drift_guard_m = std::numeric_limits<double>::quiet_NaN();
+    double fixed_height_guard_m = std::numeric_limits<double>::quiet_NaN();
+    bool spp_replacement_used = false;
+    bool output_added = false;
+    std::string rejection_reason = "none";
+    // cascade fields (develop port: stub. cascade branch では PositionSolution
+    // から populate される。 PPC pipeline の 70-col schema に対する forward-compat 拡張。)
+    bool initial_cascade_used = false;
+    int initial_cascade_wl_attempted = 0;
+    int initial_cascade_wl_fixed = 0;
+    int initial_cascade_n1_fixed = 0;
+    double initial_cascade_wl_acceptance_rate = std::numeric_limits<double>::quiet_NaN();
+    int initial_cascade_l5_pairs_attempted = 0;
+    int initial_cascade_l5_pairs_fixed = 0;
+    int initial_cascade_l5_cross_validation_rejects = 0;
+    bool final_cascade_used = false;
+    int final_cascade_wl_attempted = 0;
+    int final_cascade_wl_fixed = 0;
+    int final_cascade_n1_fixed = 0;
+    double final_cascade_wl_acceptance_rate = std::numeric_limits<double>::quiet_NaN();
+    int final_cascade_l5_pairs_attempted = 0;
+    int final_cascade_l5_pairs_fixed = 0;
+    int final_cascade_l5_cross_validation_rejects = 0;
+};
+
+void writeDiagnosticsHeader(std::ostream& out) {
+    out << "epoch_index,gps_week,tow,exact_base,interpolated_base,"
+        << "initial_valid,initial_status,initial_sats,initial_ratio,initial_pdop,"
+        << "initial_baseline_m,initial_residual_rms,initial_residual_abs_max,"
+        << "initial_update_rows,initial_suppressed_outliers,"
+        << "initial_has_glonass_icb_diag,initial_glonass_icb_l1,initial_glonass_icb_l2,"
+        << "initial_glonass_icb_l1_sigma,initial_glonass_icb_l2_sigma,"
+        << "initial_glonass_icb_l1_rows,initial_glonass_icb_l2_rows,"
+        << "initial_has_alt_lambda,initial_alt_lambda_rank,initial_alt_lambda_cost_ratio,"
+        << "initial_alt_lambda_x,initial_alt_lambda_y,initial_alt_lambda_z,"
+        << "initial_alt_lambda_dx,initial_alt_lambda_dy,initial_alt_lambda_dz,"
+        << "initial_alt_lambda_dnorm,initial_alt_lambda_candidates,"
+        << "initial_cascade_used,initial_cascade_wl_attempted,initial_cascade_wl_fixed,"
+        << "initial_cascade_n1_fixed,initial_cascade_wl_acceptance_rate,"
+        << "initial_cascade_l5_pairs_attempted,initial_cascade_l5_pairs_fixed,"
+        << "initial_cascade_l5_cross_validation_rejects,"
+        << "final_valid,final_status,final_sats,final_ratio,final_pdop,"
+        << "final_baseline_m,final_residual_rms,final_residual_abs_max,"
+        << "final_update_rows,final_suppressed_outliers,"
+        << "final_has_glonass_icb_diag,final_glonass_icb_l1,final_glonass_icb_l2,"
+        << "final_glonass_icb_l1_sigma,final_glonass_icb_l2_sigma,"
+        << "final_glonass_icb_l1_rows,final_glonass_icb_l2_rows,"
+        << "final_has_alt_lambda,final_alt_lambda_rank,final_alt_lambda_cost_ratio,"
+        << "final_alt_lambda_x,final_alt_lambda_y,final_alt_lambda_z,"
+        << "final_alt_lambda_dx,final_alt_lambda_dy,final_alt_lambda_dz,"
+        << "final_alt_lambda_dnorm,final_alt_lambda_candidates,"
+        << "final_cascade_used,final_cascade_wl_attempted,final_cascade_wl_fixed,"
+        << "final_cascade_n1_fixed,final_cascade_wl_acceptance_rate,"
+        << "final_cascade_l5_pairs_attempted,final_cascade_l5_pairs_fixed,"
+        << "final_cascade_l5_cross_validation_rejects,"
+        << "spp_valid,spp_sats,spp_pdop,candidate_vs_spp_m,candidate_jump_m,"
+        << "last_output_dt_s,nonfixed_jump_guard_m,drift_from_fixed_m,"
+        << "height_from_fixed_m,dt_since_fixed_s,fixed_drift_guard_m,"
+        << "fixed_height_guard_m,spp_replacement_used,output_added,rejection_reason\n";
+}
+
+// develop 用 fill: alt_lambda / glonass_icb は develop に存在せずスタブ
+void fillSolutionDiagnostics(const libgnss::PositionSolution& solution,
+                             bool& valid, int& status, int& sats,
+                             double& ratio, double& pdop, double& baseline_m,
+                             double& residual_rms, double& residual_abs_max,
+                             int& update_rows, int& suppressed_outliers) {
+    valid = solution.isValid();
+    status = static_cast<int>(solution.status);
+    sats = solution.num_satellites;
+    ratio = solution.ratio;
+    pdop = solution.pdop;
+    baseline_m = solution.baseline_length;
+    residual_rms = solution.rtk_update_post_suppression_residual_rms_m > 0.0
+                       ? solution.rtk_update_post_suppression_residual_rms_m
+                       : solution.residual_rms;
+    residual_abs_max = solution.rtk_update_post_suppression_residual_max_m;
+    update_rows = solution.rtk_update_observations;
+    suppressed_outliers = solution.rtk_update_suppressed_outliers;
+}
+
+void writeDiagnosticsRow(std::ostream& out, const EpochDiagnostics& d) {
+    const char* nan_str = "nan";
+    out << d.epoch_index << ','
+        << d.gps_week << ','
+        << std::fixed << std::setprecision(3) << d.tow << ','
+        << (d.exact_base ? 1 : 0) << ','
+        << (d.interpolated_base ? 1 : 0) << ','
+        << (d.initial_valid ? 1 : 0) << ','
+        << d.initial_status << ','
+        << d.initial_sats << ','
+        << std::setprecision(6) << d.initial_ratio << ','
+        << d.initial_pdop << ','
+        << d.initial_baseline_m << ','
+        << d.initial_residual_rms << ','
+        << d.initial_residual_abs_max << ','
+        << d.initial_update_rows << ','
+        << d.initial_suppressed_outliers << ','
+        // initial glonass_icb (stub: develop に無い)
+        << "0," << nan_str << "," << nan_str << "," << nan_str << "," << nan_str
+        << ",0,0,"
+        // initial alt_lambda (stub)
+        << "0,0," << nan_str << "," << nan_str << "," << nan_str << "," << nan_str
+        << "," << nan_str << "," << nan_str << "," << nan_str << "," << nan_str << ",,"
+        // initial cascade
+        << (d.initial_cascade_used ? 1 : 0) << ','
+        << d.initial_cascade_wl_attempted << ','
+        << d.initial_cascade_wl_fixed << ','
+        << d.initial_cascade_n1_fixed << ','
+        << d.initial_cascade_wl_acceptance_rate << ','
+        << d.initial_cascade_l5_pairs_attempted << ','
+        << d.initial_cascade_l5_pairs_fixed << ','
+        << d.initial_cascade_l5_cross_validation_rejects << ','
+        << (d.final_valid ? 1 : 0) << ','
+        << d.final_status << ','
+        << d.final_sats << ','
+        << d.final_ratio << ','
+        << d.final_pdop << ','
+        << d.final_baseline_m << ','
+        << d.final_residual_rms << ','
+        << d.final_residual_abs_max << ','
+        << d.final_update_rows << ','
+        << d.final_suppressed_outliers << ','
+        // final glonass_icb (stub)
+        << "0," << nan_str << "," << nan_str << "," << nan_str << "," << nan_str
+        << ",0,0,"
+        // final alt_lambda (stub)
+        << "0,0," << nan_str << "," << nan_str << "," << nan_str << "," << nan_str
+        << "," << nan_str << "," << nan_str << "," << nan_str << "," << nan_str << ",,"
+        // final cascade
+        << (d.final_cascade_used ? 1 : 0) << ','
+        << d.final_cascade_wl_attempted << ','
+        << d.final_cascade_wl_fixed << ','
+        << d.final_cascade_n1_fixed << ','
+        << d.final_cascade_wl_acceptance_rate << ','
+        << d.final_cascade_l5_pairs_attempted << ','
+        << d.final_cascade_l5_pairs_fixed << ','
+        << d.final_cascade_l5_cross_validation_rejects << ','
+        << (d.spp_valid ? 1 : 0) << ','
+        << d.spp_sats << ','
+        << d.spp_pdop << ','
+        << d.candidate_vs_spp_m << ','
+        << d.candidate_jump_m << ','
+        << d.last_output_dt_s << ','
+        << d.nonfixed_jump_guard_m << ','
+        << d.drift_from_fixed_m << ','
+        << d.height_from_fixed_m << ','
+        << d.dt_since_fixed_s << ','
+        << d.fixed_drift_guard_m << ','
+        << d.fixed_height_guard_m << ','
+        << (d.spp_replacement_used ? 1 : 0) << ','
+        << (d.output_added ? 1 : 0) << ','
+        << d.rejection_reason << '\n';
+}
+
 class EpochDebugWriter {
 public:
     bool open(const std::string& path) {
@@ -334,7 +566,7 @@ public:
         }
         file_ << "gps_week,tow,status,num_sats,ratio,baseline_m,"
               << "ar_attempted,input_pair_count,pair_count,max_ambiguity_variance,"
-              << "effective_ratio_threshold,min_subset_pair_count,min_full_ratio_for_subset_ar,"
+              << "effective_ratio_threshold,ratio_satellite_count,min_subset_pair_count,min_full_ratio_for_subset_ar,"
               << "subset_candidates_evaluated,subset_candidates_rejected_by_full_ratio,"
               << "subset_candidates_rejected_by_diversity,"
               << "bsr_guided_candidates_evaluated,bsr_guided_candidates_accepted,"
@@ -351,7 +583,11 @@ public:
               << "selected_fixed_ambiguities,selected_used_subset,"
               << "used_wlnl_fallback,validation_attempted,validation_passed,"
               << "postfix_residual_rms,fixed_float_jump_m,post_validation_rejected,"
-              << "final_fixed_applied,reject_reason,ar_skip_reason\n";
+              << "final_fixed_applied,reject_reason,ar_skip_reason,"
+              << "float_update_observation_count,float_update_prefit_residual_rms_m,"
+              << "float_update_post_suppression_residual_rms_m,"
+              << "float_update_nis_per_observation,float_update_suppressed_outliers,"
+              << "float_position_covariance_trace_m2\n";
         return true;
     }
 
@@ -374,6 +610,7 @@ public:
         writeNumber(telemetry.max_ambiguity_variance);
         file_ << ",";
         writeNumber(telemetry.effective_ratio_threshold);
+        file_ << ',' << telemetry.ratio_satellite_count;
         file_ << ","
               << telemetry.min_subset_pair_count << ","
               << telemetry.min_full_ratio_for_subset_ar << ","
@@ -424,7 +661,17 @@ public:
               << telemetry.post_validation_rejected << ","
               << telemetry.final_fixed_applied << ","
               << telemetry.reject_reason << ","
-              << libgnss::RTKProcessor::arSkipReasonToString(telemetry.ar_skip_reason) << "\n";
+              << libgnss::RTKProcessor::arSkipReasonToString(telemetry.ar_skip_reason) << ","
+              << telemetry.float_update_observation_count << ",";
+        writeNumber(telemetry.float_update_prefit_residual_rms_m);
+        file_ << ",";
+        writeNumber(telemetry.float_update_post_suppression_residual_rms_m);
+        file_ << ",";
+        writeNumber(telemetry.float_update_nis_per_observation);
+        file_ << ","
+              << telemetry.float_update_suppressed_outliers << ",";
+        writeNumber(telemetry.float_position_covariance_trace_m2);
+        file_ << "\n";
         file_.flush();
     }
 
@@ -453,7 +700,7 @@ void printUsage(const char* program_name) {
         << "  --mode <auto|kinematic|static|moving-base>\n"
         << "                             Position mode (default: auto)\n"
         << "  --iono <auto|off|iflc|est> Ionosphere option (default: auto)\n"
-        << "  --ratio <value>            Ambiguity ratio threshold (default: 3.0)\n"
+        << "  --ratio <value|sat-count>  Fixed or satellite-count-aware Ratio threshold\n"
         << "  --preset <survey|low-cost|moving-base|odaiba>\n"
         << "                             Apply a named RTK tuning preset\n"
         << "  --arfilter                 Require extra ratio margin for subset AR fixes\n"
@@ -604,6 +851,78 @@ void printUsage(const char* program_name) {
         << "                             per-pair loadings against (default: 3)\n"
         << "  --bsr-max-drops <n>        Max pairs to drop progressively in BSR-guided\n"
         << "                             decimation (default: 6)\n"
+        << "  --nlos-weights <csv>       WP7: per-epoch per-satellite LOS/NLOS weight CSV\n"
+        << "                             (columns: tow,sat,los_prob; also accepts the\n"
+        << "                             tow,epoch_idx,prn,is_los,... contract emitted by\n"
+        << "                             build_per_epoch_nlos_csv.py). Requires\n"
+        << "                             --nlos-weight-mode to have any effect.\n"
+        << "  --nlos-weight-mode <off|two-tier|continuous|exclude>\n"
+        << "                             Sigma-inflation (or WP8 hard exclusion) mapping for\n"
+        << "                             NLOS satellites (default: off — bit-identical to no\n"
+        << "                             NLOS weighting)\n"
+        << "  --nlos-two-tier-threshold <v>\n"
+        << "                             los_prob below this is treated as NLOS in\n"
+        << "                             two-tier mode (default: 0.5)\n"
+        << "  --nlos-two-tier-inflation <v>\n"
+        << "                             Sigma multiplier for NLOS satellites in two-tier\n"
+        << "                             mode (default: 3.0)\n"
+        << "  --nlos-continuous-floor <v>\n"
+        << "                             Floor on los_prob before the 1/sqrt(...) sigma\n"
+        << "                             mapping in continuous mode (default: 0.05)\n"
+        << "  --nlos-tow-tolerance <s>   Tow-matching tolerance for the NLOS weight CSV\n"
+        << "                             (default: 0.05)\n"
+        << "  --nlos-exclude-threshold <v>\n"
+        << "                             WP8: los_prob below this is dropped from DD\n"
+        << "                             formation entirely in exclude mode (default: 0.5)\n"
+        << "  --nlos-min-sats <n>        WP8: exclude-mode safety guard -- skip exclusion for\n"
+        << "                             an epoch (keep all satellites) if it would leave\n"
+        << "                             fewer than this many in the candidate set (default: 5)\n"
+        << "  --float-trust-policy <legacy|cv-predict|scaled-reset|lapse-gated>\n"
+        << "                             WP9/WP10: policy for resetPositionToSPP() once the\n"
+        << "                             previous epoch failed to refresh position trust.\n"
+        << "                             legacy (default): unconditional wide reset to\n"
+        << "                             900 m^2/axis, reseeded from SPP -- bit-identical to\n"
+        << "                             pre-WP9 behavior. cv-predict: propagate the previous\n"
+        << "                             position with a constant-velocity predict and grow\n"
+        << "                             covariance at --trust-lapse-qpos instead of jumping\n"
+        << "                             to 900. scaled-reset: keep the SPP reseed but scale\n"
+        << "                             the reset variance with time-since-trust instead of\n"
+        << "                             using a flat 900 (from the very first lapsed epoch).\n"
+        << "                             lapse-gated (WP10): scaled-reset's law, but only once\n"
+        << "                             the *continuous* trust lapse exceeds --trust-lapse-\n"
+        << "                             gate-s seconds (or --trust-lapse-gate-nlos-frac\n"
+        << "                             triggers) -- below the gate, behaves exactly like\n"
+        << "                             legacy (bit-identical), fixing scaled-reset's WP9\n"
+        << "                             regression on short/benign lapses. All non-legacy\n"
+        << "                             policies are capped at 900 m^2/axis (converge to\n"
+        << "                             legacy under a long drought)\n"
+        << "  --trust-lapse-qpos <v>     WP9/WP10: process-noise rate (m^2/s) used by\n"
+        << "                             cv-predict (linear growth per second) and\n"
+        << "                             scaled-reset/lapse-gated (quadratic growth in\n"
+        << "                             time-since-trust). No effect when --float-trust-policy\n"
+        << "                             legacy (default: 10.0; WP9/WP10's run1 winner is 0.1)\n"
+        << "  --trust-lapse-gate-s <s>   WP10: seconds of continuous trust lapse required\n"
+        << "                             before --float-trust-policy lapse-gated switches from\n"
+        << "                             legacy to the scaled-reset law (default: 5.0). No\n"
+        << "                             effect unless --float-trust-policy lapse-gated\n"
+        << "  --trust-lapse-gate-nlos-frac <f>\n"
+        << "                             WP10 optional second trigger for lapse-gated: when\n"
+        << "                             set (>= 0) and --nlos-weights is loaded, ALSO switch\n"
+        << "                             to the scaled-reset law (regardless of lapse length)\n"
+        << "                             on epochs whose NLOS-flagged satellite fraction\n"
+        << "                             exceeds this value (one-epoch-lagged; default: off/\n"
+        << "                             disabled). No effect unless --float-trust-policy\n"
+        << "                             lapse-gated\n"
+        << "  --trust-gate-nlos-relax    WP9 optional lever: relax rememberSolution()'s FLOAT\n"
+        << "                             trust-refresh jump gate 2x when >50% of this epoch's\n"
+        << "                             tracked satellites are NLOS-flagged per --nlos-weights\n"
+        << "                             (default: off; also requires --nlos-weights to have\n"
+        << "                             any effect, independent of --nlos-weight-mode)\n"
+        << "  --nlos-min-los-sats <n>    WP10: AR-acceptance-only gate (never touches the\n"
+        << "                             float-KF update) -- require at least n LOS-flagged\n"
+        << "                             satellites (per --nlos-weights) among the AR\n"
+        << "                             candidate set before attempting/accepting a fix\n"
+        << "                             (default: 0, disabled). Requires --nlos-weights\n"
         << "  --max-consec-float-reset <n>\n"
         << "                             Reset ambiguity state after n consecutive float epochs\n"
         << "                             (default: 0, disabled; e.g. 10 for aggressive urban reconvergence)\n"
@@ -662,6 +981,15 @@ void printUsage(const char* program_name) {
         << "  --skip-epochs <n>          Skip the first n rover epochs before solving\n"
         << "  --max-epochs <n>           Stop after n rover epochs\n"
         << "  --debug-epoch-log <csv>    Write per-epoch AR/debug telemetry CSV\n"
+        << "  --prefer-trusted-seed      Prefer recent trusted/fixed solution as seed\n"
+        << "  --doppler-float-seed       Propagate trusted position with Doppler velocity\n"
+        << "                             during short FLOAT gaps (default: off)\n"
+        << "  --doppler-float-seed-max-age <s>\n"
+        << "                             Maximum trusted-anchor age (default: 6)\n"
+        << "  --rover-seed-pos <file>    Inject ECEF seed positions from .pos file per epoch\n"
+        << "  --diagnostics-csv <file>   Write per-epoch RTK candidate diagnostics CSV (PPC pipeline format)\n"
+        << "  --rtk-update-outlier-threshold <v>\n"
+        << "                             Outlier rejection threshold for RTK measurement update (default: 30.0)\n"
         << "  --no-kinematic-post-filter Disable the kinematic output post-filter\n"
         << "  --no-base-interp           Require exact rover/base epoch alignment\n"
         << "  --verbose                  Print per-epoch progress summary\n"
@@ -695,6 +1023,24 @@ GlonassARChoice parseGlonassARChoice(const std::string& value, const char* progr
     if (value == "on") return GlonassARChoice::ON;
     if (value == "autocal") return GlonassARChoice::AUTOCAL;
     argumentError("unsupported --glonass-ar value: " + value, program_name);
+}
+
+libgnss::nlos_weights::NlosWeightMode parseNlosWeightMode(const std::string& value,
+                                                           const char* program_name) {
+    if (value == "off") return libgnss::nlos_weights::NlosWeightMode::OFF;
+    if (value == "two-tier") return libgnss::nlos_weights::NlosWeightMode::TWO_TIER;
+    if (value == "continuous") return libgnss::nlos_weights::NlosWeightMode::CONTINUOUS;
+    if (value == "exclude") return libgnss::nlos_weights::NlosWeightMode::EXCLUDE;
+    argumentError("unsupported --nlos-weight-mode value: " + value, program_name);
+}
+
+libgnss::float_trust_policy::FloatTrustPolicy parseFloatTrustPolicy(const std::string& value,
+                                                                     const char* program_name) {
+    if (value == "legacy") return libgnss::float_trust_policy::FloatTrustPolicy::LEGACY;
+    if (value == "cv-predict") return libgnss::float_trust_policy::FloatTrustPolicy::CV_PREDICT;
+    if (value == "scaled-reset") return libgnss::float_trust_policy::FloatTrustPolicy::SCALED_RESET;
+    if (value == "lapse-gated") return libgnss::float_trust_policy::FloatTrustPolicy::LAPSE_GATED;
+    argumentError("unsupported --float-trust-policy value: " + value, program_name);
 }
 
 RTKTuningPreset parseRTKTuningPreset(const std::string& value, const char* program_name) {
@@ -817,7 +1163,11 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         } else if (arg == "--iono" && i + 1 < argc) {
             config.iono = parseIonoChoice(argv[++i], argv[0]);
         } else if (arg == "--ratio" && i + 1 < argc) {
-            config.ratio_threshold = std::stod(argv[++i]);
+            const std::string ratio_value = argv[++i];
+            config.enable_satellite_count_ratio_threshold = ratio_value == "sat-count";
+            config.ratio_threshold = config.enable_satellite_count_ratio_threshold
+                ? 3.0
+                : std::stod(ratio_value);
             config.ratio_threshold_set = true;
         } else if (arg == "--preset" && i + 1 < argc) {
             config.preset = parseRTKTuningPreset(argv[++i], argv[0]);
@@ -898,6 +1248,13 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.enable_glonass = false;
         } else if (arg == "--no-beidou") {
             config.enable_beidou = false;
+        } else if (arg == "--enable-l5") {
+            // Phase 18 Step 3: opt-in L5 measurement collection. Default off — when off,
+            // L5 obs are still placed in the L2 slot (legacy fallback for L5-only receivers).
+            // When on, L5-class obs are collected into a dedicated SatelliteData.l5_* slot
+            // and the L2 slot only carries true L2 signals. Step 4+ will add filter
+            // measurement updates / cycle slip handling for L5.
+            config.enable_l5 = true;
         } else if (arg == "--glonass-ar" && i + 1 < argc) {
             config.glonass_ar = parseGlonassARChoice(argv[++i], argv[0]);
         } else if (arg == "--glonass-icb-l1" && i + 1 < argc) {
@@ -993,6 +1350,34 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.bsr_guided_worst_axes = std::stoi(argv[++i]);
         } else if (arg == "--bsr-max-drops" && i + 1 < argc) {
             config.bsr_guided_max_drop_steps = std::stoi(argv[++i]);
+        } else if (arg == "--nlos-weights" && i + 1 < argc) {
+            config.nlos_weights_csv_path = argv[++i];
+        } else if (arg == "--nlos-weight-mode" && i + 1 < argc) {
+            config.nlos_weight_mode = parseNlosWeightMode(argv[++i], argv[0]);
+        } else if (arg == "--nlos-two-tier-threshold" && i + 1 < argc) {
+            config.nlos_two_tier_los_threshold = std::stod(argv[++i]);
+        } else if (arg == "--nlos-two-tier-inflation" && i + 1 < argc) {
+            config.nlos_two_tier_sigma_inflation = std::stod(argv[++i]);
+        } else if (arg == "--nlos-continuous-floor" && i + 1 < argc) {
+            config.nlos_continuous_los_prob_floor = std::stod(argv[++i]);
+        } else if (arg == "--nlos-tow-tolerance" && i + 1 < argc) {
+            config.nlos_tow_tolerance_s = std::stod(argv[++i]);
+        } else if (arg == "--nlos-exclude-threshold" && i + 1 < argc) {
+            config.nlos_exclude_threshold = std::stod(argv[++i]);
+        } else if (arg == "--nlos-min-sats" && i + 1 < argc) {
+            config.nlos_min_sats = std::stoi(argv[++i]);
+        } else if (arg == "--float-trust-policy" && i + 1 < argc) {
+            config.float_trust_policy = parseFloatTrustPolicy(argv[++i], argv[0]);
+        } else if (arg == "--trust-lapse-qpos" && i + 1 < argc) {
+            config.trust_lapse_qpos_m2_per_s = std::stod(argv[++i]);
+        } else if (arg == "--trust-lapse-gate-s" && i + 1 < argc) {
+            config.trust_lapse_gate_s = std::stod(argv[++i]);
+        } else if (arg == "--trust-lapse-gate-nlos-frac" && i + 1 < argc) {
+            config.trust_lapse_gate_nlos_frac = std::stod(argv[++i]);
+        } else if (arg == "--trust-gate-nlos-relax") {
+            config.trust_gate_nlos_relax = true;
+        } else if (arg == "--nlos-min-los-sats" && i + 1 < argc) {
+            config.nlos_min_los_sats = std::stoi(argv[++i]);
         } else if (arg == "--max-consec-float-reset" && i + 1 < argc) {
             config.max_consecutive_float_for_reset = std::stoi(argv[++i]);
         } else if (arg == "--max-consec-nonfix-reset" && i + 1 < argc) {
@@ -1055,6 +1440,18 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.max_epochs = std::stoi(argv[++i]);
         } else if (arg == "--debug-epoch-log" && i + 1 < argc) {
             config.debug_epoch_log_path = argv[++i];
+        } else if (arg == "--prefer-trusted-seed") {
+            config.prefer_trusted_seed = true;
+        } else if (arg == "--doppler-float-seed") {
+            config.use_doppler_float_seed = true;
+        } else if (arg == "--doppler-float-seed-max-age" && i + 1 < argc) {
+            config.doppler_float_seed_max_age_s = std::stod(argv[++i]);
+        } else if (arg == "--rover-seed-pos" && i + 1 < argc) {
+            config.rover_seed_pos_path = argv[++i];
+        } else if (arg == "--diagnostics-csv" && i + 1 < argc) {
+            config.diagnostics_csv_path = argv[++i];
+        } else if (arg == "--rtk-update-outlier-threshold" && i + 1 < argc) {
+            config.rtk_update_outlier_threshold = std::stod(argv[++i]);
         } else if (arg == "--no-kinematic-post-filter") {
             config.enable_kinematic_post_filter = false;
         } else if (arg == "--no-base-interp") {
@@ -1103,6 +1500,40 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     }
     if (config.ar_filter_margin < 0.0) {
         argumentError("--arfilter-margin must be >= 0", argv[0]);
+    }
+    if (config.nlos_weight_mode != libgnss::nlos_weights::NlosWeightMode::OFF &&
+        config.nlos_weights_csv_path.empty()) {
+        argumentError("--nlos-weight-mode requires --nlos-weights <csv>", argv[0]);
+    }
+    if (config.nlos_two_tier_los_threshold < 0.0 || config.nlos_two_tier_los_threshold > 1.0) {
+        argumentError("--nlos-two-tier-threshold must be in [0, 1]", argv[0]);
+    }
+    if (config.nlos_two_tier_sigma_inflation < 1.0) {
+        argumentError("--nlos-two-tier-inflation must be >= 1", argv[0]);
+    }
+    if (config.nlos_continuous_los_prob_floor <= 0.0 || config.nlos_continuous_los_prob_floor > 1.0) {
+        argumentError("--nlos-continuous-floor must be in (0, 1]", argv[0]);
+    }
+    if (config.nlos_tow_tolerance_s < 0.0) {
+        argumentError("--nlos-tow-tolerance must be >= 0", argv[0]);
+    }
+    if (config.nlos_exclude_threshold < 0.0 || config.nlos_exclude_threshold > 1.0) {
+        argumentError("--nlos-exclude-threshold must be in [0, 1]", argv[0]);
+    }
+    if (config.nlos_min_sats < 0) {
+        argumentError("--nlos-min-sats must be >= 0", argv[0]);
+    }
+    if (config.trust_lapse_qpos_m2_per_s < 0.0) {
+        argumentError("--trust-lapse-qpos must be >= 0", argv[0]);
+    }
+    if (config.trust_lapse_gate_s < 0.0) {
+        argumentError("--trust-lapse-gate-s must be >= 0", argv[0]);
+    }
+    if (config.trust_lapse_gate_nlos_frac > 1.0) {
+        argumentError("--trust-lapse-gate-nlos-frac must be <= 1 (or negative to disable)", argv[0]);
+    }
+    if (config.nlos_min_los_sats < 0) {
+        argumentError("--nlos-min-los-sats must be >= 0", argv[0]);
     }
     if (config.min_hold_count < 0) {
         argumentError("--min-hold-count must be >= 0", argv[0]);
@@ -1276,6 +1707,10 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     if (config.skip_epochs < 0) {
         argumentError("--skip-epochs must be >= 0", argv[0]);
     }
+    if (!std::isfinite(config.doppler_float_seed_max_age_s) ||
+        config.doppler_float_seed_max_age_s <= 0.0) {
+        argumentError("--doppler-float-seed-max-age must be > 0", argv[0]);
+    }
 
     return config;
 }
@@ -1370,22 +1805,81 @@ bool writeSolutions(const SolveConfig& config, const libgnss::Solution& solution
     return true;
 }
 
+double roundedTowKey(double tow) {
+    return std::round(tow * 10.0) / 10.0;
+}
+
+std::map<double, Eigen::Vector3d> loadSeedPositions(const std::string& path) {
+    std::ifstream input(path);
+    if (!input.is_open()) {
+        throw std::runtime_error("failed to open rover seed .pos: " + path);
+    }
+    std::map<double, Eigen::Vector3d> out;
+    std::string line;
+    while (std::getline(input, line)) {
+        if (line.empty() || line[0] == '%') continue;
+        std::istringstream iss(line);
+        double week = 0.0;
+        double tow = 0.0;
+        double x = 0.0;
+        double y = 0.0;
+        double z = 0.0;
+        if (!(iss >> week >> tow >> x >> y >> z)) continue;
+        Eigen::Vector3d pos(x, y, z);
+        if (std::isfinite(tow) && pos.allFinite() && pos.norm() > 1e6) {
+            out[roundedTowKey(tow)] = pos;
+        }
+    }
+    if (out.empty()) {
+        throw std::runtime_error("rover seed .pos contained no usable ECEF rows: " + path);
+    }
+    return out;
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
     try {
         const SolveConfig config = parseArguments(argc, argv);
 
+        const std::map<double, Eigen::Vector3d> rover_seed_positions =
+            config.rover_seed_pos_path.empty()
+                ? std::map<double, Eigen::Vector3d>{}
+                : loadSeedPositions(config.rover_seed_pos_path);
+
         libgnss::RTKProcessor rtk_processor;
         libgnss::SPPProcessor spp_processor;
         libgnss::RTKProcessor::RTKConfig rtk_config;
+        rtk_config.prefer_trusted_position_seed = config.prefer_trusted_seed;
+        rtk_config.use_doppler_float_seed = config.use_doppler_float_seed;
+        rtk_config.doppler_float_seed_max_age_s = config.doppler_float_seed_max_age_s;
+        rtk_config.prefer_rover_position_seed =
+            config.prefer_trusted_seed || !rover_seed_positions.empty();
+        if (config.rtk_update_outlier_threshold > 0.0) {
+            rtk_config.outlier_threshold = config.rtk_update_outlier_threshold;
+        }
         rtk_config.max_baseline_length = config.max_baseline_length_m;
         rtk_config.ar_mode = libgnss::RTKProcessor::RTKConfig::AmbiguityResolutionMode::CONTINUOUS;
         rtk_config.ratio_threshold = config.ratio_threshold;
         rtk_config.ambiguity_ratio_threshold = config.ratio_threshold;
+        rtk_config.enable_satellite_count_ratio_threshold =
+            config.enable_satellite_count_ratio_threshold;
         rtk_config.hold_ambiguity_ratio_threshold = config.hold_ratio_threshold;
         rtk_config.enable_ar_filter = config.enable_ar_filter;
         rtk_config.ar_filter_margin = config.ar_filter_margin;
+        rtk_config.nlos_weight_mode = config.nlos_weight_mode;
+        rtk_config.nlos_two_tier_los_threshold = config.nlos_two_tier_los_threshold;
+        rtk_config.nlos_two_tier_sigma_inflation = config.nlos_two_tier_sigma_inflation;
+        rtk_config.nlos_continuous_los_prob_floor = config.nlos_continuous_los_prob_floor;
+        rtk_config.nlos_tow_tolerance_s = config.nlos_tow_tolerance_s;
+        rtk_config.nlos_exclude_threshold = config.nlos_exclude_threshold;
+        rtk_config.nlos_min_sats = config.nlos_min_sats;
+        rtk_config.float_trust_policy = config.float_trust_policy;
+        rtk_config.trust_lapse_qpos_m2_per_s = config.trust_lapse_qpos_m2_per_s;
+        rtk_config.trust_gate_nlos_relax = config.trust_gate_nlos_relax;
+        rtk_config.trust_lapse_gate_s = config.trust_lapse_gate_s;
+        rtk_config.trust_lapse_gate_nlos_frac = config.trust_lapse_gate_nlos_frac;
+        rtk_config.nlos_min_los_sats = config.nlos_min_los_sats;
         rtk_config.min_satellites_for_ar = config.min_satellites_for_ar;
         rtk_config.min_subset_pairs_for_ar = config.min_subset_pairs_for_ar;
         rtk_config.max_subset_drop_steps_for_ar = config.max_subset_drop_steps_for_ar;
@@ -1427,6 +1921,7 @@ int main(int argc, char* argv[]) {
         rtk_config.ionoopt = resolveIonoOpt(config, rtk_config.position_mode);
         rtk_config.enable_glonass = config.enable_glonass;
         rtk_config.enable_beidou = config.enable_beidou;
+        rtk_config.enable_l5 = config.enable_l5;  // Phase 18 Step 3
         rtk_config.glonass_ar_mode =
             config.glonass_ar == GlonassARChoice::AUTOCAL
                 ? libgnss::RTKProcessor::RTKConfig::GlonassARMode::AUTOCAL
@@ -1482,6 +1977,13 @@ int main(int argc, char* argv[]) {
         rtk_config.enable_bsr_guided_decimation = config.enable_bsr_guided_decimation;
         rtk_config.bsr_guided_worst_axes = config.bsr_guided_worst_axes;
         rtk_config.bsr_guided_max_drop_steps = config.bsr_guided_max_drop_steps;
+        if (!config.nlos_weights_csv_path.empty()) {
+            auto table = std::make_shared<libgnss::nlos_weights::NlosWeightTable>(
+                libgnss::nlos_weights::loadNlosWeightsCsv(config.nlos_weights_csv_path));
+            std::cout << "Loaded NLOS weights: " << config.nlos_weights_csv_path
+                      << " (" << table->by_tow.size() << " distinct epochs)" << std::endl;
+            rtk_processor.setNlosWeightTable(std::move(table));
+        }
         rtk_processor.setRTKConfig(rtk_config);
         libgnss::SPPProcessor::SPPConfig spp_config;
         spp_config.use_multi_constellation = true;
@@ -1493,6 +1995,17 @@ int main(int argc, char* argv[]) {
             std::cerr << "Error: failed to open debug epoch log: "
                       << config.debug_epoch_log_path << std::endl;
             return 1;
+        }
+
+        std::ofstream diagnostics_csv;
+        if (!config.diagnostics_csv_path.empty()) {
+            diagnostics_csv.open(config.diagnostics_csv_path);
+            if (!diagnostics_csv.is_open()) {
+                std::cerr << "Error: failed to open diagnostics CSV: "
+                          << config.diagnostics_csv_path << std::endl;
+                return 1;
+            }
+            writeDiagnosticsHeader(diagnostics_csv);
         }
 
         std::cout << "libgnss++ post-process solver" << std::endl;
@@ -1510,7 +2023,8 @@ int main(int argc, char* argv[]) {
                   << " (requested " << ionoChoiceString(config.iono) << ")" << std::endl;
         std::cout << "  carrier constellations: GLONASS "
                   << (rtk_config.enable_glonass ? "on" : "off")
-                  << ", BeiDou " << (rtk_config.enable_beidou ? "on" : "off") << std::endl;
+                  << ", BeiDou " << (rtk_config.enable_beidou ? "on" : "off")
+                  << ", L5 " << (rtk_config.enable_l5 ? "on" : "off") << std::endl;
         std::cout << "  GLONASS AR: " << glonassARChoiceString(config.glonass_ar)
                   << " (L1 ICB " << config.glonass_icb_l1_m_per_mhz
                   << " m/MHz, L2 ICB " << config.glonass_icb_l2_m_per_mhz << " m/MHz)"
@@ -1680,6 +2194,14 @@ int main(int argc, char* argv[]) {
                 continue;
             }
 
+            if (!rover_seed_positions.empty()) {
+                const auto seed_it =
+                    rover_seed_positions.find(roundedTowKey(rover_obs.time.tow));
+                if (seed_it != rover_seed_positions.end()) {
+                    rover_obs.receiver_position = seed_it->second;
+                }
+            }
+
             auto pos_solution = rtk_processor.processRTKEpoch(rover_obs, aligned_base_obs, nav_data);
             const libgnss::PositionSolution* last_output = solution.getLastSolution();
             const bool have_last_output = last_output != nullptr && last_output->isValid();
@@ -1756,6 +2278,27 @@ int main(int argc, char* argv[]) {
             }
 
             debug_writer.write(pos_solution, rtk_processor.getLastDebugTelemetry());
+
+            if (diagnostics_csv.is_open()) {
+                EpochDiagnostics diag;
+                diag.epoch_index = static_cast<int>(processed_rover_epochs);
+                diag.gps_week = rover_obs.time.week;
+                diag.tow = rover_obs.time.tow;
+                diag.exact_base = !used_interpolated_base;
+                diag.interpolated_base = used_interpolated_base;
+                fillSolutionDiagnostics(pos_solution,
+                    diag.initial_valid, diag.initial_status, diag.initial_sats,
+                    diag.initial_ratio, diag.initial_pdop, diag.initial_baseline_m,
+                    diag.initial_residual_rms, diag.initial_residual_abs_max,
+                    diag.initial_update_rows, diag.initial_suppressed_outliers);
+                fillSolutionDiagnostics(pos_solution,
+                    diag.final_valid, diag.final_status, diag.final_sats,
+                    diag.final_ratio, diag.final_pdop, diag.final_baseline_m,
+                    diag.final_residual_rms, diag.final_residual_abs_max,
+                    diag.final_update_rows, diag.final_suppressed_outliers);
+                diag.output_added = pos_solution.isValid();
+                writeDiagnosticsRow(diagnostics_csv, diag);
+            }
 
             if (pos_solution.isValid()) {
                 solution.addSolution(pos_solution);

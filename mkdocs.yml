@@ -32,6 +32,7 @@ nav:
   - Experiments: experiments.md
   - Decisions: decisions.md
   - IERS Integration Plan: iers-integration-plan.md
+  - MADOCALIB Native Migration: madocalib_native_migration.md
   - References:
       - Overview: references/index.md
       - MADOCALIB Gap: references/madocalib-gap.md

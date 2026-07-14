@@ -949,6 +949,16 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
 
 
 class PPCCoverageMatrixTest(unittest.TestCase):
+    def test_default_profile_uses_guarded_deep_partial_ar(self) -> None:
+        with mock.patch.object(
+            sys,
+            "argv",
+            ["gnss_ppc_coverage_matrix.py", "--dataset-root", "data/PPC-Dataset"],
+        ):
+            args = ppc_coverage_matrix.parse_args()
+
+        self.assertEqual(args.max_subset_ar_drop_steps, 18)
+
     def test_parse_args_loads_config_toml_profile_and_allows_cli_overrides(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppc_coverage_config_") as temp_dir:
             temp_root = Path(temp_dir)
@@ -1073,6 +1083,7 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                 preset="low-cost",
                 iono="iflc",
                 ratio=2.4,
+                elevation_mask_deg=22.5,
                 max_subset_ar_drop_steps=18,
                 max_hold_div=5.0,
                 max_pos_jump=20.0,
@@ -1151,6 +1162,8 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertIn("--iono", command)
             self.assertIn("iflc", command)
             self.assertIn("--ratio", command)
+            self.assertIn("--elevation-mask-deg", command)
+            self.assertIn("22.5", command)
             self.assertIn("2.4", command)
             self.assertIn("--max-subset-ar-drop-steps", command)
             self.assertIn("18", command)

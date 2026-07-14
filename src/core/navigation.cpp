@@ -1056,6 +1056,22 @@ inline bool galileoSkip(const SatelliteId& sat, const Ephemeris& eph,
     }
     return false;
 }
+
+// RTKLIB/MADOCALIB seleph() treats the Compact SSR BeiDou IODE as an
+// eight-second toe index rather than comparing it with the RINEX AODE field.
+// Other broadcast constellations compare the ephemeris IODE directly.
+inline bool ephemerisMatchesSsrIode(const SatelliteId& sat,
+                                    const Ephemeris& eph,
+                                    int desired_iode) {
+    if (sat.system == GNSSSystem::BeiDou) {
+        constexpr int kBeiDouIodeCycleSeconds = 2048;
+        const int toe_seconds = static_cast<int>(eph.toes);
+        const int correction_toe_seconds = desired_iode * 8;
+        return toe_seconds % kBeiDouIodeCycleSeconds ==
+               correction_toe_seconds % kBeiDouIodeCycleSeconds;
+    }
+    return static_cast<int>(eph.iode) == desired_iode;
+}
 }  // namespace
 
 const Ephemeris* NavigationData::getEphemeris(const SatelliteId& sat, const GNSSTime& time) const {
@@ -1093,17 +1109,18 @@ const Ephemeris* NavigationData::getEphemeris(const SatelliteId& sat,
     if (it == ephemeris_data.end()) {
         return nullptr;
     }
-    // Prefer a valid ephemeris whose IODE matches the SSR orbit correction's
-    // reference IODE (RTKLIB seleph() behaviour). Among matches pick the
-    // freshest (smallest age). Fall back to the nearest-age ephemeris (the
-    // IODE-agnostic selection) when nothing matches.
+    // Require a valid ephemeris whose IODE matches the SSR orbit correction's
+    // reference IODE (RTKLIB/MADOCALIB seleph() behaviour). Applying an SSR
+    // delta to a different broadcast orbit can introduce metre-level errors.
+    // Among matches pick the freshest (smallest age); do not fall back to an
+    // IODE-agnostic ephemeris when the referenced record is unavailable.
     const Ephemeris* best_match = nullptr;
     double min_age = 1e9;
     for (const auto& eph : it->second) {
         if (galileoSkip(sat, eph, time)) {
             continue;
         }
-        if (static_cast<int>(eph.iode) != desired_iode) {
+        if (!ephemerisMatchesSsrIode(sat, eph, desired_iode)) {
             continue;
         }
         if (!eph.isValid(time)) {
@@ -1115,7 +1132,7 @@ const Ephemeris* NavigationData::getEphemeris(const SatelliteId& sat,
             best_match = &eph;
         }
     }
-    return best_match != nullptr ? best_match : getEphemeris(sat, time);
+    return best_match;
 }
 
 std::vector<Ephemeris> NavigationData::getEphemeris(
@@ -1136,7 +1153,8 @@ bool NavigationData::hasMadocaGalileoEphemeris(const SatelliteId& sat,
     }
     constexpr int kGalInavClockBit = 1 << 9;
     for (const auto& eph : it->second) {
-        if (desired_iode >= 0 && static_cast<int>(eph.iode) != desired_iode) {
+        if (desired_iode >= 0 &&
+            !ephemerisMatchesSsrIode(sat, eph, desired_iode)) {
             continue;
         }
         if (!(eph.data_source_code & kGalInavClockBit)) {

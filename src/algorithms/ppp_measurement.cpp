@@ -1,5 +1,7 @@
 #include "ppp_internal.hpp"
 
+#include <libgnss++/algorithms/ppp_multifrequency.hpp>
+
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
 
@@ -77,6 +79,32 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
         row_secondary_frequencies_hz.push_back(observation.secondary_frequency_hz);
         row_primary_if_coefficients.push_back(observation.primary_code_bias_coeff);
         row_secondary_if_coefficients.push_back(observation.secondary_code_bias_coeff);
+        row_ssr_orbit_ages_s.push_back(observation.ssr_orbit_age_s);
+        row_ssr_clock_ages_s.push_back(observation.ssr_clock_age_s);
+        row_ssr_orbit_iods.push_back(observation.ssr_orbit_iod);
+        row_ssr_clock_iods.push_back(observation.ssr_clock_iod);
+        row_ssr_orbit_iodes.push_back(observation.ssr_orbit_iode);
+    };
+    const auto appendAdditionalShadowMetadata = [&]
+        (const IonosphereFreeObs& observation,
+         const IonosphereFreeObs::AdditionalFrequencyObs& frequency,
+         bool phase) {
+        if (!capture_shadow_metadata) {
+            return;
+        }
+        row_rinex_codes.push_back(
+            phase ? frequency.carrier_phase_observation_type
+                  : frequency.pseudorange_observation_type);
+        row_rtklib_codes.push_back(
+            phase ? frequency.carrier_phase_rtklib_code
+                  : frequency.pseudorange_rtklib_code);
+        row_signal_families.push_back(signalFamilyName(frequency.signal));
+        row_azimuths.push_back(observation.azimuth);
+        row_glonass_frequency_channels.push_back(observation.glonass_frequency_channel);
+        row_primary_frequencies_hz.push_back(frequency.frequency);
+        row_secondary_frequencies_hz.push_back(0.0);
+        row_primary_if_coefficients.push_back(1.0);
+        row_secondary_if_coefficients.push_back(0.0);
         row_ssr_orbit_ages_s.push_back(observation.ssr_orbit_age_s);
         row_ssr_clock_ages_s.push_back(observation.ssr_clock_age_s);
         row_ssr_orbit_iods.push_back(observation.ssr_orbit_iod);
@@ -433,6 +461,130 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                 }
             }
         }
+
+        // --- MADOCALIB f=2/f=3 (L3/L4) code + phase rows ---
+        for (const auto& frequency : observation.additional_frequencies) {
+            if (env_overrides_.res_dump) {
+                std::cerr << "[PPP-FREQ-ROW] " << observation.satellite.toString()
+                          << " ordinal=" << frequency.ordinal
+                          << " valid=" << frequency.valid
+                          << " f1=" << observation.freq_l1
+                          << " fx=" << frequency.frequency << "\n";
+            }
+            if (!frequency.valid || !(observation.freq_l1 > 0.0) ||
+                !(frequency.frequency > 0.0)) {
+                continue;
+            }
+            const double ratio2 =
+                algorithms::ppp_multifrequency::ionosphereScale(
+                    observation.freq_l1, frequency.frequency);
+            const auto iono_it =
+                filter_state_.ionosphere_indices.find(observation.satellite);
+            const int iono_index = iono_it != filter_state_.ionosphere_indices.end()
+                ? iono_it->second : -1;
+            const double iono_m = iono_index >= 0
+                ? filter_state_.state(iono_index) : 0.0;
+            const auto ifb_it = filter_state_.receiver_frequency_bias_indices.find(
+                algorithms::ppp_multifrequency::receiverFrequencyBiasKey(
+                    observation.satellite, frequency.ordinal));
+            if (ifb_it == filter_state_.receiver_frequency_bias_indices.end()) {
+                continue;
+            }
+            const int ifb_index = ifb_it->second;
+            const double base_pred = geometric_range + clock_bias_m -
+                constants::SPEED_OF_LIGHT * observation.satellite_clock_bias +
+                troposphere_delay + frequency.rx_ant_corr_m;
+
+            Eigen::RowVectorXd code =
+                Eigen::RowVectorXd::Zero(filter_state_.total_states);
+            code.segment(filter_state_.pos_index, 3) = -line_of_sight;
+            code(clock_state_index) = 1.0;
+            code(filter_state_.trop_index) = trop_partial;
+            code(ifb_index) = 1.0;
+            if (iono_index >= 0) code(iono_index) = ratio2;
+            const double code_pred = base_pred + ratio2 * iono_m +
+                                     filter_state_.state(ifb_index);
+            const double code_resid = frequency.pseudorange - code_pred;
+            // The oracle applies the same elevation/system/URA variance model
+            // to every code band. The flat ingest variance is only a fallback
+            // before precise geometry has populated observation.variance_pr.
+            const double var_pr = observation.variance_pr > 0.0
+                ? observation.variance_pr
+                : safeVariance(frequency.variance_pr, 1e-6);
+            const double code_limit = std::max(
+                ppp_config_.outlier_threshold * std::sqrt(var_pr) * 10.0,
+                converged_ ? 500.0 : 20000.0);
+            const std::string band = "L" + std::to_string(frequency.ordinal + 1);
+            if (env_overrides_.res_dump) dumpRes(band.c_str(), "code", code_resid);
+            if (!apply_outlier_detection || !ppp_config_.enable_outlier_detection ||
+                std::abs(code_resid) <= code_limit) {
+                rows.push_back(code);
+                measured_values.push_back(frequency.pseudorange);
+                predicted_values.push_back(code_pred);
+                variances.push_back(var_pr);
+                row_satellites.push_back(observation.satellite);
+                row_is_phase.push_back(false);
+                row_elevations.push_back(observation.elevation);
+                row_signals.push_back(frequency.signal);
+                row_signal_bands.push_back(band);
+                appendAdditionalShadowMetadata(observation, frequency, false);
+            }
+
+            const auto amb_state = filter_state_.additional_ambiguity_indices.find(
+                {observation.satellite, frequency.signal});
+            const auto amb_it = ambiguity_states_.find(observation.satellite);
+            const ppp_shared::PPPFrequencyAmbiguityLifecycle* lifecycle = nullptr;
+            if (amb_it != ambiguity_states_.end()) {
+                const auto lifecycle_it =
+                    amb_it->second.frequency_lifecycle.find(frequency.signal);
+                if (lifecycle_it != amb_it->second.frequency_lifecycle.end()) {
+                    lifecycle = &lifecycle_it->second;
+                }
+            }
+            const bool phase_ready =
+                use_phase_rows && frequency.has_carrier_phase &&
+                amb_state != filter_state_.additional_ambiguity_indices.end() &&
+                amb_it != ambiguity_states_.end() &&
+                lifecycle != nullptr &&
+                lifecycle->lock_count >=
+                    ppp_config_.phase_measurement_min_lock_count &&
+                !(qzss_code_only && observation.satellite.system == GNSSSystem::QZSS) &&
+                !glonass_code_only;
+            if (!phase_ready) {
+                continue;
+            }
+            const int ambiguity_index = amb_state->second;
+            Eigen::RowVectorXd phase =
+                Eigen::RowVectorXd::Zero(filter_state_.total_states);
+            phase.segment(filter_state_.pos_index, 3) = -line_of_sight;
+            phase(clock_state_index) = 1.0;
+            phase(filter_state_.trop_index) = trop_partial;
+            phase(ambiguity_index) = 1.0;
+            if (iono_index >= 0) phase(iono_index) = -ratio2;
+            const double phase_pred = base_pred - ratio2 * iono_m +
+                                      filter_state_.state(ambiguity_index);
+            const double phase_resid = frequency.carrier_phase - phase_pred;
+            const double var_cp = observation.variance_cp > 0.0
+                ? observation.variance_cp
+                : safeVariance(frequency.variance_cp, 1e-8);
+            const double phase_limit = std::max(
+                ppp_config_.outlier_threshold * std::sqrt(var_cp) * 10.0,
+                converged_ ? 10.0 : 50.0);
+            if (env_overrides_.res_dump) dumpRes(band.c_str(), "phase", phase_resid);
+            if (!apply_outlier_detection || !ppp_config_.enable_outlier_detection ||
+                std::abs(phase_resid) <= phase_limit) {
+                rows.push_back(phase);
+                measured_values.push_back(frequency.carrier_phase);
+                predicted_values.push_back(phase_pred);
+                variances.push_back(var_cp);
+                row_satellites.push_back(observation.satellite);
+                row_is_phase.push_back(true);
+                row_elevations.push_back(observation.elevation);
+                row_signals.push_back(frequency.signal);
+                row_signal_bands.push_back(band);
+                appendAdditionalShadowMetadata(observation, frequency, true);
+            }
+        }
     }
 
     MeasurementEquation equation;
@@ -473,34 +625,106 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
     return equation;
 }
 
+PPPConvergenceWindowMetrics evaluatePPPConvergenceWindow(
+    const std::vector<Vector3d>& positions_ecef) {
+    PPPConvergenceWindowMetrics metrics;
+    if (positions_ecef.empty()) {
+        return metrics;
+    }
+
+    Vector3d mean = Vector3d::Zero();
+    for (const auto& position : positions_ecef) {
+        mean += position;
+    }
+    mean /= static_cast<double>(positions_ecef.size());
+
+    double latitude = 0.0;
+    double longitude = 0.0;
+    double height = 0.0;
+    ecef2geodetic(mean, latitude, longitude, height);
+    (void)height;
+
+    for (const auto& position : positions_ecef) {
+        const Vector3d delta_ecef = position - mean;
+        const Vector3d delta_enu = ecef2enu(delta_ecef, latitude, longitude);
+        metrics.max_ecef_3d_m = std::max(metrics.max_ecef_3d_m, delta_ecef.norm());
+        metrics.max_horizontal_m =
+            std::max(metrics.max_horizontal_m, delta_enu.head<2>().norm());
+        metrics.max_vertical_m =
+            std::max(metrics.max_vertical_m, std::abs(delta_enu.z()));
+    }
+    return metrics;
+}
+
 void PPPProcessor::checkConvergence(const GNSSTime& current_time) {
     if (converged_) {
         return;
     }
 
+    ++convergence_telemetry_.evaluated_epochs;
+    convergence_telemetry_.required_window_epochs =
+        static_cast<size_t>(ppp_config_.convergence_min_epochs);
+    convergence_telemetry_.position_deviation_threshold_m =
+        ppp_config_.convergence_threshold_horizontal;
+    convergence_telemetry_.horizontal_position_deviation_threshold_m =
+        ppp_config_.convergence_threshold_horizontal;
+    convergence_telemetry_.vertical_position_deviation_threshold_m =
+        ppp_config_.convergence_threshold_vertical;
+    convergence_telemetry_.policy =
+        ppp_config_.convergence_policy == ppp_shared::ConvergencePolicy::LOCAL_ENU_COMPONENTS
+            ? "local-enu"
+            : "legacy-3d";
+
     recent_positions_.push_back(filter_state_.state.segment(filter_state_.pos_index, 3));
     if (recent_positions_.size() > static_cast<size_t>(ppp_config_.convergence_min_epochs)) {
         recent_positions_.erase(recent_positions_.begin());
     }
+    convergence_telemetry_.window_epochs = recent_positions_.size();
 
     if (recent_positions_.size() < static_cast<size_t>(ppp_config_.convergence_min_epochs)) {
+        ++convergence_telemetry_.insufficient_history_epochs;
+        convergence_telemetry_.gate_reason = "insufficient_history";
         return;
     }
 
-    Vector3d mean = Vector3d::Zero();
-    for (const auto& position : recent_positions_) {
-        mean += position;
-    }
-    mean /= static_cast<double>(recent_positions_.size());
+    const PPPConvergenceWindowMetrics metrics =
+        evaluatePPPConvergenceWindow(recent_positions_);
+    convergence_telemetry_.max_position_deviation_m = metrics.max_ecef_3d_m;
+    convergence_telemetry_.max_horizontal_position_deviation_m =
+        metrics.max_horizontal_m;
+    convergence_telemetry_.max_vertical_position_deviation_m = metrics.max_vertical_m;
 
-    double max_deviation = 0.0;
-    for (const auto& position : recent_positions_) {
-        max_deviation = std::max(max_deviation, (position - mean).norm());
-    }
+    const bool horizontal_stable =
+        metrics.max_horizontal_m < ppp_config_.convergence_threshold_horizontal;
+    const bool vertical_stable =
+        metrics.max_vertical_m < ppp_config_.convergence_threshold_vertical;
+    const bool legacy_stable =
+        metrics.max_ecef_3d_m < ppp_config_.convergence_threshold_horizontal;
+    const bool local_enu_policy =
+        ppp_config_.convergence_policy == ppp_shared::ConvergencePolicy::LOCAL_ENU_COMPONENTS;
+    const bool stable = local_enu_policy
+        ? horizontal_stable && vertical_stable
+        : legacy_stable;
 
-    if (max_deviation < ppp_config_.convergence_threshold_horizontal) {
+    if (stable) {
         converged_ = true;
         convergence_time_ = current_time - convergence_start_time_;
+        convergence_telemetry_.gate_reason = "converged";
+    } else {
+        ++convergence_telemetry_.unstable_position_epochs;
+        if (local_enu_policy && !horizontal_stable) {
+            ++convergence_telemetry_.unstable_horizontal_epochs;
+        }
+        if (local_enu_policy && !vertical_stable) {
+            ++convergence_telemetry_.unstable_vertical_epochs;
+        }
+        if (!local_enu_policy) {
+            convergence_telemetry_.gate_reason = "position_deviation";
+        } else if (!horizontal_stable) {
+            convergence_telemetry_.gate_reason = "horizontal_position_deviation";
+        } else {
+            convergence_telemetry_.gate_reason = "vertical_position_deviation";
+        }
     }
 }
 

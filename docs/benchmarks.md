@@ -21,7 +21,9 @@ runtime solver/coverage profile below.
 All runs below use `--mode kinematic --preset low-cost --match-tolerance-s 0.25`.
 The coverage profile additionally uses `--no-arfilter` plus the default
 low-speed non-FIX drift guard, SPP height-step guard, and FLOAT bridge-tail
-guard, with `--ratio 2.4`. The kinematic post-filter cascade was removed in
+guard, with `--ratio 2.4`. It permits up to 18 progressive Partial AR drops
+only when the full ambiguity set fails; after a full-set fix, refinement stays
+at the legacy six-drop ceiling. The kinematic post-filter cascade was removed in
 PR #36 (single-epoch height-step drop only), so `--no-kinematic-post-filter`
 is no longer required for coverage parity with the default profile.
 

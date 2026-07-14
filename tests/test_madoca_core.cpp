@@ -87,4 +87,16 @@ TEST(MadocaCore, SelectsBiasCodesThroughParityHelper) {
     EXPECT_EQ(core::selectBiasCode(mp::kSysSbs, mp::kCodeL1C), mp::kCodeNone);
 }
 
+TEST(MadocaCore, ConvertsGpsTimeAndSatelliteIdentityForL6d) {
+    const auto time = core::madocaGtimeFromGpsTime(libgnss::GNSSTime(1, 2.25));
+    EXPECT_EQ(time.time, 315964800 + 604800 + 2);
+    EXPECT_DOUBLE_EQ(time.sec, 0.25);
+    EXPECT_EQ(core::rtklibSatelliteNumber(
+                  libgnss::SatelliteId(libgnss::GNSSSystem::GPS, 1)), 1);
+    EXPECT_GT(core::rtklibSatelliteNumber(
+                  libgnss::SatelliteId(libgnss::GNSSSystem::QZSS, 1)), 0);
+    EXPECT_EQ(core::rtklibSatelliteNumber(
+                  libgnss::SatelliteId(libgnss::GNSSSystem::UNKNOWN, 1)), 0);
+}
+
 }  // namespace

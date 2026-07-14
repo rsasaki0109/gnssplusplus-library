@@ -148,10 +148,24 @@ def parse_args() -> argparse.Namespace:
         help="Optional RTK ambiguity ratio threshold passed to each ppc-demo run.",
     )
     parser.add_argument(
+        "--elevation-mask-deg",
+        type=float,
+        default=None,
+        help="Optional RTK elevation mask in degrees passed to every run.",
+    )
+    parser.add_argument(
+        "--sat-count-ratio",
+        action="store_true",
+        help="Use experimental satellite-count-aware RTK Ratio thresholds.",
+    )
+    parser.add_argument(
         "--max-subset-ar-drop-steps",
         type=int,
-        default=None,
-        help="Optional max worst-variance DD pairs dropped by RTK subset AR.",
+        default=18,
+        help=(
+            "Max worst-variance DD pairs dropped by RTK subset AR "
+            "(default: 18; deep drops run only after full-set failure)."
+        ),
     )
     parser.add_argument(
         "--max-hold-div",
@@ -283,6 +297,8 @@ def parse_args() -> argparse.Namespace:
         help="Optional RTK ambiguity reset after N consecutive non-FIX epochs.",
     )
     parser.add_argument("--max-postfix-rms", type=float, default=None)
+    parser.add_argument("--doppler-float-seed", action="store_true")
+    parser.add_argument("--doppler-float-seed-max-age", type=float, default=None)
     parser.add_argument("--enable-wide-lane-ar", action="store_true")
     parser.add_argument("--wide-lane-threshold", type=float, default=None)
     parser.add_argument("--enable-wlnl-fallback", action="store_true")
@@ -417,6 +433,10 @@ def build_ppc_demo_command(
         command.extend(["--iono", args.iono])
     if getattr(args, "ratio", None) is not None:
         command.extend(["--ratio", str(args.ratio)])
+    if getattr(args, "elevation_mask_deg", None) is not None:
+        command.extend(["--elevation-mask-deg", str(args.elevation_mask_deg)])
+    if getattr(args, "sat_count_ratio", False):
+        command.append("--sat-count-ratio")
     if getattr(args, "max_subset_ar_drop_steps", None) is not None:
         command.extend(["--max-subset-ar-drop-steps", str(args.max_subset_ar_drop_steps)])
     if getattr(args, "max_hold_div", None) is not None:
@@ -615,6 +635,12 @@ def build_ppc_demo_command(
         command.extend(["--max-consec-nonfix-reset", str(args.max_consec_nonfix_reset)])
     if getattr(args, "max_postfix_rms", None) is not None:
         command.extend(["--max-postfix-rms", str(args.max_postfix_rms)])
+    if getattr(args, "doppler_float_seed", False):
+        command.append("--doppler-float-seed")
+    if getattr(args, "doppler_float_seed_max_age", None) is not None:
+        command.extend(
+            ["--doppler-float-seed-max-age", str(args.doppler_float_seed_max_age)]
+        )
     if getattr(args, "enable_wide_lane_ar", False):
         command.append("--enable-wide-lane-ar")
     if getattr(args, "wide_lane_threshold", None) is not None:
@@ -893,6 +919,7 @@ def build_matrix_payload(args: argparse.Namespace, runs: list[dict[str, object]]
         "preset": args.preset,
         "iono": getattr(args, "iono", None),
         "ratio": getattr(args, "ratio", None),
+        "elevation_mask_deg": getattr(args, "elevation_mask_deg", None),
         "max_subset_ar_drop_steps": getattr(args, "max_subset_ar_drop_steps", None),
         "max_hold_div": getattr(args, "max_hold_div", None),
         "max_pos_jump": getattr(args, "max_pos_jump", None),
@@ -959,6 +986,10 @@ def build_matrix_payload(args: argparse.Namespace, runs: list[dict[str, object]]
         "max_consec_float_reset": getattr(args, "max_consec_float_reset", None),
         "max_consec_nonfix_reset": getattr(args, "max_consec_nonfix_reset", None),
         "max_postfix_rms": getattr(args, "max_postfix_rms", None),
+        "doppler_float_seed": bool(getattr(args, "doppler_float_seed", False)),
+        "doppler_float_seed_max_age_s": getattr(
+            args, "doppler_float_seed_max_age", None
+        ),
         "enable_wide_lane_ar": getattr(args, "enable_wide_lane_ar", False),
         "wide_lane_threshold": getattr(args, "wide_lane_threshold", None),
         "enable_wlnl_fallback": getattr(args, "enable_wlnl_fallback", False),

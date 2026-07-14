@@ -730,6 +730,19 @@ libgnss::GNSSSystem mpSysToGnss(int mpsys) {
 
 }  // namespace
 
+double madocaSsrUraSigmaMeters(int ura_index) {
+    if (ura_index <= 0) {
+        return 0.15;
+    }
+    if (ura_index >= 63) {
+        return 5.4665;
+    }
+    return (std::pow(3.0, static_cast<double>((ura_index >> 3) & 0x07)) *
+                (1.0 + static_cast<double>(ura_index & 0x07) / 4.0) -
+            1.0) *
+           1e-3;
+}
+
 // Build one native SSR correction from a satellite's decoded Compact SSR state.
 // Returns false when the satellite carries no orbit/clock or maps to no system.
 // The sample is time-stamped at the most recent of the orbit/clock t0 so a live
@@ -817,6 +830,10 @@ bool buildMadocaSsrCorrection(int sat, const MadocaSsrCorrection& c,
         int clock_week = 0;
         const double clock_tow = time2gpst(c.t0[1], &clock_week);
         out.clock_reference_time = libgnss::GNSSTime(clock_week, clock_tow);
+    }
+    if (c.t0[3].time != 0) {
+        out.ura_sigma_m = madocaSsrUraSigmaMeters(c.ura);
+        out.ura_valid = true;
     }
 
     for (int k = 0; k < MadocaSsrCorrection::kMaxCode; ++k) {
@@ -928,7 +945,8 @@ bool useMadocaBiasIdentityKey(libgnss::GNSSSystem system,
     }
     return system == libgnss::GNSSSystem::GPS ||
            system == libgnss::GNSSSystem::Galileo ||
-           system == libgnss::GNSSSystem::QZSS;
+           system == libgnss::GNSSSystem::QZSS ||
+           system == libgnss::GNSSSystem::BeiDou;
 }
 
 const char* gnssSystemName(libgnss::GNSSSystem system) {

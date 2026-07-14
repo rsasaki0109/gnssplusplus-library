@@ -138,6 +138,10 @@ std::uint8_t madocaBiasCodeToRtcmSsrId(libgnss::GNSSSystem system, int code);
 int madocaL6eSnapshotToProducts(const MadocaL6eDecoder& decoder,
                                 libgnss::SSRProducts& products);
 
+// Compact SSR DF389 URA indicator to one-sigma accuracy in meters. Matches
+// MADOCALIB var_urassr() before its configured variance ratio is applied.
+double madocaSsrUraSigmaMeters(int ura_index);
+
 // Decode one or more MADOCA L6E files into a time series of SSR products,
 // driving the decoder byte-for-byte and snapshotting each satellite whenever
 // its orbit or clock correction epoch advances. gps_week seeds the decoder's

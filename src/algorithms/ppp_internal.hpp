@@ -14,6 +14,49 @@ namespace libgnss::ppp_internal {
 
 inline constexpr double kDefaultZenithDelayMeters = 2.3;
 
+inline int filterIterationCount(bool madoca_per_frequency_update,
+                                bool precise_products_loaded,
+                                int configured_iterations) {
+    if (madoca_per_frequency_update) {
+        return 1;
+    }
+    return precise_products_loaded ? 3 : configured_iterations;
+}
+
+inline int perFrequencyArMinLockCount(bool madoca_per_frequency,
+                                      bool ssr_products_loaded,
+                                      int convergence_min_epochs) {
+    // MADOCALIB gen_sat_sd() admits every currently valid phase pair.  Its
+    // ambiguity search has no separate lock-count gate in coherent SSR mode.
+    if (madoca_per_frequency) {
+        return 0;
+    }
+    return ssr_products_loaded
+        ? std::min(convergence_min_epochs, 10)
+        : convergence_min_epochs;
+}
+
+inline bool applyGpsL5MeasurementErrorFactor(
+    bool madoca_per_frequency,
+    SignalType primary_signal,
+    SignalType secondary_signal) {
+    const auto is_l5 = [](SignalType signal) {
+        return signal == SignalType::GPS_L5 || signal == SignalType::QZS_L5;
+    };
+    // The generic RTKLIB-compatible path de-weights L5. MADOCALIB's
+    // ppp.c::varerr() does not: its per-frequency profile applies the same
+    // elevation/system variance to L1, L2/L5, and the additional bands.
+    return !madoca_per_frequency &&
+           (is_l5(primary_signal) || is_l5(secondary_signal));
+}
+
+inline bool alwaysRestoreArTrialState(PPPProcessor::PPPConfig::ARMethod method) {
+    // MADOCALIB runs per-frequency EWL/WL/N1 constraints on xp/Pp, a copy of
+    // the float filter.  The trial is never committed to rtk->x/P, including
+    // early exits after EWL conditioning but before a usable WL set exists.
+    return method == PPPProcessor::PPPConfig::ARMethod::DD_PER_FREQ;
+}
+
 inline std::string trimCopy(const std::string& text) {
     const auto is_not_space = [](unsigned char ch) {
         return !std::isspace(ch);

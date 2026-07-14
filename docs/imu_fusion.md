@@ -1,4 +1,4 @@
-# GNSS/IMU Loosely-Coupled Fusion (`gnss fuse`)
+# GNSS/IMU Fusion (`gnss fuse`)
 
 Loosely-coupled GNSS/IMU integration: a 15-state error-state EKF
 (position, velocity, attitude, accel bias, gyro bias) propagates 100 Hz
@@ -23,6 +23,15 @@ gnss fuse \
 
 Omitting `--base` falls back to SPP as the GNSS half. `--attitude-csv`
 exports per-epoch roll/pitch/yaw for analysis.
+
+Add `--tight-dd-imu` (requires `--base`) to augment the propagated INS state
+with real rover/base double-difference rows and innovation-gated soft recovery.
+Code DD is committed; carrier/ambiguity candidates are evaluated in shadow and
+fall back to code-only without partial AR. `--tight-dd-carrier-experimental`
+commits carrier, ambiguity, and partial-AR updates for research ablations. It
+is deliberately separate because PPC long-prefix validation found that
+apparently accepted carrier updates could make the covariance indefinite.
+Without either flag the established loose-coupling path is unchanged.
 
 Key flags: `--lever-arm x,y,z` (IMU→antenna, body FLU), `--zupt`/`--no-zupt`
 (default on), `--nhc`/`--no-nhc` (default off), `--imu-grade`,
@@ -49,6 +58,8 @@ Acc Z ≈ +9.81, despite the upstream README saying FRD).
 | Dense Joseph-form update + NIS gate | `src/fusion/fusion_update.cpp` |
 | Static + heading alignment | `src/fusion/fusion_initialization.cpp` |
 | Per-epoch driver | `src/fusion/fusion_processor.cpp` (`LooseCouplingProcessor`) |
+| Tight DD row adapter | `RTKProcessor::formTightlyCoupledObservations` |
+| Augmented INS/ambiguity update | `src/fusion/dd_imu_bridge.cpp` |
 | Doppler LS velocity (feeds SPP/RTK solutions) | `src/algorithms/spp_velocity.cpp` |
 | CLI | `apps/gnss_fuse.cpp` (registered as `fuse` in `apps/gnss.py`) |
 
@@ -78,6 +89,24 @@ Fixed-epoch accuracy is not degraded.
 
 Known limits: consumer/tactical-grade dead-reckoning drifts tens of meters
 through multi-minute outages; vertical error remains weaker than horizontal;
-the NIS gate defaults were tuned on PPC data. Tightly-coupled DD updates
-(Stage 2) are future work — see `include/libgnss++/fusion/dd_imu_bridge.hpp`
-for the design sketch.
+the NIS gate defaults were tuned on PPC data. The reusable Stage-2 core now
+lives in `fusion/dd_imu_bridge`: it accepts a mechanized 15-state INS state,
+maintains live DD ambiguity states and cross-covariances, applies joint code and
+carrier updates, performs quality-ordered partial LAMBDA, and replaces hard SPP
+reseed with a gated soft update/covariance inflation. The opt-in
+`gnss fuse --tight-dd-imu` epoch loop evaluates the existing RTK DD machinery
+at the propagated INS position, converts the ECEF Jacobian into the fixed local
+ENU frame, and applies the bridge update while reporting row, gate, PAR, and
+soft-reset diagnostics. The validation table above predates that opt-in path
+and remains loose-coupling evidence only.
+
+A C++20/MSVC real-data integration smoke on the first 50 Tokyo/run1 epochs
+verified the operational committed-carrier path, but a 600-epoch replay exposed
+catastrophic carrier-tail instability (p95 above 149 km). The default was
+therefore changed to safe shadow-carrier evaluation. On the same 600 epochs,
+baseline versus safe-shadow p50/p95/p99 ECEF error was
+1.171/3.480/27.031 m versus 1.123/3.480/30.447 m; 301 epochs used the
+carrier-to-code fallback, partial AR and soft resets were both zero. This is
+near-neutral safety evidence, not adoption evidence; use
+`experiments/run_tight_dd_imu_ablation.py` for the full-six and blocked-span
+comparison.

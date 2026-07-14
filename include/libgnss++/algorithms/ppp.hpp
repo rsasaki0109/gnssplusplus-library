@@ -10,6 +10,7 @@
 #include "ppp_shared.hpp"
 #include "ppp_clas_sd.hpp"
 #include "ppp_osr_types.hpp"
+#include "../io/madoca_l6d.hpp"
 #include "spp.hpp"
 #include "../iers/eop_table.hpp"
 #include "../iers/tides.hpp"
@@ -40,6 +41,57 @@ struct ReceiverPcvGrid {
     double dzen_deg = 5.0;
     std::vector<double> noazi_m;  // PCV at each zenith node (metres)
 };
+
+struct MadocaL6dShadowStatus {
+    bool snapshot_available = false;
+    bool stale = false;
+    double age_s = 0.0;
+    int region_id = -1;
+    int area_number = 0;
+    int matched_satellites = 0;
+};
+
+struct PPPConvergenceTelemetry {
+    size_t evaluated_epochs = 0;
+    size_t insufficient_history_epochs = 0;
+    size_t unstable_position_epochs = 0;
+    size_t unstable_horizontal_epochs = 0;
+    size_t unstable_vertical_epochs = 0;
+    size_t window_epochs = 0;
+    size_t required_window_epochs = 0;
+    double max_position_deviation_m = 0.0;
+    double max_horizontal_position_deviation_m = 0.0;
+    double max_vertical_position_deviation_m = 0.0;
+    double position_deviation_threshold_m = 0.0;
+    double horizontal_position_deviation_threshold_m = 0.0;
+    double vertical_position_deviation_threshold_m = 0.0;
+    std::string policy = "legacy-3d";
+    std::string gate_reason = "not_evaluated";
+};
+
+struct PPPConvergenceWindowMetrics {
+    double max_ecef_3d_m = 0.0;
+    double max_horizontal_m = 0.0;
+    double max_vertical_m = 0.0;
+};
+
+struct PPPARStageTelemetry {
+    size_t per_frequency_attempts = 0;
+    size_t insufficient_satellite_epochs = 0;
+    size_t no_wide_lane_epochs = 0;
+    size_t wide_lane_only_epochs = 0;
+    size_t n1_lambda_failure_epochs = 0;
+    size_t n1_ratio_rejection_epochs = 0;
+    size_t n1_fixed_epochs = 0;
+    int last_satellite_candidates = 0;
+    int last_wide_lane_pairs = 0;
+    int last_n1_candidates = 0;
+    double last_n1_ratio = 0.0;
+    std::string last_stage = "not_attempted";
+};
+
+PPPConvergenceWindowMetrics evaluatePPPConvergenceWindow(
+    const std::vector<Vector3d>& positions_ecef);
 
 /**
  * @brief Precise Point Positioning (PPP) processor
@@ -96,6 +148,23 @@ public:
      * were produced. Distinct from loadL6Products (CLAS-oriented decoder).
      */
     bool loadMadocaL6Products(const std::vector<std::string>& l6_files);
+
+    // Load receiver-specific L6D ionosphere snapshots for diagnostic shadow
+    // lookup. This does not change PPP measurements or filter state.
+    bool loadMadocaL6dProducts(const std::vector<std::string>& l6d_files,
+                               const double reference_epoch[6],
+                               const double receiver_ecef[3]);
+    void setMadocaIonoProductsForShadow(const io::MadocaIonoProducts& products) {
+        madoca_iono_products_ = products;
+    }
+    MadocaL6dShadowStatus inspectMadocaL6dShadow(
+        const std::vector<SatelliteId>& satellites,
+        const GNSSTime& time,
+        double max_age_s = 300.0) const;
+    const MadocaL6dShadowStatus& getLastMadocaL6dShadowStatus() const {
+        return last_madoca_l6d_shadow_status_;
+    }
+    bool hasLoadedMadocaL6dProducts() const { return !madoca_iono_products_.empty(); }
 
     /**
      * @brief Load IONEX ionosphere products for future PPP hooks.
@@ -217,6 +286,12 @@ public:
      * @brief Get convergence time
      */
     double getConvergenceTime() const { return convergence_time_; }
+    const PPPConvergenceTelemetry& getConvergenceTelemetry() const {
+        return convergence_telemetry_;
+    }
+    const PPPARStageTelemetry& getARStageTelemetry() const {
+        return ar_stage_telemetry_;
+    }
 
 private:
     void applyEnvironmentOverridesToPPPConfig();
@@ -228,6 +303,7 @@ private:
     SSRProducts ssr_products_;
     IONEXProducts ionex_products_;
     DCBProducts dcb_products_;
+    io::MadocaIonoProducts madoca_iono_products_;
     
     PPPState filter_state_;
     bool filter_initialized_ = false;
@@ -270,6 +346,9 @@ private:
     bool has_static_anchor_position_ = false;
     double last_ar_ratio_ = 0.0;
     int last_fixed_ambiguities_ = 0;
+    bool last_ar_wide_lane_only_ = false;
+    PPPConvergenceTelemetry convergence_telemetry_;
+    PPPARStageTelemetry ar_stage_telemetry_;
     int last_applied_atmos_trop_corrections_ = 0;
     int last_applied_atmos_iono_corrections_ = 0;
     double last_applied_atmos_trop_m_ = 0.0;
@@ -278,6 +357,7 @@ private:
     int last_applied_dcb_corrections_ = 0;
     double last_applied_ionex_m_ = 0.0;
     double last_applied_dcb_m_ = 0.0;
+    MadocaL6dShadowStatus last_madoca_l6d_shadow_status_;
     bool last_clas_hybrid_fallback_used_ = false;
     std::string last_clas_hybrid_fallback_reason_;
     
@@ -355,6 +435,26 @@ private:
      * @brief Form ionosphere-free combinations
      */
     struct IonosphereFreeObs {
+        struct AdditionalFrequencyObs {
+            int ordinal = 2;
+            SignalType signal = SignalType::SIGNAL_TYPE_COUNT;
+            std::string observation_type;
+            std::string pseudorange_observation_type;
+            std::string carrier_phase_observation_type;
+            int pseudorange_rtklib_code = 0;
+            int carrier_phase_rtklib_code = 0;
+            double pseudorange = 0.0;
+            double carrier_phase = 0.0;
+            double wavelength = 0.0;
+            double frequency = 0.0;
+            double variance_pr = 0.0;
+            double variance_cp = 0.0;
+            double code_bias_m = 0.0;
+            double phase_bias_m = 0.0;
+            double rx_ant_corr_m = 0.0;
+            bool has_carrier_phase = false;
+            bool valid = false;
+        };
         SatelliteId satellite;
         SignalType primary_signal = SignalType::SIGNAL_TYPE_COUNT;
         SignalType secondary_signal = SignalType::SIGNAL_TYPE_COUNT;
@@ -435,6 +535,7 @@ private:
         bool has_iono_init = false;
         bool has_l2 = false;
         bool has_carrier_phase_l2 = false;
+        std::vector<AdditionalFrequencyObs> additional_frequencies;
         // Wet mapping function and a priori zenith hydrostatic delay for the
         // RTKLIB-style split trop model (est-stec): trop = m_h*ZHD + m_w*(ZTD-ZHD).
         double trop_mapping_wet = 0.0;
@@ -495,6 +596,11 @@ private:
      * @brief Get or create the per-frequency L2 ambiguity state (est-stec only).
      */
     int getOrCreateAmbiguityStateL2(const IonosphereFreeObs& observation);
+    int getOrCreateAdditionalAmbiguityState(
+        const IonosphereFreeObs& observation,
+        const IonosphereFreeObs::AdditionalFrequencyObs& frequency);
+    int getOrCreateReceiverFrequencyBiasState(const SatelliteId& satellite,
+                                              int frequency_ordinal);
 
     /**
      * @brief Get or create the per-satellite ionosphere (STEC) state, seeded

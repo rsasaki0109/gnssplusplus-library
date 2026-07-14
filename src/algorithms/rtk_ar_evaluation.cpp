@@ -13,6 +13,11 @@ bool shouldSearchDropSubsets(bool fixed, double ratio, double threshold, double 
     return !fixed || ratio < threshold + 0.8 || max_variance > 0.20;
 }
 
+int progressiveDropStepLimit(int configured_steps, bool full_set_fixed) {
+    const int nonnegative_steps = std::max(0, configured_steps);
+    return full_set_fixed ? std::min(nonnegative_steps, 6) : nonnegative_steps;
+}
+
 bool passesArFilter(bool enabled, double candidate_ratio, double threshold, double margin) {
     if (!enabled) {
         return true;

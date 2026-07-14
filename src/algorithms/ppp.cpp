@@ -24,6 +24,21 @@ using namespace ppp_internal;
 
 namespace {
 
+ObservationData legacyDualFrequencySeedView(const ObservationData& obs) {
+    ObservationData seed_obs = obs;
+    seed_obs.observations.clear();
+    seed_obs.observations.reserve(obs.observations.size());
+
+    std::map<SatelliteId, int> observations_per_satellite;
+    for (const auto& observation : obs.observations) {
+        if (observations_per_satellite[observation.satellite]++ >= 2) {
+            continue;
+        }
+        seed_obs.observations.push_back(observation);
+    }
+    return seed_obs;
+}
+
 std::string normalizeStationName(const std::string& station_name) {
     return normalizeAntennaType(station_name);
 }
@@ -510,6 +525,7 @@ PositionSolution PPPProcessor::processEpochStandard(
     last_applied_dcb_corrections_ = 0;
     last_applied_ionex_m_ = 0.0;
     last_applied_dcb_m_ = 0.0;
+    last_madoca_l6d_shadow_status_ = {};
     if (require_coherent_ssr_ && ssr_products_loaded_ &&
         !hasEnoughCoherentSsrObservations(obs, nav)) {
         return finalizeSolution(solution);
@@ -523,6 +539,12 @@ PositionSolution PPPProcessor::processEpochStandard(
         !filter_initialized_;
     const PositionSolution* seed_ptr = nullptr;
     const auto runSeedSpp = [&]() {
+        // Multi-frequency RINEX ingestion retains L3/L4 for PPP ambiguity
+        // lifecycle and future filter rows. Keep the embedded SPP seed on its
+        // historical primary/secondary view: its Doppler solver treats every
+        // observation as an independent row, so extra bands would otherwise
+        // reweight the initial kinematic velocity before PPP consumes them.
+        const ObservationData seed_obs = legacyDualFrequencySeedView(obs);
         const SPPProcessor::SPPConfig original_spp_config = spp_processor_.getSPPConfig();
         if (ssr_products_loaded_ && original_spp_config.enable_raim_fde) {
             SPPProcessor::SPPConfig seed_spp_config = original_spp_config;
@@ -532,7 +554,7 @@ PositionSolution PPPProcessor::processEpochStandard(
             seed_spp_config.enable_raim_fde = false;
             spp_processor_.setSPPConfig(seed_spp_config);
             try {
-                PositionSolution seed = spp_processor_.processEpoch(obs, nav);
+                PositionSolution seed = spp_processor_.processEpoch(seed_obs, nav);
                 spp_processor_.setSPPConfig(original_spp_config);
                 return seed;
             } catch (...) {
@@ -540,7 +562,7 @@ PositionSolution PPPProcessor::processEpochStandard(
                 throw;
             }
         }
-        return spp_processor_.processEpoch(obs, nav);
+        return spp_processor_.processEpoch(seed_obs, nav);
     };
 
     try {
@@ -597,7 +619,11 @@ PositionSolution PPPProcessor::processEpochStandard(
                 const auto float_ambiguity_states = ambiguity_states_;
                 const bool fixed =
                     ppp_config_.enable_ambiguity_resolution && resolveAmbiguities(obs, nav);
-                solution = fixed ? generateSolution(obs.time, corrected_if_obs) : float_solution;
+                const bool wide_lane_only =
+                    ppp_config_.enable_ambiguity_resolution && last_ar_wide_lane_only_;
+                solution = (fixed || wide_lane_only)
+                    ? generateSolution(obs.time, corrected_if_obs)
+                    : float_solution;
                 solution.status = fixed ? SolutionStatus::PPP_FIXED : SolutionStatus::PPP_FLOAT;
                 solution.ratio = fixed ? last_ar_ratio_ : 0.0;
                 solution.num_fixed_ambiguities = fixed ? last_fixed_ambiguities_ : 0;
@@ -649,12 +675,26 @@ PositionSolution PPPProcessor::processEpochStandard(
                     solution.position_geodetic = GeodeticCoord(latitude, longitude, height);
                 }
                 had_fixed_last_epoch_ = accepted_fixed_solution;
-                if (fixed && !accepted_fixed_solution) {
+                if (ppp_internal::alwaysRestoreArTrialState(
+                        ppp_config_.ar_method)) {
+                    // MADOCALIB ppp_ar() receives an xp/Pp working copy.  Keep
+                    // every per-frequency EWL/WL/N1 attempt ephemeral, even
+                    // when it exits before setting the WL-only status.
                     filter_state_ = float_filter_state;
                     ambiguity_states_ = float_ambiguity_states;
-                } else if (accepted_fixed_solution && ppp_config_.ar_method != PPPConfig::ARMethod::DD_WLNL) {
-                    // For DD_IFLC/DD_PER_FREQ: revert to float state to avoid
-                    // poisoning later epochs with a bad fix.
+                } else if (wide_lane_only) {
+                    // MADOCALIB SOLQ_FIX_WL parity: publish the current epoch
+                    // from the WL-constrained working state as PPP/FLOAT, but
+                    // do not hold that temporary constraint in the float filter.
+                    filter_state_ = float_filter_state;
+                    ambiguity_states_ = float_ambiguity_states;
+                } else if (fixed && !accepted_fixed_solution) {
+                    filter_state_ = float_filter_state;
+                    ambiguity_states_ = float_ambiguity_states;
+                } else if (accepted_fixed_solution &&
+                           ppp_config_.ar_method != PPPConfig::ARMethod::DD_WLNL) {
+                    // For DD_IFLC: revert to float state to avoid poisoning
+                    // later epochs with a bad fix.
                     filter_state_ = float_filter_state;
                     ambiguity_states_ = float_ambiguity_states;
                 }
@@ -736,6 +776,9 @@ void PPPProcessor::reset() {
     has_static_anchor_position_ = false;
     last_ar_ratio_ = 0.0;
     last_fixed_ambiguities_ = 0;
+    last_ar_wide_lane_only_ = false;
+    convergence_telemetry_ = {};
+    ar_stage_telemetry_ = {};
     ppp_ar::clearWlnlHoldState(clas_wlnl_hold_);
     last_clas_constrained_fixed_state_valid_ = false;
     clas_kinematic_fix_candidate_streak_ = 0;
@@ -748,6 +791,7 @@ void PPPProcessor::reset() {
     last_applied_dcb_corrections_ = 0;
     last_applied_ionex_m_ = 0.0;
     last_applied_dcb_m_ = 0.0;
+    last_madoca_l6d_shadow_status_ = {};
 
     std::lock_guard<std::mutex> lock(stats_mutex_);
     total_epochs_processed_ = 0;

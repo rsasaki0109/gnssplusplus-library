@@ -10,6 +10,11 @@
 
 namespace libgnss::ppp_shared {
 
+enum class ConvergencePolicy {
+    LEGACY_ECEF_3D,
+    LOCAL_ENU_COMPONENTS,
+};
+
 /// Check if PPP debug output is enabled via GNSS_PPP_DEBUG.
 inline bool pppDebugEnabled() {
     return pppEnvOverrides().debug;
@@ -290,6 +295,7 @@ struct PPPConfig {
     bool apply_relativity = true;
 
     // Convergence criteria
+    ConvergencePolicy convergence_policy = ConvergencePolicy::LEGACY_ECEF_3D;
     double convergence_threshold_horizontal = 0.1;
     double convergence_threshold_vertical = 0.2;
     int convergence_min_epochs = 20;
@@ -314,6 +320,7 @@ struct PPPState {
     int gal_clock_index = -1;
     int qzs_clock_index = -1;
     int bds_clock_index = -1;
+    int bds2_clock_index = -1;
     int trop_index = 8;
     int iono_index = 9;
     int amb_index = 9;
@@ -331,7 +338,24 @@ struct PPPState {
     // amb_index/total_states and the ambiguity_indices layout are byte-identical
     // to the ionosphere-free path. L1 ambiguities stay in ambiguity_indices.
     std::map<SatelliteId, int> ambiguity_l2_indices;
+    // Third/fourth-frequency ambiguity states use the actual signal as part of
+    // the key because the available band depends on the constellation.
+    std::map<std::pair<SatelliteId, SignalType>, int> additional_ambiguity_indices;
+    // MADOCALIB I3/I4 receiver inter-frequency code biases. The integer key is
+    // the zero-based additional-frequency ordinal (2 = L3, 3 = L4).
+    std::map<std::pair<GNSSSystem, int>, int> receiver_frequency_bias_indices;
     int total_states = 9;
+};
+
+struct PPPFrequencyAmbiguityLifecycle {
+    double last_phase = 0.0;
+    GNSSTime last_time;
+    int lock_count = 0;
+    double quality_indicator = 0.0;
+    bool has_last_phase = false;
+    double float_value_m = 0.0;
+    double wavelength_m = 0.0;
+    int state_index = -1;
 };
 
 struct PPPAmbiguityInfo {
@@ -376,6 +400,23 @@ struct PPPAmbiguityInfo {
     double float_value_l2 = 0.0;
     double wavelength_l1 = 0.0;
     double wavelength_l2 = 0.0;
+    // Per-signal observation lifecycle used by multi-frequency PPP-AR. The
+    // satellite-level fields above remain the primary/secondary compatibility
+    // view until every ambiguity state is keyed by frequency.
+    std::map<SignalType, PPPFrequencyAmbiguityLifecycle> frequency_lifecycle;
 };
+
+inline void updateFrequencyAmbiguityLifecycle(PPPAmbiguityInfo& ambiguity,
+                                              SignalType signal,
+                                              double carrier_phase,
+                                              const GNSSTime& time,
+                                              double quality_indicator) {
+    auto& frequency = ambiguity.frequency_lifecycle[signal];
+    frequency.last_phase = carrier_phase;
+    frequency.last_time = time;
+    frequency.lock_count++;
+    frequency.quality_indicator = quality_indicator;
+    frequency.has_last_phase = true;
+}
 
 }  // namespace libgnss::ppp_shared

@@ -149,15 +149,16 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
         !envExactZero("GNSS_PPP_QZSS_SSR_PRN_FIX") &&
         !envExactOne("GNSS_PPP_DISABLE_QZSS_SSR_PRN_FIX");
     overrides.madoca_qzss_clock = !envExactZero("GNSS_PPP_MADOCA_QZSS_CLOCK");
-    overrides.madoca_qzss_phase = envExactOne("GNSS_PPP_MADOCA_QZSS_PHASE");
-    overrides.madoca_qzss_l5 = envExactOne("GNSS_PPP_MADOCA_QZSS_L5");
+    overrides.madoca_qzss_phase = !envExactZero("GNSS_PPP_MADOCA_QZSS_PHASE");
+    overrides.madoca_qzss_l5 = !envExactZero("GNSS_PPP_MADOCA_QZSS_L5");
     overrides.madoca_glonass = !envExactZero("GNSS_PPP_MADOCA_GLONASS");
     overrides.madoca_glonass_phase = envExactOne("GNSS_PPP_MADOCA_GLONASS_PHASE");
     overrides.madoca_low_elev = !envExactZero("GNSS_PPP_MADOCA_LOW_ELEV");
     overrides.madoca_galileo_gate =
         envExactOne("GNSS_PPP_MADOCA_GALILEO_GATE") ||
         overrides.madoca_early_window;
-    overrides.madoca_bias_identity = envExactOne("GNSS_PPP_MADOCA_BIAS_IDENTITY");
+    overrides.madoca_bias_identity =
+        !envExactZero("GNSS_PPP_MADOCA_BIAS_IDENTITY");
     overrides.pb_add = envPresent("GNSS_PPP_PB_ADD");
     overrides.no_phase_bias = envPresent("GNSS_PPP_NO_PHASE_BIAS");
     overrides.l2_reset_fix = envFirstCharNotZero("GNSS_PPP_L2_RESET_FIX");
@@ -165,7 +166,7 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
     overrides.ssr_discnt_slip = envPresent("GNSS_PPP_SSR_DISCNT_SLIP");
     overrides.no_solid_tide = envPresent("GNSS_PPP_NO_SOLID_TIDE");
     overrides.tide_itrs_sun_moon = envPresent("GNSS_PPP_TIDE_ITRS_SUN_MOON");
-    overrides.pf_code_var_scale = envDoubleOr("GNSS_PPP_PF_CODE_VAR_SCALE", 9.0);
+    overrides.pf_code_var_scale = envDoubleOr("GNSS_PPP_PF_CODE_VAR_SCALE", 1.0);
     overrides.pf_rx_antenna = envPresent("GNSS_PPP_PF_RX_ANTENNA");
     overrides.pf_wet_trop = envPresent("GNSS_PPP_PF_WET_TROP");
 

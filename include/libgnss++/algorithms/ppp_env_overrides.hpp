@@ -68,12 +68,13 @@ struct PPPEnvOverrides {
     // GNSS_PPP_MADOCA_QZSS_CLOCK: allow default QZSS ISB clock in coherent
     // MADOCA unless set exactly to "0". Default true.
     bool madoca_qzss_clock = true;
-    // GNSS_PPP_MADOCA_QZSS_PHASE: allow QZSS phase rows in MADOCA when set
-    // exactly to "1". Default false.
-    bool madoca_qzss_phase = false;
-    // GNSS_PPP_MADOCA_QZSS_L5: prefer QZSS L1/L5 over L1/L2 in coherent
-    // MADOCA when set exactly to "1". Default false while measured.
-    bool madoca_qzss_l5 = false;
+    // GNSS_PPP_MADOCA_QZSS_PHASE: allow QZSS phase rows in coherent MADOCA.
+    // Default true for MADOCALIB parity; set exactly to "0" to opt out.
+    bool madoca_qzss_phase = true;
+    // GNSS_PPP_MADOCA_QZSS_L5: prefer QZSS L1/L5 while retaining L2 as the
+    // additional MADOCALIB frequency in coherent MADOCA. Default true for
+    // three-frequency row parity; set exactly to "0" to opt out.
+    bool madoca_qzss_l5 = true;
     // GNSS_PPP_MADOCA_GLONASS: include GLONASS in coherent MADOCA unless set
     // exactly to "0". Default true.
     bool madoca_glonass = true;
@@ -89,9 +90,9 @@ struct PPPEnvOverrides {
     // GNSS_PPP_MADOCA_EARLY_WINDOW.
     bool madoca_galileo_gate = false;
     // GNSS_PPP_MADOCA_BIAS_IDENTITY: preserve MADOCA SSR code/phase-bias
-    // signal identity instead of collapsed RTCM band ids when set exactly to
-    // "1". Default false while the parity impact is measured.
-    bool madoca_bias_identity = false;
+    // signal identity instead of collapsed RTCM band ids unless set exactly
+    // to "0". Exact identity is required for distinct BDS-3 B2a biases.
+    bool madoca_bias_identity = true;
     // GNSS_PPP_PB_ADD: add non-MADOCA SSR phase biases instead of subtracting.
     // Default false.
     bool pb_add = false;
@@ -113,9 +114,9 @@ struct PPPEnvOverrides {
     // GNSS_PPP_TIDE_ITRS_SUN_MOON: rotate sun/moon vectors to ITRS before IERS
     // solid tide when present. Default false.
     bool tide_itrs_sun_moon = false;
-    // GNSS_PPP_PF_CODE_VAR_SCALE: per-frequency code variance scale.
-    // Default 9.0.
-    double pf_code_var_scale = 9.0;
+    // GNSS_PPP_PF_CODE_VAR_SCALE: diagnostic per-frequency code variance
+    // scale applied after the RTKLIB error-ratio model. Default 1.0.
+    double pf_code_var_scale = 1.0;
     // GNSS_PPP_PF_RX_ANTENNA: enable per-frequency receiver antenna correction
     // when present. Default false.
     bool pf_rx_antenna = false;

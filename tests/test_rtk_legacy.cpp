@@ -134,6 +134,34 @@ TEST_F(RTKLegacyCompatibilityTest, FormsDoubleDifferencesAndLinearizedHelpersSta
     EXPECT_TRUE(processor_.hasSufficientSatellites(measurements));
 }
 
+TEST_F(RTKLegacyCompatibilityTest, AssemblesRealRowsForTightlyCoupledDDIMUBridge) {
+    const Matrix3d ecef_to_enu = Matrix3d::Identity();
+    const auto rows = processor_.formTightlyCoupledObservations(
+        rover_obs_, base_obs_, nav_data_, rover_header_.approximate_position,
+        ecef_to_enu, Eigen::Quaterniond::Identity());
+
+    ASSERT_GE(rows.size(), 4u);
+    for (const auto& row : rows) {
+        EXPECT_GT(row.key.satellite_prn, 0);
+        EXPECT_GT(row.key.reference_satellite_prn, 0);
+        EXPECT_NE(row.key.satellite_system, 0);
+        EXPECT_EQ(row.key.satellite_system, row.key.reference_satellite_system);
+        EXPECT_GE(row.key.frequency_index, 0);
+        EXPECT_GE(row.key.signal_type, 0);
+        EXPECT_TRUE(row.geometry_enu.array().isFinite().all());
+        EXPECT_TRUE(std::isfinite(row.code_residual_m));
+        EXPECT_TRUE(std::isfinite(row.carrier_residual_m));
+        EXPECT_GT(row.code_variance_m2, 0.0);
+        // The fixture is a fresh arc; tight carrier rows mature for 300
+        // consecutive lock epochs before ambiguity-state augmentation.
+        EXPECT_DOUBLE_EQ(row.carrier_variance_m2, 0.0);
+        EXPECT_GT(row.wavelength_m, 0.0);
+        EXPECT_GE(row.posterior_abs_residual_m, 0.0);
+        EXPECT_LE(row.posterior_abs_residual_m, 0.5 * row.wavelength_m + 1e-12);
+        EXPECT_TRUE(std::isfinite(row.body_azimuth_rad));
+    }
+}
+
 TEST(RTKLegacyCompatibilityStandaloneTest, LambdaCompatibilityProducesValidatedIntegerFix) {
     RTKProcessor processor;
     VectorXd float_ambiguities(3);
@@ -576,6 +604,19 @@ TEST(RTKLegacyCompatibilityStandaloneTest, MaxPostfixResidualRmsDefaultDisabled)
     EXPECT_DOUBLE_EQ(processor.getRTKConfig().max_postfix_residual_rms, 0.0);
 }
 
+TEST(RTKLegacyCompatibilityStandaloneTest, DopplerFloatSeedDefaultDisabled) {
+    RTKProcessor processor;
+    EXPECT_FALSE(processor.getRTKConfig().use_doppler_float_seed);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().doppler_float_seed_max_age_s, 6.0);
+
+    auto config = processor.getRTKConfig();
+    config.use_doppler_float_seed = true;
+    config.doppler_float_seed_max_age_s = 3.0;
+    processor.setRTKConfig(config);
+    EXPECT_TRUE(processor.getRTKConfig().use_doppler_float_seed);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().doppler_float_seed_max_age_s, 3.0);
+}
+
 TEST(RTKLegacyCompatibilityStandaloneTest, MaxPostfixResidualRmsConfigurable) {
     RTKProcessor processor;
 
@@ -679,6 +720,7 @@ TEST(RTKLegacyCompatibilityStandaloneTest, SubsetArFullRatioGateDefaultDisabled)
     RTKProcessor processor;
     EXPECT_EQ(processor.getRTKConfig().min_subset_pairs_for_ar, 4);
     EXPECT_EQ(processor.getRTKConfig().max_subset_drop_steps_for_ar, 6);
+    EXPECT_FALSE(processor.getRTKConfig().enable_paper_constellation_fallback_ar);
     EXPECT_EQ(processor.getRTKConfig().min_subset_sats_for_ar, 0);
     EXPECT_EQ(processor.getRTKConfig().min_subset_systems_for_ar, 0);
     EXPECT_EQ(processor.getRTKConfig().min_subset_frequencies_for_ar, 0);

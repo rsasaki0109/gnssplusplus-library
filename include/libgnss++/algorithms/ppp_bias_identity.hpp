@@ -28,6 +28,8 @@ inline constexpr ObservationCodeMapEntry kObservationCodeMap[] = {
     {"C2X", madoca_parity::kCodeL2X}, {"L2X", madoca_parity::kCodeL2X},
     {"C2P", madoca_parity::kCodeL2P}, {"L2P", madoca_parity::kCodeL2P},
     {"C2W", madoca_parity::kCodeL2W}, {"L2W", madoca_parity::kCodeL2W},
+    {"C2I", madoca_parity::kCodeL2I}, {"L2I", madoca_parity::kCodeL2I},
+    {"C2Q", madoca_parity::kCodeL2Q}, {"L2Q", madoca_parity::kCodeL2Q},
     {"C5I", madoca_parity::kCodeL5I}, {"L5I", madoca_parity::kCodeL5I},
     {"C5Q", madoca_parity::kCodeL5Q}, {"L5Q", madoca_parity::kCodeL5Q},
     {"C5X", madoca_parity::kCodeL5X}, {"L5X", madoca_parity::kCodeL5X},
@@ -49,6 +51,7 @@ inline int rtklibSystemForGnss(GNSSSystem system) {
         case GNSSSystem::GPS: return madoca_parity::kSysGps;
         case GNSSSystem::Galileo: return madoca_parity::kSysGal;
         case GNSSSystem::QZSS: return madoca_parity::kSysQzs;
+        case GNSSSystem::BeiDou: return madoca_parity::kSysCmp;
         default: return madoca_parity::kSysNone;
     }
 }

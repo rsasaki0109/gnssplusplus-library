@@ -1,7 +1,10 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <map>
+#include <string>
+#include <vector>
 
 #include <libgnss++/io/madoca_l6.hpp>  // MadocaGtime
 
@@ -147,5 +150,61 @@ private:
 
     std::map<int, MadocaIonoRegion> re_;  // sparse pppiono.re[MIONO_MAX_RID]
 };
+
+// Receiver-specific correction view emitted after one complete L6D region
+// update. updated_region_id identifies the message that triggered the snapshot;
+// correction.rid/anum identify the nearest area selected from the persistent
+// store (which may belong to an earlier region update).
+struct MadocaIonoSnapshot {
+    MadocaGtime decode_time;
+    int updated_region_id = -1;
+    MadocaIonoCorr correction;
+};
+
+// Time-indexed receiver-specific L6D products. This container owns ordering,
+// duplicate replacement, causal lookup, and freshness policy so PPP consumers
+// do not need to know how raw files were replayed. Returned lookup pointers stay
+// valid until the next mutating call.
+class MadocaIonoProducts {
+public:
+    bool addSnapshot(const MadocaIonoSnapshot& snapshot);
+    std::size_t addSnapshots(const std::vector<MadocaIonoSnapshot>& snapshots);
+
+    // Latest snapshot whose decode time is not later than query_time. A
+    // negative max_age_s disables the freshness gate; otherwise snapshots
+    // older than max_age_s are rejected.
+    const MadocaIonoSnapshot* latestAtOrBefore(
+        const MadocaGtime& query_time, double max_age_s = -1.0) const;
+
+    bool empty() const { return snapshots_.empty(); }
+    std::size_t size() const { return snapshots_.size(); }
+    const std::vector<MadocaIonoSnapshot>& snapshots() const { return snapshots_; }
+    void clear() { snapshots_.clear(); }
+
+private:
+    std::vector<MadocaIonoSnapshot> snapshots_;
+};
+
+// Materialize the current persistent L6D store for one receiver. This is the
+// reusable boundary shared by file replay and future streaming PPP ingestion.
+// Returns true when a receiver area was selected and a snapshot was appended.
+bool appendMadocaIonoSnapshot(const MadocaIonoStore& store,
+                              const double receiver_ecef[3],
+                              const MadocaGtime& decode_time,
+                              int updated_region_id,
+                              std::vector<MadocaIonoSnapshot>& snapshots,
+                              const double* gloFreqHz = nullptr);
+
+// Decode one raw QZSS L6D file and materialize a snapshot after every complete
+// region update. The reference epoch seeds GPS-week reconstruction. Returns
+// false for invalid arguments, unreadable input, decoder errors, or a file with
+// no complete L6D messages; error_message is optional.
+bool decodeMadocaL6dFileToSnapshots(
+    const std::string& path,
+    const double reference_epoch[6],
+    const double receiver_ecef[3],
+    std::vector<MadocaIonoSnapshot>& snapshots,
+    std::string* error_message = nullptr,
+    const double* gloFreqHz = nullptr);
 
 }  // namespace libgnss::io
