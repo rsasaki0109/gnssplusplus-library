@@ -31,6 +31,68 @@ TEST(PPPFilterIterations, MadocaPerFrequencyCommitsOneUpdatePerEpoch) {
     EXPECT_EQ(ppp_internal::filterIterationCount(false, false, 8), 8);
 }
 
+TEST(NavigationSsrIodeSelection, DoesNotFallBackWhenGpsIodeIsUnavailable) {
+    NavigationData navigation;
+    const SatelliteId satellite(GNSSSystem::GPS, 8);
+    const GNSSTime query_time(2300, 100000.0);
+
+    Ephemeris available;
+    available.satellite = satellite;
+    available.toe = query_time - 60.0;
+    available.toes = available.toe.tow;
+    available.iode = 17;
+    available.valid = true;
+    navigation.addEphemeris(available);
+
+    ASSERT_NE(navigation.getEphemeris(satellite, query_time), nullptr);
+    EXPECT_EQ(navigation.getEphemeris(satellite, query_time, 18), nullptr);
+}
+
+TEST(NavigationSsrIodeSelection, SelectsTheExactGpsIodeInsteadOfNearestAge) {
+    NavigationData navigation;
+    const SatelliteId satellite(GNSSSystem::GPS, 8);
+    const GNSSTime query_time(2300, 100000.0);
+
+    Ephemeris nearest;
+    nearest.satellite = satellite;
+    nearest.toe = query_time - 30.0;
+    nearest.toes = nearest.toe.tow;
+    nearest.iode = 17;
+    nearest.valid = true;
+    navigation.addEphemeris(nearest);
+
+    Ephemeris referenced = nearest;
+    referenced.toe = query_time - 120.0;
+    referenced.toes = referenced.toe.tow;
+    referenced.iode = 18;
+    navigation.addEphemeris(referenced);
+
+    const Ephemeris* selected =
+        navigation.getEphemeris(satellite, query_time, 18);
+    ASSERT_NE(selected, nullptr);
+    EXPECT_EQ(selected->iode, 18);
+}
+
+TEST(NavigationSsrIodeSelection, MatchesBeiDouIodeAgainstToeModuloCycle) {
+    NavigationData navigation;
+    const SatelliteId satellite(GNSSSystem::BeiDou, 19);
+    const GNSSTime query_time(2300, 100000.0);
+
+    Ephemeris referenced;
+    referenced.satellite = satellite;
+    referenced.toe = query_time - 60.0;
+    referenced.toes = 100000.0;
+    referenced.iode = 999;  // BeiDou AODE is not the Compact SSR IODE key.
+    referenced.valid = true;
+    navigation.addEphemeris(referenced);
+
+    constexpr int matching_iode = 212;  // 100000 mod 2048 == (212 * 8) mod 2048
+    ASSERT_NE(
+        navigation.getEphemeris(satellite, query_time, matching_iode), nullptr);
+    EXPECT_EQ(
+        navigation.getEphemeris(satellite, query_time, matching_iode + 1), nullptr);
+}
+
 GNSSTime makeTime(int year, int month, int day, int hour, int minute, double second) {
     std::tm epoch_tm{};
     epoch_tm.tm_year = year - 1900;
