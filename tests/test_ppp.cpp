@@ -55,6 +55,24 @@ TEST(PPPArTrialState, PerFrequencyAttemptsAreAlwaysEphemeral) {
     EXPECT_FALSE(ppp_internal::alwaysRestoreArTrialState(ARMethod::DD_WLNL));
 }
 
+TEST(PPPIonospherePrediction, MatchesMadocalibCarrierDeltaAndElevationNoise) {
+    constexpr double f1 = 1575.42e6;
+    constexpr double f2 = 1227.60e6;
+    const double denominator = 1.0 - (f1 / f2) * (f1 / f2);
+    EXPECT_NEAR(
+        ppp_internal::madocaCarrierIonosphereMeters(12.4, 12.1, f1, f2),
+        -0.3 / denominator,
+        1e-12);
+    EXPECT_NEAR(
+        ppp_internal::madocaIonosphereProcessVariance(1e-4, M_PI / 6.0, 30.0),
+        0.012,
+        1e-12);
+    EXPECT_NEAR(
+        ppp_internal::madocaIonosphereProcessVariance(1e-4, M_PI / 2.0, 30.0),
+        0.003,
+        1e-12);
+}
+
 TEST(PPPEnvOverridesTest, MadocaQzssL5DefaultsToThreeFrequencyParity) {
     EXPECT_TRUE(PPPEnvOverrides::fromEnvironment().madoca_qzss_l5);
 }

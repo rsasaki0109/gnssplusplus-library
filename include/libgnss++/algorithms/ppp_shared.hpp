@@ -381,6 +381,8 @@ struct PPPAmbiguityInfo {
     int fractional_bias_samples = 0;
     double last_geometry_free_m = 0.0;
     bool has_last_geometry_free = false;
+    double last_carrier_ionosphere_m = 0.0;
+    bool has_last_carrier_ionosphere = false;
     double last_melbourne_wubbena_m = 0.0;
     bool has_last_melbourne_wubbena = false;
     GNSSTime last_slip_time;

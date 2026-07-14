@@ -485,10 +485,16 @@ void PPPProcessor::predictState(double dt, const PositionSolution* seed_solution
     for (int idx = filter_state_.amb_index; idx < filter_state_.total_states; ++idx) {
         Q(idx, idx) = ppp_config_.process_noise_ambiguity * dt;
     }
-    // Ionosphere process noise
+    // Ionosphere process noise. Coherent MADOCA applies the per-satellite
+    // elevation scaling later, after corrected observations provide az/el.
+    const bool madoca_per_frequency =
+        require_coherent_ssr_ && ssr_products_loaded_ &&
+        !ppp_config_.use_ionosphere_free && ppp_config_.estimate_ionosphere;
     if (ppp_config_.estimate_ionosphere) {
         for (const auto& [sat, idx] : filter_state_.ionosphere_indices) {
-            Q(idx, idx) = ppp_config_.process_noise_ionosphere * dt;
+            Q(idx, idx) = madoca_per_frequency
+                ? 0.0
+                : ppp_config_.process_noise_ionosphere * dt;
         }
     }
 
@@ -534,7 +540,58 @@ void PPPProcessor::predictState(double dt, const PositionSolution* seed_solution
     constrainStaticAnchorPosition();
 }
 
-bool PPPProcessor::updateFilter(const ObservationData& obs, const NavigationData& nav) {
+void PPPProcessor::updateMadocaPerFrequencyIonospherePrediction(
+    const std::vector<IonosphereFreeObs>& observations, double dt) {
+    const bool madoca_per_frequency =
+        require_coherent_ssr_ && ssr_products_loaded_ &&
+        !ppp_config_.use_ionosphere_free && ppp_config_.estimate_ionosphere;
+    if (!madoca_per_frequency) {
+        return;
+    }
+
+    for (const auto& observation : observations) {
+        const auto ionosphere_it =
+            filter_state_.ionosphere_indices.find(observation.satellite);
+        if (!observation.valid ||
+            ionosphere_it == filter_state_.ionosphere_indices.end()) {
+            continue;
+        }
+        const int index = ionosphere_it->second;
+        filter_state_.covariance(index, index) +=
+            ppp_internal::madocaIonosphereProcessVariance(
+                ppp_config_.process_noise_ionosphere,
+                observation.elevation,
+                dt);
+
+        auto& ambiguity = ambiguity_states_[observation.satellite];
+        if (!observation.has_carrier_phase ||
+            !observation.has_carrier_phase_l2) {
+            ambiguity.has_last_carrier_ionosphere = false;
+            continue;
+        }
+        const double carrier_ionosphere =
+            ppp_internal::madocaCarrierIonosphereMeters(
+                observation.carrier_phase_l1,
+                observation.carrier_phase_l2,
+                observation.freq_l1,
+                observation.freq_l2);
+        if (!std::isfinite(carrier_ionosphere)) {
+            ambiguity.has_last_carrier_ionosphere = false;
+            continue;
+        }
+        if (ambiguity.has_last_carrier_ionosphere) {
+            filter_state_.state(index) +=
+                carrier_ionosphere - ambiguity.last_carrier_ionosphere_m;
+        }
+        ambiguity.last_carrier_ionosphere_m = carrier_ionosphere;
+        ambiguity.has_last_carrier_ionosphere = true;
+    }
+}
+
+bool PPPProcessor::updateFilter(const ObservationData& obs,
+                                const NavigationData& nav,
+                                double dt,
+                                bool apply_iono_prediction) {
     auto if_obs = formIonosphereFree(obs, nav);
     if (if_obs.size() < static_cast<size_t>(config_.min_satellites)) {
         if (pppDebugEnabled()) {
@@ -546,6 +603,9 @@ bool PPPProcessor::updateFilter(const ObservationData& obs, const NavigationData
 
     applyPreciseCorrections(if_obs, nav, obs.time);
     ensureAmbiguityStates(if_obs);
+    if (apply_iono_prediction) {
+        updateMadocaPerFrequencyIonospherePrediction(if_obs, dt);
+    }
     if (!ppp_config_.use_ionosphere_free && ppp_config_.estimate_ionosphere &&
         !ppp_config_.use_clas_osr_filter) {
         std::set<SatelliteId> observed_now;
