@@ -256,6 +256,31 @@ full-window RMS is higher than M2c's 2.194 m, so this row-contract correction
 does not close M2; remaining native-only rows and state priors must be aligned
 before judging its combined trajectory effect.
 
+#### M2e -- Strict SSR broadcast-ephemeris admission
+
+MADOCALIB's `seleph()` requires the broadcast ephemeris referenced by the SSR
+orbit IODE and rejects a satellite when that record is unavailable.  Native's
+IODE-aware selector previously fell back to the nearest-age ephemeris, applying
+the SSR delta to a different broadcast orbit and admitting GPS, GLONASS, and
+BeiDou satellites before the oracle.  The selector now returns no state when
+the requested record is missing.  GPS, Galileo, QZSS, and GLONASS compare IODE
+directly; BeiDou follows MADOCALIB's Compact SSR rule,
+`toes mod 2048 == (IODE * 8) mod 2048`.
+
+On the pinned MIZU trace, native now reproduces the oracle's constellation
+admission sequence exactly: G08 appears at 00:02:00, GLONASS at 00:02:30, C28
+at 00:03:30, and the seven-satellite BeiDou set at 00:04:00.  GPS and BeiDou
+row counts also match at every checked early epoch.  The remaining row-count
+gap is isolated to six QZSS rows per epoch and four GLONASS rows after its
+admission, which are frequency-selection differences for a later slice.
+
+Across all 118 aligned solution epochs, native produces 65 complete fixes, all
+inside oracle Fix epochs, with no wrong Fix.  The full-window native/oracle 3D
+delta RMS is 0.317 m, maximum is 0.988 m, horizontal RMS is 0.213 m, Up RMS is
+0.235 m, and final-30-minute RMS is 0.299 m.  M2 remains open: 43 oracle Fix
+epochs are still native Float, status agreement remains below 95%, and the
+fixed-epoch RMS exit threshold is not yet proven.
+
 ### M3 -- Apply L6D ionosphere products
 
 - Promote the proven snapshot lookup from shadow telemetry to an explicit
