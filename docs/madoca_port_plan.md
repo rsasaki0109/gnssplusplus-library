@@ -36,7 +36,8 @@ second station (ALIC, neutral) with 1 h/6 h staying byte-exact.  The interim
 byte-identical under commit); the #144 spike guard (100 m) is kept as the
 opt-out-path safety net.  GLONASS
 phase, QZSS L5, SSR-replay, bias-identity, and pair-selection hypotheses were
-each measured and closed (default-off knobs kept where they were preview-only).
+each measured.  QZSS L5 was later promoted for M2 three-frequency row parity;
+the remaining preview-only knobs stay default-off.
 The repro harness and per-slice history live in the memory note
 `madoca-ppp-frontier` and in issue #148.
 
