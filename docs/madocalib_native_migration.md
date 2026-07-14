@@ -281,6 +281,29 @@ delta RMS is 0.317 m, maximum is 0.988 m, horizontal RMS is 0.213 m, Up RMS is
 epochs are still native Float, status agreement remains below 95%, and the
 fixed-epoch RMS exit threshold is not yet proven.
 
+#### M2f -- QZSS three-frequency row parity
+
+MADOCALIB orders QZSS per-frequency observations as L1, L5, then L2.  Native
+already preserved all three RINEX bands and implemented additional-frequency
+states, corrections, and measurement rows, but selected L2 as the secondary
+frequency by default.  That made L2 ineligible for the additional slot and
+dropped L5, leaving six missing rows across J02/J03/J04 at every epoch.
+
+Coherent MADOCA now selects L5 as the secondary frequency and retains L2 as
+the additional MADOCALIB ordinal by default.  `GNSS_PPP_MADOCA_QZSS_L5=0`
+remains an opt-out.  A RINEX reader regression test pins simultaneous L1/L5/L2
+retention rather than testing L5 replacement alone.
+
+On the pinned early MIZU trace, QZSS grows from 12 to the oracle's 18 rows per
+epoch with exact L1/L5/L2 code-and-phase identities.  Across all 118 aligned
+solution epochs, native produces 61 complete fixes, all inside oracle Fix
+epochs, with no wrong Fix.  Full-window native/oracle 3D delta RMS is 0.337 m,
+maximum is 0.854 m, horizontal RMS is 0.232 m, Up RMS is 0.244 m, and the
+final-30-minute RMS is 0.309 m.  The full RMS is 0.020 m above M2e while the
+maximum improves by 0.134 m; this slice accepts the exact oracle row contract.
+GLONASS phase remains intentionally excluded until its measured FDMA residual
+drift is modelled, and M2 remains open.
+
 ### M3 -- Apply L6D ionosphere products
 
 - Promote the proven snapshot lookup from shadow telemetry to an explicit

@@ -537,9 +537,10 @@ TEST(RINEXReaderTest, QzssSecondaryL5PreferenceSelectsL5Q) {
            << "\n";
     output.close();
 
-    auto read_epoch = [&](bool prefer_l5) {
+    auto read_epoch = [&](bool prefer_l5, bool preserve_additional_bands) {
         io::RINEXReader reader;
         reader.setQzssSecondaryL5Preference(prefer_l5);
+        reader.setPreserveAdditionalFrequencyBands(preserve_additional_bands);
         EXPECT_TRUE(reader.open(temp_path.string()));
         io::RINEXReader::RINEXHeader header;
         EXPECT_TRUE(reader.readHeader(header));
@@ -550,11 +551,11 @@ TEST(RINEXReaderTest, QzssSecondaryL5PreferenceSelectsL5Q) {
     };
 
     const SatelliteId qzss_2(GNSSSystem::QZSS, 2);
-    const ObservationData default_epoch = read_epoch(false);
+    const ObservationData default_epoch = read_epoch(false, false);
     EXPECT_NE(default_epoch.getObservation(qzss_2, SignalType::QZS_L2C), nullptr);
     EXPECT_EQ(default_epoch.getObservation(qzss_2, SignalType::QZS_L5), nullptr);
 
-    const ObservationData l5_epoch = read_epoch(true);
+    const ObservationData l5_epoch = read_epoch(true, false);
     EXPECT_EQ(l5_epoch.getObservation(qzss_2, SignalType::QZS_L2C), nullptr);
     const auto* qzss_l5 = l5_epoch.getObservation(qzss_2, SignalType::QZS_L5);
     ASSERT_NE(qzss_l5, nullptr);
@@ -562,6 +563,18 @@ TEST(RINEXReaderTest, QzssSecondaryL5PreferenceSelectsL5Q) {
     EXPECT_NEAR(qzss_l5->carrier_phase, 140000004.000, 1e-3);
     EXPECT_EQ(qzss_l5->pseudorange_observation_type, "C5Q");
     EXPECT_EQ(qzss_l5->carrier_phase_observation_type, "L5Q");
+
+    const ObservationData three_frequency_epoch = read_epoch(true, true);
+    EXPECT_EQ(three_frequency_epoch.getObservations(qzss_2).size(), 3U);
+    EXPECT_NE(
+        three_frequency_epoch.getObservation(qzss_2, SignalType::QZS_L1CA),
+        nullptr);
+    EXPECT_NE(
+        three_frequency_epoch.getObservation(qzss_2, SignalType::QZS_L5),
+        nullptr);
+    EXPECT_NE(
+        three_frequency_epoch.getObservation(qzss_2, SignalType::QZS_L2C),
+        nullptr);
 
     std::filesystem::remove(temp_path);
 }

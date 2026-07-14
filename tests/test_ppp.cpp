@@ -31,6 +31,10 @@ TEST(PPPFilterIterations, MadocaPerFrequencyCommitsOneUpdatePerEpoch) {
     EXPECT_EQ(ppp_internal::filterIterationCount(false, false, 8), 8);
 }
 
+TEST(PPPEnvOverridesTest, MadocaQzssL5DefaultsToThreeFrequencyParity) {
+    EXPECT_TRUE(PPPEnvOverrides::fromEnvironment().madoca_qzss_l5);
+}
+
 TEST(NavigationSsrIodeSelection, DoesNotFallBackWhenGpsIodeIsUnavailable) {
     NavigationData navigation;
     const SatelliteId satellite(GNSSSystem::GPS, 8);

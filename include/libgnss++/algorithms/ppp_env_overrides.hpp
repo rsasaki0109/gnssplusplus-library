@@ -71,9 +71,10 @@ struct PPPEnvOverrides {
     // GNSS_PPP_MADOCA_QZSS_PHASE: allow QZSS phase rows in coherent MADOCA.
     // Default true for MADOCALIB parity; set exactly to "0" to opt out.
     bool madoca_qzss_phase = true;
-    // GNSS_PPP_MADOCA_QZSS_L5: prefer QZSS L1/L5 over L1/L2 in coherent
-    // MADOCA when set exactly to "1". Default false while measured.
-    bool madoca_qzss_l5 = false;
+    // GNSS_PPP_MADOCA_QZSS_L5: prefer QZSS L1/L5 while retaining L2 as the
+    // additional MADOCALIB frequency in coherent MADOCA. Default true for
+    // three-frequency row parity; set exactly to "0" to opt out.
+    bool madoca_qzss_l5 = true;
     // GNSS_PPP_MADOCA_GLONASS: include GLONASS in coherent MADOCA unless set
     // exactly to "0". Default true.
     bool madoca_glonass = true;
