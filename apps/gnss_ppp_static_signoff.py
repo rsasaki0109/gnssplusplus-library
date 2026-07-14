@@ -13,7 +13,7 @@ import subprocess
 import sys
 import tempfile
 
-from gnss_runtime import ensure_input_exists, resolve_gnss_command, run_fetch_products
+from support.gnss_runtime import ensure_input_exists, resolve_gnss_command, run_fetch_products
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent

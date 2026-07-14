@@ -11,8 +11,8 @@ import re
 import subprocess
 import time
 
-from gnss_toml_config import parse_args_with_toml
-from gnss_runtime import ensure_input_exists, resolve_gnss_command
+from support.gnss_toml_config import parse_args_with_toml
+from support.gnss_runtime import ensure_input_exists, resolve_gnss_command
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent

@@ -106,8 +106,6 @@ install(PROGRAMS
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_field_report.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_rcv.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_web.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/gnss_runtime.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/gnss_toml_config.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_mode_compare.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_ppc_taroz_amb_pdc_smoke.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_taroz_p_dogfood.py
@@ -162,6 +160,13 @@ install(PROGRAMS
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_qzss_l6_info.py
     ${CMAKE_CURRENT_SOURCE_DIR}/compat/gnss_pos2kml
     DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+install(FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/support/__init__.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/support/gnss_runtime.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/support/gnss_toml_config.py
+    DESTINATION ${CMAKE_INSTALL_BINDIR}/support
 )
 
 install(PROGRAMS

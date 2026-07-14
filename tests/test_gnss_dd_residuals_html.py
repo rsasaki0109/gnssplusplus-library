@@ -1,4 +1,4 @@
-"""Unit tests for ``apps/gnss_dd_residuals_html``."""
+"""Unit tests for ``apps/support/gnss_dd_residuals_html``."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 APPS_DIR = ROOT_DIR / "apps"
 sys.path.insert(0, str(APPS_DIR))
 
-import gnss_dd_residuals_html as html_mod  # noqa: E402
+from support import gnss_dd_residuals_html as html_mod  # noqa: E402
 
 
 class TestHtmlValue(unittest.TestCase):

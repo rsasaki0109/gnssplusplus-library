@@ -10,8 +10,8 @@ from pathlib import Path
 import subprocess
 from urllib import parse, request
 
-from gnss_toml_config import parse_args_with_toml
-from gnss_runtime import resolve_gnss_command
+from support.gnss_toml_config import parse_args_with_toml
+from support.gnss_runtime import resolve_gnss_command
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent

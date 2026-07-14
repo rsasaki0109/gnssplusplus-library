@@ -12,7 +12,7 @@ import math
 from pathlib import Path
 from typing import Any
 
-from gnss_dd_residuals_records import frequency_label
+from .gnss_dd_residuals_records import frequency_label
 
 
 def html_value(value: Any) -> str:

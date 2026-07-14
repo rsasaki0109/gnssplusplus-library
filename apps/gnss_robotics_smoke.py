@@ -9,7 +9,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from gnss_runtime import resolve_gnss_command
+from support.gnss_runtime import resolve_gnss_command
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]

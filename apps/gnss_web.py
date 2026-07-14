@@ -16,7 +16,7 @@ import threading
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from gnss_toml_config import parse_args_with_toml
+from support.gnss_toml_config import parse_args_with_toml
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = ROOT_DIR / "scripts"

@@ -24,10 +24,10 @@ import os
 from pathlib import Path
 from typing import Any
 
-from gnss_dd_residuals_filtering import filter_records
-from gnss_dd_residuals_html import write_html_report
-from gnss_dd_residuals_io import read_records, write_top_pairs_csv
-from gnss_dd_residuals_summary import summarize_records
+from support.gnss_dd_residuals_filtering import filter_records
+from support.gnss_dd_residuals_html import write_html_report
+from support.gnss_dd_residuals_io import read_records, write_top_pairs_csv
+from support.gnss_dd_residuals_summary import summarize_records
 
 
 def parse_args() -> argparse.Namespace:

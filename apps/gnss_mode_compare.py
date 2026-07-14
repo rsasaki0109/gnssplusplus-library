@@ -14,7 +14,7 @@ import sys
 import time
 from typing import Any
 
-from gnss_runtime import ensure_input_exists, resolve_gnss_command
+from support.gnss_runtime import ensure_input_exists, resolve_gnss_command
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent

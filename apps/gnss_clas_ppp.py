@@ -16,7 +16,7 @@ import tempfile
 if os.name != "nt":
     import termios
 
-from gnss_runtime import resolve_gnss_command
+from support.gnss_runtime import resolve_gnss_command
 import gnss_qzss_l6_info as qzss_l6_info
 
 ROOT_DIR = Path(__file__).resolve().parent.parent

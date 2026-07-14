@@ -11,7 +11,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from gnss_dd_residuals_records import (
+from .gnss_dd_residuals_records import (
     abs_normalized_residual,
     compact_row,
     frequency_label,

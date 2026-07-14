@@ -14,8 +14,8 @@ import tempfile
 
 import gnss_ppc_demo as ppc_demo
 import gnss_ppc_metrics as ppc_metrics
-from gnss_toml_config import parse_args_with_toml
-from gnss_runtime import ensure_input_exists, resolve_gnss_command, run_fetch_products
+from support.gnss_toml_config import parse_args_with_toml
+from support.gnss_runtime import ensure_input_exists, resolve_gnss_command, run_fetch_products
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent

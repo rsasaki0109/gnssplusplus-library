@@ -17,7 +17,7 @@ def resolve_gnss_command(root_dir: Path) -> list[str]:
     if source_dispatcher.exists():
         return [sys.executable, str(source_dispatcher)]
 
-    sibling_dispatcher = Path(__file__).resolve().parent / "gnss"
+    sibling_dispatcher = Path(__file__).resolve().parent.parent / "gnss"
     if sibling_dispatcher.exists():
         return [str(sibling_dispatcher)]
 
