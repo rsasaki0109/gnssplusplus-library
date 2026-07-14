@@ -15,8 +15,11 @@ from urllib import error, request
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
-APPS_DIR = ROOT_DIR / "apps"
+COMMANDS_DIR = ROOT_DIR / "apps" / "commands"
+APPS_DIR = COMMANDS_DIR / "visualization"
 
+if str(COMMANDS_DIR) not in sys.path:
+    sys.path.insert(0, str(COMMANDS_DIR))
 if str(APPS_DIR) not in sys.path:
     sys.path.insert(0, str(APPS_DIR))
 

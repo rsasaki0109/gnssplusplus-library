@@ -485,7 +485,7 @@ investigation.
 CSSR subtype 11 (`flg_net=1`) mid-cycle records (`tow % 30 == 25`) carry
 network-scoped orbit deltas that CLASLIB stores in a separate bank and does
 not apply to base-orbit projection.  The Python L6 expander
-(`decode_cssr_combined_message` in `apps/gnss_qzss_l6_info.py`) previously
+(`decode_cssr_combined_message` in `apps/commands/receivers/gnss_qzss_l6_info.py`) previously
 wrote those network orbit values into `pending_orbit` unconditionally, so the
 expanded SSR CSV treated them as base-orbit refreshes.  Native
 `interpolateCorrection` then swung `orbit_projection_m` through the outlier

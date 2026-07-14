@@ -12,7 +12,7 @@ import sys
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
-APPS_DIR = ROOT_DIR / "apps"
+APPS_DIR = ROOT_DIR / "apps" / "commands" / "benchmarks"
 if str(APPS_DIR) not in sys.path:
     sys.path.insert(0, str(APPS_DIR))
 

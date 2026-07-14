@@ -479,7 +479,8 @@ class CliUxTest(unittest.TestCase):
             self.assertIn(snippet, normalized_section)
 
     def test_app_generated_gnss_examples_use_registered_dispatcher_commands(self) -> None:
-        app_files = sorted((ROOT_DIR / "apps").glob("*.py"))
+        app_files = [ROOT_DIR / "apps" / "gnss.py"]
+        app_files.extend(sorted((ROOT_DIR / "apps" / "commands").rglob("gnss_*.py")))
         seen_examples, stale_examples = self.stale_gnss_example_commands_in_files(app_files)
 
         self.assertGreaterEqual(seen_examples, 20)

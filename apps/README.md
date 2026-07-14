@@ -6,9 +6,8 @@ The application layer is organized by role:
   and development workflows.
 - `native/` contains C++ command implementations built by CMake. Their target
   names and installed executable names remain unchanged.
-- top-level `gnss_*.py` files implement Python commands and their shared
-  modules. They remain together because several commands are also importable
-  modules.
+- `commands/` groups Python command entrypoints by domain and contains their
+  shared `support/` package. See `commands/README.md` for the domain map.
 - `compat/` contains legacy executable names that forward to maintained tools.
 
 Add user-facing commands to the `COMMANDS` registry in `gnss.py`. Native
