@@ -36,7 +36,8 @@ For longer workflows, `gnss web`, `gnss live-signoff`,
 `gnss moving-base-signoff`, `gnss scorpion-moving-base-signoff`,
 `gnss ppc-rtk-signoff`, `gnss ppc-coverage-matrix`, and
 `gnss ppp-products-signoff`
-also accept `--config-toml <file>`. Example templates live in `configs/`.
+also accept `--config-toml <file>`. Templates are indexed in
+`configs/README.md` and grouped by purpose.
 
 For CLAS-oriented PPP experiments, `gnss ppp` also exposes the boundary and
 selector knobs used by the experiment lane:

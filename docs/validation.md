@@ -118,7 +118,7 @@ rejects 226 non-FIX drift epochs on Tokyo run1, improves P95H from 34.53 m to
 30.61 m, and keeps PPC official nearly flat, but costs 1.47 pp Positioning rate.
 `ppc-coverage-matrix` also accepts `--config-toml`; the deployable
 `sigma-demote nis2-ratio4` profile is pinned in
-`configs/ppc_sigma_demote_nis2_ratio4.toml`. It accepts these non-FIX, SPP
+`configs/benchmarks/ppc_sigma_demote_nis2_ratio4.toml`. It accepts these non-FIX, SPP
 height-step, FLOAT bridge-tail, and fixed-burst tuning flags so the same profile
 can be swept across all six PPC runs. The full six-run sweep keeps a +15.7 pp
 average Positioning lead over

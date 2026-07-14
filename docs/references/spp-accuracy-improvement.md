@@ -341,14 +341,14 @@ then writes the cross-run policy report:
 
 ```bash
 python3 apps/gnss.py ppc-spp-policy-suite \
-  --manifest-json configs/ppc_spp_policy_suite.adaptive3_policy1.example.json
+  --manifest-json configs/benchmarks/ppc_spp_policy_suite.adaptive3_policy1.example.json
 ```
 
 The manifest can be validated without running the sweeps:
 
 ```bash
 python3 apps/gnss.py ppc-spp-policy-suite \
-  --manifest-json configs/ppc_spp_policy_suite.adaptive3_policy1.example.json \
+  --manifest-json configs/benchmarks/ppc_spp_policy_suite.adaptive3_policy1.example.json \
   --dry-run
 ```
 

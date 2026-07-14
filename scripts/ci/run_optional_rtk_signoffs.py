@@ -152,7 +152,7 @@ def make_ppc_coverage_matrix_smoke_step(context: SignoffContext) -> SignoffStep:
         *context.gnss_command,
         "ppc-coverage-matrix",
         "--config-toml",
-        str(context.repo_root / "configs" / "ppc_sigma_demote_nis2_ratio4.toml"),
+        str(context.repo_root / "configs" / "benchmarks" / "ppc_sigma_demote_nis2_ratio4.toml"),
         "--dataset-root",
         str(context.dataset_root),
         "--max-epochs",

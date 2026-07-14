@@ -19,7 +19,7 @@ except ModuleNotFoundError:  # pragma: no cover - Python 3.10 fallback
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
-DEFAULT_CONFIG = ROOT_DIR / "configs" / "clas_mrtklib_v051.example.toml"
+DEFAULT_CONFIG = ROOT_DIR / "configs" / "benchmarks" / "clas_mrtklib_v051.example.toml"
 
 
 def resolve_path(value: str) -> Path:

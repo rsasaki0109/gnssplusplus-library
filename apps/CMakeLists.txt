@@ -197,15 +197,28 @@ install(PROGRAMS
 )
 
 install(FILES
-    ${CMAKE_SOURCE_DIR}/configs/live.example.conf
-    ${CMAKE_SOURCE_DIR}/configs/live_signoff.example.toml
-    ${CMAKE_SOURCE_DIR}/configs/ppc_rtk_signoff.example.toml
-    ${CMAKE_SOURCE_DIR}/configs/ppp_products_ppc.example.toml
-    ${CMAKE_SOURCE_DIR}/configs/moving_base_signoff.example.toml
-    ${CMAKE_SOURCE_DIR}/configs/iers_atl_multisite_smoke.example.json
-    ${CMAKE_SOURCE_DIR}/configs/iers_atl_multisite_vmf.example.json
-    ${CMAKE_SOURCE_DIR}/configs/web.example.toml
+    ${CMAKE_SOURCE_DIR}/configs/README.md
     DESTINATION configs
+)
+
+install(FILES
+    ${CMAKE_SOURCE_DIR}/configs/examples/live.example.conf
+    ${CMAKE_SOURCE_DIR}/configs/examples/web.example.toml
+    DESTINATION configs/examples
+)
+
+install(FILES
+    ${CMAKE_SOURCE_DIR}/configs/signoff/live_signoff.example.toml
+    ${CMAKE_SOURCE_DIR}/configs/signoff/moving_base_signoff.example.toml
+    ${CMAKE_SOURCE_DIR}/configs/signoff/ppc_rtk_signoff.example.toml
+    ${CMAKE_SOURCE_DIR}/configs/signoff/ppp_products_ppc.example.toml
+    DESTINATION configs/signoff
+)
+
+install(FILES
+    ${CMAKE_SOURCE_DIR}/configs/benchmarks/iers_atl_multisite_smoke.example.json
+    ${CMAKE_SOURCE_DIR}/configs/benchmarks/iers_atl_multisite_vmf.example.json
+    DESTINATION configs/benchmarks
 )
 
 install(FILES
