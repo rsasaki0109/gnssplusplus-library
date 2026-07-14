@@ -57,10 +57,12 @@ public:
         double max_position_jump_rate_mps = 0.0;      ///< Max accepted position step rate [m/s] (<=0 disables)
         double max_position_jump_min_m = 0.0;         ///< Minimum allowed position step [m]
         bool use_ionosphere_free_combination = false; ///< Use dual-frequency code IFLC when available
+        bool mrtklib_iflc_code_bias = false;          ///< Match MRTKLIB prange() IFLC TGD handling
         bool use_ionex_corrections = true;            ///< Prefer loaded IONEX TEC maps over broadcast ionosphere
         bool use_dcb_corrections = true;              ///< Apply loaded OSB/DCB code-bias products when available
         bool use_precise_products = true;             ///< Use loaded SP3/CLK products for satellite orbit/clock
         bool use_ssr_corrections = true;              ///< Apply loaded SSR orbit/clock/code-bias corrections
+        double elevation_mask_override_deg = -1.0;   ///< Per-solve elevation mask; negative uses ProcessorConfig
         
         // Clock modeling
         bool model_intersystem_bias = true;           ///< Model inter-system clock biases
@@ -130,6 +132,10 @@ public:
      * @brief Load CSV SSR orbit/clock/code-bias products for SPP corrections
      */
     bool loadSSRProducts(const std::string& ssr_file);
+    void setSSRProducts(const SSRProducts& products) {
+        ssr_products_ = products;
+        ssr_products_loaded_ = !ssr_products_.orbit_clock_corrections.empty();
+    }
 
     bool hasLoadedPreciseProducts() const { return precise_products_loaded_; }
     bool hasLoadedIONEXProducts() const { return ionex_products_loaded_; }
@@ -200,6 +206,7 @@ private:
         double primary_coeff = 1.0;
         double secondary_coeff = 0.0;
         double variance_scale = 1.0;
+        double transmit_pseudorange = 0.0; ///< Raw P1 used by MRTKLIB satposs()
     };
     
     /**

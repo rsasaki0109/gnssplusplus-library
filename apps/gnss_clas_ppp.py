@@ -25,7 +25,7 @@ DEFAULT_SERIAL_BAUD = 115200
 COMPACT_FILE_COLUMNS = (
     "week,tow,system,prn,dx,dy,dz,dclock_m"
     "[,high_rate_clock_m][,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...]"
-    "[,bias_network_id=<n>][,atmos_<name>=<value>...]"
+    "[,orbit_iode=<n>][,bias_network_id=<n>][,atmos_<name>=<value>...]"
 )
 
 
@@ -168,6 +168,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--static", dest="kinematic", action="store_false", help="Use static PPP.")
     parser.add_argument("--kinematic", dest="kinematic", action="store_true", help="Use kinematic PPP.")
     parser.set_defaults(kinematic=False)
+    parser.add_argument(
+        "--use-dynamics-model",
+        action="store_true",
+        help="Forward the continuous position/velocity dynamics model to PPP.",
+    )
     parser.add_argument("--enable-ar", action="store_true", help="Enable PPP ambiguity resolution.")
     parser.add_argument(
         "--ar-ratio-threshold",
@@ -359,6 +364,14 @@ def expand_compact_ssr_text(text: str, output_path: Path) -> dict[str, object]:
             tow = float(columns[1])
             system = normalize_system_token(columns[2])
             prn = int(columns[3])
+            # The Compact SSR decoder exports RTKLIB's contiguous satellite
+            # number for QZSS in the legacy S121..S129 form.  Convert that
+            # transport alias back to the RINEX/QZSS identifier consumed by
+            # the native PPP path (S121 == J02).  Leaving it as SBAS silently
+            # removes the QZSS DD row and changes both ns and LAMBDA dimension.
+            if system == "S" and 121 <= prn <= 129:
+                system = "J"
+                prn -= 119
             dx = float(columns[4])
             dy = float(columns[5])
             dz = float(columns[6])
@@ -369,6 +382,7 @@ def expand_compact_ssr_text(text: str, output_path: Path) -> dict[str, object]:
             code_bias_tokens: list[str] = []
             phase_bias_tokens: list[str] = []
             bias_network_tokens: list[str] = []
+            orbit_iode_tokens: list[str] = []
             atmos_tokens: list[str] = []
             extras = columns[8:]
             if extras and "=" not in extras[0] and not extras[0].startswith("cbias:"):
@@ -382,17 +396,36 @@ def expand_compact_ssr_text(text: str, output_path: Path) -> dict[str, object]:
                 else:
                     extras = extras[1:]
             for token in extras:
+                # Satellite-qualified atmosphere keys and membership lists
+                # use the same legacy contiguous QZSS aliases as the row
+                # identifier.  Normalize those embedded identifiers too;
+                # otherwise the J02/J03 correction row exists but fails the
+                # CLAS STEC membership gate.
+                token = (
+                    token.replace("S121", "J02")
+                    .replace("S122", "J03")
+                    .replace("S123", "J04")
+                    .replace("S124", "J05")
+                    .replace("S125", "J06")
+                    .replace("S126", "J07")
+                    .replace("S127", "J08")
+                    .replace("S128", "J09")
+                    .replace("S129", "J10")
+                )
                 if token.startswith("ura_sigma_m="):
                     ura_sigma_token = token
                     continue
-                if token.startswith("cbias:") and "=" in token:
+                if token.startswith(("cbias:", "cbias_code:")) and "=" in token:
                     code_bias_tokens.append(token)
                     continue
-                if token.startswith("pbias:") and "=" in token:
+                if token.startswith(("pbias:", "pbias_code:")) and "=" in token:
                     phase_bias_tokens.append(token)
                     continue
                 if token.startswith("bias_network_id="):
                     bias_network_tokens.append(token)
+                    continue
+                if token.startswith("orbit_iode="):
+                    orbit_iode_tokens.append(token)
                     continue
                 if token.startswith("atmos_") and "=" in token:
                     atmos_tokens.append(token)
@@ -419,6 +452,7 @@ def expand_compact_ssr_text(text: str, output_path: Path) -> dict[str, object]:
                 output_tokens.append(f"clock_network_id={clock_network_id}")
             output_tokens.extend(code_bias_tokens)
             output_tokens.extend(phase_bias_tokens)
+            output_tokens.extend(orbit_iode_tokens)
             output_tokens.extend(bias_network_tokens)
             output_tokens.extend(atmos_tokens)
             handle.write(",".join(output_tokens) + "\n")
@@ -795,6 +829,8 @@ def main() -> int:
             command.extend(["--ssr-rtcm", args.ssr_rtcm, "--ssr-step-seconds", str(args.ssr_step_seconds)])
 
         command.append("--kinematic" if args.kinematic else "--static")
+        if args.use_dynamics_model:
+            command.append("--use-dynamics-model")
         command.append("--estimate-troposphere" if args.estimate_troposphere else "--no-estimate-troposphere")
         # When atmospheric corrections are available from CLAS, disable IFLC and
         # enable per-satellite ionosphere estimation with STEC constraints.

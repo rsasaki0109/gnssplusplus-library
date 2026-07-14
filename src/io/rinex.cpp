@@ -1170,10 +1170,54 @@ bool RINEXReader::parseObservationEpochV3(const std::string& epoch_line, Observa
 
             ObservationSelection primary_selection;
             ObservationSelection secondary_selection;
+            std::map<std::string, Observation> tracking_observations;
             std::map<int, ObservationSelection> band_selections;
+
+            // RTKLIB fixes its normal-frequency slots from the RINEX header,
+            // not from whichever values happen to be present this epoch.
+            // Preserve that identity so a missing L2W remains a zero L[1]
+            // instead of falling through to an extended L2L observation.
+            if (sat.system == GNSSSystem::GPS) {
+                obs_data.setRinexFrequencySlot(GNSSSystem::GPS, 0, "1C");
+                static constexpr char kGpsL2Priority[] = "PYWCMNDLXS";
+                for (const char* priority = kGpsL2Priority;
+                     *priority != '\0'; ++priority) {
+                    const std::string candidate =
+                        std::string("2") + *priority;
+                    const bool declared = std::any_of(
+                        obs_types.begin(), obs_types.end(),
+                        [&candidate](const std::string& type) {
+                            return type.size() >= 3 &&
+                                   type.substr(1) == candidate;
+                        });
+                    if (declared) {
+                        obs_data.setRinexFrequencySlot(
+                            GNSSSystem::GPS, 1, candidate);
+                        break;
+                    }
+                }
+            }
 
             for (size_t i = 0; i < obs_types.size() && i < obs_values.size(); ++i) {
                 const std::string& obs_type = obs_types[i];
+                if (obs_values[i] != 0.0 && obs_type.size() >= 3) {
+                    const std::string tracking_code = obs_type.substr(1);
+                    auto [it, inserted] = tracking_observations.try_emplace(
+                        tracking_code);
+                    Observation& exact = it->second;
+                    if (inserted) {
+                        exact.satellite = sat;
+                        exact.signal = signalForObservationType(
+                            sat.system, obs_type,
+                            isPrimaryBand(sat.system, rinexBand(obs_type)));
+                        exact.valid = true;
+                    }
+                    assignObservationField(exact,
+                                           obs_type,
+                                           obs_values[i],
+                                           lli_flags[i],
+                                           signal_strength[i]);
+                }
                 maybeAssignSelectedObservation(primary_selection,
                                                sat,
                                                obs_type,
@@ -1208,6 +1252,11 @@ bool RINEXReader::parseObservationEpochV3(const std::string& epoch_line, Observa
                 primary_selection, secondary_selection, band_selections,
                 preserve_additional_frequency_bands_,
                 header_.glonass_frequency_channels, obs_data);
+            for (auto& [tracking_code, exact] : tracking_observations) {
+                annotateGlonassFrequencyChannel(
+                    exact, header_.glonass_frequency_channels);
+                obs_data.addRinexTrackingObservation(tracking_code, exact);
+            }
         }
 
     } catch (const std::exception& e) {

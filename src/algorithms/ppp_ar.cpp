@@ -58,6 +58,37 @@ double claslibRatioThresholdForNb(int nb) {
     return kClaslibRatioThresholdsAlpha10[index];
 }
 
+std::vector<SatelliteId> selectMrtklibParCandidates(
+    const std::vector<SatelliteId>& eligible_frequency_states,
+    const std::map<SatelliteId, double>& satellite_elevations_rad,
+    int min_active_frequency_states) {
+    std::map<SatelliteId, int> active_frequency_count;
+    for (const SatelliteId& satellite : eligible_frequency_states) {
+        ++active_frequency_count[clasRealSatellite(satellite)];
+    }
+
+    std::vector<SatelliteId> candidates;
+    for (const auto& [satellite, elevation_rad] : satellite_elevations_rad) {
+        const auto count_it = active_frequency_count.find(satellite);
+        if (elevation_rad <= kMrtklibArElevationMaskRad ||
+            count_it == active_frequency_count.end() ||
+            count_it->second < min_active_frequency_states) {
+            continue;
+        }
+        candidates.push_back(satellite);
+    }
+    std::sort(candidates.begin(), candidates.end(),
+              [&](const SatelliteId& lhs, const SatelliteId& rhs) {
+                  const double lhs_elevation = satellite_elevations_rad.at(lhs);
+                  const double rhs_elevation = satellite_elevations_rad.at(rhs);
+                  if (lhs_elevation != rhs_elevation) {
+                      return lhs_elevation < rhs_elevation;
+                  }
+                  return lhs < rhs;
+              });
+    return candidates;
+}
+
 double safeVarianceFloor(double variance, double floor_value) {
     if (!std::isfinite(variance) || variance < floor_value) {
         return floor_value;
@@ -90,7 +121,7 @@ EligibleAmbiguities collectEligibleAmbiguities(
         if (time.week > 0 && ambiguity.has_last_slip_time &&
             slip_ar_exclusion_seconds > 0.0 &&
             (time - ambiguity.last_slip_time) < slip_ar_exclusion_seconds) {
-            ++eligible.skipped_reinitialization;
+            ++eligible.skipped_slip_window;
             continue;
         }
         if (!std::isfinite(ambiguity.ambiguity_scale_m) || ambiguity.ambiguity_scale_m <= 0.0) {
@@ -166,8 +197,29 @@ WlnlPreparation prepareWlnlCandidates(
     preparation.min_lock_count = use_ssr_products
         ? std::max(1, config.wl_min_averaging_epochs)
         : config.convergence_min_epochs;
+    // MRTKLIB literal-port track (direct state-DD path): ddmat admits a
+    // satellite once lock[f] > 0.  A cycle slip starts lock at -minlock,
+    // but a whole-filter FLOAT timeout initializes it at zero.  The latter
+    // is the path immediately preceding tokyo/run2's first fix (the MRT stat
+    // has lock=2 at tow 177083.2), so requiring minlock+1 observations here
+    // incorrectly makes every ambiguity ineligible before the next timeout.
+    // The negative post-slip lock itself supplies the longer quarantine.
+    if (config.clas_mrtklib_float_parity &&
+        config.use_clas_osr_filter && config.kinematic_mode &&
+        !config.low_dynamics_mode && config.use_dynamics_model) {
+        preparation.min_lock_count = 1;
+    }
+    // MRTKLIB parity (kinematic CLAS): post-slip AR re-eligibility is purely
+    // lock-count based -- a slip sets lock = -minlock and the satellite
+    // becomes DD-eligible again once lock > 0 (mrtk_ppp_rtk.c:875/1718/2561).
+    // The additional 10 s wall-clock exclusion has no MRTKLIB
+    // counterpart and starves urban AR (50 epochs at 5 Hz vs MRTKLIB's 6).
+    // Non-kinematic paths keep the historical 10 s window.
+    const double slip_ar_exclusion_seconds =
+        (config.use_clas_osr_filter && config.kinematic_mode) ? 0.0 : 10.0;
     preparation.eligible_ambiguities = collectEligibleAmbiguities(
-        filter_state, ambiguity_states, preparation.min_lock_count, time);
+        filter_state, ambiguity_states, preparation.min_lock_count, time,
+        slip_ar_exclusion_seconds);
     preparation.wl_summary = applyWideLaneFixes(
         config, ambiguity_states, preparation.eligible_ambiguities.satellites, debug_enabled);
     return preparation;
@@ -490,6 +542,57 @@ bool validStateDdEndpoint(int state_index, double scale_m, int total_states) {
            scale_m > 0.0;
 }
 
+// Resolve a satellite's L2 ambiguity state endpoint. The generic per-freq
+// path registers L2 states in ambiguity_l2_indices, but the CLAS per-freq
+// path stores them as prn+100 pseudo-satellites inside ambiguity_indices --
+// leaving ambiguity_l2_indices empty and (before this fallback) silently
+// dropping every L2 row from the state-DD system: measured on tokyo_run2
+// dynamics, all 13k+ resamb attempts and every hold constraint were L1-only,
+// i.e. LAMBDA searched half of MRTKLIB's nb with no L2 integer constraint.
+bool resolveL2StateEndpoint(
+    const ppp_shared::PPPState& filter_state,
+    const std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
+    const SatelliteId& satellite,
+    double wavelength_l2_hint,
+    bool allow_pseudo_states,
+    int& state_index,
+    double& scale_m) {
+    const auto l2_it = filter_state.ambiguity_l2_indices.find(satellite);
+    if (l2_it != filter_state.ambiguity_l2_indices.end()) {
+        state_index = l2_it->second;
+        scale_m = wavelength_l2_hint;
+        return validStateDdEndpoint(state_index, scale_m,
+                                    filter_state.total_states);
+    }
+    if (!allow_pseudo_states) {
+        return false;
+    }
+    const SatelliteId l2_satellite(
+        satellite.system,
+        static_cast<uint8_t>(
+            std::min(255, static_cast<int>(satellite.prn) + 100)));
+    const auto idx_it = filter_state.ambiguity_indices.find(l2_satellite);
+    const auto amb_it = ambiguity_states.find(l2_satellite);
+    if (idx_it == filter_state.ambiguity_indices.end() ||
+        amb_it == ambiguity_states.end()) {
+        return false;
+    }
+    state_index = idx_it->second;
+    scale_m = amb_it->second.ambiguity_scale_m;
+    return validStateDdEndpoint(state_index, scale_m,
+                                filter_state.total_states);
+}
+
+bool solveStateDdRows(
+    const ppp_shared::PPPConfig& config,
+    const ppp_shared::PPPState& filter_state,
+    const MatrixXd& constraint_covariance,
+    const std::vector<StateDdRow>& rows,
+    bool have_wlnl_datum,
+    int min_rows,
+    WlnlFixAttempt& attempt,
+    bool debug_enabled);
+
 bool conditionWlnlFilterStateDd(
     const ppp_shared::PPPConfig& config,
     const ppp_shared::PPPState& filter_state,
@@ -555,25 +658,30 @@ bool conditionWlnlFilterStateDd(
             });
         }
 
-        const auto ref_l2_state_it = filter_state.ambiguity_l2_indices.find(ref_sat);
-        const auto sat_l2_state_it = filter_state.ambiguity_l2_indices.find(sat);
-        const double ref_l2_scale = ref_amb_it->second.wavelength_l2;
-        const double sat_l2_scale = sat_amb_it->second.wavelength_l2;
-        if (ref_l2_state_it != filter_state.ambiguity_l2_indices.end() &&
-            sat_l2_state_it != filter_state.ambiguity_l2_indices.end() &&
-            validStateDdEndpoint(
-                ref_l2_state_it->second,
-                ref_l2_scale,
-                filter_state.total_states) &&
-            validStateDdEndpoint(
-                sat_l2_state_it->second,
-                sat_l2_scale,
-                filter_state.total_states)) {
+        // Dynamics-gated: the L2 pseudo-state rows change LAMBDA's system;
+        // the white-noise CLAS path keeps its historical L1-only resamb
+        // (verified: with L2 rows enabled the white-noise ratio never clears
+        // the table and its fix rate collapses to zero).
+        const bool allow_l2_pseudo =
+            config.use_clas_osr_filter && config.kinematic_mode &&
+            config.use_dynamics_model && !config.low_dynamics_mode;
+        int ref_l2_state = -1;
+        int sat_l2_state = -1;
+        double ref_l2_scale = 0.0;
+        double sat_l2_scale = 0.0;
+        if (resolveL2StateEndpoint(filter_state, ambiguity_states, ref_sat,
+                                   ref_amb_it->second.wavelength_l2,
+                                   allow_l2_pseudo,
+                                   ref_l2_state, ref_l2_scale) &&
+            resolveL2StateEndpoint(filter_state, ambiguity_states, sat,
+                                   sat_amb_it->second.wavelength_l2,
+                                   allow_l2_pseudo,
+                                   sat_l2_state, sat_l2_scale)) {
             rows.push_back({
                 ref_sat,
                 sat,
-                ref_l2_state_it->second,
-                sat_l2_state_it->second,
+                ref_l2_state,
+                sat_l2_state,
                 ref_l2_scale,
                 sat_l2_scale,
                 l2_fixed_cycles,
@@ -582,9 +690,33 @@ bool conditionWlnlFilterStateDd(
         }
     }
 
+    return solveStateDdRows(config, filter_state, constraint_covariance,
+                            rows, /*have_wlnl_datum=*/true, /*min_rows=*/4,
+                            attempt, debug_enabled);
+}
+
+// LAMBDA solve + F-table ratio test + conditional (xa) update over a
+// prepared set of ambiguity state-DD rows (shared by the WL/NL-datum path
+// and the MRTKLIB-parity direct ddmat-style path).
+bool solveStateDdRows(
+    const ppp_shared::PPPConfig& config,
+    const ppp_shared::PPPState& filter_state,
+    const MatrixXd& constraint_covariance,
+    const std::vector<StateDdRow>& rows,
+    bool have_wlnl_datum,
+    int min_rows,
+    WlnlFixAttempt& attempt,
+    bool debug_enabled) {
     const int nb = static_cast<int>(rows.size());
     attempt.state_dd_count = nb;
-    if (nb < 4) {
+    // WL/NL-datum path: historical 4-row floor. MRTKLIB's minamb = 6 counts
+    // DD rows in a state where every satellite carries valid L1 and L2 bias
+    // states; the WL-datum rows are sparser (L2 endpoints are frequently
+    // invalid), so 6 there would be effectively stricter than MRTKLIB --
+    // measured on tokyo_run2 white-noise it eliminated every fix (row count
+    // peaked at 5). The direct ddmat-style path passes MRTKLIB's minamb (6,
+    // clas.toml partial_ar.min_ambiguities).
+    if (nb < min_rows) {
         if (debug_enabled) {
             std::cerr << "[PPP-WLNL-RESAMB] insufficient state DD rows: "
                       << nb << "\n";
@@ -629,7 +761,11 @@ bool conditionWlnlFilterStateDd(
         }
     }
 
-    dd_cov = 0.5 * (dd_cov + dd_cov.transpose());
+    if (!(config.clas_mrtklib_float_parity &&
+          config.use_clas_osr_filter && config.kinematic_mode &&
+          !config.low_dynamics_mode && config.use_dynamics_model)) {
+        dd_cov = 0.5 * (dd_cov + dd_cov.transpose());
+    }
     if (!dd_float.allFinite() || !dd_cov.allFinite() || !Qab.allFinite()) {
         if (debug_enabled) {
             std::cerr << "[PPP-WLNL-RESAMB] non-finite state DD system\n";
@@ -639,14 +775,16 @@ bool conditionWlnlFilterStateDd(
 
     VectorXd state_lambda_fixed = VectorXd::Zero(nb);
     VectorXd wlnl_fixed = VectorXd::Zero(nb);
-    for (int row = 0; row < nb; ++row) {
-        wlnl_fixed(row) = rows[static_cast<size_t>(row)].wlnl_fixed_cycles;
-        const double fractional =
-            std::abs(wlnl_fixed(row) - std::round(wlnl_fixed(row)));
-        attempt.state_wlnl_max_fractional_cycles =
-            std::max(attempt.state_wlnl_max_fractional_cycles, fractional);
-        if (fractional > 1e-6) {
-            ++attempt.state_wlnl_noninteger_count;
+    if (have_wlnl_datum) {
+        for (int row = 0; row < nb; ++row) {
+            wlnl_fixed(row) = rows[static_cast<size_t>(row)].wlnl_fixed_cycles;
+            const double fractional =
+                std::abs(wlnl_fixed(row) - std::round(wlnl_fixed(row)));
+            attempt.state_wlnl_max_fractional_cycles =
+                std::max(attempt.state_wlnl_max_fractional_cycles, fractional);
+            if (fractional > 1e-6) {
+                ++attempt.state_wlnl_noninteger_count;
+            }
         }
     }
 
@@ -661,7 +799,14 @@ bool conditionWlnlFilterStateDd(
     attempt.state_lambda_solved = true;
     attempt.state_lambda_ratio = state_ratio;
     attempt.state_required_ratio = config.ar_ratio_threshold;
-    if (config.use_clas_osr_filter) {
+    if (config.use_clas_osr_filter && config.kinematic_mode) {
+        // MRTKLIB parity: the ratio threshold is the nb-dependent F-test
+        // table ONLY (mrtk_ppp_rtk.c:2062-2063, thres = qf[alpha][nb-1] with
+        // clas.toml alpha = "10%"); opt.thresar plays no role when alpha is
+        // configured. Taking max(3.0, table) was stricter than MRTKLIB for
+        // every nb >= 7 (table drops to 2.78 at nb=7, 2.15 at nb=12).
+        attempt.state_required_ratio = claslibRatioThresholdForNb(nb);
+    } else if (config.use_clas_osr_filter) {
         attempt.state_required_ratio =
             std::max(attempt.state_required_ratio, claslibRatioThresholdForNb(nb));
     }
@@ -671,10 +816,12 @@ bool conditionWlnlFilterStateDd(
     double max_abs_delta = 0.0;
     for (int row = 0; row < nb; ++row) {
         dd_fixed(row) = std::round(state_lambda_fixed(row));
-        const double delta = dd_fixed(row) - wlnl_fixed(row);
-        max_abs_delta = std::max(max_abs_delta, std::abs(delta));
-        if (std::abs(delta) > 0.25) {
-            ++mismatch_count;
+        if (have_wlnl_datum) {
+            const double delta = dd_fixed(row) - wlnl_fixed(row);
+            max_abs_delta = std::max(max_abs_delta, std::abs(delta));
+            if (std::abs(delta) > 0.25) {
+                ++mismatch_count;
+            }
         }
         state_lambda_fixed(row) = dd_fixed(row);
     }
@@ -694,6 +841,22 @@ bool conditionWlnlFilterStateDd(
     attempt.constrained_state = filter_state;
     const VectorXd delta = Qab * solved_residual;
     attempt.constrained_state.state.head(filter_state.amb_index) -= delta;
+    // MRTKLIB restamb() (mrtk_ppp_rtk.c:1550-1585): xa first receives the
+    // conditionally fixed non-ambiguity states, then the fixed DD integers
+    // are expanded back to SD ambiguity states.  Keep each group's reference
+    // ambiguity at its float value (the rank-deficient datum) and restore the
+    // other endpoint so ref_cycles - sat_cycles equals the fixed DD integer.
+    // Without this, position was shifted to xa while every ambiguity remained
+    // float, creating metre-level post-fix phase residuals.
+    for (int row = 0; row < nb; ++row) {
+        const auto& row_entry = rows[static_cast<size_t>(row)];
+        const double ref_cycles =
+            filter_state.state(row_entry.ref_state) / row_entry.ref_scale_m;
+        attempt.constrained_state.state(row_entry.ref_state) =
+            filter_state.state(row_entry.ref_state);
+        attempt.constrained_state.state(row_entry.sat_state) =
+            (ref_cycles - dd_fixed(row)) * row_entry.sat_scale_m;
+    }
     attempt.state_dd_residual_norm = dd_residual.norm();
     attempt.state_position_shift_m =
         delta.segment(filter_state.pos_index, 3).norm();
@@ -737,7 +900,7 @@ bool conditionWlnlFilterStateDd(
                   << attempt.state_wlnl_noninteger_count
                   << " wlnl_max_frac="
                   << attempt.state_wlnl_max_fractional_cycles << "\n";
-        for (int row = 0; row < std::min(nb, 6); ++row) {
+        for (int row = 0; row < nb; ++row) {
             const auto& entry = rows[static_cast<size_t>(row)];
             std::cerr << "[PPP-WLNL-RESAMB] row " << row
                       << " " << entry.band
@@ -867,7 +1030,15 @@ WlnlFixAttempt tryWlnlFix(
 
     const int dd_pair_count = static_cast<int>(dd_pairs.size());
     attempt.nb = dd_pair_count;
-    if (dd_pair_count < 4) {
+    // MRTKLIB parity (kinematic CLAS): resamb_LAMBDA requires minamb = 6 DD
+    // ROWS counting L1 and L2 separately (mrtk_ppp_rtk.c:2015, clas.toml
+    // partial_ar.min_ambiguities = 6), i.e. 3 dual-band DD pairs. The
+    // state-DD builder below enforces the 6-row floor; here 3 NL pairs
+    // suffice. Non-kinematic paths keep the historical 4-pair floor.
+    const bool kinematic_clas_nb_parity =
+        config.use_clas_osr_filter && config.kinematic_mode;
+    const int min_dd_pairs = kinematic_clas_nb_parity ? 3 : 4;
+    if (dd_pair_count < min_dd_pairs) {
         if (debug_enabled) {
             std::cerr << "[PPP-WLNL] insufficient DD NL pairs: "
                       << dd_pair_count << "\n";
@@ -902,7 +1073,7 @@ WlnlFixAttempt tryWlnlFix(
         }
     }
 
-    if (valid_dd < 4) {
+    if (valid_dd < min_dd_pairs) {
         if (debug_enabled) {
             std::cerr << "[PPP-WLNL] insufficient valid DD NL: " << valid_dd << "\n";
         }
@@ -1022,6 +1193,15 @@ WlnlFixAttempt tryWlnlFix(
     return attempt;
 }
 
+WlnlFixAttempt runParExclusionLoop(
+    WlnlFixAttempt best_attempt,
+    const std::function<WlnlFixAttempt(const std::set<SatelliteId>&)>& try_fix,
+    const std::map<SatelliteId, double>& satellite_elevations_rad,
+    const std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
+    bool debug_enabled,
+    const std::vector<SatelliteId>* eligible_frequency_states = nullptr,
+    int min_active_frequency_states = 1);
+
 WlnlFixAttempt tryWlnlFixWithPar(
     const ppp_shared::PPPConfig& config,
     ppp_shared::PPPState& filter_state,
@@ -1054,16 +1234,41 @@ WlnlFixAttempt tryWlnlFixWithPar(
         satellite_elevations_rad->empty()) {
         return best_attempt;
     }
+    return runParExclusionLoop(std::move(best_attempt),
+                               try_fix,
+                               *satellite_elevations_rad,
+                               ambiguity_states,
+                               debug_enabled);
+}
 
+// MRTKLIB partial-AR exclusion loop (mrtk_ppp_rtk.c:2237-2277), shared by
+// the WL/NL-datum and direct state-DD fix paths.
+WlnlFixAttempt runParExclusionLoop(
+    WlnlFixAttempt best_attempt,
+    const std::function<WlnlFixAttempt(const std::set<SatelliteId>&)>& try_fix,
+    const std::map<SatelliteId, double>& satellite_elevations_rad,
+    const std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
+    bool debug_enabled,
+    const std::vector<SatelliteId>* eligible_frequency_states,
+    int min_active_frequency_states) {
     struct ParCandidate {
         SatelliteId real_satellite;
         double elevation_rad = -1.0;
         int mw_count = 0;
     };
     std::vector<ParCandidate> par_candidates;
-    par_candidates.reserve(satellite_elevations_rad->size());
-    for (const auto& [real_satellite, elevation_rad] : *satellite_elevations_rad) {
-        par_candidates.push_back({real_satellite, elevation_rad, 0});
+    par_candidates.reserve(satellite_elevations_rad.size());
+    if (eligible_frequency_states != nullptr) {
+        for (const SatelliteId& real_satellite : selectMrtklibParCandidates(
+                 *eligible_frequency_states, satellite_elevations_rad,
+                 min_active_frequency_states)) {
+            par_candidates.push_back(
+                {real_satellite, satellite_elevations_rad.at(real_satellite), 0});
+        }
+    } else {
+        for (const auto& [real_satellite, elevation_rad] : satellite_elevations_rad) {
+            par_candidates.push_back({real_satellite, elevation_rad, 0});
+        }
     }
     for (auto& candidate : par_candidates) {
         const auto ambiguity_it = ambiguity_states.find(candidate.real_satellite);
@@ -1080,14 +1285,24 @@ WlnlFixAttempt tryWlnlFixWithPar(
               });
 
     std::set<SatelliteId> excluded_real_satellites;
-    const int max_exclusions = std::min(
-        4,
-        std::max(0, static_cast<int>(par_candidates.size()) - config.min_satellites_for_ar));
+    // MRTKLIB loops up to armaxdelsat=4. resamb_LAMBDA's minamb=6 DD-row
+    // check, rather than a candidate-count shortcut, stops undersized trials.
+    constexpr int kMrtklibParMinRealSatellites = 4;
+    const int max_exclusions = eligible_frequency_states != nullptr
+        ? std::min(4, static_cast<int>(par_candidates.size()))
+        : std::min(
+              4,
+              std::max(0, static_cast<int>(par_candidates.size()) -
+                              kMrtklibParMinRealSatellites));
 
     for (int iteration = 0; iteration < max_exclusions && !best_attempt.fixed; ++iteration) {
         SatelliteId best_exclusion;
         bool has_best_exclusion = false;
-        double best_ratio = best_attempt.ratio;
+        // v0.5.1 resets the best failed-trial ratio to zero on each outer
+        // iteration; retain the historical behavior outside the parity path.
+        double best_ratio = eligible_frequency_states != nullptr
+            ? 0.0
+            : best_attempt.ratio;
 
         for (const auto& candidate : par_candidates) {
             if (excluded_real_satellites.count(candidate.real_satellite) != 0) {
@@ -1149,6 +1364,128 @@ std::map<SatelliteId, WlnlNlInfo> buildWlnlNlInfoMap(
     return nl_info;
 }
 
+// MRTKLIB resamb_LAMBDA / ddmat parity (mrtk_ppp_rtk.c:1470-1537, 1701):
+// the DD system is built directly from the filter's SD ambiguity states --
+// every eligible (locked, unslipped, el >= elmaskar, observed-this-epoch)
+// satellite contributes an L1 and an L2 DD row against the group reference,
+// with NO wide-lane fix prerequisite. The reference satellite is the first
+// eligible one in PRN order per (system, frequency) group, exactly like
+// ddmat's scan. LAMBDA + the alpha-10% F-table ratio test + the conditional
+// xa update then run on that system via solveStateDdRows.
+WlnlFixAttempt tryDirectStateDdFix(
+    const ppp_shared::PPPConfig& config,
+    const ppp_shared::PPPState& filter_state,
+    const MatrixXd& constraint_covariance,
+    std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
+    const EligibleAmbiguities& eligible_ambiguities,
+    bool debug_enabled,
+    const std::map<SatelliteId, double>* satellite_elevations_rad,
+    const std::set<SatelliteId>& excluded_real_satellites) {
+    WlnlFixAttempt attempt;
+    if (satellite_elevations_rad == nullptr) {
+        return attempt;
+    }
+    const auto& satellites = eligible_ambiguities.satellites;
+    const auto& state_indices = eligible_ambiguities.state_indices;
+    const auto& scales = eligible_ambiguities.scales;
+
+    struct GroupMember {
+        int index;
+        SatelliteId satellite;
+        uint8_t real_prn;
+    };
+    std::map<std::pair<GNSSSystem, int>, std::vector<GroupMember>> groups;
+    for (int i = 0; i < static_cast<int>(satellites.size()); ++i) {
+        const SatelliteId real_satellite =
+            clasRealSatellite(satellites[static_cast<size_t>(i)]);
+        if (excluded_real_satellites.count(real_satellite) != 0) {
+            continue;
+        }
+        // ddmat: vsat (observed and used this epoch) + azel >= elmaskar.
+        const auto el_it = satellite_elevations_rad->find(real_satellite);
+        if (el_it == satellite_elevations_rad->end() ||
+            el_it->second < kMrtklibArElevationMaskRad) {
+            continue;
+        }
+        if (i >= static_cast<int>(state_indices.size()) ||
+            i >= static_cast<int>(scales.size())) {
+            continue;
+        }
+        groups[ambiguityDdGroup(satellites[static_cast<size_t>(i)])]
+            .push_back({i,
+                        satellites[static_cast<size_t>(i)],
+                        real_satellite.prn});
+    }
+
+    std::vector<StateDdRow> rows;
+    for (auto& [group, members] : groups) {
+        if (members.size() < 2) {
+            continue;
+        }
+        // ddmat scans states in PRN order; the first eligible satellite is
+        // the group reference.
+        std::sort(members.begin(), members.end(),
+                  [](const GroupMember& lhs, const GroupMember& rhs) {
+                      return lhs.real_prn < rhs.real_prn;
+                  });
+        const GroupMember& ref = members.front();
+        for (size_t j = 1; j < members.size(); ++j) {
+            rows.push_back({
+                ref.satellite,
+                members[j].satellite,
+                state_indices[static_cast<size_t>(ref.index)],
+                state_indices[static_cast<size_t>(members[j].index)],
+                scales[static_cast<size_t>(ref.index)],
+                scales[static_cast<size_t>(members[j].index)],
+                0.0,
+                group.second == 0 ? "L1" : "L2",
+            });
+        }
+    }
+
+    // MRTKLIB minamb: clas.toml partial_ar.min_ambiguities = 6.
+    if (!solveStateDdRows(config, filter_state, constraint_covariance, rows,
+                          /*have_wlnl_datum=*/false, /*min_rows=*/6,
+                          attempt, debug_enabled)) {
+        return WlnlFixAttempt{};
+    }
+    if (!attempt.has_constrained_state ||
+        !std::isfinite(attempt.state_lambda_ratio) ||
+        attempt.state_lambda_ratio < attempt.state_required_ratio) {
+        if (debug_enabled) {
+            std::cerr << "[PPP-RESAMB-DIRECT] ratio reject: nb="
+                      << attempt.state_dd_count
+                      << " ratio=" << attempt.state_lambda_ratio
+                      << " threshold=" << attempt.state_required_ratio << "\n";
+        }
+        return WlnlFixAttempt{};
+    }
+
+    attempt.ratio = attempt.state_lambda_ratio;
+    attempt.nb = attempt.state_dd_count;
+    // Mark participants fixed so the hold path (buildWlnlHoldConstraints
+    // requires wl_is_fixed && nl_is_fixed) sees them; the hold constraint
+    // values come from the constrained fixed state, not these flags.
+    for (const auto& row : rows) {
+        for (const SatelliteId& satellite :
+             {row.ref_satellite, row.sat_satellite}) {
+            auto amb_it = ambiguity_states.find(satellite);
+            if (amb_it != ambiguity_states.end()) {
+                amb_it->second.is_fixed = true;
+                amb_it->second.wl_is_fixed = true;
+                amb_it->second.nl_is_fixed = true;
+            }
+        }
+    }
+    attempt.fixed = true;
+    if (debug_enabled) {
+        std::cerr << "[PPP-RESAMB-DIRECT] fixed: nb=" << attempt.nb
+                  << " ratio=" << attempt.ratio
+                  << " pos_shift=" << attempt.state_position_shift_m << "\n";
+    }
+    return attempt;
+}
+
 WlnlFixAttempt resolveWlnlFix(
     const ppp_shared::PPPConfig& config,
     ppp_shared::PPPState& filter_state,
@@ -1158,6 +1495,57 @@ WlnlFixAttempt resolveWlnlFix(
     const WlnlNlInfoProvider& provider,
     bool debug_enabled,
     const std::map<SatelliteId, double>* satellite_elevations_rad) {
+    // MRTKLIB literal-port track: with float parity on the dynamics path the
+    // fix comes from the direct ddmat-style state-DD system (no WL/NL
+    // cascade prerequisite), wrapped in the same partial-AR exclusion loop.
+    if (config.clas_mrtklib_float_parity &&
+        config.use_clas_osr_filter && config.kinematic_mode &&
+        !config.low_dynamics_mode && config.use_dynamics_model) {
+        // MRTKLIB B2 position-variance gate (mrtk_ppp_rtk.c:2223-2233,
+        // thresar[1] default 0.9999 m^2): skip AR entirely until the float
+        // position has converged. Without it a fresh filter attempts LAMBDA
+        // on a flat ambiguity covariance (ratio ~1, thousands of wasted
+        // searches) and the rare ratio passes are wrong-integer fixes.
+        {
+            const MatrixXd& P_gate =
+                constraint_covariance.rows() == filter_state.total_states
+                    ? constraint_covariance
+                    : filter_state.covariance;
+            double posvar = 0.0;
+            for (int axis = 0; axis < 3; ++axis) {
+                posvar += P_gate(filter_state.pos_index + axis,
+                                 filter_state.pos_index + axis);
+            }
+            posvar /= 3.0;
+            constexpr double kMrtklibArPosVarGate = 0.9999;  // thresar[1]
+            if (!(posvar <= kMrtklibArPosVarGate)) {
+                if (debug_enabled) {
+                    std::cerr << "[PPP-RESAMB-DIRECT] skip AR posvar="
+                              << posvar << "\n";
+                }
+                return WlnlFixAttempt{};
+            }
+        }
+        auto try_direct = [&](const std::set<SatelliteId>& excluded) {
+            return tryDirectStateDdFix(
+                config, filter_state, constraint_covariance, ambiguity_states,
+                eligible_ambiguities, debug_enabled, satellite_elevations_rad,
+                excluded);
+        };
+        WlnlFixAttempt best_attempt = try_direct({});
+        if (best_attempt.fixed ||
+            satellite_elevations_rad == nullptr ||
+            satellite_elevations_rad->empty()) {
+            return best_attempt;
+        }
+        return runParExclusionLoop(std::move(best_attempt),
+                                   try_direct,
+                                   *satellite_elevations_rad,
+                                   ambiguity_states,
+                                   debug_enabled,
+                                   &eligible_ambiguities.satellites,
+                                   2);
+    }
     const auto nl_info = buildWlnlNlInfoMap(
         eligible_ambiguities.satellites,
         ambiguity_states,
@@ -1428,7 +1816,8 @@ bool buildWlnlHoldConstraints(
     const ppp_shared::PPPState& fixed_state,
     const std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
     const std::map<SatelliteId, double>& satellite_elevations_rad,
-    std::vector<WlnlHoldConstraint>& constraints) {
+    std::vector<WlnlHoldConstraint>& constraints,
+    bool allow_l2_pseudo_states) {
     constraints.clear();
 
     std::vector<SatelliteId> fixed_satellites;
@@ -1516,23 +1905,24 @@ bool buildWlnlHoldConstraints(
             sat_el_it != satellite_elevations_rad.end() ? sat_el_it->second : 0.0;
         constraints.push_back(constraint);
 
-        const auto ref_l2_state_it = fixed_state.ambiguity_l2_indices.find(ref_satellite);
-        const auto sat_l2_state_it = fixed_state.ambiguity_l2_indices.find(sat_satellite);
-        const double ref_l2_scale = ref_amb_it->second.wavelength_l2;
-        const double sat_l2_scale = sat_amb_it->second.wavelength_l2;
-        if (ref_l2_state_it != fixed_state.ambiguity_l2_indices.end() &&
-            sat_l2_state_it != fixed_state.ambiguity_l2_indices.end() &&
-            validStateDdEndpoint(
-                ref_l2_state_it->second, ref_l2_scale, fixed_state.total_states) &&
-            validStateDdEndpoint(
-                sat_l2_state_it->second, sat_l2_scale, fixed_state.total_states) &&
-            ref_l2_scale > 0.0 && sat_l2_scale > 0.0) {
+        int ref_l2_state = -1;
+        int sat_l2_state = -1;
+        double ref_l2_scale = 0.0;
+        double sat_l2_scale = 0.0;
+        if (resolveL2StateEndpoint(fixed_state, ambiguity_states, ref_satellite,
+                                   ref_amb_it->second.wavelength_l2,
+                                   allow_l2_pseudo_states,
+                                   ref_l2_state, ref_l2_scale) &&
+            resolveL2StateEndpoint(fixed_state, ambiguity_states, sat_satellite,
+                                   sat_amb_it->second.wavelength_l2,
+                                   allow_l2_pseudo_states,
+                                   sat_l2_state, sat_l2_scale)) {
             const double l2_fixed_dd_m =
-                fixed_state.state(ref_l2_state_it->second) -
-                fixed_state.state(sat_l2_state_it->second);
+                fixed_state.state(ref_l2_state) -
+                fixed_state.state(sat_l2_state);
             WlnlHoldConstraint l2_constraint;
-            l2_constraint.ref_state = ref_l2_state_it->second;
-            l2_constraint.sat_state = sat_l2_state_it->second;
+            l2_constraint.ref_state = ref_l2_state;
+            l2_constraint.sat_state = sat_l2_state;
             l2_constraint.fixed_dd_m = l2_fixed_dd_m;
             l2_constraint.ambiguity_scale_m = ref_l2_scale;
             l2_constraint.ref_satellite = ref_satellite;

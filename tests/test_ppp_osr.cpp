@@ -34,6 +34,27 @@ GNSSTime makeTime(int year, int month, int day, int hour, int minute, double sec
     return GNSSTime::fromSystemTime(tp);
 }
 
+TEST(PPPOSRTest, HeldClasTropTokensUsePayloadNetworkForGridEvaluation) {
+    SSRProducts products;
+    SSROrbitClockCorrection bank;
+    bank.time = GNSSTime(2324, 177015.0);
+    bank.atmos_valid = true;
+    bank.atmos_tokens = {
+        {"atmos_trop_bank_only", "1"},
+        {"atmos_network_id", "11"},
+        {"atmos_trop_network_id", "7"},
+        {"atmos_trop_residuals_m", "0.01;0.02"},
+    };
+    products.clas_trop_bank_corrections.push_back(bank);
+
+    std::map<std::string, std::string> held;
+    ASSERT_TRUE(products.heldClasTropTokens(
+        bank.time, 30.0, 7, 0, held, nullptr));
+    ASSERT_EQ(held.count("atmos_network_id"), 1U);
+    EXPECT_EQ(held.at("atmos_network_id"), "7");
+    EXPECT_EQ(held.at("atmos_trop_network_id"), "7");
+}
+
 SSROrbitClockCorrection makeAtmosCorrection(
     const SatelliteId& satellite,
     const GNSSTime& time,

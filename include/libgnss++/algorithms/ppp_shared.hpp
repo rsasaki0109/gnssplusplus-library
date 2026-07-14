@@ -176,11 +176,32 @@ struct PPPConfig {
     double clas_trop_process_noise = 1e-6;        // Small: CLAS grid trop is stable
     double clas_initial_position_variance = 100.0; // Position covariance at filter init
     double clas_clock_variance = 1e8;             // Clock state variance (reset each epoch)
+    // Dynamics-mode receiver clock model (white-noise clock, RTKLIB PPP
+    // udclk_ppp semantics: state reseeded from SPP every epoch, then the
+    // measurement update refines it within this prior variance). 3600 m^2
+    // matches RTKLIB VAR_CLK = SQR(60.0). Do not raise toward
+    // clas_clock_variance (1e8): that destroys the LAMBDA float-covariance
+    // conditioning; do not shrink toward 0: that freezes the clock at the
+    // (meter-level noisy) SPP value and biases all phase residuals.
+    double clas_dynamic_clock_reseed_variance = 3600.0;
+    // Clock coast drift bound (m/s) used only in dynamics mode on epochs
+    // where no SPP seed is available (deep canyon): the clock variance is
+    // inflated by (drift * dt)^2 because consumer receiver clock drift is
+    // quasi-deterministic (grows with dt^2, not dt). Measured drift on the
+    // PPC tokyo_run2 rover is ~152 m/s; 200 gives headroom.
+    double clas_dynamic_clock_coast_drift_mps = 200.0;
     double clas_iono_prior_variance = 0.25;       // Ionosphere pseudo-observation variance
     double clas_ambiguity_reinit_threshold = 3000.0; // Re-init ambiguity when cov exceeds this
     double clas_anchor_sigma = 5.0;               // SPP anchor constraint sigma (m)
     double clas_outlier_sigma_scale = 50.0;       // Inflate variance when residual > N*sigma
     bool clas_decouple_clock_position = true;      // Zero clock cross-covariance each epoch
+    // MRTKLIB literal-port track (kinematic CLAS + dynamics model only):
+    // when set, the float chain uses MRTKLIB's varerr() measurement
+    // variance model (elevation-dependent, code = 50x phase, L2 phase
+    // factor) instead of the historical flat clas_phase_variance /
+    // clas_code_variance_scale weighting. White-noise kinematic, static
+    // and all non-CLAS paths ignore this flag entirely.
+    bool clas_mrtklib_float_parity = false;
 
     bool apply_ocean_loading = false;
     bool apply_solid_earth_tides = true;
@@ -293,6 +314,7 @@ struct PPPState {
 
     int pos_index = 0;
     int vel_index = 3;
+    int accel_index = -1;
     int clock_index = 6;
     int glo_clock_index = 7;
     int gal_clock_index = -1;
@@ -304,7 +326,14 @@ struct PPPState {
     int amb_index = 9;
 
     std::map<SatelliteId, int> ionosphere_indices;
+    // MRTKLIB IONOOPT_EST_ADPT rtk->Q diagonal, in m^2/s. This is distinct
+    // from P: filter2 updates it from (K*v)^2 and udion clamps/adds it at the
+    // following epoch.
+    std::map<SatelliteId, double> adaptive_ionosphere_process_noise;
     std::map<SatelliteId, int> ambiguity_indices;
+    // Physical scale of ambiguity states stored in metres. The CLAS path
+    // uses this to transform MRTKLIB's cycle-domain bias covariance/noise.
+    std::map<SatelliteId, double> ambiguity_wavelengths_m;
     // Per-frequency (est-stec) L2 ambiguity states. Empty in IFLC mode, so
     // amb_index/total_states and the ambiguity_indices layout are byte-identical
     // to the ionosphere-free path. L1 ambiguities stay in ambiguity_indices.
@@ -334,8 +363,17 @@ struct PPPAmbiguityInfo {
     double fixed_value = 0.0;
     bool is_fixed = false;
     int lock_count = 0;
+    // MRTKLIB ssat[].outc[f]: incremented before every ambiguity time update
+    // and cleared only when that frequency survives the post-fit update.
+    int outage_count = 0;
     double last_phase = 0.0;
     GNSSTime last_time;
+    std::array<SignalType, 2> last_observation_signals{};
+    std::array<bool, 2> has_last_observation_signal{false, false};
+    // MRTKLIB detslp_code() compares the exact RTKLIB observation code, not
+    // only the frequency-family SignalType. Keep the selected carrier RINEX
+    // identity so parity mode also detects switches such as L2W <-> L2X.
+    std::array<std::string, 2> last_carrier_observation_types{};
     double quality_indicator = 0.0;
     double ambiguity_scale_m = 0.0;
     bool needs_reinitialization = true;

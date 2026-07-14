@@ -870,6 +870,11 @@ int main(int argc, char* argv[]) {
             ppp_env_overrides.madoca_qzss_l5) {
             obs_reader.setQzssSecondaryL5Preference(true);
         }
+        if (options.use_clas_osr_filter && options.kinematic_mode &&
+            options.use_dynamics_model && !options.low_dynamics_mode) {
+            // MRTKLIB nf=3 assigns QZSS C5Q to pntpos()'s second code slot.
+            obs_reader.setQzssSecondaryL5Preference(true);
+        }
         if (!obs_reader.open(options.obs_path)) {
             std::cerr << "Error: failed to open observation file: " << options.obs_path << "\n";
             return 1;
@@ -949,6 +954,24 @@ int main(int argc, char* argv[]) {
             ppp_config.reset_clock_to_spp_each_epoch = false;
             ppp_config.process_noise_position = 0.04;
             ppp_config.process_noise_velocity = 0.01;
+            // Velocity is unobserved by H (only reached through the F
+            // pos+=vel*dt coupling), so a loose prior here inflates
+            // position uncertainty every predict step via F*P*F' long
+            // before velocity itself converges. The previous default
+            // (100 m^2/s^2, i.e. 10 m/s std) made the startup transient
+            // (before ambiguities/troposphere converge) swing tens to
+            // hundreds of meters in height before settling; 4.0 (2 m/s
+            // std) is still loose enough to capture urban-drive dynamics
+            // but keeps that transient much smaller.
+            ppp_config.initial_velocity_variance = 4.0;
+            // MRTKLIB literal-port track: the dynamics-model kinematic CLAS
+            // path is the MRTKLIB-equivalence path, so it uses MRTKLIB's
+            // varerr measurement variance model. Env kill switch for A/B:
+            // GNSS_PPP_CLAS_MRTKLIB_FLOAT_PARITY=0 restores the flat model.
+            const char* parity_env =
+                std::getenv("GNSS_PPP_CLAS_MRTKLIB_FLOAT_PARITY");
+            ppp_config.clas_mrtklib_float_parity =
+                parity_env == nullptr || std::string(parity_env) != "0";
         }
         ppp_config.emit_solution_epoch_time = options.emit_epoch_time;
         ppp_config.apply_static_anchor_blend = options.apply_static_anchor_blend;
@@ -985,6 +1008,16 @@ int main(int argc, char* argv[]) {
             ppp_config.ar_method = ARMethod::DD_PER_FREQ;
         } else {
             argumentError("--ar-method must be one of: iflc, wlnl, per-freq", argv[0]);
+        }
+        // The MRTKLIB literal CLAS path resolves the uncombined L1/L2 state-DD
+        // system directly (ddmat/resamb_LAMBDA).  In the native processor that
+        // implementation is hosted by DD_WLNL even though it deliberately has
+        // no WL-fix prerequisite.  Do not leave parity runs on the CLI default
+        // DD_IFLC path when the wrapper omits --ar-method.
+        if (ppp_config.clas_mrtklib_float_parity &&
+            ppp_config.kinematic_mode && !ppp_config.low_dynamics_mode &&
+            ppp_config.use_clas_osr_filter && ppp_config.use_dynamics_model) {
+            ppp_config.ar_method = ARMethod::DD_WLNL;
         }
         ppp_config.use_iers_solid_tide = options.use_iers_solid_tide;
         ppp_config.use_iers_ocean_loading = options.use_iers_ocean_loading;
@@ -1181,8 +1214,16 @@ int main(int argc, char* argv[]) {
         double atmospheric_iono_meters = 0.0;
         double ionex_meters = 0.0;
         double dcb_meters = 0.0;
+        // TEMP-DEBUG (remove before merge): skip obs epochs before a GPS TOW.
+        const char* skip_until_env = std::getenv("GNSS_PPP_SKIP_UNTIL_TOW");
+        const double skip_until_tow =
+            skip_until_env != nullptr ? std::atof(skip_until_env) : -1.0;
         while ((options.max_epochs == 0 || processed_epochs < options.max_epochs) &&
                obs_reader.readObservationEpoch(observation_data)) {
+            if (skip_until_tow >= 0.0 &&
+                observation_data.time.tow < skip_until_tow) {
+                continue;
+            }
             if (obs_header.approximate_position.norm() > 0.0) {
                 observation_data.receiver_position = obs_header.approximate_position;
             }

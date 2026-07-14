@@ -217,8 +217,25 @@ if(MADOCALIB_PARITY_LINK)
             NEXOBS=5
             "GNSSPP_MADOCALIB_ROOT=\"${MADOCALIB_ROOT_DIR}\""
     )
+    target_compile_definitions(gnss_lib PRIVATE GNSSPP_HAS_MADOCALIB_TIDE=1)
     target_link_libraries(gnss_lib PUBLIC madocalib)
 else()
+    # CLAS parity needs RTKLIB's exact tidedisp() convention independently of
+    # the optional full decoder/oracle bridge.
+    set(MADOCALIB_TIDE_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/madocalib/src")
+    add_library(madocalib_tide STATIC
+        ${MADOCALIB_TIDE_SRC_DIR}/rtkcmn.c
+        ${MADOCALIB_TIDE_SRC_DIR}/tides.c)
+    target_include_directories(madocalib_tide PRIVATE ${MADOCALIB_TIDE_SRC_DIR})
+    target_compile_definitions(madocalib_tide PRIVATE
+        TRACE ENAGLO ENAQZS ENAGAL ENACMP ENAIRN NFREQ=5 NEXOBS=5)
+    target_link_libraries(madocalib_tide PUBLIC m Threads::Threads)
+    if(UNIX AND NOT APPLE)
+        target_link_libraries(madocalib_tide PUBLIC rt)
+    endif()
+    target_include_directories(gnss_lib PRIVATE ${MADOCALIB_TIDE_SRC_DIR})
+    target_compile_definitions(gnss_lib PRIVATE GNSSPP_HAS_MADOCALIB_TIDE=1)
+    target_link_libraries(gnss_lib PRIVATE madocalib_tide)
     target_compile_definitions(gnss_lib
         PUBLIC
             GNSSPP_HAS_MADOCALIB_BRIDGE=0
@@ -268,6 +285,9 @@ endif()
 set(GNSS_INSTALL_TARGETS gnss_lib gnss_lib_noopt sofa ginan_iers2010)
 if(MADOCALIB_PARITY_LINK)
     list(APPEND GNSS_INSTALL_TARGETS madocalib)
+endif()
+if(TARGET madocalib_tide)
+    list(APPEND GNSS_INSTALL_TARGETS madocalib_tide)
 endif()
 
 install(

@@ -74,6 +74,40 @@ import apply_ppc_multi_candidate_selector as ppc_multi_candidate_selector  # noq
 import run_ppc_multi_candidate_selector_matrix as ppc_multi_selector_matrix  # noqa: E402
 import run_ppc_ratio_gating_selector_sweep as ppc_ratio_gating_sweep  # noqa: E402
 import run_ppc_realtime_guard_sweep as ppc_realtime_guard_sweep  # noqa: E402
+import run_clas_mrtklib_v051 as clas_v051_runner  # noqa: E402
+
+
+class ClasMrtklibV051RunnerTest(unittest.TestCase):
+    def test_dynamic_profile_keeps_fixture_identity_and_dynamics_flag(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnsspp_clas_v051_") as temp_dir:
+            root = Path(temp_dir)
+            for name in ("gnss_ppp", "rover.obs", "base.nav"):
+                (root / name).write_text("fixture\n", encoding="ascii")
+            ssr = root / "expanded.csv"
+            ssr.write_text("# fixture\n", encoding="ascii")
+            config = {
+                "runner": {
+                    "gnss_ppp": "gnss_ppp",
+                    "env": {"PARITY_GATE": "1"},
+                },
+                "profiles": {
+                    "dynamic": {
+                        "obs": "rover.obs",
+                        "nav": "base.nav",
+                        "ssr": "expanded.csv",
+                        "ssr_md5": clas_v051_runner.file_md5(ssr),
+                        "out": "result.pos",
+                        "env": ["PARITY_GATE"],
+                        "args": ["--kinematic", "--use-dynamics-model"],
+                    }
+                },
+            }
+            with mock.patch.object(clas_v051_runner, "ROOT_DIR", root):
+                command, env, out = clas_v051_runner.profile_command(config, "dynamic")
+
+            self.assertIn("--use-dynamics-model", command)
+            self.assertEqual(env["PARITY_GATE"], "1")
+            self.assertEqual(out, root / "result.pos")
 
 
 class IersMultisiteBenchHelpersTest(unittest.TestCase):
@@ -375,6 +409,23 @@ class ClasCompactHelpersTest(unittest.TestCase):
             self.assertEqual(
                 lines[1],
                 "2200,345600.000,G03,0.100000,0.200000,0.300000,0.400000,atmos_network_id=1,atmos_trop_avail=3,atmos_stec_avail=3",
+            )
+
+    def test_expand_compact_ssr_text_normalizes_legacy_qzss_and_iode(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_clas_compact_qzss_") as temp_dir:
+            output_csv = Path(temp_dir) / "expanded.csv"
+            clas_ppp.expand_compact_ssr_text(
+                "2200,345600.0,S,121,0.1,0.2,0.3,0.4,0.0,0,"
+                "orbit_iode=32,atmos_stec_c00_tecu:S121=12.5,"
+                "atmos_stec_satellites=G03;S121;S122",
+                output_csv,
+            )
+
+            self.assertEqual(
+                output_csv.read_text(encoding="ascii").splitlines()[1],
+                "2200,345600.000,J02,0.100000,0.200000,0.300000,0.400000,"
+                "orbit_iode=32,atmos_stec_c00_tecu:J02=12.5,"
+                "atmos_stec_satellites=G03;J02;J03",
             )
 
     def test_parse_ppp_summary_counts_extracts_atmospheric_lines(self) -> None:

@@ -20,6 +20,35 @@ namespace {
 
 constexpr double kDegreesToRadians = M_PI / 180.0;
 
+double mrtklibBroadcastVarianceM2(GNSSSystem system, double accuracy_m) {
+    if (system == GNSSSystem::Galileo) {
+        int sisa = 255;
+        if (accuracy_m >= 0.0 && accuracy_m <= 0.5) {
+            sisa = static_cast<int>(accuracy_m / 0.01);
+        } else if (accuracy_m <= 1.0) {
+            sisa = static_cast<int>((accuracy_m - 0.5) / 0.02) + 50;
+        } else if (accuracy_m <= 2.0) {
+            sisa = static_cast<int>((accuracy_m - 1.0) / 0.04) + 75;
+        } else if (accuracy_m <= 6.0) {
+            // Preserve MRTKLIB sisa_index()'s integer cast before division.
+            sisa = static_cast<int>(accuracy_m - 2.0) / 0.16 + 100;
+        }
+        double sigma_m = 500.0;
+        if (sisa <= 49) sigma_m = sisa * 0.01;
+        else if (sisa <= 74) sigma_m = 0.5 + (sisa - 50) * 0.02;
+        else if (sisa <= 99) sigma_m = 1.0 + (sisa - 75) * 0.04;
+        else if (sisa <= 125) sigma_m = 2.0 + (sisa - 100) * 0.16;
+        return sigma_m * sigma_m;
+    }
+    constexpr double kUraThresholdM[] = {
+        2.4, 3.4, 4.85, 6.85, 9.65, 13.65, 24.0, 48.0,
+        96.0, 192.0, 384.0, 768.0, 1536.0, 3072.0, 6144.0};
+    int index = 0;
+    while (index < 15 && kUraThresholdM[index] < accuracy_m) ++index;
+    const double sigma_m = index < 15 ? kUraThresholdM[index] : 6144.0;
+    return sigma_m * sigma_m;
+}
+
 bool isSPPSystemEnabled(GNSSSystem system, const SPPProcessor::SPPConfig& config) {
     switch (system) {
         case GNSSSystem::GPS:
@@ -467,7 +496,6 @@ PositionSolution SPPProcessor::processEpoch(const ObservationData& obs, const Na
 
         // Validate and filter observations
         auto valid_obs = validateObservations(obs, nav, obs.time);
-
         if (valid_obs.size() < 4) {
             updateStatistics(0.0, false);
             return solution;
@@ -661,10 +689,16 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
     auto buildMeasurements = [&](const Vector3d& current_position) {
         std::vector<MeasurementModel> measurements;
         measurements.reserve(valid_obs.size());
-        const double min_elevation_rad = elevationMaskRadians(config_.elevation_mask);
+        const double configured_elevation_mask =
+            spp_config_.elevation_mask_override_deg >= 0.0
+                ? spp_config_.elevation_mask_override_deg
+                : config_.elevation_mask;
+        const double min_elevation_rad =
+            elevationMaskRadians(configured_elevation_mask);
         const bool apply_atmosphere =
-            spp_config_.apply_atmospheric_corrections &&
-            (config_.use_ionosphere_model || config_.use_troposphere_model);
+            spp_config_.mrtklib_iflc_code_bias ||
+            (spp_config_.apply_atmospheric_corrections &&
+             (config_.use_ionosphere_model || config_.use_troposphere_model));
 
         double rcv_lat = 0.0;
         double rcv_lon = 0.0;
@@ -701,9 +735,21 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
                     nullptr,
                     nullptr,
                     0,
-                    &ssr_orbit_iode);
+                    &ssr_orbit_iode,
+                    nullptr,
+                    nullptr,
+                    !spp_config_.mrtklib_iflc_code_bias,
+                    nullptr,
+                    nullptr,
+                    spp_config_.mrtklib_iflc_code_bias
+                        ? SSRClockSelectionPolicy::MrtklibLiteralBaseHold
+                        : SSRClockSelectionPolicy::MergedInterpolate);
 
-            double travel_time = obs.pseudorange / constants::SPEED_OF_LIGHT;
+            const double transmit_pseudorange =
+                spp_obs.transmit_pseudorange > 0.0
+                    ? spp_obs.transmit_pseudorange
+                    : obs.pseudorange;
+            double travel_time = transmit_pseudorange / constants::SPEED_OF_LIGHT;
             GNSSTime tx_time = time - travel_time;
             if (spp_config_.use_precise_products && precise_products_loaded_) {
                 precise_orbit_clock = precise_products_.interpolateOrbitClock(
@@ -726,7 +772,67 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
                 }
             }
 
-            if (!precise_orbit_clock) {
+            if (!precise_orbit_clock && spp_config_.mrtklib_iflc_code_bias) {
+                Ephemeris clock_eph_value;
+                const Ephemeris* clock_eph = nullptr;
+                if (obs.satellite.system == GNSSSystem::Galileo) {
+                    double min_age = std::numeric_limits<double>::infinity();
+                    for (const auto& candidate : nav.getEphemeris(obs.satellite)) {
+                        if (!(candidate.data_source_code & (1 << 9)) ||
+                            candidate.toe - time >= 0.0 || !candidate.isValid(time)) {
+                            continue;
+                        }
+                        const double age = candidate.getAge(time);
+                        if (age <= min_age) {
+                            min_age = age;
+                            clock_eph_value = candidate;
+                            clock_eph = &clock_eph_value;
+                        }
+                    }
+                } else {
+                    if (const Ephemeris* selected =
+                            nav.getEphemeris(obs.satellite, time)) {
+                        clock_eph_value = *selected;
+                        clock_eph = &clock_eph_value;
+                    }
+                }
+                if (clock_eph == nullptr) continue;
+
+                // satposs() first calls ephclk() with the ordinary broadcast
+                // ephemeris selection (IODE=-1).  This clock is used only to
+                // refine the transmission epoch and deliberately excludes
+                // relativity.
+                const double tc0 = tx_time - clock_eph->toc;
+                double tc = tc0;
+                for (int iteration = 0; iteration < 2; ++iteration) {
+                    const double polynomial = clock_eph->af0 +
+                        clock_eph->af1 * tc + clock_eph->af2 * tc * tc;
+                    tc = tc0 - polynomial;
+                }
+                const double broadcast_clock = clock_eph->af0 +
+                    clock_eph->af1 * tc + clock_eph->af2 * tc * tc;
+                tx_time = tx_time - broadcast_clock;
+
+                // satpos_ssr() then switches to the ephemeris referenced by
+                // the SSR orbit IODE.  Using the ephclk() ephemeris here as
+                // well is observably wrong around an IODE transition (for
+                // example QZSS J02 in the Tokyo run2 parity fixture).
+                const Ephemeris* state_eph =
+                    ssr_orbit_iode < 0
+                        ? clock_eph
+                        : nav.getEphemeris(
+                              obs.satellite, time, ssr_orbit_iode);
+                if (state_eph == nullptr ||
+                    (ssr_orbit_iode >= 0 &&
+                     static_cast<int>(state_eph->iode) != ssr_orbit_iode)) {
+                    continue;
+                }
+                if (!state_eph->calculateSatelliteState(
+                        tx_time, sat_pos, sat_vel, sat_clk, sat_clk_drift,
+                        true)) {
+                    continue;
+                }
+            } else if (!precise_orbit_clock) {
                 if (!nav.calculateSatelliteState(obs.satellite, tx_time,
                                                  sat_pos, sat_vel, sat_clk, sat_clk_drift,
                                                  ssr_orbit_iode)) {
@@ -780,13 +886,19 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
             earth_rotation << std::cos(angle),  std::sin(angle), 0.0,
                              -std::sin(angle),  std::cos(angle), 0.0,
                               0.0,              0.0,             1.0;
-            Vector3d corrected_sat_pos = earth_rotation * sat_pos;
+            Vector3d corrected_sat_pos =
+                spp_config_.mrtklib_iflc_code_bias
+                    ? sat_pos
+                    : earth_rotation * sat_pos;
             // Rotate the satellite velocity by the same Earth-rotation frame
             // correction applied to its position, so the Doppler velocity LS
             // (spp_velocity::solveVelocity) sees a satellite state consistent
             // with corrected_sat_pos rather than mixing an uncorrected
             // velocity vector with a corrected position.
-            Vector3d corrected_sat_vel = earth_rotation * sat_vel;
+            Vector3d corrected_sat_vel =
+                spp_config_.mrtklib_iflc_code_bias
+                    ? sat_vel
+                    : earth_rotation * sat_vel;
 
             auto geom = nav.calculateGeometry(current_position, corrected_sat_pos);
             if (geom.elevation < min_elevation_rad) {
@@ -794,13 +906,26 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
             }
 
             double trop_delay = 0.0;
-            const bool trop_corrected = apply_atmosphere && config_.use_troposphere_model;
+            // pntpos() uses the broadcast Saastamoinen correction for its
+            // standalone code solution even when the subsequent CLAS PPP
+            // filter has troposphere estimation/correction disabled.
+            const bool trop_corrected = apply_atmosphere &&
+                (config_.use_troposphere_model ||
+                 spp_config_.mrtklib_iflc_code_bias);
             if (trop_corrected) {
                 trop_delay = models::tropDelaySaastamoinen(current_position, geom.elevation);
             }
 
             const Ephemeris* eph = nav.getEphemeris(obs.satellite, tx_time);
             if (!eph) {
+                continue;
+            }
+            // MRTKLIB var_uraeph() maps a negative Galileo SISA to VAR_MAX
+            // and rescode() excludes that satellite.  The tokyo/run2 E12
+            // broadcast record carries SISA=-1; admitting it shifts the
+            // reset SPP seed even though the CLAS mask later rejects it.
+            if (spp_config_.mrtklib_iflc_code_bias &&
+                (!std::isfinite(eph->sv_accuracy) || eph->sv_accuracy < 0.0)) {
                 continue;
             }
 
@@ -880,6 +1005,17 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
                 group_delay =
                     spp_obs.primary_coeff * groupDelayCorrectionMeters(primary_obs, *eph) +
                     spp_obs.secondary_coeff * groupDelayCorrectionMeters(secondary_obs, *eph);
+                // MRTKLIB prange() forms GPS/QZSS IFLC directly from P1/P2;
+                // broadcast TGD is only removed on its single-frequency
+                // branch. Galileo I/NAV follows the same direct-combination
+                // path (the optional F/NAV BGD_E5aE5b adjustment is not used
+                // by the CLAS benchmark selection).
+                if (spp_config_.mrtklib_iflc_code_bias &&
+                    (obs.satellite.system == GNSSSystem::GPS ||
+                     obs.satellite.system == GNSSSystem::QZSS ||
+                     obs.satellite.system == GNSSSystem::Galileo)) {
+                    group_delay = 0.0;
+                }
             }
 
             double corrected_pr = obs.pseudorange
@@ -897,6 +1033,15 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
 
             double variance = spp_config_.pseudorange_sigma * spp_config_.pseudorange_sigma /
                               (sin_el * sin_el);
+            if (spp_config_.mrtklib_iflc_code_bias) {
+                const double measurement_variance =
+                    9.0 * (1.0 + 0.25 / sin_el);
+                const double trop_variance =
+                    0.09 / ((sin_el + 0.1) * (sin_el + 0.1));
+                variance = measurement_variance + trop_variance +
+                           mrtklibBroadcastVarianceM2(
+                               obs.satellite.system, eph->sv_accuracy);
+            }
             if (spp_config_.use_variance_model) {
                 spp_utils::MeasurementVarianceInputs variance_inputs;
                 variance_inputs.elevation_rad = geom.elevation;
@@ -911,7 +1056,9 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
                 variance_inputs.troposphere_sigma_scale = spp_config_.troposphere_sigma_scale;
                 variance = spp_utils::calculatePseudorangeVariance(variance_inputs);
             }
-            variance *= std::max(1.0, spp_obs.variance_scale);
+            if (!spp_config_.mrtklib_iflc_code_bias) {
+                variance *= std::max(1.0, spp_obs.variance_scale);
+            }
             if (!std::isfinite(variance) || variance <= 0.0) {
                 continue;
             }
@@ -924,7 +1071,11 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
             measurement.has_doppler = obs.has_doppler && obs.doppler != 0.0;
             measurement.doppler_hz = obs.doppler;
             measurement.signal_frequency_hz = signalFrequencyHz(obs.signal, eph);
-            measurement.clock_group = clockBiasGroup(obs.satellite.system);
+            measurement.clock_group =
+                spp_config_.mrtklib_iflc_code_bias &&
+                        obs.satellite.system == GNSSSystem::QZSS
+                    ? GNSSSystem::QZSS
+                    : clockBiasGroup(obs.satellite.system);
             measurement.corrected_pseudorange = corrected_pr;
             measurement.elevation = geom.elevation;
             measurement.variance = variance;
@@ -1014,7 +1165,18 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
         for (int i = 0; i < n; ++i) {
             const auto& measurement = measurements[i];
             const Vector3d los = (measurement.satellite_position - position).normalized();
-            const double geometric_range = (measurement.satellite_position - position).norm();
+            double geometric_range =
+                (measurement.satellite_position - position).norm();
+            if (spp_config_.mrtklib_iflc_code_bias) {
+                // MRTKLIB geodist(): retain the unrotated transmit-time
+                // satellite position and add the first-order Earth-rotation
+                // term to the scalar range.  Its design-vector `e` is also
+                // formed from that unrotated position.
+                geometric_range += constants::OMEGA_E *
+                    (measurement.satellite_position.x() * position.y() -
+                     measurement.satellite_position.y() * position.x()) /
+                    constants::SPEED_OF_LIGHT;
+            }
 
             H(i, 0) = -los(0);
             H(i, 1) = -los(1);
@@ -1087,13 +1249,27 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
             weighted_residuals(i) = residuals(i) * sqrt_weight;
         }
 
-        Eigen::ColPivHouseholderQR<MatrixXd> qr(weighted_H);
-        if (qr.rank() < num_unknowns) {
-            solution.status = SolutionStatus::NONE;
-            return solution;
+        VectorXd dx;
+        if (spp_config_.mrtklib_iflc_code_bias) {
+            // MRTKLIB lsq(): Q=inv(A*A'), x=Q*A*y.  Reproduce the normal
+            // equation solve on the literal SPP seed path; QR's different
+            // rounding is otherwise carried into every 15-epoch float reset.
+            const MatrixXd normal = weighted_H.transpose() * weighted_H;
+            const VectorXd rhs = weighted_H.transpose() * weighted_residuals;
+            Eigen::FullPivLU<MatrixXd> lu(normal);
+            if (lu.rank() < num_unknowns) {
+                solution.status = SolutionStatus::NONE;
+                return solution;
+            }
+            dx = lu.solve(rhs);
+        } else {
+            Eigen::ColPivHouseholderQR<MatrixXd> qr(weighted_H);
+            if (qr.rank() < num_unknowns) {
+                solution.status = SolutionStatus::NONE;
+                return solution;
+            }
+            dx = qr.solve(weighted_residuals);
         }
-
-        VectorXd dx = qr.solve(weighted_residuals);
         if (!dx.allFinite()) {
             solution.status = SolutionStatus::NONE;
             return solution;
@@ -1114,7 +1290,11 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
                 ? iteration_min_robust_weight_factor
                 : 1.0;
 
-        if (dx.head<3>().norm() < spp_config_.position_convergence_threshold) {
+        const double convergence_norm =
+            spp_config_.mrtklib_iflc_code_bias
+                ? dx.norm()
+                : dx.head<3>().norm();
+        if (convergence_norm < spp_config_.position_convergence_threshold) {
             solution.iterations = iter + 1;
             break;
         }
@@ -1154,7 +1334,14 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
     final_sat_positions.reserve(final_measurements.size());
     for (int i = 0; i < static_cast<int>(final_measurements.size()); ++i) {
         const auto& measurement = final_measurements[i];
-        const double geometric_range = (measurement.satellite_position - position).norm();
+        double geometric_range =
+            (measurement.satellite_position - position).norm();
+        if (spp_config_.mrtklib_iflc_code_bias) {
+            geometric_range += constants::OMEGA_E *
+                (measurement.satellite_position.x() * position.y() -
+                 measurement.satellite_position.y() * position.x()) /
+                constants::SPEED_OF_LIGHT;
+        }
         double predicted = geometric_range + clock_bias;
         const auto bias_col_it = final_bias_columns.find(measurement.clock_group);
         if (bias_col_it != final_bias_columns.end()) {
@@ -1546,6 +1733,30 @@ std::vector<SPPProcessor::SPPObservation> SPPProcessor::validateObservations(
         }
 
         const Observation* secondary = selectBestObservation(satellite_observations, false);
+        if (spp_config_.mrtklib_iflc_code_bias &&
+            satellite.system == GNSSSystem::GPS) {
+            // MRTKLIB prange(IFLC) consumes GPS P[1] (L2) even when an L5
+            // code is present in P[2].  Do not substitute L5 for a missing
+            // L2 code in the literal CLAS pntpos seed.
+            secondary = nullptr;
+            for (const auto& candidate : satellite_observations) {
+                if (candidate.pseudorange_observation_type == "C2W") {
+                    secondary = &candidate;
+                    break;
+                }
+            }
+        } else if (spp_config_.mrtklib_iflc_code_bias &&
+                   satellite.system == GNSSSystem::QZSS) {
+            // With nf=3, MRTKLIB's RINEX slot assignment places QZSS C5Q in
+            // P[1]; prange(IFLC) therefore combines L1/L5, not L1/L2.
+            secondary = nullptr;
+            for (const auto& candidate : satellite_observations) {
+                if (candidate.signal == SignalType::QZS_L5) {
+                    secondary = &candidate;
+                    break;
+                }
+            }
+        }
         if (secondary != nullptr) {
             const double travel_time = primary->pseudorange / constants::SPEED_OF_LIGHT;
             const GNSSTime tx_time = time - travel_time;
@@ -1556,6 +1767,7 @@ std::vector<SPPProcessor::SPPObservation> SPPProcessor::validateObservations(
                 const auto coefficients = spp_utils::ionosphereFreeCoefficients(f1, f2);
                 SPPObservation entry;
                 entry.observation = *primary;
+                entry.transmit_pseudorange = primary->pseudorange;
                 entry.observation.pseudorange = spp_utils::calculateIonosphereFreePseudorange(
                     primary->pseudorange, secondary->pseudorange, f1, f2);
                 entry.observation.snr = combinedSnr(primary->snr, secondary->snr);
@@ -1572,8 +1784,19 @@ std::vector<SPPProcessor::SPPObservation> SPPProcessor::validateObservations(
             }
         }
 
+        // MRTKLIB prange(IFLC) returns zero when either P[0] or P[1] is
+        // absent.  Native historically fell through to a single-frequency
+        // observation here, changing the pntpos satellite set precisely at
+        // urban missing-code epochs and shifting the maxdiffp/reset seed.
+        // mrtklib_iflc_code_bias is enabled only for the literal CLAS SPP
+        // seed, so preserve the general SPP fallback outside that path.
+        if (spp_config_.mrtklib_iflc_code_bias) {
+            continue;
+        }
+
         SPPObservation entry;
         entry.observation = *primary;
+        entry.transmit_pseudorange = primary->pseudorange;
         entry.primary_signal = primary->signal;
         valid_obs.push_back(entry);
     }
@@ -1959,7 +2182,11 @@ SPPProcessor::preprocessEpoch(const ObservationData& obs, const NavigationData& 
 
         // Geometry
         auto geom = nav.calculateGeometry(position, corrected_sat_pos);
-        if (geom.elevation < elevationMaskRadians(config_.elevation_mask)) continue;
+        const double configured_elevation_mask =
+            spp_config_.elevation_mask_override_deg >= 0.0
+                ? spp_config_.elevation_mask_override_deg
+                : config_.elevation_mask;
+        if (geom.elevation < elevationMaskRadians(configured_elevation_mask)) continue;
 
         // Receiver LLH for atmospheric models
         auto rcv_geo = spp_utils::ecefToGeodetic(position);

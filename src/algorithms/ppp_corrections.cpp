@@ -1225,7 +1225,12 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                         ssr_geometry.elevation,
                         ppp_config_.clas_expanded_value_construction_policy,
                         ppp_config_.clas_subtype12_value_construction_policy,
-                        ppp_config_.clas_expanded_residual_sampling_policy);
+                        ppp_config_.clas_expanded_residual_sampling_policy,
+                        ppp_config_.clas_mrtklib_float_parity &&
+                            ppp_config_.kinematic_mode &&
+                            !ppp_config_.low_dynamics_mode &&
+                            ppp_config_.use_clas_osr_filter &&
+                            ppp_config_.use_dynamics_model);
                 if (std::isfinite(trop_correction_m) && std::abs(trop_correction_m) > 0.0) {
                     observation.pseudorange_if +=
                         algorithms::ppp_correction_contract::measurementCorrectionSign(false, false) *

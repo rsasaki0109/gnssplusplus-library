@@ -4,6 +4,32 @@
 
 using namespace libgnss;
 
+TEST(PPPArTest, MrtklibParCandidatesRequireTwoActiveFrequencyStates) {
+    const SatelliteId gps6(GNSSSystem::GPS, 6);
+    const SatelliteId gps6_l2(GNSSSystem::GPS, 106);
+    const SatelliteId gps11(GNSSSystem::GPS, 11);
+    const SatelliteId gps11_l2(GNSSSystem::GPS, 111);
+    const SatelliteId qzss2(GNSSSystem::QZSS, 2);
+    const SatelliteId gps17(GNSSSystem::GPS, 17);
+    const SatelliteId gps17_l2(GNSSSystem::GPS, 117);
+
+    const std::vector<SatelliteId> eligible = {
+        gps6, gps6_l2, gps11, gps11_l2, qzss2, gps17, gps17_l2};
+    const std::map<SatelliteId, double> elevations = {
+        {gps6, 54.0 * M_PI / 180.0},
+        {gps11, 20.3 * M_PI / 180.0},
+        {qzss2, 33.0 * M_PI / 180.0},
+        {gps17, 19.9 * M_PI / 180.0},
+    };
+
+    const auto candidates =
+        ppp_ar::selectMrtklibParCandidates(eligible, elevations);
+
+    ASSERT_EQ(candidates.size(), 2u);
+    EXPECT_EQ(candidates[0], gps11);
+    EXPECT_EQ(candidates[1], gps6);
+}
+
 TEST(PPPArTest, FrequencyLifecycleTracksSignalsIndependently) {
     ppp_shared::PPPAmbiguityInfo ambiguity;
     const GNSSTime first_time(2360, 100.0);
