@@ -61,7 +61,7 @@ Acc Z ≈ +9.81, despite the upstream README saying FRD).
 | Tight DD row adapter | `RTKProcessor::formTightlyCoupledObservations` |
 | Augmented INS/ambiguity update | `src/fusion/dd_imu_bridge.cpp` |
 | Doppler LS velocity (feeds SPP/RTK solutions) | `src/algorithms/spp_velocity.cpp` |
-| CLI | `apps/gnss_fuse.cpp` (registered as `fuse` in `apps/gnss.py`) |
+| CLI | `apps/native/gnss_fuse.cpp` (registered as `fuse` in `apps/gnss.py`) |
 
 The fusion deliberately does not reuse `algorithms/kalman.hpp`: its
 RTKLIB-style "active state" convention (`x[i] != 0`) is incompatible with an

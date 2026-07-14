@@ -127,7 +127,7 @@ tides altogether see no change.
 
 ### 3.2 CLI plumbing
 
-`apps/gnss_ppp.cpp` follows the canonical "three-line" pattern from
+`apps/native/gnss_ppp.cpp` follows the canonical "three-line" pattern from
 the recent `--enable-ppp-holdamb` change (commit `0293f54`):
 
 1. Add field to local `Options` struct.

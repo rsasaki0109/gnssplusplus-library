@@ -3,7 +3,7 @@
 
 Reads the per-epoch CSV produced by `gnss_fgo_parity --dump-csv <path>`
 (columns: tow,status,e_err_m,n_err_m,u_err_m,horiz_err_m,e_pos_m,n_pos_m,
-ref_e_pos_m,ref_n_pos_m -- see apps/gnss_fgo_parity.cpp's dumpEpochCsv()) and
+ref_e_pos_m,ref_n_pos_m -- see apps/native/gnss_fgo_parity.cpp's dumpEpochCsv()) and
 renders one 2-panel PNG per run:
 
 - Top: 2D ground track (East vs North, meters, equal aspect). The

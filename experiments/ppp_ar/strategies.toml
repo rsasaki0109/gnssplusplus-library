@@ -872,7 +872,7 @@ extra_args = [
   "--estimate-ionosphere",
 ]
 implementation_files = [
-  "apps/gnss_ppp.cpp",
+  "apps/native/gnss_ppp.cpp",
   "apps/gnss_qzss_l6_info.py",
   "src/algorithms/ppp.cpp",
   "src/algorithms/ppp_osr.cpp",
@@ -896,7 +896,7 @@ extra_args = [
   "--estimate-ionosphere",
 ]
 implementation_files = [
-  "apps/gnss_ppp.cpp",
+  "apps/native/gnss_ppp.cpp",
   "apps/gnss_qzss_l6_info.py",
   "src/algorithms/ppp.cpp",
   "src/algorithms/ppp_osr.cpp",
@@ -1951,7 +1951,7 @@ extra_args = [
   "--estimate-ionosphere",
 ]
 implementation_files = [
-  "apps/gnss_ppp.cpp",
+  "apps/native/gnss_ppp.cpp",
   "apps/gnss_qzss_l6_info.py",
   "src/algorithms/ppp.cpp",
   "src/algorithms/ppp_osr.cpp",
@@ -1977,7 +1977,7 @@ extra_args = [
   "--estimate-ionosphere",
 ]
 implementation_files = [
-  "apps/gnss_ppp.cpp",
+  "apps/native/gnss_ppp.cpp",
   "apps/gnss_qzss_l6_info.py",
   "src/algorithms/ppp.cpp",
   "src/algorithms/ppp_osr.cpp",

@@ -19,10 +19,12 @@ set(GNSS_APP_TARGETS
     gnss_live
 )
 
-add_executable(gnss_spp gnss_spp.cpp)
+set(GNSS_NATIVE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/native)
+
+add_executable(gnss_spp ${GNSS_NATIVE_DIR}/gnss_spp.cpp)
 target_link_libraries(gnss_spp PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
 
-add_executable(gnss_fgo gnss_fgo.cpp)
+add_executable(gnss_fgo ${GNSS_NATIVE_DIR}/gnss_fgo.cpp)
 target_link_libraries(gnss_fgo PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
 if(GTSAM_FOUND)
     target_compile_definitions(gnss_fgo PRIVATE GNSS_WITH_GTSAM=1)
@@ -34,56 +36,56 @@ endif()
 # back to Eigen). gnss_lib_noopt carries the gtsam link + /FORCE:MULTIPLE as an
 # INTERFACE requirement, so this target inherits both automatically.
 if(GTSAM_FOUND)
-    add_executable(gnss_fgo_parity gnss_fgo_parity.cpp)
+    add_executable(gnss_fgo_parity ${GNSS_NATIVE_DIR}/gnss_fgo_parity.cpp)
     target_link_libraries(gnss_fgo_parity PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
 endif()
 
-add_executable(gnss_fuse gnss_fuse.cpp)
+add_executable(gnss_fuse ${GNSS_NATIVE_DIR}/gnss_fuse.cpp)
 target_link_libraries(gnss_fuse PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
 
-add_executable(gnss_vel_d gnss_vel_d.cpp)
+add_executable(gnss_vel_d ${GNSS_NATIVE_DIR}/gnss_vel_d.cpp)
 target_link_libraries(gnss_vel_d PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
 
-add_executable(gnss_pos_pdc gnss_pos_pdc.cpp)
+add_executable(gnss_pos_pdc ${GNSS_NATIVE_DIR}/gnss_pos_pdc.cpp)
 target_link_libraries(gnss_pos_pdc PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
 
-add_executable(gnss_pos_pd gnss_pos_pd.cpp)
+add_executable(gnss_pos_pd ${GNSS_NATIVE_DIR}/gnss_pos_pd.cpp)
 target_link_libraries(gnss_pos_pd PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
 
-add_executable(gnss_pos_vel_pdc gnss_pos_vel_pdc.cpp)
+add_executable(gnss_pos_vel_pdc ${GNSS_NATIVE_DIR}/gnss_pos_vel_pdc.cpp)
 target_link_libraries(gnss_pos_vel_pdc PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
 
-add_executable(gnss_pos_vel_pd gnss_pos_vel_pd.cpp)
+add_executable(gnss_pos_vel_pd ${GNSS_NATIVE_DIR}/gnss_pos_vel_pd.cpp)
 target_link_libraries(gnss_pos_vel_pd PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
 
-add_executable(gnss_solve gnss_solve.cpp)
+add_executable(gnss_solve ${GNSS_NATIVE_DIR}/gnss_solve.cpp)
 target_link_libraries(gnss_solve PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
 
-add_executable(gnss_ppp gnss_ppp.cpp)
+add_executable(gnss_ppp ${GNSS_NATIVE_DIR}/gnss_ppp.cpp)
 target_link_libraries(gnss_ppp PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
 
-add_executable(gnss_visibility gnss_visibility.cpp)
+add_executable(gnss_visibility ${GNSS_NATIVE_DIR}/gnss_visibility.cpp)
 target_link_libraries(gnss_visibility PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
 
-add_executable(gnss_nav_products gnss_nav_products.cpp)
+add_executable(gnss_nav_products ${GNSS_NATIVE_DIR}/gnss_nav_products.cpp)
 target_link_libraries(gnss_nav_products PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
 
-add_executable(gnss_rinex_info gnss_rinex_info.cpp)
+add_executable(gnss_rinex_info ${GNSS_NATIVE_DIR}/gnss_rinex_info.cpp)
 target_link_libraries(gnss_rinex_info PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
 
-add_executable(gnss_stream gnss_stream.cpp)
+add_executable(gnss_stream ${GNSS_NATIVE_DIR}/gnss_stream.cpp)
 target_link_libraries(gnss_stream PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
 
-add_executable(gnss_ubx_info gnss_ubx_info.cpp)
+add_executable(gnss_ubx_info ${GNSS_NATIVE_DIR}/gnss_ubx_info.cpp)
 target_link_libraries(gnss_ubx_info PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
 
-add_executable(gnss_convert gnss_convert.cpp)
+add_executable(gnss_convert ${GNSS_NATIVE_DIR}/gnss_convert.cpp)
 target_link_libraries(gnss_convert PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
 
-add_executable(gnss_replay gnss_replay.cpp)
+add_executable(gnss_replay ${GNSS_NATIVE_DIR}/gnss_replay.cpp)
 target_link_libraries(gnss_replay PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
 
-add_executable(gnss_live gnss_live.cpp)
+add_executable(gnss_live ${GNSS_NATIVE_DIR}/gnss_live.cpp)
 target_link_libraries(gnss_live PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
 
 install(TARGETS ${GNSS_APP_TARGETS}
@@ -158,7 +160,7 @@ install(PROGRAMS
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_skytraq_info.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_binex_info.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gnss_qzss_l6_info.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/gnss_pos2kml
+    ${CMAKE_CURRENT_SOURCE_DIR}/compat/gnss_pos2kml
     DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 

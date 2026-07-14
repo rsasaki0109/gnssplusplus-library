@@ -2,7 +2,7 @@
 
 // Shared rover/base RINEX epoch-alignment helpers used by every native CLI
 // that drives libgnss::RTKProcessor over a rover.obs/base.obs pair
-// (apps/gnss_solve.cpp, apps/gnss_fuse.cpp). Factored out so gnss_fuse's
+// (apps/native/gnss_solve.cpp, apps/native/gnss_fuse.cpp). Factored out so gnss_fuse's
 // --base RTK path reuses the exact same base-epoch time alignment /
 // linear-in-range interpolation logic gnss_solve already uses, instead of
 // forking a second copy of it (docs/design.md 5 / CLI task notes).
@@ -248,7 +248,7 @@ inline bool interpolateBaseEpoch(const libgnss::ObservationData& before,
     return !interpolated_epoch.observations.empty();
 }
 
-// Small subset of apps/gnss_solve.cpp's `--preset` numeric tables, applied
+// Small subset of apps/native/gnss_solve.cpp's `--preset` numeric tables, applied
 // directly to an RTKConfig. gnss_solve.cpp keeps its own richer preset
 // application (apply*RTKTuningPreset against SolveConfig, with per-flag
 // "_set" override tracking across its much larger CLI surface) unchanged;

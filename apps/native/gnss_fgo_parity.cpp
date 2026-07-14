@@ -1,7 +1,7 @@
 // Real-data Eigen-vs-GTSAM FGO parity harness (Phase 1 validation).
 //
 // Loads a real tokyo/nagoya PPC run (rover.obs + base.obs + base.nav) exactly
-// the way apps/gnss_fgo.cpp does, materializes ONE production FGOProblem via
+// the way apps/native/gnss_fgo.cpp does, materializes ONE production FGOProblem via
 // FGOProcessor::buildDoubleDifferenceProblem(), then runs that identical
 // problem through BOTH FGOProcessor backends (FGOBackend::Eigen and
 // FGOBackend::GTSAM) and reports:
@@ -370,7 +370,7 @@ Args parseArgs(int argc, char** argv) {
     return args;
 }
 
-// Mirrors apps/gnss_fgo.cpp's "real-data-float" preset for the DD RTK path so
+// Mirrors apps/native/gnss_fgo.cpp's "real-data-float" preset for the DD RTK path so
 // the FGOProblem we build matches a realistic production configuration.
 libgnss::FGOProcessor::FGOConfig makeRealDataDdConfig() {
     libgnss::FGOProcessor::FGOConfig config;

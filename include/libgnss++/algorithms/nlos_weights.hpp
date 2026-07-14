@@ -16,7 +16,7 @@
 //
 // Everything here is a free function / value type — no file I/O happens
 // inside RTKProcessor itself, so RTKConfig (copied by value all over the
-// existing CLI apps) stays POD-simple. Callers (apps/gnss_solve.cpp) load
+// existing CLI apps) stays POD-simple. Callers (apps/native/gnss_solve.cpp) load
 // the table once via loadNlosWeightsCsv() and hand a shared_ptr to
 // RTKProcessor::setNlosWeightTable().
 
