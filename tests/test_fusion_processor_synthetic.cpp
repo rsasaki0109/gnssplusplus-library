@@ -52,6 +52,9 @@ TEST(FusionProcessorSyntheticTest, AppliesTightlyCoupledDDRowsToLiveINSState) {
     LooseCouplingProcessor::Config config;
     config.align_static_window_s = 0.1;
     config.zupt_enable = false;
+    // This test exercises the committed joint code/carrier path explicitly;
+    // production remains shadow-only unless this research flag is enabled.
+    config.tight_dd_commit_carrier_updates = true;
     LooseCouplingProcessor processor(config);
 
     GNSSTime time(2200, 100000.0);
@@ -84,10 +87,8 @@ TEST(FusionProcessorSyntheticTest, AppliesTightlyCoupledDDRowsToLiveINSState) {
     row.code_residual_m = 1.0;
     row.code_variance_m2 = 0.25;
     row.wavelength_m = 0.19;
-    // Keep the synthetic ambiguity exactly integral.  A fractional 12.1-cycle
-    // residual sat close enough to the joint gate for Eigen/compiler rounding
-    // to select the healthy-code fallback on Linux while accepting both rows
-    // on MSVC, making the observation-count assertion platform-dependent.
+    // Keep the synthetic ambiguity exactly integral so the test isolates the
+    // processor integration path instead of exercising an innovation boundary.
     row.carrier_residual_m = row.wavelength_m * 12.0;
     row.carrier_variance_m2 = 0.0025;
     row.elevation_rad = 0.8;
