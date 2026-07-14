@@ -50,6 +50,13 @@ inline bool applyGpsL5MeasurementErrorFactor(
            (is_l5(primary_signal) || is_l5(secondary_signal));
 }
 
+inline bool alwaysRestoreArTrialState(PPPProcessor::PPPConfig::ARMethod method) {
+    // MADOCALIB runs per-frequency EWL/WL/N1 constraints on xp/Pp, a copy of
+    // the float filter.  The trial is never committed to rtk->x/P, including
+    // early exits after EWL conditioning but before a usable WL set exists.
+    return method == PPPProcessor::PPPConfig::ARMethod::DD_PER_FREQ;
+}
+
 inline std::string trimCopy(const std::string& text) {
     const auto is_not_space = [](unsigned char ch) {
         return !std::isspace(ch);
