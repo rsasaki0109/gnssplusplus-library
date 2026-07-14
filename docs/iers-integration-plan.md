@@ -437,7 +437,7 @@ does not block Phase C:
   consistent with the IERS §7.1.5 envelope.
 
   The checked smoke config
-  `configs/iers_atl_multisite_smoke.example.json` uses the small
+  `configs/benchmarks/iers_atl_multisite_smoke.example.json` uses the small
   synthetic fixture `test_data/iers/tskb_synth.atl` and reproduces
   the single-site result exactly (`median = 0.169 mm`, `p95 =
   0.358 mm`, `max = 0.901 mm`) when the 2026-04-15 TSKB PPP

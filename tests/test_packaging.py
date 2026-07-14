@@ -125,12 +125,13 @@ class PackagingSmokeTest(unittest.TestCase):
                 prefix / "scripts" / "generate_architecture_diagram.py",
                 prefix / "scripts" / "generate_feature_overview_card.py",
                 prefix / "scripts" / "generate_odaiba_social_card.py",
-                prefix / "configs" / "live.example.conf",
-                prefix / "configs" / "ppp_products_ppc.example.toml",
-                prefix / "configs" / "moving_base_signoff.example.toml",
-                prefix / "configs" / "live_signoff.example.toml",
-                prefix / "configs" / "ppc_rtk_signoff.example.toml",
-                prefix / "configs" / "web.example.toml",
+                prefix / "configs" / "README.md",
+                prefix / "configs" / "examples" / "live.example.conf",
+                prefix / "configs" / "examples" / "web.example.toml",
+                prefix / "configs" / "signoff" / "ppp_products_ppc.example.toml",
+                prefix / "configs" / "signoff" / "moving_base_signoff.example.toml",
+                prefix / "configs" / "signoff" / "live_signoff.example.toml",
+                prefix / "configs" / "signoff" / "ppc_rtk_signoff.example.toml",
             ]
             ros2_binary = next((path for path in BUILD_DIR.rglob("gnss_solution_node") if path.is_file()), None)
             if ros2_binary is not None:

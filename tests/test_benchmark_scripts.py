@@ -151,7 +151,7 @@ class IersMultisiteBenchHelpersTest(unittest.TestCase):
 
 class IersAtmTidalLoadingMultisiteBenchHelpersTest(unittest.TestCase):
     def test_smoke_example_config_references_tracked_synthetic_atl_fixture(self) -> None:
-        config_path = ROOT_DIR / "configs" / "iers_atl_multisite_smoke.example.json"
+        config_path = ROOT_DIR / "configs" / "benchmarks" / "iers_atl_multisite_smoke.example.json"
         config = json.loads(config_path.read_text(encoding="utf-8"))
 
         self.assertEqual(config["sites"][0]["name"], "TSKB")
@@ -160,7 +160,7 @@ class IersAtmTidalLoadingMultisiteBenchHelpersTest(unittest.TestCase):
         self.assertIn("S1", atl_path.read_text(encoding="ascii"))
 
     def test_vmf_example_config_references_tracked_real_atl_fixtures(self) -> None:
-        config_path = ROOT_DIR / "configs" / "iers_atl_multisite_vmf.example.json"
+        config_path = ROOT_DIR / "configs" / "benchmarks" / "iers_atl_multisite_vmf.example.json"
         config = json.loads(config_path.read_text(encoding="utf-8"))
 
         self.assertEqual([site["name"] for site in config["sites"]], ["PERT", "TSKB"])
@@ -1034,7 +1034,7 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertEqual(args.demote_fixed_status_max_ratio, 4.0)
 
     def test_tracked_sigma_demote_profile_config_parses(self) -> None:
-        config_toml = ROOT_DIR / "configs" / "ppc_sigma_demote_nis2_ratio4.toml"
+        config_toml = ROOT_DIR / "configs" / "benchmarks" / "ppc_sigma_demote_nis2_ratio4.toml"
 
         with mock.patch.object(
             sys,

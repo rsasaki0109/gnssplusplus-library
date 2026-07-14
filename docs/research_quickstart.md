@@ -67,12 +67,12 @@ python3 apps/gnss.py ppc-rtk-signoff \
   --require-realtime-factor-min 1
 ```
 
-Keep threshold sets in `configs/*.toml` once they become long-lived. For
+Keep threshold sets in `configs/signoff/*.toml` once they become long-lived. For
 example:
 
 ```bash
 python3 apps/gnss.py ppc-rtk-signoff \
-  --config-toml configs/ppc_rtk_signoff.example.toml
+  --config-toml configs/signoff/ppc_rtk_signoff.example.toml
 ```
 
 ## Compare solver profiles

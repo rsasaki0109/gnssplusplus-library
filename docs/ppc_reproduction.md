@@ -30,7 +30,7 @@ profile:
 
 ```bash
 python3 apps/gnss.py ppc-coverage-matrix \
-  --config-toml configs/ppc_sigma_demote_nis2_ratio4.toml
+  --config-toml configs/benchmarks/ppc_sigma_demote_nis2_ratio4.toml
 ```
 
 Override `--dataset-root` after `--config-toml` when your PPC checkout is not
@@ -46,7 +46,7 @@ fork-specific option enum:
 make -C external/madocalib/app/consapp/rnx2rtkp/gcc
 
 python3 apps/gnss.py ppc-coverage-matrix \
-  --config-toml configs/ppc_sigma_demote_nis2_ratio4.toml \
+  --config-toml configs/benchmarks/ppc_sigma_demote_nis2_ratio4.toml \
   --max-epochs 20 \
   --rtklib-bin external/madocalib/app/consapp/rnx2rtkp/gcc/rnx2rtkp \
   --rtklib-config scripts/madocalib_ppc_rtk.conf \
