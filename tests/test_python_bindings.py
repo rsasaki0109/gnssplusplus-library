@@ -7,12 +7,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import pytest
-
-libgnsspp = pytest.importorskip(
-    "libgnsspp",
-    reason="optional pybind11 extension is not built in this test environment",
-)
+try:
+    import libgnsspp
+except ImportError:
+    libgnsspp = None
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -22,6 +20,10 @@ def repo_data_exists(*relative_paths: str) -> bool:
     return all((ROOT_DIR / relative_path).exists() for relative_path in relative_paths)
 
 
+@unittest.skipIf(
+    libgnsspp is None,
+    "optional pybind11 extension is not built in this test environment",
+)
 class PythonBindingsSmokeTest(unittest.TestCase):
     def setUp(self) -> None:
         method = self._testMethodName
