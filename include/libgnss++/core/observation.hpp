@@ -63,6 +63,16 @@ public:
     double receiver_clock_bias = 0.0;
     
     std::vector<Observation> observations;
+
+    // Complete RINEX tracking-code observations, kept separately from the
+    // policy-selected primary/secondary observations above.  A key such as
+    // "2W" groups C2W/L2W/D2W/S2W for one satellite.  Normal positioning
+    // paths intentionally ignore this collection; literal compatibility
+    // paths can use it when an upstream implementation assigns a specific
+    // RINEX tracking code to a frequency slot.
+    std::map<std::pair<SatelliteId, std::string>, Observation>
+        rinex_tracking_observations;
+    std::map<std::pair<GNSSSystem, int>, std::string> rinex_frequency_slots;
     
     ObservationData() = default;
     ObservationData(const GNSSTime& t) : time(t) {}
@@ -72,6 +82,30 @@ public:
      */
     void addObservation(const Observation& obs) {
         observations.push_back(obs);
+    }
+
+    void addRinexTrackingObservation(const std::string& tracking_code,
+                                     const Observation& obs) {
+        rinex_tracking_observations[{obs.satellite, tracking_code}] = obs;
+    }
+
+    const Observation* getRinexTrackingObservation(
+        const SatelliteId& sat,
+        const std::string& tracking_code) const {
+        const auto it = rinex_tracking_observations.find({sat, tracking_code});
+        return it == rinex_tracking_observations.end() ? nullptr : &it->second;
+    }
+
+    void setRinexFrequencySlot(GNSSSystem system,
+                               int frequency_index,
+                               const std::string& tracking_code) {
+        rinex_frequency_slots[{system, frequency_index}] = tracking_code;
+    }
+
+    const std::string* getRinexFrequencySlot(GNSSSystem system,
+                                             int frequency_index) const {
+        const auto it = rinex_frequency_slots.find({system, frequency_index});
+        return it == rinex_frequency_slots.end() ? nullptr : &it->second;
     }
     
     /**
@@ -152,6 +186,8 @@ public:
      */
     void clear() {
         observations.clear();
+        rinex_tracking_observations.clear();
+        rinex_frequency_slots.clear();
         receiver_position.setZero();
         receiver_clock_bias = 0.0;
     }

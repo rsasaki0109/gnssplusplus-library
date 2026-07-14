@@ -398,8 +398,14 @@ class CompactSSRCorrection:
     high_rate_clock_m: float = 0.0
     clock_network_id: int = 0
     ura_sigma_m: float | None = None
+    orbit_iode: int | None = None
     code_bias_m: dict[int, float] | None = None
     phase_bias_m: dict[int, float] | None = None
+    # Exact RTKLIB observation-code identity.  The legacy maps above use the
+    # coarser RTCM SSR signal ids (for example GPS L2P and L2W both become 9),
+    # which cannot preserve an invalid value for only one CSSR signal cell.
+    code_bias_rtklib_m: dict[int, float] | None = None
+    phase_bias_rtklib_m: dict[int, float] | None = None
     bias_network_id: int | None = None
     atmos_network_id: int | None = None
     atmos_trop_avail: int | None = None
@@ -439,7 +445,7 @@ class AtmosLifecycleCoeff:
 class CSSRDecoderState:
     mask: CSSRMaskState | None = None
     message_index: int = 0
-    pending_orbit: dict[str, tuple[float, float, float]] | None = None
+    pending_orbit: dict[str, tuple[int, float, float, float]] | None = None
     pending_clock: dict[str, float] | None = None
     pending_base_clock: dict[str, float] | None = None
     pending_clock_network: dict[str, int] | None = None
@@ -448,9 +454,11 @@ class CSSRDecoderState:
     pending_udi_seconds: float | None = None
     pending_ura: dict[str, float] | None = None
     pending_code_bias: dict[str, dict[int, float]] | None = None
+    pending_code_bias_rtklib: dict[str, dict[int, float]] | None = None
     pending_base_code_bias: dict[str, dict[int, float]] | None = None
     base_code_bias_banks: dict[int, dict[str, dict[int, float]]] | None = None
     pending_phase_bias: dict[str, dict[int, float]] | None = None
+    pending_phase_bias_rtklib: dict[str, dict[int, float]] | None = None
     pending_phase_bias_source: dict[str, dict[int, int]] | None = None
     pending_base_phase_bias: dict[str, dict[int, float]] | None = None
     base_phase_bias_banks: dict[int, dict[str, dict[int, float]]] | None = None
@@ -462,8 +470,11 @@ class CSSRDecoderState:
     atmos_lifecycle_stec_times: dict[int, dict[str, list[int]]] = field(default_factory=dict)
     atmos_lifecycle_trop_tokens: dict[int, dict[str, str]] = field(default_factory=dict)
     atmos_lifecycle_trop_time: dict[int, int] = field(default_factory=dict)
+    atmos_subtype12_bank_tokens: dict[int, dict[str, str]] = field(default_factory=dict)
+    atmos_subtype12_bank_time: dict[int, int] = field(default_factory=dict)
     atmos_lifecycle_grid_count: dict[int, int] = field(default_factory=dict)
     atmos_lifecycle_pending_emits: set[tuple[int, int]] = field(default_factory=set)
+    atmos_trop_bank_pending_emits: set[tuple[int, int]] = field(default_factory=set)
     parity_trop_by_network: dict[int, dict[str, str]] = field(default_factory=dict)
     parity_trop_time_by_network: dict[int, int] = field(default_factory=dict)
     service_info_chunks: list[tuple[int, bytes, int]] | None = None
@@ -535,6 +546,22 @@ def cssr_signal_slots_from_mask(sigmask: int) -> list[int]:
 
 def cssr_signal_slot_to_rtcm_id(system_id: int, signal_slot: int) -> int:
     return CSSR_SIGNAL_RTCM_IDS.get(system_id, {}).get(signal_slot, 0)
+
+
+# RTKLIB CODE_* values in the exact order used by CLASLIB sigmask2sig().
+CSSR_SIGNAL_RTKLIB_CODES = {
+    0: (1, 2, 3, 7, 8, 12, 16, 17, 18, 19, 20, 24, 25, 26),
+    1: (1, 2, 14, 19, 44, 45, 46),
+    2: (11, 1, 12, 24, 25, 26, 27, 28, 29, 37, 38, 39),
+    3: (40, 41, 18, 42, 43, 33, 27, 28, 29),
+    4: (1, 7, 8, 12, 16, 17, 18, 24, 25, 26),
+    5: (1, 7, 8, 12, 16, 17, 18, 24, 25, 26),
+}
+
+
+def cssr_signal_slot_to_rtklib_code(system_id: int, signal_slot: int) -> int:
+    codes = CSSR_SIGNAL_RTKLIB_CODES.get(system_id, ())
+    return codes[signal_slot] if 0 <= signal_slot < len(codes) else 0
 
 
 def ura_meters_from_ssr_index(ura_index: int) -> float:
@@ -1079,8 +1106,10 @@ def reset_pending_corrections(state: CSSRDecoderState) -> None:
     state.pending_udi_seconds = None
     state.pending_ura = None
     state.pending_code_bias = None
+    state.pending_code_bias_rtklib = None
     state.pending_base_code_bias = None
     state.pending_phase_bias = None
+    state.pending_phase_bias_rtklib = None
     state.pending_phase_bias_source = None
     state.pending_base_phase_bias = None
     state.pending_bias_network_id = None
@@ -1097,6 +1126,8 @@ def reset_pending_corrections(state: CSSRDecoderState) -> None:
         carry_forward = {k: v for k, v in state.pending_atmos.items()
                          if "stec_c0" in k or "stec_c1" in k or "stec_c2" in k
                          or "stec_type" in k or "stec_quality" in k
+                         or k == "atmos_grid_satellites"
+                         or k.startswith("atmos_stec_satellites")
                          or k == "atmos_network_id"}
         state.pending_atmos = carry_forward if carry_forward else None
     else:
@@ -1124,6 +1155,8 @@ def carry_forward_atmos_tokens(
         or "stec_c2" in key
         or "stec_type" in key
         or "stec_quality" in key
+        or key == "atmos_grid_satellites"
+        or key.startswith("atmos_stec_satellites")
         or key == "atmos_network_id"
     }
     return carry_forward if carry_forward else None
@@ -1527,6 +1560,7 @@ def materialize_missing_code_bias_rows(
     if row_materialization_policy == COMPACT_BIAS_ROW_MATERIALIZATION_POLICY_OVERLAP_ONLY:
         return
     assert state.pending_code_bias is not None
+    assert state.pending_code_bias_rtklib is not None
     if row_materialization_policy == COMPACT_BIAS_ROW_MATERIALIZATION_POLICY_SELECTED_SATELLITE_BASE_EXTEND:
         target_satellites = set(selected_satellites)
     else:
@@ -1688,6 +1722,7 @@ def prepare_pending_phase_bias_for_message(
         if reset_message_scope:
             state.pending_phase_bias = {}
             state.pending_phase_bias_source = {}
+            state.pending_phase_bias_rtklib = {}
         return
     if selected_satellites is None:
         return
@@ -1696,6 +1731,12 @@ def prepare_pending_phase_bias_for_message(
         for sat_token, biases in state.pending_phase_bias.items()
         if sat_token in selected_satellites
     }
+    if state.pending_phase_bias_rtklib is not None:
+        state.pending_phase_bias_rtklib = {
+            sat_token: biases
+            for sat_token, biases in state.pending_phase_bias_rtklib.items()
+            if sat_token in selected_satellites
+        }
     if state.pending_phase_bias_source is not None:
         state.pending_phase_bias_source = {
             sat_token: sources
@@ -1950,8 +1991,10 @@ def ensure_pending_epoch(
     state.pending_clock_network = {}
     state.pending_ura = {}
     state.pending_code_bias = {}
+    state.pending_code_bias_rtklib = {}
     state.pending_base_code_bias = {}
     state.pending_phase_bias = {}
+    state.pending_phase_bias_rtklib = {}
     state.pending_phase_bias_source = {}
     state.pending_base_phase_bias = {}
     # pending_atmos is intentionally NOT reset here — the carry-forward
@@ -1973,7 +2016,9 @@ def flush_pending_corrections(
     clock_network_map = state.pending_clock_network or {}
     ura_map = state.pending_ura or {}
     code_bias_map = state.pending_code_bias or {}
+    code_bias_rtklib_map = state.pending_code_bias_rtklib or {}
     phase_bias_map = state.pending_phase_bias or {}
+    phase_bias_rtklib_map = state.pending_phase_bias_rtklib or {}
     atmos = state.pending_atmos or {}
     if atmos and "atmos_network_id" in atmos and state.pending_tow is not None:
         network_id = _try_int(atmos.get("atmos_network_id"), 0)
@@ -2016,7 +2061,9 @@ def flush_pending_corrections(
             | set(clock_map)
             | set(ura_map)
             | set(code_bias_map)
+            | set(code_bias_rtklib_map)
             | set(phase_bias_map)
+            | set(phase_bias_rtklib_map)
             | atmos_sat_tokens
         )
     elif flush_policy == COMPACT_SSR_FLUSH_POLICY_ORBIT_OR_CLOCK_ONLY:
@@ -2029,20 +2076,25 @@ def flush_pending_corrections(
         satellite = sat_index.get(sat_token)
         if satellite is None:
             continue
-        dx, dy, dz = orbit_map.get(sat_token, (0.0, 0.0, 0.0))
+        orbit_iode, dx, dy, dz = orbit_map.get(sat_token, (-1, 0.0, 0.0, 0.0))
         merged_dclock_m = clock_map.get(sat_token, 0.0)
         base_dclock_m = base_clock_map.get(sat_token)
         clock_network_id = clock_network_map.get(sat_token, 0)
         code_bias = code_bias_map.get(sat_token, {})
+        code_bias_rtklib = code_bias_rtklib_map.get(sat_token, {})
         phase_bias = phase_bias_map.get(sat_token, {})
+        phase_bias_rtklib = phase_bias_rtklib_map.get(sat_token, {})
         shared_fields = dict(
             week=gps_week,
             tow=float(state.pending_tow),
             system=satellite.system,
             prn=satellite.prn,
             ura_sigma_m=ura_map.get(sat_token),
+            orbit_iode=orbit_iode if orbit_iode >= 0 else None,
             code_bias_m=dict(code_bias) if code_bias else None,
             phase_bias_m=dict(phase_bias) if phase_bias else None,
+            code_bias_rtklib_m=dict(code_bias_rtklib) if code_bias_rtklib else None,
+            phase_bias_rtklib_m=dict(phase_bias_rtklib) if phase_bias_rtklib else None,
             bias_network_id=state.pending_bias_network_id,
             atmos_network_id=int(atmos["atmos_network_id"]) if "atmos_network_id" in atmos else None,
             atmos_trop_avail=int(atmos["atmos_trop_avail"]) if "atmos_trop_avail" in atmos else None,
@@ -2142,6 +2194,37 @@ def flush_pending_corrections(
                     atmos_tokens=dict(atmos_tokens),
                 )
             )
+    # Subtype-12 troposphere banks rotate independently of orbit/clock and
+    # gridded STEC.  Emit one marker row per raw bank so the C++ loader can
+    # retain it outside the per-satellite correction histories.
+    if state.atmos_trop_bank_pending_emits and sat_index:
+        bank_satellite = sat_index[sorted(sat_index)[0]]
+        for network_id, bank_tow in sorted(state.atmos_trop_bank_pending_emits):
+            bank_tokens = state.atmos_subtype12_bank_tokens.get(network_id)
+            stored_tow = state.atmos_subtype12_bank_time.get(network_id)
+            if bank_tokens is None or stored_tow != bank_tow:
+                continue
+            tokens = dict(bank_tokens)
+            tokens["atmos_network_id"] = str(network_id)
+            tokens["atmos_trop_network_id"] = str(network_id)
+            tokens["atmos_trop_bank_only"] = "1"
+            rows.append(
+                CompactSSRCorrection(
+                    week=gps_week,
+                    tow=float(bank_tow),
+                    system=bank_satellite.system,
+                    prn=bank_satellite.prn,
+                    dx=0.0,
+                    dy=0.0,
+                    dz=0.0,
+                    dclock_m=0.0,
+                    atmos_network_id=network_id,
+                    atmos_trop_avail=int(tokens.get("atmos_trop_avail", "0")),
+                    atmos_grid_count=int(tokens.get("atmos_grid_count", "0")),
+                    atmos_tokens=tokens,
+                )
+            )
+        state.atmos_trop_bank_pending_emits.clear()
     reset_pending_corrections(state)
     return rows
 
@@ -2169,11 +2252,12 @@ def decode_cssr_orbit_message(
     assert state.pending_orbit is not None
     for satellite in mask.satellites:
         orbit_iode_bits = 10 if satellite.system == "E" else 8
+        orbit_iode = read_bits(payload, bit_offset, orbit_iode_bits)
         bit_offset += orbit_iode_bits
         dx, bit_offset = decode_scaled_signed(payload, bit_offset, 15, 0.0016)
         dy, bit_offset = decode_scaled_signed(payload, bit_offset, 13, 0.0064)
         dz, bit_offset = decode_scaled_signed(payload, bit_offset, 13, 0.0064)
-        state.pending_orbit[satellite.sat] = (dx, dy, dz)
+        state.pending_orbit[satellite.sat] = (orbit_iode, dx, dy, dz)
     state.message_index += 1
     return (
         CSSRMessage(
@@ -2273,9 +2357,13 @@ def decode_cssr_code_bias_message(
     base_rows_by_satellite: dict[str, dict[int, float]] = {}
     for satellite in mask.satellites:
         satellite_biases = state.pending_code_bias.setdefault(satellite.sat, {})
+        exact_biases = state.pending_code_bias_rtklib.setdefault(satellite.sat, {})
         for signal_slot in satellite.signal_slots:
             bias_m, bit_offset = decode_scaled_signed(payload, bit_offset, 11, 0.02)
             signal_id = cssr_signal_slot_to_rtcm_id(satellite.system_id, signal_slot)
+            exact_code = cssr_signal_slot_to_rtklib_code(satellite.system_id, signal_slot)
+            if exact_code != 0:
+                exact_biases[exact_code] = bias_m
             if signal_id == 0 or not math.isfinite(bias_m):
                 continue
             satellite_biases[signal_id] = bias_m
@@ -2366,8 +2454,10 @@ def decode_cssr_code_phase_bias_message(
         atmos_merge_policy,
     )
     assert state.pending_code_bias is not None
+    assert state.pending_code_bias_rtklib is not None
     assert state.pending_base_code_bias is not None
     assert state.pending_phase_bias is not None
+    assert state.pending_phase_bias_rtklib is not None
     assert state.pending_phase_bias_source is not None
     assert state.pending_base_phase_bias is not None
     state.pending_bias_network_id = network_id if network_bias_correction else None
@@ -2391,10 +2481,15 @@ def decode_cssr_code_phase_bias_message(
             continue
         selected_satellite_count += 1
         satellite_code_biases = state.pending_code_bias.setdefault(satellite.sat, {})
+        exact_code_biases = state.pending_code_bias_rtklib.setdefault(satellite.sat, {})
+        exact_phase_biases = state.pending_phase_bias_rtklib.setdefault(satellite.sat, {})
         for signal_slot in satellite.signal_slots:
             signal_id = cssr_signal_slot_to_rtcm_id(satellite.system_id, signal_slot)
+            exact_code = cssr_signal_slot_to_rtklib_code(satellite.system_id, signal_slot)
             if code_bias_exists:
                 bias_m, bit_offset = decode_scaled_signed(payload, bit_offset, 11, 0.02)
+                if exact_code != 0:
+                    exact_code_biases[exact_code] = bias_m
                 if signal_id != 0 and math.isfinite(bias_m) and network_bias_correction:
                     bias_m = compose_code_bias_value(
                         state=state,
@@ -2420,6 +2515,8 @@ def decode_cssr_code_phase_bias_message(
             if phase_bias_exists:
                 bias_m, bit_offset = decode_scaled_signed(payload, bit_offset, 15, 0.001)
                 bit_offset += 2  # phase discontinuity indicator
+                if exact_code != 0:
+                    exact_phase_biases[exact_code] = bias_m
                 if signal_id != 0 and math.isfinite(bias_m) and network_bias_correction:
                     bias_m = compose_phase_bias_value(
                         state=state,
@@ -2566,6 +2663,7 @@ def decode_cssr_phase_bias_message(
         atmos_merge_policy,
     )
     assert state.pending_phase_bias is not None
+    assert state.pending_phase_bias_rtklib is not None
     assert state.pending_phase_bias_source is not None
     assert state.pending_base_phase_bias is not None
     prepare_pending_phase_bias_for_message(
@@ -2576,10 +2674,14 @@ def decode_cssr_phase_bias_message(
 
     mapped_phase = 0
     for satellite in mask.satellites:
+        exact_biases = state.pending_phase_bias_rtklib.setdefault(satellite.sat, {})
         for signal_slot in satellite.signal_slots:
             signal_id = cssr_signal_slot_to_rtcm_id(satellite.system_id, signal_slot)
             bias_m, bit_offset = decode_scaled_signed(payload, bit_offset, 15, 0.001)
             bit_offset += 2  # phase discontinuity indicator
+            exact_code = cssr_signal_slot_to_rtklib_code(satellite.system_id, signal_slot)
+            if exact_code != 0:
+                exact_biases[exact_code] = bias_m
             if (
                 signal_id != 0
                 and math.isfinite(bias_m)
@@ -2705,13 +2807,14 @@ def decode_cssr_stec_message(
         "atmos_stec_avail": "1",
         "atmos_grid_count": "0",
     }
-
     selected_satellites = 0
+    selected_satellite_tokens: list[str] = []
     for index, satellite in enumerate(mask.satellites):
         if ((selected_mask >> (mask.satellite_count - 1 - index)) & 1) == 0:
             continue
         selected_satellites += 1
         sat_key = satellite.sat
+        selected_satellite_tokens.append(sat_key)
         stec_quality = read_bits(payload, bit_offset, 6)
         atmos_tokens[f"atmos_stec_quality:{sat_key}"] = str(stec_quality)
         bit_offset += 6
@@ -2756,6 +2859,10 @@ def decode_cssr_stec_message(
         atmos_merge_policy,
     )
     atmos_tokens["atmos_selected_satellites"] = str(selected_satellites)
+    atmos_tokens["atmos_stec_satellites"] = ";".join(selected_satellite_tokens)
+    atmos_tokens[f"atmos_stec_satellites:{network_id}"] = ";".join(
+        selected_satellite_tokens
+    )
     if compact_atmos_lifecycle_enabled():
         update_pending_lifecycle_atmos(
             state,
@@ -2859,6 +2966,12 @@ def decode_cssr_gridded_message(
         "atmos_trop_wet_residuals_m": ";".join(trop_wet_residuals_m),
         "atmos_stec_residual_range": str(stec_residual_range),
         "atmos_selected_satellites": str(len(selected_satellites)),
+        # Preserve the ST9 grid mask separately from persistent ST8
+        # polynomial keys.  MRTKLIB rejects a satellite absent from this mask
+        # even when an older polynomial for it is still carried forward.
+        "atmos_grid_satellites": ";".join(
+            satellite.sat for satellite in selected_satellites
+        ),
     }
     _update_parity_trop_tokens(
         state,
@@ -3033,11 +3146,13 @@ def decode_cssr_combined_message(
         selected_satellites += 1
         if flg_orbit:
             orbit_iode_bits = 10 if satellite.system == "E" else 8
+            orbit_iode = read_bits(payload, bit_offset, orbit_iode_bits)
             bit_offset += orbit_iode_bits
             dx, bit_offset = decode_scaled_signed(payload, bit_offset, 15, 0.0016)
             dy, bit_offset = decode_scaled_signed(payload, bit_offset, 13, 0.0064)
             dz, bit_offset = decode_scaled_signed(payload, bit_offset, 13, 0.0064)
         else:
+            orbit_iode = -1
             dx = dy = dz = 0.0
         if flg_clock:
             dclock_m, bit_offset = decode_scaled_signed(payload, bit_offset, 15, 0.0016)
@@ -3046,7 +3161,7 @@ def decode_cssr_combined_message(
         # CLASLIB keeps network orbit in a separate bank; only base-orbit samples
         # should refresh pending_orbit for the expanded SSR product.
         if not flg_net:
-            state.pending_orbit[satellite.sat] = (dx, dy, dz)
+            state.pending_orbit[satellite.sat] = (orbit_iode, dx, dy, dz)
         if flg_clock:
             if not flg_net:
                 state.pending_clock[satellite.sat] = dclock_m
@@ -3108,8 +3223,14 @@ def decode_cssr_atmos_message(
         "atmos_stec_avail": str(stec_avail),
         "atmos_grid_count": str(grid_count),
     }
+    # Keep subtype-12 bank ownership distinct from the merged atmosphere
+    # network.  Later subtype 8/9 messages may replace atmos_network_id while
+    # the independently rotating trop payload is intentionally carried.
+    if trop_avail != 0:
+        atmos_tokens["atmos_trop_network_id"] = str(network_id)
 
     selected_satellites = 0
+    selected_satellite_tokens: list[str] = []
     if trop_avail != 0:
         trop_quality = read_bits(payload, bit_offset, 6)
         atmos_tokens["atmos_trop_quality"] = str(trop_quality)
@@ -3161,6 +3282,7 @@ def decode_cssr_atmos_message(
             satellite = mask.satellites[index]
             selected_satellites += 1
             sat_key = satellite.sat
+            selected_satellite_tokens.append(sat_key)
             stec_quality = read_bits(payload, bit_offset, 6)
             atmos_tokens[f"atmos_stec_quality:{sat_key}"] = str(stec_quality)
             bit_offset += 6
@@ -3225,6 +3347,17 @@ def decode_cssr_atmos_message(
         atmos_merge_policy,
     )
     atmos_tokens["atmos_selected_satellites"] = str(selected_satellites)
+    atmos_tokens["atmos_stec_satellites"] = ";".join(selected_satellite_tokens)
+    atmos_tokens[f"atmos_stec_satellites:{network_id}"] = ";".join(
+        selected_satellite_tokens
+    )
+    state.atmos_subtype12_bank_tokens[network_id] = dict(atmos_tokens)
+    state.atmos_subtype12_bank_time[network_id] = int(header["tow"])
+    state.atmos_trop_bank_pending_emits.add((network_id, int(header["tow"])))
+    if not compact_atmos_lifecycle_enabled():
+        _update_lifecycle_trop(
+            state, int(header["tow"]), network_id, atmos_tokens
+        )
     if compact_atmos_lifecycle_enabled():
         update_pending_lifecycle_atmos(
             state,
@@ -3506,12 +3639,20 @@ def write_compact_corrections(path: Path, corrections: list[CompactSSRCorrection
             ]
             if correction.ura_sigma_m is not None:
                 row.append(f"ura_sigma_m={correction.ura_sigma_m:.6f}")
+            if correction.orbit_iode is not None:
+                row.append(f"orbit_iode={correction.orbit_iode}")
             if correction.code_bias_m:
                 for signal_id in sorted(correction.code_bias_m):
                     row.append(f"cbias:{signal_id}={correction.code_bias_m[signal_id]:.6f}")
             if correction.phase_bias_m:
                 for signal_id in sorted(correction.phase_bias_m):
                     row.append(f"pbias:{signal_id}={correction.phase_bias_m[signal_id]:.6f}")
+            if correction.code_bias_rtklib_m:
+                for code in sorted(correction.code_bias_rtklib_m):
+                    row.append(f"cbias_code:{code}={correction.code_bias_rtklib_m[code]:.6f}")
+            if correction.phase_bias_rtklib_m:
+                for code in sorted(correction.phase_bias_rtklib_m):
+                    row.append(f"pbias_code:{code}={correction.phase_bias_rtklib_m[code]:.6f}")
             if correction.bias_network_id is not None:
                 row.append(f"bias_network_id={correction.bias_network_id}")
             if correction.atmos_network_id is not None:

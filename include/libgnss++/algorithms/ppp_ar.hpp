@@ -14,6 +14,13 @@ SatelliteId clasRealSatellite(const SatelliteId& satellite);
 std::pair<GNSSSystem, int> ambiguityDdGroup(const SatelliteId& satellite);
 double claslibRatioThresholdForNb(int nb);
 
+// MRTKLIB PAR candidate gate: with the three configured frequency slots,
+// satellites missing more than one accepted ambiguity are not trial-excluded.
+std::vector<SatelliteId> selectMrtklibParCandidates(
+    const std::vector<SatelliteId>& eligible_frequency_states,
+    const std::map<SatelliteId, double>& satellite_elevations_rad,
+    int min_active_frequency_states = 2);
+
 // MRTKLIB clas.toml / mrtk_ppp_rtk.c holdamb() semantics (ARMODE_FIXHOLD).
 constexpr double kMrtklibVarHoldAmbCycles2 = 0.001;
 constexpr double kMrtklibHoldElevationMaskRad = 30.0 * M_PI / 180.0;

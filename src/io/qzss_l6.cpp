@@ -391,11 +391,14 @@ void L6Decoder::decodeSubtype8(BitReader& reader) {
     };
 
     int selected_count = 0;
+    std::string stec_satellites;
     for (int i = 0; i < nsat; ++i) {
         if (((selected_mask >> (nsat - 1 - i)) & 1) == 0) continue;
         const auto& sat = mask_.satellites[static_cast<size_t>(i)];
         const std::string key = satLabel(sat);
         ++selected_count;
+        if (!stec_satellites.empty()) stec_satellites += ";";
+        stec_satellites += key;
 
         reader.readU(6); // stec_quality
         const double c00 = reader.readS(14) * 0.05;
@@ -415,6 +418,9 @@ void L6Decoder::decodeSubtype8(BitReader& reader) {
         }
     }
     tokens["atmos_selected_satellites"] = std::to_string(selected_count);
+    tokens["atmos_stec_satellites"] = stec_satellites;
+    tokens["atmos_stec_satellites:" + std::to_string(network_id)] =
+        stec_satellites;
     current_epoch_.has_atmos = true;
     // Update persistent merged atmos (Python pending_atmos equivalent)
     for (const auto& [k, v] : tokens) merged_atmos_[k] = v;
@@ -481,6 +487,15 @@ void L6Decoder::decodeSubtype9(BitReader& reader) {
     tokens["atmos_trop_wet_residuals_m"] = trop_wet;
     tokens["atmos_stec_residual_range"] = std::to_string(stec_residual_range);
     tokens["atmos_selected_satellites"] = std::to_string(static_cast<int>(sel_sats.size()));
+    std::string grid_satellites;
+    for (const auto& sat_key : sel_sats) {
+        if (!grid_satellites.empty()) grid_satellites += ";";
+        grid_satellites += sat_key;
+    }
+    // Keep the ST9 satellite mask distinct from the persistent ST8
+    // polynomial keys.  A satellite can have an old polynomial while being
+    // absent from the current grid, in which case clas_osr_corrmeas rejects it.
+    tokens["atmos_grid_satellites"] = grid_satellites;
     for (const auto& sat_key : sel_sats) {
         tokens["atmos_stec_residual_size:" + sat_key] = std::to_string(stec_residual_range);
         tokens["atmos_stec_residuals_tecu:" + sat_key] = stec_residuals[sat_key];
@@ -847,6 +862,7 @@ void populateSSRProducts(
                         k.find("atmos_stec_c2") != std::string::npos ||
                         k.find("atmos_stec_type:") != std::string::npos ||
                         k.find("atmos_stec_quality:") != std::string::npos ||
+                        k == "atmos_grid_satellites" ||
                         k == "atmos_stec_avail" ||
                         k == "atmos_selected_satellites")
                         pref_corr.atmos_tokens[k] = v;

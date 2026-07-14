@@ -688,12 +688,17 @@ double claslibTropGridCorrectionMeters(
     const Vector3d& receiver_position,
     const GNSSTime& time,
     double elevation_rad,
-    ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy residual_sampling_policy) {
+    ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy residual_sampling_policy,
+    bool allow_native_subtype12) {
     using namespace models::claslib;
     (void)residual_sampling_policy;
 
     int trop_type = -1;
-    if (!parseAtmosTokenInt(atmos_tokens, "atmos_trop_type", trop_type) || trop_type != 1) {
+    const bool have_native_subtype12_wet = allow_native_subtype12 &&
+        atmos_tokens.find("atmos_trop_offset_m") != atmos_tokens.end() &&
+        atmos_tokens.find("atmos_trop_residuals_m") != atmos_tokens.end();
+    if (!parseAtmosTokenInt(atmos_tokens, "atmos_trop_type", trop_type) ||
+        (trop_type != 1 && !have_native_subtype12_wet)) {
         if (!parseAtmosTokenInt(atmos_tokens, "atmos_trop_parity_type", trop_type) ||
             trop_type != 1) {
             return std::numeric_limits<double>::quiet_NaN();
@@ -774,6 +779,9 @@ double claslibTropGridCorrectionMeters(
         double hs_residual_m = 0.0;
         double wet_residual_m = 0.0;
         bool have_residuals = false;
+        bool have_direct_subtype12_values = false;
+        double direct_trop_total_m = 0.0;
+        double direct_trop_wet_m = 0.0;
         if (use_parity_grid_tokens) {
             have_residuals =
                 parseAtmosGridKeyedDouble(
@@ -790,13 +798,52 @@ double claslibTropGridCorrectionMeters(
                         atmos_tokens, "atmos_trop_wet_residuals_m", residual_index, wet_residual_m);
             }
         }
+        // CSSR subtype 12 carries one hydrostatic polynomial shared by the
+        // network plus an absolute wet offset+residual at each grid.  The
+        // expanded CSV preserves those native fields rather than the older
+        // split hs/wet residual lists above (mrtk_clas.c:2168-2186).
+        if (!have_residuals && allow_native_subtype12) {
+            double wet_offset_m = 0.0;
+            double wet_grid_residual_m = 0.0;
+            if (parseAtmosTokenDouble(
+                    atmos_tokens, "atmos_trop_offset_m", wet_offset_m) &&
+                parseAtmosListValueAtIndex(
+                    atmos_tokens, "atmos_trop_residuals_m",
+                    static_cast<size_t>(grid_no - 1), wet_grid_residual_m)) {
+                double t00 = 0.0, t01 = 0.0, t10 = 0.0, t11 = 0.0;
+                parseAtmosTokenDouble(atmos_tokens, "atmos_trop_t00_m", t00);
+                parseAtmosTokenDouble(
+                    atmos_tokens, "atmos_trop_t01_m_per_deg", t01);
+                parseAtmosTokenDouble(
+                    atmos_tokens, "atmos_trop_t10_m_per_deg", t10);
+                parseAtmosTokenDouble(
+                    atmos_tokens, "atmos_trop_t11_m_per_deg2", t11);
+                const ClasGridPoint* origin =
+                    findClasGridPoint(grid_reference.network_id, 1);
+                if (origin != nullptr) {
+                    const double dlat =
+                        grid_point->latitude_deg - origin->latitude_deg;
+                    const double dlon =
+                        grid_point->longitude_deg - origin->longitude_deg;
+                    direct_trop_wet_m = wet_offset_m + wet_grid_residual_m;
+                    direct_trop_total_m = kCssrTropHsRefM + t00 +
+                        t01 * dlat + t10 * dlon + t11 * dlat * dlon +
+                        direct_trop_wet_m;
+                    have_direct_subtype12_values = true;
+                    have_residuals = true;
+                }
+            }
+        }
         if (!have_residuals || !std::isfinite(hs_residual_m) || !std::isfinite(wet_residual_m)) {
             continue;
         }
 
-        const double trop_total_m =
-            tropTotalFromResiduals(hs_residual_m, wet_residual_m);
-        const double trop_wet_m = tropWetFromResidual(wet_residual_m);
+        const double trop_total_m = have_direct_subtype12_values
+            ? direct_trop_total_m
+            : tropTotalFromResiduals(hs_residual_m, wet_residual_m);
+        const double trop_wet_m = have_direct_subtype12_values
+            ? direct_trop_wet_m
+            : tropWetFromResidual(wet_residual_m);
 
         double grid_dry_zenith_m = 0.0;
         double grid_wet_zenith_m = 0.0;
@@ -963,14 +1010,16 @@ double atmosphericTroposphereCorrectionMeters(
     double elevation,
     ppp_shared::PPPConfig::ClasExpandedValueConstructionPolicy value_policy,
     ppp_shared::PPPConfig::ClasSubtype12ValueConstructionPolicy subtype12_value_policy,
-    ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy residual_sampling_policy) {
+    ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy residual_sampling_policy,
+    bool allow_native_subtype12) {
     if (pppEnvOverrides().clas_trop_grid_parity) {
         const double claslib_trop = claslibTropGridCorrectionMeters(
             atmos_tokens,
             receiver_position,
             time,
             elevation,
-            residual_sampling_policy);
+            residual_sampling_policy,
+            allow_native_subtype12);
         if (std::isfinite(claslib_trop)) {
             return claslib_trop;
         }
@@ -1104,12 +1153,17 @@ double atmosphericStecTecu(const std::map<std::string, std::string>& atmos_token
                            const Vector3d& receiver_position,
                            ppp_shared::PPPConfig::ClasExpandedValueConstructionPolicy value_policy,
                            ppp_shared::PPPConfig::ClasSubtype12ValueConstructionPolicy subtype12_value_policy,
-                           ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy residual_sampling_policy) {
+                           ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy residual_sampling_policy,
+                           bool use_claslib_matrix_grid) {
     const std::string suffix = ":" + satellite.toString();
+    const bool subtype12_row = isSubtype12StecRow(atmos_tokens, satellite);
     double stec_tecu = 0.0;
     bool have_correction = false;
     ClasGridReference grid_reference;
     bool have_grid_reference =
+        (use_claslib_matrix_grid && subtype12_row &&
+         resolveClaslibMatrixGridReference(
+             atmos_tokens, receiver_position, grid_reference)) ||
         resolveClasGridReference(atmos_tokens, receiver_position, grid_reference);
     if (!have_grid_reference &&
         pppEnvOverrides().clas_qzss_s_prn_fix &&
@@ -1130,7 +1184,6 @@ double atmosphericStecTecu(const std::map<std::string, std::string>& atmos_token
             }
         }
     }
-    const bool subtype12_row = isSubtype12StecRow(atmos_tokens, satellite);
     int stec_type = -1;
     parseAtmosTokenInt(atmos_tokens, "atmos_stec_type" + suffix, stec_type);
 

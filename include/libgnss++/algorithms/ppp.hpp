@@ -295,6 +295,17 @@ private:
     bool had_fixed_last_epoch_ = false;  ///< AR succeeded in previous epoch
     int clas_kinematic_fix_candidate_streak_ = 0;
     int clas_kinematic_spp_divergence_count_ = 0;
+    // MRTKLIB clas.toml float_count=15: consecutive PPP-FLOAT epochs before
+    // the kinematic CLAS filter is reinitialized from the current SPP seed.
+    int clas_mrtklib_float_count_ = 0;
+    // The CSV correction store is precomposed, while MRTKLIB's L6 decoder
+    // starts empty and needs one 15 s CSSR cycle before CLAS OSR is usable.
+    bool has_clas_mrtklib_stream_start_time_ = false;
+    GNSSTime clas_mrtklib_stream_start_time_;
+    // Per-epoch analogue of MRTKLIB ssat[].vsat[f]: ambiguity states whose
+    // carrier row did not survive the final post-fit residual selection must
+    // not enter ddmat/LAMBDA in this epoch.
+    std::set<SatelliteId> clas_mrtklib_ar_rejected_ambiguities_;
     ppp_ar::WlnlHoldState clas_wlnl_hold_;
     Vector3d last_published_solution_position_ecef_ = Vector3d::Zero();
     bool has_last_published_solution_position_ = false;
@@ -516,7 +527,8 @@ private:
         const NavigationData& nav,
         const Vector3d& receiver_position,
         double clock_bias_m,
-        double trop_zenith) const;
+        double trop_zenith,
+        bool include_single_frequency = false) const;
     bool buildWlnlNlInfoForSatellite(
         const ObservationData& obs,
         const NavigationData& nav,

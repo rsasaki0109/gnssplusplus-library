@@ -55,9 +55,18 @@ struct MeasurementRow {
     Eigen::RowVectorXd H;
     double residual = 0.0;
     double variance = 0.0;
+    // MRTKLIB ddres()/ddcov() metadata. For a DD row, variance is the
+    // diagonal Ri+Rj term, reference_variance is Ri, and rows sharing a
+    // non-negative covariance block receive Ri on their off-diagonals.
+    // Defaults preserve the historical diagonal-ZD/SD measurement model.
+    double reference_variance = 0.0;
+    int dd_covariance_block = -1;
+    SatelliteId reference_satellite;
     SatelliteId satellite;
     bool is_phase = false;
+    bool ambiguity_fresh = false;
     int freq_index = 0;
+    int ambiguity_index = -1;
 };
 
 struct AmbiguityObservation {
@@ -86,10 +95,12 @@ struct KalmanUpdateStats {
     VectorXd residuals;
     VectorXd variances;
     MatrixXd pre_anchor_covariance;
+    std::set<SatelliteId> rejected_phase_ambiguities;
 };
 
 struct EpochUpdateResult {
     bool updated = false;
+    bool insufficient_valid_satellites = false;
     KalmanUpdateStats update_stats;
 };
 
@@ -102,15 +113,18 @@ struct AmbiguityResolutionResult {
 
 struct EpochPreparationResult {
     bool ready = false;
+    bool initialized_this_epoch = false;
 };
 
 struct ClasSlipDetectionStats {
     int lli_count = 0;
     int gf_count = 0;
     int mw_count = 0;
+    int code_change_count = 0;
     int outage_resets = 0;
     int per_sat_outage_resets = 0;
     int total_resets = 0;
+    std::set<SatelliteId> reset_satellites;
 };
 
 AppliedOsrCorrections selectAppliedOsrCorrections(
@@ -158,7 +172,8 @@ void syncSlipState(
     std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
     std::map<SatelliteId, CLASDispersionCompensationInfo>& dispersion_compensation,
     std::map<SatelliteId, CLASPhaseBiasRepairInfo>& phase_bias_repair,
-    double ambiguity_reset_variance);
+    double ambiguity_reset_variance,
+    bool mark_dispersion_slip);
 
 ClasSlipDetectionStats detectClasCycleSlips(
     const ObservationData& obs,
@@ -179,7 +194,8 @@ void predictFilterState(
     double dt,
     const Vector3d& seed_position_ecef,
     double seed_receiver_clock_bias_m,
-    bool seed_valid);
+    bool seed_valid,
+    const std::set<SatelliteId>* observed_satellites = nullptr);
 
 void markSlipCompensationFromAmbiguities(
     const ObservationData& obs,
@@ -208,7 +224,8 @@ MeasurementBuildResult buildEpochMeasurements(
     const std::map<std::string, std::string>& epoch_atmos,
     const TropMappingFunction& trop_mapping_function,
     const AmbiguityResetFunction& ambiguity_reset_function = {},
-    bool debug_enabled = false);
+    bool debug_enabled = false,
+    int reference_rank = 0);
 
 KalmanUpdateStats applyMeasurementUpdate(
     ppp_shared::PPPState& filter_state,

@@ -67,7 +67,8 @@ double claslibTropGridCorrectionMeters(
     const GNSSTime& time,
     double elevation_rad,
     ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy residual_sampling_policy =
-        ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy::INDEXED_OR_MEAN);
+        ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy::INDEXED_OR_MEAN,
+    bool allow_native_subtype12 = false);
 
 double atmosphericTroposphereCorrectionMeters(
     const std::map<std::string, std::string>& atmos_tokens,
@@ -79,7 +80,8 @@ double atmosphericTroposphereCorrectionMeters(
     ppp_shared::PPPConfig::ClasSubtype12ValueConstructionPolicy subtype12_value_policy =
         ppp_shared::PPPConfig::ClasSubtype12ValueConstructionPolicy::FULL,
     ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy residual_sampling_policy =
-        ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy::INDEXED_OR_MEAN);
+        ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy::INDEXED_OR_MEAN,
+    bool allow_native_subtype12 = false);
 
 double atmosphericStecTecu(const std::map<std::string, std::string>& atmos_tokens,
                            const SatelliteId& satellite,
@@ -89,7 +91,8 @@ double atmosphericStecTecu(const std::map<std::string, std::string>& atmos_token
                            ppp_shared::PPPConfig::ClasSubtype12ValueConstructionPolicy subtype12_value_policy =
                                ppp_shared::PPPConfig::ClasSubtype12ValueConstructionPolicy::FULL,
                            ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy residual_sampling_policy =
-                               ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy::INDEXED_OR_MEAN);
+                               ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy::INDEXED_OR_MEAN,
+                           bool use_claslib_matrix_grid = false);
 
 double ionosphereDelayMetersFromTecu(SignalType signal,
                                      const Ephemeris* eph,

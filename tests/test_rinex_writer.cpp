@@ -498,6 +498,13 @@ TEST(RINEXReaderTest, PreservesExactGpsL2RinexObservationIdentity) {
     EXPECT_EQ(gps_l2w->pseudorange_observation_type, "C2W");
     EXPECT_EQ(gps_l2w->carrier_phase_observation_type, "L2W");
     EXPECT_EQ(gps_l2w->exactBiasObservationType(), "C2W");
+    const auto* exact_l2w = w_epoch.getRinexTrackingObservation(gps_24, "2W");
+    ASSERT_NE(exact_l2w, nullptr);
+    EXPECT_NEAR(exact_l2w->pseudorange, 22022262.423, 1e-3);
+    EXPECT_NEAR(exact_l2w->carrier_phase, 120222443.467, 1e-3);
+    const auto* w_slot = w_epoch.getRinexFrequencySlot(GNSSSystem::GPS, 1);
+    ASSERT_NE(w_slot, nullptr);
+    EXPECT_EQ(*w_slot, "2W");
 
     const ObservationData x_epoch =
         read_l2_epoch("x", "C2X L2X", "22033362.423", "120333443.467");
@@ -508,6 +515,59 @@ TEST(RINEXReaderTest, PreservesExactGpsL2RinexObservationIdentity) {
     EXPECT_EQ(gps_l2x->pseudorange_observation_type, "C2X");
     EXPECT_EQ(gps_l2x->carrier_phase_observation_type, "L2X");
     EXPECT_EQ(gps_l2x->exactBiasObservationType(), "C2X");
+    const auto* exact_l2x = x_epoch.getRinexTrackingObservation(gps_24, "2X");
+    ASSERT_NE(exact_l2x, nullptr);
+    EXPECT_NEAR(exact_l2x->pseudorange, 22033362.423, 1e-3);
+    EXPECT_NEAR(exact_l2x->carrier_phase, 120333443.467, 1e-3);
+    const auto* x_slot = x_epoch.getRinexFrequencySlot(GNSSSystem::GPS, 1);
+    ASSERT_NE(x_slot, nullptr);
+    EXPECT_EQ(*x_slot, "2X");
+}
+
+TEST(RINEXReaderTest, GpsL2HeaderSlotDoesNotFallbackWhenL2wIsMissing) {
+    const auto temp_path = std::filesystem::temp_directory_path() /
+        "libgnss_gps_l2_fixed_header_slot.obs";
+    std::filesystem::remove(temp_path);
+
+    std::ofstream output(temp_path);
+    ASSERT_TRUE(output.is_open());
+    output << rinexHeaderLine(
+        "     3.04           OBSERVATION DATA    M",
+        "RINEX VERSION / TYPE");
+    output << rinexHeaderLine(
+        "G    6 C1C L1C C2W L2W C2L L2L",
+        "SYS / # / OBS TYPES");
+    output << rinexHeaderLine("", "END OF HEADER");
+    output << "> 2024 08 03 09 51 20.0000000  0  1\n";
+    output << "G24"
+           << rinexObsField("22011162.552")
+           << rinexObsField("115669443.467")
+           << rinexObsField("")
+           << rinexObsField("")
+           << rinexObsField("22033362.423")
+           << rinexObsField("120333443.467")
+           << "\n";
+    output.close();
+
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(temp_path.string()));
+    io::RINEXReader::RINEXHeader header;
+    ASSERT_TRUE(reader.readHeader(header));
+    ObservationData epoch;
+    ASSERT_TRUE(reader.readObservationEpoch(epoch));
+
+    const auto* slot = epoch.getRinexFrequencySlot(GNSSSystem::GPS, 1);
+    ASSERT_NE(slot, nullptr);
+    EXPECT_EQ(*slot, "2W");
+    EXPECT_EQ(epoch.getRinexTrackingObservation(
+                  SatelliteId(GNSSSystem::GPS, 24), "2W"),
+              nullptr);
+    EXPECT_NE(epoch.getRinexTrackingObservation(
+                  SatelliteId(GNSSSystem::GPS, 24), "2L"),
+              nullptr);
+
+    reader.close();
+    std::filesystem::remove(temp_path);
 }
 
 TEST(RINEXReaderTest, QzssSecondaryL5PreferenceSelectsL5Q) {

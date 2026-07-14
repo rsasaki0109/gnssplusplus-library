@@ -75,6 +75,10 @@ struct OSRCorrection {
     int atmos_valid_grid_count = 0;
     int atmos_stec_grid_value_count = 0;
     int atmos_selected_grid_stec_value_count = 0;
+    bool atmos_grid_satellite_membership_known = false;
+    bool atmos_grid_has_satellite = false;
+    bool atmos_stec_satellite_membership_known = false;
+    bool atmos_stec_has_satellite = false;
     GNSSTime phase_bias_reference_time;
     GNSSTime code_bias_reference_time;
     GNSSTime clock_reference_time;
@@ -93,6 +97,7 @@ struct CLASDispersionCompensationInfo {
     std::array<double, 2> base_phase_m{{0.0, 0.0}};
     std::array<bool, 2> has_base{{false, false}};
     std::array<bool, 2> slip{{false, false}};
+    bool mrtklib_qzss_suppressed = false;
 };
 
 struct CLASSisContinuityInfo {

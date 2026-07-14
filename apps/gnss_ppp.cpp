@@ -806,6 +806,11 @@ int main(int argc, char* argv[]) {
             ppp_env_overrides.madoca_qzss_l5) {
             obs_reader.setQzssSecondaryL5Preference(true);
         }
+        if (options.use_clas_osr_filter && options.kinematic_mode &&
+            options.use_dynamics_model && !options.low_dynamics_mode) {
+            // MRTKLIB nf=3 assigns QZSS C5Q to pntpos()'s second code slot.
+            obs_reader.setQzssSecondaryL5Preference(true);
+        }
         if (!obs_reader.open(options.obs_path)) {
             std::cerr << "Error: failed to open observation file: " << options.obs_path << "\n";
             return 1;
@@ -922,6 +927,16 @@ int main(int argc, char* argv[]) {
             ppp_config.ar_method = ARMethod::DD_PER_FREQ;
         } else {
             argumentError("--ar-method must be one of: iflc, wlnl, per-freq", argv[0]);
+        }
+        // The MRTKLIB literal CLAS path resolves the uncombined L1/L2 state-DD
+        // system directly (ddmat/resamb_LAMBDA).  In the native processor that
+        // implementation is hosted by DD_WLNL even though it deliberately has
+        // no WL-fix prerequisite.  Do not leave parity runs on the CLI default
+        // DD_IFLC path when the wrapper omits --ar-method.
+        if (ppp_config.clas_mrtklib_float_parity &&
+            ppp_config.kinematic_mode && !ppp_config.low_dynamics_mode &&
+            ppp_config.use_clas_osr_filter && ppp_config.use_dynamics_model) {
+            ppp_config.ar_method = ARMethod::DD_WLNL;
         }
         ppp_config.use_iers_solid_tide = options.use_iers_solid_tide;
         ppp_config.use_iers_ocean_loading = options.use_iers_ocean_loading;

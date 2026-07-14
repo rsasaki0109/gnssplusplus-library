@@ -1326,7 +1326,7 @@ TEST(PPPTest, SSRProductsLoadCsvParsesOptionalUraCodeBiasPhaseBiasAndAtmosTokens
 
     const std::string ssr_text =
         "# week,tow,sat,dx,dy,dz,dclock_m[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,atmos_<name>=<value>...]\n"
-        "2414,345600.0,G01,1.0,-2.0,3.0,4.0,ura_sigma_m=0.002750,cbias:2=-0.120000,cbias:8=0.050000,pbias:2=0.015000,atmos_network_id=1,atmos_trop_quality=9\n";
+        "2414,345600.0,G01,1.0,-2.0,3.0,4.0,ura_sigma_m=0.002750,cbias:2=-0.120000,cbias:8=0.050000,pbias:2=0.015000,cbias_code:1=-0.120000,pbias_code:17=nan,pbias_code:18=0.025000,atmos_network_id=1,atmos_trop_quality=9\n";
     writeTextFile(ssr_path, ssr_text);
 
     SSRProducts ssr_products;
@@ -1337,6 +1337,8 @@ TEST(PPPTest, SSRProductsLoadCsvParsesOptionalUraCodeBiasPhaseBiasAndAtmosTokens
     double ura_sigma_m = 0.0;
     std::map<uint8_t, double> code_bias_m;
     std::map<uint8_t, double> phase_bias_m;
+    std::map<uint8_t, double> code_bias_rtklib_m;
+    std::map<uint8_t, double> phase_bias_rtklib_m;
     std::map<std::string, std::string> atmos_tokens;
     ASSERT_TRUE(ssr_products.interpolateCorrection(
         SatelliteId(GNSSSystem::GPS, 1),
@@ -1346,7 +1348,10 @@ TEST(PPPTest, SSRProductsLoadCsvParsesOptionalUraCodeBiasPhaseBiasAndAtmosTokens
         &ura_sigma_m,
         &code_bias_m,
         &phase_bias_m,
-        &atmos_tokens));
+        &atmos_tokens,
+        nullptr, nullptr, nullptr, 0, nullptr, nullptr, nullptr, true,
+        nullptr, nullptr, SSRClockSelectionPolicy::MergedInterpolate,
+        &code_bias_rtklib_m, &phase_bias_rtklib_m));
 
     EXPECT_NEAR(ura_sigma_m, 0.00275, 1e-12);
     ASSERT_EQ(code_bias_m.size(), 2U);
@@ -1354,6 +1359,11 @@ TEST(PPPTest, SSRProductsLoadCsvParsesOptionalUraCodeBiasPhaseBiasAndAtmosTokens
     EXPECT_NEAR(code_bias_m.at(8U), 0.05, 1e-12);
     ASSERT_EQ(phase_bias_m.size(), 1U);
     EXPECT_NEAR(phase_bias_m.at(2U), 0.015, 1e-12);
+    ASSERT_EQ(code_bias_rtklib_m.size(), 1U);
+    EXPECT_NEAR(code_bias_rtklib_m.at(1U), -0.12, 1e-12);
+    ASSERT_EQ(phase_bias_rtklib_m.size(), 2U);
+    EXPECT_TRUE(std::isnan(phase_bias_rtklib_m.at(17U)));
+    EXPECT_NEAR(phase_bias_rtklib_m.at(18U), 0.025, 1e-12);
     ASSERT_EQ(atmos_tokens.size(), 2U);
     EXPECT_EQ(atmos_tokens.at("atmos_network_id"), "1");
     EXPECT_EQ(atmos_tokens.at("atmos_trop_quality"), "9");
@@ -1495,6 +1505,84 @@ TEST(PPPTest, SSRProductsUsesExactCodeBiasNetworkRefreshAtBoundary) {
     EXPECT_NEAR(status.code_bias_reference_time.tow, 230445.0, 1e-12);
 
     std::filesystem::remove(ssr_path);
+}
+
+TEST(PPPTest, SSRProductsHoldsSelectedBiasNetworkPastNewerForeignBank) {
+    SSRProducts products;
+    const SatelliteId satellite(GNSSSystem::GPS, 6);
+
+    const auto add_phase_bias = [&](double tow, int network_id, double bias_m) {
+        SSROrbitClockCorrection correction;
+        correction.satellite = satellite;
+        correction.time = GNSSTime(2324, tow);
+        correction.phase_bias_valid = true;
+        correction.phase_bias_m[2] = bias_m;
+        correction.bias_network_id = network_id;
+        products.addCorrection(correction);
+    };
+    add_phase_bias(177000.0, 7, -1.837);
+    add_phase_bias(177025.0, 1, 1.727);
+    // At the query epoch this matching bank is still inside the literal
+    // reception-lag window, so network 7 must continue holding its older bank.
+    add_phase_bias(177030.0, 7, -1.834);
+
+    const auto add_code_bias = [&](double tow, int network_id, double bias_m) {
+        SSROrbitClockCorrection correction;
+        correction.satellite = satellite;
+        correction.time = GNSSTime(2324, tow);
+        correction.code_bias_valid = true;
+        correction.code_bias_m[9] = bias_m;
+        correction.bias_network_id = network_id;
+        products.addCorrection(correction);
+    };
+    add_code_bias(177000.0, 0, 0.96);
+    add_code_bias(177025.0, 1, 0.34);
+    add_code_bias(177030.0, 0, 0.96);
+
+    for (double tow : {177040.0, 177040.2, 177040.4}) {
+        SSROrbitClockCorrection clock;
+        clock.satellite = satellite;
+        clock.time = GNSSTime(2324, tow);
+        clock.orbit_valid = true;
+        clock.orbit_correction_ecef = Vector3d::Zero();
+        clock.clock_valid = true;
+        clock.clock_correction_m = -1.0208;
+        products.addCorrection(clock);
+    }
+
+    for (double tow : {177040.0, 177040.2}) {
+        SCOPED_TRACE(tow);
+        Vector3d orbit_correction = Vector3d::Zero();
+        double clock_correction_m = 0.0;
+        std::map<uint8_t, double> code_bias_m;
+        std::map<uint8_t, double> phase_bias_m;
+        GNSSTime phase_bias_reference_time;
+        ASSERT_TRUE(products.interpolateCorrection(
+            satellite,
+            GNSSTime(2324, tow),
+            orbit_correction,
+            clock_correction_m,
+            nullptr,
+            &code_bias_m,
+            &phase_bias_m,
+            nullptr,
+            nullptr,
+            &phase_bias_reference_time,
+            nullptr,
+            7,
+            nullptr,
+            nullptr,
+            nullptr,
+            false,
+            nullptr,
+            nullptr,
+            SSRClockSelectionPolicy::MrtklibLiteralBaseHold));
+        ASSERT_EQ(code_bias_m.size(), 1U);
+        EXPECT_DOUBLE_EQ(code_bias_m.at(9), 0.96);
+        ASSERT_EQ(phase_bias_m.size(), 1U);
+        EXPECT_DOUBLE_EQ(phase_bias_m.at(2), -1.837);
+        EXPECT_DOUBLE_EQ(phase_bias_reference_time.tow, 177000.0);
+    }
 }
 
 TEST(PPPTest, ProcessorLoadsRtcmSsrCorrectionsFromFile) {

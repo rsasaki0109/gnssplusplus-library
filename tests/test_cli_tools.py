@@ -6804,6 +6804,8 @@ class CLIToolsTest(unittest.TestCase):
             self.assertIn("atmos_trop_avail=0", corrections_csv)
             self.assertIn("atmos_stec_avail=1", corrections_csv)
             self.assertIn("atmos_grid_count=0", corrections_csv)
+            self.assertIn("atmos_stec_satellites=G03", corrections_csv)
+            self.assertIn("atmos_stec_satellites:7=G03", corrections_csv)
             self.assertIn("atmos_stec_quality:G03=17", corrections_csv)
             self.assertIn("atmos_stec_type:G03=3", corrections_csv)
             self.assertIn("atmos_stec_c00_tecu:G03=1.500000", corrections_csv)
@@ -7419,6 +7421,55 @@ class CLIToolsTest(unittest.TestCase):
             self.assertNotIn("2200,518400.000,G,3", reset_csv)
             self.assertIn("2200,518400.000,G,4", reset_csv)
             self.assertIn("pbias:2=0.045000", reset_csv)
+
+    def test_qzss_l6_info_preserves_exact_rtklib_phase_bias_signal_identity(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_exact_pbias_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_l6_exact_pbias.bin"
+            output_path = temp_root / "exact_pbias.csv"
+            # GPS CSSR slots 0, 8 and 10 are respectively RTKLIB CODE_L1C,
+            # CODE_L2X and CODE_L2W.  CODE_L2L (17) is deliberately absent;
+            # collapsing the cells to RTCM bands must not invent it.
+            input_path.write_bytes(
+                build_qzss_l6_subframe_stream(
+                    [
+                        build_qzss_cssr_mask_message(
+                            tow=518400,
+                            iod=3,
+                            prn=4,
+                            sigmask=0x80A0,
+                            sync=True,
+                        ),
+                        build_qzss_cssr_phase_bias_message(
+                            tow_delta=0,
+                            iod=3,
+                            phase_biases_m=(0.101, 0.202, 0.303),
+                            entry_count=3,
+                            sync=False,
+                        ),
+                    ]
+                )
+            )
+
+            result = self.run_gnss(
+                "qzss-l6-info",
+                "--input",
+                str(input_path),
+                "--extract-compact-corrections",
+                str(output_path),
+                "--gps-week",
+                "2200",
+            )
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            row = next(
+                line
+                for line in output_path.read_text(encoding="ascii").splitlines()
+                if line.startswith("2200,518400.000,G,4")
+            )
+            self.assertIn("pbias_code:1=0.101000", row)
+            self.assertIn("pbias_code:18=0.202000", row)
+            self.assertIn("pbias_code:20=0.303000", row)
+            self.assertNotIn("pbias_code:17=", row)
 
     def test_qzss_l6_info_compact_phase_bias_merge_policy_selected_mask_prune_drops_unselected_satellites(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_qzss_l6_phase_bias_prune_") as temp_dir:

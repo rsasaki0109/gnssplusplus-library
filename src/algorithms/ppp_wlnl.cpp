@@ -115,13 +115,35 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
     last_fixed_ambiguities_ = 0;
     last_clas_constrained_fixed_state_valid_ = false;
 
-    const auto wlnl_preparation = ppp_ar::prepareWlnlCandidates(
+    auto wlnl_preparation = ppp_ar::prepareWlnlCandidates(
         ppp_config_,
         filter_state_,
         ambiguity_states_,
         ssr_products_loaded_,
         obs.time,
         pppDebugEnabled());
+    if (ppp_config_.clas_mrtklib_float_parity &&
+        ppp_config_.kinematic_mode && !ppp_config_.low_dynamics_mode &&
+        ppp_config_.use_clas_osr_filter && ppp_config_.use_dynamics_model &&
+        !clas_mrtklib_ar_rejected_ambiguities_.empty()) {
+        auto& eligible = wlnl_preparation.eligible_ambiguities;
+        size_t write = 0;
+        for (size_t read = 0; read < eligible.satellites.size(); ++read) {
+            if (clas_mrtklib_ar_rejected_ambiguities_.count(
+                    eligible.satellites[read]) != 0) {
+                continue;
+            }
+            if (write != read) {
+                eligible.satellites[write] = eligible.satellites[read];
+                eligible.state_indices[write] = eligible.state_indices[read];
+                eligible.scales[write] = eligible.scales[read];
+            }
+            ++write;
+        }
+        eligible.satellites.resize(write);
+        eligible.state_indices.resize(write);
+        eligible.scales.resize(write);
+    }
     const auto& eligible_ambiguities = wlnl_preparation.eligible_ambiguities;
 
     const int n = static_cast<int>(eligible_ambiguities.satellites.size());
@@ -169,7 +191,8 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
     const double trop_zenith =
         ppp_config_.estimate_troposphere ? filter_state_.state(filter_state_.trop_index) : 2.3;
     const auto osr_by_sat = computeWlnlOsrCorrections(
-        obs, nav, receiver_position, clock_bias_m, trop_zenith);
+        obs, nav, receiver_position, clock_bias_m, trop_zenith,
+        /*include_single_frequency=*/direct_state_dd_path);
 
     std::map<SatelliteId, double> satellite_elevations_rad;
     for (const auto& [satellite, osr] : osr_by_sat) {
@@ -177,6 +200,23 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
     }
     const std::map<SatelliteId, double>* elevation_ref_map =
         satellite_elevations_rad.empty() ? nullptr : &satellite_elevations_rad;
+
+    if (pppDebugEnabled() && direct_state_dd_path) {
+        std::cerr << std::setprecision(15)
+                  << "[PPP-AR-EPOCH] week=" << obs.time.week
+                  << " tow=" << obs.time.tow
+                  << " eligible=" << eligible_ambiguities.satellites.size()
+                  << " sats=";
+        for (const auto& satellite : eligible_ambiguities.satellites) {
+            const auto ambiguity_it = ambiguity_states_.find(satellite);
+            std::cerr << satellite.toString();
+            if (ambiguity_it != ambiguity_states_.end()) {
+                std::cerr << "(lock=" << ambiguity_it->second.lock_count << ')';
+            }
+            std::cerr << ' ';
+        }
+        std::cerr << '\n';
+    }
 
     const ppp_ar::WlnlFixAttempt attempt = ppp_ar::resolveWlnlFix(
         ppp_config_,
@@ -420,7 +460,8 @@ std::map<SatelliteId, OSRCorrection> PPPProcessor::computeWlnlOsrCorrections(
     const NavigationData& nav,
     const Vector3d& receiver_position,
     double clock_bias_m,
-    double trop_zenith) const {
+    double trop_zenith,
+    bool include_single_frequency) const {
     std::map<SatelliteId, OSRCorrection> osr_by_sat;
     const bool use_clas_osr_wlnl =
         ssr_products_loaded_ && ppp_config_.estimate_ionosphere && !ppp_config_.use_ionosphere_free;
@@ -441,7 +482,13 @@ std::map<SatelliteId, OSRCorrection> PPPProcessor::computeWlnlOsrCorrections(
                                       sis_continuity, phase_bias_repair);
     materializeClasReceiverAntennaCorrections(osr_corrections);
     for (const auto& osr : osr_corrections) {
-        if (osr.valid && osr.num_frequencies >= 2) {
+        // MRTKLIB ddmat admits each frequency independently via vsat[f].
+        // The direct state-DD path therefore needs an elevation entry for a
+        // returning L1-only satellite even though the legacy WL/NL observable
+        // builder still requires two frequencies.
+        if (osr.valid &&
+            (osr.num_frequencies >= 2 ||
+             (include_single_frequency && osr.num_frequencies >= 1))) {
             osr_by_sat[osr.satellite] = osr;
         }
     }
