@@ -48,6 +48,13 @@ TEST(PPPMeasurementVariance, MadocaPerFrequencyDoesNotDeweightQzssL5) {
         false, SignalType::GPS_L1CA, SignalType::GPS_L2C));
 }
 
+TEST(PPPArTrialState, PerFrequencyAttemptsAreAlwaysEphemeral) {
+    using ARMethod = PPPProcessor::PPPConfig::ARMethod;
+    EXPECT_TRUE(ppp_internal::alwaysRestoreArTrialState(ARMethod::DD_PER_FREQ));
+    EXPECT_FALSE(ppp_internal::alwaysRestoreArTrialState(ARMethod::DD_IFLC));
+    EXPECT_FALSE(ppp_internal::alwaysRestoreArTrialState(ARMethod::DD_WLNL));
+}
+
 TEST(PPPEnvOverridesTest, MadocaQzssL5DefaultsToThreeFrequencyParity) {
     EXPECT_TRUE(PPPEnvOverrides::fromEnvironment().madoca_qzss_l5);
 }

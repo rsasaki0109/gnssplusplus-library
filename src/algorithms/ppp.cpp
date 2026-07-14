@@ -675,7 +675,14 @@ PositionSolution PPPProcessor::processEpochStandard(
                     solution.position_geodetic = GeodeticCoord(latitude, longitude, height);
                 }
                 had_fixed_last_epoch_ = accepted_fixed_solution;
-                if (wide_lane_only) {
+                if (ppp_internal::alwaysRestoreArTrialState(
+                        ppp_config_.ar_method)) {
+                    // MADOCALIB ppp_ar() receives an xp/Pp working copy.  Keep
+                    // every per-frequency EWL/WL/N1 attempt ephemeral, even
+                    // when it exits before setting the WL-only status.
+                    filter_state_ = float_filter_state;
+                    ambiguity_states_ = float_ambiguity_states;
+                } else if (wide_lane_only) {
                     // MADOCALIB SOLQ_FIX_WL parity: publish the current epoch
                     // from the WL-constrained working state as PPP/FLOAT, but
                     // do not hold that temporary constraint in the float filter.
@@ -684,9 +691,10 @@ PositionSolution PPPProcessor::processEpochStandard(
                 } else if (fixed && !accepted_fixed_solution) {
                     filter_state_ = float_filter_state;
                     ambiguity_states_ = float_ambiguity_states;
-                } else if (accepted_fixed_solution && ppp_config_.ar_method != PPPConfig::ARMethod::DD_WLNL) {
-                    // For DD_IFLC/DD_PER_FREQ: revert to float state to avoid
-                    // poisoning later epochs with a bad fix.
+                } else if (accepted_fixed_solution &&
+                           ppp_config_.ar_method != PPPConfig::ARMethod::DD_WLNL) {
+                    // For DD_IFLC: revert to float state to avoid poisoning
+                    // later epochs with a bad fix.
                     filter_state_ = float_filter_state;
                     ambiguity_states_ = float_ambiguity_states;
                 }
