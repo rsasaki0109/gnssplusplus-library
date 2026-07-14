@@ -422,9 +422,10 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
         int wl_int = 0;
         bool wl_fixed = false;
     };
-    const int min_lock = ssr_products_loaded_
-        ? std::min(ppp_config_.convergence_min_epochs, 10)
-        : ppp_config_.convergence_min_epochs;
+    const int min_lock = ppp_internal::perFrequencyArMinLockCount(
+        require_coherent_ssr_ && ssr_products_loaded_,
+        ssr_products_loaded_,
+        ppp_config_.convergence_min_epochs);
     std::vector<Cand> cands;
     for (const auto& [sat, l1_index] : filter_state_.ambiguity_indices) {
         // MADOCALIB gen_sat_sd excludes GLONASS from PPP-AR even when it is
