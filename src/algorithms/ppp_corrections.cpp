@@ -620,10 +620,6 @@ double rtklibSystemErrorFactor(GNSSSystem system) {
     }
 }
 
-bool usesGpsL5ErrorFactor(SignalType signal) {
-    return signal == SignalType::GPS_L5 || signal == SignalType::QZS_L5;
-}
-
 }  // namespace
 
 double PPPProcessor::modeledZenithTroposphereDelayMeters(
@@ -1617,8 +1613,14 @@ double PPPProcessor::measurementVariance(const IonosphereFreeObs& observation,
                                          bool carrier_phase) const {
     const double sin_elevation = std::sin(std::max(observation.elevation, kRtkLibMinElevationRadians));
     double factor = rtklibSystemErrorFactor(observation.satellite.system);
-    if (usesGpsL5ErrorFactor(observation.primary_signal) ||
-        usesGpsL5ErrorFactor(observation.secondary_signal)) {
+    const bool madoca_per_frequency =
+        require_coherent_ssr_ && ssr_products_loaded_ &&
+        !ppp_config_.use_ionosphere_free && ppp_config_.estimate_ionosphere &&
+        !ppp_config_.use_clas_osr_filter;
+    if (ppp_internal::applyGpsL5MeasurementErrorFactor(
+            madoca_per_frequency,
+            observation.primary_signal,
+            observation.secondary_signal)) {
         factor *= kRtkLibGpsL5ErrorFactor;
     }
     if (ppp_config_.use_ionosphere_free) {

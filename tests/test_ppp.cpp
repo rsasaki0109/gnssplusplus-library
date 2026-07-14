@@ -31,6 +31,23 @@ TEST(PPPFilterIterations, MadocaPerFrequencyCommitsOneUpdatePerEpoch) {
     EXPECT_EQ(ppp_internal::filterIterationCount(false, false, 8), 8);
 }
 
+TEST(PPPArAdmission, CoherentSsrDoesNotAddALockCountGate) {
+    EXPECT_EQ(ppp_internal::perFrequencyArMinLockCount(true, true, 20), 0);
+    EXPECT_EQ(ppp_internal::perFrequencyArMinLockCount(false, true, 20), 10);
+    EXPECT_EQ(ppp_internal::perFrequencyArMinLockCount(false, false, 20), 20);
+}
+
+TEST(PPPMeasurementVariance, MadocaPerFrequencyDoesNotDeweightQzssL5) {
+    EXPECT_FALSE(ppp_internal::applyGpsL5MeasurementErrorFactor(
+        true, SignalType::QZS_L1CA, SignalType::QZS_L5));
+    EXPECT_TRUE(ppp_internal::applyGpsL5MeasurementErrorFactor(
+        false, SignalType::QZS_L1CA, SignalType::QZS_L5));
+    EXPECT_TRUE(ppp_internal::applyGpsL5MeasurementErrorFactor(
+        false, SignalType::GPS_L1CA, SignalType::GPS_L5));
+    EXPECT_FALSE(ppp_internal::applyGpsL5MeasurementErrorFactor(
+        false, SignalType::GPS_L1CA, SignalType::GPS_L2C));
+}
+
 TEST(PPPEnvOverridesTest, MadocaQzssL5DefaultsToThreeFrequencyParity) {
     EXPECT_TRUE(PPPEnvOverrides::fromEnvironment().madoca_qzss_l5);
 }
