@@ -262,7 +262,10 @@ class ClaslibZdComponentExportTest(unittest.TestCase):
             code_l1c = next(row for row in rows if row["row_type"] == "code" and row["signal"] == "C1C")
             code_l2w = next(row for row in rows if row["row_type"] == "code" and row["signal"] == "C2W")
             phase_l2w = next(row for row in rows if row["row_type"] == "phase" and row["signal"] == "L2W")
-            l2w_iono_l1 = (4.202 - (2.345 - 0.020 + 0.003 + 0.022)) / export.GPS_IONO_SCALE_BY_SUFFIX["2"]
+            l2w_iono_l1 = 1.234 * export.CLASLIB_STORED_IONO_TO_L1
+            l2w_iono_scaled = (
+                l2w_iono_l1 * export.GPS_IONO_SCALE_BY_SUFFIX["2"]
+            )
             self.assertEqual(code_l2w["stage"], "post")
             self.assertEqual(code_l2w["week"], "2068")
             self.assertEqual(code_l2w["tow"], "230420.0")
@@ -275,18 +278,25 @@ class ClaslibZdComponentExportTest(unittest.TestCase):
             self.assertEqual(code_l2w["code_bias_m"], "0.022")
             self.assertEqual(code_l2w["network_compensation_m"], "0")
             self.assertEqual(code_l2w["trop_correction_m"], "2.345")
-            self.assertAlmostEqual(float(code_l1c["iono_l1_m"]), 1.752)
+            self.assertAlmostEqual(float(code_l1c["iono_l1_m"]), l2w_iono_l1)
             self.assertAlmostEqual(float(code_l2w["iono_l1_m"]), l2w_iono_l1)
             self.assertAlmostEqual(
                 float(code_l2w["stec_tecu"]),
                 l2w_iono_l1 / export.GPS_L1_TECU_TO_METERS,
             )
-            self.assertAlmostEqual(float(code_l2w["iono_scaled_m"]), 1.852)
+            self.assertAlmostEqual(float(code_l2w["iono_scaled_m"]), l2w_iono_scaled)
             self.assertAlmostEqual(
                 float(code_l2w["iono_scale"]),
                 export.GPS_IONO_SCALE_BY_SUFFIX["2"],
             )
-            self.assertEqual(code_l2w["claslib_iono_source"], "prc_closure")
+            self.assertEqual(code_l2w["claslib_iono_source"], "stored_f2_f1")
+            expected_geometry = 4.202 - (
+                2.345 - 0.020 + 0.003 + 0.022 + l2w_iono_scaled
+            )
+            self.assertAlmostEqual(
+                float(code_l2w["iode_geometry_compensation_m"]),
+                expected_geometry,
+            )
             self.assertAlmostEqual(float(code_l2w["claslib_raw_iono_l1_m"]), 1.234)
             self.assertAlmostEqual(
                 float(code_l2w["claslib_raw_stec_tecu"]),
@@ -385,17 +395,15 @@ class ClaslibZdComponentExportTest(unittest.TestCase):
             )
             self.assertEqual(code_l1c["network_compensation_m"], "-0.052")
             self.assertEqual(code_l2w["network_compensation_m"], "-0.052")
-            # CLASLIB's adjust_prc subtracts the SIS continuity delta from PRC
-            # (prc -= sis) while dumping compN = +sis, so the PRC-closure
-            # iono reconstruction must add compN back: -0.359 + (-0.052) and
-            # -0.625 + (-0.052) (see prc_iono_scaled_from_osrres). Without
-            # this the sis residual leaks into iono_scaled_m/iono_l1_m/
-            # stec_tecu.
-            self.assertAlmostEqual(float(code_l1c["iono_scaled_m"]), -0.411)
-            self.assertAlmostEqual(float(code_l2w["iono_scaled_m"]), -0.677)
+            # The raw CLASLIB ionosphere is stored with F1*F2 scaling. SIS and
+            # IODE geometry are independent terms rather than part of STEC.
+            l1_iono = -0.527 * export.CLASLIB_STORED_IONO_TO_L1
+            l2_iono = l1_iono * export.GPS_IONO_SCALE_BY_SUFFIX["2"]
+            self.assertAlmostEqual(float(code_l1c["iono_scaled_m"]), l1_iono)
+            self.assertAlmostEqual(float(code_l2w["iono_scaled_m"]), l2_iono)
             self.assertAlmostEqual(
                 float(code_l2w["iono_l1_m"]),
-                -0.677 / export.GPS_IONO_SCALE_BY_SUFFIX["2"],
+                l1_iono,
             )
 
     def test_normalizes_claslib_osrres_qzss_l2x_code_row(self) -> None:
@@ -458,6 +466,7 @@ class ClaslibZdComponentExportTest(unittest.TestCase):
             rows = read_csv(output_path)
             code_l1c = next(row for row in rows if row["row_type"] == "code" and row["signal"] == "C1C")
             code_l2x = next(row for row in rows if row["row_type"] == "code" and row["signal"] == "C2X")
+            code_l5x = next(row for row in rows if row["row_type"] == "code" and row["signal"] == "C5X")
             self.assertEqual(code_l1c["sat"], "J01")
             self.assertEqual(code_l1c["prc_m"], "3.787")
             self.assertEqual(code_l1c["code_bias_m"], "0.000")
@@ -469,6 +478,8 @@ class ClaslibZdComponentExportTest(unittest.TestCase):
             self.assertEqual(code_l2x["prc_m"], "5.468")
             self.assertEqual(code_l2x["code_bias_m"], "2.340")
             self.assertEqual(code_l2x["receiver_antenna_m"], "-0.058")
+            self.assertEqual(code_l5x["prc_m"], "0.000")
+            self.assertEqual(code_l5x["iode_geometry_compensation_m"], "")
 
     def test_claslib_osrres_requires_gps_week(self) -> None:
         with tempfile.TemporaryDirectory(prefix="claslib_zd_export_test_") as temp_dir:
@@ -493,6 +504,48 @@ class ClaslibZdComponentExportTest(unittest.TestCase):
 
             with self.assertRaisesRegex(export.ExportError, "pass --gps-week"):
                 export.export_csv(input_path, output_path, stage_label="post")
+
+    def test_normalizes_claslib_osrres_galileo_e1x_and_e5ax_rows(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="claslib_zd_export_test_") as temp_dir:
+            input_path = Path(temp_dir) / "claslib.osr"
+            output_path = Path(temp_dir) / "normalized.csv"
+            write_csv(
+                input_path,
+                [
+                    {
+                        "msg": "OSRRES(ch0)",
+                        "tow": "230420.0",
+                        "sys": "8",
+                        "prn": "7",
+                        "pbias1": "2.847",
+                        "pbias5": "4.192",
+                        "cbias1": "0.000",
+                        "cbias5": "0.900",
+                        "CPC1": "4.370",
+                        "CPC5": "4.289",
+                        "PRC1": "5.048",
+                        "PRC5": "7.304",
+                    }
+                ],
+                OSR_FIELDNAMES,
+            )
+
+            export.export_csv(
+                input_path,
+                output_path,
+                stage_label="post",
+                gps_week=2068,
+            )
+            rows = read_csv(output_path)
+            self.assertEqual(len(rows), 4)
+            by_type_freq = {(row["row_type"], row["freq"]): row for row in rows}
+            self.assertEqual(by_type_freq[("code", "0")]["sat"], "E07")
+            self.assertEqual(by_type_freq[("code", "0")]["pseudorange_rinex_code"], "C1X")
+            self.assertEqual(by_type_freq[("phase", "0")]["carrier_rinex_code"], "L1X")
+            self.assertEqual(by_type_freq[("code", "1")]["pseudorange_rinex_code"], "C5X")
+            self.assertEqual(by_type_freq[("phase", "1")]["carrier_rinex_code"], "L5X")
+            self.assertEqual(by_type_freq[("code", "1")]["code_bias_m"], "0.900")
+            self.assertEqual(by_type_freq[("phase", "1")]["phase_bias_m"], "4.192")
 
     def test_normalizes_qzss_phase_and_galileo_code_rows(self) -> None:
         with tempfile.TemporaryDirectory(prefix="claslib_zd_export_test_") as temp_dir:

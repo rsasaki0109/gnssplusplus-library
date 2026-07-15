@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from support.gnss_runtime import application_root
+import gnss_qzss_l6_bias as bias_bank
 
 if os.name != "nt":
     import termios
@@ -1174,18 +1175,16 @@ def reset_pending_corrections_with_policy(
 
 
 def phase_bias_bank_anchor_tow(tow: int) -> int:
-    return tow - (tow % PHASE_BIAS_BANK_BUCKET_SECONDS)
+    return bias_bank.bank_anchor_tow(tow, PHASE_BIAS_BANK_BUCKET_SECONDS)
 
 
 def prune_base_code_bias_banks(state: CSSRDecoderState, current_tow: int) -> None:
-    if state.base_code_bias_banks is None:
-        return
-    min_anchor = phase_bias_bank_anchor_tow(current_tow) - PHASE_BIAS_BANK_RETENTION_SECONDS
-    state.base_code_bias_banks = {
-        anchor: bank
-        for anchor, bank in state.base_code_bias_banks.items()
-        if anchor >= min_anchor
-    }
+    state.base_code_bias_banks = bias_bank.prune_bias_banks(
+        state.base_code_bias_banks,
+        current_tow,
+        bucket_seconds=PHASE_BIAS_BANK_BUCKET_SECONDS,
+        retention_seconds=PHASE_BIAS_BANK_RETENTION_SECONDS,
+    )
 
 
 def store_base_code_bias_bank_entry(
@@ -1195,12 +1194,15 @@ def store_base_code_bias_bank_entry(
     signal_id: int,
     bias_m: float,
 ) -> None:
-    if state.base_code_bias_banks is None:
-        state.base_code_bias_banks = {}
-    prune_base_code_bias_banks(state, tow)
-    anchor = phase_bias_bank_anchor_tow(tow)
-    bank = state.base_code_bias_banks.setdefault(anchor, {})
-    bank.setdefault(satellite_token, {})[signal_id] = bias_m
+    state.base_code_bias_banks = bias_bank.store_bias_bank_entry(
+        state.base_code_bias_banks,
+        tow,
+        satellite_token,
+        signal_id,
+        bias_m,
+        bucket_seconds=PHASE_BIAS_BANK_BUCKET_SECONDS,
+        retention_seconds=PHASE_BIAS_BANK_RETENTION_SECONDS,
+    )
 
 
 def materialize_delayed_code_bias_bank_refresh_rows(
@@ -1325,44 +1327,21 @@ def lookup_base_code_bias_bank_entry(
             "unsupported Compact SSR code-bias bank policy: "
             f"{bank_policy}"
         )
-    if (
-        bank_policy == COMPACT_CODE_BIAS_BANK_POLICY_PENDING_EPOCH
-        or not state.base_code_bias_banks
-    ):
-        return None
-    if bank_policy == COMPACT_CODE_BIAS_BANK_POLICY_SAME_30S_BANK:
-        anchors = [phase_bias_bank_anchor_tow(tow)]
-    elif bank_policy == COMPACT_CODE_BIAS_BANK_POLICY_CLOSE_30S_BANK:
-        current_anchor = phase_bias_bank_anchor_tow(tow)
-        anchors = [
-            anchor
-            for anchor in state.base_code_bias_banks
-            if anchor <= tow and (current_anchor - anchor) <= PHASE_BIAS_BANK_BUCKET_SECONDS
-        ]
-        anchors.sort(reverse=True)
-    elif bank_policy == COMPACT_CODE_BIAS_BANK_POLICY_DELAYED_15S_BANK:
-        effective_tow = tow - CODE_BIAS_BANK_EFFECTIVE_DELAY_SECONDS
-        anchors = [
-            anchor
-            for anchor in state.base_code_bias_banks
-            if anchor <= effective_tow
-        ]
-        anchors.sort(reverse=True)
-    else:
-        anchors = [
-            anchor
-            for anchor in state.base_code_bias_banks
-            if anchor <= tow
-        ]
-        anchors.sort(reverse=True)
-    for anchor in anchors:
-        bias_bank = state.base_code_bias_banks.get(anchor)
-        if bias_bank is None:
-            continue
-        bias_m = bias_bank.get(satellite_token, {}).get(signal_id)
-        if bias_m is not None:
-            return bias_m
-    return None
+    anchors = bias_bank.candidate_bank_anchors(
+        state.base_code_bias_banks or {},
+        tow,
+        bank_policy,
+        pending_policy=COMPACT_CODE_BIAS_BANK_POLICY_PENDING_EPOCH,
+        same_bucket_policy=COMPACT_CODE_BIAS_BANK_POLICY_SAME_30S_BANK,
+        close_bucket_policy=COMPACT_CODE_BIAS_BANK_POLICY_CLOSE_30S_BANK,
+        latest_preceding_policy=COMPACT_CODE_BIAS_BANK_POLICY_LATEST_PRECEDING_BANK,
+        delayed_policy=COMPACT_CODE_BIAS_BANK_POLICY_DELAYED_15S_BANK,
+        bucket_seconds=PHASE_BIAS_BANK_BUCKET_SECONDS,
+        effective_delay_seconds=CODE_BIAS_BANK_EFFECTIVE_DELAY_SECONDS,
+    )
+    return bias_bank.lookup_bias_bank_entry(
+        state.base_code_bias_banks, anchors, satellite_token, signal_id,
+    )
 
 
 def lookup_base_code_bias_bank_rows(
@@ -1376,51 +1355,30 @@ def lookup_base_code_bias_bank_rows(
             "unsupported Compact SSR code-bias bank policy: "
             f"{bank_policy}"
         )
-    if (
-        bank_policy == COMPACT_CODE_BIAS_BANK_POLICY_PENDING_EPOCH
-        or not state.base_code_bias_banks
-    ):
-        return {}
-    if bank_policy == COMPACT_CODE_BIAS_BANK_POLICY_SAME_30S_BANK:
-        anchors = [phase_bias_bank_anchor_tow(tow)]
-    elif bank_policy == COMPACT_CODE_BIAS_BANK_POLICY_CLOSE_30S_BANK:
-        current_anchor = phase_bias_bank_anchor_tow(tow)
-        anchors = [
-            anchor
-            for anchor in state.base_code_bias_banks
-            if anchor <= tow and (current_anchor - anchor) <= PHASE_BIAS_BANK_BUCKET_SECONDS
-        ]
-        anchors.sort(reverse=True)
-    elif bank_policy == COMPACT_CODE_BIAS_BANK_POLICY_DELAYED_15S_BANK:
-        effective_tow = tow - CODE_BIAS_BANK_EFFECTIVE_DELAY_SECONDS
-        anchors = [
-            anchor
-            for anchor in state.base_code_bias_banks
-            if anchor <= effective_tow
-        ]
-        anchors.sort(reverse=True)
-    else:
-        anchors = [anchor for anchor in state.base_code_bias_banks if anchor <= tow]
-        anchors.sort(reverse=True)
-    for anchor in anchors:
-        bias_bank = state.base_code_bias_banks.get(anchor)
-        if bias_bank is None:
-            continue
-        rows = bias_bank.get(satellite_token)
-        if rows:
-            return dict(rows)
-    return {}
+    anchors = bias_bank.candidate_bank_anchors(
+        state.base_code_bias_banks or {},
+        tow,
+        bank_policy,
+        pending_policy=COMPACT_CODE_BIAS_BANK_POLICY_PENDING_EPOCH,
+        same_bucket_policy=COMPACT_CODE_BIAS_BANK_POLICY_SAME_30S_BANK,
+        close_bucket_policy=COMPACT_CODE_BIAS_BANK_POLICY_CLOSE_30S_BANK,
+        latest_preceding_policy=COMPACT_CODE_BIAS_BANK_POLICY_LATEST_PRECEDING_BANK,
+        delayed_policy=COMPACT_CODE_BIAS_BANK_POLICY_DELAYED_15S_BANK,
+        bucket_seconds=PHASE_BIAS_BANK_BUCKET_SECONDS,
+        effective_delay_seconds=CODE_BIAS_BANK_EFFECTIVE_DELAY_SECONDS,
+    )
+    return bias_bank.lookup_bias_bank_rows(
+        state.base_code_bias_banks, anchors, satellite_token,
+    )
 
 
 def prune_base_phase_bias_banks(state: CSSRDecoderState, current_tow: int) -> None:
-    if state.base_phase_bias_banks is None:
-        return
-    min_anchor = phase_bias_bank_anchor_tow(current_tow) - PHASE_BIAS_BANK_RETENTION_SECONDS
-    state.base_phase_bias_banks = {
-        anchor: bank
-        for anchor, bank in state.base_phase_bias_banks.items()
-        if anchor >= min_anchor
-    }
+    state.base_phase_bias_banks = bias_bank.prune_bias_banks(
+        state.base_phase_bias_banks,
+        current_tow,
+        bucket_seconds=PHASE_BIAS_BANK_BUCKET_SECONDS,
+        retention_seconds=PHASE_BIAS_BANK_RETENTION_SECONDS,
+    )
 
 
 def store_base_phase_bias_bank_entry(
@@ -1430,12 +1388,15 @@ def store_base_phase_bias_bank_entry(
     signal_id: int,
     bias_m: float,
 ) -> None:
-    if state.base_phase_bias_banks is None:
-        state.base_phase_bias_banks = {}
-    prune_base_phase_bias_banks(state, tow)
-    anchor = phase_bias_bank_anchor_tow(tow)
-    bank = state.base_phase_bias_banks.setdefault(anchor, {})
-    bank.setdefault(satellite_token, {})[signal_id] = bias_m
+    state.base_phase_bias_banks = bias_bank.store_bias_bank_entry(
+        state.base_phase_bias_banks,
+        tow,
+        satellite_token,
+        signal_id,
+        bias_m,
+        bucket_seconds=PHASE_BIAS_BANK_BUCKET_SECONDS,
+        retention_seconds=PHASE_BIAS_BANK_RETENTION_SECONDS,
+    )
 
 
 def lookup_base_phase_bias_bank_entry(
@@ -1450,36 +1411,19 @@ def lookup_base_phase_bias_bank_entry(
             "unsupported Compact SSR phase-bias bank policy: "
             f"{bank_policy}"
         )
-    if (
-        bank_policy == COMPACT_PHASE_BIAS_BANK_POLICY_PENDING_EPOCH
-        or not state.base_phase_bias_banks
-    ):
-        return None
-    if bank_policy == COMPACT_PHASE_BIAS_BANK_POLICY_SAME_30S_BANK:
-        anchors = [phase_bias_bank_anchor_tow(tow)]
-    elif bank_policy == COMPACT_PHASE_BIAS_BANK_POLICY_CLOSE_30S_BANK:
-        current_anchor = phase_bias_bank_anchor_tow(tow)
-        anchors = [
-            anchor
-            for anchor in state.base_phase_bias_banks
-            if anchor <= tow and (current_anchor - anchor) <= PHASE_BIAS_BANK_BUCKET_SECONDS
-        ]
-        anchors.sort(reverse=True)
-    else:
-        anchors = [
-            anchor
-            for anchor in state.base_phase_bias_banks
-            if anchor <= tow
-        ]
-        anchors.sort(reverse=True)
-    for anchor in anchors:
-        bias_bank = state.base_phase_bias_banks.get(anchor)
-        if bias_bank is None:
-            continue
-        bias_m = bias_bank.get(satellite_token, {}).get(signal_id)
-        if bias_m is not None:
-            return bias_m
-    return None
+    anchors = bias_bank.candidate_bank_anchors(
+        state.base_phase_bias_banks or {},
+        tow,
+        bank_policy,
+        pending_policy=COMPACT_PHASE_BIAS_BANK_POLICY_PENDING_EPOCH,
+        same_bucket_policy=COMPACT_PHASE_BIAS_BANK_POLICY_SAME_30S_BANK,
+        close_bucket_policy=COMPACT_PHASE_BIAS_BANK_POLICY_CLOSE_30S_BANK,
+        latest_preceding_policy=COMPACT_PHASE_BIAS_BANK_POLICY_LATEST_PRECEDING_BANK,
+        bucket_seconds=PHASE_BIAS_BANK_BUCKET_SECONDS,
+    )
+    return bias_bank.lookup_bias_bank_entry(
+        state.base_phase_bias_banks, anchors, satellite_token, signal_id,
+    )
 
 
 def lookup_base_phase_bias_bank_rows(
@@ -1493,32 +1437,19 @@ def lookup_base_phase_bias_bank_rows(
             "unsupported Compact SSR phase-bias bank policy: "
             f"{bank_policy}"
         )
-    if (
-        bank_policy == COMPACT_PHASE_BIAS_BANK_POLICY_PENDING_EPOCH
-        or not state.base_phase_bias_banks
-    ):
-        return {}
-    if bank_policy == COMPACT_PHASE_BIAS_BANK_POLICY_SAME_30S_BANK:
-        anchors = [phase_bias_bank_anchor_tow(tow)]
-    elif bank_policy == COMPACT_PHASE_BIAS_BANK_POLICY_CLOSE_30S_BANK:
-        current_anchor = phase_bias_bank_anchor_tow(tow)
-        anchors = [
-            anchor
-            for anchor in state.base_phase_bias_banks
-            if anchor <= tow and (current_anchor - anchor) <= PHASE_BIAS_BANK_BUCKET_SECONDS
-        ]
-        anchors.sort(reverse=True)
-    else:
-        anchors = [anchor for anchor in state.base_phase_bias_banks if anchor <= tow]
-        anchors.sort(reverse=True)
-    for anchor in anchors:
-        bias_bank = state.base_phase_bias_banks.get(anchor)
-        if bias_bank is None:
-            continue
-        rows = bias_bank.get(satellite_token)
-        if rows:
-            return dict(rows)
-    return {}
+    anchors = bias_bank.candidate_bank_anchors(
+        state.base_phase_bias_banks or {},
+        tow,
+        bank_policy,
+        pending_policy=COMPACT_PHASE_BIAS_BANK_POLICY_PENDING_EPOCH,
+        same_bucket_policy=COMPACT_PHASE_BIAS_BANK_POLICY_SAME_30S_BANK,
+        close_bucket_policy=COMPACT_PHASE_BIAS_BANK_POLICY_CLOSE_30S_BANK,
+        latest_preceding_policy=COMPACT_PHASE_BIAS_BANK_POLICY_LATEST_PRECEDING_BANK,
+        bucket_seconds=PHASE_BIAS_BANK_BUCKET_SECONDS,
+    )
+    return bias_bank.lookup_bias_bank_rows(
+        state.base_phase_bias_banks, anchors, satellite_token,
+    )
 
 
 def resolve_base_code_bias_rows(
@@ -1527,10 +1458,11 @@ def resolve_base_code_bias_rows(
     satellite_token: str,
     bank_policy: str,
 ) -> dict[int, float]:
-    rows = lookup_base_code_bias_bank_rows(state, tow, satellite_token, bank_policy)
-    if state.pending_base_code_bias is not None:
-        rows.update(state.pending_base_code_bias.get(satellite_token, {}))
-    return rows
+    return bias_bank.resolve_bias_rows(
+        lookup_base_code_bias_bank_rows(state, tow, satellite_token, bank_policy),
+        state.pending_base_code_bias,
+        satellite_token,
+    )
 
 
 def resolve_base_phase_bias_rows(
@@ -1539,10 +1471,11 @@ def resolve_base_phase_bias_rows(
     satellite_token: str,
     bank_policy: str,
 ) -> dict[int, float]:
-    rows = lookup_base_phase_bias_bank_rows(state, tow, satellite_token, bank_policy)
-    if state.pending_base_phase_bias is not None:
-        rows.update(state.pending_base_phase_bias.get(satellite_token, {}))
-    return rows
+    return bias_bank.resolve_bias_rows(
+        lookup_base_phase_bias_bank_rows(state, tow, satellite_token, bank_policy),
+        state.pending_base_phase_bias,
+        satellite_token,
+    )
 
 
 def materialize_missing_code_bias_rows(
@@ -1567,13 +1500,13 @@ def materialize_missing_code_bias_rows(
         target_satellites = set(selected_satellites)
     else:
         target_satellites = {satellite.sat for satellite in mask_satellites}
-    for satellite_token in sorted(target_satellites):
-        base_rows = resolve_base_code_bias_rows(state, tow, satellite_token, bank_policy)
-        if not base_rows:
-            continue
-        satellite_biases = state.pending_code_bias.setdefault(satellite_token, {})
-        for signal_id, bias_m in base_rows.items():
-            satellite_biases.setdefault(signal_id, bias_m)
+    bias_bank.materialize_missing_bias_rows(
+        state.pending_code_bias,
+        target_satellites=target_satellites,
+        resolve_rows=lambda satellite_token: resolve_base_code_bias_rows(
+            state, tow, satellite_token, bank_policy,
+        ),
+    )
 
 
 def materialize_missing_phase_bias_rows(
@@ -1598,17 +1531,15 @@ def materialize_missing_phase_bias_rows(
         target_satellites = set(selected_satellites)
     else:
         target_satellites = {satellite.sat for satellite in mask_satellites}
-    for satellite_token in sorted(target_satellites):
-        base_rows = resolve_base_phase_bias_rows(state, tow, satellite_token, bank_policy)
-        if not base_rows:
-            continue
-        satellite_biases = state.pending_phase_bias.setdefault(satellite_token, {})
-        satellite_sources = state.pending_phase_bias_source.setdefault(satellite_token, {})
-        for signal_id, bias_m in base_rows.items():
-            if signal_id in satellite_biases:
-                continue
-            satellite_biases[signal_id] = bias_m
-            satellite_sources[signal_id] = CSSR_SUBTYPE_CODE_PHASE_BIAS
+    bias_bank.materialize_missing_bias_rows(
+        state.pending_phase_bias,
+        target_satellites=target_satellites,
+        resolve_rows=lambda satellite_token: resolve_base_phase_bias_rows(
+            state, tow, satellite_token, bank_policy,
+        ),
+        pending_sources=state.pending_phase_bias_source,
+        source_subtype=CSSR_SUBTYPE_CODE_PHASE_BIAS,
+    )
 
 
 def apply_coupled_code_phase_construction(
@@ -1821,11 +1752,14 @@ def compose_phase_bias_value(
             signal_id,
             bank_policy,
         )
-    if base_bias_m is None:
-        return network_bias_m
-    if composition_policy == COMPACT_PHASE_BIAS_COMPOSITION_POLICY_BASE_PLUS_NETWORK:
-        return base_bias_m + network_bias_m
-    return base_bias_m
+    return bias_bank.compose_bias_value(
+        network_bias_m,
+        base_bias_m,
+        composition_policy,
+        direct_policy=COMPACT_PHASE_BIAS_COMPOSITION_POLICY_DIRECT,
+        base_plus_network_policy=COMPACT_PHASE_BIAS_COMPOSITION_POLICY_BASE_PLUS_NETWORK,
+        base_only_if_present_policy=COMPACT_PHASE_BIAS_COMPOSITION_POLICY_BASE_ONLY_IF_PRESENT,
+    )
 
 
 def compose_code_bias_value(
@@ -1856,11 +1790,14 @@ def compose_code_bias_value(
             signal_id,
             bank_policy,
         )
-    if base_bias_m is None:
-        return network_bias_m
-    if composition_policy == COMPACT_CODE_BIAS_COMPOSITION_POLICY_BASE_PLUS_NETWORK:
-        return base_bias_m + network_bias_m
-    return base_bias_m
+    return bias_bank.compose_bias_value(
+        network_bias_m,
+        base_bias_m,
+        composition_policy,
+        direct_policy=COMPACT_CODE_BIAS_COMPOSITION_POLICY_DIRECT,
+        base_plus_network_policy=COMPACT_CODE_BIAS_COMPOSITION_POLICY_BASE_PLUS_NETWORK,
+        base_only_if_present_policy=COMPACT_CODE_BIAS_COMPOSITION_POLICY_BASE_ONLY_IF_PRESENT,
+    )
 
 
 def merge_pending_atmos(

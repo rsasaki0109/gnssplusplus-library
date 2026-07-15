@@ -9,10 +9,50 @@
 #include <libgnss++/core/observation.hpp>
 
 #include <cmath>
+#include <cstdio>
+#include <fstream>
 #include <set>
+#include <string>
 #include <tuple>
 
 using namespace libgnss;
+
+TEST(PPPClasDdTest, VersionedMeasurementRowDumpPreservesCanonicalKey) {
+    const std::string path = "/tmp/gnsspp_clas_dd_measurement_rows_test.csv";
+    std::remove(path.c_str());
+
+    ppp_clas_dd::DdMeasurementBuildResult build;
+    ppp_clas_dd::DdRow row;
+    row.reference_satellite = SatelliteId(GNSSSystem::GPS, 1);
+    row.target_satellite = SatelliteId(GNSSSystem::GPS, 2);
+    row.is_phase = true;
+    row.frequency_index = 1;
+    row.system_group = 0;
+    row.raw_dd_m = 0.005;
+    row.residual_m = 0.004;
+    row.reference_variance_m2 = 1e-4;
+    row.target_variance_m2 = 2e-4;
+    row.reference_elevation_rad = 0.9;
+    row.target_elevation_rad = 0.7;
+    row.position_coefficients = Vector3d(0.1, 0.2, 0.3);
+    build.rows.push_back(row);
+    build.linearization_position_ecef = Vector3d(1.0, 2.0, 3.0);
+
+    ppp_clas_dd::appendDdMeasurementRowsCsv(
+        path, GNSSTime(2068, 230420.0), build);
+
+    std::ifstream input(path);
+    ASSERT_TRUE(input.good());
+    std::string header;
+    std::string data;
+    ASSERT_TRUE(static_cast<bool>(std::getline(input, header)));
+    ASSERT_TRUE(static_cast<bool>(std::getline(input, data)));
+    EXPECT_NE(header.find("target_satellite,raw_dd_m,residual_m"), std::string::npos);
+    EXPECT_NE(
+        data.find("clas_dd_measurement.v3,2068,230420,prefit,0,1,phase,G01,G02,"),
+        std::string::npos);
+    std::remove(path.c_str());
+}
 
 namespace {
 
@@ -141,6 +181,22 @@ TEST(PPPClasOsrTest, ReceiverAntennaLookupUsesL1SlotForExactGpsL2w) {
     EXPECT_EQ(clasReceiverAntennaLookupSignal(osr, 1), SignalType::GPS_L2C);
 }
 
+TEST(PPPClasOsrTest, ReceiverAntennaLookupUsesLegacyR01AndC02SlotsForQzss) {
+    OSRCorrection osr;
+    osr.satellite = SatelliteId(GNSSSystem::QZSS, 2);
+    osr.num_frequencies = 2;
+    osr.signals[0] = SignalType::QZS_L1CA;
+    osr.signals[1] = SignalType::QZS_L2C;
+    osr.claslib_qzss_receiver_antenna_slots = true;
+
+    EXPECT_EQ(clasReceiverAntennaLookupSignal(osr, 0), SignalType::GLO_L1CA);
+    EXPECT_EQ(clasReceiverAntennaLookupSignal(osr, 1), SignalType::BDS_B1I);
+
+    osr.claslib_qzss_receiver_antenna_slots = false;
+    EXPECT_EQ(clasReceiverAntennaLookupSignal(osr, 0), SignalType::QZS_L1CA);
+    EXPECT_EQ(clasReceiverAntennaLookupSignal(osr, 1), SignalType::QZS_L2C);
+}
+
 TEST(PPPClasDdTest, RowBuilderSelectsHighestElevationReferenceAndFormsResidual) {
     ObservationData obs(GNSSTime(2068, 230572.0));
     const Vector3d receiver(constants::WGS84_A, 0.0, 0.0);
@@ -211,8 +267,18 @@ TEST(PPPClasDdTest, RowBuilderSelectsHighestElevationReferenceAndFormsResidual) 
         state,
         config,
         [](const Vector3d&, double, const GNSSTime&) { return 0.0; });
+    const Vector3d geometry_displacement(0.1, -0.2, 0.05);
+    const auto displaced_build = ppp_clas_dd::buildDdMeasurementSystem(
+        obs,
+        {low, high},
+        layout,
+        state,
+        config,
+        [](const Vector3d&, double, const GNSSTime&) { return 0.0; },
+        geometry_displacement);
 
     ASSERT_EQ(build.rows.size(), 2u);
+    ASSERT_EQ(displaced_build.rows.size(), build.rows.size());
     ASSERT_EQ(build.phase_rows, 1);
     ASSERT_EQ(build.code_rows, 1);
     for (const auto& row : build.rows) {
@@ -233,6 +299,13 @@ TEST(PPPClasDdTest, RowBuilderSelectsHighestElevationReferenceAndFormsResidual) 
             EXPECT_TRUE(row.state_coefficients.empty());
         }
     }
+    for (size_t index = 0; index < build.rows.size(); ++index) {
+        EXPECT_NEAR(
+            displaced_build.rows[index].raw_dd_m - build.rows[index].raw_dd_m,
+            -build.rows[index].position_coefficients.dot(geometry_displacement),
+            1e-6);
+    }
+
 }
 
 TEST(PPPClasDdTest, RowBuilderAdmitsQzssRowsWithDedicatedReferenceGroup) {
@@ -363,6 +436,30 @@ TEST(PPPClasDdTest, RowBuilderAdmitsQzssRowsWithDedicatedReferenceGroup) {
         EXPECT_TRUE(row.target_satellite == j01.satellite ||
                     row.target_satellite == j03.satellite);
     }
+
+    auto parity_j01 = j01;
+    auto parity_j02 = j02;
+    auto parity_j03 = j03;
+    for (int frequency = 0; frequency < 2; ++frequency) {
+        parity_j01.phase_bias_present[frequency] = true;
+        parity_j02.phase_bias_present[frequency] = true;
+        parity_j03.phase_bias_present[frequency] = false;
+    }
+    config.clas_mrtklib_float_parity = true;
+    const auto parity_build = ppp_clas_dd::buildDdMeasurementSystem(
+        obs,
+        {parity_j01, parity_j03, parity_j02},
+        layout,
+        state,
+        config,
+        [](const Vector3d&, double, const GNSSTime&) { return 0.0; });
+    ASSERT_EQ(parity_build.rows.size(), 4u);
+    EXPECT_TRUE(std::none_of(
+        parity_build.rows.begin(), parity_build.rows.end(),
+        [&](const ppp_clas_dd::DdRow& row) {
+            return row.reference_satellite == parity_j03.satellite ||
+                   row.target_satellite == parity_j03.satellite;
+        }));
 }
 
 TEST(PPPClasDdTest, PostfitValidationRejectsLargePhaseRms) {
@@ -729,6 +826,63 @@ TEST(PPPClasTest, MrtklibOutageCounterResetsBeforeSecondUnacceptedEpoch) {
     EXPECT_EQ(ambiguity_states[l2_ambiguity].lock_count, -4);
 }
 
+TEST(PPPClasTest, MrtklibOutageIgnoresFilterExcludedQzssL2AndGalileo) {
+    ppp_shared::PPPConfig config;
+    config.kinematic_mode = true;
+    config.enable_cycle_slip_detection = true;
+    config.clas_mrtklib_float_parity = true;
+    config.use_clas_osr_filter = true;
+    config.use_dynamics_model = true;
+
+    auto verify_excluded_outage = [&](GNSSSystem system,
+                                      SignalType l1_signal,
+                                      SignalType l2_signal) {
+        ObservationData obs;
+        obs.time = GNSSTime(2068, 230439.0);
+        OSRCorrection osr;
+        osr.valid = true;
+        osr.satellite = SatelliteId(system, 2);
+        osr.num_frequencies = 2;
+        osr.frequencies[0] = 1575.42e6;
+        osr.frequencies[1] = 1227.60e6;
+        osr.wavelengths[0] = constants::SPEED_OF_LIGHT / osr.frequencies[0];
+        osr.wavelengths[1] = constants::SPEED_OF_LIGHT / osr.frequencies[1];
+        Observation l1;
+        l1.satellite = osr.satellite;
+        l1.signal = l1_signal;
+        l1.valid = l1.has_carrier_phase = l1.has_pseudorange = true;
+        l1.carrier_phase = 1000.0;
+        l1.pseudorange = 2.0e7;
+        Observation l2 = l1;
+        l2.signal = l2_signal;
+        l2.carrier_phase = 780.0;
+        obs.observations = {l1, l2};
+
+        const SatelliteId l2_ambiguity(
+            system, static_cast<uint8_t>(osr.satellite.prn + 100));
+        std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo> ambiguities;
+        ambiguities[osr.satellite].outage_count =
+            system == GNSSSystem::Galileo ? 1 : -1;
+        ambiguities[l2_ambiguity].outage_count = 1;
+        ppp_shared::PPPState state;
+        std::map<SatelliteId, CLASDispersionCompensationInfo> dispersion;
+        std::map<SatelliteId, CLASPhaseBiasRepairInfo> repair;
+        int resets = 0;
+        const auto stats = ppp_clas::detectClasCycleSlips(
+            obs, {osr}, config, 1.0, state, ambiguities, dispersion, repair,
+            [&](const SatelliteId&, SignalType) { ++resets; }, 3600.0, false);
+
+        EXPECT_EQ(stats.per_sat_outage_resets, 0);
+        EXPECT_EQ(stats.total_resets, 0);
+        EXPECT_EQ(resets, 0);
+    };
+
+    verify_excluded_outage(
+        GNSSSystem::QZSS, SignalType::QZS_L1CA, SignalType::QZS_L2C);
+    verify_excluded_outage(
+        GNSSSystem::Galileo, SignalType::GAL_E1, SignalType::GAL_E5A);
+}
+
 TEST(PPPClasTest, MrtklibReturningL1OnlySatelliteResetsStaleL1Ambiguity) {
     ObservationData obs;
     obs.time = GNSSTime(2324, 177091.4);
@@ -970,4 +1124,35 @@ TEST(PPPClasTest, MrtklibAdaptiveIonoNoiseClampsOnlyObservedSatellite) {
     EXPECT_DOUBLE_EQ(state.adaptive_ionosphere_process_noise[unobserved], 1.0);
     EXPECT_NEAR(state.covariance(12, 12), 1.0 + 0.05 * 0.05 * 0.2, 1e-15);
     EXPECT_DOUBLE_EQ(state.covariance(13, 13), 1.0);
+}
+
+TEST(PPPClasTest, MrtklibDdLayoutKeepsCanonicalDynamicsOff) {
+    ppp_shared::PPPConfig config;
+    config.kinematic_mode = true;
+    config.use_dynamics_model = true;
+    config.clas_mrtklib_float_parity = true;
+
+    ppp_shared::PPPState native_state;
+    native_state.pos_index = 0;
+    native_state.total_states = 9;
+    native_state.state = VectorXd::Zero(9);
+    native_state.state.head<3>() << -3957235.0, 3310368.0, 3737530.0;
+    native_state.covariance = MatrixXd::Identity(9, 9);
+
+    PositionSolution native_solution;
+    native_solution.position_ecef = native_state.state.head<3>();
+
+    ppp_clas_dd::DdFilterScaffold scaffold;
+    ObservationData obs(GNSSTime(2068, 230420.0));
+    CLASEpochContext context;
+    scaffold.processFloatUpdate(
+        obs, context, native_state, native_solution, config,
+        [](const Vector3d&, double, const GNSSTime&) { return 0.0; });
+
+    ASSERT_TRUE(scaffold.hasSnapshot());
+    EXPECT_FALSE(scaffold.snapshot().layout.options.dynamics);
+    EXPECT_EQ(scaffold.snapshot().layout.np(), 3);
+    EXPECT_EQ(scaffold.snapshot().layout.nt(), 0);
+    EXPECT_EQ(scaffold.snapshot().layout.nr(), 3);
+    EXPECT_DOUBLE_EQ(scaffold.snapshot().covariance(0, 0), 900.0);
 }

@@ -52,6 +52,24 @@ class ClaslibOsrZdExportTest(unittest.TestCase):
             self.assertEqual(config.gps_week, runner.DEFAULT_GPS_WEEK)
             self.assertEqual(config.max_epochs, runner.DEFAULT_MAX_EPOCHS)
             self.assertEqual(config.gps_l2w_rows_min, runner.DEFAULT_MAX_EPOCHS)
+            self.assertEqual(config.observation_file, "0627239Q.obs")
+            self.assertEqual(config.navigation_file, "sept_2019239.nav")
+            self.assertEqual(config.l6_file, "2019239Q.l6")
+
+    def test_parse_config_accepts_alternate_public_dataset_inputs(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_claslib_osr_config_") as temp_dir:
+            config = runner.parse_config(
+                runner.parse_args(["--repo-root", str(ROOT_DIR), "--output-dir", temp_dir]),
+                {
+                    "GNSSPP_CLASLIB_OSR_OBSERVATION_FILE": "0161329A.obs",
+                    "GNSSPP_CLASLIB_OSR_NAVIGATION_FILE": "tskc2018329.nav",
+                    "GNSSPP_CLASLIB_OSR_L6_FILE": "2018328X_329A.l6",
+                },
+            )
+
+            self.assertEqual(config.observation_file, "0161329A.obs")
+            self.assertEqual(config.navigation_file, "tskc2018329.nav")
+            self.assertEqual(config.l6_file, "2018328X_329A.l6")
 
     def test_data_root_failures_reports_missing_source_data(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_claslib_osr_data_") as temp_dir:
@@ -64,6 +82,9 @@ class ClaslibOsrZdExportTest(unittest.TestCase):
             self.assertIn("sept_2019239.nav", failures)
             self.assertIn("clas_grid.def", failures)
             self.assertNotIn("0627239Q.obs", failures)
+
+            alternate = runner.data_root_failures(source_root, ("alternate.obs",))
+            self.assertIn("alternate.obs", alternate)
 
     def test_write_linux_config_rewrites_claslib_data_paths(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_claslib_osr_config_") as temp_dir:
@@ -78,6 +99,41 @@ class ClaslibOsrZdExportTest(unittest.TestCase):
             self.assertIn(str(source_root / "data") + "/clas_grid.def", written)
             self.assertIn(str(source_root / "data") + "/clas_grid.blq", written)
             self.assertNotIn("..\\..\\data\\", written)
+
+    def test_prepare_instrumented_source_copies_user_source_and_adds_dd_dump(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_claslib_dd_instrument_") as temp_dir:
+            root = Path(temp_dir)
+            source_root = make_source_root(root)
+            source_path = source_root / "src" / "ppprtk.c"
+            source_path.parent.mkdir()
+            source_path.write_text(
+                "enum ddres_order { FST = 1, SND, TRD };\n"
+                "int ddres(void) {\n"
+                "    double pos[3],lami,lamj,*Ri,*Rj,*Hi=NULL;\n"
+                "    int refchgflg;\n"
+                "    trace(3,\"ddres   :niter=%2d nx=%d n=%d\\n\",niter,rtk->nx,n);\n"
+                "                if (H) { /* partial derivatives by rover position */\n"
+                "                /* set valid data flags */\n"
+                "    dops(n,azel,opt->elmin,rtk->sol.dop); /* {GDOP,PDOP,HDOP,VDOP} */\n"
+                "}\n"
+                "/* single-differenced phase/code residuals  ----------------------------------\n",
+                encoding="utf-8",
+            )
+            paths = runner.default_paths(root / "output")
+            paths.work_dir.mkdir(parents=True)
+
+            build_root = runner.prepare_instrumented_source(source_root, paths)
+            instrumented = (build_root / "src" / "ppprtk.c").read_text(encoding="utf-8")
+
+            self.assertEqual(build_root, paths.instrumented_source_dir)
+            self.assertNotIn("GNSS++ canonical", source_path.read_text(encoding="utf-8"))
+            self.assertIn("GNSS++ canonical CLAS DD oracle instrumentation", instrumented)
+            self.assertIn("CLASLIB_DD_ROW_DUMP", instrumented)
+            self.assertIn("clas_dd_measurement.v3", instrumented)
+            self.assertIn("dump_rows=begin_clas_dd_dump", instrumented)
+            self.assertIn("GNSS++ canonical CLAS filter-state oracle instrumentation", instrumented)
+            self.assertIn("CLASLIB_FILTER_STATE_DUMP", instrumented)
+            self.assertIn("clas_dd_filter_state.v1", instrumented)
 
     def test_build_rnx2rtkp_command_sets_osr_window_and_inputs(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_claslib_osr_command_") as temp_dir:
@@ -116,6 +172,23 @@ class ClaslibOsrZdExportTest(unittest.TestCase):
             normalize_command = runner.build_normalize_command(config, paths, source_root)
             self.assertIn("--clas-grid-def", normalize_command)
             self.assertIn(str(source_root / "data" / "clas_grid.def"), normalize_command)
+
+            rollover = runner.RunConfig(
+                **{
+                    **config.__dict__,
+                    "start_date": "2018/11/24",
+                    "start_time": "23:59:31",
+                    "max_epochs": 30,
+                }
+            )
+            rollover_command = runner.build_rnx2rtkp_command(
+                rollover, paths, source_root
+            )
+            end_index = rollover_command.index("-te")
+            self.assertEqual(
+                rollover_command[end_index + 1:end_index + 3],
+                ["2018/11/25", "00:00:00"],
+            )
 
     def test_evaluate_accepts_normalized_osr_summary(self) -> None:
         config = runner.RunConfig(
@@ -211,11 +284,15 @@ class ClaslibOsrZdExportTest(unittest.TestCase):
             runner.write_summary(paths, payload)
             written = json.loads(paths.summary_json.read_text(encoding="utf-8"))
 
-        self.assertEqual(written["summary_schema"], "ci_claslib_osr_zd_export.v2")
-        self.assertEqual(written["contract"], "claslib_osr_zd_export.v2")
+        self.assertEqual(written["summary_schema"], runner.SUMMARY_SCHEMA)
+        self.assertEqual(written["contract"], runner.CONTRACT)
         self.assertEqual(written["status"], "blocked_infrastructure")
         self.assertIn("missing CLASLIB OSR oracle evidence", written["next_actions"][1])
         self.assertEqual(written["configuration"]["zd_filter"]["rinex_code"], "C2W")
+        self.assertEqual(
+            written["configuration"]["dd_measurement_dump"]["source_policy"],
+            "generated-checkout-or-copied-user-source",
+        )
 
     def test_artifacts_include_normalized_dump_summary(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_claslib_osr_artifacts_") as temp_dir:
@@ -226,6 +303,14 @@ class ClaslibOsrZdExportTest(unittest.TestCase):
         self.assertEqual(
             roles["normalized_zd_component_summary"],
             str(paths.normalized_summary_json),
+        )
+        self.assertEqual(
+            roles["claslib_dd_measurement_dump"],
+            str(paths.claslib_dd_dump),
+        )
+        self.assertEqual(
+            roles["claslib_dd_filter_state_dump"],
+            str(paths.claslib_state_dump),
         )
 
 

@@ -109,6 +109,7 @@ FIELDNAMES = [
     "code_bias_m",
     "phase_bias_m",
     "network_compensation_m",
+    "iode_geometry_compensation_m",
     "receiver_antenna_m",
     "relativity_m",
     "atmos_ref_week",
@@ -176,8 +177,14 @@ CLASLIB_OSR_QZSS_SLOTS = (
     (2, "5", 26),  # QZSS L5X
 )
 
+CLASLIB_OSR_GALILEO_SLOTS = (
+    (0, "1", 12),  # Galileo E1X
+    (1, "5", 26),  # Galileo E5a-X
+)
+
 CLASLIB_OSR_SLOTS_BY_SYS_ID = {
     1: CLASLIB_OSR_GPS_SLOTS,
+    8: CLASLIB_OSR_GALILEO_SLOTS,
     16: CLASLIB_OSR_QZSS_SLOTS,
 }
 
@@ -187,6 +194,7 @@ GPS_IONO_SCALE_BY_SUFFIX = {
     "5": (1575.42 / 1176.45) ** 2,
 }
 GPS_L1_TECU_TO_METERS = 40.3e16 / ((1575.42 * 1e6) ** 2)
+CLASLIB_STORED_IONO_TO_L1 = 1227.60 / 1575.42
 WGS84_A = 6378137.0
 DEGREES_TO_RADIANS = math.pi / 180.0
 CLAS_MAX_GRID_DISTANCE_M = 120000.0
@@ -525,17 +533,19 @@ def osrres_network_compensation(row: dict[str, str]) -> Optional[float]:
     return comp_n
 
 
-# CLASLIB's adjust_prc/adjust_cpc (ephemeris.c) subtract the SIS continuity
-# delta directly from PRC/CPC at SSR update boundaries (`prc -= sis`), while
-# dumping the applied delta as compN = +sis (see osrres_network_compensation
-# above and GNSS_PPP_CLAS_SIS_BOUNDARY in src/algorithms/ppp_osr.cpp). The
-# PRC-closure iono reconstruction below must add compN back before backing
-# out trop/antr/relativity/cbias, otherwise the sis residual leaks into the
-# reconstructed iono_l1_m/stec_tecu columns (observed as a ~0.0527m RMS
-# artifact tracking compN almost exactly). Missing compN (older dumps
-# without the column) defaults to 0.0, matching the zero-unless-boundary
-# semantics of the delta itself.
+# Prefer CLASLIB's stored ionosphere, converted by the literal FREQ2/FREQ1
+# factor from cssr2osr.c. PRC closure is only a compatibility fallback for
+# older dumps without the raw field; at IODE boundaries closure also contains
+# adjust_r_dts(), which must remain an independent geometry component.
 def prc_iono_scaled_from_osrres(row: dict[str, str], suffix: str) -> Optional[float]:
+    stored_iono = parse_osr_float(
+        first_present(row, ("iono", "iono_l1_m", "l1_iono_m"))
+    )
+    scale = GPS_IONO_SCALE_BY_SUFFIX.get(suffix, 0.0)
+    if stored_iono is not None and scale > 0.0:
+        # CLASLIB stores STEC-derived ionosphere with F1*F2 scaling and forms
+        # each OSR row as fi^2 * FREQ2/FREQ1 * stored_iono.
+        return stored_iono * CLASLIB_STORED_IONO_TO_L1 * scale
     prc = parse_osr_float(first_present(row, (f"PRC{suffix}",)))
     trop = parse_osr_float(first_present(row, ("trop", "trop_m")))
     cbias = parse_osr_float(first_present(row, (f"cbias{suffix}",)))
@@ -547,6 +557,34 @@ def prc_iono_scaled_from_osrres(row: dict[str, str], suffix: str) -> Optional[fl
         return None
     comp_n = osrres_network_compensation(row) or 0.0
     return prc - (trop + antr + relativity + cbias) + comp_n
+
+
+def iode_geometry_compensation_from_osrres(
+    row: dict[str, str], suffix: str
+) -> Optional[float]:
+    prc = parse_osr_float(first_present(row, (f"PRC{suffix}",)))
+    # CLASLIB exports an nf=3 L5 component slot for some satellites while
+    # leaving PRC5/CPC5 at their zero-initialized sentinel.  It is an output
+    # surface row, not a valid closure equation; deriving adjust_r_dts() from
+    # it would manufacture a large negative geometry term.
+    if prc == 0.0:
+        return None
+    trop = parse_osr_float(first_present(row, ("trop", "trop_m")))
+    cbias = parse_osr_float(first_present(row, (f"cbias{suffix}",)))
+    antr = parse_osr_float(first_present(row, (f"antr{suffix}",)))
+    relativity = parse_osr_float(
+        first_present(row, ("relatv", "relativity_m", "relativity_correction_m"))
+    )
+    stored_iono = parse_osr_float(
+        first_present(row, ("iono", "iono_l1_m", "l1_iono_m"))
+    )
+    scale = GPS_IONO_SCALE_BY_SUFFIX.get(suffix, 0.0)
+    if None in (prc, trop, cbias, antr, relativity, stored_iono) or scale <= 0.0:
+        return None
+    iono_scaled = stored_iono * CLASLIB_STORED_IONO_TO_L1 * scale
+    comp_n = osrres_network_compensation(row) or 0.0
+    # cssr2osr.c: PRC = base - sis + adjust_r_dts_delta.
+    return prc - (trop + antr + relativity + cbias + iono_scaled) + comp_n
 
 
 def prc_iono_l1_from_osrres(row: dict[str, str], suffix: str) -> str:
@@ -731,10 +769,13 @@ def normalize_osrres_rows(
             "stec_tecu": stec_tecu_from_iono_l1_m(effective_iono_l1_m),
             "iono_scaled_m": effective_iono_scaled_m,
             "iono_scale": format_component(GPS_IONO_SCALE_BY_SUFFIX[suffix]),
-            "claslib_iono_source": "prc_closure",
+            "claslib_iono_source": "stored_f2_f1",
             "claslib_raw_iono_l1_m": raw_iono_l1_m,
             "claslib_raw_stec_tecu": stec_tecu_from_iono_l1_m(raw_iono_l1_m),
             "network_compensation_m": format_component(osrres_network_compensation(row)),
+            "iode_geometry_compensation_m": format_component(
+                iode_geometry_compensation_from_osrres(row, suffix)
+            ),
             "receiver_antenna_m": first_present(row, (f"antr{suffix}",)),
             "relativity_m": first_present(row, ("relatv", "relativity_m", "relativity_correction_m")),
             "windup_m": first_present(row, (f"wup{suffix}",)),

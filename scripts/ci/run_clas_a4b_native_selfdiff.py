@@ -20,8 +20,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from optional_diff_runner import artifact_record, truthy  # noqa: E402
 
 
-SUMMARY_SCHEMA = "ci_clas_a4b_native_selfdiff.v3"
-CONTRACT = "clas_a4b_native_selfdiff.v1"
+SUMMARY_SCHEMA = "ci_clas_a4b_native_selfdiff.v5"
+CONTRACT = "clas_a4b_native_selfdiff.v3"
 DEFAULT_CLASLIB_REPO = "https://github.com/QZSS-Strategy-Office/claslib.git"
 DEFAULT_CLASLIB_REF = "23cfd363a2db6d8d8144e292c82e9d97ca2d3015"
 DEFAULT_MAX_EPOCHS = 300
@@ -39,7 +39,9 @@ ENV_OVERRIDES = {
     "GNSS_PPP_CLAS_ATMOS_GRID_MATRIX": "1",
     "GNSS_PPP_CLAS_ATMOS_LIFECYCLE": "1",
     "GNSS_PPP_CLAS_TROP_CLIMATOLOGY": "1",
+    "GNSS_PPP_CLAS_PHASE_ROW_DUMP": "1",
 }
+BEHAVIOR_ENV_PREFIXES = ("GNSS_PPP_CLAS_", "GNSS_PPP_QZSS_")
 
 
 @dataclass(frozen=True)
@@ -52,6 +54,8 @@ class RunPaths:
     native_pos: Path
     native_summary_json: Path
     native_code_dump: Path
+    native_dd_dump: Path
+    native_state_dump: Path
     native_code_dump_summary_json: Path
     selfdiff_json: Path
     selfdiff_csv: Path
@@ -70,6 +74,8 @@ class RunConfig:
     gps_l2w_rows_min: int
     receiver_antenna_type: str
     python_executable: str
+    claslib_filter_profile: bool = False
+    enable_ar: bool = False
 
 
 def repo_root_from_script() -> Path:
@@ -87,6 +93,8 @@ def default_paths(output_dir: Path) -> RunPaths:
         native_pos=work_dir / "native.pos",
         native_summary_json=work_dir / "native_summary.json",
         native_code_dump=work_dir / "native_code_dump.csv",
+        native_dd_dump=work_dir / "native_dd_measurement_dump.csv",
+        native_state_dump=work_dir / "native_dd_filter_state_dump.csv",
         native_code_dump_summary_json=work_dir / "native_code_dump_summary.json",
         selfdiff_json=work_dir / "selfdiff.json",
         selfdiff_csv=work_dir / "selfdiff.csv",
@@ -125,6 +133,10 @@ def parse_config(args: argparse.Namespace, environ: Mapping[str, str]) -> RunCon
             DEFAULT_RECEIVER_ANTENNA_TYPE,
         ).strip()
         or DEFAULT_RECEIVER_ANTENNA_TYPE,
+        claslib_filter_profile=truthy(
+            env_or(environ, "GNSSPP_CLAS_A4B_CLASLIB_FILTER_PROFILE", "0")
+        ),
+        enable_ar=truthy(env_or(environ, "GNSSPP_CLAS_A4B_ENABLE_AR", "0")),
         python_executable=sys.executable,
     )
 
@@ -203,6 +215,7 @@ def build_native_command(
     config: RunConfig,
     paths: RunPaths,
     data_root: Path,
+    environ: Mapping[str, str],
 ) -> tuple[list[str], dict[str, str]]:
     command = [
         config.python_executable,
@@ -237,10 +250,43 @@ def build_native_command(
         "--max-epochs",
         str(config.max_epochs),
     ]
-    env = dict(os.environ)
+    if config.claslib_filter_profile:
+        command.extend(("--kinematic", "--use-dynamics-model"))
+    if config.enable_ar:
+        # The clas-ppp wrapper exposes only the enable switch. Its CLAS
+        # uncombined profile selects the DD-WLNL implementation downstream.
+        command.append("--enable-ar")
+    return command, native_environment(paths, environ)
+
+
+def behavior_environment(environ: Mapping[str, str]) -> dict[str, str]:
+    """Return the non-secret CLAS/QZSS behavior inputs relevant to parity."""
+    return {
+        name: environ[name]
+        for name in sorted(environ)
+        if name.startswith(BEHAVIOR_ENV_PREFIXES)
+    }
+
+
+def native_environment(paths: RunPaths, environ: Mapping[str, str]) -> dict[str, str]:
+    env = dict(environ)
     env.update(ENV_OVERRIDES)
     env["GNSS_PPP_CLAS_CODE_DUMP"] = str(paths.native_code_dump)
-    return command, env
+    env["GNSS_PPP_CLAS_DD_ROW_DUMP"] = str(paths.native_dd_dump)
+    env["GNSS_PPP_CLAS_DD_STATE_DUMP"] = str(paths.native_state_dump)
+    return env
+
+
+def parity_profile(environ: Mapping[str, str]) -> dict[str, object]:
+    """Describe behavior-changing parity gates with stable typed values."""
+    return {
+        "name": "clas-zd-parity",
+        "version": 1,
+        "qzss_s_prn_fix": truthy(environ.get("GNSS_PPP_CLAS_QZSS_S_PRN_FIX", "0")),
+        "base_clock_parity": truthy(environ.get("GNSS_PPP_CLAS_BASE_CLOCK_PARITY", "0")),
+        "sis_boundary": truthy(environ.get("GNSS_PPP_CLAS_SIS_BOUNDARY", "0")),
+        "trop_grid_parity": truthy(environ.get("GNSS_PPP_CLAS_TROP_GRID_PARITY", "0")),
+    }
 
 
 def build_selfdiff_command(config: RunConfig, paths: RunPaths) -> list[str]:
@@ -436,6 +482,8 @@ def summarize_artifacts(paths: RunPaths) -> list[dict[str, object]]:
         artifact_record(paths.native_pos, role="native_solution", required=True),
         artifact_record(paths.native_summary_json, role="native_summary", required=True),
         artifact_record(paths.native_code_dump, role="native_zd_component_dump", required=True),
+        artifact_record(paths.native_dd_dump, role="native_dd_measurement_dump", required=True),
+        artifact_record(paths.native_state_dump, role="native_dd_filter_state_dump", required=False),
         artifact_record(paths.native_code_dump_summary_json, role="native_zd_component_summary", required=True),
         artifact_record(paths.selfdiff_json, role="selfdiff_json", required=True),
         artifact_record(paths.selfdiff_csv, role="selfdiff_csv", required=True),
@@ -453,11 +501,13 @@ def build_payload(
     paths: RunPaths,
     status: str,
     data_root: Path | None,
+    environ: Mapping[str, str],
     metrics: dict[str, object] | None = None,
     thresholds: dict[str, object] | None = None,
     failures: list[str] | None = None,
     block_reason: str | None = None,
 ) -> dict[str, object]:
+    effective_env = native_environment(paths, environ)
     next_actions: list[str] = []
     if status == "blocked_infrastructure":
         next_actions.append("Provide CLAS public data with GNSSPP_CLAS_A4B_DATA_ROOT or allow sparse auto-fetch.")
@@ -483,7 +533,22 @@ def build_payload(
             "max_epochs": config.max_epochs,
             "fail_on_blocked": config.fail_on_blocked,
             "receiver_antenna_type": config.receiver_antenna_type,
-            "env_overrides": {**ENV_OVERRIDES, "GNSS_PPP_CLAS_CODE_DUMP": str(paths.native_code_dump)},
+            "claslib_filter_profile": config.claslib_filter_profile,
+            "enable_ar": config.enable_ar,
+            "env_overrides": {
+                **ENV_OVERRIDES,
+                "GNSS_PPP_CLAS_CODE_DUMP": str(paths.native_code_dump),
+                "GNSS_PPP_CLAS_DD_ROW_DUMP": str(paths.native_dd_dump),
+                "GNSS_PPP_CLAS_DD_STATE_DUMP": str(paths.native_state_dump),
+            },
+            "inherited_behavior_env": behavior_environment(environ),
+            "effective_behavior_env": behavior_environment(effective_env),
+            "parity_profile": parity_profile(effective_env),
+            "dd_measurement_dump": {
+                "schema": "clas_dd_measurement.v3",
+                "stage": "prefit",
+                "path": str(paths.native_dd_dump),
+            },
             "selfdiff_filter": {"sat": "G14", "freq": 1, "rinex_code": "C2W", "row_type": "code"},
         },
         "metrics": metrics or {},
@@ -515,6 +580,7 @@ def main(argv: Sequence[str] | None = None, environ: Mapping[str, str] | None = 
             paths=paths,
             status="blocked_infrastructure",
             data_root=None,
+            environ=env,
             block_reason=block_reason,
         )
         write_summary(paths, payload)
@@ -522,7 +588,9 @@ def main(argv: Sequence[str] | None = None, environ: Mapping[str, str] | None = 
         print(f"  summary: {paths.summary_json}")
         return 1 if config.fail_on_blocked else 0
 
-    native_command, native_env = build_native_command(config, paths, data_root)
+    paths.native_dd_dump.unlink(missing_ok=True)
+    paths.native_state_dump.unlink(missing_ok=True)
+    native_command, native_env = build_native_command(config, paths, data_root, env)
     native_result = run_logged(native_command, cwd=config.repo_root, log_path=paths.log_path, env=native_env)
     if native_result.returncode != 0:
         payload = build_payload(
@@ -530,6 +598,7 @@ def main(argv: Sequence[str] | None = None, environ: Mapping[str, str] | None = 
             paths=paths,
             status="failed",
             data_root=data_root,
+            environ=env,
             failures=["native CLAS A4b run failed"],
         )
         write_summary(paths, payload)
@@ -548,6 +617,7 @@ def main(argv: Sequence[str] | None = None, environ: Mapping[str, str] | None = 
             paths=paths,
             status="failed",
             data_root=data_root,
+            environ=env,
             failures=["native CLAS A4b code dump summary failed"],
         )
         write_summary(paths, payload)
@@ -562,6 +632,7 @@ def main(argv: Sequence[str] | None = None, environ: Mapping[str, str] | None = 
             paths=paths,
             status="failed",
             data_root=data_root,
+            environ=env,
             failures=["native CLAS A4b self-diff failed"],
         )
         write_summary(paths, payload)
@@ -578,12 +649,24 @@ def main(argv: Sequence[str] | None = None, environ: Mapping[str, str] | None = 
         selfdiff_report,
         count_csv_data_rows(paths.native_code_dump),
     )
+    dd_measurement_rows = count_csv_data_rows(paths.native_dd_dump)
+    metrics["native_dd_measurement_rows"] = dd_measurement_rows
+    thresholds["native_dd_measurement_rows_min"] = 1
+    if dd_measurement_rows < 1:
+        failures.append("native DD measurement dump has no data rows")
+    filter_state_rows = count_csv_data_rows(paths.native_state_dump)
+    metrics["native_filter_state_rows"] = filter_state_rows
+    if config.claslib_filter_profile:
+        thresholds["native_filter_state_rows_min"] = 1
+        if filter_state_rows < 1:
+            failures.append("native DD filter-state dump has no data rows")
     status = "failed" if failures else "passed"
     payload = build_payload(
         config=config,
         paths=paths,
         status=status,
         data_root=data_root,
+        environ=env,
         metrics=metrics,
         thresholds=thresholds,
         failures=failures,

@@ -576,6 +576,39 @@ class ClasZdComponentDiffTest(unittest.TestCase):
         self.assertEqual(filtered[0].freq, 1)
         self.assertEqual(filtered[0].signal, "C2W")
 
+    def test_filters_system_and_keys_requested_correction_identity(self) -> None:
+        gps = code_row(
+            sat="G25",
+            freq="1",
+            prc="0.70",
+            code_bias="0.10",
+            receiver_ant="-0.02",
+            pseudorange_rinex_code="C2X",
+        )
+        gps["requested_pseudorange_rinex_code"] = "C2W"
+        qzss = code_row(
+            sat="J02",
+            freq="1",
+            prc="0.80",
+            code_bias="0.10",
+            receiver_ant="-0.02",
+            pseudorange_rinex_code="C2X",
+        )
+
+        filtered = component_diff.normalize_rows(
+            [gps, qzss],
+            component_names=["prc_m"],
+            stage_filter=None,
+            row_type_filter="code",
+            system_filter={"G"},
+            rinex_code_filter={"C2W"},
+            identity_source="requested",
+        )
+
+        self.assertEqual(len(filtered), 1)
+        self.assertEqual(filtered[0].sat, "G25")
+        self.assertEqual(filtered[0].signal, "C2W")
+
     def test_duplicate_policy_controls_repeated_row_keys(self) -> None:
         base = component_diff.normalize_rows(
             [
@@ -938,6 +971,7 @@ class ClasZdComponentDiffTest(unittest.TestCase):
                     "--details-csv",
                     str(details_path),
                     "--fail-on-diff",
+                    "--fail-on-threshold",
                 ],
                 check=False,
                 capture_output=True,

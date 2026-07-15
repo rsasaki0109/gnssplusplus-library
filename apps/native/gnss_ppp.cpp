@@ -859,7 +859,15 @@ int main(int argc, char* argv[]) {
 
         libgnss::io::RINEXReader obs_reader;
         const auto& ppp_env_overrides = libgnss::pppEnvOverrides();
-        if (options.ar_method == "per-freq") {
+        const bool clas_mrtklib_profile =
+            options.use_clas_osr_filter && options.kinematic_mode &&
+            options.use_dynamics_model && !options.low_dynamics_mode &&
+            ppp_env_overrides.clas_mrtklib_float_parity;
+        const bool clas_zd_parity_profile =
+            options.use_clas_osr_filter && ppp_env_overrides.clas_dd_filter &&
+            ppp_env_overrides.clas_code_row_bias_identity;
+        if (options.ar_method == "per-freq" || clas_mrtklib_profile ||
+            clas_zd_parity_profile) {
             obs_reader.setPreserveAdditionalFrequencyBands(true);
         }
         if (!options.madoca_l6_paths.empty() &&
@@ -966,12 +974,10 @@ int main(int argc, char* argv[]) {
             ppp_config.initial_velocity_variance = 4.0;
             // MRTKLIB literal-port track: the dynamics-model kinematic CLAS
             // path is the MRTKLIB-equivalence path, so it uses MRTKLIB's
-            // varerr measurement variance model. Env kill switch for A/B:
-            // GNSS_PPP_CLAS_MRTKLIB_FLOAT_PARITY=0 restores the flat model.
-            const char* parity_env =
-                std::getenv("GNSS_PPP_CLAS_MRTKLIB_FLOAT_PARITY");
+            // varerr measurement variance model. The typed environment
+            // override retains the exact-0 kill switch for A/B comparisons.
             ppp_config.clas_mrtklib_float_parity =
-                parity_env == nullptr || std::string(parity_env) != "0";
+                ppp_env_overrides.clas_mrtklib_float_parity;
         }
         ppp_config.emit_solution_epoch_time = options.emit_epoch_time;
         ppp_config.apply_static_anchor_blend = options.apply_static_anchor_blend;

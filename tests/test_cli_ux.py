@@ -457,24 +457,23 @@ class CliUxTest(unittest.TestCase):
         self.assertEqual(len(clas_rows), 1)
         clas_row = clas_rows[0]
         for snippet in (
-            "Historical `--claslib-parity` result",
-            "Current native DD filter",
-            "default-off",
-            "A5 STOP",
+            "Current 480 s moving gate",
+            "zero false FIX",
+            "full six-run sign-off pending",
         ):
             self.assertIn(snippet, clas_row)
 
-        section_heading = "### Historical CLAS PPP vs CLASLIB"
+        section_heading = "### Moving CLAS PPP vs MRTKLIB"
         self.assertIn(section_heading, readme)
         section_start = readme.index(section_heading)
         section_end = readme.find("\n### ", section_start + len(section_heading))
         clas_section = readme[section_start:] if section_end == -1 else readme[section_start:section_end]
         normalized_section = re.sub(r"\s+", " ", clas_section)
         for snippet in (
-            "not the current default CLAS capability",
-            "no longer exposes `--claslib-parity`",
-            "A4b component-diff evidence",
-            "DD filter default flip remains stopped at A5",
+            "current moving-data gate",
+            "public PPC Tokyo run2 rover",
+            "FIX integrity now passes",
+            "full Tokyo/Nagoya six-run scorecard remain open",
         ):
             self.assertIn(snippet, normalized_section)
 

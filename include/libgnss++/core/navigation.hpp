@@ -82,7 +82,7 @@ struct Ephemeris {
                                Vector3d& vel,
                                double& clock_bias,
                                double& clock_drift,
-                               bool use_mrtklib_galileo_mu = false) const;
+                               bool use_mrtklib_galileo_mu = true) const;
     
     /**
      * @brief Check if ephemeris is valid for given time
@@ -415,6 +415,7 @@ struct SSROrbitClockCorrection {
 
     bool orbit_valid = false;
     bool clock_valid = false;
+    bool clock_withdrawn = false;                       ///< Explicit invalid clock cell in the current CLAS network bank
     bool base_clock_valid = false;
     bool mrtklib_base_clock_valid = false;
     bool ura_valid = false;
@@ -431,7 +432,9 @@ enum class SSRClockSelectionPolicy {
 
 struct SSRCorrectionStatus {
     bool orbit_valid = false;
+    bool orbit_withdrawn = false;
     bool clock_valid = false;
+    bool clock_withdrawn = false;
     bool ura_valid = false;
     bool code_bias_valid = false;
     bool phase_bias_valid = false;
@@ -492,7 +495,18 @@ public:
         std::map<uint8_t, double>* phase_bias_m,
         std::map<uint8_t, int>* phase_bias_discnt = nullptr,
         GNSSTime* phase_bias_reference_time = nullptr,
-        bool include_equal_time_group = false) const;
+        bool include_equal_time_group = false,
+        double max_hold_age_seconds = -1.0) const;
+
+    bool heldClasPhaseBiasForServiceNetwork(
+        const SatelliteId& sat,
+        const GNSSTime& time,
+        int service_network_id,
+        std::map<uint8_t, double>* phase_bias_m,
+        std::map<uint8_t, int>* phase_bias_discnt = nullptr,
+        GNSSTime* phase_bias_reference_time = nullptr,
+        bool apply_reception_lag = true,
+        double max_hold_age_seconds = -1.0) const;
 
     bool heldAtmosTokensForNetwork(int network_id,
                                    const GNSSTime& time,

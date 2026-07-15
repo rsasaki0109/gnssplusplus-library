@@ -192,6 +192,14 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
         envExactOne("GNSS_PPP_CLAS_RESAMB");
     overrides.clas_dd_filter =
         envExactOne("GNSS_PPP_CLAS_DD_FILTER");
+    overrides.clas_dd_diag_path =
+        envStringOrEmpty("GNSS_PPP_CLAS_DD_DIAG");
+    overrides.clas_dd_state_dump_path =
+        envStringOrEmpty("GNSS_PPP_CLAS_DD_STATE_DUMP");
+    overrides.clas_dd_row_dump_path =
+        envStringOrEmpty("GNSS_PPP_CLAS_DD_ROW_DUMP");
+    overrides.clas_mrtklib_float_parity =
+        !envExactZero("GNSS_PPP_CLAS_MRTKLIB_FLOAT_PARITY");
     overrides.clas_sis_boundary =
         envExactOne("GNSS_PPP_CLAS_SIS_BOUNDARY");
     overrides.clas_base_clock_parity =

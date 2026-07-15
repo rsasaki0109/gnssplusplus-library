@@ -176,6 +176,18 @@ struct PPPEnvOverrides {
     // scaffold when set exactly to "1". Default false; exact "0" and unset are
     // no-ops for bit-exact legacy CLAS/MADOCA output.
     bool clas_dd_filter = false;
+    // GNSS_PPP_CLAS_DD_DIAG: path for CLAS DD-filter diagnostic CSV output.
+    // Empty disables it.
+    std::string clas_dd_diag_path;
+    // GNSS_PPP_CLAS_DD_STATE_DUMP: path for versioned CLAS DD-filter state
+    // rows (position and adaptive ionosphere). Empty disables it.
+    std::string clas_dd_state_dump_path;
+    // GNSS_PPP_CLAS_DD_ROW_DUMP: path for versioned CLAS DD measurement rows.
+    // Empty disables it.
+    std::string clas_dd_row_dump_path;
+    // GNSS_PPP_CLAS_MRTKLIB_FLOAT_PARITY: use the MRTKLIB-equivalent CLAS
+    // float variance model unless set exactly to "0". Default true.
+    bool clas_mrtklib_float_parity = true;
     // GNSS_PPP_CLAS_SIS_BOUNDARY: apply the CLAS SIS continuity delta with
     // CLASLIB-style SSR-update-boundary semantics (hold the delta captured at
     // a 30s orbit/clock boundary for the following 15s, matching the
