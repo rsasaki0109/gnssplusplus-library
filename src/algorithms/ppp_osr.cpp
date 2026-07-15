@@ -54,6 +54,178 @@ bool pppDebugEnabled() {
     return ppp_shared::pppDebugEnabled();
 }
 
+bool computeClasIodeGeometryCompensation(
+    const NavigationData& nav,
+    const SatelliteId& satellite,
+    const GNSSTime& observation_time,
+    double pseudorange_m,
+    const Vector3d& receiver_position,
+    int previous_iode,
+    int current_iode,
+    const Vector3d& current_orbit_rac_m,
+    double current_clock_correction_m,
+    const Vector3d& current_corrected_position,
+    double current_corrected_clock_s,
+    double& compensation_m) {
+    compensation_m = 0.0;
+    if (previous_iode < 0 || pseudorange_m <= 0.0) {
+        return false;
+    }
+
+    const GNSSTime approximate_transmit_time =
+        observation_time - pseudorange_m / constants::SPEED_OF_LIGHT;
+    const Ephemeris* previous_eph =
+        nav.getEphemeris(satellite, approximate_transmit_time, previous_iode);
+    if (previous_eph == nullptr) {
+        return false;
+    }
+
+    // RTKLIB eph2pos() and the native broadcast path use MU_GAL for Galileo.
+    // Keep the explicit argument here so both sides of an IODE transition are
+    // pinned to the same propagation constant even if a caller requests the
+    // legacy GPS-mu behavior elsewhere.
+    if (satellite.system == GNSSSystem::Galileo && current_iode >= 0) {
+        const Ephemeris* current_eph =
+            nav.getEphemeris(satellite, approximate_transmit_time, current_iode);
+        if (current_eph == nullptr) {
+            return false;
+        }
+        const auto corrected_model = [&](const Ephemeris& eph,
+                                         double& model_m) -> bool {
+            const double tc0 = approximate_transmit_time - eph.toc;
+            double tc = tc0;
+            for (int iteration = 0; iteration < 2; ++iteration) {
+                const double polynomial =
+                    eph.af0 + eph.af1 * tc + eph.af2 * tc * tc;
+                tc = tc0 - polynomial;
+            }
+            const double polynomial =
+                eph.af0 + eph.af1 * tc + eph.af2 * tc * tc;
+            const GNSSTime transmit_time =
+                approximate_transmit_time - polynomial;
+
+            Vector3d position;
+            Vector3d velocity;
+            double clock_s = 0.0;
+            double clock_drift = 0.0;
+            if (!eph.calculateSatelliteState(
+                    transmit_time, position, velocity, clock_s, clock_drift,
+                    true)) {
+                return false;
+            }
+            constexpr double kRtklibVelocityStepSeconds = 1e-3;
+            Vector3d forward_position;
+            Vector3d ignored_velocity;
+            double ignored_clock = 0.0;
+            double ignored_drift = 0.0;
+            if (!eph.calculateSatelliteState(
+                    transmit_time + kRtklibVelocityStepSeconds,
+                    forward_position, ignored_velocity, ignored_clock,
+                    ignored_drift, true)) {
+                return false;
+            }
+            velocity = (forward_position - position) /
+                kRtklibVelocityStepSeconds;
+            if (position.squaredNorm() <= 0.0 || velocity.squaredNorm() <= 0.0) {
+                return false;
+            }
+            const Vector3d along = velocity.normalized();
+            Vector3d cross = position.cross(velocity);
+            if (cross.squaredNorm() <= 0.0) {
+                return false;
+            }
+            cross.normalize();
+            const Vector3d radial = along.cross(cross);
+            position -= radial * current_orbit_rac_m(0) +
+                along * current_orbit_rac_m(1) +
+                cross * current_orbit_rac_m(2);
+            clock_s += current_clock_correction_m /
+                constants::SPEED_OF_LIGHT;
+            model_m = geodist(position, receiver_position) -
+                constants::SPEED_OF_LIGHT * clock_s;
+            return std::isfinite(model_m);
+        };
+
+        double previous_model_m = 0.0;
+        double current_model_m = 0.0;
+        if (!corrected_model(*previous_eph, previous_model_m) ||
+            !corrected_model(*current_eph, current_model_m)) {
+            return false;
+        }
+        compensation_m = previous_model_m - current_model_m;
+        return std::isfinite(compensation_m);
+    }
+
+    // CLASLIB adjust_r_dts(): select the pre-boundary IODE, iterate the
+    // broadcast clock polynomial at transmit time, then apply the *current*
+    // SSR orbit/clock correction to that broadcast state.
+    const double tc0 = approximate_transmit_time - previous_eph->toc;
+    double tc = tc0;
+    for (int iteration = 0; iteration < 2; ++iteration) {
+        const double polynomial = previous_eph->af0 +
+            previous_eph->af1 * tc + previous_eph->af2 * tc * tc;
+        tc = tc0 - polynomial;
+    }
+    const double polynomial = previous_eph->af0 +
+        previous_eph->af1 * tc + previous_eph->af2 * tc * tc;
+    const GNSSTime transmit_time = approximate_transmit_time - polynomial;
+
+    Vector3d previous_position;
+    Vector3d ignored_velocity;
+    double previous_clock_s = 0.0;
+    double ignored_drift = 0.0;
+    if (!previous_eph->calculateSatelliteState(
+            transmit_time,
+            previous_position,
+            ignored_velocity,
+            previous_clock_s,
+            ignored_drift)) {
+        return false;
+    }
+
+    constexpr double kRtklibVelocityStepSeconds = 1e-3;
+    Vector3d forward_position;
+    double ignored_clock = 0.0;
+    if (!previous_eph->calculateSatelliteState(
+            transmit_time + kRtklibVelocityStepSeconds,
+            forward_position,
+            ignored_velocity,
+            ignored_clock,
+            ignored_drift)) {
+        return false;
+    }
+    const Vector3d previous_velocity =
+        (forward_position - previous_position) / kRtklibVelocityStepSeconds;
+    if (previous_position.squaredNorm() <= 0.0 ||
+        previous_velocity.squaredNorm() <= 0.0) {
+        return false;
+    }
+
+    const Vector3d along = previous_velocity.normalized();
+    Vector3d cross = previous_position.cross(previous_velocity);
+    if (cross.squaredNorm() <= 0.0) {
+        return false;
+    }
+    cross.normalize();
+    const Vector3d radial = along.cross(cross);
+    const Vector3d previous_orbit_ecef =
+        -(radial * current_orbit_rac_m(0) +
+          along * current_orbit_rac_m(1) +
+          cross * current_orbit_rac_m(2));
+    previous_position += previous_orbit_ecef;
+    previous_clock_s +=
+        current_clock_correction_m / constants::SPEED_OF_LIGHT;
+
+    const double previous_model_m =
+        geodist(previous_position, receiver_position) -
+        constants::SPEED_OF_LIGHT * previous_clock_s;
+    const double current_model_m =
+        geodist(current_corrected_position, receiver_position) -
+        constants::SPEED_OF_LIGHT * current_corrected_clock_s;
+    compensation_m = previous_model_m - current_model_m;
+    return std::isfinite(compensation_m);
+}
+
 struct ClasOsrBiasLookup {
     double value_m = 0.0;
     std::uint8_t source_signal_id = 0;
@@ -113,6 +285,22 @@ bool clasMrtklibFloatParity(const ppp_shared::PPPConfig& config) {
 const Observation* findExactGpsL2wObservation(
     const ObservationData& obs,
     const SatelliteId& sat) {
+    // The normal observation vector contains only the policy-selected signal
+    // family (often 2X). RINEX slot assignment in RTKLIB is header-driven and
+    // selects 2W when that tracking code is declared, so consult the preserved
+    // exact tracking-code collection before the normal family observations.
+    if (const Observation* exact =
+            obs.getRinexTrackingObservation(sat, "2W");
+        exact != nullptr && exact->valid && exact->has_pseudorange &&
+        exact->has_carrier_phase && std::isfinite(exact->pseudorange) &&
+        std::isfinite(exact->carrier_phase) &&
+        algorithms::ppp_bias_identity::isGpsL2wObservation(
+            exact->satellite.system,
+            exact->signal,
+            exact->pseudorange_observation_type,
+            exact->carrier_phase_observation_type)) {
+        return exact;
+    }
     for (const auto& candidate : obs.observations) {
         if (!candidate.valid || candidate.satellite != sat) {
             continue;
@@ -129,6 +317,13 @@ const Observation* findExactGpsL2wObservation(
         }
     }
     return nullptr;
+}
+
+bool isGpsL2xObservation(const Observation* observation) {
+    return observation != nullptr &&
+           observation->satellite.system == GNSSSystem::GPS &&
+           observation->pseudorange_observation_type == "C2X" &&
+           observation->carrier_phase_observation_type == "L2X";
 }
 
 bool hasUsableCodeAndPhase(const Observation& observation) {
@@ -458,9 +653,6 @@ void updateDispersionCompensation(
     const Observation* l2_obs,
     const GNSSTime& obs_time,
     bool mrtklib_parity) {
-    if (mrtklib_parity && compensation.mrtklib_qzss_suppressed) {
-        return;
-    }
     const GNSSTime interval_reference =
         osr.atmos_reference_time.week != 0 ? osr.atmos_reference_time : obs_time;
     if (compensation.reference_time.week == 0 ||
@@ -469,8 +661,26 @@ void updateDispersionCompensation(
         compensation.base_phase_m = {0.0, 0.0};
         compensation.has_base = {false, false};
         compensation.slip = {false, false};
+        if (mrtklib_parity) {
+            for (size_t sample = 0;
+                 sample < compensation.warmup_times.size() &&
+                 sample < compensation.warmup_phase_m.size();
+                 ++sample) {
+                if (compensation.warmup_times[sample] < interval_reference ||
+                    compensation.warmup_times[sample] > obs_time) {
+                    continue;
+                }
+                compensation.base_phase_m =
+                    compensation.warmup_phase_m[sample];
+                compensation.has_base = {true, true};
+                break;
+            }
+        }
         const Observation* freq_obs[2] = {l1_obs, l2_obs};
         for (int f = 0; f < 2; ++f) {
+            if (compensation.has_base[static_cast<size_t>(f)]) {
+                continue;
+            }
             const Observation* raw = freq_obs[f];
             if (raw != nullptr && (!mrtklib_parity || raw->valid) &&
                 raw->has_carrier_phase &&
@@ -541,6 +751,7 @@ void updateDispersionCompensation(
 
 // Minimum elevation angle for satellite inclusion (radians, ~15 degrees)
 constexpr double kElevationMaskRad = 0.26;
+constexpr double kClasPhaseBiasBankPeriodSeconds = 30.0;
 // Maximum time gap for phase bias repair before resetting (seconds)
 constexpr double kPhaseBiasRepairTimeoutSeconds = 120.0;
 // Expected SSR clock interval for SIS continuity detection (seconds)
@@ -737,6 +948,8 @@ void updateSisContinuity(
         const GNSSTime preserved_boundary_prev_time = info.boundary_prev_time;
         const double preserved_boundary_prev_sis_m = info.boundary_prev_sis_m;
         const bool preserved_has_boundary_prev_sis = info.has_boundary_prev_sis;
+        const int preserved_boundary_prev_iode = info.boundary_prev_iode;
+        const bool preserved_has_boundary_prev_iode = info.has_boundary_prev_iode;
         info = CLASSisContinuityInfo{};
         info.boundary_time = preserved_boundary_time;
         info.boundary_delta_m = preserved_boundary_delta_m;
@@ -744,6 +957,8 @@ void updateSisContinuity(
         info.boundary_prev_time = preserved_boundary_prev_time;
         info.boundary_prev_sis_m = preserved_boundary_prev_sis_m;
         info.has_boundary_prev_sis = preserved_has_boundary_prev_sis;
+        info.boundary_prev_iode = preserved_boundary_prev_iode;
+        info.has_boundary_prev_iode = preserved_has_boundary_prev_iode;
     } else if (!info.has_current) {
         info.current_time = osr.clock_reference_time;
         info.current_sis_m = current_sis_m;
@@ -955,7 +1170,9 @@ OsrFrequencyObservationLookup findOsrFrequencyObservationWithProvenance(
     const OSRCorrection& osr,
     int freq_index) {
     OsrFrequencyObservationLookup result;
-    if (freq_index < 0 || freq_index >= osr.num_frequencies ||
+    const int available_frequency_count =
+        std::max(osr.num_frequencies, osr.num_output_frequencies);
+    if (freq_index < 0 || freq_index >= available_frequency_count ||
         freq_index >= OSR_MAX_FREQ) {
         return result;
     }
@@ -969,6 +1186,19 @@ OsrFrequencyObservationLookup findOsrFrequencyObservationWithProvenance(
 
     const auto& pseudorange_code = osr.pseudorange_rinex_codes[freq_index];
     const auto& carrier_code = osr.carrier_rinex_codes[freq_index];
+    if (pseudorange_code.size() >= 3 && carrier_code.size() >= 3 &&
+        pseudorange_code.substr(1) == carrier_code.substr(1)) {
+        if (const Observation* exact = obs.getRinexTrackingObservation(
+                osr.satellite, pseudorange_code.substr(1));
+            exact != nullptr && hasUsableCodeAndPhase(*exact) &&
+            exact->pseudorange_observation_type == pseudorange_code &&
+            exact->carrier_phase_observation_type == carrier_code) {
+            result.observation = exact;
+            result.exact_identity_matched = true;
+            result.family_fallback = false;
+            return result;
+        }
+    }
     for (const auto& candidate : obs.observations) {
         if (candidate.satellite != osr.satellite || candidate.signal != signal) {
             continue;
@@ -1079,6 +1309,22 @@ SignalType clasReceiverAntennaLookupSignal(
             osr.carrier_rinex_codes[freq_index])) {
         return SignalType::GPS_L1CA;
     }
+    // CLASLIB's legacy ANTEX reader discards the constellation letter and
+    // stores receiver antenna entries by frequency number only.  In the
+    // canonical igs14_L5copy.atx receiver block, R01 is the final *01 entry
+    // and C02 is the final *02 entry.  They therefore overwrite the two
+    // RTKLIB antenna slots consumed by corrmeas(), including for QZSS.
+    // Preserve that file-specific observable quirk only for explicitly
+    // tagged QZSS parity rows.
+    if (osr.claslib_qzss_receiver_antenna_slots &&
+        osr.satellite.system == GNSSSystem::QZSS) {
+        if (freq_index == 0) {
+            return SignalType::GLO_L1CA;
+        }
+        if (freq_index == 1) {
+            return SignalType::BDS_B1I;
+        }
+    }
     return signal;
 }
 
@@ -1153,7 +1399,7 @@ std::map<std::string, std::string> selectClasEpochAtmosTokens(
     }
 
     if (config.clas_atmos_selection_policy ==
-            ppp_shared::PPPConfig::ClasAtmosSelectionPolicy::GRID_GUARDED &&
+        ppp_shared::PPPConfig::ClasAtmosSelectionPolicy::GRID_GUARDED &&
         !best.tokens.empty() &&
         best.time_gap > config.clas_atmos_stale_after_seconds) {
         if (pppDebugEnabled()) {
@@ -1226,13 +1472,27 @@ std::vector<OSRCorrection> computeOSR(
     std::map<SatelliteId, CLASPhaseBiasRepairInfo>& phase_bias_repair) {
 
     std::vector<OSRCorrection> corrections;
+    const bool mrtklib_parity = clasMrtklibFloatParity(config);
+    const bool clas_network_parity =
+        mrtklib_parity || clasGpsL2wIdentityGateEnabled();
     int preferred_network_id = 0;
     ppp_atmosphere::parseAtmosTokenInt(
         epoch_atmos_tokens, "atmos_network_id", preferred_network_id);
+    if (clas_network_parity) {
+        ppp_atmosphere::ClasGridReference nearest_regional;
+        if (ppp_atmosphere::resolveClasNearestRegionalGridReference(
+                receiver_pos, nearest_regional) &&
+            nearest_regional.network_id > 0) {
+            preferred_network_id = nearest_regional.network_id;
+        }
+    }
 
     for (const auto& sat : obs.getSatellites()) {
         OSRCorrection osr;
         osr.satellite = sat;
+        osr.claslib_qzss_receiver_antenna_slots =
+            sat.system == GNSSSystem::QZSS &&
+            pppEnvOverrides().clas_qzss_s_prn_fix;
 
         // --- 1. Find L1/L2 observations ---
         const auto findSignal = [&](const std::vector<SignalType>& candidates)
@@ -1244,11 +1504,12 @@ std::vector<OSRCorrection> computeOSR(
             return nullptr;
         };
 
-        std::vector<SignalType> l1_cands, l2_cands;
+        std::vector<SignalType> l1_cands, l2_cands, l5_cands;
         switch (sat.system) {
             case GNSSSystem::GPS:
                 l1_cands = {SignalType::GPS_L1CA, SignalType::GPS_L1P};
-                l2_cands = {SignalType::GPS_L2C, SignalType::GPS_L2P, SignalType::GPS_L5};
+                l2_cands = {SignalType::GPS_L2C, SignalType::GPS_L2P};
+                l5_cands = {SignalType::GPS_L5};
                 break;
             case GNSSSystem::Galileo:
                 l1_cands = {SignalType::GAL_E1};
@@ -1256,7 +1517,8 @@ std::vector<OSRCorrection> computeOSR(
                 break;
             case GNSSSystem::QZSS:
                 l1_cands = {SignalType::QZS_L1CA};
-                l2_cands = {SignalType::QZS_L2C, SignalType::QZS_L5};
+                l2_cands = {SignalType::QZS_L2C};
+                l5_cands = {SignalType::QZS_L5};
                 break;
             default:
                 continue;
@@ -1264,17 +1526,19 @@ std::vector<OSRCorrection> computeOSR(
 
         const Observation* l1_obs = findSignal(l1_cands);
         const Observation* l2_obs = findSignal(l2_cands);
-        const bool mrtklib_parity = clasMrtklibFloatParity(config);
+        const Observation* l5_obs = findSignal(l5_cands);
         if (sat.system == GNSSSystem::GPS &&
             (mrtklib_parity || clasGpsL2wIdentityGateEnabled())) {
             const Observation* exact_l2w = findExactGpsL2wObservation(obs, sat);
-            // RTKLIB fixes frequency slot 1 to the header-selected L2W code.
-            // On the literal path a missing L2W must remain absent for both
-            // compensatedisp() and slip detection; falling through to the
-            // simultaneously recorded L2L creates a fictitious multi-metre
-            // phase compensation (G04 at tow 177068.8 in tokyo/run2).
-            if (mrtklib_parity || exact_l2w != nullptr) {
+            // RTKLIB places the highest-priority usable L2 observation in
+            // frequency slot 1. A4b selects C2W/L2W when present and C2X/L2X
+            // otherwise; both consume the CLAS L2W correction cell. Do not
+            // fall through to L2L: that creates a fictitious multi-metre
+            // compensation on tokyo/run2 when the configured slot is absent.
+            if (exact_l2w != nullptr) {
                 l2_obs = exact_l2w;
+            } else if (mrtklib_parity && !isGpsL2xObservation(l2_obs)) {
+                l2_obs = nullptr;
             }
         }
         if (!l1_obs) {
@@ -1284,12 +1548,34 @@ std::vector<OSRCorrection> computeOSR(
             }
             continue;
         }
+        if (mrtklib_parity && l2_obs != nullptr &&
+            l1_obs->has_carrier_phase && l2_obs->has_carrier_phase &&
+            std::isfinite(l1_obs->carrier_phase) &&
+            std::isfinite(l2_obs->carrier_phase)) {
+            const double l1_wavelength = signalWavelengthMeters(*l1_obs);
+            const double l2_wavelength = signalWavelengthMeters(*l2_obs);
+            if (l1_wavelength > 0.0 && l2_wavelength > 0.0) {
+                auto& warmup = dispersion_compensation[sat];
+                while (!warmup.warmup_times.empty() &&
+                       obs.time - warmup.warmup_times.front() > 120.0) {
+                    warmup.warmup_times.erase(warmup.warmup_times.begin());
+                    warmup.warmup_phase_m.erase(warmup.warmup_phase_m.begin());
+                }
+                if (warmup.warmup_times.empty() ||
+                    warmup.warmup_times.back() != obs.time) {
+                    warmup.warmup_times.push_back(obs.time);
+                    warmup.warmup_phase_m.push_back({{
+                        l1_obs->carrier_phase * l1_wavelength,
+                        l2_obs->carrier_phase * l2_wavelength}});
+                }
+            }
+        }
 
         // --- 2. Satellite position/clock from broadcast + SSR ---
         Vector3d sat_pos, sat_vel;
         double sat_clk = 0.0, sat_drift = 0.0;
         int clas_orbit_iode = -1;
-        if (mrtklib_parity) {
+        if (clas_network_parity) {
             const auto entries_it = ssr.orbit_clock_corrections.find(sat);
             if (entries_it != ssr.orbit_clock_corrections.end()) {
                 for (auto entry = entries_it->second.rbegin();
@@ -1394,11 +1680,10 @@ std::vector<OSRCorrection> computeOSR(
                 sat_vel = (forward_pos - sat_pos) /
                           kRtklibVelocityStepSeconds;
                 const double tc = emission_time - parity_eph->toc;
-                const double polynomial = parity_eph->af0 +
-                    parity_eph->af1 * tc + parity_eph->af2 * tc * tc;
-                sat_clk = polynomial -
-                    2.0 * sat_pos.dot(sat_vel) /
-                        (constants::SPEED_OF_LIGHT * constants::SPEED_OF_LIGHT);
+                // calculateSatelliteState() already supplies the broadcast
+                // relativity term from the eccentric anomaly. Retain that
+                // value: recomputing -2*r.v/c^2 from a 1 ms numerical
+                // derivative adds constellation-dependent centimetre noise.
                 sat_drift = parity_eph->af1 + 2.0 * parity_eph->af2 * tc;
             }
             osr.signal_transmit_time = emission_time;
@@ -1406,6 +1691,7 @@ std::vector<OSRCorrection> computeOSR(
 
         // Apply SSR orbit/clock corrections
         Vector3d orbit_corr = Vector3d::Zero();
+        Vector3d orbit_corr_rac = Vector3d::Zero();
         double clock_corr = 0.0;
         double ura_sigma = 0.0;
         std::map<uint8_t, double> ssr_cbias, ssr_pbias;
@@ -1441,6 +1727,15 @@ std::vector<OSRCorrection> computeOSR(
                                        clock_policy,
                                        &ssr_cbias_rtklib,
                                        &ssr_pbias_rtklib)) {
+            // CLASLIB's satpos_ssr() rejects QZSS observations when the
+            // current compact orbit bank omits that satellite. Do not publish
+            // a broadcast-only OSR row after the parity selector has marked
+            // the held orbit as withdrawn.
+            if (env.clas_qzss_s_prn_fix && sat.system == GNSSSystem::QZSS &&
+                ssr_status.orbit_withdrawn) {
+                continue;
+            }
+            orbit_corr_rac = orbit_corr;
             // CSV-expanded CLAS corrections carry orbit deltas in RAC, while
             // sampled RTCM SSR products are already stored in ECEF.
             // RAC frame follows RTCM-10403.1 / CLASLIB convention:
@@ -1505,6 +1800,29 @@ std::vector<OSRCorrection> computeOSR(
             }
         }
 
+        if (clas_network_parity && preferred_network_id > 0 &&
+            sat.system != GNSSSystem::QZSS) {
+            std::map<uint8_t, int> repicked_discnt;
+            GNSSTime repicked_ref;
+            if (ssr.heldClasPhaseBiasForServiceNetwork(
+                    sat, obs.time, preferred_network_id, &ssr_pbias,
+                    &repicked_discnt, &repicked_ref, true,
+                    kClasPhaseBiasBankPeriodSeconds)) {
+                ssr_pbias_rtklib.clear();
+                phase_bias_reference_time = repicked_ref;
+                ssr_status.phase_bias_valid = !ssr_pbias.empty();
+                ssr_status.phase_bias_reference_time = repicked_ref;
+            } else {
+                // clas_osr_zdres() requires a phase-bias cell for every
+                // exported frequency.  Once the service-network bank is
+                // withdrawn, retaining the interpolator's base/old value
+                // creates rows absent from CLASLIB.
+                ssr_pbias.clear();
+                ssr_pbias_rtklib.clear();
+                ssr_status.phase_bias_valid = false;
+            }
+        }
+
         const auto ssr_timing_policy = config.clas_ssr_timing_policy;
         const bool clock_ref_valid = gnsstimeIsSet(osr.clock_reference_time);
         const bool phase_bias_ref_valid = gnsstimeIsSet(osr.phase_bias_reference_time);
@@ -1557,13 +1875,44 @@ std::vector<OSRCorrection> computeOSR(
         osr.frequencies[0] = signalFrequencyHz(l1_obs->signal, eph);
         osr.wavelengths[0] = constants::SPEED_OF_LIGHT / osr.frequencies[0];
         osr.num_frequencies = 1;
+        osr.num_output_frequencies = 1;
         if (l2_obs) {
             osr.signals[1] = l2_obs->signal;
             osr.pseudorange_rinex_codes[1] = l2_obs->pseudorange_observation_type;
             osr.carrier_rinex_codes[1] = l2_obs->carrier_phase_observation_type;
+            // CLASLIB exposes GPS frequency slot 1 as RTKLIB CODE_L2W even
+            // when the receiver value occupying that slot was tracked as
+            // C2X/L2X. Keep the raw Observation unchanged for measurement
+            // provenance, but key the CLAS correction/bias slot as L2W.
+            if (sat.system == GNSSSystem::GPS &&
+                clasGpsL2wIdentityGateEnabled()) {
+                osr.pseudorange_rinex_codes[1] = "C2W";
+                osr.carrier_rinex_codes[1] = "L2W";
+            }
             osr.frequencies[1] = signalFrequencyHz(l2_obs->signal, eph);
             osr.wavelengths[1] = constants::SPEED_OF_LIGHT / osr.frequencies[1];
             osr.num_frequencies = 2;
+            osr.num_output_frequencies = 2;
+        }
+        const bool claslib_output_l5 =
+            sat.system == GNSSSystem::GPS
+                ? clas_network_parity
+                : (sat.system == GNSSSystem::QZSS &&
+                   pppEnvOverrides().clas_qzss_s_prn_fix);
+        if (claslib_output_l5 && l2_obs && l5_obs) {
+            osr.signals[2] = l5_obs->signal;
+            osr.pseudorange_rinex_codes[2] =
+                l5_obs->pseudorange_observation_type;
+            osr.carrier_rinex_codes[2] =
+                l5_obs->carrier_phase_observation_type;
+            osr.frequencies[2] = signalFrequencyHz(l5_obs->signal, eph);
+            osr.wavelengths[2] =
+                constants::SPEED_OF_LIGHT / osr.frequencies[2];
+            // CLASLIB's nf=3 export contains the L5 signal identity and its
+            // component fields, but PRC[2]/CPC[2] remain zero.  Keep it as an
+            // output-only slot so it cannot collide with the estimator's L2
+            // ambiguity key or create an extra measurement row.
+            osr.num_output_frequencies = 3;
         }
 
         // --- 4. Troposphere ---
@@ -1766,8 +2115,8 @@ std::vector<OSRCorrection> computeOSR(
             // network messages rotated at 5 s boundaries. Repick the held
             // bank for the selected network for GPS/GAL/QZSS alike.
             int service_network_id =
-                mrtklib_parity ? osr.atmos_network_id : 0;
-            if (mrtklib_parity) {
+                clas_network_parity ? osr.atmos_network_id : 0;
+            if (clas_network_parity) {
                 ppp_atmosphere::ClasGridReference nearest_regional;
                 if (ppp_atmosphere::resolveClasNearestRegionalGridReference(
                         receiver_pos, nearest_regional) &&
@@ -1778,7 +2127,7 @@ std::vector<OSRCorrection> computeOSR(
             if (service_network_id > 0) {
                 std::map<std::string, std::string> service_atmos_tokens;
                 GNSSTime service_atmos_reference_time;
-                const auto* clas_bank = mrtklib_parity
+                const auto* clas_bank = clas_network_parity
                     ? ssr.heldClasAtmosBankTokens(
                           obs.time, kClasQzssHeldStecAgeSeconds,
                           service_network_id, &service_atmos_reference_time)
@@ -1805,7 +2154,7 @@ std::vector<OSRCorrection> computeOSR(
                     config.clas_expanded_value_construction_policy,
                     config.clas_subtype12_value_construction_policy,
                     config.clas_expanded_residual_sampling_policy,
-                    mrtklib_parity);
+                    clas_network_parity);
                 if (!(env.clas_qzss_s_prn_fix && sat.system == GNSSSystem::QZSS)) {
                     return value;
                 }
@@ -1866,23 +2215,35 @@ std::vector<OSRCorrection> computeOSR(
             std::map<uint8_t, double> repicked_pbias;
             std::map<uint8_t, int> repicked_discnt;
             GNSSTime repicked_ref;
+            const bool qzss_literal_bank =
+                mrtklib_parity || env.clas_qzss_s_prn_fix;
             if (service_network_id > 0 &&
                 ssr.heldQzssPhaseBiasForServiceNetwork(
                     sat, obs.time, service_network_id,
                     &repicked_pbias, &repicked_discnt, &repicked_ref,
-                    mrtklib_parity)) {
+                    qzss_literal_bank,
+                    qzss_literal_bank ? kClasPhaseBiasBankPeriodSeconds : -1.0)) {
                 ssr_pbias = std::move(repicked_pbias);
                 phase_bias_reference_time = repicked_ref;
                 osr.has_phase_bias = !ssr_pbias.empty();
                 osr.phase_bias_reference_time = repicked_ref;
+            } else if (qzss_literal_bank) {
+                ssr_pbias.clear();
+                ssr_pbias_rtklib.clear();
+                osr.has_phase_bias = false;
             }
         }
 
         // --- 7. Code/Phase bias ---
-        const Observation* freq_observations[2] = {l1_obs, l2_obs};
-        for (int f = 0; f < osr.num_frequencies; ++f) {
+        const Observation* freq_observations[OSR_MAX_FREQ] = {
+            l1_obs, l2_obs, l5_obs};
+        for (int f = 0; f < osr.num_output_frequencies; ++f) {
             const Observation* freq_obs = freq_observations[f];
+            const bool claslib_gps_l2w_slot =
+                f == 1 && sat.system == GNSSSystem::GPS &&
+                clasGpsL2wIdentityGateEnabled();
             const bool exact_bias_identity =
+                claslib_gps_l2w_slot ||
                 gpsL2ExactBiasIdentityEnabled(freq_obs) ||
                 (mrtklib_parity && freq_obs != nullptr &&
                  algorithms::ppp_bias_identity::isGpsL2wObservation(
@@ -1893,8 +2254,10 @@ std::vector<OSRCorrection> computeOSR(
             auto bias = materializeClasOsrBiases(
                 sat.system,
                 osr.signals[f],
-                freq_obs != nullptr ? freq_obs->pseudorange_observation_type : "",
-                freq_obs != nullptr ? freq_obs->carrier_phase_observation_type : "",
+                claslib_gps_l2w_slot ? "C2W" :
+                    (freq_obs != nullptr ? freq_obs->pseudorange_observation_type : ""),
+                claslib_gps_l2w_slot ? "L2W" :
+                    (freq_obs != nullptr ? freq_obs->carrier_phase_observation_type : ""),
                 ssr_cbias,
                 ssr_pbias,
                 exact_bias_identity,
@@ -1948,11 +2311,11 @@ std::vector<OSRCorrection> computeOSR(
 
         // --- 8. Phase wind-up ---
         double& wu = prev_windup[sat];
-        wu = mrtklib_parity
+        wu = clas_network_parity
             ? phaseWindupMrtklib(sat_pos, sat_vel, receiver_pos, wu)
             : phaseWindup(sat_pos, receiver_pos, wu);
         osr.windup_cycles = wu;
-        for (int f = 0; f < osr.num_frequencies; ++f) {
+        for (int f = 0; f < osr.num_output_frequencies; ++f) {
             osr.windup_m[f] = wu * osr.wavelengths[f];
         }
 
@@ -1965,11 +2328,115 @@ std::vector<OSRCorrection> computeOSR(
             osr.base_clock_correction_m : osr.clock_correction_m;
         const double current_sis_m = -sis_clock_m + osr.orbit_projection_m;
         updateSisContinuity(sis_continuity_info, osr, clock_time_valid);
-        if (pppEnvOverrides().clas_sis_boundary) {
+        const bool sis_boundary_gate_enabled =
+            pppEnvOverrides().clas_sis_boundary || clas_network_parity;
+        if (sis_boundary_gate_enabled) {
+            if (isSsrOrbitBoundaryOffset25Tow(obs.time.tow) &&
+                clas_orbit_iode >= 0) {
+                sis_continuity_info.boundary_prev_iode = clas_orbit_iode;
+                sis_continuity_info.has_boundary_prev_iode = true;
+            }
             captureClasSisBoundary(
                 sis_continuity_info, obs.time, current_sis_m,
                 mrtklib_parity ? kMrtklibOrbitBoundaryToleranceSeconds
                                : kSsrOrbitBoundaryToleranceSeconds);
+
+            // The native CLAS pipeline can first publish a valid OSR several
+            // seconds after the 30 s boundary. CLASLIB has already populated
+            // satcorr[] while decoding those warm-up epochs, so reconstruct
+            // its missed (boundary-5 s, boundary) SIS pair from SSR history.
+            // The 30 s phase-bias lag is the literal adjust_cpc() trigger.
+            const GNSSTime seed_effective_phase_bias_reference_time =
+                selectClasPhaseBiasReferenceTime(
+                    config.clas_phase_bias_reference_time_policy,
+                    osr.phase_bias_reference_time,
+                    osr.clock_reference_time,
+                    obs.time);
+            const GNSSTime seed_boundary_time =
+                seed_effective_phase_bias_reference_time + kPhaseBiasLagSeconds;
+            const double since_boundary = obs.time - seed_boundary_time;
+            if (!sis_continuity_info.has_boundary_delta &&
+                clock_time_valid &&
+                gnsstimeIsSet(seed_effective_phase_bias_reference_time) &&
+                since_boundary >= 0.0 &&
+                since_boundary < kSsrOrbitBoundaryApplyWindowSeconds &&
+                sat_vel.squaredNorm() > 0.0) {
+                const GNSSTime previous_sample_time =
+                    seed_boundary_time - kSsrOrbitBoundaryPrevToBoundarySeconds;
+                const auto sample_sis = [&](const GNSSTime& sample_time,
+                                            double& sampled_sis_m) {
+                    Vector3d sampled_orbit_rac = Vector3d::Zero();
+                    double sampled_clock_m = 0.0;
+                    double sampled_ura = 0.0;
+                    std::map<uint8_t, double> sampled_code_biases;
+                    std::map<uint8_t, double> sampled_phase_biases;
+                    std::map<std::string, std::string> sampled_atmos;
+                    GNSSTime sampled_atmos_time;
+                    GNSSTime sampled_phase_bias_time;
+                    GNSSTime sampled_clock_time;
+                    SSRCorrectionStatus sampled_status;
+                    double sampled_base_clock_m = 0.0;
+                    bool sampled_base_clock_valid = false;
+                    if (!ssr.interpolateCorrection(
+                            sat, sample_time,
+                            sampled_orbit_rac, sampled_clock_m,
+                            &sampled_ura, &sampled_code_biases,
+                            &sampled_phase_biases, &sampled_atmos,
+                            &sampled_atmos_time, &sampled_phase_bias_time,
+                            &sampled_clock_time, preferred_network_id,
+                            nullptr, nullptr, &sampled_status,
+                            false, &sampled_base_clock_m,
+                            &sampled_base_clock_valid, clock_policy)) {
+                        return false;
+                    }
+                    Vector3d sampled_orbit_ecef = sampled_orbit_rac;
+                    if (ssr.orbitCorrectionsAreRac()) {
+                        const Vector3d broadcast_position = sat_pos - orbit_corr;
+                        const Vector3d along = sat_vel.normalized();
+                        Vector3d cross = broadcast_position.cross(sat_vel);
+                        if (cross.squaredNorm() > 0.0) {
+                            cross.normalize();
+                            const Vector3d radial = along.cross(cross);
+                            sampled_orbit_ecef =
+                                -(radial * sampled_orbit_rac.x() +
+                                  along * sampled_orbit_rac.y() +
+                                  cross * sampled_orbit_rac.z());
+                        }
+                    }
+                    const Vector3d sampled_position =
+                        sat_pos - orbit_corr + sampled_orbit_ecef;
+                    const Vector3d sampled_los =
+                        (sampled_position - receiver_pos).normalized();
+                    const double sampled_orbit_projection_m =
+                        sampled_los.dot(sampled_orbit_ecef);
+                    const double sampled_sis_clock_m =
+                        sampled_base_clock_valid
+                            ? sampled_base_clock_m
+                            : sampled_clock_m;
+                    sampled_sis_m =
+                        -sampled_sis_clock_m + sampled_orbit_projection_m;
+                    return true;
+                };
+                double previous_sis_m = 0.0;
+                double boundary_sis_m = 0.0;
+                if (sample_sis(previous_sample_time, previous_sis_m) &&
+                    sample_sis(seed_boundary_time, boundary_sis_m)) {
+                    sis_continuity_info.boundary_prev_time = previous_sample_time;
+                    sis_continuity_info.boundary_prev_sis_m = previous_sis_m;
+                    sis_continuity_info.has_boundary_prev_sis = true;
+                    sis_continuity_info.boundary_time = seed_boundary_time;
+                    sis_continuity_info.boundary_delta_m =
+                        boundary_sis_m - previous_sis_m;
+                    sis_continuity_info.has_boundary_delta = true;
+                    if (pppDebugEnabled()) {
+                        std::cerr << "[OSR-SIS-SEED] " << sat.toString()
+                                  << " boundary_tow=" << seed_boundary_time.tow
+                                  << " delta_m="
+                                  << sis_continuity_info.boundary_delta_m
+                                  << '\n';
+                    }
+                }
+            }
         }
         const GNSSTime effective_phase_bias_reference_time =
             selectClasPhaseBiasReferenceTime(
@@ -2009,8 +2476,6 @@ std::vector<OSRCorrection> computeOSR(
                        + phase_compensation_term;
 
             if (usesClasSisContinuity(phase_continuity_policy)) {
-                const bool sis_boundary_gate_enabled =
-                    pppEnvOverrides().clas_sis_boundary;
                 const auto sis_decision = computeClasSisApplyDecision(
                     sis_continuity_info,
                     obs.time,
@@ -2024,6 +2489,32 @@ std::vector<OSRCorrection> computeOSR(
                     osr.CPC[f] -= sis_decision.delta_m;
                     osr.PRC[f] -= sis_decision.delta_m;
                     osr.network_compensation_m = sis_decision.delta_m;
+                    if (f == 0 &&
+                        sis_continuity_info.has_boundary_prev_iode &&
+                        clas_orbit_iode >= 0 &&
+                        clas_orbit_iode !=
+                            sis_continuity_info.boundary_prev_iode &&
+                        ssr.orbitCorrectionsAreRac()) {
+                        double iode_compensation_m = 0.0;
+                        if (computeClasIodeGeometryCompensation(
+                                nav,
+                                sat,
+                                obs.time,
+                                l1_obs->pseudorange,
+                                receiver_pos,
+                                sis_continuity_info.boundary_prev_iode,
+                                clas_orbit_iode,
+                                orbit_corr_rac,
+                                clock_corr,
+                                sat_pos,
+                                sat_clk,
+                                iode_compensation_m)) {
+                            osr.iode_geometry_compensation_m =
+                                iode_compensation_m;
+                        }
+                    }
+                    osr.CPC[f] += osr.iode_geometry_compensation_m;
+                    osr.PRC[f] += osr.iode_geometry_compensation_m;
                     if (pppDebugEnabled() && f == 0) {
                         std::cerr << (sis_boundary_gate_enabled ?
                                           "[OSR-SIS-BOUNDARY] " : "[OSR-SIS] ")
@@ -2087,6 +2578,8 @@ std::vector<OSRCorrection> computeOSR(
                       << " eff_pbias_ref_tow=" << effective_phase_bias_reference_time.tow
                       << " orb_los=" << osr.orbit_projection_m
                       << " clk_corr=" << osr.clock_correction_m
+                      << " base_clk=" << osr.base_clock_correction_m
+                      << " base_clk_valid=" << osr.base_clock_valid
                       << " PRC0=" << osr.PRC[0]
                       << " CPC0=" << osr.CPC[0]
                       << "\n";

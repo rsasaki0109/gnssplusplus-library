@@ -158,6 +158,7 @@ install(PROGRAMS
     ${CMAKE_CURRENT_SOURCE_DIR}/commands/receivers/gnss_skytraq_info.py
     ${CMAKE_CURRENT_SOURCE_DIR}/commands/receivers/gnss_binex_info.py
     ${CMAKE_CURRENT_SOURCE_DIR}/commands/receivers/gnss_qzss_l6_info.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/commands/receivers/gnss_qzss_l6_bias.py
     ${CMAKE_CURRENT_SOURCE_DIR}/compat/gnss_pos2kml
     DESTINATION ${CMAKE_INSTALL_BINDIR}
 )

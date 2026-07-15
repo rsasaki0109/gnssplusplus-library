@@ -8,6 +8,7 @@
 #include <libgnss++/core/coordinates.hpp>
 
 #include "ppp_internal.hpp"
+#include "ppp_clas_diagnostics.hpp"
 
 #include <algorithm>
 #include <array>
@@ -224,77 +225,19 @@ double effectiveClasIonoProcessNoise(const ppp_shared::PPPConfig& config) {
 }
 
 std::ofstream* ambDatumDumpStream() {
-    const auto& path = pppEnvOverrides().clas_amb_datum_dump_path;
-    if (path.empty()) {
-        return nullptr;
-    }
-
-    static std::ofstream stream;
-    static bool initialized = false;
-    if (!initialized) {
-        initialized = true;
-        stream.open(path, std::ios::out | std::ios::trunc);
-        if (stream) {
-            stream << "record,week,tow,sat,freq,signal,carrier_rinex_code,"
-                   << "carrier_rtklib_code,signal_family,"
-                   << "requested_pseudorange_rinex_code,"
-                   << "requested_carrier_rinex_code,"
-                   << "observation_exact_identity_requested,"
-                   << "observation_exact_match,observation_family_fallback,"
-                   << "phase_bias_signal_id,bias_exact_identity,"
-                   << "phase_bias_source_signal_id,phase_bias_present,"
-                   << "phase_bias_fallback,lambda_m,"
-                   << "raw_phase_cycles,raw_phase_m,carrier_correction_m,"
-                   << "cpc_m,cpc_minus_trop_m,trop_correction_m,relativity_m,"
-                   << "receiver_antenna_m,iono_cpc_m,phase_bias_m,windup_m,"
-                   << "phase_compensation_m,l_corr_m,predicted_no_amb_m,"
-                   << "amb_state_m,amb_state_cycles,residual_m\n";
-        }
-    }
-    return stream ? &stream : nullptr;
+    return ppp_clas_diagnostics::ambiguityDatumStream();
 }
 
 std::ofstream* clasGeometryDumpStream() {
-    const auto& path = pppEnvOverrides().clas_geom_dump_path;
-    if (path.empty()) {
-        return nullptr;
-    }
-
-    static std::ofstream stream;
-    static bool initialized = false;
-    if (!initialized) {
-        initialized = true;
-        stream.open(path, std::ios::out | std::ios::trunc);
-        if (stream) {
-            stream << "record,week,tow,tx_tow,sat,freq,signal,"
-                   << "rx_state_x_m,rx_state_y_m,rx_state_z_m,"
-                   << "rx_row_x_m,rx_row_y_m,rx_row_z_m,"
-                   << "rx_forced_x_m,rx_forced_y_m,rx_forced_z_m,"
-                   << "tide_x_m,tide_y_m,tide_z_m,"
-                   << "sat_x_m,sat_y_m,sat_z_m,sat_vx_mps,sat_vy_mps,sat_vz_mps,"
-                   << "sat_clk_m,euclidean_m,sagnac_m,rho_m,az_rad,el_rad,"
-                   << "cpc_m,model_phase_m\n";
-        }
-    }
-    return stream ? &stream : nullptr;
+    return ppp_clas_diagnostics::geometryDumpStream();
 }
 
 bool clasPhaseRowDumpEnabled() {
-    return pppEnvOverrides().clas_phase_row_dump;
-}
-
-const char* clasCodeDumpPhaseExtensionHeader() {
-    return clasPhaseRowDumpEnabled()
-        ? ",row_type,cpc_m,carrier_correction_m,cpc_minus_trop_m,phase_bias_m,"
-          "windup_m,phase_compensation_m,raw_l_m,corrected_l_m"
-        : "";
+    return ppp_clas_diagnostics::phaseRowDumpEnabled();
 }
 
 void writeClasCodeDumpCodePhaseExtension(std::ostream& out) {
-    if (!clasPhaseRowDumpEnabled()) {
-        return;
-    }
-    out << ",code,,,,,,,,";
+    ppp_clas_diagnostics::writeCodePhaseExtension(out);
 }
 
 void writeClasCodeDumpPhasePhaseExtension(
@@ -307,93 +250,40 @@ void writeClasCodeDumpPhasePhaseExtension(
     double phase_compensation_m,
     double raw_l_m,
     double corrected_l_m) {
-    if (!clasPhaseRowDumpEnabled()) {
-        return;
-    }
-    out << ",phase," << cpc_m << ',' << carrier_correction_m << ','
-        << cpc_minus_trop_m << ',' << phase_bias_m << ',' << windup_m << ','
-        << phase_compensation_m << ',' << raw_l_m << ',' << corrected_l_m;
+    ppp_clas_diagnostics::writePhasePhaseExtension(
+        out,
+        cpc_m,
+        carrier_correction_m,
+        cpc_minus_trop_m,
+        phase_bias_m,
+        windup_m,
+        phase_compensation_m,
+        raw_l_m,
+        corrected_l_m);
 }
 
 std::ofstream* clasCodeDumpStream() {
-    const auto& path = pppEnvOverrides().clas_code_dump_path;
-    if (path.empty()) {
-        return nullptr;
-    }
-
-    static std::ofstream stream;
-    static bool initialized = false;
-    if (!initialized) {
-        initialized = true;
-        stream.open(path, std::ios::out | std::ios::trunc);
-        if (stream) {
-            stream << "record,stage,week,tow,sat,freq,signal,"
-                   << "pseudorange_rinex_code,carrier_rinex_code,"
-                   << "pseudorange_rtklib_code,carrier_rtklib_code,signal_family,"
-                   << "requested_pseudorange_rinex_code,"
-                   << "requested_carrier_rinex_code,"
-                   << "observation_exact_identity_requested,"
-                   << "observation_exact_match,observation_family_fallback,"
-                   << "code_bias_signal_id,phase_bias_signal_id,"
-                   << "bias_exact_identity,code_bias_source_signal_id,"
-                   << "phase_bias_source_signal_id,code_bias_present,"
-                   << "phase_bias_present,code_bias_fallback,phase_bias_fallback,"
-                   << "raw_p_m,corrected_p_m,applied_pr_corr_m,prc_m,"
-                   << "prc_minus_trop_m,trop_correction_m,iono_l1_m,"
-                   << "stec_tecu,iono_scaled_m,code_bias_m,network_compensation_m,"
-                   << "receiver_ant_m,relativity_m,"
-                   << "atmos_ref_week,atmos_ref_tow,clock_ref_week,clock_ref_tow,"
-                   << "code_bias_ref_week,code_bias_ref_tow,"
-                   << "atmos_clock_gap_s,atmos_network_id,atmos_grid_no,"
-                   << "atmos_grid_distance_m,atmos_grid_count,"
-                   << "atmos_grid1_no,atmos_grid1_weight,"
-                   << "atmos_grid2_no,atmos_grid2_weight,"
-                   << "atmos_grid3_no,atmos_grid3_weight,"
-                   << "atmos_grid4_no,atmos_grid4_weight,"
-                   << "atmos_lifecycle,atmos_lifecycle_tow,"
-                   << "atmos_selected_satellite_count,"
-                   << "atmos_valid_grid_count,atmos_stec_grid_value_count,"
-                   << "atmos_selected_grid_stec_value_count,"
-                   << "geo_m,sat_clk_m,receiver_clock_m,trop_model_m,"
-                   << "iono_state_m,iono_scale,predicted_m,residual_m,"
-                   << "variance_m2,los_e_m,los_n_m,los_u_m,az_rad,el_rad,"
-                   << "rx_x_m,rx_y_m,rx_z_m"
-                   << clasCodeDumpPhaseExtensionHeader() << '\n';
-        }
-    }
-    return stream ? &stream : nullptr;
+    return ppp_clas_diagnostics::codeDumpStream();
 }
 
 bool selectedClasGeometryDumpTow(double tow) {
-    constexpr std::array<double, 3> kTargets{230572.0, 232034.0, 234018.0};
-    for (double target : kTargets) {
-        if (std::abs(tow - target) < 0.01) {
-            return true;
-        }
-    }
-    return false;
+    return ppp_clas_diagnostics::selectedGeometryDumpTow(tow);
 }
 
 Vector3d clasGeometryDumpReceiverPosition(const Vector3d& fallback) {
-    const auto& spec = pppEnvOverrides().clas_geom_dump_rx_xyz;
-    if (spec.empty()) {
-        return fallback;
-    }
-
-    std::string normalized = spec;
-    std::replace(normalized.begin(), normalized.end(), ',', ' ');
-    std::istringstream input(normalized);
-    Vector3d parsed = fallback;
-    if (input >> parsed.x() >> parsed.y() >> parsed.z()) {
-        return parsed;
-    }
-    return fallback;
+    return ppp_clas_diagnostics::geometryDumpReceiverPosition(fallback);
 }
 
 bool usesClaslibCodePrcRows(const ppp_shared::PPPConfig& config) {
     return pppEnvOverrides().clas_code_row_full_prc &&
            config.clas_correction_application_policy ==
                ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy::FULL_OSR;
+}
+
+bool usesClaslibBiasValidityRows(const ppp_shared::PPPConfig& config) {
+    const auto& env = pppEnvOverrides();
+    return config.use_clas_osr_filter && env.clas_dd_filter &&
+           env.clas_code_row_bias_identity;
 }
 
 void dumpClasCodeRows(
@@ -449,7 +339,12 @@ void dumpClasCodeRows(
         const double iono_state_l1_m =
             have_iono_state ? filter_state.state(iono_state_it->second) : 0.0;
 
-        for (int f = 0; f < osr.num_frequencies; ++f) {
+        for (int f = 0; f < std::max(osr.num_frequencies,
+                                     osr.num_output_frequencies); ++f) {
+            if (usesClaslibBiasValidityRows(config) &&
+                (!osr.code_bias_present[f] || !osr.phase_bias_present[f])) {
+                continue;
+            }
             const auto lookup = findOsrFrequencyObservationWithProvenance(obs, osr, f);
             const Observation* raw = lookup.observation;
             if (raw == nullptr || !raw->valid || !raw->has_pseudorange ||
@@ -551,6 +446,7 @@ void dumpClasCodeRows(
                   << iono_scaled << ','
                   << osr.code_bias_m[f] << ','
                   << osr.network_compensation_m << ','
+                  << osr.iode_geometry_compensation_m << ','
                   << osr.receiver_antenna_m[f] << ','
                   << osr.relativity_correction_m << ','
                   << timeWeekField(osr.atmos_reference_time, have_atmos_ref) << ','
@@ -657,7 +553,12 @@ void dumpClasPhaseRows(
         const double iono_state_l1_m =
             have_iono_state ? filter_state.state(iono_state_it->second) : 0.0;
 
-        for (int f = 0; f < osr.num_frequencies; ++f) {
+        for (int f = 0; f < std::max(osr.num_frequencies,
+                                     osr.num_output_frequencies); ++f) {
+            if (usesClaslibBiasValidityRows(config) &&
+                (!osr.code_bias_present[f] || !osr.phase_bias_present[f])) {
+                continue;
+            }
             const auto lookup = findOsrFrequencyObservationWithProvenance(obs, osr, f);
             const Observation* raw = lookup.observation;
             if (raw == nullptr || !raw->valid || !raw->has_carrier_phase ||
@@ -786,6 +687,7 @@ void dumpClasPhaseRows(
                   << iono_scaled << ','
                   << ','
                   << osr.network_compensation_m << ','
+                  << osr.iode_geometry_compensation_m << ','
                   << osr.receiver_antenna_m[f] << ','
                   << osr.relativity_correction_m << ','
                   << timeWeekField(osr.atmos_reference_time, have_atmos_ref) << ','
@@ -854,7 +756,9 @@ AppliedOsrCorrections selectAppliedOsrCorrections(
     int freq_index,
     ppp_shared::PPPConfig::ClasCorrectionApplicationPolicy policy) {
     AppliedOsrCorrections corrections;
-    if (freq_index < 0 || freq_index >= osr.num_frequencies) {
+    if (freq_index < 0 ||
+        freq_index >= std::max(osr.num_frequencies,
+                               osr.num_output_frequencies)) {
         return corrections;
     }
 
@@ -1330,8 +1234,23 @@ ClasSlipDetectionStats detectClasCycleSlips(
         }
         if (mrtklib_float_parity && !outage_gap) {
             constexpr int kMrtklibMaxOut = 1;
-            l1_outage_overflow = l1_outage_count > kMrtklibMaxOut;
-            l2_outage_overflow = l2_outage_count > kMrtklibMaxOut;
+            // clas_osr_zdres() does not create Galileo filter rows and uses
+            // only QZSS frequency slot zero.  Their absent ambiguity states
+            // therefore cannot overflow outc[] or set pbreset[] in CLASLIB.
+            // Native retains the extra observations for OSR diagnostics and
+            // dispersion compensation, so gate the outage lifecycle to the
+            // subset that the literal filter actually tracks.
+            const bool tracks_l1_filter_state =
+                osr.satellite.system != GNSSSystem::Galileo;
+            const bool tracks_l2_filter_state =
+                tracks_l1_filter_state &&
+                osr.satellite.system != GNSSSystem::QZSS;
+            l1_outage_overflow =
+                tracks_l1_filter_state &&
+                l1_outage_count > kMrtklibMaxOut;
+            l2_outage_overflow =
+                tracks_l2_filter_state &&
+                l2_outage_count > kMrtklibMaxOut;
             per_sat_outage = l1_outage_overflow || l2_outage_overflow;
             if (per_sat_outage) {
                 ++stats.per_sat_outage_resets;
@@ -2313,7 +2232,7 @@ MeasurementBuildResult buildEpochMeasurements(
             // satellite code bias or phase bias is CSSRINVALID.  Applying a
             // sibling signal's collapsed RTCM-band value would admit rows
             // that do not exist in MRTKLIB (for example G04 C2L at 177067.2).
-            if (mrtklib_parity &&
+            if ((mrtklib_parity || usesClaslibBiasValidityRows(config)) &&
                 (!osr.code_bias_present[f] || !osr.phase_bias_present[f])) {
                 continue;
             }

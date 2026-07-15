@@ -22,7 +22,7 @@ handling without an external RTKLIB runtime.
 |---|---|---|
 | RTK | PPC Tokyo/Nagoya vs RTKLIB `demo5` | +17.0 pp positioning, +28.1 pp official score, -11.96 m P95 H delta |
 | GNSS/IMU FGO | PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | Higher <50 cm fraction (avg +5.3 pp) and fix-rate (avg +7.9 pp) on all 3 runs; fixed-only RMS also wins 2 of 3 runs |
-| CLAS PPP | QZSS CLAS vs CLASLIB | Historical `--claslib-parity` result: 3.57 mm vs 7.29 mm RMS 3D. Current native DD filter remains default-off at A5 STOP. |
+| CLAS PPP | PPC Tokyo run2 vs MRTKLIB CLAS | Current 480 s moving gate: zero false FIX, 0.114 m FIX RMS2D vs 0.145 m; full six-run sign-off pending. |
 | Urban RTK | UrbanNav Tokyo Odaiba vs RTKLIB `demo5` | More fixes, lower Hp95/Vp95; `--preset odaiba` closes Hmed |
 | SPP | PPC SPP adaptive robust + policy gate | No P95 regression with <=1 pp positioning drop |
 
@@ -82,36 +82,41 @@ the shipping preset:
 --fix-demote --fix-demote-dist 5 --fix-demote-res 25 --fix-demote-posthold 5
 ```
 
-### Historical CLAS PPP vs CLASLIB
+### Moving CLAS PPP vs MRTKLIB
 
-This is the historical iter55 `--claslib-parity` result, not the current default
-CLAS capability. Current `develop` no longer exposes `--claslib-parity`; active
-native CLAS work is gated by A4b component-diff evidence, and the DD filter
-default flip remains stopped at A5. See
-[CLAS validation datasets](docs/clas_validated_datasets.md) and
-[A5 closure](docs/clas_dd_filter_a5.md).
+This replaces the historical 2019 static `--claslib-parity` snapshot with a
+current moving-data gate. It replays the public PPC Tokyo run2 rover at 5 Hz
+from QZSS L6 corrections, with kinematic dynamics enabled. Both solvers use the
+published PPC reference coordinates, discard the first 60 matched epochs, and
+define TTFF as the first run of at least 30 consecutive FIX epochs.
 
-QZSS CLAS PPP from raw L6 binary, 2019-08-27 static dataset, 1 hour
-(`3599` epochs):
+The table compares the same first 480 seconds. MRTKLIB is a v0.5.1 local replay
+from the CLAS benchmark lineage described in the
+[MRTKLIB release article](https://zenn.dev/hatognss/articles/7a54dd82606faf).
 
-| Metric | libgnss++ historical `--claslib-parity` | CLASLIB |
+| Metric | libgnss++ current CLAS | MRTKLIB v0.5.1 CLAS |
 |---|---:|---:|
-| Matched fixed epochs | **3594 / 3599 (99.86%)** | 3594 / 3599 (99.86%) |
-| RMS 3D fixed-only | **3.57 mm** | 7.29 mm |
-| 3D bias mean offset | **1.66 mm** | 4.84 mm |
-| RMS East | **1.15 mm** | 1.52 mm |
-| RMS North | 1.21 mm | **0.92 mm** |
-| RMS Up | **3.15 mm** | 7.07 mm |
-| First fix epoch | epoch 6 | epoch 6 |
-| Runtime dependency | no CLASLIB runtime | CLASLIB runtime |
+| Scored epochs | 2332 | **2340** |
+| FIX epochs | **118 (5.06%)** | 114 (4.87%) |
+| FIX RMS2D | **0.114 m** | 0.145 m |
+| FIX 68th percentile | **0.091 m** | 0.146 m |
+| FIX 95th percentile | **0.208 m** | 0.248 m |
+| Maximum FIX horizontal error | **0.305 m** | 0.797 m |
+| FIX epochs above 1 m | **0** | **0** |
+| All-solution RMS2D | 11.630 m | **8.538 m** |
+| All-solution 95th percentile | 15.160 m | **12.074 m** |
+| 30-epoch TTFF | **301.2 s** | 375.2 s |
+| Runtime dependency | **no CLASLIB runtime** | no CLASLIB runtime |
 
-| CLASLIB 2D | libgnss++ 2D |
-|---|---|
-| ![CLASLIB 2D](docs/clas_claslib_2d.png) | ![libgnss++ CLAS 2D](docs/clas_native_2d.png) |
+![PPC Tokyo run2 moving CLAS comparison](docs/ppc_clas_tokyo_run2_moving.png)
 
-| RTKLIB Odaiba 2D | libgnss++ Odaiba 2D |
-|---|---|
-| ![RTKLIB Odaiba 2D](docs/driving_odaiba_comparison_rtklib_2d.png) | ![libgnss++ Odaiba 2D](docs/driving_odaiba_comparison_libgnss_2d.png) |
+The current safety fix clears the complete dynamics/filter/AR state after the
+MRTKLIB-style `maxdiffp` reset. In the 1300-epoch A/B window this removed all 34
+approximately 10 m false fixes while preserving all 25 valid early fixes
+bit-for-bit. FIX integrity now passes this moving gate; FLOAT recovery and the
+full Tokyo/Nagoya six-run scorecard remain open before declaring parity. See the
+[PPC CLAS validation note](docs/ppc_clas_validation.md) for definitions,
+artifacts, and remaining gates.
 
 ## Quick Start
 

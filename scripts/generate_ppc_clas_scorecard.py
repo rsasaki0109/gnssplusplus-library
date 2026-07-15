@@ -46,6 +46,8 @@ QZSS_L6_DOWNLOAD = f"{QZSS_ARCHIVE_BASE}/archives/l6"
 PPP_FIXED_STATUS = 6
 MATCH_TOLERANCE_S = 0.25
 LEAD_IN_MINUTES = 30
+ARTICLE_SKIP_EPOCHS = 60
+ARTICLE_TTFF_CONSECUTIVE_FIX_EPOCHS = 30
 LEVER_ARM_BODY_M = np.array([0.593, -0.670, -1.216])  # IMU -> antenna, x fwd / y right / z down
 LEVER_ARM_BY_CITY: dict[str, np.ndarray] = {
     # PPC README: Tokyo AT1675 mount; Nagoya Zephyr 3 Rover mount.
@@ -362,6 +364,7 @@ def build_gnss_ppp_command(
         "--ssr",
         str(ssr_csv),
         "--kinematic",
+        "--use-dynamics-model",
         "--no-ionosphere-free",
         "--estimate-ionosphere",
         "--enable-ar",
@@ -616,11 +619,23 @@ def trajectory_sanity(
     }
 
 
-def compute_ttff_s(matched: list[comparison.MatchedEpoch], fixed_status: int) -> float | None:
-    for epoch in sorted(matched, key=lambda item: item.tow):
+def compute_ttff_s(
+    matched: list[comparison.MatchedEpoch],
+    fixed_status: int,
+    consecutive_epochs: int = ARTICLE_TTFF_CONSECUTIVE_FIX_EPOCHS,
+) -> float | None:
+    ordered = sorted(matched, key=lambda item: item.tow)
+    run = 0
+    run_start_tow = 0.0
+    for epoch in ordered:
         if epoch.status == fixed_status:
-            first_tow = epoch.tow
-            return rounded(first_tow - matched[0].tow)
+            if run == 0:
+                run_start_tow = epoch.tow
+            run += 1
+            if run >= consecutive_epochs:
+                return rounded(run_start_tow - ordered[0].tow)
+        else:
+            run = 0
     return None
 
 
@@ -631,8 +646,12 @@ def score_run(
     *,
     fixed_status: int = PPP_FIXED_STATUS,
     match_tolerance_s: float = MATCH_TOLERANCE_S,
+    skip_epochs: int = ARTICLE_SKIP_EPOCHS,
 ) -> dict[str, Any]:
-    reference = read_reference_csv(reference_csv, city=reference_csv.parent.parent.name)
+    # Article-compatible scoring intentionally uses the PPC reference point as
+    # published, without applying an IMU-to-antenna lever arm. MRTKLIB's
+    # compare_ppc.py does the same and discards the first 60 matched rows.
+    reference = read_reference_csv(reference_csv, apply_lever_arm=False)
     solutions = read_ppp_pos(pos_path)
     if solutions and all(
         epoch.week == 0 and abs(epoch.tow) < 1e-6 for epoch in solutions[: min(5, len(solutions))]
@@ -641,6 +660,12 @@ def score_run(
     matched = comparison.match_to_reference(solutions, reference, match_tolerance_s)
     if not matched:
         raise SystemExit(f"No epochs matched reference for {pos_path}")
+    if skip_epochs:
+        matched = matched[skip_epochs:]
+    if not matched:
+        raise SystemExit(
+            f"No epochs remain after skipping {skip_epochs} matched rows for {pos_path}"
+        )
 
     all_horiz = np.array([epoch.horiz_error_m for epoch in matched], dtype=float)
     fixed = [epoch for epoch in matched if epoch.status == fixed_status]
@@ -653,12 +678,17 @@ def score_run(
 
     return {
         "matched_epochs": len(matched),
+        "skip_epochs": skip_epochs,
+        "reference_point": "published_ppc_reference_no_lever_arm",
+        "ttff_consecutive_fix_epochs": ARTICLE_TTFF_CONSECUTIVE_FIX_EPOCHS,
         "reference_epochs": len(reference),
         "solution_epochs": len(solutions),
         "fix_pct": rounded(100.0 * len(fixed) / len(matched)),
         "fixed_epochs": len(fixed),
         "rms2d_fixed_m": rounded(float(np.sqrt(np.mean(fixed_horiz**2))) if len(fixed_horiz) else float("nan")),
-        "sigma2d_fixed_m": rounded(float(np.std(fixed_horiz)) if len(fixed_horiz) > 1 else float("nan")),
+        "sigma2d_fixed_m": rounded(
+            float(np.percentile(fixed_horiz, 68)) if len(fixed_horiz) else float("nan")
+        ),
         "rms2d_all_m": rounded(float(np.sqrt(np.mean(all_horiz**2)))),
         "median_h_all_m": rounded(float(np.median(all_horiz))),
         "p95_h_all_m": rounded(float(np.percentile(all_horiz, 95))),
@@ -719,7 +749,7 @@ def rank_gaps(results: list[dict[str, Any]]) -> list[str]:
     for item in results:
         key = item["run_key"]
         target = MRTKLIB_TARGETS[key]
-        for config in ("default", "parity"):
+        for config in item["configs"]:
             metrics = item["configs"][config]
             fix_gap = target["fix_pct"] - metrics["fix_pct"]
             rms_gap = metrics["rms2d_fixed_m"] - target["rms2d_m"] if not math.isnan(metrics["rms2d_fixed_m"]) else 5.0
@@ -750,9 +780,9 @@ def write_report(
     lines.append(f"- L6 cache: `{l6_cache}` (per-run concatenations under `{work_dir}`)")
     lines.append(f"- SSR CSV recipe: {csv_recipe}")
     lines.append("- Observation rate: 5 Hz (0.2 s); SSR expanded rows are time-stamped (1 s class sampling in compact expansion). MW/AR windows in PPP are time-based on receiver epochs, but any epoch-count heuristics in the CLAS path should be checked against 5 Hz density.")
-    lines.append("- Ground truth: `reference.csv` Applanix POS LVX ECEF with city-specific lever arm (Tokyo 0.31/0/−0.55 m, Nagoya 0.593/−0.670/−1.216 m body → antenna); horizontal error in local ENU at each matched epoch.")
+    lines.append("- Article-compatible ground truth: published `reference.csv` ECEF without a lever-arm transform; horizontal error in local ENU at each matched epoch.")
     lines.append("- PPP `.pos` rows carry GPS week/TOW from the receiver epoch; legacy rows with `GPS_Week=0` fall back to rover.obs `>` header alignment when counts match.")
-    lines.append("- Match tolerance: 0.25 s; PPP fixed status = 6.")
+    lines.append("- Match tolerance: 0.25 s; discard first 60 matched epochs; PPP fixed status = 6; TTFF requires 30 consecutive FIX epochs; 1sigma is the FIX horizontal-error 68th percentile.")
     lines.append("")
     lines.append("### gnss_ppp kinematic CLAS invocation")
     lines.append("")
@@ -765,7 +795,12 @@ def write_report(
     lines.append("- (b) parity: `GNSS_PPP_CLAS_BASE_CLOCK_PARITY=1 GNSS_PPP_CLAS_SIS_BOUNDARY=1 GNSS_PPP_CLAS_TROP_GRID_PARITY=1 GNSS_PPP_CLAS_QZSS_S_PRN_FIX=1` (never `GNSS_PPP_CLAS_ATMOS_LIFECYCLE`)")
     lines.append("")
 
-    for config_key, config_label in CONFIG_LABELS.items():
+    available_configs = [
+        key for key in CONFIG_LABELS
+        if any(key in item["configs"] for item in run_results)
+    ]
+    for config_key in available_configs:
+        config_label = CONFIG_LABELS[config_key]
         lines.append(f"## Scorecard — {config_label}")
         lines.append("")
         lines.append(
@@ -876,6 +911,13 @@ def parse_args() -> argparse.Namespace:
         default=["tokyo_run1", "tokyo_run2", "tokyo_run3", "nagoya_run1", "nagoya_run2", "nagoya_run3"],
         help="Run keys to process (city_runN).",
     )
+    parser.add_argument(
+        "--configs",
+        nargs="+",
+        choices=tuple(CONFIG_LABELS),
+        default=list(CONFIG_LABELS),
+        help="Solver configurations to run (default: default parity).",
+    )
     parser.add_argument("--skip-ppp", action="store_true", help="Reuse existing .pos files.")
     parser.add_argument("--skip-l6", action="store_true", help="Reuse cached L6/SSR files.")
     parser.add_argument("--force-fetch", action="store_true", help="Re-download L6 even if cached.")
@@ -941,22 +983,26 @@ def main() -> int:
         else:
             ssr_summary = {"rows_written": "cached", "cached": True}
 
+        template_config = args.configs[0]
+        template_pos = paths.pos_parity if template_config == "parity" else paths.pos_default
         command_template = " ".join(
             build_gnss_ppp_command(
                 gnss_ppp_bin=args.gnss_ppp,
                 rover_obs=paths.rover_obs,
                 base_nav=paths.base_nav,
                 ssr_csv=paths.ssr_csv,
-                out_pos=paths.pos_default,
-                parity=False,
+                out_pos=template_pos,
+                parity=(template_config == "parity"),
             )
         )
 
         config_metrics: dict[str, Any] = {}
-        for config_key, pos_path, summary_path in (
-            ("default", paths.pos_default, paths.summary_default),
-            ("parity", paths.pos_parity, paths.summary_parity),
-        ):
+        config_paths = {
+            "default": (paths.pos_default, paths.summary_default),
+            "parity": (paths.pos_parity, paths.summary_parity),
+        }
+        for config_key in args.configs:
+            pos_path, summary_path = config_paths[config_key]
             log_path = paths.pos_default.parent / f"{window.key}_{config_key}.log"
             run_ppp = not args.skip_ppp or not pos_path.exists()
             if run_ppp:

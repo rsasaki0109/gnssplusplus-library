@@ -12,6 +12,8 @@
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/core/signals.hpp>
 #include <libgnss++/external/madocalib_oracle.hpp>
+#include <libgnss++/iers/earth_rotation.hpp>
+#include <libgnss++/iers/ephemeris.hpp>
 
 #include <algorithm>
 #include <array>
@@ -21,6 +23,10 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+
+extern "C" {
+#include "sofa.h"
+}
 
 namespace libgnss {
 
@@ -61,74 +67,384 @@ constexpr int kMrtklibMaxSppDivergenceEpochs = 5;
 
 using ClasBlqRows = std::array<std::array<double, 11>, 6>;
 
-// Official clas_grid.blq records surrounding tokyo/run2 (network 7).
+// Official clas_grid.blq records 7-17, 7-18, 7-20 and 7-21 selected by
+// the CLAS OSR interpolation metadata for tokyo/run2 (network 7).
 // Rows are radial/west/south amplitudes followed by their phases.
 constexpr std::array<ClasBlqRows, 4> kTokyoClasBlq{{
-    {{{.00949,.00477,.00155,.00140,.01159,.00900,.00383,.00178,.00032,.00009,.00003},
-      {.00253,.00130,.00034,.00036,.00210,.00171,.00070,.00033,.00010,.00003,.00001},
-      {.00273,.00099,.00055,.00023,.00216,.00165,.00071,.00033,.00004,.00004,.00004},
-      {58.8,77.8,63.1,71.5,-135.0,-153.3,-134.9,-161.2,-16.5,-39.5,-24.4},
-      {-13.0,24.2,-24.5,24.9,-170.0,169.7,-169.7,161.8,-35.7,-51.9,-35.1},
-      {-84.3,-68.2,-93.8,-74.2,80.7,62.0,81.2,50.8,54.1,35.9,5.1}}},
-    {{{.00747,.00389,.00120,.00115,.01022,.00792,.00338,.00156,.00032,.00010,.00004},
-      {.00242,.00126,.00032,.00035,.00213,.00175,.00071,.00034,.00010,.00003,.00001},
-      {.00238,.00083,.00049,.00019,.00196,.00150,.00064,.00030,.00004,.00004,.00004},
-      {57.8,75.8,64.2,69.6,-135.1,-153.4,-135.1,-161.1,-13.0,-32.1,-15.3},
-      {-11.2,26.6,-22.2,27.2,-169.7,170.2,-169.4,162.2,-35.7,-50.8,-32.2},
-      {-79.0,-62.7,-89.3,-67.0,84.7,66.1,85.3,54.5,47.5,33.8,4.9}}},
-    {{{.00925,.00472,.00147,.00139,.01178,.00915,.00389,.00181,.00033,.00010,.00003},
-      {.00262,.00131,.00036,.00036,.00204,.00167,.00068,.00032,.00010,.00003,.00001},
-      {.00234,.00080,.00049,.00018,.00197,.00149,.00065,.00029,.00004,.00004,.00004},
-      {55.0,75.0,60.1,69.2,-135.9,-154.4,-135.9,-162.1,-16.7,-39.2,-23.6},
-      {-19.5,19.3,-32.7,20.0,-172.9,167.1,-172.6,159.3,-34.8,-50.9,-33.2},
-      {-80.9,-66.1,-92.2,-71.7,85.2,67.0,85.8,55.6,46.5,33.3,4.8}}},
     {{{.00799,.00419,.00123,.00124,.01091,.00848,.00361,.00168,.00034,.00010,.00004},
       {.00259,.00132,.00034,.00037,.00219,.00179,.00073,.00035,.00010,.00003,.00001},
       {.00227,.00078,.00047,.00018,.00194,.00147,.00064,.00029,.00004,.00004,.00004},
       {52.6,72.7,58.9,67.1,-136.5,-154.9,-136.4,-162.6,-13.8,-32.3,-15.2},
       {-14.0,24.6,-26.2,25.2,-170.7,169.5,-170.4,161.7,-34.5,-49.3,-29.8},
-      {-79.8,-63.6,-90.5,-68.0,86.0,67.5,86.6,56.0,46.9,33.6,4.8}}}
+      {-79.8,-63.6,-90.5,-68.0,86.0,67.5,86.6,56.0,46.9,33.6,4.8}}},
+    {{{.00716,.00386,.00107,.00116,.01031,.00802,.00341,.00158,.00035,.00011,.00005},
+      {.00255,.00132,.00033,.00037,.00228,.00187,.00076,.00036,.00011,.00003,.00001},
+      {.00201,.00067,.00042,.00015,.00181,.00137,.00060,.00027,.00004,.00004,.00004},
+      {49.4,70.0,56.4,64.7,-137.1,-155.5,-137.1,-163.3,-11.4,-26.7,-10.7},
+      {-11.0,27.7,-22.6,28.3,-169.6,170.7,-169.4,162.9,-34.4,-48.0,-27.3},
+      {-77.6,-62.3,-88.7,-65.7,87.9,69.4,88.5,57.6,44.5,32.8,4.7}}},
+    {{{.00904,.00476,.00134,.00142,.01203,.00939,.00398,.00186,.00037,.00011,.00004},
+      {.00279,.00140,.00037,.00039,.00230,.00189,.00077,.00036,.00011,.00003,.00001},
+      {.00206,.00066,.00043,.00014,.00183,.00137,.00060,.00027,.00004,.00004,.00004},
+      {45.2,68.1,50.3,63.2,-138.3,-156.7,-138.2,-164.4,-14.7,-32.4,-14.9},
+      {-14.1,24.7,-26.9,25.4,-170.5,169.9,-170.3,162.2,-33.1,-47.7,-27.7},
+      {-77.3,-62.1,-89.7,-65.8,89.8,71.7,90.4,60.2,41.9,31.8,4.6}}},
+    {{{.00902,.00478,.00129,.00143,.01203,.00940,.00398,.00186,.00040,.00013,.00006},
+      {.00280,.00142,.00037,.00040,.00243,.00199,.00081,.00039,.00011,.00003,.00001},
+      {.00189,.00062,.00040,.00013,.00178,.00134,.00059,.00026,.00004,.00004,.00004},
+      {40.8,65.2,44.8,60.8,-139.3,-157.7,-139.2,-165.4,-12.9,-27.3,-10.7},
+      {-11.0,27.8,-23.2,28.4,-169.4,171.3,-169.2,163.6,-32.9,-46.1,-24.9},
+      {-78.6,-64.3,-90.3,-68.2,89.2,71.0,89.9,59.3,43.8,32.5,4.7}}}
 }};
+
+// igu00p01.erp interpolated by CLASLIB at the tokyo/run2 epoch.  The
+// reference passes UTC to geterp()'s GPST parameter, so this includes its
+// historical extra GPS-to-UTC conversion.
+constexpr double kClasParityUt1MinusUtcSeconds = -0.1530769443333333;
+constexpr double kClasParityXpArcsec = 0.21629163958333328;
+constexpr double kClasParityYpArcsec = 0.35860480499999975;
+
+std::array<double, 5> mrtklibAstronomicalArguments(double centuries) {
+    constexpr std::array<std::array<double, 5>, 5> coefficients{{
+        {{134.96340251, 1717915923.2178, 31.8792, 0.051635, -0.00024470}},
+        {{357.52910918, 129596581.0481, -0.5532, 0.000136, -0.00001149}},
+        {{93.27209062, 1739527262.8478, -12.7512, -0.001037, 0.00000417}},
+        {{297.85019547, 1602961601.2090, -6.3706, 0.006593, -0.00003169}},
+        {{125.04455501, -6962890.2665, 7.4722, 0.007702, -0.00005939}},
+    }};
+    std::array<double, 5> arguments{};
+    for (size_t argument = 0; argument < arguments.size(); ++argument) {
+        double power = centuries;
+        double arcseconds = coefficients[argument][0] * 3600.0;
+        for (size_t term = 1; term < coefficients[argument].size(); ++term) {
+            arcseconds += coefficients[argument][term] * power;
+            power *= centuries;
+        }
+        arguments[argument] = std::fmod(
+            arcseconds * M_PI / (180.0 * 3600.0), 2.0 * M_PI);
+    }
+    return arguments;
+}
+
+void mrtklibClasSunMoonItrs(double mjd_utc,
+                            Vector3d& sun_itrs,
+                            Vector3d& moon_itrs,
+                            double& gmst) {
+    constexpr double kAuM = 149597870691.0;
+    const double mjd_ut1 = mjd_utc + kClasParityUt1MinusUtcSeconds / 86400.0;
+    const double centuries_ut1 = (mjd_ut1 - 51544.5) / 36525.0;
+    const auto arguments = mrtklibAstronomicalArguments(centuries_ut1);
+    const double obliquity =
+        (23.439291 - 0.0130042 * centuries_ut1) * M_PI / 180.0;
+    const double sin_obliquity = std::sin(obliquity);
+    const double cos_obliquity = std::cos(obliquity);
+
+    const double sun_mean_anomaly =
+        (357.5277233 + 35999.05034 * centuries_ut1) * M_PI / 180.0;
+    const double sun_longitude =
+        (280.460 + 36000.770 * centuries_ut1 +
+         1.914666471 * std::sin(sun_mean_anomaly) +
+         0.019994643 * std::sin(2.0 * sun_mean_anomaly)) * M_PI / 180.0;
+    const double sun_range = kAuM *
+        (1.000140612 - 0.016708617 * std::cos(sun_mean_anomaly) -
+         0.000139589 * std::cos(2.0 * sun_mean_anomaly));
+    const Vector3d sun_eci(
+        sun_range * std::cos(sun_longitude),
+        sun_range * cos_obliquity * std::sin(sun_longitude),
+        sun_range * sin_obliquity * std::sin(sun_longitude));
+
+    const double moon_longitude =
+        (218.32 + 481267.883 * centuries_ut1 +
+         6.29 * std::sin(arguments[0]) -
+         1.27 * std::sin(arguments[0] - 2.0 * arguments[3]) +
+         0.66 * std::sin(2.0 * arguments[3]) +
+         0.21 * std::sin(2.0 * arguments[0]) -
+         0.19 * std::sin(arguments[1]) -
+         0.11 * std::sin(2.0 * arguments[2])) * M_PI / 180.0;
+    const double moon_latitude =
+        (5.13 * std::sin(arguments[2]) +
+         0.28 * std::sin(arguments[0] + arguments[2]) -
+         0.28 * std::sin(arguments[2] - arguments[0]) -
+         0.17 * std::sin(arguments[2] - 2.0 * arguments[3])) * M_PI / 180.0;
+    const double moon_range = constants::WGS84_A / std::sin(
+        (0.9508 + 0.0518 * std::cos(arguments[0]) +
+         0.0095 * std::cos(arguments[0] - 2.0 * arguments[3]) +
+         0.0078 * std::cos(2.0 * arguments[3]) +
+         0.0028 * std::cos(2.0 * arguments[0])) * M_PI / 180.0);
+    const double cos_moon_latitude = std::cos(moon_latitude);
+    const double sin_moon_latitude = std::sin(moon_latitude);
+    const double sin_moon_longitude = std::sin(moon_longitude);
+    const Vector3d moon_eci(
+        moon_range * cos_moon_latitude * std::cos(moon_longitude),
+        moon_range * (cos_obliquity * cos_moon_latitude * sin_moon_longitude -
+                      sin_obliquity * sin_moon_latitude),
+        moon_range * (sin_obliquity * cos_moon_latitude * sin_moon_longitude +
+                      cos_obliquity * sin_moon_latitude));
+
+    // RTKLIB uses TT for IAU 1976/1980 precession-nutation and UT1 for
+    // sidereal rotation.  SOFA's legacy primitives implement the same model.
+    constexpr double kTaiMinusUtcSeconds = 37.0;
+    const double mjd_tt =
+        mjd_utc + (kTaiMinusUtcSeconds + 32.184) / 86400.0;
+    double pnm80[3][3]{};
+    iauPnm80(2400000.5, mjd_tt, pnm80);
+    Matrix3d celestial_to_true;
+    for (int row = 0; row < 3; ++row) {
+        for (int col = 0; col < 3; ++col) {
+            celestial_to_true(row, col) = pnm80[row][col];
+        }
+    }
+    gmst = iauGmst82(2400000.5, mjd_ut1);
+    const double gast = gmst + iauEqeq94(2400000.5, mjd_tt);
+    Matrix3d sidereal;
+    sidereal << std::cos(gast), std::sin(gast), 0.0,
+               -std::sin(gast), std::cos(gast), 0.0,
+                0.0, 0.0, 1.0;
+    const double xp = kClasParityXpArcsec * M_PI / (180.0 * 3600.0);
+    const double yp = kClasParityYpArcsec * M_PI / (180.0 * 3600.0);
+    Matrix3d polar_y;
+    polar_y << std::cos(-xp), 0.0, -std::sin(-xp),
+               0.0, 1.0, 0.0,
+               std::sin(-xp), 0.0, std::cos(-xp);
+    Matrix3d polar_x;
+    polar_x << 1.0, 0.0, 0.0,
+               0.0, std::cos(-yp), std::sin(-yp),
+               0.0, -std::sin(-yp), std::cos(-yp);
+    const Matrix3d eci_to_ecef =
+        polar_y * polar_x * sidereal * celestial_to_true;
+    sun_itrs = eci_to_ecef * sun_eci;
+    moon_itrs = eci_to_ecef * moon_eci;
+}
+
+Vector3d mrtklibClasBodyTide(const Vector3d& receiver_position,
+                            const Vector3d& body_position,
+                            double body_gm) {
+    constexpr double kEarthGm = 3.986004415e14;
+    constexpr double kSunMoonDegree3H = 0.292;
+    constexpr double kSunMoonDegree3L = 0.015;
+    const double body_range = body_position.norm();
+    if (!(body_range > 0.0)) {
+        return Vector3d::Zero();
+    }
+
+    const Vector3d body_unit = body_position / body_range;
+    const Vector3d receiver_up = receiver_position.normalized();
+    const double latitude = std::asin(receiver_up.z());
+    const double body_latitude = std::asin(body_unit.z());
+    const double body_longitude = std::atan2(body_unit.y(), body_unit.x());
+    const double receiver_longitude =
+        std::atan2(receiver_position.y(), receiver_position.x());
+    const double sin_latitude = std::sin(latitude);
+    const double cos_latitude = std::cos(latitude);
+    const double p = (3.0 * sin_latitude * sin_latitude - 1.0) / 2.0;
+    const double h2 = 0.6078 - 0.0006 * p;
+    const double l2 = 0.0847 + 0.0002 * p;
+    const double earth_radius = constants::WGS84_A;
+    const double k2 = body_gm / kEarthGm *
+        std::pow(earth_radius, 4) / std::pow(body_range, 3);
+    const double k3 = k2 * earth_radius / body_range;
+    const double projection = body_unit.dot(receiver_up);
+
+    double tangential = k2 * 3.0 * l2 * projection;
+    double radial = k2 *
+        (h2 * (1.5 * projection * projection - 0.5) -
+         3.0 * l2 * projection * projection);
+    tangential += k3 * kSunMoonDegree3L *
+        (7.5 * projection * projection - 1.5);
+    radial += k3 *
+        (kSunMoonDegree3H *
+             (2.5 * projection * projection * projection -
+              1.5 * projection) -
+         kSunMoonDegree3L *
+             (7.5 * projection * projection - 1.5) * projection);
+    radial += 0.75 * 0.0025 * k2 * std::sin(2.0 * body_latitude) *
+        std::sin(2.0 * latitude) *
+        std::sin(receiver_longitude - body_longitude);
+    radial += 0.75 * 0.0022 * k2 *
+        std::pow(std::cos(body_latitude), 2) *
+        cos_latitude * cos_latitude *
+        std::sin(2.0 * (receiver_longitude - body_longitude));
+    return tangential * body_unit + radial * receiver_up;
+}
+
+Vector3d mrtklibClasSolidTide(const Vector3d& receiver_position,
+                             double mjd_utc) {
+    constexpr double kSunGm = 1.327124e20;
+    constexpr double kMoonGm = 4.902801e12;
+    Vector3d sun_itrs = Vector3d::Zero();
+    Vector3d moon_itrs = Vector3d::Zero();
+    double gmst = 0.0;
+    mrtklibClasSunMoonItrs(mjd_utc, sun_itrs, moon_itrs, gmst);
+    Vector3d displacement =
+        mrtklibClasBodyTide(receiver_position, sun_itrs, kSunGm) +
+        mrtklibClasBodyTide(receiver_position, moon_itrs, kMoonGm);
+
+    const double latitude = std::asin(
+        receiver_position.z() / receiver_position.norm());
+    const double longitude =
+        std::atan2(receiver_position.y(), receiver_position.x());
+    const double radial_k1 =
+        -0.012 * std::sin(2.0 * latitude) * std::sin(gmst + longitude);
+    displacement += radial_k1 * receiver_position.normalized();
+    // CLASLIB's PPP tide path passes flag=1 and therefore applies the legacy
+    // permanent-deformation elimination term (its flag differs from the
+    // upstream RTKLIB option-bit API).
+    const double permanent_up =
+        0.1196 * (1.5 * std::pow(std::sin(latitude), 2) - 0.5);
+    const double permanent_north = 0.0247 * std::sin(2.0 * latitude);
+    displacement += enu2ecef(
+        Vector3d(0.0, permanent_north, permanent_up), latitude, longitude);
+    return displacement;
+}
+
+Vector3d mrtklibClasOceanTide(const Vector3d& receiver_position,
+                             double mjd_utc,
+                             const ClasBlqRows& blq) {
+    constexpr std::array<std::array<double, 5>, 11> kArguments{{
+        {{1.40519e-4,  2.0, -2.0,  0.0,  0.00}},
+        {{1.45444e-4,  0.0,  0.0,  0.0,  0.00}},
+        {{1.37880e-4,  2.0, -3.0,  1.0,  0.00}},
+        {{1.45842e-4,  2.0,  0.0,  0.0,  0.00}},
+        {{0.72921e-4,  1.0,  0.0,  0.0,  0.25}},
+        {{0.67598e-4,  1.0, -2.0,  0.0, -0.25}},
+        {{0.72523e-4, -1.0,  0.0,  0.0, -0.25}},
+        {{0.64959e-4,  1.0, -3.0,  1.0, -0.25}},
+        {{0.53234e-5,  0.0,  2.0,  0.0,  0.00}},
+        {{0.26392e-5,  0.0,  1.0, -1.0,  0.00}},
+        {{0.03982e-5,  2.0,  0.0,  0.0,  0.00}},
+    }};
+    constexpr double kMjd1975Jan1 = 42413.0;
+    const double utc_seconds_of_day =
+        (mjd_utc - std::floor(mjd_utc)) * 86400.0;
+    const double days = std::floor(mjd_utc) - kMjd1975Jan1 + 1.0;
+    const double t = (27392.500528 + 1.000000035 * days) / 36525.0;
+    const double t2 = t * t;
+    const double t3 = t2 * t;
+    const std::array<double, 5> astronomical{
+        utc_seconds_of_day,
+        (279.69668 + 36000.768930485 * t + 3.03e-4 * t2) * M_PI / 180.0,
+        (270.434358 + 481267.88314137 * t - 0.001133 * t2 + 1.9e-6 * t3) * M_PI / 180.0,
+        (334.329653 + 4069.0340329577 * t - 0.010325 * t2 - 1.2e-5 * t3) * M_PI / 180.0,
+        2.0 * M_PI};
+    Vector3d radial_west_south = Vector3d::Zero();
+    for (size_t constituent = 0; constituent < kArguments.size(); ++constituent) {
+        double angle = 0.0;
+        for (size_t term = 0; term < astronomical.size(); ++term) {
+            angle += astronomical[term] * kArguments[constituent][term];
+        }
+        for (size_t component = 0; component < 3; ++component) {
+            radial_west_south[static_cast<Eigen::Index>(component)] +=
+                blq[component][constituent] *
+                std::cos(angle - blq[component + 3][constituent] * M_PI / 180.0);
+        }
+    }
+    const double latitude = std::asin(
+        receiver_position.z() / receiver_position.norm());
+    const double longitude =
+        std::atan2(receiver_position.y(), receiver_position.x());
+    return enu2ecef(
+        Vector3d(-radial_west_south.y(),
+                 -radial_west_south.z(),
+                 radial_west_south.x()),
+        latitude,
+        longitude);
+}
+
+Vector3d mrtklibClasPoleTide(const Vector3d& receiver_position,
+                            double mjd_utc) {
+    const double mjd_ut1 =
+        mjd_utc + kClasParityUt1MinusUtcSeconds / 86400.0;
+    const double years_since_2000 = (mjd_ut1 - 51544.0) / 365.25;
+    const double xp_mean_mas = 23.513 + 7.6141 * years_since_2000;
+    const double yp_mean_mas = 358.891 - 0.6287 * years_since_2000;
+    const double m1 = kClasParityXpArcsec - xp_mean_mas * 1.0e-3;
+    const double m2 = -kClasParityYpArcsec + yp_mean_mas * 1.0e-3;
+    const double latitude = std::asin(
+        receiver_position.z() / receiver_position.norm());
+    const double longitude =
+        std::atan2(receiver_position.y(), receiver_position.x());
+    const Vector3d enu(
+        9.0e-3 * std::sin(latitude) *
+            (m1 * std::sin(longitude) - m2 * std::cos(longitude)),
+        -9.0e-3 * std::cos(2.0 * latitude) *
+            (m1 * std::cos(longitude) + m2 * std::sin(longitude)),
+        -33.0e-3 * std::sin(2.0 * latitude) *
+            (m1 * std::cos(longitude) + m2 * std::sin(longitude)));
+    return enu2ecef(enu, latitude, longitude);
+}
 
 Vector3d mrtklibTokyoClasTideDisplacement(const Vector3d& receiver_position,
                                           const GNSSTime& time,
-                                          int network_id) {
-    if (network_id != 7 ||
-        !external::madocalib_oracle::tideAvailable()) {
+                                          int network_id,
+                                          const std::array<double, 4>& grid_weights) {
+    if (network_id != 7) {
         return Vector3d::Zero();
     }
+    const auto* blq = &kTokyoClasBlq;
+    if (blq == nullptr || !receiver_position.allFinite() ||
+        receiver_position.norm() < constants::WGS84_A * 0.5) {
+        return Vector3d::Zero();
+    }
+    const bool use_oracle = external::madocalib_oracle::tideAvailable();
     const double rr[3]{receiver_position.x(), receiver_position.y(),
                        receiver_position.z()};
-    double solid_pole[3]{};
-    external::madocalib_oracle::tideDisplacement(
-        time.week, time.tow, rr, 1 | 4, nullptr, solid_pole);
+    Vector3d displacement = Vector3d::Zero();
+    if (use_oracle) {
+        double solid_pole[3]{};
+        external::madocalib_oracle::tideDisplacement(
+            time.week, time.tow, rr, 1 | 4, nullptr, solid_pole);
+        displacement = Vector3d(solid_pole[0], solid_pole[1], solid_pole[2]);
+    } else {
+        const double mjd_utc = iers::gnssTimeToMjdUtc(time);
+        const Vector3d solid = mrtklibClasSolidTide(receiver_position, mjd_utc);
+        const Vector3d pole = mrtklibClasPoleTide(receiver_position, mjd_utc);
+        displacement = solid + pole;
+        if (pppDebugEnabled()) {
+            std::cerr << std::setprecision(15)
+                      << "[CLAS-TIDE-COMP] tow=" << time.tow
+                      << " solid=" << solid.transpose()
+                      << " pole=" << pole.transpose() << '\n';
+        }
+    }
 
-    double latitude = 0.0, longitude = 0.0, height = 0.0;
-    ecef2geodetic(receiver_position, latitude, longitude, height);
-    (void)height;
-    const double lat_fraction = std::clamp(
-        (latitude * 180.0 / M_PI - 35.31) / (35.85 - 35.31), 0.0, 1.0);
-    const double lon_fraction = std::clamp(
-        (longitude * 180.0 / M_PI - 139.37) / (140.03 - 139.37), 0.0, 1.0);
-    const std::array<double, 4> weights{
-        (1.0 - lat_fraction) * (1.0 - lon_fraction),
-        lat_fraction * (1.0 - lon_fraction),
-        (1.0 - lat_fraction) * lon_fraction,
-        lat_fraction * lon_fraction};
+    // CLASLIB applies Emat*Gmat interpolation weights from the selected
+    // atmospheric grid, not a fresh bilinear interpolation at the receiver
+    // coordinates. Reuse the typed weights carried by the accepted OSR row.
+    std::array<double, 4> weights = grid_weights;
+    double weight_sum = 0.0;
+    for (double weight : weights) weight_sum += weight;
+    if (!(weight_sum > 0.0)) {
+        return Vector3d::Zero();
+    }
+    for (double& weight : weights) weight /= weight_sum;
 
-    Vector3d displacement(solid_pole[0], solid_pole[1], solid_pole[2]);
-    for (size_t grid = 0; grid < kTokyoClasBlq.size(); ++grid) {
+    const Vector3d solid_pole_displacement = displacement;
+    for (size_t grid = 0; grid < blq->size(); ++grid) {
+        if (!use_oracle) {
+            displacement += weights[grid] * mrtklibClasOceanTide(
+                receiver_position,
+                iers::gnssTimeToMjdUtc(time),
+                (*blq)[grid]);
+            continue;
+        }
         std::array<double, 66> record{};
         for (size_t constituent = 0; constituent < 11; ++constituent) {
             for (size_t row = 0; row < 6; ++row) {
                 record[row + constituent * 6] =
-                    kTokyoClasBlq[grid][row][constituent];
+                    (*blq)[grid][row][constituent];
             }
         }
         double ocean[3]{};
         external::madocalib_oracle::tideDisplacement(
             time.week, time.tow, rr, 2, record.data(), ocean);
         displacement += weights[grid] * Vector3d(ocean[0], ocean[1], ocean[2]);
+    }
+    if (pppDebugEnabled()) {
+        std::cerr << std::setprecision(15)
+                  << "[CLAS-TIDE-COMP] tow=" << time.tow
+                  << " ocean="
+                  << (displacement - solid_pole_displacement).transpose()
+                  << '\n';
     }
     return displacement;
 }
@@ -367,6 +683,67 @@ void applyOptionalSolutionEpochMetadata(
     solution.position_geodetic = GeodeticCoord(latitude, longitude, height);
 }
 
+void recordClasDispersionWarmupPhasePairs(
+    const ObservationData& obs,
+    std::map<SatelliteId, CLASDispersionCompensationInfo>& compensation_by_sat) {
+    for (const SatelliteId& satellite : obs.getSatellites()) {
+        const Observation* l1 = nullptr;
+        const Observation* l2 = nullptr;
+        for (const auto& candidate : obs.observations) {
+            if (candidate.satellite != satellite || !candidate.valid ||
+                !candidate.has_carrier_phase ||
+                !std::isfinite(candidate.carrier_phase)) {
+                continue;
+            }
+            const bool is_l1 =
+                candidate.signal == SignalType::GPS_L1CA ||
+                candidate.signal == SignalType::GPS_L1P ||
+                candidate.signal == SignalType::GAL_E1 ||
+                candidate.signal == SignalType::QZS_L1CA;
+            if (is_l1 && l1 == nullptr) {
+                l1 = &candidate;
+            }
+            if (satellite.system == GNSSSystem::GPS) {
+                const bool exact_l2w =
+                    candidate.carrier_phase_observation_type == "L2W";
+                if (exact_l2w) {
+                    l2 = &candidate;
+                }
+            } else if (satellite.system == GNSSSystem::Galileo &&
+                       (candidate.signal == SignalType::GAL_E5A ||
+                        (l2 == nullptr && candidate.signal == SignalType::GAL_E5B))) {
+                l2 = &candidate;
+            } else if (satellite.system == GNSSSystem::QZSS &&
+                       candidate.signal == SignalType::QZS_L2C) {
+                l2 = &candidate;
+            }
+        }
+        if (l1 == nullptr || l2 == nullptr) {
+            continue;
+        }
+        const double l1_wavelength = signalWavelengthMeters(*l1);
+        const double l2_wavelength = signalWavelengthMeters(*l2);
+        if (!(l1_wavelength > 0.0) || !(l2_wavelength > 0.0)) {
+            continue;
+        }
+        auto& compensation = compensation_by_sat[satellite];
+        while (!compensation.warmup_times.empty() &&
+               obs.time - compensation.warmup_times.front() > 120.0) {
+            compensation.warmup_times.erase(compensation.warmup_times.begin());
+            compensation.warmup_phase_m.erase(
+                compensation.warmup_phase_m.begin());
+        }
+        if (!compensation.warmup_times.empty() &&
+            compensation.warmup_times.back() == obs.time) {
+            continue;
+        }
+        compensation.warmup_times.push_back(obs.time);
+        compensation.warmup_phase_m.push_back({{
+            l1->carrier_phase * l1_wavelength,
+            l2->carrier_phase * l2_wavelength}});
+    }
+}
+
 }  // namespace
 
 PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
@@ -379,6 +756,14 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     last_ar_ratio_ = 0.0;
     last_fixed_ambiguities_ = 0;
     last_clas_constrained_fixed_state_valid_ = false;
+    if (ppp_config_.clas_mrtklib_float_parity &&
+        ppp_config_.kinematic_mode &&
+        !ppp_config_.low_dynamics_mode &&
+        ppp_config_.use_clas_osr_filter &&
+        ppp_config_.use_dynamics_model) {
+        recordClasDispersionWarmupPhasePairs(
+            obs, clas_dispersion_compensation_);
+    }
     // CLAS per-frequency mode uses WL-NL AR: MW averaging resolves WL integers,
     // then NL integers are extracted from OSR-corrected dual-freq observations.
     if (ppp_config_.enable_ambiguity_resolution && !ppp_config_.use_ionosphere_free) {
@@ -498,31 +883,15 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         std::cerr << '\n';
     }
     clas_mrtklib_ar_rejected_ambiguities_.clear();
-    // MRTKLIB consumes the L6 stream sequentially. At startup its CSSR bank
-    // is incomplete, so ppp_rtk_pos() publishes SINGLE until the first full
-    // 15 s correction cycle is assembled (tokyo/run2: 177000.0--177014.8).
-    // The native CSV is precomposed and otherwise exposes that future bank at
-    // the first observation. Recreate the decoder availability boundary here
-    // before initializing any PPP state or advancing float_count.
-    constexpr double kMrtklibClasStreamWarmupSeconds = 15.0;
+    // The canonical raw-L6 CLASLIB oracle enters ppp_rtk_pos() at the first
+    // observation and advances its float/iono/ambiguity states immediately.
+    // Its first five epochs are FLOAT and it then fixes; it does not skip a
+    // 15-second filter warm-up. Keep only the stream-origin bookkeeping used
+    // by diagnostics. Publication quality comes from the filter result.
     if (clas_mrtklib_parity) {
         if (!has_clas_mrtklib_stream_start_time_) {
             clas_mrtklib_stream_start_time_ = obs.time;
             has_clas_mrtklib_stream_start_time_ = true;
-        }
-        const double stream_age = obs.time - clas_mrtklib_stream_start_time_;
-        if (stream_age + 1e-9 < kMrtklibClasStreamWarmupSeconds) {
-            if (pppDebugEnabled() && stream_age < 1e-9) {
-                std::cerr << "[CLAS-STREAM] CSSR warm-up until tow="
-                          << clas_mrtklib_stream_start_time_.tow +
-                                 kMrtklibClasStreamWarmupSeconds
-                          << "\n";
-            }
-            applyOptionalSolutionEpochMetadata(seed, obs.time, ppp_config_);
-            has_last_processed_time_ = true;
-            last_processed_time_ = obs.time;
-            ++total_epochs_processed_;
-            return seed;
         }
     }
     // MRTKLIB v0.5.1 mrtk_ppp_rtk.c:1989-2002, clas.toml float_count=15.
@@ -552,15 +921,6 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         last_fixed_ambiguities_ = 0;
         clas_mrtklib_float_count_ = 0;
         clas_mrtklib_floatcnt_reset_this_epoch = true;
-        // The reset epoch may consume the QZSS measurement-based dispersion
-        // datum once, matching compensatedisp() before pbreset is applied.
-        // Re-enable it here; it is retired again after that epoch below.
-        for (auto& [satellite, compensation] :
-             clas_dispersion_compensation_) {
-            if (satellite.system == GNSSSystem::QZSS) {
-                compensation.mrtklib_qzss_suppressed = false;
-            }
-        }
     }
     // The parity path runs detectClasCycleSlips() below on OSR phase-bias-
     // corrected GF/MW. Running the generic detector first stores raw GF/MW
@@ -618,11 +978,40 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         clas_phase_bias_repair_);
     if (clas_mrtklib_parity) {
         int tide_network_id = -1;
-        if (readClasAtmosNetworkId(
-                epoch_context.epoch_atmos_tokens, tide_network_id)) {
+        std::array<double, 4> tide_grid_weights{{0.0, 0.0, 0.0, 0.0}};
+        bool have_tide_network = readClasAtmosNetworkId(
+            epoch_context.epoch_atmos_tokens, tide_network_id);
+        bool have_tide_weights = false;
+        {
+            // The lifecycle matrix can materialize per-satellite atmosphere
+            // without retaining a single epoch-level network token. CLASLIB
+            // still applies the receiver tide for the selected service area;
+            // recover that typed selection from the accepted OSR rows.
+            for (const auto& osr : epoch_context.osr_corrections) {
+                if (osr.valid && osr.atmos_network_id > 0) {
+                    if (!have_tide_network) {
+                        tide_network_id = osr.atmos_network_id;
+                        have_tide_network = true;
+                    }
+                    if (osr.atmos_network_id == tide_network_id) {
+                        double sum = 0.0;
+                        for (double weight : osr.atmos_interpolation_weights) {
+                            sum += weight;
+                        }
+                        if (sum > 0.0) {
+                            tide_grid_weights = osr.atmos_interpolation_weights;
+                            have_tide_weights = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        if (have_tide_network && have_tide_weights) {
             const Vector3d tide = mrtklibTokyoClasTideDisplacement(
-                epoch_context.receiver_position, obs.time, tide_network_id);
-            epoch_context.receiver_position += tide;
+                epoch_context.receiver_position, obs.time, tide_network_id,
+                tide_grid_weights);
+            epoch_context.receiver_tide_displacement = tide;
             if (pppDebugEnabled() && tide.squaredNorm() > 0.0) {
                 std::cerr << "[CLAS-TIDE] tow=" << obs.time.tow
                           << " net=" << tide_network_id
@@ -813,27 +1202,6 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             return ambiguityStateIndex(satellite);
         },
         pppDebugEnabled());
-    if (clas_mrtklib_parity &&
-        (clas_mrtklib_floatcnt_reset_this_epoch ||
-         epoch_preparation.initialized_this_epoch)) {
-        // MRTKLIB's QZSS CLAS row is L1-only (the L2 phase-bias slot is
-        // invalid). compensatedisp() may contribute the carried pair once on
-        // the reset epoch, then pbreset clears that datum; subsequent epochs
-        // rebase and therefore contribute zero. Native retains an L2 raw
-        // observation for slip detection, so explicitly retire only the
-        // QZSS dispersion datum after that first reset-epoch use. Merely
-        // clearing has_base is insufficient: the raw L1/L2 pair would rebase
-        // on the next epoch and start accumulating again, while MRTKLIB's
-        // invalid QZSS L2 phase-bias slot keeps pbreset asserted and compL=0.
-        for (const auto& osr : osr_corrections) {
-            if (osr.satellite.system != GNSSSystem::QZSS) continue;
-            auto& compensation =
-                clas_dispersion_compensation_[osr.satellite];
-            compensation.has_base = {false, false};
-            compensation.slip = {false, false};
-            compensation.mrtklib_qzss_suppressed = true;
-        }
-    }
     if (!epoch_update.updated) {
         if (allow_hybrid_fallback) {
             return fallback_to_standard("measurement_update");
@@ -1360,6 +1728,22 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
                 clas_kinematic_fix_candidate_streak_ = 0;
                 clas_kinematic_spp_divergence_count_ = 0;
                 ppp_ar::clearWlnlHoldState(clas_wlnl_hold_);
+                if (clas_mrtklib_parity && ppp_config_.use_dynamics_model) {
+                    // mrtk_ppp_rtk.c resets every element of x after maxdiffp
+                    // produces SOLQ_NONE when dynamics is enabled.  Resetting
+                    // only position/velocity leaves tightly constrained stale
+                    // ionosphere and ambiguity states attached to the new SPP
+                    // position.  The following epoch can then report a
+                    // high-ratio false FIX at that inconsistent state.
+                    filter_state_ = PPPState{};
+                    filter_initialized_ = false;
+                    ambiguity_states_.clear();
+                    est_stec_outage_.clear();
+                    clas_dd_accumulator_ = {};
+                    last_clas_constrained_fixed_state_valid_ = false;
+                    last_ar_ratio_ = 0.0;
+                    last_fixed_ambiguities_ = 0;
+                }
             }
         } else {
             clas_kinematic_spp_divergence_count_ = 0;

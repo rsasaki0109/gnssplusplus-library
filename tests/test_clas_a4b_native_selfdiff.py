@@ -43,6 +43,8 @@ class ClasA4bNativeSelfdiffTest(unittest.TestCase):
             self.assertEqual(config.claslib_ref, runner.DEFAULT_CLASLIB_REF)
             self.assertEqual(config.max_epochs, runner.DEFAULT_MAX_EPOCHS)
             self.assertEqual(config.gps_l2w_rows_min, runner.DEFAULT_MAX_EPOCHS)
+            self.assertFalse(config.claslib_filter_profile)
+            self.assertFalse(config.enable_ar)
 
     def test_data_root_failures_reports_missing_public_inputs(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_clas_a4b_data_") as temp_dir:
@@ -73,18 +75,31 @@ class ClasA4bNativeSelfdiffTest(unittest.TestCase):
                 max_epochs=30,
                 gps_l2w_rows_min=30,
                 receiver_antenna_type="TEST ANT",
+                claslib_filter_profile=True,
                 python_executable=sys.executable,
             )
 
-            command, env = runner.build_native_command(config, paths, data_root)
+            inherited_env = {
+                "PATH": "/test/bin",
+                "GNSS_PPP_CLAS_QZSS_S_PRN_FIX": "1",
+                "GNSS_PPP_CLAS_CODE_ROW_PARITY": "caller-value",
+            }
+            command, env = runner.build_native_command(config, paths, data_root, inherited_env)
 
+            self.assertEqual(env["PATH"], "/test/bin")
+            self.assertEqual(env["GNSS_PPP_CLAS_QZSS_S_PRN_FIX"], "1")
             self.assertEqual(env["GNSS_PPP_CLAS_DD_FILTER"], "1")
             self.assertEqual(env["GNSS_PPP_CLAS_CODE_ROW_PARITY"], "bias,full-prc")
             self.assertEqual(env["GNSS_PPP_CLAS_RX_ANTENNA"], "1")
             self.assertEqual(env["GNSS_PPP_CLAS_ATMOS_GRID_MATRIX"], "1")
             self.assertEqual(env["GNSS_PPP_CLAS_ATMOS_LIFECYCLE"], "1")
             self.assertEqual(env["GNSS_PPP_CLAS_TROP_CLIMATOLOGY"], "1")
+            self.assertEqual(env["GNSS_PPP_CLAS_PHASE_ROW_DUMP"], "1")
             self.assertEqual(env["GNSS_PPP_CLAS_CODE_DUMP"], str(paths.native_code_dump))
+            self.assertEqual(env["GNSS_PPP_CLAS_DD_ROW_DUMP"], str(paths.native_dd_dump))
+            self.assertEqual(
+                env["GNSS_PPP_CLAS_DD_STATE_DUMP"], str(paths.native_state_dump)
+            )
             self.assertIn("clas-ppp", command)
             self.assertIn("--compact-code-bias-composition-policy", command)
             self.assertIn("base-only-if-present", command)
@@ -96,7 +111,38 @@ class ClasA4bNativeSelfdiffTest(unittest.TestCase):
             self.assertEqual(command[command.index("--clas-atmos-selection") + 1], "freshness-first")
             self.assertIn("--receiver-antenna-type", command)
             self.assertIn("TEST ANT", command)
-            self.assertEqual(command[-2:], ["--max-epochs", "30"])
+            self.assertEqual(command[command.index("--max-epochs") + 1], "30")
+            self.assertEqual(command[-2:], ["--kinematic", "--use-dynamics-model"])
+
+    def test_build_native_command_enables_wlnl_ar_when_requested(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_clas_a4b_ar_command_") as temp_dir:
+            root = Path(temp_dir)
+            data_root = make_data_root(root)
+            output_dir = root / "output"
+            paths = runner.default_paths(output_dir)
+            config = runner.RunConfig(
+                repo_root=ROOT_DIR,
+                output_dir=output_dir,
+                data_root=data_root,
+                auto_fetch=False,
+                fail_on_blocked=True,
+                claslib_repo=runner.DEFAULT_CLASLIB_REPO,
+                claslib_ref=runner.DEFAULT_CLASLIB_REF,
+                max_epochs=30,
+                gps_l2w_rows_min=1,
+                receiver_antenna_type="TEST ANT",
+                claslib_filter_profile=True,
+                enable_ar=True,
+                python_executable=sys.executable,
+            )
+
+            command, _env = runner.build_native_command(
+                config, paths, data_root, {"PATH": "/test/bin"})
+
+            self.assertEqual(
+                command[-3:],
+                ["--kinematic", "--use-dynamics-model", "--enable-ar"],
+            )
 
     def test_build_code_dump_summary_command_validates_native_dump(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_clas_a4b_summary_command_") as temp_dir:
@@ -331,6 +377,10 @@ class ClasA4bNativeSelfdiffTest(unittest.TestCase):
                 paths=paths,
                 status="blocked_infrastructure",
                 data_root=None,
+                environ={
+                    "GNSS_PPP_CLAS_QZSS_S_PRN_FIX": "1",
+                    "GNSS_PPP_CLAS_BASE_CLOCK_PARITY": "0",
+                },
                 block_reason="no data",
             )
             runner.write_summary(paths, payload)
@@ -342,6 +392,25 @@ class ClasA4bNativeSelfdiffTest(unittest.TestCase):
         self.assertIn("missing native A4b evidence", written["next_actions"][1])
         self.assertFalse(written["configuration"]["fail_on_blocked"])
         self.assertEqual(written["configuration"]["selfdiff_filter"]["rinex_code"], "C2W")
+        self.assertEqual(
+            written["configuration"]["dd_measurement_dump"]["schema"],
+            "clas_dd_measurement.v3",
+        )
+        self.assertEqual(
+            written["configuration"]["inherited_behavior_env"],
+            {
+                "GNSS_PPP_CLAS_BASE_CLOCK_PARITY": "0",
+                "GNSS_PPP_CLAS_QZSS_S_PRN_FIX": "1",
+            },
+        )
+        self.assertEqual(
+            written["configuration"]["effective_behavior_env"]["GNSS_PPP_CLAS_QZSS_S_PRN_FIX"],
+            "1",
+        )
+        self.assertTrue(written["configuration"]["parity_profile"]["qzss_s_prn_fix"])
+        self.assertFalse(written["configuration"]["parity_profile"]["base_clock_parity"])
+        self.assertFalse(written["configuration"]["parity_profile"]["sis_boundary"])
+        self.assertFalse(written["configuration"]["parity_profile"]["trop_grid_parity"])
 
     def test_artifacts_include_code_dump_summary(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_clas_a4b_artifacts_") as temp_dir:
@@ -352,6 +421,10 @@ class ClasA4bNativeSelfdiffTest(unittest.TestCase):
         self.assertEqual(
             roles["native_zd_component_summary"],
             str(paths.native_code_dump_summary_json),
+        )
+        self.assertEqual(
+            roles["native_dd_measurement_dump"],
+            str(paths.native_dd_dump),
         )
 
 

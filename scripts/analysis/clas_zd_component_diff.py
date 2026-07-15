@@ -42,6 +42,7 @@ COMPONENT_ALIASES: dict[str, tuple[str, ...]] = {
     "code_bias_m": ("code_bias_m", "code_bias"),
     "phase_bias_m": ("phase_bias_m", "phase_bias"),
     "network_compensation_m": ("network_compensation_m",),
+    "iode_geometry_compensation_m": ("iode_geometry_compensation_m",),
     "bias_exact_identity": ("bias_exact_identity",),
     "observation_exact_identity_requested": ("observation_exact_identity_requested",),
     "observation_exact_match": ("observation_exact_match",),
@@ -270,6 +271,14 @@ def observation_identity(row: Row, row_type: str) -> str:
     return first_present(row, ("obs_code", "rinex_code", "code", "signal"), "")
 
 
+def requested_observation_identity(row: Row, row_type: str) -> str:
+    if row_type == "code":
+        return first_present(row, ("requested_pseudorange_rinex_code",)) or observation_identity(row, row_type)
+    if row_type == "phase":
+        return first_present(row, ("requested_carrier_rinex_code",)) or observation_identity(row, row_type)
+    return observation_identity(row, row_type)
+
+
 def extract_components(row: Row, component_names: Sequence[str]) -> ComponentMap:
     components: ComponentMap = {}
     for component in component_names:
@@ -299,8 +308,10 @@ def normalize_rows(
     stage_filter: Optional[str],
     row_type_filter: Optional[str],
     sat_filter: Optional[set[str]] = None,
+    system_filter: Optional[set[str]] = None,
     freq_filter: Optional[set[int]] = None,
     rinex_code_filter: Optional[set[str]] = None,
+    identity_source: str = "observed",
 ) -> list[ComponentRow]:
     normalized: list[ComponentRow] = []
     for index, row in enumerate(rows, start=2):
@@ -314,8 +325,14 @@ def normalize_rows(
         tow_millis = tow_to_millis(row["tow"])
         sat = row["sat"]
         freq = detect_frequency(row)
-        signal = observation_identity(row, row_type)
+        signal = (
+            requested_observation_identity(row, row_type)
+            if identity_source == "requested"
+            else observation_identity(row, row_type)
+        )
         if sat_filter is not None and sat not in sat_filter:
+            continue
+        if system_filter is not None and sat[:1].upper() not in system_filter:
             continue
         if freq_filter is not None and freq not in freq_filter:
             continue
@@ -762,6 +779,18 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help="compare only one satellite label, such as G14; may be repeated or comma-separated",
     )
     parser.add_argument(
+        "--system",
+        action="append",
+        choices=["G", "E", "J"],
+        help="compare only GPS (G), Galileo (E), or QZSS (J); may be repeated",
+    )
+    parser.add_argument(
+        "--identity-source",
+        choices=["observed", "requested"],
+        default="observed",
+        help="key rows by raw receiver identity or requested CLAS correction-slot identity",
+    )
+    parser.add_argument(
         "--freq",
         action="append",
         help="compare only one frequency index; may be repeated or comma-separated",
@@ -796,6 +825,14 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         action="store_true",
         help="return non-zero when rows are unmatched or a threshold is exceeded",
     )
+    parser.add_argument(
+        "--fail-on-threshold",
+        action="store_true",
+        help=(
+            "return non-zero only when a component threshold is exceeded; "
+            "unmatched edge rows remain diagnostic"
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -803,6 +840,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parse_args(argv)
     component_names = args.components or sorted(COMPONENT_ALIASES)
     sat_filter = normalize_filter_values(args.sat)
+    system_filter = normalize_filter_values(args.system)
     freq_filter = normalize_freq_filter(args.freq)
     rinex_code_filter = normalize_filter_values(args.rinex_code)
     base_rows = normalize_rows(
@@ -811,8 +849,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         stage_filter=args.stage,
         row_type_filter=args.row_type,
         sat_filter=sat_filter,
+        system_filter=system_filter,
         freq_filter=freq_filter,
         rinex_code_filter=rinex_code_filter,
+        identity_source=args.identity_source,
     )
     candidate_rows = normalize_rows(
         read_csv_rows(args.candidate_csv),
@@ -820,8 +860,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         stage_filter=args.stage,
         row_type_filter=args.row_type,
         sat_filter=sat_filter,
+        system_filter=system_filter,
         freq_filter=freq_filter,
         rinex_code_filter=rinex_code_filter,
+        identity_source=args.identity_source,
     )
     try:
         report = build_report(
@@ -842,6 +884,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     report["stage_filter"] = args.stage
     report["row_type_filter"] = args.row_type
     report["sat_filter"] = sorted(sat_filter) if sat_filter is not None else None
+    report["system_filter"] = sorted(system_filter) if system_filter is not None else None
+    report["identity_source"] = args.identity_source
     report["freq_filter"] = sorted(freq_filter) if freq_filter is not None else None
     report["rinex_code_filter"] = (
         sorted(rinex_code_filter) if rinex_code_filter is not None else None
@@ -861,6 +905,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         or report["candidate_only_rows"] > 0
         or report["threshold_exceedances"] > 0
     ):
+        return 2
+    if args.fail_on_threshold and report["threshold_exceedances"] > 0:
         return 2
     return 0
 

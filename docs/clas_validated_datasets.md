@@ -355,10 +355,11 @@ rms=0.01309 m` to `mean_abs=0.00800 m, rms=0.01265 m`, with mismatch count
 moving from 120/280 to 112/280 common rows.  The L6 expansion then emits delayed
 base-bank refresh rows for selected subtype-6 network replacements, moving the
 same G14/C2W slice to 16/280 mismatches with `mean_abs=0.00114 m` and
-`rms=0.00478 m`; aggregate `PRC` moves to `mean_abs=0.00879 m` and
-`rms=0.01481 m`.  The remaining code-bias mismatches are 5-second boundary
-epochs, so the next correction-materialization target is boundary lifecycle
-alignment rather than a broad row or variance change.  The CLASLIB `.osr`
+`rms=0.00478 m`; aggregate `PRC` moved to `mean_abs=0.00879 m` and
+`rms=0.01481 m`.  Current `develop` regenerates the same public-data slice with
+zero `code_bias_m` delta on all 280 common G14/C2W rows, including the former
+5-second boundary mismatches.  CI hard-gates this component at `0.0 m` while
+the remaining ionosphere and aggregate PRC differences stay diagnostic.  The CLASLIB `.osr`
 snapshot summaries also include `claslib_raw_iono_l1_m` and
 `claslib_raw_stec_tecu` numeric stats
 as explicit diagnostics; they are intentionally outside the default native diff

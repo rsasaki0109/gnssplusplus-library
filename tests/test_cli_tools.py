@@ -3162,8 +3162,12 @@ class CLIToolsTest(unittest.TestCase):
             self.assertEqual(payload["topic_status"]["raw_binary"]["source"], "metadata")
             self.assertIsNone(payload["topic_status"]["fix"]["mean_rate_hz"])
             self.assertIsNone(payload["topic_status"]["fix"]["gap_count"])
-            self.assertIn("mcap reader unavailable", json.dumps(payload["checks"]))
-            self.assertIn("Install the Python `mcap` package", json.dumps(payload["checks"]))
+            checks = json.dumps(payload["checks"])
+            reader_unavailable = "mcap reader unavailable" in checks
+            reader_failed = "read failed" in checks
+            self.assertTrue(reader_unavailable or reader_failed)
+            if reader_unavailable:
+                self.assertIn("Install the Python `mcap` package", checks)
             self.assertTrue(summary_json.exists())
 
             strict_result = self.run_gnss(

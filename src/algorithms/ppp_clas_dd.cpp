@@ -5,6 +5,8 @@
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
+#include <iomanip>
+#include <iostream>
 #include <limits>
 #include <set>
 #include <sstream>
@@ -44,6 +46,7 @@ constexpr int kMaxPrnSbas = 158;
 constexpr int kNsatNavic = 14;
 
 constexpr double kDdInitialPositionVarianceM2 = 0.003;
+constexpr double kClaslibInitialPositionVarianceM2 = 30.0 * 30.0;
 constexpr double kClaslibInitialZwdM = 0.001;
 constexpr double kClaslibStdBiasCycles = 100.0;
 constexpr double kClaslibStdIonoM = 0.01;
@@ -51,9 +54,12 @@ constexpr double kClaslibStdTropM = 0.005;
 constexpr double kClaslibPrnBiasCycles = 1e-3;
 constexpr double kClaslibPrnIonoM = 1e-3;
 constexpr double kClaslibPrnIonoMaxM = 0.05;
+constexpr double kClaslibIonoTimeConstantS = 10.0;
 constexpr double kClaslibPrnTropM = 1e-3;
-constexpr double kClaslibForgetIono = 0.5;
-constexpr double kClaslibAfGainIono = 1.0;
+constexpr double kClaslibForgetIono = 0.3;
+constexpr double kClaslibAfGainIono = 3.0;
+constexpr double kClaslibForgetPosition = 0.3;
+constexpr double kClaslibAfGainPosition = 1.0;
 constexpr int kClaslibMaxOutage = 5;
 constexpr double kGpsL2VarianceScale = (2.55 / 1.55) * (2.55 / 1.55);
 constexpr double kDdPostfitResidualRmsLimitM = 5.0;
@@ -101,7 +107,28 @@ struct DdGroupKey {
 struct DdAmbiguityCandidate {
     rtk_measurement::AmbiguityDifference difference;
     int frequency_index = 0;
+    SatelliteId target_satellite;
+    double target_elevation_rad = 0.0;
 };
+
+// CLASLIB static_linux.conf selects pos2-aralpha=10%.  resamb_LAMBDA()
+// therefore uses qf[4][nb-1], not RTKLIB's conventional fixed ratio of 3.
+constexpr std::array<double, 60> kClaslibRatioThresholdAlpha10{{
+    39.86, 9.00, 5.39, 4.11, 3.45, 3.05, 2.78, 2.59, 2.44, 2.32,
+    2.23, 2.15, 2.08, 2.02, 1.97, 1.93, 1.89, 1.85, 1.82, 1.79,
+    1.77, 1.74, 1.72, 1.70, 1.68, 1.67, 1.65, 1.63, 1.62, 1.61,
+    1.59, 1.58, 1.57, 1.56, 1.55, 1.54, 1.53, 1.52, 1.51, 1.51,
+    1.50, 1.49, 1.48, 1.48, 1.47, 1.46, 1.46, 1.45, 1.45, 1.44,
+    1.44, 1.43, 1.43, 1.42, 1.42, 1.41, 1.41, 1.40, 1.40, 1.40,
+}};
+
+double claslibRatioThreshold(int ambiguity_count) {
+    if (ambiguity_count <= 0) {
+        return std::numeric_limits<double>::infinity();
+    }
+    const size_t index = static_cast<size_t>(std::min(ambiguity_count, 60) - 1);
+    return kClaslibRatioThresholdAlpha10[index];
+}
 
 int qzssPrnForClaslib(int prn) {
     if (prn >= kMinPrnQzsClaslib && prn <= kMaxPrnQzsClaslib) {
@@ -201,8 +228,18 @@ int claslibFrequencyIndex(
     const SatelliteId& satellite,
     SignalType signal,
     int osr_frequency_index) {
-    (void)satellite;
-    (void)signal;
+    if (satellite.system == GNSSSystem::Galileo) {
+        switch (signal) {
+            case SignalType::GAL_E1:
+                return 0;
+            case SignalType::GAL_E5B:
+                return 1;
+            case SignalType::GAL_E5A:
+                return 2;
+            default:
+                break;
+        }
+    }
     return osr_frequency_index;
 }
 
@@ -393,13 +430,15 @@ std::vector<DdAmbiguityCandidate> collectDdAmbiguityCandidates(
             continue;
         }
         candidates.push_back(
-            {{ref_index, target_index}, row.frequency_index});
+            {{ref_index, target_index}, row.frequency_index,
+             row.target_satellite, row.target_elevation_rad});
     }
     return candidates;
 }
 
 const char* clasDdDiagnosticsPath() {
-    return std::getenv("GNSS_PPP_CLAS_DD_DIAG");
+    const auto& path = pppEnvOverrides().clas_dd_diag_path;
+    return path.empty() ? nullptr : path.c_str();
 }
 
 }  // namespace
@@ -515,13 +554,25 @@ StateLayoutOptions layoutOptionsFromConfig(
     const ppp_shared::PPPConfig& config,
     const std::vector<OSRCorrection>& osr_corrections) {
     StateLayoutOptions options;
-    options.dynamics = config.kinematic_mode && config.use_dynamics_model;
+    // The canonical CLASLIB profile runs PPP-RTK kinematically with
+    // pos1-dynamics=off (NP=3).  The outer native PPP still needs its
+    // dynamics model for a robust seed, but those velocity/acceleration
+    // states must not leak into the CLASLIB-parity DD filter layout.
+    options.dynamics =
+        !config.clas_mrtklib_float_parity &&
+        config.kinematic_mode && config.use_dynamics_model;
     options.ionosphere_mode = config.estimate_ionosphere
         ? IonosphereMode::EstimateAdaptive
         : IonosphereMode::Off;
-    options.troposphere_mode = config.estimate_troposphere
-        ? TroposphereMode::EstimateZtd
-        : TroposphereMode::Off;
+    // CLASLIB static_linux.conf uses pos1-tropopt=off because the compact
+    // correction already supplies the troposphere term.  Do not add the
+    // outer native PPP's residual-ZTD state to the parity scaffold.
+    options.troposphere_mode =
+        config.clas_mrtklib_float_parity
+            ? TroposphereMode::Off
+            : (config.estimate_troposphere
+                   ? TroposphereMode::EstimateZtd
+                   : TroposphereMode::Off);
 
     int frequencies = config.use_ionosphere_free ? 1 : 2;
     for (const auto& osr : osr_corrections) {
@@ -544,17 +595,21 @@ DdMeasurementBuildResult buildDdMeasurementSystem(
     const StateLayout& layout,
     const VectorXd& state,
     const ppp_shared::PPPConfig& config,
-    const TropMappingFunction& trop_mapping_function) {
+    const TropMappingFunction& trop_mapping_function,
+    const Vector3d& receiver_geometry_displacement) {
     DdMeasurementBuildResult result;
     const int nx = layout.nx();
     if (state.size() < nx || nx < 3 || trop_mapping_function == nullptr) {
         return result;
     }
 
-    const Vector3d receiver_position = state.segment(0, 3);
+    const Vector3d linearization_position = state.segment(0, 3);
+    const Vector3d receiver_position =
+        linearization_position + receiver_geometry_displacement;
     if (!receiver_position.allFinite() || receiver_position.norm() <= 0.0) {
         return result;
     }
+    result.linearization_position_ecef = linearization_position;
 
     double rx_lat = 0.0;
     double rx_lon = 0.0;
@@ -592,6 +647,16 @@ DdMeasurementBuildResult buildDdMeasurementSystem(
             if (osr.wavelengths[f] <= 0.0 || osr.wavelengths[0] <= 0.0) {
                 continue;
             }
+            // CLASLIB validobs() requires the carrier row even while forming
+            // the paired code DD. corrmeas() zeroes that carrier row when the
+            // selected compact phase-bias cell is invalid, so neither phase
+            // nor code from this satellite/frequency reaches ddres(). Keep
+            // the rule typed to the literal MRTKLIB parity profile; ordinary
+            // SSR/MADOCA and the historical CLAS filter remain unchanged.
+            if (config.clas_mrtklib_float_parity &&
+                !osr.phase_bias_present[f]) {
+                continue;
+            }
             const int frequency_index =
                 claslibFrequencyIndex(osr.satellite, osr.signals[f], f);
             if (frequency_index < 0 || frequency_index >= layout.nf()) {
@@ -624,6 +689,18 @@ DdMeasurementBuildResult buildDdMeasurementSystem(
                 zd.residual_m =
                     raw->carrier_phase * osr.wavelengths[f] -
                     (geo - sat_clock_m + osr.CPC[f]);
+                if (ppp_shared::pppDebugEnabled()) {
+                    std::cerr << std::setprecision(15)
+                              << "[CLAS-DD-ZD-NATIVE] tow=" << obs.time.tow
+                              << " sat=" << osr.satellite.toString()
+                              << " f=" << frequency_index
+                              << " phase=1 zd=" << zd.residual_m
+                              << " geo=" << geo
+                              << " clock_m=" << sat_clock_m
+                              << " satpos="
+                              << osr.satellite_position.transpose()
+                              << " corr=" << osr.CPC[f] << '\n';
+                }
                 zd.los = los;
                 zd.elevation_rad = elevation;
                 zd.ionosphere_map = ion_map;
@@ -645,6 +722,16 @@ DdMeasurementBuildResult buildDdMeasurementSystem(
                 zd.frequency_index = frequency_index;
                 zd.residual_m =
                     raw->pseudorange - (geo - sat_clock_m + osr.PRC[f]);
+                if (ppp_shared::pppDebugEnabled()) {
+                    std::cerr << std::setprecision(15)
+                              << "[CLAS-DD-ZD-NATIVE] tow=" << obs.time.tow
+                              << " sat=" << osr.satellite.toString()
+                              << " f=" << frequency_index
+                              << " phase=0 zd=" << zd.residual_m
+                              << " geo=" << geo
+                              << " clock_m=" << sat_clock_m
+                              << " corr=" << osr.PRC[f] << '\n';
+                }
                 zd.los = los;
                 zd.elevation_rad = elevation;
                 zd.ionosphere_map = ion_map;
@@ -694,7 +781,8 @@ DdMeasurementBuildResult buildDdMeasurementSystem(
             row.is_phase = key.is_phase;
             row.frequency_index = key.frequency_index;
             row.system_group = key.system_group;
-            row.residual_m = ref.residual_m - sat.residual_m;
+            row.raw_dd_m = ref.residual_m - sat.residual_m;
+            row.residual_m = row.raw_dd_m;
             row.reference_elevation_rad = ref.elevation_rad;
             row.target_elevation_rad = sat.elevation_rad;
             row.position_coefficients = -ref.los + sat.los;
@@ -749,6 +837,47 @@ DdMeasurementBuildResult buildDdMeasurementSystem(
     result.measurement_system =
         rtk_measurement::assembleMeasurementSystem(blocks, nx);
     return result;
+}
+
+void appendDdMeasurementRowsCsv(
+    const std::string& path,
+    const GNSSTime& time,
+    const DdMeasurementBuildResult& build,
+    const std::string& stage) {
+    if (path.empty()) {
+        return;
+    }
+    const bool needs_header = !std::ifstream(path).good();
+    std::ofstream output(path, std::ios::app);
+    if (!output.is_open()) {
+        return;
+    }
+    output.precision(17);
+    if (needs_header) {
+        output
+            << "schema,week,tow,stage,system_group,frequency_index,"
+            << "measurement_type,reference_satellite,target_satellite,raw_dd_m,residual_m,"
+            << "reference_variance_m2,target_variance_m2,"
+            << "reference_elevation_rad,target_elevation_rad,"
+            << "linearization_x_m,linearization_y_m,linearization_z_m,"
+            << "position_coeff_x,position_coeff_y,position_coeff_z\n";
+    }
+    for (const auto& row : build.rows) {
+        output << "clas_dd_measurement.v3," << time.week << ',' << time.tow << ','
+               << stage << ',' << row.system_group << ',' << row.frequency_index << ','
+               << (row.is_phase ? "phase" : "code") << ','
+               << row.reference_satellite.toString() << ','
+               << row.target_satellite.toString() << ',' << row.raw_dd_m << ','
+               << row.residual_m << ','
+               << row.reference_variance_m2 << ',' << row.target_variance_m2 << ','
+               << row.reference_elevation_rad << ',' << row.target_elevation_rad << ','
+               << build.linearization_position_ecef.x() << ','
+               << build.linearization_position_ecef.y() << ','
+               << build.linearization_position_ecef.z() << ','
+               << row.position_coefficients.x() << ','
+               << row.position_coefficients.y() << ','
+               << row.position_coefficients.z() << '\n';
+    }
 }
 
 DdPostfitValidationResult validateDdPostfitResiduals(
@@ -895,6 +1024,7 @@ void DdFilterScaffold::initializeFromNativeFloat(
     const std::vector<OSRCorrection>& osr_corrections,
     const std::map<std::string, std::string>& epoch_atmos) {
     ensureSnapshotStorage(layout, false);
+    adaptive_position_process_noise_ecef_.setZero();
     snapshot_.time = time;
     snapshot_.seeded_from_native_float = true;
     snapshot_.native_total_states = native_state.total_states;
@@ -905,8 +1035,12 @@ void DdFilterScaffold::initializeFromNativeFloat(
         native_float_solution.position_ecef.allFinite()
             ? native_float_solution.position_ecef
             : native_state.state.segment(native_state.pos_index, 3);
+    const double initial_position_variance =
+        config.clas_mrtklib_float_parity
+            ? kClaslibInitialPositionVarianceM2
+            : kDdInitialPositionVarianceM2;
     for (int axis = 0; axis < 3 && axis < layout.np(); ++axis) {
-        resetStateElement(axis, seed_position(axis), kDdInitialPositionVarianceM2);
+        resetStateElement(axis, seed_position(axis), initial_position_variance);
     }
 
     if (layout.options.dynamics && native_state.state.size() >= native_state.pos_index + 9) {
@@ -947,8 +1081,35 @@ void DdFilterScaffold::predictState(
         }
     }
 
-    const double position_q = std::max(0.0, config.process_noise_position) * abs_dt;
-    if (position_q > 0.0) {
+    // CLASLIB udpos_ppp() models estimated ionosphere as a first-order
+    // Gauss-Markov process.  With stats-tconstiono=10 s it scales every iono
+    // state by exp(-dt/10), its P cross-covariances once, and the iono-iono
+    // block twice before udion() adds adaptive process noise.
+    if (config.clas_mrtklib_float_parity &&
+        layout.options.ionosphere_mode == IonosphereMode::EstimateAdaptive &&
+        abs_dt > 0.0) {
+        const double ki = std::exp(-abs_dt / kClaslibIonoTimeConstantS);
+        for (int satno = 1; satno <= layout.options.max_satellites; ++satno) {
+            const int index = layout.ionosphereIndex(satno);
+            if (index < 0 || index >= snapshot_.state.size()) {
+                continue;
+            }
+            snapshot_.state(index) *= ki;
+            snapshot_.covariance.row(index) *= ki;
+            snapshot_.covariance.col(index) *= ki;
+        }
+    }
+
+    // With pos2-prnadpt=on CLASLIB propagates the adaptive Q matrix formed
+    // from the previous measurement-update correction.  It starts at zero;
+    // stats-prnposith/v are only used when adaptive PVA noise is disabled.
+    if (config.clas_mrtklib_float_parity &&
+        adaptive_position_process_noise_ecef_.allFinite()) {
+        snapshot_.covariance.block<3, 3>(0, 0) +=
+            adaptive_position_process_noise_ecef_ * abs_dt;
+    } else {
+        const double position_q =
+            std::max(0.0, config.process_noise_position) * abs_dt;
         for (int axis = 0; axis < 3; ++axis) {
             snapshot_.covariance(axis, axis) += position_q;
         }
@@ -1408,6 +1569,7 @@ void DdFilterScaffold::appendDiagnosticsCsv(
     if (!output.is_open()) {
         return;
     }
+    output.precision(17);
     if (needs_header) {
         output
             << "week,tow,updated,fixed,lambda_attempted,lambda_accepted,"
@@ -1417,7 +1579,9 @@ void DdFilterScaffold::appendDiagnosticsCsv(
             << "consecutive_fix_count,hold_applied,hold_rows,hold_reject_reason,"
             << "row_summary,reference_summary,postfit_worst_group,"
             << "postfit_worst_frequency,postfit_worst_pair,"
-            << "postfit_worst_phase_residual_m\n";
+            << "postfit_worst_phase_residual_m,"
+            << "float_x_m,float_y_m,float_z_m,"
+            << "fixed_x_m,fixed_y_m,fixed_z_m,fixed_shift_m\n";
     }
     const std::string reject_reason =
         !last_diagnostics_.fixed_reject_reason.empty()
@@ -1450,7 +1614,96 @@ void DdFilterScaffold::appendDiagnosticsCsv(
            << last_diagnostics_.fixed_postfit.worst_phase_system_group << ','
            << last_diagnostics_.fixed_postfit.worst_phase_frequency_index << ','
            << last_diagnostics_.fixed_postfit.worst_phase_pair << ','
-           << last_diagnostics_.fixed_postfit.worst_phase_residual_m << '\n';
+           << last_diagnostics_.fixed_postfit.worst_phase_residual_m << ',';
+    const bool have_float_position = snapshot_.state.size() >= 3;
+    const bool have_fixed_position = fixed_snapshot_.state.size() >= 3;
+    Vector3d float_position =
+        Vector3d::Constant(std::numeric_limits<double>::quiet_NaN());
+    Vector3d fixed_position =
+        Vector3d::Constant(std::numeric_limits<double>::quiet_NaN());
+    if (have_float_position) {
+        float_position = snapshot_.state.head<3>();
+    }
+    if (have_fixed_position) {
+        fixed_position = fixed_snapshot_.state.head<3>();
+    }
+    output << float_position.x() << ',' << float_position.y() << ','
+           << float_position.z() << ',' << fixed_position.x() << ','
+           << fixed_position.y() << ',' << fixed_position.z() << ','
+           << ((have_float_position && have_fixed_position)
+                   ? (fixed_position - float_position).norm()
+                   : std::numeric_limits<double>::quiet_NaN())
+           << '\n';
+}
+
+void DdFilterScaffold::appendStateDumpCsv(
+    const GNSSTime& time,
+    const std::vector<OSRCorrection>& osr_corrections,
+    bool fixed) const {
+    const auto& path = pppEnvOverrides().clas_dd_state_dump_path;
+    if (path.empty() || snapshot_.state.size() != snapshot_.layout.nx()) {
+        return;
+    }
+    const bool needs_header = !std::ifstream(path).good();
+    std::ofstream output(path, std::ios::app);
+    if (!output.is_open()) {
+        return;
+    }
+    output.precision(17);
+    if (needs_header) {
+        output
+            << "schema,week,tow,solution_state,state_kind,state_key,state_index,"
+            << "float_value,fixed_value,variance,process_noise\n";
+    }
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    auto append = [&](const char* kind,
+                      const std::string& key,
+                      int index,
+                      double process_noise) {
+        if (index < 0 || index >= snapshot_.state.size() ||
+            index >= snapshot_.covariance.rows()) {
+            return;
+        }
+        const double fixed_value =
+            fixed && index < fixed_snapshot_.state.size()
+                ? fixed_snapshot_.state(index)
+                : nan;
+        output << "clas_dd_filter_state.v1," << time.week << ',' << time.tow
+               << ',' << (fixed ? "fix" : "float") << ',' << kind << ','
+               << key << ',' << index << ',' << snapshot_.state(index) << ','
+               << fixed_value << ',' << snapshot_.covariance(index, index)
+               << ',' << process_noise << '\n';
+    };
+    static constexpr std::array<const char*, 3> kAxes{{"x", "y", "z"}};
+    for (int axis = 0; axis < 3; ++axis) {
+        append(
+            "position",
+            kAxes[static_cast<size_t>(axis)],
+            axis,
+            adaptive_position_process_noise_ecef_(axis, axis));
+    }
+    std::set<int> dumped_satellites;
+    for (const auto& osr : osr_corrections) {
+        const int satno = claslibSatelliteNumber(osr.satellite);
+        if (!dumped_satellites.insert(satno).second) {
+            continue;
+        }
+        const int index = snapshot_.layout.ionosphereIndex(satno);
+        // CLASLIB's oracle dump walks the raw epoch observations and emits an
+        // already-created ionosphere state even when corrmeas() rejects the
+        // current correction row.  Mirror that diagnostic surface: osr.valid
+        // controls estimator admission, not whether the live state is visible.
+        if (index < 0 || index >= snapshot_.state.size() ||
+            snapshot_.state(index) == 0.0) {
+            continue;
+        }
+        const auto q_it = ionosphere_process_noise_by_satno_.find(satno);
+        append(
+            "ionosphere",
+            osr.satellite.toString(),
+            index,
+            q_it == ionosphere_process_noise_by_satno_.end() ? 0.0 : q_it->second);
+    }
 }
 
 bool DdFilterScaffold::conditionFixedSnapshot(
@@ -1459,6 +1712,7 @@ bool DdFilterScaffold::conditionFixedSnapshot(
     const std::vector<DdRow>& rows,
     const ppp_shared::PPPConfig& config,
     const TropMappingFunction& trop_mapping_function,
+    const Vector3d& receiver_geometry_displacement,
     int reference_change_groups,
     double ar_pdop) {
     struct LambdaAttempt {
@@ -1557,7 +1811,8 @@ bool DdFilterScaffold::conditionFixedSnapshot(
         } else {
             attempt.ratio = 0.0;
         }
-        if (attempt.ratio < config.ar_ratio_threshold) {
+        const double required_ratio = claslibRatioThreshold(attempt.nb);
+        if (attempt.ratio < required_ratio) {
             attempt.reject_reason = "ratio";
             return attempt;
         }
@@ -1567,11 +1822,8 @@ bool DdFilterScaffold::conditionFixedSnapshot(
 
     std::vector<int> full_indices;
     full_indices.reserve(candidates.size());
-    std::map<int, std::vector<int>> indices_by_frequency;
     for (int i = 0; i < static_cast<int>(candidates.size()); ++i) {
         full_indices.push_back(i);
-        indices_by_frequency[candidates[static_cast<size_t>(i)].frequency_index]
-            .push_back(i);
     }
 
     LambdaAttempt best_attempt;
@@ -1595,15 +1847,84 @@ bool DdFilterScaffold::conditionFixedSnapshot(
     };
 
     remember(evaluate(full_indices));
-    if (!best_attempt.accepted && !indices_by_frequency.empty()) {
-        for (const auto& [_, indices] : indices_by_frequency) {
-            remember(evaluate(indices));
+
+    // CLASLIB PAR (ppprtk.c): after a failed full LAMBDA search, test
+    // excluding each elevation-sorted satellite on all frequencies.  If no
+    // trial fixes, retain the exclusion that produced the highest ratio and
+    // repeat, up to armaxdelsat=5.  This differs materially from trying one
+    // frequency family in isolation.
+    if (!best_attempt.accepted) {
+        std::map<SatelliteId, double> target_elevations;
+        for (const auto& candidate : candidates) {
+            auto [it, inserted] = target_elevations.emplace(
+                candidate.target_satellite, candidate.target_elevation_rad);
+            if (!inserted) {
+                it->second = std::max(it->second, candidate.target_elevation_rad);
+            }
+        }
+        std::vector<std::pair<SatelliteId, double>> ordered_targets(
+            target_elevations.begin(), target_elevations.end());
+        std::sort(
+            ordered_targets.begin(), ordered_targets.end(),
+            [](const auto& lhs, const auto& rhs) {
+                if (lhs.second != rhs.second) {
+                    return lhs.second < rhs.second;
+                }
+                return lhs.first < rhs.first;
+            });
+
+        std::set<SatelliteId> excluded_targets;
+        constexpr int kClaslibMaxDeletedSatellites = 5;
+        for (int deletion = 0;
+             deletion < kClaslibMaxDeletedSatellites && !best_attempt.accepted;
+             ++deletion) {
+            LambdaAttempt best_trial;
+            SatelliteId best_trial_satellite;
+            bool have_best_trial_satellite = false;
+            for (const auto& [trial_satellite, elevation] : ordered_targets) {
+                (void)elevation;
+                if (excluded_targets.count(trial_satellite) != 0) {
+                    continue;
+                }
+                std::vector<int> trial_indices;
+                trial_indices.reserve(candidates.size());
+                for (int index = 0; index < static_cast<int>(candidates.size()); ++index) {
+                    const SatelliteId target =
+                        candidates[static_cast<size_t>(index)].target_satellite;
+                    if (target == trial_satellite ||
+                        excluded_targets.count(target) != 0) {
+                        continue;
+                    }
+                    trial_indices.push_back(index);
+                }
+                auto trial = evaluate(trial_indices);
+                if (trial.accepted) {
+                    best_attempt = std::move(trial);
+                    break;
+                }
+                if (trial.attempted &&
+                    (!best_trial.attempted || trial.ratio > best_trial.ratio)) {
+                    best_trial = std::move(trial);
+                    best_trial_satellite = trial_satellite;
+                    have_best_trial_satellite = true;
+                }
+            }
+            if (best_attempt.accepted) {
+                break;
+            }
+            if (!have_best_trial_satellite) {
+                break;
+            }
+            excluded_targets.insert(best_trial_satellite);
+            remember(std::move(best_trial));
         }
     }
 
     last_diagnostics_.lambda_attempted = best_attempt.attempted;
     last_diagnostics_.lambda_ambiguities = best_attempt.nb;
     last_diagnostics_.lambda_ratio = best_attempt.ratio;
+    last_diagnostics_.lambda_required_ratio =
+        claslibRatioThreshold(best_attempt.nb);
     last_diagnostics_.lambda_reject_reason = best_attempt.reject_reason;
 
     if (!best_attempt.attempted) {
@@ -1647,10 +1968,6 @@ bool DdFilterScaffold::conditionFixedSnapshot(
     if (!std::isfinite(ar_pdop) || ar_pdop > kClaslibMaxPdopAr) {
         return reject_fixed("pdop");
     }
-    if (reference_change_groups > 0) {
-        return reject_fixed("ref_change");
-    }
-
     Eigen::LDLT<MatrixXd> ldlt(best_attempt.q_amb);
     if (ldlt.info() != Eigen::Success) {
         ++total_lambda_rejected_epochs_;
@@ -1709,7 +2026,8 @@ bool DdFilterScaffold::conditionFixedSnapshot(
         fixed_snapshot_.layout,
         fixed_snapshot_.state,
         config,
-        trop_mapping_function);
+        trop_mapping_function,
+        receiver_geometry_displacement);
     last_diagnostics_.fixed_postfit =
         validateDdPostfitResiduals(
             fixed_postfit_build,
@@ -1817,7 +2135,12 @@ PositionSolution DdFilterScaffold::processFloatUpdate(
         snapshot_.layout,
         snapshot_.state,
         config,
-        trop_mapping_function);
+        trop_mapping_function,
+        epoch_context.receiver_tide_displacement);
+    appendDdMeasurementRowsCsv(
+        pppEnvOverrides().clas_dd_row_dump_path,
+        obs.time,
+        measurement_build);
     last_diagnostics_.measurement_rows =
         static_cast<int>(measurement_build.rows.size());
     last_diagnostics_.phase_rows = measurement_build.phase_rows;
@@ -1854,8 +2177,10 @@ PositionSolution DdFilterScaffold::processFloatUpdate(
     }
 
     std::vector<DdRow> accepted_rows;
+    VectorXd accepted_state_delta = VectorXd::Zero(snapshot_.layout.nx());
     int accepted_reference_changes = 0;
     auto apply_update = [&](DdMeasurementBuildResult& build) {
+        const VectorXd prior_state = snapshot_.state;
         auto measurement_system = build.measurement_system;
         last_diagnostics_.filter_update = rtk_update::applyMeasurementUpdate(
             snapshot_.state,
@@ -1872,7 +2197,8 @@ PositionSolution DdFilterScaffold::processFloatUpdate(
             snapshot_.layout,
             snapshot_.state,
             config,
-            trop_mapping_function);
+            trop_mapping_function,
+            epoch_context.receiver_tide_displacement);
         if (!postfitRowsAccepted(postfit_build)) {
             return false;
         }
@@ -1884,6 +2210,7 @@ PositionSolution DdFilterScaffold::processFloatUpdate(
         last_diagnostics_.hold_pdop = computePdop(
             accepted_rows, kClaslibHoldElevationMaskRad);
         rememberReferenceGroups(build);
+        accepted_state_delta = snapshot_.state - prior_state;
         return true;
     };
 
@@ -1910,7 +2237,8 @@ PositionSolution DdFilterScaffold::processFloatUpdate(
             snapshot_.layout,
             snapshot_.state,
             config,
-            trop_mapping_function);
+            trop_mapping_function,
+            epoch_context.receiver_tide_displacement);
         last_diagnostics_.measurement_rows =
             static_cast<int>(retry_build.rows.size());
         last_diagnostics_.phase_rows = retry_build.phase_rows;
@@ -1933,6 +2261,14 @@ PositionSolution DdFilterScaffold::processFloatUpdate(
         }
     }
 
+    if (config.clas_mrtklib_float_parity && accepted_state_delta.size() >= 3) {
+        const Vector3d position_delta = accepted_state_delta.head<3>();
+        adaptive_position_process_noise_ecef_ =
+            kClaslibForgetPosition * adaptive_position_process_noise_ecef_ +
+            (1.0 - kClaslibForgetPosition) *
+                kClaslibAfGainPosition * kClaslibAfGainPosition *
+                (position_delta * position_delta.transpose());
+    }
     if (snapshot_.layout.options.ionosphere_mode == IonosphereMode::EstimateAdaptive) {
         for (const auto& osr : osr_corrections) {
             if (!osr.valid) {
@@ -1945,11 +2281,15 @@ PositionSolution DdFilterScaffold::processFloatUpdate(
                 continue;
             }
             const double old_q = ionosphere_process_noise_by_satno_[satno];
+            const double state_delta =
+                iono_index < accepted_state_delta.size()
+                    ? accepted_state_delta(iono_index)
+                    : 0.0;
             ionosphere_process_noise_by_satno_[satno] =
                 kClaslibForgetIono * old_q +
                 (1.0 - kClaslibForgetIono) *
                     kClaslibAfGainIono * kClaslibAfGainIono *
-                    snapshot_.covariance(iono_index, iono_index);
+                    state_delta * state_delta;
         }
     }
 
@@ -1966,6 +2306,7 @@ PositionSolution DdFilterScaffold::processFloatUpdate(
         accepted_rows,
         config,
         trop_mapping_function,
+        epoch_context.receiver_tide_displacement,
         accepted_reference_changes,
         last_diagnostics_.ar_pdop);
     if (fixed) {
@@ -1983,6 +2324,7 @@ PositionSolution DdFilterScaffold::processFloatUpdate(
             applyHoldAmbiguity(accepted_rows);
         }
     }
+    appendStateDumpCsv(obs.time, osr_corrections, fixed);
     PositionSolution solution = publishSolution(
         native_float_solution,
         measurement_diagnostics,
@@ -2067,6 +2409,7 @@ PositionSolution DdFilterScaffold::processFloatPassthrough(
 void DdFilterScaffold::reset() {
     snapshot_ = StateSnapshot{};
     fixed_snapshot_ = StateSnapshot{};
+    adaptive_position_process_noise_ecef_.setZero();
     ionosphere_outage_by_satno_.clear();
     ionosphere_process_noise_by_satno_.clear();
     ambiguity_outage_by_satno_freq_.clear();

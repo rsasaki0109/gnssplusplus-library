@@ -4,6 +4,7 @@
 #include <libgnss++/algorithms/madoca_core.hpp>
 #include <libgnss++/algorithms/ppp_ar.hpp>
 #include <libgnss++/algorithms/ppp_bias_identity.hpp>
+#include <libgnss++/algorithms/ppp_env_overrides.hpp>
 #include <libgnss++/algorithms/ppp_multifrequency.hpp>
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/models/troposphere.hpp>
@@ -1440,6 +1441,168 @@ TEST(PPPTest, SSRProductsLoadCsvAndInterpolateMidpoint) {
     std::filesystem::remove(ssr_path);
 }
 
+TEST(PPPTest, SSRProductsQzssParityWithdrawsOrbitMissingFromNewConstellationBank) {
+    SSRProducts products;
+    const SatelliteId j01(GNSSSystem::QZSS, 1);
+    const SatelliteId j02(GNSSSystem::QZSS, 2);
+    const GNSSTime old_bank_time(2068, 230580.0);
+    const GNSSTime held_clock_time(2068, 230605.0);
+    const GNSSTime new_bank_time(2068, 230609.0);
+
+    SSROrbitClockCorrection j01_old_orbit;
+    j01_old_orbit.satellite = j01;
+    j01_old_orbit.time = old_bank_time;
+    j01_old_orbit.orbit_reference_time = old_bank_time;
+    j01_old_orbit.orbit_correction_ecef = Vector3d(1.0, 2.0, 3.0);
+    j01_old_orbit.orbit_valid = true;
+    products.addCorrection(j01_old_orbit);
+
+    // J01 still has a recent clock row, but no row at the query boundary; the
+    // new constellation orbit bank (represented by J02) intentionally omits
+    // J01. This exercises the non-exact/sample-hold path used by the fixture.
+    SSROrbitClockCorrection j01_new_clock;
+    j01_new_clock.satellite = j01;
+    j01_new_clock.time = held_clock_time;
+    j01_new_clock.clock_reference_time = held_clock_time;
+    j01_new_clock.clock_correction_m = 0.25;
+    j01_new_clock.clock_valid = true;
+    j01_new_clock.mrtklib_base_clock_correction_m = 0.25;
+    j01_new_clock.mrtklib_base_clock_reference_time = held_clock_time;
+    j01_new_clock.mrtklib_base_clock_valid = true;
+    products.addCorrection(j01_new_clock);
+
+    SSROrbitClockCorrection j02_new_orbit;
+    j02_new_orbit.satellite = j02;
+    j02_new_orbit.time = new_bank_time;
+    j02_new_orbit.orbit_reference_time = new_bank_time;
+    j02_new_orbit.orbit_correction_ecef = Vector3d(4.0, 5.0, 6.0);
+    j02_new_orbit.orbit_valid = true;
+    products.addCorrection(j02_new_orbit);
+
+    Vector3d orbit_correction = Vector3d::Zero();
+    double clock_correction_m = 0.0;
+    SSRCorrectionStatus status;
+    const bool available = products.interpolateCorrection(
+        j01, new_bank_time, orbit_correction, clock_correction_m,
+        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+        0, nullptr, nullptr, &status, false, nullptr, nullptr,
+        SSRClockSelectionPolicy::MrtklibLiteralBaseHold);
+    EXPECT_TRUE(status.clock_valid);
+    EXPECT_DOUBLE_EQ(clock_correction_m, 0.25);
+    if (pppEnvOverrides().clas_qzss_s_prn_fix) {
+        EXPECT_FALSE(available);
+        EXPECT_FALSE(status.orbit_valid);
+        EXPECT_TRUE(status.orbit_withdrawn);
+        EXPECT_TRUE(orbit_correction.isZero());
+    } else {
+        EXPECT_TRUE(available);
+        EXPECT_TRUE(status.orbit_valid);
+        EXPECT_FALSE(status.orbit_withdrawn);
+        EXPECT_EQ(orbit_correction, j01_old_orbit.orbit_correction_ecef);
+    }
+}
+
+TEST(PPPTest, SSRProductsCausalHoldScansCompleteSameEpochVariantGroup) {
+    SSRProducts products;
+    const SatelliteId j01(GNSSSystem::QZSS, 1);
+    const GNSSTime old_time(2068, 230430.0);
+    const GNSSTime current_time(2068, 230435.0);
+
+    SSROrbitClockCorrection old_orbit;
+    old_orbit.satellite = j01;
+    old_orbit.time = old_time;
+    old_orbit.orbit_reference_time = old_time;
+    old_orbit.orbit_correction_ecef = Vector3d(1.0, 2.0, 3.0);
+    old_orbit.orbit_valid = true;
+    products.addCorrection(old_orbit);
+
+    SSROrbitClockCorrection current_orbit_clock;
+    current_orbit_clock.satellite = j01;
+    current_orbit_clock.time = current_time;
+    current_orbit_clock.orbit_reference_time = current_time;
+    current_orbit_clock.orbit_correction_ecef = Vector3d(4.0, 5.0, 6.0);
+    current_orbit_clock.orbit_valid = true;
+    current_orbit_clock.clock_correction_m = 0.25;
+    current_orbit_clock.clock_valid = true;
+    products.addCorrection(current_orbit_clock);
+
+    // Insert a later variant at the same TOW without orbit/clock. The causal
+    // selector must inspect the entire 230435 group, not jump to 230430 when
+    // starting its backward scan from this final entry.
+    SSROrbitClockCorrection bias_variant;
+    bias_variant.satellite = j01;
+    bias_variant.time = current_time;
+    bias_variant.bias_network_id = 1;
+    bias_variant.code_bias_m[2] = 0.5;
+    bias_variant.code_bias_valid = true;
+    products.addCorrection(bias_variant);
+
+    Vector3d orbit_correction = Vector3d::Zero();
+    double clock_correction_m = 0.0;
+    SSRCorrectionStatus status;
+    ASSERT_TRUE(products.interpolateCorrection(
+        j01, GNSSTime(2068, 230436.0), orbit_correction, clock_correction_m,
+        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+        0, nullptr, nullptr, &status, false, nullptr, nullptr,
+        SSRClockSelectionPolicy::MrtklibLiteralBaseHold));
+    EXPECT_EQ(orbit_correction, current_orbit_clock.orbit_correction_ecef);
+    EXPECT_DOUBLE_EQ(clock_correction_m, current_orbit_clock.clock_correction_m);
+    EXPECT_TRUE(status.orbit_valid);
+    EXPECT_FALSE(status.orbit_withdrawn);
+    EXPECT_EQ(status.orbit_reference_time, current_time);
+}
+
+TEST(PPPTest, SSRProductsGalileoLiteralClockHonorsLatestBankWithdrawal) {
+    const auto ssr_path = tempFilePath("libgnss_ppp_gal_clock_withdrawal.csv");
+    std::filesystem::remove(ssr_path);
+
+    const std::string ssr_text =
+        "# week,tow,sat,dx,dy,dz,dclock_m[,atmos_network_id=<n>]\n"
+        "2068,233460.0,E30,1.0,2.0,3.0,0.0\n"
+        "2068,233465.0,E30,0.0,0.0,0.0,0.2864,atmos_network_id=2\n"
+        "2068,233490.0,E30,4.0,5.0,6.0,0.0\n"
+        "2068,233490.0,E30,0.0,0.0,0.0,0.3088,atmos_network_id=1\n"
+        "2068,233490.0,E30,0.0,0.0,0.0,nan,atmos_network_id=2\n";
+    writeTextFile(ssr_path, ssr_text);
+
+    SSRProducts products;
+    ASSERT_TRUE(products.loadCSVFile(ssr_path.string()));
+    const SatelliteId e30(GNSSSystem::Galileo, 30);
+    const auto entries_it = products.orbit_clock_corrections.find(e30);
+    ASSERT_NE(entries_it, products.orbit_clock_corrections.end());
+    ASSERT_TRUE(std::any_of(
+        entries_it->second.begin(), entries_it->second.end(),
+        [](const SSROrbitClockCorrection& entry) {
+            return entry.atmos_network_id == 2 && entry.clock_withdrawn;
+        }));
+
+    Vector3d orbit_correction = Vector3d::Zero();
+    double clock_correction_m = 0.0;
+    SSRCorrectionStatus status;
+    EXPECT_FALSE(products.interpolateCorrection(
+        e30, GNSSTime(2068, 233490.0), orbit_correction, clock_correction_m,
+        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+        2, nullptr, nullptr, &status, false, nullptr, nullptr,
+        SSRClockSelectionPolicy::MrtklibLiteralBaseHold));
+    EXPECT_FALSE(status.clock_valid);
+    EXPECT_TRUE(status.clock_withdrawn);
+    EXPECT_DOUBLE_EQ(clock_correction_m, 0.0);
+
+    // Gate-off/ordinary interpolation preserves the historical finite clock;
+    // the withdrawal is a typed CLASLIB literal-policy behavior.
+    status = SSRCorrectionStatus{};
+    ASSERT_TRUE(products.interpolateCorrection(
+        e30, GNSSTime(2068, 233490.0), orbit_correction, clock_correction_m,
+        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+        1, nullptr, nullptr, &status, false, nullptr, nullptr,
+        SSRClockSelectionPolicy::MergedInterpolate));
+    EXPECT_TRUE(status.clock_valid);
+    EXPECT_FALSE(status.clock_withdrawn);
+    EXPECT_DOUBLE_EQ(clock_correction_m, 0.3088);
+
+    std::filesystem::remove(ssr_path);
+}
+
 TEST(PPPTest, SSRProductsLoadCsvParsesOptionalUraCodeBiasPhaseBiasAndAtmosTokens) {
     const auto ssr_path = tempFilePath("libgnss_ppp_ssr_optional_tokens_test.csv");
     std::filesystem::remove(ssr_path);
@@ -1703,6 +1866,84 @@ TEST(PPPTest, SSRProductsHoldsSelectedBiasNetworkPastNewerForeignBank) {
         EXPECT_DOUBLE_EQ(phase_bias_m.at(2), -1.837);
         EXPECT_DOUBLE_EQ(phase_bias_reference_time.tow, 177000.0);
     }
+}
+
+TEST(PPPTest, SSRProductsRepicksClasPhaseBiasByServiceNetworkWithReceptionLag) {
+    SSRProducts products;
+    const SatelliteId satellite(GNSSSystem::GPS, 25);
+    const auto add_phase_bias = [&](double tow, int network_id, double bias_m) {
+        SSROrbitClockCorrection correction;
+        correction.satellite = satellite;
+        correction.time = GNSSTime(2068, tow);
+        correction.phase_bias_valid = true;
+        correction.phase_bias_m[9] = bias_m;
+        correction.bias_network_id = network_id;
+        products.addCorrection(correction);
+    };
+    add_phase_bias(230670.0, 7, 11.208);
+    add_phase_bias(230695.0, 1, -6.365);
+
+    std::map<uint8_t, double> phase_bias_m;
+    GNSSTime reference_time;
+    ASSERT_TRUE(products.heldClasPhaseBiasForServiceNetwork(
+        satellite, GNSSTime(2068, 230695.0), 7, &phase_bias_m,
+        nullptr, &reference_time, true));
+    ASSERT_EQ(phase_bias_m.size(), 1U);
+    EXPECT_DOUBLE_EQ(phase_bias_m.at(9), 11.208);
+    EXPECT_DOUBLE_EQ(reference_time.tow, 230670.0);
+}
+
+TEST(PPPTest, SSRProductsExpiresClasPhaseBiasAtNextNetworkBank) {
+    SSRProducts products;
+    const SatelliteId satellite(GNSSSystem::GPS, 26);
+    SSROrbitClockCorrection correction;
+    correction.satellite = satellite;
+    correction.time = GNSSTime(2068, 230430.0);
+    correction.phase_bias_valid = true;
+    correction.phase_bias_m[9] = 6.063;
+    correction.bias_network_id = 7;
+    products.addCorrection(correction);
+
+    std::map<uint8_t, double> phase_bias_m;
+    EXPECT_TRUE(products.heldClasPhaseBiasForServiceNetwork(
+        satellite, GNSSTime(2068, 230474.0), 7, &phase_bias_m,
+        nullptr, nullptr, true, 30.0));
+    EXPECT_FALSE(products.heldClasPhaseBiasForServiceNetwork(
+        satellite, GNSSTime(2068, 230475.0), 7, &phase_bias_m,
+        nullptr, nullptr, true, 30.0));
+}
+
+TEST(PPPTest, SSRProductsHoldsCodeBiasAfterFinalClockOnlyRow) {
+    SSRProducts products;
+    const SatelliteId satellite(GNSSSystem::GPS, 32);
+
+    SSROrbitClockCorrection bias;
+    bias.satellite = satellite;
+    bias.time = GNSSTime(2068, 233985.0);
+    bias.code_bias_valid = true;
+    bias.code_bias_m[9] = 1.44;
+    products.addCorrection(bias);
+
+    SSROrbitClockCorrection clock;
+    clock.satellite = satellite;
+    clock.time = GNSSTime(2068, 233995.0);
+    clock.clock_valid = true;
+    clock.clock_correction_m = 0.25;
+    products.addCorrection(clock);
+
+    Vector3d orbit_correction = Vector3d::Zero();
+    double clock_correction_m = 0.0;
+    std::map<uint8_t, double> code_bias_m;
+    SSRCorrectionStatus status;
+    ASSERT_TRUE(products.interpolateCorrection(
+        satellite, GNSSTime(2068, 233999.0), orbit_correction,
+        clock_correction_m, nullptr, &code_bias_m, nullptr, nullptr,
+        nullptr, nullptr, nullptr, 0, nullptr, nullptr, &status, true,
+        nullptr, nullptr, SSRClockSelectionPolicy::MergedInterpolate));
+    ASSERT_EQ(code_bias_m.size(), 1U);
+    EXPECT_DOUBLE_EQ(code_bias_m.at(9), 1.44);
+    EXPECT_TRUE(status.code_bias_valid);
+    EXPECT_DOUBLE_EQ(status.code_bias_reference_time.tow, 233985.0);
 }
 
 TEST(PPPTest, ProcessorLoadsRtcmSsrCorrectionsFromFile) {

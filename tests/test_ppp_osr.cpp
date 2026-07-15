@@ -420,6 +420,30 @@ TEST(PPPOSRTest, ExactOsrFrequencyLookupUsesStoredRinexIdentity) {
     EXPECT_FALSE(lookup.family_fallback);
 }
 
+TEST(PPPOSRTest, ExactOsrFrequencyLookupUsesPreservedTrackingCodeOutsideNormalVector) {
+    const SatelliteId sat(GNSSSystem::GPS, 25);
+    ObservationData obs(GNSSTime(2068, 230435.0));
+    obs.addObservation(makeGpsL2Observation(sat, "C2X", "L2X", 100.0, 10.0));
+    const Observation l2w =
+        makeGpsL2Observation(sat, "C2W", "L2W", 200.0, 20.0);
+    obs.addRinexTrackingObservation("2W", l2w);
+
+    OSRCorrection osr;
+    osr.satellite = sat;
+    osr.num_frequencies = 1;
+    osr.signals[0] = SignalType::GPS_L2C;
+    osr.pseudorange_rinex_codes[0] = "C2W";
+    osr.carrier_rinex_codes[0] = "L2W";
+    osr.bias_exact_identity[0] = true;
+
+    const auto lookup = findOsrFrequencyObservationWithProvenance(obs, osr, 0);
+    ASSERT_EQ(lookup.observation, obs.getRinexTrackingObservation(sat, "2W"));
+    EXPECT_TRUE(lookup.exact_identity_requested);
+    EXPECT_TRUE(lookup.exact_identity_matched);
+    EXPECT_FALSE(lookup.family_fallback);
+    EXPECT_DOUBLE_EQ(lookup.observation->pseudorange, 200.0);
+}
+
 TEST(PPPOSRTest, ExactOsrFrequencyLookupSkipsInvalidStoredRinexIdentity) {
     const SatelliteId sat(GNSSSystem::GPS, 14);
     ObservationData obs(GNSSTime(2068, 230425.0));

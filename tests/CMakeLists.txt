@@ -183,6 +183,22 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_clas_zd_component_diff.py
     )
     add_test(
+        NAME python_clas_dd_measurement_diff_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_clas_dd_measurement_diff.py
+    )
+    add_test(
+        NAME python_clas_filter_state_diff_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_clas_filter_state_diff.py
+    )
+    add_test(
+        NAME python_claslib_parity_scorecard_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_claslib_parity_scorecard.py
+    )
+    add_test(
+        NAME python_qzss_l6_bias_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_qzss_l6_bias.py
+    )
+    add_test(
         NAME python_clas_zd_component_summary_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_clas_zd_component_summary.py
     )
@@ -338,13 +354,16 @@ if(GTest_FOUND)
         python_artifact_manifest_contract_validator_tests
         python_artifact_manifest_ux_tests
         python_clas_a4b_native_selfdiff_tests
+        python_clas_filter_state_diff_tests
         python_clas_zd_component_diff_tests
         python_clas_zd_component_summary_tests
+        python_claslib_parity_scorecard_tests
         python_claslib_osr_zd_export_tests
         python_claslib_zd_component_export_tests
         python_cli_json_contract_validator_tests
         python_cli_ux_tests
         python_optional_clas_zd_component_diff_tests
+        python_qzss_l6_bias_tests
         python_madoca_materialization_diff_tests
         python_madoca_materialization_selfdiff_tests
         python_madoca_materialization_summary_tests

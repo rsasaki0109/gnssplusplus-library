@@ -133,6 +133,70 @@ native PRC/CPC components match CLASLIB at the ZD level.
 
 ## Lead 3 - Galileo ZD Admission
 
+### P3.1 closure update (2026-07-14)
+
+The canonical CLASLIB exporter now includes Galileo E1X (RTKLIB code 12) and
+E5a-X (code 26), so the full 3580-epoch A4b surface is measured directly rather
+than inferred from DD rows.  The first native-only E30 boundary at TOW 233490
+was traced to CLASLIB's explicit `no ssr clock correction`: the expanded stream
+contains a finite clock followed by a same-epoch `nan` cell from a newer bank.
+Native CSV ingest previously discarded that invalid cell and held the older
+clock.
+
+`SSROrbitClockCorrection::clock_withdrawn` and
+`SSRCorrectionStatus::clock_withdrawn` now preserve that event.  Galileo uses it
+only under the typed CLAS ZD/literal parity paths; ordinary merged interpolation
+keeps its historical behavior.  The authoritative artifacts are:
+
+- `output/clas_p3_galileo_clock_withdrawal_final_3580/galileo_code_diff.json`
+- `output/clas_p3_galileo_clock_withdrawal_final_3580/galileo_phase_diff.json`
+
+Both code and phase now have 15,640 oracle rows, 15,640 native rows, 15,640
+common rows, and zero unmatched rows.  This closes the Galileo ZD admission
+surface.
+
+The subsequent P3.3 IODE audit found that CLASLIB `eph2pos()` uses Galileo's
+`MU_GAL=3.986004418e14`, while native continuity compensation left the existing
+RTKLIB-compatible Galileo-mu switch disabled and therefore introduced false
+0.2--0.4 m ephemeris discontinuities.  Recomputing only the old/current IODE
+continuity models with Galileo mu preserves shared/MADOCA propagation while
+reducing the full-run metrics as follows:
+
+| Metric | Before | After |
+| --- | ---: | ---: |
+| PRC RMS | 22.289 mm | 2.300 mm |
+| CPC RMS | 22.386 mm | 1.648 mm |
+| IODE geometry RMS | 22.334 mm | 0.672 mm |
+| IODE geometry max | 391.117 mm | 2.371 mm |
+
+The authoritative joint GPS/QZSS/Galileo post-fix artifacts are under
+`output/clas_p3_zd_profile_mu_final_3580/`; the component-only IODE figures are
+retained under `output/clas_p3_galileo_mu_final_3580/`. Galileo has 15,640
+common code and phase rows, zero unmatched rows, and clears the 10 mm ZD RMS
+gate, so P3 numeric closure is complete. Sparse 40 mm code-bias and 24--26 mm
+SIS-continuity bank boundaries remain diagnostic leads for P4/P5. A trial that
+treated the service-network id as a direct code-bias bank id was rejected
+(code-bias RMS regressed from 1.677 mm to 8.741 mm) and is not part of the
+implementation.
+
+### P4 DD measurement contract update (2026-07-14)
+
+The native DD scaffold and an instrumented CLASLIB work copy now emit the same
+`clas_dd_measurement.v3` CSV contract. Instrumentation is applied only to the
+runner checkout or to a copied user source, never to the configured source
+tree. `scripts/analysis/clas_dd_measurement_diff.py` keys rows by week/TOW,
+stage, system group, frequency, phase/code, reference satellite, and target
+satellite; duplicates and any one-sided rows fail the gate.
+
+On the five-epoch contract probe, the first comparison isolated Galileo E5a as
+CLASLIB DD slot 2 versus native slot 1. Explicit Galileo DD frequency mapping
+closes the row surface at 160/160, with 80 phase and 80 code rows and zero
+unmatched rows. The current prefit-residual baseline remains 0.624 m phase RMS
+and 1.316 m code RMS, so P4 remains open. Evidence is under
+`output/clas_dd_contract_v2_probe_5/`; per-system/frequency metrics identify the
+next state/linearization investigation without conflating this baseline with a
+passing parity claim.
+
 A4#2 admits the native Galileo row subset visible at 230425:
 
 ```
@@ -323,10 +387,12 @@ and `rms=0.01265 m`.  The A4b L6 expansion also materializes delayed base-bank
 refresh rows for selected subtype-6 network replacements, so the preferred
 network lookup can switch at the same half-window boundary.  This moves the
 same G14/C2W slice to 16/280 `code_bias_m` mismatches with
-`mean_abs=0.00114 m` and `rms=0.00478 m`; aggregate `PRC` moves to
-`mean_abs=0.00879 m` and `rms=0.01481 m`.  The remaining code-bias rows are
-5-second boundary epochs, so treat the next step as lifecycle/materialization
-alignment rather than residual variance or AR tuning.
+`mean_abs=0.00114 m` and `rms=0.00478 m`; aggregate `PRC` moved to
+`mean_abs=0.00879 m` and `rms=0.01481 m`.  On current `develop`, public-data
+A4b regeneration closes the remaining 5-second boundary rows: all 280 common
+G14/C2W rows have `code_bias_m` delta `0.0 m`.  CI now hard-gates that
+component independently while leaving the remaining ionosphere and aggregate
+PRC differences diagnostic.
 The GitHub step summary highlights raw STEC, L1 ionosphere, scaled ionosphere,
 code-bias, trop, L1-from-STEC, L1-STEC closure, scaled-ionosphere closure, PRC
 closure, and atmosphere-reference components, keeping the primary review

@@ -29,6 +29,7 @@ struct OSRCorrection {
     double CPC[OSR_MAX_FREQ] = {};
     double phase_compensation_m[OSR_MAX_FREQ] = {};
     double network_compensation_m = 0.0;
+    double iode_geometry_compensation_m = 0.0;
     double orbit_projection_m = 0.0;
     double clock_correction_m = 0.0;
     double base_clock_correction_m = 0.0;
@@ -55,7 +56,16 @@ struct OSRCorrection {
     bool phase_bias_fallback[OSR_MAX_FREQ] = {};
     double wavelengths[OSR_MAX_FREQ] = {};
     double frequencies[OSR_MAX_FREQ] = {};
+    // Number of frequency slots consumed by the estimator.  CLASLIB can
+    // expose an additional RTKLIB nf=3 slot in its OSR diagnostic surface
+    // even when clas_osr_zdres() leaves that slot at zero and the selected
+    // L1/L2 pair is the only pair admitted to the filter.
     int num_frequencies = 0;
+    int num_output_frequencies = 0;
+    // Reproduce CLASLIB's legacy receiver-ANTEX frequency-slot aliasing for
+    // QZSS.  This is carried explicitly so ordinary QZSS/non-CLAS antenna
+    // lookup remains signal-specific.
+    bool claslib_qzss_receiver_antenna_slots = false;
 
     bool valid = false;
     bool has_iono = false;
@@ -97,7 +107,11 @@ struct CLASDispersionCompensationInfo {
     std::array<double, 2> base_phase_m{{0.0, 0.0}};
     std::array<bool, 2> has_base{{false, false}};
     std::array<bool, 2> slip{{false, false}};
-    bool mrtklib_qzss_suppressed = false;
+    // Raw carrier pairs observed before the first publishable OSR. CLASLIB
+    // warms compensatedisp() during that decoder/filter lead-in, so parity
+    // needs the same first usable phase datum when a bank becomes visible.
+    std::vector<GNSSTime> warmup_times;
+    std::vector<std::array<double, 2>> warmup_phase_m;
 };
 
 struct CLASSisContinuityInfo {
@@ -121,10 +135,15 @@ struct CLASSisContinuityInfo {
     GNSSTime boundary_prev_time;
     double boundary_prev_sis_m = 0.0;
     bool has_boundary_prev_sis = false;
+    int boundary_prev_iode = -1;
+    bool has_boundary_prev_iode = false;
 };
 
 struct CLASEpochContext {
     Vector3d receiver_position = Vector3d::Zero();
+    // CLASLIB zdres() applies solid/pole/ocean displacement to the receiver
+    // used for geometry without changing the filter position state.
+    Vector3d receiver_tide_displacement = Vector3d::Zero();
     double receiver_clock_m = 0.0;
     double trop_zenith_m = 0.0;
     std::map<std::string, std::string> epoch_atmos_tokens;

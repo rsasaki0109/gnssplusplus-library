@@ -88,6 +88,7 @@ struct DdRow {
     bool is_phase = false;
     int frequency_index = 0;
     int system_group = -1;
+    double raw_dd_m = 0.0;
     double residual_m = 0.0;
     double reference_elevation_rad = 0.0;
     double target_elevation_rad = 0.0;
@@ -112,6 +113,7 @@ struct DdMeasurementBuildResult {
     int phase_rows = 0;
     int code_rows = 0;
     int reference_groups = 0;
+    Vector3d linearization_position_ecef = Vector3d::Zero();
 };
 
 DdMeasurementBuildResult buildDdMeasurementSystem(
@@ -120,7 +122,14 @@ DdMeasurementBuildResult buildDdMeasurementSystem(
     const StateLayout& layout,
     const VectorXd& state,
     const ppp_shared::PPPConfig& config,
-    const TropMappingFunction& trop_mapping_function);
+    const TropMappingFunction& trop_mapping_function,
+    const Vector3d& receiver_geometry_displacement = Vector3d::Zero());
+
+void appendDdMeasurementRowsCsv(
+    const std::string& path,
+    const GNSSTime& time,
+    const DdMeasurementBuildResult& build,
+    const std::string& stage = "prefit");
 
 struct DdPostfitValidationResult {
     bool accepted = false;
@@ -248,6 +257,7 @@ private:
         const std::vector<DdRow>& rows,
         const ppp_shared::PPPConfig& config,
         const TropMappingFunction& trop_mapping_function,
+        const Vector3d& receiver_geometry_displacement,
         int reference_change_groups,
         double ar_pdop);
     int countReferenceChanges(const DdMeasurementBuildResult& build) const;
@@ -256,9 +266,14 @@ private:
     double computePdop(const std::vector<DdRow>& rows, double min_elevation_rad) const;
     bool applyHoldAmbiguity(const std::vector<DdRow>& rows);
     void appendDiagnosticsCsv(const GNSSTime& time, bool fixed) const;
+    void appendStateDumpCsv(
+        const GNSSTime& time,
+        const std::vector<OSRCorrection>& osr_corrections,
+        bool fixed) const;
 
     StateSnapshot snapshot_;
     StateSnapshot fixed_snapshot_;
+    Matrix3d adaptive_position_process_noise_ecef_ = Matrix3d::Zero();
     std::map<int, int> ionosphere_outage_by_satno_;
     std::map<int, double> ionosphere_process_noise_by_satno_;
     std::map<std::pair<int, int>, int> ambiguity_outage_by_satno_freq_;

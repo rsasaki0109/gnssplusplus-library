@@ -400,6 +400,25 @@ jobs:
         export GNSSPP_CLAS_ZD_COMPONENTS="${GNSSPP_CLAS_ZD_COMPONENTS:-prc_m,prc_component_sum_m,prc_closure_residual_m,iono_l1_m,iono_l1_from_stec_m,iono_l1_stec_closure_residual_m,iono_scaled_m,iono_scale,iono_scaled_closure_residual_m,trop_correction_m,code_bias_m,receiver_antenna_m,relativity_m,atmos_ref_tow,clock_ref_tow,atmos_clock_gap_s}"
         bash scripts/ci/run_optional_clas_zd_component_diff.sh
 
+    - name: Gate CLAS GPS L2W code-bias boundary lifecycle
+      run: |
+        python3 scripts/analysis/clas_zd_component_diff.py \
+          output/claslib_osr_zd_export/claslib_osr.normalized.csv \
+          output/clas_a4b_native_selfdiff/native_code_dump.csv \
+          --base-label claslib \
+          --candidate-label native \
+          --stage post \
+          --row-type code \
+          --sat G14 \
+          --freq 1 \
+          --rinex-code C2W \
+          --duplicate-policy mean \
+          --component code_bias_m \
+          --component-threshold-m 0 \
+          --fail-on-threshold \
+          --json-out output/clas_zd_code_bias_boundary_gate.json \
+          --details-csv output/clas_zd_code_bias_boundary_gate.csv
+
     - name: Upload CLAS ZD component diff artifacts
       if: always() && hashFiles('output/ci_optional_clas_zd_component_summary.json') != ''
       uses: actions/upload-artifact@v4
@@ -412,6 +431,8 @@ jobs:
           output/clas_zd_component_diff.csv
           output/clas_zd_component_diff_claslib_snapshot_summary.json
           output/clas_zd_component_diff_native_snapshot_summary.json
+          output/clas_zd_code_bias_boundary_gate.json
+          output/clas_zd_code_bias_boundary_gate.csv
         if-no-files-found: error
 
     - name: Optional MADOCA materialization diff
