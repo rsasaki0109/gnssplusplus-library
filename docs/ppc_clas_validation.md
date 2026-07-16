@@ -10,11 +10,17 @@ false fixes: all 118 fixed epochs are within 0.305 m horizontally, aggregate FIX
 RMS2D is 0.114 m, and the 30-epoch TTFF is 301.2 seconds.  The remaining work is
 full-window, six-run validation and FLOAT trajectory recovery/performance.
 
-## Article-compatible scoring
+## Historical 480-second probe (not final sign-off)
+
+The values below predate the city-specific vehicle-to-antenna lever-arm
+correction.  They are retained only to document the earlier false-FIX
+diagnosis and are not used by the full six-run acceptance result.  The final
+benchmark transforms every PPC attitude sample to the antenna phase center.
 
 - Dataset: PPC Tokyo run2, first 2400 receiver epochs (480 seconds at 5 Hz)
 - Solver: kinematic CLAS OSR, dynamics model enabled, parity environment gates
-- Reference: published `reference.csv` coordinates, no lever-arm transform
+- Historical reference: published `reference.csv` coordinates without a
+  lever-arm transform
 - Warm-up: discard the first 60 matched epochs
 - FIX: LibGNSS++ status 6 (article NMEA quality 4 equivalent)
 - TTFF: start of the first run of at least 30 consecutive FIX epochs

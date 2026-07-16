@@ -1,0 +1,225 @@
+{
+  "scoring": {
+    "scope": "complete available interval of all six PPC runs",
+    "dataset_revision": "ca7337d520212d7c7a082d8ab22108276cba3c1e",
+    "solver_profile": [
+      "--kinematic",
+      "--use-dynamics-model",
+      "--no-ionosphere-free",
+      "--estimate-ionosphere",
+      "--estimate-troposphere",
+      "--enable-ar",
+      "--ar-method wlnl",
+      "--ar-ratio-threshold 3.0",
+      "--clas-osr",
+      "--emit-epoch-time"
+    ],
+    "parity_environment": {
+      "GNSS_PPP_CLAS_BASE_CLOCK_PARITY": "1",
+      "GNSS_PPP_CLAS_SIS_BOUNDARY": "1",
+      "GNSS_PPP_CLAS_TROP_GRID_PARITY": "1",
+      "GNSS_PPP_CLAS_QZSS_S_PRN_FIX": "1"
+    },
+    "reference": "PPC vehicle reference transformed to the antenna phase center",
+    "lever_arm_body_m": {
+      "tokyo": [
+        0.31,
+        0.0,
+        -0.55
+      ],
+      "nagoya": [
+        0.593,
+        -0.67,
+        -1.216
+      ]
+    },
+    "warmup": "first 60 matched epochs discarded per run",
+    "match_tolerance_s": 0.25,
+    "fixed_status": 6,
+    "ttff": "first run of 30 consecutive FIX epochs",
+    "comparison_source": "https://zenn.dev/hatognss/articles/7a54dd82606faf",
+    "comparison_caveat": "MRTKLIB article values use the published reference without this lever-arm transform"
+  },
+  "runs": {
+    "tokyo_run1": {
+      "libgnssplusplus": {
+        "duration_s": 2390.0,
+        "reference_duration_s": 2390.0,
+        "interval_coverage_pct": 100.0,
+        "epoch_coverage_pct": 93.812877,
+        "observation_epochs": 11928,
+        "solution_epochs": 11190,
+        "matched_epochs": 11190,
+        "scored_epochs": 11130,
+        "fixed_epochs": 1207,
+        "fix_pct": 10.844564,
+        "rms2d_fixed_m": 1.329426,
+        "p68_fixed_m": 0.328777,
+        "p95_fixed_m": 3.117679,
+        "max_fixed_m": 5.712371,
+        "fixed_over_1m": 184,
+        "rms2d_all_m": 614.814477,
+        "p95_all_m": 73.729891,
+        "ttff_30_s": 0.0
+      },
+      "mrtklib_v0_4_2_article": {
+        "fix_pct": 4.9,
+        "rms2d_m": 0.747,
+        "sigma2d_m": 0.244,
+        "ttff_s": 15.0
+      }
+    },
+    "tokyo_run2": {
+      "libgnssplusplus": {
+        "duration_s": 1830.0,
+        "reference_duration_s": 1830.0,
+        "interval_coverage_pct": 100.0,
+        "epoch_coverage_pct": 97.475686,
+        "observation_epochs": 9151,
+        "solution_epochs": 8920,
+        "matched_epochs": 8920,
+        "scored_epochs": 8860,
+        "fixed_epochs": 1403,
+        "fix_pct": 15.835214,
+        "rms2d_fixed_m": 1.232325,
+        "p68_fixed_m": 0.323448,
+        "p95_fixed_m": 0.665798,
+        "max_fixed_m": 8.999589,
+        "fixed_over_1m": 30,
+        "rms2d_all_m": 28.601128,
+        "p95_all_m": 32.425069,
+        "ttff_30_s": 380.8
+      },
+      "mrtklib_v0_4_2_article": {
+        "fix_pct": 21.7,
+        "rms2d_m": 0.514,
+        "sigma2d_m": 0.12,
+        "ttff_s": 368.0
+      }
+    },
+    "tokyo_run3": {
+      "libgnssplusplus": {
+        "duration_s": 3060.0,
+        "reference_duration_s": 3060.0,
+        "interval_coverage_pct": 100.0,
+        "epoch_coverage_pct": 98.470688,
+        "observation_epochs": 15301,
+        "solution_epochs": 15067,
+        "matched_epochs": 15067,
+        "scored_epochs": 15007,
+        "fixed_epochs": 4837,
+        "fix_pct": 32.231625,
+        "rms2d_fixed_m": 0.359617,
+        "p68_fixed_m": 0.322902,
+        "p95_fixed_m": 0.372779,
+        "max_fixed_m": 7.233599,
+        "fixed_over_1m": 34,
+        "rms2d_all_m": 24.166341,
+        "p95_all_m": 26.286868,
+        "ttff_30_s": 4.0
+      },
+      "mrtklib_v0_4_2_article": {
+        "fix_pct": 7.4,
+        "rms2d_m": 0.801,
+        "sigma2d_m": 0.075,
+        "ttff_s": 28.0
+      }
+    },
+    "nagoya_run1": {
+      "libgnssplusplus": {
+        "duration_s": 1530.0,
+        "reference_duration_s": 1530.0,
+        "interval_coverage_pct": 100.0,
+        "epoch_coverage_pct": 94.89608,
+        "observation_epochs": 7602,
+        "solution_epochs": 7214,
+        "matched_epochs": 7214,
+        "scored_epochs": 7154,
+        "fixed_epochs": 2760,
+        "fix_pct": 38.579815,
+        "rms2d_fixed_m": 1.06067,
+        "p68_fixed_m": 1.160887,
+        "p95_fixed_m": 1.593039,
+        "max_fixed_m": 4.513969,
+        "fixed_over_1m": 1491,
+        "rms2d_all_m": 91.892247,
+        "p95_all_m": 85.762745,
+        "ttff_30_s": 0.0
+      },
+      "mrtklib_v0_4_2_article": {
+        "fix_pct": 17.0,
+        "rms2d_m": 1.105,
+        "sigma2d_m": 0.402,
+        "ttff_s": 0.0
+      }
+    },
+    "nagoya_run2": {
+      "libgnssplusplus": {
+        "duration_s": 1890.0,
+        "reference_duration_s": 1890.0,
+        "interval_coverage_pct": 100.0,
+        "epoch_coverage_pct": 97.86266,
+        "observation_epochs": 9451,
+        "solution_epochs": 9249,
+        "matched_epochs": 9249,
+        "scored_epochs": 9189,
+        "fixed_epochs": 1802,
+        "fix_pct": 19.610404,
+        "rms2d_fixed_m": 0.792561,
+        "p68_fixed_m": 0.825724,
+        "p95_fixed_m": 1.240592,
+        "max_fixed_m": 2.885596,
+        "fixed_over_1m": 419,
+        "rms2d_all_m": 140.270936,
+        "p95_all_m": 103.964387,
+        "ttff_30_s": 0.0
+      },
+      "mrtklib_v0_4_2_article": {
+        "fix_pct": 23.4,
+        "rms2d_m": 1.119,
+        "sigma2d_m": 0.461,
+        "ttff_s": 0.0
+      }
+    },
+    "nagoya_run3": {
+      "libgnssplusplus": {
+        "duration_s": 1040.0,
+        "reference_duration_s": 1040.0,
+        "interval_coverage_pct": 100.0,
+        "epoch_coverage_pct": 99.21169,
+        "observation_epochs": 5201,
+        "solution_epochs": 5160,
+        "matched_epochs": 5160,
+        "scored_epochs": 5100,
+        "fixed_epochs": 301,
+        "fix_pct": 5.901961,
+        "rms2d_fixed_m": 1.188945,
+        "p68_fixed_m": 0.927941,
+        "p95_fixed_m": 1.429673,
+        "max_fixed_m": 8.303534,
+        "fixed_over_1m": 62,
+        "rms2d_all_m": 15.066552,
+        "p95_all_m": 31.706595,
+        "ttff_30_s": 29.0
+      },
+      "mrtklib_v0_4_2_article": {
+        "fix_pct": 6.3,
+        "rms2d_m": 0.318,
+        "sigma2d_m": 0.339,
+        "ttff_s": 9.0
+      }
+    }
+  },
+  "aggregate": {
+    "scored_epochs": 56440,
+    "fixed_epochs": 12310,
+    "fix_pct": 21.810773,
+    "rms2d_fixed_m": 0.880877,
+    "p68_fixed_m": 0.606038,
+    "p95_fixed_m": 1.422531,
+    "max_fixed_m": 8.999589,
+    "fixed_over_1m": 2220,
+    "rms2d_all_m": 281.281314,
+    "p95_all_m": 56.376883
+  }
+}

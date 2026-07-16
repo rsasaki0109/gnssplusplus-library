@@ -227,12 +227,14 @@ else()
             GNSSPP_HAS_MADOCALIB_ORACLE=0)
 endif()
 
-# Create the no-optimization library
+# Historically -O0/-Od for debuggability; the hot solver paths in this list
+# (lambda, navigation, spp, observation) made kinematic runs ~2.3x slower.
+# -O2 output is byte-identical on the CLAS kinematic parity runs.
 add_library(gnss_lib_noopt STATIC ${GNSS_SOURCES_NO_OPTIMIZATION})
 if(MSVC)
-    target_compile_options(gnss_lib_noopt PRIVATE /Od)
+    target_compile_options(gnss_lib_noopt PRIVATE /O2)
 else()
-    target_compile_options(gnss_lib_noopt PRIVATE -O0)
+    target_compile_options(gnss_lib_noopt PRIVATE -O2)
 endif()
 target_include_directories(gnss_lib_noopt PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

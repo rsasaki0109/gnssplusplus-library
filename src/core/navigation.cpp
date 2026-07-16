@@ -465,7 +465,22 @@ ClaslibClockPick pickClaslibBaseClock(
         policy == SSRClockSelectionPolicy::MrtklibLiteralBaseHold &&
         satellite.system == GNSSSystem::Galileo;
     const SSROrbitClockCorrection* best = nullptr;
-    for (const auto& entry : entries) {
+    auto clock_end = std::upper_bound(
+        entries.begin(),
+        entries.end(),
+        obs_time,
+        [](const GNSSTime& lhs, const SSROrbitClockCorrection& rhs) {
+            return lhs < rhs.time;
+        });
+    while (clock_end != entries.begin()) {
+        const SSROrbitClockCorrection& entry = *--clock_end;
+        const double obs_age = obs_time - entry.time;
+        if (obs_age > kClaslibMaxClockAgeFromObsSeconds) {
+            break;
+        }
+        if (best != nullptr && entry.time < best->time) {
+            break;
+        }
         const bool literal =
             policy == SSRClockSelectionPolicy::MrtklibLiteralBaseHold;
         const bool candidate_valid = literal
@@ -480,7 +495,6 @@ ClaslibClockPick pickClaslibBaseClock(
         if (clock_time > obs_time) {
             continue;
         }
-        const double obs_age = obs_time - clock_time;
         if (obs_age < 0.0 || obs_age > kClaslibMaxClockAgeFromObsSeconds) {
             continue;
         }
@@ -1891,14 +1905,19 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
          pppEnvOverrides().clas_code_row_full_prc);
     if (galileo_clock_withdrawal_active) {
         const SSROrbitClockCorrection* newest_clock_event = nullptr;
-        for (const SSROrbitClockCorrection& entry : entries) {
-            if (entry.time > time) {
+        auto event_end = std::upper_bound(
+            entries.begin(),
+            entries.end(),
+            time,
+            [](const GNSSTime& lhs, const SSROrbitClockCorrection& rhs) {
+                return lhs < rhs.time;
+            });
+        while (event_end != entries.begin()) {
+            const SSROrbitClockCorrection& entry = *--event_end;
+            if (time - entry.time > kClaslibMaxClockAgeFromObsSeconds) {
                 break;
             }
             if (!entry.clock_withdrawn && !entry.mrtklib_base_clock_valid) {
-                continue;
-            }
-            if (time - entry.time > kClaslibMaxClockAgeFromObsSeconds) {
                 continue;
             }
             if (newest_clock_event == nullptr ||
@@ -1984,12 +2003,23 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
             if (candidate_sat.system != GNSSSystem::QZSS) {
                 continue;
             }
-            for (const SSROrbitClockCorrection& candidate : candidate_entries) {
-                if (!candidate.orbit_valid || candidate.time > time) {
-                    continue;
-                }
+            auto candidate_end = std::upper_bound(
+                candidate_entries.begin(),
+                candidate_entries.end(),
+                time,
+                [](const GNSSTime& lhs, const SSROrbitClockCorrection& rhs) {
+                    return lhs < rhs.time;
+                });
+            while (candidate_end != candidate_entries.begin()) {
+                const SSROrbitClockCorrection& candidate = *--candidate_end;
                 const GNSSTime bank_time = orbitReferenceTime(candidate);
                 if (bank_time > time) {
+                    continue;
+                }
+                if (have_newest_bank && candidate.time < newest_bank_time) {
+                    break;
+                }
+                if (!candidate.orbit_valid) {
                     continue;
                 }
                 if (!have_newest_bank || bank_time > newest_bank_time) {
@@ -2171,17 +2201,25 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
         if (time - atmos_time > max_age + 1e-9 || atmos_time - time > 1e-9) {
             return nullptr;
         }
-        size_t group_begin = entries.size();
-        size_t group_end = 0;
-        for (size_t index = 0; index < entries.size(); ++index) {
-            if (entries[index].time == atmos_time) {
-                group_begin = std::min(group_begin, index);
-                group_end = index + 1;
-            }
-        }
-        if (group_begin >= entries.size()) {
+        const auto group_lower = std::lower_bound(
+            entries.begin(),
+            entries.end(),
+            atmos_time,
+            [](const SSROrbitClockCorrection& lhs, const GNSSTime& rhs) {
+                return lhs.time < rhs;
+            });
+        if (group_lower == entries.end() || group_lower->time != atmos_time) {
             return nullptr;
         }
+        const auto group_upper = std::upper_bound(
+            group_lower,
+            entries.end(),
+            atmos_time,
+            [](const GNSSTime& lhs, const SSROrbitClockCorrection& rhs) {
+                return lhs < rhs.time;
+            });
+        const size_t group_begin = static_cast<size_t>(group_lower - entries.begin());
+        const size_t group_end = static_cast<size_t>(group_upper - entries.begin());
         return pickBestAtmosAmong(group_begin, group_end);
     };
 
@@ -2604,12 +2642,27 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
         }
         const SSROrbitClockCorrection* held_orbit_source = nullptr;
         GNSSTime held_orbit_time;
-        for (const SSROrbitClockCorrection& candidate : entries) {
-            if (!candidate.orbit_valid || candidate.time > time) {
-                continue;
-            }
+        auto orbit_end = std::upper_bound(
+            entries.begin(),
+            entries.end(),
+            time,
+            [](const GNSSTime& lhs, const SSROrbitClockCorrection& rhs) {
+                return lhs < rhs.time;
+            });
+        while (orbit_end != entries.begin()) {
+            const SSROrbitClockCorrection& candidate = *--orbit_end;
             const GNSSTime candidate_time = orbitReferenceTime(candidate);
             if (candidate_time > time) {
+                continue;
+            }
+            // Compact-SSR reference epochs are causal: an entry cannot refer
+            // to an orbit state newer than its reception/tag epoch. Once the
+            // remaining entry times are older than the best reference epoch,
+            // no earlier candidate can replace it.
+            if (held_orbit_source != nullptr && candidate.time < held_orbit_time) {
+                break;
+            }
+            if (!candidate.orbit_valid) {
                 continue;
             }
             if (held_orbit_source == nullptr || candidate_time > held_orbit_time) {
@@ -3198,11 +3251,14 @@ bool SSRProducts::heldClasTropTokens(
             const auto& entry = *entry_it;
             if (time - entry.time > max_age_seconds + 1e-9) break;
             if (!entry.atmos_valid || entry.atmos_tokens.empty()) continue;
-            const bool has_trop = std::any_of(
-                entry.atmos_tokens.begin(), entry.atmos_tokens.end(),
-                [](const auto& token) {
-                    return token.first.rfind("atmos_trop_", 0) == 0;
-                });
+            // atmos_tokens is an ordered map. Jump to the prefix range instead
+            // of walking every string token for every satellite and receiver
+            // epoch; dense CLAS histories make that linear scan dominant.
+            static const std::string trop_prefix = "atmos_trop_";
+            const auto trop_it = entry.atmos_tokens.lower_bound(trop_prefix);
+            const bool has_trop =
+                trop_it != entry.atmos_tokens.end() &&
+                trop_it->first.compare(0, trop_prefix.size(), trop_prefix) == 0;
             if (!has_trop) continue;
             if (network_id > 0) {
                 auto network_it =

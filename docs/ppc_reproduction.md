@@ -75,6 +75,41 @@ python3 scripts/update_ppc_coverage_readme.py \
   --summary-json output/ppc_coverage_matrix/summary.json
 ```
 
+## Full Moving CLAS Comparison
+
+Replay the complete available interval of all six Tokyo/Nagoya runs with the
+same kinematic CLAS parity profile. The first command downloads/decodes QZSS L6
+corrections, expands the dense SSR input, and runs `gnss_ppp`; allow substantial
+disk space and runtime for the six full histories.
+
+```bash
+python3 scripts/generate_ppc_clas_scorecard.py \
+  --dataset-root data/PPC-Dataset \
+  --work-dir output/ppc_clas_full \
+  --l6-cache output/ppc_clas_full/l6_cache \
+  --configs parity \
+  --report output/ppc_clas_full/scorecard.md
+
+python3 scripts/generate_ppc_clas_full_comparison.py \
+  --dataset-root data/PPC-Dataset \
+  --results-dir output/ppc_clas_full \
+  --metrics docs/ppc_clas_full_metrics.json \
+  --markdown docs/ppc_clas_full_table.md \
+  --trajectory-figure docs/ppc_clas_full_trajectories.png \
+  --error-figure docs/ppc_clas_full_errors.png \
+  --metric-figure docs/ppc_clas_full_comparison.png
+```
+
+Scoring rotates the dataset's city-specific body-frame lever arm through each
+PPC attitude sample to compare at the antenna phase center: Tokyo uses
+`[0.31, 0.0, -0.55]` m and Nagoya uses
+`[0.593, -0.670, -1.216]` m in the PPC vehicle FRD convention (x forward,
+y right, z down). The first 60
+matched epochs are discarded independently per run, status 6 is FIX, and TTFF
+starts at the first 30 consecutive FIX epochs. MRTKLIB's published v0.4.2
+figures use the unmodified reference point, so README comparisons label that
+reference-definition difference explicitly.
+
 ## Historical Diagnostics
 
 Older selector, residual-reset, IMU bridge, and tail-cleanup sweeps are kept as
