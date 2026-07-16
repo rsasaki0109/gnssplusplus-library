@@ -71,6 +71,34 @@ SSROrbitClockCorrection makeAtmosCorrection(
     return correction;
 }
 
+TEST(PPPOSRTest, HeldClasTropTokensFindPrefixWithoutAcceptingAdjacentKeys) {
+    SSRProducts products;
+    const SatelliteId satellite(GNSSSystem::GPS, 1);
+    const GNSSTime trop_time(2324, 177015.0);
+    SSROrbitClockCorrection trop =
+        makeAtmosCorrection(satellite, trop_time, 7);
+    trop.atmos_tokens = {
+        {"atmos_network_id", "7"},
+        {"atmos_trop_t00_m", "0.1"},
+        {"zzz", "not-a-trop-token"},
+    };
+    products.addCorrection(trop);
+
+    SSROrbitClockCorrection adjacent =
+        makeAtmosCorrection(satellite, GNSSTime(2324, 177016.0), 7);
+    adjacent.atmos_tokens = {
+        {"atmos_network_id", "7"},
+        {"atmos_troq_t00_m", "must-not-match-atmos-trop-prefix"},
+    };
+    products.addCorrection(adjacent);
+
+    std::map<std::string, std::string> held;
+    ASSERT_TRUE(products.heldClasTropTokens(
+        adjacent.time, 30.0, 7, 0, held, nullptr));
+    EXPECT_EQ(held.at("atmos_trop_t00_m"), "0.1");
+    EXPECT_EQ(held.count("atmos_troq_t00_m"), 0U);
+}
+
 Vector3d receiverPositionNearClasNetwork9() {
     return geodetic2ecef(39.98056 * M_PI / 180.0, 141.22509 * M_PI / 180.0, 0.0);
 }

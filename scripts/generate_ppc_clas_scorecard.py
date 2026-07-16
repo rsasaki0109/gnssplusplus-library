@@ -55,13 +55,16 @@ LEVER_ARM_BY_CITY: dict[str, np.ndarray] = {
     "nagoya": LEVER_ARM_BODY_M,
 }
 
+# MRTKLIB v0.4.2 full-run values published in the release article linked by
+# write_report(). TTFF is included so the full comparison can report every
+# published CLAS metric under the same run key.
 MRTKLIB_TARGETS: dict[str, dict[str, float]] = {
-    "nagoya_run1": {"fix_pct": 17.0, "rms2d_m": 1.105, "sigma2d_m": 0.402},
-    "nagoya_run2": {"fix_pct": 23.4, "rms2d_m": 1.119, "sigma2d_m": 0.461},
-    "nagoya_run3": {"fix_pct": 6.3, "rms2d_m": 0.318, "sigma2d_m": 0.339},
-    "tokyo_run1": {"fix_pct": 4.9, "rms2d_m": 0.747, "sigma2d_m": 0.244},
-    "tokyo_run2": {"fix_pct": 21.7, "rms2d_m": 0.514, "sigma2d_m": 0.120},
-    "tokyo_run3": {"fix_pct": 7.4, "rms2d_m": 0.801, "sigma2d_m": 0.075},
+    "nagoya_run1": {"fix_pct": 17.0, "rms2d_m": 1.105, "sigma2d_m": 0.402, "ttff_s": 0.0},
+    "nagoya_run2": {"fix_pct": 23.4, "rms2d_m": 1.119, "sigma2d_m": 0.461, "ttff_s": 0.0},
+    "nagoya_run3": {"fix_pct": 6.3, "rms2d_m": 0.318, "sigma2d_m": 0.339, "ttff_s": 9.0},
+    "tokyo_run1": {"fix_pct": 4.9, "rms2d_m": 0.747, "sigma2d_m": 0.244, "ttff_s": 15.0},
+    "tokyo_run2": {"fix_pct": 21.7, "rms2d_m": 0.514, "sigma2d_m": 0.120, "ttff_s": 368.0},
+    "tokyo_run3": {"fix_pct": 7.4, "rms2d_m": 0.801, "sigma2d_m": 0.075, "ttff_s": 28.0},
 }
 
 PARITY_ENV = {
@@ -451,18 +454,31 @@ def body_to_enu_rotation_matrix(roll_deg: float, pitch_deg: float, heading_deg: 
     """Rotate vehicle-frame vectors (x fwd, y right, z down) into local ENU."""
     roll = math.radians(roll_deg)
     pitch = math.radians(pitch_deg)
-    yaw = math.radians(heading_deg)
-    psi = math.pi / 2.0 - yaw
+    heading = math.radians(heading_deg)
     cr, sr = math.cos(roll), math.sin(roll)
     cp, sp = math.cos(pitch), math.sin(pitch)
-    cy, sy = math.cos(psi), math.sin(psi)
-    return np.array(
+    ch, sh = math.cos(heading), math.sin(heading)
+
+    # PPC attitude uses the conventional vehicle FRD frame and heading
+    # clockwise from north. Form body -> NED with the heading/pitch/roll
+    # Euler sequence, then permute NED -> ENU. In particular, at zero
+    # roll/pitch a north-facing body x axis must map to +North, while body z
+    # (down) must map to -Up.
+    body_to_ned = np.array(
         [
-            [cy * cp, sy * cp, -sp],
-            [-sy * cr + cy * sp * sr, cy * cr + sy * sp * sr, cp * sr],
-            [sy * sr + cy * sp * cr, -cy * sr + sy * sp * cr, cp * cr],
+            [cp * ch, sr * sp * ch - cr * sh, cr * sp * ch + sr * sh],
+            [cp * sh, sr * sp * sh + cr * ch, cr * sp * sh - sr * ch],
+            [-sp, sr * cp, cr * cp],
         ]
     )
+    ned_to_enu = np.array(
+        [
+            [0.0, 1.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 0.0, -1.0],
+        ]
+    )
+    return ned_to_enu @ body_to_ned
 
 
 def parse_rinex_observation_epochs(path: Path) -> list[tuple[int, float]]:
@@ -490,10 +506,15 @@ def parse_rinex_observation_epochs(path: Path) -> list[tuple[int, float]]:
 
 
 def lever_arm_for_city(city: str) -> np.ndarray:
-    return LEVER_ARM_BY_CITY.get(city, LEVER_ARM_BODY_M)
+    try:
+        return LEVER_ARM_BY_CITY[city]
+    except KeyError as error:
+        raise ValueError(f"Unknown PPC city for lever-arm correction: {city}") from error
 
 
 def read_reference_csv(path: Path, *, apply_lever_arm: bool = True, city: str | None = None) -> list[comparison.ReferenceEpoch]:
+    if apply_lever_arm and city is None:
+        raise ValueError("city is required when applying the PPC lever-arm correction")
     rows: list[comparison.ReferenceEpoch] = []
     with path.open(newline="") as handle:
         reader = csv.reader(handle)
@@ -509,7 +530,7 @@ def read_reference_csv(path: Path, *, apply_lever_arm: bool = True, city: str | 
                 roll = float(row[8])
                 pitch = float(row[9])
                 heading = float(row[10])
-                lever_body = lever_arm_for_city(city) if city is not None else LEVER_ARM_BODY_M
+                lever_body = lever_arm_for_city(city)
                 lever_enu = body_to_enu_rotation_matrix(roll, pitch, heading) @ lever_body
                 ecef = ecef + enu_to_ecef_delta(lever_enu, lat, lon)
             rows.append(comparison.ReferenceEpoch(week, tow, lat, lon, height, ecef))
@@ -644,14 +665,17 @@ def score_run(
     reference_csv: Path,
     rover_obs: Path,
     *,
+    city: str,
     fixed_status: int = PPP_FIXED_STATUS,
     match_tolerance_s: float = MATCH_TOLERANCE_S,
     skip_epochs: int = ARTICLE_SKIP_EPOCHS,
 ) -> dict[str, Any]:
-    # Article-compatible scoring intentionally uses the PPC reference point as
-    # published, without applying an IMU-to-antenna lever arm. MRTKLIB's
-    # compare_ppc.py does the same and discards the first 60 matched rows.
-    reference = read_reference_csv(reference_csv, apply_lever_arm=False)
+    # PPC reference.csv is a vehicle/IMU trajectory. Compare the GNSS solution
+    # at the antenna phase center by rotating the city-specific body-frame
+    # lever arm through each reference attitude sample.
+    reference = read_reference_csv(
+        reference_csv, apply_lever_arm=True, city=city
+    )
     solutions = read_ppp_pos(pos_path)
     if solutions and all(
         epoch.week == 0 and abs(epoch.tow) < 1e-6 for epoch in solutions[: min(5, len(solutions))]
@@ -679,7 +703,7 @@ def score_run(
     return {
         "matched_epochs": len(matched),
         "skip_epochs": skip_epochs,
-        "reference_point": "published_ppc_reference_no_lever_arm",
+        "reference_point": "ppc_reference_with_city_specific_antenna_lever_arm",
         "ttff_consecutive_fix_epochs": ARTICLE_TTFF_CONSECUTIVE_FIX_EPOCHS,
         "reference_epochs": len(reference),
         "solution_epochs": len(solutions),
@@ -744,6 +768,11 @@ def gap_notes(run_key: str, config: str, metrics: dict[str, Any], target: dict[s
     return notes
 
 
+def present_config_keys(item: Mapping[str, Any]) -> list[str]:
+    """Return the CONFIG_LABELS keys present in item['configs'], in CONFIG_LABELS order."""
+    return [key for key in CONFIG_LABELS if key in item["configs"]]
+
+
 def rank_gaps(results: list[dict[str, Any]]) -> list[str]:
     ranked: list[tuple[float, str]] = []
     for item in results:
@@ -780,7 +809,7 @@ def write_report(
     lines.append(f"- L6 cache: `{l6_cache}` (per-run concatenations under `{work_dir}`)")
     lines.append(f"- SSR CSV recipe: {csv_recipe}")
     lines.append("- Observation rate: 5 Hz (0.2 s); SSR expanded rows are time-stamped (1 s class sampling in compact expansion). MW/AR windows in PPP are time-based on receiver epochs, but any epoch-count heuristics in the CLAS path should be checked against 5 Hz density.")
-    lines.append("- Article-compatible ground truth: published `reference.csv` ECEF without a lever-arm transform; horizontal error in local ENU at each matched epoch.")
+    lines.append("- Ground truth: city-specific vehicle/IMU-to-antenna lever arm rotated by each `reference.csv` attitude sample and added to the published ECEF; horizontal error in local ENU at each matched epoch.")
     lines.append("- PPP `.pos` rows carry GPS week/TOW from the receiver epoch; legacy rows with `GPS_Week=0` fall back to rover.obs `>` header alignment when counts match.")
     lines.append("- Match tolerance: 0.25 s; discard first 60 matched epochs; PPP fixed status = 6; TTFF requires 30 consecutive FIX epochs; 1sigma is the FIX horizontal-error 68th percentile.")
     lines.append("")
@@ -797,7 +826,7 @@ def write_report(
 
     available_configs = [
         key for key in CONFIG_LABELS
-        if any(key in item["configs"] for item in run_results)
+        if any(key in present_config_keys(item) for item in run_results)
     ]
     for config_key in available_configs:
         config_label = CONFIG_LABELS[config_key]
@@ -823,6 +852,7 @@ def write_report(
                         "; ".join(item["configs"][config_key]["notes"]) or "—",
                     ]
                     for item in run_results
+                    if config_key in item["configs"]
                 ],
             )
         )
@@ -856,7 +886,8 @@ def write_report(
         )
         lines.append(f"- L6 slots: {', '.join(item['l6_slots'])}")
         lines.append(f"- SSR rows: {item['ssr_rows']}")
-        for config_key, config_label in CONFIG_LABELS.items():
+        for config_key in present_config_keys(item):
+            config_label = CONFIG_LABELS[config_key]
             metrics = item["configs"][config_key]
             lines.append(
                 f"- {config_label}: fix {metrics['fix_pct']:.1f}% ({metrics['fixed_epochs']}/{metrics['matched_epochs']}), "
@@ -1033,7 +1064,9 @@ def main() -> int:
                     flush=True,
                 )
 
-            metrics = score_run(pos_path, paths.reference_csv, paths.rover_obs)
+            metrics = score_run(
+                pos_path, paths.reference_csv, paths.rover_obs, city=city
+            )
             metrics["notes"] = gap_notes(run_key, config_key, metrics, MRTKLIB_TARGETS[run_key])
             config_metrics[config_key] = metrics
             print(
