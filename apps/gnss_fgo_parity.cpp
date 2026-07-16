@@ -194,6 +194,10 @@ struct Args {
     double surplus_validation_ap_gt2 = -1.0;   // >=0: override surplus_validation_aperture_pdop_gt2_cycles (default 0.3)
     bool surplus_validation_majority = false;  // use majority aggregation instead of require-all
     double surplus_validation_majority_frac = -1.0;  // >=0: override surplus_validation_majority_fraction (default 0.5)
+    // Below-floor low-count AR rescue (see FGOConfig::use_low_count_ambiguity_resolution)
+    bool low_count_ar = false;
+    int low_count_ar_min = -1;        // >0: override low_count_min_candidates (default 4)
+    double low_count_ar_ratio = -1.0; // >=0: override low_count_min_ratio (default 1.5); use --low-count-ratio 0 for "surplus alone"
     std::string dump_csv_path;  // debug: per-epoch CSV dump (tow/status/E-N-U err/horiz err/E-N pos) for plotting
     // Opt-in FGOProblem cache (skips repeated RINEX parse + problem build
     // across validation runs on the SAME inputs/config). Default-off; when
@@ -268,6 +272,18 @@ Args parseArgs(int argc, char** argv) {
         }
         if (a == "--fix-demote-surplus-crosscheck") {
             args.fix_demote_surplus_crosscheck = true;
+            continue;
+        }
+        if (a == "--low-count-ar") {
+            args.low_count_ar = true;
+            continue;
+        }
+        if (a == "--low-count-min" && i + 1 < argc) {
+            args.low_count_ar_min = std::stoi(argv[++i]);
+            continue;
+        }
+        if (a == "--low-count-ratio" && i + 1 < argc) {
+            args.low_count_ar_ratio = std::stod(argv[++i]);
             continue;
         }
         if (a == "--adaptive-ratio") {
@@ -774,6 +790,15 @@ libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
     }
     if (args.surplus_validation_majority_frac >= 0.0) {
         config.surplus_validation_majority_fraction = args.surplus_validation_majority_frac;
+    }
+    if (args.low_count_ar) {
+        config.use_low_count_ambiguity_resolution = true;
+    }
+    if (args.low_count_ar_min > 0) {
+        config.low_count_min_candidates = args.low_count_ar_min;
+    }
+    if (args.low_count_ar_ratio >= 0.0) {
+        config.low_count_min_ratio = args.low_count_ar_ratio;
     }
     if (args.no_gal_ar) {
         config.exclude_galileo_ambiguity_fixing = true;
@@ -1307,7 +1332,8 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
            "imu_aperture_accept,imu_aperture_reject,cp_available,cp_added,"
            "cp_suppressed_hold,gen_bump_hold,gen_bump_fde,gen_bump_reset,"
            "gen_bump_warm_reset,gen_bump_stale_pin,"
-           "surplus_eval,surplus_pass,surplus_level,surplus_used,surplus_rescue,surplus_veto\n";
+           "surplus_eval,surplus_pass,surplus_level,surplus_used,surplus_rescue,surplus_veto,"
+           "low_count_attempted,low_count_used\n";
     std::size_t ri = 0;
     for (std::size_t si = 0; si < r.solution.solutions.size(); ++si) {
         const auto& s = r.solution.solutions[si];
@@ -1372,7 +1398,9 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
                 << ',' << d.surplus_validation_fallback_level
                 << ',' << d.surplus_validation_surplus_used
                 << ',' << (d.surplus_validation_used_for_rescue ? 1 : 0)
-                << ',' << (d.surplus_validation_used_for_veto ? 1 : 0);
+                << ',' << (d.surplus_validation_used_for_veto ? 1 : 0)
+                << ',' << (d.low_count_ar_attempted ? 1 : 0)
+                << ',' << (d.low_count_ar_used ? 1 : 0);
         }
         out << '\n';
     }
@@ -2199,6 +2227,12 @@ int main(int argc, char** argv) {
                   << fl.diagnostics.surplus_validation_fallback_level_histogram[3] << ","
                   << fl.diagnostics.surplus_validation_fallback_level_histogram[4] << ","
                   << fl.diagnostics.surplus_validation_fallback_level_histogram[5] << "]"
+                  << ")\n"
+                  << "  low-count AR rescue: " << (args.low_count_ar ? "on" : "off")
+                  << " (min_candidates=" << config.low_count_min_candidates
+                  << ", min_ratio=" << config.low_count_min_ratio
+                  << ", attempts=" << fl.diagnostics.low_count_ambiguity_attempts
+                  << ", accepted=" << fl.diagnostics.low_count_ambiguity_fix_accepted
                   << ")\n"
                   << "  leaky persist (C1): " << (args.leaky_persist ? "on" : "off")
                   << " (decay=" << config.cp_hold_persist_decay

@@ -3023,7 +3023,24 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                                  std::tie(sb.satellite, sb.reference_satellite, sb.signal, b);
                       });
             const int n = static_cast<int>(epoch_amb_indices.size());
-            if (n >= min_candidates) {
+            // Below-floor rescue (use_low_count_ambiguity_resolution): let a
+            // below-floor epoch INTO the LAMBDA attempt, gated separately
+            // below on a mandatory surplus-satellite pass (see the knob's
+            // comment in fgo.hpp). Requires use_surplus_satellite_validation
+            // too, since the surplus verdict is the only integrity check
+            // this path accepts. Default off (or surplus validation off):
+            // is_low_count_attempt is always false when n >= min_candidates,
+            // so this changes nothing for the established path.
+            const bool is_low_count_attempt = n < min_candidates;
+            const bool low_count_entry_allowed =
+                is_low_count_attempt && config.use_low_count_ambiguity_resolution &&
+                config.use_surplus_satellite_validation &&
+                n >= std::max(1, config.low_count_min_candidates);
+            if (n >= min_candidates || low_count_entry_allowed) {
+                if (is_low_count_attempt) {
+                    ++result.diagnostics.low_count_ambiguity_attempts;
+                    epoch_diagnostics[i].low_count_ar_attempted = true;
+                }
                 epoch_diagnostics[i].ar_outcome =
                     FGOProcessor::AmbiguityResolutionOutcome::MarginalFailure;
                 gtsam::KeyVector keys;
@@ -3171,6 +3188,19 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                         min_subset = std::max(
                             min_subset,
                             static_cast<int>(std::ceil(fraction * attempt_n)));
+                    }
+                    // Below-floor rescue: a low-count attempt is already at a
+                    // minimal candidate count by construction (gated on
+                    // entry by low_count_min_candidates); don't let ordinary
+                    // partial-AR shrink it further with the normal
+                    // min_fixed_ambiguities/fraction floors, which are tuned
+                    // for the >=6-candidate regime and would often exceed
+                    // attempt_n here and suppress the attempt entirely.
+                    // Single all-or-nothing attempt at the full (possibly
+                    // residual-screened) candidate set.
+                    if (is_low_count_attempt) {
+                        attempt_n = static_cast<int>(order.size());
+                        min_subset = attempt_n;
                     }
 
                     // PPC constellation PAR is a sequence of distinct
@@ -3715,9 +3745,28 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                         const bool established_path_pass =
                             (configured_ratio_pass || aperture_pass) &&
                             fixed_history_dr_pass && !surplus_veto_triggered;
+                        // Below-floor rescue decision (use_low_count_
+                        // ambiguity_resolution): a below-floor attempt is
+                        // decided SOLELY by this -- never by
+                        // established_path_pass/incremental_integrity_pass
+                        // above, which were tuned for the >=min_candidates
+                        // regime and would otherwise let a low-count
+                        // candidate slip through the ordinary
+                        // adaptive-ratio/IMU-aperture paths without ever
+                        // being cross-checked by the surplus test. Mandatory
+                        // surplus pass, optional additional ratio floor; on
+                        // any other outcome the epoch stays FLOAT exactly as
+                        // it did before this knob existed.
+                        const bool low_count_pass =
+                            is_low_count_attempt && std::isfinite(ratio) &&
+                            (config.low_count_min_ratio <= 0.0 ||
+                             ratio > config.low_count_min_ratio) &&
+                            surplus_evaluated && surplus_pass;
                         const bool fixed_epoch = std::isfinite(ratio) &&
-                                                 (established_path_pass ||
-                                                  incremental_integrity_pass) &&
+                                                 (is_low_count_attempt
+                                                      ? low_count_pass
+                                                      : (established_path_pass ||
+                                                         incremental_integrity_pass)) &&
                                                  !defer_relaxed_fix_to_existing_hold &&
                                                  relaxed_plausibility_pass &&
                                                  fixed_amb.size() == subset;
@@ -3739,14 +3788,22 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                             epoch_diagnostics[i].ar_outcome =
                                 FGOProcessor::AmbiguityResolutionOutcome::SurplusValidationRejected;
                         }
+                        if (is_low_count_attempt && !low_count_pass) {
+                            epoch_diagnostics[i].ar_outcome =
+                                FGOProcessor::AmbiguityResolutionOutcome::LowCountRejected;
+                        }
                         if (!fixed_epoch) {
                             if (!config.use_fixed_lag_partial_lambda) break;
                             continue;
                         }
+                        if (is_low_count_attempt) {
+                            ++result.diagnostics.low_count_ambiguity_fix_accepted;
+                            epoch_diagnostics[i].low_count_ar_used = true;
+                        }
 
                         epoch_fixed[i] = true;
                         const bool output_only_relaxed_fix =
-                            output_only_relaxed_candidate;
+                            output_only_relaxed_candidate || is_low_count_attempt;
                         epoch_fixed_history_eligible[i] =
                             !output_only_relaxed_fix;
                         epoch_diagnostics[i].ar_outcome =
@@ -3842,7 +3899,15 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                         const bool temporally_validated_partial_hold =
                             config.use_fixed_history_dr_validation &&
                             fixed_history_dr_evaluated && fixed_history_dr_pass;
-                        if (config.use_ambiguity_hold &&
+                        // Guardrail (use_low_count_ambiguity_resolution):
+                        // a below-floor fix NEVER seeds fix-and-hold,
+                        // unconditionally -- not even when
+                        // allow_relaxed_ratio_fix_and_hold is set for other
+                        // relaxed paths. A wrong low-count integer pinned
+                        // for an arc's remaining lifetime would poison every
+                        // later epoch of that arc; the simplest safe choice
+                        // is to always re-attempt LAMBDA fresh next epoch.
+                        if (config.use_ambiguity_hold && !is_low_count_attempt &&
                             (!output_only_relaxed_fix ||
                              config.allow_relaxed_ratio_fix_and_hold) &&
                             (full_candidate_attempt || temporally_validated_partial_hold) &&

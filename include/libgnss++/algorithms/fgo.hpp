@@ -355,6 +355,34 @@ public:
         // surplus_validation_majority_fraction) must be within it.
         bool surplus_validation_require_all = true;
         double surplus_validation_majority_fraction = 0.5;
+        // --- Below-floor ("low-count") ambiguity resolution rescue ---
+        // The per-epoch LAMBDA entry gate (min_candidates in
+        // fgo_gtsam_backend.cpp, = max(6, min_fixed_ambiguities+1)) exists
+        // because LAMBDA's ratio test alone is not a sufficient integrity
+        // check below six candidates in this multipath environment --
+        // unconditionally lowering that floor was tried and is net-negative
+        // (more wrong-but-plausible-ratio fixes flood in than are rescued).
+        // This knob instead lets LAMBDA additionally attempt epochs whose
+        // in-window ambiguity count is below the floor (but still >=
+        // low_count_min_candidates), and accepts the result ONLY when the
+        // independent surplus-satellite validation (use_surplus_satellite_
+        // validation, which must ALSO be enabled) evaluates AND passes for
+        // that candidate -- the independent geometric check compensates for
+        // the weak ratio statistics at low count. A below-floor fix is never
+        // eligible to seed fix-and-hold (never pinned, never contributes to
+        // the fixed-history-DR prediction window used to validate OTHER
+        // epochs' relaxed-ratio candidates), so a wrong low-count fix cannot
+        // poison a later epoch's arc; it remains subject to the normal
+        // demotion pass (fix_demote_*) like every other FIXED epoch. Default
+        // OFF; when off (or when use_surplus_satellite_validation is off)
+        // this entire path is skipped and behavior is byte-identical to
+        // before this feature existed.
+        bool use_low_count_ambiguity_resolution = false;
+        int low_count_min_candidates = 4;
+        // Modest ratio floor for the low-count path, independent of (and in
+        // addition to) the mandatory surplus-pass requirement above. <=0
+        // disables this extra floor (a surplus pass alone then suffices).
+        double low_count_min_ratio = 1.5;
         double max_tdcp_gap_s = 2.0;
         double base_epoch_match_tolerance_s = 0.02;
         double base_interpolation_max_gap_s = 1.2;
@@ -1570,6 +1598,9 @@ public:
         std::size_t surplus_validation_rescued_epochs = 0;  ///< epochs FIXED only because this test passed a relaxed-ratio candidate
         std::size_t surplus_validation_vetoed_epochs = 0;   ///< established-ratio fixes demoted by surplus_validation_veto_high_ratio_fails
         std::size_t surplus_validation_fallback_level_histogram[6] = {0, 0, 0, 0, 0, 0};  ///< index = deciding fallback level (0=GQEBR .. 5=GQ)
+        // --- Below-floor low-count AR rescue (use_low_count_ambiguity_resolution) ---
+        std::size_t low_count_ambiguity_attempts = 0;  ///< LAMBDA attempts made only because this knob lowered the floor
+        std::size_t low_count_ambiguity_fix_accepted = 0;  ///< of which accepted (surplus pass [+ ratio floor])
         std::size_t fixed_ambiguities = 0;
         std::size_t tdcp_candidate_pairs = 0;
         std::size_t tdcp_rejected_gap = 0;
@@ -1738,6 +1769,7 @@ public:
         PostfitRejected = 11,
         Fixed = 12,
         SurplusValidationRejected = 13,
+        LowCountRejected = 14,  ///< below-floor attempt (use_low_count_ambiguity_resolution) failed its surplus/ratio gate
     };
 
     /// Per-epoch fixed-lag integrity state.  These values expose why an epoch
@@ -1780,6 +1812,9 @@ public:
         bool surplus_validation_used_for_veto = false;    ///< this test demoted an established-ratio fix
         int surplus_validation_fallback_level = -1;  ///< 0=GQEBR .. 5=GQ, -1 = not evaluated
         int surplus_validation_surplus_used = 0;     ///< surplus satellites in the deciding pool
+        // --- Below-floor low-count AR rescue (use_low_count_ambiguity_resolution) ---
+        bool low_count_ar_attempted = false;  ///< this epoch's LAMBDA attempt only happened because the floor was lowered
+        bool low_count_ar_used = false;       ///< this epoch's FIXED label came from the low-count rescue path
         int carrier_factors_available = 0;
         int carrier_factors_added = 0;
         int carrier_factors_suppressed_hold = 0;
