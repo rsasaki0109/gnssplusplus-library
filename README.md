@@ -82,6 +82,43 @@ the shipping preset:
 --fix-demote --fix-demote-dist 5 --fix-demote-res 25 --fix-demote-posthold 5
 ```
 
+#### Surplus-satellite rescue (opt-in)
+
+LAMBDA candidates that fall short of the ratio gate can be rescued by an
+independent integrity test: DD carrier observations that were excluded from
+the fix (FDE quarantine, CMC exclusion, partial-AR drops) are re-differenced
+against an alternate reference satellite at the candidate fixed position and
+checked against a PDOP-scaled nearest-integer aperture, with a
+GQEBR→GQEB→GQER→GQE→GQB→GQ constellation fallback. Counterfactual auditing of
+the demotion guard on the same runs also moved `--fix-demote-res` from 25 to
+40 for this configuration (25 demoted mostly sub-0.5 m fixes on run1/run3
+while run2's genuine wrong-basin cluster sits far above 40). Tokyo PPC
+full-run results with the fixed-lag-QR configuration:
+
+```
+--imu <run>/imu.csv --fixed-lag 1 --fixed-lag-qr --hold \
+--imu-ratio-aperture --fixed-history-dr --cmc --cmc-level 0.75 \
+--fde --fde-cp-quarantine --varerr --integ-cov 1e-6 \
+--fix-demote --fix-demote-dist 5 --fix-demote-res 40 --fix-demote-posthold 5 \
+--multi-freq --partial-ar --elev-mask 25 --snr-mask 30 \
+--imu-preset-tactical --exc-recovery --ddpr-anchor \
+--surplus-validation --surplus-validation-min-n 3 \
+--surplus-validation-aperture-lt1 0.15 --surplus-validation-aperture-1to2 0.3 \
+--surplus-validation-aperture-gt2 0.45
+```
+
+| Run | Fix-rate | Fixed-only RMS | Rescue contribution |
+|---|---:|---:|---:|
+| tokyo/run1 | 67.23% | 0.797 m | +2.99 pp, RMS improved |
+| tokyo/run2 | 77.71% | 0.742 m | RMS 6.07 m → 0.74 m with res 40 |
+| tokyo/run3 | 75.14% | 1.054 m | RMS 1.96 m → 1.05 m, >5 m fixes 38 → 13 |
+
+The rescued-only population on run1 has 0.565 m RMS (n=693). The companion
+`--surplus-validation-veto` mode (re-testing established fixes) is implemented
+but counterfactually false-alarm dominated — leave it off. For repeated runs
+on identical inputs, `--problem-cache <file>` caches the parsed observations
+and built DD problem (~2× faster validation loops with an /O2 build).
+
 ### Historical CLAS PPP vs CLASLIB
 
 This is the historical iter55 `--claslib-parity` result, not the current default
