@@ -4055,6 +4055,19 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                     }
                 }
             }
+            // Surplus-satellite cross-check (fix_demote_surplus_crosscheck):
+            // reprieve a demotion when THIS epoch's own surplus-satellite
+            // verdict (from its fresh LAMBDA attempt above; independent
+            // re-differencing against excluded/surplus satellites) already
+            // vouches for the fix. Fail-safe: no verdict or a failing
+            // verdict demotes exactly as before. See the knob's comment in
+            // fgo.hpp for the measured false-alarm/discrimination numbers.
+            if (demote && config.fix_demote_surplus_crosscheck &&
+                epoch_diagnostics[i].surplus_validation_evaluated &&
+                epoch_diagnostics[i].surplus_validation_pass) {
+                demote = false;
+                ++result.diagnostics.fix_plausibility_surplus_reprieves;
+            }
             if (demote) {
                 epoch_fixed[i] = false;
                 epoch_fixed_history_eligible[i] = false;

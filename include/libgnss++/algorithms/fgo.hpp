@@ -887,6 +887,26 @@ public:
         // post-fit residual pass (see fix_demote_res_m).
         double fix_demote_res_rel = 0.0;
         int fix_demote_res_rel_window = 100;  ///< rolling window [epochs]; >=20 history required
+        // Surplus-satellite cross-check on demotion (requires
+        // use_surplus_satellite_validation). Measured on tokyo run1 (2026-07):
+        // of the epochs the res/dist/posthold/res_rel criteria above would
+        // demote, the great majority (367/406, <0.5 m; mean 0.176 m) are
+        // FALSE ALARMS -- legitimate fixes caught by a residual threshold
+        // tuned to also catch run2's genuine wrong-basin cluster. The
+        // surplus-satellite test (independent re-differencing against
+        // excluded/surplus satellites, see use_surplus_satellite_validation)
+        // already renders a verdict on 353/406 of these same epochs from
+        // this epoch's own fresh LAMBDA attempt, and it discriminates
+        // cleanly within that population: 299 PASS (mean error 0.117 m) vs
+        // 54 FAIL (mean error 0.438 m). When true, a demotion is REPRIEVED
+        // (the FIXED label stands) if and only if this epoch's surplus
+        // verdict was evaluated AND passed; any other case (no verdict,
+        // failed verdict) demotes exactly as before -- fail-safe toward
+        // demoting when the independent check cannot vouch for the fix.
+        // Default OFF (bit-identical baseline without it; no effect unless
+        // both use_fix_plausibility_demotion and
+        // use_surplus_satellite_validation are also on).
+        bool fix_demote_surplus_crosscheck = false;
 
         // --- Exception recovery (port of recovery.py's handle_solve_exception)
         // ---
@@ -1604,6 +1624,7 @@ public:
         std::size_t fix_plausibility_anchor_demotions = 0;  ///< of which via the DDPR-LS anchor gap
         std::size_t fix_plausibility_anchor_gross_gated = 0;  ///< anchor-gap evaluations skipped by the gross-offender gate (fix_demote_anchor_gross)
         std::size_t fix_plausibility_hold_skips = 0;  ///< fix-and-hold pinnings skipped on implausible epochs
+        std::size_t fix_plausibility_surplus_reprieves = 0;  ///< demotions skipped because fix_demote_surplus_crosscheck's verdict passed
         // --- Exception recovery diagnostics (use_solve_exception_recovery) ---
         std::size_t solve_exception_recoveries = 0;   ///< loose-prior retries that succeeded
         std::size_t solve_exception_warm_resets = 0;  ///< full smoother re-creations

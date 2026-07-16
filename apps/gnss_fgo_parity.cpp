@@ -183,6 +183,7 @@ struct Args {
     bool fix_demote_anchor_gross = false;   // C2: enable fix_demote_anchor_gross
     double fix_demote_anchor_gross_ratio = -1.0;  // >=0: override fix_demote_anchor_gross_ratio (default 10.0)
     double fix_demote_anchor_gross_abs = -1.0;    // >=0: override fix_demote_anchor_gross_abs_m (default 20.0)
+    bool fix_demote_surplus_crosscheck = false;   // enable fix_demote_surplus_crosscheck (needs --fix-demote + --surplus-validation)
     // Surplus-satellite independent integrity validation (see FGOConfig::use_surplus_satellite_validation)
     bool surplus_validation = false;
     bool surplus_validation_monitor = false;
@@ -263,6 +264,10 @@ Args parseArgs(int argc, char** argv) {
         }
         if (a == "--surplus-validation-majority-frac" && i + 1 < argc) {
             args.surplus_validation_majority_frac = std::stod(argv[++i]);
+            continue;
+        }
+        if (a == "--fix-demote-surplus-crosscheck") {
+            args.fix_demote_surplus_crosscheck = true;
             continue;
         }
         if (a == "--adaptive-ratio") {
@@ -724,6 +729,9 @@ libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
     }
     if (args.fix_demote_res_rel >= 0.0) {
         config.fix_demote_res_rel = args.fix_demote_res_rel;
+    }
+    if (args.fix_demote_surplus_crosscheck) {
+        config.fix_demote_surplus_crosscheck = true;
     }
     if (args.leaky_persist) {
         config.use_cp_hold_leaky_persist = true;
@@ -2156,6 +2164,8 @@ int main(int argc, char** argv) {
                   << " (demotions=" << fl.diagnostics.fix_plausibility_demotions
                   << ", anchor_demotions=" << fl.diagnostics.fix_plausibility_anchor_demotions
                   << ", hold_skips=" << fl.diagnostics.fix_plausibility_hold_skips
+                  << ", surplus_crosscheck=" << (args.fix_demote_surplus_crosscheck ? "on" : "off")
+                  << ", surplus_reprieves=" << fl.diagnostics.fix_plausibility_surplus_reprieves
                   << ", distance_m=" << config.fix_demote_distance_m
                   << ", anchor=" << (args.fix_demote_anchor ? "on" : "off")
                   << ", anchor_distance_m=" << config.fix_demote_anchor_distance_m
