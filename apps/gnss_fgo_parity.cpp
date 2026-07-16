@@ -25,11 +25,15 @@
 #include <chrono>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <map>
 #include <sstream>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -190,6 +194,11 @@ struct Args {
     bool surplus_validation_majority = false;  // use majority aggregation instead of require-all
     double surplus_validation_majority_frac = -1.0;  // >=0: override surplus_validation_majority_fraction (default 0.5)
     std::string dump_csv_path;  // debug: per-epoch CSV dump (tow/status/E-N-U err/horiz err/E-N pos) for plotting
+    // Opt-in FGOProblem cache (skips repeated RINEX parse + problem build
+    // across validation runs on the SAME inputs/config). Default-off; when
+    // empty, behavior is byte-identical to the pre-cache harness. See
+    // ProblemCacheFingerprint / loadProblemCache / writeProblemCache below.
+    std::string problem_cache_path;
 };
 
 Args parseArgs(int argc, char** argv) {
@@ -198,6 +207,10 @@ Args parseArgs(int argc, char** argv) {
         const std::string a = argv[i];
         // Keep standalone switches outside the very long else-if parser;
         // MSVC otherwise exceeds its block-nesting limit (C1061).
+        if (a == "--problem-cache" && i + 1 < argc) {
+            args.problem_cache_path = argv[++i];
+            continue;
+        }
         if (a == "--fixed-lag-qr") {
             args.fixed_lag_qr = true;
             continue;
@@ -583,6 +596,384 @@ libgnss::FGOProcessor::FGOConfig makeRealDataDdConfig() {
     // so both backends' per-epoch LAMBDA actually engage and can be compared.
     config.lambda_ratio_threshold = 2.0;
     config.use_inter_system_biases = true;
+    return config;
+}
+
+// Maps every CLI knob onto FGOConfig. Extracted out of main() so the
+// --problem-cache fingerprint (which snapshots this struct's raw bytes) can
+// be computed BEFORE the expensive RINEX parse + buildDoubleDifferenceProblem
+// call, without duplicating this arg-to-config mapping logic.
+libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
+    libgnss::FGOProcessor::FGOConfig config = makeRealDataDdConfig();
+    if (args.max_iters > 0) {
+        config.max_iterations = args.max_iters;
+    }
+    if (args.no_robust) {
+        config.use_robust_loss = false;
+    }
+    if (args.no_pr_factors) {
+        // Pure DD path: no undifferenced pseudorange factors, so there are no
+        // receiver-clock / inter-system-bias states at all -- this isolates the
+        // clock-free double-difference RTK path (the Phase-1 target) from the
+        // undifferenced-pseudorange modeling differences between backends.
+        config.use_pseudorange_factors = false;
+    }
+    // Milestone 2e lever 2: elevation / SNR masks on the DD observations
+    // (applied at problem-build time -- attacks deep-urban multipath float).
+    if (args.elev_mask_deg > 0.0) {
+        config.min_elevation_deg = args.elev_mask_deg;
+    }
+    if (args.snr_mask_dbhz > 0.0) {
+        config.min_snr_dbhz = args.snr_mask_dbhz;
+        config.double_difference_reference_min_snr_dbhz = args.snr_mask_dbhz;
+        config.double_difference_base_min_snr_dbhz = args.snr_mask_dbhz;
+    }
+    // Multi-freq control: --single-freq forces the front-end back to L1/E1/B1I
+    // only (the pre-change behaviour) so the SAME harness invocation yields a
+    // single-frequency baseline for apples-to-apples comparison.
+    if (args.single_freq) {
+        config.use_multi_frequency_double_difference = false;
+    }
+    if (args.multi_freq) {
+        config.use_multi_frequency_double_difference = true;
+    }
+    if (args.sd_doppler) {
+        config.use_single_difference_doppler_factors = true;
+    }
+    if (args.postfit_gate) {
+        config.use_fixed_hypothesis_postfit_validation = true;
+    }
+    if (args.adaptive_ratio) {
+        config.use_satellite_count_adaptive_ratio = true;
+    }
+    if (args.external_dr) {
+        config.use_external_doppler_dr_validation = true;
+    }
+    if (args.external_dr_max_age > 0) {
+        config.external_doppler_dr_max_age_epochs = args.external_dr_max_age;
+    }
+    if (args.external_dr_chi2 >= 0.0) {
+        config.external_doppler_dr_chi2_threshold = args.external_dr_chi2;
+    }
+    if (args.external_dr_reset_ratio >= 0.0) {
+        config.external_doppler_dr_reset_min_ratio = args.external_dr_reset_ratio;
+    }
+    if (args.postfit_min_n > 0) {
+        config.fixed_postfit_min_factors = args.postfit_min_n;
+    }
+    if (args.postfit_rms >= 0.0) {
+        config.fixed_postfit_max_rms_m = args.postfit_rms;
+    }
+    if (args.postfit_max_norm >= 0.0) {
+        config.fixed_postfit_max_normalized_residual = args.postfit_max_norm;
+    }
+    if (args.postfit_chi2 >= 0.0) {
+        config.fixed_postfit_max_chi2_per_dof = args.postfit_chi2;
+    }
+    if (args.oneband) {
+        config.double_difference_lambda_one_band_per_satellite = true;
+    }
+    if (args.no_oneband) {
+        config.double_difference_lambda_one_band_per_satellite = false;
+    }
+    if (args.no_band_sigma) {
+        config.double_difference_secondary_carrier_sigma_scale = 1.0;
+        config.double_difference_secondary_pseudorange_sigma_scale = 1.0;
+    }
+    if (args.no_code_align) {
+        config.use_double_difference_secondary_code_alignment = false;
+    }
+    if (args.partial_ar) {
+        config.use_fixed_lag_partial_lambda = true;
+    }
+    if (args.partial_ar_frac >= 0.0) {
+        config.fixed_lag_partial_lambda_min_fraction = args.partial_ar_frac;
+    }
+    if (args.hold_sigma >= 0.0) {
+        config.ambiguity_hold_sigma_cycles = args.hold_sigma;
+    }
+    if (args.stale_pin) {
+        config.use_stale_pin_invalidation = true;
+    }
+    if (args.stale_pin_res >= 0.0) {
+        config.stale_pin_per_sat_residual_m = args.stale_pin_res;
+    }
+    if (args.stale_pin_age >= 0) {
+        config.stale_pin_min_hold_age_epochs = args.stale_pin_age;
+    }
+    if (args.fix_demote) {
+        config.use_fix_plausibility_demotion = true;
+    }
+    if (args.fix_demote_dist >= 0.0) {
+        config.fix_demote_distance_m = args.fix_demote_dist;
+    }
+    if (args.fix_demote_anchor) {
+        config.fix_demote_use_ddpr_anchor = true;
+    }
+    if (args.fix_demote_anchor_dist >= 0.0) {
+        config.fix_demote_anchor_distance_m = args.fix_demote_anchor_dist;
+    }
+    if (args.fix_demote_anchor_res >= 0.0) {
+        config.fix_demote_anchor_trust_res_m = args.fix_demote_anchor_res;
+    }
+    if (args.fix_demote_res >= 0.0) {
+        config.fix_demote_res_m = args.fix_demote_res;
+    }
+    if (args.fix_demote_posthold >= 0) {
+        config.fix_demote_posthold_epochs = args.fix_demote_posthold;
+    }
+    if (args.fix_demote_res_rel >= 0.0) {
+        config.fix_demote_res_rel = args.fix_demote_res_rel;
+    }
+    if (args.leaky_persist) {
+        config.use_cp_hold_leaky_persist = true;
+    }
+    if (args.leaky_persist_decay >= 0.0) {
+        config.cp_hold_persist_decay = args.leaky_persist_decay;
+    }
+    if (args.fix_demote_anchor_gross) {
+        config.fix_demote_anchor_gross = true;
+    }
+    if (args.fix_demote_anchor_gross_ratio >= 0.0) {
+        config.fix_demote_anchor_gross_ratio = args.fix_demote_anchor_gross_ratio;
+    }
+    if (args.fix_demote_anchor_gross_abs >= 0.0) {
+        config.fix_demote_anchor_gross_abs_m = args.fix_demote_anchor_gross_abs;
+    }
+    if (args.surplus_validation) {
+        config.use_surplus_satellite_validation = true;
+    }
+    if (args.surplus_validation_monitor) {
+        config.surplus_validation_monitor_only = true;
+    }
+    if (args.surplus_validation_veto) {
+        config.surplus_validation_veto_high_ratio_fails = true;
+    }
+    if (args.surplus_validation_min_n > 0) {
+        config.surplus_validation_min_surplus_satellites = args.surplus_validation_min_n;
+    }
+    if (args.surplus_validation_ap_lt1 >= 0.0) {
+        config.surplus_validation_aperture_pdop_lt1_cycles = args.surplus_validation_ap_lt1;
+    }
+    if (args.surplus_validation_ap_1to2 >= 0.0) {
+        config.surplus_validation_aperture_pdop_1to2_cycles = args.surplus_validation_ap_1to2;
+    }
+    if (args.surplus_validation_ap_gt2 >= 0.0) {
+        config.surplus_validation_aperture_pdop_gt2_cycles = args.surplus_validation_ap_gt2;
+    }
+    if (args.surplus_validation_majority) {
+        config.surplus_validation_require_all = false;
+    }
+    if (args.surplus_validation_majority_frac >= 0.0) {
+        config.surplus_validation_majority_fraction = args.surplus_validation_majority_frac;
+    }
+    if (args.no_gal_ar) {
+        config.exclude_galileo_ambiguity_fixing = true;
+    }
+    if (args.ratio_threshold > 0.0) {
+        config.lambda_ratio_threshold = args.ratio_threshold;
+    }
+    if (args.imu_ratio_aperture) {
+        config.use_imu_aided_ratio_aperture = true;
+    }
+    if (args.imu_ratio_relaxed >= 0.0) {
+        config.imu_aided_relaxed_ratio_threshold = args.imu_ratio_relaxed;
+    }
+    if (args.imu_ratio_float_sep >= 0.0) {
+        config.imu_aided_max_float_separation_m = args.imu_ratio_float_sep;
+    }
+    if (args.imu_ratio_pred_sep >= 0.0) {
+        config.imu_aided_max_prediction_separation_m = args.imu_ratio_pred_sep;
+    }
+    if (args.fixed_history_dr) {
+        config.use_fixed_history_dr_validation = true;
+    }
+    if (args.fixed_history_dr_window > 0) {
+        config.fixed_history_dr_window_epochs = args.fixed_history_dr_window;
+    }
+    if (args.fixed_history_dr_sep >= 0.0) {
+        config.fixed_history_dr_max_separation_m = args.fixed_history_dr_sep;
+    }
+    if (args.anchor_aided_validation) {
+        config.use_ddpr_anchor_aided_validation = true;
+    }
+    if (args.constellation_par) {
+        config.use_constellation_ranked_partial_ar = true;
+    }
+    if (args.residual_par) {
+        config.use_residual_screened_partial_ar = true;
+    }
+    if (args.variance_par) {
+        config.use_variance_ranked_partial_ar = true;
+    }
+    if (args.par_max_std >= 0.0) {
+        config.partial_ar_max_std_cycles = args.par_max_std;
+    }
+    if (args.hold_ratio > 0.0) {
+        config.ambiguity_hold_ratio_threshold = args.hold_ratio;
+    }
+    if (args.hold_min > 0) {
+        config.ambiguity_hold_min_fixed = args.hold_min;
+    }
+    if (args.min_fixed > 0) {
+        config.min_fixed_ambiguities = args.min_fixed;
+    }
+    if (args.gates) {
+        config.use_epoch_quality_gates = true;
+    }
+    if (args.gate_res >= 0.0) {
+        config.gate_ddpr_res_max_m = args.gate_res;
+    }
+    if (args.gate_sat_res >= 0.0) {
+        config.gate_per_sat_res_max_m = args.gate_sat_res;
+    }
+    if (args.gate_gdop > 0.0) {
+        config.gate_gdop_max = args.gate_gdop;
+    }
+    if (args.gate_min_sat > 0) {
+        config.gate_min_satellites = args.gate_min_sat;
+    }
+    if (args.cmc) {
+        config.use_code_minus_carrier_screening = true;
+    }
+    if (args.cmc_jump >= 0.0) {
+        config.code_minus_carrier_jump_threshold_m = args.cmc_jump;
+    }
+    if (args.cmc_level >= 0.0) {
+        config.code_minus_carrier_level_threshold_m = args.cmc_level;
+    }
+    config.code_minus_carrier_level_pseudorange_only = args.cmc_level_pr_only;
+    if (args.cmc_warmup > 0) {
+        config.code_minus_carrier_warmup_epochs = args.cmc_warmup;
+    }
+    if (args.cmc_alpha >= 0.0) {
+        config.code_minus_carrier_baseline_alpha = args.cmc_alpha;
+    }
+    if (args.cp_hold) {
+        config.use_cp_hold_recovery = true;
+    }
+    if (args.cp_hold_float_recovery) {
+        config.use_cp_hold_float_recovery = true;
+    }
+    if (args.cp_hold_anchor_release) {
+        config.use_cp_hold_anchor_release = true;
+    }
+    if (args.cp_hold_keep_imu_chain) {
+        config.cp_hold_break_imu_chain = false;
+    }
+    if (args.selective_cp_hold) {
+        config.use_selective_cp_hold = true;
+    }
+    if (args.cp_hold_res >= 0.0) {
+        config.cp_hold_main_residual_threshold_m = args.cp_hold_res;
+    }
+    if (args.cp_hold_catastrophic >= 0.0) {
+        config.cp_hold_catastrophic_threshold_m = args.cp_hold_catastrophic;
+    }
+    if (args.cp_hold_fast_worst_sat >= 0.0) {
+        config.cp_hold_fast_worst_satellite_min_m = args.cp_hold_fast_worst_sat;
+    }
+    if (args.cp_hold_persist > 0) {
+        config.cp_hold_persist_epochs = args.cp_hold_persist;
+    }
+    if (args.cp_hold_epochs_n > 0) {
+        config.cp_hold_epochs = args.cp_hold_epochs_n;
+    }
+    if (args.cp_hold_release_res >= 0.0) {
+        config.cp_hold_release_threshold_m = args.cp_hold_release_res;
+    }
+    if (args.cp_hold_release_n > 0) {
+        config.cp_hold_release_count = args.cp_hold_release_n;
+    }
+    if (args.cp_hold_pose_replace >= 0.0) {
+        config.cp_hold_pose_replace_threshold_m = args.cp_hold_pose_replace;
+    }
+    if (args.cp_hold_gdop >= 0.0) {
+        config.cp_hold_max_gdop = args.cp_hold_gdop;
+    }
+    if (args.exc_recovery) {
+        config.use_solve_exception_recovery = true;
+    }
+    if (args.ddpr_anchor) {
+        config.use_ddpr_anchor = true;
+    }
+    if (args.ddpr_anchor_max_res >= 0.0) {
+        config.ddpr_anchor_max_residual_m = args.ddpr_anchor_max_res;
+    }
+    if (args.ddpr_anchor_fde >= 0.0) {
+        config.ddpr_anchor_fde_threshold_m = args.ddpr_anchor_fde;
+    }
+    if (args.ddpr_anchor_min_n > 0) {
+        config.ddpr_anchor_min_factors = args.ddpr_anchor_min_n;
+    }
+    if (args.ddpr_anchor_boot_epochs >= 0) {
+        config.ddpr_anchor_bootstrap_epochs = args.ddpr_anchor_boot_epochs;
+    }
+    if (args.ddpr_anchor_boot_sigma >= 0.0) {
+        config.ddpr_anchor_bootstrap_sigma_m = args.ddpr_anchor_boot_sigma;
+    }
+    if (args.ddpr_anchor_boot_after_mass >= 0) {
+        config.cp_hold_bootstrap_after_mass_reset = (args.ddpr_anchor_boot_after_mass != 0);
+    }
+    if (args.fde) {
+        config.use_fde = true;
+    }
+    config.fde_pseudorange_only = args.fde_pr_only;
+    config.fde_carrier_quarantine = args.fde_cp_quarantine;
+    if (args.fde_pr >= 0.0) {
+        config.fde_pseudorange_threshold_m = args.fde_pr;
+    }
+    if (args.fde_cp >= 0.0) {
+        config.fde_carrier_threshold_m = args.fde_cp;
+    }
+    if (args.fde_frac >= 0.0) {
+        config.fde_max_rejected_fraction = args.fde_frac;
+    }
+    if (args.fde_iters > 0) {
+        config.fde_max_iterations = args.fde_iters;
+    }
+    if (args.sat_badness) {
+        config.use_sat_badness_downweight = true;
+    }
+    if (args.sat_badness_cp_scale >= 0.0) {
+        config.sat_badness_carrier_sigma_scale = args.sat_badness_cp_scale;
+    }
+    if (args.sat_badness_pr_scale >= 0.0) {
+        config.sat_badness_pseudorange_sigma_scale = args.sat_badness_pr_scale;
+    }
+    if (args.sat_badness_ddpr_thresh >= 0.0) {
+        config.sat_badness_ddpr_threshold_m = args.sat_badness_ddpr_thresh;
+    }
+    if (args.sat_badness_clamp >= 0.0) {
+        config.sat_badness_residual_clamp_m = args.sat_badness_clamp;
+    }
+    if (args.sat_badness_cap >= 0.0) {
+        config.sat_badness_score_cap = args.sat_badness_cap;
+    }
+    if (args.sat_badness_cppr_decay >= 0.0) {
+        config.sat_badness_cppr_decay = args.sat_badness_cppr_decay;
+    }
+    if (args.varerr) {
+        config.use_elevation_dependent_sigma = true;
+    }
+    if (args.varerr_a >= 0.0) {
+        config.elevation_sigma_err_a_m = args.varerr_a;
+    }
+    if (args.varerr_b >= 0.0) {
+        config.elevation_sigma_err_b_m = args.varerr_b;
+    }
+    if (args.varerr_eratio >= 0.0) {
+        config.elevation_sigma_pseudorange_ratio = args.varerr_eratio;
+    }
+    if (args.integ_cov >= 0.0) {
+        config.imu_integration_covariance = args.integ_cov;
+    }
+    if (args.integ_cov_inflate) {
+        config.use_imu_integration_covariance_inflation = true;
+    }
+    if (args.integ_cov_max >= 0.0) {
+        config.imu_integration_covariance_max = args.integ_cov_max;
+    }
     return config;
 }
 
@@ -1160,432 +1551,365 @@ void applyImuNoiseOverrides(const Args& args, libgnss::FGOProcessor::FGOProblem&
     if (args.gravity_mps2 >= 0.0) problem.imu.noise.gravity_mps2 = args.gravity_mps2;
 }
 
+// ---------------------------------------------------------------------------
+// --problem-cache: opt-in FGOProblem cache.
+//
+// Skips the RINEX parse (rover+base+nav) and buildDoubleDifferenceProblem()
+// call -- the dominant cost of a validation run before the fixed-lag solve
+// itself -- when an on-disk cache already holds the identical problem for
+// identical inputs+config. Every type reachable from FGOProblem (down through
+// PseudorangeFactor, DoubleDifferenceCarrierFactor, AmbiguityState, EpochSeed,
+// ObservationModelDebug, SatelliteId, GNSSTime, Eigen::Vector3d/Matrix3d, ...)
+// is a flat POD struct: no pointers, no std::string, no std::map. A generic
+// length-prefixed raw-bytes writer/reader therefore suffices for every vector
+// member; std::vector<bool> (FGOProblem::clock_jumps) is the one exception
+// (bit-packed, not a raw T[]) and gets its own byte-per-flag helpers.
+//
+// Scope: only the pre-IMU FGOProblem (RINEX parse + DD factor construction)
+// is cached. buildImuInput()/applyImuNoiseOverrides() (imu.csv parse + static
+// leveling/heading-latch) still run unconditionally on every invocation --
+// they are a small linear pass next to the RINEX/DD cost above, so caching
+// them isn't worth the extra serialization surface.
+//
+// Fingerprint: format version + size/mtime of the 4 input files + every
+// config field that affects buildDoubleDifferenceProblem, i.e. FGOConfig's
+// own bytes (itself all-POD, see fgo.hpp) plus the Args fields that affect
+// the SAME build phase's epoch selection (--max-epochs/--start-epoch). Any
+// mismatch (missing/changed file, different knob, different format version)
+// -> loud stderr warning + full rebuild; the cache is never silently stale.
+namespace problem_cache {
+
+// NOTE on std::is_trivially_copyable: every FGOProblem-reachable type here is
+// a flat struct of scalars / SatelliteId / GNSSTime / fixed-size Eigen
+// vectors-matrices -- safe to round-trip via raw bytes. They are NOT,
+// however, all std::is_trivially_copyable: Eigen's fixed-size types (and
+// GNSSTime, which wraps a chrono conversion helper) declare their own
+// (semantically trivial) copy constructor/assignment for expression-template
+// support, which disqualifies them from that strict trait even though a
+// memcpy is exactly what those constructors do. So this intentionally does
+// NOT static_assert on is_trivially_copyable; standard_layout is checked
+// instead as a much weaker, but still useful, guard against accidentally
+// pointing this at a type with a std::string/std::vector/pointer member.
+template <typename T>
+void writePod(std::ostream& os, const T& v) {
+    static_assert(std::is_standard_layout_v<T>, "writePod requires a standard-layout (flat POD-like) type");
+    os.write(reinterpret_cast<const char*>(&v), sizeof(T));
+}
+
+template <typename T>
+bool readPod(std::istream& is, T& v) {
+    static_assert(std::is_standard_layout_v<T>, "readPod requires a standard-layout (flat POD-like) type");
+    is.read(reinterpret_cast<char*>(&v), sizeof(T));
+    return static_cast<bool>(is);
+}
+
+template <typename T>
+void writeVec(std::ostream& os, const std::vector<T>& v) {
+    static_assert(std::is_standard_layout_v<T>, "writeVec requires a standard-layout (flat POD-like) element type");
+    const uint64_t n = v.size();
+    writePod(os, n);
+    if (n != 0) {
+        os.write(reinterpret_cast<const char*>(v.data()), static_cast<std::streamsize>(sizeof(T) * n));
+    }
+}
+
+template <typename T>
+bool readVec(std::istream& is, std::vector<T>& v) {
+    static_assert(std::is_standard_layout_v<T>, "readVec requires a standard-layout (flat POD-like) element type");
+    uint64_t n = 0;
+    if (!readPod(is, n)) return false;
+    if (n > (1ull << 34)) return false;  // sanity cap against a corrupt/foreign file
+    v.assign(static_cast<std::size_t>(n), T{});
+    if (n != 0) {
+        is.read(reinterpret_cast<char*>(v.data()), static_cast<std::streamsize>(sizeof(T) * n));
+    }
+    return static_cast<bool>(is);
+}
+
+// vector<bool> is bit-packed, not a raw array the tricks above can alias --
+// give it a dedicated byte-per-flag round trip.
+void writeBoolVec(std::ostream& os, const std::vector<bool>& v) {
+    const uint64_t n = v.size();
+    writePod(os, n);
+    for (bool b : v) {
+        const uint8_t byte = b ? 1 : 0;
+        writePod(os, byte);
+    }
+}
+
+bool readBoolVec(std::istream& is, std::vector<bool>& v) {
+    uint64_t n = 0;
+    if (!readPod(is, n)) return false;
+    if (n > (1ull << 34)) return false;
+    v.assign(static_cast<std::size_t>(n), false);
+    for (uint64_t i = 0; i < n; ++i) {
+        uint8_t byte = 0;
+        if (!readPod(is, byte)) return false;
+        v[static_cast<std::size_t>(i)] = (byte != 0);
+    }
+    return true;
+}
+
+void writeProblem(std::ostream& os, const libgnss::FGOProcessor::FGOProblem& p) {
+    writeVec(os, p.epochs);
+    writeBoolVec(os, p.clock_jumps);
+    writeVec(os, p.pseudorange_factors);
+    writeVec(os, p.tdcp_factors);
+    writeVec(os, p.single_difference_doppler_factors);
+    writeVec(os, p.single_difference_tdcp_factors);
+    writeVec(os, p.ambiguity_states);
+    writeVec(os, p.carrier_observations);
+    writeVec(os, p.double_difference_pseudorange_observations);
+    writeVec(os, p.double_difference_reference_observations);
+    writeVec(os, p.carrier_phase_factors);
+    writeVec(os, p.double_difference_pseudorange_factors);
+    writeVec(os, p.double_difference_carrier_factors);
+    writeVec(os, p.excluded_double_difference_carrier_factors);
+    writeVec(os, p.ambiguity_between_factors);
+    writePod(os, p.diagnostics);
+}
+
+bool readProblem(std::istream& is, libgnss::FGOProcessor::FGOProblem& p) {
+    return readVec(is, p.epochs) &&
+           readBoolVec(is, p.clock_jumps) &&
+           readVec(is, p.pseudorange_factors) &&
+           readVec(is, p.tdcp_factors) &&
+           readVec(is, p.single_difference_doppler_factors) &&
+           readVec(is, p.single_difference_tdcp_factors) &&
+           readVec(is, p.ambiguity_states) &&
+           readVec(is, p.carrier_observations) &&
+           readVec(is, p.double_difference_pseudorange_observations) &&
+           readVec(is, p.double_difference_reference_observations) &&
+           readVec(is, p.carrier_phase_factors) &&
+           readVec(is, p.double_difference_pseudorange_factors) &&
+           readVec(is, p.double_difference_carrier_factors) &&
+           readVec(is, p.excluded_double_difference_carrier_factors) &&
+           readVec(is, p.ambiguity_between_factors) &&
+           readPod(is, p.diagnostics);
+}
+
+struct FileId {
+    int64_t size_bytes = -1;
+    int64_t mtime_ns = -1;
+};
+
+FileId statFile(const std::string& path) {
+    FileId id;
+    if (path.empty()) return id;
+    std::error_code ec;
+    const auto sz = std::filesystem::file_size(path, ec);
+    if (!ec) id.size_bytes = static_cast<int64_t>(sz);
+    ec.clear();
+    const auto mt = std::filesystem::last_write_time(path, ec);
+    if (!ec) {
+        id.mtime_ns = static_cast<int64_t>(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(mt.time_since_epoch()).count());
+    }
+    return id;
+}
+
+// Bump whenever writeProblem/readProblem's on-disk layout changes (new
+// vector, new factor field, ...) -- an old cache then fails the magic/version
+// check in load() below and is rebuilt instead of misread.
+constexpr uint32_t kMagic = 0x50434647u;  // "PCFG" (problem-cache fgo)
+constexpr uint32_t kVersion = 1u;
+
+struct Fingerprint {
+    uint32_t magic;
+    uint32_t version;
+    FileId rover;
+    FileId base;
+    FileId nav;
+    FileId imu;
+    int32_t max_epochs;
+    int32_t start_epoch;
+    libgnss::FGOProcessor::FGOConfig config;  // full byte-for-byte snapshot
+};
+
+Fingerprint computeFingerprint(const Args& args, const libgnss::FGOProcessor::FGOConfig& config) {
+    Fingerprint fp;
+    std::memset(&fp, 0, sizeof(fp));  // deterministic padding bytes for the memcmp below
+    fp.magic = kMagic;
+    fp.version = kVersion;
+    fp.rover = statFile(args.rover_path);
+    fp.base = statFile(args.base_path);
+    fp.nav = statFile(args.nav_path);
+    fp.imu = statFile(args.imu_path);
+    fp.max_epochs = args.max_epochs;
+    fp.start_epoch = args.start_epoch;
+    fp.config = config;
+    return fp;
+}
+
+struct CacheMeta {
+    uint64_t rover_epoch_count = 0;
+    uint64_t base_epoch_count = 0;
+    libgnss::Vector3d base_position = libgnss::Vector3d::Zero();
+};
+
+// Returns true and populates {problem, meta} on a validated hit. On ANY
+// mismatch (missing file, truncated/corrupt file, format version bump, or a
+// fingerprint field that no longer matches the current run) prints a loud
+// warning and returns false -- callers must then rebuild normally. Never
+// silently serves a stale problem.
+bool load(const std::string& path, const Fingerprint& want, libgnss::FGOProcessor::FGOProblem& problem,
+          CacheMeta& meta) {
+    std::ifstream is(path, std::ios::binary);
+    if (!is) {
+        std::cout << "problem-cache: no cache file at " << path << " -- building normally\n";
+        return false;
+    }
+    Fingerprint have;
+    std::memset(&have, 0, sizeof(have));
+    if (!readPod(is, have)) {
+        std::cerr << "problem-cache: WARNING -- " << path
+                  << " is truncated/unreadable; ignoring and rebuilding.\n";
+        return false;
+    }
+    if (have.magic != kMagic || have.version != kVersion) {
+        std::cerr << "problem-cache: WARNING -- " << path
+                  << " has an incompatible format (magic/version mismatch); ignoring and rebuilding.\n";
+        return false;
+    }
+    if (std::memcmp(&have, &want, sizeof(Fingerprint)) != 0) {
+        std::cerr << "problem-cache: WARNING -- " << path
+                  << " fingerprint mismatch (inputs or config knobs changed since it was written);"
+                     " ignoring and rebuilding.\n";
+        return false;
+    }
+    if (!readPod(is, meta) || !readProblem(is, problem)) {
+        std::cerr << "problem-cache: WARNING -- " << path
+                  << " is truncated/corrupt after the fingerprint; ignoring and rebuilding.\n";
+        return false;
+    }
+    return true;
+}
+
+void save(const std::string& path, const Fingerprint& fp, const libgnss::FGOProcessor::FGOProblem& problem,
+          const CacheMeta& meta) {
+    const std::string tmp_path = path + ".tmp";
+    std::ofstream os(tmp_path, std::ios::binary | std::ios::trunc);
+    if (!os) {
+        std::cerr << "problem-cache: WARNING -- cannot open " << tmp_path
+                  << " for writing; skipping cache write.\n";
+        return;
+    }
+    writePod(os, fp);
+    writePod(os, meta);
+    writeProblem(os, problem);
+    os.close();
+    if (!os) {
+        std::cerr << "problem-cache: WARNING -- write to " << tmp_path << " failed; skipping cache write.\n";
+        return;
+    }
+    std::error_code ec;
+    std::filesystem::rename(tmp_path, path, ec);  // atomic-ish swap; avoids a half-written cache on crash
+    if (ec) {
+        std::error_code ec2;
+        std::filesystem::remove(path, ec2);
+        std::filesystem::rename(tmp_path, path, ec);
+    }
+}
+
+}  // namespace problem_cache
+
 }  // namespace
 
 int main(int argc, char** argv) {
     const Args args = parseArgs(argc, argv);
 
-    // Navigation.
-    libgnss::io::RINEXReader nav_reader;
-    if (!nav_reader.open(args.nav_path)) {
-        std::cerr << "Error: cannot open nav " << args.nav_path << "\n";
-        return 1;
-    }
-    libgnss::NavigationData nav;
-    if (!nav_reader.readNavigationData(nav)) {
-        std::cerr << "Error: cannot read nav " << args.nav_path << "\n";
-        return 1;
+    // config depends only on args (see buildFgoConfig) -- build it FIRST so a
+    // --problem-cache fingerprint (which snapshots these bytes) can gate the
+    // expensive RINEX parse + buildDoubleDifferenceProblem() call below.
+    libgnss::FGOProcessor::FGOConfig config = buildFgoConfig(args);
+
+    libgnss::FGOProcessor::FGOProblem problem;
+    uint64_t rover_epoch_count = 0;
+    uint64_t base_epoch_count = 0;
+    libgnss::Vector3d base_position = libgnss::Vector3d::Zero();
+    bool problem_from_cache = false;
+    const bool use_problem_cache = !args.problem_cache_path.empty();
+    problem_cache::Fingerprint problem_fp;
+    if (use_problem_cache) {
+        problem_fp = problem_cache::computeFingerprint(args, config);
+        problem_cache::CacheMeta meta;
+        if (problem_cache::load(args.problem_cache_path, problem_fp, problem, meta)) {
+            problem_from_cache = true;
+            rover_epoch_count = meta.rover_epoch_count;
+            base_epoch_count = meta.base_epoch_count;
+            base_position = meta.base_position;
+            std::cout << "problem-cache: HIT (" << args.problem_cache_path
+                      << ") -- skipped RINEX parse + problem build\n";
+        }
     }
 
-    // Base station position from its RINEX header (mirrors gnss_fgo.cpp).
-    libgnss::io::RINEXReader base_header_reader;
-    if (!base_header_reader.open(args.base_path)) {
-        std::cerr << "Error: cannot open base " << args.base_path << "\n";
-        return 1;
-    }
-    libgnss::io::RINEXReader::RINEXHeader base_header;
-    if (!base_header_reader.readHeader(base_header)) {
-        std::cerr << "Error: cannot read base header " << args.base_path << "\n";
-        return 1;
-    }
-    if (base_header.approximate_position.norm() <= 1e6) {
-        std::cerr << "Error: base approximate position unavailable in " << args.base_path << "\n";
-        return 1;
-    }
-    const libgnss::Vector3d base_position = base_header.approximate_position;
+    if (!problem_from_cache) {
+        // Navigation.
+        libgnss::io::RINEXReader nav_reader;
+        if (!nav_reader.open(args.nav_path)) {
+            std::cerr << "Error: cannot open nav " << args.nav_path << "\n";
+            return 1;
+        }
+        libgnss::NavigationData nav;
+        if (!nav_reader.readNavigationData(nav)) {
+            std::cerr << "Error: cannot read nav " << args.nav_path << "\n";
+            return 1;
+        }
 
-    const std::vector<libgnss::ObservationData> rover_epochs =
-        loadEpochs(args.rover_path, args.max_epochs, libgnss::Vector3d::Zero(), false,
-                   args.start_epoch);
-    // Base is read fully (its epochs are matched/interpolated to rover time
-    // inside buildDoubleDifferenceProblem); no rover-side epoch cap on base.
-    const std::vector<libgnss::ObservationData> base_epochs =
-        loadEpochs(args.base_path, 0, base_position, true);
+        // Base station position from its RINEX header (mirrors gnss_fgo.cpp).
+        libgnss::io::RINEXReader base_header_reader;
+        if (!base_header_reader.open(args.base_path)) {
+            std::cerr << "Error: cannot open base " << args.base_path << "\n";
+            return 1;
+        }
+        libgnss::io::RINEXReader::RINEXHeader base_header;
+        if (!base_header_reader.readHeader(base_header)) {
+            std::cerr << "Error: cannot read base header " << args.base_path << "\n";
+            return 1;
+        }
+        if (base_header.approximate_position.norm() <= 1e6) {
+            std::cerr << "Error: base approximate position unavailable in " << args.base_path << "\n";
+            return 1;
+        }
+        base_position = base_header.approximate_position;
+
+        const std::vector<libgnss::ObservationData> rover_epochs =
+            loadEpochs(args.rover_path, args.max_epochs, libgnss::Vector3d::Zero(), false,
+                       args.start_epoch);
+        // Base is read fully (its epochs are matched/interpolated to rover time
+        // inside buildDoubleDifferenceProblem); no rover-side epoch cap on base.
+        const std::vector<libgnss::ObservationData> base_epochs =
+            loadEpochs(args.base_path, 0, base_position, true);
+        rover_epoch_count = rover_epochs.size();
+        base_epoch_count = base_epochs.size();
+
+        if (use_problem_cache) {
+            std::cout << "problem-cache: MISS (" << args.problem_cache_path
+                      << ") -- parsing RINEX + building problem normally\n";
+        }
+
+        const libgnss::FGOProcessor builder(config);
+        problem = builder.buildDoubleDifferenceProblem(rover_epochs, base_epochs, nav, base_position);
+
+        if (use_problem_cache) {
+            problem_cache::CacheMeta meta;
+            meta.rover_epoch_count = rover_epoch_count;
+            meta.base_epoch_count = base_epoch_count;
+            meta.base_position = base_position;
+            problem_cache::save(args.problem_cache_path, problem_fp, problem, meta);
+        }
+    }
 
     std::cout << "Dataset:\n"
-              << "  rover=" << args.rover_path << " (" << rover_epochs.size() << " epochs"
+              << "  rover=" << args.rover_path << " (" << rover_epoch_count << " epochs"
               << (args.max_epochs > 0 ? " capped" : "")
               << (args.start_epoch > 0
                       ? ", starting at input epoch " + std::to_string(args.start_epoch)
                       : std::string())
               << ")\n"
-              << "  base=" << args.base_path << " (" << base_epochs.size() << " epochs)\n"
+              << "  base=" << args.base_path << " (" << base_epoch_count << " epochs)\n"
               << "  nav=" << args.nav_path << "\n"
               << "  base_pos_ecef=[" << base_position.transpose() << "]\n";
-
-    libgnss::FGOProcessor::FGOConfig config = makeRealDataDdConfig();
-    if (args.max_iters > 0) {
-        config.max_iterations = args.max_iters;
-    }
-    if (args.no_robust) {
-        config.use_robust_loss = false;
-    }
-    if (args.no_pr_factors) {
-        // Pure DD path: no undifferenced pseudorange factors, so there are no
-        // receiver-clock / inter-system-bias states at all -- this isolates the
-        // clock-free double-difference RTK path (the Phase-1 target) from the
-        // undifferenced-pseudorange modeling differences between backends.
-        config.use_pseudorange_factors = false;
-    }
-    // Milestone 2e lever 2: elevation / SNR masks on the DD observations
-    // (applied at problem-build time -- attacks deep-urban multipath float).
-    if (args.elev_mask_deg > 0.0) {
-        config.min_elevation_deg = args.elev_mask_deg;
-    }
-    if (args.snr_mask_dbhz > 0.0) {
-        config.min_snr_dbhz = args.snr_mask_dbhz;
-        config.double_difference_reference_min_snr_dbhz = args.snr_mask_dbhz;
-        config.double_difference_base_min_snr_dbhz = args.snr_mask_dbhz;
-    }
-    // Multi-freq control: --single-freq forces the front-end back to L1/E1/B1I
-    // only (the pre-change behaviour) so the SAME harness invocation yields a
-    // single-frequency baseline for apples-to-apples comparison.
-    if (args.single_freq) {
-        config.use_multi_frequency_double_difference = false;
-    }
-    if (args.multi_freq) {
-        config.use_multi_frequency_double_difference = true;
-    }
-    if (args.sd_doppler) {
-        config.use_single_difference_doppler_factors = true;
-    }
-    if (args.postfit_gate) {
-        config.use_fixed_hypothesis_postfit_validation = true;
-    }
-    if (args.adaptive_ratio) {
-        config.use_satellite_count_adaptive_ratio = true;
-    }
-    if (args.external_dr) {
-        config.use_external_doppler_dr_validation = true;
-    }
-    if (args.external_dr_max_age > 0) {
-        config.external_doppler_dr_max_age_epochs = args.external_dr_max_age;
-    }
-    if (args.external_dr_chi2 >= 0.0) {
-        config.external_doppler_dr_chi2_threshold = args.external_dr_chi2;
-    }
-    if (args.external_dr_reset_ratio >= 0.0) {
-        config.external_doppler_dr_reset_min_ratio = args.external_dr_reset_ratio;
-    }
-    if (args.postfit_min_n > 0) {
-        config.fixed_postfit_min_factors = args.postfit_min_n;
-    }
-    if (args.postfit_rms >= 0.0) {
-        config.fixed_postfit_max_rms_m = args.postfit_rms;
-    }
-    if (args.postfit_max_norm >= 0.0) {
-        config.fixed_postfit_max_normalized_residual = args.postfit_max_norm;
-    }
-    if (args.postfit_chi2 >= 0.0) {
-        config.fixed_postfit_max_chi2_per_dof = args.postfit_chi2;
-    }
-    if (args.oneband) {
-        config.double_difference_lambda_one_band_per_satellite = true;
-    }
-    if (args.no_oneband) {
-        config.double_difference_lambda_one_band_per_satellite = false;
-    }
-    if (args.no_band_sigma) {
-        config.double_difference_secondary_carrier_sigma_scale = 1.0;
-        config.double_difference_secondary_pseudorange_sigma_scale = 1.0;
-    }
-    if (args.no_code_align) {
-        config.use_double_difference_secondary_code_alignment = false;
-    }
-    if (args.partial_ar) {
-        config.use_fixed_lag_partial_lambda = true;
-    }
-    if (args.partial_ar_frac >= 0.0) {
-        config.fixed_lag_partial_lambda_min_fraction = args.partial_ar_frac;
-    }
-    if (args.hold_sigma >= 0.0) {
-        config.ambiguity_hold_sigma_cycles = args.hold_sigma;
-    }
-    if (args.stale_pin) {
-        config.use_stale_pin_invalidation = true;
-    }
-    if (args.stale_pin_res >= 0.0) {
-        config.stale_pin_per_sat_residual_m = args.stale_pin_res;
-    }
-    if (args.stale_pin_age >= 0) {
-        config.stale_pin_min_hold_age_epochs = args.stale_pin_age;
-    }
-    if (args.fix_demote) {
-        config.use_fix_plausibility_demotion = true;
-    }
-    if (args.fix_demote_dist >= 0.0) {
-        config.fix_demote_distance_m = args.fix_demote_dist;
-    }
-    if (args.fix_demote_anchor) {
-        config.fix_demote_use_ddpr_anchor = true;
-    }
-    if (args.fix_demote_anchor_dist >= 0.0) {
-        config.fix_demote_anchor_distance_m = args.fix_demote_anchor_dist;
-    }
-    if (args.fix_demote_anchor_res >= 0.0) {
-        config.fix_demote_anchor_trust_res_m = args.fix_demote_anchor_res;
-    }
-    if (args.fix_demote_res >= 0.0) {
-        config.fix_demote_res_m = args.fix_demote_res;
-    }
-    if (args.fix_demote_posthold >= 0) {
-        config.fix_demote_posthold_epochs = args.fix_demote_posthold;
-    }
-    if (args.fix_demote_res_rel >= 0.0) {
-        config.fix_demote_res_rel = args.fix_demote_res_rel;
-    }
-    if (args.leaky_persist) {
-        config.use_cp_hold_leaky_persist = true;
-    }
-    if (args.leaky_persist_decay >= 0.0) {
-        config.cp_hold_persist_decay = args.leaky_persist_decay;
-    }
-    if (args.fix_demote_anchor_gross) {
-        config.fix_demote_anchor_gross = true;
-    }
-    if (args.fix_demote_anchor_gross_ratio >= 0.0) {
-        config.fix_demote_anchor_gross_ratio = args.fix_demote_anchor_gross_ratio;
-    }
-    if (args.fix_demote_anchor_gross_abs >= 0.0) {
-        config.fix_demote_anchor_gross_abs_m = args.fix_demote_anchor_gross_abs;
-    }
-    if (args.surplus_validation) {
-        config.use_surplus_satellite_validation = true;
-    }
-    if (args.surplus_validation_monitor) {
-        config.surplus_validation_monitor_only = true;
-    }
-    if (args.surplus_validation_veto) {
-        config.surplus_validation_veto_high_ratio_fails = true;
-    }
-    if (args.surplus_validation_min_n > 0) {
-        config.surplus_validation_min_surplus_satellites = args.surplus_validation_min_n;
-    }
-    if (args.surplus_validation_ap_lt1 >= 0.0) {
-        config.surplus_validation_aperture_pdop_lt1_cycles = args.surplus_validation_ap_lt1;
-    }
-    if (args.surplus_validation_ap_1to2 >= 0.0) {
-        config.surplus_validation_aperture_pdop_1to2_cycles = args.surplus_validation_ap_1to2;
-    }
-    if (args.surplus_validation_ap_gt2 >= 0.0) {
-        config.surplus_validation_aperture_pdop_gt2_cycles = args.surplus_validation_ap_gt2;
-    }
-    if (args.surplus_validation_majority) {
-        config.surplus_validation_require_all = false;
-    }
-    if (args.surplus_validation_majority_frac >= 0.0) {
-        config.surplus_validation_majority_fraction = args.surplus_validation_majority_frac;
-    }
-    if (args.no_gal_ar) {
-        config.exclude_galileo_ambiguity_fixing = true;
-    }
-    if (args.ratio_threshold > 0.0) {
-        config.lambda_ratio_threshold = args.ratio_threshold;
-    }
-    if (args.imu_ratio_aperture) {
-        config.use_imu_aided_ratio_aperture = true;
-    }
-    if (args.imu_ratio_relaxed >= 0.0) {
-        config.imu_aided_relaxed_ratio_threshold = args.imu_ratio_relaxed;
-    }
-    if (args.imu_ratio_float_sep >= 0.0) {
-        config.imu_aided_max_float_separation_m = args.imu_ratio_float_sep;
-    }
-    if (args.imu_ratio_pred_sep >= 0.0) {
-        config.imu_aided_max_prediction_separation_m = args.imu_ratio_pred_sep;
-    }
-    if (args.fixed_history_dr) {
-        config.use_fixed_history_dr_validation = true;
-    }
-    if (args.fixed_history_dr_window > 0) {
-        config.fixed_history_dr_window_epochs = args.fixed_history_dr_window;
-    }
-    if (args.fixed_history_dr_sep >= 0.0) {
-        config.fixed_history_dr_max_separation_m = args.fixed_history_dr_sep;
-    }
-    if (args.anchor_aided_validation) {
-        config.use_ddpr_anchor_aided_validation = true;
-    }
-    if (args.constellation_par) {
-        config.use_constellation_ranked_partial_ar = true;
-    }
-    if (args.residual_par) {
-        config.use_residual_screened_partial_ar = true;
-    }
-    if (args.variance_par) {
-        config.use_variance_ranked_partial_ar = true;
-    }
-    if (args.par_max_std >= 0.0) {
-        config.partial_ar_max_std_cycles = args.par_max_std;
-    }
-    if (args.hold_ratio > 0.0) {
-        config.ambiguity_hold_ratio_threshold = args.hold_ratio;
-    }
-    if (args.hold_min > 0) {
-        config.ambiguity_hold_min_fixed = args.hold_min;
-    }
-    if (args.min_fixed > 0) {
-        config.min_fixed_ambiguities = args.min_fixed;
-    }
-    if (args.gates) {
-        config.use_epoch_quality_gates = true;
-    }
-    if (args.gate_res >= 0.0) {
-        config.gate_ddpr_res_max_m = args.gate_res;
-    }
-    if (args.gate_sat_res >= 0.0) {
-        config.gate_per_sat_res_max_m = args.gate_sat_res;
-    }
-    if (args.gate_gdop > 0.0) {
-        config.gate_gdop_max = args.gate_gdop;
-    }
-    if (args.gate_min_sat > 0) {
-        config.gate_min_satellites = args.gate_min_sat;
-    }
-    if (args.cmc) {
-        config.use_code_minus_carrier_screening = true;
-    }
-    if (args.cmc_jump >= 0.0) {
-        config.code_minus_carrier_jump_threshold_m = args.cmc_jump;
-    }
-    if (args.cmc_level >= 0.0) {
-        config.code_minus_carrier_level_threshold_m = args.cmc_level;
-    }
-    config.code_minus_carrier_level_pseudorange_only = args.cmc_level_pr_only;
-    if (args.cmc_warmup > 0) {
-        config.code_minus_carrier_warmup_epochs = args.cmc_warmup;
-    }
-    if (args.cmc_alpha >= 0.0) {
-        config.code_minus_carrier_baseline_alpha = args.cmc_alpha;
-    }
-    if (args.cp_hold) {
-        config.use_cp_hold_recovery = true;
-    }
-    if (args.cp_hold_float_recovery) {
-        config.use_cp_hold_float_recovery = true;
-    }
-    if (args.cp_hold_anchor_release) {
-        config.use_cp_hold_anchor_release = true;
-    }
-    if (args.cp_hold_keep_imu_chain) {
-        config.cp_hold_break_imu_chain = false;
-    }
-    if (args.selective_cp_hold) {
-        config.use_selective_cp_hold = true;
-    }
-    if (args.cp_hold_res >= 0.0) {
-        config.cp_hold_main_residual_threshold_m = args.cp_hold_res;
-    }
-    if (args.cp_hold_catastrophic >= 0.0) {
-        config.cp_hold_catastrophic_threshold_m = args.cp_hold_catastrophic;
-    }
-    if (args.cp_hold_fast_worst_sat >= 0.0) {
-        config.cp_hold_fast_worst_satellite_min_m = args.cp_hold_fast_worst_sat;
-    }
-    if (args.cp_hold_persist > 0) {
-        config.cp_hold_persist_epochs = args.cp_hold_persist;
-    }
-    if (args.cp_hold_epochs_n > 0) {
-        config.cp_hold_epochs = args.cp_hold_epochs_n;
-    }
-    if (args.cp_hold_release_res >= 0.0) {
-        config.cp_hold_release_threshold_m = args.cp_hold_release_res;
-    }
-    if (args.cp_hold_release_n > 0) {
-        config.cp_hold_release_count = args.cp_hold_release_n;
-    }
-    if (args.cp_hold_pose_replace >= 0.0) {
-        config.cp_hold_pose_replace_threshold_m = args.cp_hold_pose_replace;
-    }
-    if (args.cp_hold_gdop >= 0.0) {
-        config.cp_hold_max_gdop = args.cp_hold_gdop;
-    }
-    if (args.exc_recovery) {
-        config.use_solve_exception_recovery = true;
-    }
-    if (args.ddpr_anchor) {
-        config.use_ddpr_anchor = true;
-    }
-    if (args.ddpr_anchor_max_res >= 0.0) {
-        config.ddpr_anchor_max_residual_m = args.ddpr_anchor_max_res;
-    }
-    if (args.ddpr_anchor_fde >= 0.0) {
-        config.ddpr_anchor_fde_threshold_m = args.ddpr_anchor_fde;
-    }
-    if (args.ddpr_anchor_min_n > 0) {
-        config.ddpr_anchor_min_factors = args.ddpr_anchor_min_n;
-    }
-    if (args.ddpr_anchor_boot_epochs >= 0) {
-        config.ddpr_anchor_bootstrap_epochs = args.ddpr_anchor_boot_epochs;
-    }
-    if (args.ddpr_anchor_boot_sigma >= 0.0) {
-        config.ddpr_anchor_bootstrap_sigma_m = args.ddpr_anchor_boot_sigma;
-    }
-    if (args.ddpr_anchor_boot_after_mass >= 0) {
-        config.cp_hold_bootstrap_after_mass_reset = (args.ddpr_anchor_boot_after_mass != 0);
-    }
-    if (args.fde) {
-        config.use_fde = true;
-    }
-    config.fde_pseudorange_only = args.fde_pr_only;
-    config.fde_carrier_quarantine = args.fde_cp_quarantine;
-    if (args.fde_pr >= 0.0) {
-        config.fde_pseudorange_threshold_m = args.fde_pr;
-    }
-    if (args.fde_cp >= 0.0) {
-        config.fde_carrier_threshold_m = args.fde_cp;
-    }
-    if (args.fde_frac >= 0.0) {
-        config.fde_max_rejected_fraction = args.fde_frac;
-    }
-    if (args.fde_iters > 0) {
-        config.fde_max_iterations = args.fde_iters;
-    }
-    if (args.sat_badness) {
-        config.use_sat_badness_downweight = true;
-    }
-    if (args.sat_badness_cp_scale >= 0.0) {
-        config.sat_badness_carrier_sigma_scale = args.sat_badness_cp_scale;
-    }
-    if (args.sat_badness_pr_scale >= 0.0) {
-        config.sat_badness_pseudorange_sigma_scale = args.sat_badness_pr_scale;
-    }
-    if (args.sat_badness_ddpr_thresh >= 0.0) {
-        config.sat_badness_ddpr_threshold_m = args.sat_badness_ddpr_thresh;
-    }
-    if (args.sat_badness_clamp >= 0.0) {
-        config.sat_badness_residual_clamp_m = args.sat_badness_clamp;
-    }
-    if (args.sat_badness_cap >= 0.0) {
-        config.sat_badness_score_cap = args.sat_badness_cap;
-    }
-    if (args.sat_badness_cppr_decay >= 0.0) {
-        config.sat_badness_cppr_decay = args.sat_badness_cppr_decay;
-    }
-    if (args.varerr) {
-        config.use_elevation_dependent_sigma = true;
-    }
-    if (args.varerr_a >= 0.0) {
-        config.elevation_sigma_err_a_m = args.varerr_a;
-    }
-    if (args.varerr_b >= 0.0) {
-        config.elevation_sigma_err_b_m = args.varerr_b;
-    }
-    if (args.varerr_eratio >= 0.0) {
-        config.elevation_sigma_pseudorange_ratio = args.varerr_eratio;
-    }
-    if (args.integ_cov >= 0.0) {
-        config.imu_integration_covariance = args.integ_cov;
-    }
-    if (args.integ_cov_inflate) {
-        config.use_imu_integration_covariance_inflation = true;
-    }
-    if (args.integ_cov_max >= 0.0) {
-        config.imu_integration_covariance_max = args.integ_cov_max;
-    }
-    const libgnss::FGOProcessor builder(config);
-    const libgnss::FGOProcessor::FGOProblem problem =
-        builder.buildDoubleDifferenceProblem(rover_epochs, base_epochs, nav, base_position);
 
     std::cout << "FGOProblem: epochs=" << problem.epochs.size()
               << " dd_pr_factors=" << problem.double_difference_pseudorange_factors.size()
