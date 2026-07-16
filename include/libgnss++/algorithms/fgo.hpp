@@ -243,8 +243,118 @@ public:
         double fixed_ambiguity_sigma_m = 0.003;
         double ambiguity_fix_max_fractional_cycles = 0.15;
         double lambda_ratio_threshold = 3.0;
+        // PPC satellite-count adaptive ratio schedule:
+        // >=20:1.5, 15..19:2.0, 10..14:2.5, <10:3.0.
+        bool use_satellite_count_adaptive_ratio = false;
+        double adaptive_ratio_nsat20 = 1.5;
+        double adaptive_ratio_nsat15 = 2.0;
+        double adaptive_ratio_nsat10 = 2.5;
+        double adaptive_ratio_nsat_low = 3.0;
+        // Validate a candidate integer subset back in the DD carrier
+        // observation domain before reporting FIX.  Thresholds <= 0 disable
+        // that individual test; the whole gate is opt-in so existing runs
+        // remain behavior-identical while diagnostics are collected.
+        bool use_fixed_hypothesis_postfit_validation = false;
+        bool fixed_postfit_validate_normal_ratio = false;
+        int fixed_postfit_min_factors = 4;
+        double fixed_postfit_max_rms_m = 0.0;
+        double fixed_postfit_max_normalized_residual = 0.0;
+        double fixed_postfit_max_chi2_per_dof = 0.0;
+        // Permit a lower LAMBDA ratio only when the implied fixed position
+        // agrees with both the float solution and the IMU-predicted pose.
+        // This is a solution-separation aperture test; the normal ratio gate
+        // remains authoritative when this opt-in path is disabled.
+        bool use_imu_aided_ratio_aperture = false;
+        double imu_aided_relaxed_ratio_threshold = 1.0;
+        double imu_aided_max_float_separation_m = 0.5;
+        double imu_aided_max_prediction_separation_m = 2.0;
+        // RTK-EVC-style validation: propagate several recent accepted FIX
+        // positions with the optimized velocity history, then require the new
+        // fixed candidate to agree with their weighted DR prediction.
+        bool use_fixed_history_dr_validation = false;
+        int fixed_history_dr_window_epochs = 50;
+        double fixed_history_dr_max_separation_m = 0.5;
+        // Independent solution-separation track: propagate the last
+        // high-confidence FIX using an SD-Doppler-only velocity LS solution,
+        // then test the next integer candidate with a 3-D Mahalanobis chi2.
+        bool use_external_doppler_dr_validation = false;
+        bool external_doppler_dr_require_for_relaxed_fix = true;
+        // A statistically validated relaxed-ratio solution may label the
+        // current epoch FIXED, but must not become a persistent graph prior
+        // until it also passes the configured (non-relaxed) ratio test.
+        // This prevents one marginal early decision from steering all later
+        // ambiguity estimates through fix-and-hold.
+        bool allow_relaxed_ratio_fix_and_hold = false;
+        int external_doppler_dr_max_age_epochs = 30;
+        int external_doppler_dr_min_factors = 4;
+        double external_doppler_dr_chi2_threshold = 11.345;  ///< 99% / 3 dof
+        double external_doppler_dr_process_noise_mps = 0.5;
+        double external_doppler_dr_reset_min_ratio = 3.0;
+        // Independent current-epoch DDPR-LS/FDE anchor may rescue a candidate
+        // rejected by the IMU/temporal aperture when both solutions agree.
+        bool use_ddpr_anchor_aided_validation = false;
+        double ddpr_anchor_validation_max_separation_m = 1.0;
+        // Try the PPC constellation partial-AR cascade as separate LAMBDA
+        // pools: GQEBR -> GQEB -> GQER -> GQB -> GQR -> GQ.
+        bool use_constellation_ranked_partial_ar = false;
+        // Remove ambiguity candidates implicated by a gross current-epoch
+        // DD pseudorange residual before the PPC constellation cascade.
+        bool use_residual_screened_partial_ar = false;
+        // GICI-style PAR: prefer ambiguities with the smallest marginal
+        // variance and do not attempt a subset whose least precise member
+        // exceeds this standard deviation in cycles (<=0 disables the gate).
+        bool use_variance_ranked_partial_ar = false;
+        double partial_ar_max_std_cycles = 0.25;
         int min_fixed_ambiguities = 4;
         int max_lambda_ambiguities = 12;
+        // --- Surplus-satellite independent integrity validation ---
+        // Rescues LAMBDA candidates whose ratio falls in
+        // (imu_aided_relaxed_ratio_threshold, lambda_ratio_threshold] using
+        // an INDEPENDENT re-check: DD carrier observations EXCLUDED from the
+        // fixed subset this epoch (FDE quarantine, CMC level-exclusion,
+        // partial-AR drops -- i.e. present in cp_by_epoch[i] but whose
+        // ambiguity_index is not part of the accepted LAMBDA subset) are
+        // re-differenced against an ALTERNATE reference satellite (a
+        // fixed-set satellite, in the same (system,signal) group, other than
+        // the group's own DD reference) and their distance from the nearest
+        // integer cycle is tested against a PDOP-scaled aperture. Mirrors
+        // the PPC paper (Okada/Sasaki/Ando 2024) reliability check and the
+        // "Modified RTK-GNSS" MDPI paper (sensors 24-9-2712): validate a
+        // fixed candidate using observations that did NOT produce it, not
+        // observations correlated with it (unlike the IMU/temporal/DDPR-
+        // anchor apertures above, which all re-use graph state derived from
+        // the SAME fix). Default OFF; when off this whole block is skipped
+        // and behavior is byte-identical to before this feature existed.
+        bool use_surplus_satellite_validation = false;
+        // Monitor mode: evaluate + record diagnostics (per-epoch pass/fail,
+        // fallback level, surplus count) for EVERY LAMBDA attempt (both the
+        // established ratio>=lambda_ratio_threshold zone and the relaxed
+        // rescue zone) WITHOUT changing any FIX/FLOAT decision. Use this to
+        // validate the test itself (confusion matrix vs reference.csv
+        // horizontal error) before trusting it to rescue or veto.
+        bool surplus_validation_monitor_only = false;
+        // Stage B: also demote (veto) an already-accepted
+        // ratio>=lambda_ratio_threshold fix that FAILS this test. Separate
+        // knob, default off; evaluate in Stage A before enabling.
+        bool surplus_validation_veto_high_ratio_fails = false;
+        // Minimum number of surplus satellites required (at whichever
+        // constellation fallback level is being tried) before the test can
+        // render a verdict; below this the epoch is "insufficient surplus"
+        // (does not rescue, does not veto, regardless of monitor mode).
+        int surplus_validation_min_surplus_satellites = 2;
+        // Nearest-integer aperture (cycles), selected by the epoch's PDOP
+        // (computed from the FIXED-set geometry at the candidate fixed
+        // antenna position -- see computeFixedSetPdop in
+        // fgo_gtsam_backend.cpp).
+        double surplus_validation_aperture_pdop_lt1_cycles = 0.1;
+        double surplus_validation_aperture_pdop_1to2_cycles = 0.2;
+        double surplus_validation_aperture_pdop_gt2_cycles = 0.3;
+        // Aggregation over the (possibly constellation-fallback-reduced)
+        // surplus pool: true (default) = ALL surplus satellites in the pool
+        // must be within the aperture; false = a majority (>=
+        // surplus_validation_majority_fraction) must be within it.
+        bool surplus_validation_require_all = true;
+        double surplus_validation_majority_fraction = 0.5;
         double max_tdcp_gap_s = 2.0;
         double base_epoch_match_tolerance_s = 0.02;
         double base_interpolation_max_gap_s = 1.2;
@@ -371,6 +481,9 @@ public:
         // Smoother lag in seconds. States (and ambiguity/clock nodes) whose
         // last timestamp is older than this window are marginalized out.
         double fixed_lag_smoother_lag_s = 5.0;
+        /// QR tolerates rank-deficient urban marginalization better than
+        /// Cholesky at higher computational cost.
+        bool fixed_lag_use_qr_factorization = false;
 
         // --- Phase 2 milestone 2d: NHC + ZUPT pseudo-measurements ---
         // Applied per-epoch in the IMU-coupled fixed-lag path (gated), mirror
@@ -489,6 +602,10 @@ public:
         bool use_code_minus_carrier_screening = false;
         double code_minus_carrier_jump_threshold_m = 3.0;
         double code_minus_carrier_level_threshold_m = 0.0;  ///< 0 = level check off (reference default)
+        /// On sustained CMC deviation, suppress the contaminated DD code
+        /// factor but retain DD carrier continuity for robust-loss/FDE AR
+        /// quarantine.  Default false preserves reference parity.
+        bool code_minus_carrier_level_pseudorange_only = false;
         int code_minus_carrier_warmup_epochs = 5;
         double code_minus_carrier_baseline_alpha = 0.05;
 
@@ -542,6 +659,15 @@ public:
         //
         // Master switch, default OFF (bit-identical baseline without it).
         bool use_cp_hold_recovery = false;
+        // FGO-specific recovery: while integer fixing is held, keep carrier
+        // factors alive at reduced weight so fresh float ambiguities can
+        // converge.  The legacy mode removes carrier and bumps its generation
+        // every held epoch, which can deadlock reacquisition indefinitely.
+        bool use_cp_hold_float_recovery = false;
+        double cp_hold_float_recovery_sigma_scale = 10.0;
+        // Release a carrier hold early only when an independent DDPR-LS/FDE
+        // position is trusted, and anchor the reacquisition epoch to it.
+        bool use_cp_hold_anchor_release = false;
         double cp_hold_main_residual_threshold_m = 3.0;    ///< reference main_ddpr_res_thresh
         double cp_hold_catastrophic_threshold_m = 15.0;    ///< reference main_ddpr_res_catastrophic
         double cp_hold_fast_worst_satellite_min_m = 10.0;  ///< reference ddpr_fast_worst_sat_min (tokyo profile)
@@ -579,6 +705,11 @@ public:
         bool use_cp_hold_leaky_persist = false;
         double cp_hold_persist_decay = 1.0;
         int cp_hold_epochs = 5;                            ///< reference recov_cp_hold
+        // Keep clean carrier arcs available during an urban multipath hold;
+        // only pairs implicated by the previous epoch's per-satellite DD
+        // pseudorange residuals are suppressed.
+        bool use_selective_cp_hold = false;
+        double selective_cp_hold_sigma_scale = 100.0;
         double cp_hold_release_threshold_m = 2.0;          ///< reference recov_cp_release_thresh (tokyo profile)
         int cp_hold_release_count = 5;                     ///< reference recov_cp_release_count (tokyo profile)
         double cp_hold_pose_replace_threshold_m = 5.0;     ///< reference sanity_pose_replace_thresh
@@ -952,6 +1083,14 @@ public:
         //
         // Master switch, default OFF (bit-identical baseline without it).
         bool use_fde = false;
+        /// PPC-style residual exclusion: screen code only and never sever a
+        /// carrier ambiguity arc.  Carrier residuals remain robust-loss
+        /// downweighted and are still visible in diagnostics.
+        bool fde_pseudorange_only = false;
+        /// Keep a gross-residual carrier factor under its robust loss, but
+        /// quarantine its ambiguity from this epoch's LAMBDA/PAR set.  This
+        /// avoids tearing a live fixed-lag graph while still protecting AR.
+        bool fde_carrier_quarantine = false;
         double fde_pseudorange_threshold_m = 4.0;   ///< reference fde_pr
         double fde_carrier_threshold_m = 0.5;       ///< reference fde_cp
         double fde_max_rejected_fraction = 0.5;     ///< reference fde_max_frac
@@ -1358,6 +1497,20 @@ public:
         std::vector<CarrierPhaseFactor> carrier_phase_factors;
         std::vector<DoubleDifferencePseudorangeFactor> double_difference_pseudorange_factors;
         std::vector<DoubleDifferenceCarrierFactor> double_difference_carrier_factors;
+        // DD carrier rows dropped BEFORE reaching double_difference_carrier_
+        // factors above by a build-time exclusion (currently: CMC sustained-
+        // multipath level exclusion, code_minus_carrier_level_threshold_m,
+        // when NOT running in code_minus_carrier_level_pseudorange_only
+        // mode -- that mode keeps the DD-CP factor and only excludes the
+        // DD-PR factor, so nothing needs to be retained here for it).  NEVER
+        // added to the solved graph; consumed only by the surplus-satellite
+        // independent integrity validation (FGOConfig::use_surplus_
+        // satellite_validation) as its "observations excluded from the fix"
+        // pool. ambiguity_index on these entries is a sentinel
+        // (std::numeric_limits<std::size_t>::max()) -- there is no
+        // AmbiguityState for an arc that was never solved for; the surplus
+        // validator looks up wavelength from `signal` instead.
+        std::vector<DoubleDifferenceCarrierFactor> excluded_double_difference_carrier_factors;
         std::vector<AmbiguityBetweenFactor> ambiguity_between_factors;
         FGOProblemDiagnostics diagnostics;
     };
@@ -1378,6 +1531,25 @@ public:
         std::size_t lambda_ambiguity_candidates = 0;
         std::size_t lambda_ambiguity_used_candidates = 0;
         std::size_t lambda_ambiguity_attempts = 0;
+        std::size_t imu_aided_ratio_accepts = 0;
+        std::size_t imu_aided_ratio_rejects = 0;
+        std::size_t fixed_history_dr_accepts = 0;
+        std::size_t fixed_history_dr_rejects = 0;
+        std::size_t ddpr_anchor_validation_accepts = 0;
+        std::size_t ddpr_anchor_validation_rejects = 0;
+        std::size_t fixed_postfit_validation_accepts = 0;
+        std::size_t fixed_postfit_validation_rejects = 0;
+        std::size_t external_doppler_dr_accepts = 0;
+        std::size_t external_doppler_dr_rejects = 0;
+        std::size_t external_doppler_dr_unavailable = 0;
+        // --- Surplus-satellite independent integrity validation (use_surplus_satellite_validation) ---
+        std::size_t surplus_validation_attempts = 0;   ///< LAMBDA attempts where the test rendered a verdict
+        std::size_t surplus_validation_passes = 0;
+        std::size_t surplus_validation_fails = 0;
+        std::size_t surplus_validation_insufficient_surplus = 0;  ///< too few surplus sats at every fallback level
+        std::size_t surplus_validation_rescued_epochs = 0;  ///< epochs FIXED only because this test passed a relaxed-ratio candidate
+        std::size_t surplus_validation_vetoed_epochs = 0;   ///< established-ratio fixes demoted by surplus_validation_veto_high_ratio_fails
+        std::size_t surplus_validation_fallback_level_histogram[6] = {0, 0, 0, 0, 0, 0};  ///< index = deciding fallback level (0=GQEBR .. 5=GQ)
         std::size_t fixed_ambiguities = 0;
         std::size_t tdcp_candidate_pairs = 0;
         std::size_t tdcp_rejected_gap = 0;
@@ -1412,12 +1584,19 @@ public:
         // --- CP-hold / sanity FSM diagnostics (use_cp_hold_recovery) ---
         std::size_t cp_hold_triggers = 0;         ///< times CP-hold was (re)engaged/extended
         std::size_t cp_hold_epochs_held = 0;      ///< cumulative epochs with carrier suppressed
+        std::size_t cp_hold_anchor_releases = 0;
+        std::size_t selective_cp_hold_downweighted_factors = 0;
         std::size_t sanity_mass_resets = 0;       ///< persist-path (3 consecutive bad) resets
         std::size_t sanity_fast_resets = 0;       ///< catastrophic fast-path resets
         std::size_t sanity_pose_replacements = 0; ///< epochs where the reported pose was IMU-predicted
         std::size_t sanity_multipath_skips = 0;   ///< bad epochs skipped as single-satellite multipath
         std::size_t sanity_gdop_skips = 0;        ///< persist-eligible resets skipped for weak geometry
         std::size_t ambiguity_generation_bumps = 0;  ///< total per-arc generation bumps (fresh symbols)
+        std::size_t ambiguity_generation_bumps_hold = 0;
+        std::size_t ambiguity_generation_bumps_fde = 0;
+        std::size_t ambiguity_generation_bumps_reset = 0;
+        std::size_t ambiguity_generation_bumps_warm_reset = 0;
+        std::size_t ambiguity_generation_bumps_stale_pin = 0;
         // --- Stale-pin invalidation diagnostics (use_stale_pin_invalidation) ---
         std::size_t stale_pin_invalidations = 0;  ///< pinned arcs released per-arc at a trigger epoch
         // --- Fix plausibility demotion diagnostics (use_fix_plausibility_demotion) ---
@@ -1438,6 +1617,7 @@ public:
         // --- FDE diagnostics (use_fde) ---
         std::size_t fde_pseudorange_rejections = 0;  ///< total DD PR factors removed
         std::size_t fde_carrier_rejections = 0;      ///< total DD CP factors removed
+        std::size_t fde_carrier_quarantines = 0;     ///< gross DD CP ambiguities excluded from AR only
         std::size_t fde_safeguard_skips = 0;         ///< epochs where the reject-fraction safeguard aborted FDE
         std::size_t fde_epochs = 0;                  ///< epochs where >=1 factor was actually removed
         // --- Sat-badness EWMA down-weighting diagnostics (use_sat_badness_downweight) ---
@@ -1519,6 +1699,76 @@ public:
         bool converged = false;
     };
 
+    /// Terminal ambiguity-resolution state for one epoch.  This is kept
+    /// separate from the reported FIX/FLOAT status so a FLOAT epoch says
+    /// exactly which integrity gate stopped it.
+    enum class AmbiguityResolutionOutcome : int {
+        NotAttempted = 0,
+        Disabled = 1,
+        SmootherFailure = 2,
+        QualityGateRejected = 3,
+        NoCandidates = 4,
+        InsufficientCandidates = 5,
+        MarginalFailure = 6,
+        LambdaSearchFailed = 7,
+        RatioRejected = 8,
+        ImuApertureRejected = 9,
+        FixedHistoryRejected = 10,
+        PostfitRejected = 11,
+        Fixed = 12,
+        SurplusValidationRejected = 13,
+    };
+
+    /// Per-epoch fixed-lag integrity state.  These values expose why an epoch
+    /// did or did not fix, rather than only reporting the final FIX/FLOAT label.
+    struct FGOEpochDiagnostics {
+        GNSSTime time;
+        AmbiguityResolutionOutcome ar_outcome =
+            AmbiguityResolutionOutcome::NotAttempted;
+        double ddpr_rms_m = 0.0;
+        double sd_doppler_rms_mps = 0.0;
+        double gdop = 0.0;
+        int num_satellites = 0;
+        int sd_doppler_factors = 0;
+        int ambiguity_candidates = 0;
+        int lambda_attempts = 0;
+        int lambda_selected_stage = -1;  ///< PPC cascade: 0=GQEBR ... 5=GQ
+        double ambiguity_variance_median_cycles2 = 0.0;
+        double ambiguity_variance_max_cycles2 = 0.0;
+        double imu_pose_correction_m = 0.0;
+        double fixed_float_separation_m = 0.0;
+        double fixed_imu_prediction_separation_m = 0.0;
+        double fixed_postfit_ddcp_rms_m = 0.0;
+        double fixed_postfit_ddcp_max_normalized = 0.0;
+        double fixed_postfit_ddcp_chi2_per_dof = 0.0;
+        int fixed_postfit_ddcp_factors = 0;
+        double effective_ratio_threshold = 0.0;
+        double external_dr_separation_m = 0.0;
+        double external_dr_mahalanobis2 = 0.0;
+        int external_dr_age_epochs = -1;
+        bool external_dr_evaluated = false;
+        bool external_dr_accepted = false;
+        bool external_dr_rejected = false;
+        bool carrier_hold_active = false;
+        bool imu_aperture_accepted = false;
+        bool imu_aperture_rejected = false;
+        // --- Surplus-satellite independent integrity validation ---
+        bool surplus_validation_evaluated = false;  ///< false = insufficient surplus sats at every fallback level
+        bool surplus_validation_pass = false;
+        bool surplus_validation_used_for_rescue = false;  ///< this test flipped a relaxed-ratio candidate to FIXED
+        bool surplus_validation_used_for_veto = false;    ///< this test demoted an established-ratio fix
+        int surplus_validation_fallback_level = -1;  ///< 0=GQEBR .. 5=GQ, -1 = not evaluated
+        int surplus_validation_surplus_used = 0;     ///< surplus satellites in the deciding pool
+        int carrier_factors_available = 0;
+        int carrier_factors_added = 0;
+        int carrier_factors_suppressed_hold = 0;
+        int ambiguity_generation_bumps_hold = 0;
+        int ambiguity_generation_bumps_fde = 0;
+        int ambiguity_generation_bumps_reset = 0;
+        int ambiguity_generation_bumps_warm_reset = 0;
+        int ambiguity_generation_bumps_stale_pin = 0;
+    };
+
     struct FGOResult {
         Solution solution;
         FGODiagnostics diagnostics;
@@ -1529,6 +1779,7 @@ public:
         std::vector<Vector3d> epoch_velocities_ecef_mps;
         std::vector<LambdaDebugEntry> lambda_debug_entries;
         std::vector<CostTraceEntry> cost_trace_entries;
+        std::vector<FGOEpochDiagnostics> epoch_diagnostics;
         // Milestone 2b (populated only by the GTSAM IMU-coupled path):
         // per-epoch estimated attitude as [roll, pitch, heading] in degrees
         // (body FLU -> nav ENU; heading is clockwise from North) and estimated
