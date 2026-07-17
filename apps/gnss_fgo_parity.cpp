@@ -184,6 +184,8 @@ struct Args {
     double fix_demote_anchor_gross_ratio = -1.0;  // >=0: override fix_demote_anchor_gross_ratio (default 10.0)
     double fix_demote_anchor_gross_abs = -1.0;    // >=0: override fix_demote_anchor_gross_abs_m (default 20.0)
     bool fix_demote_surplus_crosscheck = false;   // enable fix_demote_surplus_crosscheck (needs --fix-demote + --surplus-validation)
+    bool surplus_overrides_dr = false;   // "c2" lever: enable surplus_validation_overrides_history_dr (needs --fixed-history-dr + --surplus-validation)
+    int surplus_overrides_dr_min_used = 0;  // >0: override surplus_validation_overrides_history_dr_min_surplus_used (default 0 = no extra floor)
     // Surplus-satellite independent integrity validation (see FGOConfig::use_surplus_satellite_validation)
     bool surplus_validation = false;
     bool surplus_validation_monitor = false;
@@ -272,6 +274,14 @@ Args parseArgs(int argc, char** argv) {
         }
         if (a == "--fix-demote-surplus-crosscheck") {
             args.fix_demote_surplus_crosscheck = true;
+            continue;
+        }
+        if (a == "--surplus-overrides-dr") {
+            args.surplus_overrides_dr = true;
+            continue;
+        }
+        if (a == "--surplus-overrides-dr-min-used" && i + 1 < argc) {
+            args.surplus_overrides_dr_min_used = std::stoi(argv[++i]);
             continue;
         }
         if (a == "--low-count-ar") {
@@ -827,6 +837,13 @@ libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
     if (args.fixed_history_dr_sep >= 0.0) {
         config.fixed_history_dr_max_separation_m = args.fixed_history_dr_sep;
     }
+    if (args.surplus_overrides_dr) {
+        config.surplus_validation_overrides_history_dr = true;
+    }
+    if (args.surplus_overrides_dr_min_used > 0) {
+        config.surplus_validation_overrides_history_dr_min_surplus_used =
+            args.surplus_overrides_dr_min_used;
+    }
     if (args.anchor_aided_validation) {
         config.use_ddpr_anchor_aided_validation = true;
     }
@@ -1333,7 +1350,8 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
            "cp_suppressed_hold,gen_bump_hold,gen_bump_fde,gen_bump_reset,"
            "gen_bump_warm_reset,gen_bump_stale_pin,"
            "surplus_eval,surplus_pass,surplus_level,surplus_used,surplus_rescue,surplus_veto,"
-           "low_count_attempted,low_count_used\n";
+           "low_count_attempted,low_count_used,"
+           "dr_bypass_eval,dr_bypass_horiz_err_m,dr_bypass_applied\n";
     std::size_t ri = 0;
     for (std::size_t si = 0; si < r.solution.solutions.size(); ++si) {
         const auto& s = r.solution.solutions[si];
@@ -1401,6 +1419,16 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
                 << ',' << (d.surplus_validation_used_for_veto ? 1 : 0)
                 << ',' << (d.low_count_ar_attempted ? 1 : 0)
                 << ',' << (d.low_count_ar_used ? 1 : 0);
+            double dr_bypass_horiz = -1.0;
+            if (d.dr_bypass_candidate_evaluated) {
+                const libgnss::Vector3d dr_bypass_err_enu = libgnss::ecef2enu(
+                    d.dr_bypass_candidate_position_ecef - ref[ri].ecef, lat0, lon0);
+                dr_bypass_horiz =
+                    std::hypot(dr_bypass_err_enu.x(), dr_bypass_err_enu.y());
+            }
+            out << ',' << (d.dr_bypass_candidate_evaluated ? 1 : 0)
+                << ',' << dr_bypass_horiz
+                << ',' << (d.dr_bypass_applied ? 1 : 0);
         }
         out << '\n';
     }
@@ -2123,7 +2151,12 @@ int main(int argc, char** argv) {
                   << " (accepted=" << fl.diagnostics.fixed_history_dr_accepts
                   << ", rejected=" << fl.diagnostics.fixed_history_dr_rejects
                   << ", window=" << config.fixed_history_dr_window_epochs
-                  << ", sep_m=" << config.fixed_history_dr_max_separation_m << ")\n"
+                  << ", sep_m=" << config.fixed_history_dr_max_separation_m
+                  << ", surplus_overrides=" << (args.surplus_overrides_dr ? "on" : "off")
+                  << " (n=" << fl.diagnostics.fixed_history_dr_surplus_overrides
+                  << ", min_used=" << config.surplus_validation_overrides_history_dr_min_surplus_used
+                  << ")"
+                  << ")\n"
                   << "  DDPR anchor validation: "
                   << (args.anchor_aided_validation ? "on" : "off")
                   << " (accepted=" << fl.diagnostics.ddpr_anchor_validation_accepts

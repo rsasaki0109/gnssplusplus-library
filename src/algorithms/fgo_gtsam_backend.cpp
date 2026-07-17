@@ -3575,6 +3575,14 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                             newly_relaxed_ratio_pass && !aperture_pass;
                         bool fixed_history_dr_pass = true;
                         bool fixed_history_dr_evaluated = false;
+                        // Set true only by the surplus-override branch below.
+                        // Kept separate from epoch_diagnostics[i].dr_bypass_
+                        // applied (which is only committed once THIS attempt
+                        // is confirmed to be the one that ends up FIXED, near
+                        // "epoch_fixed[i] = true" below) so a later attempt in
+                        // the same epoch that fixes via a normal path never
+                        // inherits a stale flag from an earlier rejected one.
+                        bool dr_bypass_applied_this_attempt = false;
                         if ((normal_ratio_pass || aperture_pass || integrity_candidate) &&
                             config.use_fixed_history_dr_validation) {
                             if (!has_provisional_fixed_ant) {
@@ -3630,9 +3638,42 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                                 }
                             }
                         }
+                        // Monitor-only counterfactual (cheap, always run):
+                        // capture the raw candidate position the FIRST time
+                        // this epoch has a surplus-passed attempt blocked
+                        // purely by the DR verdict, before any reprieve or
+                        // override below can change it. Never influences the
+                        // FIX/FLOAT decision by itself.
+                        if (fixed_history_dr_evaluated && !fixed_history_dr_pass &&
+                            surplus_evaluated && surplus_pass && has_provisional_fixed_ant &&
+                            !epoch_diagnostics[i].dr_bypass_candidate_evaluated) {
+                            epoch_diagnostics[i].dr_bypass_candidate_evaluated = true;
+                            epoch_diagnostics[i].dr_bypass_candidate_position_ecef =
+                                Vector3d(provisional_fixed_ant);
+                        }
                         if (!fixed_history_dr_pass && has_provisional_fixed_ant &&
                             anchorValidationAgrees(provisional_fixed_ant)) {
                             fixed_history_dr_pass = true;
+                        }
+                        // "c2" lever (surplus_validation_overrides_history_dr):
+                        // a candidate still rejected by the DR gate after the
+                        // anchor reprieve above is accepted anyway when the
+                        // independent surplus-satellite validation ALREADY
+                        // passed for this same attempt this epoch -- two
+                        // independent integrity checks (one re-using this
+                        // arc's own recent fixed history, one re-differencing
+                        // observations that did NOT produce this candidate)
+                        // agreeing is treated as sufficient. Default off; see
+                        // the knob's doc comment in fgo.hpp.
+                        if (!fixed_history_dr_pass &&
+                            config.surplus_validation_overrides_history_dr &&
+                            fixed_history_dr_evaluated && surplus_evaluated && surplus_pass &&
+                            (config.surplus_validation_overrides_history_dr_min_surplus_used <= 0 ||
+                             epoch_diagnostics[i].surplus_validation_surplus_used >=
+                                 config.surplus_validation_overrides_history_dr_min_surplus_used)) {
+                            fixed_history_dr_pass = true;
+                            dr_bypass_applied_this_attempt = true;
+                            ++result.diagnostics.fixed_history_dr_surplus_overrides;
                         }
                         bool postfit_pass = true;
                         if ((normal_ratio_pass || aperture_pass || integrity_candidate) &&
@@ -3802,8 +3843,23 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                         }
 
                         epoch_fixed[i] = true;
+                        epoch_diagnostics[i].dr_bypass_applied = dr_bypass_applied_this_attempt;
+                        // A DR-bypassed candidate failed the one integrity
+                        // check that re-uses this arc's own recent fixed
+                        // history; treat it the same as any other "output-
+                        // only" relaxed fix -- label this epoch FIXED but
+                        // never pin its integers into the persistent graph
+                        // (would poison the rest of the arc if the bypass was
+                        // wrong) and never let it seed the DR window used to
+                        // validate OTHER epochs. Measured on tokyo1 full-run:
+                        // allowing hold-pinning here raised FIXED RMS from
+                        // 0.787 m to 1.018 m and collapsed <50cm rate from
+                        // 58% to 25% -- a small number of wrong pinned
+                        // integers cascades through the shared ambiguity/pose
+                        // graph far beyond the bypassed epoch itself.
                         const bool output_only_relaxed_fix =
-                            output_only_relaxed_candidate || is_low_count_attempt;
+                            output_only_relaxed_candidate || is_low_count_attempt ||
+                            dr_bypass_applied_this_attempt;
                         epoch_fixed_history_eligible[i] =
                             !output_only_relaxed_fix;
                         epoch_diagnostics[i].ar_outcome =

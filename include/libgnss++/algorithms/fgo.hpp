@@ -274,6 +274,37 @@ public:
         bool use_fixed_history_dr_validation = false;
         int fixed_history_dr_window_epochs = 50;
         double fixed_history_dr_max_separation_m = 0.5;
+        // "c2" lever: a candidate that FAILS the fixed-history-DR
+        // consistency check above is accepted anyway when the independent
+        // surplus-satellite validation (use_surplus_satellite_validation,
+        // which must ALSO be enabled) already evaluated and PASSED for this
+        // same attempt. Surplus validation re-differences DD carriers that
+        // did NOT produce the candidate against an alternate reference
+        // satellite -- an independent geometric cross-check, unlike the DR
+        // gate which only re-uses this arc's own recent fixed history. Two
+        // independent tests agreeing is treated as sufficient integrity
+        // evidence to override the (single) DR gate's rejection. Default
+        // OFF; when off (or when use_surplus_satellite_validation is off)
+        // this override never fires and behavior is byte-identical to
+        // before this knob existed. See fixed_history_dr_surplus_overrides
+        // in FGODiagnostics and dr_bypass_* in FGOEpochDiagnostics for the
+        // monitor-style counterfactual (candidate ECEF position, logged
+        // whenever the raw DR verdict alone would have blocked a
+        // surplus-passed candidate) used to characterize this lever before
+        // trusting it.
+        bool surplus_validation_overrides_history_dr = false;
+        // Conditional variant: require the surplus pool that decided THIS
+        // attempt's pass to contain at least this many surplus satellites
+        // (epoch_diagnostics[i].surplus_validation_surplus_used) before the
+        // override may fire, on top of the mandatory surplus_evaluated+pass
+        // above. <=0 = no extra floor (any surplus-passed candidate that
+        // clears surplus_validation_min_surplus_satellites qualifies).
+        // Measured on tokyo1 full-run1: the worst bypassed candidates
+        // (>1 m true error) cluster heavily at surplus_used==min_n (the
+        // weakest possible independent check); requiring >=4 cuts run1's
+        // bypassed-population RMS roughly in half while keeping most of the
+        // fix-rate gain.
+        int surplus_validation_overrides_history_dr_min_surplus_used = 0;
         // Independent solution-separation track: propagate the last
         // high-confidence FIX using an SD-Doppler-only velocity LS solution,
         // then test the next integer candidate with a 3-D Mahalanobis chi2.
@@ -1583,6 +1614,7 @@ public:
         std::size_t imu_aided_ratio_rejects = 0;
         std::size_t fixed_history_dr_accepts = 0;
         std::size_t fixed_history_dr_rejects = 0;
+        std::size_t fixed_history_dr_surplus_overrides = 0;  ///< surplus_validation_overrides_history_dr flipped a DR-rejected candidate to FIXED
         std::size_t ddpr_anchor_validation_accepts = 0;
         std::size_t ddpr_anchor_validation_rejects = 0;
         std::size_t fixed_postfit_validation_accepts = 0;
@@ -1791,6 +1823,16 @@ public:
         double imu_pose_correction_m = 0.0;
         double fixed_float_separation_m = 0.0;
         double fixed_imu_prediction_separation_m = 0.0;
+        // --- "c2" DR-gate bypass counterfactual (see FGOConfig::
+        // surplus_validation_overrides_history_dr). Monitor fields below are
+        // populated whenever a surplus-passed candidate's RAW fixed-history-
+        // DR verdict (before any reprieve/override) would reject it -- cheap
+        // and unconditional, independent of whether the override knob is
+        // enabled -- so callers can score the would-be fix against
+        // reference.csv even when the epoch is left FLOAT. ---
+        bool dr_bypass_candidate_evaluated = false;  ///< true = this epoch had a surplus-passed candidate blocked by the raw DR verdict
+        Vector3d dr_bypass_candidate_position_ecef = Vector3d::Zero();  ///< that candidate's fixed antenna ECEF position
+        bool dr_bypass_applied = false;  ///< surplus_validation_overrides_history_dr actually accepted this candidate
         double fixed_postfit_ddcp_rms_m = 0.0;
         double fixed_postfit_ddcp_max_normalized = 0.0;
         double fixed_postfit_ddcp_chi2_per_dof = 0.0;
