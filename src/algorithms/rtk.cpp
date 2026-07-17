@@ -291,6 +291,11 @@ RTKProcessor::RTKProcessor(const RTKConfig& rtk_config)
 void RTKProcessor::setRTKConfig(const RTKConfig& config) {
     rtk_config_ = config;
     syncSPPConfig();
+    // Phase 2a: cmc_suspect_tracker_ is lazily constructed with the
+    // cmc_ref_level_m threshold captured at construction time; drop it so a
+    // config change (e.g. --cmc-ref-level) takes effect on the next epoch
+    // instead of being silently ignored.
+    cmc_suspect_tracker_.reset();
 }
 
 void RTKProcessor::syncSPPConfig() {
@@ -336,6 +341,11 @@ void RTKProcessor::reset() {
     doppler_phase_history_l2_m_.clear();
     code_phase_history_l1_m_.clear();
     code_phase_history_l2_m_.clear();
+    cmc_suspect_tracker_.reset();
+    cmc_ref_hysteresis_by_system_.clear();
+    cmc_aware_ref_by_system_.clear();
+    cmc_ref_suspect_epoch_count_ = 0;
+    cmc_ref_switch_count_ = 0;
     consecutive_fix_count_ = 0;
     consecutive_float_count_ = 0;
     consecutive_nonfix_count_ = 0;
@@ -822,6 +832,80 @@ std::vector<rtk_selection::SatelliteSelectionData> RTKProcessor::buildSelectionS
     return snapshot;
 }
 
+// ============================================================
+// Phase 2a: CMC-aware DD reference-satellite selection (opt-in)
+// ============================================================
+void RTKProcessor::updateCmcAwareReferenceSelection(
+    const std::map<SatelliteId, SatelliteData>& sat_data,
+    const std::set<SatelliteId>& gf_slips,
+    const std::set<SatelliteId>& gf_slips_l1l5,
+    const std::set<SatelliteId>& code_slips_l1,
+    const std::set<SatelliteId>& doppler_slips_l1) {
+    if (!cmc_suspect_tracker_) {
+        cmc_suspect_tracker_ =
+            std::make_unique<rtk_cmc_reference::CmcSuspectTracker>(rtk_config_.cmc_ref_level_m);
+    }
+
+    // 1) Per-satellite CMC suspect classification for this epoch, driven by
+    // the SD L1 code-minus-phase deviation from each satellite's own
+    // running baseline. Reuses this epoch's already-computed slip sets as
+    // the "arc restarted" signal (same reasoning as FGOProcessor's
+    // rover_arc_restarted: a fresh ambiguity invalidates the old baseline).
+    std::set<SatelliteId> seen;
+    std::set<SatelliteId> suspects;
+    for (const auto& [sat, sd] : sat_data) {
+        if (!sd.has_l1 || sd.l1_wavelength <= 0.0) continue;
+        seen.insert(sat);
+        const double cmc_m = rtk_slip_detection::singleDifferenceCodeMinusPhaseM(
+            sd.rover_l1_code, sd.base_l1_code, sd.rover_l1_phase, sd.base_l1_phase, sd.l1_wavelength);
+        const bool arc_restarted = gf_slips.count(sat) > 0 || gf_slips_l1l5.count(sat) > 0 ||
+                                   code_slips_l1.count(sat) > 0 || doppler_slips_l1.count(sat) > 0 ||
+                                   (sd.l1_lli & 0x01) != 0;
+        if (cmc_suspect_tracker_->classify(sat, cmc_m, arc_restarted)) {
+            suspects.insert(sat);
+            ++cmc_ref_suspect_epoch_count_;
+        }
+    }
+    cmc_suspect_tracker_->pruneMissing(seen);
+
+    // 2) Per-system hysteresis reference selection, fed by this epoch's
+    // suspect classification above.
+    cmc_aware_ref_by_system_.clear();
+    const auto snapshot = buildSelectionSnapshot(sat_data);
+    const double return_min_elev_rad = rtk_config_.cmc_ref_return_min_elev_deg * M_PI / 180.0;
+
+    for (GNSSSystem system : kRTKSupportedSystems) {
+        if (!isEnabledRTKSystem(rtk_config_, system)) continue;
+        SatelliteId natural_ref;
+        if (!rtk_selection::selectSystemReferenceSatellite(snapshot, system, 0, natural_ref)) {
+            continue;  // no candidate at all this epoch -- nothing to select or track
+        }
+
+        std::vector<rtk_cmc_reference::ReferenceHysteresis::Candidate> candidates;
+        double natural_ref_elevation_rad = 0.0;
+        for (const auto& item : snapshot) {
+            if (item.satellite.system != system || !item.has_l1 || !item.n1_active) continue;
+            rtk_cmc_reference::ReferenceHysteresis::Candidate candidate;
+            candidate.satellite = item.satellite;
+            candidate.elevation_rad = item.elevation;
+            candidate.dual_frequency = item.has_l2 && item.n2_active;
+            candidate.suspect = suspects.count(item.satellite) > 0;
+            if (item.satellite == natural_ref) natural_ref_elevation_rad = item.elevation;
+            candidates.push_back(candidate);
+        }
+
+        auto& hysteresis = cmc_ref_hysteresis_by_system_[system];
+        SatelliteId chosen_ref;
+        bool switched = false;
+        if (hysteresis.update(candidates, natural_ref, natural_ref_elevation_rad,
+                              rtk_config_.cmc_ref_switch_epochs, return_min_elev_rad, chosen_ref,
+                              switched)) {
+            cmc_aware_ref_by_system_[system] = chosen_ref;
+            if (switched) ++cmc_ref_switch_count_;
+        }
+    }
+}
+
 std::vector<RTKProcessor::DDPair> RTKProcessor::buildDoubleDifferencePairs(
     const std::map<SatelliteId, SatelliteData>& sat_data,
     int min_lock_count) const {
@@ -830,11 +914,17 @@ std::vector<RTKProcessor::DDPair> RTKProcessor::buildDoubleDifferencePairs(
 
     for (GNSSSystem system : kRTKSupportedSystems) {
         if (!isEnabledRTKSystem(rtk_config_, system)) continue;
+        const SatelliteId* forced_ref = nullptr;
+        if (rtk_config_.cmc_aware_reference_selection) {
+            const auto forced_it = cmc_aware_ref_by_system_.find(system);
+            if (forced_it != cmc_aware_ref_by_system_.end()) forced_ref = &forced_it->second;
+        }
         const auto system_pairs = rtk_selection::buildDoubleDifferencePairsForSystem(
             snapshot,
             system,
             min_lock_count,
-            requiresMatchedCarrierWavelength(rtk_config_, system));
+            requiresMatchedCarrierWavelength(rtk_config_, system),
+            forced_ref);
         for (const auto& pair : system_pairs) {
             const auto& indices = (pair.freq == 0) ? filter_state_.n1_indices :
                                   (pair.freq == 1) ? filter_state_.n2_indices :
@@ -1142,6 +1232,17 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
     debug_telemetry_.code_slip_l1_count = static_cast<int>(code_slips_l1.size());
     debug_telemetry_.code_slip_l2_count = static_cast<int>(code_slips_l2.size());
     debug_telemetry_.code_slip_l5_count = static_cast<int>(code_slips_l5.size());
+
+    // Phase 2a: CMC-aware DD reference-satellite selection (opt-in). Reuses
+    // this epoch's already-computed slip-detection sets (gf/doppler/code)
+    // as the CMC baseline's arc-restart signal. No-op (cmc_aware_ref_by_
+    // system_ left empty) unless the knob is on.
+    if (rtk_config_.cmc_aware_reference_selection) {
+        updateCmcAwareReferenceSelection(sat_data, gf_slips, gf_slips_l1l5, code_slips_l1,
+                                         doppler_slips_l1);
+    } else if (!cmc_aware_ref_by_system_.empty()) {
+        cmc_aware_ref_by_system_.clear();
+    }
 
     // Phase 18 Step 4: extend freq loop from {L1, L2} to {L1, L2, L5} when enable_l5.
     // Per-frequency accessors abstract over the SatelliteData layout differences.
@@ -2222,7 +2323,17 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
     for (GNSSSystem system : kRTKSupportedSystems) {
         if (!isEnabledRTKSystem(rtk_config_, system)) continue;
         SatelliteId ref_sat;
-        if (!rtk_selection::selectSystemReferenceSatellite(selection_snapshot, system, 0, ref_sat)) continue;
+        const SatelliteId* forced_ref = nullptr;
+        if (rtk_config_.cmc_aware_reference_selection) {
+            const auto forced_it = cmc_aware_ref_by_system_.find(system);
+            if (forced_it != cmc_aware_ref_by_system_.end()) forced_ref = &forced_it->second;
+        }
+        if (forced_ref != nullptr) {
+            ref_sat = *forced_ref;
+        } else if (!rtk_selection::selectSystemReferenceSatellite(selection_snapshot, system, 0,
+                                                                    ref_sat)) {
+            continue;
+        }
 
         auto ref_it = sat_data.find(ref_sat);
         if (ref_it == sat_data.end()) continue;
@@ -2231,7 +2342,8 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
             selection_snapshot,
             system,
             0,
-            requiresMatchedCarrierWavelength(rtk_config_, system));
+            requiresMatchedCarrierWavelength(rtk_config_, system),
+            forced_ref);
         const double rr_ref = geodist_range(ref_sd.sat_pos, rover_pos) +
                               tropModel(rover_pos, ref_sd.elevation);
         const double br_ref = geodist_range(ref_sd.sat_pos_base, base_position_) +

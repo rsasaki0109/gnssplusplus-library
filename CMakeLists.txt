@@ -123,6 +123,7 @@ set(GNSS_SOURCES_NO_OPTIMIZATION
     src/algorithms/float_trust_policy.cpp
     src/algorithms/rtk_measurement.cpp
     src/algorithms/rtk_selection.cpp
+    src/algorithms/rtk_cmc_reference.cpp
     src/algorithms/rtk_update.cpp
     src/algorithms/rtk_validation.cpp
     src/algorithms/fgo.cpp

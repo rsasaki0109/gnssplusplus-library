@@ -139,6 +139,16 @@ struct FuseOptions {
     double rtk_snr_max_variance_scale = 25.0;
     int max_subset_ar_drop_steps = -1;  // < 0 leaves RTKConfig's own default (6)
 
+    // Phase 2a: CMC-aware DD reference-satellite selection with hysteresis
+    // (RTKConfig::cmc_aware_reference_selection), mirroring gnss_solve's
+    // --cmc-ref family so gnss_fuse's underlying RTKProcessor can be tuned
+    // identically. Off by default; see rtk.hpp's doc comment for the
+    // algorithm.
+    bool cmc_aware_reference_selection = false;
+    double cmc_ref_level_m = 0.75;
+    int cmc_ref_switch_epochs = 3;
+    double cmc_ref_return_min_elev_deg = 5.0;
+
     // Opt-in: also write the per-epoch RTK (pre-fusion) PositionSolution
     // stream to its own .pos file, in the same libgnss::Solution format
     // `gnss solve` writes, so the existing PPC scoring pipeline can score
@@ -323,6 +333,15 @@ void printUsage(const char* program_name) {
         << "                                writes -- lets the PPC scoring pipeline evaluate the\n"
         << "                                RTK solution alone, independent of the ESKF's own\n"
         << "                                smoothing (--base only; default: off)\n"
+        << "  --cmc-ref                    Phase 2a: CMC-aware DD reference-satellite selection\n"
+        << "                                with hysteresis (mirrors `gnss solve`; default: off)\n"
+        << "  --cmc-ref-level <m>           CMC suspect-classification threshold in meters\n"
+        << "                                (default: 0.75). No effect without --cmc-ref\n"
+        << "  --cmc-ref-switch-epochs <k>   Consecutive suspect/non-suspect epochs required\n"
+        << "                                before switching away/back (default: 3)\n"
+        << "  --cmc-ref-return-min-elev <deg>\n"
+        << "                                Elevation margin (degrees) required before a switch-\n"
+        << "                                back is considered (default: 5.0)\n"
         << "  --verbose                    Print periodic per-epoch progress\n"
         << "  --quiet                      Suppress run summary\n"
         << "  -h, --help                   Show this help\n";
@@ -562,6 +581,14 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             options.max_subset_ar_drop_steps = std::stoi(requireValue(arg, i, argc, argv));
         } else if (arg == "--rtk-pos-out") {
             options.rtk_pos_out = requireValue(arg, i, argc, argv);
+        } else if (arg == "--cmc-ref") {
+            options.cmc_aware_reference_selection = true;
+        } else if (arg == "--cmc-ref-level") {
+            options.cmc_ref_level_m = std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--cmc-ref-switch-epochs") {
+            options.cmc_ref_switch_epochs = std::stoi(requireValue(arg, i, argc, argv));
+        } else if (arg == "--cmc-ref-return-min-elev") {
+            options.cmc_ref_return_min_elev_deg = std::stod(requireValue(arg, i, argc, argv));
         } else {
             argumentError("unknown or incomplete argument: " + arg, argv[0]);
         }
@@ -580,6 +607,12 @@ FuseOptions parseArguments(int argc, char* argv[]) {
     if (options.nav_path.empty()) argumentError("--nav is required", argv[0]);
     if (options.imu_path.empty()) argumentError("--imu is required", argv[0]);
     if (options.max_epochs < 0) argumentError("--max-epochs must be non-negative", argv[0]);
+    if (options.cmc_ref_switch_epochs < 1) {
+        argumentError("--cmc-ref-switch-epochs must be >= 1", argv[0]);
+    }
+    if (options.cmc_ref_return_min_elev_deg < 0.0) {
+        argumentError("--cmc-ref-return-min-elev must be >= 0", argv[0]);
+    }
 
     return options;
 }
@@ -750,6 +783,10 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
     if (options.max_subset_ar_drop_steps >= 0) {
         rtk_config.max_subset_drop_steps_for_ar = options.max_subset_ar_drop_steps;
     }
+    rtk_config.cmc_aware_reference_selection = options.cmc_aware_reference_selection;
+    rtk_config.cmc_ref_level_m = options.cmc_ref_level_m;
+    rtk_config.cmc_ref_switch_epochs = options.cmc_ref_switch_epochs;
+    rtk_config.cmc_ref_return_min_elev_deg = options.cmc_ref_return_min_elev_deg;
     if (!libgnss_apps::applyRtkConfigPreset(options.rtk_preset, rtk_config)) {
         std::cerr << "Error: unsupported --preset value: " << options.rtk_preset << "\n";
         return 1;
@@ -1110,6 +1147,12 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
         }
         if (!options.rtk_pos_out.empty()) {
             std::cout << "RTK solution stream written: " << options.rtk_pos_out << "\n";
+        }
+        if (options.cmc_aware_reference_selection) {
+            const auto cmc_ref_diag = rtk_processor.getCmcReferenceDiagnostics();
+            std::cout << "CMC-aware reference selection: enabled"
+                      << " suspect_epochs=" << cmc_ref_diag.suspect_epoch_count
+                      << " switches=" << cmc_ref_diag.switch_count << "\n";
         }
         std::cout << "IMU samples loaded: " << imu_series.samples.size() << "\n";
         std::cout << "Rover epochs processed: " << processed_epochs << "\n";

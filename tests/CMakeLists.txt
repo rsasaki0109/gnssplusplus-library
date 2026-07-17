@@ -35,6 +35,7 @@ if(GTest_FOUND)
         test_rtk_measurement.cpp
         test_rtk_update.cpp
         test_rtk_selection.cpp
+        test_rtk_cmc_ref.cpp
         test_rtk_validation.cpp
         test_fgo.cpp
         test_signal_policy.cpp

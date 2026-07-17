@@ -54,11 +54,23 @@ std::vector<SelectionPair> buildDoubleDifferencePairsForSystem(
     const std::vector<SatelliteSelectionData>& satellites,
     GNSSSystem system,
     int min_lock_count,
-    bool require_matched_carrier_wavelength) {
+    bool require_matched_carrier_wavelength,
+    const SatelliteId* forced_ref_sat) {
     std::vector<SelectionPair> pairs;
 
     SatelliteId ref_sat;
-    if (!selectSystemReferenceSatellite(satellites, system, min_lock_count, ref_sat)) {
+    bool have_ref = false;
+    if (forced_ref_sat != nullptr) {
+        for (const auto& satellite : satellites) {
+            if (satellite.satellite.system == system && satellite.satellite == *forced_ref_sat &&
+                satellite.has_l1 && satellite.n1_active) {
+                ref_sat = *forced_ref_sat;
+                have_ref = true;
+                break;
+            }
+        }
+    }
+    if (!have_ref && !selectSystemReferenceSatellite(satellites, system, min_lock_count, ref_sat)) {
         return pairs;
     }
 

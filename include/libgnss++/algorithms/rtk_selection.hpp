@@ -35,11 +35,31 @@ bool selectSystemReferenceSatellite(const std::vector<SatelliteSelectionData>& s
                                     int min_lock_count,
                                     SatelliteId& ref_sat);
 
+// forced_ref_sat: optional override for the DD reference satellite
+// (RTKProcessor::RTKConfig::cmc_aware_reference_selection: the caller has
+// already picked a hysteresis-gated reference for this (system) group and
+// wants every DD pair formed against it, instead of the plain highest-
+// elevation pick selectSystemReferenceSatellite() would make). When null
+// (the default via the 4-argument overload below) or when the referenced
+// satellite is not present/eligible (system mismatch, no active L1
+// ambiguity) in `satellites`, falls back to selectSystemReferenceSatellite()
+// exactly as before -- existing callers that never pass this argument are
+// unaffected, bit for bit.
 std::vector<SelectionPair> buildDoubleDifferencePairsForSystem(
     const std::vector<SatelliteSelectionData>& satellites,
     GNSSSystem system,
     int min_lock_count,
-    bool require_matched_carrier_wavelength);
+    bool require_matched_carrier_wavelength,
+    const SatelliteId* forced_ref_sat);
+
+inline std::vector<SelectionPair> buildDoubleDifferencePairsForSystem(
+    const std::vector<SatelliteSelectionData>& satellites,
+    GNSSSystem system,
+    int min_lock_count,
+    bool require_matched_carrier_wavelength) {
+    return buildDoubleDifferencePairsForSystem(
+        satellites, system, min_lock_count, require_matched_carrier_wavelength, nullptr);
+}
 
 }  // namespace rtk_selection
 }  // namespace libgnss

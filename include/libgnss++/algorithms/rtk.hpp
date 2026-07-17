@@ -6,6 +6,7 @@
 #include "../core/solution.hpp"
 #include "nlos_weights.hpp"
 #include "float_trust_policy.hpp"
+#include "rtk_cmc_reference.hpp"
 #include "rtk_measurement.hpp"
 #include "rtk_selection.hpp"
 #include "rtk_slip_detection.hpp"
@@ -421,6 +422,72 @@ public:
         /// MOVING_BASE position_mode (relative baseline against a moving
         /// base has no meaning for an absolute INS-predicted antenna prior).
         bool use_external_position_prior = false;
+
+        /// Phase 2a (docs/imu_fusion.md-adjacent RTK work): CMC-aware DD
+        /// reference-satellite selection with hysteresis. The plain
+        /// max-elevation reference pick (rtk_selection::
+        /// selectSystemReferenceSatellite, used by both buildMeasurement
+        /// Blocks() and buildDoubleDifferencePairs()) has no regard for
+        /// multipath/NLOS-driven code-minus-carrier (CMC) deviations; a
+        /// biased high-elevation satellite poisons every DD pair in its
+        /// (system) group at once. When true, each epoch classifies every
+        /// candidate satellite's SD L1 code-minus-phase deviation from its
+        /// own running EWMA baseline (see rtk_cmc_reference::
+        /// CmcSuspectTracker, threshold cmc_ref_level_m) and only switches
+        /// the active reference away from a CMC-suspect one after
+        /// cmc_ref_switch_epochs consecutive suspect epochs, picking the
+        /// highest-elevation non-suspect candidate (dual-freq preferred,
+        /// same tie-break as the plain selector); falls back to keeping the
+        /// current reference if every candidate is suspect. Switching back
+        /// to a higher-elevation candidate additionally requires
+        /// cmc_ref_switch_epochs consecutive non-suspect epochs AND that
+        /// candidate exceeding the current reference's elevation by
+        /// cmc_ref_return_min_elev_deg -- both hysteresis gates exist
+        /// because an earlier FGO-pipeline port of a blanket (non-
+        /// hysteresis) version of this rule regressed there (commit
+        /// 8cdff0c): ~10.5k switch decisions flip-flopped between the
+        /// top-2 elevation candidates on single-epoch CMC flicker. Unlike
+        /// FGO, the KF path keys ambiguities per-satellite (SD states; the
+        /// reference only enters the H matrix), so reference switching does
+        /// not itself sever ambiguity continuity here -- structurally safer
+        /// to enable. false (default) preserves existing reference
+        /// selection bit-for-bit: neither buildMeasurementBlocks() nor
+        /// buildDoubleDifferencePairs() consult the CMC-aware pick, and the
+        /// per-epoch suspect/hysteresis bookkeeping in updateBias() is
+        /// skipped entirely.
+        bool cmc_aware_reference_selection = false;
+
+        /// CMC suspect-classification deviation threshold in meters (see
+        /// cmc_aware_reference_selection's doc comment). Mirrors the FGO
+        /// pipeline's --cmc-level default. No effect unless
+        /// cmc_aware_reference_selection is true.
+        double cmc_ref_level_m = 0.75;
+
+        /// Consecutive CMC-suspect epochs required before switching the
+        /// active reference away from it, and consecutive non-suspect
+        /// epochs required before switching back to a higher-elevation
+        /// candidate (see cmc_aware_reference_selection's doc comment).
+        /// No effect unless cmc_aware_reference_selection is true.
+        int cmc_ref_switch_epochs = 3;
+
+        /// Minimum elevation margin (degrees) a higher-elevation candidate
+        /// must clear over the current reference before a switch-back is
+        /// even considered (in addition to the consecutive-non-suspect-
+        /// epochs gate above). No effect unless
+        /// cmc_aware_reference_selection is true.
+        double cmc_ref_return_min_elev_deg = 5.0;
+    };
+
+    /// Phase 2a diagnostics: RTKConfig::cmc_aware_reference_selection
+    /// counters, zero for the life of the processor unless that knob is
+    /// enabled. suspect_epoch_count counts (satellite, epoch) CMC-suspect
+    /// classifications (see rtk_cmc_reference::CmcSuspectTracker);
+    /// switch_count counts reference-satellite changes actually performed
+    /// by the hysteresis state machine (both switch-away and switch-back),
+    /// summed across all (system) groups and the whole run.
+    struct CmcReferenceDiagnostics {
+        std::size_t suspect_epoch_count = 0;
+        std::size_t switch_count = 0;
     };
 
     /// Reason why AR was silently skipped or failed in resolveAmbiguities().
@@ -604,6 +671,13 @@ public:
     /// True if a prior has been supplied via setExternalPositionPrior() and
     /// not yet consumed by resetPositionToSPP().
     bool hasExternalPositionPrior() const { return has_external_position_prior_; }
+
+    /// Phase 2a: RTKConfig::cmc_aware_reference_selection diagnostics
+    /// counters, accumulated since construction/reset(). Both fields stay
+    /// zero for the life of the processor when the knob is off.
+    CmcReferenceDiagnostics getCmcReferenceDiagnostics() const {
+        return {cmc_ref_suspect_epoch_count_, cmc_ref_switch_count_};
+    }
 
 public:
     bool lambdaMethod(const VectorXd& float_ambiguities,
@@ -893,6 +967,22 @@ private:
     std::map<SatelliteId, double> code_phase_history_l2_m_;
     std::map<SatelliteId, double> code_phase_history_l5_m_;  // Phase 18 Step 5
 
+    // Phase 2a: CMC-aware DD reference-satellite selection state (only
+    // populated/consulted when rtk_config_.cmc_aware_reference_selection is
+    // true; see rtk_cmc_reference.hpp and updateCmcAwareReferenceSelection()
+    // for the algorithm). Lazily constructed on first use so a processor
+    // that never enables the knob never allocates the tracker.
+    std::unique_ptr<rtk_cmc_reference::CmcSuspectTracker> cmc_suspect_tracker_;
+    std::map<GNSSSystem, rtk_cmc_reference::ReferenceHysteresis> cmc_ref_hysteresis_by_system_;
+    // This epoch's hysteresis-selected reference per system, consumed by
+    // buildMeasurementBlocks()/buildDoubleDifferencePairs() in place of the
+    // plain max-elevation pick. Recomputed once per epoch in updateBias();
+    // absent entries fall back to the plain selector (e.g. no candidates at
+    // all this epoch for that system).
+    std::map<GNSSSystem, SatelliteId> cmc_aware_ref_by_system_;
+    std::size_t cmc_ref_suspect_epoch_count_ = 0;
+    std::size_t cmc_ref_switch_count_ = 0;
+
     /**
      * Collect all satellite data for an epoch (L1+L2 for rover and base)
      */
@@ -912,6 +1002,22 @@ private:
      */
     void handleReferenceSatelliteChange(const SatelliteId& new_ref,
                                         const std::map<SatelliteId, SatelliteData>& sat_data);
+
+    /**
+     * Phase 2a: recompute this epoch's CMC-suspect classification for every
+     * candidate satellite and, when rtk_config_.cmc_aware_reference_
+     * selection is enabled, run the per-system hysteresis reference
+     * selection, populating cmc_aware_ref_by_system_. Called from
+     * updateBias() once the epoch's cycle-slip signals (gf/doppler/code)
+     * are available, so slip detection can double as the CMC baseline's
+     * arc-restart signal. No-op (and cmc_aware_ref_by_system_ left empty)
+     * when the knob is off.
+     */
+    void updateCmcAwareReferenceSelection(const std::map<SatelliteId, SatelliteData>& sat_data,
+                                          const std::set<SatelliteId>& gf_slips,
+                                          const std::set<SatelliteId>& gf_slips_l1l5,
+                                          const std::set<SatelliteId>& code_slips_l1,
+                                          const std::set<SatelliteId>& doppler_slips_l1);
 
     /**
      * Initialize filter
