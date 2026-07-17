@@ -64,6 +64,52 @@ constexpr double kMrtklibPhaseResidualSigmaGate = 2.0;
 // (pos2-rejdiffpse -> opt.maxdiffp, pos2-poserrcnt; mrtk_ppp_rtk.c:2333-2352)
 constexpr double kMrtklibMaxSppDivergenceM = 10.0;
 constexpr int kMrtklibMaxSppDivergenceEpochs = 5;
+// Immediate (uncounted) sanity ceiling for the reset seed vs. the filter's
+// own tracked position -- see the long comment at its use site. Well above
+// any plausible ground-vehicle displacement per epoch, and far below the
+// hundreds-of-meters to multi-km blunders this guard targets.
+constexpr double kClasSeedImplausibleSpeedMps = 100.0;
+constexpr double kClasSeedImplausibleJumpFloorM = 300.0;
+
+// MRTKLIB mrtk_spp.c valsol(): chi-square(alpha=0.001) table indexed by
+// degrees of freedom (nv-nx), used to validate every pntpos() solution
+// whenever raim_fde (clas.toml pos1-posopt5) is enabled -- which the real
+// clas.toml benchmark config does. The parity SPP seed above intentionally
+// runs with enable_raim_fde=false (the leave-one-out FDE loop shifts the
+// reset seed ~11 m at tow 177036; see comment above), which also silently
+// skips this codebase's equivalent of valsol()'s baseline chi-square check
+// (it is bundled behind the same flag as the FDE loop in MRTKLIB, but this
+// port exposes it as an independent, still-disabled knob). Left completely
+// unchecked, a multi-GNSS SPP epoch with only 1-2 satellites per non-
+// reference system consumes all its redundancy on per-system clock/ISB
+// unknowns (dof collapses to 0) and reports a numerically "perfect"
+// (near-zero residual) but arbitrarily wrong fix -- observed to reach
+// 17 km on the tokyo_run1 benchmark. Re-apply valsol()'s literal chi-square
+// gate here (using the seed's own already-computed spp_chi_square /
+// spp_degrees_of_freedom) and additionally require dof >= 1: valsol()
+// itself only runs the chi-square test when nv>nx, so a dof<=0 fit is
+// exactly the gap real MRTKLIB's own gate cannot see either, and is the
+// gap this guard closes. Failing either check marks the seed invalid,
+// which reuses the filter's existing seed-unavailable handling (clock
+// coasting instead of the every-epoch hard clock reseed, and skipping the
+// maxdiffp position/filter reset below) instead of introducing new state
+// machinery.
+constexpr std::array<double, 30> kMrtklibChiSquare001Table = {
+    10.8, 13.8, 16.3, 18.5, 20.5, 22.5, 24.3, 26.1, 27.9, 29.6,
+    31.3, 32.9, 34.5, 36.1, 37.7, 39.3, 40.8, 42.3, 43.8, 45.3,
+    46.8, 48.3, 49.7, 51.2, 52.6, 54.1, 55.5, 56.9, 58.3, 59.7,
+};
+
+bool clasSeedFailsRedundancyGate(const PositionSolution& seed) {
+    const int dof = seed.spp_degrees_of_freedom;
+    if (dof < 1) {
+        return true;
+    }
+    const auto table_index = static_cast<std::size_t>(std::min(
+        dof, static_cast<int>(kMrtklibChiSquare001Table.size()))) - 1;
+    return std::isfinite(seed.spp_chi_square) &&
+           seed.spp_chi_square > kMrtklibChiSquare001Table[table_index];
+}
 
 using ClasBlqRows = std::array<std::array<double, 11>, 6>;
 
@@ -837,6 +883,9 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         ppp_config_.kinematic_mode && !ppp_config_.low_dynamics_mode &&
         ppp_config_.use_clas_osr_filter && ppp_config_.use_dynamics_model;
     PositionSolution seed;
+    // Set below (parity path only) once the redundancy/jump guards have run;
+    // see the long comment at its assignment for what this gates.
+    bool clas_seed_untrusted_this_epoch = false;
     if (clas_mrtklib_parity) {
         const auto original_spp_config = spp_processor_.getSPPConfig();
         auto clas_spp_config = original_spp_config;
@@ -864,6 +913,130 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         spp_processor_.setSPPConfig(clas_spp_config);
         seed = spp_processor_.processEpoch(obs, nav);
         spp_processor_.setSPPConfig(original_spp_config);
+        if (seed.isValid() && clasSeedFailsRedundancyGate(seed)) {
+            if (pppDebugEnabled()) {
+                std::cerr << "[CLAS-SEED-CHI2] reject tow=" << obs.time.tow
+                          << " dof=" << seed.spp_degrees_of_freedom
+                          << " chi2=" << seed.spp_chi_square
+                          << " ns=" << seed.num_satellites << "\n";
+            }
+            seed.status = SolutionStatus::NONE;
+        }
+        // Second, complementary guard: a sparse multi-GNSS SPP epoch can
+        // still pass the chi-square/dof check above (enough redundancy for
+        // a numerically fine fit) while one of its few satellites carries an
+        // undetected bias (bad ephemeris/SSR lookup, multipath) that a
+        // single-satellite RAIM/FDE exclusion would normally catch -- but
+        // enable_raim_fde is deliberately off above (see comment). Observed
+        // on nagoya_run2 tow 557038.4: dof=1, chi2=2.27 (well under the
+        // dof=1 table entry 10.8), yet the fix was ~4.2 km from the last
+        // published position. That epoch is also mid-reset (filter_
+        // initialized_ is false: this urban segment cycles through repeated
+        // cold reinitialization, never holding a fix long enough to
+        // accumulate 5 maxdiffp-counted epochs below), so comparing against
+        // filter_state_ would miss it -- there is no filter_state_ yet.
+        // last_published_solution_position_ecef_ is the right reference: it
+        // is updated from any isValid() publication regardless of filter_
+        // initialized_/resets, so it still holds the last trustworthy fix
+        // across a cold reinit. Reject a seed that implies covering more
+        // than kClasSeedImplausibleSpeedMps in dt: no ground vehicle does,
+        // regardless of how well the seed fits its own (possibly biased)
+        // measurements.
+        if (seed.isValid() && has_last_published_solution_position_) {
+            const double dt = has_last_processed_time_
+                ? std::max(obs.time - last_processed_time_, 0.001)
+                : 1.0;
+            const double seed_vs_last_published_m =
+                (seed.position_ecef - last_published_solution_position_ecef_)
+                    .norm();
+            const double implausible_jump_m = std::max(
+                kClasSeedImplausibleJumpFloorM,
+                kClasSeedImplausibleSpeedMps * dt);
+            if (seed_vs_last_published_m > implausible_jump_m) {
+                if (pppDebugEnabled()) {
+                    std::cerr << "[CLAS-SEED-JUMP] reject tow=" << obs.time.tow
+                              << " jump=" << seed_vs_last_published_m
+                              << " limit=" << implausible_jump_m
+                              << " dt=" << dt << "\n";
+                }
+                seed.status = SolutionStatus::NONE;
+            }
+        }
+        // Captured *before* the coast-splice fallback below patches a
+        // rejected seed back to isValid()=true for filter-(re)init
+        // purposes: this is the guards' true verdict on the raw SPP this
+        // epoch (redundancy/chi-square gate, jump gate, or a plain
+        // pre-existing SPP failure -- e.g. <4 usable satellites -- all
+        // collapse to !seed.isValid() here). Debug evidence on
+        // nagoya_run2 (tow 556698-556733, a 176-epoch/35 s continuous
+        // chi-square-reject stretch) showed the coast/tt-freeze mechanism
+        // above stops position blind-extrapolation but does nothing to
+        // stop WLNL AR: ambiguity eligibility is governed purely by
+        // lock_count (phase continuity), which is completely decoupled
+        // from seed quality, so AR kept resolving and PUBLISHING a stable
+        // wrong fix (~12.2 m error, all 176/176 epochs guard-rejected)
+        // every single epoch of the coast. Suppress the AR *attempt*
+        // itself on any epoch whose own seed is untrusted -- mirroring
+        // MRTKLIB's pntpos-failure semantics one step further: a stale/
+        // coasted state should not be allowed to originate a new
+        // publishable fix, only to keep the float filter alive until a
+        // trustworthy seed returns.
+        clas_seed_untrusted_this_epoch = !seed.isValid();
+        // Suppressing this epoch's AR *attempt* alone is not enough: lock
+        // counts are untouched by that gate, so a short (2-3 epoch)
+        // rejection window can still leave every ambiguity's lock_count
+        // comfortably above the min_lock_count=1 eligibility floor
+        // (ppp_ar.cpp:210) the instant a seed is accepted again -- no
+        // cooldown. Observed on tokyo_run1 tow 188097.0-188097.4 (~8.45 m,
+        // 3 epochs): the seed was accepted there (no CHI2/JUMP reject in
+        // the debug log), but a rejection/coast stretch had ended only
+        // ~2.2 s (11 epochs) earlier at tow 188092.8, and the filter fixed
+        // a wrong integer almost immediately on reconvergence. Reset every
+        // tracked ambiguity's lock_count to -minlock on a rejected epoch,
+        // mirroring udbias_ppp()'s existing outage-reset semantics
+        // (mrtk_ppp_rtk.c ~865-875; the identical -kMrtklibMinLock/
+        // outage_count=0 pattern already used for the floatcnt and
+        // outage_gap resets elsewhere in this function): this reuses the
+        // existing lock_count>=min_lock_count gate to enforce a natural
+        // kMrtklibMinLock+1-epoch (6 accepted-phase-epoch) cooldown after
+        // the seed becomes trustworthy again, instead of adding a new,
+        // bespoke cooldown counter.
+        if (clas_seed_untrusted_this_epoch) {
+            constexpr int kMrtklibMinLock = 5;
+            for (auto& [_, ambiguity] : ambiguity_states_) {
+                ambiguity.lock_count = -kMrtklibMinLock;
+                ambiguity.outage_count = 0;
+            }
+        }
+        // Coverage fallback for a rejected seed encountered mid-(re)init.
+        // mrtk_rtkpos.c:2417-2425: when pntpos() fails, MRTKLIB's caller
+        // only skips the epoch outright in the static branch
+        // (!rtk->opt.dynamics -> return 0); in dynamics mode (our path) it
+        // falls through and keeps running ppp_rtk_pos() on the *stale*
+        // rtk->sol.rr left by the last successful pntpos (sol_t is only
+        // overwritten on success), i.e. it coasts rather than drops the
+        // epoch. This port's cold-(re)init path (prepareEpochState,
+        // filter_initialized_==false after every floatcnt/maxdiffp reset)
+        // instead requires seed_solution.isValid() and returns not-ready
+        // when it fails, silently suppressing the row. Mirror the literal
+        // behavior: when a gate above rejected the seed and there is no
+        // filter to fall back on, but a prior published fix exists, splice
+        // that stale-but-trustworthy position into the seed (position/
+        // velocity only -- initializeFilterState always applies its own
+        // fixed 30 m-sigma init variance regardless of seed quality, so no
+        // covariance bookkeeping is needed) so the epoch still initializes
+        // and publishes, instead of being dropped.
+        if (!seed.isValid() && !filter_initialized_ &&
+            has_last_published_solution_position_ &&
+            seed.num_satellites >= 4) {
+            if (pppDebugEnabled()) {
+                std::cerr << "[CLAS-SEED-COAST] tow=" << obs.time.tow
+                          << " coasting to last published position\n";
+            }
+            seed.position_ecef = last_published_solution_position_ecef_;
+            seed.velocity_ecef = Vector3d::Zero();
+            seed.status = SolutionStatus::SPP;
+        }
     } else {
         seed = spp_processor_.processEpoch(obs, nav);
     }
@@ -883,6 +1056,34 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         std::cerr << '\n';
     }
     clas_mrtklib_ar_rejected_ambiguities_.clear();
+    // MRTKLIB mrtk_rtkpos.c ~2395-2416: rtk->sol.time (and therefore tt,
+    // its predict-step dt) only advances on a pntpos() SUCCESS; in dynamics
+    // mode a failure falls through with tt frozen at 0 for that one epoch,
+    // and the caller keeps running ppp_rtk_pos() on the stale state. The
+    // redundancy/jump guards above are this port's equivalent of pntpos()
+    // rejecting a solution (enable_raim_fde/outlier detection are
+    // deliberately off on the reset seed; see clasSeedFailsRedundancyGate).
+    // Capture "was the filter already running before this epoch" here,
+    // before the floatcnt/measurement-update resets below can change
+    // filter_initialized_, so the freeze below only ever applies to a
+    // genuine mid-stream coast (never a cold/re-init epoch, which already
+    // has its own seed-availability handling).
+    const bool clas_seed_guard_rejected_mid_stream =
+        clas_mrtklib_parity && filter_initialized_ && !seed.isValid();
+    // Advances clas_last_accepted_seed_time_ alongside every
+    // last_processed_time_ update below, except on an epoch the guards
+    // above just rejected -- i.e. exactly the pntpos-success gating
+    // described above. Called at each of the existing bookkeeping sites
+    // regardless of which later stage (OSR availability, measurement
+    // update) the epoch ultimately exits through, since MRTKLIB's tt
+    // freeze is governed solely by pntpos, not by ppp_rtk_pos()'s own
+    // later success/failure.
+    const auto clas_update_seed_anchor = [&]() {
+        if (clas_mrtklib_parity && !clas_seed_guard_rejected_mid_stream) {
+            clas_last_accepted_seed_time_ = obs.time;
+            has_clas_last_accepted_seed_time_ = true;
+        }
+    };
     // The canonical raw-L6 CLASLIB oracle enters ppp_rtk_pos() at the first
     // observation and advances its float/iono/ambiguity states immediately.
     // Its first five epochs are FLOAT and it then fixes; it does not skip a
@@ -940,6 +1141,29 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             ? 1e4
             : (precise_products_loaded_ ? 1e6
                                         : ppp_config_.initial_ambiguity_variance);
+    // Feed prepareEpochState()/predictFilterState() the tt-style anchor
+    // described above instead of the plain last_processed_time_ bookkeeping
+    // whenever this is the parity path: clas_last_accepted_seed_time_ only
+    // moves forward on epochs the seed guard accepted (see the six update
+    // sites below), so a guard-rejected mid-stream epoch here synthesizes a
+    // near-zero dt (freezing position/velocity/clock/iono/ambiguity
+    // propagation for exactly this epoch, mirroring tt==0), while the
+    // return-to-accepted epoch after one or more rejections naturally sees
+    // the full accumulated real gap in one predict step -- exactly as
+    // MRTKLIB's own tt does. Non-parity paths (static CLAS anchors,
+    // white-noise mode) are untouched: they keep using last_processed_time_
+    // directly, unaffected by this guard.
+    bool clas_prepare_has_last_processed_time = has_last_processed_time_;
+    GNSSTime clas_prepare_last_processed_time = last_processed_time_;
+    if (clas_mrtklib_parity) {
+        if (clas_seed_guard_rejected_mid_stream) {
+            clas_prepare_has_last_processed_time = true;
+            clas_prepare_last_processed_time = obs.time - 0.001;
+        } else {
+            clas_prepare_has_last_processed_time = has_clas_last_accepted_seed_time_;
+            clas_prepare_last_processed_time = clas_last_accepted_seed_time_;
+        }
+    }
     const auto epoch_preparation = ppp_clas::prepareEpochState(
         obs,
         seed,
@@ -951,8 +1175,8 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         has_static_anchor_position_,
         ppp_config_,
         modeledZenithTroposphereDelayMeters(seed.position_ecef, obs.time),
-        has_last_processed_time_,
-        last_processed_time_,
+        clas_prepare_has_last_processed_time,
+        clas_prepare_last_processed_time,
         ambiguity_states_,
         clas_dispersion_compensation_,
         clas_phase_bias_repair_,
@@ -1023,9 +1247,15 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     const auto& epoch_atmos = epoch_context.epoch_atmos_tokens;
     auto& osr_corrections = epoch_context.osr_corrections;
 
+    // Same tt-anchor substitution as the prepareEpochState() call above,
+    // applied here so detectClasCycleSlips()'s outage_gap (dt_seconds > 2s)
+    // ambiguity-reset path sees the real accumulated gap on the
+    // return-to-accepted epoch, exactly like the predict step does --
+    // otherwise a multi-epoch coast would leave every ambiguity's lock
+    // count untouched even though the filter froze underneath it.
     const double clas_dt_seconds =
-        has_last_processed_time_
-            ? std::max(obs.time - last_processed_time_, 0.001)
+        clas_prepare_has_last_processed_time
+            ? std::max(obs.time - clas_prepare_last_processed_time, 0.001)
             : 1.0;
     if (ppp_config_.kinematic_mode && ppp_config_.enable_cycle_slip_detection) {
         const auto slip_stats = ppp_clas::detectClasCycleSlips(
@@ -1105,6 +1335,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         if (ppp_config_.use_dynamics_model) {
             has_last_processed_time_ = true;
             last_processed_time_ = obs.time;
+            clas_update_seed_anchor();
         }
         solution = seed;
         return solution;
@@ -1223,6 +1454,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             applyOptionalSolutionEpochMetadata(solution, obs.time, ppp_config_);
             has_last_processed_time_ = true;
             last_processed_time_ = obs.time;
+            clas_update_seed_anchor();
             ++total_epochs_processed_;
             return solution;
         }
@@ -1240,6 +1472,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             applyOptionalSolutionEpochMetadata(solution, obs.time, ppp_config_);
             has_last_processed_time_ = true;
             last_processed_time_ = obs.time;
+            clas_update_seed_anchor();
             ++total_epochs_processed_;
             if (solution.isValid()) {
                 last_published_solution_position_ecef_ = solution.position_ecef;
@@ -1252,6 +1485,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         if (ppp_config_.use_dynamics_model) {
             has_last_processed_time_ = true;
             last_processed_time_ = obs.time;
+            clas_update_seed_anchor();
         }
         solution = seed;
         return solution;
@@ -1287,6 +1521,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         applyOptionalSolutionEpochMetadata(solution, obs.time, ppp_config_);
         has_last_processed_time_ = true;
         last_processed_time_ = obs.time;
+        clas_update_seed_anchor();
         ++total_epochs_processed_;
         return solution;
     }
@@ -1357,7 +1592,12 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             filter_state_,
             ambiguity_states_,
             [&]() {
+                // clas_seed_untrusted_this_epoch (parity path only; always
+                // false otherwise) -- do not let AR originate a new
+                // publishable fix from a coasted/stale state; see the long
+                // comment at its assignment above.
                 return ppp_config_.enable_ambiguity_resolution &&
+                       !clas_seed_untrusted_this_epoch &&
                        resolveAmbiguities(obs, nav);
             },
             (ppp_config_.ar_method == PPPConfig::ARMethod::DD_WLNL)
@@ -1763,6 +2003,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
 
     has_last_processed_time_ = true;
     last_processed_time_ = obs.time;
+    clas_update_seed_anchor();
     ++total_epochs_processed_;
 
     applyOptionalSolutionEpochMetadata(solution, obs.time, ppp_config_);

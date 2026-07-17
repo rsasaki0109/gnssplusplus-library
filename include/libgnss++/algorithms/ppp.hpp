@@ -389,6 +389,19 @@ private:
     ppp_ar::WlnlHoldState clas_wlnl_hold_;
     Vector3d last_published_solution_position_ecef_ = Vector3d::Zero();
     bool has_last_published_solution_position_ = false;
+    // Anchors MRTKLIB rtk->sol.time's role in tt (=timediff) computation
+    // (mrtk_rtkpos.c ~2395-2416): sol.time -- and therefore the predict
+    // dt derived from it -- only advances on a pntpos() SUCCESS. In
+    // dynamics mode a pntpos failure falls through with tt==0 for that one
+    // epoch (state frozen, no propagation) and the full accumulated real
+    // gap is only applied once, on the epoch pntpos next succeeds. On the
+    // kinematic CLAS parity path (ppp_clas_epoch.cpp), the redundancy/jump
+    // guards on the SPP seed are this port's equivalent of pntpos()
+    // rejecting a solution, so this anchor only advances when those guards
+    // accept the seed -- deliberately independent of last_processed_time_,
+    // which keeps advancing every epoch for its other (non-parity) uses.
+    GNSSTime clas_last_accepted_seed_time_;
+    bool has_clas_last_accepted_seed_time_ = false;
     std::map<SatelliteId, double> windup_cache_;  ///< Phase wind-up cache for OSR
     std::map<SatelliteId, int> est_stec_outage_;   ///< Epochs since last seen (est-stec pruning)
     std::map<SatelliteId, std::map<uint8_t, int>> prev_phase_bias_discnt_;  ///< Last-seen SSR phase-bias discontinuity counters (GNSS_PPP_SSR_DISCNT_SLIP)
