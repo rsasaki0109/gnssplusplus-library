@@ -78,6 +78,7 @@ Fixed-epoch accuracy is not degraded.
 
 Known limits: consumer/tactical-grade dead-reckoning drifts tens of meters
 through multi-minute outages; vertical error remains weaker than horizontal;
-the NIS gate defaults were tuned on PPC data. Tightly-coupled DD updates
-(Stage 2) are future work — see `include/libgnss++/fusion/dd_imu_bridge.hpp`
-for the design sketch.
+the NIS gate defaults were tuned on PPC data. The RTK-hosted tightly-coupled
+path is specified in [`tight_coupling.md`](tight_coupling.md). The older
+`include/libgnss++/fusion/dd_imu_bridge.hpp` declarations are retained only as
+the historical parallel-filter sketch that preceded that design.
