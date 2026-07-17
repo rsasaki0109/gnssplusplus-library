@@ -64,52 +64,6 @@ constexpr double kMrtklibPhaseResidualSigmaGate = 2.0;
 // (pos2-rejdiffpse -> opt.maxdiffp, pos2-poserrcnt; mrtk_ppp_rtk.c:2333-2352)
 constexpr double kMrtklibMaxSppDivergenceM = 10.0;
 constexpr int kMrtklibMaxSppDivergenceEpochs = 5;
-// Immediate (uncounted) sanity ceiling for the reset seed vs. the filter's
-// own tracked position -- see the long comment at its use site. Well above
-// any plausible ground-vehicle displacement per epoch, and far below the
-// hundreds-of-meters to multi-km blunders this guard targets.
-constexpr double kClasSeedImplausibleSpeedMps = 100.0;
-constexpr double kClasSeedImplausibleJumpFloorM = 300.0;
-
-// MRTKLIB mrtk_spp.c valsol(): chi-square(alpha=0.001) table indexed by
-// degrees of freedom (nv-nx), used to validate every pntpos() solution
-// whenever raim_fde (clas.toml pos1-posopt5) is enabled -- which the real
-// clas.toml benchmark config does. The parity SPP seed above intentionally
-// runs with enable_raim_fde=false (the leave-one-out FDE loop shifts the
-// reset seed ~11 m at tow 177036; see comment above), which also silently
-// skips this codebase's equivalent of valsol()'s baseline chi-square check
-// (it is bundled behind the same flag as the FDE loop in MRTKLIB, but this
-// port exposes it as an independent, still-disabled knob). Left completely
-// unchecked, a multi-GNSS SPP epoch with only 1-2 satellites per non-
-// reference system consumes all its redundancy on per-system clock/ISB
-// unknowns (dof collapses to 0) and reports a numerically "perfect"
-// (near-zero residual) but arbitrarily wrong fix -- observed to reach
-// 17 km on the tokyo_run1 benchmark. Re-apply valsol()'s literal chi-square
-// gate here (using the seed's own already-computed spp_chi_square /
-// spp_degrees_of_freedom) and additionally require dof >= 1: valsol()
-// itself only runs the chi-square test when nv>nx, so a dof<=0 fit is
-// exactly the gap real MRTKLIB's own gate cannot see either, and is the
-// gap this guard closes. Failing either check marks the seed invalid,
-// which reuses the filter's existing seed-unavailable handling (clock
-// coasting instead of the every-epoch hard clock reseed, and skipping the
-// maxdiffp position/filter reset below) instead of introducing new state
-// machinery.
-constexpr std::array<double, 30> kMrtklibChiSquare001Table = {
-    10.8, 13.8, 16.3, 18.5, 20.5, 22.5, 24.3, 26.1, 27.9, 29.6,
-    31.3, 32.9, 34.5, 36.1, 37.7, 39.3, 40.8, 42.3, 43.8, 45.3,
-    46.8, 48.3, 49.7, 51.2, 52.6, 54.1, 55.5, 56.9, 58.3, 59.7,
-};
-
-bool clasSeedFailsRedundancyGate(const PositionSolution& seed) {
-    const int dof = seed.spp_degrees_of_freedom;
-    if (dof < 1) {
-        return true;
-    }
-    const auto table_index = static_cast<std::size_t>(std::min(
-        dof, static_cast<int>(kMrtklibChiSquare001Table.size()))) - 1;
-    return std::isfinite(seed.spp_chi_square) &&
-           seed.spp_chi_square > kMrtklibChiSquare001Table[table_index];
-}
 
 using ClasBlqRows = std::array<std::array<double, 11>, 6>;
 
@@ -910,84 +864,6 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         spp_processor_.setSPPConfig(clas_spp_config);
         seed = spp_processor_.processEpoch(obs, nav);
         spp_processor_.setSPPConfig(original_spp_config);
-        if (seed.isValid() && clasSeedFailsRedundancyGate(seed)) {
-            if (pppDebugEnabled()) {
-                std::cerr << "[CLAS-SEED-CHI2] reject tow=" << obs.time.tow
-                          << " dof=" << seed.spp_degrees_of_freedom
-                          << " chi2=" << seed.spp_chi_square
-                          << " ns=" << seed.num_satellites << "\n";
-            }
-            seed.status = SolutionStatus::NONE;
-        }
-        // Second, complementary guard: a sparse multi-GNSS SPP epoch can
-        // still pass the chi-square/dof check above (enough redundancy for
-        // a numerically fine fit) while one of its few satellites carries an
-        // undetected bias (bad ephemeris/SSR lookup, multipath) that a
-        // single-satellite RAIM/FDE exclusion would normally catch -- but
-        // enable_raim_fde is deliberately off above (see comment). Observed
-        // on nagoya_run2 tow 557038.4: dof=1, chi2=2.27 (well under the
-        // dof=1 table entry 10.8), yet the fix was ~4.2 km from the last
-        // published position. That epoch is also mid-reset (filter_
-        // initialized_ is false: this urban segment cycles through repeated
-        // cold reinitialization, never holding a fix long enough to
-        // accumulate 5 maxdiffp-counted epochs below), so comparing against
-        // filter_state_ would miss it -- there is no filter_state_ yet.
-        // last_published_solution_position_ecef_ is the right reference: it
-        // is updated from any isValid() publication regardless of filter_
-        // initialized_/resets, so it still holds the last trustworthy fix
-        // across a cold reinit. Reject a seed that implies covering more
-        // than kClasSeedImplausibleSpeedMps in dt: no ground vehicle does,
-        // regardless of how well the seed fits its own (possibly biased)
-        // measurements.
-        if (seed.isValid() && has_last_published_solution_position_) {
-            const double dt = has_last_processed_time_
-                ? std::max(obs.time - last_processed_time_, 0.001)
-                : 1.0;
-            const double seed_vs_last_published_m =
-                (seed.position_ecef - last_published_solution_position_ecef_)
-                    .norm();
-            const double implausible_jump_m = std::max(
-                kClasSeedImplausibleJumpFloorM,
-                kClasSeedImplausibleSpeedMps * dt);
-            if (seed_vs_last_published_m > implausible_jump_m) {
-                if (pppDebugEnabled()) {
-                    std::cerr << "[CLAS-SEED-JUMP] reject tow=" << obs.time.tow
-                              << " jump=" << seed_vs_last_published_m
-                              << " limit=" << implausible_jump_m
-                              << " dt=" << dt << "\n";
-                }
-                seed.status = SolutionStatus::NONE;
-            }
-        }
-        // Coverage fallback for a rejected seed encountered mid-(re)init.
-        // mrtk_rtkpos.c:2417-2425: when pntpos() fails, MRTKLIB's caller
-        // only skips the epoch outright in the static branch
-        // (!rtk->opt.dynamics -> return 0); in dynamics mode (our path) it
-        // falls through and keeps running ppp_rtk_pos() on the *stale*
-        // rtk->sol.rr left by the last successful pntpos (sol_t is only
-        // overwritten on success), i.e. it coasts rather than drops the
-        // epoch. This port's cold-(re)init path (prepareEpochState,
-        // filter_initialized_==false after every floatcnt/maxdiffp reset)
-        // instead requires seed_solution.isValid() and returns not-ready
-        // when it fails, silently suppressing the row. Mirror the literal
-        // behavior: when a gate above rejected the seed and there is no
-        // filter to fall back on, but a prior published fix exists, splice
-        // that stale-but-trustworthy position into the seed (position/
-        // velocity only -- initializeFilterState always applies its own
-        // fixed 30 m-sigma init variance regardless of seed quality, so no
-        // covariance bookkeeping is needed) so the epoch still initializes
-        // and publishes, instead of being dropped.
-        if (!seed.isValid() && !filter_initialized_ &&
-            has_last_published_solution_position_ &&
-            seed.num_satellites >= 4) {
-            if (pppDebugEnabled()) {
-                std::cerr << "[CLAS-SEED-COAST] tow=" << obs.time.tow
-                          << " coasting to last published position\n";
-            }
-            seed.position_ecef = last_published_solution_position_ecef_;
-            seed.velocity_ecef = Vector3d::Zero();
-            seed.status = SolutionStatus::SPP;
-        }
     } else {
         seed = spp_processor_.processEpoch(obs, nav);
     }
