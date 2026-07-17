@@ -1590,6 +1590,9 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
     std::map<CarrierKey, std::size_t> cmc_last_rover_ambiguity_index;
     std::size_t cmc_jump_reset_total = 0;
     std::size_t cmc_level_exclusion_total = 0;
+    // FGOConfig::cmc_aware_reference_selection: count of DD reference
+    // picks steered away from a CMC-level-excluded candidate this run.
+    std::size_t cmc_ref_avoided_total = 0;
 
     for (std::size_t epoch_index = 0; epoch_index < problem.epochs.size(); ++epoch_index) {
         // Reference: tc._update_epoch_dt(obs) runs unconditionally at the top
@@ -1836,6 +1839,52 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                            const PreparedCarrierObservation* rhs) {
                             return lhs->elevation_rad < rhs->elevation_rad;
                         });
+
+                // --- CMC-aware reference selection
+                // (FGOConfig::cmc_aware_reference_selection) ---
+                // The plain max-elevation pick above can land on a satellite
+                // the CMC screening pre-pass above already flagged as
+                // sustained multipath/NLOS this epoch
+                // (cmc_level_exclude_this_epoch). Every DD pair in the group
+                // is formed against this ONE reference, so a multipath-
+                // biased reference poisons every DD residual in the group at
+                // once (see the config knob's doc comment for the tokyo
+                // run1 episode that motivated this). When the knob is on and
+                // CMC screening is active, prefer the highest-elevation
+                // NON-excluded candidate instead; if every candidate in the
+                // group is CMC-excluded this epoch, keep the original
+                // max-elevation choice so the group is never dropped.
+                if (config_.cmc_aware_reference_selection &&
+                    config_.use_code_minus_carrier_screening &&
+                    !cmc_level_exclude_this_epoch.empty()) {
+                    const CarrierKey default_key{
+                        base_reference_selection->satellite,
+                        base_reference_selection->signal};
+                    if (cmc_level_exclude_this_epoch.count(default_key) > 0) {
+                        const PreparedCarrierObservation* best_clean = nullptr;
+                        for (const auto* candidate : reference_group_it->second) {
+                            const CarrierKey candidate_key{candidate->satellite,
+                                                            candidate->signal};
+                            if (cmc_level_exclude_this_epoch.count(candidate_key) >
+                                0) {
+                                continue;
+                            }
+                            if (!best_clean || candidate->elevation_rad >
+                                                    best_clean->elevation_rad) {
+                                best_clean = candidate;
+                            }
+                        }
+                        if (best_clean) {
+                            base_reference_selection = best_clean;
+                            ++cmc_ref_avoided_total;
+                        }
+                        // else: every candidate in the group is CMC-excluded
+                        // -- fall back to the original max-elevation choice
+                        // (base_reference_selection unchanged) rather than
+                        // dropping the whole group.
+                    }
+                }
+
                 const CarrierKey reference_key{
                     base_reference_selection->satellite,
                     base_reference_selection->signal};
@@ -2409,6 +2458,7 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
     problem.diagnostics.code_minus_carrier_jump_resets = cmc_jump_reset_total;
     problem.diagnostics.code_minus_carrier_level_exclusions =
         cmc_level_exclusion_total;
+    problem.diagnostics.cmc_ref_avoided_count = cmc_ref_avoided_total;
 
     return problem;
 }
@@ -2469,6 +2519,8 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
         problem.diagnostics.code_minus_carrier_jump_resets;
     result.diagnostics.code_minus_carrier_level_exclusions =
         problem.diagnostics.code_minus_carrier_level_exclusions;
+    result.diagnostics.cmc_ref_avoided_count =
+        problem.diagnostics.cmc_ref_avoided_count;
 
     if (problem.epochs.empty() ||
         (problem.pseudorange_factors.empty() &&

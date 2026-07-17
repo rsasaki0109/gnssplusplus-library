@@ -106,6 +106,7 @@ struct Args {
     double cmc_level = -1.0;       // >=0: override code_minus_carrier_level_threshold_m
     int cmc_warmup = 0;            // >0: override code_minus_carrier_warmup_epochs
     double cmc_alpha = -1.0;       // >=0: override code_minus_carrier_baseline_alpha
+    bool cmc_ref = false;          // enable cmc_aware_reference_selection (needs --cmc)
     bool cp_hold = false;                  // CP-hold / sanity FSM (validation/postfit.py + recovery.py port)
     bool cp_hold_float_recovery = false;   // keep downweighted float carrier during hold
     bool cp_hold_anchor_release = false;   // trusted DDPR anchor releases hold
@@ -275,6 +276,10 @@ Args parseArgs(int argc, char** argv) {
         }
         if (a == "--fix-demote-surplus-crosscheck") {
             args.fix_demote_surplus_crosscheck = true;
+            continue;
+        }
+        if (a == "--cmc-ref") {
+            args.cmc_ref = true;
             continue;
         }
         if (a == "--surplus-overrides-dr") {
@@ -907,6 +912,9 @@ libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
     }
     if (args.cmc_alpha >= 0.0) {
         config.code_minus_carrier_baseline_alpha = args.cmc_alpha;
+    }
+    if (args.cmc_ref) {
+        config.cmc_aware_reference_selection = true;
     }
     if (args.cp_hold) {
         config.use_cp_hold_recovery = true;
@@ -1998,6 +2006,8 @@ int main(int argc, char** argv) {
               << ", alpha=" << config.code_minus_carrier_baseline_alpha << ")"
               << " -- jump_resets=" << problem.diagnostics.code_minus_carrier_jump_resets
               << ", level_exclusions=" << problem.diagnostics.code_minus_carrier_level_exclusions
+              << ", cmc_ref=" << (args.cmc_ref ? "on" : "off")
+              << ", ref_avoided=" << problem.diagnostics.cmc_ref_avoided_count
               << "\n";
 
     // --- MF hygiene diagnostics: per-signal DD residuals at the reference
@@ -2208,6 +2218,8 @@ int main(int argc, char** argv) {
                   << "  CMC screening: " << (args.cmc ? "on" : "off")
                   << " (jump_resets=" << fl.diagnostics.code_minus_carrier_jump_resets
                   << ", level_exclusions=" << fl.diagnostics.code_minus_carrier_level_exclusions
+                  << ", cmc_ref=" << (args.cmc_ref ? "on" : "off")
+                  << ", ref_avoided=" << fl.diagnostics.cmc_ref_avoided_count
                   << ")\n"
                   << "  CP-hold/sanity FSM: " << (args.cp_hold ? "on" : "off")
                   << " (triggers=" << fl.diagnostics.cp_hold_triggers

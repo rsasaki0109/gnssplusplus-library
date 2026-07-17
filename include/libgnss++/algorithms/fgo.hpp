@@ -700,6 +700,22 @@ public:
         bool code_minus_carrier_level_pseudorange_only = false;
         int code_minus_carrier_warmup_epochs = 5;
         double code_minus_carrier_baseline_alpha = 0.05;
+        // DD reference-satellite selection normally picks the highest-
+        // elevation satellite in each (system, signal) group with no regard
+        // for the CMC sustained-level exclusion computed just above
+        // (cmc_level_exclude_this_epoch). Because every DD pair in a group
+        // is formed against that ONE reference, a high-elevation but
+        // multipath/NLOS-biased satellite becoming the reference poisons
+        // every DD residual in the group simultaneously (diagnosed on tokyo
+        // run1: ddpr_rms toggling 2m<->40-58m across all satellites while
+        // geometry stayed fine, 42% of the run's float squared-error from
+        // one such episode). When true (and use_code_minus_carrier_screening
+        // is also on), the highest-elevation NON-CMC-excluded candidate is
+        // preferred as reference; if every candidate in the group is
+        // CMC-excluded this epoch, falls back to the original max-elevation
+        // choice so the group is never dropped. Default OFF: bit-identical
+        // to the pre-change baseline when false.
+        bool cmc_aware_reference_selection = false;
 
         // --- Per-epoch quality gates (port of the inuex35 reference's
         // preprocess/gate.py + validation/postfit.py policy) ---
@@ -1544,6 +1560,7 @@ public:
         std::size_t tdcp_rejected_code_phase_jump = 0;
         std::size_t code_minus_carrier_jump_resets = 0;       ///< CMC screening: arc breaks forced
         std::size_t code_minus_carrier_level_exclusions = 0;  ///< CMC screening: (sat,signal) epochs excluded
+        std::size_t cmc_ref_avoided_count = 0;  ///< cmc_aware_reference_selection: references changed away from a CMC-excluded candidate
     };
 
     // --- Phase 2 milestone 2b: IMU preintegration inputs ---
@@ -1698,6 +1715,7 @@ public:
         std::size_t quality_gated_epochs = 0;   ///< epochs where the quality gates suppressed fixing
         std::size_t code_minus_carrier_jump_resets = 0;       ///< CMC screening: arc breaks forced
         std::size_t code_minus_carrier_level_exclusions = 0;  ///< CMC screening: (sat,signal) epochs excluded
+        std::size_t cmc_ref_avoided_count = 0;  ///< cmc_aware_reference_selection: references changed away from a CMC-excluded candidate
         // --- CP-hold / sanity FSM diagnostics (use_cp_hold_recovery) ---
         std::size_t cp_hold_triggers = 0;         ///< times CP-hold was (re)engaged/extended
         std::size_t cp_hold_epochs_held = 0;      ///< cumulative epochs with carrier suppressed
