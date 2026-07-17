@@ -15,6 +15,7 @@ if(GTest_FOUND)
         test_imu_csv.cpp
         test_attitude.cpp
         test_mechanization.cpp
+        test_preintegration.cpp
         test_fusion_process_noise.cpp
         test_fusion_update.cpp
         test_fusion_measurement.cpp
