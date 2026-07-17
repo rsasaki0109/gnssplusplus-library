@@ -1484,6 +1484,35 @@ void RTKProcessor::resetPositionToSPP(const ObservationData& rover_obs, const Na
     }
 
     const bool moving_base_mode = isMovingBasePositionMode(rtk_config_);
+
+    // Phase 1 GNSS/IMU coupling (docs/design.md): opt-in external position
+    // prior (e.g. INS-mechanization-predicted antenna position) in place of
+    // the legacy SPP/trusted-position reseed below. The prior is always
+    // consumed (has_external_position_prior_ cleared) here, whether or not
+    // it is actually applied, so a caller that stops supplying one (e.g. an
+    // IMU gap) transparently falls back to the legacy reseed on the very
+    // next epoch rather than accidentally reusing a stale value. Guarded on
+    // !moving_base_mode: MOVING_BASE tracks a relative baseline against a
+    // time-varying base, which an absolute INS-predicted antenna position
+    // cannot seed meaningfully.
+    const bool has_prior_this_epoch = has_external_position_prior_;
+    const Vector3d prior_ecef = external_position_prior_ecef_;
+    const Matrix3d prior_cov = external_position_prior_covariance_;
+    has_external_position_prior_ = false;
+    if (rtk_config_.use_external_position_prior && has_prior_this_epoch && !moving_base_mode) {
+        const Vector3d baseline = prior_ecef - base_position_;
+        filter_state_.state.head<3>() = baseline;
+        const int n = filter_state_.state.size();
+        for (int i = 0; i < BASE_STATES; ++i) {
+            for (int j = 0; j < n; ++j) {
+                filter_state_.covariance(i, j) = 0.0;
+                filter_state_.covariance(j, i) = 0.0;
+            }
+        }
+        filter_state_.covariance.block<BASE_STATES, BASE_STATES>(0, 0) = prior_cov;
+        return;
+    }
+
     // Dynamic modes: refresh the baseline seed each epoch. Moving-base keeps the
     // relative baseline and only uses absolute rover hints when they exist.
     Vector3d rover_pos;

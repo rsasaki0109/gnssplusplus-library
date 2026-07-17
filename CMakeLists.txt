@@ -4,9 +4,13 @@ project(gnss_lib VERSION 0.1.0 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-if(MSVC)
+if(MSVC OR (WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
     # MSVC portability: expose M_PI etc. from <cmath>, keep <windows.h>
     # from defining min/max macros that clash with std::min/std::max.
+    # Also needed for Clang targeting the MSVC ABI/headers (e.g. the
+    # build/clang-ninja config): CMAKE_CXX_COMPILER_ID is "Clang" there
+    # (MSVC is false), but the toolchain still resolves <cmath>/<math.h>
+    # to the MSVC STL headers, which gate M_PI on this same macro.
     add_compile_definitions(_USE_MATH_DEFINES NOMINMAX)
 endif()
 include(CTest)

@@ -403,6 +403,24 @@ public:
         /// <= 0 (default) disables the gate. No effect without
         /// --nlos-weights (a loaded weight table).
         int nlos_min_los_sats = 0;
+
+        /// Phase 1 GNSS/IMU coupling (docs/design.md, INS-prediction into the
+        /// KF time update): when true AND an external position prior has
+        /// been supplied for this epoch (see setExternalPositionPrior()),
+        /// KINEMATIC's per-epoch resetPositionToSPP() consumes that prior
+        /// (e.g. an INS-mechanization-predicted antenna position) instead of
+        /// reseeding from SPP/trusted-position history. The prior is always
+        /// consumed (and cleared) by the next resetPositionToSPP() call
+        /// regardless of this flag, so toggling it off mid-run cannot leave
+        /// a stale prior lying around; when no prior has been supplied for
+        /// an epoch (e.g. an IMU gap), behavior falls straight through to
+        /// the existing legacy reseed logic. false (default) preserves
+        /// existing behavior bit-for-bit: resetPositionToSPP() does not even
+        /// branch on a pending prior when this is off. Never applied in
+        /// STATIC (resetPositionToSPP() returns before this check) or
+        /// MOVING_BASE position_mode (relative baseline against a moving
+        /// base has no meaning for an absolute INS-predicted antenna prior).
+        bool use_external_position_prior = false;
     };
 
     /// Reason why AR was silently skipped or failed in resolveAmbiguities().
@@ -563,6 +581,30 @@ public:
         nlos_weight_table_ = std::move(table);
     }
 
+    /// Phase 1 GNSS/IMU coupling: supply an external (e.g. INS-mechanization-
+    /// predicted) ECEF antenna position + covariance to seed the upcoming
+    /// KINEMATIC epoch's position states, in place of the legacy SPP/
+    /// trusted-position reseed. Only consumed when
+    /// rtk_config_.use_external_position_prior is true; see that flag's doc
+    /// comment for the exact semantics (including STATIC/MOVING_BASE being
+    /// unaffected). Must be called fresh for each epoch before
+    /// processRTKEpoch()/processEpoch() -- the prior is consumed (cleared)
+    /// the first time resetPositionToSPP() runs, so a stale prior can never
+    /// silently persist across an IMU gap.
+    void setExternalPositionPrior(const Vector3d& ecef_pos, const Matrix3d& pos_cov) {
+        external_position_prior_ecef_ = ecef_pos;
+        external_position_prior_covariance_ = pos_cov;
+        has_external_position_prior_ = true;
+    }
+
+    /// Discard any pending external position prior without consuming it
+    /// (e.g. the caller judges its INS/ESKF source unhealthy this epoch).
+    void clearExternalPositionPrior() { has_external_position_prior_ = false; }
+
+    /// True if a prior has been supplied via setExternalPositionPrior() and
+    /// not yet consumed by resetPositionToSPP().
+    bool hasExternalPositionPrior() const { return has_external_position_prior_; }
+
 public:
     bool lambdaMethod(const VectorXd& float_ambiguities,
                      const MatrixXd& covariance_matrix,
@@ -596,6 +638,14 @@ private:
 
     Vector3d base_position_;
     bool base_position_known_ = false;
+
+    // Phase 1 GNSS/IMU coupling: pending externally supplied (e.g. INS)
+    // position prior, consumed by resetPositionToSPP() when
+    // rtk_config_.use_external_position_prior is enabled. See
+    // setExternalPositionPrior()'s doc comment.
+    Vector3d external_position_prior_ecef_ = Vector3d::Zero();
+    Matrix3d external_position_prior_covariance_ = Matrix3d::Zero();
+    bool has_external_position_prior_ = false;
 
     // Fixed-size state: [pos(3), glo_hw_bias(2), iono(MAXSAT), N1(MAXSAT), N2(MAXSAT), N5(MAXSAT)]
     // Phase 18 Step 2 (2026-05-09): N5 freq slot reserved (IB(sat, freq=2)).

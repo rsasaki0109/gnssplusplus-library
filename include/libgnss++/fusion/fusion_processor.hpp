@@ -178,6 +178,23 @@ public:
     /** @brief Convert the fused ENU state back into the library's PositionSolution shape. */
     PositionSolution toPositionSolution() const;
 
+    /**
+     * @brief Phase 1 GNSS/IMU coupling (docs/design.md): current best-
+     * estimate ANTENNA-frame ECEF position + covariance, lever-arm
+     * compensated, for feeding into e.g. RTKProcessor::
+     * setExternalPositionPrior() ahead of a KINEMATIC epoch's time update.
+     * Uses the same h(x) = position_enu + R*lever_arm model as
+     * fusion_measurement::buildGnssPositionUpdate(), so the reported
+     * covariance is the position update's own H P H^T (projecting [dp;
+     * dtheta] through the lever-arm Jacobian), not just the raw POSITION
+     * error-state block -- i.e. it already reflects attitude uncertainty's
+     * contribution via the lever arm.
+     *
+     * Returns false (leaving ecef_pos/ecef_cov untouched) when the filter
+     * has no ECEF anchor yet (isOriginSet() == false).
+     */
+    bool predictedAntennaPositionEcef(Eigen::Vector3d& ecef_pos, Eigen::Matrix3d& ecef_cov) const;
+
 private:
     Config config_;
     FusionState state_;

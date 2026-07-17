@@ -56,6 +56,47 @@ struct FuseOptions {
     // correction).
     bool derive_velocity_from_fixed = false;
 
+    // Phase 1 GNSS/IMU coupling (docs/design.md): feed the ESKF's INS-
+    // mechanization-predicted antenna ECEF position back into RTKProcessor
+    // as a KINEMATIC-epoch prior, in place of the SPP-only reseed, when the
+    // fusion filter is healthy/aligned. Opt-in, off by default -- see
+    // runRtkFusion()'s use of these two options for the exact wiring and
+    // health gating.
+    bool rtk_ins_prior = false;
+    // Multiplier applied to the ESKF's own predicted-position covariance
+    // before handing it to RTKProcessor as var_pos. Conservative (>> 1) by
+    // default: the prior only needs to be tight enough to beat the legacy
+    // 900 m^2 kinematic-reset variance during a genuine SPP-degraded
+    // stretch (bridges/tunnels/urban canyon), while staying soft enough
+    // that a biased ESKF prediction can't dominate the DD phase/code
+    // measurement update and entrench itself via the loose-coupling
+    // feedback loop (ESKF <- RTK solution <- ESKF prior <- ...).
+    double rtk_ins_prior_inflation = 25.0;
+
+    // RTK tuning passthroughs mirroring apps/gnss_solve.cpp's flags of the
+    // same name, added so gnss_fuse's underlying RTKProcessor config can be
+    // made to match a `gnss solve` run exactly (docs/design.md Phase 1 gate
+    // 2 verification: scoring the pre-fusion RTK stream against the
+    // gnss_solve baseline requires the same RTK tuning on both sides).
+    // Preset-set-then-explicit-override semantics only matter for
+    // enable_ar_filter (the only field below any preset also touches --
+    // see rtk_base_epoch_align.hpp's applyRtkConfigPreset()); the SNR/
+    // subset-AR fields are never touched by a preset, so they can just be
+    // assigned unconditionally.
+    bool arfilter_override = false;
+    bool arfilter_value = false;
+    bool rtk_snr_weighting = false;
+    double rtk_snr_reference_dbhz = 45.0;
+    double rtk_snr_max_variance_scale = 25.0;
+    int max_subset_ar_drop_steps = -1;  // < 0 leaves RTKConfig's own default (6)
+
+    // Opt-in: also write the per-epoch RTK (pre-fusion) PositionSolution
+    // stream to its own .pos file, in the same libgnss::Solution format
+    // `gnss solve` writes, so the existing PPC scoring pipeline can score
+    // the RTK solution in isolation from the ESKF's own smoothing/accuracy
+    // characteristics (docs/design.md Phase 1 gate 2). Empty (default): off.
+    std::string rtk_pos_out;
+
     libgnss::LooseCouplingProcessor::Config fusion_config;
     int max_epochs = 0;
     bool quiet = false;
@@ -186,6 +227,34 @@ void printUsage(const char* program_name) {
         << "                                has_velocity) is unavailable. Experimental -- see\n"
         << "                                docs/design.md notes on wrong-fix sensitivity. Default: off.\n"
         << "  --max-epochs <n>             Stop after n GNSS observation epochs (0 = no limit)\n"
+        << "  --rtk-ins-prior               Phase 1 GNSS/IMU coupling (--base only): feed the\n"
+        << "                                ESKF's INS-predicted antenna ECEF position into\n"
+        << "                                RTKProcessor as a KINEMATIC-epoch prior (replacing the\n"
+        << "                                SPP-only reseed) whenever the fusion filter is\n"
+        << "                                initialized, origin-anchored, and heading-converged.\n"
+        << "                                Falls back to the legacy SPP reseed on any epoch\n"
+        << "                                without a healthy prior (e.g. before alignment, or an\n"
+        << "                                IMU gap). Default: off.\n"
+        << "  --rtk-ins-prior-inflation <f> Multiplier applied to the ESKF's predicted-position\n"
+        << "                                covariance before it seeds RTKProcessor's position\n"
+        << "                                states (guards against the ESKF<-RTK<-ESKF feedback\n"
+        << "                                loop entrenching a biased prediction). Only used with\n"
+        << "                                --rtk-ins-prior. Default: 25.0\n"
+        << "  --arfilter / --no-arfilter   Force RTK subset-AR filter margin on/off, overriding\n"
+        << "                                whatever --preset set (mirrors `gnss solve`'s flag).\n"
+        << "  --rtk-snr-weighting          Inflate RTK observation variance for low-SNR links\n"
+        << "                                (mirrors `gnss solve`; default: off)\n"
+        << "  --rtk-snr-reference-dbhz <v> No inflation at/above this SNR (default: 45.0)\n"
+        << "  --rtk-snr-max-variance-scale <v>\n"
+        << "                                Clamp low-SNR variance inflation (default: 25.0)\n"
+        << "  --max-subset-ar-drop-steps <n>\n"
+        << "                                Max worst-variance DD pairs dropped during subset AR\n"
+        << "                                (mirrors `gnss solve`; default: RTKConfig's own, 6)\n"
+        << "  --rtk-pos-out <path>          Also write the per-epoch RTK (pre-fusion) solution\n"
+        << "                                stream to <path>, in the same format `gnss solve`\n"
+        << "                                writes -- lets the PPC scoring pipeline evaluate the\n"
+        << "                                RTK solution alone, independent of the ESKF's own\n"
+        << "                                smoothing (--base only; default: off)\n"
         << "  --verbose                    Print periodic per-epoch progress\n"
         << "  --quiet                      Suppress run summary\n"
         << "  -h, --help                   Show this help\n";
@@ -396,6 +465,26 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             options.verbose = true;
         } else if (arg == "--quiet") {
             options.quiet = true;
+        } else if (arg == "--rtk-ins-prior") {
+            options.rtk_ins_prior = true;
+        } else if (arg == "--rtk-ins-prior-inflation") {
+            options.rtk_ins_prior_inflation = std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--arfilter") {
+            options.arfilter_override = true;
+            options.arfilter_value = true;
+        } else if (arg == "--no-arfilter") {
+            options.arfilter_override = true;
+            options.arfilter_value = false;
+        } else if (arg == "--rtk-snr-weighting") {
+            options.rtk_snr_weighting = true;
+        } else if (arg == "--rtk-snr-reference-dbhz") {
+            options.rtk_snr_reference_dbhz = std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--rtk-snr-max-variance-scale") {
+            options.rtk_snr_max_variance_scale = std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--max-subset-ar-drop-steps") {
+            options.max_subset_ar_drop_steps = std::stoi(requireValue(arg, i, argc, argv));
+        } else if (arg == "--rtk-pos-out") {
+            options.rtk_pos_out = requireValue(arg, i, argc, argv);
         } else {
             argumentError("unknown or incomplete argument: " + arg, argv[0]);
         }
@@ -571,9 +660,28 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
         rtk_config.ambiguity_ratio_threshold = options.ratio_threshold;
     }
     rtk_config.elevation_mask = options.elevation_mask_deg * M_PI / 180.0;
+    // Phase 1 GNSS/IMU coupling: no-op unless --rtk-ins-prior was passed
+    // (RTKConfig::use_external_position_prior defaults false, so this line
+    // is a no-op for every existing caller/preset).
+    rtk_config.use_external_position_prior = options.rtk_ins_prior;
+    // RTK tuning passthroughs (see FuseOptions doc comment): never touched
+    // by any preset, so safe to assign unconditionally before the preset
+    // call runs.
+    rtk_config.enable_snr_weighting = options.rtk_snr_weighting;
+    rtk_config.snr_reference_dbhz = options.rtk_snr_reference_dbhz;
+    rtk_config.snr_max_variance_scale = options.rtk_snr_max_variance_scale;
+    if (options.max_subset_ar_drop_steps >= 0) {
+        rtk_config.max_subset_drop_steps_for_ar = options.max_subset_ar_drop_steps;
+    }
     if (!libgnss_apps::applyRtkConfigPreset(options.rtk_preset, rtk_config)) {
         std::cerr << "Error: unsupported --preset value: " << options.rtk_preset << "\n";
         return 1;
+    }
+    // --arfilter/--no-arfilter always win over whatever the preset set,
+    // since they were requested explicitly after preset resolution would
+    // have run (mirrors apps/gnss_solve.cpp's has_ar_filter_override).
+    if (options.arfilter_override) {
+        rtk_config.enable_ar_filter = options.arfilter_value;
     }
     // A non-default --ratio always wins over whatever the preset set, since
     // it was requested explicitly after preset resolution would have run.
@@ -586,6 +694,10 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
 
     libgnss::LooseCouplingProcessor fusion_processor(options.fusion_config);
     libgnss::Solution fused_solution;
+    // Opt-in (--rtk-pos-out): the raw per-epoch RTK PositionSolution stream,
+    // before it ever reaches the fusion filter -- see FuseOptions doc
+    // comment. Left empty/unused unless options.rtk_pos_out is set.
+    libgnss::Solution rtk_solution_log;
     AttitudeCsvWriter attitude_writer;
     if (!attitude_writer.open(options.attitude_csv_path)) {
         std::cerr << "Error: failed to open attitude CSV: " << options.attitude_csv_path << "\n";
@@ -720,6 +832,33 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
             ++imu_cursor;
         }
 
+        // Phase 1 GNSS/IMU coupling (docs/design.md): after IMU mechanization
+        // has been propagated up to this epoch's time above, hand the ESKF's
+        // predicted antenna ECEF position to RTKProcessor as this epoch's
+        // KINEMATIC prior, BEFORE processRTKEpoch() runs its internal
+        // resetPositionToSPP() time update. Gated on the fusion filter being
+        // initialized, ECEF-anchored, and heading-converged (isHeadingConverged()
+        // requires both a latch AND that recent GNSS-velocity innovations still
+        // corroborate it -- see LooseCouplingProcessor doc comment) so an
+        // unaligned or drifting ESKF never gets to seed RTK's position states.
+        // predictedAntennaPositionEcef() itself already returns false pre-
+        // origin-anchor, so isOriginSet() is a redundant but cheap belt-and-
+        // suspenders check. RTKProcessor::resetPositionToSPP() consumes
+        // (clears) any prior on every call, so simply not calling
+        // setExternalPositionPrior() this epoch (rather than an explicit
+        // clearExternalPositionPrior()) is sufficient to fall back to the
+        // legacy SPP reseed.
+        if (options.rtk_ins_prior && fusion_processor.isInitialized() &&
+            fusion_processor.isOriginSet() && fusion_processor.isHeadingConverged()) {
+            Eigen::Vector3d predicted_pos;
+            Eigen::Matrix3d predicted_cov;
+            if (fusion_processor.predictedAntennaPositionEcef(predicted_pos, predicted_cov) &&
+                predicted_pos.allFinite() && predicted_cov.allFinite()) {
+                rtk_processor.setExternalPositionPrior(
+                    predicted_pos, predicted_cov * options.rtk_ins_prior_inflation);
+            }
+        }
+
         auto pos_solution = rtk_processor.processRTKEpoch(rover_obs, aligned_base_obs, nav_data);
         if (pos_solution.isValid()) {
             if (options.derive_velocity_from_fixed && !pos_solution.has_velocity &&
@@ -750,6 +889,14 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
             if (pos_solution.isFixed()) {
                 ++fixed_solutions;
             }
+
+            // Opt-in (--rtk-pos-out): log the RTK solution exactly as
+            // processRTKEpoch() returned it, before fusion ever touches it,
+            // for scoring the RTK stream in isolation (see FuseOptions doc
+            // comment / gnss_solve.cpp's own solution logging for parity).
+            if (!options.rtk_pos_out.empty()) {
+                rtk_solution_log.addSolution(pos_solution);
+            }
         }
 
         if (fusion_processor.isOriginSet()) {
@@ -778,6 +925,11 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
         processed_epochs++;
     }
 
+    if (!options.rtk_pos_out.empty() && !rtk_solution_log.writeToFile(options.rtk_pos_out)) {
+        std::cerr << "Error: failed to write RTK solution file: " << options.rtk_pos_out << "\n";
+        return 1;
+    }
+
     if (!fused_solution.writeToFile(options.out_path)) {
         std::cerr << "Error: failed to write fused solution file: " << options.out_path << "\n";
         return 1;
@@ -791,6 +943,14 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
         std::cout << "GNSS half: RTK (--base " << options.base_path << ")\n";
         if (!options.rtk_preset.empty()) {
             std::cout << "RTK preset: " << options.rtk_preset << "\n";
+        }
+        std::cout << "RTK INS position prior: " << (options.rtk_ins_prior ? "on" : "off");
+        if (options.rtk_ins_prior) {
+            std::cout << " (inflation=" << options.rtk_ins_prior_inflation << ")";
+        }
+        std::cout << "\n";
+        if (!options.rtk_pos_out.empty()) {
+            std::cout << "RTK solution stream written: " << options.rtk_pos_out << "\n";
         }
         std::cout << "IMU samples loaded: " << imu_series.samples.size() << "\n";
         std::cout << "Rover epochs processed: " << processed_epochs << "\n";
