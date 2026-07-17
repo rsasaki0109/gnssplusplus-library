@@ -73,6 +73,55 @@ struct FuseOptions {
     // feedback loop (ESKF <- RTK solution <- ESKF prior <- ...).
     double rtk_ins_prior_inflation = 25.0;
 
+    // Phase 1b redesign (docs/imu_fusion.md): Phase 1 v1 injected the prior
+    // on every eligible (initialized/anchored/heading-converged) epoch and
+    // that regressed at every tested inflation on PPC tokyo/run1 -- the
+    // ESKF's predicted mean carries a persistent multi-meter bias that trips
+    // RTKProcessor's own magnitude-based jump/reacquisition gates each time
+    // it seeds a healthy epoch that RTK itself would have solved just fine.
+    // Two additional gates, both on by default whenever --rtk-ins-prior is
+    // given, restrict injection to the degraded-GNSS epochs the prior
+    // actually exists for (bridges/tunnels/urban canyon):
+    //
+    // 1. SPP-degraded gate (rtk_ins_prior_spp_gate): only inject when the
+    //    current epoch's raw rover observation satellite count is below
+    //    rtk_ins_prior_min_sats. This is deliberately the raw pre-solve
+    //    count from ObservationData::getNumSatellites(), not a lagged
+    //    previous-epoch RTK/SPP solution status: at the point in the epoch
+    //    loop where the prior must be handed to RTKProcessor (before
+    //    processRTKEpoch() runs its internal resetPositionToSPP() time
+    //    update), no current-epoch SPP/RTK quality figure exists yet without
+    //    duplicating the solve. Raw satellite count is available immediately,
+    //    with zero lag, and is exactly the signal that collapses during a
+    //    genuine sky-blockage event. Note this raw count (unique satellites
+    //    with ANY observation in the epoch, pre elevation-mask/QC) runs much
+    //    higher than PositionSolution::num_satellites (the post-QC count
+    //    used-in-solution, mean ~17-18 on this dataset): on PPC tokyo/run1
+    //    the epochs eligible for injection (isInitialized/isOriginSet/
+    //    isHeadingConverged) have a raw-count median of 32 and p10 of ~24 --
+    //    calibrated empirically (docs/imu_fusion.md-style validation, see
+    //    this feature's gate verification) by sweeping the threshold and
+    //    picking the value that fires on a small (~1-5%) fraction of
+    //    eligible epochs rather than 0% or a large fraction.
+    // 2. ESKF health gate (rtk_ins_prior_max_nis): only inject when the
+    //    ESKF's own velocity-update NIS-per-observation EMA (the same signal
+    //    backing isHeadingConverged(), see LooseCouplingProcessor::
+    //    getVelocityNisEma()) is below this threshold, i.e. the predicted
+    //    mean is currently being corroborated by GNSS velocity innovations
+    //    and is less likely to carry the kind of bias v1 tripped over.
+    //    <= 0 disables this gate. Deliberately tighter than
+    //    isHeadingConverged()'s own heading_recovery_nis_threshold (30.0 by
+    //    default): that threshold answers "is yaw still trustworthy", this
+    //    one answers "is the filter tight enough right now to seed a
+    //    position", a stricter bar.
+    //
+    // --rtk-ins-prior-always restores exact v1 behavior (unconditional
+    // injection on every isInitialized/isOriginSet/isHeadingConverged epoch)
+    // for A/B comparison, by disabling both gates at once.
+    bool rtk_ins_prior_spp_gate = true;
+    int rtk_ins_prior_min_sats = 20;
+    double rtk_ins_prior_max_nis = 3.0;
+
     // RTK tuning passthroughs mirroring apps/gnss_solve.cpp's flags of the
     // same name, added so gnss_fuse's underlying RTKProcessor config can be
     // made to match a `gnss solve` run exactly (docs/design.md Phase 1 gate
@@ -240,6 +289,25 @@ void printUsage(const char* program_name) {
         << "                                states (guards against the ESKF<-RTK<-ESKF feedback\n"
         << "                                loop entrenching a biased prediction). Only used with\n"
         << "                                --rtk-ins-prior. Default: 25.0\n"
+        << "  --rtk-ins-prior-spp-gate      Only inject the prior on epochs where the raw rover\n"
+        << "                                satellite count is below --rtk-ins-prior-min-sats\n"
+        << "                                (the degraded-GNSS case the prior exists for). On by\n"
+        << "                                default whenever --rtk-ins-prior is given; this flag is\n"
+        << "                                an explicit no-op restating the default. See\n"
+        << "                                --rtk-ins-prior-always to disable it.\n"
+        << "  --rtk-ins-prior-min-sats <n>  Raw satellite count threshold for the SPP-degraded gate\n"
+        << "                                (pre-QC ObservationData::getNumSatellites(), not the\n"
+        << "                                post-QC PositionSolution::num_satellites -- runs much\n"
+        << "                                higher, calibrate per-dataset). Default: 20\n"
+        << "  --rtk-ins-prior-max-nis <f>   Only inject the prior when the ESKF's velocity-update\n"
+        << "                                NIS-per-observation EMA is at or below this (the\n"
+        << "                                filter's own health signal, see\n"
+        << "                                LooseCouplingProcessor::getVelocityNisEma()). <=0\n"
+        << "                                disables this gate. Default: 3.0\n"
+        << "  --rtk-ins-prior-always        Restore Phase 1 v1 behavior: inject on every\n"
+        << "                                isInitialized/isOriginSet/isHeadingConverged epoch,\n"
+        << "                                disabling both the SPP-degraded gate and the NIS health\n"
+        << "                                gate (for A/B comparison against the gated default).\n"
         << "  --arfilter / --no-arfilter   Force RTK subset-AR filter margin on/off, overriding\n"
         << "                                whatever --preset set (mirrors `gnss solve`'s flag).\n"
         << "  --rtk-snr-weighting          Inflate RTK observation variance for low-SNR links\n"
@@ -469,6 +537,15 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             options.rtk_ins_prior = true;
         } else if (arg == "--rtk-ins-prior-inflation") {
             options.rtk_ins_prior_inflation = std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--rtk-ins-prior-spp-gate") {
+            options.rtk_ins_prior_spp_gate = true;
+        } else if (arg == "--rtk-ins-prior-min-sats") {
+            options.rtk_ins_prior_min_sats = std::stoi(requireValue(arg, i, argc, argv));
+        } else if (arg == "--rtk-ins-prior-max-nis") {
+            options.rtk_ins_prior_max_nis = std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--rtk-ins-prior-always") {
+            options.rtk_ins_prior_spp_gate = false;
+            options.rtk_ins_prior_max_nis = 0.0;
         } else if (arg == "--arfilter") {
             options.arfilter_override = true;
             options.arfilter_value = true;
@@ -733,6 +810,21 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
     int interpolated_base_epochs = 0;
     int skipped_rover_epochs = 0;
     int derived_velocity_updates = 0;
+    // Phase 1b (docs/imu_fusion.md): how often the gated INS position prior
+    // actually fired vs. how many epochs were even eligible (fusion filter
+    // initialized/anchored/heading-converged) to fire on, absent the new
+    // gates. With the gates doing their job, ins_prior_fire_count should be
+    // a small fraction of ins_prior_eligible_epochs -- most eligible epochs
+    // have a healthy SPP fix and should fall back to the legacy reseed.
+    int ins_prior_eligible_epochs = 0;
+    int ins_prior_fire_count = 0;
+    // Gate-tuning diagnostics only (not printed unless --verbose): per
+    // eligible epoch, the two raw signals the gates threshold on, so a
+    // --verbose run's tail summary can show their distribution and calibrate
+    // rtk_ins_prior_min_sats / rtk_ins_prior_max_nis against a real dataset
+    // without needing custom instrumentation each time.
+    std::vector<int> ins_prior_eligible_nsats;
+    std::vector<double> ins_prior_eligible_nis;
 
     // RTKProcessor::processRTKEpoch() now populates PositionSolution::
     // has_velocity from a real Doppler-derived least squares solve
@@ -848,14 +940,41 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
         // setExternalPositionPrior() this epoch (rather than an explicit
         // clearExternalPositionPrior()) is sufficient to fall back to the
         // legacy SPP reseed.
+        // Phase 1b redesign (docs/imu_fusion.md, docs/decisions.md): v1 fed
+        // the prior into every eligible epoch and regressed at all tested
+        // inflations, because the ESKF's predicted mean carries a persistent
+        // multi-meter bias that trips RTKProcessor's magnitude-based
+        // jump/reacquisition gates on otherwise-healthy epochs RTK would
+        // have solved fine on its own. Two additional gates (see
+        // FuseOptions's rtk_ins_prior_spp_gate/rtk_ins_prior_max_nis doc
+        // comment for the full rationale) now restrict injection to epochs
+        // that are BOTH plausibly SPP-degraded (the bridges/tunnels/urban-
+        // canyon case the prior exists for) AND backed by a currently
+        // healthy ESKF (recent velocity innovations still corroborate the
+        // predicted state) -- --rtk-ins-prior-always disables both to
+        // reproduce v1 exactly for comparison.
         if (options.rtk_ins_prior && fusion_processor.isInitialized() &&
             fusion_processor.isOriginSet() && fusion_processor.isHeadingConverged()) {
-            Eigen::Vector3d predicted_pos;
-            Eigen::Matrix3d predicted_cov;
-            if (fusion_processor.predictedAntennaPositionEcef(predicted_pos, predicted_cov) &&
-                predicted_pos.allFinite() && predicted_cov.allFinite()) {
-                rtk_processor.setExternalPositionPrior(
-                    predicted_pos, predicted_cov * options.rtk_ins_prior_inflation);
+            ++ins_prior_eligible_epochs;
+            const int current_nsat = static_cast<int>(rover_obs.getNumSatellites());
+            const double current_nis = fusion_processor.getVelocityNisEma();
+            if (options.verbose) {
+                ins_prior_eligible_nsats.push_back(current_nsat);
+                ins_prior_eligible_nis.push_back(current_nis);
+            }
+            const bool spp_degraded = !options.rtk_ins_prior_spp_gate ||
+                current_nsat < options.rtk_ins_prior_min_sats;
+            const bool eskf_healthy = options.rtk_ins_prior_max_nis <= 0.0 ||
+                current_nis <= options.rtk_ins_prior_max_nis;
+            if (spp_degraded && eskf_healthy) {
+                Eigen::Vector3d predicted_pos;
+                Eigen::Matrix3d predicted_cov;
+                if (fusion_processor.predictedAntennaPositionEcef(predicted_pos, predicted_cov) &&
+                    predicted_pos.allFinite() && predicted_cov.allFinite()) {
+                    rtk_processor.setExternalPositionPrior(
+                        predicted_pos, predicted_cov * options.rtk_ins_prior_inflation);
+                    ++ins_prior_fire_count;
+                }
             }
         }
 
@@ -946,9 +1065,49 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
         }
         std::cout << "RTK INS position prior: " << (options.rtk_ins_prior ? "on" : "off");
         if (options.rtk_ins_prior) {
-            std::cout << " (inflation=" << options.rtk_ins_prior_inflation << ")";
+            std::cout << " (inflation=" << options.rtk_ins_prior_inflation
+                      << ", spp_gate=" << (options.rtk_ins_prior_spp_gate ? "on" : "off")
+                      << (options.rtk_ins_prior_spp_gate
+                              ? (" min_sats=" + std::to_string(options.rtk_ins_prior_min_sats))
+                              : "")
+                      << ", max_nis="
+                      << (options.rtk_ins_prior_max_nis <= 0.0
+                              ? std::string("off")
+                              : std::to_string(options.rtk_ins_prior_max_nis))
+                      << ")";
         }
         std::cout << "\n";
+        if (options.rtk_ins_prior) {
+            std::cout << "INS prior eligible epochs (initialized/anchored/heading-converged): "
+                      << ins_prior_eligible_epochs << "\n";
+            std::cout << "INS prior fired (actually injected): " << ins_prior_fire_count;
+            if (ins_prior_eligible_epochs > 0) {
+                std::cout << " (" << std::fixed << std::setprecision(2)
+                          << (100.0 * ins_prior_fire_count / ins_prior_eligible_epochs)
+                          << "% of eligible epochs)";
+            }
+            std::cout << "\n";
+            if (options.verbose && !ins_prior_eligible_nsats.empty()) {
+                auto percentile = [](std::vector<double> values, double p) {
+                    std::sort(values.begin(), values.end());
+                    size_t idx = static_cast<size_t>(p * (values.size() - 1));
+                    return values[idx];
+                };
+                std::vector<double> nsats_as_double(ins_prior_eligible_nsats.begin(),
+                                                     ins_prior_eligible_nsats.end());
+                std::cout << "  eligible-epoch nsat distribution: min="
+                          << percentile(nsats_as_double, 0.0) << " p10=" << percentile(nsats_as_double, 0.10)
+                          << " p25=" << percentile(nsats_as_double, 0.25)
+                          << " median=" << percentile(nsats_as_double, 0.50)
+                          << " p75=" << percentile(nsats_as_double, 0.75)
+                          << " max=" << percentile(nsats_as_double, 1.0) << "\n";
+                std::cout << "  eligible-epoch velocity-NIS-EMA distribution: min="
+                          << percentile(ins_prior_eligible_nis, 0.0)
+                          << " p50=" << percentile(ins_prior_eligible_nis, 0.50)
+                          << " p90=" << percentile(ins_prior_eligible_nis, 0.90)
+                          << " max=" << percentile(ins_prior_eligible_nis, 1.0) << "\n";
+            }
+        }
         if (!options.rtk_pos_out.empty()) {
             std::cout << "RTK solution stream written: " << options.rtk_pos_out << "\n";
         }
