@@ -4,6 +4,7 @@
 #include <libgnss++/algorithms/lambda.hpp>
 #include <libgnss++/algorithms/rtk_measurement.hpp>
 #include <libgnss++/algorithms/rtk_selection.hpp>
+#include <libgnss++/algorithms/rtk_ins_time_update.hpp>
 #include <libgnss++/algorithms/rtk_update.hpp>
 #include <libgnss++/algorithms/spp_velocity.hpp>
 #include <libgnss++/core/coordinates.hpp>
@@ -346,6 +347,10 @@ void RTKProcessor::reset() {
     cmc_aware_ref_by_system_.clear();
     cmc_ref_suspect_epoch_count_ = 0;
     cmc_ref_switch_count_ = 0;
+    has_external_position_time_update_ = false;
+    ins_time_update_applied_count_ = 0;
+    ins_time_update_rejected_count_ = 0;
+    ins_time_update_applied_last_epoch_ = false;
     consecutive_fix_count_ = 0;
     consecutive_float_count_ = 0;
     consecutive_nonfix_count_ = 0;
@@ -367,6 +372,20 @@ ProcessorStats RTKProcessor::getStats() const {
     stats.valid_solutions = fixed_solutions_ + float_solutions_;
     stats.fixed_solutions = fixed_solutions_;
     return stats;
+}
+
+bool RTKProcessor::getFloatPosteriorPosition(
+    Vector3d& position_ecef, Matrix3d& position_covariance_ecef) const {
+    if (!filter_initialized_ || !base_position_known_ ||
+        filter_state_.state.size() < BASE_STATES ||
+        filter_state_.covariance.rows() < BASE_STATES ||
+        filter_state_.covariance.cols() < BASE_STATES) {
+        return false;
+    }
+    position_ecef = base_position_ + filter_state_.state.head<BASE_STATES>();
+    position_covariance_ecef =
+        filter_state_.covariance.topLeftCorner<BASE_STATES, BASE_STATES>();
+    return position_ecef.allFinite() && position_covariance_ecef.allFinite();
 }
 
 // RTKLIB varerr: SD measurement error variance
@@ -1580,6 +1599,15 @@ void RTKProcessor::recordFallbackEpoch(const ObservationData& rover_obs, const N
 }
 
 void RTKProcessor::resetPositionToSPP(const ObservationData& rover_obs, const NavigationData& nav) {
+    // M1 time updates are strictly single-use. Consume before any mode return
+    // so STATIC/MOVING_BASE or a caller mode change cannot retain a stale IMU
+    // increment for a later kinematic epoch.
+    const bool has_time_update_this_epoch = has_external_position_time_update_;
+    const Vector3d position_delta_ecef = external_position_delta_ecef_;
+    const Matrix3d position_process_noise_ecef = external_position_process_noise_ecef_;
+    has_external_position_time_update_ = false;
+    ins_time_update_applied_last_epoch_ = false;
+
     if (rtk_config_.position_mode == RTKConfig::PositionMode::STATIC) {
         // Static: position accumulates with process noise
         double pos_pnoise = rtk_config_.process_noise_position;  // default 1e-4 m^2/s
@@ -1589,6 +1617,23 @@ void RTKProcessor::resetPositionToSPP(const ObservationData& rover_obs, const Na
     }
 
     const bool moving_base_mode = isMovingBasePositionMode(rtk_config_);
+
+    if (rtk_config_.use_external_position_time_update &&
+        has_time_update_this_epoch && !moving_base_mode) {
+        if (rtk_ins_time_update::apply(
+                filter_state_.state, filter_state_.covariance,
+                position_delta_ecef, position_process_noise_ecef,
+                rtk_config_.ins_time_update_position_q_floor_m2)) {
+            ++ins_time_update_applied_count_;
+            ins_time_update_applied_last_epoch_ = true;
+            // Both external mechanisms target the same epoch. Never let a
+            // simultaneously queued absolute prior survive this successful
+            // update and accidentally seed a later epoch.
+            has_external_position_prior_ = false;
+            return;
+        }
+        ++ins_time_update_rejected_count_;
+    }
 
     // Phase 1 GNSS/IMU coupling (docs/design.md): opt-in external position
     // prior (e.g. INS-mechanization-predicted antenna position) in place of

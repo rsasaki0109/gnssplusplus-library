@@ -1,6 +1,7 @@
 // Phase 1 GNSS/IMU coupling unit tests (docs/design.md): RTKProcessor::
 // setExternalPositionPrior() / clearExternalPositionPrior() /
-// hasExternalPositionPrior() and RTKConfig::use_external_position_prior.
+// hasExternalPositionPrior() and RTKConfig::use_external_position_prior, plus
+// M1's incremental setExternalPositionTimeUpdate() path.
 //
 // Deliberately PUBLIC-API-ONLY (no "#define private public" trick): that
 // trick relies on the Itanium C++ ABI not encoding member access in mangled
@@ -253,6 +254,92 @@ TEST_F(RTKInsPriorTest, KnobOnPriorMeasurablyShiftsSolution) {
                                "pull the epoch's solution away from the no-prior baseline; "
                                "shift was only "
                             << shift_m << " m -- resetPositionToSPP() may not be consuming the prior";
+}
+
+TEST_F(RTKInsPriorTest, TimeUpdateKnobOffIsBitIdenticalAndConsumesUpdate) {
+    ASSERT_FALSE(config_.use_external_position_time_update);
+
+    RTKProcessor baseline;
+    baseline.setRTKConfig(config_);
+    baseline.setBasePosition(base_position_);
+    RTKProcessor candidate;
+    candidate.setRTKConfig(config_);
+    candidate.setBasePosition(base_position_);
+
+    const auto sol1_a = baseline.processRTKEpoch(rover_obs1_, base_obs1_, nav_data_);
+    const auto sol1_b = candidate.processRTKEpoch(rover_obs1_, base_obs1_, nav_data_);
+    ASSERT_TRUE(sol1_a.isValid());
+    ASSERT_TRUE(sol1_b.isValid());
+
+    candidate.setExternalPositionTimeUpdate(
+        Vector3d(100.0, -200.0, 300.0), Matrix3d::Identity() * 10.0);
+    ASSERT_TRUE(candidate.hasExternalPositionTimeUpdate());
+    const auto sol2_a = baseline.processRTKEpoch(rover_obs2_, base_obs2_, nav_data_);
+    const auto sol2_b = candidate.processRTKEpoch(rover_obs2_, base_obs2_, nav_data_);
+
+    EXPECT_FALSE(candidate.hasExternalPositionTimeUpdate());
+    ASSERT_TRUE(sol2_a.isValid());
+    ASSERT_TRUE(sol2_b.isValid());
+    EXPECT_TRUE(sol2_a.position_ecef.isApprox(sol2_b.position_ecef, 1e-9));
+    EXPECT_EQ(sol2_a.status, sol2_b.status);
+    const auto diagnostics = candidate.getInsTimeUpdateDiagnostics();
+    EXPECT_EQ(diagnostics.applied_count, 0u);
+    EXPECT_EQ(diagnostics.rejected_count, 0u);
+    EXPECT_FALSE(diagnostics.applied_last_epoch);
+}
+
+TEST_F(RTKInsPriorTest, TimeUpdateKnobOnAppliesOnceAndExposesFloatPosterior) {
+    config_.use_external_position_time_update = true;
+    config_.ins_time_update_position_q_floor_m2 = 1e-4;
+    RTKProcessor rtk;
+    rtk.setRTKConfig(config_);
+    rtk.setBasePosition(base_position_);
+
+    const auto sol1 = rtk.processRTKEpoch(rover_obs1_, base_obs1_, nav_data_);
+    ASSERT_TRUE(sol1.isValid());
+    Vector3d float_position;
+    Matrix3d float_covariance;
+    ASSERT_TRUE(rtk.getFloatPosteriorPosition(float_position, float_covariance));
+    EXPECT_TRUE(float_position.allFinite());
+    EXPECT_TRUE(float_covariance.allFinite());
+
+    rtk.setExternalPositionTimeUpdate(
+        Vector3d(0.1, -0.05, 0.02), Matrix3d::Identity() * 1e-3);
+    const auto sol2 = rtk.processRTKEpoch(rover_obs2_, base_obs2_, nav_data_);
+    ASSERT_TRUE(sol2.isValid());
+    EXPECT_FALSE(rtk.hasExternalPositionTimeUpdate());
+    const auto diagnostics = rtk.getInsTimeUpdateDiagnostics();
+    EXPECT_EQ(diagnostics.applied_count, 1u);
+    EXPECT_EQ(diagnostics.rejected_count, 0u);
+    EXPECT_TRUE(diagnostics.applied_last_epoch);
+}
+
+TEST_F(RTKInsPriorTest, InvalidTimeUpdateFallsBackAndIsCounted) {
+    config_.use_external_position_time_update = true;
+    RTKProcessor rtk;
+    rtk.setRTKConfig(config_);
+    rtk.setBasePosition(base_position_);
+    ASSERT_TRUE(rtk.processRTKEpoch(rover_obs1_, base_obs1_, nav_data_).isValid());
+
+    Matrix3d invalid_noise = Matrix3d::Zero();
+    invalid_noise(0, 0) = -1.0;
+    rtk.setExternalPositionTimeUpdate(Vector3d::Zero(), invalid_noise);
+    const auto sol2 = rtk.processRTKEpoch(rover_obs2_, base_obs2_, nav_data_);
+
+    EXPECT_TRUE(sol2.isValid());
+    EXPECT_FALSE(rtk.hasExternalPositionTimeUpdate());
+    const auto diagnostics = rtk.getInsTimeUpdateDiagnostics();
+    EXPECT_EQ(diagnostics.applied_count, 0u);
+    EXPECT_EQ(diagnostics.rejected_count, 1u);
+    EXPECT_FALSE(diagnostics.applied_last_epoch);
+}
+
+TEST_F(RTKInsPriorTest, ClearTimeUpdateDiscardsPendingIncrement) {
+    RTKProcessor rtk;
+    rtk.setExternalPositionTimeUpdate(Vector3d::Ones(), Matrix3d::Identity());
+    ASSERT_TRUE(rtk.hasExternalPositionTimeUpdate());
+    rtk.clearExternalPositionTimeUpdate();
+    EXPECT_FALSE(rtk.hasExternalPositionTimeUpdate());
 }
 
 }  // namespace

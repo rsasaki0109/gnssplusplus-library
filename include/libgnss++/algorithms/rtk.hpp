@@ -423,6 +423,23 @@ public:
         /// base has no meaning for an absolute INS-predicted antenna prior).
         bool use_external_position_prior = false;
 
+        /// M1 RTK-hosted tight coupling (docs/tight_coupling.md): consume a
+        /// caller-supplied ECEF antenna-position increment for one KINEMATIC
+        /// epoch instead of running the legacy SPP/trusted-position reseed.
+        /// Unlike use_external_position_prior, this is a true time update:
+        /// it advances the existing position state, adds interval process
+        /// noise only to the 3x3 position block, and preserves every
+        /// position-to-ambiguity/ionosphere cross-covariance. A missing or
+        /// rejected update falls through to the unchanged legacy reseed.
+        /// false by default; never applied to STATIC or MOVING_BASE.
+        bool use_external_position_time_update = false;
+
+        /// Per-epoch diagonal regularization added by the INS position time
+        /// update, in m^2. The legacy wide reseed also acted as a strong
+        /// regularizer; this explicit floor makes that role independently
+        /// tunable without destroying cross-covariance.
+        double ins_time_update_position_q_floor_m2 = 1e-4;
+
         /// Phase 2a (docs/imu_fusion.md-adjacent RTK work): CMC-aware DD
         /// reference-satellite selection with hysteresis. The plain
         /// max-elevation reference pick (rtk_selection::
@@ -518,6 +535,12 @@ public:
     struct CmcReferenceDiagnostics {
         std::size_t suspect_epoch_count = 0;
         std::size_t switch_count = 0;
+    };
+
+    struct InsTimeUpdateDiagnostics {
+        std::size_t applied_count = 0;
+        std::size_t rejected_count = 0;
+        bool applied_last_epoch = false;
     };
 
     /// Reason why AR was silently skipped or failed in resolveAmbiguities().
@@ -702,6 +725,29 @@ public:
     /// not yet consumed by resetPositionToSPP().
     bool hasExternalPositionPrior() const { return has_external_position_prior_; }
 
+    /// M1 tight coupling: supply an incremental ECEF antenna displacement and
+    /// interval process-noise covariance for the upcoming KINEMATIC epoch.
+    /// The value is consumed by the next resetPositionToSPP() call whether it
+    /// is applied, rejected, or inapplicable, so an IMU gap cannot reuse it.
+    void setExternalPositionTimeUpdate(const Vector3d& position_delta_ecef,
+                                       const Matrix3d& process_noise_ecef) {
+        external_position_delta_ecef_ = position_delta_ecef;
+        external_position_process_noise_ecef_ = process_noise_ecef;
+        has_external_position_time_update_ = true;
+    }
+
+    void clearExternalPositionTimeUpdate() { has_external_position_time_update_ = false; }
+    bool hasExternalPositionTimeUpdate() const { return has_external_position_time_update_; }
+    InsTimeUpdateDiagnostics getInsTimeUpdateDiagnostics() const {
+        return {ins_time_update_applied_count_, ins_time_update_rejected_count_,
+                ins_time_update_applied_last_epoch_};
+    }
+
+    /// Return RTK's current FLOAT posterior antenna position/covariance. The
+    /// ambiguity-fixed candidate is intentionally not used as the INS anchor.
+    bool getFloatPosteriorPosition(Vector3d& position_ecef,
+                                   Matrix3d& position_covariance_ecef) const;
+
     /// Phase 2a: RTKConfig::cmc_aware_reference_selection diagnostics
     /// counters, accumulated since construction/reset(). Both fields stay
     /// zero for the life of the processor when the knob is off.
@@ -750,6 +796,13 @@ private:
     Vector3d external_position_prior_ecef_ = Vector3d::Zero();
     Matrix3d external_position_prior_covariance_ = Matrix3d::Zero();
     bool has_external_position_prior_ = false;
+
+    Vector3d external_position_delta_ecef_ = Vector3d::Zero();
+    Matrix3d external_position_process_noise_ecef_ = Matrix3d::Zero();
+    bool has_external_position_time_update_ = false;
+    std::size_t ins_time_update_applied_count_ = 0;
+    std::size_t ins_time_update_rejected_count_ = 0;
+    bool ins_time_update_applied_last_epoch_ = false;
 
     // Fixed-size state: [pos(3), glo_hw_bias(2), iono(MAXSAT), N1(MAXSAT), N2(MAXSAT), N5(MAXSAT)]
     // Phase 18 Step 2 (2026-05-09): N5 freq slot reserved (IB(sat, freq=2)).
