@@ -57,7 +57,8 @@ bool ReferenceHysteresis::update(const std::vector<Candidate>& candidates,
                                  const SatelliteId& natural_ref,
                                  double natural_ref_elevation_rad, int switch_epochs,
                                  double return_min_elev_rad, SatelliteId& out_ref,
-                                 bool& switched) {
+                                 bool& switched, double switch_away_max_elev_drop_rad,
+                                 double switch_away_min_elev_rad) {
     switched = false;
     if (candidates.empty()) {
         return false;
@@ -111,14 +112,25 @@ bool ReferenceHysteresis::update(const std::vector<Candidate>& candidates,
             }
         }
         const Candidate* clean = best_dual != nullptr ? best_dual : best_l1;
-        if (clean != nullptr && !(clean->satellite == current_ref_)) {
+        // Elevation-quality gate: a switch-away is only worth its cost (see
+        // rtk_cmc_reference.hpp's update() doc comment) if the replacement
+        // is both close in elevation to the suspect reference it displaces
+        // and itself high enough to keep the DD group's atmospheric
+        // mismatch small. current->elevation_rad is the suspect reference's
+        // own elevation this epoch (found above, before this block).
+        const bool passes_elev_gate =
+            clean != nullptr &&
+            clean->elevation_rad >= switch_away_min_elev_rad &&
+            (current->elevation_rad - clean->elevation_rad) <= switch_away_max_elev_drop_rad;
+        if (clean != nullptr && !(clean->satellite == current_ref_) && passes_elev_gate) {
             current_ref_ = clean->satellite;
             suspect_streak_ = 0;
             has_return_candidate_ = false;
             return_candidate_clean_streak_ = 0;
         }
         // else: every non-suspect candidate is already the current
-        // reference, or none exist (whole group suspect) -- keep current.
+        // reference, none exist (whole group suspect), or the best
+        // candidate failed the elevation-quality gate -- keep current.
     }
 
     // 2) Switch-back: only once the natural (CMC-blind) pick has been

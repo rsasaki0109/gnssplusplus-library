@@ -323,6 +323,128 @@ TEST(ReferenceHysteresisTest, PrefersDualFrequencyCandidateWhenSwitchingAway) {
     EXPECT_EQ(out_ref.prn, 3);
 }
 
+// --- Switch-away elevation-quality gate (rtk_cmc_reference.cpp refinement)
+
+TEST(ReferenceHysteresisTest, SwitchAwayBlockedByExcessiveElevationDrop) {
+    // Suspect reference at 70deg, only clean candidate at 55deg -- a 15deg
+    // drop exceeds a 10deg max_elev_drop gate, so the switch-away must be
+    // suppressed even though the K-epoch suspect streak is satisfied.
+    ReferenceHysteresis hysteresis;
+    SatelliteId out_ref;
+    bool switched = false;
+    const int K = 2;
+    const double max_drop_rad = 10.0 * M_PI / 180.0;
+    const double min_elev_rad = 0.0;  // floor disabled for this test
+
+    std::vector<ReferenceHysteresis::Candidate> candidates = {
+        makeCandidate(1, 70.0 * M_PI / 180.0, true, false),
+        makeCandidate(2, 55.0 * M_PI / 180.0, true, false),
+    };
+    ASSERT_TRUE(hysteresis.update(candidates, gps(1), 70.0 * M_PI / 180.0, K, 0.0, out_ref,
+                                  switched, max_drop_rad, min_elev_rad));
+    ASSERT_EQ(out_ref.prn, 1);
+
+    for (int epoch = 0; epoch < K; ++epoch) {
+        candidates = {
+            makeCandidate(1, 70.0 * M_PI / 180.0, true, true),  // suspect
+            makeCandidate(2, 55.0 * M_PI / 180.0, true, false),
+        };
+        ASSERT_TRUE(hysteresis.update(candidates, gps(1), 70.0 * M_PI / 180.0, K, 0.0, out_ref,
+                                      switched, max_drop_rad, min_elev_rad));
+    }
+    // K-th consecutive suspect epoch reached: without the gate this would
+    // switch to sat 2, but the 15deg drop blocks it -- stays on sat 1.
+    EXPECT_EQ(out_ref.prn, 1);
+    EXPECT_FALSE(switched);
+}
+
+TEST(ReferenceHysteresisTest, SwitchAwayBlockedByAbsoluteElevationFloor) {
+    // Suspect reference at 32deg, only clean candidate at 25deg -- the drop
+    // (7deg) is within a generous 10deg max-drop gate, but 25deg falls
+    // below a 30deg absolute floor, so the switch-away must still be
+    // suppressed.
+    ReferenceHysteresis hysteresis;
+    SatelliteId out_ref;
+    bool switched = false;
+    const int K = 1;
+    const double max_drop_rad = 10.0 * M_PI / 180.0;
+    const double min_elev_rad = 30.0 * M_PI / 180.0;
+
+    std::vector<ReferenceHysteresis::Candidate> candidates = {
+        makeCandidate(1, 32.0 * M_PI / 180.0, true, false),
+        makeCandidate(2, 25.0 * M_PI / 180.0, true, false),
+    };
+    ASSERT_TRUE(hysteresis.update(candidates, gps(1), 32.0 * M_PI / 180.0, K, 0.0, out_ref,
+                                  switched, max_drop_rad, min_elev_rad));
+    ASSERT_EQ(out_ref.prn, 1);
+
+    candidates = {
+        makeCandidate(1, 32.0 * M_PI / 180.0, true, true),  // suspect
+        makeCandidate(2, 25.0 * M_PI / 180.0, true, false),
+    };
+    ASSERT_TRUE(hysteresis.update(candidates, gps(1), 32.0 * M_PI / 180.0, K, 0.0, out_ref,
+                                  switched, max_drop_rad, min_elev_rad));
+    EXPECT_EQ(out_ref.prn, 1);
+    EXPECT_FALSE(switched);
+}
+
+TEST(ReferenceHysteresisTest, SwitchAwayAllowedWhenBothElevationGatesSatisfied) {
+    // Suspect reference at 40deg, clean candidate at 33deg -- 7deg drop
+    // (within the 10deg max-drop gate) and 33deg clears the 30deg floor, so
+    // the switch-away must proceed normally.
+    ReferenceHysteresis hysteresis;
+    SatelliteId out_ref;
+    bool switched = false;
+    const int K = 1;
+    const double max_drop_rad = 10.0 * M_PI / 180.0;
+    const double min_elev_rad = 30.0 * M_PI / 180.0;
+
+    std::vector<ReferenceHysteresis::Candidate> candidates = {
+        makeCandidate(1, 40.0 * M_PI / 180.0, true, false),
+        makeCandidate(2, 33.0 * M_PI / 180.0, true, false),
+    };
+    ASSERT_TRUE(hysteresis.update(candidates, gps(1), 40.0 * M_PI / 180.0, K, 0.0, out_ref,
+                                  switched, max_drop_rad, min_elev_rad));
+    ASSERT_EQ(out_ref.prn, 1);
+
+    candidates = {
+        makeCandidate(1, 40.0 * M_PI / 180.0, true, true),  // suspect
+        makeCandidate(2, 33.0 * M_PI / 180.0, true, false),
+    };
+    ASSERT_TRUE(hysteresis.update(candidates, gps(1), 40.0 * M_PI / 180.0, K, 0.0, out_ref,
+                                  switched, max_drop_rad, min_elev_rad));
+    EXPECT_EQ(out_ref.prn, 2);
+    EXPECT_TRUE(switched);
+}
+
+TEST(ReferenceHysteresisTest, DefaultElevationGateParamsPreserveUngatedBehavior) {
+    // Calling update() without the two new trailing arguments (as all the
+    // pre-existing tests above do) must reproduce the pre-refinement
+    // behavior exactly: even a huge elevation drop still switches away once
+    // the K-epoch suspect streak is hit.
+    ReferenceHysteresis hysteresis;
+    SatelliteId out_ref;
+    bool switched = false;
+    const int K = 1;
+
+    std::vector<ReferenceHysteresis::Candidate> candidates = {
+        makeCandidate(1, 80.0 * M_PI / 180.0, true, false),
+        makeCandidate(2, 5.0 * M_PI / 180.0, true, false),  // 75deg drop, near-horizon
+    };
+    ASSERT_TRUE(hysteresis.update(candidates, gps(1), 80.0 * M_PI / 180.0, K, 0.0, out_ref,
+                                  switched));
+    ASSERT_EQ(out_ref.prn, 1);
+
+    candidates = {
+        makeCandidate(1, 80.0 * M_PI / 180.0, true, true),  // suspect
+        makeCandidate(2, 5.0 * M_PI / 180.0, true, false),
+    };
+    ASSERT_TRUE(hysteresis.update(candidates, gps(1), 80.0 * M_PI / 180.0, K, 0.0, out_ref,
+                                  switched));
+    EXPECT_EQ(out_ref.prn, 2);
+    EXPECT_TRUE(switched);
+}
+
 TEST(ReferenceHysteresisTest, HardReacquisitionWhenCurrentReferenceDisappears) {
     ReferenceHysteresis hysteresis;
     SatelliteId out_ref;
@@ -364,6 +486,8 @@ TEST(RTKCmcReferenceIntegrationTest, KnobOffByDefaultAndDiagnosticsStayZero) {
     EXPECT_DOUBLE_EQ(default_config.cmc_ref_level_m, 0.75);
     EXPECT_EQ(default_config.cmc_ref_switch_epochs, 3);
     EXPECT_DOUBLE_EQ(default_config.cmc_ref_return_min_elev_deg, 5.0);
+    EXPECT_DOUBLE_EQ(default_config.cmc_ref_switch_max_elev_drop_deg, 10.0);
+    EXPECT_DOUBLE_EQ(default_config.cmc_ref_switch_min_elev_deg, 30.0);
 
     std::string rover_path = "data/rover_kinematic.obs";
     std::string base_path = "data/base_kinematic.obs";

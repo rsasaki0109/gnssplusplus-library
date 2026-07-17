@@ -148,6 +148,8 @@ struct FuseOptions {
     double cmc_ref_level_m = 0.75;
     int cmc_ref_switch_epochs = 3;
     double cmc_ref_return_min_elev_deg = 5.0;
+    double cmc_ref_switch_max_elev_drop_deg = 10.0;
+    double cmc_ref_switch_min_elev_deg = 30.0;
 
     // Opt-in: also write the per-epoch RTK (pre-fusion) PositionSolution
     // stream to its own .pos file, in the same libgnss::Solution format
@@ -342,6 +344,13 @@ void printUsage(const char* program_name) {
         << "  --cmc-ref-return-min-elev <deg>\n"
         << "                                Elevation margin (degrees) required before a switch-\n"
         << "                                back is considered (default: 5.0)\n"
+        << "  --cmc-ref-switch-max-elev-drop <deg>\n"
+        << "                                Elevation-quality gate on switch-away only: only\n"
+        << "                                switch if the replacement is within this many\n"
+        << "                                degrees below the suspect reference (default: 10.0)\n"
+        << "  --cmc-ref-switch-min-elev <deg>\n"
+        << "                                Companion absolute floor for the switch-away\n"
+        << "                                replacement's elevation (default: 30.0)\n"
         << "  --verbose                    Print periodic per-epoch progress\n"
         << "  --quiet                      Suppress run summary\n"
         << "  -h, --help                   Show this help\n";
@@ -589,6 +598,10 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             options.cmc_ref_switch_epochs = std::stoi(requireValue(arg, i, argc, argv));
         } else if (arg == "--cmc-ref-return-min-elev") {
             options.cmc_ref_return_min_elev_deg = std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--cmc-ref-switch-max-elev-drop") {
+            options.cmc_ref_switch_max_elev_drop_deg = std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--cmc-ref-switch-min-elev") {
+            options.cmc_ref_switch_min_elev_deg = std::stod(requireValue(arg, i, argc, argv));
         } else {
             argumentError("unknown or incomplete argument: " + arg, argv[0]);
         }
@@ -612,6 +625,12 @@ FuseOptions parseArguments(int argc, char* argv[]) {
     }
     if (options.cmc_ref_return_min_elev_deg < 0.0) {
         argumentError("--cmc-ref-return-min-elev must be >= 0", argv[0]);
+    }
+    if (options.cmc_ref_switch_max_elev_drop_deg < 0.0) {
+        argumentError("--cmc-ref-switch-max-elev-drop must be >= 0", argv[0]);
+    }
+    if (options.cmc_ref_switch_min_elev_deg < 0.0) {
+        argumentError("--cmc-ref-switch-min-elev must be >= 0", argv[0]);
     }
 
     return options;
@@ -787,6 +806,8 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
     rtk_config.cmc_ref_level_m = options.cmc_ref_level_m;
     rtk_config.cmc_ref_switch_epochs = options.cmc_ref_switch_epochs;
     rtk_config.cmc_ref_return_min_elev_deg = options.cmc_ref_return_min_elev_deg;
+    rtk_config.cmc_ref_switch_max_elev_drop_deg = options.cmc_ref_switch_max_elev_drop_deg;
+    rtk_config.cmc_ref_switch_min_elev_deg = options.cmc_ref_switch_min_elev_deg;
     if (!libgnss_apps::applyRtkConfigPreset(options.rtk_preset, rtk_config)) {
         std::cerr << "Error: unsupported --preset value: " << options.rtk_preset << "\n";
         return 1;

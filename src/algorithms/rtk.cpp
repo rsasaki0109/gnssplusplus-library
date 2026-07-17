@@ -873,6 +873,9 @@ void RTKProcessor::updateCmcAwareReferenceSelection(
     cmc_aware_ref_by_system_.clear();
     const auto snapshot = buildSelectionSnapshot(sat_data);
     const double return_min_elev_rad = rtk_config_.cmc_ref_return_min_elev_deg * M_PI / 180.0;
+    const double switch_away_max_elev_drop_rad =
+        rtk_config_.cmc_ref_switch_max_elev_drop_deg * M_PI / 180.0;
+    const double switch_away_min_elev_rad = rtk_config_.cmc_ref_switch_min_elev_deg * M_PI / 180.0;
 
     for (GNSSSystem system : kRTKSupportedSystems) {
         if (!isEnabledRTKSystem(rtk_config_, system)) continue;
@@ -899,7 +902,8 @@ void RTKProcessor::updateCmcAwareReferenceSelection(
         bool switched = false;
         if (hysteresis.update(candidates, natural_ref, natural_ref_elevation_rad,
                               rtk_config_.cmc_ref_switch_epochs, return_min_elev_rad, chosen_ref,
-                              switched)) {
+                              switched, switch_away_max_elev_drop_rad,
+                              switch_away_min_elev_rad)) {
             cmc_aware_ref_by_system_[system] = chosen_ref;
             if (switched) ++cmc_ref_switch_count_;
         }

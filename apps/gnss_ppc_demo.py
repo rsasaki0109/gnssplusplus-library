@@ -447,6 +447,22 @@ def parse_args() -> argparse.Namespace:
         help="Elevation margin (degrees) required before a reference switch-back is considered (default: 5.0).",
     )
     parser.add_argument(
+        "--cmc-ref-switch-max-elev-drop",
+        type=float,
+        default=None,
+        help=(
+            "Elevation-quality gate on switch-away only: only switch away from a suspect "
+            "reference if the best replacement's elevation is within this many degrees below "
+            "it (default: 10.0)."
+        ),
+    )
+    parser.add_argument(
+        "--cmc-ref-switch-min-elev",
+        type=float,
+        default=None,
+        help="Companion absolute floor (degrees) for the switch-away replacement's elevation (default: 30.0).",
+    )
+    parser.add_argument(
         "--cycle-slip-threshold",
         type=float,
         default=None,
@@ -1432,6 +1448,10 @@ def run_solver(
             command.extend(["--cmc-ref-switch-epochs", str(args.cmc_ref_switch_epochs)])
         if getattr(args, "cmc_ref_return_min_elev", None) is not None:
             command.extend(["--cmc-ref-return-min-elev", str(args.cmc_ref_return_min_elev)])
+        if getattr(args, "cmc_ref_switch_max_elev_drop", None) is not None:
+            command.extend(["--cmc-ref-switch-max-elev-drop", str(args.cmc_ref_switch_max_elev_drop)])
+        if getattr(args, "cmc_ref_switch_min_elev", None) is not None:
+            command.extend(["--cmc-ref-switch-min-elev", str(args.cmc_ref_switch_min_elev)])
         if getattr(args, "cycle_slip_threshold", None) is not None:
             command.extend(["--cycle-slip-threshold", str(args.cycle_slip_threshold)])
         if getattr(args, "doppler_slip_threshold", None) is not None:

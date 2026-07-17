@@ -476,6 +476,36 @@ public:
         /// epochs gate above). No effect unless
         /// cmc_aware_reference_selection is true.
         double cmc_ref_return_min_elev_deg = 5.0;
+
+        /// Elevation-quality gate on the SWITCH-AWAY decision only (a
+        /// Phase-2a refinement, not the original Phase 2a design): even
+        /// once a reference has been CMC-suspect for cmc_ref_switch_epochs
+        /// consecutive epochs, the switch away from it is only actually
+        /// performed if the best non-suspect replacement's elevation is
+        /// within this many degrees below the current (suspect)
+        /// reference's elevation this epoch; otherwise the current
+        /// reference is kept (same as the existing "every candidate
+        /// suspect" fallback). Motivated by a long-baseline (9.4 km,
+        /// ionoopt=off) regression traced to switches that replaced a
+        /// merely-suspect high-elevation reference with a much-lower-
+        /// elevation one: the resulting larger unmodeled atmospheric DD
+        /// mismatch, compounded by the switch-back hysteresis pinning the
+        /// filter on that degraded reference for long stretches, cost more
+        /// than the original multipath/NLOS bias being avoided. Does not
+        /// affect the switch-back (return-to-natural-reference) path,
+        /// which already has its own (stronger, opposite-direction)
+        /// elevation-margin gate via cmc_ref_return_min_elev_deg. No effect
+        /// unless cmc_aware_reference_selection is true.
+        double cmc_ref_switch_max_elev_drop_deg = 10.0;
+
+        /// Companion absolute floor to cmc_ref_switch_max_elev_drop_deg: a
+        /// switch-away replacement candidate must also be above this
+        /// elevation in degrees, regardless of how small its drop from the
+        /// current reference is (guards against two low-elevation
+        /// candidates within the drop margin of each other, both still too
+        /// low to be a good DD reference). No effect unless
+        /// cmc_aware_reference_selection is true.
+        double cmc_ref_switch_min_elev_deg = 30.0;
     };
 
     /// Phase 2a diagnostics: RTKConfig::cmc_aware_reference_selection

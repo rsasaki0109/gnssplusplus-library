@@ -257,6 +257,8 @@ struct SolveConfig {
     double cmc_ref_level_m = 0.75;
     int cmc_ref_switch_epochs = 3;
     double cmc_ref_return_min_elev_deg = 5.0;
+    double cmc_ref_switch_max_elev_drop_deg = 10.0;
+    double cmc_ref_switch_min_elev_deg = 30.0;
 };
 
 using libgnss_apps::timeDiffSeconds;
@@ -949,6 +951,15 @@ void printUsage(const char* program_name) {
         << "                             clear over the current reference before a switch-back\n"
         << "                             is considered (default: 5.0). No effect without\n"
         << "                             --cmc-ref\n"
+        << "  --cmc-ref-switch-max-elev-drop <deg>\n"
+        << "                             Elevation-quality gate on switch-away only: only\n"
+        << "                             switch away from a suspect reference if the best\n"
+        << "                             replacement's elevation is within this many degrees\n"
+        << "                             below it (default: 10.0). No effect without --cmc-ref\n"
+        << "  --cmc-ref-switch-min-elev <deg>\n"
+        << "                             Companion absolute floor: the switch-away replacement\n"
+        << "                             must also be above this elevation (default: 30.0). No\n"
+        << "                             effect without --cmc-ref\n"
         << "  --max-consec-float-reset <n>\n"
         << "                             Reset ambiguity state after n consecutive float epochs\n"
         << "                             (default: 0, disabled; e.g. 10 for aggressive urban reconvergence)\n"
@@ -1186,6 +1197,14 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         }
         if (arg == "--cmc-ref-return-min-elev" && i + 1 < argc) {
             config.cmc_ref_return_min_elev_deg = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--cmc-ref-switch-max-elev-drop" && i + 1 < argc) {
+            config.cmc_ref_switch_max_elev_drop_deg = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--cmc-ref-switch-min-elev" && i + 1 < argc) {
+            config.cmc_ref_switch_min_elev_deg = std::stod(argv[++i]);
             continue;
         }
         if (arg == "--data-dir" && i + 1 < argc) {
@@ -1588,6 +1607,12 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     if (config.cmc_ref_return_min_elev_deg < 0.0) {
         argumentError("--cmc-ref-return-min-elev must be >= 0", argv[0]);
     }
+    if (config.cmc_ref_switch_max_elev_drop_deg < 0.0) {
+        argumentError("--cmc-ref-switch-max-elev-drop must be >= 0", argv[0]);
+    }
+    if (config.cmc_ref_switch_min_elev_deg < 0.0) {
+        argumentError("--cmc-ref-switch-min-elev must be >= 0", argv[0]);
+    }
     if (config.min_hold_count < 0) {
         argumentError("--min-hold-count must be >= 0", argv[0]);
     }
@@ -1937,6 +1962,8 @@ int main(int argc, char* argv[]) {
         rtk_config.cmc_ref_level_m = config.cmc_ref_level_m;
         rtk_config.cmc_ref_switch_epochs = config.cmc_ref_switch_epochs;
         rtk_config.cmc_ref_return_min_elev_deg = config.cmc_ref_return_min_elev_deg;
+        rtk_config.cmc_ref_switch_max_elev_drop_deg = config.cmc_ref_switch_max_elev_drop_deg;
+        rtk_config.cmc_ref_switch_min_elev_deg = config.cmc_ref_switch_min_elev_deg;
         rtk_config.min_satellites_for_ar = config.min_satellites_for_ar;
         rtk_config.min_subset_pairs_for_ar = config.min_subset_pairs_for_ar;
         rtk_config.max_subset_drop_steps_for_ar = config.max_subset_drop_steps_for_ar;

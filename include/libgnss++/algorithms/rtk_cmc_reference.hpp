@@ -37,6 +37,7 @@
 #include "../core/observation.hpp"
 
 #include <cstddef>
+#include <limits>
 #include <map>
 #include <set>
 #include <vector>
@@ -123,6 +124,23 @@ public:
     // radians) -- passed per call rather than fixed at construction so a
     // config change takes effect immediately without resetting state.
     //
+    // switch_away_max_elev_drop_rad/switch_away_min_elev_rad: elevation-
+    // quality gate on the SWITCH-AWAY decision only (RTKConfig::
+    // cmc_ref_switch_max_elev_drop_deg/cmc_ref_switch_min_elev_deg, already
+    // converted to radians). Even once suspect_streak_ reaches
+    // switch_epochs, the switch is only actually performed if the best
+    // non-suspect candidate's elevation is (a) within
+    // switch_away_max_elev_drop_rad below the current (suspect)
+    // reference's elevation this epoch, AND (b) itself at least
+    // switch_away_min_elev_rad. When the gate blocks the switch, the
+    // current reference is kept -- same as the pre-existing "every
+    // candidate suspect" fallback. Defaults (+infinity / -infinity)
+    // disable both checks, preserving prior callers' behavior unchanged.
+    // The switch-back path (natural-reference return) is untouched by this
+    // gate: it already requires natural_ref_elevation_rad to exceed the
+    // current reference by return_min_elev_rad, which is a strictly
+    // stronger elevation condition in the return direction.
+    //
     // Returns false (state left untouched, out_ref unset) iff `candidates`
     // is empty -- caller should skip DD formation for the system entirely
     // in that case, matching the pre-existing no-candidate behavior.
@@ -133,7 +151,9 @@ public:
     // acquisition is not a "switch").
     bool update(const std::vector<Candidate>& candidates, const SatelliteId& natural_ref,
                double natural_ref_elevation_rad, int switch_epochs, double return_min_elev_rad,
-               SatelliteId& out_ref, bool& switched);
+               SatelliteId& out_ref, bool& switched,
+               double switch_away_max_elev_drop_rad = std::numeric_limits<double>::infinity(),
+               double switch_away_min_elev_rad = -std::numeric_limits<double>::infinity());
 
     bool hasReference() const { return has_current_ref_; }
     SatelliteId currentReference() const { return current_ref_; }
