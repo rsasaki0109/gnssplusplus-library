@@ -1922,7 +1922,33 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
         }
     };
 
+    // surplus_validation_overrides_history_dr_max_consecutive: count of
+    // immediately-preceding FIXED epochs (skipping FLOAT/unsolved ones,
+    // which neither increment nor reset it) that were themselves DR-gate
+    // overrides. Reset only by a normally-validated FIXED epoch (see the
+    // knob's doc comment in fgo.hpp).
+    std::size_t dr_bypass_consecutive_streak = 0;
     for (std::size_t i = 0; i < num_epochs; ++i) {
+        // Fold epoch (i-1)'s FINAL outcome into the streak before starting
+        // epoch i's own processing. Deliberately done here -- at the top of
+        // THIS iteration, reading the previous iteration's already-fully-
+        // settled epoch_fixed/epoch_diagnostics entries -- rather than at
+        // the bottom of the previous iteration, because that loop body has
+        // several mid-iteration `continue` escapes (CP-hold/sanity paths)
+        // that would otherwise skip a bottom-of-loop update; the previous
+        // iteration's array entries are guaranteed final by the time this
+        // iteration begins regardless of which exit path it took.
+        if (config.surplus_validation_overrides_history_dr_max_consecutive > 0 &&
+            i > 0) {
+            const std::size_t prev = i - 1;
+            if (epoch_fixed[prev]) {
+                if (epoch_diagnostics[prev].dr_bypass_applied) {
+                    ++dr_bypass_consecutive_streak;
+                } else {
+                    dr_bypass_consecutive_streak = 0;
+                }
+            }
+        }
         epoch_diagnostics[i].time = problem.epochs[i].time;
         epoch_diagnostics[i].ar_outcome = config.use_lambda_ambiguity_fix
             ? FGOProcessor::AmbiguityResolutionOutcome::SmootherFailure
@@ -3665,15 +3691,35 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                         // observations that did NOT produce this candidate)
                         // agreeing is treated as sufficient. Default off; see
                         // the knob's doc comment in fgo.hpp.
-                        if (!fixed_history_dr_pass &&
+                        const bool dr_bypass_otherwise_qualifies =
+                            !fixed_history_dr_pass &&
                             config.surplus_validation_overrides_history_dr &&
                             fixed_history_dr_evaluated && surplus_evaluated && surplus_pass &&
                             (config.surplus_validation_overrides_history_dr_min_surplus_used <= 0 ||
                              epoch_diagnostics[i].surplus_validation_surplus_used >=
-                                 config.surplus_validation_overrides_history_dr_min_surplus_used)) {
+                                 config.surplus_validation_overrides_history_dr_min_surplus_used);
+                        // Consecutive-run cap (surplus_validation_overrides_
+                        // history_dr_max_consecutive): a candidate that
+                        // otherwise qualifies for the override is still
+                        // blocked once dr_bypass_consecutive_streak (this
+                        // arc's run of immediately-preceding FIXED epochs
+                        // that were themselves overrides -- see the knob's
+                        // doc comment in fgo.hpp for the reset rule) has
+                        // already reached the configured limit. <=0 leaves
+                        // the override unlimited, exactly as before this
+                        // knob existed.
+                        const bool dr_bypass_cap_blocks =
+                            dr_bypass_otherwise_qualifies &&
+                            config.surplus_validation_overrides_history_dr_max_consecutive > 0 &&
+                            dr_bypass_consecutive_streak >=
+                                static_cast<std::size_t>(
+                                    config.surplus_validation_overrides_history_dr_max_consecutive);
+                        if (dr_bypass_otherwise_qualifies && !dr_bypass_cap_blocks) {
                             fixed_history_dr_pass = true;
                             dr_bypass_applied_this_attempt = true;
                             ++result.diagnostics.fixed_history_dr_surplus_overrides;
+                        } else if (dr_bypass_cap_blocks) {
+                            ++result.diagnostics.fixed_history_dr_surplus_override_capped;
                         }
                         bool postfit_pass = true;
                         if ((normal_ratio_pass || aperture_pass || integrity_candidate) &&

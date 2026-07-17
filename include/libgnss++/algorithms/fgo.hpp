@@ -305,6 +305,39 @@ public:
         // bypassed-population RMS roughly in half while keeping most of the
         // fix-rate gain.
         int surplus_validation_overrides_history_dr_min_surplus_used = 0;
+        // Consecutive-run cap on the override above. A SUSTAINED run of
+        // consecutive overrides is a fundamentally different risk than a
+        // scattered single-epoch one: the wrong position basin persists
+        // across the whole run, so the DR gate keeps (correctly) rejecting
+        // while the override keeps (incorrectly) accepting. Measured on
+        // tokyo run2 full (min_surplus_used=4): 11 of 328 overrides landed
+        // >5 m true error, and ALL 11 sit inside one continuous ~4 s /
+        // 15-epoch override run where ratio (up to 4.27) and the surplus
+        // check were correlated-fooled together; every OTHER override run
+        // in the same log (lengths up to 50) is clean (sub-30 cm).
+        // <=0 = no cap (unlimited consecutive overrides; byte-identical to
+        // before this knob existed). >0 = an override may only fire while
+        // FEWER than this many immediately-preceding FIXED epochs were
+        // themselves overrides; once the cap is hit, the DR gate's
+        // rejection stands (this epoch falls back to FLOAT / whatever the
+        // non-override paths decide) until a normally-validated FIXED
+        // epoch (normal ratio path or an existing ambiguity hold; NOT a
+        // FLOAT epoch) resets the streak. FLOAT epochs in between
+        // deliberately do NOT reset the streak and do NOT count toward
+        // it -- offline replay of the tokyo run2 monitor CSV shows the bad
+        // run's intervening epochs are themselves all override-or-FLOAT,
+        // so a FLOAT-resets rule would never let the cap engage at all.
+        // Offline replay of that same CSV also shows this is a blunt
+        // instrument: because the FIRST override of any run is always
+        // admitted (the streak starts at 0), no K can drive the bad run's
+        // >5 m count to zero without K=0 (i.e. turning the override off
+        // outright); and because several of the CLEAN override runs are
+        // themselves far longer (up to 50 epochs) than the bad run
+        // (15 epochs), a K small enough to meaningfully shorten the bad
+        // run also truncates most of the clean runs. See
+        // fixed_history_dr_surplus_override_capped in FGODiagnostics for
+        // the count this knob suppressed.
+        int surplus_validation_overrides_history_dr_max_consecutive = 0;
         // Independent solution-separation track: propagate the last
         // high-confidence FIX using an SD-Doppler-only velocity LS solution,
         // then test the next integer candidate with a 3-D Mahalanobis chi2.
@@ -1615,6 +1648,7 @@ public:
         std::size_t fixed_history_dr_accepts = 0;
         std::size_t fixed_history_dr_rejects = 0;
         std::size_t fixed_history_dr_surplus_overrides = 0;  ///< surplus_validation_overrides_history_dr flipped a DR-rejected candidate to FIXED
+        std::size_t fixed_history_dr_surplus_override_capped = 0;  ///< surplus_validation_overrides_history_dr_max_consecutive blocked an otherwise-qualifying override
         std::size_t ddpr_anchor_validation_accepts = 0;
         std::size_t ddpr_anchor_validation_rejects = 0;
         std::size_t fixed_postfit_validation_accepts = 0;

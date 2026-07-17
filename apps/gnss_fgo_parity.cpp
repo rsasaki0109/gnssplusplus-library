@@ -186,6 +186,7 @@ struct Args {
     bool fix_demote_surplus_crosscheck = false;   // enable fix_demote_surplus_crosscheck (needs --fix-demote + --surplus-validation)
     bool surplus_overrides_dr = false;   // "c2" lever: enable surplus_validation_overrides_history_dr (needs --fixed-history-dr + --surplus-validation)
     int surplus_overrides_dr_min_used = 0;  // >0: override surplus_validation_overrides_history_dr_min_surplus_used (default 0 = no extra floor)
+    int surplus_overrides_dr_max_consec = 0;  // >0: override surplus_validation_overrides_history_dr_max_consecutive (default 0 = no cap)
     // Surplus-satellite independent integrity validation (see FGOConfig::use_surplus_satellite_validation)
     bool surplus_validation = false;
     bool surplus_validation_monitor = false;
@@ -282,6 +283,10 @@ Args parseArgs(int argc, char** argv) {
         }
         if (a == "--surplus-overrides-dr-min-used" && i + 1 < argc) {
             args.surplus_overrides_dr_min_used = std::stoi(argv[++i]);
+            continue;
+        }
+        if (a == "--surplus-overrides-dr-max-consec" && i + 1 < argc) {
+            args.surplus_overrides_dr_max_consec = std::stoi(argv[++i]);
             continue;
         }
         if (a == "--low-count-ar") {
@@ -843,6 +848,10 @@ libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
     if (args.surplus_overrides_dr_min_used > 0) {
         config.surplus_validation_overrides_history_dr_min_surplus_used =
             args.surplus_overrides_dr_min_used;
+    }
+    if (args.surplus_overrides_dr_max_consec > 0) {
+        config.surplus_validation_overrides_history_dr_max_consecutive =
+            args.surplus_overrides_dr_max_consec;
     }
     if (args.anchor_aided_validation) {
         config.use_ddpr_anchor_aided_validation = true;
@@ -2155,6 +2164,8 @@ int main(int argc, char** argv) {
                   << ", surplus_overrides=" << (args.surplus_overrides_dr ? "on" : "off")
                   << " (n=" << fl.diagnostics.fixed_history_dr_surplus_overrides
                   << ", min_used=" << config.surplus_validation_overrides_history_dr_min_surplus_used
+                  << ", max_consec=" << config.surplus_validation_overrides_history_dr_max_consecutive
+                  << ", capped=" << fl.diagnostics.fixed_history_dr_surplus_override_capped
                   << ")"
                   << ")\n"
                   << "  DDPR anchor validation: "
