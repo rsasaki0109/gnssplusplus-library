@@ -6,6 +6,7 @@
 #include "../core/solution.hpp"
 #include "nlos_weights.hpp"
 #include "float_trust_policy.hpp"
+#include "rtk_cmc_reference.hpp"
 #include "rtk_measurement.hpp"
 #include "rtk_selection.hpp"
 #include "rtk_slip_detection.hpp"
@@ -404,6 +405,169 @@ public:
         /// <= 0 (default) disables the gate. No effect without
         /// --nlos-weights (a loaded weight table).
         int nlos_min_los_sats = 0;
+
+        /// Phase 1 GNSS/IMU coupling (docs/design.md, INS-prediction into the
+        /// KF time update): when true AND an external position prior has
+        /// been supplied for this epoch (see setExternalPositionPrior()),
+        /// KINEMATIC's per-epoch resetPositionToSPP() consumes that prior
+        /// (e.g. an INS-mechanization-predicted antenna position) instead of
+        /// reseeding from SPP/trusted-position history. The prior is always
+        /// consumed (and cleared) by the next resetPositionToSPP() call
+        /// regardless of this flag, so toggling it off mid-run cannot leave
+        /// a stale prior lying around; when no prior has been supplied for
+        /// an epoch (e.g. an IMU gap), behavior falls straight through to
+        /// the existing legacy reseed logic. false (default) preserves
+        /// existing behavior bit-for-bit: resetPositionToSPP() does not even
+        /// branch on a pending prior when this is off. Never applied in
+        /// STATIC (resetPositionToSPP() returns before this check) or
+        /// MOVING_BASE position_mode (relative baseline against a moving
+        /// base has no meaning for an absolute INS-predicted antenna prior).
+        bool use_external_position_prior = false;
+
+        /// M1 RTK-hosted tight coupling (docs/tight_coupling.md): consume a
+        /// caller-supplied ECEF antenna-position increment for one KINEMATIC
+        /// epoch instead of running the legacy SPP/trusted-position reseed.
+        /// Unlike use_external_position_prior, this is a true time update:
+        /// it advances the existing position state, adds interval process
+        /// noise only to the 3x3 position block, and preserves every
+        /// position-to-ambiguity/ionosphere cross-covariance. A missing or
+        /// rejected update falls through to the unchanged legacy reseed.
+        /// false by default; never applied to STATIC or MOVING_BASE.
+        bool use_external_position_time_update = false;
+
+        /// M4: append ECEF velocity states after every legacy RTK state.
+        /// Existing position/hardware-bias/iono/ambiguity indices therefore
+        /// never move. Requires an external position/velocity time update.
+        bool enable_velocity_states = false;
+
+        /// M5 measurement-neutral single-difference TDCP-vs-Doppler
+        /// diagnostics. No filter row or state mutation is performed.
+        bool enable_tdcp_diagnostics = false;
+        double tdcp_diagnostics_max_gap_s = 2.0;
+
+        /// Per-epoch diagonal regularization added by the INS position time
+        /// update, in m^2. The legacy wide reseed also acted as a strong
+        /// regularizer; this explicit floor makes that role independently
+        /// tunable without destroying cross-covariance.
+        double ins_time_update_position_q_floor_m2 = 25.0;
+
+        /// M2 wrong-fix containment: validate a fixed DD integer candidate
+        /// using code-minus-carrier consistency before it can be reported,
+        /// held, or remembered as a trusted fix. The check is independent
+        /// of both FLOAT and FIXED positions. GLONASS FDMA pairs are skipped.
+        bool enable_cp_pr_fixed_gate = false;
+        double cp_pr_fixed_gate_threshold_m = 10.0;
+        int cp_pr_fixed_gate_min_pairs = 4;
+        int cp_pr_fixed_gate_max_bad_pairs = 1;
+        int cp_pr_fixed_gate_escalation_epochs = 2;
+
+        /// DD pseudorange-only recovery anchor produced after consecutive
+        /// CP-vs-PR vetoes. M2 computes and exposes this independent anchor;
+        /// M3 owns any closed-loop state injection.
+        double ddpr_anchor_fde_threshold_m = 10.0;
+        int ddpr_anchor_max_fde_removals = 3;
+
+        /// Phase 2a (docs/imu_fusion.md-adjacent RTK work): CMC-aware DD
+        /// reference-satellite selection with hysteresis. The plain
+        /// max-elevation reference pick (rtk_selection::
+        /// selectSystemReferenceSatellite, used by both buildMeasurement
+        /// Blocks() and buildDoubleDifferencePairs()) has no regard for
+        /// multipath/NLOS-driven code-minus-carrier (CMC) deviations; a
+        /// biased high-elevation satellite poisons every DD pair in its
+        /// (system) group at once. When true, each epoch classifies every
+        /// candidate satellite's SD L1 code-minus-phase deviation from its
+        /// own running EWMA baseline (see rtk_cmc_reference::
+        /// CmcSuspectTracker, threshold cmc_ref_level_m) and only switches
+        /// the active reference away from a CMC-suspect one after
+        /// cmc_ref_switch_epochs consecutive suspect epochs, picking the
+        /// highest-elevation non-suspect candidate (dual-freq preferred,
+        /// same tie-break as the plain selector); falls back to keeping the
+        /// current reference if every candidate is suspect. Switching back
+        /// to a higher-elevation candidate additionally requires
+        /// cmc_ref_switch_epochs consecutive non-suspect epochs AND that
+        /// candidate exceeding the current reference's elevation by
+        /// cmc_ref_return_min_elev_deg -- both hysteresis gates exist
+        /// because an earlier FGO-pipeline port of a blanket (non-
+        /// hysteresis) version of this rule regressed there (commit
+        /// 8cdff0c): ~10.5k switch decisions flip-flopped between the
+        /// top-2 elevation candidates on single-epoch CMC flicker. Unlike
+        /// FGO, the KF path keys ambiguities per-satellite (SD states; the
+        /// reference only enters the H matrix), so reference switching does
+        /// not itself sever ambiguity continuity here -- structurally safer
+        /// to enable. false (default) preserves existing reference
+        /// selection bit-for-bit: neither buildMeasurementBlocks() nor
+        /// buildDoubleDifferencePairs() consult the CMC-aware pick, and the
+        /// per-epoch suspect/hysteresis bookkeeping in updateBias() is
+        /// skipped entirely.
+        bool cmc_aware_reference_selection = false;
+
+        /// CMC suspect-classification deviation threshold in meters (see
+        /// cmc_aware_reference_selection's doc comment). Mirrors the FGO
+        /// pipeline's --cmc-level default. No effect unless
+        /// cmc_aware_reference_selection is true.
+        double cmc_ref_level_m = 0.75;
+
+        /// Consecutive CMC-suspect epochs required before switching the
+        /// active reference away from it, and consecutive non-suspect
+        /// epochs required before switching back to a higher-elevation
+        /// candidate (see cmc_aware_reference_selection's doc comment).
+        /// No effect unless cmc_aware_reference_selection is true.
+        int cmc_ref_switch_epochs = 3;
+
+        /// Minimum elevation margin (degrees) a higher-elevation candidate
+        /// must clear over the current reference before a switch-back is
+        /// even considered (in addition to the consecutive-non-suspect-
+        /// epochs gate above). No effect unless
+        /// cmc_aware_reference_selection is true.
+        double cmc_ref_return_min_elev_deg = 5.0;
+
+        /// Elevation-quality gate on the SWITCH-AWAY decision only (a
+        /// Phase-2a refinement, not the original Phase 2a design): even
+        /// once a reference has been CMC-suspect for cmc_ref_switch_epochs
+        /// consecutive epochs, the switch away from it is only actually
+        /// performed if the best non-suspect replacement's elevation is
+        /// within this many degrees below the current (suspect)
+        /// reference's elevation this epoch; otherwise the current
+        /// reference is kept (same as the existing "every candidate
+        /// suspect" fallback). Motivated by a long-baseline (9.4 km,
+        /// ionoopt=off) regression traced to switches that replaced a
+        /// merely-suspect high-elevation reference with a much-lower-
+        /// elevation one: the resulting larger unmodeled atmospheric DD
+        /// mismatch, compounded by the switch-back hysteresis pinning the
+        /// filter on that degraded reference for long stretches, cost more
+        /// than the original multipath/NLOS bias being avoided. Does not
+        /// affect the switch-back (return-to-natural-reference) path,
+        /// which already has its own (stronger, opposite-direction)
+        /// elevation-margin gate via cmc_ref_return_min_elev_deg. No effect
+        /// unless cmc_aware_reference_selection is true.
+        double cmc_ref_switch_max_elev_drop_deg = 10.0;
+
+        /// Companion absolute floor to cmc_ref_switch_max_elev_drop_deg: a
+        /// switch-away replacement candidate must also be above this
+        /// elevation in degrees, regardless of how small its drop from the
+        /// current reference is (guards against two low-elevation
+        /// candidates within the drop margin of each other, both still too
+        /// low to be a good DD reference). No effect unless
+        /// cmc_aware_reference_selection is true.
+        double cmc_ref_switch_min_elev_deg = 30.0;
+    };
+
+    /// Phase 2a diagnostics: RTKConfig::cmc_aware_reference_selection
+    /// counters, zero for the life of the processor unless that knob is
+    /// enabled. suspect_epoch_count counts (satellite, epoch) CMC-suspect
+    /// classifications (see rtk_cmc_reference::CmcSuspectTracker);
+    /// switch_count counts reference-satellite changes actually performed
+    /// by the hysteresis state machine (both switch-away and switch-back),
+    /// summed across all (system) groups and the whole run.
+    struct CmcReferenceDiagnostics {
+        std::size_t suspect_epoch_count = 0;
+        std::size_t switch_count = 0;
+    };
+
+    struct InsTimeUpdateDiagnostics {
+        std::size_t applied_count = 0;
+        std::size_t rejected_count = 0;
+        bool applied_last_epoch = false;
     };
 
     /// Reason why AR was silently skipped or failed in resolveAmbiguities().
@@ -500,6 +664,25 @@ public:
         double fixed_float_jump_m = std::numeric_limits<double>::quiet_NaN();
         bool post_validation_rejected = false;
         bool final_fixed_applied = false;
+        bool cp_pr_gate_evaluated = false;
+        bool cp_pr_gate_rejected = false;
+        bool cp_pr_gate_escalated = false;
+        int cp_pr_gate_checked_pairs = 0;
+        int cp_pr_gate_bad_pairs = 0;
+        double cp_pr_gate_rms_m = std::numeric_limits<double>::quiet_NaN();
+        double cp_pr_gate_max_m = std::numeric_limits<double>::quiet_NaN();
+        bool ddpr_anchor_valid = false;
+        int ddpr_anchor_observations = 0;
+        double ddpr_anchor_residual_rms_m = std::numeric_limits<double>::quiet_NaN();
+        double ddpr_anchor_fixed_distance_m = std::numeric_limits<double>::quiet_NaN();
+        int tdcp_candidate_count = 0;
+        int tdcp_residual_count = 0;
+        int tdcp_rejected_missing_previous = 0;
+        int tdcp_rejected_gap = 0;
+        int tdcp_rejected_loss_of_lock = 0;
+        int tdcp_rejected_invalid = 0;
+        double tdcp_residual_rms_m = std::numeric_limits<double>::quiet_NaN();
+        double tdcp_residual_max_abs_m = std::numeric_limits<double>::quiet_NaN();
         std::string reject_reason;
         ARSkipReason ar_skip_reason{ARSkipReason::NONE};
 
@@ -579,6 +762,86 @@ public:
         nlos_weight_table_ = std::move(table);
     }
 
+    /// Phase 1 GNSS/IMU coupling: supply an external (e.g. INS-mechanization-
+    /// predicted) ECEF antenna position + covariance to seed the upcoming
+    /// KINEMATIC epoch's position states, in place of the legacy SPP/
+    /// trusted-position reseed. Only consumed when
+    /// rtk_config_.use_external_position_prior is true; see that flag's doc
+    /// comment for the exact semantics (including STATIC/MOVING_BASE being
+    /// unaffected). Must be called fresh for each epoch before
+    /// processRTKEpoch()/processEpoch() -- the prior is consumed (cleared)
+    /// the first time resetPositionToSPP() runs, so a stale prior can never
+    /// silently persist across an IMU gap.
+    void setExternalPositionPrior(const Vector3d& ecef_pos, const Matrix3d& pos_cov) {
+        external_position_prior_ecef_ = ecef_pos;
+        external_position_prior_covariance_ = pos_cov;
+        has_external_position_prior_ = true;
+    }
+
+    /// Discard any pending external position prior without consuming it
+    /// (e.g. the caller judges its INS/ESKF source unhealthy this epoch).
+    void clearExternalPositionPrior() { has_external_position_prior_ = false; }
+
+    /// True if a prior has been supplied via setExternalPositionPrior() and
+    /// not yet consumed by resetPositionToSPP().
+    bool hasExternalPositionPrior() const { return has_external_position_prior_; }
+
+    /// M1 tight coupling: supply an incremental ECEF antenna displacement and
+    /// interval process-noise covariance for the upcoming KINEMATIC epoch.
+    /// The value is consumed by the next resetPositionToSPP() call whether it
+    /// is applied, rejected, or inapplicable, so an IMU gap cannot reuse it.
+    void setExternalPositionTimeUpdate(const Vector3d& position_delta_ecef,
+                                       const Matrix3d& process_noise_ecef) {
+        external_position_delta_ecef_ = position_delta_ecef;
+        external_position_process_noise_ecef_ = process_noise_ecef;
+        has_external_position_time_update_ = true;
+        has_external_velocity_time_update_ = false;
+    }
+
+    /// M4 tight coupling: supply the M1 displacement plus predicted antenna
+    /// velocity and [position,velocity] interval process noise.
+    void setExternalPositionVelocityTimeUpdate(
+        const Vector3d& position_delta_ecef,
+        const Vector3d& velocity_ecef,
+        const Eigen::Matrix<double, 6, 6>& process_noise_ecef,
+        const Matrix3d& velocity_initial_covariance_ecef) {
+        external_position_delta_ecef_ = position_delta_ecef;
+        external_position_process_noise_ecef_ = process_noise_ecef.topLeftCorner<3, 3>();
+        external_velocity_ecef_ = velocity_ecef;
+        external_position_velocity_process_noise_ecef_ = process_noise_ecef;
+        external_velocity_initial_covariance_ecef_ = velocity_initial_covariance_ecef;
+        has_external_position_time_update_ = true;
+        has_external_velocity_time_update_ = true;
+    }
+
+    void clearExternalPositionTimeUpdate() {
+        has_external_position_time_update_ = false;
+        has_external_velocity_time_update_ = false;
+    }
+    bool hasExternalPositionTimeUpdate() const { return has_external_position_time_update_; }
+    InsTimeUpdateDiagnostics getInsTimeUpdateDiagnostics() const {
+        return {ins_time_update_applied_count_, ins_time_update_rejected_count_,
+                ins_time_update_applied_last_epoch_};
+    }
+
+    /// Return RTK's current FLOAT posterior antenna position/covariance. The
+    /// ambiguity-fixed candidate is intentionally not used as the INS anchor.
+    bool getFloatPosteriorPosition(Vector3d& position_ecef,
+                                   Matrix3d& position_covariance_ecef) const;
+
+    /// Return the most recent M2 DDPR-only recovery anchor. The anchor is
+    /// diagnostic until M3 explicitly consumes it.
+    bool getLastDdPrAnchor(Vector3d& position_ecef,
+                           Matrix3d& position_covariance_ecef,
+                           GNSSTime& time) const;
+
+    /// Phase 2a: RTKConfig::cmc_aware_reference_selection diagnostics
+    /// counters, accumulated since construction/reset(). Both fields stay
+    /// zero for the life of the processor when the knob is off.
+    CmcReferenceDiagnostics getCmcReferenceDiagnostics() const {
+        return {cmc_ref_suspect_epoch_count_, cmc_ref_switch_count_};
+    }
+
 public:
     bool lambdaMethod(const VectorXd& float_ambiguities,
                      const MatrixXd& covariance_matrix,
@@ -613,7 +876,33 @@ private:
     Vector3d base_position_;
     bool base_position_known_ = false;
 
-    // Fixed-size state: [pos(3), glo_hw_bias(2), iono(MAXSAT), N1(MAXSAT), N2(MAXSAT), N5(MAXSAT)]
+    // Phase 1 GNSS/IMU coupling: pending externally supplied (e.g. INS)
+    // position prior, consumed by resetPositionToSPP() when
+    // rtk_config_.use_external_position_prior is enabled. See
+    // setExternalPositionPrior()'s doc comment.
+    Vector3d external_position_prior_ecef_ = Vector3d::Zero();
+    Matrix3d external_position_prior_covariance_ = Matrix3d::Zero();
+    bool has_external_position_prior_ = false;
+
+    Vector3d external_position_delta_ecef_ = Vector3d::Zero();
+    Matrix3d external_position_process_noise_ecef_ = Matrix3d::Zero();
+    bool has_external_position_time_update_ = false;
+    Vector3d external_velocity_ecef_ = Vector3d::Zero();
+    Eigen::Matrix<double, 6, 6> external_position_velocity_process_noise_ecef_ =
+        Eigen::Matrix<double, 6, 6>::Zero();
+    Matrix3d external_velocity_initial_covariance_ecef_ = Matrix3d::Zero();
+    bool has_external_velocity_time_update_ = false;
+    std::size_t ins_time_update_applied_count_ = 0;
+    std::size_t ins_time_update_rejected_count_ = 0;
+    bool ins_time_update_applied_last_epoch_ = false;
+    int consecutive_cp_pr_gate_rejections_ = 0;
+    Vector3d last_ddpr_anchor_position_ecef_ = Vector3d::Zero();
+    Matrix3d last_ddpr_anchor_covariance_ecef_ = Matrix3d::Zero();
+    GNSSTime last_ddpr_anchor_time_;
+    bool has_last_ddpr_anchor_ = false;
+
+    // Legacy state: [pos(3), glo_hw_bias(2), iono(MAXSAT), N1(MAXSAT), N2(MAXSAT), N5(MAXSAT)].
+    // M4 optionally appends velocity(3); it never shifts any legacy index.
     // Phase 18 Step 2 (2026-05-09): N5 freq slot reserved (IB(sat, freq=2)).
     // Currently N5 entries stay 0 / unconfirmed; populated by Steps 3+ when L5 enabled.
     // Existing L1/L2-only path is unchanged: N5 slots default to 0 with zero covariance.
@@ -626,7 +915,11 @@ private:
     static constexpr int REAL_STATES = BASE_STATES + GLO_HWBIAS_STATES;
     static constexpr int IONO_STATES = MAXSAT;
     static constexpr int FREQ_SLOTS = 3;  // L1, L2, L5 (Phase 18 Step 2)
-    static constexpr int NX = REAL_STATES + IONO_STATES + MAXSAT * FREQ_SLOTS;  // total state size
+    static constexpr int LEGACY_NX =
+        REAL_STATES + IONO_STATES + MAXSAT * FREQ_SLOTS;
+    static constexpr int VELOCITY_STATE_INDEX = LEGACY_NX;
+    static constexpr int VELOCITY_STATES = 3;
+    static constexpr int NX = LEGACY_NX + VELOCITY_STATES;
 
     static int systemSlotBase(GNSSSystem system) {
         switch (system) {
@@ -859,6 +1152,30 @@ private:
     std::map<SatelliteId, double> code_phase_history_l2_m_;
     std::map<SatelliteId, double> code_phase_history_l5_m_;  // Phase 18 Step 5
 
+    struct TdcpHistory {
+        double phase_m = 0.0;
+        double range_rate_mps = 0.0;
+    };
+    std::map<SatelliteId, TdcpHistory> tdcp_history_l1_;
+    std::map<SatelliteId, TdcpHistory> tdcp_history_l2_;
+    std::map<SatelliteId, TdcpHistory> tdcp_history_l5_;
+
+    // Phase 2a: CMC-aware DD reference-satellite selection state (only
+    // populated/consulted when rtk_config_.cmc_aware_reference_selection is
+    // true; see rtk_cmc_reference.hpp and updateCmcAwareReferenceSelection()
+    // for the algorithm). Lazily constructed on first use so a processor
+    // that never enables the knob never allocates the tracker.
+    std::unique_ptr<rtk_cmc_reference::CmcSuspectTracker> cmc_suspect_tracker_;
+    std::map<GNSSSystem, rtk_cmc_reference::ReferenceHysteresis> cmc_ref_hysteresis_by_system_;
+    // This epoch's hysteresis-selected reference per system, consumed by
+    // buildMeasurementBlocks()/buildDoubleDifferencePairs() in place of the
+    // plain max-elevation pick. Recomputed once per epoch in updateBias();
+    // absent entries fall back to the plain selector (e.g. no candidates at
+    // all this epoch for that system).
+    std::map<GNSSSystem, SatelliteId> cmc_aware_ref_by_system_;
+    std::size_t cmc_ref_suspect_epoch_count_ = 0;
+    std::size_t cmc_ref_switch_count_ = 0;
+
     /**
      * Collect all satellite data for an epoch (L1+L2 for rover and base)
      */
@@ -880,6 +1197,22 @@ private:
                                         const std::map<SatelliteId, SatelliteData>& sat_data);
 
     /**
+     * Phase 2a: recompute this epoch's CMC-suspect classification for every
+     * candidate satellite and, when rtk_config_.cmc_aware_reference_
+     * selection is enabled, run the per-system hysteresis reference
+     * selection, populating cmc_aware_ref_by_system_. Called from
+     * updateBias() once the epoch's cycle-slip signals (gf/doppler/code)
+     * are available, so slip detection can double as the CMC baseline's
+     * arc-restart signal. No-op (and cmc_aware_ref_by_system_ left empty)
+     * when the knob is off.
+     */
+    void updateCmcAwareReferenceSelection(const std::map<SatelliteId, SatelliteData>& sat_data,
+                                          const std::set<SatelliteId>& gf_slips,
+                                          const std::set<SatelliteId>& gf_slips_l1l5,
+                                          const std::set<SatelliteId>& code_slips_l1,
+                                          const std::set<SatelliteId>& doppler_slips_l1);
+
+    /**
      * Initialize filter
      */
     bool initializeFilter(const ObservationData& rover_obs,
@@ -890,6 +1223,8 @@ private:
      * Update SD biases (RTKLIB udbias): initialize new, reset slipped
      */
     void updateBias(const std::map<SatelliteId, SatelliteData>& sat_data, double dt_s);
+    void updateTdcpDiagnostics(const std::map<SatelliteId, SatelliteData>& sat_data,
+                               double dt_s);
 
     /**
      * Predict state (kinematic: reset position variance)
@@ -956,6 +1291,8 @@ private:
      */
     bool validateFixedSolution(const std::map<SatelliteId, SatelliteData>& sat_data,
                                const GNSSTime& current_time);
+    bool validateCpPrFixedCandidate(const std::map<SatelliteId, SatelliteData>& sat_data,
+                                    const GNSSTime& current_time);
 
     /**
      * Hold ambiguities after consecutive fixes (RTKLIB holdamb)

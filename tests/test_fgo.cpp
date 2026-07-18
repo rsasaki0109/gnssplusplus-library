@@ -1385,6 +1385,129 @@ TEST(FGOTest, CmcArcResetAlsoResetsBaseline) {
     EXPECT_EQ(problem.diagnostics.code_minus_carrier_level_exclusions, 0u);
 }
 
+// --- CMC-aware DD reference selection (FGOConfig::cmc_aware_reference_
+// selection) -- select_reference() normally picks the group's highest-
+// elevation satellite as the DD reference with no regard for
+// cmc_level_exclude_this_epoch; every DD pair in the group is formed
+// against that one satellite, so a CMC-excluded (multipath/NLOS) reference
+// poisons the whole group at once. Needs a THIRD satellite (unlike the
+// 2-satellite helper above) so that after the elevation-max satellite is
+// excluded and a new reference is picked, a clean non-reference satellite
+// remains to produce an observable DD factor pointing at the NEW reference.
+std::vector<ObservationData> makeCmcObservationEpochsThreeSat(
+    const NavigationData& nav,
+    const Vector3d& receiver_position,
+    const std::vector<std::array<double, 3>>& carrier_bias_m,
+    double dt_s) {
+    std::vector<ObservationData> epochs;
+    for (std::size_t epoch_index = 0; epoch_index < carrier_bias_m.size();
+         ++epoch_index) {
+        ObservationData epoch(
+            GNSSTime(2300, 100100.0 + dt_s * static_cast<double>(epoch_index)));
+        epoch.receiver_position = receiver_position;
+        for (std::size_t sat_index = 0; sat_index < 3; ++sat_index) {
+            Observation observation;
+            const uint8_t prn = static_cast<uint8_t>(sat_index + 1);
+            if (makeSyntheticGpsL1Observation(nav,
+                                              SatelliteId(GNSSSystem::GPS, prn),
+                                              epoch.time,
+                                              receiver_position,
+                                              carrier_bias_m[epoch_index][sat_index],
+                                              observation)) {
+                epoch.addObservation(observation);
+            }
+        }
+        epochs.push_back(epoch);
+    }
+    return epochs;
+}
+
+TEST(FGOTest, CmcAwareReferenceSelectionAvoidsExcludedReference) {
+    const NavigationData nav = makeSyntheticGpsNavigation(3);
+    const Vector3d rover_position(1113194.0, -4841695.0, 3985350.0);
+    const Vector3d base_position = rover_position + Vector3d(-320.0, 180.0, 45.0);
+
+    // Step 1: probe which satellite the plain elevation-max rule currently
+    // picks as reference (geometry-driven, not controlled by this test --
+    // same reasoning as makeCmcObservationEpochs's comment above), using a
+    // single zero-bias epoch so no CMC exclusion is in play.
+    const std::vector<std::array<double, 3>> zero_bias = {{0.0, 0.0, 0.0}};
+    const auto probe_rover =
+        makeCmcObservationEpochsThreeSat(nav, rover_position, zero_bias, 1.0);
+    const auto probe_base =
+        makeCmcObservationEpochsThreeSat(nav, base_position, zero_bias, 1.0);
+    FGOProcessor probe_processor(makeCmcTestConfig());
+    const auto probe_problem = probe_processor.buildDoubleDifferenceProblem(
+        probe_rover, probe_base, nav, base_position);
+    ASSERT_FALSE(probe_problem.double_difference_carrier_factors.empty());
+    const SatelliteId elevation_reference =
+        probe_problem.double_difference_carrier_factors.front().reference_satellite;
+    const std::size_t excluded_sat_index =
+        static_cast<std::size_t>(elevation_reference.prn) - 1;
+
+    // Step 2: warmup (epochs 0-2) at zero CMC for all three satellites, then
+    // epoch 3 pushes ONLY the elevation-max satellite's single-difference
+    // CMC past the level threshold; the other two stay clean throughout.
+    // Jump threshold set far above any deviation used here so only the
+    // level check can fire (same isolation style as the level-exclusion
+    // test above).
+    FGOProcessor::FGOConfig config = makeCmcTestConfig();
+    config.code_minus_carrier_jump_threshold_m = 1000.0;
+    config.code_minus_carrier_level_threshold_m = 0.4;
+    config.code_minus_carrier_warmup_epochs = 3;
+    config.code_minus_carrier_baseline_alpha = 0.5;
+
+    std::vector<std::array<double, 3>> base_bias(4, std::array<double, 3>{0.0, 0.0, 0.0});
+    base_bias[3][excluded_sat_index] = 1.0;  // baseline 0 + 1.0 > 0.4 threshold
+    const std::vector<std::array<double, 3>> rover_bias(
+        4, std::array<double, 3>{0.0, 0.0, 0.0});
+
+    const auto rover_epochs =
+        makeCmcObservationEpochsThreeSat(nav, rover_position, rover_bias, 1.0);
+    const auto base_epochs =
+        makeCmcObservationEpochsThreeSat(nav, base_position, base_bias, 1.0);
+
+    // --- cmc_aware_reference_selection OFF (default): the CMC-excluded,
+    // elevation-max satellite is still picked as reference at epoch 3 --
+    // every surviving DD factor in the group references it (poisoned).
+    {
+        FGOProcessor processor(config);
+        const auto problem = processor.buildDoubleDifferenceProblem(
+            rover_epochs, base_epochs, nav, base_position);
+        bool found_epoch3_factor = false;
+        for (const auto& factor : problem.double_difference_carrier_factors) {
+            if (factor.epoch_index != 3) {
+                continue;
+            }
+            found_epoch3_factor = true;
+            EXPECT_TRUE(factor.reference_satellite == elevation_reference);
+        }
+        EXPECT_TRUE(found_epoch3_factor);
+        EXPECT_EQ(problem.diagnostics.cmc_ref_avoided_count, 0u);
+    }
+
+    // --- cmc_aware_reference_selection ON: epoch 3's reference must move
+    // away from the CMC-excluded elevation-max satellite, and the avoided-
+    // reference counter must record it (once for the PR-factor loop, once
+    // for the CP-factor loop -- both call select_reference for this group).
+    {
+        config.cmc_aware_reference_selection = true;
+        FGOProcessor processor(config);
+        const auto problem = processor.buildDoubleDifferenceProblem(
+            rover_epochs, base_epochs, nav, base_position);
+        bool found_epoch3_factor = false;
+        for (const auto& factor : problem.double_difference_carrier_factors) {
+            if (factor.epoch_index != 3) {
+                continue;
+            }
+            found_epoch3_factor = true;
+            EXPECT_FALSE(factor.reference_satellite == elevation_reference);
+        }
+        EXPECT_TRUE(found_epoch3_factor);
+        EXPECT_EQ(problem.diagnostics.cmc_ref_avoided_count, 2u);
+    }
+}
+
 // --- Elevation-dependent DD sigma ("varerr", FGOConfig::use_elevation_
 // dependent_sigma) -- port of the inuex35 reference's preprocess/prefit.py
 // varerr_dd_sigma / buildfactor/factors.py pair_sigma. See the knob's doc

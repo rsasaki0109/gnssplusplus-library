@@ -200,6 +200,35 @@ public:
     /** @brief Convert the fused ENU state back into the library's PositionSolution shape. */
     PositionSolution toPositionSolution() const;
 
+    /**
+     * @brief Phase 1 GNSS/IMU coupling (docs/design.md): current best-
+     * estimate ANTENNA-frame ECEF position + covariance, lever-arm
+     * compensated, for feeding into e.g. RTKProcessor::
+     * setExternalPositionPrior() ahead of a KINEMATIC epoch's time update.
+     * Uses the same h(x) = position_enu + R*lever_arm model as
+     * fusion_measurement::buildGnssPositionUpdate(), so the reported
+     * covariance is the position update's own H P H^T (projecting [dp;
+     * dtheta] through the lever-arm Jacobian), not just the raw POSITION
+     * error-state block -- i.e. it already reflects attitude uncertainty's
+     * contribution via the lever arm.
+     *
+     * Returns false (leaving ecef_pos/ecef_cov untouched) when the filter
+     * has no ECEF anchor yet (isOriginSet() == false).
+     */
+    bool predictedAntennaPositionEcef(Eigen::Vector3d& ecef_pos, Eigen::Matrix3d& ecef_cov) const;
+
+    /**
+     * @brief Phase 1b GNSS/IMU coupling (docs/imu_fusion.md): the same
+     * velocity-update NIS-per-observation exponential moving average that
+     * backs isHeadingConverged()'s health check, exposed directly so a
+     * caller (e.g. gnss_fuse.cpp's INS position-prior injection) can gate on
+     * a tighter/looser threshold than heading_recovery_nis_threshold without
+     * this class needing to know about that caller's policy. 0.0 before the
+     * first velocity update (i.e. reads as "healthy" until proven otherwise,
+     * matching isHeadingConverged()'s own treatment of the EMA).
+     */
+    double getVelocityNisEma() const { return velocity_nis_ema_; }
+
 private:
     Config config_;
     FusionState state_;

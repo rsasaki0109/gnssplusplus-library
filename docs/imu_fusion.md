@@ -110,3 +110,8 @@ carrier-to-code fallback, partial AR and soft resets were both zero. This is
 near-neutral safety evidence, not adoption evidence; use
 `experiments/run_tight_dd_imu_ablation.py` for the full-six and blocked-span
 comparison.
+
+The complementary RTK-hosted tightly-coupled path is specified in
+[`tight_coupling.md`](tight_coupling.md). It keeps baseline, ambiguity, and AR
+ownership in `RTKProcessor`, and feeds opt-in INS propagation and measurement
+updates into that existing lifecycle.

@@ -2484,4 +2484,71 @@ TEST(FGOFixDemoteTest, ExtremeThresholdNeverPinsAndDemotesEveryFix) {
     }
 }
 
+// ============================================================================
+// Surplus-satellite independent integrity validation
+// (FGOConfig::use_surplus_satellite_validation). Reuses the stale-pin
+// fixture (lambdaCapableSatelliteGeometry + fix-and-hold): it has no FDE/CMC
+// exclusions, so every DD-carrier arc that reaches LAMBDA also gets fixed --
+// there is never a satellite EXCLUDED from the fixed subset to serve as a
+// surplus candidate. That makes it the right "is this genuinely a no-op
+// when there's nothing to validate against" fixture: the feature must
+// gracefully report insufficient-surplus (never rescue, never crash, never
+// change the FIXED/held outcome) rather than assume exclusions exist.
+// ============================================================================
+
+TEST(FGOSurplusValidationTest, DefaultOffIsNoOp) {
+    const auto problem = makeStalePinProblem();
+
+    FGOProcessor::FGOConfig config = makeStalePinBaseConfig();
+    ASSERT_FALSE(config.use_surplus_satellite_validation);
+
+    FGOProcessor processor(config);
+    const auto result = processor.optimizeProblem(problem);
+
+    EXPECT_EQ(result.diagnostics.surplus_validation_attempts, 0u);
+    EXPECT_EQ(result.diagnostics.surplus_validation_passes, 0u);
+    EXPECT_EQ(result.diagnostics.surplus_validation_fails, 0u);
+    EXPECT_EQ(result.diagnostics.surplus_validation_insufficient_surplus, 0u);
+    EXPECT_EQ(result.diagnostics.surplus_validation_rescued_epochs, 0u);
+    EXPECT_EQ(result.diagnostics.surplus_validation_vetoed_epochs, 0u);
+    for (auto count : result.diagnostics.surplus_validation_fallback_level_histogram) {
+        EXPECT_EQ(count, 0u);
+    }
+}
+
+TEST(FGOSurplusValidationTest, EnabledWithoutExclusionsReportsInsufficientSurplusAndStaysInert) {
+    const auto problem = makeStalePinProblem();
+
+    FGOProcessor::FGOConfig off_config = makeStalePinBaseConfig();
+    FGOProcessor off_processor(off_config);
+    const auto off_result = off_processor.optimizeProblem(problem);
+    ASSERT_GT(off_result.diagnostics.ambiguity_hold_arcs, 0u)
+        << "sanity: this fixture must actually pin arcs for the comparison below "
+           "to mean anything (mirrors FGOStalePinTest.DefaultOffIsNoOp's sanity check)";
+
+    FGOProcessor::FGOConfig on_config = makeStalePinBaseConfig();
+    on_config.use_surplus_satellite_validation = true;
+    on_config.surplus_validation_min_surplus_satellites = 2;
+    FGOProcessor on_processor(on_config);
+    const auto on_result = on_processor.optimizeProblem(problem);
+
+    // No FDE/CMC in this fixture -> every arc reaching LAMBDA also gets
+    // fixed -> zero surplus candidates at every fallback level -> every
+    // evaluation is "insufficient surplus", never a rendered pass/fail.
+    EXPECT_EQ(on_result.diagnostics.surplus_validation_attempts, 0u);
+    EXPECT_EQ(on_result.diagnostics.surplus_validation_passes, 0u);
+    EXPECT_EQ(on_result.diagnostics.surplus_validation_fails, 0u);
+    EXPECT_GT(on_result.diagnostics.surplus_validation_insufficient_surplus, 0u);
+    EXPECT_EQ(on_result.diagnostics.surplus_validation_rescued_epochs, 0u);
+    EXPECT_EQ(on_result.diagnostics.surplus_validation_vetoed_epochs, 0u);
+
+    // With nothing to rescue or veto, the held-arc outcome must be
+    // byte-identical to the feature-off run.
+    EXPECT_EQ(on_result.diagnostics.ambiguity_hold_arcs, off_result.diagnostics.ambiguity_hold_arcs);
+    EXPECT_EQ(on_result.diagnostics.ambiguity_hold_epochs, off_result.diagnostics.ambiguity_hold_epochs);
+    for (const auto& sol : on_result.solution.solutions) {
+        EXPECT_TRUE(sol.position_ecef.allFinite());
+    }
+}
+
 #endif  // GNSSPP_HAS_GTSAM

@@ -80,3 +80,52 @@ TEST(RTKSelectionTest, EnforcesMatchedWavelengthConstraintWhenRequested) {
         satellites, GNSSSystem::GPS, 5, false);
     EXPECT_EQ(unmatched_pairs.size(), 4U);
 }
+
+// Phase 2a: forced_ref_sat overload lets a caller (RTKProcessor's CMC-aware
+// hysteresis selector) override the plain max-elevation reference pick.
+TEST(RTKSelectionTest, ForcedRefSatOverridesPlainElevationPick) {
+    const std::vector<rtk_selection::SatelliteSelectionData> satellites = {
+        makeSatellite(GNSSSystem::GPS, 1, 0.7, true, true),   // highest elevation
+        makeSatellite(GNSSSystem::GPS, 2, 0.5, true, true),
+        makeSatellite(GNSSSystem::GPS, 3, 0.3, true, true),
+    };
+
+    const SatelliteId forced_ref(GNSSSystem::GPS, 2);
+    const auto pairs = rtk_selection::buildDoubleDifferencePairsForSystem(
+        satellites, GNSSSystem::GPS, 5, false, &forced_ref);
+    ASSERT_FALSE(pairs.empty());
+    for (const auto& pair : pairs) {
+        EXPECT_EQ(pair.ref_sat.prn, 2);
+        EXPECT_NE(pair.sat.prn, 2);
+    }
+
+    // 4-argument overload (no forced ref) is unaffected -- still picks the
+    // highest-elevation satellite, matching pre-Phase-2a behavior exactly.
+    const auto default_pairs = rtk_selection::buildDoubleDifferencePairsForSystem(
+        satellites, GNSSSystem::GPS, 5, false);
+    ASSERT_FALSE(default_pairs.empty());
+    EXPECT_EQ(default_pairs[0].ref_sat.prn, 1);
+}
+
+TEST(RTKSelectionTest, ForcedRefSatFallsBackWhenIneligible) {
+    const std::vector<rtk_selection::SatelliteSelectionData> satellites = {
+        makeSatellite(GNSSSystem::GPS, 1, 0.7, true, true),
+        makeSatellite(GNSSSystem::GPS, 2, 0.5, true, true),
+    };
+
+    // Forced satellite absent from the candidate list entirely (e.g. it
+    // dropped out this epoch) -- must fall back to the plain selector
+    // rather than returning an empty pair list.
+    const SatelliteId missing_ref(GNSSSystem::GPS, 9);
+    const auto pairs = rtk_selection::buildDoubleDifferencePairsForSystem(
+        satellites, GNSSSystem::GPS, 5, false, &missing_ref);
+    ASSERT_FALSE(pairs.empty());
+    EXPECT_EQ(pairs[0].ref_sat.prn, 1);
+
+    // Forced satellite present but in the wrong system -- also falls back.
+    const SatelliteId wrong_system_ref(GNSSSystem::Galileo, 1);
+    const auto pairs2 = rtk_selection::buildDoubleDifferencePairsForSystem(
+        satellites, GNSSSystem::GPS, 5, false, &wrong_system_ref);
+    ASSERT_FALSE(pairs2.empty());
+    EXPECT_EQ(pairs2[0].ref_sat.prn, 1);
+}

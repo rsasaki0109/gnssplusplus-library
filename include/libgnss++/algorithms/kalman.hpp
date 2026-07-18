@@ -2,6 +2,8 @@
 
 #include <Eigen/Dense>
 
+#include <vector>
+
 namespace libgnss {
 
 using Eigen::VectorXd;
@@ -12,9 +14,11 @@ using Eigen::MatrixXd;
  *
  * Performs the standard KF update on active states only (states where
  * x[i] != 0.0 and P[i,i] > 0.0), matching RTKLIB's sparse-state convention.
+ * An optional force-active mask admits zero-valued error/velocity states
+ * without changing the convention for unmasked states.
  *
  * Algorithm:
- *   ix = active state indices (x[i] != 0 && P[i,i] > 0)
+ *   ix = active state indices ((x[i] != 0 || force_active[i]) && P[i,i] > 0)
  *   x_ = x[ix],  P_ = P[ix,ix],  H_ = H[:,ix]
  *   F  = P_ * H_'
  *   Q  = H_ * P_ * H_' + R
@@ -29,6 +33,7 @@ using Eigen::MatrixXd;
  * @param H  Design/observation matrix (m x n), H maps states to measurements
  * @param v  Innovation vector (m x 1), measurement minus predicted
  * @param R  Measurement noise covariance (m x m)
+ * @param force_active Optional n-element active-state override mask
  * @return 0 on success, non-zero on failure (singular Q)
  *
  * Note: RTKLIB's filter() takes H transposed (n x m, column-major).
@@ -36,15 +41,20 @@ using Eigen::MatrixXd;
  */
 inline int kalmanFilter(VectorXd& x, MatrixXd& P,
                         const MatrixXd& H, const VectorXd& v,
-                        const MatrixXd& R) {
+                        const MatrixXd& R,
+                        const std::vector<bool>& force_active = {}) {
     const int n = static_cast<int>(x.size());
     const int m = static_cast<int>(v.size());
 
-    // Collect active state indices: x[i] != 0.0 && P[i,i] > 0.0
+    if (!force_active.empty() && static_cast<int>(force_active.size()) != n) return -2;
+
+    // Collect active state indices. The optional mask supports states whose
+    // valid nominal value is exactly zero.
     std::vector<int> ix;
     ix.reserve(n);
     for (int i = 0; i < n; ++i) {
-        if (x(i) != 0.0 && P(i, i) > 0.0) {
+        const bool explicitly_active = !force_active.empty() && force_active[i];
+        if ((x(i) != 0.0 || explicitly_active) && P(i, i) > 0.0) {
             ix.push_back(i);
         }
     }

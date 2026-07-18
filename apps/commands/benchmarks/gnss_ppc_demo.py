@@ -426,6 +426,45 @@ def parse_args() -> argparse.Namespace:
         help="Apply RTK SNR weighting only when baseline length is at least this many meters.",
     )
     parser.add_argument(
+        "--cmc-ref",
+        action="store_true",
+        help="Phase 2a: enable CMC-aware DD reference-satellite selection with hysteresis.",
+    )
+    parser.add_argument(
+        "--cmc-ref-level",
+        type=float,
+        default=None,
+        help="CMC suspect-classification deviation threshold in meters (default: 0.75).",
+    )
+    parser.add_argument(
+        "--cmc-ref-switch-epochs",
+        type=int,
+        default=None,
+        help="Consecutive suspect/non-suspect epochs required before switching away/back (default: 3).",
+    )
+    parser.add_argument(
+        "--cmc-ref-return-min-elev",
+        type=float,
+        default=None,
+        help="Elevation margin (degrees) required before a reference switch-back is considered (default: 5.0).",
+    )
+    parser.add_argument(
+        "--cmc-ref-switch-max-elev-drop",
+        type=float,
+        default=None,
+        help=(
+            "Elevation-quality gate on switch-away only: only switch away from a suspect "
+            "reference if the best replacement's elevation is within this many degrees below "
+            "it (default: 10.0)."
+        ),
+    )
+    parser.add_argument(
+        "--cmc-ref-switch-min-elev",
+        type=float,
+        default=None,
+        help="Companion absolute floor (degrees) for the switch-away replacement's elevation (default: 30.0).",
+    )
+    parser.add_argument(
         "--cycle-slip-threshold",
         type=float,
         default=None,
@@ -1403,6 +1442,18 @@ def run_solver(
             )
         if getattr(args, "rtk_snr_min_baseline", None) is not None:
             command.extend(["--rtk-snr-min-baseline", str(args.rtk_snr_min_baseline)])
+        if getattr(args, "cmc_ref", False):
+            command.append("--cmc-ref")
+        if getattr(args, "cmc_ref_level", None) is not None:
+            command.extend(["--cmc-ref-level", str(args.cmc_ref_level)])
+        if getattr(args, "cmc_ref_switch_epochs", None) is not None:
+            command.extend(["--cmc-ref-switch-epochs", str(args.cmc_ref_switch_epochs)])
+        if getattr(args, "cmc_ref_return_min_elev", None) is not None:
+            command.extend(["--cmc-ref-return-min-elev", str(args.cmc_ref_return_min_elev)])
+        if getattr(args, "cmc_ref_switch_max_elev_drop", None) is not None:
+            command.extend(["--cmc-ref-switch-max-elev-drop", str(args.cmc_ref_switch_max_elev_drop)])
+        if getattr(args, "cmc_ref_switch_min_elev", None) is not None:
+            command.extend(["--cmc-ref-switch-min-elev", str(args.cmc_ref_switch_min_elev)])
         if getattr(args, "cycle_slip_threshold", None) is not None:
             command.extend(["--cycle-slip-threshold", str(args.cycle_slip_threshold)])
         if getattr(args, "doppler_slip_threshold", None) is not None:

@@ -6,9 +6,13 @@ set(GNSSPP_CXX_STANDARD 20 CACHE STRING
 set(CMAKE_CXX_STANDARD ${GNSSPP_CXX_STANDARD})
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-if(MSVC)
+if(MSVC OR (WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
     # MSVC portability: expose M_PI etc. from <cmath>, keep <windows.h>
     # from defining min/max macros that clash with std::min/std::max.
+    # Also needed for Clang targeting the MSVC ABI/headers (e.g. the
+    # build/clang-ninja config): CMAKE_CXX_COMPILER_ID is "Clang" there
+    # (MSVC is false), but the toolchain still resolves <cmath>/<math.h>
+    # to the MSVC STL headers, which gate M_PI on this same macro.
     add_compile_definitions(_USE_MATH_DEFINES NOMINMAX)
 endif()
 include(CTest)
@@ -84,6 +88,8 @@ set(GNSS_SOURCES
     src/core/types.cpp
     src/fusion/attitude.cpp
     src/fusion/mechanization.cpp
+    src/fusion/preintegration.cpp
+    src/fusion/tight_coupling_processor.cpp
     src/fusion/fusion_process_noise.cpp
     src/fusion/fusion_measurement.cpp
     src/fusion/fusion_update.cpp
@@ -126,7 +132,12 @@ set(GNSS_SOURCES_NO_OPTIMIZATION
     src/algorithms/float_trust_policy.cpp
     src/algorithms/rtk_measurement.cpp
     src/algorithms/rtk_selection.cpp
+    src/algorithms/rtk_cmc_reference.cpp
+    src/algorithms/rtk_cp_pr_gate.cpp
+    src/algorithms/rtk_ddpr_anchor.cpp
     src/algorithms/rtk_update.cpp
+    src/algorithms/rtk_ins_time_update.cpp
+    src/algorithms/rtk_tdcp_diagnostics.cpp
     src/algorithms/rtk_validation.cpp
     src/algorithms/fgo.cpp
     src/algorithms/ppp_env_overrides.cpp

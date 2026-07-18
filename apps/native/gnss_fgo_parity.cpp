@@ -25,11 +25,15 @@
 #include <chrono>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <map>
 #include <sstream>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -40,6 +44,7 @@ struct Args {
     std::string base_path;
     std::string nav_path;
     int max_epochs = 0;      // 0 = all
+    int start_epoch = 0;     // rover input epochs to skip before replay
     int max_iters = 0;       // 0 = use preset default
     bool no_pr_factors = false;  // pure double-difference path (clock-free)
     bool no_robust = false;      // disable Huber robust loss (convexity check)
@@ -47,6 +52,7 @@ struct Args {
     std::string imu_path;        // milestone 2b: imu.csv -> IMU-coupled Pose3 run
     std::string ref_path;        // optional reference.csv for attitude sanity
     double fixed_lag_s = 0.0;    // milestone 2c: >0 enables the fixed-lag smoother
+    bool fixed_lag_qr = false;   // rank-tolerant iSAM2 elimination
     bool use_nhc = false;        // milestone 2d
     bool use_zupt = false;       // milestone 2d
     bool use_hold = false;       // milestone 2e: fix-and-hold
@@ -55,6 +61,18 @@ struct Args {
     bool diag = false;           // milestone 2e: Eigen-vs-GTSAM apples fix-rate + freq analysis
     bool single_freq = false;    // multi-freq control: force L1/E1/B1-only DD (single-frequency baseline)
     bool multi_freq = false;     // force multi-frequency DD on (library default is now OFF)
+    bool sd_doppler = false;     // add single-difference Doppler velocity factors
+    bool postfit_gate = false;
+    bool adaptive_ratio = false;
+    int postfit_min_n = -1;
+    double postfit_rms = -1.0;
+    double postfit_max_norm = -1.0;
+    double postfit_chi2 = -1.0;
+    bool external_dr = false;
+    int external_dr_max_age = -1;
+    double external_dr_chi2 = -1.0;
+    double external_dr_reset_ratio = -1.0;
+    bool oneband = false;        // restrict LAMBDA to one ambiguity per satellite
     bool no_oneband = false;     // MF-AR ablation: disable one-band-per-satellite LAMBDA restriction
     bool no_band_sigma = false;  // MF-AR ablation: disable per-band (secondary) sigma de-weighting
     bool no_code_align = false;  // MF hygiene ablation: disable secondary-band code alignment
@@ -62,6 +80,18 @@ struct Args {
     bool partial_ar = false;     // MF-AR step 2: partial AR in the fixed-lag LAMBDA
     bool no_gal_ar = false;      // MF-AR step 2: exclude Galileo arcs from LAMBDA / hold
     double ratio_threshold = 0.0;  // >0: override lambda_ratio_threshold
+    bool imu_ratio_aperture = false;
+    double imu_ratio_relaxed = -1.0;
+    double imu_ratio_float_sep = -1.0;
+    double imu_ratio_pred_sep = -1.0;
+    bool fixed_history_dr = false;
+    int fixed_history_dr_window = 0;
+    double fixed_history_dr_sep = -1.0;
+    bool anchor_aided_validation = false;
+    bool constellation_par = false;
+    bool residual_par = false;
+    bool variance_par = false;
+    double par_max_std = -1.0;
     double hold_ratio = 0.0;       // >0: override ambiguity_hold_ratio_threshold
     int hold_min = 0;              // >0: override ambiguity_hold_min_fixed
     int min_fixed = 0;             // >0: override min_fixed_ambiguities (partial-AR floor)
@@ -71,11 +101,17 @@ struct Args {
     int gate_min_sat = 0;          // >0: override gate_min_satellites
     double gate_gdop = 0.0;        // >0: override gate_gdop_max
     bool cmc = false;              // Code-Minus-Carrier multipath screening (slip_detect.py port)
+    bool cmc_level_pr_only = false; // sustained CMC excludes DD code, not carrier continuity
     double cmc_jump = -1.0;        // >=0: override code_minus_carrier_jump_threshold_m
     double cmc_level = -1.0;       // >=0: override code_minus_carrier_level_threshold_m
     int cmc_warmup = 0;            // >0: override code_minus_carrier_warmup_epochs
     double cmc_alpha = -1.0;       // >=0: override code_minus_carrier_baseline_alpha
+    bool cmc_ref = false;          // enable cmc_aware_reference_selection (needs --cmc)
     bool cp_hold = false;                  // CP-hold / sanity FSM (validation/postfit.py + recovery.py port)
+    bool cp_hold_float_recovery = false;   // keep downweighted float carrier during hold
+    bool cp_hold_anchor_release = false;   // trusted DDPR anchor releases hold
+    bool cp_hold_keep_imu_chain = false;   // ambiguity reset must not discard nav-state continuity
+    bool selective_cp_hold = false;        // suppress only residual-implicated carrier pairs during a hold
     double cp_hold_res = -1.0;             // >=0: override cp_hold_main_residual_threshold_m
     double cp_hold_catastrophic = -1.0;    // >=0: override cp_hold_catastrophic_threshold_m
     double cp_hold_fast_worst_sat = -1.0;  // >=0: override cp_hold_fast_worst_satellite_min_m
@@ -94,6 +130,8 @@ struct Args {
     double ddpr_anchor_boot_sigma = -1.0;  // >=0: override ddpr_anchor_bootstrap_sigma_m
     int ddpr_anchor_boot_after_mass = -1;  // 0/1: override cp_hold_bootstrap_after_mass_reset
     bool fde = false;              // GICI-style FDE (validation/postfit.py apply_fde port)
+    bool fde_pr_only = false;      // PPC-style: exclude pseudorange outliers, preserve carrier arcs
+    bool fde_cp_quarantine = false; // keep gross CP factors but exclude their ambiguities from AR
     double fde_pr = -1.0;          // >=0: override fde_pseudorange_threshold_m
     double fde_cp = -1.0;          // >=0: override fde_carrier_threshold_m
     double fde_frac = -1.0;        // >=0: override fde_max_rejected_fraction
@@ -146,13 +184,168 @@ struct Args {
     bool fix_demote_anchor_gross = false;   // C2: enable fix_demote_anchor_gross
     double fix_demote_anchor_gross_ratio = -1.0;  // >=0: override fix_demote_anchor_gross_ratio (default 10.0)
     double fix_demote_anchor_gross_abs = -1.0;    // >=0: override fix_demote_anchor_gross_abs_m (default 20.0)
+    bool fix_demote_surplus_crosscheck = false;   // enable fix_demote_surplus_crosscheck (needs --fix-demote + --surplus-validation)
+    bool surplus_overrides_dr = false;   // "c2" lever: enable surplus_validation_overrides_history_dr (needs --fixed-history-dr + --surplus-validation)
+    int surplus_overrides_dr_min_used = 0;  // >0: override surplus_validation_overrides_history_dr_min_surplus_used (default 0 = no extra floor)
+    int surplus_overrides_dr_max_consec = 0;  // >0: override surplus_validation_overrides_history_dr_max_consecutive (default 0 = no cap)
+    // Surplus-satellite independent integrity validation (see FGOConfig::use_surplus_satellite_validation)
+    bool surplus_validation = false;
+    bool surplus_validation_monitor = false;
+    bool surplus_validation_veto = false;
+    int surplus_validation_min_n = 0;          // >0: override surplus_validation_min_surplus_satellites (default 2)
+    double surplus_validation_ap_lt1 = -1.0;   // >=0: override surplus_validation_aperture_pdop_lt1_cycles (default 0.1)
+    double surplus_validation_ap_1to2 = -1.0;  // >=0: override surplus_validation_aperture_pdop_1to2_cycles (default 0.2)
+    double surplus_validation_ap_gt2 = -1.0;   // >=0: override surplus_validation_aperture_pdop_gt2_cycles (default 0.3)
+    bool surplus_validation_majority = false;  // use majority aggregation instead of require-all
+    double surplus_validation_majority_frac = -1.0;  // >=0: override surplus_validation_majority_fraction (default 0.5)
+    // Below-floor low-count AR rescue (see FGOConfig::use_low_count_ambiguity_resolution)
+    bool low_count_ar = false;
+    int low_count_ar_min = -1;        // >0: override low_count_min_candidates (default 4)
+    double low_count_ar_ratio = -1.0; // >=0: override low_count_min_ratio (default 1.5); use --low-count-ratio 0 for "surplus alone"
     std::string dump_csv_path;  // debug: per-epoch CSV dump (tow/status/E-N-U err/horiz err/E-N pos) for plotting
+    // Opt-in FGOProblem cache (skips repeated RINEX parse + problem build
+    // across validation runs on the SAME inputs/config). Default-off; when
+    // empty, behavior is byte-identical to the pre-cache harness. See
+    // ProblemCacheFingerprint / loadProblemCache / writeProblemCache below.
+    std::string problem_cache_path;
 };
 
 Args parseArgs(int argc, char** argv) {
     Args args;
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
+        // Keep standalone switches outside the very long else-if parser;
+        // MSVC otherwise exceeds its block-nesting limit (C1061).
+        if (a == "--problem-cache" && i + 1 < argc) {
+            args.problem_cache_path = argv[++i];
+            continue;
+        }
+        if (a == "--fixed-lag-qr") {
+            args.fixed_lag_qr = true;
+            continue;
+        }
+        if (a == "--cp-hold-keep-imu-chain") {
+            args.cp_hold_keep_imu_chain = true;
+            continue;
+        }
+        if (a == "--sd-doppler") {
+            args.sd_doppler = true;
+            continue;
+        }
+        if (a == "--postfit-gate") {
+            args.postfit_gate = true;
+            continue;
+        }
+        if (a == "--surplus-validation") {
+            args.surplus_validation = true;
+            continue;
+        }
+        if (a == "--surplus-validation-monitor") {
+            args.surplus_validation = true;
+            args.surplus_validation_monitor = true;
+            continue;
+        }
+        if (a == "--surplus-validation-veto") {
+            args.surplus_validation = true;
+            args.surplus_validation_veto = true;
+            continue;
+        }
+        if (a == "--surplus-validation-min-n" && i + 1 < argc) {
+            args.surplus_validation_min_n = std::stoi(argv[++i]);
+            continue;
+        }
+        if (a == "--surplus-validation-aperture-lt1" && i + 1 < argc) {
+            args.surplus_validation_ap_lt1 = std::stod(argv[++i]);
+            continue;
+        }
+        if (a == "--surplus-validation-aperture-1to2" && i + 1 < argc) {
+            args.surplus_validation_ap_1to2 = std::stod(argv[++i]);
+            continue;
+        }
+        if (a == "--surplus-validation-aperture-gt2" && i + 1 < argc) {
+            args.surplus_validation_ap_gt2 = std::stod(argv[++i]);
+            continue;
+        }
+        if (a == "--surplus-validation-majority") {
+            args.surplus_validation_majority = true;
+            continue;
+        }
+        if (a == "--surplus-validation-majority-frac" && i + 1 < argc) {
+            args.surplus_validation_majority_frac = std::stod(argv[++i]);
+            continue;
+        }
+        if (a == "--fix-demote-surplus-crosscheck") {
+            args.fix_demote_surplus_crosscheck = true;
+            continue;
+        }
+        if (a == "--cmc-ref") {
+            args.cmc_ref = true;
+            continue;
+        }
+        if (a == "--surplus-overrides-dr") {
+            args.surplus_overrides_dr = true;
+            continue;
+        }
+        if (a == "--surplus-overrides-dr-min-used" && i + 1 < argc) {
+            args.surplus_overrides_dr_min_used = std::stoi(argv[++i]);
+            continue;
+        }
+        if (a == "--surplus-overrides-dr-max-consec" && i + 1 < argc) {
+            args.surplus_overrides_dr_max_consec = std::stoi(argv[++i]);
+            continue;
+        }
+        if (a == "--low-count-ar") {
+            args.low_count_ar = true;
+            continue;
+        }
+        if (a == "--low-count-min" && i + 1 < argc) {
+            args.low_count_ar_min = std::stoi(argv[++i]);
+            continue;
+        }
+        if (a == "--low-count-ratio" && i + 1 < argc) {
+            args.low_count_ar_ratio = std::stod(argv[++i]);
+            continue;
+        }
+        if (a == "--adaptive-ratio") {
+            args.adaptive_ratio = true;
+            continue;
+        }
+        if (a == "--external-dr") {
+            args.external_dr = true;
+            continue;
+        }
+        if (a == "--external-dr-max-age" && i + 1 < argc) {
+            args.external_dr_max_age = std::stoi(argv[++i]);
+            continue;
+        }
+        if (a == "--external-dr-chi2" && i + 1 < argc) {
+            args.external_dr_chi2 = std::stod(argv[++i]);
+            continue;
+        }
+        if (a == "--external-dr-reset-ratio" && i + 1 < argc) {
+            args.external_dr_reset_ratio = std::stod(argv[++i]);
+            continue;
+        }
+        if (a == "--postfit-min-n" && i + 1 < argc) {
+            args.postfit_min_n = std::stoi(argv[++i]);
+            continue;
+        }
+        if (a == "--postfit-rms" && i + 1 < argc) {
+            args.postfit_rms = std::stod(argv[++i]);
+            continue;
+        }
+        if (a == "--postfit-max-norm" && i + 1 < argc) {
+            args.postfit_max_norm = std::stod(argv[++i]);
+            continue;
+        }
+        if (a == "--postfit-chi2" && i + 1 < argc) {
+            args.postfit_chi2 = std::stod(argv[++i]);
+            continue;
+        }
+        if (a == "--start-epoch" && i + 1 < argc) {
+            args.start_epoch = std::max(0, std::stoi(argv[++i]));
+            continue;
+        }
         if (a == "--rover" && i + 1 < argc) {
             args.rover_path = argv[++i];
         } else if (a == "--base" && i + 1 < argc) {
@@ -191,6 +384,8 @@ Args parseArgs(int argc, char** argv) {
             args.single_freq = true;
         } else if (a == "--multi-freq") {
             args.multi_freq = true;
+        } else if (a == "--one-band-per-sat") {
+            args.oneband = true;
         } else if (a == "--no-oneband") {
             args.no_oneband = true;
         } else if (a == "--no-band-sigma") {
@@ -205,6 +400,30 @@ Args parseArgs(int argc, char** argv) {
             args.no_gal_ar = true;
         } else if (a == "--ratio" && i + 1 < argc) {
             args.ratio_threshold = std::stod(argv[++i]);
+        } else if (a == "--imu-ratio-aperture") {
+            args.imu_ratio_aperture = true;
+        } else if (a == "--imu-ratio-relaxed" && i + 1 < argc) {
+            args.imu_ratio_relaxed = std::stod(argv[++i]);
+        } else if (a == "--imu-ratio-float-sep" && i + 1 < argc) {
+            args.imu_ratio_float_sep = std::stod(argv[++i]);
+        } else if (a == "--imu-ratio-pred-sep" && i + 1 < argc) {
+            args.imu_ratio_pred_sep = std::stod(argv[++i]);
+        } else if (a == "--fixed-history-dr") {
+            args.fixed_history_dr = true;
+        } else if (a == "--fixed-history-dr-window" && i + 1 < argc) {
+            args.fixed_history_dr_window = std::stoi(argv[++i]);
+        } else if (a == "--fixed-history-dr-sep" && i + 1 < argc) {
+            args.fixed_history_dr_sep = std::stod(argv[++i]);
+        } else if (a == "--anchor-aided-validation") {
+            args.anchor_aided_validation = true;
+        } else if (a == "--constellation-par") {
+            args.constellation_par = true;
+        } else if (a == "--residual-par") {
+            args.residual_par = true;
+        } else if (a == "--variance-par") {
+            args.variance_par = true;
+        } else if (a == "--par-max-std" && i + 1 < argc) {
+            args.par_max_std = std::stod(argv[++i]);
         } else if (a == "--hold-ratio" && i + 1 < argc) {
             args.hold_ratio = std::stod(argv[++i]);
         } else if (a == "--hold-min" && i + 1 < argc) {
@@ -223,6 +442,9 @@ Args parseArgs(int argc, char** argv) {
             args.gate_min_sat = std::stoi(argv[++i]);
         } else if (a == "--cmc") {
             args.cmc = true;
+        } else if (a == "--cmc-level-pr-only") {
+            args.cmc = true;
+            args.cmc_level_pr_only = true;
         } else if (a == "--cmc-jump" && i + 1 < argc) {
             args.cmc_jump = std::stod(argv[++i]);
         } else if (a == "--cmc-level" && i + 1 < argc) {
@@ -233,6 +455,14 @@ Args parseArgs(int argc, char** argv) {
             args.cmc_alpha = std::stod(argv[++i]);
         } else if (a == "--cp-hold") {
             args.cp_hold = true;
+        } else if (a == "--cp-hold-float-recovery") {
+            args.cp_hold = true;
+            args.cp_hold_float_recovery = true;
+        } else if (a == "--cp-hold-anchor-release") {
+            args.cp_hold = true;
+            args.cp_hold_anchor_release = true;
+        } else if (a == "--cp-hold-selective") {
+            args.selective_cp_hold = true;
         } else if (a == "--cp-hold-res" && i + 1 < argc) {
             args.cp_hold_res = std::stod(argv[++i]);
         } else if (a == "--cp-hold-catastrophic" && i + 1 < argc) {
@@ -269,6 +499,12 @@ Args parseArgs(int argc, char** argv) {
             args.ddpr_anchor_boot_after_mass = std::stoi(argv[++i]);
         } else if (a == "--fde") {
             args.fde = true;
+        } else if (a == "--fde-pr-only") {
+            args.fde = true;
+            args.fde_pr_only = true;
+        } else if (a == "--fde-cp-quarantine") {
+            args.fde = true;
+            args.fde_cp_quarantine = true;
         } else if (a == "--fde-pr" && i + 1 < argc) {
             args.fde_pr = std::stod(argv[++i]);
         } else if (a == "--fde-cp" && i + 1 < argc) {
@@ -404,10 +640,415 @@ libgnss::FGOProcessor::FGOConfig makeRealDataDdConfig() {
     return config;
 }
 
+// Maps every CLI knob onto FGOConfig. Extracted out of main() so the
+// --problem-cache fingerprint (which snapshots this struct's raw bytes) can
+// be computed BEFORE the expensive RINEX parse + buildDoubleDifferenceProblem
+// call, without duplicating this arg-to-config mapping logic.
+libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
+    libgnss::FGOProcessor::FGOConfig config = makeRealDataDdConfig();
+    if (args.max_iters > 0) {
+        config.max_iterations = args.max_iters;
+    }
+    if (args.no_robust) {
+        config.use_robust_loss = false;
+    }
+    if (args.no_pr_factors) {
+        // Pure DD path: no undifferenced pseudorange factors, so there are no
+        // receiver-clock / inter-system-bias states at all -- this isolates the
+        // clock-free double-difference RTK path (the Phase-1 target) from the
+        // undifferenced-pseudorange modeling differences between backends.
+        config.use_pseudorange_factors = false;
+    }
+    // Milestone 2e lever 2: elevation / SNR masks on the DD observations
+    // (applied at problem-build time -- attacks deep-urban multipath float).
+    if (args.elev_mask_deg > 0.0) {
+        config.min_elevation_deg = args.elev_mask_deg;
+    }
+    if (args.snr_mask_dbhz > 0.0) {
+        config.min_snr_dbhz = args.snr_mask_dbhz;
+        config.double_difference_reference_min_snr_dbhz = args.snr_mask_dbhz;
+        config.double_difference_base_min_snr_dbhz = args.snr_mask_dbhz;
+    }
+    // Multi-freq control: --single-freq forces the front-end back to L1/E1/B1I
+    // only (the pre-change behaviour) so the SAME harness invocation yields a
+    // single-frequency baseline for apples-to-apples comparison.
+    if (args.single_freq) {
+        config.use_multi_frequency_double_difference = false;
+    }
+    if (args.multi_freq) {
+        config.use_multi_frequency_double_difference = true;
+    }
+    if (args.sd_doppler) {
+        config.use_single_difference_doppler_factors = true;
+    }
+    if (args.postfit_gate) {
+        config.use_fixed_hypothesis_postfit_validation = true;
+    }
+    if (args.adaptive_ratio) {
+        config.use_satellite_count_adaptive_ratio = true;
+    }
+    if (args.external_dr) {
+        config.use_external_doppler_dr_validation = true;
+    }
+    if (args.external_dr_max_age > 0) {
+        config.external_doppler_dr_max_age_epochs = args.external_dr_max_age;
+    }
+    if (args.external_dr_chi2 >= 0.0) {
+        config.external_doppler_dr_chi2_threshold = args.external_dr_chi2;
+    }
+    if (args.external_dr_reset_ratio >= 0.0) {
+        config.external_doppler_dr_reset_min_ratio = args.external_dr_reset_ratio;
+    }
+    if (args.postfit_min_n > 0) {
+        config.fixed_postfit_min_factors = args.postfit_min_n;
+    }
+    if (args.postfit_rms >= 0.0) {
+        config.fixed_postfit_max_rms_m = args.postfit_rms;
+    }
+    if (args.postfit_max_norm >= 0.0) {
+        config.fixed_postfit_max_normalized_residual = args.postfit_max_norm;
+    }
+    if (args.postfit_chi2 >= 0.0) {
+        config.fixed_postfit_max_chi2_per_dof = args.postfit_chi2;
+    }
+    if (args.oneband) {
+        config.double_difference_lambda_one_band_per_satellite = true;
+    }
+    if (args.no_oneband) {
+        config.double_difference_lambda_one_band_per_satellite = false;
+    }
+    if (args.no_band_sigma) {
+        config.double_difference_secondary_carrier_sigma_scale = 1.0;
+        config.double_difference_secondary_pseudorange_sigma_scale = 1.0;
+    }
+    if (args.no_code_align) {
+        config.use_double_difference_secondary_code_alignment = false;
+    }
+    if (args.partial_ar) {
+        config.use_fixed_lag_partial_lambda = true;
+    }
+    if (args.partial_ar_frac >= 0.0) {
+        config.fixed_lag_partial_lambda_min_fraction = args.partial_ar_frac;
+    }
+    if (args.hold_sigma >= 0.0) {
+        config.ambiguity_hold_sigma_cycles = args.hold_sigma;
+    }
+    if (args.stale_pin) {
+        config.use_stale_pin_invalidation = true;
+    }
+    if (args.stale_pin_res >= 0.0) {
+        config.stale_pin_per_sat_residual_m = args.stale_pin_res;
+    }
+    if (args.stale_pin_age >= 0) {
+        config.stale_pin_min_hold_age_epochs = args.stale_pin_age;
+    }
+    if (args.fix_demote) {
+        config.use_fix_plausibility_demotion = true;
+    }
+    if (args.fix_demote_dist >= 0.0) {
+        config.fix_demote_distance_m = args.fix_demote_dist;
+    }
+    if (args.fix_demote_anchor) {
+        config.fix_demote_use_ddpr_anchor = true;
+    }
+    if (args.fix_demote_anchor_dist >= 0.0) {
+        config.fix_demote_anchor_distance_m = args.fix_demote_anchor_dist;
+    }
+    if (args.fix_demote_anchor_res >= 0.0) {
+        config.fix_demote_anchor_trust_res_m = args.fix_demote_anchor_res;
+    }
+    if (args.fix_demote_res >= 0.0) {
+        config.fix_demote_res_m = args.fix_demote_res;
+    }
+    if (args.fix_demote_posthold >= 0) {
+        config.fix_demote_posthold_epochs = args.fix_demote_posthold;
+    }
+    if (args.fix_demote_res_rel >= 0.0) {
+        config.fix_demote_res_rel = args.fix_demote_res_rel;
+    }
+    if (args.fix_demote_surplus_crosscheck) {
+        config.fix_demote_surplus_crosscheck = true;
+    }
+    if (args.leaky_persist) {
+        config.use_cp_hold_leaky_persist = true;
+    }
+    if (args.leaky_persist_decay >= 0.0) {
+        config.cp_hold_persist_decay = args.leaky_persist_decay;
+    }
+    if (args.fix_demote_anchor_gross) {
+        config.fix_demote_anchor_gross = true;
+    }
+    if (args.fix_demote_anchor_gross_ratio >= 0.0) {
+        config.fix_demote_anchor_gross_ratio = args.fix_demote_anchor_gross_ratio;
+    }
+    if (args.fix_demote_anchor_gross_abs >= 0.0) {
+        config.fix_demote_anchor_gross_abs_m = args.fix_demote_anchor_gross_abs;
+    }
+    if (args.surplus_validation) {
+        config.use_surplus_satellite_validation = true;
+    }
+    if (args.surplus_validation_monitor) {
+        config.surplus_validation_monitor_only = true;
+    }
+    if (args.surplus_validation_veto) {
+        config.surplus_validation_veto_high_ratio_fails = true;
+    }
+    if (args.surplus_validation_min_n > 0) {
+        config.surplus_validation_min_surplus_satellites = args.surplus_validation_min_n;
+    }
+    if (args.surplus_validation_ap_lt1 >= 0.0) {
+        config.surplus_validation_aperture_pdop_lt1_cycles = args.surplus_validation_ap_lt1;
+    }
+    if (args.surplus_validation_ap_1to2 >= 0.0) {
+        config.surplus_validation_aperture_pdop_1to2_cycles = args.surplus_validation_ap_1to2;
+    }
+    if (args.surplus_validation_ap_gt2 >= 0.0) {
+        config.surplus_validation_aperture_pdop_gt2_cycles = args.surplus_validation_ap_gt2;
+    }
+    if (args.surplus_validation_majority) {
+        config.surplus_validation_require_all = false;
+    }
+    if (args.surplus_validation_majority_frac >= 0.0) {
+        config.surplus_validation_majority_fraction = args.surplus_validation_majority_frac;
+    }
+    if (args.low_count_ar) {
+        config.use_low_count_ambiguity_resolution = true;
+    }
+    if (args.low_count_ar_min > 0) {
+        config.low_count_min_candidates = args.low_count_ar_min;
+    }
+    if (args.low_count_ar_ratio >= 0.0) {
+        config.low_count_min_ratio = args.low_count_ar_ratio;
+    }
+    if (args.no_gal_ar) {
+        config.exclude_galileo_ambiguity_fixing = true;
+    }
+    if (args.ratio_threshold > 0.0) {
+        config.lambda_ratio_threshold = args.ratio_threshold;
+    }
+    if (args.imu_ratio_aperture) {
+        config.use_imu_aided_ratio_aperture = true;
+    }
+    if (args.imu_ratio_relaxed >= 0.0) {
+        config.imu_aided_relaxed_ratio_threshold = args.imu_ratio_relaxed;
+    }
+    if (args.imu_ratio_float_sep >= 0.0) {
+        config.imu_aided_max_float_separation_m = args.imu_ratio_float_sep;
+    }
+    if (args.imu_ratio_pred_sep >= 0.0) {
+        config.imu_aided_max_prediction_separation_m = args.imu_ratio_pred_sep;
+    }
+    if (args.fixed_history_dr) {
+        config.use_fixed_history_dr_validation = true;
+    }
+    if (args.fixed_history_dr_window > 0) {
+        config.fixed_history_dr_window_epochs = args.fixed_history_dr_window;
+    }
+    if (args.fixed_history_dr_sep >= 0.0) {
+        config.fixed_history_dr_max_separation_m = args.fixed_history_dr_sep;
+    }
+    if (args.surplus_overrides_dr) {
+        config.surplus_validation_overrides_history_dr = true;
+    }
+    if (args.surplus_overrides_dr_min_used > 0) {
+        config.surplus_validation_overrides_history_dr_min_surplus_used =
+            args.surplus_overrides_dr_min_used;
+    }
+    if (args.surplus_overrides_dr_max_consec > 0) {
+        config.surplus_validation_overrides_history_dr_max_consecutive =
+            args.surplus_overrides_dr_max_consec;
+    }
+    if (args.anchor_aided_validation) {
+        config.use_ddpr_anchor_aided_validation = true;
+    }
+    if (args.constellation_par) {
+        config.use_constellation_ranked_partial_ar = true;
+    }
+    if (args.residual_par) {
+        config.use_residual_screened_partial_ar = true;
+    }
+    if (args.variance_par) {
+        config.use_variance_ranked_partial_ar = true;
+    }
+    if (args.par_max_std >= 0.0) {
+        config.partial_ar_max_std_cycles = args.par_max_std;
+    }
+    if (args.hold_ratio > 0.0) {
+        config.ambiguity_hold_ratio_threshold = args.hold_ratio;
+    }
+    if (args.hold_min > 0) {
+        config.ambiguity_hold_min_fixed = args.hold_min;
+    }
+    if (args.min_fixed > 0) {
+        config.min_fixed_ambiguities = args.min_fixed;
+    }
+    if (args.gates) {
+        config.use_epoch_quality_gates = true;
+    }
+    if (args.gate_res >= 0.0) {
+        config.gate_ddpr_res_max_m = args.gate_res;
+    }
+    if (args.gate_sat_res >= 0.0) {
+        config.gate_per_sat_res_max_m = args.gate_sat_res;
+    }
+    if (args.gate_gdop > 0.0) {
+        config.gate_gdop_max = args.gate_gdop;
+    }
+    if (args.gate_min_sat > 0) {
+        config.gate_min_satellites = args.gate_min_sat;
+    }
+    if (args.cmc) {
+        config.use_code_minus_carrier_screening = true;
+    }
+    if (args.cmc_jump >= 0.0) {
+        config.code_minus_carrier_jump_threshold_m = args.cmc_jump;
+    }
+    if (args.cmc_level >= 0.0) {
+        config.code_minus_carrier_level_threshold_m = args.cmc_level;
+    }
+    config.code_minus_carrier_level_pseudorange_only = args.cmc_level_pr_only;
+    if (args.cmc_warmup > 0) {
+        config.code_minus_carrier_warmup_epochs = args.cmc_warmup;
+    }
+    if (args.cmc_alpha >= 0.0) {
+        config.code_minus_carrier_baseline_alpha = args.cmc_alpha;
+    }
+    if (args.cmc_ref) {
+        config.cmc_aware_reference_selection = true;
+    }
+    if (args.cp_hold) {
+        config.use_cp_hold_recovery = true;
+    }
+    if (args.cp_hold_float_recovery) {
+        config.use_cp_hold_float_recovery = true;
+    }
+    if (args.cp_hold_anchor_release) {
+        config.use_cp_hold_anchor_release = true;
+    }
+    if (args.cp_hold_keep_imu_chain) {
+        config.cp_hold_break_imu_chain = false;
+    }
+    if (args.selective_cp_hold) {
+        config.use_selective_cp_hold = true;
+    }
+    if (args.cp_hold_res >= 0.0) {
+        config.cp_hold_main_residual_threshold_m = args.cp_hold_res;
+    }
+    if (args.cp_hold_catastrophic >= 0.0) {
+        config.cp_hold_catastrophic_threshold_m = args.cp_hold_catastrophic;
+    }
+    if (args.cp_hold_fast_worst_sat >= 0.0) {
+        config.cp_hold_fast_worst_satellite_min_m = args.cp_hold_fast_worst_sat;
+    }
+    if (args.cp_hold_persist > 0) {
+        config.cp_hold_persist_epochs = args.cp_hold_persist;
+    }
+    if (args.cp_hold_epochs_n > 0) {
+        config.cp_hold_epochs = args.cp_hold_epochs_n;
+    }
+    if (args.cp_hold_release_res >= 0.0) {
+        config.cp_hold_release_threshold_m = args.cp_hold_release_res;
+    }
+    if (args.cp_hold_release_n > 0) {
+        config.cp_hold_release_count = args.cp_hold_release_n;
+    }
+    if (args.cp_hold_pose_replace >= 0.0) {
+        config.cp_hold_pose_replace_threshold_m = args.cp_hold_pose_replace;
+    }
+    if (args.cp_hold_gdop >= 0.0) {
+        config.cp_hold_max_gdop = args.cp_hold_gdop;
+    }
+    if (args.exc_recovery) {
+        config.use_solve_exception_recovery = true;
+    }
+    if (args.ddpr_anchor) {
+        config.use_ddpr_anchor = true;
+    }
+    if (args.ddpr_anchor_max_res >= 0.0) {
+        config.ddpr_anchor_max_residual_m = args.ddpr_anchor_max_res;
+    }
+    if (args.ddpr_anchor_fde >= 0.0) {
+        config.ddpr_anchor_fde_threshold_m = args.ddpr_anchor_fde;
+    }
+    if (args.ddpr_anchor_min_n > 0) {
+        config.ddpr_anchor_min_factors = args.ddpr_anchor_min_n;
+    }
+    if (args.ddpr_anchor_boot_epochs >= 0) {
+        config.ddpr_anchor_bootstrap_epochs = args.ddpr_anchor_boot_epochs;
+    }
+    if (args.ddpr_anchor_boot_sigma >= 0.0) {
+        config.ddpr_anchor_bootstrap_sigma_m = args.ddpr_anchor_boot_sigma;
+    }
+    if (args.ddpr_anchor_boot_after_mass >= 0) {
+        config.cp_hold_bootstrap_after_mass_reset = (args.ddpr_anchor_boot_after_mass != 0);
+    }
+    if (args.fde) {
+        config.use_fde = true;
+    }
+    config.fde_pseudorange_only = args.fde_pr_only;
+    config.fde_carrier_quarantine = args.fde_cp_quarantine;
+    if (args.fde_pr >= 0.0) {
+        config.fde_pseudorange_threshold_m = args.fde_pr;
+    }
+    if (args.fde_cp >= 0.0) {
+        config.fde_carrier_threshold_m = args.fde_cp;
+    }
+    if (args.fde_frac >= 0.0) {
+        config.fde_max_rejected_fraction = args.fde_frac;
+    }
+    if (args.fde_iters > 0) {
+        config.fde_max_iterations = args.fde_iters;
+    }
+    if (args.sat_badness) {
+        config.use_sat_badness_downweight = true;
+    }
+    if (args.sat_badness_cp_scale >= 0.0) {
+        config.sat_badness_carrier_sigma_scale = args.sat_badness_cp_scale;
+    }
+    if (args.sat_badness_pr_scale >= 0.0) {
+        config.sat_badness_pseudorange_sigma_scale = args.sat_badness_pr_scale;
+    }
+    if (args.sat_badness_ddpr_thresh >= 0.0) {
+        config.sat_badness_ddpr_threshold_m = args.sat_badness_ddpr_thresh;
+    }
+    if (args.sat_badness_clamp >= 0.0) {
+        config.sat_badness_residual_clamp_m = args.sat_badness_clamp;
+    }
+    if (args.sat_badness_cap >= 0.0) {
+        config.sat_badness_score_cap = args.sat_badness_cap;
+    }
+    if (args.sat_badness_cppr_decay >= 0.0) {
+        config.sat_badness_cppr_decay = args.sat_badness_cppr_decay;
+    }
+    if (args.varerr) {
+        config.use_elevation_dependent_sigma = true;
+    }
+    if (args.varerr_a >= 0.0) {
+        config.elevation_sigma_err_a_m = args.varerr_a;
+    }
+    if (args.varerr_b >= 0.0) {
+        config.elevation_sigma_err_b_m = args.varerr_b;
+    }
+    if (args.varerr_eratio >= 0.0) {
+        config.elevation_sigma_pseudorange_ratio = args.varerr_eratio;
+    }
+    if (args.integ_cov >= 0.0) {
+        config.imu_integration_covariance = args.integ_cov;
+    }
+    if (args.integ_cov_inflate) {
+        config.use_imu_integration_covariance_inflation = true;
+    }
+    if (args.integ_cov_max >= 0.0) {
+        config.imu_integration_covariance_max = args.integ_cov_max;
+    }
+    return config;
+}
+
 std::vector<libgnss::ObservationData> loadEpochs(const std::string& path,
                                                  int max_epochs,
                                                  const libgnss::Vector3d& fixed_position,
-                                                 bool assign_fixed_position) {
+                                                 bool assign_fixed_position,
+                                                 int start_epoch = 0) {
     libgnss::io::RINEXReader reader;
     std::vector<libgnss::ObservationData> epochs;
     if (!reader.open(path)) {
@@ -420,7 +1061,11 @@ std::vector<libgnss::ObservationData> loadEpochs(const std::string& path,
         std::exit(1);
     }
     libgnss::ObservationData epoch;
+    int input_index = 0;
     while (reader.readObservationEpoch(epoch)) {
+        if (input_index++ < start_epoch) {
+            continue;
+        }
         if (assign_fixed_position) {
             epoch.receiver_position = fixed_position;
         } else if (header.approximate_position.norm() > 0.0) {
@@ -508,9 +1153,10 @@ libgnss::FGOProcessor::FGOResult run(const libgnss::FGOProcessor::FGOProblem& pr
                                      bool use_pose3 = false,
                                      bool use_imu = false,
                                      double fixed_lag_s = 0.0,
-                                     bool use_nhc = false,
-                                     bool use_zupt = false,
-                                     bool use_hold = false) {
+                                      bool use_nhc = false,
+                                      bool use_zupt = false,
+                                      bool use_hold = false,
+                                      bool fixed_lag_qr = false) {
     config.backend = backend;
     config.use_lambda_ambiguity_fix = use_lambda;
     config.fix_ambiguities = use_lambda;
@@ -534,6 +1180,7 @@ libgnss::FGOProcessor::FGOResult run(const libgnss::FGOProcessor::FGOProblem& pr
     if (fixed_lag_s > 0.0) {
         config.use_fixed_lag_smoother = true;
         config.fixed_lag_smoother_lag_s = fixed_lag_s;
+        config.fixed_lag_use_qr_factorization = fixed_lag_qr;
     }
     // Milestone 2d: NHC / ZUPT pseudo-measurements.
     config.use_nhc = use_nhc;
@@ -713,9 +1360,18 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
     out << std::fixed;
     out.precision(3);
     out << "tow,status,e_err_m,n_err_m,u_err_m,horiz_err_m,e_pos_m,n_pos_m,"
-           "ref_e_pos_m,ref_n_pos_m\n";
+           "ref_e_pos_m,ref_n_pos_m,ratio,ratio_threshold,nfixed,ar_outcome,ddpr_rms_m,sd_doppler_rms_mps,gdop,nsat,sd_doppler_n,"
+           "amb_candidates,lambda_attempts,lambda_stage,amb_var_median,amb_var_max,"
+           "imu_pose_correction_m,fixed_float_sep_m,fixed_imu_pred_sep_m,fixed_postfit_ddcp_rms_m,fixed_postfit_ddcp_max_norm,fixed_postfit_ddcp_chi2_dof,fixed_postfit_ddcp_n,external_dr_sep_m,external_dr_mahal2,external_dr_age,external_dr_eval,external_dr_accept,external_dr_reject,cp_hold,"
+           "imu_aperture_accept,imu_aperture_reject,cp_available,cp_added,"
+           "cp_suppressed_hold,gen_bump_hold,gen_bump_fde,gen_bump_reset,"
+           "gen_bump_warm_reset,gen_bump_stale_pin,"
+           "surplus_eval,surplus_pass,surplus_level,surplus_used,surplus_rescue,surplus_veto,"
+           "low_count_attempted,low_count_used,"
+           "dr_bypass_eval,dr_bypass_horiz_err_m,dr_bypass_applied\n";
     std::size_t ri = 0;
-    for (const auto& s : r.solution.solutions) {
+    for (std::size_t si = 0; si < r.solution.solutions.size(); ++si) {
+        const auto& s = r.solution.solutions[si];
         if (s.status == libgnss::SolutionStatus::NONE || !s.position_ecef.allFinite()) continue;
         while (ri + 1 < ref.size() &&
                std::abs(ref[ri + 1].time - s.time) < std::abs(ref[ri].time - s.time)) {
@@ -734,7 +1390,64 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
         out << s.time.tow << ',' << status << ','
             << err_enu.x() << ',' << err_enu.y() << ',' << err_enu.z() << ','
             << horiz << ',' << pos_enu.x() << ',' << pos_enu.y() << ','
-            << ref_pos_enu.x() << ',' << ref_pos_enu.y() << '\n';
+            << ref_pos_enu.x() << ',' << ref_pos_enu.y() << ','
+            << s.ratio;
+        if (si < r.epoch_diagnostics.size()) {
+            const auto& d = r.epoch_diagnostics[si];
+            out << ',' << d.effective_ratio_threshold
+                << ',' << s.num_fixed_ambiguities
+                << ',' << static_cast<int>(d.ar_outcome)
+                << ',' << d.ddpr_rms_m << ',' << d.sd_doppler_rms_mps
+                << ',' << d.gdop << ',' << d.num_satellites
+                << ',' << d.sd_doppler_factors
+                << ',' << d.ambiguity_candidates << ',' << d.lambda_attempts
+                << ',' << d.lambda_selected_stage
+                << ',' << d.ambiguity_variance_median_cycles2
+                << ',' << d.ambiguity_variance_max_cycles2
+                << ',' << d.imu_pose_correction_m
+                << ',' << d.fixed_float_separation_m
+                << ',' << d.fixed_imu_prediction_separation_m
+                << ',' << d.fixed_postfit_ddcp_rms_m
+                << ',' << d.fixed_postfit_ddcp_max_normalized
+                << ',' << d.fixed_postfit_ddcp_chi2_per_dof
+                << ',' << d.fixed_postfit_ddcp_factors
+                << ',' << d.external_dr_separation_m
+                << ',' << d.external_dr_mahalanobis2
+                << ',' << d.external_dr_age_epochs
+                << ',' << (d.external_dr_evaluated ? 1 : 0)
+                << ',' << (d.external_dr_accepted ? 1 : 0)
+                << ',' << (d.external_dr_rejected ? 1 : 0)
+                << ',' << (d.carrier_hold_active ? 1 : 0)
+                << ',' << (d.imu_aperture_accepted ? 1 : 0)
+                << ',' << (d.imu_aperture_rejected ? 1 : 0)
+                << ',' << d.carrier_factors_available
+                << ',' << d.carrier_factors_added
+                << ',' << d.carrier_factors_suppressed_hold
+                << ',' << d.ambiguity_generation_bumps_hold
+                << ',' << d.ambiguity_generation_bumps_fde
+                << ',' << d.ambiguity_generation_bumps_reset
+                << ',' << d.ambiguity_generation_bumps_warm_reset
+                << ',' << d.ambiguity_generation_bumps_stale_pin
+                << ',' << (d.surplus_validation_evaluated ? 1 : 0)
+                << ',' << (d.surplus_validation_pass ? 1 : 0)
+                << ',' << d.surplus_validation_fallback_level
+                << ',' << d.surplus_validation_surplus_used
+                << ',' << (d.surplus_validation_used_for_rescue ? 1 : 0)
+                << ',' << (d.surplus_validation_used_for_veto ? 1 : 0)
+                << ',' << (d.low_count_ar_attempted ? 1 : 0)
+                << ',' << (d.low_count_ar_used ? 1 : 0);
+            double dr_bypass_horiz = -1.0;
+            if (d.dr_bypass_candidate_evaluated) {
+                const libgnss::Vector3d dr_bypass_err_enu = libgnss::ecef2enu(
+                    d.dr_bypass_candidate_position_ecef - ref[ri].ecef, lat0, lon0);
+                dr_bypass_horiz =
+                    std::hypot(dr_bypass_err_enu.x(), dr_bypass_err_enu.y());
+            }
+            out << ',' << (d.dr_bypass_candidate_evaluated ? 1 : 0)
+                << ',' << dr_bypass_horiz
+                << ',' << (d.dr_bypass_applied ? 1 : 0);
+        }
+        out << '\n';
     }
 }
 
@@ -770,51 +1483,84 @@ bool buildImuInput(const std::string& imu_path,
     imu.nav_origin_lon_rad = lon;
 
     // Stage-1 static leveling, reusing fusion_initialization::alignStatic.
-    // The tokyo run starts stationary (reference velocity ~0 for the first
-    // seconds) and the IMU stream begins essentially concurrent with the first
-    // GNSS epoch, so the leveling window is the first ~2.5 s of IMU samples at
-    // or after the first epoch time (samples strictly "before" the first epoch
-    // do not exist). A short leading gyro/accel-quiet check guards against
-    // starting mid-motion.
+    // Always use the original run's leading static IMU window.  In a
+    // --start-epoch diagnostic replay, the first retained GNSS epoch can be
+    // mid-motion and must never be mistaken for a leveling interval.
     const libgnss::GNSSTime t_first = problem.epochs.front().time;
+    const bool midrun_start =
+        !imu.samples_body_flu.empty() && (t_first - imu.samples_body_flu.front().time) > 5.0;
     std::vector<libgnss::ImuSample> stationary;
     for (const auto& s : imu.samples_body_flu) {
-        if (s.time < t_first) continue;
         if (stationary.size() >= 250) break;  // ~2.5 s at 100 Hz
         stationary.push_back(s);
     }
     const libgnss::NominalState aligned = libgnss::fusion_initialization::alignStatic(
         stationary, libgnss::Vector3d::Zero(), imu.noise.gravity_mps2);
 
-    // Heading latch: first epoch whose GNSS ENU speed exceeds threshold sets
-    // yaw = course (mirrors fusion_initialization::tryAlignHeading). Compute
-    // ENU velocity by finite difference of consecutive antenna positions.
+    // Heading latch from a sustained, windowed GNSS course.  A consecutive
+    // 0.2-s position difference is far too sensitive to urban code noise: on
+    // Nagoya run1 it falsely latched a stationary outlier as
+    // [10,18,-40] m/s.  Use a 5-s displacement and require three consistent
+    // horizontal course estimates before accepting yaw.
     libgnss::FusionState fstate;
     fstate.nominal = aligned;
+    // Both PPC runs provide a static leveling window at the start.  Heading
+    // may be learned from later motion, but that later velocity must never be
+    // copied back into the initial state.
     libgnss::Vector3d init_vel_enu = libgnss::Vector3d::Zero();
     bool heading_latched = false;
-    for (std::size_t i = 0; i + 1 < problem.epochs.size(); ++i) {
-        const double dt = problem.epochs[i + 1].time - problem.epochs[i].time;
+    constexpr std::size_t kCourseWindowEpochs = 25;  // 5 s at 5 Hz
+    libgnss::Vector3d previous_course_velocity = libgnss::Vector3d::Zero();
+    libgnss::Vector3d course_velocity_sum = libgnss::Vector3d::Zero();
+    int consistent_course_count = 0;
+    for (std::size_t i = 0; i + kCourseWindowEpochs < problem.epochs.size(); ++i) {
+        const std::size_t j = i + kCourseWindowEpochs;
+        const double dt = problem.epochs[j].time - problem.epochs[i].time;
         if (dt <= 1e-3) continue;
         const libgnss::Vector3d enu0 = libgnss::ecef2enu(
             problem.epochs[i].position_ecef - origin_ecef, lat, lon);
         const libgnss::Vector3d enu1 = libgnss::ecef2enu(
-            problem.epochs[i + 1].position_ecef - origin_ecef, lat, lon);
+            problem.epochs[j].position_ecef - origin_ecef, lat, lon);
         const libgnss::Vector3d vel = (enu1 - enu0) / dt;
-        if (!heading_latched) {
-            if (libgnss::fusion_initialization::tryAlignHeading(fstate, vel, 1.0, 5.0)) {
-                heading_latched = true;
-                init_vel_enu = vel;
-            }
+        const double horizontal_speed = std::hypot(vel.x(), vel.y());
+        const bool plausible = horizontal_speed >= 2.0 && horizontal_speed <= 50.0 &&
+                               std::abs(vel.z()) <= 3.0;
+        if (!plausible) {
+            consistent_course_count = 0;
+            course_velocity_sum.setZero();
+            continue;
         }
-    }
-    // If never moved fast enough in the batch, fall back to first-interval vel.
-    if (!heading_latched && problem.epochs.size() >= 2) {
-        const double dt = problem.epochs[1].time - problem.epochs[0].time;
-        if (dt > 1e-3) {
-            init_vel_enu = libgnss::ecef2enu(
-                problem.epochs[1].position_ecef - origin_ecef, lat, lon) / dt -
-                libgnss::ecef2enu(problem.epochs[0].position_ecef - origin_ecef, lat, lon) / dt;
+        bool consistent = true;
+        if (consistent_course_count > 0) {
+            const double prev_speed = std::hypot(previous_course_velocity.x(),
+                                                 previous_course_velocity.y());
+            const double cosine = (vel.x() * previous_course_velocity.x() +
+                                   vel.y() * previous_course_velocity.y()) /
+                                  std::max(1e-9, horizontal_speed * prev_speed);
+            consistent = cosine >= std::cos(20.0 * 3.14159265358979323846 / 180.0);
+        }
+        if (!consistent) {
+            consistent_course_count = 0;
+            course_velocity_sum.setZero();
+        }
+        previous_course_velocity = vel;
+        course_velocity_sum += vel;
+        ++consistent_course_count;
+        if (consistent_course_count >= 3) {
+            const libgnss::Vector3d course_velocity =
+                course_velocity_sum / static_cast<double>(consistent_course_count);
+            if (libgnss::fusion_initialization::tryAlignHeading(
+                    fstate, course_velocity, 1.0, 5.0)) {
+                if (midrun_start) {
+                    // A segment replay starts in motion, unlike a full run's
+                    // static epoch zero.  Seed its velocity from the same
+                    // sustained course used for heading; full runs retain the
+                    // intentional zero-velocity initialization.
+                    init_vel_enu = course_velocity;
+                }
+                heading_latched = true;
+                break;
+            }
         }
     }
 
@@ -886,326 +1632,382 @@ void applyImuNoiseOverrides(const Args& args, libgnss::FGOProcessor::FGOProblem&
     if (args.gravity_mps2 >= 0.0) problem.imu.noise.gravity_mps2 = args.gravity_mps2;
 }
 
+// ---------------------------------------------------------------------------
+// --problem-cache: opt-in FGOProblem cache.
+//
+// Skips the RINEX parse (rover+base+nav) and buildDoubleDifferenceProblem()
+// call -- the dominant cost of a validation run before the fixed-lag solve
+// itself -- when an on-disk cache already holds the identical problem for
+// identical inputs+config. Every type reachable from FGOProblem (down through
+// PseudorangeFactor, DoubleDifferenceCarrierFactor, AmbiguityState, EpochSeed,
+// ObservationModelDebug, SatelliteId, GNSSTime, Eigen::Vector3d/Matrix3d, ...)
+// is a flat POD struct: no pointers, no std::string, no std::map. A generic
+// length-prefixed raw-bytes writer/reader therefore suffices for every vector
+// member; std::vector<bool> (FGOProblem::clock_jumps) is the one exception
+// (bit-packed, not a raw T[]) and gets its own byte-per-flag helpers.
+//
+// Scope: only the pre-IMU FGOProblem (RINEX parse + DD factor construction)
+// is cached. buildImuInput()/applyImuNoiseOverrides() (imu.csv parse + static
+// leveling/heading-latch) still run unconditionally on every invocation --
+// they are a small linear pass next to the RINEX/DD cost above, so caching
+// them isn't worth the extra serialization surface.
+//
+// Fingerprint: format version + size/mtime of the 4 input files + every
+// config field that affects buildDoubleDifferenceProblem, i.e. FGOConfig's
+// own bytes (itself all-POD, see fgo.hpp) plus the Args fields that affect
+// the SAME build phase's epoch selection (--max-epochs/--start-epoch). Any
+// mismatch (missing/changed file, different knob, different format version)
+// -> loud stderr warning + full rebuild; the cache is never silently stale.
+namespace problem_cache {
+
+// NOTE on std::is_trivially_copyable: every FGOProblem-reachable type here is
+// a flat struct of scalars / SatelliteId / GNSSTime / fixed-size Eigen
+// vectors-matrices -- safe to round-trip via raw bytes. They are NOT,
+// however, all std::is_trivially_copyable: Eigen's fixed-size types (and
+// GNSSTime, which wraps a chrono conversion helper) declare their own
+// (semantically trivial) copy constructor/assignment for expression-template
+// support, which disqualifies them from that strict trait even though a
+// memcpy is exactly what those constructors do. So this intentionally does
+// NOT static_assert on is_trivially_copyable; standard_layout is checked
+// instead as a much weaker, but still useful, guard against accidentally
+// pointing this at a type with a std::string/std::vector/pointer member.
+template <typename T>
+void writePod(std::ostream& os, const T& v) {
+    static_assert(std::is_standard_layout_v<T>, "writePod requires a standard-layout (flat POD-like) type");
+    os.write(reinterpret_cast<const char*>(&v), sizeof(T));
+}
+
+template <typename T>
+bool readPod(std::istream& is, T& v) {
+    static_assert(std::is_standard_layout_v<T>, "readPod requires a standard-layout (flat POD-like) type");
+    is.read(reinterpret_cast<char*>(&v), sizeof(T));
+    return static_cast<bool>(is);
+}
+
+template <typename T>
+void writeVec(std::ostream& os, const std::vector<T>& v) {
+    static_assert(std::is_standard_layout_v<T>, "writeVec requires a standard-layout (flat POD-like) element type");
+    const uint64_t n = v.size();
+    writePod(os, n);
+    if (n != 0) {
+        os.write(reinterpret_cast<const char*>(v.data()), static_cast<std::streamsize>(sizeof(T) * n));
+    }
+}
+
+template <typename T>
+bool readVec(std::istream& is, std::vector<T>& v) {
+    static_assert(std::is_standard_layout_v<T>, "readVec requires a standard-layout (flat POD-like) element type");
+    uint64_t n = 0;
+    if (!readPod(is, n)) return false;
+    if (n > (1ull << 34)) return false;  // sanity cap against a corrupt/foreign file
+    v.assign(static_cast<std::size_t>(n), T{});
+    if (n != 0) {
+        is.read(reinterpret_cast<char*>(v.data()), static_cast<std::streamsize>(sizeof(T) * n));
+    }
+    return static_cast<bool>(is);
+}
+
+// vector<bool> is bit-packed, not a raw array the tricks above can alias --
+// give it a dedicated byte-per-flag round trip.
+void writeBoolVec(std::ostream& os, const std::vector<bool>& v) {
+    const uint64_t n = v.size();
+    writePod(os, n);
+    for (bool b : v) {
+        const uint8_t byte = b ? 1 : 0;
+        writePod(os, byte);
+    }
+}
+
+bool readBoolVec(std::istream& is, std::vector<bool>& v) {
+    uint64_t n = 0;
+    if (!readPod(is, n)) return false;
+    if (n > (1ull << 34)) return false;
+    v.assign(static_cast<std::size_t>(n), false);
+    for (uint64_t i = 0; i < n; ++i) {
+        uint8_t byte = 0;
+        if (!readPod(is, byte)) return false;
+        v[static_cast<std::size_t>(i)] = (byte != 0);
+    }
+    return true;
+}
+
+void writeProblem(std::ostream& os, const libgnss::FGOProcessor::FGOProblem& p) {
+    writeVec(os, p.epochs);
+    writeBoolVec(os, p.clock_jumps);
+    writeVec(os, p.pseudorange_factors);
+    writeVec(os, p.tdcp_factors);
+    writeVec(os, p.single_difference_doppler_factors);
+    writeVec(os, p.single_difference_tdcp_factors);
+    writeVec(os, p.ambiguity_states);
+    writeVec(os, p.carrier_observations);
+    writeVec(os, p.double_difference_pseudorange_observations);
+    writeVec(os, p.double_difference_reference_observations);
+    writeVec(os, p.carrier_phase_factors);
+    writeVec(os, p.double_difference_pseudorange_factors);
+    writeVec(os, p.double_difference_carrier_factors);
+    writeVec(os, p.excluded_double_difference_carrier_factors);
+    writeVec(os, p.ambiguity_between_factors);
+    writePod(os, p.diagnostics);
+}
+
+bool readProblem(std::istream& is, libgnss::FGOProcessor::FGOProblem& p) {
+    return readVec(is, p.epochs) &&
+           readBoolVec(is, p.clock_jumps) &&
+           readVec(is, p.pseudorange_factors) &&
+           readVec(is, p.tdcp_factors) &&
+           readVec(is, p.single_difference_doppler_factors) &&
+           readVec(is, p.single_difference_tdcp_factors) &&
+           readVec(is, p.ambiguity_states) &&
+           readVec(is, p.carrier_observations) &&
+           readVec(is, p.double_difference_pseudorange_observations) &&
+           readVec(is, p.double_difference_reference_observations) &&
+           readVec(is, p.carrier_phase_factors) &&
+           readVec(is, p.double_difference_pseudorange_factors) &&
+           readVec(is, p.double_difference_carrier_factors) &&
+           readVec(is, p.excluded_double_difference_carrier_factors) &&
+           readVec(is, p.ambiguity_between_factors) &&
+           readPod(is, p.diagnostics);
+}
+
+struct FileId {
+    int64_t size_bytes = -1;
+    int64_t mtime_ns = -1;
+};
+
+FileId statFile(const std::string& path) {
+    FileId id;
+    if (path.empty()) return id;
+    std::error_code ec;
+    const auto sz = std::filesystem::file_size(path, ec);
+    if (!ec) id.size_bytes = static_cast<int64_t>(sz);
+    ec.clear();
+    const auto mt = std::filesystem::last_write_time(path, ec);
+    if (!ec) {
+        id.mtime_ns = static_cast<int64_t>(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(mt.time_since_epoch()).count());
+    }
+    return id;
+}
+
+// Bump whenever writeProblem/readProblem's on-disk layout changes (new
+// vector, new factor field, ...) -- an old cache then fails the magic/version
+// check in load() below and is rebuilt instead of misread.
+constexpr uint32_t kMagic = 0x50434647u;  // "PCFG" (problem-cache fgo)
+constexpr uint32_t kVersion = 1u;
+
+struct Fingerprint {
+    uint32_t magic;
+    uint32_t version;
+    FileId rover;
+    FileId base;
+    FileId nav;
+    FileId imu;
+    int32_t max_epochs;
+    int32_t start_epoch;
+    libgnss::FGOProcessor::FGOConfig config;  // full byte-for-byte snapshot
+};
+
+Fingerprint computeFingerprint(const Args& args, const libgnss::FGOProcessor::FGOConfig& config) {
+    Fingerprint fp;
+    std::memset(&fp, 0, sizeof(fp));  // deterministic padding bytes for the memcmp below
+    fp.magic = kMagic;
+    fp.version = kVersion;
+    fp.rover = statFile(args.rover_path);
+    fp.base = statFile(args.base_path);
+    fp.nav = statFile(args.nav_path);
+    fp.imu = statFile(args.imu_path);
+    fp.max_epochs = args.max_epochs;
+    fp.start_epoch = args.start_epoch;
+    fp.config = config;
+    return fp;
+}
+
+struct CacheMeta {
+    uint64_t rover_epoch_count = 0;
+    uint64_t base_epoch_count = 0;
+    libgnss::Vector3d base_position = libgnss::Vector3d::Zero();
+};
+
+// Returns true and populates {problem, meta} on a validated hit. On ANY
+// mismatch (missing file, truncated/corrupt file, format version bump, or a
+// fingerprint field that no longer matches the current run) prints a loud
+// warning and returns false -- callers must then rebuild normally. Never
+// silently serves a stale problem.
+bool load(const std::string& path, const Fingerprint& want, libgnss::FGOProcessor::FGOProblem& problem,
+          CacheMeta& meta) {
+    std::ifstream is(path, std::ios::binary);
+    if (!is) {
+        std::cout << "problem-cache: no cache file at " << path << " -- building normally\n";
+        return false;
+    }
+    Fingerprint have;
+    std::memset(&have, 0, sizeof(have));
+    if (!readPod(is, have)) {
+        std::cerr << "problem-cache: WARNING -- " << path
+                  << " is truncated/unreadable; ignoring and rebuilding.\n";
+        return false;
+    }
+    if (have.magic != kMagic || have.version != kVersion) {
+        std::cerr << "problem-cache: WARNING -- " << path
+                  << " has an incompatible format (magic/version mismatch); ignoring and rebuilding.\n";
+        return false;
+    }
+    if (std::memcmp(&have, &want, sizeof(Fingerprint)) != 0) {
+        std::cerr << "problem-cache: WARNING -- " << path
+                  << " fingerprint mismatch (inputs or config knobs changed since it was written);"
+                     " ignoring and rebuilding.\n";
+        return false;
+    }
+    if (!readPod(is, meta) || !readProblem(is, problem)) {
+        std::cerr << "problem-cache: WARNING -- " << path
+                  << " is truncated/corrupt after the fingerprint; ignoring and rebuilding.\n";
+        return false;
+    }
+    return true;
+}
+
+void save(const std::string& path, const Fingerprint& fp, const libgnss::FGOProcessor::FGOProblem& problem,
+          const CacheMeta& meta) {
+    const std::string tmp_path = path + ".tmp";
+    std::ofstream os(tmp_path, std::ios::binary | std::ios::trunc);
+    if (!os) {
+        std::cerr << "problem-cache: WARNING -- cannot open " << tmp_path
+                  << " for writing; skipping cache write.\n";
+        return;
+    }
+    writePod(os, fp);
+    writePod(os, meta);
+    writeProblem(os, problem);
+    os.close();
+    if (!os) {
+        std::cerr << "problem-cache: WARNING -- write to " << tmp_path << " failed; skipping cache write.\n";
+        return;
+    }
+    std::error_code ec;
+    std::filesystem::rename(tmp_path, path, ec);  // atomic-ish swap; avoids a half-written cache on crash
+    if (ec) {
+        std::error_code ec2;
+        std::filesystem::remove(path, ec2);
+        std::filesystem::rename(tmp_path, path, ec);
+    }
+}
+
+}  // namespace problem_cache
+
 }  // namespace
 
 int main(int argc, char** argv) {
     const Args args = parseArgs(argc, argv);
 
-    // Navigation.
-    libgnss::io::RINEXReader nav_reader;
-    if (!nav_reader.open(args.nav_path)) {
-        std::cerr << "Error: cannot open nav " << args.nav_path << "\n";
-        return 1;
-    }
-    libgnss::NavigationData nav;
-    if (!nav_reader.readNavigationData(nav)) {
-        std::cerr << "Error: cannot read nav " << args.nav_path << "\n";
-        return 1;
+    // config depends only on args (see buildFgoConfig) -- build it FIRST so a
+    // --problem-cache fingerprint (which snapshots these bytes) can gate the
+    // expensive RINEX parse + buildDoubleDifferenceProblem() call below.
+    libgnss::FGOProcessor::FGOConfig config = buildFgoConfig(args);
+
+    libgnss::FGOProcessor::FGOProblem problem;
+    uint64_t rover_epoch_count = 0;
+    uint64_t base_epoch_count = 0;
+    libgnss::Vector3d base_position = libgnss::Vector3d::Zero();
+    bool problem_from_cache = false;
+    const bool use_problem_cache = !args.problem_cache_path.empty();
+    problem_cache::Fingerprint problem_fp;
+    if (use_problem_cache) {
+        problem_fp = problem_cache::computeFingerprint(args, config);
+        problem_cache::CacheMeta meta;
+        if (problem_cache::load(args.problem_cache_path, problem_fp, problem, meta)) {
+            problem_from_cache = true;
+            rover_epoch_count = meta.rover_epoch_count;
+            base_epoch_count = meta.base_epoch_count;
+            base_position = meta.base_position;
+            std::cout << "problem-cache: HIT (" << args.problem_cache_path
+                      << ") -- skipped RINEX parse + problem build\n";
+        }
     }
 
-    // Base station position from its RINEX header (mirrors gnss_fgo.cpp).
-    libgnss::io::RINEXReader base_header_reader;
-    if (!base_header_reader.open(args.base_path)) {
-        std::cerr << "Error: cannot open base " << args.base_path << "\n";
-        return 1;
-    }
-    libgnss::io::RINEXReader::RINEXHeader base_header;
-    if (!base_header_reader.readHeader(base_header)) {
-        std::cerr << "Error: cannot read base header " << args.base_path << "\n";
-        return 1;
-    }
-    if (base_header.approximate_position.norm() <= 1e6) {
-        std::cerr << "Error: base approximate position unavailable in " << args.base_path << "\n";
-        return 1;
-    }
-    const libgnss::Vector3d base_position = base_header.approximate_position;
+    if (!problem_from_cache) {
+        // Navigation.
+        libgnss::io::RINEXReader nav_reader;
+        if (!nav_reader.open(args.nav_path)) {
+            std::cerr << "Error: cannot open nav " << args.nav_path << "\n";
+            return 1;
+        }
+        libgnss::NavigationData nav;
+        if (!nav_reader.readNavigationData(nav)) {
+            std::cerr << "Error: cannot read nav " << args.nav_path << "\n";
+            return 1;
+        }
 
-    const std::vector<libgnss::ObservationData> rover_epochs =
-        loadEpochs(args.rover_path, args.max_epochs, libgnss::Vector3d::Zero(), false);
-    // Base is read fully (its epochs are matched/interpolated to rover time
-    // inside buildDoubleDifferenceProblem); no rover-side epoch cap on base.
-    const std::vector<libgnss::ObservationData> base_epochs =
-        loadEpochs(args.base_path, 0, base_position, true);
+        // Base station position from its RINEX header (mirrors gnss_fgo.cpp).
+        libgnss::io::RINEXReader base_header_reader;
+        if (!base_header_reader.open(args.base_path)) {
+            std::cerr << "Error: cannot open base " << args.base_path << "\n";
+            return 1;
+        }
+        libgnss::io::RINEXReader::RINEXHeader base_header;
+        if (!base_header_reader.readHeader(base_header)) {
+            std::cerr << "Error: cannot read base header " << args.base_path << "\n";
+            return 1;
+        }
+        if (base_header.approximate_position.norm() <= 1e6) {
+            std::cerr << "Error: base approximate position unavailable in " << args.base_path << "\n";
+            return 1;
+        }
+        base_position = base_header.approximate_position;
+
+        const std::vector<libgnss::ObservationData> rover_epochs =
+            loadEpochs(args.rover_path, args.max_epochs, libgnss::Vector3d::Zero(), false,
+                       args.start_epoch);
+        // Base is read fully (its epochs are matched/interpolated to rover time
+        // inside buildDoubleDifferenceProblem); no rover-side epoch cap on base.
+        const std::vector<libgnss::ObservationData> base_epochs =
+            loadEpochs(args.base_path, 0, base_position, true);
+        rover_epoch_count = rover_epochs.size();
+        base_epoch_count = base_epochs.size();
+
+        if (use_problem_cache) {
+            std::cout << "problem-cache: MISS (" << args.problem_cache_path
+                      << ") -- parsing RINEX + building problem normally\n";
+        }
+
+        const libgnss::FGOProcessor builder(config);
+        problem = builder.buildDoubleDifferenceProblem(rover_epochs, base_epochs, nav, base_position);
+
+        if (use_problem_cache) {
+            problem_cache::CacheMeta meta;
+            meta.rover_epoch_count = rover_epoch_count;
+            meta.base_epoch_count = base_epoch_count;
+            meta.base_position = base_position;
+            problem_cache::save(args.problem_cache_path, problem_fp, problem, meta);
+        }
+    }
 
     std::cout << "Dataset:\n"
-              << "  rover=" << args.rover_path << " (" << rover_epochs.size() << " epochs"
-              << (args.max_epochs > 0 ? " capped" : "") << ")\n"
-              << "  base=" << args.base_path << " (" << base_epochs.size() << " epochs)\n"
+              << "  rover=" << args.rover_path << " (" << rover_epoch_count << " epochs"
+              << (args.max_epochs > 0 ? " capped" : "")
+              << (args.start_epoch > 0
+                      ? ", starting at input epoch " + std::to_string(args.start_epoch)
+                      : std::string())
+              << ")\n"
+              << "  base=" << args.base_path << " (" << base_epoch_count << " epochs)\n"
               << "  nav=" << args.nav_path << "\n"
               << "  base_pos_ecef=[" << base_position.transpose() << "]\n";
-
-    libgnss::FGOProcessor::FGOConfig config = makeRealDataDdConfig();
-    if (args.max_iters > 0) {
-        config.max_iterations = args.max_iters;
-    }
-    if (args.no_robust) {
-        config.use_robust_loss = false;
-    }
-    if (args.no_pr_factors) {
-        // Pure DD path: no undifferenced pseudorange factors, so there are no
-        // receiver-clock / inter-system-bias states at all -- this isolates the
-        // clock-free double-difference RTK path (the Phase-1 target) from the
-        // undifferenced-pseudorange modeling differences between backends.
-        config.use_pseudorange_factors = false;
-    }
-    // Milestone 2e lever 2: elevation / SNR masks on the DD observations
-    // (applied at problem-build time -- attacks deep-urban multipath float).
-    if (args.elev_mask_deg > 0.0) {
-        config.min_elevation_deg = args.elev_mask_deg;
-    }
-    if (args.snr_mask_dbhz > 0.0) {
-        config.min_snr_dbhz = args.snr_mask_dbhz;
-        config.double_difference_reference_min_snr_dbhz = args.snr_mask_dbhz;
-        config.double_difference_base_min_snr_dbhz = args.snr_mask_dbhz;
-    }
-    // Multi-freq control: --single-freq forces the front-end back to L1/E1/B1I
-    // only (the pre-change behaviour) so the SAME harness invocation yields a
-    // single-frequency baseline for apples-to-apples comparison.
-    if (args.single_freq) {
-        config.use_multi_frequency_double_difference = false;
-    }
-    if (args.multi_freq) {
-        config.use_multi_frequency_double_difference = true;
-    }
-    if (args.no_oneband) {
-        config.double_difference_lambda_one_band_per_satellite = false;
-    }
-    if (args.no_band_sigma) {
-        config.double_difference_secondary_carrier_sigma_scale = 1.0;
-        config.double_difference_secondary_pseudorange_sigma_scale = 1.0;
-    }
-    if (args.no_code_align) {
-        config.use_double_difference_secondary_code_alignment = false;
-    }
-    if (args.partial_ar) {
-        config.use_fixed_lag_partial_lambda = true;
-    }
-    if (args.partial_ar_frac >= 0.0) {
-        config.fixed_lag_partial_lambda_min_fraction = args.partial_ar_frac;
-    }
-    if (args.hold_sigma >= 0.0) {
-        config.ambiguity_hold_sigma_cycles = args.hold_sigma;
-    }
-    if (args.stale_pin) {
-        config.use_stale_pin_invalidation = true;
-    }
-    if (args.stale_pin_res >= 0.0) {
-        config.stale_pin_per_sat_residual_m = args.stale_pin_res;
-    }
-    if (args.stale_pin_age >= 0) {
-        config.stale_pin_min_hold_age_epochs = args.stale_pin_age;
-    }
-    if (args.fix_demote) {
-        config.use_fix_plausibility_demotion = true;
-    }
-    if (args.fix_demote_dist >= 0.0) {
-        config.fix_demote_distance_m = args.fix_demote_dist;
-    }
-    if (args.fix_demote_anchor) {
-        config.fix_demote_use_ddpr_anchor = true;
-    }
-    if (args.fix_demote_anchor_dist >= 0.0) {
-        config.fix_demote_anchor_distance_m = args.fix_demote_anchor_dist;
-    }
-    if (args.fix_demote_anchor_res >= 0.0) {
-        config.fix_demote_anchor_trust_res_m = args.fix_demote_anchor_res;
-    }
-    if (args.fix_demote_res >= 0.0) {
-        config.fix_demote_res_m = args.fix_demote_res;
-    }
-    if (args.fix_demote_posthold >= 0) {
-        config.fix_demote_posthold_epochs = args.fix_demote_posthold;
-    }
-    if (args.fix_demote_res_rel >= 0.0) {
-        config.fix_demote_res_rel = args.fix_demote_res_rel;
-    }
-    if (args.leaky_persist) {
-        config.use_cp_hold_leaky_persist = true;
-    }
-    if (args.leaky_persist_decay >= 0.0) {
-        config.cp_hold_persist_decay = args.leaky_persist_decay;
-    }
-    if (args.fix_demote_anchor_gross) {
-        config.fix_demote_anchor_gross = true;
-    }
-    if (args.fix_demote_anchor_gross_ratio >= 0.0) {
-        config.fix_demote_anchor_gross_ratio = args.fix_demote_anchor_gross_ratio;
-    }
-    if (args.fix_demote_anchor_gross_abs >= 0.0) {
-        config.fix_demote_anchor_gross_abs_m = args.fix_demote_anchor_gross_abs;
-    }
-    if (args.no_gal_ar) {
-        config.exclude_galileo_ambiguity_fixing = true;
-    }
-    if (args.ratio_threshold > 0.0) {
-        config.lambda_ratio_threshold = args.ratio_threshold;
-    }
-    if (args.hold_ratio > 0.0) {
-        config.ambiguity_hold_ratio_threshold = args.hold_ratio;
-    }
-    if (args.hold_min > 0) {
-        config.ambiguity_hold_min_fixed = args.hold_min;
-    }
-    if (args.min_fixed > 0) {
-        config.min_fixed_ambiguities = args.min_fixed;
-    }
-    if (args.gates) {
-        config.use_epoch_quality_gates = true;
-    }
-    if (args.gate_res >= 0.0) {
-        config.gate_ddpr_res_max_m = args.gate_res;
-    }
-    if (args.gate_sat_res >= 0.0) {
-        config.gate_per_sat_res_max_m = args.gate_sat_res;
-    }
-    if (args.gate_gdop > 0.0) {
-        config.gate_gdop_max = args.gate_gdop;
-    }
-    if (args.gate_min_sat > 0) {
-        config.gate_min_satellites = args.gate_min_sat;
-    }
-    if (args.cmc) {
-        config.use_code_minus_carrier_screening = true;
-    }
-    if (args.cmc_jump >= 0.0) {
-        config.code_minus_carrier_jump_threshold_m = args.cmc_jump;
-    }
-    if (args.cmc_level >= 0.0) {
-        config.code_minus_carrier_level_threshold_m = args.cmc_level;
-    }
-    if (args.cmc_warmup > 0) {
-        config.code_minus_carrier_warmup_epochs = args.cmc_warmup;
-    }
-    if (args.cmc_alpha >= 0.0) {
-        config.code_minus_carrier_baseline_alpha = args.cmc_alpha;
-    }
-    if (args.cp_hold) {
-        config.use_cp_hold_recovery = true;
-    }
-    if (args.cp_hold_res >= 0.0) {
-        config.cp_hold_main_residual_threshold_m = args.cp_hold_res;
-    }
-    if (args.cp_hold_catastrophic >= 0.0) {
-        config.cp_hold_catastrophic_threshold_m = args.cp_hold_catastrophic;
-    }
-    if (args.cp_hold_fast_worst_sat >= 0.0) {
-        config.cp_hold_fast_worst_satellite_min_m = args.cp_hold_fast_worst_sat;
-    }
-    if (args.cp_hold_persist > 0) {
-        config.cp_hold_persist_epochs = args.cp_hold_persist;
-    }
-    if (args.cp_hold_epochs_n > 0) {
-        config.cp_hold_epochs = args.cp_hold_epochs_n;
-    }
-    if (args.cp_hold_release_res >= 0.0) {
-        config.cp_hold_release_threshold_m = args.cp_hold_release_res;
-    }
-    if (args.cp_hold_release_n > 0) {
-        config.cp_hold_release_count = args.cp_hold_release_n;
-    }
-    if (args.cp_hold_pose_replace >= 0.0) {
-        config.cp_hold_pose_replace_threshold_m = args.cp_hold_pose_replace;
-    }
-    if (args.cp_hold_gdop >= 0.0) {
-        config.cp_hold_max_gdop = args.cp_hold_gdop;
-    }
-    if (args.exc_recovery) {
-        config.use_solve_exception_recovery = true;
-    }
-    if (args.ddpr_anchor) {
-        config.use_ddpr_anchor = true;
-    }
-    if (args.ddpr_anchor_max_res >= 0.0) {
-        config.ddpr_anchor_max_residual_m = args.ddpr_anchor_max_res;
-    }
-    if (args.ddpr_anchor_fde >= 0.0) {
-        config.ddpr_anchor_fde_threshold_m = args.ddpr_anchor_fde;
-    }
-    if (args.ddpr_anchor_min_n > 0) {
-        config.ddpr_anchor_min_factors = args.ddpr_anchor_min_n;
-    }
-    if (args.ddpr_anchor_boot_epochs >= 0) {
-        config.ddpr_anchor_bootstrap_epochs = args.ddpr_anchor_boot_epochs;
-    }
-    if (args.ddpr_anchor_boot_sigma >= 0.0) {
-        config.ddpr_anchor_bootstrap_sigma_m = args.ddpr_anchor_boot_sigma;
-    }
-    if (args.ddpr_anchor_boot_after_mass >= 0) {
-        config.cp_hold_bootstrap_after_mass_reset = (args.ddpr_anchor_boot_after_mass != 0);
-    }
-    if (args.fde) {
-        config.use_fde = true;
-    }
-    if (args.fde_pr >= 0.0) {
-        config.fde_pseudorange_threshold_m = args.fde_pr;
-    }
-    if (args.fde_cp >= 0.0) {
-        config.fde_carrier_threshold_m = args.fde_cp;
-    }
-    if (args.fde_frac >= 0.0) {
-        config.fde_max_rejected_fraction = args.fde_frac;
-    }
-    if (args.fde_iters > 0) {
-        config.fde_max_iterations = args.fde_iters;
-    }
-    if (args.sat_badness) {
-        config.use_sat_badness_downweight = true;
-    }
-    if (args.sat_badness_cp_scale >= 0.0) {
-        config.sat_badness_carrier_sigma_scale = args.sat_badness_cp_scale;
-    }
-    if (args.sat_badness_pr_scale >= 0.0) {
-        config.sat_badness_pseudorange_sigma_scale = args.sat_badness_pr_scale;
-    }
-    if (args.sat_badness_ddpr_thresh >= 0.0) {
-        config.sat_badness_ddpr_threshold_m = args.sat_badness_ddpr_thresh;
-    }
-    if (args.sat_badness_clamp >= 0.0) {
-        config.sat_badness_residual_clamp_m = args.sat_badness_clamp;
-    }
-    if (args.sat_badness_cap >= 0.0) {
-        config.sat_badness_score_cap = args.sat_badness_cap;
-    }
-    if (args.sat_badness_cppr_decay >= 0.0) {
-        config.sat_badness_cppr_decay = args.sat_badness_cppr_decay;
-    }
-    if (args.varerr) {
-        config.use_elevation_dependent_sigma = true;
-    }
-    if (args.varerr_a >= 0.0) {
-        config.elevation_sigma_err_a_m = args.varerr_a;
-    }
-    if (args.varerr_b >= 0.0) {
-        config.elevation_sigma_err_b_m = args.varerr_b;
-    }
-    if (args.varerr_eratio >= 0.0) {
-        config.elevation_sigma_pseudorange_ratio = args.varerr_eratio;
-    }
-    if (args.integ_cov >= 0.0) {
-        config.imu_integration_covariance = args.integ_cov;
-    }
-    if (args.integ_cov_inflate) {
-        config.use_imu_integration_covariance_inflation = true;
-    }
-    if (args.integ_cov_max >= 0.0) {
-        config.imu_integration_covariance_max = args.integ_cov_max;
-    }
-    const libgnss::FGOProcessor builder(config);
-    const libgnss::FGOProcessor::FGOProblem problem =
-        builder.buildDoubleDifferenceProblem(rover_epochs, base_epochs, nav, base_position);
 
     std::cout << "FGOProblem: epochs=" << problem.epochs.size()
               << " dd_pr_factors=" << problem.double_difference_pseudorange_factors.size()
               << " dd_cp_factors=" << problem.double_difference_carrier_factors.size()
+              << " sd_doppler_factors=" << problem.single_difference_doppler_factors.size()
               << " ambiguity_states=" << problem.ambiguity_states.size()
               << " pr_factors=" << problem.pseudorange_factors.size() << "\n";
     std::cout << "  CMC screening: " << (args.cmc ? "on" : "off")
               << " (jump=" << config.code_minus_carrier_jump_threshold_m
               << " m, level=" << config.code_minus_carrier_level_threshold_m
-              << " m, warmup=" << config.code_minus_carrier_warmup_epochs
+              << " m (" << (args.cmc_level_pr_only ? "PR-only" : "PR+CP") << ')'
+              << ", warmup=" << config.code_minus_carrier_warmup_epochs
               << ", alpha=" << config.code_minus_carrier_baseline_alpha << ")"
               << " -- jump_resets=" << problem.diagnostics.code_minus_carrier_jump_resets
               << ", level_exclusions=" << problem.diagnostics.code_minus_carrier_level_exclusions
+              << ", cmc_ref=" << (args.cmc_ref ? "on" : "off")
+              << ", ref_avoided=" << problem.diagnostics.cmc_ref_avoided_count
               << "\n";
 
     // --- MF hygiene diagnostics: per-signal DD residuals at the reference
@@ -1332,8 +2134,8 @@ int main(int argc, char** argv) {
 
         double t_fl = 0.0;
         const auto fl = run(problem_imu, config, libgnss::FGOBackend::GTSAM, true, t_fl,
-                            /*use_pose3=*/true, /*use_imu=*/true, args.fixed_lag_s,
-                            args.use_nhc, args.use_zupt, args.use_hold);
+                             /*use_pose3=*/true, /*use_imu=*/true, args.fixed_lag_s,
+                             args.use_nhc, args.use_zupt, args.use_hold, args.fixed_lag_qr);
         std::size_t nonfinite = 0, none_epochs = 0;
         for (const auto& s : fl.solution.solutions) {
             if (s.status == libgnss::SolutionStatus::NONE) ++none_epochs;
@@ -1357,6 +2159,52 @@ int main(int argc, char** argv) {
                   << ", fixed_epochs=" << fl_fixed << "/" << ne << " ("
                   << (ne > 0 ? 100.0 * double(fl_fixed) / double(ne) : 0.0)
                   << "% fix-rate), best_ratio=" << fl.diagnostics.lambda_ambiguity_ratio << "\n"
+                  << "  IMU ratio aperture: " << (args.imu_ratio_aperture ? "on" : "off")
+                  << " (accepted=" << fl.diagnostics.imu_aided_ratio_accepts
+                  << ", rejected=" << fl.diagnostics.imu_aided_ratio_rejects
+                  << ", relaxed_ratio=" << config.imu_aided_relaxed_ratio_threshold
+                  << ", float_sep_m=" << config.imu_aided_max_float_separation_m
+                  << ", pred_sep_m=" << config.imu_aided_max_prediction_separation_m << ")\n"
+                  << "  fixed-history DR validation: "
+                  << (args.fixed_history_dr ? "on" : "off")
+                  << " (accepted=" << fl.diagnostics.fixed_history_dr_accepts
+                  << ", rejected=" << fl.diagnostics.fixed_history_dr_rejects
+                  << ", window=" << config.fixed_history_dr_window_epochs
+                  << ", sep_m=" << config.fixed_history_dr_max_separation_m
+                  << ", surplus_overrides=" << (args.surplus_overrides_dr ? "on" : "off")
+                  << " (n=" << fl.diagnostics.fixed_history_dr_surplus_overrides
+                  << ", min_used=" << config.surplus_validation_overrides_history_dr_min_surplus_used
+                  << ", max_consec=" << config.surplus_validation_overrides_history_dr_max_consecutive
+                  << ", capped=" << fl.diagnostics.fixed_history_dr_surplus_override_capped
+                  << ")"
+                  << ")\n"
+                  << "  DDPR anchor validation: "
+                  << (args.anchor_aided_validation ? "on" : "off")
+                  << " (accepted=" << fl.diagnostics.ddpr_anchor_validation_accepts
+                  << ", rejected=" << fl.diagnostics.ddpr_anchor_validation_rejects
+                  << ", sep_m=" << config.ddpr_anchor_validation_max_separation_m << ")\n"
+                  << "  fixed-hypothesis postfit: "
+                  << (config.use_fixed_hypothesis_postfit_validation ? "on" : "off")
+                  << " (accepted=" << fl.diagnostics.fixed_postfit_validation_accepts
+                  << ", rejected=" << fl.diagnostics.fixed_postfit_validation_rejects
+                  << ", min_n=" << config.fixed_postfit_min_factors
+                  << ", rms_m=" << config.fixed_postfit_max_rms_m
+                  << ", max_norm=" << config.fixed_postfit_max_normalized_residual
+                  << ", chi2_dof=" << config.fixed_postfit_max_chi2_per_dof << ")\n"
+                  << "  satellite-count adaptive ratio: "
+                  << (config.use_satellite_count_adaptive_ratio ? "on" : "off")
+                  << " (>=20:" << config.adaptive_ratio_nsat20
+                  << ", >=15:" << config.adaptive_ratio_nsat15
+                  << ", >=10:" << config.adaptive_ratio_nsat10
+                  << ", low:" << config.adaptive_ratio_nsat_low << ")\n"
+                  << "  external Doppler-DR SSE: "
+                  << (config.use_external_doppler_dr_validation ? "on" : "off")
+                  << " (accepted=" << fl.diagnostics.external_doppler_dr_accepts
+                  << ", rejected=" << fl.diagnostics.external_doppler_dr_rejects
+                  << ", unavailable=" << fl.diagnostics.external_doppler_dr_unavailable
+                  << ", max_age=" << config.external_doppler_dr_max_age_epochs
+                  << ", chi2=" << config.external_doppler_dr_chi2_threshold
+                  << ", reset_ratio=" << config.external_doppler_dr_reset_min_ratio << ")\n"
                   << "  NHC/ZUPT: nhc=" << (args.use_nhc ? "on" : "off")
                   << " (applied " << fl.diagnostics.nhc_epochs << " epochs), zupt="
                   << (args.use_zupt ? "on" : "off") << " (applied " << fl.diagnostics.zupt_epochs
@@ -1370,16 +2218,26 @@ int main(int argc, char** argv) {
                   << "  CMC screening: " << (args.cmc ? "on" : "off")
                   << " (jump_resets=" << fl.diagnostics.code_minus_carrier_jump_resets
                   << ", level_exclusions=" << fl.diagnostics.code_minus_carrier_level_exclusions
+                  << ", cmc_ref=" << (args.cmc_ref ? "on" : "off")
+                  << ", ref_avoided=" << fl.diagnostics.cmc_ref_avoided_count
                   << ")\n"
                   << "  CP-hold/sanity FSM: " << (args.cp_hold ? "on" : "off")
                   << " (triggers=" << fl.diagnostics.cp_hold_triggers
                   << ", epochs_held=" << fl.diagnostics.cp_hold_epochs_held
+                  << ", anchor_releases=" << fl.diagnostics.cp_hold_anchor_releases
+                  << ", selectively_downweighted="
+                  << fl.diagnostics.selective_cp_hold_downweighted_factors
                   << ", mass_resets=" << fl.diagnostics.sanity_mass_resets
                   << ", fast_resets=" << fl.diagnostics.sanity_fast_resets
                   << ", pose_replacements=" << fl.diagnostics.sanity_pose_replacements
                   << ", multipath_skips=" << fl.diagnostics.sanity_multipath_skips
                   << ", gdop_skips=" << fl.diagnostics.sanity_gdop_skips
                   << ", generation_bumps=" << fl.diagnostics.ambiguity_generation_bumps
+                  << " [hold=" << fl.diagnostics.ambiguity_generation_bumps_hold
+                  << ", fde=" << fl.diagnostics.ambiguity_generation_bumps_fde
+                  << ", reset=" << fl.diagnostics.ambiguity_generation_bumps_reset
+                  << ", warm_reset=" << fl.diagnostics.ambiguity_generation_bumps_warm_reset
+                  << ", stale_pin=" << fl.diagnostics.ambiguity_generation_bumps_stale_pin << ']'
                   << ")\n"
                   << "  stale-pin invalidation: " << (args.stale_pin ? "on" : "off")
                   << " (invalidations=" << fl.diagnostics.stale_pin_invalidations
@@ -1390,6 +2248,8 @@ int main(int argc, char** argv) {
                   << " (demotions=" << fl.diagnostics.fix_plausibility_demotions
                   << ", anchor_demotions=" << fl.diagnostics.fix_plausibility_anchor_demotions
                   << ", hold_skips=" << fl.diagnostics.fix_plausibility_hold_skips
+                  << ", surplus_crosscheck=" << (args.fix_demote_surplus_crosscheck ? "on" : "off")
+                  << ", surplus_reprieves=" << fl.diagnostics.fix_plausibility_surplus_reprieves
                   << ", distance_m=" << config.fix_demote_distance_m
                   << ", anchor=" << (args.fix_demote_anchor ? "on" : "off")
                   << ", anchor_distance_m=" << config.fix_demote_anchor_distance_m
@@ -1401,6 +2261,34 @@ int main(int argc, char** argv) {
                   << ", anchor_gross_ratio=" << config.fix_demote_anchor_gross_ratio
                   << ", anchor_gross_abs_m=" << config.fix_demote_anchor_gross_abs_m
                   << ", anchor_gross_gated=" << fl.diagnostics.fix_plausibility_anchor_gross_gated
+                  << ")\n"
+                  << "  surplus-satellite validation: " << (args.surplus_validation ? "on" : "off")
+                  << " (monitor_only=" << (args.surplus_validation_monitor ? "on" : "off")
+                  << ", veto=" << (args.surplus_validation_veto ? "on" : "off")
+                  << ", attempts=" << fl.diagnostics.surplus_validation_attempts
+                  << ", passes=" << fl.diagnostics.surplus_validation_passes
+                  << ", fails=" << fl.diagnostics.surplus_validation_fails
+                  << ", insufficient_surplus=" << fl.diagnostics.surplus_validation_insufficient_surplus
+                  << ", rescued_epochs=" << fl.diagnostics.surplus_validation_rescued_epochs
+                  << ", vetoed_epochs=" << fl.diagnostics.surplus_validation_vetoed_epochs
+                  << ", min_n=" << config.surplus_validation_min_surplus_satellites
+                  << ", aperture_cycles(lt1/1to2/gt2)=" << config.surplus_validation_aperture_pdop_lt1_cycles
+                  << "/" << config.surplus_validation_aperture_pdop_1to2_cycles
+                  << "/" << config.surplus_validation_aperture_pdop_gt2_cycles
+                  << ", require_all=" << (config.surplus_validation_require_all ? "on" : "off")
+                  << ", fallback_level_hist(GQEBR,GQEB,GQER,GQE,GQB,GQ)=["
+                  << fl.diagnostics.surplus_validation_fallback_level_histogram[0] << ","
+                  << fl.diagnostics.surplus_validation_fallback_level_histogram[1] << ","
+                  << fl.diagnostics.surplus_validation_fallback_level_histogram[2] << ","
+                  << fl.diagnostics.surplus_validation_fallback_level_histogram[3] << ","
+                  << fl.diagnostics.surplus_validation_fallback_level_histogram[4] << ","
+                  << fl.diagnostics.surplus_validation_fallback_level_histogram[5] << "]"
+                  << ")\n"
+                  << "  low-count AR rescue: " << (args.low_count_ar ? "on" : "off")
+                  << " (min_candidates=" << config.low_count_min_candidates
+                  << ", min_ratio=" << config.low_count_min_ratio
+                  << ", attempts=" << fl.diagnostics.low_count_ambiguity_attempts
+                  << ", accepted=" << fl.diagnostics.low_count_ambiguity_fix_accepted
                   << ")\n"
                   << "  leaky persist (C1): " << (args.leaky_persist ? "on" : "off")
                   << " (decay=" << config.cp_hold_persist_decay
@@ -1420,8 +2308,12 @@ int main(int argc, char** argv) {
                   << ", bootstrap_prior_epochs=" << fl.diagnostics.ddpr_anchor_bootstrap_prior_epochs
                   << ")\n"
                   << "  FDE: " << (args.fde ? "on" : "off")
-                  << " (pr_rejections=" << fl.diagnostics.fde_pseudorange_rejections
+                  << " (mode=" << (args.fde_pr_only ? "pseudorange-only" :
+                                      (args.fde_cp_quarantine ? "carrier-AR-quarantine" :
+                                                               "pseudorange+carrier"))
+                  << ", pr_rejections=" << fl.diagnostics.fde_pseudorange_rejections
                   << ", cp_rejections=" << fl.diagnostics.fde_carrier_rejections
+                  << ", cp_quarantines=" << fl.diagnostics.fde_carrier_quarantines
                   << ", safeguard_skips=" << fl.diagnostics.fde_safeguard_skips
                   << ", fde_epochs=" << fl.diagnostics.fde_epochs
                   << ")\n"

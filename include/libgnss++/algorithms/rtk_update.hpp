@@ -4,6 +4,8 @@
 
 #include <Eigen/Dense>
 
+#include <vector>
+
 namespace libgnss {
 namespace rtk_update {
 
@@ -26,7 +28,8 @@ FilterUpdateResult applyMeasurementUpdate(Eigen::VectorXd& state,
                                           rtk_measurement::MeasurementSystem& measurement_system,
                                           double outlier_threshold,
                                           int min_observation_count,
-                                          double max_normalized_innovation_squared_per_observation = 0.0);
+                                          double max_normalized_innovation_squared_per_observation = 0.0,
+                                          const std::vector<bool>& force_active = {});
 
 }  // namespace rtk_update
 }  // namespace libgnss

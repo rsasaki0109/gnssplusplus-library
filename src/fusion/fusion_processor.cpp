@@ -448,6 +448,28 @@ LooseCouplingProcessor::processTightlyCoupledDD(
     return result;
 }
 
+bool LooseCouplingProcessor::predictedAntennaPositionEcef(Eigen::Vector3d& ecef_pos,
+                                                           Eigen::Matrix3d& ecef_cov) const {
+    if (!origin_set_) {
+        return false;
+    }
+
+    const Eigen::Matrix3d r_e2n = ecefToEnuRotation(origin_lat_, origin_lon_);
+    const Eigen::Matrix3d r_n2e = r_e2n.transpose();
+    const Eigen::Matrix3d rotation = state_.nominal.attitude_body_to_enu.toRotationMatrix();
+    const Eigen::Vector3d antenna_position_enu =
+        state_.nominal.position_enu + rotation * config_.lever_arm_body;
+    ecef_pos = origin_ecef_ + r_n2e * antenna_position_enu;
+
+    // Same H as fusion_measurement::buildGnssPositionUpdate(): [I 0 -R*skew(lever) 0 0].
+    Eigen::MatrixXd h = Eigen::MatrixXd::Zero(3, fusion_index::SIZE);
+    h.block<3, 3>(0, fusion_index::POSITION) = Eigen::Matrix3d::Identity();
+    h.block<3, 3>(0, fusion_index::ATTITUDE) = -rotation * attitude::skew(config_.lever_arm_body);
+    const Eigen::Matrix3d cov_enu = h * state_.covariance * h.transpose();
+    ecef_cov = r_n2e * cov_enu * r_e2n;
+    return true;
+}
+
 PositionSolution LooseCouplingProcessor::toPositionSolution() const {
     PositionSolution solution;
     solution.time = state_.nominal.time;

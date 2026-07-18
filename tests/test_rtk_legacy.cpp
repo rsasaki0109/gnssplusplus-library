@@ -252,6 +252,14 @@ TEST_F(RTKLegacyCompatibilityTest, AppliesFixedAmbiguitiesAndPublishesFixedBasel
 }
 
 // ============================================================
+// (Phase 1 GNSS/IMU coupling unit tests for RTKProcessor::
+// setExternalPositionPrior() live in tests/test_rtk_ins_prior.cpp instead of
+// here: this file's "#define private public" trick doesn't link on the
+// clang-targeting-MSVC-ABI toolchain -- see the tests/CMakeLists.txt guard
+// right above where this file is added to gnss_run_tests.)
+// ============================================================
+
+// ============================================================
 // ARPolicy gate unit tests
 // ============================================================
 

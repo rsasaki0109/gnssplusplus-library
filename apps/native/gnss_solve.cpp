@@ -250,6 +250,15 @@ struct SolveConfig {
     // WP10 (WP8 rec 2): AR-acceptance-only min-LOS-satellites gate.
     // <= 0 (default) disables it; requires --nlos-weights.
     int nlos_min_los_sats = 0;
+    // Phase 2a: CMC-aware DD reference-satellite selection with hysteresis
+    // (RTKConfig::cmc_aware_reference_selection). Off by default; see the
+    // config field's doc comment in rtk.hpp for the full algorithm.
+    bool cmc_aware_reference_selection = false;
+    double cmc_ref_level_m = 0.75;
+    int cmc_ref_switch_epochs = 3;
+    double cmc_ref_return_min_elev_deg = 5.0;
+    double cmc_ref_switch_max_elev_drop_deg = 10.0;
+    double cmc_ref_switch_min_elev_deg = 30.0;
 };
 
 using libgnss_apps::timeDiffSeconds;
@@ -923,6 +932,34 @@ void printUsage(const char* program_name) {
         << "                             satellites (per --nlos-weights) among the AR\n"
         << "                             candidate set before attempting/accepting a fix\n"
         << "                             (default: 0, disabled). Requires --nlos-weights\n"
+        << "  --cmc-ref                  Phase 2a: CMC-aware DD reference-satellite selection\n"
+        << "                             with hysteresis (default: off). Switches the DD\n"
+        << "                             reference away from a code-minus-carrier-suspect\n"
+        << "                             satellite only after --cmc-ref-switch-epochs\n"
+        << "                             consecutive suspect epochs, and back only after the\n"
+        << "                             same streak of non-suspect epochs plus an elevation\n"
+        << "                             margin (see rtk.hpp's cmc_aware_reference_selection\n"
+        << "                             doc comment for the full algorithm)\n"
+        << "  --cmc-ref-level <m>        CMC suspect-classification deviation threshold in\n"
+        << "                             meters (default: 0.75). No effect without --cmc-ref\n"
+        << "  --cmc-ref-switch-epochs <k>\n"
+        << "                             Consecutive suspect/non-suspect epochs required before\n"
+        << "                             switching away/back (default: 3). No effect without\n"
+        << "                             --cmc-ref\n"
+        << "  --cmc-ref-return-min-elev <deg>\n"
+        << "                             Minimum elevation margin (degrees) a candidate must\n"
+        << "                             clear over the current reference before a switch-back\n"
+        << "                             is considered (default: 5.0). No effect without\n"
+        << "                             --cmc-ref\n"
+        << "  --cmc-ref-switch-max-elev-drop <deg>\n"
+        << "                             Elevation-quality gate on switch-away only: only\n"
+        << "                             switch away from a suspect reference if the best\n"
+        << "                             replacement's elevation is within this many degrees\n"
+        << "                             below it (default: 10.0). No effect without --cmc-ref\n"
+        << "  --cmc-ref-switch-min-elev <deg>\n"
+        << "                             Companion absolute floor: the switch-away replacement\n"
+        << "                             must also be above this elevation (default: 30.0). No\n"
+        << "                             effect without --cmc-ref\n"
         << "  --max-consec-float-reset <n>\n"
         << "                             Reset ambiguity state after n consecutive float epochs\n"
         << "                             (default: 0, disabled; e.g. 10 for aggressive urban reconvergence)\n"
@@ -1140,6 +1177,35 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         if (arg == "-h" || arg == "--help") {
             printUsage(argv[0]);
             std::exit(0);
+        }
+        // Phase 2a CMC-aware reference selection flags: kept as STANDALONE
+        // ifs (each ending in `continue`) rather than joining the else-if
+        // chain below, which already sits at MSVC's C1061 nested-block
+        // limit (gnss_solve is clang-only to build anyway, but there is no
+        // reason to push the chain any deeper).
+        if (arg == "--cmc-ref") {
+            config.cmc_aware_reference_selection = true;
+            continue;
+        }
+        if (arg == "--cmc-ref-level" && i + 1 < argc) {
+            config.cmc_ref_level_m = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--cmc-ref-switch-epochs" && i + 1 < argc) {
+            config.cmc_ref_switch_epochs = std::stoi(argv[++i]);
+            continue;
+        }
+        if (arg == "--cmc-ref-return-min-elev" && i + 1 < argc) {
+            config.cmc_ref_return_min_elev_deg = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--cmc-ref-switch-max-elev-drop" && i + 1 < argc) {
+            config.cmc_ref_switch_max_elev_drop_deg = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--cmc-ref-switch-min-elev" && i + 1 < argc) {
+            config.cmc_ref_switch_min_elev_deg = std::stod(argv[++i]);
+            continue;
         }
         if (arg == "--data-dir" && i + 1 < argc) {
             config.data_dir = argv[++i];
@@ -1535,6 +1601,18 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     if (config.nlos_min_los_sats < 0) {
         argumentError("--nlos-min-los-sats must be >= 0", argv[0]);
     }
+    if (config.cmc_ref_switch_epochs < 1) {
+        argumentError("--cmc-ref-switch-epochs must be >= 1", argv[0]);
+    }
+    if (config.cmc_ref_return_min_elev_deg < 0.0) {
+        argumentError("--cmc-ref-return-min-elev must be >= 0", argv[0]);
+    }
+    if (config.cmc_ref_switch_max_elev_drop_deg < 0.0) {
+        argumentError("--cmc-ref-switch-max-elev-drop must be >= 0", argv[0]);
+    }
+    if (config.cmc_ref_switch_min_elev_deg < 0.0) {
+        argumentError("--cmc-ref-switch-min-elev must be >= 0", argv[0]);
+    }
     if (config.min_hold_count < 0) {
         argumentError("--min-hold-count must be >= 0", argv[0]);
     }
@@ -1880,6 +1958,12 @@ int main(int argc, char* argv[]) {
         rtk_config.trust_lapse_gate_s = config.trust_lapse_gate_s;
         rtk_config.trust_lapse_gate_nlos_frac = config.trust_lapse_gate_nlos_frac;
         rtk_config.nlos_min_los_sats = config.nlos_min_los_sats;
+        rtk_config.cmc_aware_reference_selection = config.cmc_aware_reference_selection;
+        rtk_config.cmc_ref_level_m = config.cmc_ref_level_m;
+        rtk_config.cmc_ref_switch_epochs = config.cmc_ref_switch_epochs;
+        rtk_config.cmc_ref_return_min_elev_deg = config.cmc_ref_return_min_elev_deg;
+        rtk_config.cmc_ref_switch_max_elev_drop_deg = config.cmc_ref_switch_max_elev_drop_deg;
+        rtk_config.cmc_ref_switch_min_elev_deg = config.cmc_ref_switch_min_elev_deg;
         rtk_config.min_satellites_for_ar = config.min_satellites_for_ar;
         rtk_config.min_subset_pairs_for_ar = config.min_subset_pairs_for_ar;
         rtk_config.max_subset_drop_steps_for_ar = config.max_subset_drop_steps_for_ar;
@@ -2495,6 +2579,12 @@ int main(int argc, char* argv[]) {
         std::cout << "  exact base epochs: " << exact_base_epochs << std::endl;
         std::cout << "  interpolated base epochs: " << interpolated_base_epochs << std::endl;
         std::cout << "  skipped rover epochs: " << skipped_rover_epochs << std::endl;
+        if (config.cmc_aware_reference_selection) {
+            const auto cmc_ref_diag = rtk_processor.getCmcReferenceDiagnostics();
+            std::cout << "  CMC-aware reference selection: enabled"
+                      << " suspect_epochs=" << cmc_ref_diag.suspect_epoch_count
+                      << " switches=" << cmc_ref_diag.switch_count << std::endl;
+        }
         if (rtk_config.position_mode != libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC) {
             std::cout << "  non-FIX drift guard: "
                       << (config.enable_nonfix_drift_guard ? "enabled" : "disabled")

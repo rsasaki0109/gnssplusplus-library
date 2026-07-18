@@ -14,7 +14,7 @@ struct AmbiguityKey {
     int frequency_index = -1;
     int generation = 0;
     // PRN is not globally unique and a DD ambiguity also changes when its
-    // reference satellite changes.  Keep these fields after the legacy three
+    // reference satellite changes. Keep these fields after the legacy three
     // so existing aggregate initializers remain source-compatible.
     int satellite_system = 0;
     int reference_satellite_prn = 0;
@@ -48,7 +48,7 @@ struct TightlyCoupledState {
 };
 
 /** One already differenced RTK observation, evaluated at eskf.nominal.
- * geometry_enu is d(predicted DD range)/d(position error).  Carrier residual
+ * geometry_enu is d(predicted DD range)/d(position error). Carrier residual
  * is observed-minus-predicted range before subtracting wavelength*N.
  */
 struct DDObservation {

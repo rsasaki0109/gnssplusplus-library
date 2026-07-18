@@ -980,6 +980,22 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
         dd_reference_carrier_by_problem_epoch;
     std::map<SatelliteId, double> previous_gps_pseudorange_by_satellite;
 
+    // Seed continuity across a brief SPP outage (see FGOConfig::use_spp_seed):
+    // a tunnel/underpass/urban-canyon gap can drop the rover to near-zero
+    // tracked satellites for several seconds. The RINEX header's static
+    // approximate position can be kilometres from the true kinematic position
+    // at that point in the trajectory; seeding elevation/geometry from it
+    // spuriously fails the elevation mask for whatever few satellites ARE
+    // still tracked during recovery, rejecting far more marginal epochs than
+    // the min_satellites_per_epoch gate actually requires. Coast on the last
+    // valid SPP fix instead -- at the rover's epoch-to-epoch cadence this
+    // stays far closer to truth through a brief outage than the static
+    // fallback, and degrades no worse than the static fallback once the
+    // outage is long enough that both are stale.
+    Vector3d last_valid_seed_position_ecef = Vector3d::Zero();
+    double last_valid_seed_clock_bias_m = 0.0;
+    bool have_last_valid_seed = false;
+
     for (const auto& epoch : input_epochs) {
         EpochSeed seed;
         seed.time = epoch.time;
@@ -992,6 +1008,12 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
         if (spp_solution.isValid()) {
             seed.position_ecef = spp_solution.position_ecef;
             seed.receiver_clock_bias_m = spp_solution.receiver_clock_bias;
+            last_valid_seed_position_ecef = seed.position_ecef;
+            last_valid_seed_clock_bias_m = seed.receiver_clock_bias_m;
+            have_last_valid_seed = true;
+        } else if (have_last_valid_seed) {
+            seed.position_ecef = last_valid_seed_position_ecef;
+            seed.receiver_clock_bias_m = last_valid_seed_clock_bias_m;
         } else if (epoch.receiver_position.norm() > 1e6) {
             seed.position_ecef = epoch.receiver_position;
             seed.receiver_clock_bias_m = epoch.receiver_clock_bias * constants::SPEED_OF_LIGHT;
@@ -1568,6 +1590,9 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
     std::map<CarrierKey, std::size_t> cmc_last_rover_ambiguity_index;
     std::size_t cmc_jump_reset_total = 0;
     std::size_t cmc_level_exclusion_total = 0;
+    // FGOConfig::cmc_aware_reference_selection: count of DD reference
+    // picks steered away from a CMC-level-excluded candidate this run.
+    std::size_t cmc_ref_avoided_total = 0;
 
     for (std::size_t epoch_index = 0; epoch_index < problem.epochs.size(); ++epoch_index) {
         // Reference: tc._update_epoch_dt(obs) runs unconditionally at the top
@@ -1814,6 +1839,52 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                            const PreparedCarrierObservation* rhs) {
                             return lhs->elevation_rad < rhs->elevation_rad;
                         });
+
+                // --- CMC-aware reference selection
+                // (FGOConfig::cmc_aware_reference_selection) ---
+                // The plain max-elevation pick above can land on a satellite
+                // the CMC screening pre-pass above already flagged as
+                // sustained multipath/NLOS this epoch
+                // (cmc_level_exclude_this_epoch). Every DD pair in the group
+                // is formed against this ONE reference, so a multipath-
+                // biased reference poisons every DD residual in the group at
+                // once (see the config knob's doc comment for the tokyo
+                // run1 episode that motivated this). When the knob is on and
+                // CMC screening is active, prefer the highest-elevation
+                // NON-excluded candidate instead; if every candidate in the
+                // group is CMC-excluded this epoch, keep the original
+                // max-elevation choice so the group is never dropped.
+                if (config_.cmc_aware_reference_selection &&
+                    config_.use_code_minus_carrier_screening &&
+                    !cmc_level_exclude_this_epoch.empty()) {
+                    const CarrierKey default_key{
+                        base_reference_selection->satellite,
+                        base_reference_selection->signal};
+                    if (cmc_level_exclude_this_epoch.count(default_key) > 0) {
+                        const PreparedCarrierObservation* best_clean = nullptr;
+                        for (const auto* candidate : reference_group_it->second) {
+                            const CarrierKey candidate_key{candidate->satellite,
+                                                            candidate->signal};
+                            if (cmc_level_exclude_this_epoch.count(candidate_key) >
+                                0) {
+                                continue;
+                            }
+                            if (!best_clean || candidate->elevation_rad >
+                                                    best_clean->elevation_rad) {
+                                best_clean = candidate;
+                            }
+                        }
+                        if (best_clean) {
+                            base_reference_selection = best_clean;
+                            ++cmc_ref_avoided_total;
+                        }
+                        // else: every candidate in the group is CMC-excluded
+                        // -- fall back to the original max-elevation choice
+                        // (base_reference_selection unchanged) rather than
+                        // dropping the whole group.
+                    }
+                }
+
                 const CarrierKey reference_key{
                     base_reference_selection->satellite,
                     base_reference_selection->signal};
@@ -1831,6 +1902,10 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
 
         std::map<DdFactorKey, DoubleDifferencePseudorangeFactor>
             pseudorange_factors_by_key;
+        // Includes CMC-level-excluded code observations solely for carrier
+        // ambiguity initialization when code-only exclusion is requested.
+        std::map<DdFactorKey, DoubleDifferencePseudorangeFactor>
+            pseudorange_seed_factors_by_key;
         for (const auto& [group_key, group] : grouped_rover_pseudoranges) {
             if (group_key.first == GNSSSystem::GLONASS) {
                 problem.diagnostics.double_difference_rejected_no_reference +=
@@ -1853,7 +1928,10 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                     continue;
                 }
                 const CarrierKey satellite_key{satellite->satellite, satellite->signal};
-                if (cmc_level_exclude_this_epoch.count(satellite_key) > 0) {
+                const bool cmc_level_excluded =
+                    cmc_level_exclude_this_epoch.count(satellite_key) > 0;
+                if (cmc_level_excluded &&
+                    !config_.code_minus_carrier_level_pseudorange_only) {
                     // Sustained CMC multipath this epoch: skip the DD
                     // pseudorange factor. The CP loop below only builds a
                     // carrier factor when it finds a matching entry in
@@ -1925,14 +2003,18 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                     base_satellite.model_debug;
                 pseudorange_factor.base_reference_model =
                     base_reference.model_debug;
-                problem.double_difference_pseudorange_factors.push_back(
-                    pseudorange_factor);
-                pseudorange_factors_by_key[DdFactorKey{
+                const DdFactorKey factor_key{
                     epoch_index,
                     satellite->satellite,
                     reference->satellite,
                     satellite->signal,
-                }] = pseudorange_factor;
+                };
+                pseudorange_seed_factors_by_key[factor_key] = pseudorange_factor;
+                if (!cmc_level_excluded) {
+                    problem.double_difference_pseudorange_factors.push_back(
+                        pseudorange_factor);
+                    pseudorange_factors_by_key[factor_key] = pseudorange_factor;
+                }
             }
         }
 
@@ -1957,20 +2039,69 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                 if (base_satellite_it == base_carriers.end()) {
                     continue;
                 }
-                const auto pseudorange_factor_it =
-                    pseudorange_factors_by_key.find(DdFactorKey{
+                const DdFactorKey factor_key{
                         epoch_index,
                         satellite->satellite,
                         reference->satellite,
                         satellite->signal,
-                    });
-                if (pseudorange_factor_it == pseudorange_factors_by_key.end()) {
+                    };
+                const auto pseudorange_factor_it = pseudorange_factors_by_key.find(factor_key);
+                const DoubleDifferencePseudorangeFactor* pseudorange_factor_ptr =
+                    pseudorange_factor_it != pseudorange_factors_by_key.end()
+                        ? &pseudorange_factor_it->second
+                        : nullptr;
+                if (!pseudorange_factor_ptr &&
+                    config_.code_minus_carrier_level_pseudorange_only) {
+                    const auto seed_it = pseudorange_seed_factors_by_key.find(factor_key);
+                    if (seed_it != pseudorange_seed_factors_by_key.end()) {
+                        pseudorange_factor_ptr = &seed_it->second;
+                    }
+                }
+                if (!pseudorange_factor_ptr) {
+                    // Sustained CMC multipath dropped this satellite's DD-PR
+                    // factor at problem-build time (and, transitively, this
+                    // DD-CP row -- code_minus_carrier_level_pseudorange_only
+                    // is false, else pseudorange_factor_ptr would have come
+                    // from the seed map above). Retain a minimal excluded
+                    // row -- geometry + observed DD carrier, no ambiguity/
+                    // segment tracking (ambiguity_index is the sentinel
+                    // max()) -- solely so the surplus-satellite independent
+                    // integrity validator (FGOConfig::use_surplus_
+                    // satellite_validation) can see observations that never
+                    // entered ambiguity resolution at all. NEVER added to
+                    // double_difference_carrier_factors / the solved graph.
+                    if (cmc_level_exclude_this_epoch.count(satellite_key) > 0 &&
+                        reference->has_carrier_phase && base_reference.has_carrier_phase) {
+                        const auto& base_satellite_excl = base_satellite_it->second;
+                        DoubleDifferenceCarrierFactor excluded;
+                        excluded.epoch_index = epoch_index;
+                        excluded.use_ambiguity_difference = false;
+                        excluded.ambiguity_index = std::numeric_limits<std::size_t>::max();
+                        excluded.satellite = satellite->satellite;
+                        excluded.reference_satellite = reference->satellite;
+                        excluded.signal = satellite->signal;
+                        excluded.rover_satellite_position_ecef = satellite->satellite_position_ecef;
+                        excluded.rover_reference_position_ecef = reference->satellite_position_ecef;
+                        excluded.base_satellite_position_ecef =
+                            base_satellite_excl.satellite_position_ecef;
+                        excluded.base_reference_position_ecef =
+                            base_reference.satellite_position_ecef;
+                        excluded.base_position_ecef = base_position_ecef;
+                        excluded.observed_dd_carrier_m =
+                            (satellite->corrected_carrier_m -
+                             base_satellite_excl.corrected_carrier_m) -
+                            (reference->corrected_carrier_m -
+                             base_reference.corrected_carrier_m);
+                        excluded.sigma_m = carrier_sigma;  // unused by the surplus validator
+                        excluded.elevation_rad = satellite->elevation_rad;
+                        problem.excluded_double_difference_carrier_factors.push_back(excluded);
+                    }
                     continue;
                 }
                 ++problem.diagnostics.double_difference_candidate_pairs;
 
                 const auto& base_satellite = base_satellite_it->second;
-                const auto& pseudorange_factor = pseudorange_factor_it->second;
+                const auto& pseudorange_factor = *pseudorange_factor_ptr;
                 const double satellite_sin_el =
                     std::max(0.1, std::sin(satellite->elevation_rad));
                 const double satellite_sqrt_sin_el =
@@ -2189,6 +2320,7 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
     }
 
     if (config_.use_single_difference_doppler_factors ||
+        config_.use_external_doppler_dr_validation ||
         config_.use_single_difference_tdcp_factors) {
         std::map<CarrierKey, SingleDifferenceCarrierResidual>
             previous_sd_carrier_residuals;
@@ -2239,9 +2371,16 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                     continue;
                 }
                 const auto* reference = reference_model_it->second;
+                // A satellite differenced with itself is identically zero
+                // and adds no information (but can distort factor counts and
+                // residual diagnostics).
+                if (rover->satellite == reference_satellite) {
+                    continue;
+                }
                 const Vector3d sd_los = rover->los - reference->los;
 
-                if (config_.use_single_difference_doppler_factors &&
+                if ((config_.use_single_difference_doppler_factors ||
+                     config_.use_external_doppler_dr_validation) &&
                     rover->has_doppler_residual &&
                     reference->has_doppler_residual) {
                     SingleDifferenceDopplerFactor factor;
@@ -2253,7 +2392,8 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                     factor.residual_mps =
                         rover->doppler_residual_mps -
                         reference->doppler_residual_mps;
-                    factor.sigma_mps = rover->doppler_sigma_mps;
+                    factor.sigma_mps = std::hypot(rover->doppler_sigma_mps,
+                                                  reference->doppler_sigma_mps);
                     factor.elevation_rad = rover->elevation_rad;
                     if (std::isfinite(factor.residual_mps) &&
                         std::isfinite(factor.sigma_mps) &&
@@ -2318,6 +2458,7 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
     problem.diagnostics.code_minus_carrier_jump_resets = cmc_jump_reset_total;
     problem.diagnostics.code_minus_carrier_level_exclusions =
         cmc_level_exclusion_total;
+    problem.diagnostics.cmc_ref_avoided_count = cmc_ref_avoided_total;
 
     return problem;
 }
@@ -2378,6 +2519,8 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
         problem.diagnostics.code_minus_carrier_jump_resets;
     result.diagnostics.code_minus_carrier_level_exclusions =
         problem.diagnostics.code_minus_carrier_level_exclusions;
+    result.diagnostics.cmc_ref_avoided_count =
+        problem.diagnostics.cmc_ref_avoided_count;
 
     if (problem.epochs.empty() ||
         (problem.pseudorange_factors.empty() &&

@@ -15,6 +15,8 @@ if(GTest_FOUND)
         test_imu_csv.cpp
         test_attitude.cpp
         test_mechanization.cpp
+        test_preintegration.cpp
+        test_tight_coupling_processor.cpp
         test_fusion_process_noise.cpp
         test_fusion_update.cpp
         test_fusion_measurement.cpp
@@ -35,7 +37,12 @@ if(GTest_FOUND)
         test_rtk_slip_detection.cpp
         test_rtk_measurement.cpp
         test_rtk_update.cpp
+        test_rtk_ins_time_update.cpp
+        test_rtk_tdcp_diagnostics.cpp
         test_rtk_selection.cpp
+        test_rtk_cmc_ref.cpp
+        test_rtk_cp_pr_gate.cpp
+        test_rtk_ddpr_anchor.cpp
         test_rtk_validation.cpp
         test_fgo.cpp
         test_signal_policy.cpp
@@ -50,6 +57,7 @@ if(GTest_FOUND)
         test_spp.cpp
         test_spp_velocity.cpp
         test_rtk.cpp
+        test_rtk_ins_prior.cpp
         test_rtk_smoke.cpp
         test_ntrip.cpp
         test_rtcm.cpp
@@ -67,8 +75,13 @@ if(GTest_FOUND)
     # test_rtk_legacy.cpp uses "#define private public" before including
     # rtk.hpp. MSVC encodes member access in mangled names, so the test's
     # references never link against the library's private symbols; the
-    # trick only works on Itanium-ABI compilers (GCC/Clang).
-    if(NOT MSVC)
+    # trick only works on Itanium-ABI compilers (GCC/Clang). That mangling
+    # is a property of the target ABI, not of which compiler emits it: Clang
+    # targeting the MSVC ABI (e.g. a Windows build/clang-ninja config, where
+    # CMAKE_CXX_COMPILER_ID is "Clang" and MSVC is therefore false here)
+    # mangles member access the same way real MSVC does and hits the exact
+    # same undefined-symbol link failure, so it must be excluded too.
+    if(NOT MSVC AND NOT (WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
         target_sources(gnss_run_tests PRIVATE test_rtk_legacy.cpp)
     endif()
 

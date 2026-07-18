@@ -82,5 +82,40 @@ TEST(RTKUpdateTest, RejectsLargeNormalizedInnovationBeforeKalmanUpdate) {
     EXPECT_TRUE(covariance.isApprox(original_covariance, 0.0));
 }
 
+TEST(RTKUpdateTest, ForceActiveMaskUpdatesAZeroValuedState) {
+    Eigen::VectorXd state = Eigen::VectorXd::Zero(2);
+    Eigen::MatrixXd covariance = Eigen::MatrixXd::Identity(2, 2);
+    rtk_measurement::MeasurementSystem system;
+    system.design_matrix = Eigen::MatrixXd::Identity(2, 2);
+    system.residuals = Eigen::VectorXd::Constant(2, 1.0);
+    system.covariance = Eigen::MatrixXd::Identity(2, 2);
+
+    const std::vector<bool> force_active{true, true};
+    const auto result = rtk_update::applyMeasurementUpdate(
+        state, covariance, system, 30.0, 2, 0.0, force_active);
+
+    ASSERT_TRUE(result.ok);
+    EXPECT_TRUE(state.isApprox(Eigen::VectorXd::Constant(2, 0.5), 1e-12));
+    EXPECT_TRUE(covariance.isApprox(0.5 * Eigen::MatrixXd::Identity(2, 2), 1e-12));
+}
+
+TEST(RTKUpdateTest, RejectsWrongSizedForceActiveMaskWithoutMutation) {
+    Eigen::VectorXd state = Eigen::VectorXd::Zero(2);
+    Eigen::MatrixXd covariance = Eigen::MatrixXd::Identity(2, 2);
+    rtk_measurement::MeasurementSystem system;
+    system.design_matrix = Eigen::MatrixXd::Identity(2, 2);
+    system.residuals = Eigen::VectorXd::Ones(2);
+    system.covariance = Eigen::MatrixXd::Identity(2, 2);
+    const Eigen::VectorXd state_before = state;
+    const Eigen::MatrixXd covariance_before = covariance;
+
+    const auto result = rtk_update::applyMeasurementUpdate(
+        state, covariance, system, 30.0, 2, 0.0, std::vector<bool>{true});
+
+    EXPECT_FALSE(result.ok);
+    EXPECT_TRUE(state.isApprox(state_before, 0.0));
+    EXPECT_TRUE(covariance.isApprox(covariance_before, 0.0));
+}
+
 }  // namespace
 }  // namespace libgnss
