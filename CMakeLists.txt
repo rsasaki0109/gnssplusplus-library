@@ -84,6 +84,7 @@ set(GNSS_SOURCES
     src/fusion/attitude.cpp
     src/fusion/mechanization.cpp
     src/fusion/preintegration.cpp
+    src/fusion/tight_coupling_processor.cpp
     src/fusion/fusion_process_noise.cpp
     src/fusion/fusion_measurement.cpp
     src/fusion/fusion_update.cpp
