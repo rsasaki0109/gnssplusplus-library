@@ -198,3 +198,45 @@ However, Tokyo run1 misses the fix-rate tolerance by 0.03 percentage points,
 and horizontal p95 regresses on every dataset (with additional Tokyo run3
 50-cm and vertical-p95 regressions). M4 is therefore another documented
 mixed-negative result and remains default-off.
+
+## M5 evaluation
+
+`--tc-tdcp-diagnostics` requires M4 and is deliberately measurement-neutral.
+For each satellite/frequency it compares the single-difference carrier-phase
+change with trapezoid-integrated single-difference Doppler range rate. It
+classifies missing history, excessive gap, loss of lock, and invalid input,
+then reports raw residual RMS and maximum. It never constructs a filter row,
+changes a state/covariance, or affects ambiguity resolution.
+
+The 300-epoch Tokyo run3 smoke produced 15,865 valid residuals from 15,959
+candidates (94 first-epoch/history misses), with 1.02 cm RMS and 12.6 cm
+maximum. M5 OFF and ON position streams were bit-identical, and diagnostic
+wall overhead was 0.48%.
+
+Final same-binary evaluation used the three milestone datasets plus Tokyo
+run2 and Nagoya run2. Every full OFF/ON `rtk.pos` pair was SHA-256 identical:
+
+| Dataset | Fix % | PPC 3D 50 cm % | p95 horizontal m | p95 abs up m | Official % | OFF/ON wall s |
+|---|---:|---:|---:|---:|---:|---:|
+| Tokyo run1 | 77.36 | 75.75 | 7.53 | 23.32 | 70.07 | 2312.3 / 2312.4 |
+| Tokyo run2 | 77.58 | 82.39 | 2.95 | 4.86 | 84.03 | 1145.2 / 1146.1 |
+| Tokyo run3 | 78.52 | 79.22 | 4.69 | 6.22 | 74.68 | 2355.2 / 2359.3 |
+| Nagoya run1 | 78.27 | 74.39 | 9.66 | 13.15 | 55.46 | 1166.6 / 1171.3 |
+| Nagoya run2 | 53.74 | 53.80 | 27.72 | 60.04 | 39.61 | 1059.5 / 1061.4 |
+
+Raw TDCP diagnostics were:
+
+| Dataset | Candidates | Residuals | Missing / gap / LLI / invalid | RMS m | Max abs m |
+|---|---:|---:|---:|---:|---:|
+| Tokyo run1 | 336152 | 331816 | 4306 / 25 / 5 / 0 | 3122.69 | 299793 |
+| Tokyo run2 | 310171 | 306370 | 3799 / 0 / 2 / 0 | 3592.74 | 299793 |
+| Tokyo run3 | 551476 | 545598 | 5869 / 0 / 9 / 0 | 2029.36 | 299793 |
+| Nagoya run1 | 242782 | 241048 | 1402 / 0 / 332 / 0 | 3764.10 | 299793 |
+| Nagoya run2 | 290885 | 287508 | 2696 / 0 / 681 / 0 | 1.78 | 375.25 |
+
+The repeated approximately 299,793 m jump is consistent with (but does not by
+itself prove) an unmodelled one-millisecond receiver-clock discontinuity.
+These raw results explicitly fail readiness for a TDCP measurement update.
+Any future update requires a separate opt-in switch and validation of clock
+jump, slip/outlier, and robust residual gates. M5 diagnostics remain
+default-off.

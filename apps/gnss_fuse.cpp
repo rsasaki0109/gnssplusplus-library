@@ -141,6 +141,7 @@ struct FuseOptions {
     bool tc_ins_time_update = false;
     bool tc_closed_loop = false;
     bool tc_velocity_states = false;
+    bool tc_tdcp_diagnostics = false;
     double tc_ins_position_q_floor_m2 = 25.0;
     double tc_ins_max_sample_gap_s = 0.1;
     bool tc_cp_pr_gate = false;
@@ -364,6 +365,8 @@ void printUsage(const char* program_name) {
         << "                                Mutually exclusive with --tc-ins-time-update. Default: off.\n"
         << "  --tc-velocity-states         M4 ECEF velocity states appended after legacy RTK state.\n"
         << "                                Requires --tc-closed-loop. Default: off.\n"
+        << "  --tc-tdcp-diagnostics        M5 measurement-neutral SD-TDCP vs Doppler diagnostics.\n"
+        << "                                Requires --tc-velocity-states. Default: off.\n"
         << "  --tc-cp-pr-gate              M2 fixed-candidate CP-vs-PR gate (--base only). Vetoes\n"
         << "                                inconsistent integers before FIX feedback. Default: off.\n"
         << "  --tc-cp-pr-threshold <m>     Per-pair absolute innovation threshold (default: 10).\n"
@@ -632,6 +635,8 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             options.tc_closed_loop = true;
         } else if (arg == "--tc-velocity-states") {
             options.tc_velocity_states = true;
+        } else if (arg == "--tc-tdcp-diagnostics") {
+            options.tc_tdcp_diagnostics = true;
         } else if (arg == "--tc-ins-position-q-floor") {
             options.tc_ins_position_q_floor_m2 = std::stod(requireValue(arg, i, argc, argv));
         } else if (arg == "--tc-ins-max-sample-gap") {
@@ -705,6 +710,9 @@ FuseOptions parseArguments(int argc, char* argv[]) {
     }
     if (options.tc_velocity_states && !options.tc_closed_loop) {
         argumentError("--tc-velocity-states requires --tc-closed-loop", argv[0]);
+    }
+    if (options.tc_tdcp_diagnostics && !options.tc_velocity_states) {
+        argumentError("--tc-tdcp-diagnostics requires --tc-velocity-states", argv[0]);
     }
     if (!std::isfinite(options.tc_ins_position_q_floor_m2) ||
         options.tc_ins_position_q_floor_m2 < 0.0) {
@@ -901,6 +909,7 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
     rtk_config.use_external_position_time_update =
         options.tc_ins_time_update || options.tc_closed_loop;
     rtk_config.enable_velocity_states = options.tc_velocity_states;
+    rtk_config.enable_tdcp_diagnostics = options.tc_tdcp_diagnostics;
     rtk_config.ins_time_update_position_q_floor_m2 = options.tc_ins_position_q_floor_m2;
     rtk_config.enable_cp_pr_fixed_gate = options.tc_cp_pr_gate || options.tc_closed_loop;
     rtk_config.cp_pr_fixed_gate_threshold_m = options.tc_cp_pr_threshold_m;
@@ -971,6 +980,14 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
     int tc_cp_pr_rejected_count = 0;
     int tc_cp_pr_escalated_count = 0;
     int tc_ddpr_anchor_count = 0;
+    std::size_t tc_tdcp_candidate_count = 0;
+    std::size_t tc_tdcp_residual_count = 0;
+    std::size_t tc_tdcp_missing_previous_count = 0;
+    std::size_t tc_tdcp_gap_count = 0;
+    std::size_t tc_tdcp_loss_of_lock_count = 0;
+    std::size_t tc_tdcp_invalid_count = 0;
+    double tc_tdcp_residual_sum_squares = 0.0;
+    double tc_tdcp_residual_max_abs_m = 0.0;
     libgnss::Solution fused_solution;
     // Opt-in (--rtk-pos-out): the raw per-epoch RTK PositionSolution stream,
     // before it ever reaches the fusion filter -- see FuseOptions doc
@@ -1249,6 +1266,22 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
             tc_cp_pr_escalated_count += telemetry.cp_pr_gate_escalated ? 1 : 0;
             tc_ddpr_anchor_count += telemetry.ddpr_anchor_valid ? 1 : 0;
         }
+        if (options.tc_tdcp_diagnostics) {
+            const auto& telemetry = rtk_processor.getLastDebugTelemetry();
+            tc_tdcp_candidate_count += telemetry.tdcp_candidate_count;
+            tc_tdcp_residual_count += telemetry.tdcp_residual_count;
+            tc_tdcp_missing_previous_count += telemetry.tdcp_rejected_missing_previous;
+            tc_tdcp_gap_count += telemetry.tdcp_rejected_gap;
+            tc_tdcp_loss_of_lock_count += telemetry.tdcp_rejected_loss_of_lock;
+            tc_tdcp_invalid_count += telemetry.tdcp_rejected_invalid;
+            if (telemetry.tdcp_residual_count > 0 &&
+                std::isfinite(telemetry.tdcp_residual_rms_m)) {
+                tc_tdcp_residual_sum_squares += telemetry.tdcp_residual_count *
+                    telemetry.tdcp_residual_rms_m * telemetry.tdcp_residual_rms_m;
+                tc_tdcp_residual_max_abs_m = std::max(
+                    tc_tdcp_residual_max_abs_m, telemetry.tdcp_residual_max_abs_m);
+            }
+        }
         if (pos_solution.isValid()) {
             if (options.derive_velocity_from_fixed && !pos_solution.has_velocity &&
                 pos_solution.isFixed() && have_previous_fixed_solution &&
@@ -1472,6 +1505,22 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
         std::cout << "\n";
         std::cout << "RTK velocity states: "
                   << (options.tc_velocity_states ? "on" : "off") << "\n";
+        std::cout << "RTK TDCP diagnostics: "
+                  << (options.tc_tdcp_diagnostics ? "on" : "off");
+        if (options.tc_tdcp_diagnostics) {
+            const double rms_m = tc_tdcp_residual_count > 0
+                ? std::sqrt(tc_tdcp_residual_sum_squares / tc_tdcp_residual_count)
+                : std::numeric_limits<double>::quiet_NaN();
+            std::cout << "\n  candidates=" << tc_tdcp_candidate_count
+                      << " residuals=" << tc_tdcp_residual_count
+                      << " missing_previous=" << tc_tdcp_missing_previous_count
+                      << " gap=" << tc_tdcp_gap_count
+                      << " loss_of_lock=" << tc_tdcp_loss_of_lock_count
+                      << " invalid=" << tc_tdcp_invalid_count
+                      << " rms_m=" << rms_m
+                      << " max_abs_m=" << tc_tdcp_residual_max_abs_m;
+        }
+        std::cout << "\n";
         const bool cp_pr_gate_active = options.tc_cp_pr_gate || options.tc_closed_loop;
         std::cout << "RTK CP-vs-PR fixed gate: " << (cp_pr_gate_active ? "on" : "off");
         if (cp_pr_gate_active) {

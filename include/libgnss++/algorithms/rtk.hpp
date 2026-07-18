@@ -439,6 +439,11 @@ public:
         /// never move. Requires an external position/velocity time update.
         bool enable_velocity_states = false;
 
+        /// M5 measurement-neutral single-difference TDCP-vs-Doppler
+        /// diagnostics. No filter row or state mutation is performed.
+        bool enable_tdcp_diagnostics = false;
+        double tdcp_diagnostics_max_gap_s = 2.0;
+
         /// Per-epoch diagonal regularization added by the INS position time
         /// update, in m^2. The legacy wide reseed also acted as a strong
         /// regularizer; this explicit floor makes that role independently
@@ -669,6 +674,14 @@ public:
         int ddpr_anchor_observations = 0;
         double ddpr_anchor_residual_rms_m = std::numeric_limits<double>::quiet_NaN();
         double ddpr_anchor_fixed_distance_m = std::numeric_limits<double>::quiet_NaN();
+        int tdcp_candidate_count = 0;
+        int tdcp_residual_count = 0;
+        int tdcp_rejected_missing_previous = 0;
+        int tdcp_rejected_gap = 0;
+        int tdcp_rejected_loss_of_lock = 0;
+        int tdcp_rejected_invalid = 0;
+        double tdcp_residual_rms_m = std::numeric_limits<double>::quiet_NaN();
+        double tdcp_residual_max_abs_m = std::numeric_limits<double>::quiet_NaN();
         std::string reject_reason;
         ARSkipReason ar_skip_reason{ARSkipReason::NONE};
 
@@ -1123,6 +1136,14 @@ private:
     std::map<SatelliteId, double> code_phase_history_l2_m_;
     std::map<SatelliteId, double> code_phase_history_l5_m_;  // Phase 18 Step 5
 
+    struct TdcpHistory {
+        double phase_m = 0.0;
+        double range_rate_mps = 0.0;
+    };
+    std::map<SatelliteId, TdcpHistory> tdcp_history_l1_;
+    std::map<SatelliteId, TdcpHistory> tdcp_history_l2_;
+    std::map<SatelliteId, TdcpHistory> tdcp_history_l5_;
+
     // Phase 2a: CMC-aware DD reference-satellite selection state (only
     // populated/consulted when rtk_config_.cmc_aware_reference_selection is
     // true; see rtk_cmc_reference.hpp and updateCmcAwareReferenceSelection()
@@ -1186,6 +1207,8 @@ private:
      * Update SD biases (RTKLIB udbias): initialize new, reset slipped
      */
     void updateBias(const std::map<SatelliteId, SatelliteData>& sat_data, double dt_s);
+    void updateTdcpDiagnostics(const std::map<SatelliteId, SatelliteData>& sat_data,
+                               double dt_s);
 
     /**
      * Predict state (kinematic: reset position variance)

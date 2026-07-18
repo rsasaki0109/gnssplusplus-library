@@ -7,6 +7,7 @@
 #include <libgnss++/algorithms/rtk_measurement.hpp>
 #include <libgnss++/algorithms/rtk_selection.hpp>
 #include <libgnss++/algorithms/rtk_ins_time_update.hpp>
+#include <libgnss++/algorithms/rtk_tdcp_diagnostics.hpp>
 #include <libgnss++/algorithms/rtk_update.hpp>
 #include <libgnss++/algorithms/spp_velocity.hpp>
 #include <libgnss++/core/coordinates.hpp>
@@ -15,6 +16,7 @@
 #include <libgnss++/core/signals.hpp>
 #include <libgnss++/models/troposphere.hpp>
 #include <iostream>
+#include <iterator>
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -344,6 +346,9 @@ void RTKProcessor::reset() {
     doppler_phase_history_l2_m_.clear();
     code_phase_history_l1_m_.clear();
     code_phase_history_l2_m_.clear();
+    tdcp_history_l1_.clear();
+    tdcp_history_l2_.clear();
+    tdcp_history_l5_.clear();
     cmc_suspect_tracker_.reset();
     cmc_ref_hysteresis_by_system_.clear();
     cmc_aware_ref_by_system_.clear();
@@ -1045,7 +1050,95 @@ void RTKProcessor::updateGlonassHardwareBias(double dt) {
 // ============================================================
 // Update SD biases (RTKLIB udbias)
 // ============================================================
+void RTKProcessor::updateTdcpDiagnostics(
+    const std::map<SatelliteId, SatelliteData>& sat_data, double dt_s) {
+    if (!rtk_config_.enable_tdcp_diagnostics) return;
+
+    const rtk_tdcp_diagnostics::Config config{
+        rtk_config_.tdcp_diagnostics_max_gap_s};
+    double residual_sum_squares = 0.0;
+    double residual_max_abs = 0.0;
+
+    auto process_frequency = [&](auto& history, auto get_measurement) {
+        std::set<SatelliteId> seen;
+        for (const auto& [sat, data] : sat_data) {
+            double phase_m = 0.0;
+            double range_rate_mps = 0.0;
+            bool loss_of_lock = false;
+            if (!get_measurement(data, phase_m, range_rate_mps, loss_of_lock)) continue;
+            seen.insert(sat);
+            ++debug_telemetry_.tdcp_candidate_count;
+            const auto previous = history.find(sat);
+            if (previous == history.end()) {
+                ++debug_telemetry_.tdcp_rejected_missing_previous;
+            } else {
+                const auto result = rtk_tdcp_diagnostics::evaluate(
+                    previous->second.phase_m, phase_m,
+                    previous->second.range_rate_mps, range_rate_mps,
+                    dt_s, loss_of_lock, config);
+                switch (result.status) {
+                    case rtk_tdcp_diagnostics::Status::VALID:
+                        ++debug_telemetry_.tdcp_residual_count;
+                        residual_sum_squares += result.residual_m * result.residual_m;
+                        residual_max_abs = std::max(residual_max_abs, std::abs(result.residual_m));
+                        break;
+                    case rtk_tdcp_diagnostics::Status::INVALID_GAP:
+                        ++debug_telemetry_.tdcp_rejected_gap;
+                        break;
+                    case rtk_tdcp_diagnostics::Status::LOSS_OF_LOCK:
+                        ++debug_telemetry_.tdcp_rejected_loss_of_lock;
+                        break;
+                    case rtk_tdcp_diagnostics::Status::INVALID_INPUT:
+                        ++debug_telemetry_.tdcp_rejected_invalid;
+                        break;
+                }
+            }
+            history[sat] = TdcpHistory{phase_m, range_rate_mps};
+        }
+        for (auto it = history.begin(); it != history.end();) {
+            it = seen.contains(it->first) ? std::next(it) : history.erase(it);
+        }
+    };
+
+    process_frequency(tdcp_history_l1_, [](const SatelliteData& data, double& phase_m,
+                                           double& range_rate_mps, bool& loss_of_lock) {
+        if (!data.has_l1 || !data.has_l1_doppler || data.l1_wavelength <= 0.0) return false;
+        phase_m = (data.rover_l1_phase - data.base_l1_phase) * data.l1_wavelength;
+        range_rate_mps = rtk_slip_detection::singleDifferenceRangeRateMps(
+            data.rover_l1_doppler, data.base_l1_doppler, data.l1_wavelength);
+        loss_of_lock = data.l1_lli != 0;
+        return true;
+    });
+    process_frequency(tdcp_history_l2_, [](const SatelliteData& data, double& phase_m,
+                                           double& range_rate_mps, bool& loss_of_lock) {
+        if (!data.has_l2 || !data.has_l2_doppler || data.l2_wavelength <= 0.0) return false;
+        phase_m = (data.rover_l2_phase - data.base_l2_phase) * data.l2_wavelength;
+        range_rate_mps = rtk_slip_detection::singleDifferenceRangeRateMps(
+            data.rover_l2_doppler, data.base_l2_doppler, data.l2_wavelength);
+        loss_of_lock = data.l2_lli != 0;
+        return true;
+    });
+    if (rtk_config_.enable_l5) {
+        process_frequency(tdcp_history_l5_, [](const SatelliteData& data, double& phase_m,
+                                               double& range_rate_mps, bool& loss_of_lock) {
+            if (!data.has_l5 || !data.has_l5_doppler || data.l5_wavelength <= 0.0) return false;
+            phase_m = (data.rover_l5_phase - data.base_l5_phase) * data.l5_wavelength;
+            range_rate_mps = rtk_slip_detection::singleDifferenceRangeRateMps(
+                data.rover_l5_doppler, data.base_l5_doppler, data.l5_wavelength);
+            loss_of_lock = data.l5_lli != 0;
+            return true;
+        });
+    }
+
+    if (debug_telemetry_.tdcp_residual_count > 0) {
+        debug_telemetry_.tdcp_residual_rms_m = std::sqrt(
+            residual_sum_squares / debug_telemetry_.tdcp_residual_count);
+        debug_telemetry_.tdcp_residual_max_abs_m = residual_max_abs;
+    }
+}
+
 void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_data, double dt_s) {
+    updateTdcpDiagnostics(sat_data, dt_s);
     std::vector<SatelliteId> sats_to_remove;
     for (const auto& [sat, idx] : filter_state_.n1_indices) {
         if (sat_data.find(sat) == sat_data.end()) sats_to_remove.push_back(sat);

@@ -37,6 +37,7 @@ if(GTest_FOUND)
         test_rtk_measurement.cpp
         test_rtk_update.cpp
         test_rtk_ins_time_update.cpp
+        test_rtk_tdcp_diagnostics.cpp
         test_rtk_selection.cpp
         test_rtk_cmc_ref.cpp
         test_rtk_cp_pr_gate.cpp
