@@ -30,6 +30,25 @@ TEST(PPPArTest, MrtklibParCandidatesRequireTwoActiveFrequencyStates) {
     EXPECT_EQ(candidates[1], gps6);
 }
 
+TEST(PPPArTest, ParCandidatesCanIncludeSingleFrequencyConstellationFallback) {
+    const SatelliteId gps6(GNSSSystem::GPS, 6);
+    const SatelliteId gps6_l2(GNSSSystem::GPS, 106);
+    const SatelliteId qzss2(GNSSSystem::QZSS, 2);
+
+    const std::vector<SatelliteId> eligible = {gps6, gps6_l2, qzss2};
+    const std::map<SatelliteId, double> elevations = {
+        {gps6, 54.0 * M_PI / 180.0},
+        {qzss2, 33.0 * M_PI / 180.0},
+    };
+
+    const auto candidates =
+        ppp_ar::selectMrtklibParCandidates(eligible, elevations, 1);
+
+    ASSERT_EQ(candidates.size(), 2u);
+    EXPECT_EQ(candidates[0], qzss2);
+    EXPECT_EQ(candidates[1], gps6);
+}
+
 TEST(PPPArTest, FrequencyLifecycleTracksSignalsIndependently) {
     ppp_shared::PPPAmbiguityInfo ambiguity;
     const GNSSTime first_time(2360, 100.0);
