@@ -4,7 +4,9 @@
 #include <libgnss++/core/observation.hpp>
 #include <libgnss++/core/types.hpp>
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <map>
 #include <string>
 
@@ -18,6 +20,33 @@ enum class ConvergencePolicy {
 /// Check if PPP debug output is enabled via GNSS_PPP_DEBUG.
 inline bool pppDebugEnabled() {
     return pppEnvOverrides().debug;
+}
+
+/// Retry a CLAS reset seed with leave-one-out FDE only after the baseline
+/// seed has demonstrated the same failure that would feed the parity guards.
+inline bool shouldRetryClasSeedWithFde(bool seed_valid,
+                                       bool redundancy_gate_failed,
+                                       bool filter_initialized,
+                                       double filter_spp_distance_m,
+                                       double max_spp_divergence_m) {
+    return seed_valid &&
+           (redundancy_gate_failed ||
+            (filter_initialized && std::isfinite(filter_spp_distance_m) &&
+             max_spp_divergence_m > 0.0 &&
+             filter_spp_distance_m > max_spp_divergence_m));
+}
+
+/// Start one fixed AR quarantine window on a raw maxdiff event. Repeated
+/// maxdiff observations consume the active window instead of extending it.
+inline bool updateClasSeedArQuarantine(bool trigger,
+                                       int recovery_epochs,
+                                       int& remaining_epochs) {
+    if (remaining_epochs > 0) {
+        --remaining_epochs;
+    } else if (trigger) {
+        remaining_epochs = std::max(recovery_epochs, 0);
+    }
+    return remaining_epochs > 0;
 }
 
 struct PPPConfig {

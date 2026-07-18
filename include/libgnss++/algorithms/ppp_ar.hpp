@@ -150,6 +150,11 @@ struct WlnlFixAttempt {
     int state_wlnl_noninteger_count = 0;
     int nb = 0;
     ppp_shared::PPPState constrained_state;
+    // Exact DD rows accepted by the direct state-DD LAMBDA path. MRTKLIB's
+    // holdamb() only constrains ssat rows marked FIX in the current ddmat()
+    // call; rebuilding this set from persistent ambiguity flags admits stale
+    // or PAR-excluded satellites.
+    std::vector<WlnlHoldConstraint> hold_constraints;
 };
 
 struct WlnlWideLaneFixSummary {
