@@ -38,6 +38,8 @@ if(GTest_FOUND)
         test_rtk_ins_time_update.cpp
         test_rtk_selection.cpp
         test_rtk_cmc_ref.cpp
+        test_rtk_cp_pr_gate.cpp
+        test_rtk_ddpr_anchor.cpp
         test_rtk_validation.cpp
         test_fgo.cpp
         test_signal_policy.cpp
