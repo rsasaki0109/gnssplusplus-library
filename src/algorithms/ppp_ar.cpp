@@ -1565,7 +1565,12 @@ WlnlFixAttempt resolveWlnlFix(
                                    ambiguity_states,
                                    debug_enabled,
                                    &eligible_ambiguities.satellites,
-                                   2);
+                                   // A single-frequency constellation DD can
+                                   // poison every otherwise-valid PAR trial.
+                                   // Keep it eligible for exclusion even
+                                   // though dual-frequency satellites remain
+                                   // the preferred candidates by elevation.
+                                   1);
     }
     const auto nl_info = buildWlnlNlInfoMap(
         eligible_ambiguities.satellites,
