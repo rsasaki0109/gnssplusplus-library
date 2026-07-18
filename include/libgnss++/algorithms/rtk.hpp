@@ -434,6 +434,11 @@ public:
         /// false by default; never applied to STATIC or MOVING_BASE.
         bool use_external_position_time_update = false;
 
+        /// M4: append ECEF velocity states after every legacy RTK state.
+        /// Existing position/hardware-bias/iono/ambiguity indices therefore
+        /// never move. Requires an external position/velocity time update.
+        bool enable_velocity_states = false;
+
         /// Per-epoch diagonal regularization added by the INS position time
         /// update, in m^2. The legacy wide reseed also acted as a strong
         /// regularizer; this explicit floor makes that role independently
@@ -761,9 +766,29 @@ public:
         external_position_delta_ecef_ = position_delta_ecef;
         external_position_process_noise_ecef_ = process_noise_ecef;
         has_external_position_time_update_ = true;
+        has_external_velocity_time_update_ = false;
     }
 
-    void clearExternalPositionTimeUpdate() { has_external_position_time_update_ = false; }
+    /// M4 tight coupling: supply the M1 displacement plus predicted antenna
+    /// velocity and [position,velocity] interval process noise.
+    void setExternalPositionVelocityTimeUpdate(
+        const Vector3d& position_delta_ecef,
+        const Vector3d& velocity_ecef,
+        const Eigen::Matrix<double, 6, 6>& process_noise_ecef,
+        const Matrix3d& velocity_initial_covariance_ecef) {
+        external_position_delta_ecef_ = position_delta_ecef;
+        external_position_process_noise_ecef_ = process_noise_ecef.topLeftCorner<3, 3>();
+        external_velocity_ecef_ = velocity_ecef;
+        external_position_velocity_process_noise_ecef_ = process_noise_ecef;
+        external_velocity_initial_covariance_ecef_ = velocity_initial_covariance_ecef;
+        has_external_position_time_update_ = true;
+        has_external_velocity_time_update_ = true;
+    }
+
+    void clearExternalPositionTimeUpdate() {
+        has_external_position_time_update_ = false;
+        has_external_velocity_time_update_ = false;
+    }
     bool hasExternalPositionTimeUpdate() const { return has_external_position_time_update_; }
     InsTimeUpdateDiagnostics getInsTimeUpdateDiagnostics() const {
         return {ins_time_update_applied_count_, ins_time_update_rejected_count_,
@@ -833,6 +858,11 @@ private:
     Vector3d external_position_delta_ecef_ = Vector3d::Zero();
     Matrix3d external_position_process_noise_ecef_ = Matrix3d::Zero();
     bool has_external_position_time_update_ = false;
+    Vector3d external_velocity_ecef_ = Vector3d::Zero();
+    Eigen::Matrix<double, 6, 6> external_position_velocity_process_noise_ecef_ =
+        Eigen::Matrix<double, 6, 6>::Zero();
+    Matrix3d external_velocity_initial_covariance_ecef_ = Matrix3d::Zero();
+    bool has_external_velocity_time_update_ = false;
     std::size_t ins_time_update_applied_count_ = 0;
     std::size_t ins_time_update_rejected_count_ = 0;
     bool ins_time_update_applied_last_epoch_ = false;
@@ -842,7 +872,8 @@ private:
     GNSSTime last_ddpr_anchor_time_;
     bool has_last_ddpr_anchor_ = false;
 
-    // Fixed-size state: [pos(3), glo_hw_bias(2), iono(MAXSAT), N1(MAXSAT), N2(MAXSAT), N5(MAXSAT)]
+    // Legacy state: [pos(3), glo_hw_bias(2), iono(MAXSAT), N1(MAXSAT), N2(MAXSAT), N5(MAXSAT)].
+    // M4 optionally appends velocity(3); it never shifts any legacy index.
     // Phase 18 Step 2 (2026-05-09): N5 freq slot reserved (IB(sat, freq=2)).
     // Currently N5 entries stay 0 / unconfirmed; populated by Steps 3+ when L5 enabled.
     // Existing L1/L2-only path is unchanged: N5 slots default to 0 with zero covariance.
@@ -855,7 +886,11 @@ private:
     static constexpr int REAL_STATES = BASE_STATES + GLO_HWBIAS_STATES;
     static constexpr int IONO_STATES = MAXSAT;
     static constexpr int FREQ_SLOTS = 3;  // L1, L2, L5 (Phase 18 Step 2)
-    static constexpr int NX = REAL_STATES + IONO_STATES + MAXSAT * FREQ_SLOTS;  // total state size
+    static constexpr int LEGACY_NX =
+        REAL_STATES + IONO_STATES + MAXSAT * FREQ_SLOTS;
+    static constexpr int VELOCITY_STATE_INDEX = LEGACY_NX;
+    static constexpr int VELOCITY_STATES = 3;
+    static constexpr int NX = LEGACY_NX + VELOCITY_STATES;
 
     static int systemSlotBase(GNSSSystem system) {
         switch (system) {

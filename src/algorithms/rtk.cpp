@@ -350,6 +350,7 @@ void RTKProcessor::reset() {
     cmc_ref_suspect_epoch_count_ = 0;
     cmc_ref_switch_count_ = 0;
     has_external_position_time_update_ = false;
+    has_external_velocity_time_update_ = false;
     ins_time_update_applied_count_ = 0;
     ins_time_update_rejected_count_ = 0;
     ins_time_update_applied_last_epoch_ = false;
@@ -463,7 +464,7 @@ int RTKProcessor::getOrCreateN1Index(const SatelliteId& sat, double initial_valu
     }
     filter_state_.n1_indices[sat] = idx;
     filter_state_.state(idx) = initial_value;
-    for (int j = 0; j < NX; ++j) {
+    for (int j = 0; j < filter_state_.state.size(); ++j) {
         filter_state_.covariance(idx, j) = 0.0;
         filter_state_.covariance(j, idx) = 0.0;
     }
@@ -479,7 +480,7 @@ int RTKProcessor::getOrCreateN2Index(const SatelliteId& sat, double initial_valu
     }
     filter_state_.n2_indices[sat] = idx;
     filter_state_.state(idx) = initial_value;
-    for (int j = 0; j < NX; ++j) {
+    for (int j = 0; j < filter_state_.state.size(); ++j) {
         filter_state_.covariance(idx, j) = 0.0;
         filter_state_.covariance(j, idx) = 0.0;
     }
@@ -497,7 +498,7 @@ int RTKProcessor::getOrCreateN5Index(const SatelliteId& sat, double initial_valu
     }
     filter_state_.n5_indices[sat] = idx;
     filter_state_.state(idx) = initial_value;
-    for (int j = 0; j < NX; ++j) {
+    for (int j = 0; j < filter_state_.state.size(); ++j) {
         filter_state_.covariance(idx, j) = 0.0;
         filter_state_.covariance(j, idx) = 0.0;
     }
@@ -514,7 +515,7 @@ int RTKProcessor::getOrCreateIonoIndex(const SatelliteId& sat, double initial_va
     filter_state_.iono_indices[sat] = idx;
     // Keep the state active in the sparse Kalman path even if the initial iono estimate is near zero.
     filter_state_.state(idx) = std::abs(initial_value) > 1e-6 ? initial_value : 1e-3;
-    for (int j = 0; j < NX; ++j) {
+    for (int j = 0; j < filter_state_.state.size(); ++j) {
         filter_state_.covariance(idx, j) = 0.0;
         filter_state_.covariance(j, idx) = 0.0;
     }
@@ -527,7 +528,7 @@ void RTKProcessor::removeSatelliteFromState(const SatelliteId& sat) {
     if (it0 != filter_state_.iono_indices.end()) {
         int idx = it0->second;
         filter_state_.state(idx) = 0.0;
-        for (int j = 0; j < NX; ++j) {
+        for (int j = 0; j < filter_state_.state.size(); ++j) {
             filter_state_.covariance(idx, j) = 0.0;
             filter_state_.covariance(j, idx) = 0.0;
         }
@@ -537,7 +538,7 @@ void RTKProcessor::removeSatelliteFromState(const SatelliteId& sat) {
     if (it1 != filter_state_.n1_indices.end()) {
         int idx = it1->second;
         filter_state_.state(idx) = 0.0;
-        for (int j = 0; j < NX; ++j) {
+        for (int j = 0; j < filter_state_.state.size(); ++j) {
             filter_state_.covariance(idx, j) = 0.0;
             filter_state_.covariance(j, idx) = 0.0;
         }
@@ -547,7 +548,7 @@ void RTKProcessor::removeSatelliteFromState(const SatelliteId& sat) {
     if (it2 != filter_state_.n2_indices.end()) {
         int idx = it2->second;
         filter_state_.state(idx) = 0.0;
-        for (int j = 0; j < NX; ++j) {
+        for (int j = 0; j < filter_state_.state.size(); ++j) {
             filter_state_.covariance(idx, j) = 0.0;
             filter_state_.covariance(j, idx) = 0.0;
         }
@@ -558,7 +559,7 @@ void RTKProcessor::removeSatelliteFromState(const SatelliteId& sat) {
     if (it5 != filter_state_.n5_indices.end()) {
         int idx = it5->second;
         filter_state_.state(idx) = 0.0;
-        for (int j = 0; j < NX; ++j) {
+        for (int j = 0; j < filter_state_.state.size(); ++j) {
             filter_state_.covariance(idx, j) = 0.0;
             filter_state_.covariance(j, idx) = 0.0;
         }
@@ -985,8 +986,9 @@ std::vector<RTKProcessor::DDPair> RTKProcessor::buildDoubleDifferencePairs(
 bool RTKProcessor::initializeFilter(const ObservationData& rover_obs,
     const ObservationData& base_obs, const NavigationData& nav) {
     (void)base_obs;
-    filter_state_.state = VectorXd::Zero(NX);
-    filter_state_.covariance = MatrixXd::Zero(NX, NX);
+    const int state_size = rtk_config_.enable_velocity_states ? NX : LEGACY_NX;
+    filter_state_.state = VectorXd::Zero(state_size);
+    filter_state_.covariance = MatrixXd::Zero(state_size, state_size);
     filter_state_.iono_indices.clear();
     filter_state_.n1_indices.clear();
     filter_state_.n2_indices.clear();
@@ -1029,7 +1031,7 @@ void RTKProcessor::updateGlonassHardwareBias(double dt) {
         const int idx = IL(freq);
         if (filter_state_.state(idx) == 0.0 || filter_state_.covariance(idx, idx) <= 0.0) {
             filter_state_.state(idx) = initial_values[freq];
-            for (int j = 0; j < NX; ++j) {
+            for (int j = 0; j < filter_state_.state.size(); ++j) {
                 filter_state_.covariance(idx, j) = 0.0;
                 filter_state_.covariance(j, idx) = 0.0;
             }
@@ -1620,7 +1622,14 @@ void RTKProcessor::resetPositionToSPP(const ObservationData& rover_obs, const Na
     const bool has_time_update_this_epoch = has_external_position_time_update_;
     const Vector3d position_delta_ecef = external_position_delta_ecef_;
     const Matrix3d position_process_noise_ecef = external_position_process_noise_ecef_;
+    const bool has_velocity_update_this_epoch = has_external_velocity_time_update_;
+    const Vector3d velocity_ecef = external_velocity_ecef_;
+    const Eigen::Matrix<double, 6, 6> position_velocity_process_noise_ecef =
+        external_position_velocity_process_noise_ecef_;
+    const Matrix3d velocity_initial_covariance_ecef =
+        external_velocity_initial_covariance_ecef_;
     has_external_position_time_update_ = false;
+    has_external_velocity_time_update_ = false;
     ins_time_update_applied_last_epoch_ = false;
 
     if (rtk_config_.position_mode == RTKConfig::PositionMode::STATIC) {
@@ -1635,10 +1644,20 @@ void RTKProcessor::resetPositionToSPP(const ObservationData& rover_obs, const Na
 
     if (rtk_config_.use_external_position_time_update &&
         has_time_update_this_epoch && !moving_base_mode) {
-        if (rtk_ins_time_update::apply(
-                filter_state_.state, filter_state_.covariance,
-                position_delta_ecef, position_process_noise_ecef,
-                rtk_config_.ins_time_update_position_q_floor_m2)) {
+        const bool applied = rtk_config_.enable_velocity_states &&
+                has_velocity_update_this_epoch
+            ? rtk_ins_time_update::applyPositionVelocity(
+                  filter_state_.state, filter_state_.covariance,
+                  position_delta_ecef, velocity_ecef,
+                  position_velocity_process_noise_ecef,
+                  velocity_initial_covariance_ecef,
+                  rtk_config_.ins_time_update_position_q_floor_m2,
+                  VELOCITY_STATE_INDEX)
+            : rtk_ins_time_update::apply(
+                  filter_state_.state, filter_state_.covariance,
+                  position_delta_ecef, position_process_noise_ecef,
+                  rtk_config_.ins_time_update_position_q_floor_m2);
+        if (applied) {
             ++ins_time_update_applied_count_;
             ins_time_update_applied_last_epoch_ = true;
             // Both external mechanisms target the same epoch. Never let a
@@ -2607,6 +2626,14 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
     const auto measurement_diagnostics = rtk_measurement::summarizeMeasurementBlocks(blocks);
     auto measurement_system = rtk_measurement::assembleMeasurementSystem(
         blocks, filter_state_.state.size());
+    std::vector<bool> force_active;
+    if (rtk_config_.enable_velocity_states &&
+        filter_state_.state.size() >= VELOCITY_STATE_INDEX + VELOCITY_STATES) {
+        force_active.assign(filter_state_.state.size(), false);
+        for (int i = 0; i < VELOCITY_STATES; ++i) {
+            force_active[VELOCITY_STATE_INDEX + i] = true;
+        }
+    }
     const auto update_result = rtk_update::applyMeasurementUpdate(filter_state_.state,
                                                                   filter_state_.covariance,
                                                                   measurement_system,
@@ -2614,7 +2641,8 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
                                                                       ? rtk_config_.outlier_threshold
                                                                       : 30.0,
                                                                   6,
-                                                                  rtk_config_.max_update_nis_per_observation);
+                                                                  rtk_config_.max_update_nis_per_observation,
+                                                                  force_active);
     current_update_diagnostics_.observation_count = update_result.observation_count;
     current_update_diagnostics_.phase_observation_count =
         measurement_diagnostics.phase_observation_count;
@@ -4294,6 +4322,20 @@ PositionSolution RTKProcessor::generateSolution(const GNSSTime& time, SolutionSt
         current_update_diagnostics_.normalized_innovation_squared_per_observation;
     solution.rtk_update_rejected_by_innovation_gate =
         current_update_diagnostics_.rejected_by_innovation_gate ? 1 : 0;
+    if (rtk_config_.enable_velocity_states &&
+        filter_state_.state.size() >= VELOCITY_STATE_INDEX + VELOCITY_STATES &&
+        filter_state_.covariance.rows() == filter_state_.state.size()) {
+        const Vector3d velocity = filter_state_.state.segment<3>(VELOCITY_STATE_INDEX);
+        const Matrix3d velocity_covariance =
+            filter_state_.covariance.block<3, 3>(
+                VELOCITY_STATE_INDEX, VELOCITY_STATE_INDEX);
+        if (velocity.allFinite() && velocity_covariance.allFinite() &&
+            velocity_covariance.diagonal().minCoeff() > 0.0) {
+            solution.velocity_ecef = velocity;
+            solution.velocity_covariance = velocity_covariance;
+            solution.has_velocity = true;
+        }
+    }
     rememberSolution(solution);
     return solution;
 }

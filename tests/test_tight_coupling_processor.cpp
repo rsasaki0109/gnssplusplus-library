@@ -31,12 +31,16 @@ TEST(TightCouplingProcessorTest, ProducesZeroStationaryAntennaIncrement) {
     const Eigen::Vector3d antenna{-3961765.0, 3349009.0, 3698311.0};
     const FusionState bootstrap = bootstrapState();
     ASSERT_TRUE(processor.reanchor(antenna, Eigen::Matrix3d::Identity(),
-                                   Eigen::Vector3d::Zero(), bootstrap.nominal.time, &bootstrap));
+                                   Eigen::Vector3d::Zero(), Eigen::Matrix3d::Identity(),
+                                   bootstrap.nominal.time, &bootstrap));
     for (int i = 1; i <= 20; ++i) processor.processImuSample(stationarySample(100.0 + i * 0.01));
     const auto update = processor.prepareTimeUpdate();
     ASSERT_TRUE(update.valid);
     EXPECT_LT(update.antenna_delta_ecef.norm(), 1e-8);
+    EXPECT_LT(update.antenna_velocity_ecef.norm(), 1e-8);
     EXPECT_TRUE(update.process_noise_ecef.allFinite());
+    EXPECT_TRUE(update.position_velocity_process_noise_ecef.allFinite());
+    EXPECT_TRUE(update.velocity_covariance_ecef.allFinite());
 }
 
 TEST(TightCouplingProcessorTest, LaterReanchorRetainsPrivateBiasState) {
@@ -46,14 +50,16 @@ TEST(TightCouplingProcessorTest, LaterReanchorRetainsPrivateBiasState) {
     const Eigen::Vector3d antenna{-3961765.0, 3349009.0, 3698311.0};
     FusionState bootstrap = bootstrapState();
     ASSERT_TRUE(processor.reanchor(antenna, Eigen::Matrix3d::Identity(),
-                                   Eigen::Vector3d::Zero(), bootstrap.nominal.time, &bootstrap));
+                                   Eigen::Vector3d::Zero(), Eigen::Matrix3d::Identity(),
+                                   bootstrap.nominal.time, &bootstrap));
     processor.processImuSample(stationarySample(100.01));
     ASSERT_TRUE(processor.prepareTimeUpdate().valid);
     FusionState hostile = bootstrap;
     hostile.nominal.accel_bias.setConstant(9.0);
     hostile.nominal.gyro_bias.setConstant(8.0);
     ASSERT_TRUE(processor.reanchor(antenna, Eigen::Matrix3d::Identity(),
-                                   Eigen::Vector3d::Zero(), GNSSTime(2200, 100.01), &hostile));
+                                   Eigen::Vector3d::Zero(), Eigen::Matrix3d::Identity(),
+                                   GNSSTime(2200, 100.01), &hostile));
     EXPECT_TRUE(processor.state().nominal.accel_bias.isApprox(bootstrap.nominal.accel_bias));
     EXPECT_TRUE(processor.state().nominal.gyro_bias.isApprox(bootstrap.nominal.gyro_bias));
 }
@@ -63,7 +69,8 @@ TEST(TightCouplingProcessorTest, GapInvalidatesWholeInterval) {
     const Eigen::Vector3d antenna{-3961765.0, 3349009.0, 3698311.0};
     const FusionState bootstrap = bootstrapState();
     ASSERT_TRUE(processor.reanchor(antenna, Eigen::Matrix3d::Identity(),
-                                   Eigen::Vector3d::Zero(), bootstrap.nominal.time, &bootstrap));
+                                   Eigen::Vector3d::Zero(), Eigen::Matrix3d::Identity(),
+                                   bootstrap.nominal.time, &bootstrap));
     processor.processImuSample(stationarySample(100.2));
     EXPECT_FALSE(processor.prepareTimeUpdate().valid);
     EXPECT_EQ(processor.diagnostics().invalid_intervals, 1u);
@@ -76,7 +83,8 @@ TEST(TightCouplingProcessorTest, OwnsZuptAndNhcConstraintUpdates) {
     const Eigen::Vector3d antenna{-3961765.0, 3349009.0, 3698311.0};
     const FusionState bootstrap = bootstrapState();
     ASSERT_TRUE(processor.reanchor(antenna, Eigen::Matrix3d::Identity(),
-                                   Eigen::Vector3d::Zero(), bootstrap.nominal.time, &bootstrap));
+                                   Eigen::Vector3d::Zero(), Eigen::Matrix3d::Identity(),
+                                   bootstrap.nominal.time, &bootstrap));
     for (int i = 1; i <= 20; ++i) processor.processImuSample(stationarySample(100.0 + i * 0.01));
     ASSERT_TRUE(processor.prepareTimeUpdate().valid);
     EXPECT_EQ(processor.diagnostics().zupt_updates, 1u);

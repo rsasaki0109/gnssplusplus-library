@@ -132,13 +132,36 @@ TightCouplingProcessor::TimeUpdate TightCouplingProcessor::prepareTimeUpdate() {
         -body_to_enu * attitude::skew(config_.lever_arm_body);
     const Eigen::Matrix3d process_noise_enu =
         jacobian * result.process_noise * jacobian.transpose();
+    Eigen::Matrix<double, 6, fusion_index::SIZE> navigation_jacobian =
+        Eigen::Matrix<double, 6, fusion_index::SIZE>::Zero();
+    navigation_jacobian.topRows<3>() = jacobian;
+    navigation_jacobian.block<3, 3>(3, fusion_index::VELOCITY).setIdentity();
+    const Eigen::Matrix<double, 6, 6> navigation_process_noise_enu =
+        navigation_jacobian * result.process_noise * navigation_jacobian.transpose();
     const Eigen::Matrix3d enu_to_ecef =
         ecefToEnuRotation(anchor_lat_rad_, anchor_lon_rad_).transpose();
+    const Eigen::Vector3d antenna_velocity_enu =
+        state_.nominal.velocity_enu +
+        body_to_enu * last_angular_rate_body_.cross(config_.lever_arm_body);
+    Eigen::Matrix<double, 6, 6> navigation_rotation =
+        Eigen::Matrix<double, 6, 6>::Zero();
+    navigation_rotation.topLeftCorner<3, 3>() = enu_to_ecef;
+    navigation_rotation.bottomRightCorner<3, 3>() = enu_to_ecef;
     output.antenna_delta_ecef = enu_to_ecef * antenna_delta_enu;
+    output.antenna_velocity_ecef = enu_to_ecef * antenna_velocity_enu;
     output.process_noise_ecef =
         enu_to_ecef * process_noise_enu * enu_to_ecef.transpose();
+    output.position_velocity_process_noise_ecef =
+        navigation_rotation * navigation_process_noise_enu * navigation_rotation.transpose();
+    output.velocity_covariance_ecef =
+        enu_to_ecef *
+        state_.covariance.block<3, 3>(fusion_index::VELOCITY, fusion_index::VELOCITY) *
+        enu_to_ecef.transpose();
     output.valid = output.antenna_delta_ecef.allFinite() &&
-                   output.process_noise_ecef.allFinite();
+                   output.antenna_velocity_ecef.allFinite() &&
+                   output.process_noise_ecef.allFinite() &&
+                   output.position_velocity_process_noise_ecef.allFinite() &&
+                   output.velocity_covariance_ecef.allFinite();
     prepared_ = output.valid;
     if (output.valid) ++diagnostics_.supplied_updates;
     return output;
@@ -148,10 +171,12 @@ bool TightCouplingProcessor::reanchor(
     const Eigen::Vector3d& float_antenna_position_ecef,
     const Eigen::Matrix3d& float_position_covariance_ecef,
     const Eigen::Vector3d& antenna_velocity_ecef,
+    const Eigen::Matrix3d& antenna_velocity_covariance_ecef,
     const GNSSTime& time,
     const FusionState* bootstrap_state) {
     if (!float_antenna_position_ecef.allFinite() ||
         !float_position_covariance_ecef.allFinite() || !antenna_velocity_ecef.allFinite() ||
+        !antenna_velocity_covariance_ecef.allFinite() ||
         !std::isfinite(time.tow) || (!initialized_ && bootstrap_state == nullptr)) {
         invalidateInterval();
         return false;
@@ -180,6 +205,14 @@ bool TightCouplingProcessor::reanchor(
         0, fusion_index::POSITION).setZero();
     state_.covariance.block<3, 3>(fusion_index::POSITION, fusion_index::POSITION) =
         new_ecef_to_enu * float_position_covariance_ecef * new_ecef_to_enu.transpose();
+    if (config_.velocity_state_output_enable) {
+        state_.covariance.block<3, fusion_index::SIZE>(
+            fusion_index::VELOCITY, 0).setZero();
+        state_.covariance.block<fusion_index::SIZE, 3>(
+            0, fusion_index::VELOCITY).setZero();
+        state_.covariance.block<3, 3>(fusion_index::VELOCITY, fusion_index::VELOCITY) =
+            new_ecef_to_enu * antenna_velocity_covariance_ecef * new_ecef_to_enu.transpose();
+    }
     state_.covariance = 0.5 * (state_.covariance + state_.covariance.transpose());
     initialized_ = preintegrator_.reset(state_.nominal) == PreintegrationStatus::ACCEPTED;
     prepared_ = false;

@@ -81,5 +81,35 @@ TEST(RTKInsTimeUpdateTest, RejectsNegativeFloorWithoutMutation) {
     EXPECT_TRUE(covariance.isApprox(covariance_before, 0.0));
 }
 
+TEST(RTKInsTimeUpdateTest, AppendsVelocityWithoutMovingLegacyCrossCovariance) {
+    Eigen::VectorXd state = Eigen::VectorXd::Zero(9);
+    state.head<3>() << 10.0, 20.0, 30.0;
+    state.segment<3>(3).setConstant(4.0);  // legacy states
+    Eigen::MatrixXd covariance = Eigen::MatrixXd::Identity(9, 9);
+    covariance.block<3, 3>(6, 6).setZero();
+    covariance.block<3, 3>(0, 3).setConstant(0.25);
+    covariance.block<3, 3>(3, 0).setConstant(0.25);
+    const Eigen::Matrix3d legacy_cross_before = covariance.block<3, 3>(0, 3);
+    Eigen::Matrix<double, 6, 6> noise =
+        Eigen::Matrix<double, 6, 6>::Identity() * 0.01;
+    noise.block<3, 3>(0, 3).setIdentity();
+    noise.block<3, 3>(0, 3) *= 0.002;
+    noise.block<3, 3>(3, 0) = noise.block<3, 3>(0, 3).transpose();
+
+    ASSERT_TRUE(applyPositionVelocity(
+        state, covariance, Eigen::Vector3d(1.0, -2.0, 3.0),
+        Eigen::Vector3d(4.0, 5.0, 6.0), noise,
+        2.0 * Eigen::Matrix3d::Identity(), 0.5, 6));
+
+    EXPECT_TRUE(state.head<3>().isApprox(Eigen::Vector3d(11.0, 18.0, 33.0)));
+    EXPECT_TRUE(state.segment<3>(3).isApprox(Eigen::Vector3d::Constant(4.0)));
+    EXPECT_TRUE(state.tail<3>().isApprox(Eigen::Vector3d(4.0, 5.0, 6.0)));
+    EXPECT_TRUE((covariance.block<3, 3>(0, 3).isApprox(legacy_cross_before, 0.0)));
+    EXPECT_TRUE((covariance.block<3, 3>(6, 6).isApprox(
+        2.01 * Eigen::Matrix3d::Identity(), 1e-12)));
+    EXPECT_TRUE((covariance.block<3, 3>(0, 6).isApprox(
+        0.002 * Eigen::Matrix3d::Identity(), 1e-12)));
+}
+
 }  // namespace
 }  // namespace libgnss::rtk_ins_time_update

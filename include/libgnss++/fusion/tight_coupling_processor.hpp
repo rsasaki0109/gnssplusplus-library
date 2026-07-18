@@ -26,12 +26,17 @@ public:
         bool nhc_enable = false;
         double nhc_sigma_lateral_mps = 0.3;
         double nhc_sigma_vertical_mps = 0.2;
+        bool velocity_state_output_enable = false;
     };
 
     struct TimeUpdate {
         bool valid = false;
         Eigen::Vector3d antenna_delta_ecef = Eigen::Vector3d::Zero();
+        Eigen::Vector3d antenna_velocity_ecef = Eigen::Vector3d::Zero();
         Eigen::Matrix3d process_noise_ecef = Eigen::Matrix3d::Zero();
+        Eigen::Matrix<double, 6, 6> position_velocity_process_noise_ecef =
+            Eigen::Matrix<double, 6, 6>::Zero();
+        Eigen::Matrix3d velocity_covariance_ecef = Eigen::Matrix3d::Zero();
     };
 
     struct Diagnostics {
@@ -56,6 +61,7 @@ public:
     bool reanchor(const Eigen::Vector3d& float_antenna_position_ecef,
                   const Eigen::Matrix3d& float_position_covariance_ecef,
                   const Eigen::Vector3d& antenna_velocity_ecef,
+                  const Eigen::Matrix3d& antenna_velocity_covariance_ecef,
                   const GNSSTime& time,
                   const FusionState* bootstrap_state = nullptr);
 

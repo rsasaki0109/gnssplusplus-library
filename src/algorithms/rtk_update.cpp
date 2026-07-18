@@ -36,7 +36,8 @@ InnovationStats computeInnovationStats(const Eigen::VectorXd& state,
                                        const Eigen::MatrixXd& covariance,
                                        const Eigen::MatrixXd& design_matrix,
                                        const Eigen::VectorXd& residuals,
-                                       const Eigen::MatrixXd& measurement_covariance) {
+                                       const Eigen::MatrixXd& measurement_covariance,
+                                       const std::vector<bool>& force_active) {
     InnovationStats stats;
     const int n = static_cast<int>(state.size());
     const int m = static_cast<int>(residuals.size());
@@ -44,11 +45,15 @@ InnovationStats computeInnovationStats(const Eigen::VectorXd& state,
         measurement_covariance.cols() != m) {
         return stats;
     }
+    if (!force_active.empty() && static_cast<int>(force_active.size()) != n) {
+        return stats;
+    }
 
     std::vector<int> active_states;
     active_states.reserve(n);
     for (int i = 0; i < n; ++i) {
-        if (state(i) != 0.0 && covariance(i, i) > 0.0) {
+        const bool explicitly_active = !force_active.empty() && force_active[i];
+        if ((state(i) != 0.0 || explicitly_active) && covariance(i, i) > 0.0) {
             active_states.push_back(i);
         }
     }
@@ -101,7 +106,8 @@ FilterUpdateResult applyMeasurementUpdate(Eigen::VectorXd& state,
                                           rtk_measurement::MeasurementSystem& measurement_system,
                                           double outlier_threshold,
                                           int min_observation_count,
-                                          double max_normalized_innovation_squared_per_observation) {
+                                          double max_normalized_innovation_squared_per_observation,
+                                          const std::vector<bool>& force_active) {
     FilterUpdateResult result;
     result.observation_count = static_cast<int>(measurement_system.residuals.size());
     result.prefit_residual_rms_m = residualRms(measurement_system.residuals);
@@ -121,7 +127,8 @@ FilterUpdateResult applyMeasurementUpdate(Eigen::VectorXd& state,
                                                          covariance,
                                                          measurement_system.design_matrix,
                                                          measurement_system.residuals,
-                                                         measurement_system.covariance);
+                                                         measurement_system.covariance,
+                                                         force_active);
     result.innovation_observation_count = innovation_stats.observation_count;
     result.normalized_innovation_squared =
         innovation_stats.ok ? innovation_stats.normalized_innovation_squared : 0.0;
@@ -141,7 +148,8 @@ FilterUpdateResult applyMeasurementUpdate(Eigen::VectorXd& state,
                                   covariance,
                                   measurement_system.design_matrix,
                                   measurement_system.residuals,
-                                  measurement_system.covariance);
+                                  measurement_system.covariance,
+                                  force_active);
     result.ok = (info == 0);
     return result;
 }

@@ -164,3 +164,37 @@ and Nagoya error percentiles, but it fails the acceptance gates: Tokyo run1
 horizontal p95 regresses slightly, Nagoya fix rate falls by 4.98 percentage
 points, and wall time rises by 14.9--71.9%. This is a documented mixed-negative
 result and the feature remains default-off.
+
+## M4 evaluation
+
+`--tc-velocity-states` requires the M3 closed loop and appends three ECEF
+velocity states after the complete legacy RTK state vector. Position,
+GLONASS-hardware-bias, ionosphere, and ambiguity indices are unchanged. The
+INS time update supplies antenna velocity and a 6x6 position-velocity process
+noise block. Position DD updates can therefore correct velocity through the
+cross-covariance. A force-active mask in the shared Kalman and NIS paths keeps
+valid zero-valued velocity states observable without changing the legacy
+RTKLIB sparse-state rule for any other state.
+
+The 300-epoch Tokyo run3 smoke completed with 300 valid solutions, 296 fixes,
+111 velocity-state time updates, no invalid interval, and no stderr. With M4
+disabled, both the all-features-OFF and M3-only smoke outputs were bit-identical
+to their pre-M4 counterparts. Full M4-OFF outputs were also SHA-256 identical
+to the saved M3-ON output on all three evaluation datasets.
+
+Same-binary full M3/M4 runs produced:
+
+| Dataset | Mode | Fix % | PPC 3D 50 cm % | p95 horizontal m | p95 abs up m | Wall s | Veto / DDPR anchor |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Tokyo run1 | M3 | 77.89 | 75.14 | 6.91 | 24.66 | 1133.3 | 51 / 47 |
+| Tokyo run1 | M4 | 77.36 | 75.75 | 7.53 | 23.32 | 1139.9 | 51 / 47 |
+| Tokyo run3 | M3 | 76.74 | 81.01 | 3.88 | 6.04 | 1919.9 | 0 / 0 |
+| Tokyo run3 | M4 | 78.52 | 79.22 | 4.69 | 6.22 | 1948.1 | 81 / 76 |
+| Nagoya run1 | M3 | 72.51 | 72.19 | 8.73 | 13.71 | 721.9 | 300 / 296 |
+| Nagoya run1 | M4 | 78.27 | 74.39 | 9.66 | 13.15 | 741.3 | 0 / 0 |
+
+Wall-time overhead stays within 2.7%, and Nagoya fix rate recovers strongly.
+However, Tokyo run1 misses the fix-rate tolerance by 0.03 percentage points,
+and horizontal p95 regresses on every dataset (with additional Tokyo run3
+50-cm and vertical-p95 regressions). M4 is therefore another documented
+mixed-negative result and remains default-off.

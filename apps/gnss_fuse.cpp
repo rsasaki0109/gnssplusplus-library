@@ -140,6 +140,7 @@ struct FuseOptions {
     // position prior above; the two modes are mutually exclusive.
     bool tc_ins_time_update = false;
     bool tc_closed_loop = false;
+    bool tc_velocity_states = false;
     double tc_ins_position_q_floor_m2 = 25.0;
     double tc_ins_max_sample_gap_s = 0.1;
     bool tc_cp_pr_gate = false;
@@ -361,6 +362,8 @@ void printUsage(const char* program_name) {
         << "  --tc-closed-loop             M3 TightCouplingProcessor path. Owns IMU intervals,\n"
         << "                                re-anchoring, ZUPT/NHC, and enables the M2 gate.\n"
         << "                                Mutually exclusive with --tc-ins-time-update. Default: off.\n"
+        << "  --tc-velocity-states         M4 ECEF velocity states appended after legacy RTK state.\n"
+        << "                                Requires --tc-closed-loop. Default: off.\n"
         << "  --tc-cp-pr-gate              M2 fixed-candidate CP-vs-PR gate (--base only). Vetoes\n"
         << "                                inconsistent integers before FIX feedback. Default: off.\n"
         << "  --tc-cp-pr-threshold <m>     Per-pair absolute innovation threshold (default: 10).\n"
@@ -627,6 +630,8 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             options.tc_ins_time_update = true;
         } else if (arg == "--tc-closed-loop") {
             options.tc_closed_loop = true;
+        } else if (arg == "--tc-velocity-states") {
+            options.tc_velocity_states = true;
         } else if (arg == "--tc-ins-position-q-floor") {
             options.tc_ins_position_q_floor_m2 = std::stod(requireValue(arg, i, argc, argv));
         } else if (arg == "--tc-ins-max-sample-gap") {
@@ -697,6 +702,9 @@ FuseOptions parseArguments(int argc, char* argv[]) {
     if (options.tc_closed_loop && (options.tc_ins_time_update || options.rtk_ins_prior)) {
         argumentError("--tc-closed-loop is mutually exclusive with legacy INS prior/time-update modes",
                       argv[0]);
+    }
+    if (options.tc_velocity_states && !options.tc_closed_loop) {
+        argumentError("--tc-velocity-states requires --tc-closed-loop", argv[0]);
     }
     if (!std::isfinite(options.tc_ins_position_q_floor_m2) ||
         options.tc_ins_position_q_floor_m2 < 0.0) {
@@ -892,6 +900,7 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
     rtk_config.use_external_position_prior = options.rtk_ins_prior;
     rtk_config.use_external_position_time_update =
         options.tc_ins_time_update || options.tc_closed_loop;
+    rtk_config.enable_velocity_states = options.tc_velocity_states;
     rtk_config.ins_time_update_position_q_floor_m2 = options.tc_ins_position_q_floor_m2;
     rtk_config.enable_cp_pr_fixed_gate = options.tc_cp_pr_gate || options.tc_closed_loop;
     rtk_config.cp_pr_fixed_gate_threshold_m = options.tc_cp_pr_threshold_m;
@@ -951,6 +960,7 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
     tc_closed_loop_config.nhc_enable = options.fusion_config.nhc_enable;
     tc_closed_loop_config.nhc_sigma_lateral_mps = options.fusion_config.nhc_sigma_lateral_mps;
     tc_closed_loop_config.nhc_sigma_vertical_mps = options.fusion_config.nhc_sigma_vertical_mps;
+    tc_closed_loop_config.velocity_state_output_enable = options.tc_velocity_states;
     libgnss::TightCouplingProcessor tc_closed_loop_processor(tc_closed_loop_config);
     double tc_anchor_lat_rad = 0.0;
     double tc_anchor_lon_rad = 0.0;
@@ -1165,8 +1175,15 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
         if (options.tc_closed_loop) {
             const auto update = tc_closed_loop_processor.prepareTimeUpdate();
             if (update.valid) {
-                rtk_processor.setExternalPositionTimeUpdate(
-                    update.antenna_delta_ecef, update.process_noise_ecef);
+                if (options.tc_velocity_states) {
+                    rtk_processor.setExternalPositionVelocityTimeUpdate(
+                        update.antenna_delta_ecef, update.antenna_velocity_ecef,
+                        update.position_velocity_process_noise_ecef,
+                        update.velocity_covariance_ecef);
+                } else {
+                    rtk_processor.setExternalPositionTimeUpdate(
+                        update.antenna_delta_ecef, update.process_noise_ecef);
+                }
             }
         }
 
@@ -1309,12 +1326,14 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
                         anchor_position_ecef, anchor_position_covariance_ecef);
                 }
                 if (bootstrap_ready && have_anchor && pos_solution.has_velocity &&
-                    pos_solution.velocity_ecef.allFinite()) {
+                    pos_solution.velocity_ecef.allFinite() &&
+                    pos_solution.velocity_covariance.allFinite()) {
                     const libgnss::FusionState* bootstrap =
                         needs_bootstrap ? &fusion_processor.state() : nullptr;
                     anchored = tc_closed_loop_processor.reanchor(
                         anchor_position_ecef, anchor_position_covariance_ecef,
-                        pos_solution.velocity_ecef, rover_obs.time, bootstrap);
+                        pos_solution.velocity_ecef, pos_solution.velocity_covariance,
+                        rover_obs.time, bootstrap);
                 }
                 if (!anchored) {
                     tc_closed_loop_processor.invalidateInterval();
@@ -1451,6 +1470,8 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
                       << " nhc_updates=" << diagnostics.nhc_updates;
         }
         std::cout << "\n";
+        std::cout << "RTK velocity states: "
+                  << (options.tc_velocity_states ? "on" : "off") << "\n";
         const bool cp_pr_gate_active = options.tc_cp_pr_gate || options.tc_closed_loop;
         std::cout << "RTK CP-vs-PR fixed gate: " << (cp_pr_gate_active ? "on" : "off");
         if (cp_pr_gate_active) {
