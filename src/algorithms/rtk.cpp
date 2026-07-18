@@ -2,6 +2,8 @@
 #include <libgnss++/algorithms/rtk_ar_evaluation.hpp>
 #include <libgnss++/algorithms/rtk_ar_selection.hpp>
 #include <libgnss++/algorithms/lambda.hpp>
+#include <libgnss++/algorithms/rtk_cp_pr_gate.hpp>
+#include <libgnss++/algorithms/rtk_ddpr_anchor.hpp>
 #include <libgnss++/algorithms/rtk_measurement.hpp>
 #include <libgnss++/algorithms/rtk_selection.hpp>
 #include <libgnss++/algorithms/rtk_ins_time_update.hpp>
@@ -351,6 +353,8 @@ void RTKProcessor::reset() {
     ins_time_update_applied_count_ = 0;
     ins_time_update_rejected_count_ = 0;
     ins_time_update_applied_last_epoch_ = false;
+    consecutive_cp_pr_gate_rejections_ = 0;
+    has_last_ddpr_anchor_ = false;
     consecutive_fix_count_ = 0;
     consecutive_float_count_ = 0;
     consecutive_nonfix_count_ = 0;
@@ -386,6 +390,17 @@ bool RTKProcessor::getFloatPosteriorPosition(
     position_covariance_ecef =
         filter_state_.covariance.topLeftCorner<BASE_STATES, BASE_STATES>();
     return position_ecef.allFinite() && position_covariance_ecef.allFinite();
+}
+
+bool RTKProcessor::getLastDdPrAnchor(
+    Vector3d& position_ecef, Matrix3d& position_covariance_ecef, GNSSTime& time) const {
+    if (!has_last_ddpr_anchor_) {
+        return false;
+    }
+    position_ecef = last_ddpr_anchor_position_ecef_;
+    position_covariance_ecef = last_ddpr_anchor_covariance_ecef_;
+    time = last_ddpr_anchor_time_;
+    return true;
 }
 
 // RTKLIB varerr: SD measurement error variance
@@ -3521,6 +3536,139 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
 // ============================================================
 // Validate fixed solution
 // ============================================================
+bool RTKProcessor::validateCpPrFixedCandidate(
+    const std::map<SatelliteId, SatelliteData>& sat_data,
+    const GNSSTime& current_time) {
+    if (!rtk_config_.enable_cp_pr_fixed_gate) {
+        consecutive_cp_pr_gate_rejections_ = 0;
+        return true;
+    }
+
+    auto wavelength = [](const SatelliteData& data, int freq) {
+        return freq == 0 ? data.l1_wavelength
+             : freq == 1 ? data.l2_wavelength
+                         : data.l5_wavelength;
+    };
+    auto phaseSd = [](const SatelliteData& data, int freq) {
+        return freq == 0 ? data.rover_l1_phase - data.base_l1_phase
+             : freq == 1 ? data.rover_l2_phase - data.base_l2_phase
+                         : data.rover_l5_phase - data.base_l5_phase;
+    };
+    auto codeSd = [](const SatelliteData& data, int freq) {
+        return freq == 0 ? data.rover_l1_code - data.base_l1_code
+             : freq == 1 ? data.rover_l2_code - data.base_l2_code
+                         : data.rover_l5_code - data.base_l5_code;
+    };
+
+    std::vector<rtk_cp_pr_gate::Observation> gate_observations;
+    if (last_best_subset_.size() == static_cast<std::size_t>(last_dd_fixed_.size())) {
+        gate_observations.reserve(last_best_subset_.size());
+        for (int i = 0; i < static_cast<int>(last_best_subset_.size()); ++i) {
+            const int pair_index = last_best_subset_[i];
+            if (pair_index < 0 || pair_index >= static_cast<int>(last_dd_pairs_.size())) {
+                continue;
+            }
+            const auto& pair = last_dd_pairs_[pair_index];
+            if (pair.ref_sat.system == GNSSSystem::GLONASS) {
+                continue;
+            }
+            const auto ref_it = sat_data.find(pair.ref_sat);
+            const auto sat_it = sat_data.find(pair.sat);
+            if (ref_it == sat_data.end() || sat_it == sat_data.end()) {
+                continue;
+            }
+            const double ref_wavelength = wavelength(ref_it->second, pair.freq);
+            const double sat_wavelength = wavelength(sat_it->second, pair.freq);
+            if (!(ref_wavelength > 0.0) || !(sat_wavelength > 0.0) ||
+                std::abs(ref_wavelength - sat_wavelength) > 1e-6) {
+                continue;
+            }
+            rtk_cp_pr_gate::Observation observation;
+            observation.dd_pseudorange_m =
+                codeSd(ref_it->second, pair.freq) - codeSd(sat_it->second, pair.freq);
+            observation.dd_carrier_m =
+                ref_wavelength * phaseSd(ref_it->second, pair.freq) -
+                sat_wavelength * phaseSd(sat_it->second, pair.freq);
+            observation.fixed_ambiguity_m = ref_wavelength * last_dd_fixed_(i);
+            gate_observations.push_back(observation);
+        }
+    }
+
+    rtk_cp_pr_gate::Config gate_config;
+    gate_config.innovation_threshold_m = rtk_config_.cp_pr_fixed_gate_threshold_m;
+    gate_config.min_pairs = static_cast<std::size_t>(
+        std::max(1, rtk_config_.cp_pr_fixed_gate_min_pairs));
+    gate_config.max_bad_pairs = static_cast<std::size_t>(
+        std::max(0, rtk_config_.cp_pr_fixed_gate_max_bad_pairs));
+    gate_config.escalation_epochs = static_cast<std::size_t>(
+        std::max(1, rtk_config_.cp_pr_fixed_gate_escalation_epochs));
+    const auto gate_result = rtk_cp_pr_gate::evaluate(gate_observations, gate_config);
+    if (!gate_result.valid) {
+        consecutive_cp_pr_gate_rejections_ = 0;
+        return true;
+    }
+
+    debug_telemetry_.cp_pr_gate_evaluated = true;
+    debug_telemetry_.cp_pr_gate_checked_pairs =
+        static_cast<int>(gate_result.checked_pairs);
+    debug_telemetry_.cp_pr_gate_bad_pairs = static_cast<int>(gate_result.bad_pairs);
+    debug_telemetry_.cp_pr_gate_rms_m = gate_result.rms_innovation_m;
+    debug_telemetry_.cp_pr_gate_max_m = gate_result.max_abs_innovation_m;
+    if (gate_result.consistent) {
+        consecutive_cp_pr_gate_rejections_ = 0;
+        return true;
+    }
+
+    debug_telemetry_.cp_pr_gate_rejected = true;
+    ++consecutive_cp_pr_gate_rejections_;
+    const bool escalated = consecutive_cp_pr_gate_rejections_ >=
+        std::max(1, rtk_config_.cp_pr_fixed_gate_escalation_epochs);
+    debug_telemetry_.cp_pr_gate_escalated = escalated;
+    if (escalated) {
+        std::set<std::pair<SatelliteId, SatelliteId>> used_pairs;
+        std::vector<rtk_ddpr_anchor::Observation> anchor_observations;
+        for (const auto& pair : last_dd_pairs_) {
+            if (pair.freq != 0 || !used_pairs.insert({pair.ref_sat, pair.sat}).second) {
+                continue;
+            }
+            const auto ref_it = sat_data.find(pair.ref_sat);
+            const auto sat_it = sat_data.find(pair.sat);
+            if (ref_it == sat_data.end() || sat_it == sat_data.end()) {
+                continue;
+            }
+            rtk_ddpr_anchor::Observation observation;
+            observation.reference_satellite_rover_ecef = ref_it->second.sat_pos;
+            observation.target_satellite_rover_ecef = sat_it->second.sat_pos;
+            observation.reference_satellite_base_ecef = ref_it->second.sat_pos_base;
+            observation.target_satellite_base_ecef = sat_it->second.sat_pos_base;
+            observation.dd_pseudorange_m =
+                codeSd(ref_it->second, 0) - codeSd(sat_it->second, 0);
+            anchor_observations.push_back(observation);
+        }
+        rtk_ddpr_anchor::Config anchor_config;
+        anchor_config.fde_threshold_m = rtk_config_.ddpr_anchor_fde_threshold_m;
+        anchor_config.max_fde_removals = static_cast<std::size_t>(
+            std::max(0, rtk_config_.ddpr_anchor_max_fde_removals));
+        const Vector3d initial_position = base_position_ + filter_state_.state.head<3>();
+        const auto anchor_result = rtk_ddpr_anchor::solve(
+            anchor_observations, base_position_, initial_position, anchor_config);
+        if (anchor_result.valid) {
+            last_ddpr_anchor_position_ecef_ = anchor_result.position_ecef;
+            last_ddpr_anchor_covariance_ecef_ = anchor_result.covariance_ecef;
+            last_ddpr_anchor_time_ = current_time;
+            has_last_ddpr_anchor_ = true;
+            debug_telemetry_.ddpr_anchor_valid = true;
+            debug_telemetry_.ddpr_anchor_observations =
+                static_cast<int>(anchor_result.observations_used);
+            debug_telemetry_.ddpr_anchor_residual_rms_m = anchor_result.residual_rms_m;
+            debug_telemetry_.ddpr_anchor_fixed_distance_m =
+                (anchor_result.position_ecef - (base_position_ + fixed_baseline_)).norm();
+        }
+    }
+    debug_telemetry_.reject_reason = "cp_pr_innovation";
+    return false;
+}
+
 RTKProcessor::HoldStateSnapshot RTKProcessor::captureHoldState() const {
     HoldStateSnapshot snapshot;
     snapshot.last_fixed_position = last_fixed_position_;
@@ -3551,6 +3699,10 @@ bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteDa
                                          const GNSSTime& current_time) {
     if (!has_fixed_solution_) {
         debug_telemetry_.reject_reason = "no_fixed_solution";
+        return false;
+    }
+
+    if (!validateCpPrFixedCandidate(sat_data, current_time)) {
         return false;
     }
 

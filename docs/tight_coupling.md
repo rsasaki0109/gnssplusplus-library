@@ -109,3 +109,26 @@ M1 is therefore a documented mixed-negative result: Tokyo run3 improves
 strongly, but Tokyo run1 and Nagoya run1 fail the quality and wall-time gates.
 The feature remains default-off. The selected `25 m^2` floor is only the
 default after a caller explicitly enables the M1 path.
+
+## M2 evaluation
+
+M2 validates a fixed integer candidate without using either candidate
+position. Non-GLONASS pairs apply
+`|DD_PR - (DD_CP - fixed_DD_ambiguity)|`; GLONASS FDMA is skipped because the
+reference and target wavelengths differ. A first pass that rejected a whole
+candidate for one pair above 10 m was too strict on Tokyo run1. The one allowed
+retune kept the 10 m reference threshold and allowed one bad pair. Two
+consecutive vetoes escalate to an independent DDPR-only LS anchor with
+leave-one-out FDE. M2 exposes that anchor for M3 but does not inject it yet.
+
+Same-binary full runs with the selected settings produced:
+
+| Dataset | OFF/ON fixed epochs | OFF/ON 3D 50 cm % | Vetoed candidates | DDPR anchors |
+|---|---:|---:|---:|---:|
+| Tokyo run1 | 9082 / 9079 | 72.11 / 72.11 | 195 | 191 |
+| Tokyo run3 | 11419 / 11419 | 78.95 / 78.95 | 10 | 9 |
+| Nagoya run1 | 5848 / 5848 | 71.54 / 71.54 | 5 | 4 |
+
+Official score and horizontal/vertical p95 were also identical within each
+OFF/ON pair. The gate remains default-off; enabling it uses a 10 m threshold,
+minimum four checked pairs, one allowed bad pair, and two-epoch escalation.

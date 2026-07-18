@@ -140,6 +140,13 @@ struct FuseOptions {
     bool tc_ins_time_update = false;
     double tc_ins_position_q_floor_m2 = 25.0;
     double tc_ins_max_sample_gap_s = 0.1;
+    bool tc_cp_pr_gate = false;
+    double tc_cp_pr_threshold_m = 10.0;
+    int tc_cp_pr_min_pairs = 4;
+    int tc_cp_pr_max_bad_pairs = 1;
+    int tc_cp_pr_escalation_epochs = 2;
+    double tc_ddpr_fde_threshold_m = 10.0;
+    int tc_ddpr_max_fde_removals = 3;
 
     // RTK tuning passthroughs mirroring apps/gnss_solve.cpp's flags of the
     // same name, added so gnss_fuse's underlying RTKProcessor config can be
@@ -349,6 +356,14 @@ void printUsage(const char* program_name) {
         << "                                INS interval (default: 25 m^2).\n"
         << "  --tc-ins-max-sample-gap <s>  Invalidate an IMU interval containing a larger sample\n"
         << "                                gap and fall back to legacy RTK reseeding (default: 0.1 s).\n"
+        << "  --tc-cp-pr-gate              M2 fixed-candidate CP-vs-PR gate (--base only). Vetoes\n"
+        << "                                inconsistent integers before FIX feedback. Default: off.\n"
+        << "  --tc-cp-pr-threshold <m>     Per-pair absolute innovation threshold (default: 10).\n"
+        << "  --tc-cp-pr-min-pairs <n>     Minimum non-GLONASS DD pairs to evaluate (default: 4).\n"
+        << "  --tc-cp-pr-max-bad-pairs <n> Allowed above-threshold pairs (default: 1).\n"
+        << "  --tc-cp-pr-escalation <n>    Consecutive vetoes before DDPR-LS anchor (default: 2).\n"
+        << "  --tc-ddpr-fde-threshold <m>  DDPR-LS outlier threshold (default: 10).\n"
+        << "  --tc-ddpr-max-fde-removals <n> Maximum DDPR-LS row removals (default: 3).\n"
         << "  --arfilter / --no-arfilter   Force RTK subset-AR filter margin on/off, overriding\n"
         << "                                whatever --preset set (mirrors `gnss solve`'s flag).\n"
         << "  --rtk-snr-weighting          Inflate RTK observation variance for low-SNR links\n"
@@ -609,6 +624,20 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             options.tc_ins_position_q_floor_m2 = std::stod(requireValue(arg, i, argc, argv));
         } else if (arg == "--tc-ins-max-sample-gap") {
             options.tc_ins_max_sample_gap_s = std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--tc-cp-pr-gate") {
+            options.tc_cp_pr_gate = true;
+        } else if (arg == "--tc-cp-pr-threshold") {
+            options.tc_cp_pr_threshold_m = std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--tc-cp-pr-min-pairs") {
+            options.tc_cp_pr_min_pairs = std::stoi(requireValue(arg, i, argc, argv));
+        } else if (arg == "--tc-cp-pr-max-bad-pairs") {
+            options.tc_cp_pr_max_bad_pairs = std::stoi(requireValue(arg, i, argc, argv));
+        } else if (arg == "--tc-cp-pr-escalation") {
+            options.tc_cp_pr_escalation_epochs = std::stoi(requireValue(arg, i, argc, argv));
+        } else if (arg == "--tc-ddpr-fde-threshold") {
+            options.tc_ddpr_fde_threshold_m = std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--tc-ddpr-max-fde-removals") {
+            options.tc_ddpr_max_fde_removals = std::stoi(requireValue(arg, i, argc, argv));
         } else if (arg == "--arfilter") {
             options.arfilter_override = true;
             options.arfilter_value = true;
@@ -665,6 +694,17 @@ FuseOptions parseArguments(int argc, char* argv[]) {
     if (!std::isfinite(options.tc_ins_max_sample_gap_s) ||
         options.tc_ins_max_sample_gap_s <= 0.0) {
         argumentError("--tc-ins-max-sample-gap must be finite and > 0", argv[0]);
+    }
+    if (!std::isfinite(options.tc_cp_pr_threshold_m) || options.tc_cp_pr_threshold_m <= 0.0) {
+        argumentError("--tc-cp-pr-threshold must be finite and > 0", argv[0]);
+    }
+    if (options.tc_cp_pr_min_pairs < 1 || options.tc_cp_pr_max_bad_pairs < 0 ||
+        options.tc_cp_pr_escalation_epochs < 1) {
+        argumentError("CP-vs-PR counts must be positive (max bad pairs may be zero)", argv[0]);
+    }
+    if (!std::isfinite(options.tc_ddpr_fde_threshold_m) ||
+        options.tc_ddpr_fde_threshold_m < 0.0 || options.tc_ddpr_max_fde_removals < 0) {
+        argumentError("DDPR FDE settings must be finite and non-negative", argv[0]);
     }
     if (options.cmc_ref_switch_epochs < 1) {
         argumentError("--cmc-ref-switch-epochs must be >= 1", argv[0]);
@@ -841,6 +881,13 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
     rtk_config.use_external_position_prior = options.rtk_ins_prior;
     rtk_config.use_external_position_time_update = options.tc_ins_time_update;
     rtk_config.ins_time_update_position_q_floor_m2 = options.tc_ins_position_q_floor_m2;
+    rtk_config.enable_cp_pr_fixed_gate = options.tc_cp_pr_gate;
+    rtk_config.cp_pr_fixed_gate_threshold_m = options.tc_cp_pr_threshold_m;
+    rtk_config.cp_pr_fixed_gate_min_pairs = options.tc_cp_pr_min_pairs;
+    rtk_config.cp_pr_fixed_gate_max_bad_pairs = options.tc_cp_pr_max_bad_pairs;
+    rtk_config.cp_pr_fixed_gate_escalation_epochs = options.tc_cp_pr_escalation_epochs;
+    rtk_config.ddpr_anchor_fde_threshold_m = options.tc_ddpr_fde_threshold_m;
+    rtk_config.ddpr_anchor_max_fde_removals = options.tc_ddpr_max_fde_removals;
     // RTK tuning passthroughs (see FuseOptions doc comment): never touched
     // by any preset, so safe to assign unconditionally before the preset
     // call runs.
@@ -885,6 +932,10 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
     int tc_update_supplied_count = 0;
     int tc_anchor_count = 0;
     int tc_invalid_interval_count = 0;
+    int tc_cp_pr_evaluated_count = 0;
+    int tc_cp_pr_rejected_count = 0;
+    int tc_cp_pr_escalated_count = 0;
+    int tc_ddpr_anchor_count = 0;
     libgnss::Solution fused_solution;
     // Opt-in (--rtk-pos-out): the raw per-epoch RTK PositionSolution stream,
     // before it ever reaches the fusion filter -- see FuseOptions doc
@@ -1139,6 +1190,13 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
         }
 
         auto pos_solution = rtk_processor.processRTKEpoch(rover_obs, aligned_base_obs, nav_data);
+        if (options.tc_cp_pr_gate) {
+            const auto& telemetry = rtk_processor.getLastDebugTelemetry();
+            tc_cp_pr_evaluated_count += telemetry.cp_pr_gate_evaluated ? 1 : 0;
+            tc_cp_pr_rejected_count += telemetry.cp_pr_gate_rejected ? 1 : 0;
+            tc_cp_pr_escalated_count += telemetry.cp_pr_gate_escalated ? 1 : 0;
+            tc_ddpr_anchor_count += telemetry.ddpr_anchor_valid ? 1 : 0;
+        }
         if (pos_solution.isValid()) {
             if (options.derive_velocity_from_fixed && !pos_solution.has_velocity &&
                 pos_solution.isFixed() && have_previous_fixed_solution &&
@@ -1313,6 +1371,18 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
                       << " applied=" << tc_diagnostics.applied_count
                       << " rejected=" << tc_diagnostics.rejected_count
                       << " invalid_intervals=" << tc_invalid_interval_count;
+        }
+        std::cout << "\n";
+        std::cout << "RTK CP-vs-PR fixed gate: " << (options.tc_cp_pr_gate ? "on" : "off");
+        if (options.tc_cp_pr_gate) {
+            std::cout << " (threshold_m=" << options.tc_cp_pr_threshold_m
+                      << ", min_pairs=" << options.tc_cp_pr_min_pairs
+                      << ", max_bad_pairs=" << options.tc_cp_pr_max_bad_pairs
+                      << ", escalation_epochs=" << options.tc_cp_pr_escalation_epochs << ")\n"
+                      << "  evaluated=" << tc_cp_pr_evaluated_count
+                      << " rejected=" << tc_cp_pr_rejected_count
+                      << " escalated=" << tc_cp_pr_escalated_count
+                      << " ddpr_anchors=" << tc_ddpr_anchor_count;
         }
         std::cout << "\n";
         if (!options.rtk_pos_out.empty()) {

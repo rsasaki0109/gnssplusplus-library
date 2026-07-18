@@ -440,6 +440,22 @@ public:
         /// tunable without destroying cross-covariance.
         double ins_time_update_position_q_floor_m2 = 25.0;
 
+        /// M2 wrong-fix containment: validate a fixed DD integer candidate
+        /// using code-minus-carrier consistency before it can be reported,
+        /// held, or remembered as a trusted fix. The check is independent
+        /// of both FLOAT and FIXED positions. GLONASS FDMA pairs are skipped.
+        bool enable_cp_pr_fixed_gate = false;
+        double cp_pr_fixed_gate_threshold_m = 10.0;
+        int cp_pr_fixed_gate_min_pairs = 4;
+        int cp_pr_fixed_gate_max_bad_pairs = 1;
+        int cp_pr_fixed_gate_escalation_epochs = 2;
+
+        /// DD pseudorange-only recovery anchor produced after consecutive
+        /// CP-vs-PR vetoes. M2 computes and exposes this independent anchor;
+        /// M3 owns any closed-loop state injection.
+        double ddpr_anchor_fde_threshold_m = 10.0;
+        int ddpr_anchor_max_fde_removals = 3;
+
         /// Phase 2a (docs/imu_fusion.md-adjacent RTK work): CMC-aware DD
         /// reference-satellite selection with hysteresis. The plain
         /// max-elevation reference pick (rtk_selection::
@@ -637,6 +653,17 @@ public:
         double fixed_float_jump_m = std::numeric_limits<double>::quiet_NaN();
         bool post_validation_rejected = false;
         bool final_fixed_applied = false;
+        bool cp_pr_gate_evaluated = false;
+        bool cp_pr_gate_rejected = false;
+        bool cp_pr_gate_escalated = false;
+        int cp_pr_gate_checked_pairs = 0;
+        int cp_pr_gate_bad_pairs = 0;
+        double cp_pr_gate_rms_m = std::numeric_limits<double>::quiet_NaN();
+        double cp_pr_gate_max_m = std::numeric_limits<double>::quiet_NaN();
+        bool ddpr_anchor_valid = false;
+        int ddpr_anchor_observations = 0;
+        double ddpr_anchor_residual_rms_m = std::numeric_limits<double>::quiet_NaN();
+        double ddpr_anchor_fixed_distance_m = std::numeric_limits<double>::quiet_NaN();
         std::string reject_reason;
         ARSkipReason ar_skip_reason{ARSkipReason::NONE};
 
@@ -748,6 +775,12 @@ public:
     bool getFloatPosteriorPosition(Vector3d& position_ecef,
                                    Matrix3d& position_covariance_ecef) const;
 
+    /// Return the most recent M2 DDPR-only recovery anchor. The anchor is
+    /// diagnostic until M3 explicitly consumes it.
+    bool getLastDdPrAnchor(Vector3d& position_ecef,
+                           Matrix3d& position_covariance_ecef,
+                           GNSSTime& time) const;
+
     /// Phase 2a: RTKConfig::cmc_aware_reference_selection diagnostics
     /// counters, accumulated since construction/reset(). Both fields stay
     /// zero for the life of the processor when the knob is off.
@@ -803,6 +836,11 @@ private:
     std::size_t ins_time_update_applied_count_ = 0;
     std::size_t ins_time_update_rejected_count_ = 0;
     bool ins_time_update_applied_last_epoch_ = false;
+    int consecutive_cp_pr_gate_rejections_ = 0;
+    Vector3d last_ddpr_anchor_position_ecef_ = Vector3d::Zero();
+    Matrix3d last_ddpr_anchor_covariance_ecef_ = Matrix3d::Zero();
+    GNSSTime last_ddpr_anchor_time_;
+    bool has_last_ddpr_anchor_ = false;
 
     // Fixed-size state: [pos(3), glo_hw_bias(2), iono(MAXSAT), N1(MAXSAT), N2(MAXSAT), N5(MAXSAT)]
     // Phase 18 Step 2 (2026-05-09): N5 freq slot reserved (IB(sat, freq=2)).
@@ -1179,6 +1217,8 @@ private:
      */
     bool validateFixedSolution(const std::map<SatelliteId, SatelliteData>& sat_data,
                                const GNSSTime& current_time);
+    bool validateCpPrFixedCandidate(const std::map<SatelliteId, SatelliteData>& sat_data,
+                                    const GNSSTime& current_time);
 
     /**
      * Hold ambiguities after consecutive fixes (RTKLIB holdamb)
