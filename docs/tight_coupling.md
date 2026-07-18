@@ -88,3 +88,24 @@ Each milestone requires unit tests, a deterministic short run, and same-binary
 OFF/ON full runs on Tokyo run1, Tokyo run3, and Nagoya run1. Major milestones
 also run all five PPC datasets. Negative results remain documented and disabled
 by default.
+
+## M1 evaluation
+
+The first `1e-4 m^2` process-noise floor was overconfident and reduced Tokyo
+run3 fix rate by 4.63 percentage points. One bounded retune selected `25 m^2`
+after 2,000- and 6,000-epoch prefix comparisons against `900 m^2`. Full-run
+same-binary results for the selected value were:
+
+| Dataset | Mode | Fix % | PPC 3D 50 cm % | p95 horizontal m | p95 abs up m | Wall s |
+|---|---:|---:|---:|---:|---:|---:|
+| Tokyo run1 | OFF | 76.67 | 72.11 | 6.83 | 31.33 | 538.4 |
+| Tokyo run1 | M1 | 74.33 | 69.38 | 7.24 | 29.86 | 725.5 |
+| Tokyo run3 | OFF | 74.63 | 78.95 | 8.73 | 13.31 | 1450.9 |
+| Tokyo run3 | M1 | 78.20 | 82.22 | 4.23 | 5.89 | 1389.8 |
+| Nagoya run1 | OFF | 77.49 | 71.54 | 9.44 | 17.02 | 443.4 |
+| Nagoya run1 | M1 | 77.66 | 65.64 | 8.54 | 15.35 | 587.7 |
+
+M1 is therefore a documented mixed-negative result: Tokyo run3 improves
+strongly, but Tokyo run1 and Nagoya run1 fail the quality and wall-time gates.
+The feature remains default-off. The selected `25 m^2` floor is only the
+default after a caller explicitly enables the M1 path.

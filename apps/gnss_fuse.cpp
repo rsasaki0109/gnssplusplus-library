@@ -11,8 +11,11 @@
 
 #include <libgnss++/algorithms/rtk.hpp>
 #include <libgnss++/algorithms/spp.hpp>
+#include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/core/solution.hpp>
+#include <libgnss++/fusion/attitude.hpp>
 #include <libgnss++/fusion/fusion_processor.hpp>
+#include <libgnss++/fusion/preintegration.hpp>
 #include <libgnss++/io/imu.hpp>
 #include <libgnss++/io/rinex.hpp>
 
@@ -21,6 +24,14 @@
 namespace {
 
 constexpr double kExactTimeToleranceSeconds = libgnss_apps::kExactTimeToleranceSeconds;
+
+Eigen::Matrix3d ecefToEnuRotation(double lat, double lon) {
+    Eigen::Matrix3d rotation;
+    rotation.col(0) = libgnss::ecef2enu(Eigen::Vector3d::UnitX(), lat, lon);
+    rotation.col(1) = libgnss::ecef2enu(Eigen::Vector3d::UnitY(), lat, lon);
+    rotation.col(2) = libgnss::ecef2enu(Eigen::Vector3d::UnitZ(), lat, lon);
+    return rotation;
+}
 
 struct FuseOptions {
     std::string data_dir;
@@ -121,6 +132,14 @@ struct FuseOptions {
     bool rtk_ins_prior_spp_gate = true;
     int rtk_ins_prior_min_sats = 20;
     double rtk_ins_prior_max_nis = 3.0;
+
+    // M1 RTK-hosted tight coupling: mechanize an incremental antenna
+    // displacement from RTK's FLOAT posterior and use it in place of the
+    // per-epoch SPP position wipe. Independent of the Phase 1 absolute
+    // position prior above; the two modes are mutually exclusive.
+    bool tc_ins_time_update = false;
+    double tc_ins_position_q_floor_m2 = 25.0;
+    double tc_ins_max_sample_gap_s = 0.1;
 
     // RTK tuning passthroughs mirroring apps/gnss_solve.cpp's flags of the
     // same name, added so gnss_fuse's underlying RTKProcessor config can be
@@ -320,6 +339,16 @@ void printUsage(const char* program_name) {
         << "                                isInitialized/isOriginSet/isHeadingConverged epoch,\n"
         << "                                disabling both the SPP-degraded gate and the NIS health\n"
         << "                                gate (for A/B comparison against the gated default).\n"
+        << "  --tc-ins-time-update          M1 RTK-hosted tight coupling (--base only): replace the\n"
+        << "                                kinematic SPP position wipe with an incremental IMU\n"
+        << "                                antenna displacement anchored at RTK's FLOAT posterior.\n"
+        << "                                Preserves position/ambiguity cross-covariance. Mutually\n"
+        << "                                exclusive with --rtk-ins-prior. Default: off.\n"
+        << "  --tc-ins-position-q-floor <m2>\n"
+        << "                                Diagonal position process-noise floor added per applied\n"
+        << "                                INS interval (default: 25 m^2).\n"
+        << "  --tc-ins-max-sample-gap <s>  Invalidate an IMU interval containing a larger sample\n"
+        << "                                gap and fall back to legacy RTK reseeding (default: 0.1 s).\n"
         << "  --arfilter / --no-arfilter   Force RTK subset-AR filter margin on/off, overriding\n"
         << "                                whatever --preset set (mirrors `gnss solve`'s flag).\n"
         << "  --rtk-snr-weighting          Inflate RTK observation variance for low-SNR links\n"
@@ -574,6 +603,12 @@ FuseOptions parseArguments(int argc, char* argv[]) {
         } else if (arg == "--rtk-ins-prior-always") {
             options.rtk_ins_prior_spp_gate = false;
             options.rtk_ins_prior_max_nis = 0.0;
+        } else if (arg == "--tc-ins-time-update") {
+            options.tc_ins_time_update = true;
+        } else if (arg == "--tc-ins-position-q-floor") {
+            options.tc_ins_position_q_floor_m2 = std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--tc-ins-max-sample-gap") {
+            options.tc_ins_max_sample_gap_s = std::stod(requireValue(arg, i, argc, argv));
         } else if (arg == "--arfilter") {
             options.arfilter_override = true;
             options.arfilter_value = true;
@@ -620,6 +655,17 @@ FuseOptions parseArguments(int argc, char* argv[]) {
     if (options.nav_path.empty()) argumentError("--nav is required", argv[0]);
     if (options.imu_path.empty()) argumentError("--imu is required", argv[0]);
     if (options.max_epochs < 0) argumentError("--max-epochs must be non-negative", argv[0]);
+    if (options.rtk_ins_prior && options.tc_ins_time_update) {
+        argumentError("--rtk-ins-prior and --tc-ins-time-update are mutually exclusive", argv[0]);
+    }
+    if (!std::isfinite(options.tc_ins_position_q_floor_m2) ||
+        options.tc_ins_position_q_floor_m2 < 0.0) {
+        argumentError("--tc-ins-position-q-floor must be finite and >= 0", argv[0]);
+    }
+    if (!std::isfinite(options.tc_ins_max_sample_gap_s) ||
+        options.tc_ins_max_sample_gap_s <= 0.0) {
+        argumentError("--tc-ins-max-sample-gap must be finite and > 0", argv[0]);
+    }
     if (options.cmc_ref_switch_epochs < 1) {
         argumentError("--cmc-ref-switch-epochs must be >= 1", argv[0]);
     }
@@ -793,6 +839,8 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
     // (RTKConfig::use_external_position_prior defaults false, so this line
     // is a no-op for every existing caller/preset).
     rtk_config.use_external_position_prior = options.rtk_ins_prior;
+    rtk_config.use_external_position_time_update = options.tc_ins_time_update;
+    rtk_config.ins_time_update_position_q_floor_m2 = options.tc_ins_position_q_floor_m2;
     // RTK tuning passthroughs (see FuseOptions doc comment): never touched
     // by any preset, so safe to assign unconditionally before the preset
     // call runs.
@@ -828,6 +876,15 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
     rtk_processor.setBasePosition(base_position);
 
     libgnss::LooseCouplingProcessor fusion_processor(options.fusion_config);
+    libgnss::ImuPreintegrationConfig tc_preintegration_config;
+    tc_preintegration_config.process_noise = options.fusion_config.process_noise;
+    tc_preintegration_config.max_sample_gap_s = options.tc_ins_max_sample_gap_s;
+    libgnss::ImuPreintegrator tc_preintegrator(tc_preintegration_config);
+    double tc_anchor_lat_rad = 0.0;
+    double tc_anchor_lon_rad = 0.0;
+    int tc_update_supplied_count = 0;
+    int tc_anchor_count = 0;
+    int tc_invalid_interval_count = 0;
     libgnss::Solution fused_solution;
     // Opt-in (--rtk-pos-out): the raw per-epoch RTK PositionSolution stream,
     // before it ever reaches the fusion filter -- see FuseOptions doc
@@ -979,7 +1036,52 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
             sample.accel_raw = axis_convention.apply(sample.accel_raw);
             sample.gyro_raw_radps = axis_convention.apply(sample.gyro_raw_radps);
             fusion_processor.processImuSample(sample);
+            if (options.tc_ins_time_update && tc_preintegrator.initialized()) {
+                const auto status = tc_preintegrator.integrate(sample);
+                if (status != libgnss::PreintegrationStatus::ACCEPTED &&
+                    status != libgnss::PreintegrationStatus::INTERVAL_INVALID) {
+                    // Count the root failure once. Later samples in the same
+                    // latched-invalid interval report INTERVAL_INVALID.
+                    ++tc_invalid_interval_count;
+                }
+            }
             ++imu_cursor;
+        }
+
+        // M1: convert this RTK-to-RTK preintegrated antenna displacement and
+        // its process noise from the anchor ENU frame to ECEF. The anchor's
+        // nominal body position is -R*lever, so predicted p+R*lever is the
+        // antenna displacement itself, with no loose-ESKF absolute position
+        // entering the update.
+        if (options.tc_ins_time_update && tc_preintegrator.valid()) {
+            const auto tc_result = tc_preintegrator.result();
+            const Eigen::Matrix3d body_to_enu =
+                tc_result.predicted_state.attitude_body_to_enu.toRotationMatrix();
+            const Eigen::Vector3d antenna_delta_enu =
+                tc_result.predicted_state.position_enu +
+                body_to_enu * options.fusion_config.lever_arm_body;
+            Eigen::Matrix<double, 3, libgnss::fusion_index::SIZE> antenna_jacobian =
+                Eigen::Matrix<double, 3, libgnss::fusion_index::SIZE>::Zero();
+            antenna_jacobian.block<3, 3>(0, libgnss::fusion_index::POSITION) =
+                Eigen::Matrix3d::Identity();
+            antenna_jacobian.block<3, 3>(0, libgnss::fusion_index::ATTITUDE) =
+                -body_to_enu * libgnss::attitude::skew(options.fusion_config.lever_arm_body);
+            const Eigen::Matrix3d antenna_process_noise_enu =
+                antenna_jacobian * tc_result.process_noise * antenna_jacobian.transpose();
+            const Eigen::Matrix3d ecef_to_enu =
+                ecefToEnuRotation(tc_anchor_lat_rad, tc_anchor_lon_rad);
+            const Eigen::Matrix3d enu_to_ecef = ecef_to_enu.transpose();
+            const Eigen::Vector3d antenna_delta_ecef = enu_to_ecef * antenna_delta_enu;
+            const Eigen::Matrix3d antenna_process_noise_ecef =
+                enu_to_ecef * antenna_process_noise_enu * ecef_to_enu;
+            if (antenna_delta_ecef.allFinite() && antenna_process_noise_ecef.allFinite()) {
+                rtk_processor.setExternalPositionTimeUpdate(
+                    antenna_delta_ecef, antenna_process_noise_ecef);
+                ++tc_update_supplied_count;
+            } else {
+                ++tc_invalid_interval_count;
+                tc_preintegrator.clear();
+            }
         }
 
         // Phase 1 GNSS/IMU coupling (docs/design.md): after IMU mechanization
@@ -1062,6 +1164,38 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
             }
 
             fusion_processor.processGnssSolution(pos_solution);
+            if (options.tc_ins_time_update) {
+                bool anchored = false;
+                Eigen::Vector3d float_position_ecef;
+                Eigen::Matrix3d float_position_covariance_ecef;
+                if (pos_solution.has_velocity && pos_solution.velocity_ecef.allFinite() &&
+                    fusion_processor.isInitialized() && fusion_processor.isOriginSet() &&
+                    fusion_processor.isHeadingConverged() &&
+                    rtk_processor.getFloatPosteriorPosition(
+                        float_position_ecef, float_position_covariance_ecef)) {
+                    double anchor_height_m = 0.0;
+                    libgnss::ecef2geodetic(float_position_ecef, tc_anchor_lat_rad,
+                                           tc_anchor_lon_rad, anchor_height_m);
+                    const Eigen::Matrix3d ecef_to_enu =
+                        ecefToEnuRotation(tc_anchor_lat_rad, tc_anchor_lon_rad);
+                    libgnss::NominalState anchor_state = fusion_processor.state().nominal;
+                    anchor_state.time = rover_obs.time;
+                    anchor_state.velocity_enu = ecef_to_enu * pos_solution.velocity_ecef;
+                    anchor_state.position_enu =
+                        -anchor_state.attitude_body_to_enu.toRotationMatrix() *
+                        options.fusion_config.lever_arm_body;
+                    anchored = tc_preintegrator.reset(anchor_state) ==
+                        libgnss::PreintegrationStatus::ACCEPTED;
+                    if (anchored) {
+                        ++tc_anchor_count;
+                    } else {
+                        ++tc_invalid_interval_count;
+                    }
+                }
+                if (!anchored) {
+                    tc_preintegrator.clear();
+                }
+            }
             ++valid_solutions;
             if (pos_solution.isFixed()) {
                 ++fixed_solutions;
@@ -1074,6 +1208,8 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
             if (!options.rtk_pos_out.empty()) {
                 rtk_solution_log.addSolution(pos_solution);
             }
+        } else if (options.tc_ins_time_update) {
+            tc_preintegrator.clear();
         }
 
         if (fusion_processor.isOriginSet()) {
@@ -1166,6 +1302,19 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
                           << " max=" << percentile(ins_prior_eligible_nis, 1.0) << "\n";
             }
         }
+        std::cout << "RTK INS time update: "
+                  << (options.tc_ins_time_update ? "on" : "off");
+        if (options.tc_ins_time_update) {
+            const auto tc_diagnostics = rtk_processor.getInsTimeUpdateDiagnostics();
+            std::cout << " (q_floor_m2=" << options.tc_ins_position_q_floor_m2
+                      << ", max_sample_gap_s=" << options.tc_ins_max_sample_gap_s << ")\n"
+                      << "  anchors=" << tc_anchor_count
+                      << " supplied=" << tc_update_supplied_count
+                      << " applied=" << tc_diagnostics.applied_count
+                      << " rejected=" << tc_diagnostics.rejected_count
+                      << " invalid_intervals=" << tc_invalid_interval_count;
+        }
+        std::cout << "\n";
         if (!options.rtk_pos_out.empty()) {
             std::cout << "RTK solution stream written: " << options.rtk_pos_out << "\n";
         }

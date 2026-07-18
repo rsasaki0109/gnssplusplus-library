@@ -438,7 +438,7 @@ public:
         /// update, in m^2. The legacy wide reseed also acted as a strong
         /// regularizer; this explicit floor makes that role independently
         /// tunable without destroying cross-covariance.
-        double ins_time_update_position_q_floor_m2 = 1e-4;
+        double ins_time_update_position_q_floor_m2 = 25.0;
 
         /// Phase 2a (docs/imu_fusion.md-adjacent RTK work): CMC-aware DD
         /// reference-satellite selection with hysteresis. The plain
