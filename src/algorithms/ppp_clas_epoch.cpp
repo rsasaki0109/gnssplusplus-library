@@ -64,6 +64,10 @@ constexpr double kMrtklibPhaseResidualSigmaGate = 2.0;
 // (pos2-rejdiffpse -> opt.maxdiffp, pos2-poserrcnt; mrtk_ppp_rtk.c:2333-2352)
 constexpr double kMrtklibMaxSppDivergenceM = 10.0;
 constexpr int kMrtklibMaxSppDivergenceEpochs = 5;
+// Cover the observed interval in which a maxdiff-inconsistent float can
+// otherwise originate and hold a false WLNL fix, without allowing repeated
+// maxdiff observations to postpone AR indefinitely.
+constexpr int kClasSeedArQuarantineEpochs = 30;
 // Immediate (uncounted) sanity ceiling for the reset seed vs. the filter's
 // own tracked position -- see the long comment at its use site. Well above
 // any plausible ground-vehicle displacement per epoch, and far below the
@@ -74,12 +78,9 @@ constexpr double kClasSeedImplausibleJumpFloorM = 300.0;
 // MRTKLIB mrtk_spp.c valsol(): chi-square(alpha=0.001) table indexed by
 // degrees of freedom (nv-nx), used to validate every pntpos() solution
 // whenever raim_fde (clas.toml pos1-posopt5) is enabled -- which the real
-// clas.toml benchmark config does. The parity SPP seed above intentionally
-// runs with enable_raim_fde=false (the leave-one-out FDE loop shifts the
-// reset seed ~11 m at tow 177036; see comment above), which also silently
-// skips this codebase's equivalent of valsol()'s baseline chi-square check
-// (it is bundled behind the same flag as the FDE loop in MRTKLIB, but this
-// port exposes it as an independent, still-disabled knob). Left completely
+// clas.toml benchmark config does. The parity path first evaluates this gate
+// on the baseline seed, then permits leave-one-out FDE only for a rejected or
+// already maxdiff-inconsistent seed. Left completely
 // unchecked, a multi-GNSS SPP epoch with only 1-2 satellites per non-
 // reference system consumes all its redundancy on per-system clock/ISB
 // unknowns (dof collapses to 0) and reports a numerically "perfect"
@@ -886,6 +887,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     // Set below (parity path only) once the redundancy/jump guards have run;
     // see the long comment at its assignment for what this gates.
     bool clas_seed_untrusted_this_epoch = false;
+    bool clas_baseline_seed_maxdiff_this_epoch = false;
     if (clas_mrtklib_parity) {
         const auto original_spp_config = spp_processor_.getSPPConfig();
         auto clas_spp_config = original_spp_config;
@@ -905,13 +907,42 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         clas_spp_config.use_variance_model = false;
         clas_spp_config.enable_outlier_detection = false;
         clas_spp_config.elevation_mask_override_deg = 15.0;
-        // clas.toml enables pos1-posopt5 (RAIM FDE).  It first becomes
-        // active in this dataset at the urban inconsistency near tow
-        // 177036; disabling it changes the SPP reset seed by about 11 m and
-        // prematurely triggers maxdiffp, shifting every later float reset.
+        // First solve the baseline exactly once. Applying native's
+        // leave-one-out selection to every valid epoch changes otherwise-good
+        // reset seeds and AR cadence. Retry with FDE below only when the seed
+        // has already failed the parity validity/maxdiff tests.
         clas_spp_config.enable_raim_fde = false;
         spp_processor_.setSPPConfig(clas_spp_config);
         seed = spp_processor_.processEpoch(obs, nav);
+        const bool clas_seed_redundancy_failed =
+            seed.isValid() && clasSeedFailsRedundancyGate(seed);
+        double baseline_filter_spp_distance_m =
+            std::numeric_limits<double>::quiet_NaN();
+        if (seed.isValid() && filter_initialized_ &&
+            filter_state_.pos_index >= 0 &&
+            filter_state_.pos_index + 2 < filter_state_.state.size()) {
+            baseline_filter_spp_distance_m =
+                (filter_state_.state.segment<3>(filter_state_.pos_index) -
+                 seed.position_ecef).norm();
+        }
+        const bool clas_seed_needs_fde =
+            ppp_shared::shouldRetryClasSeedWithFde(
+                seed.isValid(), clas_seed_redundancy_failed,
+                filter_initialized_, baseline_filter_spp_distance_m,
+                kMrtklibMaxSppDivergenceM);
+        clas_baseline_seed_maxdiff_this_epoch =
+            seed.isValid() && filter_initialized_ &&
+            std::isfinite(baseline_filter_spp_distance_m) &&
+            baseline_filter_spp_distance_m > kMrtklibMaxSppDivergenceM;
+        if (clas_seed_needs_fde) {
+            clas_spp_config.enable_raim_fde = true;
+            spp_processor_.setSPPConfig(clas_spp_config);
+            const PositionSolution fde_seed =
+                spp_processor_.processEpoch(obs, nav);
+            if (fde_seed.isValid()) {
+                seed = fde_seed;
+            }
+        }
         spp_processor_.setSPPConfig(original_spp_config);
         if (seed.isValid() && clasSeedFailsRedundancyGate(seed)) {
             if (pppDebugEnabled()) {
@@ -926,8 +957,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         // still pass the chi-square/dof check above (enough redundancy for
         // a numerically fine fit) while one of its few satellites carries an
         // undetected bias (bad ephemeris/SSR lookup, multipath) that a
-        // single-satellite RAIM/FDE exclusion would normally catch -- but
-        // enable_raim_fde is deliberately off above (see comment). Observed
+        // single-satellite RAIM/FDE exclusion would normally catch. Observed
         // on nagoya_run2 tow 557038.4: dof=1, chi2=2.27 (well under the
         // dof=1 table entry 10.8), yet the fix was ~4.2 km from the last
         // published position. That epoch is also mid-reset (filter_
@@ -981,7 +1011,13 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         // coasted state should not be allowed to originate a new
         // publishable fix, only to keep the float filter alive until a
         // trustworthy seed returns.
-        clas_seed_untrusted_this_epoch = !seed.isValid();
+        const bool clas_seed_ar_quarantined =
+            ppp_shared::updateClasSeedArQuarantine(
+                clas_baseline_seed_maxdiff_this_epoch,
+                kClasSeedArQuarantineEpochs,
+                clas_seed_ar_quarantine_epochs_);
+        clas_seed_untrusted_this_epoch =
+            !seed.isValid() || clas_seed_ar_quarantined;
         // Suppressing this epoch's AR *attempt* alone is not enough: lock
         // counts are untouched by that gate, so a short (2-3 epoch)
         // rejection window can still leave every ambiguity's lock_count
@@ -999,8 +1035,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         // outage_gap resets elsewhere in this function): this reuses the
         // existing lock_count>=min_lock_count gate to enforce a natural
         // kMrtklibMinLock+1-epoch (6 accepted-phase-epoch) cooldown after
-        // the seed becomes trustworthy again, instead of adding a new,
-        // bespoke cooldown counter.
+        // the rejected seed becomes trustworthy again.
         if (clas_seed_untrusted_this_epoch) {
             constexpr int kMrtklibMinLock = 5;
             for (auto& [_, ambiguity] : ambiguity_states_) {
@@ -1061,8 +1096,8 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     // mode a failure falls through with tt frozen at 0 for that one epoch,
     // and the caller keeps running ppp_rtk_pos() on the stale state. The
     // redundancy/jump guards above are this port's equivalent of pntpos()
-    // rejecting a solution (enable_raim_fde/outlier detection are
-    // deliberately off on the reset seed; see clasSeedFailsRedundancyGate).
+    // rejecting a solution (generic outlier detection is deliberately off;
+    // RAIM/FDE is gated by the MRTKLIB baseline chi-square failure).
     // Capture "was the filter already running before this epoch" here,
     // before the floatcnt/measurement-update resets below can change
     // filter_initialized_, so the freeze below only ever applies to a
@@ -1685,15 +1720,20 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
                 }
                 ++clas_wlnl_hold_.consecutive_fix_count;
                 std::vector<ppp_ar::WlnlHoldConstraint> hold_constraints;
-                if (clas_wlnl_hold_.consecutive_fix_count >=
-                        ppp_ar::kMrtklibMinFixCount &&
+                if (!clas_wlnl_candidate_hold_constraints_.empty()) {
+                    hold_constraints = clas_wlnl_candidate_hold_constraints_;
+                } else {
                     ppp_ar::buildWlnlHoldConstraints(
                         last_clas_constrained_fixed_state_,
                         ambiguity_states_,
                         clas_satellite_elevations_rad,
                         hold_constraints,
                         ppp_config_.use_dynamics_model &&
-                            !ppp_config_.low_dynamics_mode)) {
+                            !ppp_config_.low_dynamics_mode);
+                }
+                if (clas_wlnl_hold_.consecutive_fix_count >=
+                        ppp_ar::kMrtklibMinFixCount &&
+                    !hold_constraints.empty()) {
                     clas_wlnl_hold_.constraints = std::move(hold_constraints);
                     clas_wlnl_hold_.active = true;
                     const bool hold_applied = ppp_ar::applyWlnlHoldAmbiguity(

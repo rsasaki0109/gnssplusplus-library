@@ -378,6 +378,7 @@ private:
     // MRTKLIB clas.toml float_count=15: consecutive PPP-FLOAT epochs before
     // the kinematic CLAS filter is reinitialized from the current SPP seed.
     int clas_mrtklib_float_count_ = 0;
+    int clas_seed_ar_quarantine_epochs_ = 0;
     // The CSV correction store is precomposed, while MRTKLIB's L6 decoder
     // starts empty and needs one 15 s CSSR cycle before CLAS OSR is usable.
     bool has_clas_mrtklib_stream_start_time_ = false;
@@ -387,6 +388,10 @@ private:
     // not enter ddmat/LAMBDA in this epoch.
     std::set<SatelliteId> clas_mrtklib_ar_rejected_ambiguities_;
     ppp_ar::WlnlHoldState clas_wlnl_hold_;
+    // Current accepted ddmat/LAMBDA rows, carried to the post-fix chi-square
+    // gate so holdamb parity does not reconstruct participants from stale
+    // ambiguity flags.
+    std::vector<ppp_ar::WlnlHoldConstraint> clas_wlnl_candidate_hold_constraints_;
     Vector3d last_published_solution_position_ecef_ = Vector3d::Zero();
     bool has_last_published_solution_position_ = false;
     // Anchors MRTKLIB rtk->sol.time's role in tt (=timediff) computation

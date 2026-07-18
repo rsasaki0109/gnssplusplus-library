@@ -1463,9 +1463,30 @@ WlnlFixAttempt tryDirectStateDdFix(
 
     attempt.ratio = attempt.state_lambda_ratio;
     attempt.nb = attempt.state_dd_count;
-    // Mark participants fixed so the hold path (buildWlnlHoldConstraints
-    // requires wl_is_fixed && nl_is_fixed) sees them; the hold constraint
-    // values come from the constrained fixed state, not these flags.
+    attempt.hold_constraints.reserve(rows.size());
+    for (const auto& row : rows) {
+        const SatelliteId real_ref = clasRealSatellite(row.ref_satellite);
+        const SatelliteId real_sat = clasRealSatellite(row.sat_satellite);
+        const auto ref_el_it = satellite_elevations_rad->find(real_ref);
+        const auto sat_el_it = satellite_elevations_rad->find(real_sat);
+        WlnlHoldConstraint constraint;
+        constraint.ref_state = row.ref_state;
+        constraint.sat_state = row.sat_state;
+        constraint.fixed_dd_m =
+            attempt.constrained_state.state(row.ref_state) -
+            attempt.constrained_state.state(row.sat_state);
+        constraint.ambiguity_scale_m = row.ref_scale_m;
+        constraint.ref_elevation_rad =
+            ref_el_it != satellite_elevations_rad->end() ? ref_el_it->second : 0.0;
+        constraint.sat_elevation_rad =
+            sat_el_it != satellite_elevations_rad->end() ? sat_el_it->second : 0.0;
+        constraint.ref_satellite = row.ref_satellite;
+        constraint.sat_satellite = row.sat_satellite;
+        attempt.hold_constraints.push_back(constraint);
+    }
+    // Preserve the accepted-participant status for downstream diagnostics and
+    // non-direct callers. The direct hold path above carries its exact current
+    // DD rows and does not reconstruct participants from these persistent flags.
     for (const auto& row : rows) {
         for (const SatelliteId& satellite :
              {row.ref_satellite, row.sat_satellite}) {

@@ -114,6 +114,7 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
     last_ar_ratio_ = 0.0;
     last_fixed_ambiguities_ = 0;
     last_clas_constrained_fixed_state_valid_ = false;
+    clas_wlnl_candidate_hold_constraints_.clear();
 
     auto wlnl_preparation = ppp_ar::prepareWlnlCandidates(
         ppp_config_,
@@ -243,6 +244,7 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
         // only holdamb() constraints nudge the float states.
         last_clas_constrained_fixed_state_ = attempt.constrained_state;
         last_clas_constrained_fixed_state_valid_ = true;
+        clas_wlnl_candidate_hold_constraints_ = attempt.hold_constraints;
         if (auto* debug = clasFixDebugStream(); debug != nullptr) {
             const Vector3d initial_position =
                 filter_state_.state.segment(filter_state_.pos_index, 3);

@@ -26,6 +26,30 @@ using namespace libgnss;
 
 namespace {
 
+TEST(PPPClasSeedFde, RetriesOnlyRejectedOrMaxdiffInconsistentSeeds) {
+    EXPECT_FALSE(ppp_shared::shouldRetryClasSeedWithFde(
+        false, true, true, 20.0, 10.0));
+    EXPECT_TRUE(ppp_shared::shouldRetryClasSeedWithFde(
+        true, true, false, 0.0, 10.0));
+    EXPECT_FALSE(ppp_shared::shouldRetryClasSeedWithFde(
+        true, false, true, 10.0, 10.0));
+    EXPECT_TRUE(ppp_shared::shouldRetryClasSeedWithFde(
+        true, false, true, 10.001, 10.0));
+    EXPECT_FALSE(ppp_shared::shouldRetryClasSeedWithFde(
+        true, false, false, 20.0, 10.0));
+}
+
+TEST(PPPClasSeedFde, QuarantineDoesNotExtendOnRepeatedMaxdiff) {
+    int remaining = 0;
+    EXPECT_TRUE(ppp_shared::updateClasSeedArQuarantine(true, 3, remaining));
+    EXPECT_EQ(remaining, 3);
+    EXPECT_TRUE(ppp_shared::updateClasSeedArQuarantine(true, 3, remaining));
+    EXPECT_EQ(remaining, 2);
+    EXPECT_TRUE(ppp_shared::updateClasSeedArQuarantine(true, 3, remaining));
+    EXPECT_FALSE(ppp_shared::updateClasSeedArQuarantine(false, 3, remaining));
+    EXPECT_EQ(remaining, 0);
+}
+
 TEST(PPPFilterIterations, MadocaPerFrequencyCommitsOneUpdatePerEpoch) {
     EXPECT_EQ(ppp_internal::filterIterationCount(true, false, 8), 1);
     EXPECT_EQ(ppp_internal::filterIterationCount(false, true, 8), 3);
