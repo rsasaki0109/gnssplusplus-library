@@ -16,6 +16,7 @@
 #include <libgnss++/fusion/attitude.hpp>
 #include <libgnss++/fusion/fusion_processor.hpp>
 #include <libgnss++/fusion/preintegration.hpp>
+#include <libgnss++/fusion/tight_coupling_processor.hpp>
 #include <libgnss++/io/imu.hpp>
 #include <libgnss++/io/rinex.hpp>
 
@@ -138,6 +139,7 @@ struct FuseOptions {
     // per-epoch SPP position wipe. Independent of the Phase 1 absolute
     // position prior above; the two modes are mutually exclusive.
     bool tc_ins_time_update = false;
+    bool tc_closed_loop = false;
     double tc_ins_position_q_floor_m2 = 25.0;
     double tc_ins_max_sample_gap_s = 0.1;
     bool tc_cp_pr_gate = false;
@@ -356,6 +358,9 @@ void printUsage(const char* program_name) {
         << "                                INS interval (default: 25 m^2).\n"
         << "  --tc-ins-max-sample-gap <s>  Invalidate an IMU interval containing a larger sample\n"
         << "                                gap and fall back to legacy RTK reseeding (default: 0.1 s).\n"
+        << "  --tc-closed-loop             M3 TightCouplingProcessor path. Owns IMU intervals,\n"
+        << "                                re-anchoring, ZUPT/NHC, and enables the M2 gate.\n"
+        << "                                Mutually exclusive with --tc-ins-time-update. Default: off.\n"
         << "  --tc-cp-pr-gate              M2 fixed-candidate CP-vs-PR gate (--base only). Vetoes\n"
         << "                                inconsistent integers before FIX feedback. Default: off.\n"
         << "  --tc-cp-pr-threshold <m>     Per-pair absolute innovation threshold (default: 10).\n"
@@ -620,6 +625,8 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             options.rtk_ins_prior_max_nis = 0.0;
         } else if (arg == "--tc-ins-time-update") {
             options.tc_ins_time_update = true;
+        } else if (arg == "--tc-closed-loop") {
+            options.tc_closed_loop = true;
         } else if (arg == "--tc-ins-position-q-floor") {
             options.tc_ins_position_q_floor_m2 = std::stod(requireValue(arg, i, argc, argv));
         } else if (arg == "--tc-ins-max-sample-gap") {
@@ -686,6 +693,10 @@ FuseOptions parseArguments(int argc, char* argv[]) {
     if (options.max_epochs < 0) argumentError("--max-epochs must be non-negative", argv[0]);
     if (options.rtk_ins_prior && options.tc_ins_time_update) {
         argumentError("--rtk-ins-prior and --tc-ins-time-update are mutually exclusive", argv[0]);
+    }
+    if (options.tc_closed_loop && (options.tc_ins_time_update || options.rtk_ins_prior)) {
+        argumentError("--tc-closed-loop is mutually exclusive with legacy INS prior/time-update modes",
+                      argv[0]);
     }
     if (!std::isfinite(options.tc_ins_position_q_floor_m2) ||
         options.tc_ins_position_q_floor_m2 < 0.0) {
@@ -879,9 +890,10 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
     // (RTKConfig::use_external_position_prior defaults false, so this line
     // is a no-op for every existing caller/preset).
     rtk_config.use_external_position_prior = options.rtk_ins_prior;
-    rtk_config.use_external_position_time_update = options.tc_ins_time_update;
+    rtk_config.use_external_position_time_update =
+        options.tc_ins_time_update || options.tc_closed_loop;
     rtk_config.ins_time_update_position_q_floor_m2 = options.tc_ins_position_q_floor_m2;
-    rtk_config.enable_cp_pr_fixed_gate = options.tc_cp_pr_gate;
+    rtk_config.enable_cp_pr_fixed_gate = options.tc_cp_pr_gate || options.tc_closed_loop;
     rtk_config.cp_pr_fixed_gate_threshold_m = options.tc_cp_pr_threshold_m;
     rtk_config.cp_pr_fixed_gate_min_pairs = options.tc_cp_pr_min_pairs;
     rtk_config.cp_pr_fixed_gate_max_bad_pairs = options.tc_cp_pr_max_bad_pairs;
@@ -927,6 +939,19 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
     tc_preintegration_config.process_noise = options.fusion_config.process_noise;
     tc_preintegration_config.max_sample_gap_s = options.tc_ins_max_sample_gap_s;
     libgnss::ImuPreintegrator tc_preintegrator(tc_preintegration_config);
+    libgnss::TightCouplingProcessor::Config tc_closed_loop_config;
+    tc_closed_loop_config.process_noise = options.fusion_config.process_noise;
+    tc_closed_loop_config.lever_arm_body = options.fusion_config.lever_arm_body;
+    tc_closed_loop_config.max_sample_gap_s = options.tc_ins_max_sample_gap_s;
+    tc_closed_loop_config.zupt_enable = options.fusion_config.zupt_enable;
+    tc_closed_loop_config.zupt_sigma_mps = options.fusion_config.zupt_sigma_mps;
+    tc_closed_loop_config.zupt_max_accel_std = options.fusion_config.zupt_max_accel_std;
+    tc_closed_loop_config.zupt_max_gyro_std = options.fusion_config.zupt_max_gyro_std;
+    tc_closed_loop_config.zupt_max_gyro_median = options.fusion_config.zupt_max_gyro_median;
+    tc_closed_loop_config.nhc_enable = options.fusion_config.nhc_enable;
+    tc_closed_loop_config.nhc_sigma_lateral_mps = options.fusion_config.nhc_sigma_lateral_mps;
+    tc_closed_loop_config.nhc_sigma_vertical_mps = options.fusion_config.nhc_sigma_vertical_mps;
+    libgnss::TightCouplingProcessor tc_closed_loop_processor(tc_closed_loop_config);
     double tc_anchor_lat_rad = 0.0;
     double tc_anchor_lon_rad = 0.0;
     int tc_update_supplied_count = 0;
@@ -1096,6 +1121,9 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
                     ++tc_invalid_interval_count;
                 }
             }
+            if (options.tc_closed_loop) {
+                tc_closed_loop_processor.processImuSample(sample);
+            }
             ++imu_cursor;
         }
 
@@ -1132,6 +1160,13 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
             } else {
                 ++tc_invalid_interval_count;
                 tc_preintegrator.clear();
+            }
+        }
+        if (options.tc_closed_loop) {
+            const auto update = tc_closed_loop_processor.prepareTimeUpdate();
+            if (update.valid) {
+                rtk_processor.setExternalPositionTimeUpdate(
+                    update.antenna_delta_ecef, update.process_noise_ecef);
             }
         }
 
@@ -1190,7 +1225,7 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
         }
 
         auto pos_solution = rtk_processor.processRTKEpoch(rover_obs, aligned_base_obs, nav_data);
-        if (options.tc_cp_pr_gate) {
+        if (options.tc_cp_pr_gate || options.tc_closed_loop) {
             const auto& telemetry = rtk_processor.getLastDebugTelemetry();
             tc_cp_pr_evaluated_count += telemetry.cp_pr_gate_evaluated ? 1 : 0;
             tc_cp_pr_rejected_count += telemetry.cp_pr_gate_rejected ? 1 : 0;
@@ -1254,6 +1289,37 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
                     tc_preintegrator.clear();
                 }
             }
+            if (options.tc_closed_loop) {
+                bool anchored = false;
+                Eigen::Vector3d anchor_position_ecef;
+                Eigen::Matrix3d anchor_position_covariance_ecef;
+                const bool needs_bootstrap = !tc_closed_loop_processor.initialized();
+                const bool bootstrap_ready = !needs_bootstrap ||
+                    (fusion_processor.isInitialized() && fusion_processor.isOriginSet() &&
+                     fusion_processor.isHeadingConverged());
+                bool have_anchor = false;
+                const auto& telemetry = rtk_processor.getLastDebugTelemetry();
+                if (telemetry.ddpr_anchor_valid) {
+                    libgnss::GNSSTime anchor_time;
+                    have_anchor = rtk_processor.getLastDdPrAnchor(
+                        anchor_position_ecef, anchor_position_covariance_ecef, anchor_time);
+                }
+                if (!have_anchor) {
+                    have_anchor = rtk_processor.getFloatPosteriorPosition(
+                        anchor_position_ecef, anchor_position_covariance_ecef);
+                }
+                if (bootstrap_ready && have_anchor && pos_solution.has_velocity &&
+                    pos_solution.velocity_ecef.allFinite()) {
+                    const libgnss::FusionState* bootstrap =
+                        needs_bootstrap ? &fusion_processor.state() : nullptr;
+                    anchored = tc_closed_loop_processor.reanchor(
+                        anchor_position_ecef, anchor_position_covariance_ecef,
+                        pos_solution.velocity_ecef, rover_obs.time, bootstrap);
+                }
+                if (!anchored) {
+                    tc_closed_loop_processor.invalidateInterval();
+                }
+            }
             ++valid_solutions;
             if (pos_solution.isFixed()) {
                 ++fixed_solutions;
@@ -1266,8 +1332,9 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
             if (!options.rtk_pos_out.empty()) {
                 rtk_solution_log.addSolution(pos_solution);
             }
-        } else if (options.tc_ins_time_update) {
-            tc_preintegrator.clear();
+        } else {
+            if (options.tc_ins_time_update) tc_preintegrator.clear();
+            if (options.tc_closed_loop) tc_closed_loop_processor.invalidateInterval();
         }
 
         if (fusion_processor.isOriginSet()) {
@@ -1373,8 +1440,20 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
                       << " invalid_intervals=" << tc_invalid_interval_count;
         }
         std::cout << "\n";
-        std::cout << "RTK CP-vs-PR fixed gate: " << (options.tc_cp_pr_gate ? "on" : "off");
-        if (options.tc_cp_pr_gate) {
+        std::cout << "RTK tight-coupling closed loop: "
+                  << (options.tc_closed_loop ? "on" : "off");
+        if (options.tc_closed_loop) {
+            const auto diagnostics = tc_closed_loop_processor.diagnostics();
+            std::cout << "\n  anchors=" << diagnostics.anchors
+                      << " supplied=" << diagnostics.supplied_updates
+                      << " invalid_intervals=" << diagnostics.invalid_intervals
+                      << " zupt_updates=" << diagnostics.zupt_updates
+                      << " nhc_updates=" << diagnostics.nhc_updates;
+        }
+        std::cout << "\n";
+        const bool cp_pr_gate_active = options.tc_cp_pr_gate || options.tc_closed_loop;
+        std::cout << "RTK CP-vs-PR fixed gate: " << (cp_pr_gate_active ? "on" : "off");
+        if (cp_pr_gate_active) {
             std::cout << " (threshold_m=" << options.tc_cp_pr_threshold_m
                       << ", min_pairs=" << options.tc_cp_pr_min_pairs
                       << ", max_bad_pairs=" << options.tc_cp_pr_max_bad_pairs

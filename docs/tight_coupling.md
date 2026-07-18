@@ -132,3 +132,35 @@ Same-binary full runs with the selected settings produced:
 Official score and horizontal/vertical p95 were also identical within each
 OFF/ON pair. The gate remains default-off; enabling it uses a 10 m threshold,
 minimum four checked pairs, one allowed bad pair, and two-epoch escalation.
+
+## M3 evaluation
+
+`--tc-closed-loop` moves IMU interval selection, private attitude/velocity/bias
+propagation, lever-arm handling, re-anchoring, ZUPT/NHC, and invalid-interval
+fallback into `TightCouplingProcessor`. It automatically enables the M2 gate.
+The normal anchor is the accepted RTK FLOAT posterior; on an escalated veto,
+the current DDPR-LS/FDE anchor is consumed instead. The loose ESKF is used only
+to bootstrap the first private navigation state.
+
+A deterministic 300-epoch Tokyo run3 check supplied 111 INS time updates from
+112 anchors with no invalid intervals. Its OFF output was bit-identical to the
+pre-M3 OFF output. A forced 0.1 m CP-vs-PR threshold rejected all 281 evaluated
+candidates, produced and consumed 280 DDPR anchors, and completed without an
+invalid interval or runtime error.
+
+Same-binary full runs produced:
+
+| Dataset | Mode | Fix % | PPC 3D 50 cm % | p95 horizontal m | p95 abs up m | Wall s | Veto / DDPR anchor |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Tokyo run1 | OFF | 76.67 | 72.11 | 6.83 | 31.33 | 620.9 | 0 / 0 |
+| Tokyo run1 | M3 | 77.89 | 75.14 | 6.91 | 24.66 | 1067.1 | 51 / 47 |
+| Tokyo run3 | OFF | 74.63 | 78.95 | 8.73 | 13.31 | 2684.6 | 0 / 0 |
+| Tokyo run3 | M3 | 76.74 | 81.01 | 3.88 | 6.04 | 3084.1 | 0 / 0 |
+| Nagoya run1 | OFF | 77.49 | 71.54 | 9.44 | 17.02 | 415.1 | 0 / 0 |
+| Nagoya run1 | M3 | 72.51 | 72.19 | 8.73 | 13.71 | 665.2 | 300 / 296 |
+
+M3 strongly improves Tokyo run3 position quality and improves most Tokyo run1
+and Nagoya error percentiles, but it fails the acceptance gates: Tokyo run1
+horizontal p95 regresses slightly, Nagoya fix rate falls by 4.98 percentage
+points, and wall time rises by 14.9--71.9%. This is a documented mixed-negative
+result and the feature remains default-off.
