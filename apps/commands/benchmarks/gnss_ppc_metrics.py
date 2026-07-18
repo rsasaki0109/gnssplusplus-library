@@ -262,6 +262,14 @@ def summarize_solution_epochs(
         threshold_m=0.50,
     )
     matched_fixed_epochs = sum(1 for epoch in matched if epoch.status == fixed_status)
+    wrong_fix_threshold_m = 0.50
+    wrong_fix_epochs = sum(
+        1
+        for epoch in matched
+        if epoch.status == fixed_status
+        and math.hypot(epoch.horiz_error_m, epoch.up_m) > wrong_fix_threshold_m
+    )
+    correct_fix_epochs = matched_fixed_epochs - wrong_fix_epochs
     mean_satellites = sum(epoch.num_satellites for epoch in solution_epochs) / len(solution_epochs)
     valid_span_s = solution_span_seconds(solution_epochs)
 
@@ -269,6 +277,18 @@ def summarize_solution_epochs(
         "valid_epochs": len(solution_epochs),
         "matched_epochs": len(matched),
         "fixed_epochs": matched_fixed_epochs,
+        "wrong_fix_threshold_m": wrong_fix_threshold_m,
+        "wrong_fix_epochs": wrong_fix_epochs,
+        "wrong_fix_rate_pct": rounded(
+            100.0 * wrong_fix_epochs / max(matched_fixed_epochs, 1)
+        ),
+        "correct_fix_epochs": correct_fix_epochs,
+        "correct_fix_matched_pct": rounded(
+            100.0 * correct_fix_epochs / max(len(matched), 1)
+        ),
+        "correct_fix_ref_pct": rounded(
+            100.0 * correct_fix_epochs / reference_count
+        ),
         "positioning_rate_pct": rounded(100.0 * len(matched) / reference_count),
         "fix_rate_pct": rounded(float(summary["fix_rate_pct"])),
         "mean_h_m": rounded(mean_h_m),

@@ -78,6 +78,10 @@ struct Args {
     bool no_code_align = false;  // MF hygiene ablation: disable secondary-band code alignment
     bool dd_resid = false;       // per-signal DD residuals at the reference trajectory (no solve)
     bool partial_ar = false;     // MF-AR step 2: partial AR in the fixed-lag LAMBDA
+    bool integer_constrained_reoptimization = false;
+    double integer_constrained_prior_sigma_cycles = -1.0;
+    double integer_constrained_cost_tolerance = -1.0;
+    int integer_constrained_max_iterations = 0;
     bool no_gal_ar = false;      // MF-AR step 2: exclude Galileo arcs from LAMBDA / hold
     double ratio_threshold = 0.0;  // >0: override lambda_ratio_threshold
     bool imu_ratio_aperture = false;
@@ -222,6 +226,22 @@ Args parseArgs(int argc, char** argv) {
         }
         if (a == "--fixed-lag-qr") {
             args.fixed_lag_qr = true;
+            continue;
+        }
+        if (a == "--integer-constrained-reoptimization") {
+            args.integer_constrained_reoptimization = true;
+            continue;
+        }
+        if (a == "--integer-constrained-prior-sigma" && i + 1 < argc) {
+            args.integer_constrained_prior_sigma_cycles = std::stod(argv[++i]);
+            continue;
+        }
+        if (a == "--integer-constrained-cost-tolerance" && i + 1 < argc) {
+            args.integer_constrained_cost_tolerance = std::stod(argv[++i]);
+            continue;
+        }
+        if (a == "--integer-constrained-max-iterations" && i + 1 < argc) {
+            args.integer_constrained_max_iterations = std::stoi(argv[++i]);
             continue;
         }
         if (a == "--cp-hold-keep-imu-chain") {
@@ -726,6 +746,21 @@ libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
     }
     if (args.partial_ar) {
         config.use_fixed_lag_partial_lambda = true;
+    }
+    if (args.integer_constrained_reoptimization) {
+        config.use_integer_constrained_reoptimization = true;
+    }
+    if (args.integer_constrained_prior_sigma_cycles > 0.0) {
+        config.integer_constrained_prior_sigma_cycles =
+            args.integer_constrained_prior_sigma_cycles;
+    }
+    if (args.integer_constrained_cost_tolerance >= 0.0) {
+        config.integer_constrained_cost_abs_tolerance =
+            args.integer_constrained_cost_tolerance;
+    }
+    if (args.integer_constrained_max_iterations > 0) {
+        config.integer_constrained_max_iterations =
+            args.integer_constrained_max_iterations;
     }
     if (args.partial_ar_frac >= 0.0) {
         config.fixed_lag_partial_lambda_min_fraction = args.partial_ar_frac;
@@ -1368,6 +1403,8 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
            "gen_bump_warm_reset,gen_bump_stale_pin,"
            "surplus_eval,surplus_pass,surplus_level,surplus_used,surplus_rescue,surplus_veto,"
            "low_count_attempted,low_count_used,"
+           "integer_reopt_eval,integer_reopt_pass,integer_reopt_base_cost_before,"
+           "integer_reopt_base_cost_after,integer_reopt_base_cost_delta,"
            "dr_bypass_eval,dr_bypass_horiz_err_m,dr_bypass_applied\n";
     std::size_t ri = 0;
     for (std::size_t si = 0; si < r.solution.solutions.size(); ++si) {
@@ -1435,7 +1472,13 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
                 << ',' << (d.surplus_validation_used_for_rescue ? 1 : 0)
                 << ',' << (d.surplus_validation_used_for_veto ? 1 : 0)
                 << ',' << (d.low_count_ar_attempted ? 1 : 0)
-                << ',' << (d.low_count_ar_used ? 1 : 0);
+                << ',' << (d.low_count_ar_used ? 1 : 0)
+                << ',' << (d.integer_constrained_reoptimization_evaluated ? 1 : 0)
+                << ',' << (d.integer_constrained_reoptimization_pass ? 1 : 0)
+                << ',' << d.integer_constrained_base_cost_before
+                << ',' << d.integer_constrained_base_cost_after
+                << ',' << (d.integer_constrained_base_cost_after -
+                             d.integer_constrained_base_cost_before);
             double dr_bypass_horiz = -1.0;
             if (d.dr_bypass_candidate_evaluated) {
                 const libgnss::Vector3d dr_bypass_err_enu = libgnss::ecef2enu(
@@ -2290,6 +2333,17 @@ int main(int argc, char** argv) {
                   << ", attempts=" << fl.diagnostics.low_count_ambiguity_attempts
                   << ", accepted=" << fl.diagnostics.low_count_ambiguity_fix_accepted
                   << ")\n"
+                  << "  integer-constrained reoptimization: "
+                  << (args.integer_constrained_reoptimization ? "on" : "off")
+                  << " (attempts=" << fl.diagnostics.integer_constrained_reoptimization_attempts
+                  << ", accepted=" << fl.diagnostics.integer_constrained_reoptimization_accepts
+                  << ", rejected=" << fl.diagnostics.integer_constrained_reoptimization_rejects
+                  << ", prior_sigma_cycles="
+                  << config.integer_constrained_prior_sigma_cycles
+                  << ", cost_tolerance="
+                  << config.integer_constrained_cost_abs_tolerance
+                  << ", max_iterations="
+                  << config.integer_constrained_max_iterations << ")\n"
                   << "  leaky persist (C1): " << (args.leaky_persist ? "on" : "off")
                   << " (decay=" << config.cp_hold_persist_decay
                   << ", persist_epochs=" << config.cp_hold_persist_epochs

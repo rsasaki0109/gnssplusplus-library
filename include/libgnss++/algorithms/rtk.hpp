@@ -177,6 +177,22 @@ public:
         /// 0 (default) disables the gate and preserves existing subset behavior.
         double min_full_ratio_for_subset_ar = 0.0;
 
+        /// When both values are positive, candidates below the guard ratio
+        /// must fix at least this many DD ambiguities. This permits a modest
+        /// low-ratio relaxation only when the integer system is well
+        /// constrained. Disabled by default for backward compatibility.
+        double low_ratio_guard_threshold = 0.0;
+        int low_ratio_min_fixed_ambiguities = 0;
+
+        /// Opt-in rescue for a small but high-confidence integer subset that
+        /// the minimum-integer guard would otherwise reject. The candidate
+        /// must have a strong LAMBDA ratio and imply a plausible average
+        /// displacement speed from the previous validated FIX. Any zero
+        /// threshold disables the rescue.
+        double low_count_rescue_ratio_threshold = 0.0;
+        int low_count_rescue_min_fixed_ambiguities = 4;
+        double low_count_rescue_max_history_speed_mps = 0.0;
+
         /// Max hold fix divergence from float baseline in meters.
         /// 0 (default) disables the check — existing behavior preserved.
         double max_hold_divergence_m = 0.0;
@@ -662,8 +678,25 @@ public:
         bool validation_passed = false;
         double postfix_residual_rms = std::numeric_limits<double>::quiet_NaN();
         double fixed_float_jump_m = std::numeric_limits<double>::quiet_NaN();
+        Vector3d fixed_candidate_position_ecef = Vector3d::Zero();
+        bool fixed_candidate_position_valid = false;
+        double fixed_candidate_float_separation_m =
+            std::numeric_limits<double>::quiet_NaN();
+        double fixed_candidate_history_jump_m =
+            std::numeric_limits<double>::quiet_NaN();
+        double fixed_candidate_history_dt_s =
+            std::numeric_limits<double>::quiet_NaN();
+        bool low_count_rescue_evaluated = false;
+        bool low_count_rescue_passed = false;
         bool post_validation_rejected = false;
         bool final_fixed_applied = false;
+        bool hold_fix_attempted = false;
+        bool hold_fix_applied = false;
+        int hold_fix_candidate_pairs = 0;
+        int hold_fix_matched_pairs = 0;
+        double hold_fix_jump_m = std::numeric_limits<double>::quiet_NaN();
+        double hold_fix_float_divergence_m = std::numeric_limits<double>::quiet_NaN();
+        std::string hold_fix_reject_reason;
         bool cp_pr_gate_evaluated = false;
         bool cp_pr_gate_rejected = false;
         bool cp_pr_gate_escalated = false;

@@ -113,6 +113,11 @@ struct SolveConfig {
     int min_subset_frequencies_for_ar = 0;
     int min_subset_dual_frequency_sats_for_ar = 0;
     double min_full_ratio_for_subset_ar = 0.0;
+    double low_ratio_guard_threshold = 0.0;
+    int low_ratio_min_fixed_ambiguities = 0;
+    double low_count_rescue_ratio_threshold = 0.0;
+    int low_count_rescue_min_fixed_ambiguities = 4;
+    double low_count_rescue_max_history_speed_mps = 0.0;
     int min_hold_count = 5;
     double hold_ratio_threshold = 2.0;
     double elevation_mask_deg = 15.0;
@@ -259,6 +264,15 @@ struct SolveConfig {
     double cmc_ref_return_min_elev_deg = 5.0;
     double cmc_ref_switch_max_elev_drop_deg = 10.0;
     double cmc_ref_switch_min_elev_deg = 30.0;
+    // Self-reference-free integer validation. This is independently opt-in;
+    // it does not require the IMU tight-coupling path.
+    bool cp_pr_fixed_gate = false;
+    double cp_pr_fixed_gate_threshold_m = 10.0;
+    int cp_pr_fixed_gate_min_pairs = 4;
+    int cp_pr_fixed_gate_max_bad_pairs = 1;
+    int cp_pr_fixed_gate_escalation_epochs = 2;
+    double ddpr_anchor_fde_threshold_m = 5.0;
+    int ddpr_anchor_max_fde_removals = 3;
 };
 
 using libgnss_apps::timeDiffSeconds;
@@ -591,8 +605,18 @@ public:
               << "selected_distinct_frequencies,selected_dual_frequency_sats,"
               << "selected_fixed_ambiguities,selected_used_subset,"
               << "used_wlnl_fallback,validation_attempted,validation_passed,"
-              << "postfix_residual_rms,fixed_float_jump_m,post_validation_rejected,"
-              << "final_fixed_applied,reject_reason,ar_skip_reason,"
+              << "cp_pr_gate_evaluated,cp_pr_gate_rejected,cp_pr_gate_escalated,"
+              << "cp_pr_gate_checked_pairs,cp_pr_gate_bad_pairs,"
+              << "cp_pr_gate_rms_m,cp_pr_gate_max_m,"
+              << "postfix_residual_rms,fixed_float_jump_m,fixed_candidate_x_m,"
+              << "fixed_candidate_y_m,fixed_candidate_z_m,"
+              << "fixed_candidate_float_separation_m,fixed_candidate_history_jump_m,"
+              << "fixed_candidate_history_dt_s,low_count_rescue_evaluated,"
+              << "low_count_rescue_passed,post_validation_rejected,"
+              << "final_fixed_applied,hold_fix_attempted,hold_fix_applied,"
+              << "hold_fix_candidate_pairs,hold_fix_matched_pairs,hold_fix_jump_m,"
+              << "hold_fix_float_divergence_m,hold_fix_reject_reason,"
+              << "reject_reason,ar_skip_reason,"
               << "float_update_observation_count,float_update_prefit_residual_rms_m,"
               << "float_update_post_suppression_residual_rms_m,"
               << "float_update_nis_per_observation,float_update_suppressed_outliers,"
@@ -662,13 +686,51 @@ public:
               << telemetry.selected_used_subset << ","
               << telemetry.used_wlnl_fallback << ","
               << telemetry.validation_attempted << ","
-              << telemetry.validation_passed << ",";
+              << telemetry.validation_passed << ","
+              << telemetry.cp_pr_gate_evaluated << ","
+              << telemetry.cp_pr_gate_rejected << ","
+              << telemetry.cp_pr_gate_escalated << ","
+              << telemetry.cp_pr_gate_checked_pairs << ","
+              << telemetry.cp_pr_gate_bad_pairs << ",";
+        writeNumber(telemetry.cp_pr_gate_rms_m);
+        file_ << ",";
+        writeNumber(telemetry.cp_pr_gate_max_m);
+        file_ << ",";
         writeNumber(telemetry.postfix_residual_rms);
         file_ << ",";
         writeNumber(telemetry.fixed_float_jump_m);
+        file_ << ",";
+        if (telemetry.fixed_candidate_position_valid) {
+            writeNumber(telemetry.fixed_candidate_position_ecef.x());
+        }
+        file_ << ",";
+        if (telemetry.fixed_candidate_position_valid) {
+            writeNumber(telemetry.fixed_candidate_position_ecef.y());
+        }
+        file_ << ",";
+        if (telemetry.fixed_candidate_position_valid) {
+            writeNumber(telemetry.fixed_candidate_position_ecef.z());
+        }
+        file_ << ",";
+        writeNumber(telemetry.fixed_candidate_float_separation_m);
+        file_ << ",";
+        writeNumber(telemetry.fixed_candidate_history_jump_m);
+        file_ << ",";
+        writeNumber(telemetry.fixed_candidate_history_dt_s);
         file_ << ","
+              << telemetry.low_count_rescue_evaluated << ","
+              << telemetry.low_count_rescue_passed << ","
               << telemetry.post_validation_rejected << ","
               << telemetry.final_fixed_applied << ","
+              << telemetry.hold_fix_attempted << ","
+              << telemetry.hold_fix_applied << ","
+              << telemetry.hold_fix_candidate_pairs << ","
+              << telemetry.hold_fix_matched_pairs << ",";
+        writeNumber(telemetry.hold_fix_jump_m);
+        file_ << ",";
+        writeNumber(telemetry.hold_fix_float_divergence_m);
+        file_ << ","
+              << telemetry.hold_fix_reject_reason << ","
               << telemetry.reject_reason << ","
               << libgnss::RTKProcessor::arSkipReasonToString(telemetry.ar_skip_reason) << ","
               << telemetry.float_update_observation_count << ",";
@@ -960,6 +1022,35 @@ void printUsage(const char* program_name) {
         << "                             Companion absolute floor: the switch-away replacement\n"
         << "                             must also be above this elevation (default: 30.0). No\n"
         << "                             effect without --cmc-ref\n"
+        << "  --cp-pr-fixed-gate         Validate an integer candidate with independent\n"
+        << "                             DD code-vs-carrier innovations before accepting it\n"
+        << "                             (default: off; does not require tight coupling)\n"
+        << "  --cp-pr-fixed-gate-threshold <m>\n"
+        << "                             Per-pair innovation threshold (default: 10.0)\n"
+        << "  --cp-pr-fixed-gate-min-pairs <n>\n"
+        << "                             Minimum checked pairs (default: 4)\n"
+        << "  --cp-pr-fixed-gate-max-bad-pairs <n>\n"
+        << "                             Allowed pairs above threshold (default: 1)\n"
+        << "  --cp-pr-fixed-gate-escalation-epochs <n>\n"
+        << "                             Consecutive vetoes before DDPR anchor solve (default: 2)\n"
+        << "  --ddpr-anchor-fde-threshold <m>\n"
+        << "                             DDPR anchor leave-one-out threshold (default: 5.0)\n"
+        << "  --ddpr-anchor-max-fde-removals <n>\n"
+        << "                             DDPR anchor maximum removals (default: 3)\n"
+        << "  --low-ratio-guard-threshold <ratio>\n"
+        << "                             Below this ratio, require a strongly constrained\n"
+        << "                             integer candidate (default: 0, disabled)\n"
+        << "  --low-ratio-min-fixed-ambiguities <n>\n"
+        << "                             Required DD integers below the guard threshold\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --low-count-rescue-ratio <ratio>\n"
+        << "                             Rescue a small integer subset only above this\n"
+        << "                             strong LAMBDA ratio (default: 0, disabled)\n"
+        << "  --low-count-rescue-min-fixed <n>\n"
+        << "                             Minimum integers for rescue (default: 4)\n"
+        << "  --low-count-rescue-max-history-speed <m/s>\n"
+        << "                             Maximum implied speed from previous FIX\n"
+        << "                             (default: 0, disabled)\n"
         << "  --max-consec-float-reset <n>\n"
         << "                             Reset ambiguity state after n consecutive float epochs\n"
         << "                             (default: 0, disabled; e.g. 10 for aggressive urban reconvergence)\n"
@@ -1205,6 +1296,131 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         }
         if (arg == "--cmc-ref-switch-min-elev" && i + 1 < argc) {
             config.cmc_ref_switch_min_elev_deg = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--cp-pr-fixed-gate") {
+            config.cp_pr_fixed_gate = true;
+            continue;
+        }
+        if (arg == "--cp-pr-fixed-gate-threshold" && i + 1 < argc) {
+            config.cp_pr_fixed_gate_threshold_m = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--cp-pr-fixed-gate-min-pairs" && i + 1 < argc) {
+            config.cp_pr_fixed_gate_min_pairs = std::stoi(argv[++i]);
+            continue;
+        }
+        if (arg == "--cp-pr-fixed-gate-max-bad-pairs" && i + 1 < argc) {
+            config.cp_pr_fixed_gate_max_bad_pairs = std::stoi(argv[++i]);
+            continue;
+        }
+        if (arg == "--cp-pr-fixed-gate-escalation-epochs" && i + 1 < argc) {
+            config.cp_pr_fixed_gate_escalation_epochs = std::stoi(argv[++i]);
+            continue;
+        }
+        if (arg == "--ddpr-anchor-fde-threshold" && i + 1 < argc) {
+            config.ddpr_anchor_fde_threshold_m = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--ddpr-anchor-max-fde-removals" && i + 1 < argc) {
+            config.ddpr_anchor_max_fde_removals = std::stoi(argv[++i]);
+            continue;
+        }
+        if (arg == "--low-ratio-guard-threshold" && i + 1 < argc) {
+            config.low_ratio_guard_threshold = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--low-ratio-min-fixed-ambiguities" && i + 1 < argc) {
+            config.low_ratio_min_fixed_ambiguities = std::stoi(argv[++i]);
+            continue;
+        }
+        if (arg == "--low-count-rescue-ratio" && i + 1 < argc) {
+            config.low_count_rescue_ratio_threshold = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--low-count-rescue-min-fixed" && i + 1 < argc) {
+            config.low_count_rescue_min_fixed_ambiguities = std::stoi(argv[++i]);
+            continue;
+        }
+        if (arg == "--low-count-rescue-max-history-speed" && i + 1 < argc) {
+            config.low_count_rescue_max_history_speed_mps = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--float-bridge-tail-guard") {
+            config.enable_float_bridge_tail_guard = true;
+            continue;
+        }
+        if (arg == "--no-float-bridge-tail-guard") {
+            config.enable_float_bridge_tail_guard = false;
+            continue;
+        }
+        if (arg == "--float-bridge-tail-max-anchor-gap" && i + 1 < argc) {
+            config.float_bridge_tail_guard_max_anchor_gap_s = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--float-bridge-tail-min-anchor-speed" && i + 1 < argc) {
+            config.float_bridge_tail_guard_min_anchor_speed_mps = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--float-bridge-tail-max-anchor-speed" && i + 1 < argc) {
+            config.float_bridge_tail_guard_max_anchor_speed_mps = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--float-bridge-tail-max-residual" && i + 1 < argc) {
+            config.float_bridge_tail_guard_max_residual_m = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--float-bridge-tail-min-segment-epochs" && i + 1 < argc) {
+            config.float_bridge_tail_guard_min_segment_epochs = std::stoi(argv[++i]);
+            continue;
+        }
+        if (arg == "--max-baseline-m" && i + 1 < argc) {
+            config.max_baseline_length_m = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--base-ecef" && i + 3 < argc) {
+            config.base_position_ecef = Eigen::Vector3d(
+                std::stod(argv[++i]), std::stod(argv[++i]), std::stod(argv[++i]));
+            config.base_position_override = true;
+            continue;
+        }
+        if (arg == "--skip-epochs" && i + 1 < argc) {
+            config.skip_epochs = std::stoi(argv[++i]);
+            continue;
+        }
+        if (arg == "--max-epochs" && i + 1 < argc) {
+            config.max_epochs = std::stoi(argv[++i]);
+            continue;
+        }
+        if (arg == "--debug-epoch-log" && i + 1 < argc) {
+            config.debug_epoch_log_path = argv[++i];
+            continue;
+        }
+        // Keep these late-chain options standalone as well. Besides making
+        // the parser easier to extend, this keeps MSVC below C1061's nested
+        // else-if limit.
+        if (arg == "--fixed-bridge-burst-guard") {
+            config.enable_fixed_bridge_burst_guard = true;
+            continue;
+        }
+        if (arg == "--no-fixed-bridge-burst-guard") {
+            config.enable_fixed_bridge_burst_guard = false;
+            continue;
+        }
+        if (arg == "--fixed-bridge-burst-max-anchor-gap" && i + 1 < argc) {
+            config.fixed_bridge_burst_guard_max_anchor_gap_s = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--fixed-bridge-burst-min-boundary-gap" && i + 1 < argc) {
+            config.fixed_bridge_burst_guard_min_boundary_gap_s = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--fixed-bridge-burst-max-residual" && i + 1 < argc) {
+            config.fixed_bridge_burst_guard_max_residual_m = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--fixed-bridge-burst-max-segment-epochs" && i + 1 < argc) {
+            config.fixed_bridge_burst_guard_max_segment_epochs = std::stoi(argv[++i]);
             continue;
         }
         if (arg == "--data-dir" && i + 1 < argc) {
@@ -1468,44 +1684,6 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.spp_height_step_guard_min_m = std::stod(argv[++i]);
         } else if (arg == "--spp-height-step-rate" && i + 1 < argc) {
             config.spp_height_step_guard_max_rate_mps = std::stod(argv[++i]);
-        } else if (arg == "--float-bridge-tail-guard") {
-            config.enable_float_bridge_tail_guard = true;
-        } else if (arg == "--no-float-bridge-tail-guard") {
-            config.enable_float_bridge_tail_guard = false;
-        } else if (arg == "--float-bridge-tail-max-anchor-gap" && i + 1 < argc) {
-            config.float_bridge_tail_guard_max_anchor_gap_s = std::stod(argv[++i]);
-        } else if (arg == "--float-bridge-tail-min-anchor-speed" && i + 1 < argc) {
-            config.float_bridge_tail_guard_min_anchor_speed_mps = std::stod(argv[++i]);
-        } else if (arg == "--float-bridge-tail-max-anchor-speed" && i + 1 < argc) {
-            config.float_bridge_tail_guard_max_anchor_speed_mps = std::stod(argv[++i]);
-        } else if (arg == "--float-bridge-tail-max-residual" && i + 1 < argc) {
-            config.float_bridge_tail_guard_max_residual_m = std::stod(argv[++i]);
-        } else if (arg == "--float-bridge-tail-min-segment-epochs" && i + 1 < argc) {
-            config.float_bridge_tail_guard_min_segment_epochs = std::stoi(argv[++i]);
-        } else if (arg == "--fixed-bridge-burst-guard") {
-            config.enable_fixed_bridge_burst_guard = true;
-        } else if (arg == "--no-fixed-bridge-burst-guard") {
-            config.enable_fixed_bridge_burst_guard = false;
-        } else if (arg == "--fixed-bridge-burst-max-anchor-gap" && i + 1 < argc) {
-            config.fixed_bridge_burst_guard_max_anchor_gap_s = std::stod(argv[++i]);
-        } else if (arg == "--fixed-bridge-burst-min-boundary-gap" && i + 1 < argc) {
-            config.fixed_bridge_burst_guard_min_boundary_gap_s = std::stod(argv[++i]);
-        } else if (arg == "--fixed-bridge-burst-max-residual" && i + 1 < argc) {
-            config.fixed_bridge_burst_guard_max_residual_m = std::stod(argv[++i]);
-        } else if (arg == "--fixed-bridge-burst-max-segment-epochs" && i + 1 < argc) {
-            config.fixed_bridge_burst_guard_max_segment_epochs = std::stoi(argv[++i]);
-        } else if (arg == "--max-baseline-m" && i + 1 < argc) {
-            config.max_baseline_length_m = std::stod(argv[++i]);
-        } else if (arg == "--base-ecef" && i + 3 < argc) {
-            config.base_position_ecef =
-                Eigen::Vector3d(std::stod(argv[++i]), std::stod(argv[++i]), std::stod(argv[++i]));
-            config.base_position_override = true;
-        } else if (arg == "--skip-epochs" && i + 1 < argc) {
-            config.skip_epochs = std::stoi(argv[++i]);
-        } else if (arg == "--max-epochs" && i + 1 < argc) {
-            config.max_epochs = std::stoi(argv[++i]);
-        } else if (arg == "--debug-epoch-log" && i + 1 < argc) {
-            config.debug_epoch_log_path = argv[++i];
         } else if (arg == "--prefer-trusted-seed") {
             config.prefer_trusted_seed = true;
         } else if (arg == "--doppler-float-seed") {
@@ -1612,6 +1790,39 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     }
     if (config.cmc_ref_switch_min_elev_deg < 0.0) {
         argumentError("--cmc-ref-switch-min-elev must be >= 0", argv[0]);
+    }
+    if (config.cp_pr_fixed_gate_threshold_m <= 0.0) {
+        argumentError("--cp-pr-fixed-gate-threshold must be > 0", argv[0]);
+    }
+    if (config.cp_pr_fixed_gate_min_pairs < 1) {
+        argumentError("--cp-pr-fixed-gate-min-pairs must be >= 1", argv[0]);
+    }
+    if (config.cp_pr_fixed_gate_max_bad_pairs < 0) {
+        argumentError("--cp-pr-fixed-gate-max-bad-pairs must be >= 0", argv[0]);
+    }
+    if (config.cp_pr_fixed_gate_escalation_epochs < 1) {
+        argumentError("--cp-pr-fixed-gate-escalation-epochs must be >= 1", argv[0]);
+    }
+    if (config.ddpr_anchor_fde_threshold_m <= 0.0) {
+        argumentError("--ddpr-anchor-fde-threshold must be > 0", argv[0]);
+    }
+    if (config.ddpr_anchor_max_fde_removals < 0) {
+        argumentError("--ddpr-anchor-max-fde-removals must be >= 0", argv[0]);
+    }
+    if (config.low_ratio_guard_threshold < 0.0) {
+        argumentError("--low-ratio-guard-threshold must be >= 0", argv[0]);
+    }
+    if (config.low_ratio_min_fixed_ambiguities < 0) {
+        argumentError("--low-ratio-min-fixed-ambiguities must be >= 0", argv[0]);
+    }
+    if (config.low_count_rescue_ratio_threshold < 0.0) {
+        argumentError("--low-count-rescue-ratio must be >= 0", argv[0]);
+    }
+    if (config.low_count_rescue_min_fixed_ambiguities < 1) {
+        argumentError("--low-count-rescue-min-fixed must be >= 1", argv[0]);
+    }
+    if (config.low_count_rescue_max_history_speed_mps < 0.0) {
+        argumentError("--low-count-rescue-max-history-speed must be >= 0", argv[0]);
     }
     if (config.min_hold_count < 0) {
         argumentError("--min-hold-count must be >= 0", argv[0]);
@@ -1964,6 +2175,23 @@ int main(int argc, char* argv[]) {
         rtk_config.cmc_ref_return_min_elev_deg = config.cmc_ref_return_min_elev_deg;
         rtk_config.cmc_ref_switch_max_elev_drop_deg = config.cmc_ref_switch_max_elev_drop_deg;
         rtk_config.cmc_ref_switch_min_elev_deg = config.cmc_ref_switch_min_elev_deg;
+        rtk_config.enable_cp_pr_fixed_gate = config.cp_pr_fixed_gate;
+        rtk_config.cp_pr_fixed_gate_threshold_m = config.cp_pr_fixed_gate_threshold_m;
+        rtk_config.cp_pr_fixed_gate_min_pairs = config.cp_pr_fixed_gate_min_pairs;
+        rtk_config.cp_pr_fixed_gate_max_bad_pairs = config.cp_pr_fixed_gate_max_bad_pairs;
+        rtk_config.cp_pr_fixed_gate_escalation_epochs =
+            config.cp_pr_fixed_gate_escalation_epochs;
+        rtk_config.ddpr_anchor_fde_threshold_m = config.ddpr_anchor_fde_threshold_m;
+        rtk_config.ddpr_anchor_max_fde_removals = config.ddpr_anchor_max_fde_removals;
+        rtk_config.low_ratio_guard_threshold = config.low_ratio_guard_threshold;
+        rtk_config.low_ratio_min_fixed_ambiguities =
+            config.low_ratio_min_fixed_ambiguities;
+        rtk_config.low_count_rescue_ratio_threshold =
+            config.low_count_rescue_ratio_threshold;
+        rtk_config.low_count_rescue_min_fixed_ambiguities =
+            config.low_count_rescue_min_fixed_ambiguities;
+        rtk_config.low_count_rescue_max_history_speed_mps =
+            config.low_count_rescue_max_history_speed_mps;
         rtk_config.min_satellites_for_ar = config.min_satellites_for_ar;
         rtk_config.min_subset_pairs_for_ar = config.min_subset_pairs_for_ar;
         rtk_config.max_subset_drop_steps_for_ar = config.max_subset_drop_steps_for_ar;

@@ -3849,14 +3849,95 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                             (config.low_count_min_ratio <= 0.0 ||
                              ratio > config.low_count_min_ratio) &&
                             surplus_evaluated && surplus_pass;
-                        const bool fixed_epoch = std::isfinite(ratio) &&
-                                                 (is_low_count_attempt
-                                                      ? low_count_pass
-                                                      : (established_path_pass ||
-                                                         incremental_integrity_pass)) &&
-                                                 !defer_relaxed_fix_to_existing_hold &&
-                                                 relaxed_plausibility_pass &&
-                                                 fixed_amb.size() == subset;
+                        const bool fixed_decision_pass = std::isfinite(ratio) &&
+                            (is_low_count_attempt
+                                 ? low_count_pass
+                                 : (established_path_pass || incremental_integrity_pass)) &&
+                            !defer_relaxed_fix_to_existing_hold &&
+                            relaxed_plausibility_pass && fixed_amb.size() == subset;
+                        bool integer_constrained_pass = true;
+                        if (fixed_decision_pass &&
+                            config.use_integer_constrained_reoptimization) {
+                            integer_constrained_pass = false;
+                            ++result.diagnostics.integer_constrained_reoptimization_attempts;
+                            epoch_diagnostics[i]
+                                .integer_constrained_reoptimization_evaluated = true;
+                            try {
+                                gtsam::NonlinearFactorGraph base_graph;
+                                const auto& active_factors =
+                                    smoother.getISAM2().getFactorsUnsafe();
+                                for (const auto& factor : active_factors) {
+                                    if (factor) base_graph.push_back(factor);
+                                }
+                                gtsam::Values initial_values = smoother.calculateEstimate();
+                                const double base_cost_before =
+                                    base_graph.error(initial_values);
+
+                                gtsam::NonlinearFactorGraph constrained_graph = base_graph;
+                                const auto integer_noise =
+                                    gtsam::noiseModel::Isotropic::Sigma(
+                                        1,
+                                        std::max(1e-9,
+                                            config.integer_constrained_prior_sigma_cycles));
+                                for (int r = 0; r < subset; ++r) {
+                                    const std::size_t idx = epoch_amb_indices[order[r]];
+                                    const gtsam::Key key =
+                                        ambiguityKey(ambSymbolId(idx));
+                                    if (!initial_values.exists(key)) continue;
+                                    constrained_graph.addPrior(
+                                        key,
+                                        static_cast<double>(std::lround(fixed_amb(r))),
+                                        integer_noise);
+                                }
+                                gtsam::LevenbergMarquardtParams params;
+                                params.setMaxIterations(std::max(
+                                    1, config.integer_constrained_max_iterations));
+                                params.setVerbosityLM("SILENT");
+                                const gtsam::Values optimized_values =
+                                    gtsam::LevenbergMarquardtOptimizer(
+                                        constrained_graph, initial_values, params).optimize();
+                                const double base_cost_after =
+                                    base_graph.error(optimized_values);
+                                epoch_diagnostics[i]
+                                    .integer_constrained_base_cost_before =
+                                        base_cost_before;
+                                epoch_diagnostics[i]
+                                    .integer_constrained_base_cost_after =
+                                        base_cost_after;
+                                integer_constrained_pass =
+                                    std::isfinite(base_cost_before) &&
+                                    std::isfinite(base_cost_after) &&
+                                    base_cost_after <= base_cost_before +
+                                        std::max(0.0,
+                                            config.integer_constrained_cost_abs_tolerance);
+                                if (integer_constrained_pass &&
+                                    optimized_values.exists(positionKey(i))) {
+                                    const Pose3 optimized_pose =
+                                        optimized_values.at<Pose3>(positionKey(i));
+                                    provisional_fixed_ant =
+                                        Eigen::Vector3d(antennaOf(optimized_pose));
+                                    has_provisional_fixed_ant =
+                                        provisional_fixed_ant.allFinite();
+                                }
+                            } catch (const std::exception&) {
+                                integer_constrained_pass = false;
+                            }
+                            epoch_diagnostics[i]
+                                .integer_constrained_reoptimization_pass =
+                                    integer_constrained_pass;
+                            if (integer_constrained_pass) {
+                                ++result.diagnostics
+                                      .integer_constrained_reoptimization_accepts;
+                            } else {
+                                ++result.diagnostics
+                                      .integer_constrained_reoptimization_rejects;
+                                epoch_diagnostics[i].ar_outcome =
+                                    FGOProcessor::AmbiguityResolutionOutcome::
+                                        IntegerConstrainedReoptimizationRejected;
+                            }
+                        }
+                        const bool fixed_epoch =
+                            fixed_decision_pass && integer_constrained_pass;
                         // Record float ambiguity values for the result mapping
                         // (full candidate set, once).
                         if (!float_cycles_recorded) {

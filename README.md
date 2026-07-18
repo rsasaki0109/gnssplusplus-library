@@ -263,4 +263,6 @@ ctest --test-dir build --output-on-failure
 
 ## License
 
-MIT License. See [LICENSE](LICENSE).
+MIT License. See [LICENSE](LICENSE). Permissive third-party attributions and
+the separate GPL-only competitor-benchmark boundary are documented in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

@@ -21,6 +21,13 @@ bool sourcePathExists(const std::string& relative_path) {
 }
 }  // namespace
 
+TEST(RTKConfigDefaultsTest, LowCountRescueIsDisabled) {
+    const RTKProcessor::RTKConfig config;
+    EXPECT_DOUBLE_EQ(config.low_count_rescue_ratio_threshold, 0.0);
+    EXPECT_EQ(config.low_count_rescue_min_fixed_ambiguities, 4);
+    EXPECT_DOUBLE_EQ(config.low_count_rescue_max_history_speed_mps, 0.0);
+}
+
 // ============================================================================
 // Helper: RTKLIB reference solution (lat/lon in degrees, height in meters)
 // Parsed from output/rtklib_rtk_result.pos

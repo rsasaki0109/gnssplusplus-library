@@ -2209,6 +2209,29 @@ class PPCDualProfileSelectorTest(unittest.TestCase):
             )
             self.assertEqual(metrics["ppc_official_score_pct"], 100.0)
 
+    def test_common_metrics_separate_correct_and_wrong_fixed_epochs(self) -> None:
+        reference = [self.reference_epoch(index) for index in range(2)]
+        solution = [
+            self.solution_epoch(0, 0.1, 4, None),
+            self.solution_epoch(1, 11.0, 4, None),
+        ]
+
+        metrics = ppc_metrics.summarize_solution_epochs(
+            reference,
+            solution,
+            fixed_status=4,
+            label="fixed-quality-audit",
+            match_tolerance_s=0.25,
+            solver_wall_time_s=None,
+        )
+
+        self.assertEqual(metrics["fixed_epochs"], 2)
+        self.assertEqual(metrics["correct_fix_epochs"], 1)
+        self.assertEqual(metrics["wrong_fix_epochs"], 1)
+        self.assertEqual(metrics["wrong_fix_rate_pct"], 50.0)
+        self.assertEqual(metrics["correct_fix_matched_pct"], 50.0)
+        self.assertEqual(metrics["correct_fix_ref_pct"], 50.0)
+
 
 class PPCDualProfileSelectorMatrixTest(unittest.TestCase):
     @staticmethod

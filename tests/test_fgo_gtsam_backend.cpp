@@ -1738,6 +1738,10 @@ TEST(FGOSatBadnessClampedTest, FaithfulEscapeHatchReproducesUnboundedScoring) {
 
 TEST(FGOImuIntegrationCovarianceTest, DefaultsMatchPortedReferenceMapping) {
     const FGOProcessor::FGOConfig config;
+    EXPECT_FALSE(config.use_integer_constrained_reoptimization);
+    EXPECT_DOUBLE_EQ(config.integer_constrained_prior_sigma_cycles, 1e-3);
+    EXPECT_DOUBLE_EQ(config.integer_constrained_cost_abs_tolerance, 1e-6);
+    EXPECT_EQ(config.integer_constrained_max_iterations, 1);
     // 1e-6 == sq(1e-3), the harness's hardcoded (pre-port) effective
     // covariance -- this default alone must not change any existing run.
     EXPECT_DOUBLE_EQ(config.imu_integration_covariance, 1e-6);

@@ -3823,11 +3823,64 @@ bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteDa
         return false;
     }
 
+    const Vector3d new_pos = base_position_ + fixed_baseline_;
+    debug_telemetry_.fixed_candidate_position_ecef = new_pos;
+    debug_telemetry_.fixed_candidate_position_valid = new_pos.allFinite();
+    if (filter_state_.state.size() >= 3) {
+        const Vector3d float_pos = base_position_ + filter_state_.state.head<3>();
+        debug_telemetry_.fixed_candidate_float_separation_m =
+            (new_pos - float_pos).norm();
+    }
+    if (has_last_fixed_position_) {
+        debug_telemetry_.fixed_candidate_history_jump_m =
+            (new_pos - last_fixed_position_).norm();
+    }
+    if (has_last_fixed_time_) {
+        debug_telemetry_.fixed_candidate_history_dt_s = current_time - last_fixed_time_;
+    }
+
+    const bool low_ratio_guard_enabled =
+        std::isfinite(rtk_config_.low_ratio_guard_threshold) &&
+        rtk_config_.low_ratio_guard_threshold > 0.0 &&
+        rtk_config_.low_ratio_min_fixed_ambiguities > 0;
+    const bool low_count_rescue_enabled =
+        std::isfinite(rtk_config_.low_count_rescue_ratio_threshold) &&
+        rtk_config_.low_count_rescue_ratio_threshold > 0.0 &&
+        rtk_config_.low_count_rescue_min_fixed_ambiguities > 0 &&
+        std::isfinite(rtk_config_.low_count_rescue_max_history_speed_mps) &&
+        rtk_config_.low_count_rescue_max_history_speed_mps > 0.0;
+    const bool low_count_candidate =
+        low_ratio_guard_enabled && std::isfinite(last_ar_ratio_) &&
+        last_ar_ratio_ < rtk_config_.low_ratio_guard_threshold &&
+        last_num_fixed_ambiguities_ < rtk_config_.low_ratio_min_fixed_ambiguities;
+    bool low_count_rescue_pass = false;
+    if (low_count_candidate && low_count_rescue_enabled) {
+        debug_telemetry_.low_count_rescue_evaluated = true;
+        const double history_dt = debug_telemetry_.fixed_candidate_history_dt_s;
+        const double history_jump = debug_telemetry_.fixed_candidate_history_jump_m;
+        const double history_speed =
+            (std::isfinite(history_dt) && history_dt > 0.0 &&
+             std::isfinite(history_jump))
+                ? history_jump / history_dt
+                : std::numeric_limits<double>::infinity();
+        low_count_rescue_pass =
+            last_num_fixed_ambiguities_ >=
+                rtk_config_.low_count_rescue_min_fixed_ambiguities &&
+            last_ar_ratio_ >= rtk_config_.low_count_rescue_ratio_threshold &&
+            history_speed <= rtk_config_.low_count_rescue_max_history_speed_mps;
+        debug_telemetry_.low_count_rescue_passed = low_count_rescue_pass;
+    }
+    if (low_ratio_guard_enabled &&
+        (!std::isfinite(last_ar_ratio_) ||
+         (low_count_candidate && !low_count_rescue_pass))) {
+        debug_telemetry_.reject_reason = "low_ratio_weak_integer_system";
+        return false;
+    }
+
     if (!validateCpPrFixedCandidate(sat_data, current_time)) {
         return false;
     }
 
-    Vector3d new_pos = base_position_ + fixed_baseline_;
     const double fixed_candidate_baseline_m = fixed_baseline_.norm();
     const auto window_enabled = [](double max_ratio,
                                    double min_baseline,
@@ -4262,14 +4315,19 @@ void RTKProcessor::applyHoldAmbiguity() {
 // ============================================================
 bool RTKProcessor::tryHoldFix(const std::map<SatelliteId, SatelliteData>& sat_data,
                                const GNSSTime& time, int n_sats, PositionSolution& solution) {
-    if (isMovingBasePositionMode(rtk_config_)) {
+    debug_telemetry_.hold_fix_attempted = true;
+    const auto reject_hold = [&](const char* reason) {
+        debug_telemetry_.hold_fix_reject_reason = reason;
         return false;
+    };
+    if (isMovingBasePositionMode(rtk_config_)) {
+        return reject_hold("moving_base");
     }
     if (!rtk_validation::canAttemptHoldFix(consecutive_fix_count_,
                                            rtk_config_.min_hold_count,
                                            has_last_fixed_position_,
                                            last_dd_fixed_.size() > 0)) {
-        return false;
+        return reject_hold("preconditions");
     }
 
     const int na = usesGlonassAutocal(rtk_config_) ? REAL_STATES : BASE_STATES;
@@ -4283,7 +4341,8 @@ bool RTKProcessor::tryHoldFix(const std::map<SatelliteId, SatelliteData>& sat_da
         dd_pairs.end());
 
     int nb = dd_pairs.size();
-    if (nb < 4) return false;
+    debug_telemetry_.hold_fix_candidate_pairs = nb;
+    if (nb < 4) return reject_hold("candidate_pairs_lt4");
 
     // Match current DD pairs with last held DD pairs
     // Use the held DD integers for matching satellites
@@ -4311,7 +4370,8 @@ bool RTKProcessor::tryHoldFix(const std::map<SatelliteId, SatelliteData>& sat_da
         }
     }
 
-    if (matched < 4) return false;  // Need at least 4 matched pairs to trust held integers
+    debug_telemetry_.hold_fix_matched_pairs = matched;
+    if (matched < 4) return reject_hold("matched_pairs_lt4");
 
     std::vector<rtk_measurement::AmbiguityDifference> differences;
     differences.reserve(nb);
@@ -4330,7 +4390,7 @@ bool RTKProcessor::tryHoldFix(const std::map<SatelliteId, SatelliteData>& sat_da
         if (Qb(i, i) < 1e-6) Qb(i, i) = 1e-6;
     VectorXd db = dd_float_v - dd_fixed;
     Eigen::LDLT<MatrixXd> Qb_solver(Qb);
-    if (Qb_solver.info() != Eigen::Success) return false;
+    if (Qb_solver.info() != Eigen::Success) return reject_hold("covariance_factorization");
     VectorXd Qb_inv_db = Qb_solver.solve(db);
 
     VectorXd xa = head_state - Qab * Qb_inv_db;
@@ -4339,14 +4399,18 @@ bool RTKProcessor::tryHoldFix(const std::map<SatelliteId, SatelliteData>& sat_da
     // Position validation: only accept if close to last fix
     const double max_hold_jump_m =
         (rtk_config_.position_mode == RTKConfig::PositionMode::STATIC) ? 0.1 : 1.0;
+    debug_telemetry_.hold_fix_jump_m = (test_pos - last_fixed_position_).norm();
     if (rtk_validation::exceedsAbsoluteJump(
             test_pos, last_fixed_position_, has_last_fixed_position_, max_hold_jump_m)) {
-        return false;
+        return reject_hold("position_jump");
     }
-    if (rtk_config_.max_hold_divergence_m > 0.0 && filter_state_.state.size() >= 3) {
+    if (filter_state_.state.size() >= 3) {
         const Vector3d float_pos = base_position_ + filter_state_.state.head<3>();
-        if ((test_pos - float_pos).norm() > rtk_config_.max_hold_divergence_m) {
-            return false;
+        debug_telemetry_.hold_fix_float_divergence_m = (test_pos - float_pos).norm();
+        if (rtk_config_.max_hold_divergence_m > 0.0 &&
+            debug_telemetry_.hold_fix_float_divergence_m >
+                rtk_config_.max_hold_divergence_m) {
+            return reject_hold("float_divergence");
         }
     }
 
@@ -4369,6 +4433,7 @@ bool RTKProcessor::tryHoldFix(const std::map<SatelliteId, SatelliteData>& sat_da
     last_fixed_position_ = base_position_ + fixed_baseline_;
     last_fixed_time_ = time;
     has_last_fixed_time_ = true;
+    debug_telemetry_.hold_fix_applied = true;
 
     return true;
 }

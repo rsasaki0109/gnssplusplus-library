@@ -97,6 +97,10 @@ struct Options {
     bool fix_all_ambiguities = false;
     bool use_lambda_ambiguity_fix = true;
     bool use_epoch_lambda_fixed_output = false;
+    bool use_integer_constrained_reoptimization = false;
+    double integer_constrained_prior_sigma_cycles = 1e-3;
+    double integer_constrained_cost_abs_tolerance = 1e-6;
+    int integer_constrained_max_iterations = 1;
     bool use_partial_lambda_ambiguity_fix = true;
     bool use_robust_loss = true;
     bool no_pseudorange_factors = false;
@@ -206,6 +210,16 @@ void printUsage(const char* program_name) {
         << "                                Keep optimized float positions in output\n"
         << "  --no-partial-lambda-ambiguity-fix\n"
         << "                                Disable partial LAMBDA retry with fewer candidates\n"
+        << "  --integer-constrained-reoptimization\n"
+        << "                                Re-optimize each accepted integer hypothesis and\n"
+        << "                                reject it if the original active-graph cost worsens\n"
+        << "  --integer-constrained-prior-sigma <cycles>\n"
+        << "                                Integer prior sigma (default: 0.001)\n"
+        << "  --integer-constrained-cost-tolerance <cost>\n"
+        << "                                Allowed absolute active-graph cost increase\n"
+        << "                                (default: 1e-6)\n"
+        << "  --integer-constrained-max-iterations <n>\n"
+        << "                                Batch reoptimization iterations (default: 1)\n"
         << "  --no-pseudorange-factors      Do not add raw pseudorange factors\n"
         << "  --no-dd-factors               Ignore --base for FGO double-difference factors\n"
         << "  --sd-doppler-factors          Add taroz-style SD Doppler factors\n"
@@ -555,6 +569,14 @@ Options parseArguments(int argc, char* argv[]) {
             options.use_epoch_lambda_fixed_output = true;
         } else if (arg == "--no-epoch-lambda-fixed-output") {
             options.use_epoch_lambda_fixed_output = false;
+        } else if (arg == "--integer-constrained-reoptimization") {
+            options.use_integer_constrained_reoptimization = true;
+        } else if (arg == "--integer-constrained-prior-sigma" && i + 1 < argc) {
+            options.integer_constrained_prior_sigma_cycles = std::stod(argv[++i]);
+        } else if (arg == "--integer-constrained-cost-tolerance" && i + 1 < argc) {
+            options.integer_constrained_cost_abs_tolerance = std::stod(argv[++i]);
+        } else if (arg == "--integer-constrained-max-iterations" && i + 1 < argc) {
+            options.integer_constrained_max_iterations = std::stoi(argv[++i]);
         } else if (arg == "--no-partial-lambda-ambiguity-fix") {
             options.use_partial_lambda_ambiguity_fix = false;
         } else if (arg == "--no-pseudorange-factors") {
@@ -667,6 +689,15 @@ Options parseArguments(int argc, char* argv[]) {
     }
     if (options.lambda_ratio_threshold < 0.0) {
         argumentError("--lambda-ratio-threshold must be non-negative", argv[0]);
+    }
+    if (options.integer_constrained_prior_sigma_cycles <= 0.0) {
+        argumentError("--integer-constrained-prior-sigma must be positive", argv[0]);
+    }
+    if (options.integer_constrained_cost_abs_tolerance < 0.0) {
+        argumentError("--integer-constrained-cost-tolerance must be non-negative", argv[0]);
+    }
+    if (options.integer_constrained_max_iterations <= 0) {
+        argumentError("--integer-constrained-max-iterations must be positive", argv[0]);
     }
     if (options.min_fixed_ambiguities <= 0) {
         argumentError("--min-fixed-ambiguities must be positive", argv[0]);
@@ -1793,6 +1824,14 @@ void writeSummaryJson(const Options& options,
            << ",\n";
     output << "  \"use_epoch_lambda_fixed_output\": "
            << jsonBool(options.use_epoch_lambda_fixed_output) << ",\n";
+    output << "  \"use_integer_constrained_reoptimization\": "
+           << jsonBool(options.use_integer_constrained_reoptimization) << ",\n";
+    output << "  \"integer_constrained_prior_sigma_cycles\": "
+           << options.integer_constrained_prior_sigma_cycles << ",\n";
+    output << "  \"integer_constrained_cost_abs_tolerance\": "
+           << options.integer_constrained_cost_abs_tolerance << ",\n";
+    output << "  \"integer_constrained_max_iterations\": "
+           << options.integer_constrained_max_iterations << ",\n";
     output << "  \"pseudorange_sigma_m\": "
            << options.pseudorange_sigma_m << ",\n";
     output << "  \"pseudorange_elevation_sigma_power\": "
@@ -1882,6 +1921,12 @@ void writeSummaryJson(const Options& options,
            << diagnostics.lambda_ambiguity_used_candidates << ",\n";
     output << "  \"lambda_ambiguity_attempts\": "
            << diagnostics.lambda_ambiguity_attempts << ",\n";
+    output << "  \"integer_constrained_reoptimization_attempts\": "
+           << diagnostics.integer_constrained_reoptimization_attempts << ",\n";
+    output << "  \"integer_constrained_reoptimization_accepts\": "
+           << diagnostics.integer_constrained_reoptimization_accepts << ",\n";
+    output << "  \"integer_constrained_reoptimization_rejects\": "
+           << diagnostics.integer_constrained_reoptimization_rejects << ",\n";
     output << "  \"lambda_ambiguity_fix_solved\": "
            << jsonBool(diagnostics.lambda_ambiguity_fix_solved) << ",\n";
     output << "  \"lambda_ambiguity_fix_used\": "
@@ -3313,6 +3358,14 @@ int main(int argc, char* argv[]) {
         config.lambda_ratio_threshold = options.lambda_ratio_threshold;
         config.use_epoch_lambda_fixed_output =
             options.use_epoch_lambda_fixed_output;
+        config.use_integer_constrained_reoptimization =
+            options.use_integer_constrained_reoptimization;
+        config.integer_constrained_prior_sigma_cycles =
+            options.integer_constrained_prior_sigma_cycles;
+        config.integer_constrained_cost_abs_tolerance =
+            options.integer_constrained_cost_abs_tolerance;
+        config.integer_constrained_max_iterations =
+            options.integer_constrained_max_iterations;
         config.min_fixed_ambiguities = options.min_fixed_ambiguities;
         config.max_lambda_ambiguities = options.max_lambda_ambiguities;
         config.max_tdcp_gap_s = options.max_tdcp_gap_s;

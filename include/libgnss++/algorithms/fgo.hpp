@@ -153,6 +153,16 @@ public:
         bool use_lambda_ambiguity_fix = true;
         bool use_epoch_lambda_fixed_output = false;
         bool use_partial_lambda_ambiguity_fix = true;
+        // Independently re-optimize the active fixed-lag graph with the
+        // candidate integers imposed as tight priors. The candidate is
+        // accepted only when the original (prior-free) active graph cost
+        // does not worsen beyond the configured tolerance. This also checks
+        // that constrained batch refinement remains consistent with the
+        // active incremental solution. Default OFF.
+        bool use_integer_constrained_reoptimization = false;
+        double integer_constrained_prior_sigma_cycles = 1e-3;
+        double integer_constrained_cost_abs_tolerance = 1e-6;
+        int integer_constrained_max_iterations = 1;
         bool use_robust_loss = true;
         double motion_sigma_m = 50.0;
         double clock_motion_sigma_m = 300.0;
@@ -1660,6 +1670,9 @@ public:
         std::size_t lambda_ambiguity_candidates = 0;
         std::size_t lambda_ambiguity_used_candidates = 0;
         std::size_t lambda_ambiguity_attempts = 0;
+        std::size_t integer_constrained_reoptimization_attempts = 0;
+        std::size_t integer_constrained_reoptimization_accepts = 0;
+        std::size_t integer_constrained_reoptimization_rejects = 0;
         std::size_t imu_aided_ratio_accepts = 0;
         std::size_t imu_aided_ratio_rejects = 0;
         std::size_t fixed_history_dr_accepts = 0;
@@ -1854,6 +1867,7 @@ public:
         Fixed = 12,
         SurplusValidationRejected = 13,
         LowCountRejected = 14,  ///< below-floor attempt (use_low_count_ambiguity_resolution) failed its surplus/ratio gate
+        IntegerConstrainedReoptimizationRejected = 15,
     };
 
     /// Per-epoch fixed-lag integrity state.  These values expose why an epoch
@@ -1890,6 +1904,10 @@ public:
         double fixed_postfit_ddcp_chi2_per_dof = 0.0;
         int fixed_postfit_ddcp_factors = 0;
         double effective_ratio_threshold = 0.0;
+        bool integer_constrained_reoptimization_evaluated = false;
+        bool integer_constrained_reoptimization_pass = false;
+        double integer_constrained_base_cost_before = 0.0;
+        double integer_constrained_base_cost_after = 0.0;
         double external_dr_separation_m = 0.0;
         double external_dr_mahalanobis2 = 0.0;
         int external_dr_age_epochs = -1;

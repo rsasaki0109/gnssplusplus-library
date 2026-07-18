@@ -465,6 +465,22 @@ def parse_args() -> argparse.Namespace:
         help="Companion absolute floor (degrees) for the switch-away replacement's elevation (default: 30.0).",
     )
     parser.add_argument(
+        "--cp-pr-fixed-gate",
+        action="store_true",
+        help="Validate RTK integer candidates with independent DD code-vs-carrier innovations.",
+    )
+    parser.add_argument("--cp-pr-fixed-gate-threshold", type=float, default=None)
+    parser.add_argument("--cp-pr-fixed-gate-min-pairs", type=int, default=None)
+    parser.add_argument("--cp-pr-fixed-gate-max-bad-pairs", type=int, default=None)
+    parser.add_argument("--cp-pr-fixed-gate-escalation-epochs", type=int, default=None)
+    parser.add_argument("--ddpr-anchor-fde-threshold", type=float, default=None)
+    parser.add_argument("--ddpr-anchor-max-fde-removals", type=int, default=None)
+    parser.add_argument("--low-ratio-guard-threshold", type=float, default=None)
+    parser.add_argument("--low-ratio-min-fixed-ambiguities", type=int, default=None)
+    parser.add_argument("--low-count-rescue-ratio", type=float, default=None)
+    parser.add_argument("--low-count-rescue-min-fixed", type=int, default=None)
+    parser.add_argument("--low-count-rescue-max-history-speed", type=float, default=None)
+    parser.add_argument(
         "--cycle-slip-threshold",
         type=float,
         default=None,
@@ -1454,6 +1470,35 @@ def run_solver(
             command.extend(["--cmc-ref-switch-max-elev-drop", str(args.cmc_ref_switch_max_elev_drop)])
         if getattr(args, "cmc_ref_switch_min_elev", None) is not None:
             command.extend(["--cmc-ref-switch-min-elev", str(args.cmc_ref_switch_min_elev)])
+        if getattr(args, "cp_pr_fixed_gate", False):
+            command.append("--cp-pr-fixed-gate")
+        if getattr(args, "cp_pr_fixed_gate_threshold", None) is not None:
+            command.extend(["--cp-pr-fixed-gate-threshold", str(args.cp_pr_fixed_gate_threshold)])
+        if getattr(args, "cp_pr_fixed_gate_min_pairs", None) is not None:
+            command.extend(["--cp-pr-fixed-gate-min-pairs", str(args.cp_pr_fixed_gate_min_pairs)])
+        if getattr(args, "cp_pr_fixed_gate_max_bad_pairs", None) is not None:
+            command.extend(["--cp-pr-fixed-gate-max-bad-pairs", str(args.cp_pr_fixed_gate_max_bad_pairs)])
+        if getattr(args, "cp_pr_fixed_gate_escalation_epochs", None) is not None:
+            command.extend(["--cp-pr-fixed-gate-escalation-epochs", str(args.cp_pr_fixed_gate_escalation_epochs)])
+        if getattr(args, "ddpr_anchor_fde_threshold", None) is not None:
+            command.extend(["--ddpr-anchor-fde-threshold", str(args.ddpr_anchor_fde_threshold)])
+        if getattr(args, "ddpr_anchor_max_fde_removals", None) is not None:
+            command.extend(["--ddpr-anchor-max-fde-removals", str(args.ddpr_anchor_max_fde_removals)])
+        if getattr(args, "low_ratio_guard_threshold", None) is not None:
+            command.extend(["--low-ratio-guard-threshold", str(args.low_ratio_guard_threshold)])
+        if getattr(args, "low_ratio_min_fixed_ambiguities", None) is not None:
+            command.extend(["--low-ratio-min-fixed-ambiguities", str(args.low_ratio_min_fixed_ambiguities)])
+        if getattr(args, "low_count_rescue_ratio", None) is not None:
+            command.extend(["--low-count-rescue-ratio", str(args.low_count_rescue_ratio)])
+        if getattr(args, "low_count_rescue_min_fixed", None) is not None:
+            command.extend(["--low-count-rescue-min-fixed", str(args.low_count_rescue_min_fixed)])
+        if getattr(args, "low_count_rescue_max_history_speed", None) is not None:
+            command.extend(
+                [
+                    "--low-count-rescue-max-history-speed",
+                    str(args.low_count_rescue_max_history_speed),
+                ]
+            )
         if getattr(args, "cycle_slip_threshold", None) is not None:
             command.extend(["--cycle-slip-threshold", str(args.cycle_slip_threshold)])
         if getattr(args, "doppler_slip_threshold", None) is not None:
@@ -1769,6 +1814,35 @@ def build_summary_payload(
         "rtk_max_fixed_update_nis_per_observation": (
             getattr(args, "max_fixed_update_nis_per_obs", None) if args.solver == "rtk" else None
         ),
+        "rtk_cp_pr_fixed_gate": (
+            bool(getattr(args, "cp_pr_fixed_gate", False)) if args.solver == "rtk" else False
+        ),
+        "rtk_cp_pr_fixed_gate_threshold_m": (
+            getattr(args, "cp_pr_fixed_gate_threshold", None) if args.solver == "rtk" else None
+        ),
+        "rtk_cp_pr_fixed_gate_min_pairs": (
+            getattr(args, "cp_pr_fixed_gate_min_pairs", None) if args.solver == "rtk" else None
+        ),
+        "rtk_cp_pr_fixed_gate_max_bad_pairs": (
+            getattr(args, "cp_pr_fixed_gate_max_bad_pairs", None) if args.solver == "rtk" else None
+        ),
+        "rtk_low_ratio_guard_threshold": (
+            getattr(args, "low_ratio_guard_threshold", None) if args.solver == "rtk" else None
+        ),
+        "rtk_low_ratio_min_fixed_ambiguities": (
+            getattr(args, "low_ratio_min_fixed_ambiguities", None) if args.solver == "rtk" else None
+        ),
+        "rtk_low_count_rescue_ratio_threshold": (
+            getattr(args, "low_count_rescue_ratio", None) if args.solver == "rtk" else None
+        ),
+        "rtk_low_count_rescue_min_fixed_ambiguities": (
+            getattr(args, "low_count_rescue_min_fixed", None) if args.solver == "rtk" else None
+        ),
+        "rtk_low_count_rescue_max_history_speed_mps": (
+            getattr(args, "low_count_rescue_max_history_speed", None)
+            if args.solver == "rtk"
+            else None
+        ),
         "rtk_max_fixed_update_post_residual_rms_m": (
             getattr(args, "max_fixed_update_post_rms", None) if args.solver == "rtk" else None
         ),
@@ -1937,6 +2011,12 @@ def build_summary_payload(
         "reference_epochs": len(reference),
         "matched_epochs": lib_metrics["matched_epochs"],
         "fixed_epochs": lib_metrics["fixed_epochs"],
+        "wrong_fix_threshold_m": lib_metrics["wrong_fix_threshold_m"],
+        "wrong_fix_epochs": lib_metrics["wrong_fix_epochs"],
+        "wrong_fix_rate_pct": lib_metrics["wrong_fix_rate_pct"],
+        "correct_fix_epochs": lib_metrics["correct_fix_epochs"],
+        "correct_fix_matched_pct": lib_metrics["correct_fix_matched_pct"],
+        "correct_fix_ref_pct": lib_metrics["correct_fix_ref_pct"],
         "positioning_rate_pct": lib_metrics["positioning_rate_pct"],
         "fix_rate_pct": lib_metrics["fix_rate_pct"],
         "mean_h_m": lib_metrics["mean_h_m"],
