@@ -39,15 +39,25 @@ TEST(PPPClasSeedFde, RetriesOnlyRejectedOrMaxdiffInconsistentSeeds) {
         true, false, false, 20.0, 10.0));
 }
 
-TEST(PPPClasSeedFde, QuarantineDoesNotExtendOnRepeatedMaxdiff) {
+TEST(PPPClasSeedFde, QuarantineRefreshesOnRepeatedMaxdiff) {
     int remaining = 0;
     EXPECT_TRUE(ppp_shared::updateClasSeedArQuarantine(true, 3, remaining));
     EXPECT_EQ(remaining, 3);
     EXPECT_TRUE(ppp_shared::updateClasSeedArQuarantine(true, 3, remaining));
+    EXPECT_EQ(remaining, 3);
+    EXPECT_TRUE(ppp_shared::updateClasSeedArQuarantine(false, 3, remaining));
     EXPECT_EQ(remaining, 2);
-    EXPECT_TRUE(ppp_shared::updateClasSeedArQuarantine(true, 3, remaining));
+    EXPECT_TRUE(ppp_shared::updateClasSeedArQuarantine(false, 3, remaining));
     EXPECT_FALSE(ppp_shared::updateClasSeedArQuarantine(false, 3, remaining));
     EXPECT_EQ(remaining, 0);
+}
+
+TEST(PPPClasSeedFde, MaskedAdmissionFailureCoastsWithTooFewSatellites) {
+    EXPECT_TRUE(ppp_shared::shouldCoastClasSeed(true, true, 0));
+    EXPECT_TRUE(ppp_shared::shouldCoastClasSeed(true, false, 0));
+    EXPECT_TRUE(ppp_shared::shouldCoastClasSeed(false, false, 4));
+    EXPECT_FALSE(ppp_shared::shouldCoastClasSeed(false, true, 4));
+    EXPECT_FALSE(ppp_shared::shouldCoastClasSeed(false, false, 3));
 }
 
 TEST(PPPFilterIterations, MadocaPerFrequencyCommitsOneUpdatePerEpoch) {

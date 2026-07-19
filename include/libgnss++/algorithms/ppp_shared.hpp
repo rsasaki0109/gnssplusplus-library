@@ -36,15 +36,24 @@ inline bool shouldRetryClasSeedWithFde(bool seed_valid,
              filter_spp_distance_m > max_spp_divergence_m));
 }
 
-/// Start one fixed AR quarantine window on a raw maxdiff event. Repeated
-/// maxdiff observations consume the active window instead of extending it.
+/// MRTKLIB dynamics keeps the previous sol.rr when masked pntpos admission
+/// fails. Native guard rejections still require a minimally populated solve.
+inline bool shouldCoastClasSeed(bool masked_admission_failed,
+                                bool filter_initialized,
+                                int satellites_used) {
+    return masked_admission_failed ||
+           (!filter_initialized && satellites_used >= 4);
+}
+
+/// Keep AR quarantined while raw maxdiff observations continue, then retain
+/// the quarantine for a bounded recovery window after the last event.
 inline bool updateClasSeedArQuarantine(bool trigger,
                                        int recovery_epochs,
                                        int& remaining_epochs) {
-    if (remaining_epochs > 0) {
-        --remaining_epochs;
-    } else if (trigger) {
+    if (trigger) {
         remaining_epochs = std::max(recovery_epochs, 0);
+    } else if (remaining_epochs > 0) {
+        --remaining_epochs;
     }
     return remaining_epochs > 0;
 }

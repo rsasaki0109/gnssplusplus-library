@@ -904,6 +904,19 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
             if (geom.elevation < min_elevation_rad) {
                 continue;
             }
+            // The CLAS benchmark enables MRTKLIB's rover SNR mask on both
+            // IFLC code slots. The native scalar SNR gate is evaluated before
+            // geometry and cannot reproduce its elevation interpolation.
+            // combinedSnr() is the minimum of the two code C/N0 values, so
+            // this single comparison is equivalent to testsnr() on P[0] and
+            // P[1]. At Tokyo run2 tow=178509.6 this rejects the weak G04 code
+            // and changes the seed from 63.3 m to 35.75 m (MRTKLIB: 35.73 m),
+            // restoring the same maxdiffp branch.
+            if (spp_config_.mrtklib_clas_snr_mask &&
+                obs.snr < spp_utils::mrtklibClasSnrThresholdDbHz(
+                              geom.elevation)) {
+                continue;
+            }
 
             double trop_delay = 0.0;
             // pntpos() uses the broadcast Saastamoinen correction for its
@@ -1951,6 +1964,19 @@ void SPPProcessor::updateStatistics(double processing_time_ms, bool success) con
 
 // Utility functions
 namespace spp_utils {
+
+double mrtklibClasSnrThresholdDbHz(double elevation_rad) {
+    constexpr double kMaskDbHz[] = {
+        10.0, 10.0, 10.0, 10.0, 30.0, 30.0, 30.0, 30.0, 30.0};
+    double interpolation =
+        (elevation_rad / kDegreesToRadians + 5.0) / 10.0;
+    const int index = static_cast<int>(std::floor(interpolation));
+    interpolation -= static_cast<double>(index);
+    if (index < 1) return kMaskDbHz[0];
+    if (index > 8) return kMaskDbHz[8];
+    return (1.0 - interpolation) * kMaskDbHz[index - 1] +
+           interpolation * kMaskDbHz[index];
+}
 
 double calculateElevation(const Vector3d& receiver_pos, const Vector3d& satellite_pos) {
     Vector3d los = satellite_pos - receiver_pos;
