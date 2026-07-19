@@ -65,8 +65,9 @@ constexpr double kMrtklibPhaseResidualSigmaGate = 2.0;
 constexpr double kMrtklibMaxSppDivergenceM = 10.0;
 constexpr int kMrtklibMaxSppDivergenceEpochs = 5;
 // Cover the observed interval in which a maxdiff-inconsistent float can
-// otherwise originate and hold a false WLNL fix, without allowing repeated
-// maxdiff observations to postpone AR indefinitely.
+// otherwise originate and hold a false WLNL fix. Repeated raw maxdiff
+// observations refresh this window: MRTKLIB keeps resetting instead of
+// attempting AR while the SPP disagreement persists.
 constexpr int kClasSeedArQuarantineEpochs = 30;
 // Immediate (uncounted) sanity ceiling for the reset seed vs. the filter's
 // own tracked position -- see the long comment at its use site. Well above
@@ -836,6 +837,8 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         GNSSTime last_processed_time;
         int last_clas_atmos_network_id = -1;
         bool has_last_clas_atmos_network_id = false;
+        PositionSolution last_valid_spp_seed;
+        bool has_last_valid_spp_seed = false;
     };
     const ClasFallbackSnapshot fallback_snapshot{
         filter_state_,
@@ -852,6 +855,8 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         last_processed_time_,
         last_clas_atmos_network_id_,
         has_last_clas_atmos_network_id_,
+        clas_last_valid_spp_seed_,
+        has_clas_last_valid_spp_seed_,
     };
     const auto restore_clas_snapshot = [&]() {
         filter_state_ = fallback_snapshot.filter_state;
@@ -870,6 +875,9 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             fallback_snapshot.last_clas_atmos_network_id;
         has_last_clas_atmos_network_id_ =
             fallback_snapshot.has_last_clas_atmos_network_id;
+        clas_last_valid_spp_seed_ = fallback_snapshot.last_valid_spp_seed;
+        has_clas_last_valid_spp_seed_ =
+            fallback_snapshot.has_last_valid_spp_seed;
     };
     const bool allow_hybrid_fallback =
         ppp_config_.clas_epoch_policy ==
@@ -888,6 +896,9 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     // see the long comment at its assignment for what this gates.
     bool clas_seed_untrusted_this_epoch = false;
     bool clas_baseline_seed_maxdiff_this_epoch = false;
+    bool clas_seed_failed_before_continuity_fallback = false;
+    PositionSolution clas_continuity_output;
+    bool has_clas_continuity_output = false;
     if (clas_mrtklib_parity) {
         const auto original_spp_config = spp_processor_.getSPPConfig();
         auto clas_spp_config = original_spp_config;
@@ -903,6 +914,10 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         // and MAD clipping are not part of that solve.
         clas_spp_config.use_ionosphere_free_combination = true;
         clas_spp_config.mrtklib_iflc_code_bias = true;
+        clas_spp_config.mrtklib_clas_snr_mask = true;
+        // rtkpos() forces EPHOPT_BRDC for the PPP-RTK pntpos() seed even
+        // though the subsequent CLAS filter uses SSR APC products.
+        clas_spp_config.use_ssr_corrections = false;
         clas_spp_config.pseudorange_sigma = 1.0;
         clas_spp_config.use_variance_model = false;
         clas_spp_config.enable_outlier_detection = false;
@@ -943,6 +958,12 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
                 seed = fde_seed;
             }
         }
+        // pntpos() failure includes valsol() rejecting an otherwise finite LS
+        // solution (chi-square/redundancy), not just failure to form the LS.
+        // Capture the final FDE result using that same definition so dynamics
+        // can preserve the prior sol.rr below.
+        const bool clas_masked_spp_admission_failed =
+            !seed.isValid() || clasSeedFailsRedundancyGate(seed);
         spp_processor_.setSPPConfig(original_spp_config);
         if (seed.isValid() && clasSeedFailsRedundancyGate(seed)) {
             if (pppDebugEnabled()) {
@@ -992,10 +1013,13 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
                 seed.status = SolutionStatus::NONE;
             }
         }
-        // Captured *before* the coast-splice fallback below patches a
-        // rejected seed back to isValid()=true for filter-(re)init
-        // purposes: this is the guards' true verdict on the raw SPP this
-        // epoch (redundancy/chi-square gate, jump gate, or a plain
+        if (seed.isValid()) {
+            clas_last_valid_spp_seed_ = seed;
+            has_clas_last_valid_spp_seed_ = true;
+        }
+        // Captured before the output-only coast splice below: this is the
+        // guards' true verdict on the raw SPP this epoch
+        // (redundancy/chi-square gate, jump gate, or a plain
         // pre-existing SPP failure -- e.g. <4 usable satellites -- all
         // collapse to !seed.isValid() here). Debug evidence on
         // nagoya_run2 (tow 556698-556733, a 176-epoch/35 s continuous
@@ -1016,8 +1040,10 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
                 clas_baseline_seed_maxdiff_this_epoch,
                 kClasSeedArQuarantineEpochs,
                 clas_seed_ar_quarantine_epochs_);
+        clas_seed_failed_before_continuity_fallback = !seed.isValid();
         clas_seed_untrusted_this_epoch =
-            !seed.isValid() || clas_seed_ar_quarantined;
+            clas_seed_failed_before_continuity_fallback ||
+            clas_seed_ar_quarantined;
         // Suppressing this epoch's AR *attempt* alone is not enough: lock
         // counts are untouched by that gate, so a short (2-3 epoch)
         // rejection window can still leave every ambiguity's lock_count
@@ -1043,34 +1069,59 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
                 ambiguity.outage_count = 0;
             }
         }
-        // Coverage fallback for a rejected seed encountered mid-(re)init.
+        // Coverage fallback for a rejected seed.
         // mrtk_rtkpos.c:2417-2425: when pntpos() fails, MRTKLIB's caller
         // only skips the epoch outright in the static branch
         // (!rtk->opt.dynamics -> return 0); in dynamics mode (our path) it
         // falls through and keeps running ppp_rtk_pos() on the *stale*
         // rtk->sol.rr left by the last successful pntpos (sol_t is only
         // overwritten on success), i.e. it coasts rather than drops the
-        // epoch. This port's cold-(re)init path (prepareEpochState,
-        // filter_initialized_==false after every floatcnt/maxdiffp reset)
-        // instead requires seed_solution.isValid() and returns not-ready
-        // when it fails, silently suppressing the row. Mirror the literal
-        // behavior: when a gate above rejected the seed and there is no
-        // filter to fall back on, but a prior published fix exists, splice
-        // that stale-but-trustworthy position into the seed (position/
-        // velocity only -- initializeFilterState always applies its own
-        // fixed 30 m-sigma init variance regardless of seed quality, so no
-        // covariance bookkeeping is needed) so the epoch still initializes
-        // and publishes, instead of being dropped.
-        if (!seed.isValid() && !filter_initialized_ &&
+        // epoch. Native passes the current SPP result through later early
+        // returns, so an invalid result can suppress a row even when the
+        // filter is already running. Mirror the publication continuity by
+        // preparing a stale-but-trustworthy output row while leaving the
+        // invalid seed and filter lifecycle unchanged.
+        // A plain masked-admission failure commonly reports fewer than four
+        // satellites in native's invalid result. MRTKLIB still coasts in that
+        // exact case because the failed pntpos() leaves the prior sol.rr
+        // untouched. Keep the >=4 guard only for native redundancy/jump
+        // rejections, where it prevents manufacturing an epoch without a
+        // minimally viable current solve.
+        const bool coast_from_last_spp =
+            clas_masked_spp_admission_failed &&
+            has_clas_last_valid_spp_seed_;
+        const bool coast_from_last_published =
+            !clas_masked_spp_admission_failed &&
             has_last_published_solution_position_ &&
-            seed.num_satellites >= 4) {
+            ppp_shared::shouldCoastClasSeed(
+                false, filter_initialized_,
+                static_cast<int>(seed.satellites_used.size()));
+        if (!seed.isValid() &&
+            (coast_from_last_spp || coast_from_last_published)) {
             if (pppDebugEnabled()) {
                 std::cerr << "[CLAS-SEED-COAST] tow=" << obs.time.tow
                           << " coasting to last published position\n";
             }
-            seed.position_ecef = last_published_solution_position_ecef_;
-            seed.velocity_ecef = Vector3d::Zero();
-            seed.status = SolutionStatus::SPP;
+            PositionSolution coast_seed = seed;
+            if (coast_from_last_spp) {
+                coast_seed = clas_last_valid_spp_seed_;
+                coast_seed.time = obs.time;
+            } else {
+                coast_seed.position_ecef =
+                    last_published_solution_position_ecef_;
+                coast_seed.num_satellites =
+                    static_cast<int>(coast_seed.satellites_used.size());
+            }
+            coast_seed.velocity_ecef = Vector3d::Zero();
+            coast_seed.status = SolutionStatus::SPP;
+            // Preserve MRTKLIB's stale-sol continuity row without feeding it
+            // into native's filter. The original invalid seed must continue
+            // through the unchanged clear-path lifecycle; only an otherwise
+            // invalid return value is spliced below. Injecting the stale code
+            // position into either cold initialization or a running filter
+            // can originate delayed wrong fixes.
+            clas_continuity_output = coast_seed;
+            has_clas_continuity_output = coast_seed.isValid();
         }
     } else {
         seed = spp_processor_.processEpoch(obs, nav);
@@ -1104,7 +1155,8 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     // genuine mid-stream coast (never a cold/re-init epoch, which already
     // has its own seed-availability handling).
     const bool clas_seed_guard_rejected_mid_stream =
-        clas_mrtklib_parity && filter_initialized_ && !seed.isValid();
+        clas_mrtklib_parity && filter_initialized_ &&
+        clas_seed_failed_before_continuity_fallback;
     // Advances clas_last_accepted_seed_time_ alongside every
     // last_processed_time_ update below, except on an epoch the guards
     // above just rejected -- i.e. exactly the pntpos-success gating
@@ -1219,6 +1271,15 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     if (!epoch_preparation.ready) {
         if (allow_hybrid_fallback) {
             return fallback_to_standard("prepare_epoch_state");
+        }
+        if (has_clas_continuity_output) {
+            solution = clas_continuity_output;
+            applyOptionalSolutionEpochMetadata(solution, obs.time, ppp_config_);
+            // Output-only splice: preserve the exact pre-existing filter
+            // lifecycle. Advancing time/counters here changes the dt seen by
+            // the next genuinely accepted seed and suppresses later FIX
+            // recovery, even though no filter epoch was processed now.
+            return solution;
         }
         return solution;
     }
@@ -1372,7 +1433,9 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             last_processed_time_ = obs.time;
             clas_update_seed_anchor();
         }
-        solution = seed;
+        solution = has_clas_continuity_output
+            ? clas_continuity_output
+            : seed;
         return solution;
     }
 
@@ -1485,7 +1548,9 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             clas_dd_accumulator_ = {};
             ppp_ar::clearWlnlHoldState(clas_wlnl_hold_);
             last_clas_constrained_fixed_state_valid_ = false;
-            solution = seed;
+            solution = has_clas_continuity_output
+                ? clas_continuity_output
+                : seed;
             applyOptionalSolutionEpochMetadata(solution, obs.time, ppp_config_);
             has_last_processed_time_ = true;
             last_processed_time_ = obs.time;
@@ -1522,7 +1587,9 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             last_processed_time_ = obs.time;
             clas_update_seed_anchor();
         }
-        solution = seed;
+        solution = has_clas_continuity_output
+            ? clas_continuity_output
+            : seed;
         return solution;
     }
     dumpClasFloatPosition(obs.time, filter_state_, epoch_update, osr_corrections.size());
@@ -2009,12 +2076,9 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
                 clas_kinematic_spp_divergence_count_ = 0;
                 ppp_ar::clearWlnlHoldState(clas_wlnl_hold_);
                 if (clas_mrtklib_parity && ppp_config_.use_dynamics_model) {
-                    // mrtk_ppp_rtk.c resets every element of x after maxdiffp
-                    // produces SOLQ_NONE when dynamics is enabled.  Resetting
-                    // only position/velocity leaves tightly constrained stale
-                    // ionosphere and ambiguity states attached to the new SPP
-                    // position.  The following epoch can then report a
-                    // high-ratio false FIX at that inconsistent state.
+                    // Drop the stale ambiguity/ionosphere state attached to
+                    // the pre-reset position. AR stays quarantined through
+                    // the recovery window above while the filter rebuilds.
                     filter_state_ = PPPState{};
                     filter_initialized_ = false;
                     ambiguity_states_.clear();

@@ -392,6 +392,11 @@ private:
     // gate so holdamb parity does not reconstruct participants from stale
     // ambiguity flags.
     std::vector<ppp_ar::WlnlHoldConstraint> clas_wlnl_candidate_hold_constraints_;
+    // MRTKLIB rtk->sol.rr is updated by every successful pntpos() call even
+    // when the later PPP update fails, and remains unchanged on pntpos()
+    // failure. Keep that lifecycle separate from published filter solutions.
+    PositionSolution clas_last_valid_spp_seed_;
+    bool has_clas_last_valid_spp_seed_ = false;
     Vector3d last_published_solution_position_ecef_ = Vector3d::Zero();
     bool has_last_published_solution_position_ = false;
     // Anchors MRTKLIB rtk->sol.time's role in tt (=timediff) computation

@@ -1450,19 +1450,26 @@ WlnlFixAttempt tryDirectStateDdFix(
         return WlnlFixAttempt{};
     }
     if (!attempt.has_constrained_state ||
-        !std::isfinite(attempt.state_lambda_ratio) ||
-        attempt.state_lambda_ratio < attempt.state_required_ratio) {
+        !std::isfinite(attempt.state_lambda_ratio)) {
+        return WlnlFixAttempt{};
+    }
+
+    // resamb_LAMBDA() leaves rtk->sol.ratio populated after a valid LAMBDA
+    // solve even when the ratio test rejects the candidate. MRTKLIB's outer
+    // PAR loop uses that failed-trial ratio to choose the satellite to carry
+    // into the next exclusion iteration, so preserve it here as well.
+    attempt.ratio = attempt.state_lambda_ratio;
+    attempt.nb = attempt.state_dd_count;
+    if (attempt.state_lambda_ratio < attempt.state_required_ratio) {
         if (debug_enabled) {
             std::cerr << "[PPP-RESAMB-DIRECT] ratio reject: nb="
                       << attempt.state_dd_count
                       << " ratio=" << attempt.state_lambda_ratio
                       << " threshold=" << attempt.state_required_ratio << "\n";
         }
-        return WlnlFixAttempt{};
+        return attempt;
     }
 
-    attempt.ratio = attempt.state_lambda_ratio;
-    attempt.nb = attempt.state_dd_count;
     attempt.hold_constraints.reserve(rows.size());
     for (const auto& row : rows) {
         const SatelliteId real_ref = clasRealSatellite(row.ref_satellite);

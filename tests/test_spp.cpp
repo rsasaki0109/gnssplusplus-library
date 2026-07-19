@@ -256,6 +256,19 @@ TEST(SPPUtilsTest, PseudorangeVariancePenalizesLowElevationAndWeakSnr) {
     EXPECT_GT(low_variance, high_variance);
 }
 
+TEST(SPPUtilsTest, MrtklibClasSnrMaskInterpolatesElevationBins) {
+    EXPECT_DOUBLE_EQ(spp_utils::mrtklibClasSnrThresholdDbHz(30.0 * M_PI / 180.0),
+                     10.0);
+    EXPECT_DOUBLE_EQ(spp_utils::mrtklibClasSnrThresholdDbHz(35.0 * M_PI / 180.0),
+                     10.0);
+    EXPECT_DOUBLE_EQ(spp_utils::mrtklibClasSnrThresholdDbHz(40.0 * M_PI / 180.0),
+                     20.0);
+    EXPECT_DOUBLE_EQ(spp_utils::mrtklibClasSnrThresholdDbHz(45.0 * M_PI / 180.0),
+                     30.0);
+    EXPECT_DOUBLE_EQ(spp_utils::mrtklibClasSnrThresholdDbHz(90.0 * M_PI / 180.0),
+                     30.0);
+}
+
 TEST(SPPUtilsTest, PseudorangeVariancePenalizesUnmodeledAtmosphere) {
     spp_utils::MeasurementVarianceInputs corrected;
     corrected.elevation_rad = 45.0 * M_PI / 180.0;

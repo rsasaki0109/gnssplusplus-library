@@ -58,6 +58,7 @@ public:
         double max_position_jump_min_m = 0.0;         ///< Minimum allowed position step [m]
         bool use_ionosphere_free_combination = false; ///< Use dual-frequency code IFLC when available
         bool mrtklib_iflc_code_bias = false;          ///< Match MRTKLIB prange() IFLC TGD handling
+        bool mrtklib_clas_snr_mask = false;           ///< Apply the CLAS rover elevation/SNR mask
         bool use_ionex_corrections = true;            ///< Prefer loaded IONEX TEC maps over broadcast ionosphere
         bool use_dcb_corrections = true;              ///< Apply loaded OSB/DCB code-bias products when available
         bool use_precise_products = true;             ///< Use loaded SP3/CLK products for satellite orbit/clock
@@ -367,6 +368,9 @@ namespace spp_utils {
      * @brief Apply SNR-dependent weighting
      */
     double calculateSNRWeight(double snr_db, double min_snr_db = 35.0);
+
+    /** Match the CLAS benchmark rover SNR mask used by MRTKLIB testsnr(). */
+    double mrtklibClasSnrThresholdDbHz(double elevation_rad);
 
     struct MeasurementVarianceInputs {
         double elevation_rad = 0.0;

@@ -351,6 +351,64 @@ TEST(PPPArTest, DirectStateDdHoldUsesOnlyCurrentAcceptedRows) {
     }
 }
 
+TEST(PPPArTest, DirectStateDdRatioRejectPreservesRatioForNextParIteration) {
+    ppp_shared::PPPConfig config;
+    config.clas_mrtklib_float_parity = true;
+    config.use_clas_osr_filter = true;
+    config.kinematic_mode = true;
+    config.use_dynamics_model = true;
+    config.low_dynamics_mode = false;
+
+    ppp_shared::PPPState state;
+    state.pos_index = 0;
+    state.amb_index = 3;
+    state.total_states = 11;
+    state.state = VectorXd::Zero(state.total_states);
+    state.covariance = MatrixXd::Identity(state.total_states, state.total_states) * 1e-6;
+
+    const std::vector<SatelliteId> satellites = {
+        {GNSSSystem::GPS, 1}, {GNSSSystem::GPS, 2},
+        {GNSSSystem::GPS, 3}, {GNSSSystem::GPS, 4},
+        {GNSSSystem::GPS, 101}, {GNSSSystem::GPS, 102},
+        {GNSSSystem::GPS, 103}, {GNSSSystem::GPS, 104},
+    };
+    ppp_ar::EligibleAmbiguities eligible;
+    for (int i = 0; i < static_cast<int>(satellites.size()); ++i) {
+        const int state_index = state.amb_index + i;
+        eligible.satellites.push_back(satellites[static_cast<size_t>(i)]);
+        eligible.state_indices.push_back(state_index);
+        eligible.scales.push_back(0.19);
+        state.ambiguity_indices[satellites[static_cast<size_t>(i)]] = state_index;
+        double cycles = i < 4 ? static_cast<double>(i)
+                              : 10.0 + static_cast<double>(i - 4);
+        if (i == 3) {
+            cycles += 0.5;
+        }
+        state.state(state_index) = cycles * 0.19;
+    }
+
+    std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo> ambiguity_states;
+    for (const auto& satellite : satellites) {
+        ambiguity_states[satellite].ambiguity_scale_m = 0.19;
+    }
+    std::map<SatelliteId, double> elevations;
+    for (int prn = 1; prn <= 4; ++prn) {
+        elevations[{GNSSSystem::GPS, static_cast<uint8_t>(prn)}] =
+            (35.0 + prn) * M_PI / 180.0;
+    }
+
+    const auto attempt = ppp_ar::resolveWlnlFix(
+        config, state, state.covariance, ambiguity_states, eligible,
+        ppp_ar::WlnlNlInfoProvider{}, false, &elevations);
+
+    EXPECT_FALSE(attempt.fixed);
+    EXPECT_TRUE(attempt.has_constrained_state);
+    EXPECT_EQ(attempt.nb, 6);
+    EXPECT_TRUE(std::isfinite(attempt.ratio));
+    EXPECT_GT(attempt.ratio, 0.0);
+    EXPECT_LT(attempt.ratio, attempt.state_required_ratio);
+}
+
 TEST(PPPArTest, BuildFixedObservationHelpersFilterInvalidProviders) {
     const SatelliteId sat1(GNSSSystem::GPS, 1);
     const SatelliteId sat2(GNSSSystem::GPS, 2);
