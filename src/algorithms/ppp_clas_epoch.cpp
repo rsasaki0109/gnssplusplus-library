@@ -64,10 +64,9 @@ constexpr double kMrtklibPhaseResidualSigmaGate = 2.0;
 // (pos2-rejdiffpse -> opt.maxdiffp, pos2-poserrcnt; mrtk_ppp_rtk.c:2333-2352)
 constexpr double kMrtklibMaxSppDivergenceM = 10.0;
 constexpr int kMrtklibMaxSppDivergenceEpochs = 5;
-// Cover the observed interval in which a maxdiff-inconsistent float can
-// otherwise originate and hold a false WLNL fix. Repeated raw maxdiff
-// observations refresh this window: MRTKLIB keeps resetting instead of
-// attempting AR while the SPP disagreement persists.
+// Keep a bounded recovery marker after raw maxdiff. It no longer suppresses
+// all AR attempts; recovery candidates receive stricter row-count and ratio
+// validation below.
 constexpr int kClasSeedArQuarantineEpochs = 30;
 // Immediate (uncounted) sanity ceiling for the reset seed vs. the filter's
 // own tracked position -- see the long comment at its use site. Well above
@@ -897,6 +896,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     bool clas_seed_untrusted_this_epoch = false;
     bool clas_baseline_seed_maxdiff_this_epoch = false;
     bool clas_seed_failed_before_continuity_fallback = false;
+    bool clas_seed_ar_recovery_this_epoch = false;
     PositionSolution clas_continuity_output;
     bool has_clas_continuity_output = false;
     if (clas_mrtklib_parity) {
@@ -1035,7 +1035,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         // coasted state should not be allowed to originate a new
         // publishable fix, only to keep the float filter alive until a
         // trustworthy seed returns.
-        const bool clas_seed_ar_quarantined =
+        clas_seed_ar_recovery_this_epoch =
             ppp_shared::updateClasSeedArQuarantine(
                 clas_baseline_seed_maxdiff_this_epoch,
                 kClasSeedArQuarantineEpochs,
@@ -1043,7 +1043,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         clas_seed_failed_before_continuity_fallback = !seed.isValid();
         clas_seed_untrusted_this_epoch =
             clas_seed_failed_before_continuity_fallback ||
-            clas_seed_ar_quarantined;
+            clas_baseline_seed_maxdiff_this_epoch;
         // Suppressing this epoch's AR *attempt* alone is not enough: lock
         // counts are untouched by that gate, so a short (2-3 epoch)
         // rejection window can still leave every ambiguity's lock_count
@@ -1062,7 +1062,12 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         // existing lock_count>=min_lock_count gate to enforce a natural
         // kMrtklibMinLock+1-epoch (6 accepted-phase-epoch) cooldown after
         // the rejected seed becomes trustworthy again.
-        if (clas_seed_untrusted_this_epoch) {
+        // A raw maxdiff sample does not invalidate MRTKLIB's ambiguity locks:
+        // AR runs before cntdiffp is updated, and state reset only happens
+        // after poserrcnt consecutive excesses. Keep the ambiguity cooldown
+        // for an actually failed SPP seed, but let a maxdiff-only recovery
+        // epoch reuse the still-valid lock history.
+        if (clas_seed_failed_before_continuity_fallback) {
             constexpr int kMrtklibMinLock = 5;
             for (auto& [_, ambiguity] : ambiguity_states_) {
                 ambiguity.lock_count = -kMrtklibMinLock;
@@ -1730,6 +1735,22 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         }
 
         if (ambiguity_resolution.accepted &&
+            !ppp_shared::clasRecoveryFixIsSupported(
+                clas_seed_ar_recovery_this_epoch, last_fixed_ambiguities_,
+                last_ar_ratio_, kClasKinematicMinFixRatio)) {
+            // Native's minimum-row fixes immediately after a maxdiff event
+            // are the remaining wrong-integer mode (Tokyo run2: 24 bad FIX,
+            // all nb=6). MRTKLIB's desired recovery begins at nb=8 and the
+            // native equivalent at nb=7 with ratio above the normal
+            // kinematic publication floor, so keep AR running but reject
+            // only the under-supported recovery candidate.
+            clas_kinematic_chisq_rejected = true;
+            if (pppDebugEnabled()) {
+                std::cerr << "[CLAS-KIN-RECOVERY] reject nb="
+                          << last_fixed_ambiguities_ << " ratio="
+                          << last_ar_ratio_ << "\n";
+            }
+        } else if (ambiguity_resolution.accepted &&
             !last_clas_constrained_fixed_state_valid_) {
             // MRTKLIB publishes FIX only from the constrained xa solution
             // (sol.rr = xa). Without a validated state-DD LAMBDA fix the epoch

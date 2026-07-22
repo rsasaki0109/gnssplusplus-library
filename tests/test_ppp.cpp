@@ -39,7 +39,7 @@ TEST(PPPClasSeedFde, RetriesOnlyRejectedOrMaxdiffInconsistentSeeds) {
         true, false, false, 20.0, 10.0));
 }
 
-TEST(PPPClasSeedFde, QuarantineRefreshesOnRepeatedMaxdiff) {
+TEST(PPPClasSeedFde, RecoveryMarkerCountsDownAfterMaxdiffClears) {
     int remaining = 0;
     EXPECT_TRUE(ppp_shared::updateClasSeedArQuarantine(true, 3, remaining));
     EXPECT_EQ(remaining, 3);
@@ -50,6 +50,13 @@ TEST(PPPClasSeedFde, QuarantineRefreshesOnRepeatedMaxdiff) {
     EXPECT_TRUE(ppp_shared::updateClasSeedArQuarantine(false, 3, remaining));
     EXPECT_FALSE(ppp_shared::updateClasSeedArQuarantine(false, 3, remaining));
     EXPECT_EQ(remaining, 0);
+}
+
+TEST(PPPClasSeedFde, RecoveryFixRequiresRowsAndKinematicRatioFloor) {
+    EXPECT_TRUE(ppp_shared::clasRecoveryFixIsSupported(false, 6, 2.0, 3.0));
+    EXPECT_FALSE(ppp_shared::clasRecoveryFixIsSupported(true, 6, 4.0, 3.0));
+    EXPECT_FALSE(ppp_shared::clasRecoveryFixIsSupported(true, 7, 2.9, 3.0));
+    EXPECT_TRUE(ppp_shared::clasRecoveryFixIsSupported(true, 7, 3.0, 3.0));
 }
 
 TEST(PPPClasSeedFde, MaskedAdmissionFailureCoastsWithTooFewSatellites) {
