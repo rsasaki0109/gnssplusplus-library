@@ -474,12 +474,15 @@ class CliUxTest(unittest.TestCase):
             "all six public PPC Tokyo/Nagoya runs",
             "Across 58,256 scored epochs",
             "zero FIX epochs above 3 m",
-            "Historical static CLASLIB oracle (separate dataset)",
-            "not evidence of PPC moving-data parity",
+            "All RMS2D*",
+            "SINGLE RMS2D*",
+            "bounded output-only continuity path",
+            "FLOAT RMS2D remains bit-for-bit unchanged",
         ):
             self.assertIn(snippet, normalized_section)
 
         self.assertNotIn("full six-run sign-off pending", normalized_section)
+        self.assertNotIn("Historical static CLASLIB oracle", normalized_section)
 
     def test_app_generated_gnss_examples_use_registered_dispatcher_commands(self) -> None:
         app_files = [ROOT_DIR / "apps" / "gnss.py"]
