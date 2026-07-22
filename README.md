@@ -22,7 +22,7 @@ handling without an external RTKLIB runtime.
 |---|---|---|
 | RTK | PPC Tokyo/Nagoya vs RTKLIB `demo5` | +17.0 pp positioning, +28.1 pp official score, -11.96 m P95 H delta |
 | GNSS/IMU FGO | PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | Higher <50 cm fraction (avg +5.3 pp) and fix-rate (avg +7.9 pp) on all 3 runs; fixed-only RMS also wins 2 of 3 runs |
-| CLAS PPP | Six PPC Tokyo/Nagoya runs vs MRTKLIB CLAS | 23.646% aggregate FIX, 0.593 m FIX RMS2D, 36.796 m all-solution RMS2D, and zero FIX epochs above 3 m across 58,256 scored epochs |
+| CLAS PPP | Six PPC Tokyo/Nagoya runs vs MRTKLIB CLAS | 22.055% aggregate FIX, 0.663 m FIX RMS2D, 36.525 m all-solution RMS2D, and 36 FIX epochs above 3 m across 58,258 scored epochs |
 | Urban RTK | UrbanNav Tokyo Odaiba vs RTKLIB `demo5` | More fixes, lower Hp95/Vp95; `--preset odaiba` closes Hmed |
 | SPP | PPC SPP adaptive robust + policy gate | No P95 regression with <=1 pp positioning drop |
 
