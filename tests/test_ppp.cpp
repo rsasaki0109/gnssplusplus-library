@@ -54,6 +54,21 @@ TEST(PPPClasSeedFde, RejectedOutputRequiresCausalContinuity) {
         true, true, true, 1.0, 0.2, 100.0, 100.0, 151.0, 150.0));
 }
 
+TEST(PPPClasSeedFde, RejectedMaxdiffRequiresParityAndCatastrophicDistance) {
+    EXPECT_TRUE(ppp_shared::clasMaxdiffCanUseValidationRejectedCandidate(
+        true, true, true, 101.0, 100.0));
+    EXPECT_FALSE(ppp_shared::clasMaxdiffCanUseValidationRejectedCandidate(
+        false, true, true, 101.0, 100.0));
+    EXPECT_FALSE(ppp_shared::clasMaxdiffCanUseValidationRejectedCandidate(
+        true, false, true, 101.0, 100.0));
+    EXPECT_FALSE(ppp_shared::clasMaxdiffCanUseValidationRejectedCandidate(
+        true, true, false, 101.0, 100.0));
+    EXPECT_FALSE(ppp_shared::clasMaxdiffCanUseValidationRejectedCandidate(
+        true, true, true, 100.0, 100.0));
+    EXPECT_FALSE(ppp_shared::clasMaxdiffCanUseValidationRejectedCandidate(
+        true, true, true, std::numeric_limits<double>::quiet_NaN(), 100.0));
+}
+
 TEST(PPPClasSeedFde, RecoveryMarkerCountsDownAfterMaxdiffClears) {
     int remaining = 0;
     EXPECT_TRUE(ppp_shared::updateClasSeedArQuarantine(true, 3, remaining));

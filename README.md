@@ -22,7 +22,7 @@ handling without an external RTKLIB runtime.
 |---|---|---|
 | RTK | PPC Tokyo/Nagoya vs RTKLIB `demo5` | +17.0 pp positioning, +28.1 pp official score, -11.96 m P95 H delta |
 | GNSS/IMU FGO | PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | Higher <50 cm fraction (avg +5.3 pp) and fix-rate (avg +7.9 pp) on all 3 runs; fixed-only RMS also wins 2 of 3 runs |
-| CLAS PPP | Six PPC Tokyo/Nagoya runs vs MRTKLIB CLAS | 23.646% aggregate FIX, 0.593 m FIX RMS2D, 36.796 m all-solution RMS2D, and zero FIX epochs above 3 m across 58,256 scored epochs |
+| CLAS PPP | Six PPC Tokyo/Nagoya runs vs MRTKLIB CLAS | 22.055% aggregate FIX, 0.663 m FIX RMS2D, 36.525 m all-solution RMS2D, and 36 FIX epochs above 3 m across 58,258 scored epochs |
 | Urban RTK | UrbanNav Tokyo Odaiba vs RTKLIB `demo5` | More fixes, lower Hp95/Vp95; `--preset odaiba` closes Hmed |
 | SPP | PPC SPP adaptive robust + policy gate | No P95 regression with <=1 pp positioning drop |
 
@@ -189,13 +189,13 @@ non-FIX continuity fixes; each run has 100% interval coverage and at least
 
 | Run | libgnss++ FIX | MRTKLIB FIX | FIX RMS2D* | MRTKLIB RMS2D† | All RMS2D* | FLOAT RMS2D* | SINGLE RMS2D* | max FIX* | >3 m FIX* |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Tokyo 1 | **9.702%** | 4.900% | 0.453 m | 0.747 m | 41.713 m | 16.619 m | 80.050 m | 1.533 m | **0** |
-| Tokyo 2 | 19.219% | **21.700%** | 0.387 m | 0.514 m | 28.643 m | 16.130 m | 52.970 m | 1.036 m | **0** |
-| Tokyo 3 | **37.387%** | 7.400% | 0.327 m | 0.801 m | 35.286 m | 19.727 m | 88.586 m | 2.826 m | **0** |
-| Nagoya 1 | **36.605%** | 17.000% | 0.888 m | 1.105 m | 57.258 m | 8.064 m | 119.221 m | 1.501 m | **0** |
-| Nagoya 2 | 23.117% | **23.400%** | 0.783 m | 1.119 m | 25.558 m | 16.478 m | 39.810 m | 2.486 m | **0** |
-| Nagoya 3 | 4.867% | **6.300%** | 0.959 m | 0.318 m | 13.607 m | 13.810 m | 14.152 m | 1.494 m | **0** |
-| **Six-run aggregate** | **23.646%** | — | **0.593 m** | — | **36.796 m** | **16.471 m** | **71.060 m** | **2.826 m** | **0** |
+| Tokyo 1 | **9.541%** | 4.900% | 0.766 m | 0.747 m | 41.866 m | 17.161 m | 80.321 m | 3.136 m | 36 |
+| Tokyo 2 | 16.942% | **21.700%** | 0.521 m | 0.514 m | 25.769 m | 17.067 m | 45.405 m | 2.484 m | **0** |
+| Tokyo 3 | **37.236%** | 7.400% | 0.327 m | 0.801 m | 35.292 m | 19.675 m | 88.663 m | 1.845 m | **0** |
+| Nagoya 1 | **33.448%** | 17.000% | 1.046 m | 1.105 m | 57.253 m | 7.676 m | 119.256 m | 1.638 m | **0** |
+| Nagoya 2 | 17.588% | **23.400%** | 0.745 m | 1.119 m | 25.792 m | 15.812 m | 39.933 m | 1.304 m | **0** |
+| Nagoya 3 | **6.421%** | 6.300% | 0.929 m | 0.318 m | 13.609 m | 13.986 m | 14.180 m | 1.499 m | **0** |
+| **Six-run aggregate** | **22.055%** | — | **0.663 m** | — | **36.525 m** | **16.615 m** | **70.291 m** | **3.136 m** | **36** |
 
 \* libgnss++ precision uses PPC vehicle truth transformed to the antenna phase
 center. † The published MRTKLIB precision uses the unmodified PPC reference,
@@ -203,16 +203,14 @@ so cross-solver precision columns are contextual rather than reference-identical
 
 ![PPC six-run moving CLAS metric comparison](docs/ppc_clas_full_comparison.png)
 
-Across 58,256 scored epochs, native CLAS produced 13,775 FIX epochs. The
-recovery validation requires enough double-difference support and the kinematic
-ratio floor after a `maxdiffp` event; all six runs now have zero FIX epochs above
-3 m while recovering FIX faster than the previous native implementation.
-For validation-rejected SPP epochs, a bounded output-only continuity path now
-uses the current candidate instead of freezing an old SINGLE position. It does
-not feed the candidate into the filter or AR state: all 58,256 statuses and all
-FIX/FLOAT coordinates are unchanged. Aggregate all-solution RMS2D improves
-from 36.991 m to 36.796 m and SINGLE RMS2D from 71.481 m to 71.060 m; FLOAT
-RMS2D remains bit-for-bit unchanged at 16.471 m.
+Across 58,258 scored epochs, native CLAS produced 12,849 FIX epochs. A finite
+SPP candidate rejected by the chi-square/redundancy validation still remains
+excluded from ordinary filter admission, cold starts, and AR. For catastrophic
+FLOAT/SPP disagreement above 250 m only, it can continue the counted MRTKLIB
+`maxdiffp` recovery path. On Tokyo 2 this moves the bad-seed recovery from TOW
+177750.0 to 177747.4 (311.6 m to 5.4 m), 0.8 s before the MRTKLIB recovery at
+177748.2. The six-run all-solution RMS2D is 36.525 m; FLOAT and SINGLE RMS2D are
+16.615 m and 70.291 m respectively.
 
 | Complete trajectories | Horizontal error and FIX epochs |
 |---|---|

@@ -36,6 +36,20 @@ inline bool shouldRetryClasSeedWithFde(bool seed_valid,
              filter_spp_distance_m > max_spp_divergence_m));
 }
 
+/// MRTKLIB writes a finite estpos() candidate to sol.rr before valsol()
+/// rejects it. In dynamics mode that candidate remains available only to the
+/// later counted maxdiffp recovery path; it is not an accepted SPP seed.
+inline bool clasMaxdiffCanUseValidationRejectedCandidate(
+    bool clas_mrtklib_parity,
+    bool validation_failed,
+    bool candidate_valid,
+    double filter_spp_distance_m,
+    double minimum_recovery_distance_m) {
+    return clas_mrtklib_parity && validation_failed && candidate_valid &&
+           std::isfinite(filter_spp_distance_m) &&
+           filter_spp_distance_m > minimum_recovery_distance_m;
+}
+
 /// A validation-rejected SPP candidate is never admitted to the PPP filter,
 /// but a causally continuous candidate is safer SINGLE output than freezing
 /// an old position while the vehicle moves. The tracker is output-only.
