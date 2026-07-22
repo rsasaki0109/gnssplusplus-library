@@ -182,6 +182,12 @@ def write_trajectory_figure(runs: list[dict[str, Any]], output: Path) -> None:
         fixed = np.asarray(
             [epoch.status == scorecard.PPP_FIXED_STATUS for epoch in matched]
         )
+        floating = np.asarray(
+            [epoch.status == PPP_FLOAT_STATUS for epoch in matched]
+        )
+        single = np.asarray(
+            [epoch.status == PPP_SINGLE_STATUS for epoch in matched]
+        )
         ax.plot(
             truth[:, 0],
             truth[:, 1],
@@ -189,8 +195,12 @@ def write_trajectory_figure(runs: list[dict[str, Any]], output: Path) -> None:
             linewidth=1.7,
             label="PPC antenna truth",
         )
-        ax.plot(solution_xy[:, 0], solution_xy[:, 1], color="#d97706", linewidth=0.75,
-                alpha=0.85, label="libgnss++")
+        ax.plot(solution_xy[:, 0], solution_xy[:, 1], color="#9ca3af",
+                linewidth=0.55, alpha=0.55, label="All solutions")
+        ax.scatter(solution_xy[single, 0], solution_xy[single, 1], s=3.0,
+                   color="#2563eb", alpha=0.45, label="SINGLE", zorder=2)
+        ax.scatter(solution_xy[floating, 0], solution_xy[floating, 1], s=3.0,
+                   color="#d97706", alpha=0.55, label="FLOAT", zorder=2)
         ax.scatter(solution_xy[fixed, 0], solution_xy[fixed, 1], s=3.5,
                    color="#16a34a", alpha=0.7, label="FIX", zorder=3)
         ax.set_aspect("equal", adjustable="datalim")
@@ -198,8 +208,12 @@ def write_trajectory_figure(runs: list[dict[str, Any]], output: Path) -> None:
         ax.set_xlabel("East (m)")
         ax.set_ylabel("North (m)")
     handles, labels = axes.flat[0].get_legend_handles_labels()
-    figure.legend(handles, labels, loc="lower center", ncol=3)
-    figure.suptitle("PPC moving CLAS — complete trajectories", fontsize=15, fontweight="bold")
+    figure.legend(handles, labels, loc="lower center", ncol=5)
+    figure.suptitle(
+        "PPC moving CLAS — complete trajectories by solution status",
+        fontsize=15,
+        fontweight="bold",
+    )
     figure.tight_layout(rect=(0, 0.055, 1, 0.96))
     output.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(output, dpi=180, bbox_inches="tight")
