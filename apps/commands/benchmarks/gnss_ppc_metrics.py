@@ -233,6 +233,85 @@ def llh_from_ecef(ecef_x_m: float, ecef_y_m: float, ecef_z_m: float) -> tuple[fl
     return math.degrees(latitude), math.degrees(longitude), height
 
 
+def load_fgo_parity_csv(
+    path: Path,
+    reference: list[comparison.ReferenceEpoch],
+) -> list[comparison.SolutionEpoch]:
+    """Convert gnss_fgo_parity --dump-csv output into common PPC epochs."""
+    if not reference:
+        raise SystemExit("FGO CSV conversion requires a non-empty PPC reference")
+    origin = reference[0]
+    lat = math.radians(origin.lat_deg)
+    lon = math.radians(origin.lon_deg)
+    sin_lat, cos_lat = math.sin(lat), math.cos(lat)
+    sin_lon, cos_lon = math.sin(lon), math.cos(lon)
+    ecef_to_enu = np.asarray(
+        [
+            [-sin_lon, cos_lon, 0.0],
+            [-sin_lat * cos_lon, -sin_lat * sin_lon, cos_lat],
+            [cos_lat * cos_lon, cos_lat * sin_lon, sin_lat],
+        ],
+        dtype=float,
+    )
+    reference_tows = [epoch.tow for epoch in reference]
+    epochs: list[comparison.SolutionEpoch] = []
+    with path.open(encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            status_text = row.get("status", "").strip().upper()
+            if status_text not in {"FIXED", "FLOAT"}:
+                continue
+            tow = float(row["tow"])
+            index = bisect.bisect_left(reference_tows, tow)
+            candidates = [
+                candidate
+                for candidate in (index - 1, index)
+                if 0 <= candidate < len(reference)
+            ]
+            ref = reference[
+                min(candidates, key=lambda candidate: abs(reference_tows[candidate] - tow))
+            ]
+            if row.get("x_ecef_m", "").strip():
+                ecef = np.asarray(
+                    [
+                        float(row["x_ecef_m"]),
+                        float(row["y_ecef_m"]),
+                        float(row["z_ecef_m"]),
+                    ],
+                    dtype=float,
+                )
+            else:
+                enu = np.asarray(
+                    [float(row["e_pos_m"]), float(row["n_pos_m"]), 0.0], dtype=float
+                )
+                if row.get("u_pos_m", "").strip():
+                    # New parity dumps are self-contained: consumers such as a
+                    # KF/FGO combiner must not need reference truth to recover the
+                    # FGO position. Keep the legacy reconstruction below so old
+                    # checked-in and locally cached benchmark artifacts still load.
+                    enu[2] = float(row["u_pos_m"])
+                else:
+                    ref_enu = comparison.ecef_to_enu(
+                        ref.ecef - origin.ecef, origin.lat_deg, origin.lon_deg
+                    )
+                    enu[2] = float(ref_enu[2]) + float(row["u_err_m"])
+                ecef = origin.ecef + ecef_to_enu.transpose() @ enu
+            lat_deg, lon_deg, height_m = llh_from_ecef(*ecef)
+            epochs.append(
+                comparison.SolutionEpoch(
+                    week=ref.week,
+                    tow=tow,
+                    lat_deg=lat_deg,
+                    lon_deg=lon_deg,
+                    height_m=height_m,
+                    ecef=ecef,
+                    status=4 if status_text == "FIXED" else 3,
+                    num_satellites=int(row.get("nsat") or 0),
+                    ratio=float(row.get("ratio") or 0.0),
+                )
+            )
+    return epochs
+
+
 def summarize_solution_epochs(
     reference: list[comparison.ReferenceEpoch],
     solution_epochs: list[comparison.SolutionEpoch],

@@ -1225,8 +1225,18 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
     // fresh-arc bookkeeping below (seed value + prior, no held integer) then
     // treats exactly like a genuinely new arc. Generation-0 resolves to the
     // identity (symbol id == ambiguity_index), so this whole mechanism is a
-    // no-op -- and the backend bit-identical to pre-port -- whenever
-    // use_cp_hold_recovery is false.
+    // no-op -- and the backend bit-identical to pre-port -- whenever neither
+    // reset policy nor carrier FDE is enabled. Carrier FDE also bumps an
+    // ambiguity generation when it rejects a factor: without the overlay,
+    // that bump was recorded in diagnostics but ambSymbolId() kept returning
+    // the rejected arc's original key, so persistent urban outliers could be
+    // rejected repeatedly without ever starting a fresh ambiguity state.
+    // Continuous-unfix reacquisition deliberately uses the same overlay
+    // without enabling the CP-hold FSM.
+    const bool use_ambiguity_generation_overlay =
+        config.use_cp_hold_recovery ||
+        config.use_continuous_unfix_ambiguity_reset ||
+        config.use_fde;
     std::map<std::size_t, int> amb_generation;
     std::map<std::pair<std::size_t, int>, std::size_t> amb_symbol_id;
     // Epoch at which each pinned symbol's hold prior was created (keyed by
@@ -1250,7 +1260,7 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
     std::map<std::size_t, std::size_t> sym_to_ambiguity_index;
     auto ambSymbolId = [&](std::size_t idx) -> std::size_t {
         std::size_t sid = idx;
-        if (config.use_cp_hold_recovery) {
+        if (use_ambiguity_generation_overlay) {
             const auto git = amb_generation.find(idx);
             const int gen = (git == amb_generation.end()) ? 0 : git->second;
             if (gen != 0) {
@@ -1297,7 +1307,14 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
     // translation-only anchor prior (see the bootstrap block in the main
     // loop) and CP-hold is forced to 0 via effectiveCpHoldEpochs() below
     // (reference state.effective_cp_hold_epochs: bootstrap wins).
-    int ddpr_bootstrap_epochs_remaining = 0;
+    // The reference tight-coupling stage arms the DDPR translation bootstrap
+    // once at Phase-2 initialization, then re-arms it after a full recovery.
+    // Previously this port only implemented the recovery half, so enabling
+    // use_ddpr_anchor on a healthy run performed zero anchor solves unless an
+    // unrelated smoother exception happened first.
+    int ddpr_bootstrap_epochs_remaining =
+        config.use_ddpr_anchor ? config.ddpr_anchor_bootstrap_epochs : 0;
+    int continuous_unfix_streak = 0;
 
     // Reference state.effective_cp_hold_epochs(): the configured CP-hold
     // length, suppressed to 0 while the DDPR-anchor bootstrap countdown is
@@ -1321,7 +1338,8 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
     // the graph lets it re-float and hand over continuously to the new arc;
     // it then ages out naturally after the lag window. Returns the number of
     // tight hold priors removed.
-    auto resetAmbiguitiesWithCpHold = [&](std::size_t epoch_idx) -> std::size_t {
+    auto resetAmbiguitiesWithCpHold = [&](std::size_t epoch_idx,
+                                          bool engage_cp_hold = true) -> std::size_t {
         gtsam::FactorIndices remove_indices;
         if (!live_ambiguity_indices.empty()) {
             std::set<gtsam::Key> live_keys;
@@ -1375,14 +1393,17 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
         // arms the bootstrap engages NO carrier hold: the bootstrap needs
         // the fresh carrier arcs + anchor translation priors flowing
         // immediately to pull the float back.
-        if (config.use_ddpr_anchor && config.cp_hold_bootstrap_after_mass_reset) {
+        if (engage_cp_hold && config.use_ddpr_anchor &&
+            config.cp_hold_bootstrap_after_mass_reset) {
             ddpr_bootstrap_epochs_remaining = config.ddpr_anchor_bootstrap_epochs;
         }
-        cp_hold_counter = effectiveCpHoldEpochs();
+        cp_hold_counter = engage_cp_hold ? effectiveCpHoldEpochs() : 0;
         cp_hold_release_streak = 0;
         ddpr_bad_count = 0;
-        if (config.cp_hold_break_imu_chain) pim_discontinuity = true;
-        ++result.diagnostics.cp_hold_triggers;
+        if (engage_cp_hold && config.cp_hold_break_imu_chain) {
+            pim_discontinuity = true;
+        }
+        if (engage_cp_hold) ++result.diagnostics.cp_hold_triggers;
         return remove_indices.size();
     };
 
@@ -2332,7 +2353,11 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                   config.use_cp_hold_float_recovery)) {
                 epoch_amb_indices.push_back(factor.ambiguity_index);
             }
-            if (config.use_cp_hold_recovery) live_ambiguity_indices.insert(factor.ambiguity_index);
+            // Track active arcs for every reset policy, not only the CP-hold
+            // FSM. The GICI-style continuous-unfix reset also needs to bump
+            // all currently observed ambiguity generations while leaving the
+            // carrier/IMU chains active.
+            live_ambiguity_indices.insert(factor.ambiguity_index);
         }
         if (dummy_created) ts[dummyAmbiguityKey()] = te;
 
@@ -2353,6 +2378,12 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
         if (config.use_ddpr_anchor && ddpr_bootstrap_epochs_remaining > 0) {
             ++result.diagnostics.ddpr_anchor_solves;
             const DdprAnchorResult boot_anchor = solveDdprAnchor(i, pose_seed);
+            epoch_diagnostics[i].ddpr_anchor_evaluated = true;
+            epoch_diagnostics[i].ddpr_anchor_active_factors = boot_anchor.n_active;
+            epoch_diagnostics[i].ddpr_anchor_residual_rms_m = boot_anchor.res_rms;
+            if (boot_anchor.ok) {
+                epoch_diagnostics[i].ddpr_anchor_position_ecef = antennaOf(boot_anchor.pose);
+            }
             if (boot_anchor.ok && boot_anchor.n_active >= config.ddpr_anchor_min_factors) {
                 // "successes" counts TRUSTED solves (res gate included) for
                 // diagnostic consistency with the other two call sites; the
@@ -2367,6 +2398,7 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 const Pose3 boot_pose(pose_seed.rotation(), boot_anchor.pose.translation());
                 new_factors.addPrior(positionKey(i), boot_pose,
                                      gtsam::noiseModel::Diagonal::Sigmas(boot_sigmas));
+                epoch_diagnostics[i].ddpr_anchor_bootstrap_prior_applied = true;
                 ++result.diagnostics.ddpr_anchor_bootstrap_prior_epochs;
             }
             --ddpr_bootstrap_epochs_remaining;
@@ -2622,6 +2654,8 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 external_dr_velocity_ecef = doppler_velocity;
                 external_dr_velocity_cov = 0.5 * (doppler_cov + doppler_cov.transpose());
                 external_dr_velocity_valid = true;
+                epoch_diagnostics[i].external_doppler_velocity_valid = true;
+                epoch_diagnostics[i].external_doppler_velocity_ecef_mps = doppler_velocity;
             }
             external_dr_time = current_time;
             epoch_diagnostics[i].external_dr_age_epochs =
@@ -2996,10 +3030,33 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
         // sees the float already cleaned of gross outliers. Gated on the
         // PRIMARY smoother.update having succeeded without exception (see
         // fde_indices_valid's declaration above).
+        double fde_pr_reject_fraction_this_epoch = 0.0;
+        double fde_cp_reject_fraction_this_epoch = 0.0;
         if (config.use_fde && fde_indices_valid) {
+            const std::size_t pr_rejections_before =
+                result.diagnostics.fde_pseudorange_rejections;
+            const std::size_t cp_rejections_before =
+                result.diagnostics.fde_carrier_rejections;
             std::set<std::size_t> fde_rejected_amb;
             const std::size_t fde_removed =
                 runFde(i, fde_local_indices, fde_new_indices, &fde_rejected_amb);
+            const std::size_t pr_rejected =
+                result.diagnostics.fde_pseudorange_rejections -
+                pr_rejections_before;
+            const std::size_t cp_rejected =
+                result.diagnostics.fde_carrier_rejections -
+                cp_rejections_before;
+            if (!pr_by_epoch[i].empty()) {
+                fde_pr_reject_fraction_this_epoch =
+                    static_cast<double>(pr_rejected) /
+                    static_cast<double>(pr_by_epoch[i].size());
+            }
+            if (epoch_diagnostics[i].carrier_factors_added > 0) {
+                fde_cp_reject_fraction_this_epoch =
+                    static_cast<double>(cp_rejected) /
+                    static_cast<double>(
+                        epoch_diagnostics[i].carrier_factors_added);
+            }
             if (fde_removed > 0) {
                 ++result.diagnostics.fde_epochs;
                 // A rejected CP factor's ambiguity_index may still be
@@ -3299,11 +3356,17 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                         const int subset = static_cast<int>(order.size());
                         const bool full_candidate_attempt = lambda_order_idx == 0;
                         if (config.use_variance_ranked_partial_ar &&
-                            config.partial_ar_max_std_cycles > 0.0 &&
-                            std::sqrt(std::max(0.0,
-                                q_amb(order.back(), order.back()))) >
-                                config.partial_ar_max_std_cycles) {
-                            continue;
+                            config.partial_ar_max_std_cycles > 0.0) {
+                            bool exceeds_std_gate = false;
+                            for (int candidate : order) {
+                                if (std::sqrt(std::max(
+                                        0.0, q_amb(candidate, candidate))) >
+                                    config.partial_ar_max_std_cycles) {
+                                    exceeds_std_gate = true;
+                                    break;
+                                }
+                            }
+                            if (exceeds_std_gate) continue;
                         }
                         Eigen::VectorXd sub_float(subset);
                         Eigen::MatrixXd sub_q(subset, subset);
@@ -3722,11 +3785,16 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                             ++result.diagnostics.fixed_history_dr_surplus_override_capped;
                         }
                         bool postfit_pass = true;
-                        if ((normal_ratio_pass || aperture_pass || integrity_candidate) &&
+                        const bool validate_normal_ratio_postfit =
+                            config.fixed_postfit_validate_normal_ratio &&
+                            (config.fixed_postfit_normal_ratio_ceiling <= 0.0 ||
+                             ratio <= config.fixed_postfit_normal_ratio_ceiling);
+                        const bool postfit_evaluated =
+                            (normal_ratio_pass || aperture_pass || integrity_candidate) &&
                             config.use_fixed_hypothesis_postfit_validation &&
-                            (config.fixed_postfit_validate_normal_ratio ||
-                             adaptive_only_pass ||
-                             integrity_candidate)) {
+                            (validate_normal_ratio_postfit || adaptive_only_pass ||
+                             integrity_candidate);
+                        if (postfit_evaluated) {
                             const auto& d = epoch_diagnostics[i];
                             postfit_pass =
                                 d.fixed_postfit_ddcp_factors >=
@@ -3828,10 +3896,15 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                         const bool surplus_veto_triggered =
                             !config.surplus_validation_monitor_only &&
                             config.surplus_validation_veto_high_ratio_fails &&
-                            configured_ratio_pass && surplus_evaluated && !surplus_pass;
+                            configured_ratio_pass && surplus_evaluated && !surplus_pass &&
+                            (config.surplus_validation_veto_ratio_ceiling <= 0.0 ||
+                             ratio <= config.surplus_validation_veto_ratio_ceiling) &&
+                            (config.surplus_validation_veto_min_ddpr_rms_m <= 0.0 ||
+                             ddpr_rms >= config.surplus_validation_veto_min_ddpr_rms_m);
                         const bool established_path_pass =
                             (configured_ratio_pass || aperture_pass) &&
-                            fixed_history_dr_pass && !surplus_veto_triggered;
+                            fixed_history_dr_pass && !surplus_veto_triggered &&
+                            (!postfit_evaluated || postfit_pass);
                         // Below-floor rescue decision (use_low_count_
                         // ambiguity_resolution): a below-floor attempt is
                         // decided SOLELY by this -- never by
@@ -4144,7 +4217,8 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
         // fixed solution. This is the main fix-rate lever. Quality-gated
         // epochs are never labelled FIXED this way (reference: no fixing on a
         // corrupt epoch). ---
-        if (fix_allowed && config.use_ambiguity_hold && !epoch_fixed[i]) {
+        if (fix_allowed && config.use_ambiguity_hold &&
+            config.report_held_ambiguities_as_fixed && !epoch_fixed[i]) {
             int held_here = 0;
             for (std::size_t idx : epoch_amb_indices) {
                 if (pinned_ambiguities.count(ambSymbolId(idx))) ++held_here;
@@ -4322,6 +4396,36 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 epoch_fixed_count[i] = 0;
                 epoch_has_fixed[i] = false;
                 ++result.diagnostics.fix_plausibility_demotions;
+            }
+        }
+
+        // GICI-style reacquisition after a sustained fresh-AR outage under
+        // otherwise good observations. A long unfix streak with adequate
+        // geometry and low FDE reject ratios is evidence that the ambiguity
+        // state has gone stale, not that the epoch is intrinsically unusable.
+        // Bump live ambiguity generations only; do not engage CP hold, break
+        // the IMU chain, or alter this epoch's already-reported FLOAT result.
+        if (config.use_continuous_unfix_ambiguity_reset) {
+            const bool good_observation =
+                nsat >= config.continuous_unfix_min_satellites &&
+                gdop <= config.continuous_unfix_max_gdop &&
+                fde_pr_reject_fraction_this_epoch <
+                    config.continuous_unfix_max_fde_reject_fraction &&
+                fde_cp_reject_fraction_this_epoch <
+                    config.continuous_unfix_max_fde_reject_fraction;
+            if (epoch_fixed[i]) {
+                continuous_unfix_streak = 0;
+            } else if (good_observation) {
+                ++continuous_unfix_streak;
+            } else {
+                continuous_unfix_streak = 0;
+            }
+            if (continuous_unfix_streak >
+                    std::max(0, config.continuous_unfix_reset_epochs) &&
+                !live_ambiguity_indices.empty()) {
+                resetAmbiguitiesWithCpHold(i, /*engage_cp_hold=*/false);
+                ++result.diagnostics.ambiguity_continuous_unfix_resets;
+                continuous_unfix_streak = 0;
             }
         }
 

@@ -1,0 +1,213 @@
+{
+  "evaluation": {
+    "correct_fix_threshold_3d_m": 0.5,
+    "dataset": "taroz/PPC-Dataset, Tokyo/Nagoya runs 1-3",
+    "fixed_status": 4,
+    "official_score_threshold_3d_m": 0.5,
+    "reference_used_by_runtime_selector": false,
+    "status_labels_preserved_by_position_selectors": true
+  },
+  "macro_mean": {
+    "gici": {
+      "correct_fix_ref_pct": 50.588786166666665,
+      "fix_rate_pct": 54.32599833333333,
+      "p95_abs_up_m": 1.3143045,
+      "p95_h_m": 1.1725905,
+      "ppc_official_score_pct": 66.48261883333333,
+      "ppc_score_3d_50cm_ref_pct": 67.79910233333334,
+      "wrong_fix_rate_pct": 2.488520166666667
+    },
+    "libgnss": {
+      "correct_fix_ref_pct": 67.107906,
+      "fix_rate_pct": 73.176798,
+      "p95_abs_up_m": 6.713209,
+      "p95_h_m": 4.614866,
+      "ppc_official_score_pct": 74.435344,
+      "ppc_score_3d_50cm_ref_pct": 77.110075,
+      "wrong_fix_rate_pct": 3.379532
+    }
+  },
+  "provenance": {
+    "gici_commit": "e7666110a88d22e08aad24345a253564af9b8024",
+    "gici_license_boundary": "GPL-3.0 external executable; NMEA output only",
+    "gici_matrix": "output\\gici_reproduction_ppc_matrix.json",
+    "gici_repository": "https://github.com/inuex35/gici-open",
+    "gici_results_dir": null,
+    "kaiyodai_paper": "https://www.denshi.e.kaiyodai.ac.jp/wp-content/uploads/pdf/content/2024okada,sasaki,ando.pdf",
+    "lib_matrix": "output\\kf_fgo_selected_ppc_matrix.json",
+    "turing_slides": "https://www.denshi.e.kaiyodai.ac.jp/wp-content/uploads/2025/01/Turing-Inc.-Tight-coupling-Factor-Graph-%E4%BA%95%E4%B8%8A%E6%A7%98-%E5%9C%A7%E7%B8%AE.pdf"
+  },
+  "runs": [
+    {
+      "gici": {
+        "correct_fix_ref_pct": 43.527738,
+        "fix_rate_pct": 46.472446,
+        "p95_abs_up_m": 1.677779,
+        "p95_h_m": 1.247934,
+        "path": "",
+        "ppc_official_score_pct": 80.262989,
+        "ppc_score_3d_50cm_ref_pct": 76.478956,
+        "wrong_fix_rate_pct": 1.774924
+      },
+      "key": "tokyo_run1",
+      "label": "Tokyo 1",
+      "libgnss": {
+        "correct_fix_ref_pct": 72.571333,
+        "fix_rate_pct": 84.631656,
+        "p95_abs_up_m": 3.372768,
+        "p95_h_m": 2.081906,
+        "pos": "output/tokyo1_selected_quality_tcm3_tier3_truthfree.pos",
+        "ppc_official_score_pct": 78.878774,
+        "ppc_score_3d_50cm_ref_pct": 80.018409,
+        "wrong_fix_rate_pct": 5.74875
+      }
+    },
+    {
+      "gici": {
+        "correct_fix_ref_pct": 74.461807,
+        "fix_rate_pct": 76.937788,
+        "p95_abs_up_m": 0.325714,
+        "p95_h_m": 0.629631,
+        "path": "",
+        "ppc_official_score_pct": 90.652429,
+        "ppc_score_3d_50cm_ref_pct": 90.820675,
+        "wrong_fix_rate_pct": 0.365551
+      },
+      "key": "tokyo_run2",
+      "label": "Tokyo 2",
+      "libgnss": {
+        "correct_fix_ref_pct": 81.00754,
+        "fix_rate_pct": 84.943341,
+        "p95_abs_up_m": 1.87324,
+        "p95_h_m": 1.603843,
+        "pos": "output/tokyo2_selected_quality_rtkbaseline_tier2_truthfree.pos",
+        "ppc_official_score_pct": 88.693805,
+        "ppc_score_3d_50cm_ref_pct": 88.340072,
+        "wrong_fix_rate_pct": 2.086911
+      }
+    },
+    {
+      "gici": {
+        "correct_fix_ref_pct": 71.923404,
+        "fix_rate_pct": 73.346627,
+        "p95_abs_up_m": 1.407457,
+        "p95_h_m": 0.841578,
+        "path": "",
+        "ppc_official_score_pct": 83.786792,
+        "ppc_score_3d_50cm_ref_pct": 84.667669,
+        "wrong_fix_rate_pct": 0.271862
+      },
+      "key": "tokyo_run3",
+      "label": "Tokyo 3",
+      "libgnss": {
+        "correct_fix_ref_pct": 76.615907,
+        "fix_rate_pct": 80.571276,
+        "p95_abs_up_m": 2.170366,
+        "p95_h_m": 1.670993,
+        "pos": "output/tokyo3_selected_quality_rtkbaseline_tier2_truthfree.pos",
+        "ppc_official_score_pct": 85.968869,
+        "ppc_score_3d_50cm_ref_pct": 86.295013,
+        "wrong_fix_rate_pct": 3.123709
+      }
+    },
+    {
+      "gici": {
+        "correct_fix_ref_pct": 60.005228,
+        "fix_rate_pct": 67.812362,
+        "p95_abs_up_m": 1.120251,
+        "p95_h_m": 0.42378,
+        "path": "",
+        "ppc_official_score_pct": 70.85096,
+        "ppc_score_3d_50cm_ref_pct": 77.976735,
+        "wrong_fix_rate_pct": 0.13052
+      },
+      "key": "nagoya_run1",
+      "label": "Nagoya 1",
+      "libgnss": {
+        "correct_fix_ref_pct": 78.721736,
+        "fix_rate_pct": 84.171864,
+        "p95_abs_up_m": 2.425634,
+        "p95_h_m": 1.331778,
+        "pos": "output/hybrid_nagoya1_multistage_m4_fixedpos_bridge05_vertical025_veld_vertical10_truthfree.pos",
+        "ppc_official_score_pct": 65.200926,
+        "ppc_score_3d_50cm_ref_pct": 85.844988,
+        "wrong_fix_rate_pct": 0.823316
+      }
+    },
+    {
+      "gici": {
+        "correct_fix_ref_pct": 35.329595,
+        "fix_rate_pct": 39.988166,
+        "p95_abs_up_m": 1.636335,
+        "p95_h_m": 1.650509,
+        "path": "",
+        "ppc_official_score_pct": 39.84708,
+        "ppc_score_3d_50cm_ref_pct": 49.105915,
+        "wrong_fix_rate_pct": 1.183782
+      },
+      "key": "nagoya_run2",
+      "label": "Nagoya 2",
+      "libgnss": {
+        "correct_fix_ref_pct": 48.989525,
+        "fix_rate_pct": 57.213332,
+        "p95_abs_up_m": 27.246268,
+        "p95_h_m": 19.092497,
+        "pos": "output/nagoya2_selected_quality_rtkbaseline_tier2_truthfree.pos",
+        "ppc_official_score_pct": 55.533437,
+        "ppc_score_3d_50cm_ref_pct": 60.80838,
+        "wrong_fix_rate_pct": 2.628812
+      }
+    },
+    {
+      "gici": {
+        "correct_fix_ref_pct": 18.284945,
+        "fix_rate_pct": 21.398601,
+        "p95_abs_up_m": 1.718291,
+        "p95_h_m": 2.242111,
+        "path": "",
+        "ppc_official_score_pct": 33.495463,
+        "ppc_score_3d_50cm_ref_pct": 27.744664,
+        "wrong_fix_rate_pct": 11.204482
+      },
+      "key": "nagoya_run3",
+      "label": "Nagoya 3",
+      "libgnss": {
+        "correct_fix_ref_pct": 44.741396,
+        "fix_rate_pct": 47.529321,
+        "p95_abs_up_m": 3.190975,
+        "p95_h_m": 1.908178,
+        "pos": "output/nagoya3_selected_quality_rtkbaseline_truthfree.pos",
+        "ppc_official_score_pct": 72.336255,
+        "ppc_score_3d_50cm_ref_pct": 61.353586,
+        "wrong_fix_rate_pct": 5.865696
+      }
+    }
+  ],
+  "schema_version": 1,
+  "targets": [
+    {
+      "achieved_pct": 84.631656,
+      "key": "tokyo1_fix",
+      "label": "Tokyo 1 FIX",
+      "profile": "six-course selected matrix",
+      "target_pct": 80.8
+    },
+    {
+      "achieved_pct": 85.100974,
+      "key": "nagoya1_fix",
+      "label": "Nagoya 1 FIX",
+      "p95_h_m": 1.459572,
+      "profile": "FIX-target profile (separate from six-course matrix)",
+      "target_pct": 85.1,
+      "wrong_fix_rate_pct": 0.912712
+    },
+    {
+      "achieved_pct": 78.716546,
+      "key": "ppc_official",
+      "label": "PPC official",
+      "profile": "distance-weighted six-course selected matrix",
+      "target_pct": 78.7
+    }
+  ],
+  "weighted_official_score_pct": 78.716546
+}

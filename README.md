@@ -26,6 +26,46 @@ handling without an external RTKLIB runtime.
 | Urban RTK | UrbanNav Tokyo Odaiba vs RTKLIB `demo5` | More fixes, lower Hp95/Vp95; `--preset odaiba` closes Hmed |
 | SPP | PPC SPP adaptive robust + policy gate | No P95 regression with <=1 pp positioning drop |
 
+### PPC 2024 goal matrix vs Kaiyodai and gici-open
+
+The audited KF/FGO selected profile clears the distance-weighted PPC public
+target at **78.7165%** (published target: **78.7%**). It also exceeds the
+Tokyo 1 public FIX rate (**84.632%** vs **80.8%**). A separate FIX-target
+profile clears Nagoya 1 by the narrow measured margin **85.100974%** vs
+**85.1%**, with 0.913% Wrong FIX/FIX and 1.460 m P95 horizontal error. The
+public FIX targets come from the [Kaiyodai RTK paper](https://www.denshi.e.kaiyodai.ac.jp/wp-content/uploads/pdf/content/2024okada,sasaki,ando.pdf),
+and the PPC score target from the [Turing tight-coupling slides](https://www.denshi.e.kaiyodai.ac.jp/wp-content/uploads/2025/01/Turing-Inc.-Tight-coupling-Factor-Graph-%E4%BA%95%E4%B8%8A%E6%A7%98-%E5%9C%A7%E7%B8%AE.pdf).
+
+| Run | libgnss++ FIX | gici-open FIX | Wrong FIX/FIX | libgnss++ correct FIX/ref | gici-open correct FIX/ref | 50 cm/ref | libgnss++ official | gici-open official | P95 H |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Tokyo 1 | **84.632%** | 46.472% | 5.749% | **72.571%** | 43.528% | 80.018% | 78.879% | **80.263%** | 2.082 m |
+| Tokyo 2 | **84.943%** | 76.938% | 2.087% | **81.008%** | 74.462% | 88.340% | 88.694% | **90.652%** | 1.604 m |
+| Tokyo 3 | **80.571%** | 73.347% | 3.124% | **76.616%** | 71.923% | 86.295% | **85.969%** | 83.787% | 1.671 m |
+| Nagoya 1 | **84.172%** | 67.812% | 0.823% | **78.722%** | 60.005% | 85.845% | 65.201% | **70.851%** | 1.332 m |
+| Nagoya 2 | **57.213%** | 39.988% | 2.629% | **48.990%** | 35.330% | 60.808% | **55.533%** | 39.847% | 19.092 m |
+| Nagoya 3 | **47.529%** | 21.399% | 5.866% | **44.741%** | 18.285% | 61.354% | **72.336%** | 33.495% | 1.908 m |
+| **Macro mean** | **73.177%** | 54.326% | 3.380% | **67.108%** | 50.589% | 77.110% | **74.435%** | 66.483% | 4.615 m |
+
+![PPC libgnss++ and gici-open comparison](docs/ppc_libgnss_gici_comparison.png)
+
+![PPC public targets](docs/ppc_public_targets.png)
+
+`gici-open` was reproduced from commit
+`e7666110a88d22e08aad24345a253564af9b8024` on its `forppc2024` branch and
+evaluated from exported NMEA with the same six references and metric code.
+The six-run libgnss++ FIX macro is **+18.851 pp** above that reproduction.
+The GPL-3.0 program remains an external executable: no GICI source is copied,
+linked, or distributed here, so libgnss++ remains MIT.
+
+The position selectors use candidate status/ratio/satellite/residual telemetry
+and candidate-to-current separation only. They preserve the baseline epoch
+grid, status labels, and telemetry; reference truth is used only after output
+generation for scoring. Thresholds were tuned on this public benchmark, so
+these results are an in-sample benchmark rather than a held-out generalization
+claim. Definitions, commands, paths, and the machine-readable audit are in
+[PPC reproduction commands](docs/ppc_reproduction.md) and
+[`docs/ppc_kf_fgo_goal_metrics.json`](docs/ppc_kf_fgo_goal_metrics.json).
+
 ### PPC RTK vs RTKLIB demo5
 
 These are public PPC Tokyo/Nagoya moving-RTK replays using the same

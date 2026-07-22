@@ -497,6 +497,35 @@ TEST(FGOCpHoldFsmTest, DefaultOffIsNoOp) {
     EXPECT_EQ(result.solution.solutions.size(), problem.epochs.size());
 }
 
+TEST(FGOCpHoldFsmTest, LongWindowMarginalizationKeepsCurrentPoseKeysValid) {
+    CpHoldTestOptions opt;
+    opt.num_epochs = 120;
+    auto problem = makeCpHoldFixedLagProblem(opt);
+    // Let every ambiguity disappear for longer than the six-second lag and
+    // then reappear. This exercises both pose-chain marginalization and the
+    // ambiguity-key reinsertion path over many lag-window turnovers.
+    problem.double_difference_carrier_factors.erase(
+        std::remove_if(
+            problem.double_difference_carrier_factors.begin(),
+            problem.double_difference_carrier_factors.end(),
+            [](const FGOProcessor::DoubleDifferenceCarrierFactor& factor) {
+                return factor.epoch_index >= 40 && factor.epoch_index <= 55;
+            }),
+        problem.double_difference_carrier_factors.end());
+
+    FGOProcessor::FGOConfig config = makeCpHoldBaseConfig();
+    config.use_solve_exception_recovery = true;
+    FGOProcessor processor(config);
+    const auto result = processor.optimizeProblem(problem);
+
+    ASSERT_EQ(result.solution.solutions.size(), problem.epochs.size());
+    EXPECT_TRUE(std::none_of(
+        result.solution.solutions.begin(), result.solution.solutions.end(),
+        [](const PositionSolution& solution) {
+            return solution.status == SolutionStatus::NONE;
+        }));
+}
+
 TEST(FGOCpHoldFsmTest, HoldEngagesOnPersistAndSuppressesCarrier) {
     CpHoldTestOptions opt;
     // A long corrupt stretch: bad epochs 5..14 (10 consecutive), well past
@@ -921,6 +950,16 @@ TEST(FGODdprAnchorTest, BootstrapRecoversPositionAndRejectsFdeOutlier) {
         << " outlier=" << outlier_result.diagnostics.ddpr_anchor_successes << ")";
     EXPECT_GE(outlier_result.diagnostics.ddpr_anchor_bootstrap_prior_epochs,
               clean_result.diagnostics.ddpr_anchor_bootstrap_prior_epochs - 1);
+    const auto diagnostic_it = std::find_if(
+        outlier_result.epoch_diagnostics.begin(), outlier_result.epoch_diagnostics.end(),
+        [](const auto& diagnostic) {
+            return diagnostic.ddpr_anchor_bootstrap_prior_applied;
+        });
+    ASSERT_NE(diagnostic_it, outlier_result.epoch_diagnostics.end());
+    EXPECT_TRUE(diagnostic_it->ddpr_anchor_evaluated);
+    EXPECT_GE(diagnostic_it->ddpr_anchor_active_factors, 4);
+    EXPECT_TRUE(std::isfinite(diagnostic_it->ddpr_anchor_residual_rms_m));
+    EXPECT_GT(diagnostic_it->ddpr_anchor_position_ecef.norm(), 1e6);
 
     // Position recovery: with noise-free synthetic pseudorange the DDPR-LS
     // anchor is exact, so the bootstrap-anchored post-reset float must pull
@@ -1200,15 +1239,18 @@ TEST(FGOFdeTest, CarrierOutlierReleasesHoldAndBumpsGeneration) {
     opt.num_epochs = 30;
     auto problem = makeCpHoldFixedLagProblem(opt);
 
-    // Single-satellite, single-epoch carrier-only outlier (ambiguity_index 0,
+    // Single-satellite persistent carrier-only step (ambiguity_index 0,
     // i.e. satellite PRN 2): mutate the same raw model field the GTSAM
     // carrier factor is built from, well past where fix-and-hold should have
     // pinned this arc (noise-free synthetic geometry converges in a handful
-    // of epochs).
+    // of epochs). FDE must reject the transition once and mint a fresh
+    // ambiguity generation that can absorb the new constant bias; repeatedly
+    // rejecting every later epoch would prove that the generation bump is
+    // diagnostic-only and not used by ambSymbolId().
     constexpr std::size_t kOutlierEpoch = 15;
     constexpr double kOutlierBiasM = 5.0;  // >> fde_carrier_threshold_m (0.5)
     for (auto& cp : problem.double_difference_carrier_factors) {
-        if (cp.epoch_index != kOutlierEpoch || cp.ambiguity_index != 0) continue;
+        if (cp.epoch_index < kOutlierEpoch || cp.ambiguity_index != 0) continue;
         cp.rover_satellite_model.corrected_carrier_m += kOutlierBiasM;
         cp.observed_dd_carrier_m += kOutlierBiasM;
     }
@@ -1236,12 +1278,64 @@ TEST(FGOFdeTest, CarrierOutlierReleasesHoldAndBumpsGeneration) {
     EXPECT_EQ(off_result.diagnostics.ambiguity_generation_bumps, 0u);
 
     ASSERT_GT(on_result.diagnostics.fde_carrier_rejections, 0u);
+    EXPECT_LT(on_result.diagnostics.fde_carrier_rejections, 5u)
+        << "a persistent carrier step should be absorbed by one fresh ambiguity "
+           "generation instead of being rejected throughout the remaining arc";
     EXPECT_EQ(on_result.diagnostics.fde_pseudorange_rejections, 0u);
     EXPECT_GT(on_result.diagnostics.ambiguity_generation_bumps, 0u)
         << "the rejected carrier factor's arc should get a fresh generation, "
            "i.e. be treated as a cycle slip";
     for (const auto& sol : on_result.solution.solutions) {
         EXPECT_TRUE(sol.position_ecef.allFinite());
+    }
+}
+
+TEST(FGOAmbiguityReacquisitionTest, ContinuousUnfixResetStartsFreshArcsWithoutCpHold) {
+    CpHoldTestOptions opt;
+    opt.num_epochs = 14;
+    opt.satellites = gtsamParitySatelliteGeometry();
+    opt.satellites.emplace_back(-20000000.0, 10000000.0, 12000000.0);
+    opt.satellites.emplace_back(9000000.0, 20000000.0, 15000000.0);
+    const auto problem = makeCpHoldFixedLagProblem(opt);
+
+    FGOProcessor::FGOConfig config = makeCpHoldBaseConfig();
+    config.use_lambda_ambiguity_fix = true;
+    config.lambda_ratio_threshold = std::numeric_limits<double>::max();
+    config.use_continuous_unfix_ambiguity_reset = true;
+    config.continuous_unfix_reset_epochs = 2;
+    config.continuous_unfix_min_satellites = 6;
+    config.continuous_unfix_max_gdop = 100.0;
+    config.continuous_unfix_max_fde_reject_fraction = 1.0;
+
+    auto baseline_config = config;
+    baseline_config.use_continuous_unfix_ambiguity_reset = false;
+    FGOProcessor baseline_processor(baseline_config);
+    const auto baseline_result = baseline_processor.optimizeProblem(problem);
+
+    FGOProcessor processor(config);
+    const auto result = processor.optimizeProblem(problem);
+
+    EXPECT_GT(result.diagnostics.ambiguity_continuous_unfix_resets, 0u);
+    EXPECT_GT(result.diagnostics.ambiguity_generation_bumps_reset, 0u);
+    EXPECT_EQ(result.diagnostics.ambiguity_generation_bumps,
+              result.diagnostics.ambiguity_generation_bumps_reset);
+    EXPECT_EQ(result.diagnostics.cp_hold_triggers, 0u)
+        << "reacquisition must not engage the CP-hold recovery FSM";
+    ASSERT_EQ(result.solution.solutions.size(), problem.epochs.size());
+    ASSERT_EQ(result.solution.solutions.size(),
+              baseline_result.solution.solutions.size());
+    bool changed_after_reset = false;
+    for (std::size_t i = 0; i < result.solution.solutions.size(); ++i) {
+        if ((result.solution.solutions[i].position_ecef -
+             baseline_result.solution.solutions[i].position_ecef).norm() >
+            1e-9) {
+            changed_after_reset = true;
+        }
+    }
+    EXPECT_TRUE(changed_after_reset)
+        << "generation bumps must mint fresh graph keys, not only counters";
+    for (const auto& solution : result.solution.solutions) {
+        EXPECT_TRUE(solution.position_ecef.allFinite());
     }
 }
 
@@ -1742,6 +1836,11 @@ TEST(FGOImuIntegrationCovarianceTest, DefaultsMatchPortedReferenceMapping) {
     EXPECT_DOUBLE_EQ(config.integer_constrained_prior_sigma_cycles, 1e-3);
     EXPECT_DOUBLE_EQ(config.integer_constrained_cost_abs_tolerance, 1e-6);
     EXPECT_EQ(config.integer_constrained_max_iterations, 1);
+    EXPECT_TRUE(config.report_held_ambiguities_as_fixed);
+    EXPECT_FALSE(config.use_continuous_unfix_ambiguity_reset);
+    EXPECT_DOUBLE_EQ(config.fixed_postfit_normal_ratio_ceiling, 0.0);
+    EXPECT_DOUBLE_EQ(config.surplus_validation_veto_ratio_ceiling, 0.0);
+    EXPECT_DOUBLE_EQ(config.surplus_validation_veto_min_ddpr_rms_m, 0.0);
     // 1e-6 == sq(1e-3), the harness's hardcoded (pre-port) effective
     // covariance -- this default alone must not change any existing run.
     EXPECT_DOUBLE_EQ(config.imu_integration_covariance, 1e-6);
