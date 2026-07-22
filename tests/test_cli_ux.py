@@ -457,9 +457,9 @@ class CliUxTest(unittest.TestCase):
         self.assertEqual(len(clas_rows), 1)
         clas_row = clas_rows[0]
         for snippet in (
-            "Current 480 s moving gate",
-            "zero false FIX",
-            "full six-run sign-off pending",
+            "Six PPC Tokyo/Nagoya runs",
+            "23.646% aggregate FIX",
+            "zero FIX epochs above 3 m",
         ):
             self.assertIn(snippet, clas_row)
 
@@ -471,11 +471,15 @@ class CliUxTest(unittest.TestCase):
         normalized_section = re.sub(r"\s+", " ", clas_section)
         for snippet in (
             "current moving-data gate",
-            "public PPC Tokyo run2 rover",
-            "FIX integrity now passes",
-            "full Tokyo/Nagoya six-run scorecard remain open",
+            "all six public PPC Tokyo/Nagoya runs",
+            "Across 58,256 scored epochs",
+            "zero FIX epochs above 3 m",
+            "Historical static CLASLIB oracle (separate dataset)",
+            "not evidence of PPC moving-data parity",
         ):
             self.assertIn(snippet, normalized_section)
+
+        self.assertNotIn("full six-run sign-off pending", normalized_section)
 
     def test_app_generated_gnss_examples_use_registered_dispatcher_commands(self) -> None:
         app_files = [ROOT_DIR / "apps" / "gnss.py"]
