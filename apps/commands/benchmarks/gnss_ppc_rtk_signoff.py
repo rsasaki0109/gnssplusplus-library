@@ -192,6 +192,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--demote-fixed-status-nis-per-obs", type=float, default=None)
     parser.add_argument("--demote-fixed-status-post-rms", type=float, default=None)
     parser.add_argument("--demote-fixed-status-gate-ratio", type=float, default=None)
+    parser.add_argument("--demote-fixed-status-min-satellites", type=int, default=None)
     parser.add_argument("--min-demote-fixed-status-baseline", type=float, default=None)
     parser.add_argument("--max-demote-fixed-status-baseline", type=float, default=None)
     parser.add_argument("--rtk-snr-weighting", action="store_true")
@@ -363,6 +364,8 @@ def selected_tuning(args: argparse.Namespace, city: str) -> dict[str, str | floa
         tuning["demote_fixed_status_post_rms"] = args.demote_fixed_status_post_rms
     if getattr(args, "demote_fixed_status_gate_ratio", None) is not None:
         tuning["demote_fixed_status_gate_ratio"] = args.demote_fixed_status_gate_ratio
+    if getattr(args, "demote_fixed_status_min_satellites", None) is not None:
+        tuning["demote_fixed_status_min_satellites"] = args.demote_fixed_status_min_satellites
     if getattr(args, "min_demote_fixed_status_baseline", None) is not None:
         tuning["min_demote_fixed_status_baseline"] = args.min_demote_fixed_status_baseline
     if getattr(args, "max_demote_fixed_status_baseline", None) is not None:
@@ -665,6 +668,16 @@ def build_ppc_demo_command(args: argparse.Namespace,
     if isinstance(demote_fixed_status_gate_ratio, (int, float)):
         command.extend(
             ["--demote-fixed-status-gate-ratio", str(demote_fixed_status_gate_ratio)]
+        )
+    demote_fixed_status_min_satellites = tuning.get(
+        "demote_fixed_status_min_satellites"
+    )
+    if isinstance(demote_fixed_status_min_satellites, int):
+        command.extend(
+            [
+                "--demote-fixed-status-min-satellites",
+                str(demote_fixed_status_min_satellites),
+            ]
         )
     min_demote_fixed_status_baseline = tuning.get("min_demote_fixed_status_baseline")
     if isinstance(min_demote_fixed_status_baseline, (int, float)):

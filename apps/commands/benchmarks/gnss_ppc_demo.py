@@ -400,6 +400,12 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Apply RTK fixed-status demotion only when AR ratio is at or below this value.",
     )
+    parser.add_argument(
+        "--demote-fixed-status-min-satellites",
+        type=int,
+        default=None,
+        help="Output RTK FIX as FLOAT when fewer than this many satellites are used.",
+    )
     parser.add_argument("--min-demote-fixed-status-baseline", type=float, default=None)
     parser.add_argument("--max-demote-fixed-status-baseline", type=float, default=None)
     parser.add_argument(
@@ -1431,6 +1437,13 @@ def run_solver(
                     str(args.demote_fixed_status_gate_ratio),
                 ]
             )
+        if getattr(args, "demote_fixed_status_min_satellites", None) is not None:
+            command.extend(
+                [
+                    "--demote-fixed-status-min-satellites",
+                    str(args.demote_fixed_status_min_satellites),
+                ]
+            )
         if getattr(args, "min_demote_fixed_status_baseline", None) is not None:
             command.extend(
                 [
@@ -1903,6 +1916,11 @@ def build_summary_payload(
         ),
         "rtk_demote_fixed_status_gate_ratio": (
             getattr(args, "demote_fixed_status_gate_ratio", None)
+            if args.solver == "rtk"
+            else None
+        ),
+        "rtk_demote_fixed_status_min_satellites": (
+            getattr(args, "demote_fixed_status_min_satellites", None)
             if args.solver == "rtk"
             else None
         ),

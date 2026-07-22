@@ -40,6 +40,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--comparison-png", type=Path, required=True)
     parser.add_argument("--targets-png", type=Path, required=True)
     parser.add_argument(
+        "--status-demotion-min-satellites",
+        type=int,
+        default=None,
+        help="Truth-free FIX-to-FLOAT output gate recorded in the audit payload.",
+    )
+    parser.add_argument(
         "--gici-commit", default="e7666110a88d22e08aad24345a253564af9b8024"
     )
     return parser.parse_args(argv)
@@ -192,16 +198,25 @@ def build_payload(args: argparse.Namespace) -> dict[str, object]:
             "profile": "distance-weighted six-course selected matrix",
         },
     ]
+    evaluation: dict[str, object] = {
+        "dataset": "taroz/PPC-Dataset, Tokyo/Nagoya runs 1-3",
+        "fixed_status": 4,
+        "correct_fix_threshold_3d_m": 0.5,
+        "official_score_threshold_3d_m": 0.5,
+        "reference_used_by_runtime_selector": False,
+        "status_labels_preserved_by_position_selectors": True,
+    }
+    min_satellites = getattr(args, "status_demotion_min_satellites", None)
+    if min_satellites is not None:
+        evaluation["status_demotion"] = {
+            "rule": "demote FIX to FLOAT when NumSat is below the threshold",
+            "min_satellites": min_satellites,
+            "reference_used": False,
+            "position_trajectory_changed": False,
+        }
     return {
         "schema_version": 1,
-        "evaluation": {
-            "dataset": "taroz/PPC-Dataset, Tokyo/Nagoya runs 1-3",
-            "fixed_status": 4,
-            "correct_fix_threshold_3d_m": 0.5,
-            "official_score_threshold_3d_m": 0.5,
-            "reference_used_by_runtime_selector": False,
-            "status_labels_preserved_by_position_selectors": True,
-        },
+        "evaluation": evaluation,
         "provenance": {
             "lib_matrix": str(args.lib_matrix),
             "gici_matrix": str(args.gici_matrix) if args.gici_matrix is not None else None,

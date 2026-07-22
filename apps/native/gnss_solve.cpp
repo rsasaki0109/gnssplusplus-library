@@ -216,6 +216,7 @@ struct SolveConfig {
     double demote_fixed_status_post_residual_rms_m = 0.0;
     double demote_fixed_status_max_ratio = 0.0;
     double demote_fixed_status_gate_ratio = 0.0;
+    int demote_fixed_status_min_satellites = 0;
     double min_demote_fixed_status_baseline_m = 0.0;
     double max_demote_fixed_status_baseline_m = 0.0;
     int max_consecutive_float_for_reset = 0;
@@ -282,6 +283,11 @@ bool shouldDemoteFixedStatus(const SolveConfig& config,
                              const libgnss::PositionSolution& solution) {
     if (!solution.isFixed()) {
         return false;
+    }
+
+    if (config.demote_fixed_status_min_satellites > 0 &&
+        solution.num_satellites < config.demote_fixed_status_min_satellites) {
+        return true;
     }
 
     if (std::isfinite(config.demote_fixed_status_max_ratio) &&
@@ -902,6 +908,9 @@ void printUsage(const char* program_name) {
         << "  --demote-fixed-status-gate-ratio <v>\n"
         << "                             Apply fixed-status demotion only when AR ratio <= v\n"
         << "                             (default: 0, unconditional when demotion is enabled)\n"
+        << "  --demote-fixed-status-min-satellites <n>\n"
+        << "                             Output FIX as FLOAT when fewer than n satellites are used\n"
+        << "                             (default: 0, disabled)\n"
         << "  --min-demote-fixed-status-baseline <m>\n"
         << "                             Apply fixed-status demotion only above this baseline length\n"
         << "                             (default: 0, disabled)\n"
@@ -1609,6 +1618,8 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.demote_fixed_status_max_ratio = std::stod(argv[++i]);
         } else if (arg == "--demote-fixed-status-gate-ratio" && i + 1 < argc) {
             config.demote_fixed_status_gate_ratio = std::stod(argv[++i]);
+        } else if (arg == "--demote-fixed-status-min-satellites" && i + 1 < argc) {
+            config.demote_fixed_status_min_satellites = std::stoi(argv[++i]);
         } else if (arg == "--min-demote-fixed-status-baseline" && i + 1 < argc) {
             config.min_demote_fixed_status_baseline_m = std::stod(argv[++i]);
         } else if (arg == "--max-demote-fixed-status-baseline" && i + 1 < argc) {
@@ -1934,6 +1945,9 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     }
     if (config.demote_fixed_status_gate_ratio < 0.0) {
         argumentError("--demote-fixed-status-gate-ratio must be >= 0", argv[0]);
+    }
+    if (config.demote_fixed_status_min_satellites < 0) {
+        argumentError("--demote-fixed-status-min-satellites must be >= 0", argv[0]);
     }
     if (config.min_demote_fixed_status_baseline_m < 0.0) {
         argumentError("--min-demote-fixed-status-baseline must be >= 0", argv[0]);
