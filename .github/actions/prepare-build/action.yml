@@ -115,6 +115,7 @@ runs:
         cmake_args=(
           -B build
           -DCMAKE_BUILD_TYPE=${{ inputs.build-type }}
+          -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF
           "-DCMAKE_C_COMPILER_LAUNCHER=${CMAKE_C_COMPILER_LAUNCHER}"
           "-DCMAKE_CXX_COMPILER_LAUNCHER=${CMAKE_CXX_COMPILER_LAUNCHER}"
         )
