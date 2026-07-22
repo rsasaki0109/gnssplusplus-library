@@ -392,23 +392,31 @@ private:
     // gate so holdamb parity does not reconstruct participants from stale
     // ambiguity flags.
     std::vector<ppp_ar::WlnlHoldConstraint> clas_wlnl_candidate_hold_constraints_;
-    // MRTKLIB rtk->sol.rr is updated by every successful pntpos() call even
-    // when the later PPP update fails, and remains unchanged on pntpos()
-    // failure. Keep that lifecycle separate from published filter solutions.
+    // MRTKLIB estpos() writes rtk->sol.rr before valsol(), but admitting that
+    // validation-rejected candidate into native's filter regresses the
+    // six-run gate. Keep the last admitted SPP seed separate from both filter
+    // publications and the bounded rejected-candidate output tracker below.
     PositionSolution clas_last_valid_spp_seed_;
     bool has_clas_last_valid_spp_seed_ = false;
+    // Output-only continuity tracker for validation-rejected SPP candidates.
+    // These candidates never initialize or reset the PPP filter.
+    Vector3d clas_last_rejected_output_position_ecef_ = Vector3d::Zero();
+    GNSSTime clas_last_rejected_output_time_;
+    bool has_clas_last_rejected_output_ = false;
     Vector3d last_published_solution_position_ecef_ = Vector3d::Zero();
     bool has_last_published_solution_position_ = false;
     // Anchors MRTKLIB rtk->sol.time's role in tt (=timediff) computation
-    // (mrtk_rtkpos.c ~2395-2416): sol.time -- and therefore the predict
-    // dt derived from it -- only advances on a pntpos() SUCCESS. In
-    // dynamics mode a pntpos failure falls through with tt==0 for that one
-    // epoch (state frozen, no propagation) and the full accumulated real
-    // gap is only applied once, on the epoch pntpos next succeeds. On the
+    // (mrtk_rtkpos.c ~2395-2416): a failure before estpos() converges leaves
+    // sol.time unchanged, while a later valsol() chi-square failure retains
+    // the current time. In dynamics mode an early failure falls through
+    // with tt==0 for that epoch and the accumulated gap is applied once a
+    // usable current candidate returns. On the
     // kinematic CLAS parity path (ppp_clas_epoch.cpp), the redundancy/jump
     // guards on the SPP seed are this port's equivalent of pntpos()
-    // rejecting a solution, so this anchor only advances when those guards
-    // accept the seed -- deliberately independent of last_processed_time_,
+    // rejecting a position. Native deliberately keeps its existing filter
+    // lifecycle here: this anchor advances only for an admitted seed, while
+    // rejected candidates can be used by the separate output-only tracker --
+    // independent of last_processed_time_,
     // which keeps advancing every epoch for its other (non-parity) uses.
     GNSSTime clas_last_accepted_seed_time_;
     bool has_clas_last_accepted_seed_time_ = false;

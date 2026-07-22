@@ -82,6 +82,9 @@ class PpcClasLeverArmTest(unittest.TestCase):
                         "fix_pct": 12.5,
                         "rms2d_fixed_m": 0.25,
                         "p68_fixed_m": 0.20,
+                        "rms2d_all_m": 4.0,
+                        "rms2d_float_m": 1.5,
+                        "rms2d_single_m": 8.0,
                         "max_fixed_m": 0.75,
                         "fixed_over_3m": 0,
                         "ttff_30_s": None,
@@ -93,6 +96,9 @@ class PpcClasLeverArmTest(unittest.TestCase):
             "fix_pct": 0.0,
             "rms2d_fixed_m": None,
             "p68_fixed_m": None,
+            "rms2d_all_m": 4.0,
+            "rms2d_float_m": 1.5,
+            "rms2d_single_m": 8.0,
             "max_fixed_m": None,
             "fixed_over_3m": 0,
         }
@@ -107,7 +113,12 @@ class PpcClasLeverArmTest(unittest.TestCase):
         self.assertIn("vehicle truth transformed to the antenna phase center", markdown)
         self.assertIn("unmodified PPC reference point", markdown)
         self.assertIn(">3 m FIX", markdown)
+        self.assertIn("FLOAT RMS2D", markdown)
+        self.assertIn("SINGLE RMS2D", markdown)
         self.assertIn("—", markdown)
+        rows = [line for line in markdown.splitlines() if line.startswith("|")]
+        expected_columns = rows[0].count("|")
+        self.assertTrue(all(line.count("|") == expected_columns for line in rows))
 
     def test_write_report_with_only_parity_config_does_not_raise(self) -> None:
         run_key = "tokyo_run2"

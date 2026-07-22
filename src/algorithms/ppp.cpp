@@ -766,6 +766,13 @@ void PPPProcessor::reset() {
     last_processed_time_ = GNSSTime();
     last_clas_atmos_network_id_ = -1;
     has_last_clas_atmos_network_id_ = false;
+    clas_last_valid_spp_seed_ = PositionSolution{};
+    has_clas_last_valid_spp_seed_ = false;
+    clas_last_rejected_output_position_ecef_.setZero();
+    clas_last_rejected_output_time_ = GNSSTime();
+    has_clas_last_rejected_output_ = false;
+    last_published_solution_position_ecef_.setZero();
+    has_last_published_solution_position_ = false;
     precise_products_loaded_ = !precise_products_.orbit_clock_data.empty();
     ssr_products_loaded_ = !ssr_products_.orbit_clock_corrections.empty();
     ionex_products_loaded_ = !ionex_products_.tec_maps.empty();

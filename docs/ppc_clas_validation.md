@@ -9,6 +9,12 @@ epochs, LibGNSS++ produced 13,775 FIX epochs (23.646%) with 0.593 m aggregate
 FIX RMS2D, 0.558 m FIX p68, and no FIX epoch above 3 m. Every run covers 100% of
 the reference interval and at least 99.92% of observation epochs.
 
+The same gate now reports non-FIX quality explicitly. Aggregate all-solution
+RMS2D is 36.796 m, FLOAT RMS2D is 16.471 m, and SINGLE RMS2D is 71.060 m.
+Relative to the preceding native baseline, all-solution RMS2D improves from
+36.991 m and SINGLE RMS2D from 71.481 m. FLOAT and FIX coordinates, solution
+statuses, and epoch coverage are unchanged across all 58,256 scored epochs.
+
 Compared with the published MRTKLIB v0.4.2 results, native FIX rate is higher
 on Tokyo 1, Tokyo 3, and Nagoya 1; it is within 0.3 percentage points on
 Nagoya 2 and remains lower on Tokyo 2 and Nagoya 3. Native FIX RMS2D is lower
@@ -19,7 +25,25 @@ MRTKLIB values use the unmodified reference point.
 This is therefore a completed six-run safety and performance sign-off, not a
 claim of per-metric equivalence on every run. The active remaining work is
 same-reference MRTKLIB replay coverage for all six runs and improved FLOAT
-trajectory recovery.
+trajectory recovery; this change intentionally targets stale SINGLE output
+without perturbing the FLOAT filter.
+
+## Non-FIX continuity fix
+
+MRTKLIB's SPP least-squares path writes a finite current position before its
+final chi-square validation. Native CLAS rejected that candidate and could
+publish the last accepted SPP position for a long rejection stretch, allowing
+the reported SINGLE error to grow as the vehicle moved. Directly admitting the
+rejected candidate to the filter improved Tokyo 2 but materially regressed
+Nagoya 2, so that approach was rejected.
+
+The accepted implementation keeps the existing filter, `float_count`,
+`cntdiffp`, maxdiff, and AR lifecycle unchanged. A separate output-only tracker
+publishes a validation-rejected SPP candidate only when its per-step motion is
+causal and it remains within 150 m of the last trustworthy publication. This
+prevents both stale-position coast and a sequence of small but cumulatively
+unbounded SPP jumps. The six-run audit found zero status differences and zero
+non-SINGLE coordinate differences versus the prior baseline.
 
 ## Historical 480-second probe (not final sign-off)
 
@@ -77,6 +101,6 @@ from 7.640 m to 0.192 m.
 1. Re-run MRTKLIB on all six PPC sequences and score both implementations
    against the same antenna-phase-center reference.
 2. Improve Nagoya 3 FIX precision without introducing any FIX epochs above 3 m.
-3. Improve FLOAT/coast recovery, which still dominates all-solution RMS2D.
+3. Improve FLOAT recovery, which is unchanged by the output-only SINGLE fix.
 4. Promote the six-run generator and cached outputs into a repeatable release
    sign-off so README assets cannot drift behind solver behavior.

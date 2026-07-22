@@ -30,6 +30,8 @@ RUNS = (
     ("nagoya_run3", "Nagoya 3"),
 )
 MIN_INTERVAL_COVERAGE = 0.99
+PPP_SINGLE_STATUS = 1
+PPP_FLOAT_STATUS = 5
 
 
 def rounded(value: float) -> float:
@@ -113,7 +115,11 @@ def load_run(
 
     all_error = np.asarray([epoch.horiz_error_m for epoch in scored])
     fixed = [epoch for epoch in scored if epoch.status == scorecard.PPP_FIXED_STATUS]
+    floating = [epoch for epoch in scored if epoch.status == PPP_FLOAT_STATUS]
+    single = [epoch for epoch in scored if epoch.status == PPP_SINGLE_STATUS]
     fixed_error = np.asarray([epoch.horiz_error_m for epoch in fixed])
+    float_error = np.asarray([epoch.horiz_error_m for epoch in floating])
+    single_error = np.asarray([epoch.horiz_error_m for epoch in single])
     target = scorecard.MRTKLIB_TARGETS[key]
     first_tow = matched[0].tow
     metrics = {
@@ -126,6 +132,8 @@ def load_run(
         "matched_epochs": len(matched),
         "scored_epochs": len(scored),
         "fixed_epochs": len(fixed),
+        "float_epochs": len(floating),
+        "single_epochs": len(single),
         "fix_pct": rounded(100.0 * len(fixed) / len(scored)),
         "rms2d_fixed_m": rounded(np.sqrt(np.mean(fixed_error**2))) if len(fixed) else None,
         "p68_fixed_m": rounded(np.percentile(fixed_error, 68)) if len(fixed) else None,
@@ -135,6 +143,14 @@ def load_run(
         "fixed_over_3m": int(np.count_nonzero(fixed_error > 3.0)),
         "rms2d_all_m": rounded(np.sqrt(np.mean(all_error**2))),
         "p95_all_m": rounded(np.percentile(all_error, 95)),
+        "rms2d_float_m": rounded(np.sqrt(np.mean(float_error**2)))
+        if len(float_error) else None,
+        "p95_float_m": rounded(np.percentile(float_error, 95))
+        if len(float_error) else None,
+        "rms2d_single_m": rounded(np.sqrt(np.mean(single_error**2)))
+        if len(single_error) else None,
+        "p95_single_m": rounded(np.percentile(single_error, 95))
+        if len(single_error) else None,
         "ttff_30_s": scorecard.compute_ttff_s(
             scored, scorecard.PPP_FIXED_STATUS
         ),
@@ -146,6 +162,8 @@ def load_run(
         "scored": scored,
         "all_error": all_error,
         "fixed_error": fixed_error,
+        "float_error": float_error,
+        "single_error": single_error,
         "metrics": metrics,
         "mrtklib_v0_4_2": target,
     }
@@ -164,6 +182,12 @@ def write_trajectory_figure(runs: list[dict[str, Any]], output: Path) -> None:
         fixed = np.asarray(
             [epoch.status == scorecard.PPP_FIXED_STATUS for epoch in matched]
         )
+        floating = np.asarray(
+            [epoch.status == PPP_FLOAT_STATUS for epoch in matched]
+        )
+        single = np.asarray(
+            [epoch.status == PPP_SINGLE_STATUS for epoch in matched]
+        )
         ax.plot(
             truth[:, 0],
             truth[:, 1],
@@ -171,8 +195,12 @@ def write_trajectory_figure(runs: list[dict[str, Any]], output: Path) -> None:
             linewidth=1.7,
             label="PPC antenna truth",
         )
-        ax.plot(solution_xy[:, 0], solution_xy[:, 1], color="#d97706", linewidth=0.75,
-                alpha=0.85, label="libgnss++")
+        ax.plot(solution_xy[:, 0], solution_xy[:, 1], color="#9ca3af",
+                linewidth=0.55, alpha=0.55, label="All solutions")
+        ax.scatter(solution_xy[single, 0], solution_xy[single, 1], s=3.0,
+                   color="#2563eb", alpha=0.45, label="SINGLE", zorder=2)
+        ax.scatter(solution_xy[floating, 0], solution_xy[floating, 1], s=3.0,
+                   color="#d97706", alpha=0.55, label="FLOAT", zorder=2)
         ax.scatter(solution_xy[fixed, 0], solution_xy[fixed, 1], s=3.5,
                    color="#16a34a", alpha=0.7, label="FIX", zorder=3)
         ax.set_aspect("equal", adjustable="datalim")
@@ -180,8 +208,12 @@ def write_trajectory_figure(runs: list[dict[str, Any]], output: Path) -> None:
         ax.set_xlabel("East (m)")
         ax.set_ylabel("North (m)")
     handles, labels = axes.flat[0].get_legend_handles_labels()
-    figure.legend(handles, labels, loc="lower center", ncol=3)
-    figure.suptitle("PPC moving CLAS — complete trajectories", fontsize=15, fontweight="bold")
+    figure.legend(handles, labels, loc="lower center", ncol=5)
+    figure.suptitle(
+        "PPC moving CLAS — complete trajectories by solution status",
+        fontsize=15,
+        fontweight="bold",
+    )
     figure.tight_layout(rect=(0, 0.055, 1, 0.96))
     output.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(output, dpi=180, bbox_inches="tight")
@@ -243,8 +275,18 @@ def write_error_figure(runs: list[dict[str, Any]], output: Path) -> None:
         fixed = np.asarray(
             [epoch.status == scorecard.PPP_FIXED_STATUS for epoch in scored]
         )
-        ax.plot(elapsed, errors, color="#d97706", linewidth=0.55, alpha=0.75,
+        floating = np.asarray(
+            [epoch.status == PPP_FLOAT_STATUS for epoch in scored]
+        )
+        single = np.asarray(
+            [epoch.status == PPP_SINGLE_STATUS for epoch in scored]
+        )
+        ax.plot(elapsed, errors, color="#9ca3af", linewidth=0.45, alpha=0.55,
                 label="All solutions")
+        ax.scatter(elapsed[single], errors[single], s=3.0, color="#2563eb",
+                   alpha=0.45, label="SINGLE")
+        ax.scatter(elapsed[floating], errors[floating], s=3.0, color="#d97706",
+                   alpha=0.55, label="FLOAT")
         ax.scatter(elapsed[fixed], errors[fixed], s=4.0, color="#16a34a",
                    alpha=0.75, label="FIX")
         ax.axhline(1.0, color="#dc2626", linewidth=0.8, linestyle="--", label="1 m")
@@ -253,7 +295,7 @@ def write_error_figure(runs: list[dict[str, Any]], output: Path) -> None:
         ax.set_xlabel("Elapsed scored time (s)")
         ax.set_ylabel("Horizontal error (m)")
     handles, labels = axes.flat[0].get_legend_handles_labels()
-    figure.legend(handles, labels, loc="lower center", ncol=3)
+    figure.legend(handles, labels, loc="lower center", ncol=5)
     figure.suptitle(
         "PPC moving CLAS — horizontal error after common warm-up",
         fontsize=15,
@@ -275,8 +317,8 @@ def write_markdown_table(
     runs: list[dict[str, Any]], aggregate: dict[str, Any], output: Path
 ) -> None:
     lines = [
-        "| Run | Coverage (time / epochs) | libgnss++ FIX | MRTKLIB FIX | libgnss++ FIX RMS2D* | MRTKLIB RMS2D† | libgnss++ FIX p68* | MRTKLIB p68† | libgnss++ max FIX* | >3 m FIX* | libgnss++ TTFF | MRTKLIB TTFF |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| Run | Coverage (time / epochs) | libgnss++ FIX | MRTKLIB FIX | libgnss++ FIX RMS2D* | MRTKLIB RMS2D† | libgnss++ FIX p68* | MRTKLIB p68† | All RMS2D* | FLOAT RMS2D* | SINGLE RMS2D* | libgnss++ max FIX* | >3 m FIX* | libgnss++ TTFF | MRTKLIB TTFF |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for run, (_, label) in zip(runs, RUNS, strict=True):
         local = run["metrics"]
@@ -292,6 +334,9 @@ def write_markdown_table(
                     markdown_value(mrtk["rms2d_m"], " m"),
                     markdown_value(local["p68_fixed_m"], " m"),
                     markdown_value(mrtk["sigma2d_m"], " m"),
+                    markdown_value(local["rms2d_all_m"], " m"),
+                    markdown_value(local["rms2d_float_m"], " m"),
+                    markdown_value(local["rms2d_single_m"], " m"),
                     markdown_value(local["max_fixed_m"], " m"),
                     str(local["fixed_over_3m"]),
                     markdown_value(local["ttff_30_s"], " s"),
@@ -304,6 +349,9 @@ def write_markdown_table(
         f"**{markdown_value(aggregate['fix_pct'], '%')}** | — | "
         f"**{markdown_value(aggregate['rms2d_fixed_m'], ' m')}** | — | "
         f"**{markdown_value(aggregate['p68_fixed_m'], ' m')}** | — | "
+        f"**{markdown_value(aggregate['rms2d_all_m'], ' m')}** | "
+        f"**{markdown_value(aggregate['rms2d_float_m'], ' m')}** | "
+        f"**{markdown_value(aggregate['rms2d_single_m'], ' m')}** | "
         f"**{markdown_value(aggregate['max_fixed_m'], ' m')}** | "
         f"**{aggregate['fixed_over_3m']}** | — | — |"
     )
@@ -350,6 +398,8 @@ def main() -> int:
     ]
     all_errors = np.concatenate([run["all_error"] for run in runs])
     fixed_errors = np.concatenate([run["fixed_error"] for run in runs])
+    float_errors = np.concatenate([run["float_error"] for run in runs])
+    single_errors = np.concatenate([run["single_error"] for run in runs])
     total_scored = sum(run["metrics"]["scored_epochs"] for run in runs)
     total_fixed = sum(run["metrics"]["fixed_epochs"] for run in runs)
     payload = {
@@ -404,6 +454,14 @@ def main() -> int:
             "fixed_over_3m": int(np.count_nonzero(fixed_errors > 3.0)),
             "rms2d_all_m": rounded(np.sqrt(np.mean(all_errors**2))),
             "p95_all_m": rounded(np.percentile(all_errors, 95)),
+            "rms2d_float_m": rounded(np.sqrt(np.mean(float_errors**2)))
+            if len(float_errors) else None,
+            "p95_float_m": rounded(np.percentile(float_errors, 95))
+            if len(float_errors) else None,
+            "rms2d_single_m": rounded(np.sqrt(np.mean(single_errors**2)))
+            if len(single_errors) else None,
+            "p95_single_m": rounded(np.percentile(single_errors, 95))
+            if len(single_errors) else None,
         },
     }
     args.metrics.parent.mkdir(parents=True, exist_ok=True)
