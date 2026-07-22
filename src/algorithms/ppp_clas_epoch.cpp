@@ -64,6 +64,10 @@ constexpr double kMrtklibPhaseResidualSigmaGate = 2.0;
 // (pos2-rejdiffpse -> opt.maxdiffp, pos2-poserrcnt; mrtk_ppp_rtk.c:2333-2352)
 constexpr double kMrtklibMaxSppDivergenceM = 10.0;
 constexpr int kMrtklibMaxSppDivergenceEpochs = 5;
+// A candidate that failed valsol-equivalent validation is weaker evidence than
+// an accepted SPP seed. Use it only to recover a catastrophically stale FLOAT
+// state, not to turn ordinary urban tens-of-metres disagreement into a reset.
+constexpr double kClasRejectedMaxdiffRecoveryM = 250.0;
 // Keep a bounded recovery marker after raw maxdiff. It no longer suppresses
 // all AR attempts; recovery candidates receive stricter row-count and ratio
 // validation below.
@@ -95,9 +99,9 @@ constexpr double kClasRejectedOutputTrustedLimitM = 150.0;
 // exactly the gap real MRTKLIB's own gate cannot see either, and is the
 // gap this guard closes. Failing either check marks the seed invalid,
 // which reuses the filter's existing seed-unavailable handling (clock
-// coasting instead of the every-epoch hard clock reseed, and skipping the
-// maxdiffp position/filter reset below) instead of introducing new state
-// machinery.
+// coasting instead of the every-epoch hard clock reseed). The finite rejected
+// candidate remains available only to the counted MRTKLIB maxdiffp recovery
+// below; it is never an ordinary filter seed.
 constexpr std::array<double, 30> kMrtklibChiSquare001Table = {
     10.8, 13.8, 16.3, 18.5, 20.5, 22.5, 24.3, 26.1, 27.9, 29.6,
     31.3, 32.9, 34.5, 36.1, 37.7, 39.3, 40.8, 42.3, 43.8, 45.3,
@@ -922,6 +926,8 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     PositionSolution clas_continuity_output;
     bool has_clas_continuity_output = false;
     bool clas_rejected_seed_output_prepared = false;
+    bool has_clas_validation_rejected_candidate = false;
+    bool clas_seed_validation_failed = false;
     if (clas_mrtklib_parity) {
         const auto original_spp_config = spp_processor_.getSPPConfig();
         auto clas_spp_config = original_spp_config;
@@ -990,6 +996,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         const bool clas_seed_dof_failed =
             seed.isValid() && clasSeedLacksRedundancy(seed);
         const PositionSolution clas_validation_rejected_candidate = seed;
+        has_clas_validation_rejected_candidate = seed.isValid();
         // MRTKLIB's estpos() writes the converged current-epoch sol.rr and
         // sol.time before valsol() checks chi-square.  If valsol() then
         // returns false, dynamics mode still enters ppp_rtk_pos() with that
@@ -997,8 +1004,9 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         // The full six-run gate showed that admitting ordinary chi-square
         // failures to the filter helps Tokyo 2 but regresses Nagoya 2 all-
         // solution RMS and FIX rate. Keep both validation failures out of
-        // filter/maxdiff state; a bounded output-only path below can still
-        // publish their current SPP coordinates without changing lifecycle.
+        // ordinary filter admission. The counted maxdiffp path below still
+        // sees the finite candidate, matching MRTKLIB's sol.rr lifecycle;
+        // a bounded output-only path can also publish it without admission.
         const bool clas_masked_spp_admission_failed =
             !seed.isValid() || clas_seed_chi_square_failed ||
             clas_seed_dof_failed;
@@ -1127,7 +1135,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         // 4.2 km/17 km rank-collapse jumps; the second prevents a sequence of
         // individually small steps from drifting unboundedly (observed on
         // Nagoya 2).
-        const bool clas_seed_validation_failed =
+        clas_seed_validation_failed =
             clas_seed_chi_square_failed || clas_seed_dof_failed;
         if (clas_seed_validation_failed &&
             has_clas_last_rejected_output_) {
@@ -2113,30 +2121,68 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     // with dynamics on (benchmark clas.toml: dynamics=true + pseudorange_diff);
     // without it the dynamics filter can enter a rejection spiral and coast
     // kilometers away on the velocity states.
+    const PositionSolution* clas_maxdiff_seed = nullptr;
+    bool clas_maxdiff_uses_validation_rejected_candidate = false;
+    if (seed.isValid()) {
+        clas_maxdiff_seed = &seed;
+    } else {
+        double rejected_filter_spp_distance_m =
+            std::numeric_limits<double>::quiet_NaN();
+        if (has_clas_validation_rejected_candidate && filter_initialized_ &&
+            filter_state_.pos_index >= 0 &&
+            filter_state_.pos_index + 2 < filter_state_.state.size()) {
+            rejected_filter_spp_distance_m =
+                (filter_state_.state.segment<3>(filter_state_.pos_index) -
+                 seed.position_ecef)
+                    .norm();
+        }
+        if (ppp_shared::clasMaxdiffCanUseValidationRejectedCandidate(
+                clas_mrtklib_parity, clas_seed_validation_failed,
+                has_clas_validation_rejected_candidate,
+                rejected_filter_spp_distance_m,
+                kClasRejectedMaxdiffRecoveryM)) {
+            // estpos() stores its finite current-epoch solution in sol.rr
+            // before MRTKLIB's valsol() chi-square/redundancy rejection.
+            // Dynamics still reaches the maxdiffp guard with that position,
+            // so cntdiffp can recover a catastrophically stale FLOAT state.
+            // The candidate remains excluded from ordinary filter updates and
+            // cold starts.
+            // Validation only clears seed.status; its finite estpos()-style
+            // coordinates and covariance remain available here.
+            clas_maxdiff_seed = &seed;
+            clas_maxdiff_uses_validation_rejected_candidate = true;
+        }
+    }
     if (ppp_config_.kinematic_mode &&
         ppp_config_.use_clas_osr_filter &&
-        seed.isValid()) {
+        clas_maxdiff_seed != nullptr) {
         const Vector3d float_position =
             filter_state_.state.segment(filter_state_.pos_index, 3);
         const double spp_divergence_m =
-            (float_position - seed.position_ecef).norm();
+            (float_position - clas_maxdiff_seed->position_ecef).norm();
         if (spp_divergence_m > kMrtklibMaxSppDivergenceM) {
             ++clas_kinematic_spp_divergence_count_;
             if (clas_kinematic_spp_divergence_count_ >
                     kMrtklibMaxSppDivergenceEpochs) {
                 if (pppDebugEnabled()) {
                     std::cerr << "[CLAS-KIN-MAXDIFFP] reset to SPP dist="
-                              << spp_divergence_m << "\n";
+                              << spp_divergence_m
+                              << " tow=" << obs.time.tow
+                              << " seed="
+                              << (clas_maxdiff_uses_validation_rejected_candidate
+                                      ? "validation-rejected"
+                                      : "accepted")
+                              << "\n";
                 }
                 filter_state_.state.segment(filter_state_.pos_index, 3) =
-                    seed.position_ecef;
+                    clas_maxdiff_seed->position_ecef;
                 for (int i = 0; i < 3; ++i) {
                     const int idx = filter_state_.pos_index + i;
                     filter_state_.covariance.row(idx).setZero();
                     filter_state_.covariance.col(idx).setZero();
                     const double spp_variance =
-                        seed.position_covariance(i, i) > 0.0
-                            ? seed.position_covariance(i, i)
+                        clas_maxdiff_seed->position_covariance(i, i) > 0.0
+                            ? clas_maxdiff_seed->position_covariance(i, i)
                             : 100.0;
                     filter_state_.covariance(idx, idx) = spp_variance;
                 }
@@ -2167,7 +2213,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
                         filter_state_.covariance(idx, idx) = 1.0;
                     }
                 }
-                solution.position_ecef = seed.position_ecef;
+                solution.position_ecef = clas_maxdiff_seed->position_ecef;
                 solution.status = SolutionStatus::SPP;
                 solution.ratio = 0.0;
                 solution.num_fixed_ambiguities = 0;
