@@ -4,11 +4,22 @@ Benchmark source: [GNSS測位エコシステムの統合を目指して - モダ
 
 ## Current verdict
 
-LibGNSS++ has not yet demonstrated full six-run equivalence with the MRTKLIB
-v0.4.2 PPC CLAS benchmark.  The Tokyo run2 480-second quality gate now has no
-false fixes: all 118 fixed epochs are within 0.305 m horizontally, aggregate FIX
-RMS2D is 0.114 m, and the 30-epoch TTFF is 301.2 seconds.  The remaining work is
-full-window, six-run validation and FLOAT trajectory recovery/performance.
+The full six-run PPC moving-data validation is complete. Across 58,256 scored
+epochs, LibGNSS++ produced 13,775 FIX epochs (23.646%) with 0.593 m aggregate
+FIX RMS2D, 0.558 m FIX p68, and no FIX epoch above 3 m. Every run covers 100% of
+the reference interval and at least 99.92% of observation epochs.
+
+Compared with the published MRTKLIB v0.4.2 results, native FIX rate is higher
+on Tokyo 1, Tokyo 3, and Nagoya 1; it is within 0.3 percentage points on
+Nagoya 2 and remains lower on Tokyo 2 and Nagoya 3. Native FIX RMS2D is lower
+on five of six runs. The precision comparison is contextual: native scoring
+transforms PPC vehicle truth to the antenna phase center, while the published
+MRTKLIB values use the unmodified reference point.
+
+This is therefore a completed six-run safety and performance sign-off, not a
+claim of per-metric equivalence on every run. The active remaining work is
+same-reference MRTKLIB replay coverage for all six runs and improved FLOAT
+trajectory recovery.
 
 ## Historical 480-second probe (not final sign-off)
 
@@ -55,21 +66,17 @@ from 7.640 m to 0.192 m.
 
 ## Artifacts
 
-- Corrected position output:
-  `output/ppc_clas_tokyo_run2_probe2400_fixed/native.pos`
-- Machine-readable metrics:
-  `output/ppc_clas_tokyo_run2_probe2400_fixed/article_compatible_metrics.json`
-- Pre-fix position output: `output/ppc_clas_tokyo_run2_probe2400/native.pos`
-- Short probe metrics:
-  `output/ppc_clas_tokyo_run2_probe600/article_compatible_metrics.json`
+- Complete result table: [ppc_clas_full_table.md](ppc_clas_full_table.md)
+- Machine-readable metrics: [ppc_clas_full_metrics.json](ppc_clas_full_metrics.json)
+- Metric comparison: [ppc_clas_full_comparison.png](ppc_clas_full_comparison.png)
+- Complete trajectories: [ppc_clas_full_trajectories.png](ppc_clas_full_trajectories.png)
+- Horizontal-error histories: [ppc_clas_full_errors.png](ppc_clas_full_errors.png)
 
 ## Next development gates
 
-1. Index SSR corrections by epoch instead of repeatedly searching the expanded
-   history.  The 480-second probe took about 47 minutes even with a time-trimmed
-   SSR CSV, which is too slow for a six-run regression suite.
-2. Improve FLOAT recovery after `maxdiffp`; FIX integrity now passes, while the
-   480-second all-solution RMS2D remains 11.630 m.
-3. Run the complete Tokyo run2 window and require aggregate metrics at least as
-   good as the article target without weakening its scoring definition.
-4. Run all six PPC sequences and publish a single default-profile scorecard.
+1. Re-run MRTKLIB on all six PPC sequences and score both implementations
+   against the same antenna-phase-center reference.
+2. Improve Nagoya 3 FIX precision without introducing any FIX epochs above 3 m.
+3. Improve FLOAT/coast recovery, which still dominates all-solution RMS2D.
+4. Promote the six-run generator and cached outputs into a repeatable release
+   sign-off so README assets cannot drift behind solver behavior.

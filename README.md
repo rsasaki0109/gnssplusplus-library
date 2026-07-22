@@ -22,7 +22,7 @@ handling without an external RTKLIB runtime.
 |---|---|---|
 | RTK | PPC Tokyo/Nagoya vs RTKLIB `demo5` | +17.0 pp positioning, +28.1 pp official score, -11.96 m P95 H delta |
 | GNSS/IMU FGO | PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | Higher <50 cm fraction (avg +5.3 pp) and fix-rate (avg +7.9 pp) on all 3 runs; fixed-only RMS also wins 2 of 3 runs |
-| CLAS PPP | PPC Tokyo run2 vs MRTKLIB CLAS | Current 480 s moving gate: zero false FIX, 0.114 m FIX RMS2D vs 0.145 m; full six-run sign-off pending. |
+| CLAS PPP | Six PPC Tokyo/Nagoya runs vs MRTKLIB CLAS | 23.646% aggregate FIX, 0.593 m FIX RMS2D, and zero FIX epochs above 3 m across 58,256 scored epochs |
 | Urban RTK | UrbanNav Tokyo Odaiba vs RTKLIB `demo5` | More fixes, lower Hp95/Vp95; `--preset odaiba` closes Hmed |
 | SPP | PPC SPP adaptive robust + policy gate | No P95 regression with <=1 pp positioning drop |
 
@@ -121,39 +121,72 @@ and built DD problem (~2× faster validation loops with an /O2 build).
 
 ### Moving CLAS PPP vs MRTKLIB
 
-This replaces the historical 2019 static `--claslib-parity` snapshot with a
-current moving-data gate. It replays the public PPC Tokyo run2 rover at 5 Hz
-from QZSS L6 corrections, with kinematic dynamics enabled. Both solvers use the
-published PPC reference coordinates, discard the first 60 matched epochs, and
-define TTFF as the first run of at least 30 consecutive FIX epochs.
+The current moving-data gate replays all six public PPC Tokyo/Nagoya runs at
+5 Hz from QZSS L6 corrections with kinematic dynamics enabled. Scoring matches
+solutions to the PPC reference, discards the first 60 matched epochs per run,
+and defines TTFF as the first run of at least 30 consecutive FIX epochs.
 
-The table compares the same first 480 seconds. MRTKLIB is a v0.5.1 local replay
-from the CLAS benchmark lineage described in the
-[MRTKLIB release article](https://zenn.dev/hatognss/articles/7a54dd82606faf).
+MRTKLIB columns are the published v0.4.2 results from the
+[CLAS benchmark article](https://zenn.dev/hatognss/articles/7a54dd82606faf).
+The native results below are the complete-run outputs after the maxdiff recovery
+fix; each run has 100% interval coverage and at least 99.92% epoch coverage.
 
-| Metric | libgnss++ current CLAS | MRTKLIB v0.5.1 CLAS |
+| Run | libgnss++ FIX | MRTKLIB FIX | libgnss++ FIX RMS2D* | MRTKLIB RMS2D† | libgnss++ max FIX* | >3 m FIX* |
+|---|---:|---:|---:|---:|---:|---:|
+| Tokyo 1 | **9.702%** | 4.900% | 0.453 m | 0.747 m | 1.533 m | **0** |
+| Tokyo 2 | 19.219% | **21.700%** | 0.387 m | 0.514 m | 1.036 m | **0** |
+| Tokyo 3 | **37.387%** | 7.400% | 0.327 m | 0.801 m | 2.826 m | **0** |
+| Nagoya 1 | **36.605%** | 17.000% | 0.888 m | 1.105 m | 1.501 m | **0** |
+| Nagoya 2 | 23.117% | **23.400%** | 0.783 m | 1.119 m | 2.486 m | **0** |
+| Nagoya 3 | 4.867% | **6.300%** | 0.959 m | 0.318 m | 1.494 m | **0** |
+| **Six-run aggregate** | **23.646%** | — | **0.593 m** | — | **2.826 m** | **0** |
+
+\* libgnss++ precision uses PPC vehicle truth transformed to the antenna phase
+center. † The published MRTKLIB precision uses the unmodified PPC reference,
+so cross-solver precision columns are contextual rather than reference-identical.
+
+![PPC six-run moving CLAS metric comparison](docs/ppc_clas_full_comparison.png)
+
+Across 58,256 scored epochs, native CLAS produced 13,775 FIX epochs. The
+recovery validation requires enough double-difference support and the kinematic
+ratio floor after a `maxdiffp` event; all six runs now have zero FIX epochs above
+3 m while recovering FIX faster than the previous native implementation.
+
+| Complete trajectories | Horizontal error and FIX epochs |
+|---|---|
+| ![PPC six-run CLAS trajectories](docs/ppc_clas_full_trajectories.png) | ![PPC six-run CLAS errors](docs/ppc_clas_full_errors.png) |
+
+See the [complete table](docs/ppc_clas_full_table.md),
+[machine-readable metrics](docs/ppc_clas_full_metrics.json), and
+[PPC CLAS validation note](docs/ppc_clas_validation.md) for definitions and
+reproduction details.
+
+#### Historical static CLASLIB oracle (separate dataset)
+
+CLASLIB is not included as a third column above because the checked-in CLASLIB
+comparison uses a different, static public sample. On the 2019-08-27
+one-hour dataset from the
+[upstream CLASLIB repository](https://github.com/QZSS-Strategy-Office/claslib),
+the historical native CLASNAT parity path and CLASLIB fixed the same 3,594 of
+3,599 epochs:
+
+| Metric | Historical native CLASNAT | CLASLIB |
 |---|---:|---:|
-| Scored epochs | 2332 | **2340** |
-| FIX epochs | **118 (5.06%)** | 114 (4.87%) |
-| FIX RMS2D | **0.114 m** | 0.145 m |
-| FIX 68th percentile | **0.091 m** | 0.146 m |
-| FIX 95th percentile | **0.208 m** | 0.248 m |
-| Maximum FIX horizontal error | **0.305 m** | 0.797 m |
-| FIX epochs above 1 m | **0** | **0** |
-| All-solution RMS2D | 11.630 m | **8.538 m** |
-| All-solution 95th percentile | 15.160 m | **12.074 m** |
-| 30-epoch TTFF | **301.2 s** | 375.2 s |
-| Runtime dependency | **no CLASLIB runtime** | no CLASLIB runtime |
+| Matched fixed epochs | **3,594 / 3,599 (99.86%)** | **3,594 / 3,599 (99.86%)** |
+| RMS 3D, fixed only | **3.57 mm** | 7.29 mm |
+| 3D bias | **1.66 mm** | 4.84 mm |
+| RMS East / North / Up | **1.15 / 1.21 / 3.15 mm** | 1.52 / **0.92** / 7.07 mm |
+| First fix | epoch 6 | epoch 6 |
+| Runtime dependency | **no CLASLIB runtime** | CLASLIB |
 
-![PPC Tokyo run2 moving CLAS comparison](docs/ppc_clas_tokyo_run2_moving.png)
+| CLASLIB 2D error | Historical native CLASNAT 2D error |
+|---|---|
+| ![CLASLIB static 2D error](docs/clas_claslib_2d.png) | ![Native static CLAS 2D error](docs/clas_native_2d.png) |
 
-The current safety fix clears the complete dynamics/filter/AR state after the
-MRTKLIB-style `maxdiffp` reset. In the 1300-epoch A/B window this removed all 34
-approximately 10 m false fixes while preserving all 25 valid early fixes
-bit-for-bit. FIX integrity now passes this moving gate; FLOAT recovery and the
-full Tokyo/Nagoya six-run scorecard remain open before declaring parity. See the
-[PPC CLAS validation note](docs/ppc_clas_validation.md) for definitions,
-artifacts, and remaining gates.
+This static oracle demonstrates the depth of the original port, but it is not
+evidence of PPC moving-data parity. The six-run table above is the active
+kinematic gate; the CLASLIB result is retained as a separate historical
+reference.
 
 ## Quick Start
 

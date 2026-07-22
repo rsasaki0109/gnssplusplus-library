@@ -132,6 +132,7 @@ def load_run(
         "p95_fixed_m": rounded(np.percentile(fixed_error, 95)) if len(fixed) else None,
         "max_fixed_m": rounded(np.max(fixed_error)) if len(fixed) else None,
         "fixed_over_1m": int(np.count_nonzero(fixed_error > 1.0)),
+        "fixed_over_3m": int(np.count_nonzero(fixed_error > 3.0)),
         "rms2d_all_m": rounded(np.sqrt(np.mean(all_error**2))),
         "p95_all_m": rounded(np.percentile(all_error, 95)),
         "ttff_30_s": scorecard.compute_ttff_s(
@@ -207,7 +208,13 @@ def write_metric_figure(runs: list[dict[str, Any]], output: Path) -> None:
         ax.set_xticks(x, labels, rotation=35, ha="right")
         ax.set_axisbelow(True)
     handles, legend_labels = axes[0].get_legend_handles_labels()
-    figure.legend(handles, legend_labels, loc="lower center", ncol=2)
+    figure.legend(
+        handles,
+        legend_labels,
+        loc="lower center",
+        bbox_to_anchor=(0.5, 0.065),
+        ncol=2,
+    )
     figure.suptitle("PPC full-run CLAS comparison", fontsize=15, fontweight="bold")
     figure.text(
         0.5,
@@ -218,7 +225,7 @@ def write_metric_figure(runs: list[dict[str, Any]], output: Path) -> None:
         fontsize=8.5,
         color="#4b5563",
     )
-    figure.tight_layout(rect=(0, 0.12, 1, 0.94))
+    figure.tight_layout(rect=(0, 0.16, 1, 0.94))
     output.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(output, dpi=180, bbox_inches="tight")
     plt.close(figure)
@@ -268,8 +275,8 @@ def write_markdown_table(
     runs: list[dict[str, Any]], aggregate: dict[str, Any], output: Path
 ) -> None:
     lines = [
-        "| Run | Coverage (time / epochs) | libgnss++ FIX | MRTKLIB FIX | libgnss++ FIX RMS2D* | MRTKLIB RMS2D† | libgnss++ FIX p68* | MRTKLIB p68† | libgnss++ TTFF | MRTKLIB TTFF |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| Run | Coverage (time / epochs) | libgnss++ FIX | MRTKLIB FIX | libgnss++ FIX RMS2D* | MRTKLIB RMS2D† | libgnss++ FIX p68* | MRTKLIB p68† | libgnss++ max FIX* | >3 m FIX* | libgnss++ TTFF | MRTKLIB TTFF |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for run, (_, label) in zip(runs, RUNS, strict=True):
         local = run["metrics"]
@@ -285,6 +292,8 @@ def write_markdown_table(
                     markdown_value(mrtk["rms2d_m"], " m"),
                     markdown_value(local["p68_fixed_m"], " m"),
                     markdown_value(mrtk["sigma2d_m"], " m"),
+                    markdown_value(local["max_fixed_m"], " m"),
+                    str(local["fixed_over_3m"]),
                     markdown_value(local["ttff_30_s"], " s"),
                     markdown_value(mrtk["ttff_s"], " s"),
                 ]
@@ -294,7 +303,9 @@ def write_markdown_table(
         "| **Six-run aggregate** | — | "
         f"**{markdown_value(aggregate['fix_pct'], '%')}** | — | "
         f"**{markdown_value(aggregate['rms2d_fixed_m'], ' m')}** | — | "
-        f"**{markdown_value(aggregate['p68_fixed_m'], ' m')}** | — | — | — |"
+        f"**{markdown_value(aggregate['p68_fixed_m'], ' m')}** | — | "
+        f"**{markdown_value(aggregate['max_fixed_m'], ' m')}** | "
+        f"**{aggregate['fixed_over_3m']}** | — | — |"
     )
     lines.extend(
         [
@@ -390,6 +401,7 @@ def main() -> int:
             "max_fixed_m": rounded(np.max(fixed_errors))
             if len(fixed_errors) else None,
             "fixed_over_1m": int(np.count_nonzero(fixed_errors > 1.0)),
+            "fixed_over_3m": int(np.count_nonzero(fixed_errors > 3.0)),
             "rms2d_all_m": rounded(np.sqrt(np.mean(all_errors**2))),
             "p95_all_m": rounded(np.percentile(all_errors, 95)),
         },
