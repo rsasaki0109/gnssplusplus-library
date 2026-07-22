@@ -7,6 +7,7 @@ import argparse
 import csv
 from collections import Counter
 from dataclasses import dataclass
+import json
 import math
 from pathlib import Path
 from typing import Iterable
@@ -25,6 +26,7 @@ RUNS: tuple[tuple[str, str, str], ...] = (
     ("nagoya_run2", "Nagoya run2", "nagoya/run2"),
     ("nagoya_run3", "Nagoya run3", "nagoya/run3"),
 )
+ROOT_DIR = Path(__file__).resolve().parents[1]
 STATUS_NAMES = {
     1: "SPP",
     3: "FLOAT",
@@ -52,7 +54,17 @@ class Position:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset-root", type=Path, required=True)
-    parser.add_argument("--solution-dir", type=Path, required=True)
+    solutions = parser.add_mutually_exclusive_group(required=True)
+    solutions.add_argument(
+        "--solution-dir",
+        type=Path,
+        help="directory containing tokyo_run1.pos through nagoya_run3.pos",
+    )
+    solutions.add_argument(
+        "--metrics-json",
+        type=Path,
+        help="goal-metrics JSON whose runs contain libgnss.pos paths",
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--title", required=True)
     parser.add_argument("--subtitle", default="")
@@ -63,6 +75,37 @@ def parse_args() -> argparse.Namespace:
         help="Classify status=FIXED epochs above this 3D truth error as WRONG_FIX.",
     )
     return parser.parse_args()
+
+
+def load_solution_paths(
+    solution_dir: Path | None,
+    metrics_json: Path | None,
+) -> dict[str, Path]:
+    if solution_dir is not None:
+        return {key: solution_dir / f"{key}.pos" for key, _, _ in RUNS}
+    if metrics_json is None:
+        raise ValueError("either solution_dir or metrics_json is required")
+    payload = json.loads(metrics_json.read_text(encoding="utf-8"))
+    raw_runs = payload.get("runs")
+    if not isinstance(raw_runs, list):
+        raise ValueError(f"{metrics_json}: missing runs list")
+    paths: dict[str, Path] = {}
+    for row in raw_runs:
+        if not isinstance(row, dict):
+            continue
+        key = row.get("key")
+        libgnss = row.get("libgnss")
+        if not isinstance(key, str) or not isinstance(libgnss, dict):
+            continue
+        path_text = libgnss.get("pos")
+        if not isinstance(path_text, str) or not path_text:
+            continue
+        path = Path(path_text)
+        paths[key] = path if path.is_absolute() else ROOT_DIR / path
+    missing = [key for key, _, _ in RUNS if key not in paths]
+    if missing:
+        raise ValueError(f"{metrics_json}: missing POS paths for {', '.join(missing)}")
+    return paths
 
 
 def load_reference(path: Path) -> dict[tuple[int, float], tuple[float, float, float]]:
@@ -200,14 +243,14 @@ def scatter_label(ax: plt.Axes, points: list[tuple[float, float]], label: str) -
 def plot_run(
     ax: plt.Axes,
     dataset_root: Path,
-    solution_dir: Path,
+    solution_path: Path,
     run_key: str,
     run_title: str,
     run_relpath: str,
     wrong_fix_threshold_m: float,
 ) -> Counter[str]:
     reference = load_reference(dataset_root / run_relpath / "reference.csv")
-    solution = load_solution(solution_dir / f"{run_key}.pos")
+    solution = load_solution(solution_path)
     if not reference or not solution:
         ax.set_title(f"{run_title}\nmissing data", fontsize=12)
         ax.axis("off")
@@ -261,6 +304,7 @@ def build_legend(fig: plt.Figure, labels: Iterable[str]) -> None:
 
 def main() -> int:
     args = parse_args()
+    solution_paths = load_solution_paths(args.solution_dir, args.metrics_json)
     fig, axes = plt.subplots(2, 3, figsize=(19, 10), constrained_layout=False)
     total_counts: Counter[str] = Counter()
     for ax, run in zip(axes.flat, RUNS, strict=True):
@@ -268,7 +312,7 @@ def main() -> int:
             plot_run(
                 ax,
                 args.dataset_root,
-                args.solution_dir,
+                solution_paths[run[0]],
                 run[0],
                 run[1],
                 run[2],

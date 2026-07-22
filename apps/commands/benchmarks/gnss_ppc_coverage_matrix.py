@@ -261,6 +261,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--demote-fixed-status-post-rms", type=float, default=None)
     parser.add_argument("--demote-fixed-status-max-ratio", type=float, default=None)
     parser.add_argument("--demote-fixed-status-gate-ratio", type=float, default=None)
+    parser.add_argument("--demote-fixed-status-min-satellites", type=int, default=None)
     parser.add_argument("--min-demote-fixed-status-baseline", type=float, default=None)
     parser.add_argument("--max-demote-fixed-status-baseline", type=float, default=None)
     parser.add_argument(
@@ -583,6 +584,13 @@ def build_ppc_demo_command(
             [
                 "--demote-fixed-status-gate-ratio",
                 str(args.demote_fixed_status_gate_ratio),
+            ]
+        )
+    if getattr(args, "demote_fixed_status_min_satellites", None) is not None:
+        command.extend(
+            [
+                "--demote-fixed-status-min-satellites",
+                str(args.demote_fixed_status_min_satellites),
             ]
         )
     if getattr(args, "min_demote_fixed_status_baseline", None) is not None:
@@ -967,6 +975,9 @@ def build_matrix_payload(args: argparse.Namespace, runs: list[dict[str, object]]
         ),
         "demote_fixed_status_gate_ratio": getattr(
             args, "demote_fixed_status_gate_ratio", None
+        ),
+        "demote_fixed_status_min_satellites": getattr(
+            args, "demote_fixed_status_min_satellites", None
         ),
         "min_demote_fixed_status_baseline": getattr(
             args, "min_demote_fixed_status_baseline", None

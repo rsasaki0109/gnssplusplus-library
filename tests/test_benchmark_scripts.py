@@ -67,6 +67,7 @@ import analyze_ppc_segment_selector_sweep as ppc_segment_selector_sweep  # noqa:
 import apply_ppc_dual_profile_selector as ppc_dual_profile_selector  # noqa: E402
 import generate_ppc_rtk_scorecard as ppc_rtk_scorecard  # noqa: E402
 import generate_ppc_goal_scorecard as ppc_goal_scorecard  # noqa: E402
+import plot_ppc_status_trajectories as ppc_status_trajectories  # noqa: E402
 import generate_ppc_selector_validation_scorecard as ppc_selector_scorecard  # noqa: E402
 import generate_ppc_tail_cleanup_scorecard as ppc_tail_cleanup_scorecard  # noqa: E402
 import generate_ppc_rtk_trajectory as ppc_rtk_trajectory  # noqa: E402
@@ -143,6 +144,7 @@ class PPCGoalScorecardTest(unittest.TestCase):
                 comparison_png=root / "comparison.png",
                 targets_png=root / "targets.png",
                 gici_commit="deadbeef",
+                status_demotion_min_satellites=9,
             )
 
             payload = ppc_goal_scorecard.build_payload(args)
@@ -153,6 +155,40 @@ class PPCGoalScorecardTest(unittest.TestCase):
             self.assertEqual(payload["targets"][1]["achieved_pct"], 85.11)
             self.assertIn("separate", payload["targets"][1]["profile"])
             self.assertFalse(payload["evaluation"]["reference_used_by_runtime_selector"])
+            self.assertEqual(
+                payload["evaluation"]["status_demotion"]["min_satellites"], 9
+            )
+            self.assertFalse(
+                payload["evaluation"]["status_demotion"]["reference_used"]
+            )
+
+
+class PPCStatusTrajectoryTest(unittest.TestCase):
+    def test_loads_selected_pos_paths_from_goal_metrics(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_status_paths_") as td:
+            metrics = Path(td) / "metrics.json"
+            metrics.write_text(
+                json.dumps(
+                    {
+                        "runs": [
+                            {
+                                "key": key,
+                                "libgnss": {"pos": f"output/{key}.pos"},
+                            }
+                            for key, _, _ in ppc_status_trajectories.RUNS
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            paths = ppc_status_trajectories.load_solution_paths(None, metrics)
+
+        self.assertEqual(set(paths), {key for key, _, _ in ppc_status_trajectories.RUNS})
+        self.assertEqual(
+            paths["tokyo_run1"],
+            ppc_status_trajectories.ROOT_DIR / "output/tokyo_run1.pos",
+        )
 
 
 class StatusPositionMergeTest(unittest.TestCase):
@@ -892,6 +928,7 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
                 "demote_fixed_status_nis_per_obs": 20.0,
                 "demote_fixed_status_post_rms": 3.0,
                 "demote_fixed_status_gate_ratio": 6.0,
+                "demote_fixed_status_min_satellites": 9,
                 "min_demote_fixed_status_baseline": 500.0,
                 "max_demote_fixed_status_baseline": 9500.0,
                 "rtk_snr_weighting": True,
@@ -990,6 +1027,8 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
             self.assertIn("3.0", command)
             self.assertIn("--demote-fixed-status-gate-ratio", command)
             self.assertIn("6.0", command)
+            self.assertIn("--demote-fixed-status-min-satellites", command)
+            self.assertIn("9", command)
             self.assertIn("--min-demote-fixed-status-baseline", command)
             self.assertIn("500.0", command)
             self.assertIn("--max-demote-fixed-status-baseline", command)
@@ -1191,6 +1230,7 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                         "max_pos_jump_rate = 25.0",
                         "demote_fixed_status_nis_per_obs = 2.0",
                         "demote_fixed_status_max_ratio = 4.0",
+                        "demote_fixed_status_min_satellites = 9",
                     ]
                 )
                 + "\n",
@@ -1237,6 +1277,7 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertEqual(args.max_pos_jump_rate, 25.0)
             self.assertEqual(args.demote_fixed_status_nis_per_obs, 2.0)
             self.assertEqual(args.demote_fixed_status_max_ratio, 4.0)
+            self.assertEqual(args.demote_fixed_status_min_satellites, 9)
 
     def test_tracked_sigma_demote_profile_config_parses(self) -> None:
         config_toml = ROOT_DIR / "configs" / "benchmarks" / "ppc_sigma_demote_nis2_ratio4.toml"

@@ -30,7 +30,7 @@ handling without an external RTKLIB runtime.
 
 The audited KF/FGO selected profile clears the distance-weighted PPC public
 target at **78.7165%** (published target: **78.7%**). It also exceeds the
-Tokyo 1 public FIX rate (**84.632%** vs **80.8%**). A separate FIX-target
+Tokyo 1 public FIX rate (**83.041%** vs **80.8%**). A separate FIX-target
 profile clears Nagoya 1 by the narrow measured margin **85.100974%** vs
 **85.1%**, with 0.913% Wrong FIX/FIX and 1.460 m P95 horizontal error. The
 public FIX targets come from the [Kaiyodai RTK paper](https://www.denshi.e.kaiyodai.ac.jp/wp-content/uploads/pdf/content/2024okada,sasaki,ando.pdf),
@@ -38,32 +38,47 @@ and the PPC score target from the [Turing tight-coupling slides](https://www.den
 
 | Run | libgnss++ FIX | gici-open FIX | Wrong FIX/FIX | libgnss++ correct FIX/ref | gici-open correct FIX/ref | 50 cm/ref | libgnss++ official | gici-open official | P95 H |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Tokyo 1 | **84.632%** | 46.472% | 5.749% | **72.571%** | 43.528% | 80.018% | 78.879% | **80.263%** | 2.082 m |
-| Tokyo 2 | **84.943%** | 76.938% | 2.087% | **81.008%** | 74.462% | 88.340% | 88.694% | **90.652%** | 1.604 m |
-| Tokyo 3 | **80.571%** | 73.347% | 3.124% | **76.616%** | 71.923% | 86.295% | **85.969%** | 83.787% | 1.671 m |
-| Nagoya 1 | **84.172%** | 67.812% | 0.823% | **78.722%** | 60.005% | 85.845% | 65.201% | **70.851%** | 1.332 m |
-| Nagoya 2 | **57.213%** | 39.988% | 2.629% | **48.990%** | 35.330% | 60.808% | **55.533%** | 39.847% | 19.092 m |
-| Nagoya 3 | **47.529%** | 21.399% | 5.866% | **44.741%** | 18.285% | 61.354% | **72.336%** | 33.495% | 1.908 m |
-| **Macro mean** | **73.177%** | 54.326% | 3.380% | **67.108%** | 50.589% | 77.110% | **74.435%** | 66.483% | 4.615 m |
+| Tokyo 1 | **83.041%** | 46.472% | 4.873% | **71.868%** | 43.528% | 80.018% | 78.879% | **80.263%** | 2.082 m |
+| Tokyo 2 | **83.967%** | 76.938% | 1.269% | **80.745%** | 74.462% | 88.340% | 88.694% | **90.652%** | 1.604 m |
+| Tokyo 3 | **79.919%** | 73.347% | 2.791% | **76.256%** | 71.923% | 86.295% | **85.969%** | 83.787% | 1.671 m |
+| Nagoya 1 | **84.116%** | 67.812% | 0.758% | **78.722%** | 60.005% | 85.845% | 65.201% | **70.851%** | 1.332 m |
+| Nagoya 2 | **57.129%** | 39.988% | 2.591% | **48.937%** | 35.330% | 60.808% | **55.533%** | 39.847% | 19.092 m |
+| Nagoya 3 | **47.433%** | 21.399% | 5.675% | **44.741%** | 18.285% | 61.354% | **72.336%** | 33.495% | 1.908 m |
+| **Macro mean** | **72.601%** | 54.326% | 2.993% | **66.878%** | 50.589% | 77.110% | **74.435%** | 66.483% | 4.615 m |
 
 ![PPC libgnss++ and gici-open comparison](docs/ppc_libgnss_gici_comparison.png)
 
 ![PPC public targets](docs/ppc_public_targets.png)
 
+The XY view below shows where each selected solution is FIXED or FLOAT. Green
+points are correct FIX epochs, red crosses are FIX epochs with 3D error above
+0.5 m, orange points are FLOAT, and the light-gray line is the reference
+trajectory.
+
+Before scoring, a deployable confidence gate demotes FIX to FLOAT when fewer
+than 9 satellites are used. It changes no positions and reads no reference
+truth. Across the six runs it demotes 374 of 42,174 FIX labels: 206 wrong FIX
+and 168 correct FIX. The official score stays **78.716546%**, while aggregate
+wrong FIX falls from 1,385 to 1,179 and Tokyo 1 remains above its public FIX
+target.
+
+![PPC selected XY trajectories by FIX status](docs/ppc_kf_fgo_fix_status_xy.png)
+
 `gici-open` was reproduced from commit
 `e7666110a88d22e08aad24345a253564af9b8024` on its `forppc2024` branch and
 evaluated from exported NMEA with the same six references and metric code.
-The six-run libgnss++ FIX macro is **+18.851 pp** above that reproduction.
+The six-run libgnss++ FIX macro is **+18.275 pp** above that reproduction.
 The GPL-3.0 program remains an external executable: no GICI source is copied,
 linked, or distributed here, so libgnss++ remains MIT.
 
 The position selectors use candidate status/ratio/satellite/residual telemetry
 and candidate-to-current separation only. They preserve the baseline epoch
-grid, status labels, and telemetry; reference truth is used only after output
-generation for scoring. Thresholds were tuned on this public benchmark, so
-these results are an in-sample benchmark rather than a held-out generalization
-claim. Definitions, commands, paths, and the machine-readable audit are in
-[PPC reproduction commands](docs/ppc_reproduction.md) and
+grid and telemetry. The final minimum-satellite confidence gate changes only
+the emitted status, from FIX to FLOAT; reference truth is used only after
+output generation for scoring. Thresholds were tuned on this public benchmark,
+so these results are an in-sample benchmark rather than a held-out
+generalization claim. Definitions, commands, paths, and the machine-readable
+audit are in [PPC reproduction commands](docs/ppc_reproduction.md) and
 [`docs/ppc_kf_fgo_goal_metrics.json`](docs/ppc_kf_fgo_goal_metrics.json).
 
 ### PPC RTK vs RTKLIB demo5

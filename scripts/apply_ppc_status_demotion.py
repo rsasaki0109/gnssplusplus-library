@@ -5,7 +5,10 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+import json
 from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
 
 
 @dataclass(frozen=True)
@@ -15,6 +18,7 @@ class DemotionRule:
     max_baseline_m: float | None
     max_nis_per_obs: float | None
     max_post_rms_m: float | None
+    min_satellites: int | None = None
 
 
 @dataclass(frozen=True)
@@ -27,8 +31,21 @@ class DemotionSummary:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input-dir", type=Path, required=True)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--input-dir", type=Path)
+    source.add_argument(
+        "--metrics-json",
+        type=Path,
+        help="goal-metrics JSON whose runs contain libgnss.pos paths",
+    )
+    source.add_argument(
+        "--pos",
+        action="append",
+        metavar="RUN_KEY=PATH",
+        help="selected POS input; repeat for each output run key",
+    )
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--min-satellites", type=int, default=None)
     parser.add_argument("--max-ratio", type=float, default=None)
     parser.add_argument("--min-baseline-m", type=float, default=None)
     parser.add_argument("--max-baseline-m", type=float, default=None)
@@ -57,10 +74,15 @@ def should_demote(parts: list[str], rule: DemotionRule) -> bool:
         return False
 
     ratio = optional_float(parts, 11)
+    satellites = optional_float(parts, 9)
     baseline_m = optional_float(parts, 12)
     post_rms_m = optional_float(parts, 20)
     nis_per_obs = optional_float(parts, 23)
 
+    if rule.min_satellites is not None and (
+        satellites is None or satellites < rule.min_satellites
+    ):
+        return True
     if rule.max_ratio is not None and (ratio is None or ratio > rule.max_ratio):
         return False
     if rule.min_baseline_m is not None and (
@@ -127,16 +149,74 @@ def apply_directory(input_dir: Path, output_dir: Path, rule: DemotionRule) -> li
     ]
 
 
+def apply_metrics(
+    metrics_json: Path,
+    output_dir: Path,
+    rule: DemotionRule,
+) -> list[DemotionSummary]:
+    payload = json.loads(metrics_json.read_text(encoding="utf-8"))
+    runs = payload.get("runs")
+    if not isinstance(runs, list):
+        raise SystemExit(f"{metrics_json}: missing runs list")
+    summaries: list[DemotionSummary] = []
+    for row in runs:
+        if not isinstance(row, dict):
+            continue
+        key = row.get("key")
+        libgnss = row.get("libgnss")
+        if not isinstance(key, str) or not isinstance(libgnss, dict):
+            continue
+        path_text = libgnss.get("pos")
+        if not isinstance(path_text, str) or not path_text:
+            continue
+        input_path = Path(path_text)
+        if not input_path.is_absolute():
+            input_path = ROOT_DIR / input_path
+        summaries.append(apply_file(input_path, output_dir / f"{key}.pos", rule))
+    if not summaries:
+        raise SystemExit(f"{metrics_json}: no libgnss POS paths found")
+    return summaries
+
+
+def apply_specs(
+    specs: list[str],
+    output_dir: Path,
+    rule: DemotionRule,
+) -> list[DemotionSummary]:
+    summaries: list[DemotionSummary] = []
+    seen: set[str] = set()
+    for spec in specs:
+        try:
+            key, path_text = spec.split("=", 1)
+        except ValueError as error:
+            raise SystemExit(f"invalid --pos value {spec!r}; expected RUN_KEY=PATH") from error
+        if not key or key in seen:
+            raise SystemExit(f"invalid or duplicate --pos run key: {key!r}")
+        seen.add(key)
+        input_path = Path(path_text)
+        if not input_path.is_absolute():
+            input_path = ROOT_DIR / input_path
+        summaries.append(apply_file(input_path, output_dir / f"{key}.pos", rule))
+    return summaries
+
+
 def main() -> int:
     args = parse_args()
     rule = DemotionRule(
+        min_satellites=args.min_satellites,
         max_ratio=args.max_ratio,
         min_baseline_m=args.min_baseline_m,
         max_baseline_m=args.max_baseline_m,
         max_nis_per_obs=args.max_nis_per_obs,
         max_post_rms_m=args.max_post_rms_m,
     )
-    summaries = apply_directory(args.input_dir, args.output_dir, rule)
+    if args.pos is not None:
+        summaries = apply_specs(args.pos, args.output_dir, rule)
+    elif args.metrics_json is not None:
+        summaries = apply_metrics(args.metrics_json, args.output_dir, rule)
+    else:
+        assert args.input_dir is not None
+        summaries = apply_directory(args.input_dir, args.output_dir, rule)
     total_fixed = sum(summary.fixed_epochs for summary in summaries)
     total_demoted = sum(summary.demoted_epochs for summary in summaries)
     print(f"wrote {args.output_dir}")
