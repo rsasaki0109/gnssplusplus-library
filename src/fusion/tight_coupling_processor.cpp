@@ -167,6 +167,28 @@ TightCouplingProcessor::TimeUpdate TightCouplingProcessor::prepareTimeUpdate() {
     return output;
 }
 
+bool TightCouplingProcessor::continueFromPrediction() {
+    if (!initialized_ || !prepared_ || !std::isfinite(state_.nominal.time.tow) ||
+        !state_.nominal.position_enu.allFinite() ||
+        !state_.nominal.velocity_enu.allFinite() || !state_.covariance.allFinite()) {
+        return false;
+    }
+
+    // prepareTimeUpdate() expressed the antenna displacement relative to the
+    // current RTK epoch. Rebase the local position deterministically so the
+    // next result is another per-epoch increment rather than the accumulated
+    // displacement since the last trusted GNSS anchor. Attitude, velocity,
+    // biases, covariance, and their cross-covariances stay propagated.
+    state_.nominal.position_enu =
+        -state_.nominal.attitude_body_to_enu.toRotationMatrix() * config_.lever_arm_body;
+    initialized_ = preintegrator_.reset(state_.nominal) == PreintegrationStatus::ACCEPTED;
+    prepared_ = false;
+    if (initialized_) {
+        ++diagnostics_.prediction_continuations;
+    }
+    return initialized_;
+}
+
 bool TightCouplingProcessor::reanchor(
     const Eigen::Vector3d& float_antenna_position_ecef,
     const Eigen::Matrix3d& float_position_covariance_ecef,

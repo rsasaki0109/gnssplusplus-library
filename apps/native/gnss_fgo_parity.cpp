@@ -56,6 +56,7 @@ struct Args {
     bool use_nhc = false;        // milestone 2d
     bool use_zupt = false;       // milestone 2d
     bool use_hold = false;       // milestone 2e: fix-and-hold
+    bool no_held_fix_label = false;  // keep hold priors; require fresh AR for FIX output
     double elev_mask_deg = -1.0; // milestone 2e: >0 overrides preset elevation mask
     double snr_mask_dbhz = -1.0; // milestone 2e: >0 sets an SNR mask
     bool diag = false;           // milestone 2e: Eigen-vs-GTSAM apples fix-rate + freq analysis
@@ -95,6 +96,7 @@ struct Args {
     bool constellation_par = false;
     bool residual_par = false;
     bool variance_par = false;
+    bool gici_par = false;          // GICI-style strict PAR + continuous-unfix reacquisition profile
     double par_max_std = -1.0;
     double hold_ratio = 0.0;       // >0: override ambiguity_hold_ratio_threshold
     int hold_min = 0;              // >0: override ambiguity_hold_min_fixed
@@ -196,6 +198,8 @@ struct Args {
     bool surplus_validation = false;
     bool surplus_validation_monitor = false;
     bool surplus_validation_veto = false;
+    double surplus_validation_veto_ratio_ceiling = -1.0;
+    double surplus_validation_veto_min_ddpr = -1.0;
     int surplus_validation_min_n = 0;          // >0: override surplus_validation_min_surplus_satellites (default 2)
     double surplus_validation_ap_lt1 = -1.0;   // >=0: override surplus_validation_aperture_pdop_lt1_cycles (default 0.1)
     double surplus_validation_ap_1to2 = -1.0;  // >=0: override surplus_validation_aperture_pdop_1to2_cycles (default 0.2)
@@ -206,7 +210,7 @@ struct Args {
     bool low_count_ar = false;
     int low_count_ar_min = -1;        // >0: override low_count_min_candidates (default 4)
     double low_count_ar_ratio = -1.0; // >=0: override low_count_min_ratio (default 1.5); use --low-count-ratio 0 for "surplus alone"
-    std::string dump_csv_path;  // debug: per-epoch CSV dump (tow/status/E-N-U err/horiz err/E-N pos) for plotting
+    std::string dump_csv_path;  // debug: per-epoch CSV dump (tow/status/E-N-U err/position) for plotting
     // Opt-in FGOProblem cache (skips repeated RINEX parse + problem build
     // across validation runs on the SAME inputs/config). Default-off; when
     // empty, behavior is byte-identical to the pre-cache harness. See
@@ -226,6 +230,14 @@ Args parseArgs(int argc, char** argv) {
         }
         if (a == "--fixed-lag-qr") {
             args.fixed_lag_qr = true;
+            continue;
+        }
+        if (a == "--no-held-fix-label") {
+            args.no_held_fix_label = true;
+            continue;
+        }
+        if (a == "--gici-par") {
+            args.gici_par = true;
             continue;
         }
         if (a == "--integer-constrained-reoptimization") {
@@ -268,6 +280,14 @@ Args parseArgs(int argc, char** argv) {
         if (a == "--surplus-validation-veto") {
             args.surplus_validation = true;
             args.surplus_validation_veto = true;
+            continue;
+        }
+        if (a == "--surplus-validation-veto-ratio-ceiling" && i + 1 < argc) {
+            args.surplus_validation_veto_ratio_ceiling = std::stod(argv[++i]);
+            continue;
+        }
+        if (a == "--surplus-validation-veto-min-ddpr" && i + 1 < argc) {
+            args.surplus_validation_veto_min_ddpr = std::stod(argv[++i]);
             continue;
         }
         if (a == "--surplus-validation-min-n" && i + 1 < argc) {
@@ -666,6 +686,7 @@ libgnss::FGOProcessor::FGOConfig makeRealDataDdConfig() {
 // call, without duplicating this arg-to-config mapping logic.
 libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
     libgnss::FGOProcessor::FGOConfig config = makeRealDataDdConfig();
+    config.report_held_ambiguities_as_fixed = !args.no_held_fix_label;
     if (args.max_iters > 0) {
         config.max_iterations = args.max_iters;
     }
@@ -828,6 +849,14 @@ libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
     if (args.surplus_validation_veto) {
         config.surplus_validation_veto_high_ratio_fails = true;
     }
+    if (args.surplus_validation_veto_ratio_ceiling >= 0.0) {
+        config.surplus_validation_veto_ratio_ceiling =
+            args.surplus_validation_veto_ratio_ceiling;
+    }
+    if (args.surplus_validation_veto_min_ddpr >= 0.0) {
+        config.surplus_validation_veto_min_ddpr_rms_m =
+            args.surplus_validation_veto_min_ddpr;
+    }
     if (args.surplus_validation_min_n > 0) {
         config.surplus_validation_min_surplus_satellites = args.surplus_validation_min_n;
     }
@@ -904,6 +933,27 @@ libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
     }
     if (args.variance_par) {
         config.use_variance_ranked_partial_ar = true;
+    }
+    if (args.gici_par) {
+        config.use_fixed_lag_partial_lambda = true;
+        config.use_variance_ranked_partial_ar = true;
+        config.use_continuous_unfix_ambiguity_reset = true;
+        // The Tokyo1 audit isolated every wrong fix in a near-threshold
+        // ratio/poor-carrier-postfit cluster. Validate only that aperture
+        // fringe, preserving the high-ratio fixes that remain trustworthy
+        // even when urban DD code residuals are large.
+        config.use_fixed_hypothesis_postfit_validation = true;
+        config.fixed_postfit_validate_normal_ratio = true;
+        config.fixed_postfit_normal_ratio_ceiling = 3.2;
+        if (args.postfit_chi2 < 0.0) {
+            config.fixed_postfit_max_chi2_per_dof = 1.5;
+        }
+        if (args.partial_ar_frac < 0.0) {
+            config.fixed_lag_partial_lambda_min_fraction = 0.9;
+        }
+        if (args.ratio_threshold <= 0.0) config.lambda_ratio_threshold = 3.0;
+        if (args.min_fixed <= 0) config.min_fixed_ambiguities = 6;
+        if (args.par_max_std < 0.0) config.partial_ar_max_std_cycles = 0.25;
     }
     if (args.par_max_std >= 0.0) {
         config.partial_ar_max_std_cycles = args.par_max_std;
@@ -1369,7 +1419,8 @@ HorizError horizontalErrorVsRef(const libgnss::FGOProcessor::FGOResult& r,
 // Debug/plotting aid: one row per solved epoch (status != NONE), reusing the
 // exact same nearest-in-time reference cursor as horizontalErrorVsRef() so the
 // per-epoch numbers are consistent with the printed headline metrics. Columns:
-//   tow,status,e_err_m,n_err_m,u_err_m,horiz_err_m,e_pos_m,n_pos_m,ref_e_pos_m,ref_n_pos_m
+//   tow,status,e_err_m,n_err_m,u_err_m,horiz_err_m,e_pos_m,n_pos_m,u_pos_m,
+//   x_ecef_m,y_ecef_m,z_ecef_m,ref_e_pos_m,ref_n_pos_m,ref_u_pos_m
 // where *_err_m is the ENU delta vs the time-matched reference.csv row (the
 // same quantity the fix-rate/RMS metrics are computed from) and *_pos_m is the
 // solution/reference position in local ENU relative to the trajectory start
@@ -1394,10 +1445,15 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
     // magnitudes (~1.8e5), collapsing 0.2s epochs onto the same displayed tow.
     out << std::fixed;
     out.precision(3);
-    out << "tow,status,e_err_m,n_err_m,u_err_m,horiz_err_m,e_pos_m,n_pos_m,"
-           "ref_e_pos_m,ref_n_pos_m,ratio,ratio_threshold,nfixed,ar_outcome,ddpr_rms_m,sd_doppler_rms_mps,gdop,nsat,sd_doppler_n,"
+    out << "tow,status,e_err_m,n_err_m,u_err_m,horiz_err_m,e_pos_m,n_pos_m,u_pos_m,"
+           "x_ecef_m,y_ecef_m,z_ecef_m,ref_e_pos_m,ref_n_pos_m,ref_u_pos_m,"
+           "vel_e_mps,vel_n_mps,vel_u_mps,"
+           "ratio,ratio_threshold,nfixed,ar_outcome,ddpr_rms_m,sd_doppler_rms_mps,gdop,nsat,sd_doppler_n,"
            "amb_candidates,lambda_attempts,lambda_stage,amb_var_median,amb_var_max,"
-           "imu_pose_correction_m,fixed_float_sep_m,fixed_imu_pred_sep_m,fixed_postfit_ddcp_rms_m,fixed_postfit_ddcp_max_norm,fixed_postfit_ddcp_chi2_dof,fixed_postfit_ddcp_n,external_dr_sep_m,external_dr_mahal2,external_dr_age,external_dr_eval,external_dr_accept,external_dr_reject,cp_hold,"
+           "imu_pose_correction_m,ddpr_anchor_eval,ddpr_anchor_n,ddpr_anchor_res_m,"
+           "ddpr_anchor_x_ecef_m,ddpr_anchor_y_ecef_m,ddpr_anchor_z_ecef_m,"
+           "ddpr_anchor_h_err_m,ddpr_anchor_u_err_m,ddpr_anchor_prior,"
+           "fixed_float_sep_m,fixed_imu_pred_sep_m,fixed_postfit_ddcp_rms_m,fixed_postfit_ddcp_max_norm,fixed_postfit_ddcp_chi2_dof,fixed_postfit_ddcp_n,external_dr_sep_m,external_dr_mahal2,external_dr_age,external_doppler_valid,external_doppler_vel_e_mps,external_doppler_vel_n_mps,external_doppler_vel_u_mps,external_dr_eval,external_dr_accept,external_dr_reject,cp_hold,"
            "imu_aperture_accept,imu_aperture_reject,cp_available,cp_added,"
            "cp_suppressed_hold,gen_bump_hold,gen_bump_fde,gen_bump_reset,"
            "gen_bump_warm_reset,gen_bump_stale_pin,"
@@ -1424,10 +1480,16 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
         const double horiz = std::hypot(err_enu.x(), err_enu.y());
         const char* status =
             s.status == libgnss::SolutionStatus::FIXED ? "FIXED" : "FLOAT";
+        const libgnss::Vector3d velocity_nav =
+            si < r.epoch_velocity_nav_mps.size()
+                ? r.epoch_velocity_nav_mps[si]
+                : libgnss::Vector3d::Zero();
         out << s.time.tow << ',' << status << ','
             << err_enu.x() << ',' << err_enu.y() << ',' << err_enu.z() << ','
-            << horiz << ',' << pos_enu.x() << ',' << pos_enu.y() << ','
-            << ref_pos_enu.x() << ',' << ref_pos_enu.y() << ','
+            << horiz << ',' << pos_enu.x() << ',' << pos_enu.y() << ',' << pos_enu.z() << ','
+            << s.position_ecef.x() << ',' << s.position_ecef.y() << ',' << s.position_ecef.z() << ','
+            << ref_pos_enu.x() << ',' << ref_pos_enu.y() << ',' << ref_pos_enu.z() << ','
+            << velocity_nav.x() << ',' << velocity_nav.y() << ',' << velocity_nav.z() << ','
             << s.ratio;
         if (si < r.epoch_diagnostics.size()) {
             const auto& d = r.epoch_diagnostics[si];
@@ -1441,7 +1503,29 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
                 << ',' << d.lambda_selected_stage
                 << ',' << d.ambiguity_variance_median_cycles2
                 << ',' << d.ambiguity_variance_max_cycles2
-                << ',' << d.imu_pose_correction_m
+                << ',' << d.imu_pose_correction_m;
+            double anchor_horiz = -1.0;
+            double anchor_up = -1.0;
+            if (d.ddpr_anchor_evaluated && d.ddpr_anchor_position_ecef.norm() > 1e6) {
+                const libgnss::Vector3d anchor_err_enu = libgnss::ecef2enu(
+                    d.ddpr_anchor_position_ecef - ref[ri].ecef, lat0, lon0);
+                anchor_horiz = std::hypot(anchor_err_enu.x(), anchor_err_enu.y());
+                anchor_up = anchor_err_enu.z();
+            }
+            const libgnss::Vector3d external_doppler_velocity_nav =
+                d.external_doppler_velocity_valid
+                    ? libgnss::ecef2enu(
+                          d.external_doppler_velocity_ecef_mps, lat0, lon0)
+                    : libgnss::Vector3d::Zero();
+            out << ',' << (d.ddpr_anchor_evaluated ? 1 : 0)
+                << ',' << d.ddpr_anchor_active_factors
+                << ',' << d.ddpr_anchor_residual_rms_m
+                << ',' << d.ddpr_anchor_position_ecef.x()
+                << ',' << d.ddpr_anchor_position_ecef.y()
+                << ',' << d.ddpr_anchor_position_ecef.z()
+                << ',' << anchor_horiz
+                << ',' << anchor_up
+                << ',' << (d.ddpr_anchor_bootstrap_prior_applied ? 1 : 0)
                 << ',' << d.fixed_float_separation_m
                 << ',' << d.fixed_imu_prediction_separation_m
                 << ',' << d.fixed_postfit_ddcp_rms_m
@@ -1451,6 +1535,10 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
                 << ',' << d.external_dr_separation_m
                 << ',' << d.external_dr_mahalanobis2
                 << ',' << d.external_dr_age_epochs
+                << ',' << (d.external_doppler_velocity_valid ? 1 : 0)
+                << ',' << external_doppler_velocity_nav.x()
+                << ',' << external_doppler_velocity_nav.y()
+                << ',' << external_doppler_velocity_nav.z()
                 << ',' << (d.external_dr_evaluated ? 1 : 0)
                 << ',' << (d.external_dr_accepted ? 1 : 0)
                 << ',' << (d.external_dr_rejected ? 1 : 0)
@@ -1695,10 +1783,13 @@ void applyImuNoiseOverrides(const Args& args, libgnss::FGOProcessor::FGOProblem&
 // they are a small linear pass next to the RINEX/DD cost above, so caching
 // them isn't worth the extra serialization surface.
 //
-// Fingerprint: format version + size/mtime of the 4 input files + every
-// config field that affects buildDoubleDifferenceProblem, i.e. FGOConfig's
-// own bytes (itself all-POD, see fgo.hpp) plus the Args fields that affect
-// the SAME build phase's epoch selection (--max-epochs/--start-epoch). Any
+// Fingerprint: format version + size/mtime of the 4 input files + only the
+// config fields that affect buildPseudorangeProblem/buildDoubleDifferenceProblem,
+// stored in a zero-filled byte snapshot, plus the Args fields that affect
+// the SAME build phase's epoch selection (--max-epochs/--start-epoch). Solver-
+// only knobs (FDE, AR validation, held-status reporting, etc.) deliberately do
+// not invalidate the cached input problem, which makes controlled A/B sweeps
+// both faster and guarantees that they optimize byte-identical factors. Any
 // mismatch (missing/changed file, different knob, different format version)
 // -> loud stderr warning + full rebuild; the cache is never silently stale.
 namespace problem_cache {
@@ -1836,7 +1927,8 @@ FileId statFile(const std::string& path) {
 // vector, new factor field, ...) -- an old cache then fails the magic/version
 // check in load() below and is rebuilt instead of misread.
 constexpr uint32_t kMagic = 0x50434647u;  // "PCFG" (problem-cache fgo)
-constexpr uint32_t kVersion = 1u;
+constexpr uint32_t kVersion = 6u;
+constexpr std::size_t kBuilderFingerprintBytes = 512u;
 
 struct Fingerprint {
     uint32_t magic;
@@ -1847,7 +1939,10 @@ struct Fingerprint {
     FileId imu;
     int32_t max_epochs;
     int32_t start_epoch;
-    libgnss::FGOProcessor::FGOConfig config;  // full byte-for-byte snapshot
+    // Stable packed snapshot of builder-visible fields only. Its size and
+    // layout deliberately do not depend on sizeof(FGOConfig), so adding a
+    // solver-only option cannot invalidate a parsed-problem cache.
+    std::array<unsigned char, kBuilderFingerprintBytes> config_bytes;
 };
 
 Fingerprint computeFingerprint(const Args& args, const libgnss::FGOProcessor::FGOConfig& config) {
@@ -1861,7 +1956,70 @@ Fingerprint computeFingerprint(const Args& args, const libgnss::FGOProcessor::FG
     fp.imu = statFile(args.imu_path);
     fp.max_epochs = args.max_epochs;
     fp.start_epoch = args.start_epoch;
-    fp.config = config;
+    // fp was zero-filled above. Pack fields consecutively instead of at their
+    // FGOConfig offsets; only this explicit list defines cache identity. Keep
+    // it in sync with config_ accesses in the problem builders.
+    std::size_t config_cursor = 0;
+#define COPY_BUILD_FIELD(name)                                                        \
+    do {                                                                              \
+        if (config_cursor + sizeof(config.name) > fp.config_bytes.size()) {           \
+            throw std::runtime_error("problem-cache builder fingerprint overflow");  \
+        }                                                                             \
+        std::memcpy(fp.config_bytes.data() + config_cursor, &config.name,             \
+                    sizeof(config.name));                                             \
+        config_cursor += sizeof(config.name);                                         \
+    } while (false)
+    COPY_BUILD_FIELD(ambiguity_between_sigma_cycles);
+    COPY_BUILD_FIELD(base_epoch_match_tolerance_s);
+    COPY_BUILD_FIELD(base_interpolation_max_gap_s);
+    COPY_BUILD_FIELD(carrier_phase_sigma_m);
+    COPY_BUILD_FIELD(cmc_aware_reference_selection);
+    COPY_BUILD_FIELD(code_minus_carrier_baseline_alpha);
+    COPY_BUILD_FIELD(code_minus_carrier_jump_threshold_m);
+    COPY_BUILD_FIELD(code_minus_carrier_level_pseudorange_only);
+    COPY_BUILD_FIELD(code_minus_carrier_level_threshold_m);
+    COPY_BUILD_FIELD(code_minus_carrier_warmup_epochs);
+    COPY_BUILD_FIELD(double_difference_base_min_snr_dbhz);
+    COPY_BUILD_FIELD(double_difference_carrier_sigma_m);
+    COPY_BUILD_FIELD(double_difference_pseudorange_sigma_m);
+    COPY_BUILD_FIELD(double_difference_reference_min_snr_dbhz);
+    COPY_BUILD_FIELD(double_difference_secondary_carrier_sigma_scale);
+    COPY_BUILD_FIELD(double_difference_secondary_pseudorange_sigma_scale);
+    COPY_BUILD_FIELD(elevation_sigma_clock_stability);
+    COPY_BUILD_FIELD(elevation_sigma_err_a_m);
+    COPY_BUILD_FIELD(elevation_sigma_err_b_m);
+    COPY_BUILD_FIELD(elevation_sigma_pseudorange_ratio);
+    COPY_BUILD_FIELD(max_tdcp_gap_s);
+    COPY_BUILD_FIELD(min_elevation_deg);
+    COPY_BUILD_FIELD(min_satellites_per_epoch);
+    COPY_BUILD_FIELD(min_snr_dbhz);
+    COPY_BUILD_FIELD(pseudorange_elevation_sigma_power);
+    COPY_BUILD_FIELD(pseudorange_sigma_m);
+    COPY_BUILD_FIELD(reject_rover_carrier_loss_of_lock);
+    COPY_BUILD_FIELD(reject_tdcp_code_phase_jump);
+    COPY_BUILD_FIELD(reject_tdcp_loss_of_lock);
+    COPY_BUILD_FIELD(reset_double_difference_ambiguities_each_epoch);
+    COPY_BUILD_FIELD(single_difference_doppler_sigma_mps);
+    COPY_BUILD_FIELD(single_difference_tdcp_sigma_m);
+    COPY_BUILD_FIELD(tdcp_code_phase_jump_threshold_m);
+    COPY_BUILD_FIELD(tdcp_sigma_m);
+    COPY_BUILD_FIELD(use_ambiguity_between_factors);
+    COPY_BUILD_FIELD(use_carrier_phase_factors);
+    COPY_BUILD_FIELD(use_code_minus_carrier_screening);
+    COPY_BUILD_FIELD(use_double_difference_factors);
+    COPY_BUILD_FIELD(use_double_difference_secondary_code_alignment);
+    COPY_BUILD_FIELD(use_elevation_dependent_sigma);
+    COPY_BUILD_FIELD(use_external_doppler_dr_validation);
+    COPY_BUILD_FIELD(use_ionosphere_model);
+    COPY_BUILD_FIELD(use_multi_constellation);
+    COPY_BUILD_FIELD(use_multi_frequency_double_difference);
+    COPY_BUILD_FIELD(use_pseudorange_factors);
+    COPY_BUILD_FIELD(use_single_difference_doppler_factors);
+    COPY_BUILD_FIELD(use_single_difference_tdcp_factors);
+    COPY_BUILD_FIELD(use_spp_seed);
+    COPY_BUILD_FIELD(use_tdcp_factors);
+    COPY_BUILD_FIELD(use_troposphere_model);
+#undef COPY_BUILD_FIELD
     return fp;
 }
 
@@ -1896,8 +2054,18 @@ bool load(const std::string& path, const Fingerprint& want, libgnss::FGOProcesso
         return false;
     }
     if (std::memcmp(&have, &want, sizeof(Fingerprint)) != 0) {
+        const auto* have_bytes = reinterpret_cast<const unsigned char*>(&have);
+        const auto* want_bytes = reinterpret_cast<const unsigned char*>(&want);
+        std::size_t first_diff = 0;
+        while (first_diff < sizeof(Fingerprint) &&
+               have_bytes[first_diff] == want_bytes[first_diff]) {
+            ++first_diff;
+        }
         std::cerr << "problem-cache: WARNING -- " << path
-                  << " fingerprint mismatch (inputs or config knobs changed since it was written);"
+                  << " fingerprint mismatch at byte " << first_diff
+                  << " (cached=" << static_cast<unsigned>(have_bytes[first_diff])
+                  << ", requested=" << static_cast<unsigned>(want_bytes[first_diff]) << ')'
+                  << " (inputs or builder config changed since it was written);"
                      " ignoring and rebuilding.\n";
         return false;
     }
@@ -2202,6 +2370,10 @@ int main(int argc, char** argv) {
                   << ", fixed_epochs=" << fl_fixed << "/" << ne << " ("
                   << (ne > 0 ? 100.0 * double(fl_fixed) / double(ne) : 0.0)
                   << "% fix-rate), best_ratio=" << fl.diagnostics.lambda_ambiguity_ratio << "\n"
+                  << "  partial AR: " << (config.use_fixed_lag_partial_lambda ? "on" : "off")
+                  << " (min_fraction=" << config.fixed_lag_partial_lambda_min_fraction
+                  << ", min_fixed=" << config.min_fixed_ambiguities
+                  << ", max_std_cycles=" << config.partial_ar_max_std_cycles << ")\n"
                   << "  IMU ratio aperture: " << (args.imu_ratio_aperture ? "on" : "off")
                   << " (accepted=" << fl.diagnostics.imu_aided_ratio_accepts
                   << ", rejected=" << fl.diagnostics.imu_aided_ratio_rejects
@@ -2257,7 +2429,16 @@ int main(int argc, char** argv) {
                   << " epochs)\n"
                   << "  fix-and-hold: " << (args.use_hold ? "on" : "off")
                   << " (pinned " << fl.diagnostics.ambiguity_hold_arcs << " arcs, "
-                  << fl.diagnostics.ambiguity_hold_epochs << " epochs FIXED via held integers)\n"
+                  << fl.diagnostics.ambiguity_hold_epochs << " epochs FIXED via held integers, "
+                  << "held_only_label=" << (args.no_held_fix_label ? "off" : "on") << ")\n"
+                  << "  continuous-unfix reset: "
+                  << (config.use_continuous_unfix_ambiguity_reset ? "on" : "off")
+                  << " (resets=" << fl.diagnostics.ambiguity_continuous_unfix_resets
+                  << ", epochs=" << config.continuous_unfix_reset_epochs
+                  << ", min_sat=" << config.continuous_unfix_min_satellites
+                  << ", max_gdop=" << config.continuous_unfix_max_gdop
+                  << ", max_fde_fraction="
+                  << config.continuous_unfix_max_fde_reject_fraction << ")\n"
                   << "  CMC screening: " << (args.cmc ? "on" : "off")
                   << " (jump_resets=" << fl.diagnostics.code_minus_carrier_jump_resets
                   << ", level_exclusions=" << fl.diagnostics.code_minus_carrier_level_exclusions

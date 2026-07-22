@@ -42,6 +42,7 @@ public:
     struct Diagnostics {
         std::size_t anchors = 0;
         std::size_t supplied_updates = 0;
+        std::size_t prediction_continuations = 0;
         std::size_t invalid_intervals = 0;
         std::size_t zupt_updates = 0;
         std::size_t nhc_updates = 0;
@@ -52,6 +53,14 @@ public:
 
     void processImuSample(const ImuSample& sample_body_flu);
     TimeUpdate prepareTimeUpdate();
+
+    /**
+     * Start the next IMU interval from the just-prepared prediction without
+     * replacing its navigation state with a GNSS posterior. This keeps time
+     * updates incremental while allowing callers to bridge an untrusted
+     * FLOAT/SPP epoch until a trusted re-anchor is available.
+     */
+    bool continueFromPrediction();
 
     /**
      * Re-anchor at RTK's FLOAT posterior antenna position. `bootstrap_state`

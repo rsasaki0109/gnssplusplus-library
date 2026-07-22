@@ -143,6 +143,8 @@ struct FuseOptions {
     // position prior above; the two modes are mutually exclusive.
     bool tc_ins_time_update = false;
     bool tc_closed_loop = false;
+    bool tc_trusted_reanchor = false;
+    int tc_trusted_reanchor_max_epochs = 0;
     bool tc_velocity_states = false;
     bool tc_tdcp_diagnostics = false;
     double tc_ins_position_q_floor_m2 = 25.0;
@@ -373,6 +375,13 @@ void printUsage(const char* program_name) {
         << "  --tc-closed-loop             M3 TightCouplingProcessor path. Owns IMU intervals,\n"
         << "                                re-anchoring, ZUPT/NHC, and enables the M2 gate.\n"
         << "                                Mutually exclusive with --tc-ins-time-update. Default: off.\n"
+        << "  --tc-trusted-reanchor        With --tc-closed-loop, re-anchor only after a FIXED RTK\n"
+        << "                                epoch; bridge FLOAT/SPP epochs by continuing the IMU\n"
+        << "                                prediction instead of copying their posterior. Default: off.\n"
+        << "  --tc-trusted-reanchor-max-epochs <n>\n"
+        << "                                Maximum consecutive FLOAT/SPP epochs bridged before\n"
+        << "                                re-anchoring to the next available posterior (0 = no\n"
+        << "                                limit). Requires --tc-trusted-reanchor. Default: 0.\n"
         << "  --tc-velocity-states         M4 ECEF velocity states appended after legacy RTK state.\n"
         << "                                Requires --tc-closed-loop. Default: off.\n"
         << "  --tc-tdcp-diagnostics        M5 measurement-neutral SD-TDCP vs Doppler diagnostics.\n"
@@ -651,6 +660,11 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             options.tc_ins_time_update = true;
         } else if (arg == "--tc-closed-loop") {
             options.tc_closed_loop = true;
+        } else if (arg == "--tc-trusted-reanchor") {
+            options.tc_trusted_reanchor = true;
+        } else if (arg == "--tc-trusted-reanchor-max-epochs") {
+            options.tc_trusted_reanchor_max_epochs =
+                std::stoi(requireValue(arg, i, argc, argv));
         } else if (arg == "--tc-velocity-states") {
             options.tc_velocity_states = true;
         } else if (arg == "--tc-tdcp-diagnostics") {
@@ -731,6 +745,16 @@ FuseOptions parseArguments(int argc, char* argv[]) {
     }
     if (options.tc_velocity_states && !options.tc_closed_loop) {
         argumentError("--tc-velocity-states requires --tc-closed-loop", argv[0]);
+    }
+    if (options.tc_trusted_reanchor && !options.tc_closed_loop) {
+        argumentError("--tc-trusted-reanchor requires --tc-closed-loop", argv[0]);
+    }
+    if (options.tc_trusted_reanchor_max_epochs < 0) {
+        argumentError("--tc-trusted-reanchor-max-epochs must be non-negative", argv[0]);
+    }
+    if (options.tc_trusted_reanchor_max_epochs > 0 && !options.tc_trusted_reanchor) {
+        argumentError("--tc-trusted-reanchor-max-epochs requires --tc-trusted-reanchor",
+                      argv[0]);
     }
     if (options.tc_tdcp_diagnostics && !options.tc_velocity_states) {
         argumentError("--tc-tdcp-diagnostics requires --tc-velocity-states", argv[0]);
@@ -997,6 +1021,8 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
     int tc_update_supplied_count = 0;
     int tc_anchor_count = 0;
     int tc_invalid_interval_count = 0;
+    int tc_trusted_reanchor_fallback_count = 0;
+    int tc_consecutive_prediction_continuations = 0;
     int tc_cp_pr_evaluated_count = 0;
     int tc_cp_pr_rejected_count = 0;
     int tc_cp_pr_escalated_count = 0;
@@ -1420,6 +1446,12 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
                 const bool bootstrap_ready = !needs_bootstrap ||
                     (fusion_processor.isInitialized() && fusion_processor.isOriginSet() &&
                      fusion_processor.isHeadingConverged());
+                const bool continuation_limit_reached = options.tc_trusted_reanchor &&
+                    options.tc_trusted_reanchor_max_epochs > 0 &&
+                    tc_consecutive_prediction_continuations >=
+                        options.tc_trusted_reanchor_max_epochs;
+                const bool trusted_reanchor = !options.tc_trusted_reanchor ||
+                    pos_solution.isFixed() || continuation_limit_reached;
                 bool have_anchor = false;
                 const auto& telemetry = rtk_processor.getLastDebugTelemetry();
                 if (telemetry.ddpr_anchor_valid) {
@@ -1431,7 +1463,7 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
                     have_anchor = rtk_processor.getFloatPosteriorPosition(
                         anchor_position_ecef, anchor_position_covariance_ecef);
                 }
-                if (bootstrap_ready && have_anchor && pos_solution.has_velocity &&
+                if (trusted_reanchor && bootstrap_ready && have_anchor && pos_solution.has_velocity &&
                     pos_solution.velocity_ecef.allFinite() &&
                     pos_solution.velocity_covariance.allFinite()) {
                     const libgnss::FusionState* bootstrap =
@@ -1440,9 +1472,21 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
                         anchor_position_ecef, anchor_position_covariance_ecef,
                         pos_solution.velocity_ecef, pos_solution.velocity_covariance,
                         rover_obs.time, bootstrap);
+                    if (anchored) {
+                        if (continuation_limit_reached && !pos_solution.isFixed()) {
+                            ++tc_trusted_reanchor_fallback_count;
+                        }
+                        tc_consecutive_prediction_continuations = 0;
+                    }
                 }
                 if (!anchored) {
-                    tc_closed_loop_processor.invalidateInterval();
+                    const bool continued = options.tc_trusted_reanchor && !needs_bootstrap &&
+                        !continuation_limit_reached &&
+                        tc_closed_loop_processor.continueFromPrediction();
+                    if (continued) ++tc_consecutive_prediction_continuations;
+                    if (!continued) {
+                        tc_closed_loop_processor.invalidateInterval();
+                    }
                 }
             }
             ++valid_solutions;
@@ -1459,7 +1503,17 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
             }
         } else {
             if (options.tc_ins_time_update) tc_preintegrator.clear();
-            if (options.tc_closed_loop) tc_closed_loop_processor.invalidateInterval();
+            if (options.tc_closed_loop) {
+                const bool continuation_limit_reached = options.tc_trusted_reanchor &&
+                    options.tc_trusted_reanchor_max_epochs > 0 &&
+                    tc_consecutive_prediction_continuations >=
+                        options.tc_trusted_reanchor_max_epochs;
+                const bool continued = options.tc_trusted_reanchor &&
+                    !continuation_limit_reached &&
+                    tc_closed_loop_processor.continueFromPrediction();
+                if (continued) ++tc_consecutive_prediction_continuations;
+                if (!continued) tc_closed_loop_processor.invalidateInterval();
+            }
         }
 
         if (fusion_processor.isOriginSet()) {
@@ -1569,8 +1623,14 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
                   << (options.tc_closed_loop ? "on" : "off");
         if (options.tc_closed_loop) {
             const auto diagnostics = tc_closed_loop_processor.diagnostics();
-            std::cout << "\n  anchors=" << diagnostics.anchors
+            std::cout << " (trusted_reanchor="
+                      << (options.tc_trusted_reanchor ? "on" : "off")
+                      << ", max_bridge_epochs="
+                      << options.tc_trusted_reanchor_max_epochs << ")\n  anchors="
+                      << diagnostics.anchors
                       << " supplied=" << diagnostics.supplied_updates
+                      << " continued=" << diagnostics.prediction_continuations
+                      << " fallback_reanchors=" << tc_trusted_reanchor_fallback_count
                       << " invalid_intervals=" << diagnostics.invalid_intervals
                       << " zupt_updates=" << diagnostics.zupt_updates
                       << " nhc_updates=" << diagnostics.nhc_updates;

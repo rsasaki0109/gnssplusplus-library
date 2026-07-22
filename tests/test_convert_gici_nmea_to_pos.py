@@ -46,6 +46,28 @@ class ConvertGiciNmeaToPosTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "GGA before dated RMC"):
                 converter.convert(source, output, leap_seconds=18)
 
+    def test_can_emit_common_libgnss_status_codes(self) -> None:
+        nmea = "\n".join(
+            [
+                "$GPRMC,040431.200,A,3540.0589,N,13947.4597,E,0,0,230724,0,E,A*00",
+                "$GPGGA,040431.200,3540.0589,N,13947.4597,E,4,20,1,2.4,M,37.5,M,0,0*00",
+                "$GPGGA,040431.400,3540.0589,N,13947.4597,E,5,20,1,2.4,M,37.5,M,0,0*00",
+            ]
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source = Path(temp_dir) / "gici.nmea"
+            output = Path(temp_dir) / "gici.pos"
+            source.write_text(nmea + "\n", encoding="ascii")
+
+            converter.convert(source, output, leap_seconds=18, libgnss_status=True)
+            rows = [
+                line.split()
+                for line in output.read_text().splitlines()
+                if not line.startswith("%")
+            ]
+
+        self.assertEqual([int(row[8]) for row in rows], [4, 3])
+
 
 if __name__ == "__main__":
     unittest.main()

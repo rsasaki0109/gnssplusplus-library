@@ -266,6 +266,10 @@ public:
         // remain behavior-identical while diagnostics are collected.
         bool use_fixed_hypothesis_postfit_validation = false;
         bool fixed_postfit_validate_normal_ratio = false;
+        // When > 0, apply the normal-ratio postfit gate only to candidates at
+        // or below this ratio. This targets near-threshold ambiguity fixes
+        // without discarding high-aperture fixes solely for noisy DD code.
+        double fixed_postfit_normal_ratio_ceiling = 0.0;
         int fixed_postfit_min_factors = 4;
         double fixed_postfit_max_rms_m = 0.0;
         double fixed_postfit_max_normalized_residual = 0.0;
@@ -379,6 +383,17 @@ public:
         // exceeds this standard deviation in cycles (<=0 disables the gate).
         bool use_variance_ranked_partial_ar = false;
         double partial_ar_max_std_cycles = 0.25;
+        // GICI-style ambiguity reacquisition: when geometry is good and FDE
+        // rejects less than the configured fraction, a long run of fresh-AR
+        // failures means the ambiguity state itself is stale. Bump every live
+        // arc generation after the streak so the next epoch starts from new
+        // float ambiguities, without breaking the IMU chain or suppressing
+        // carrier factors. Default off.
+        bool use_continuous_unfix_ambiguity_reset = false;
+        int continuous_unfix_reset_epochs = 10;
+        int continuous_unfix_min_satellites = 10;
+        double continuous_unfix_max_gdop = 2.0;
+        double continuous_unfix_max_fde_reject_fraction = 0.1;
         int min_fixed_ambiguities = 4;
         int max_lambda_ambiguities = 12;
         // --- Surplus-satellite independent integrity validation ---
@@ -411,6 +426,12 @@ public:
         // ratio>=lambda_ratio_threshold fix that FAILS this test. Separate
         // knob, default off; evaluate in Stage A before enabling.
         bool surplus_validation_veto_high_ratio_fails = false;
+        // Optional selective-veto aperture. Positive values restrict the
+        // established-ratio veto to weak-ratio candidates and/or epochs with
+        // poor DD-code consistency. Zero preserves the original all-candidate
+        // veto semantics.
+        double surplus_validation_veto_ratio_ceiling = 0.0;
+        double surplus_validation_veto_min_ddpr_rms_m = 0.0;
         // Minimum number of surplus satellites required (at whichever
         // constellation fallback level is being tried) before the test can
         // render a verdict; below this the epoch is "insufficient surplus"
@@ -628,6 +649,11 @@ public:
         // (fgo.cpp segments arcs on loss_of_lock), which is not in the held set.
         // Gated; default OFF.
         bool use_ambiguity_hold = false;
+        // When false, hold priors still stabilize the graph but an epoch is
+        // never labelled FIXED solely because enough arcs were pinned by an
+        // earlier epoch; a fresh ambiguity-resolution pass is required.
+        // Default true preserves the historical fix-and-hold output policy.
+        bool report_held_ambiguities_as_fixed = true;
         double ambiguity_hold_ratio_threshold = 3.0;  ///< min ratio to hold (stricter than fix)
         double ambiguity_hold_sigma_cycles = 1e-3;    ///< tight prior sigma at the held integer
         int ambiguity_hold_min_fixed = 4;             ///< min ambiguities in a passing epoch to hold
@@ -1096,8 +1122,8 @@ public:
         //     IMU-seeded full warm reset. Requires use_solve_exception_recovery.
         //  3. Bootstrap re-seed (optimize/stage.py's BOOT_DDPR_EPOCHS /
         //     tightly_coupled.py's Phase-2-init arming): our primary lever
-        //     against the CP-hold FSM's known FLOAT-degradation cost. Once
-        //     armed (see cp_hold_bootstrap_after_mass_reset below), every
+        //     against the CP-hold FSM's known FLOAT-degradation cost. It is
+        //     armed at Phase-2 initialization and after recovery resets; every
         //     epoch for ddpr_anchor_bootstrap_epochs epochs gets a
         //     translation-only PriorPose3 at that epoch's anchor position
         //     (rotation sigma ~unconstrained, translation sigma
@@ -1111,12 +1137,11 @@ public:
         //     the reference's state.effective_cp_hold_epochs -- bootstrap
         //     wins) via effectiveCpHoldEpochs() in the .cpp.
         //
-        // Deliberate deviation from the reference: the reference only arms
-        // the bootstrap countdown once, at Phase-2 initialization (there is
-        // no equivalent "Phase 2 init" moment in this backend -- it runs the
-        // TC graph from epoch 0). This port instead arms it after EVERY full
-        // warm reset (both the anchor-seeded and IMU-seeded paths, since
-        // both destroy and recreate the smoother from scratch) and,
+        // The reference arms the bootstrap countdown at Phase-2
+        // initialization. This port does the same at epoch 0, re-arms it
+        // after EVERY full warm reset (both the anchor-seeded and IMU-seeded
+        // paths, since both destroy and recreate the smoother from scratch),
+        // and,
         // opt-in via cp_hold_bootstrap_after_mass_reset, after the CP-hold
         // FSM's mass/fast ambiguity resets too (those do NOT recreate the
         // smoother, but DO invalidate every held integer, which is the same
@@ -1137,9 +1162,7 @@ public:
         // solver-exception recovery), where the smoother has genuinely lost
         // its history and the anchor is the only absolute-position channel.
         //
-        // Master switch, default OFF (bit-identical baseline without it;
-        // when true, requires use_cp_hold_recovery and/or
-        // use_solve_exception_recovery to actually do anything -- see above).
+        // Master switch, default OFF (bit-identical baseline without it).
         bool use_ddpr_anchor = false;
         double ddpr_anchor_max_residual_m = 2.0;       ///< reference ddpr_max_res
         double ddpr_anchor_fde_threshold_m = 4.0;      ///< reference fde_pr
@@ -1744,6 +1767,7 @@ public:
         std::size_t ambiguity_generation_bumps_fde = 0;
         std::size_t ambiguity_generation_bumps_reset = 0;
         std::size_t ambiguity_generation_bumps_warm_reset = 0;
+        std::size_t ambiguity_continuous_unfix_resets = 0;
         std::size_t ambiguity_generation_bumps_stale_pin = 0;
         // --- Stale-pin invalidation diagnostics (use_stale_pin_invalidation) ---
         std::size_t stale_pin_invalidations = 0;  ///< pinned arcs released per-arc at a trigger epoch
@@ -1887,6 +1911,11 @@ public:
         double ambiguity_variance_median_cycles2 = 0.0;
         double ambiguity_variance_max_cycles2 = 0.0;
         double imu_pose_correction_m = 0.0;
+        bool ddpr_anchor_evaluated = false;
+        bool ddpr_anchor_bootstrap_prior_applied = false;
+        int ddpr_anchor_active_factors = 0;
+        double ddpr_anchor_residual_rms_m = 0.0;
+        Vector3d ddpr_anchor_position_ecef = Vector3d::Zero();
         double fixed_float_separation_m = 0.0;
         double fixed_imu_prediction_separation_m = 0.0;
         // --- "c2" DR-gate bypass counterfactual (see FGOConfig::
@@ -1911,6 +1940,8 @@ public:
         double external_dr_separation_m = 0.0;
         double external_dr_mahalanobis2 = 0.0;
         int external_dr_age_epochs = -1;
+        bool external_doppler_velocity_valid = false;
+        Vector3d external_doppler_velocity_ecef_mps = Vector3d::Zero();
         bool external_dr_evaluated = false;
         bool external_dr_accepted = false;
         bool external_dr_rejected = false;

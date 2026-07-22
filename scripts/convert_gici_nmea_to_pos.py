@@ -13,9 +13,10 @@ GPS_EPOCH = dt.datetime(1980, 1, 6)
 WGS84_A = 6378137.0
 WGS84_E2 = 6.69437999014e-3
 
-# GGA quality -> RTKLIB/libgnss++ solution status.  In particular, GGA 4 is
-# integer-fixed RTK and the PPC evaluator represents FIX with status 1.
-GGA_TO_STATUS = {1: 5, 2: 4, 3: 5, 4: 1, 5: 2, 6: 7}
+# GGA quality -> RTKLIB solution status. In particular, GGA 4 is integer-fixed
+# RTK and RTKLIB represents FIX with status 1.
+GGA_TO_RTKLIB_STATUS = {1: 5, 2: 4, 3: 5, 4: 1, 5: 2, 6: 7}
+GGA_TO_LIBGNSS_STATUS = {1: 1, 2: 2, 3: 1, 4: 4, 5: 3, 6: 1}
 
 
 def parse_args() -> argparse.Namespace:
@@ -27,6 +28,11 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=18,
         help="GPST-UTC offset during the dataset (default: 18)",
+    )
+    parser.add_argument(
+        "--libgnss-status",
+        action="store_true",
+        help="write libgnss++ status codes (FIX=4, FLOAT=3) instead of RTKLIB codes",
     )
     return parser.parse_args()
 
@@ -67,7 +73,13 @@ def utc_stamp(date_token: str, time_token: str) -> dt.datetime:
     return dt.datetime(year, month, day, hour, minute, second, microsecond)
 
 
-def convert(nmea_path: Path, output_path: Path, leap_seconds: int) -> int:
+def convert(
+    nmea_path: Path,
+    output_path: Path,
+    leap_seconds: int,
+    *,
+    libgnss_status: bool = False,
+) -> int:
     current_date: str | None = None
     output_path.parent.mkdir(parents=True, exist_ok=True)
     count = 0
@@ -97,7 +109,8 @@ def convert(nmea_path: Path, output_path: Path, leap_seconds: int) -> int:
             week = int(gps_seconds // 604800)
             tow = gps_seconds - week * 604800
             x, y, z = llh_to_ecef(lat, lon, height)
-            status = GGA_TO_STATUS.get(quality, 0)
+            status_map = GGA_TO_LIBGNSS_STATUS if libgnss_status else GGA_TO_RTKLIB_STATUS
+            status = status_map.get(quality, 0)
             satellites = int(fields[7])
             output.write(
                 f"{week:d} {tow:.3f} {x:.4f} {y:.4f} {z:.4f} "
@@ -109,7 +122,12 @@ def convert(nmea_path: Path, output_path: Path, leap_seconds: int) -> int:
 
 def main() -> int:
     args = parse_args()
-    count = convert(args.nmea, args.output, args.gps_utc_leap_seconds)
+    count = convert(
+        args.nmea,
+        args.output,
+        args.gps_utc_leap_seconds,
+        libgnss_status=args.libgnss_status,
+    )
     print(f"Converted {count} GGA epochs to {args.output}")
     return 0
 
