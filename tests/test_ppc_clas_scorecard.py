@@ -82,6 +82,8 @@ class PpcClasLeverArmTest(unittest.TestCase):
                         "fix_pct": 12.5,
                         "rms2d_fixed_m": 0.25,
                         "p68_fixed_m": 0.20,
+                        "max_fixed_m": 0.75,
+                        "fixed_over_3m": 0,
                         "ttff_30_s": None,
                     },
                     "mrtklib_v0_4_2": scorecard.MRTKLIB_TARGETS[key],
@@ -91,6 +93,8 @@ class PpcClasLeverArmTest(unittest.TestCase):
             "fix_pct": 0.0,
             "rms2d_fixed_m": None,
             "p68_fixed_m": None,
+            "max_fixed_m": None,
+            "fixed_over_3m": 0,
         }
         with tempfile.TemporaryDirectory() as temp_dir:
             output = Path(temp_dir) / "table.md"
@@ -102,6 +106,7 @@ class PpcClasLeverArmTest(unittest.TestCase):
         self.assertIn("100.000% / 99.900%", markdown)
         self.assertIn("vehicle truth transformed to the antenna phase center", markdown)
         self.assertIn("unmodified PPC reference point", markdown)
+        self.assertIn(">3 m FIX", markdown)
         self.assertIn("—", markdown)
 
     def test_write_report_with_only_parity_config_does_not_raise(self) -> None:
