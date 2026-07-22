@@ -45,8 +45,8 @@ inline bool shouldCoastClasSeed(bool masked_admission_failed,
            (!filter_initialized && satellites_used >= 4);
 }
 
-/// Keep AR quarantined while raw maxdiff observations continue, then retain
-/// the quarantine for a bounded recovery window after the last event.
+/// Keep the maxdiff recovery marker active while raw maxdiff observations
+/// continue, then retain it for a bounded validation window.
 inline bool updateClasSeedArQuarantine(bool trigger,
                                        int recovery_epochs,
                                        int& remaining_epochs) {
@@ -56,6 +56,17 @@ inline bool updateClasSeedArQuarantine(bool trigger,
         --remaining_epochs;
     }
     return remaining_epochs > 0;
+}
+
+/// A just-recovered native state needs one more DD row than MRTKLIB's normal
+/// minamb=6 floor and must clear the kinematic ratio floor before it can
+/// publish FIX. Outside recovery, MRTKLIB's nb-dependent threshold is
+/// unchanged.
+inline bool clasRecoveryFixIsSupported(bool recovery_active,
+                                       int nb,
+                                       double ratio,
+                                       double ratio_floor) {
+    return !recovery_active || (nb >= 7 && ratio >= ratio_floor);
 }
 
 struct PPPConfig {
