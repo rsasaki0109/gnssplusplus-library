@@ -45,6 +45,37 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help="Truth-free FIX-to-FLOAT output gate recorded in the audit payload.",
     )
+    parser.add_argument("--status-demotion-low-satellite-ceiling", type=int, default=None)
+    parser.add_argument("--status-demotion-low-satellite-max-ratio", type=float, default=None)
+    parser.add_argument("--status-exonerate-min-satellites", type=int, default=None)
+    parser.add_argument("--status-exonerate-max-prefit-rms-m", type=float, default=None)
+    parser.add_argument("--status-exonerate-max-nis-per-obs", type=float, default=None)
+    parser.add_argument("--kinematic-max-jump-m", type=float, default=None)
+    parser.add_argument("--kinematic-min-acceleration-mps2", type=float, default=None)
+    parser.add_argument("--kinematic-hold-epochs", type=int, default=None)
+    parser.add_argument("--kinematic-plateau-max-jump-m", type=float, default=None)
+    parser.add_argument("--kinematic-max-hold-epochs", type=int, default=None)
+    parser.add_argument("--kinematic-secondary-min-jump-m", type=float, default=None)
+    parser.add_argument(
+        "--kinematic-secondary-min-acceleration-mps2", type=float, default=None
+    )
+    parser.add_argument("--kinematic-secondary-min-prefit-rms-m", type=float, default=None)
+    parser.add_argument("--kinematic-secondary-max-ratio", type=float, default=None)
+    parser.add_argument("--kinematic-secondary-min-outliers", type=int, default=None)
+    parser.add_argument("--kinematic-secondary-max-satellites", type=int, default=None)
+    parser.add_argument(
+        "--online-consensus-summary",
+        action="append",
+        type=Path,
+        default=[],
+        help="Truth-free online-consensus replay summary recorded in provenance.",
+    )
+    parser.add_argument(
+        "--staged-integrity-audit",
+        type=Path,
+        default=None,
+        help="Fixed-policy audit whose runtime policy and external status are recorded.",
+    )
     parser.add_argument(
         "--gici-commit", default="e7666110a88d22e08aad24345a253564af9b8024"
     )
@@ -207,12 +238,112 @@ def build_payload(args: argparse.Namespace) -> dict[str, object]:
         "status_labels_preserved_by_position_selectors": True,
     }
     min_satellites = getattr(args, "status_demotion_min_satellites", None)
-    if min_satellites is not None:
+    low_satellite_ceiling = getattr(args, "status_demotion_low_satellite_ceiling", None)
+    low_satellite_max_ratio = getattr(args, "status_demotion_low_satellite_max_ratio", None)
+    if min_satellites is not None or low_satellite_ceiling is not None:
         evaluation["status_demotion"] = {
-            "rule": "demote FIX to FLOAT when NumSat is below the threshold",
+            "rule": (
+                "demote FIX to FLOAT when NumSat is below the minimum, or when "
+                "NumSat is at/below the low-satellite ceiling and AR ratio is at/below its threshold"
+            ),
             "min_satellites": min_satellites,
+            "low_satellite_ceiling": low_satellite_ceiling,
+            "low_satellite_max_ratio": low_satellite_max_ratio,
             "reference_used": False,
             "position_trajectory_changed": False,
+        }
+    exoneration = (
+        getattr(args, "status_exonerate_min_satellites", None),
+        getattr(args, "status_exonerate_max_prefit_rms_m", None),
+        getattr(args, "status_exonerate_max_nis_per_obs", None),
+    )
+    if any(value is not None for value in exoneration):
+        evaluation["status_exoneration"] = {
+            "rule": (
+                "retain a base-gated FIX only when satellite count, prefit RMS, "
+                "and NIS/observation all pass the strong-telemetry limits"
+            ),
+            "min_satellites": exoneration[0],
+            "max_prefit_rms_m": exoneration[1],
+            "max_nis_per_observation": exoneration[2],
+            "reference_used": False,
+            "overridden_by_kinematic_quarantine": True,
+        }
+    kinematic = (
+        getattr(args, "kinematic_max_jump_m", None),
+        getattr(args, "kinematic_min_acceleration_mps2", None),
+        getattr(args, "kinematic_hold_epochs", None),
+    )
+    if any(value is not None for value in kinematic):
+        evaluation["kinematic_integrity_gate"] = {
+            "rule": (
+                "demote the trigger and bounded following epochs after a simultaneous "
+                "position-jump and acceleration violation"
+            ),
+            "max_jump_m": kinematic[0],
+            "min_acceleration_mps2": kinematic[1],
+            "hold_epochs": kinematic[2],
+            "reference_used": False,
+            "position_trajectory_changed": False,
+            "loo_report": "docs/ppc_kinematic_integrity_loo.json",
+        }
+        advanced = {
+            "plateau_max_jump_m": getattr(
+                args, "kinematic_plateau_max_jump_m", None
+            ),
+            "max_hold_epochs": getattr(args, "kinematic_max_hold_epochs", None),
+            "secondary_min_jump_m": getattr(
+                args, "kinematic_secondary_min_jump_m", None
+            ),
+            "secondary_min_acceleration_mps2": getattr(
+                args, "kinematic_secondary_min_acceleration_mps2", None
+            ),
+            "secondary_min_prefit_rms_m": getattr(
+                args, "kinematic_secondary_min_prefit_rms_m", None
+            ),
+            "secondary_max_ratio": getattr(
+                args, "kinematic_secondary_max_ratio", None
+            ),
+            "secondary_min_outliers": getattr(
+                args, "kinematic_secondary_min_outliers", None
+            ),
+            "secondary_max_satellites": getattr(
+                args, "kinematic_secondary_max_satellites", None
+            ),
+        }
+        if any(value is not None for value in advanced.values()):
+            evaluation["kinematic_integrity_gate"]["advanced_extension"] = advanced
+    consensus_summaries = getattr(args, "online_consensus_summary", [])
+    if consensus_summaries:
+        evaluation["online_consensus_replays"] = [
+            {
+                "summary": portable_artifact_path(path),
+                "runtime_truth_used": read_object(path).get("runtime_truth_used"),
+                "positions_replaced": read_object(path).get("positions_replaced"),
+                "agreement_aperture_m": read_object(path).get(
+                    "agreement_aperture_m"
+                ),
+                "shadow_max_gdop": read_object(path).get("shadow_max_gdop"),
+                "final_state": read_object(path).get("final_state"),
+            }
+            for path in consensus_summaries
+        ]
+    staged_audit_path = getattr(args, "staged_integrity_audit", None)
+    if staged_audit_path is not None:
+        staged_audit = read_object(staged_audit_path)
+        evaluation["staged_integrity_policy"] = {
+            "audit": portable_artifact_path(staged_audit_path),
+            "policy": staged_audit.get("policy"),
+            "runtime_truth_used": staged_audit.get(
+                "reference_truth_used_by_runtime_policy"
+            ),
+            "bounded_output_latency_epochs": staged_audit.get(
+                "bounded_output_latency_epochs"
+            ),
+            "external_validation_status": staged_audit.get(
+                "external_validation_status"
+            ),
+            "external_policy_active": staged_audit.get("external_policy_active"),
         }
     return {
         "schema_version": 1,
@@ -277,7 +408,7 @@ def render_comparison(payload: dict[str, object], output: Path) -> None:
     fig.text(
         0.5,
         0.015,
-        "Runtime selection is reference-free; baseline status labels are preserved.",
+        "Runtime integrity is reference-free; status-only gates do not replace positions.",
         ha="center",
         color="#475467",
     )

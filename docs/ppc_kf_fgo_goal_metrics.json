@@ -3,13 +3,74 @@
     "correct_fix_threshold_3d_m": 0.5,
     "dataset": "taroz/PPC-Dataset, Tokyo/Nagoya runs 1-3",
     "fixed_status": 4,
-    "official_score_threshold_3d_m": 0.5,
-    "reference_used_by_runtime_selector": false,
-    "status_demotion": {
-      "min_satellites": 9,
+    "kinematic_integrity_gate": {
+      "advanced_extension": {
+        "max_hold_epochs": 8,
+        "plateau_max_jump_m": 0.1,
+        "secondary_max_ratio": 10.0,
+        "secondary_max_satellites": 13,
+        "secondary_min_acceleration_mps2": 100.0,
+        "secondary_min_jump_m": 5.0,
+        "secondary_min_outliers": 10,
+        "secondary_min_prefit_rms_m": 5.0
+      },
+      "hold_epochs": 3,
+      "loo_report": "docs/ppc_kinematic_integrity_loo.json",
+      "max_jump_m": 12.0,
+      "min_acceleration_mps2": 200.0,
       "position_trajectory_changed": false,
       "reference_used": false,
-      "rule": "demote FIX to FLOAT when NumSat is below the threshold"
+      "rule": "demote the trigger and bounded following epochs after a simultaneous position-jump and acceleration violation"
+    },
+    "official_score_threshold_3d_m": 0.5,
+    "online_consensus_replays": [
+      {
+        "agreement_aperture_m": 5.0,
+        "final_state": "NORMAL",
+        "positions_replaced": 0,
+        "runtime_truth_used": false,
+        "shadow_max_gdop": 4.0,
+        "summary": "output/tokyo3_advanced_online_consensus_fgo_a5_gdop4_two_window_summary.json"
+      }
+    ],
+    "reference_used_by_runtime_selector": false,
+    "staged_integrity_policy": {
+      "audit": "docs/ppc_residual_integrity_external_audit.json",
+      "bounded_output_latency_epochs": 7,
+      "external_policy_active": true,
+      "external_validation_status": "safe_no_false_demotions",
+      "policy": {
+        "base_exonerate_max_nis_per_obs": 0.2,
+        "base_exonerate_max_prefit_rms_m": 0.5,
+        "base_exonerate_min_satellites": 11,
+        "base_low_satellite_ceiling": 11,
+        "base_low_satellite_max_ratio": 15.0,
+        "base_min_satellites": 8,
+        "spike_max_satellites": 14,
+        "spike_prefit_rms_m": 40.0,
+        "streak_epochs": 8,
+        "streak_max_ratio": 15.0,
+        "streak_min_outlier_fraction": 0.5,
+        "streak_min_outliers": 12,
+        "streak_prefit_rms_m": 40.0
+      },
+      "runtime_truth_used": false
+    },
+    "status_demotion": {
+      "low_satellite_ceiling": 11,
+      "low_satellite_max_ratio": 15.0,
+      "min_satellites": 8,
+      "position_trajectory_changed": false,
+      "reference_used": false,
+      "rule": "demote FIX to FLOAT when NumSat is below the minimum, or when NumSat is at/below the low-satellite ceiling and AR ratio is at/below its threshold"
+    },
+    "status_exoneration": {
+      "max_nis_per_observation": 0.2,
+      "max_prefit_rms_m": 0.5,
+      "min_satellites": 11,
+      "overridden_by_kinematic_quarantine": true,
+      "reference_used": false,
+      "rule": "retain a base-gated FIX only when satellite count, prefit RMS, and NIS/observation all pass the strong-telemetry limits"
     },
     "status_labels_preserved_by_position_selectors": true
   },
@@ -24,13 +85,13 @@
       "wrong_fix_rate_pct": 2.488520166666667
     },
     "libgnss": {
-      "correct_fix_ref_pct": 66.878324,
-      "fix_rate_pct": 72.600881,
-      "p95_abs_up_m": 6.713209,
-      "p95_h_m": 4.614866,
-      "ppc_official_score_pct": 74.435344,
-      "ppc_score_3d_50cm_ref_pct": 77.110075,
-      "wrong_fix_rate_pct": 2.992825
+      "correct_fix_ref_pct": 66.286505,
+      "fix_rate_pct": 70.939069,
+      "p95_abs_up_m": 6.660872,
+      "p95_h_m": 4.456766,
+      "ppc_official_score_pct": 74.531569,
+      "ppc_score_3d_50cm_ref_pct": 77.160281,
+      "wrong_fix_rate_pct": 1.463246
     }
   },
   "provenance": {
@@ -40,7 +101,7 @@
     "gici_repository": "https://github.com/inuex35/gici-open",
     "gici_results_dir": null,
     "kaiyodai_paper": "https://www.denshi.e.kaiyodai.ac.jp/wp-content/uploads/pdf/content/2024okada,sasaki,ando.pdf",
-    "lib_matrix": "output\\kf_fgo_min_sat9_ppc_matrix.json",
+    "lib_matrix": "output\\kf_fgo_staged_integrity_full_matrix.json",
     "turing_slides": "https://www.denshi.e.kaiyodai.ac.jp/wp-content/uploads/2025/01/Turing-Inc.-Tight-coupling-Factor-Graph-%E4%BA%95%E4%B8%8A%E6%A7%98-%E5%9C%A7%E7%B8%AE.pdf"
   },
   "runs": [
@@ -58,14 +119,14 @@
       "key": "tokyo_run1",
       "label": "Tokyo 1",
       "libgnss": {
-        "correct_fix_ref_pct": 71.868463,
-        "fix_rate_pct": 83.040559,
+        "correct_fix_ref_pct": 71.466823,
+        "fix_rate_pct": 80.860848,
         "p95_abs_up_m": 3.372768,
         "p95_h_m": 2.081906,
-        "pos": "output/ppc_kf_fgo_min_sat9/tokyo_run1.pos",
-        "ppc_official_score_pct": 78.878774,
-        "ppc_score_3d_50cm_ref_pct": 80.018409,
-        "wrong_fix_rate_pct": 4.873186
+        "pos": "output/ppc_kf_fgo_staged_integrity_full/tokyo_run1.pos",
+        "ppc_official_score_pct": 79.458337,
+        "ppc_score_3d_50cm_ref_pct": 80.286169,
+        "wrong_fix_rate_pct": 2.854868
       }
     },
     {
@@ -82,14 +143,14 @@
       "key": "tokyo_run2",
       "label": "Tokyo 2",
       "libgnss": {
-        "correct_fix_ref_pct": 80.745274,
-        "fix_rate_pct": 83.967239,
+        "correct_fix_ref_pct": 79.827341,
+        "fix_rate_pct": 82.340402,
         "p95_abs_up_m": 1.87324,
         "p95_h_m": 1.603843,
-        "pos": "output/ppc_kf_fgo_min_sat9/tokyo_run2.pos",
-        "ppc_official_score_pct": 88.693805,
-        "ppc_score_3d_50cm_ref_pct": 88.340072,
-        "wrong_fix_rate_pct": 1.269375
+        "pos": "output/ppc_kf_fgo_staged_integrity_full/tokyo_run2.pos",
+        "ppc_official_score_pct": 88.695533,
+        "ppc_score_3d_50cm_ref_pct": 88.394711,
+        "wrong_fix_rate_pct": 0.463278
       }
     },
     {
@@ -106,14 +167,14 @@
       "key": "tokyo_run3",
       "label": "Tokyo 3",
       "libgnss": {
-        "correct_fix_ref_pct": 76.256454,
-        "fix_rate_pct": 79.91877,
+        "correct_fix_ref_pct": 75.962355,
+        "fix_rate_pct": 78.460617,
         "p95_abs_up_m": 2.170366,
         "p95_h_m": 1.670993,
-        "pos": "output/ppc_kf_fgo_min_sat9/tokyo_run3.pos",
+        "pos": "output/ppc_kf_fgo_staged_integrity_full/tokyo_run3.pos",
         "ppc_official_score_pct": 85.968869,
         "ppc_score_3d_50cm_ref_pct": 86.295013,
-        "wrong_fix_rate_pct": 2.790969
+        "wrong_fix_rate_pct": 1.366259
       }
     },
     {
@@ -130,14 +191,14 @@
       "key": "nagoya_run1",
       "label": "Nagoya 1",
       "libgnss": {
-        "correct_fix_ref_pct": 78.721736,
-        "fix_rate_pct": 84.116424,
+        "correct_fix_ref_pct": 78.460332,
+        "fix_rate_pct": 83.659044,
         "p95_abs_up_m": 2.425634,
         "p95_h_m": 1.331778,
-        "pos": "output/ppc_kf_fgo_min_sat9/nagoya_run1.pos",
+        "pos": "output/ppc_kf_fgo_staged_integrity_full/nagoya_run1.pos",
         "ppc_official_score_pct": 65.200926,
         "ppc_score_3d_50cm_ref_pct": 85.844988,
-        "wrong_fix_rate_pct": 0.75795
+        "wrong_fix_rate_pct": 0.54672
       }
     },
     {
@@ -154,14 +215,14 @@
       "key": "nagoya_run2",
       "label": "Nagoya 2",
       "libgnss": {
-        "correct_fix_ref_pct": 48.93662,
-        "fix_rate_pct": 57.129106,
-        "p95_abs_up_m": 27.246268,
-        "p95_h_m": 19.092497,
-        "pos": "output/ppc_kf_fgo_min_sat9/nagoya_run2.pos",
-        "ppc_official_score_pct": 55.533437,
-        "ppc_score_3d_50cm_ref_pct": 60.80838,
-        "wrong_fix_rate_pct": 2.590564
+        "correct_fix_ref_pct": 48.587451,
+        "fix_rate_pct": 55.552882,
+        "p95_abs_up_m": 26.932248,
+        "p95_h_m": 18.1439,
+        "pos": "output/ppc_kf_fgo_staged_integrity_full/nagoya_run2.pos",
+        "ppc_official_score_pct": 55.529496,
+        "ppc_score_3d_50cm_ref_pct": 60.787218,
+        "wrong_fix_rate_pct": 0.541477
       }
     },
     {
@@ -178,21 +239,21 @@
       "key": "nagoya_run3",
       "label": "Nagoya 3",
       "libgnss": {
-        "correct_fix_ref_pct": 44.741396,
-        "fix_rate_pct": 47.433186,
+        "correct_fix_ref_pct": 43.414728,
+        "fix_rate_pct": 44.760623,
         "p95_abs_up_m": 3.190975,
         "p95_h_m": 1.908178,
-        "pos": "output/ppc_kf_fgo_min_sat9/nagoya_run3.pos",
+        "pos": "output/ppc_kf_fgo_staged_integrity_full/nagoya_run3.pos",
         "ppc_official_score_pct": 72.336255,
         "ppc_score_3d_50cm_ref_pct": 61.353586,
-        "wrong_fix_rate_pct": 5.674909
+        "wrong_fix_rate_pct": 3.006873
       }
     }
   ],
   "schema_version": 1,
   "targets": [
     {
-      "achieved_pct": 83.040559,
+      "achieved_pct": 80.860848,
       "key": "tokyo1_fix",
       "label": "Tokyo 1 FIX",
       "profile": "six-course selected matrix",
@@ -208,12 +269,12 @@
       "wrong_fix_rate_pct": 0.912712
     },
     {
-      "achieved_pct": 78.716546,
+      "achieved_pct": 78.845491,
       "key": "ppc_official",
       "label": "PPC official",
       "profile": "distance-weighted six-course selected matrix",
       "target_pct": 78.7
     }
   ],
-  "weighted_official_score_pct": 78.716546
+  "weighted_official_score_pct": 78.845491
 }

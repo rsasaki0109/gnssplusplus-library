@@ -322,6 +322,13 @@ PositionSolution RTKProcessor::processEpoch(const ObservationData& rover_obs, co
 void RTKProcessor::reset() {
     filter_initialized_ = false;
     debug_telemetry_ = EpochDebugTelemetry{};
+    debug_telemetry_.prior_held_integer_count = static_cast<int>(last_dd_fixed_.size());
+    debug_telemetry_.prior_held_pair_count = static_cast<int>(last_best_subset_.size());
+    debug_telemetry_.prior_consecutive_fix_count = consecutive_fix_count_;
+    debug_telemetry_.prior_tracked_ambiguity_count =
+        static_cast<int>(lock_count_l1_.size() +
+                         lock_count_l2_.size() +
+                         lock_count_l5_.size());
     filter_state_ = RTKState{};
     filter_state_.next_state_idx = REAL_STATES + IONO_STATES;
     ambiguity_states_.clear();
@@ -339,6 +346,7 @@ void RTKProcessor::reset() {
     has_last_trusted_time_ = false;
     has_prev_trusted_position_ = false;
     has_last_doppler_velocity_ = false;
+    has_doppler_continuity_position_ = false;
     current_epoch_nlos_fraction_ = std::numeric_limits<double>::quiet_NaN();
     current_sat_data_.clear();
     gf_l1l2_history_.clear();
@@ -365,6 +373,7 @@ void RTKProcessor::reset() {
     consecutive_float_count_ = 0;
     consecutive_nonfix_count_ = 0;
     consecutive_high_float_residual_count_ = 0;
+    consecutive_high_fixed_residual_count_ = 0;
     adaptive_dynamic_slip_hold_count_ = 0;
     last_ar_ratio_ = 0.0;
     last_num_fixed_ambiguities_ = 0;
@@ -1572,11 +1581,13 @@ void RTKProcessor::handleConsecutiveFloatReset(const ObservationData& rover_obs,
 }
 
 void RTKProcessor::resetAmbiguityStatesForReacquisition(const ObservationData& rover_obs,
-                                                        const NavigationData& nav) {
+                                                        const NavigationData& nav,
+                                                        bool clear_hold_state) {
     if (!filter_initialized_) {
         consecutive_float_count_ = 0;
         consecutive_nonfix_count_ = 0;
         consecutive_high_float_residual_count_ = 0;
+        consecutive_high_fixed_residual_count_ = 0;
         adaptive_dynamic_slip_hold_count_ = 0;
         return;
     }
@@ -1596,11 +1607,45 @@ void RTKProcessor::resetAmbiguityStatesForReacquisition(const ObservationData& r
     }
     // Also reset position to SPP to prevent baseline drift.
     resetPositionToSPP(rover_obs, nav);
-    // DO NOT clear held DD integers (last_dd_fixed_, last_dd_pairs_,
-    // last_best_subset_) — they enable hold fix after reset.
+    if (clear_hold_state) {
+        restoreHoldState(HoldStateSnapshot{});
+    }
+    // Ordinary FLOAT resets retain held DD integers for hold fix. A
+    // wrong-basin FIX reset explicitly clears them above.
     consecutive_float_count_ = 0;
     consecutive_nonfix_count_ = 0;
     consecutive_high_float_residual_count_ = 0;
+    consecutive_high_fixed_residual_count_ = 0;
+}
+
+bool RTKProcessor::shouldResetAfterFixedResidualGate() {
+    const double max_prefit_rms = rtk_config_.max_fixed_prefit_residual_rms_m;
+    const int min_outliers = rtk_config_.min_fixed_prefit_outliers;
+    const bool enabled = std::isfinite(max_prefit_rms) && max_prefit_rms > 0.0 &&
+                         min_outliers > 0;
+    const bool exceeded =
+        enabled && std::isfinite(current_update_diagnostics_.prefit_residual_rms_m) &&
+        current_update_diagnostics_.prefit_residual_rms_m > max_prefit_rms &&
+        current_update_diagnostics_.suppressed_outliers >= min_outliers;
+    const double max_covariance_trace =
+        rtk_config_.max_fixed_overconfidence_covariance_trace_m2;
+    const bool covariance_passes =
+        !(std::isfinite(max_covariance_trace) && max_covariance_trace > 0.0) ||
+        (std::isfinite(debug_telemetry_.float_position_covariance_trace_m2) &&
+         debug_telemetry_.float_position_covariance_trace_m2 <= max_covariance_trace);
+    if (!exceeded || !covariance_passes) {
+        consecutive_high_fixed_residual_count_ = 0;
+        return false;
+    }
+    ++consecutive_high_fixed_residual_count_;
+    if (consecutive_high_fixed_residual_count_ <
+        std::max(1, rtk_config_.fixed_prefit_reset_streak)) {
+        return false;
+    }
+    if (!rtk_config_.fixed_prefit_quarantine_only) {
+        consecutive_high_fixed_residual_count_ = 0;
+    }
+    return true;
 }
 
 bool RTKProcessor::floatResidualExceedsReacquisitionGate() const {
@@ -1681,6 +1726,7 @@ void RTKProcessor::recordFixedEpoch() {
 }
 
 void RTKProcessor::recordFloatEpoch(const ObservationData& rover_obs, const NavigationData& nav) {
+    consecutive_high_fixed_residual_count_ = 0;
     consecutive_float_count_++;
     consecutive_nonfix_count_++;
     if (rtk_config_.max_consecutive_nonfix_for_reset <= 0 ||
@@ -1695,6 +1741,7 @@ void RTKProcessor::recordFallbackEpoch(const ObservationData& rover_obs, const N
     consecutive_fix_count_ = 0;
     consecutive_float_count_ = 0;
     consecutive_high_float_residual_count_ = 0;
+    consecutive_high_fixed_residual_count_ = 0;
     if (!filter_initialized_) {
         consecutive_nonfix_count_ = 0;
         return;
@@ -1953,6 +2000,19 @@ void RTKProcessor::resetPositionToSPP(const ObservationData& rover_obs, const Na
 // ============================================================
 PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
     const ObservationData& base_obs, const NavigationData& nav) {
+    if (rtk_config_.max_fixed_doppler_consensus_m > 0.0 &&
+        has_doppler_continuity_position_ && has_last_doppler_velocity_) {
+        const double dt = rover_obs.time - doppler_continuity_time_;
+        const double velocity_age = rover_obs.time - last_doppler_velocity_time_;
+        if (std::isfinite(dt) && dt > 0.0 && dt <= 2.0 &&
+            std::isfinite(velocity_age) && velocity_age >= 0.0 && velocity_age <= 2.0 &&
+            last_doppler_velocity_ecef_.allFinite()) {
+            doppler_continuity_position_ecef_ += last_doppler_velocity_ecef_ * dt;
+            doppler_continuity_time_ = rover_obs.time;
+        } else if (!std::isfinite(dt) || dt < 0.0 || dt > 2.0) {
+            has_doppler_continuity_position_ = false;
+        }
+    }
     PositionSolution solution = processRTKEpochInternal(rover_obs, base_obs, nav);
 
     // Doppler-derived velocity: SPPProcessor now populates has_velocity on
@@ -1963,9 +2023,15 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
     // SPP-style Doppler LS directly on the rover observations here -- no
     // dependency on RTK's DD/ambiguity state, just broadcast ephemeris +
     // Doppler, per docs/design.md.
-    if (solution.isValid() && !solution.has_velocity) {
+    if (solution.isValid() &&
+        (!solution.has_velocity || rtk_config_.max_fixed_doppler_consensus_m > 0.0)) {
+        const Vector3d velocity_linearization_position =
+            rtk_config_.max_fixed_doppler_consensus_m > 0.0 &&
+                    has_doppler_continuity_position_
+                ? doppler_continuity_position_ecef_
+                : solution.position_ecef;
         const auto velocity_result = spp_velocity::solveVelocityFromObservations(
-            rover_obs, nav, solution.position_ecef, doppler_velocity_sigma_mps_);
+            rover_obs, nav, velocity_linearization_position, doppler_velocity_sigma_mps_);
         if (velocity_result.ok) {
             solution.velocity_ecef = velocity_result.velocity_ecef;
             solution.velocity_covariance = velocity_result.velocity_covariance;
@@ -1978,6 +2044,16 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
         last_doppler_velocity_ecef_ = solution.velocity_ecef;
         last_doppler_velocity_time_ = rover_obs.time;
         has_last_doppler_velocity_ = true;
+    }
+
+    if (rtk_config_.max_fixed_doppler_consensus_m > 0.0 &&
+        solution.status == SolutionStatus::FIXED && solution.position_ecef.allFinite()) {
+        // Only a candidate that already passed the independent consensus gate
+        // may re-anchor the track. This bounds integration drift without letting
+        // a rejected RTK basin contaminate the Doppler continuity state.
+        doppler_continuity_position_ecef_ = solution.position_ecef;
+        doppler_continuity_time_ = rover_obs.time;
+        has_doppler_continuity_position_ = true;
     }
 
     return solution;
@@ -2005,6 +2081,7 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
             consecutive_float_count_ = 0;
             consecutive_nonfix_count_ = 0;
             consecutive_high_float_residual_count_ = 0;
+            consecutive_high_fixed_residual_count_ = 0;
             adaptive_dynamic_slip_hold_count_ = 0;
             return spp;
         }
@@ -2213,6 +2290,24 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
             }
 
             const auto saved_hold_state = captureHoldState();
+            bool forced_fixed_reacquisition_reset = false;
+            bool fixed_prefit_quarantine = false;
+            auto emitReacquisitionFloat = [&]() {
+                debug_telemetry_.post_validation_rejected = true;
+                debug_telemetry_.reject_reason = "fixed_prefit_wrong_basin";
+                has_fixed_solution_ = false;
+                restoreHoldState(saved_hold_state);
+                restoreRememberedState();
+                solution = float_solution;
+                updateStatistics(SolutionStatus::FLOAT);
+                consecutive_fix_count_ = 0;
+                resetAmbiguityStatesForReacquisition(rover_obs, nav, true);
+                has_last_fixed_position_ = false;
+                has_last_fixed_time_ = false;
+                has_last_trusted_position_ = false;
+                has_last_trusted_time_ = false;
+                forced_fixed_reacquisition_reset = true;
+            };
             has_fixed_solution_ = false;
             struct ARCandidate {
                 bool valid = false;
@@ -2370,6 +2465,16 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                         has_last_trusted_position_ = saved_has_last_trusted;
                         last_trusted_time_ = saved_last_trusted_time;
                         has_last_trusted_time_ = saved_has_last_trusted_time;
+                    } else if (!moving_base_mode && shouldResetAfterFixedResidualGate()) {
+                        if (rtk_config_.fixed_prefit_quarantine_only) {
+                            debug_telemetry_.post_validation_rejected = true;
+                            debug_telemetry_.reject_reason = "fixed_prefit_quarantine";
+                            has_fixed_solution_ = false;
+                            restoreRememberedState();
+                            fixed_prefit_quarantine = true;
+                        } else {
+                            emitReacquisitionFloat();
+                        }
                     } else {
                         updateStatistics(SolutionStatus::FIXED);
                         consecutive_fix_count_++;
@@ -2408,6 +2513,8 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
 
             if (!moving_base_mode &&
                 !applied_fix_solution &&
+                !forced_fixed_reacquisition_reset &&
+                !fixed_prefit_quarantine &&
                 rtk_config_.ar_policy != RTKConfig::ARPolicy::DEMO5_CONTINUOUS &&
                 rtk_validation::canAttemptHoldFix(consecutive_fix_count_,
                                                   rtk_config_.min_hold_count,
@@ -2415,20 +2522,25 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                                                   saved_hold_state.hasHeldIntegers())) {
                 restoreHoldState(saved_hold_state);
                 if (tryHoldFix(sat_data, rover_obs.time, n_sats, solution)) {
-                    updateStatistics(SolutionStatus::FIXED);
-                    consecutive_fix_count_++;
-                    consecutive_float_count_ = 0;
-                    recordFixedEpoch();
-                    debug_telemetry_.final_fixed_applied = true;
-                    if (consecutive_fix_count_ >= rtk_config_.min_hold_count) {
-                        applyHoldAmbiguity();
+                    if (shouldResetAfterFixedResidualGate()) {
+                        emitReacquisitionFloat();
+                    } else {
+                        updateStatistics(SolutionStatus::FIXED);
+                        consecutive_fix_count_++;
+                        consecutive_float_count_ = 0;
+                        recordFixedEpoch();
+                        debug_telemetry_.final_fixed_applied = true;
+                        if (consecutive_fix_count_ >= rtk_config_.min_hold_count) {
+                            applyHoldAmbiguity();
+                        }
+                        applied_fix_solution = true;
                     }
-                    applied_fix_solution = true;
                 }
             }
 
-            if (!applied_fix_solution) {
-                restoreHoldState(saved_hold_state);
+            if (!applied_fix_solution && !forced_fixed_reacquisition_reset) {
+                restoreHoldState(
+                    fixed_prefit_quarantine ? HoldStateSnapshot{} : saved_hold_state);
                 solution = float_solution;
                 const bool reset_after_high_float =
                     !moving_base_mode &&
@@ -2448,6 +2560,10 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                     resetAmbiguityStatesForReacquisition(rover_obs, nav);
                 } else {
                     recordFloatEpoch(rover_obs, nav);
+                    if (fixed_prefit_quarantine) {
+                        consecutive_high_fixed_residual_count_ = std::max(
+                            1, rtk_config_.fixed_prefit_reset_streak);
+                    }
                 }
             }
         } else {
@@ -2461,6 +2577,7 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
         consecutive_float_count_ = 0;
         consecutive_nonfix_count_ = 0;
         consecutive_high_float_residual_count_ = 0;
+        consecutive_high_fixed_residual_count_ = 0;
         adaptive_dynamic_slip_hold_count_ = 0;
         return spp;
     }
@@ -3609,6 +3726,18 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
     debug_telemetry_.selected_distinct_frequencies = selected_diversity.distinct_frequencies;
     debug_telemetry_.selected_dual_frequency_sats = selected_diversity.dual_frequency_sats;
     debug_telemetry_.selected_used_subset = best_candidate.subset.size() < static_cast<size_t>(nb);
+    std::set<SatelliteId> selected_references;
+    for (const int index : best_candidate.subset) {
+        if (index >= 0 && index < static_cast<int>(dd_pairs.size())) {
+            selected_references.insert(dd_pairs[static_cast<size_t>(index)].ref_sat);
+        }
+    }
+    for (const auto& reference : selected_references) {
+        if (!debug_telemetry_.selected_reference_satellites.empty()) {
+            debug_telemetry_.selected_reference_satellites += ';';
+        }
+        debug_telemetry_.selected_reference_satellites += reference.toString();
+    }
     if (!fixed) {
         debug_telemetry_.selected_fixed = false;
         if (debug_telemetry_.reject_reason.empty()) {
@@ -4000,22 +4129,53 @@ bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteDa
         std::isfinite(current_time - last_fixed_time_);
     const double fixed_jump_dt =
         has_fixed_jump_dt ? current_time - last_fixed_time_ : 0.0;
+    const bool fixed_anchor_usable = rtk_validation::fixedAnchorUsable(
+        has_last_fixed_position_,
+        has_last_fixed_time_,
+        fixed_jump_dt,
+        rtk_config_.max_fixed_anchor_age_s);
+    const bool fixed_residual_overconfidence_suspect =
+        rtk_config_.max_fixed_prefit_residual_rms_m > 0.0 &&
+        rtk_config_.min_fixed_prefit_outliers > 0 &&
+        current_update_diagnostics_.prefit_residual_rms_m >
+            rtk_config_.max_fixed_prefit_residual_rms_m &&
+        current_update_diagnostics_.suppressed_outliers >=
+            rtk_config_.min_fixed_prefit_outliers &&
+        rtk_config_.max_fixed_overconfidence_covariance_trace_m2 > 0.0 &&
+        debug_telemetry_.float_position_covariance_trace_m2 <=
+            rtk_config_.max_fixed_overconfidence_covariance_trace_m2;
+    const bool require_doppler_consensus =
+        !fixed_anchor_usable || fixed_residual_overconfidence_suspect;
+    if (!isMovingBasePositionMode(rtk_config_) &&
+        rtk_config_.max_fixed_doppler_consensus_m > 0.0 &&
+        require_doppler_consensus &&
+        has_doppler_continuity_position_) {
+        const double consensus_distance =
+            (new_pos - doppler_continuity_position_ecef_).norm();
+        debug_telemetry_.fixed_candidate_doppler_consensus_distance_m =
+            consensus_distance;
+        if (!std::isfinite(consensus_distance) ||
+            consensus_distance > rtk_config_.max_fixed_doppler_consensus_m) {
+            debug_telemetry_.reject_reason = "fixed_doppler_consensus";
+            return false;
+        }
+    }
     const bool use_adaptive_position_jump =
         rtk_config_.max_position_jump_rate_mps > 0.0 &&
-        has_last_fixed_position_ &&
+        fixed_anchor_usable &&
         has_fixed_jump_dt;
     if (!isMovingBasePositionMode(rtk_config_) &&
         !use_adaptive_position_jump &&
         rtk_validation::exceedsFixHistoryJump(
             new_pos,
             last_fixed_position_,
-            has_last_fixed_position_,
+            fixed_anchor_usable,
             rtk_config_.position_mode == RTKConfig::PositionMode::STATIC,
             consecutive_fix_count_)) {
         debug_telemetry_.reject_reason = "fix_history_jump";
         return false;
     }
-    if (!isMovingBasePositionMode(rtk_config_) && has_last_fixed_position_) {
+    if (!isMovingBasePositionMode(rtk_config_) && fixed_anchor_usable) {
         double position_jump_limit = rtk_config_.max_position_jump_m;
         if (use_adaptive_position_jump) {
             const double adaptive_limit = rtk_validation::adaptiveJumpLimit(

@@ -55,6 +55,14 @@ TEST(RTKValidationTest, FixHistoryJumpAllowsEarlyReacquisitionButRejectsLaterJum
         Eigen::Vector3d(0.11, 0.0, 0.0), previous_fix, true, true, 3));
 }
 
+TEST(RTKValidationTest, FixedAnchorExpiryDisablesStaleJumpReference) {
+    EXPECT_TRUE(rtk_validation::fixedAnchorUsable(true, true, 20.0, 0.0));
+    EXPECT_TRUE(rtk_validation::fixedAnchorUsable(true, true, 4.9, 5.0));
+    EXPECT_FALSE(rtk_validation::fixedAnchorUsable(true, true, 5.1, 5.0));
+    EXPECT_FALSE(rtk_validation::fixedAnchorUsable(true, false, 0.0, 5.0));
+    EXPECT_FALSE(rtk_validation::fixedAnchorUsable(false, true, 0.0, 5.0));
+}
+
 TEST(RTKValidationTest, HoldAttemptRequiresStableHistoryAndHeldIntegers) {
     EXPECT_FALSE(rtk_validation::canAttemptHoldFix(4, 5, true, true));
     EXPECT_FALSE(rtk_validation::canAttemptHoldFix(5, 5, false, true));

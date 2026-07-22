@@ -44,6 +44,7 @@ if(GTest_FOUND)
         test_rtk_cp_pr_gate.cpp
         test_rtk_ddpr_anchor.cpp
         test_rtk_validation.cpp
+        test_integrity_consensus.cpp
         test_fgo.cpp
         test_signal_policy.cpp
         test_types.cpp
@@ -134,6 +135,14 @@ if(GTest_FOUND)
     add_test(
         NAME python_benchmark_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_benchmark_scripts.py
+    )
+    add_test(
+        NAME python_ppc_integrity_policy_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_ppc_integrity_policy_ci.py
+    )
+    add_test(
+        NAME python_ppc_goal_completion_audit_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/verify_ppc_goal_completion.py --check-only
     )
     add_test(
         NAME python_cli_tests
@@ -364,6 +373,8 @@ if(GTest_FOUND)
 
     set(GNSSPP_CORE_TESTS
         run_tests
+        python_ppc_integrity_policy_tests
+        python_ppc_goal_completion_audit_tests
         python_artifact_manifest_contract_validator_tests
         python_artifact_manifest_ux_tests
         python_clas_a4b_native_selfdiff_tests

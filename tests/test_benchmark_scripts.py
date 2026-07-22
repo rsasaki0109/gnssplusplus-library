@@ -65,6 +65,7 @@ import analyze_ppc_residual_reset_sweep as ppc_residual_reset_sweep  # noqa: E40
 import analyze_ppc_segment_selector_leave_one_run_out as ppc_segment_selector_loo  # noqa: E402
 import analyze_ppc_segment_selector_sweep as ppc_segment_selector_sweep  # noqa: E402
 import apply_ppc_dual_profile_selector as ppc_dual_profile_selector  # noqa: E402
+import apply_ppc_integrity_consensus as ppc_integrity_consensus  # noqa: E402
 import generate_ppc_rtk_scorecard as ppc_rtk_scorecard  # noqa: E402
 import generate_ppc_goal_scorecard as ppc_goal_scorecard  # noqa: E402
 import plot_ppc_status_trajectories as ppc_status_trajectories  # noqa: E402
@@ -85,6 +86,8 @@ import run_ppc_ratio_gating_selector_sweep as ppc_ratio_gating_sweep  # noqa: E4
 import run_ppc_realtime_guard_sweep as ppc_realtime_guard_sweep  # noqa: E402
 import run_clas_mrtklib_v051 as clas_v051_runner  # noqa: E402
 import fuse_kf_fgo_alignment as kf_fgo_alignment  # noqa: E402
+import evaluate_ppc_fgo_shadow_authority as fgo_shadow_authority  # noqa: E402
+import apply_ppc_fgo_position_consensus as fgo_position_consensus  # noqa: E402
 import summarize_fgo_ppc_matrix as fgo_ppc_matrix  # noqa: E402
 import bridge_pos_fixed_anchors as fixed_anchor_bridge  # noqa: E402
 import smooth_pos_float_horizontal as float_horizontal_smoother  # noqa: E402
@@ -135,6 +138,32 @@ class PPCGoalScorecardTest(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            consensus_path = root / "consensus.json"
+            consensus_path.write_text(
+                json.dumps(
+                    {
+                        "runtime_truth_used": False,
+                        "positions_replaced": 0,
+                        "agreement_aperture_m": 5.0,
+                        "shadow_max_gdop": 4.0,
+                        "final_state": "NORMAL",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            integrity_path = root / "integrity.json"
+            integrity_path.write_text(
+                json.dumps(
+                    {
+                        "policy": {"streak_prefit_rms_m": 40.0},
+                        "reference_truth_used_by_runtime_policy": False,
+                        "bounded_output_latency_epochs": 7,
+                        "external_validation_status": "safe_no_false_demotions",
+                        "external_policy_active": True,
+                    }
+                ),
+                encoding="utf-8",
+            )
             args = argparse.Namespace(
                 lib_matrix=matrix_path,
                 gici_matrix=None,
@@ -145,6 +174,10 @@ class PPCGoalScorecardTest(unittest.TestCase):
                 targets_png=root / "targets.png",
                 gici_commit="deadbeef",
                 status_demotion_min_satellites=9,
+                status_demotion_low_satellite_ceiling=11,
+                status_demotion_low_satellite_max_ratio=15.0,
+                online_consensus_summary=[consensus_path],
+                staged_integrity_audit=integrity_path,
             )
 
             payload = ppc_goal_scorecard.build_payload(args)
@@ -158,8 +191,21 @@ class PPCGoalScorecardTest(unittest.TestCase):
             self.assertEqual(
                 payload["evaluation"]["status_demotion"]["min_satellites"], 9
             )
+            self.assertEqual(
+                payload["evaluation"]["status_demotion"]["low_satellite_ceiling"], 11
+            )
             self.assertFalse(
                 payload["evaluation"]["status_demotion"]["reference_used"]
+            )
+            consensus = payload["evaluation"]["online_consensus_replays"][0]
+            self.assertFalse(consensus["runtime_truth_used"])
+            self.assertEqual(consensus["positions_replaced"], 0)
+            self.assertEqual(consensus["final_state"], "NORMAL")
+            staged = payload["evaluation"]["staged_integrity_policy"]
+            self.assertFalse(staged["runtime_truth_used"])
+            self.assertTrue(staged["external_policy_active"])
+            self.assertEqual(
+                staged["external_validation_status"], "safe_no_false_demotions"
             )
 
 
@@ -929,6 +975,11 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
                 "demote_fixed_status_post_rms": 3.0,
                 "demote_fixed_status_gate_ratio": 6.0,
                 "demote_fixed_status_min_satellites": 9,
+                "demote_fixed_status_low_satellite_ceiling": 11,
+                "demote_fixed_status_low_satellite_max_ratio": 15.0,
+                "max_fixed_prefit_rms": 12.0,
+                "min_fixed_prefit_outliers": 45,
+                "fixed_prefit_reset_streak": 1,
                 "min_demote_fixed_status_baseline": 500.0,
                 "max_demote_fixed_status_baseline": 9500.0,
                 "rtk_snr_weighting": True,
@@ -1029,6 +1080,15 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
             self.assertIn("6.0", command)
             self.assertIn("--demote-fixed-status-min-satellites", command)
             self.assertIn("9", command)
+            self.assertIn("--demote-fixed-status-low-satellite-ceiling", command)
+            self.assertIn("11", command)
+            self.assertIn("--demote-fixed-status-low-satellite-max-ratio", command)
+            self.assertIn("15.0", command)
+            self.assertIn("--max-fixed-prefit-rms", command)
+            self.assertIn("12.0", command)
+            self.assertIn("--min-fixed-prefit-outliers", command)
+            self.assertIn("45", command)
+            self.assertIn("--fixed-prefit-reset-streak", command)
             self.assertIn("--min-demote-fixed-status-baseline", command)
             self.assertIn("500.0", command)
             self.assertIn("--max-demote-fixed-status-baseline", command)
@@ -1333,6 +1393,8 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                 max_subset_ar_drop_steps=18,
                 max_hold_div=5.0,
                 max_pos_jump=20.0,
+                max_fixed_anchor_age=30.0,
+                max_fixed_doppler_consensus=10.0,
                 max_pos_jump_min=20.0,
                 max_pos_jump_rate=25.0,
                 max_float_spp_div=30.0,
@@ -1353,6 +1415,10 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                 max_fixed_update_secondary_gate_baseline=2500.0,
                 min_fixed_update_secondary_gate_speed=7.0,
                 max_fixed_update_secondary_gate_speed=15.0,
+                max_fixed_prefit_rms=10.0,
+                min_fixed_prefit_outliers=35,
+                max_fixed_overconfidence_cov_trace=0.01,
+                fixed_prefit_reset_streak=2,
                 rtk_snr_weighting=True,
                 rtk_snr_reference_dbhz=44.0,
                 rtk_snr_max_variance_scale=16.0,
@@ -1417,6 +1483,10 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertIn("5.0", command)
             self.assertIn("--max-pos-jump", command)
             self.assertIn("20.0", command)
+            self.assertIn("--max-fixed-anchor-age", command)
+            self.assertIn("30.0", command)
+            self.assertIn("--max-fixed-doppler-consensus", command)
+            self.assertIn("10.0", command)
             self.assertIn("--max-pos-jump-min", command)
             self.assertIn("20.0", command)
             self.assertIn("--max-pos-jump-rate", command)
@@ -1433,6 +1503,11 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertIn("8.0", command)
             self.assertIn("--max-update-nis-per-obs", command)
             self.assertIn("12.0", command)
+            self.assertIn("--max-fixed-prefit-rms", command)
+            self.assertIn("--min-fixed-prefit-outliers", command)
+            self.assertIn("--max-fixed-overconfidence-cov-trace", command)
+            self.assertIn("0.01", command)
+            self.assertIn("--fixed-prefit-reset-streak", command)
             self.assertIn("--max-fixed-update-nis-per-obs", command)
             self.assertIn("10.0", command)
             self.assertIn("--max-fixed-update-post-rms", command)
@@ -3661,6 +3736,91 @@ class VelocityFixedAnchorBridgeTest(unittest.TestCase):
 
 
 class CandidateQualityPositionSelectorTest(unittest.TestCase):
+    def test_can_gate_on_baseline_wrong_basin_telemetry_and_replace_status(self) -> None:
+        origin = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        candidate_ecef = origin + np.asarray([1.0, 0.0, 0.0])
+        lat, lon, height = ppc_metrics.llh_from_ecef(*candidate_ecef)
+        baseline = [
+            comparison.SolutionEpoch(
+                2300,
+                0.0,
+                35.0,
+                139.0,
+                50.0,
+                origin,
+                4,
+                20,
+                ratio=30.0,
+                rtk_update_suppressed_outliers=45,
+                rtk_update_prefit_residual_rms_m=8.1,
+            )
+        ]
+        candidate = [
+            comparison.SolutionEpoch(
+                2300, 0.0, lat, lon, height, candidate_ecef, 3, 0, ratio=0.0
+            )
+        ]
+        args = argparse.Namespace(
+            match_tolerance_s=0.11,
+            candidate_status=3,
+            candidate_min_ratio=0.0,
+            candidate_min_satellites=0,
+            candidate_max_post_rms_m=0.0,
+            candidate_max_nis_per_observation=0.0,
+            baseline_min_prefit_rms_m=8.0,
+            baseline_min_outliers=45,
+            min_position_separation_m=0.5,
+            max_position_separation_m=0.0,
+            replace_status=True,
+        )
+
+        selected, summary = candidate_quality_selector.select_candidate_positions(
+            baseline, candidate, args
+        )
+
+        np.testing.assert_allclose(selected[0].ecef, candidate_ecef)
+        self.assertEqual(selected[0].status, 3)
+
+    def test_can_select_low_confidence_consensus_escape_and_force_float(self) -> None:
+        origin = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        candidate_ecef = origin + np.asarray([6.0, 0.0, 0.0])
+        lat, lon, height = ppc_metrics.llh_from_ecef(*candidate_ecef)
+        baseline = comparison.SolutionEpoch(
+            2300, 100.0, 35.0, 139.0, 50.0, origin, 4, 19, ratio=6.0
+        )
+        candidate = comparison.SolutionEpoch(
+            2300, 100.0, lat, lon, height, candidate_ecef, 4, 19, ratio=2.0
+        )
+        args = argparse.Namespace(
+            match_tolerance_s=0.11,
+            candidate_status=4,
+            candidate_min_ratio=2.0,
+            candidate_max_ratio=2.0,
+            candidate_min_satellites=12,
+            candidate_max_post_rms_m=0.0,
+            candidate_max_nis_per_observation=0.0,
+            baseline_min_prefit_rms_m=0.0,
+            baseline_min_outliers=0,
+            baseline_min_satellites=19,
+            replace_status=False,
+            replacement_status=3,
+            min_position_separation_m=5.0,
+            max_position_separation_m=0.0,
+        )
+
+        selected, summary = candidate_quality_selector.select_candidate_positions(
+            [baseline], [candidate], args
+        )
+
+        self.assertEqual(summary["selected_candidate_positions"], 1)
+        self.assertEqual(summary["candidate_max_ratio"], 2.0)
+        self.assertEqual(summary["baseline_min_satellites"], 19)
+        self.assertEqual(summary["replacement_status"], 3)
+        self.assertEqual(selected[0].status, 3)
+        np.testing.assert_allclose(selected[0].ecef, candidate.ecef)
+        self.assertFalse(summary["preserved_baseline_status"])
+        self.assertTrue(summary["preserved_baseline_telemetry"])
+
     def test_selects_position_only_when_all_quality_gates_pass(self) -> None:
         origin = comparison.llh_to_ecef(35.0, 139.0, 50.0)
         seed = comparison.SolutionEpoch(2300, 0.0, 35.0, 139.0, 50.0, origin, 3, 10)
@@ -3713,6 +3873,228 @@ class CandidateQualityPositionSelectorTest(unittest.TestCase):
         self.assertFalse(summary["reference_truth_used"])
 
 
+class FgoPositionConsensusTest(unittest.TestCase):
+    def test_two_fixed_shadows_replace_position_without_changing_status(self) -> None:
+        origin = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        primary_ecef = origin + np.asarray([1.0, 0.0, 0.0])
+        lat, lon, height = ppc_metrics.llh_from_ecef(*primary_ecef)
+        primary = [
+            comparison.SolutionEpoch(
+                week=2300,
+                tow=1.0,
+                lat_deg=lat,
+                lon_deg=lon,
+                height_m=height,
+                ecef=primary_ecef,
+                status=4,
+                num_satellites=12,
+                ratio=25.0,
+            )
+        ]
+        tracks = [
+            {
+                1.0: fgo_position_consensus.TrackEpoch(
+                    sample=ppc_integrity_consensus.ShadowEpoch(
+                        tow=1.0,
+                        ecef=origin + np.asarray([offset, 0.0, 0.0]),
+                        status="FIXED",
+                        gdop=2.0,
+                        ddpr_rms_m=1.0,
+                        nsat=10,
+                    ),
+                    age_epochs=10,
+                )
+            }
+            for offset in (0.0, 0.1)
+        ]
+        args = argparse.Namespace(
+            min_independent_shadows=2,
+            shadow_agreement_aperture_m=0.25,
+            primary_separation_min_m=0.5,
+            fresh_shadow_max_age_epochs=100,
+            candidate_max_prediction_error_m=0.0,
+            shadow_max_gdop=0.0,
+            shadow_max_ddpr_rms_m=0.0,
+            shadow_min_satellites=0,
+        )
+
+        output, summary, ledger = fgo_position_consensus.apply_position_consensus(
+            primary, tracks, args
+        )
+
+        np.testing.assert_allclose(output[0].ecef, origin + np.asarray([0.05, 0.0, 0.0]))
+        self.assertEqual(output[0].status, 4)
+        self.assertEqual(output[0].ratio, 25.0)
+        self.assertEqual(summary["positions_replaced"], 1)
+        self.assertEqual(summary["statuses_changed"], 0)
+        self.assertFalse(summary["runtime_truth_used"])
+        self.assertEqual(len(ledger), 1)
+
+        args.fresh_shadow_max_age_epochs = 5
+        stale_output, stale_summary, _ = (
+            fgo_position_consensus.apply_position_consensus(primary, tracks, args)
+        )
+        np.testing.assert_array_equal(stale_output[0].ecef, primary_ecef)
+        self.assertEqual(stale_summary["positions_replaced"], 0)
+
+    def test_equal_size_disagreeing_shadow_clusters_are_ambiguous(self) -> None:
+        samples = [
+            (
+                index,
+                fgo_position_consensus.TrackEpoch(
+                    sample=ppc_integrity_consensus.ShadowEpoch(
+                        tow=1.0,
+                        ecef=np.asarray([offset, 0.0, 0.0]),
+                        status="FIXED",
+                        gdop=2.0,
+                        ddpr_rms_m=1.0,
+                        nsat=10,
+                    ),
+                    age_epochs=10,
+                ),
+            )
+            for index, offset in enumerate((0.0, 0.1, 10.0, 10.1))
+        ]
+
+        cluster, _, ambiguous = fgo_position_consensus.select_unique_consensus(
+            samples, 2, 0.25
+        )
+
+        self.assertIsNone(cluster)
+        self.assertTrue(ambiguous)
+
+    def test_prediction_gate_rejects_a_consensus_position_jump(self) -> None:
+        origin = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        lat, lon, height = ppc_metrics.llh_from_ecef(*origin)
+        primary = [
+            comparison.SolutionEpoch(
+                week=2300,
+                tow=float(index),
+                lat_deg=lat,
+                lon_deg=lon,
+                height_m=height,
+                ecef=origin.copy(),
+                status=4,
+                num_satellites=12,
+            )
+            for index in range(3)
+        ]
+        jump = origin + np.asarray([10.0, 0.0, 0.0])
+        tracks = [
+            {
+                2.0: fgo_position_consensus.TrackEpoch(
+                    sample=ppc_integrity_consensus.ShadowEpoch(
+                        tow=2.0,
+                        ecef=jump + np.asarray([offset, 0.0, 0.0]),
+                        status="FIXED",
+                        gdop=2.0,
+                        ddpr_rms_m=1.0,
+                        nsat=10,
+                    ),
+                    age_epochs=10,
+                )
+            }
+            for offset in (0.0, 0.1)
+        ]
+        args = argparse.Namespace(
+            min_independent_shadows=2,
+            shadow_agreement_aperture_m=0.25,
+            primary_separation_min_m=0.5,
+            fresh_shadow_max_age_epochs=100,
+            candidate_max_prediction_error_m=2.0,
+            shadow_max_gdop=0.0,
+            shadow_max_ddpr_rms_m=0.0,
+            shadow_min_satellites=0,
+        )
+
+        output, summary, _ = fgo_position_consensus.apply_position_consensus(
+            primary, tracks, args
+        )
+
+        np.testing.assert_array_equal(output[-1].ecef, origin)
+        self.assertEqual(summary["candidate_prediction_rejections"], 1)
+        self.assertEqual(summary["positions_replaced"], 0)
+
+
+class FgoShadowAuthorityTest(unittest.TestCase):
+    def test_report_separates_recovery_from_unsafe_replacement(self) -> None:
+        origin = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        rotation = kf_fgo_alignment.ecef_to_enu_rotation(origin)
+        correct = origin.copy()
+        wrong = origin + rotation.transpose() @ np.asarray([1.0, 0.0, 0.0])
+        primary_positions = [wrong, correct, correct, wrong]
+        shadow_positions = [correct, wrong, correct, wrong]
+
+        with tempfile.TemporaryDirectory(prefix="fgo_shadow_authority_") as temp_dir:
+            root = Path(temp_dir)
+            primary_path = root / "primary.pos"
+            shadow_path = root / "shadow.csv"
+            reference_path = root / "reference.csv"
+            output_path = root / "report.json"
+            kf_fgo_alignment.write_pos(
+                primary_path,
+                [
+                    {
+                        "week": 2300,
+                        "tow": float(index),
+                        "ecef": ecef,
+                        "status": 4,
+                        "nsat": 12,
+                        "pdop": 1.0,
+                        "ratio": 10.0,
+                        "baseline": 1.0,
+                    }
+                    for index, ecef in enumerate(primary_positions)
+                ],
+            )
+            with reference_path.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.writer(handle)
+                writer.writerow(["tow", "week", "lat", "lon", "height", "x", "y", "z"])
+                for index in range(4):
+                    writer.writerow([index, 2300, 35.0, 139.0, 50.0, *origin])
+            with shadow_path.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.writer(handle)
+                writer.writerow(
+                    [
+                        "tow",
+                        "status",
+                        "x_ecef_m",
+                        "y_ecef_m",
+                        "z_ecef_m",
+                        "gdop",
+                        "ddpr_rms_m",
+                        "nsat",
+                    ]
+                )
+                for index, ecef in enumerate(shadow_positions):
+                    writer.writerow([index, "FIXED", *ecef, 2.0, 1.0, 12])
+            args = argparse.Namespace(
+                primary_pos=primary_path,
+                shadow_csv=[shadow_path],
+                reference_csv=reference_path,
+                output_json=output_path,
+                match_tolerance_s=0.11,
+                wrong_fix_threshold_m=0.5,
+                shadow_max_gdop=4.0,
+                shadow_max_ddpr_rms_m=40.0,
+                shadow_min_satellites=8,
+                aperture_m=[1.1],
+            )
+
+            report = fgo_shadow_authority.build_report(args)
+
+        self.assertTrue(report["reference_truth_used"])
+        self.assertEqual(report["matched_primary_fixed_epochs"], 4)
+        self.assertEqual(report["healthy"]["recoveries"], 1)
+        self.assertEqual(report["healthy"]["unsafe_replacements"], 1)
+        self.assertEqual(report["healthy"]["both_correct"], 1)
+        self.assertEqual(report["healthy"]["both_wrong"], 1)
+        self.assertEqual(
+            report["healthy_by_separation_aperture_m"]["1.1"]["selected_epochs"],
+            4,
+        )
+
+
 class KfFgoAlignmentTest(unittest.TestCase):
     def test_causal_alignment_uses_only_solver_positions(self) -> None:
         origin = comparison.llh_to_ecef(35.0, 139.0, 50.0)
@@ -3761,6 +4143,53 @@ class KfFgoAlignmentTest(unittest.TestCase):
         self.assertFalse(summary["reference_truth_used"])
         self.assertEqual(summary["horizontal_updates_accepted"], 10)
         self.assertEqual(summary["vertical_updates_accepted"], 10)
+
+    def test_fixed_alignment_is_explicit_and_truth_free(self) -> None:
+        origin = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        rotation = kf_fgo_alignment.ecef_to_enu_rotation(origin)
+        offset_ecef = rotation.transpose() @ np.asarray([0.4, -0.2, 0.3])
+        kf_rows = [
+            {
+                "week": 2300,
+                "tow": float(index),
+                "ecef": origin + offset_ecef,
+                "status": 4,
+                "nsat": 12,
+                "pdop": 1.0,
+                "ratio": 25.0,
+                "baseline": 1.0,
+            }
+            for index in range(3)
+        ]
+        fgo_rows = [
+            {
+                "tow": float(index),
+                "ecef": origin.copy(),
+                "status": 4,
+                "nsat": 12,
+                "ratio": 5.0,
+            }
+            for index in range(3)
+        ]
+        args = argparse.Namespace(
+            match_tolerance_s=0.11,
+            horizontal_ratio_min=20.0,
+            horizontal_window=5,
+            horizontal_gate_m=0.5,
+            vertical_ratio_min=3.0,
+            vertical_window=5,
+            vertical_gate_m=0.75,
+            kf_fallback=False,
+            kf_gap_fill_only=False,
+            replace_kf_nonfixed=False,
+            align_fgo_fixed=True,
+        )
+
+        fused, summary = kf_fgo_alignment.fuse(kf_rows, fgo_rows, args)
+
+        np.testing.assert_allclose(fused[-1]["ecef"], origin + offset_ecef, atol=1e-5)
+        self.assertTrue(summary["align_fgo_fixed"])
+        self.assertFalse(summary["reference_truth_used"])
 
     def test_gap_fill_mode_preserves_available_kf_epochs(self) -> None:
         origin = comparison.llh_to_ecef(35.0, 139.0, 50.0)
@@ -7088,6 +7517,8 @@ class PPCDemoTest(unittest.TestCase):
                 max_subset_ar_drop_steps=18,
                 max_hold_div=5.0,
                 max_pos_jump=20.0,
+                max_fixed_anchor_age=30.0,
+                max_fixed_doppler_consensus=10.0,
                 max_pos_jump_min=20.0,
                 max_pos_jump_rate=25.0,
                 max_float_spp_div=30.0,
@@ -7108,6 +7539,10 @@ class PPCDemoTest(unittest.TestCase):
                 max_fixed_update_secondary_gate_baseline=2500.0,
                 min_fixed_update_secondary_gate_speed=7.0,
                 max_fixed_update_secondary_gate_speed=15.0,
+                max_fixed_prefit_rms=10.0,
+                min_fixed_prefit_outliers=35,
+                max_fixed_overconfidence_cov_trace=0.01,
+                fixed_prefit_reset_streak=2,
                 max_consec_float_reset=10,
                 max_consec_nonfix_reset=10,
                 max_postfix_rms=0.20,
@@ -7168,6 +7603,8 @@ class PPCDemoTest(unittest.TestCase):
             self.assertEqual(payload["rtk_max_subset_ar_drop_steps"], 18)
             self.assertEqual(payload["rtk_max_hold_divergence_m"], 5.0)
             self.assertEqual(payload["rtk_max_position_jump_m"], 20.0)
+            self.assertEqual(payload["rtk_max_fixed_anchor_age_s"], 30.0)
+            self.assertEqual(payload["rtk_max_fixed_doppler_consensus_m"], 10.0)
             self.assertEqual(payload["rtk_max_position_jump_min_m"], 20.0)
             self.assertEqual(payload["rtk_max_position_jump_rate_mps"], 25.0)
             self.assertEqual(payload["rtk_max_float_spp_divergence_m"], 30.0)
@@ -7184,6 +7621,12 @@ class PPCDemoTest(unittest.TestCase):
             self.assertEqual(payload["rtk_min_fixed_update_gate_speed_mps"], 5.0)
             self.assertEqual(payload["rtk_max_fixed_update_gate_speed_mps"], 15.0)
             self.assertEqual(payload["rtk_max_fixed_update_secondary_gate_ratio"], 4.0)
+            self.assertEqual(payload["rtk_max_fixed_prefit_residual_rms_m"], 10.0)
+            self.assertEqual(payload["rtk_min_fixed_prefit_outliers"], 35)
+            self.assertEqual(
+                payload["rtk_max_fixed_overconfidence_covariance_trace_m2"], 0.01
+            )
+            self.assertEqual(payload["rtk_fixed_prefit_reset_streak"], 2)
             self.assertEqual(
                 payload["rtk_min_fixed_update_secondary_gate_baseline_m"], 2000.0
             )

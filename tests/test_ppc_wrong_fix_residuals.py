@@ -13,9 +13,73 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT_DIR / "scripts"))
 
 import analyze_ppc_wrong_fix_residuals as wrong_fix  # noqa: E402
+import build_ppc_wrong_fix_event_ledger as event_ledger  # noqa: E402
 
 
 class PPCWrongFixResidualsTest(unittest.TestCase):
+    def test_event_ledger_splits_clusters_and_classifies_catastrophic_basin(self) -> None:
+        def labeled(tow_s: float, error_m: float) -> event_ledger.LabeledEpoch:
+            return event_ledger.LabeledEpoch(
+                wrong_fix.SolutionEpoch(
+                    week=2300,
+                    tow_s=tow_s,
+                    ecef=(0.0, 0.0, 0.0),
+                    status=4,
+                    nsat=18,
+                    ratio=3.0,
+                    baseline_m=9000.0,
+                    outliers=40,
+                    prefit_rms_m=12.0,
+                    prefit_max_m=50.0,
+                    post_rms_m=0.8,
+                    post_max_m=2.5,
+                    nis_per_obs=2.0,
+                ),
+                error_m,
+            )
+
+        events = event_ledger.split_events(
+            [labeled(10.0, 80.0), labeled(10.2, 81.0), labeled(11.0, 2.0)]
+        )
+        payload = event_ledger.build_event_payload(
+            "nagoya_run3", 1, events[0], [row.solution for row in events[0]], {}
+        )
+
+        self.assertEqual(len(events), 2)
+        self.assertEqual(payload["severity"]["above_10m"], 2)
+        self.assertIn("catastrophic_gt50m", payload["fingerprints"])
+        self.assertIn("high_prefit_basin", payload["fingerprints"])
+        self.assertIn("outlier_suppression_storm", payload["fingerprints"])
+        self.assertIn("low_ar_margin", payload["fingerprints"])
+    def test_integrity_rule_requires_low_satellite_and_low_ratio(self) -> None:
+        epoch = wrong_fix.SolutionEpoch(
+            week=2300,
+            tow_s=10.0,
+            ecef=(0.0, 0.0, 0.0),
+            status=4,
+            nsat=11,
+            ratio=15.0,
+            baseline_m=None,
+            outliers=None,
+            prefit_rms_m=None,
+            prefit_max_m=None,
+            post_rms_m=None,
+            post_max_m=None,
+            nis_per_obs=None,
+        )
+
+        self.assertTrue(wrong_fix.integrity_rule_demotes(epoch, 8, 11, 15.0))
+        self.assertFalse(
+            wrong_fix.integrity_rule_demotes(
+                wrong_fix.SolutionEpoch(**{**epoch.__dict__, "ratio": 15.1}), 8, 11, 15.0
+            )
+        )
+        self.assertFalse(
+            wrong_fix.integrity_rule_demotes(
+                wrong_fix.SolutionEpoch(**{**epoch.__dict__, "nsat": 12}), 8, 11, 15.0
+            )
+        )
+
     def test_analyze_profile_counts_source_and_gate_separation(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppc_wrong_fix_") as temp_dir:
             root = Path(temp_dir)
@@ -67,6 +131,7 @@ class PPCWrongFixResidualsTest(unittest.TestCase):
 
             self.assertEqual(payload["fixed"], 2)
             self.assertEqual(payload["wrong_fix"], 1)
+            self.assertEqual(payload["wrong_error_severity"]["above_5m"], 1)
             self.assertEqual(payload["selected_candidate_counts"], {"baseline": 1})
             self.assertEqual(payload["rule_matched_counts"], {"false": 1})
             gates = {row["gate"]: row for row in payload["gate_simulation"]}
@@ -95,6 +160,12 @@ class PPCWrongFixResidualsTest(unittest.TestCase):
                                 "wrong_fix": 1,
                                 "wrong_fix_rate_pct": 50.0,
                                 "wrong_error_p95_m": 10.0,
+                                "wrong_error_severity": {
+                                    "above_1m": 1,
+                                    "above_2m": 1,
+                                    "above_5m": 1,
+                                    "above_10m": 0,
+                                },
                                 "longest_wrong_spans": [
                                     {
                                         "start_tow_s": 10.2,
@@ -128,6 +199,7 @@ class PPCWrongFixResidualsTest(unittest.TestCase):
 
         self.assertIn("baseline=1", markdown)
         self.assertIn("post_rms > 4 m", markdown)
+        self.assertIn("| 1 | 0 | 10.000 m |", markdown)
 
 
 if __name__ == "__main__":

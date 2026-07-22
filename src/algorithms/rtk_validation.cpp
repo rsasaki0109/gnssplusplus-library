@@ -73,6 +73,19 @@ bool exceedsFixHistoryJump(const Eigen::Vector3d& fixed_position,
     return consecutive_fix_count >= 3;
 }
 
+bool fixedAnchorUsable(bool has_fixed_position,
+                       bool has_fixed_time,
+                       double age_s,
+                       double max_age_s) {
+    if (!has_fixed_position) {
+        return false;
+    }
+    if (!(std::isfinite(max_age_s) && max_age_s > 0.0)) {
+        return true;
+    }
+    return has_fixed_time && std::isfinite(age_s) && age_s >= 0.0 && age_s <= max_age_s;
+}
+
 bool canAttemptHoldFix(int consecutive_fix_count,
                        int min_hold_count,
                        bool has_last_fixed_position,

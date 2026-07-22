@@ -400,11 +400,26 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Apply RTK fixed-status demotion only when AR ratio is at or below this value.",
     )
+    parser.add_argument("--max-fixed-anchor-age", type=float, default=None)
+    parser.add_argument("--max-fixed-doppler-consensus", type=float, default=None)
     parser.add_argument(
         "--demote-fixed-status-min-satellites",
         type=int,
         default=None,
         help="Output RTK FIX as FLOAT when fewer than this many satellites are used.",
+    )
+    parser.add_argument("--demote-fixed-status-low-satellite-ceiling", type=int, default=None)
+    parser.add_argument("--demote-fixed-status-low-satellite-max-ratio", type=float, default=None)
+    parser.add_argument("--max-fixed-prefit-rms", type=float, default=None)
+    parser.add_argument("--min-fixed-prefit-outliers", type=int, default=None)
+    parser.add_argument(
+        "--max-fixed-overconfidence-cov-trace", type=float, default=None
+    )
+    parser.add_argument("--fixed-prefit-reset-streak", type=int, default=None)
+    parser.add_argument(
+        "--fixed-prefit-quarantine-only",
+        action="store_true",
+        help="Clear held integers and emit FLOAT without an SPP-seeded hard reset.",
     )
     parser.add_argument("--min-demote-fixed-status-baseline", type=float, default=None)
     parser.add_argument("--max-demote-fixed-status-baseline", type=float, default=None)
@@ -1297,6 +1312,12 @@ def run_solver(
             command.extend(["--max-hold-div", str(args.max_hold_div)])
         if getattr(args, "max_pos_jump", None) is not None:
             command.extend(["--max-pos-jump", str(args.max_pos_jump)])
+        if getattr(args, "max_fixed_anchor_age", None) is not None:
+            command.extend(["--max-fixed-anchor-age", str(args.max_fixed_anchor_age)])
+        if getattr(args, "max_fixed_doppler_consensus", None) is not None:
+            command.extend(
+                ["--max-fixed-doppler-consensus", str(args.max_fixed_doppler_consensus)]
+            )
         if getattr(args, "max_pos_jump_min", None) is not None:
             command.extend(["--max-pos-jump-min", str(args.max_pos_jump_min)])
         if getattr(args, "max_pos_jump_rate", None) is not None:
@@ -1444,6 +1465,39 @@ def run_solver(
                     str(args.demote_fixed_status_min_satellites),
                 ]
             )
+        if getattr(args, "demote_fixed_status_low_satellite_ceiling", None) is not None:
+            command.extend(
+                [
+                    "--demote-fixed-status-low-satellite-ceiling",
+                    str(args.demote_fixed_status_low_satellite_ceiling),
+                ]
+            )
+        if getattr(args, "demote_fixed_status_low_satellite_max_ratio", None) is not None:
+            command.extend(
+                [
+                    "--demote-fixed-status-low-satellite-max-ratio",
+                    str(args.demote_fixed_status_low_satellite_max_ratio),
+                ]
+            )
+        if getattr(args, "max_fixed_prefit_rms", None) is not None:
+            command.extend(["--max-fixed-prefit-rms", str(args.max_fixed_prefit_rms)])
+        if getattr(args, "min_fixed_prefit_outliers", None) is not None:
+            command.extend(
+                ["--min-fixed-prefit-outliers", str(args.min_fixed_prefit_outliers)]
+            )
+        if getattr(args, "max_fixed_overconfidence_cov_trace", None) is not None:
+            command.extend(
+                [
+                    "--max-fixed-overconfidence-cov-trace",
+                    str(args.max_fixed_overconfidence_cov_trace),
+                ]
+            )
+        if getattr(args, "fixed_prefit_reset_streak", None) is not None:
+            command.extend(
+                ["--fixed-prefit-reset-streak", str(args.fixed_prefit_reset_streak)]
+            )
+        if getattr(args, "fixed_prefit_quarantine_only", False):
+            command.append("--fixed-prefit-quarantine-only")
         if getattr(args, "min_demote_fixed_status_baseline", None) is not None:
             command.extend(
                 [
@@ -1797,6 +1851,14 @@ def build_summary_payload(
         ),
         "rtk_max_hold_divergence_m": getattr(args, "max_hold_div", None) if args.solver == "rtk" else None,
         "rtk_max_position_jump_m": getattr(args, "max_pos_jump", None) if args.solver == "rtk" else None,
+        "rtk_max_fixed_anchor_age_s": (
+            getattr(args, "max_fixed_anchor_age", None) if args.solver == "rtk" else None
+        ),
+        "rtk_max_fixed_doppler_consensus_m": (
+            getattr(args, "max_fixed_doppler_consensus", None)
+            if args.solver == "rtk"
+            else None
+        ),
         "rtk_max_position_jump_min_m": (
             getattr(args, "max_pos_jump_min", None) if args.solver == "rtk" else None
         ),
@@ -1921,6 +1983,35 @@ def build_summary_payload(
         ),
         "rtk_demote_fixed_status_min_satellites": (
             getattr(args, "demote_fixed_status_min_satellites", None)
+            if args.solver == "rtk"
+            else None
+        ),
+        "rtk_demote_fixed_status_low_satellite_ceiling": (
+            getattr(args, "demote_fixed_status_low_satellite_ceiling", None)
+            if args.solver == "rtk"
+            else None
+        ),
+        "rtk_demote_fixed_status_low_satellite_max_ratio": (
+            getattr(args, "demote_fixed_status_low_satellite_max_ratio", None)
+            if args.solver == "rtk"
+            else None
+        ),
+        "rtk_max_fixed_prefit_residual_rms_m": (
+            getattr(args, "max_fixed_prefit_rms", None) if args.solver == "rtk" else None
+        ),
+        "rtk_min_fixed_prefit_outliers": (
+            getattr(args, "min_fixed_prefit_outliers", None) if args.solver == "rtk" else None
+        ),
+        "rtk_max_fixed_overconfidence_covariance_trace_m2": (
+            getattr(args, "max_fixed_overconfidence_cov_trace", None)
+            if args.solver == "rtk"
+            else None
+        ),
+        "rtk_fixed_prefit_reset_streak": (
+            getattr(args, "fixed_prefit_reset_streak", None) if args.solver == "rtk" else None
+        ),
+        "rtk_fixed_prefit_quarantine_only": (
+            bool(getattr(args, "fixed_prefit_quarantine_only", False))
             if args.solver == "rtk"
             else None
         ),

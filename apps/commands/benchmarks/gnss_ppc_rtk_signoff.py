@@ -169,6 +169,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-subset-ar-drop-steps", type=int, default=None)
     parser.add_argument("--max-hold-div", type=float, default=None)
     parser.add_argument("--max-pos-jump", type=float, default=None)
+    parser.add_argument("--max-fixed-anchor-age", type=float, default=None)
+    parser.add_argument("--max-fixed-doppler-consensus", type=float, default=None)
     parser.add_argument("--max-pos-jump-min", type=float, default=None)
     parser.add_argument("--max-pos-jump-rate", type=float, default=None)
     parser.add_argument("--max-float-spp-div", type=float, default=None)
@@ -193,6 +195,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--demote-fixed-status-post-rms", type=float, default=None)
     parser.add_argument("--demote-fixed-status-gate-ratio", type=float, default=None)
     parser.add_argument("--demote-fixed-status-min-satellites", type=int, default=None)
+    parser.add_argument("--demote-fixed-status-low-satellite-ceiling", type=int, default=None)
+    parser.add_argument("--demote-fixed-status-low-satellite-max-ratio", type=float, default=None)
+    parser.add_argument("--max-fixed-prefit-rms", type=float, default=None)
+    parser.add_argument("--min-fixed-prefit-outliers", type=int, default=None)
+    parser.add_argument("--max-fixed-overconfidence-cov-trace", type=float, default=None)
+    parser.add_argument("--fixed-prefit-reset-streak", type=int, default=None)
+    parser.add_argument("--fixed-prefit-quarantine-only", action="store_true")
     parser.add_argument("--min-demote-fixed-status-baseline", type=float, default=None)
     parser.add_argument("--max-demote-fixed-status-baseline", type=float, default=None)
     parser.add_argument("--rtk-snr-weighting", action="store_true")
@@ -308,6 +317,10 @@ def selected_tuning(args: argparse.Namespace, city: str) -> dict[str, str | floa
         tuning["max_hold_div"] = args.max_hold_div
     if getattr(args, "max_pos_jump", None) is not None:
         tuning["max_pos_jump"] = args.max_pos_jump
+    if getattr(args, "max_fixed_anchor_age", None) is not None:
+        tuning["max_fixed_anchor_age"] = args.max_fixed_anchor_age
+    if getattr(args, "max_fixed_doppler_consensus", None) is not None:
+        tuning["max_fixed_doppler_consensus"] = args.max_fixed_doppler_consensus
     if getattr(args, "max_pos_jump_min", None) is not None:
         tuning["max_pos_jump_min"] = args.max_pos_jump_min
     if getattr(args, "max_pos_jump_rate", None) is not None:
@@ -366,6 +379,22 @@ def selected_tuning(args: argparse.Namespace, city: str) -> dict[str, str | floa
         tuning["demote_fixed_status_gate_ratio"] = args.demote_fixed_status_gate_ratio
     if getattr(args, "demote_fixed_status_min_satellites", None) is not None:
         tuning["demote_fixed_status_min_satellites"] = args.demote_fixed_status_min_satellites
+    if getattr(args, "demote_fixed_status_low_satellite_ceiling", None) is not None:
+        tuning["demote_fixed_status_low_satellite_ceiling"] = args.demote_fixed_status_low_satellite_ceiling
+    if getattr(args, "demote_fixed_status_low_satellite_max_ratio", None) is not None:
+        tuning["demote_fixed_status_low_satellite_max_ratio"] = args.demote_fixed_status_low_satellite_max_ratio
+    if getattr(args, "max_fixed_prefit_rms", None) is not None:
+        tuning["max_fixed_prefit_rms"] = args.max_fixed_prefit_rms
+    if getattr(args, "min_fixed_prefit_outliers", None) is not None:
+        tuning["min_fixed_prefit_outliers"] = args.min_fixed_prefit_outliers
+    if getattr(args, "max_fixed_overconfidence_cov_trace", None) is not None:
+        tuning["max_fixed_overconfidence_cov_trace"] = (
+            args.max_fixed_overconfidence_cov_trace
+        )
+    if getattr(args, "fixed_prefit_reset_streak", None) is not None:
+        tuning["fixed_prefit_reset_streak"] = args.fixed_prefit_reset_streak
+    if getattr(args, "fixed_prefit_quarantine_only", False):
+        tuning["fixed_prefit_quarantine_only"] = True
     if getattr(args, "min_demote_fixed_status_baseline", None) is not None:
         tuning["min_demote_fixed_status_baseline"] = args.min_demote_fixed_status_baseline
     if getattr(args, "max_demote_fixed_status_baseline", None) is not None:
@@ -552,6 +581,14 @@ def build_ppc_demo_command(args: argparse.Namespace,
     max_pos_jump = tuning.get("max_pos_jump")
     if isinstance(max_pos_jump, (int, float)):
         command.extend(["--max-pos-jump", str(max_pos_jump)])
+    max_fixed_anchor_age = tuning.get("max_fixed_anchor_age")
+    if isinstance(max_fixed_anchor_age, (int, float)):
+        command.extend(["--max-fixed-anchor-age", str(max_fixed_anchor_age)])
+    max_fixed_doppler_consensus = tuning.get("max_fixed_doppler_consensus")
+    if isinstance(max_fixed_doppler_consensus, (int, float)):
+        command.extend(
+            ["--max-fixed-doppler-consensus", str(max_fixed_doppler_consensus)]
+        )
     max_pos_jump_min = tuning.get("max_pos_jump_min")
     if isinstance(max_pos_jump_min, (int, float)):
         command.extend(["--max-pos-jump-min", str(max_pos_jump_min)])
@@ -679,6 +716,37 @@ def build_ppc_demo_command(args: argparse.Namespace,
                 str(demote_fixed_status_min_satellites),
             ]
         )
+    low_satellite_ceiling = tuning.get("demote_fixed_status_low_satellite_ceiling")
+    if isinstance(low_satellite_ceiling, int):
+        command.extend(
+            ["--demote-fixed-status-low-satellite-ceiling", str(low_satellite_ceiling)]
+        )
+    low_satellite_max_ratio = tuning.get("demote_fixed_status_low_satellite_max_ratio")
+    if isinstance(low_satellite_max_ratio, (int, float)):
+        command.extend(
+            ["--demote-fixed-status-low-satellite-max-ratio", str(low_satellite_max_ratio)]
+        )
+    max_fixed_prefit_rms = tuning.get("max_fixed_prefit_rms")
+    if isinstance(max_fixed_prefit_rms, (int, float)):
+        command.extend(["--max-fixed-prefit-rms", str(max_fixed_prefit_rms)])
+    min_fixed_prefit_outliers = tuning.get("min_fixed_prefit_outliers")
+    if isinstance(min_fixed_prefit_outliers, int):
+        command.extend(["--min-fixed-prefit-outliers", str(min_fixed_prefit_outliers)])
+    max_fixed_overconfidence_cov_trace = tuning.get(
+        "max_fixed_overconfidence_cov_trace"
+    )
+    if isinstance(max_fixed_overconfidence_cov_trace, (int, float)):
+        command.extend(
+            [
+                "--max-fixed-overconfidence-cov-trace",
+                str(max_fixed_overconfidence_cov_trace),
+            ]
+        )
+    fixed_prefit_reset_streak = tuning.get("fixed_prefit_reset_streak")
+    if isinstance(fixed_prefit_reset_streak, int):
+        command.extend(["--fixed-prefit-reset-streak", str(fixed_prefit_reset_streak)])
+    if tuning.get("fixed_prefit_quarantine_only") is True:
+        command.append("--fixed-prefit-quarantine-only")
     min_demote_fixed_status_baseline = tuning.get("min_demote_fixed_status_baseline")
     if isinstance(min_demote_fixed_status_baseline, (int, float)):
         command.extend(

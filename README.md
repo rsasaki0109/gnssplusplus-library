@@ -29,8 +29,8 @@ handling without an external RTKLIB runtime.
 ### PPC 2024 goal matrix vs Kaiyodai and gici-open
 
 The audited KF/FGO selected profile clears the distance-weighted PPC public
-target at **78.7165%** (published target: **78.7%**). It also exceeds the
-Tokyo 1 public FIX rate (**83.041%** vs **80.8%**). A separate FIX-target
+target at **78.8455%** (published target: **78.7%**). It also exceeds the
+Tokyo 1 public FIX rate (**80.861%** vs **80.8%**). A separate FIX-target
 profile clears Nagoya 1 by the narrow measured margin **85.100974%** vs
 **85.1%**, with 0.913% Wrong FIX/FIX and 1.460 m P95 horizontal error. The
 public FIX targets come from the [Kaiyodai RTK paper](https://www.denshi.e.kaiyodai.ac.jp/wp-content/uploads/pdf/content/2024okada,sasaki,ando.pdf),
@@ -38,13 +38,13 @@ and the PPC score target from the [Turing tight-coupling slides](https://www.den
 
 | Run | libgnss++ FIX | gici-open FIX | Wrong FIX/FIX | libgnss++ correct FIX/ref | gici-open correct FIX/ref | 50 cm/ref | libgnss++ official | gici-open official | P95 H |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Tokyo 1 | **83.041%** | 46.472% | 4.873% | **71.868%** | 43.528% | 80.018% | 78.879% | **80.263%** | 2.082 m |
-| Tokyo 2 | **83.967%** | 76.938% | 1.269% | **80.745%** | 74.462% | 88.340% | 88.694% | **90.652%** | 1.604 m |
-| Tokyo 3 | **79.919%** | 73.347% | 2.791% | **76.256%** | 71.923% | 86.295% | **85.969%** | 83.787% | 1.671 m |
-| Nagoya 1 | **84.116%** | 67.812% | 0.758% | **78.722%** | 60.005% | 85.845% | 65.201% | **70.851%** | 1.332 m |
-| Nagoya 2 | **57.129%** | 39.988% | 2.591% | **48.937%** | 35.330% | 60.808% | **55.533%** | 39.847% | 19.092 m |
-| Nagoya 3 | **47.433%** | 21.399% | 5.675% | **44.741%** | 18.285% | 61.354% | **72.336%** | 33.495% | 1.908 m |
-| **Macro mean** | **72.601%** | 54.326% | 2.993% | **66.878%** | 50.589% | 77.110% | **74.435%** | 66.483% | 4.615 m |
+| Tokyo 1 | **80.861%** | 46.472% | 2.855% | **71.467%** | 43.528% | 80.286% | 79.458% | **80.263%** | 2.082 m |
+| Tokyo 2 | **82.340%** | 76.938% | 0.463% | **79.827%** | 74.462% | 88.395% | 88.696% | **90.652%** | 1.604 m |
+| Tokyo 3 | **78.461%** | 73.347% | 1.366% | **75.962%** | 71.923% | 86.295% | **85.969%** | 83.787% | 1.671 m |
+| Nagoya 1 | **83.659%** | 67.812% | 0.547% | **78.460%** | 60.005% | 85.845% | 65.201% | **70.851%** | 1.332 m |
+| Nagoya 2 | **55.553%** | 39.988% | 0.541% | **48.587%** | 35.330% | 60.787% | **55.529%** | 39.847% | 18.144 m |
+| Nagoya 3 | **44.761%** | 21.399% | 3.007% | **43.415%** | 18.285% | 61.354% | **72.336%** | 33.495% | 1.908 m |
+| **Macro mean** | **70.939%** | 54.326% | **1.463%** | **66.287%** | 50.589% | 77.160% | **74.532%** | 66.483% | 4.457 m |
 
 ![PPC libgnss++ and gici-open comparison](docs/ppc_libgnss_gici_comparison.png)
 
@@ -55,26 +55,92 @@ points are correct FIX epochs, red crosses are FIX epochs with 3D error above
 0.5 m, orange points are FLOAT, and the light-gray line is the reference
 trajectory.
 
-Before scoring, a deployable confidence gate demotes FIX to FLOAT when fewer
-than 9 satellites are used. It changes no positions and reads no reference
-truth. Across the six runs it demotes 374 of 42,174 FIX labels: 206 wrong FIX
-and 168 correct FIX. The official score stays **78.716546%**, while aggregate
-wrong FIX falls from 1,385 to 1,179 and Tokyo 1 remains above its public FIX
-target.
+Before the final confidence gate, a truth-free wrong-basin escape replaces 35
+Nagoya 2 FIX positions with its independent TC-FGO candidate and emits them as
+FLOAT only when baseline prefit RMS exceeds 8 m and at least 45 observations
+were suppressed. Nagoya 2 FIX errors above 10 m fall from 36 to 4 and those
+above 5 m from 42 to 10, while its P95 horizontal error improves from 19.092 m
+to 18.144 m.
+
+Nagoya 3 now uses a causal, truth-free KF/FGO consensus state machine. The FGO
+shadow never replaces the KF position: it only quarantines a FIX label while
+the estimators disagree, and recovery requires consecutive agreement. A
+runtime-only provisional-recovery gate retains five healthy FIX epochs without
+promoting the joint anchor early. This removes 16 wrong FIX labels and 15
+errors above 10 m without losing a correct FIX epoch.
+
+The final confidence layer demotes FIX to FLOAT when fewer than 8 satellites
+are used, or when at most 11 satellites are used and the AR ratio is at most
+15. Strong same-epoch telemetry may exonerate the boundary case only with at
+least 11 satellites, prefit RMS at most 0.5 m, and NIS/observation at most 0.2.
+A causal kinematic guard then quarantines the current and next two epochs after
+a jump above 12 m with acceleration above 200 m/s2. A bounded plateau extension
+continues quarantine for at most eight epochs while jumps stay below 0.1 m. A
+secondary trigger requires a jump above 5 m, acceleration above 100 m/s2,
+prefit RMS above 5 m, ratio at most 10, at least 10 suppressed outliers, and at
+most 13 satellites. It changes no positions and reads no reference truth.
+
+Tokyo 3 additionally replays two overlapping, independently initialized
+GNSS/IMU FGO shadow windows through the consensus state machine. FIX is
+quarantined after sustained KF/FGO separation above 5 m when the shadow has
+GDOP at most 4, DDPR RMS at most 40 m, and at least 8 satellites. The FGO
+position is never substituted. Soft primary telemetry cannot start an
+unrecoverable quarantine while the independent estimator is unavailable; hard
+primary suspects remain fail-closed. The two-window replay removes 142 wrong
+FIX labels at a cost of five correct FIX labels and finishes in NORMAL state.
+
+The final staged residual guard adds at most seven epochs (1.4 seconds at
+5 Hz) of output latency. It confirms eight consecutive FIX epochs only when
+prefit RMS exceeds 40 m, ratio is at most 15, at least 12 observations are
+suppressed, and suppressed observations comprise at least half of `RTKObs`.
+A separate single-epoch gate requires prefit RMS at least 40 m and at most 14
+satellites. These rules consume emitted RTK telemetry only and change status,
+not position. They remove 57 wrong FIX labels at a cost of ten correct FIX
+labels on PPC.
+
+The official score reaches **78.845491%**. Across six runs, aggregate wrong FIX
+falls from 869 to **574**, wrong FIX above 5 m from 96 to **42**, and wrong FIX
+above 10 m from 59 to **5**. Correct FIX/reference remains above its 66.230%
+floor and Tokyo 1 remains above its public FIX target. In six-fold leave-one-run-out selection,
+five folds select the production 12 m / 3-epoch primary policy and the remaining
+fold selects a 5-epoch hold. All extension folds select an eight-epoch maximum
+plateau age; the secondary thresholds vary and provide held-out catches only on
+two runs, so that component remains exploratory. See the
+[kinematic integrity LOO report](docs/ppc_kinematic_integrity_loo.md). This is
+a run-level robustness check, not an external-dataset generalization claim. The full severity audit is
+in [PPC FIX integrity audit](docs/ppc_fix_integrity_audit.md). The
+[wrong-FIX event ledger](docs/ppc_wrong_fix_event_ledger.md) groups all 574
+residual wrong-FIX epochs into 188 contiguous events and records truth-free
+runtime fingerprints for root-cause and regression work.
+The [Nagoya 3 root-cause report](docs/ppc_nagoya3_wrong_fix_root_cause.md)
+shows that the largest event is an overconfident float-KF basin followed by
+integer certification, rather than an inherited hold-FIX failure.
+The [online consensus design](docs/ppc_online_consensus_design.md) specifies the
+truth-free KF/FGO quarantine and recovery state machine that follows from it.
+The frozen staged policy was also replayed on full UrbanNav Odaiba/Shinjuku
+Trimble rover solutions. It demoted 22 of 49 FIX errors above 2 m, harmed zero
+correct FIX epochs, and consumed no reference truth at runtime; see the
+[external integrity audit](docs/ppc_residual_integrity_external_audit.md).
+The machine-readable requirement audit is tracked in
+[PPC goal completion audit](docs/ppc_goal_completion_audit.md).
 
 ![PPC selected XY trajectories by FIX status](docs/ppc_kf_fgo_fix_status_xy.png)
 
 `gici-open` was reproduced from commit
 `e7666110a88d22e08aad24345a253564af9b8024` on its `forppc2024` branch and
 evaluated from exported NMEA with the same six references and metric code.
-The six-run libgnss++ FIX macro is **+18.275 pp** above that reproduction.
+The six-run libgnss++ FIX macro is **+16.613 pp** above that reproduction, and
+its macro Wrong FIX/FIX is **1.025 pp lower**.
 The GPL-3.0 program remains an external executable: no GICI source is copied,
 linked, or distributed here, so libgnss++ remains MIT.
 
 The position selectors use candidate status/ratio/satellite/residual telemetry
 and candidate-to-current separation only. They preserve the baseline epoch
-grid and telemetry. The final minimum-satellite confidence gate changes only
-the emitted status, from FIX to FLOAT; reference truth is used only after
+grid and telemetry; the wrong-basin and consensus escapes intentionally
+replace position and status for their selected epochs. The final
+satellite-count/ratio confidence gate changes only
+the emitted status, from FIX to FLOAT; the online consensus and kinematic
+guards likewise retain the primary position. Reference truth is used only after
 output generation for scoring. Thresholds were tuned on this public benchmark,
 so these results are an in-sample benchmark rather than a held-out
 generalization claim. Definitions, commands, paths, and the machine-readable
