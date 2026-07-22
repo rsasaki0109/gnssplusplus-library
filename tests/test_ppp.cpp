@@ -39,6 +39,21 @@ TEST(PPPClasSeedFde, RetriesOnlyRejectedOrMaxdiffInconsistentSeeds) {
         true, false, false, 20.0, 10.0));
 }
 
+TEST(PPPClasSeedFde, RejectedOutputRequiresCausalContinuity) {
+    EXPECT_TRUE(ppp_shared::clasRejectedSeedOutputIsContinuous(
+        true, true, true, 80.0, 0.2, 100.0, 100.0, 120.0, 150.0));
+    EXPECT_FALSE(ppp_shared::clasRejectedSeedOutputIsContinuous(
+        true, true, true, 101.0, 0.2, 100.0, 100.0, 120.0, 150.0));
+    EXPECT_TRUE(ppp_shared::clasRejectedSeedOutputIsContinuous(
+        true, true, true, 150.0, 2.0, 100.0, 100.0, 120.0, 150.0));
+    EXPECT_FALSE(ppp_shared::clasRejectedSeedOutputIsContinuous(
+        true, false, true, 1.0, 0.2, 100.0, 100.0, 1.0, 150.0));
+    EXPECT_FALSE(ppp_shared::clasRejectedSeedOutputIsContinuous(
+        true, true, false, 1.0, 0.2, 100.0, 100.0, 1.0, 150.0));
+    EXPECT_FALSE(ppp_shared::clasRejectedSeedOutputIsContinuous(
+        true, true, true, 1.0, 0.2, 100.0, 100.0, 151.0, 150.0));
+}
+
 TEST(PPPClasSeedFde, RecoveryMarkerCountsDownAfterMaxdiffClears) {
     int remaining = 0;
     EXPECT_TRUE(ppp_shared::updateClasSeedArQuarantine(true, 3, remaining));

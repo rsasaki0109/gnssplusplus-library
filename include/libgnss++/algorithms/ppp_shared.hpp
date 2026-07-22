@@ -36,8 +36,31 @@ inline bool shouldRetryClasSeedWithFde(bool seed_valid,
              filter_spp_distance_m > max_spp_divergence_m));
 }
 
-/// MRTKLIB dynamics keeps the previous sol.rr when masked pntpos admission
-/// fails. Native guard rejections still require a minimally populated solve.
+/// A validation-rejected SPP candidate is never admitted to the PPP filter,
+/// but a causally continuous candidate is safer SINGLE output than freezing
+/// an old position while the vehicle moves. The tracker is output-only.
+inline bool clasRejectedSeedOutputIsContinuous(bool candidate_valid,
+                                                bool validation_failed,
+                                                bool has_anchor,
+                                                double jump_m,
+                                                double dt_s,
+                                                double jump_floor_m,
+                                                double speed_limit_mps,
+                                                double trusted_distance_m,
+                                                double trusted_limit_m) {
+    if (!candidate_valid || !validation_failed || !has_anchor ||
+        !std::isfinite(jump_m) || !std::isfinite(dt_s) ||
+        !std::isfinite(trusted_distance_m)) {
+        return false;
+    }
+    const double limit = std::max(jump_floor_m,
+                                  speed_limit_mps * std::max(dt_s, 0.0));
+    return jump_m <= limit && trusted_distance_m <= trusted_limit_m;
+}
+
+/// MRTKLIB dynamics keeps the previous sol.rr when pntpos fails before
+/// estpos() converges. Native guard rejections still require a minimally
+/// populated solve.
 inline bool shouldCoastClasSeed(bool masked_admission_failed,
                                 bool filter_initialized,
                                 int satellites_used) {
