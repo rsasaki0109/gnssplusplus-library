@@ -79,6 +79,15 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--align-fgo-fixed",
+        action="store_true",
+        help=(
+            "Apply the same causal KF-to-FGO frame alignment to FGO FIXED "
+            "epochs. Disabled by default so standalone FGO integer positions "
+            "retain their native absolute frame."
+        ),
+    )
+    parser.add_argument(
         "--alignment-trend-window",
         type=int,
         default=0,
@@ -467,10 +476,13 @@ def fuse(
                     )
 
         correction = np.zeros(3)
-        # A fresh FGO integer solution is already the strongest absolute
-        # estimate available. Alignment is a FLOAT/DR recovery mechanism;
-        # moving FIXED epochs toward the KF can only dilute that guarantee.
-        if int(fgo["status"]) != 4:
+        # Standalone FGO FIXED epochs retain their native absolute frame by
+        # default.  Consensus/fusion experiments can opt into a common causal
+        # frame because integer fixing does not itself eliminate a persistent
+        # position-frame offset.
+        if int(fgo["status"]) != 4 or bool(
+            getattr(args, "align_fgo_fixed", False)
+        ):
             used_trend = False
             if horizontal:
                 correction[:2] = median_vector(horizontal)
@@ -604,6 +616,7 @@ def fuse(
         "require_alignment_initialized": bool(
             getattr(args, "require_alignment_initialized", False)
         ),
+        "align_fgo_fixed": bool(getattr(args, "align_fgo_fixed", False)),
         "alignment_trend_window": trend_window,
         "alignment_trend_max_rate_mps": float(
             getattr(args, "alignment_trend_max_rate_mps", 0.0)

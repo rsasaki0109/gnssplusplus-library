@@ -139,6 +139,7 @@ set(GNSS_SOURCES_NO_OPTIMIZATION
     src/algorithms/rtk_ins_time_update.cpp
     src/algorithms/rtk_tdcp_diagnostics.cpp
     src/algorithms/rtk_validation.cpp
+    src/algorithms/integrity_consensus.cpp
     src/algorithms/fgo.cpp
     src/algorithms/ppp_env_overrides.cpp
     src/algorithms/rtk.cpp

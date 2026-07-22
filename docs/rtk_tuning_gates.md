@@ -21,6 +21,25 @@ FLOAT epochs in slow bounded FIX-to-FIX segments when they diverge from the
 anchor bridge, and uses horizontal FIX-anchor speed for its motion gate. Use
 `--no-float-bridge-tail-guard` to reproduce the pre-bridge-tail coverage stream.
 
+The offline status replay also supports a truth-free kinematic integrity layer.
+The six-fold LOO profile uses a 12 m jump, 200 m/s2 acceleration, and a
+three-epoch hold. The advanced replay can extend a post-trigger plateau to an
+eight-epoch maximum while jumps remain <=0.1 m. Its secondary trigger combines
+jump/acceleration with prefit RMS, AR ratio, suppressed-outlier count, and
+satellite count; LOO support for its exact thresholds is limited, so it remains
+exploratory. Low-satellite exoneration requires nsat >=11, prefit RMS <=0.5 m,
+and NIS/observation <=0.2; kinematic quarantine always overrides that
+exoneration. These are `apply_ppc_status_demotion.py` replay options, not native
+RTK defaults.
+
+The online consensus manager does not let a soft primary-only telemetry warning
+create a quarantine while its independent estimator is unavailable, because
+such a state has no evidence source with which to recover. A hard primary
+suspect remains fail-closed. `--allow-soft-suspect-without-shadow` restores the
+legacy diagnostic behavior. For tight-aperture experiments,
+`--require-primary-suspect-for-disagreement` requires joint primary telemetry
+and estimator disagreement to advance the disagreement streak; it is opt-in.
+
 ## Opt-In Gates
 
 | Flag | Purpose | Default |
@@ -29,10 +48,14 @@ anchor bridge, and uses horizontal FIX-anchor speed for its motion gate. Use
 | `--max-subset-ar-drop-steps <N>` | Extend the progressive subset-AR search by dropping up to N worst-variance DD pairs. Diagnostic only: Nagoya run2 spot checks showed extra candidates are usually rejected by the jump gate unless paired with riskier validation changes. | `6` |
 | `--max-hold-div <m>` | Reject fix if the hold-state diverges from float by more than N meters. | `0` disabled |
 | `--max-pos-jump <m>` | Reject fix if the epoch-to-epoch position jump exceeds N meters. Truth-validation against PPC reference showed jumps cluster at <5 m for correct fixes or >10 m for wrong FIX. Pass `0` to disable. | `5` m |
+| `--max-fixed-anchor-age <s>` | Stop using the last FIX position as a jump reference after N seconds. This prevents permanent stale-anchor lockout, but Nagoya 3 causal replays showed that time expiry alone either reacquires a wrong basin or loses too much coverage; use only for diagnostics. | `0` disabled |
+| `--max-fixed-doppler-consensus <m>` | When the FIX anchor is expired or the residual/covariance gate is suspect, reject FIX candidates farther than N meters from an independently propagated rover-Doppler position track. Accepted FIX only may re-anchor the track. Nagoya 3 at 10 m reduced wrong FIX from 664 to 9, but long-gap Doppler drift reduced correct FIX from 1,241 to 680, so this is an integrity experiment rather than a sign-off default. | `0` disabled |
 | `--max-pos-jump-min <m>` + `--max-pos-jump-rate <m/s>` | Reject fix if the jump from the last fixed position exceeds `max(min, rate * dt)`, so vehicle gaps can be tested without a stale absolute distance clamp. | `0` / `0` disabled |
 | `--max-float-spp-div <m>` | Reject FLOAT epochs that diverge from the same-epoch SPP solution by more than N meters, then fall back to SPP/no-solution. Diagnostic gate for PPC FLOAT high-error sweeps. | `0` disabled |
 | `--max-float-prefit-rms <m>` + `--max-float-prefit-max <m>` + `--max-float-prefit-reset-streak <N>` | Reset ambiguity states for the next epoch after N consecutive otherwise accepted FLOAT epochs have high DD prefit residual RMS or max residual. The current FLOAT epoch is still reported. | `0` / `0` disabled / `3` |
 | `--min-float-prefit-trusted-jump <m>` | Continuity selector for the residual gate. When > 0, high-residual FLOAT resets are allowed only if the FLOAT position has also diverged by at least N meters from the last trusted FIX/FLOAT position. | `0` disabled |
+| `--max-fixed-prefit-rms <m>` + `--min-fixed-prefit-outliers <N>` + `--fixed-prefit-reset-streak <N>` | Detect an accepted FIX in a high-prefit-residual basin after suppression, emit the trigger epoch as FLOAT, clear held integers and stale anchors, and restart ambiguity acquisition from the same-epoch SPP position. Both residual thresholds are required. Nagoya 2/3 diagnostics reduced large wrong FIX but also reduced official-score coverage, so this remains experimental and is not used by the PPC sign-off profile. | `0` / `0` disabled / `1` |
+| `--max-fixed-overconfidence-cov-trace <m2>` | Add an upper FLOAT position-covariance-trace condition to the fixed-prefit reset, targeting filters that are implausibly confident while raw DD residuals remain large. It has no effect unless the fixed-prefit residual gate is enabled. | `0` disabled |
 | `--max-update-nis-per-obs <v>` | Reject a whole RTK DD Kalman update before state/covariance mutation when normalized innovation squared divided by active observations exceeds N. | `0` disabled |
 | `--max-fixed-update-nis-per-obs <v>` | Reject only FIXED ambiguity candidates when the preceding RTK DD update NIS divided by active observations exceeds N, while retaining the FLOAT solution for that epoch. | `0` disabled |
 | `--max-fixed-update-post-rms <m>` | Reject only FIXED ambiguity candidates when the preceding RTK DD update post-suppression residual RMS exceeds N meters, while retaining the FLOAT solution for that epoch. | `0` disabled |
@@ -41,7 +64,8 @@ anchor bridge, and uses horizontal FIX-anchor speed for its motion gate. Use
 | `--min-fixed-update-gate-speed <m/s>` + `--max-fixed-update-gate-speed <m/s>` | Optional speed window for the fixed-only NIS/post-RMS gates. | `0` / `0` disabled |
 | `--max-fixed-update-secondary-gate-ratio <v>` + baseline/speed secondary window flags | Optional second OR-window for fixed-only NIS/post-RMS gates. | `0` for all fields |
 | `--demote-fixed-status-max-ratio <v>` | Keep the position solution but output FIX as FLOAT when the AR ratio is finite and at or below N. PPC `nis2-ratio4` uses this to reduce measured Wrong/FIX while preserving official-score coverage. | `0` disabled |
-| `--demote-fixed-status-min-satellites <N>` | Keep the position solution but output FIX as FLOAT when fewer than N satellites are used. The audited KF/FGO matrix uses 9; it changes no trajectory positions and keeps Tokyo 1 above the public FIX target. | `0` disabled |
+| `--demote-fixed-status-min-satellites <N>` | Keep the position solution but output FIX as FLOAT when fewer than N satellites are used. The audited KF/FGO integrity matrix uses 8 together with the paired low-satellite ratio gate; it changes no trajectory positions and keeps Tokyo 1 above the public FIX target. | `0` disabled |
+| `--demote-fixed-status-low-satellite-ceiling <N>` + `--demote-fixed-status-low-satellite-max-ratio <R>` | Keep the position solution but output FIX as FLOAT when at most N satellites are used and the AR ratio is at most R. Both options are required. The audited integrity profile combines N=11/R=15 with minimum 8 satellites. | `0` disabled |
 | `--rtk-snr-weighting` + `--rtk-snr-reference-dbhz <v>` + `--rtk-snr-max-variance-scale <v>` + `--rtk-snr-min-baseline <m>` | Low-cost observation model diagnostic. Uses the lower rover/base SNR for each SD link and inflates DD phase/code variance below the reference SNR, capped by the max scale. | `false` / `45` / `25` / `0` |
 | `--cycle-slip-threshold <m>` + `--doppler-slip-threshold <m>` + `--code-slip-threshold <m>` + `--strict-dynamic-slip-thresholds` + `--adaptive-dynamic-slip-thresholds` | Cycle-slip sensitivity sweep. Dynamic RTK keeps protective minimum thresholds by default; strict/adaptive modes are opt-in urban reacquisition experiments. | `0.05` / `0.20` / `5.0` / `false` / `false` |
 | `--adaptive-dynamic-slip-nonfix-count <N>` | Non-FIX epochs before adaptive dynamic slip thresholds activate. | `3` |

@@ -189,6 +189,8 @@ struct SolveConfig {
         libgnss::RTKProcessor::RTKConfig::ARPolicy::EXTENDED;
     double max_hold_divergence_m = 0.0;
     double max_position_jump_m = 5.0;
+    double max_fixed_anchor_age_s = 0.0;
+    double max_fixed_doppler_consensus_m = 0.0;
     double max_position_jump_min_m = 0.0;
     double max_position_jump_rate_mps = 0.0;
     double max_float_spp_divergence_m = 0.0;
@@ -199,6 +201,11 @@ struct SolveConfig {
     bool max_float_prefit_residual_max_m_set = false;
     bool max_float_prefit_residual_reset_streak_set = false;
     double min_float_prefit_residual_trusted_jump_m = 0.0;
+    double max_fixed_prefit_residual_rms_m = 0.0;
+    int min_fixed_prefit_outliers = 0;
+    double max_fixed_overconfidence_covariance_trace_m2 = 0.0;
+    int fixed_prefit_reset_streak = 1;
+    bool fixed_prefit_quarantine_only = false;
     double max_update_nis_per_observation = 0.0;
     double max_fixed_update_nis_per_observation = 0.0;
     double max_fixed_update_post_residual_rms_m = 0.0;
@@ -217,6 +224,8 @@ struct SolveConfig {
     double demote_fixed_status_max_ratio = 0.0;
     double demote_fixed_status_gate_ratio = 0.0;
     int demote_fixed_status_min_satellites = 0;
+    int demote_fixed_status_low_satellite_ceiling = 0;
+    double demote_fixed_status_low_satellite_max_ratio = 0.0;
     double min_demote_fixed_status_baseline_m = 0.0;
     double max_demote_fixed_status_baseline_m = 0.0;
     int max_consecutive_float_for_reset = 0;
@@ -287,6 +296,14 @@ bool shouldDemoteFixedStatus(const SolveConfig& config,
 
     if (config.demote_fixed_status_min_satellites > 0 &&
         solution.num_satellites < config.demote_fixed_status_min_satellites) {
+        return true;
+    }
+
+    if (config.demote_fixed_status_low_satellite_ceiling > 0 &&
+        config.demote_fixed_status_low_satellite_max_ratio > 0.0 &&
+        solution.num_satellites <= config.demote_fixed_status_low_satellite_ceiling &&
+        std::isfinite(solution.ratio) &&
+        solution.ratio <= config.demote_fixed_status_low_satellite_max_ratio) {
         return true;
     }
 
@@ -610,6 +627,9 @@ public:
               << "selected_pair_count,selected_distinct_sats,selected_distinct_systems,"
               << "selected_distinct_frequencies,selected_dual_frequency_sats,"
               << "selected_fixed_ambiguities,selected_used_subset,"
+              << "selected_reference_satellites,prior_held_integer_count,"
+              << "prior_held_pair_count,prior_consecutive_fix_count,"
+              << "prior_tracked_ambiguity_count,"
               << "used_wlnl_fallback,validation_attempted,validation_passed,"
               << "cp_pr_gate_evaluated,cp_pr_gate_rejected,cp_pr_gate_escalated,"
               << "cp_pr_gate_checked_pairs,cp_pr_gate_bad_pairs,"
@@ -617,7 +637,8 @@ public:
               << "postfix_residual_rms,fixed_float_jump_m,fixed_candidate_x_m,"
               << "fixed_candidate_y_m,fixed_candidate_z_m,"
               << "fixed_candidate_float_separation_m,fixed_candidate_history_jump_m,"
-              << "fixed_candidate_history_dt_s,low_count_rescue_evaluated,"
+              << "fixed_candidate_history_dt_s,fixed_candidate_doppler_consensus_distance_m,"
+              << "low_count_rescue_evaluated,"
               << "low_count_rescue_passed,post_validation_rejected,"
               << "final_fixed_applied,hold_fix_attempted,hold_fix_applied,"
               << "hold_fix_candidate_pairs,hold_fix_matched_pairs,hold_fix_jump_m,"
@@ -690,6 +711,11 @@ public:
               << telemetry.selected_dual_frequency_sats << ","
               << telemetry.selected_fixed_ambiguities << ","
               << telemetry.selected_used_subset << ","
+              << telemetry.selected_reference_satellites << ","
+              << telemetry.prior_held_integer_count << ","
+              << telemetry.prior_held_pair_count << ","
+              << telemetry.prior_consecutive_fix_count << ","
+              << telemetry.prior_tracked_ambiguity_count << ","
               << telemetry.used_wlnl_fallback << ","
               << telemetry.validation_attempted << ","
               << telemetry.validation_passed << ","
@@ -723,6 +749,8 @@ public:
         writeNumber(telemetry.fixed_candidate_history_jump_m);
         file_ << ",";
         writeNumber(telemetry.fixed_candidate_history_dt_s);
+        file_ << ",";
+        writeNumber(telemetry.fixed_candidate_doppler_consensus_distance_m);
         file_ << ","
               << telemetry.low_count_rescue_evaluated << ","
               << telemetry.low_count_rescue_passed << ","
@@ -843,6 +871,11 @@ void printUsage(const char* program_name) {
         << "                             (default: 0, disabled)\n"
         << "  --max-pos-jump <v>         Max AR fix jump from last fixed pos in meters\n"
         << "                             (default: 5.0; pass 0 to disable, additional to history check)\n"
+        << "  --max-fixed-anchor-age <s> Expire the last-FIX jump reference after s seconds\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --max-fixed-doppler-consensus <m>\n"
+        << "                             Max FIX distance from Doppler-integrated track\n"
+        << "                             (default: 0, disabled)\n"
         << "  --max-pos-jump-min <v>     Min adaptive AR fix jump in meters (default: 0)\n"
         << "  --max-pos-jump-rate <v>    Max adaptive AR fix jump rate in m/s\n"
         << "                             (default: 0, disabled)\n"
@@ -857,6 +890,18 @@ void printUsage(const char* program_name) {
         << "  --min-float-prefit-trusted-jump <v>\n"
         << "                             Require high-residual FLOAT to be this far from last trusted pos\n"
         << "                             before reset (default: 0, disabled)\n"
+        << "  --max-fixed-prefit-rms <v> Max FIX prefit DD residual RMS for wrong-basin reset\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --min-fixed-prefit-outliers <n>\n"
+        << "                             Required suppressed outliers for wrong-basin reset\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --max-fixed-overconfidence-cov-trace <v>\n"
+        << "                             Require FLOAT position covariance trace <= v m^2\n"
+        << "                             for wrong-basin reset (default: 0, disabled)\n"
+        << "  --fixed-prefit-reset-streak <n>\n"
+        << "                             Consecutive suspect FIX candidates before reset (default: 1)\n"
+        << "  --fixed-prefit-quarantine-only\n"
+        << "                             Clear hold and emit FLOAT without resetting the filter state\n"
         << "  --max-update-nis-per-obs <v>\n"
         << "                             Reject DD Kalman update when NIS/active observation exceeds v\n"
         << "                             (default: 0, disabled)\n"
@@ -910,6 +955,12 @@ void printUsage(const char* program_name) {
         << "                             (default: 0, unconditional when demotion is enabled)\n"
         << "  --demote-fixed-status-min-satellites <n>\n"
         << "                             Output FIX as FLOAT when fewer than n satellites are used\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --demote-fixed-status-low-satellite-ceiling <n>\n"
+        << "                             With the paired max-ratio option, demote at <= n satellites\n"
+        << "                             (default: 0, disabled)\n"
+        << "  --demote-fixed-status-low-satellite-max-ratio <v>\n"
+        << "                             With the paired ceiling, demote when AR ratio is <= v\n"
         << "                             (default: 0, disabled)\n"
         << "  --min-demote-fixed-status-baseline <m>\n"
         << "                             Apply fixed-status demotion only above this baseline length\n"
@@ -1289,6 +1340,42 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         }
         if (arg == "--cmc-ref-level" && i + 1 < argc) {
             config.cmc_ref_level_m = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--demote-fixed-status-low-satellite-ceiling" && i + 1 < argc) {
+            config.demote_fixed_status_low_satellite_ceiling = std::stoi(argv[++i]);
+            continue;
+        }
+        if (arg == "--demote-fixed-status-low-satellite-max-ratio" && i + 1 < argc) {
+            config.demote_fixed_status_low_satellite_max_ratio = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--max-fixed-prefit-rms" && i + 1 < argc) {
+            config.max_fixed_prefit_residual_rms_m = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--max-fixed-anchor-age" && i + 1 < argc) {
+            config.max_fixed_anchor_age_s = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--max-fixed-doppler-consensus" && i + 1 < argc) {
+            config.max_fixed_doppler_consensus_m = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--min-fixed-prefit-outliers" && i + 1 < argc) {
+            config.min_fixed_prefit_outliers = std::stoi(argv[++i]);
+            continue;
+        }
+        if (arg == "--max-fixed-overconfidence-cov-trace" && i + 1 < argc) {
+            config.max_fixed_overconfidence_covariance_trace_m2 = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--fixed-prefit-reset-streak" && i + 1 < argc) {
+            config.fixed_prefit_reset_streak = std::stoi(argv[++i]);
+            continue;
+        }
+        if (arg == "--fixed-prefit-quarantine-only") {
+            config.fixed_prefit_quarantine_only = true;
             continue;
         }
         if (arg == "--cmc-ref-switch-epochs" && i + 1 < argc) {
@@ -1874,6 +1961,12 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     if (config.max_position_jump_m < 0.0) {
         argumentError("--max-pos-jump must be >= 0", argv[0]);
     }
+    if (config.max_fixed_anchor_age_s < 0.0) {
+        argumentError("--max-fixed-anchor-age must be >= 0", argv[0]);
+    }
+    if (config.max_fixed_doppler_consensus_m < 0.0) {
+        argumentError("--max-fixed-doppler-consensus must be >= 0", argv[0]);
+    }
     if (config.max_position_jump_min_m < 0.0) {
         argumentError("--max-pos-jump-min must be >= 0", argv[0]);
     }
@@ -1946,8 +2039,45 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     if (config.demote_fixed_status_gate_ratio < 0.0) {
         argumentError("--demote-fixed-status-gate-ratio must be >= 0", argv[0]);
     }
+    if (config.max_fixed_prefit_residual_rms_m < 0.0) {
+        argumentError("--max-fixed-prefit-rms must be >= 0", argv[0]);
+    }
+    if (config.min_fixed_prefit_outliers < 0) {
+        argumentError("--min-fixed-prefit-outliers must be >= 0", argv[0]);
+    }
+    if (config.max_fixed_overconfidence_covariance_trace_m2 < 0.0) {
+        argumentError("--max-fixed-overconfidence-cov-trace must be >= 0", argv[0]);
+    }
+    if (config.fixed_prefit_reset_streak < 1) {
+        argumentError("--fixed-prefit-reset-streak must be >= 1", argv[0]);
+    }
+    if ((config.max_fixed_prefit_residual_rms_m > 0.0) !=
+        (config.min_fixed_prefit_outliers > 0)) {
+        argumentError(
+            "--max-fixed-prefit-rms and --min-fixed-prefit-outliers must be used together",
+            argv[0]);
+    }
+    if (config.fixed_prefit_quarantine_only &&
+        config.max_fixed_prefit_residual_rms_m <= 0.0) {
+        argumentError(
+            "--fixed-prefit-quarantine-only requires the fixed-prefit RMS/outlier gate",
+            argv[0]);
+    }
     if (config.demote_fixed_status_min_satellites < 0) {
         argumentError("--demote-fixed-status-min-satellites must be >= 0", argv[0]);
+    }
+    if (config.demote_fixed_status_low_satellite_ceiling < 0) {
+        argumentError("--demote-fixed-status-low-satellite-ceiling must be >= 0", argv[0]);
+    }
+    if (config.demote_fixed_status_low_satellite_max_ratio < 0.0) {
+        argumentError("--demote-fixed-status-low-satellite-max-ratio must be >= 0", argv[0]);
+    }
+    if ((config.demote_fixed_status_low_satellite_ceiling > 0) !=
+        (config.demote_fixed_status_low_satellite_max_ratio > 0.0)) {
+        argumentError(
+            "--demote-fixed-status-low-satellite-ceiling and "
+            "--demote-fixed-status-low-satellite-max-ratio must be used together",
+            argv[0]);
     }
     if (config.min_demote_fixed_status_baseline_m < 0.0) {
         argumentError("--min-demote-fixed-status-baseline must be >= 0", argv[0]);
@@ -2259,6 +2389,8 @@ int main(int argc, char* argv[]) {
         rtk_config.ar_policy = config.ar_policy;
         rtk_config.max_hold_divergence_m = config.max_hold_divergence_m;
         rtk_config.max_position_jump_m = config.max_position_jump_m;
+        rtk_config.max_fixed_anchor_age_s = config.max_fixed_anchor_age_s;
+        rtk_config.max_fixed_doppler_consensus_m = config.max_fixed_doppler_consensus_m;
         rtk_config.max_position_jump_min_m = config.max_position_jump_min_m;
         rtk_config.max_position_jump_rate_mps = config.max_position_jump_rate_mps;
         rtk_config.max_float_spp_divergence_m = config.max_float_spp_divergence_m;
@@ -2270,6 +2402,13 @@ int main(int argc, char* argv[]) {
             config.max_float_prefit_residual_reset_streak;
         rtk_config.min_float_prefit_residual_trusted_jump_m =
             config.min_float_prefit_residual_trusted_jump_m;
+        rtk_config.max_fixed_prefit_residual_rms_m =
+            config.max_fixed_prefit_residual_rms_m;
+        rtk_config.min_fixed_prefit_outliers = config.min_fixed_prefit_outliers;
+        rtk_config.max_fixed_overconfidence_covariance_trace_m2 =
+            config.max_fixed_overconfidence_covariance_trace_m2;
+        rtk_config.fixed_prefit_reset_streak = config.fixed_prefit_reset_streak;
+        rtk_config.fixed_prefit_quarantine_only = config.fixed_prefit_quarantine_only;
         rtk_config.max_update_nis_per_observation = config.max_update_nis_per_observation;
         rtk_config.max_fixed_update_nis_per_observation =
             config.max_fixed_update_nis_per_observation;

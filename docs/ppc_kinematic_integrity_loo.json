@@ -1,0 +1,580 @@
+{
+  "runtime_truth_used": false,
+  "reference_truth_role": "offline labels and LOO scoring only",
+  "candidate_grid": {
+    "jump_m": [
+      8.0,
+      10.0,
+      12.0,
+      15.0,
+      20.0
+    ],
+    "acceleration_mps2": [
+      50.0,
+      100.0,
+      200.0,
+      400.0
+    ],
+    "hold_epochs": [
+      1,
+      2,
+      3,
+      5
+    ]
+  },
+  "max_training_correct_harm_rate": 0.0005,
+  "folds": [
+    {
+      "held_out": "tokyo_run1",
+      "selected": {
+        "jump_m": 12.0,
+        "acceleration_mps2": 200.0,
+        "hold_epochs": 3
+      },
+      "training": {
+        "demoted": 36,
+        "correct_fix_harmed": 12,
+        "wrong_fix_caught": 24,
+        "wrong_fix_gt5m_caught": 20,
+        "wrong_fix_gt10m_caught": 20
+      },
+      "held_out_metrics": {
+        "demoted": 9,
+        "correct_fix_harmed": 3,
+        "wrong_fix_caught": 6,
+        "wrong_fix_gt5m_caught": 6,
+        "wrong_fix_gt10m_caught": 6
+      }
+    },
+    {
+      "held_out": "tokyo_run2",
+      "selected": {
+        "jump_m": 12.0,
+        "acceleration_mps2": 200.0,
+        "hold_epochs": 3
+      },
+      "training": {
+        "demoted": 39,
+        "correct_fix_harmed": 12,
+        "wrong_fix_caught": 27,
+        "wrong_fix_gt5m_caught": 23,
+        "wrong_fix_gt10m_caught": 23
+      },
+      "held_out_metrics": {
+        "demoted": 6,
+        "correct_fix_harmed": 3,
+        "wrong_fix_caught": 3,
+        "wrong_fix_gt5m_caught": 3,
+        "wrong_fix_gt10m_caught": 3
+      }
+    },
+    {
+      "held_out": "tokyo_run3",
+      "selected": {
+        "jump_m": 12.0,
+        "acceleration_mps2": 200.0,
+        "hold_epochs": 5
+      },
+      "training": {
+        "demoted": 36,
+        "correct_fix_harmed": 14,
+        "wrong_fix_caught": 22,
+        "wrong_fix_gt5m_caught": 22,
+        "wrong_fix_gt10m_caught": 22
+      },
+      "held_out_metrics": {
+        "demoted": 26,
+        "correct_fix_harmed": 13,
+        "wrong_fix_caught": 13,
+        "wrong_fix_gt5m_caught": 8,
+        "wrong_fix_gt10m_caught": 8
+      }
+    },
+    {
+      "held_out": "nagoya_run1",
+      "selected": {
+        "jump_m": 12.0,
+        "acceleration_mps2": 200.0,
+        "hold_epochs": 3
+      },
+      "training": {
+        "demoted": 45,
+        "correct_fix_harmed": 15,
+        "wrong_fix_caught": 30,
+        "wrong_fix_gt5m_caught": 26,
+        "wrong_fix_gt10m_caught": 26
+      },
+      "held_out_metrics": {
+        "demoted": 0,
+        "correct_fix_harmed": 0,
+        "wrong_fix_caught": 0,
+        "wrong_fix_gt5m_caught": 0,
+        "wrong_fix_gt10m_caught": 0
+      }
+    },
+    {
+      "held_out": "nagoya_run2",
+      "selected": {
+        "jump_m": 12.0,
+        "acceleration_mps2": 200.0,
+        "hold_epochs": 3
+      },
+      "training": {
+        "demoted": 43,
+        "correct_fix_harmed": 13,
+        "wrong_fix_caught": 30,
+        "wrong_fix_gt5m_caught": 26,
+        "wrong_fix_gt10m_caught": 26
+      },
+      "held_out_metrics": {
+        "demoted": 2,
+        "correct_fix_harmed": 2,
+        "wrong_fix_caught": 0,
+        "wrong_fix_gt5m_caught": 0,
+        "wrong_fix_gt10m_caught": 0
+      }
+    },
+    {
+      "held_out": "nagoya_run3",
+      "selected": {
+        "jump_m": 12.0,
+        "acceleration_mps2": 200.0,
+        "hold_epochs": 3
+      },
+      "training": {
+        "demoted": 36,
+        "correct_fix_harmed": 15,
+        "wrong_fix_caught": 21,
+        "wrong_fix_gt5m_caught": 17,
+        "wrong_fix_gt10m_caught": 17
+      },
+      "held_out_metrics": {
+        "demoted": 9,
+        "correct_fix_harmed": 0,
+        "wrong_fix_caught": 9,
+        "wrong_fix_gt5m_caught": 9,
+        "wrong_fix_gt10m_caught": 9
+      }
+    }
+  ],
+  "extension_candidate_grid": {
+    "plateau_max_jump_m": [
+      0.05,
+      0.1,
+      0.2
+    ],
+    "max_hold_epochs": [
+      5,
+      8
+    ],
+    "secondary_prefit_min_m": [
+      5.0,
+      8.0,
+      10.0
+    ],
+    "secondary_ratio_max": [
+      8.0,
+      10.0,
+      15.0
+    ],
+    "secondary_outliers_min": [
+      10,
+      15,
+      20
+    ],
+    "secondary_satellites_max": [
+      12,
+      13,
+      15
+    ],
+    "secondary_off_included": true
+  },
+  "extension_harm_limit_applies_to": "increment beyond fixed primary gate",
+  "extension_folds": [
+    {
+      "held_out": "tokyo_run1",
+      "selected": {
+        "plateau_max_jump_m": 0.1,
+        "max_hold_epochs": 8,
+        "secondary": [
+          5.0,
+          15.0,
+          10,
+          15
+        ]
+      },
+      "training_extension": {
+        "demoted": 22,
+        "correct_fix_harmed": 8,
+        "wrong_fix_caught": 14,
+        "wrong_fix_gt5m_caught": 13,
+        "wrong_fix_gt10m_caught": 11
+      },
+      "held_out_extension": {
+        "demoted": 7,
+        "correct_fix_harmed": 5,
+        "wrong_fix_caught": 2,
+        "wrong_fix_gt5m_caught": 2,
+        "wrong_fix_gt10m_caught": 2
+      },
+      "held_out_combined": {
+        "demoted": 16,
+        "correct_fix_harmed": 8,
+        "wrong_fix_caught": 8,
+        "wrong_fix_gt5m_caught": 8,
+        "wrong_fix_gt10m_caught": 8
+      }
+    },
+    {
+      "held_out": "tokyo_run2",
+      "selected": {
+        "plateau_max_jump_m": 0.1,
+        "max_hold_epochs": 8,
+        "secondary": [
+          5.0,
+          15.0,
+          10,
+          15
+        ]
+      },
+      "training_extension": {
+        "demoted": 20,
+        "correct_fix_harmed": 8,
+        "wrong_fix_caught": 12,
+        "wrong_fix_gt5m_caught": 11,
+        "wrong_fix_gt10m_caught": 9
+      },
+      "held_out_extension": {
+        "demoted": 9,
+        "correct_fix_harmed": 5,
+        "wrong_fix_caught": 4,
+        "wrong_fix_gt5m_caught": 4,
+        "wrong_fix_gt10m_caught": 4
+      },
+      "held_out_combined": {
+        "demoted": 15,
+        "correct_fix_harmed": 8,
+        "wrong_fix_caught": 7,
+        "wrong_fix_gt5m_caught": 7,
+        "wrong_fix_gt10m_caught": 7
+      }
+    },
+    {
+      "held_out": "tokyo_run3",
+      "selected": {
+        "plateau_max_jump_m": 0.1,
+        "max_hold_epochs": 8,
+        "secondary": [
+          5.0,
+          15.0,
+          10,
+          15
+        ]
+      },
+      "training_extension": {
+        "demoted": 26,
+        "correct_fix_harmed": 10,
+        "wrong_fix_caught": 16,
+        "wrong_fix_gt5m_caught": 15,
+        "wrong_fix_gt10m_caught": 13
+      },
+      "held_out_extension": {
+        "demoted": 3,
+        "correct_fix_harmed": 3,
+        "wrong_fix_caught": 0,
+        "wrong_fix_gt5m_caught": 0,
+        "wrong_fix_gt10m_caught": 0
+      },
+      "held_out_combined": {
+        "demoted": 22,
+        "correct_fix_harmed": 10,
+        "wrong_fix_caught": 12,
+        "wrong_fix_gt5m_caught": 8,
+        "wrong_fix_gt10m_caught": 8
+      }
+    },
+    {
+      "held_out": "nagoya_run1",
+      "selected": {
+        "plateau_max_jump_m": 0.1,
+        "max_hold_epochs": 8,
+        "secondary": [
+          5.0,
+          15.0,
+          10,
+          15
+        ]
+      },
+      "training_extension": {
+        "demoted": 29,
+        "correct_fix_harmed": 13,
+        "wrong_fix_caught": 16,
+        "wrong_fix_gt5m_caught": 15,
+        "wrong_fix_gt10m_caught": 13
+      },
+      "held_out_extension": {
+        "demoted": 0,
+        "correct_fix_harmed": 0,
+        "wrong_fix_caught": 0,
+        "wrong_fix_gt5m_caught": 0,
+        "wrong_fix_gt10m_caught": 0
+      },
+      "held_out_combined": {
+        "demoted": 0,
+        "correct_fix_harmed": 0,
+        "wrong_fix_caught": 0,
+        "wrong_fix_gt5m_caught": 0,
+        "wrong_fix_gt10m_caught": 0
+      }
+    },
+    {
+      "held_out": "nagoya_run2",
+      "selected": {
+        "plateau_max_jump_m": 0.1,
+        "max_hold_epochs": 8,
+        "secondary": [
+          5.0,
+          8.0,
+          10,
+          12
+        ]
+      },
+      "training_extension": {
+        "demoted": 19,
+        "correct_fix_harmed": 10,
+        "wrong_fix_caught": 9,
+        "wrong_fix_gt5m_caught": 9,
+        "wrong_fix_gt10m_caught": 9
+      },
+      "held_out_extension": {
+        "demoted": 0,
+        "correct_fix_harmed": 0,
+        "wrong_fix_caught": 0,
+        "wrong_fix_gt5m_caught": 0,
+        "wrong_fix_gt10m_caught": 0
+      },
+      "held_out_combined": {
+        "demoted": 2,
+        "correct_fix_harmed": 2,
+        "wrong_fix_caught": 0,
+        "wrong_fix_gt5m_caught": 0,
+        "wrong_fix_gt10m_caught": 0
+      }
+    },
+    {
+      "held_out": "nagoya_run3",
+      "selected": {
+        "plateau_max_jump_m": 0.05,
+        "max_hold_epochs": 8,
+        "secondary": [
+          5.0,
+          15.0,
+          10,
+          15
+        ]
+      },
+      "training_extension": {
+        "demoted": 26,
+        "correct_fix_harmed": 13,
+        "wrong_fix_caught": 13,
+        "wrong_fix_gt5m_caught": 12,
+        "wrong_fix_gt10m_caught": 10
+      },
+      "held_out_extension": {
+        "demoted": 0,
+        "correct_fix_harmed": 0,
+        "wrong_fix_caught": 0,
+        "wrong_fix_gt5m_caught": 0,
+        "wrong_fix_gt10m_caught": 0
+      },
+      "held_out_combined": {
+        "demoted": 9,
+        "correct_fix_harmed": 0,
+        "wrong_fix_caught": 9,
+        "wrong_fix_gt5m_caught": 9,
+        "wrong_fix_gt10m_caught": 9
+      }
+    }
+  ],
+  "production": {
+    "jump_m": 12.0,
+    "acceleration_mps2": 200.0,
+    "hold_epochs": 3,
+    "runs": {
+      "tokyo_run1": {
+        "demoted": 9,
+        "correct_fix_harmed": 3,
+        "wrong_fix_caught": 6,
+        "wrong_fix_gt5m_caught": 6,
+        "wrong_fix_gt10m_caught": 6
+      },
+      "tokyo_run2": {
+        "demoted": 6,
+        "correct_fix_harmed": 3,
+        "wrong_fix_caught": 3,
+        "wrong_fix_gt5m_caught": 3,
+        "wrong_fix_gt10m_caught": 3
+      },
+      "tokyo_run3": {
+        "demoted": 19,
+        "correct_fix_harmed": 7,
+        "wrong_fix_caught": 12,
+        "wrong_fix_gt5m_caught": 8,
+        "wrong_fix_gt10m_caught": 8
+      },
+      "nagoya_run1": {
+        "demoted": 0,
+        "correct_fix_harmed": 0,
+        "wrong_fix_caught": 0,
+        "wrong_fix_gt5m_caught": 0,
+        "wrong_fix_gt10m_caught": 0
+      },
+      "nagoya_run2": {
+        "demoted": 2,
+        "correct_fix_harmed": 2,
+        "wrong_fix_caught": 0,
+        "wrong_fix_gt5m_caught": 0,
+        "wrong_fix_gt10m_caught": 0
+      },
+      "nagoya_run3": {
+        "demoted": 9,
+        "correct_fix_harmed": 0,
+        "wrong_fix_caught": 9,
+        "wrong_fix_gt5m_caught": 9,
+        "wrong_fix_gt10m_caught": 9
+      }
+    },
+    "total": {
+      "demoted": 45,
+      "correct_fix_harmed": 15,
+      "wrong_fix_caught": 30,
+      "wrong_fix_gt5m_caught": 26,
+      "wrong_fix_gt10m_caught": 26
+    }
+  },
+  "advanced_production": {
+    "primary": {
+      "jump_m": 12.0,
+      "acceleration_mps2": 200.0,
+      "hold_epochs": 3
+    },
+    "plateau_max_jump_m": 0.1,
+    "max_hold_epochs": 8,
+    "secondary": [
+      5.0,
+      10.0,
+      10,
+      13
+    ],
+    "runs": {
+      "tokyo_run1": {
+        "demoted": 16,
+        "correct_fix_harmed": 8,
+        "wrong_fix_caught": 8,
+        "wrong_fix_gt5m_caught": 8,
+        "wrong_fix_gt10m_caught": 8
+      },
+      "tokyo_run2": {
+        "demoted": 15,
+        "correct_fix_harmed": 8,
+        "wrong_fix_caught": 7,
+        "wrong_fix_gt5m_caught": 7,
+        "wrong_fix_gt10m_caught": 7
+      },
+      "tokyo_run3": {
+        "demoted": 19,
+        "correct_fix_harmed": 7,
+        "wrong_fix_caught": 12,
+        "wrong_fix_gt5m_caught": 8,
+        "wrong_fix_gt10m_caught": 8
+      },
+      "nagoya_run1": {
+        "demoted": 0,
+        "correct_fix_harmed": 0,
+        "wrong_fix_caught": 0,
+        "wrong_fix_gt5m_caught": 0,
+        "wrong_fix_gt10m_caught": 0
+      },
+      "nagoya_run2": {
+        "demoted": 6,
+        "correct_fix_harmed": 2,
+        "wrong_fix_caught": 4,
+        "wrong_fix_gt5m_caught": 4,
+        "wrong_fix_gt10m_caught": 4
+      },
+      "nagoya_run3": {
+        "demoted": 12,
+        "correct_fix_harmed": 0,
+        "wrong_fix_caught": 12,
+        "wrong_fix_gt5m_caught": 12,
+        "wrong_fix_gt10m_caught": 12
+      }
+    },
+    "extension_runs": {
+      "tokyo_run1": {
+        "demoted": 7,
+        "correct_fix_harmed": 5,
+        "wrong_fix_caught": 2,
+        "wrong_fix_gt5m_caught": 2,
+        "wrong_fix_gt10m_caught": 2
+      },
+      "tokyo_run2": {
+        "demoted": 9,
+        "correct_fix_harmed": 5,
+        "wrong_fix_caught": 4,
+        "wrong_fix_gt5m_caught": 4,
+        "wrong_fix_gt10m_caught": 4
+      },
+      "tokyo_run3": {
+        "demoted": 0,
+        "correct_fix_harmed": 0,
+        "wrong_fix_caught": 0,
+        "wrong_fix_gt5m_caught": 0,
+        "wrong_fix_gt10m_caught": 0
+      },
+      "nagoya_run1": {
+        "demoted": 0,
+        "correct_fix_harmed": 0,
+        "wrong_fix_caught": 0,
+        "wrong_fix_gt5m_caught": 0,
+        "wrong_fix_gt10m_caught": 0
+      },
+      "nagoya_run2": {
+        "demoted": 4,
+        "correct_fix_harmed": 0,
+        "wrong_fix_caught": 4,
+        "wrong_fix_gt5m_caught": 4,
+        "wrong_fix_gt10m_caught": 4
+      },
+      "nagoya_run3": {
+        "demoted": 3,
+        "correct_fix_harmed": 0,
+        "wrong_fix_caught": 3,
+        "wrong_fix_gt5m_caught": 3,
+        "wrong_fix_gt10m_caught": 3
+      }
+    },
+    "total": {
+      "demoted": 68,
+      "correct_fix_harmed": 25,
+      "wrong_fix_caught": 43,
+      "wrong_fix_gt5m_caught": 39,
+      "wrong_fix_gt10m_caught": 39
+    },
+    "extension_total": {
+      "demoted": 23,
+      "correct_fix_harmed": 10,
+      "wrong_fix_caught": 13,
+      "wrong_fix_gt5m_caught": 13,
+      "wrong_fix_gt10m_caught": 13
+    }
+  },
+  "positions": {
+    "tokyo_run1": "output\\tokyo1_selected_quality_tcm3_tier3_truthfree.pos",
+    "tokyo_run2": "output\\tokyo2_selected_quality_rtkbaseline_tier2_truthfree.pos",
+    "tokyo_run3": "output\\tokyo3_selected_quality_rtkbaseline_tier2_truthfree.pos",
+    "nagoya_run1": "output\\hybrid_nagoya1_multistage_m4_fixedpos_bridge05_vertical025_veld_vertical10_truthfree.pos",
+    "nagoya_run2": "output\\nagoya2_wrong_basin_fgo_escape_truthfree.pos",
+    "nagoya_run3": "output\\nagoya3_selected_online_consensus_a11_recovery.pos"
+  }
+}

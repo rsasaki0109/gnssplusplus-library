@@ -203,6 +203,14 @@ public:
         /// Set to 0 to disable.
         double max_position_jump_m = 5.0;
 
+        /// Maximum age of the previous FIX position used by history/jump
+        /// validation. 0 preserves the legacy non-expiring anchor.
+        double max_fixed_anchor_age_s = 0.0;
+
+        /// Reject FIX candidates that disagree with an independent position
+        /// track propagated by rover Doppler velocity. 0 disables the gate.
+        double max_fixed_doppler_consensus_m = 0.0;
+
         /// Adaptive max AR fix jump from last fixed position.
         /// When max_position_jump_rate_mps > 0, accepted jump is
         /// max(max_position_jump_min_m, max_position_jump_rate_mps * dt).
@@ -239,6 +247,29 @@ public:
         /// preserves the residual-only behavior when the residual gate is
         /// enabled.
         double min_float_prefit_residual_trusted_jump_m = 0.0;
+
+        /// Reset a validated FIX candidate when its DD prefit residual RMS is
+        /// above this threshold and at least min_fixed_prefit_outliers were
+        /// suppressed. The triggering epoch is emitted as FLOAT and all held
+        /// integers are cleared before SPP-seeded reacquisition. Both
+        /// thresholds must be positive; 0 (default) disables the gate.
+        double max_fixed_prefit_residual_rms_m = 0.0;
+        int min_fixed_prefit_outliers = 0;
+
+        /// Optional upper bound on the float position covariance trace for the
+        /// fixed-prefit wrong-basin reset. A positive value requires the high
+        /// residual/outlier candidate to also be overconfident.
+        double max_fixed_overconfidence_covariance_trace_m2 = 0.0;
+
+        /// Consecutive high-prefit/high-outlier FIX candidates required before
+        /// the hard reacquisition reset. Defaults to 1 when the gate is used.
+        int fixed_prefit_reset_streak = 1;
+
+        /// Reject persistent high-prefit FIX candidates and clear held
+        /// integers without resetting the FLOAT state or ambiguity
+        /// covariance. This avoids the long coverage loss of an SPP-seeded
+        /// hard reset while preserving the same causal evidence threshold.
+        bool fixed_prefit_quarantine_only = false;
 
         /// Reject a whole RTK DD Kalman update when normalized innovation
         /// squared divided by active observations exceeds this threshold.
@@ -672,7 +703,16 @@ public:
         int selected_dual_frequency_sats = 0;
         int selected_fixed_ambiguities = 0;
         bool selected_used_subset = false;
+        std::string selected_reference_satellites;
         bool used_wlnl_fallback = false;
+
+        // Integrity-state snapshot taken at the start of the epoch. These
+        // fields expose whether a new candidate inherited held integers and
+        // how many ambiguity states were live before slip/reset processing.
+        int prior_held_integer_count = 0;
+        int prior_held_pair_count = 0;
+        int prior_consecutive_fix_count = 0;
+        int prior_tracked_ambiguity_count = 0;
 
         bool validation_attempted = false;
         bool validation_passed = false;
@@ -685,6 +725,8 @@ public:
         double fixed_candidate_history_jump_m =
             std::numeric_limits<double>::quiet_NaN();
         double fixed_candidate_history_dt_s =
+            std::numeric_limits<double>::quiet_NaN();
+        double fixed_candidate_doppler_consensus_distance_m =
             std::numeric_limits<double>::quiet_NaN();
         bool low_count_rescue_evaluated = false;
         bool low_count_rescue_passed = false;
@@ -892,6 +934,9 @@ private:
     Vector3d last_doppler_velocity_ecef_ = Vector3d::Zero();
     GNSSTime last_doppler_velocity_time_;
     bool has_last_doppler_velocity_ = false;
+    Vector3d doppler_continuity_position_ecef_ = Vector3d::Zero();
+    GNSSTime doppler_continuity_time_;
+    bool has_doppler_continuity_position_ = false;
 
     /**
      * @brief The original processRTKEpoch() body (DD-RTK float/fixed solve).
@@ -1039,6 +1084,7 @@ private:
 
     // Consecutive high-residual FLOAT tracking for residual-aware reacquisition
     int consecutive_high_float_residual_count_ = 0;
+    int consecutive_high_fixed_residual_count_ = 0;
 
     // Remaining epochs for adaptive dynamic slip thresholds after a non-FIX streak.
     int adaptive_dynamic_slip_hold_count_ = 0;
@@ -1276,7 +1322,9 @@ private:
     void handleConsecutiveFloatReset(const ObservationData& rover_obs,
                                      const NavigationData& nav);
     void resetAmbiguityStatesForReacquisition(const ObservationData& rover_obs,
-                                              const NavigationData& nav);
+                                              const NavigationData& nav,
+                                              bool clear_hold_state = false);
+    bool shouldResetAfterFixedResidualGate();
     bool floatResidualExceedsReacquisitionGate() const;
     bool floatResidualTrustedJumpPassesGate(
         const PositionSolution& float_solution,
