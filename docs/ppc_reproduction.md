@@ -191,6 +191,13 @@ MPLBACKEND=Agg python3 scripts/generate_ppc_goal_scorecard.py \
   --summary-json docs/ppc_kf_fgo_goal_metrics.json \
   --comparison-png docs/ppc_libgnss_gici_comparison.png \
   --targets-png docs/ppc_public_targets.png
+
+MPLBACKEND=Agg python3 scripts/plot_ppc_status_trajectories.py \
+  --dataset-root data/PPC-Dataset \
+  --metrics-json docs/ppc_kf_fgo_goal_metrics.json \
+  --output docs/ppc_kf_fgo_fix_status_xy.png \
+  --title "PPC 2024 selected trajectories by solution status" \
+  --subtitle "Correct FIX, wrong FIX (>0.5 m 3D), FLOAT, and other states"
 ```
 
 The selector thresholds were tuned on this public benchmark. The audit proves

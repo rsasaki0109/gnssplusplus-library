@@ -50,6 +50,13 @@ and the PPC score target from the [Turing tight-coupling slides](https://www.den
 
 ![PPC public targets](docs/ppc_public_targets.png)
 
+The XY view below shows where each selected solution is FIXED or FLOAT. Green
+points are correct FIX epochs, red crosses are FIX epochs with 3D error above
+0.5 m, orange points are FLOAT, and the light-gray line is the reference
+trajectory.
+
+![PPC selected XY trajectories by FIX status](docs/ppc_kf_fgo_fix_status_xy.png)
+
 `gici-open` was reproduced from commit
 `e7666110a88d22e08aad24345a253564af9b8024` on its `forppc2024` branch and
 evaluated from exported NMEA with the same six references and metric code.

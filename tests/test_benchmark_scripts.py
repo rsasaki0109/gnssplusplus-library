@@ -67,6 +67,7 @@ import analyze_ppc_segment_selector_sweep as ppc_segment_selector_sweep  # noqa:
 import apply_ppc_dual_profile_selector as ppc_dual_profile_selector  # noqa: E402
 import generate_ppc_rtk_scorecard as ppc_rtk_scorecard  # noqa: E402
 import generate_ppc_goal_scorecard as ppc_goal_scorecard  # noqa: E402
+import plot_ppc_status_trajectories as ppc_status_trajectories  # noqa: E402
 import generate_ppc_selector_validation_scorecard as ppc_selector_scorecard  # noqa: E402
 import generate_ppc_tail_cleanup_scorecard as ppc_tail_cleanup_scorecard  # noqa: E402
 import generate_ppc_rtk_trajectory as ppc_rtk_trajectory  # noqa: E402
@@ -153,6 +154,34 @@ class PPCGoalScorecardTest(unittest.TestCase):
             self.assertEqual(payload["targets"][1]["achieved_pct"], 85.11)
             self.assertIn("separate", payload["targets"][1]["profile"])
             self.assertFalse(payload["evaluation"]["reference_used_by_runtime_selector"])
+
+
+class PPCStatusTrajectoryTest(unittest.TestCase):
+    def test_loads_selected_pos_paths_from_goal_metrics(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_status_paths_") as td:
+            metrics = Path(td) / "metrics.json"
+            metrics.write_text(
+                json.dumps(
+                    {
+                        "runs": [
+                            {
+                                "key": key,
+                                "libgnss": {"pos": f"output/{key}.pos"},
+                            }
+                            for key, _, _ in ppc_status_trajectories.RUNS
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            paths = ppc_status_trajectories.load_solution_paths(None, metrics)
+
+        self.assertEqual(set(paths), {key for key, _, _ in ppc_status_trajectories.RUNS})
+        self.assertEqual(
+            paths["tokyo_run1"],
+            ppc_status_trajectories.ROOT_DIR / "output/tokyo_run1.pos",
+        )
 
 
 class StatusPositionMergeTest(unittest.TestCase):
