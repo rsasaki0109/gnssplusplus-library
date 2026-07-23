@@ -4,16 +4,13 @@ Benchmark source: [GNSS測位エコシステムの統合を目指して - モダ
 
 ## Current verdict
 
-The full six-run PPC moving-data validation is complete. Across 58,256 scored
-epochs, LibGNSS++ produced 13,775 FIX epochs (23.646%) with 0.593 m aggregate
+The full six-run PPC moving-data validation is complete. Across 58,258 scored
+epochs, LibGNSS++ produced 13,775 FIX epochs (23.645%) with 0.593 m aggregate
 FIX RMS2D, 0.558 m FIX p68, and no FIX epoch above 3 m. Every run covers 100% of
-the reference interval and at least 99.92% of observation epochs.
+the reference interval and at least 99.95% of observation epochs.
 
 The same gate now reports non-FIX quality explicitly. Aggregate all-solution
-RMS2D is 36.796 m, FLOAT RMS2D is 16.471 m, and SINGLE RMS2D is 71.060 m.
-Relative to the preceding native baseline, all-solution RMS2D improves from
-36.991 m and SINGLE RMS2D from 71.481 m. FLOAT and FIX coordinates, solution
-statuses, and epoch coverage are unchanged across all 58,256 scored epochs.
+RMS2D is 36.510 m, FLOAT RMS2D is 16.777 m, and SINGLE RMS2D is 70.316 m.
 
 Compared with the published MRTKLIB v0.4.2 results, native FIX rate is higher
 on Tokyo 1, Tokyo 3, and Nagoya 1; it is within 0.3 percentage points on
