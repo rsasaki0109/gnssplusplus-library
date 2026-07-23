@@ -8,10 +8,12 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <vector>
 
+#include <libgnss++/algorithms/integrity_consensus.hpp>
 #include <libgnss++/algorithms/nlos_weights.hpp>
 #include <libgnss++/algorithms/float_trust_policy.hpp>
 #include <libgnss++/algorithms/rtk.hpp>
@@ -228,6 +230,30 @@ struct SolveConfig {
     double demote_fixed_status_low_satellite_max_ratio = 0.0;
     double min_demote_fixed_status_baseline_m = 0.0;
     double max_demote_fixed_status_baseline_m = 0.0;
+    bool enable_realtime_fix_integrity = false;
+    // Fix 1 (agent/realtime-fix-integrity follow-up): opt-in, off by
+    // default. Ported field-for-field from the frozen offline external
+    // audit and safe there (Shinjuku-Trimble: 22 caught / 0 harmed), but
+    // net-harmful on the plain KF PPC baseline (nagoya2: 80 caught / 177
+    // harmed) -- see output/ppc_realtime_fix_integrity_matrix.md's "After
+    // fix" section. Recommended for low-FIX-rate receivers matching the
+    // audited offline external policy.
+    bool enable_integrity_base_gate = false;
+    std::string integrity_shadow_csv_path;
+    std::string integrity_log_path;
+    double integrity_shadow_match_tolerance_s = 0.25;
+    double integrity_shadow_max_age_s = 1.0;
+    double integrity_shadow_max_gdop = 4.0;
+    double integrity_shadow_max_ddpr_rms_m = 40.0;
+    int integrity_shadow_min_satellites = 8;
+    double integrity_shadow_default_covariance_trace_m2 = 4.0;
+    // Health must bound position accuracy, not just availability -- see
+    // libgnss::ShadowEstimateHealthGate's doc comment. A missing/unpopulated
+    // (non-positive) covariance trace disables demotion authority unless
+    // integrity_shadow_assume_default_covariance_trace is explicitly set.
+    double integrity_shadow_max_covariance_trace_m2 = 4.0;
+    bool integrity_shadow_assume_default_covariance_trace = false;
+    bool integrity_shadow_require_fixed_status = true;
     int max_consecutive_float_for_reset = 0;
     int max_consecutive_nonfix_for_reset = 0;
     double max_postfix_residual_rms = 0.0;
@@ -353,6 +379,235 @@ bool shouldDemoteFixedStatus(const SolveConfig& config,
     }
     return false;
 }
+
+std::vector<std::string> parseCsvFields(const std::string& line) {
+    std::vector<std::string> fields;
+    std::string field;
+    bool quoted = false;
+    for (std::size_t i = 0; i < line.size(); ++i) {
+        const char ch = line[i];
+        if (ch == '"') {
+            if (quoted && i + 1 < line.size() && line[i + 1] == '"') {
+                field.push_back('"');
+                ++i;
+            } else {
+                quoted = !quoted;
+            }
+        } else if (ch == ',' && !quoted) {
+            fields.push_back(field);
+            field.clear();
+        } else {
+            field.push_back(ch);
+        }
+    }
+    fields.push_back(field);
+    return fields;
+}
+
+std::optional<double> parseFiniteDouble(const std::string& text) {
+    if (text.empty()) return std::nullopt;
+    char* end = nullptr;
+    const double value = std::strtod(text.c_str(), &end);
+    if (end == text.c_str() || *end != '\0' || !std::isfinite(value)) {
+        return std::nullopt;
+    }
+    return value;
+}
+
+class IntegrityShadowTimeline {
+public:
+    struct Config {
+        double match_tolerance_s = 0.25;
+        libgnss::ShadowEstimateHealthGate::Config health;
+    };
+
+    explicit IntegrityShadowTimeline(Config config)
+        : config_(config), health_gate_(config.health) {}
+
+    // Diagnostics for reporting how often the shadow qualifies as demotion
+    // authority under the configured health gate.
+    std::uint64_t lookups() const { return lookups_; }
+    std::uint64_t healthyLookups() const { return healthy_lookups_; }
+
+    bool load(const std::string& path) {
+        std::ifstream input(path);
+        if (!input) return false;
+        std::string line;
+        if (!std::getline(input, line)) return false;
+        const auto header = parseCsvFields(line);
+        std::map<std::string, std::size_t> columns;
+        for (std::size_t i = 0; i < header.size(); ++i) columns[header[i]] = i;
+        for (const char* required : {"tow", "status", "x_ecef_m", "y_ecef_m", "z_ecef_m"}) {
+            if (columns.find(required) == columns.end()) return false;
+        }
+
+        auto field = [&](const std::vector<std::string>& row,
+                         const char* name) -> std::string {
+            const auto it = columns.find(name);
+            return it != columns.end() && it->second < row.size()
+                ? row[it->second]
+                : std::string{};
+        };
+        while (std::getline(input, line)) {
+            const auto row = parseCsvFields(line);
+            const auto tow = parseFiniteDouble(field(row, "tow"));
+            const auto x = parseFiniteDouble(field(row, "x_ecef_m"));
+            const auto y = parseFiniteDouble(field(row, "y_ecef_m"));
+            const auto z = parseFiniteDouble(field(row, "z_ecef_m"));
+            if (!tow || !x || !y || !z) continue;
+            Sample sample;
+            sample.tow_s = *tow;
+            sample.position_ecef = Eigen::Vector3d(*x, *y, *z);
+            const std::string status = field(row, "status");
+            sample.status_fixed = status == "FIXED" || status == "4";
+            sample.status_present = sample.status_fixed || status == "FLOAT" ||
+                status == "3";
+            sample.gdop = parseFiniteDouble(field(row, "gdop"));
+            sample.ddpr_rms_m = parseFiniteDouble(field(row, "ddpr_rms_m"));
+            if (const auto nsat = parseFiniteDouble(field(row, "nsat"))) {
+                sample.num_satellites = static_cast<int>(*nsat);
+            }
+            sample.covariance_trace_m2 = parseFiniteDouble(
+                field(row, "position_covariance_trace_m2"));
+            if (const auto generation = parseFiniteDouble(
+                    field(row, "reset_generation"))) {
+                sample.reset_generation = static_cast<std::uint64_t>(
+                    std::max(0.0, *generation));
+            }
+            samples_.push_back(std::move(sample));
+        }
+        std::sort(samples_.begin(), samples_.end(), [](const Sample& lhs, const Sample& rhs) {
+            return lhs.tow_s < rhs.tow_s;
+        });
+        return !samples_.empty();
+    }
+
+    libgnss::RealtimeFixIntegrityGate::IndependentEstimate lookup(
+        const libgnss::GNSSTime& time) const {
+        libgnss::RealtimeFixIntegrityGate::IndependentEstimate output;
+        if (samples_.empty()) return output;
+        // Never consume a future shadow estimate.  The CSV may have been
+        // generated offline, but the gate must behave exactly like a live
+        // KF/FGO subscriber at this epoch.
+        const auto after = std::upper_bound(
+            samples_.begin(), samples_.end(), time.tow,
+            [](double tow, const Sample& sample) { return tow < sample.tow_s; });
+        if (after == samples_.begin()) return output;
+        const Sample* best = &*std::prev(after);
+        const double age_s = time.tow - best->tow_s;
+        if (age_s > config_.match_tolerance_s) return output;
+
+        output.present = true;
+        output.age_s = age_s;
+        output.reset_generation = best->reset_generation;
+        output.estimate.valid = best->position_ecef.allFinite();
+        output.estimate.position_ecef = best->position_ecef;
+
+        libgnss::ShadowEstimateHealthGate::Sample health_sample;
+        health_sample.status_fixed = best->status_fixed;
+        health_sample.status_present = best->status_present;
+        health_sample.gdop = best->gdop;
+        health_sample.ddpr_rms_m = best->ddpr_rms_m;
+        health_sample.num_satellites = best->num_satellites;
+        health_sample.covariance_trace_m2 = best->covariance_trace_m2;
+        health_sample.age_s = age_s;
+        const auto health = health_gate_.evaluate(health_sample);
+        output.estimate.covariance_trace_m2 = health.covariance_trace_m2;
+
+        ++lookups_;
+        if (health.healthy) ++healthy_lookups_;
+        return output;
+    }
+
+private:
+    struct Sample {
+        double tow_s = 0.0;
+        bool status_fixed = false;
+        bool status_present = false;
+        Eigen::Vector3d position_ecef = Eigen::Vector3d::Zero();
+        std::optional<double> gdop;
+        std::optional<double> ddpr_rms_m;
+        std::optional<int> num_satellites;
+        std::optional<double> covariance_trace_m2;
+        std::uint64_t reset_generation = 0;
+    };
+
+    Config config_;
+    libgnss::ShadowEstimateHealthGate health_gate_;
+    std::vector<Sample> samples_;
+    mutable std::uint64_t lookups_ = 0;
+    mutable std::uint64_t healthy_lookups_ = 0;
+};
+
+const char* integrityStateName(libgnss::IntegrityConsensusManager::State state) {
+    using State = libgnss::IntegrityConsensusManager::State;
+    switch (state) {
+        case State::NORMAL: return "NORMAL";
+        case State::SUSPECT: return "SUSPECT";
+        case State::QUARANTINE: return "QUARANTINE";
+        case State::RECOVERY: return "RECOVERY";
+    }
+    return "UNKNOWN";
+}
+
+class IntegrityTelemetryWriter {
+public:
+    bool open(const std::string& path) {
+        if (path.empty()) return true;
+        output_.open(path);
+        if (!output_) return false;
+        output_ << "gps_week,tow,status,state,reasons,allow_fixed,request_primary_reset,"
+                   "promote_joint_anchor,disagreement_m,aperture_m,recovery_streak,"
+                   "primary_suspect,hard_primary_suspect,independent_present,"
+                   "independent_valid,independent_age_s,primary_covariance_trace_m2,"
+                   "independent_covariance_trace_m2,independent_reset_generation,"
+                   "residual_streak_match,residual_streak_demoted,residual_spike_demoted,"
+                   "consensus_demoted,output_demoted,output_latency_epochs,"
+                   "base_confidence_demoted\n";
+        return true;
+    }
+
+    void write(const libgnss::RealtimeFixIntegrityGate::Emission& emission) {
+        if (!output_) return;
+        const auto& solution = emission.solution;
+        const auto& telemetry = emission.telemetry;
+        output_ << solution.time.week << ',' << std::fixed << std::setprecision(3)
+                << solution.time.tow << ',' << static_cast<int>(solution.status) << ','
+                << integrityStateName(telemetry.consensus.state) << ','
+                << telemetry.consensus.reasons << ','
+                << telemetry.consensus.allow_fixed << ','
+                << telemetry.consensus.request_primary_reset << ','
+                << telemetry.consensus.promote_joint_anchor << ',';
+        writeNumber(telemetry.consensus.disagreement_m);
+        output_ << ',';
+        writeNumber(telemetry.consensus.aperture_m);
+        output_ << ',' << telemetry.consensus.recovery_streak << ','
+                << telemetry.primary_suspect << ','
+                << telemetry.hard_primary_suspect << ','
+                << telemetry.independent_present << ','
+                << telemetry.independent_valid << ',';
+        writeNumber(telemetry.independent_age_s);
+        output_ << ',';
+        writeNumber(telemetry.primary_covariance_trace_m2);
+        output_ << ',';
+        writeNumber(telemetry.independent_covariance_trace_m2);
+        output_ << ',' << telemetry.independent_reset_generation << ','
+                << telemetry.residual_streak_match << ','
+                << telemetry.residual_streak_demoted << ','
+                << telemetry.residual_spike_demoted << ','
+                << telemetry.consensus_demoted << ','
+                << telemetry.output_demoted << ','
+                << telemetry.output_latency_epochs << ','
+                << telemetry.base_confidence_demoted << '\n';
+    }
+
+private:
+    void writeNumber(double value) {
+        if (std::isfinite(value)) output_ << std::setprecision(9) << value;
+    }
+
+    std::ofstream output_;
+};
 
 std::string modeChoiceString(ModeChoice mode) {
     switch (mode) {
@@ -1176,6 +1431,47 @@ void printUsage(const char* program_name) {
         << "                             Maximum trusted-anchor age (default: 6)\n"
         << "  --rover-seed-pos <file>    Inject ECEF seed positions from .pos file per epoch\n"
         << "  --diagnostics-csv <file>   Write per-epoch RTK candidate diagnostics CSV (PPC pipeline format)\n"
+        << "  --realtime-fix-integrity   Gate FIX output with bounded-latency residual checks\n"
+        << "                             (default: off; maximum latency: 7 epochs)\n"
+        << "  --integrity-base-gate      Also enable the frozen offline low-satellite/ratio\n"
+        << "                             confidence gate (default: off). Recommended for\n"
+        << "                             low-FIX-rate receivers matching the audited offline\n"
+        << "                             external policy (UrbanNav Shinjuku-Trimble: 22 caught,\n"
+        << "                             0 harmed); on the plain KF PPC baseline it over-demotes\n"
+        << "                             (net-harmful on at least one PPC run) -- see\n"
+        << "                             output/ppc_realtime_fix_integrity_matrix.md.\n"
+        << "  --no-integrity-base-gate   Disable the base confidence gate (default)\n"
+        << "  --integrity-shadow-csv <file>\n"
+        << "                             Add causal KF/FGO position consensus from an epoch CSV;\n"
+        << "                             implies --realtime-fix-integrity\n"
+        << "  --integrity-shadow-match-tolerance <s>\n"
+        << "                             Max age of a shadow sample to match an epoch (default: 0.25)\n"
+        << "  --integrity-shadow-max-age <s>\n"
+        << "                             Max shadow sample age accepted as healthy (default: 1.0)\n"
+        << "  --integrity-shadow-max-gdop <v>\n"
+        << "                             Max shadow GDOP accepted as healthy (default: 4.0)\n"
+        << "  --integrity-shadow-max-ddpr-rms <m>\n"
+        << "                             Max shadow DD-prefit RMS accepted as healthy (default: 40.0)\n"
+        << "  --integrity-shadow-min-satellites <n>\n"
+        << "                             Min shadow satellite count accepted as healthy (default: 8)\n"
+        << "  --integrity-shadow-max-covariance-trace <m^2>\n"
+        << "                             Max shadow position_covariance_trace_m2 accepted as\n"
+        << "                             demotion authority (default: 4.0)\n"
+        << "  --integrity-shadow-assume-default-covariance-trace\n"
+        << "                             Opt in to substituting --integrity-shadow-default-covariance-trace\n"
+        << "                             when the shadow CSV's own trace is missing/non-positive\n"
+        << "                             (default: off -- a missing/unpopulated trace disables\n"
+        << "                             demotion authority rather than silently granting it)\n"
+        << "  --integrity-shadow-default-covariance-trace <m^2>\n"
+        << "                             Fallback trace used only with --integrity-shadow-assume-\n"
+        << "                             default-covariance-trace (default: 4.0)\n"
+        << "  --integrity-shadow-require-fixed-status\n"
+        << "                             Require shadow status FIXED for demotion authority (default: on)\n"
+        << "  --integrity-shadow-allow-float-status\n"
+        << "                             Allow shadow status FLOAT to act as demotion authority too\n"
+        << "                             (default: off; FLOAT shadow samples were found badly diverged\n"
+        << "                             on PPC tokyo1 despite passing GDOP/DDPR-RMS/nsat/age)\n"
+        << "  --integrity-log <file>     Write real-time integrity decisions and latency CSV\n"
         << "  --rtk-update-outlier-threshold <v>\n"
         << "                             Outlier rejection threshold for RTK measurement update (default: 30.0)\n"
         << "  --no-kinematic-post-filter Disable the kinematic output post-filter\n"
@@ -1420,6 +1716,68 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         }
         if (arg == "--ddpr-anchor-max-fde-removals" && i + 1 < argc) {
             config.ddpr_anchor_max_fde_removals = std::stoi(argv[++i]);
+            continue;
+        }
+        if (arg == "--realtime-fix-integrity") {
+            config.enable_realtime_fix_integrity = true;
+            continue;
+        }
+        if (arg == "--integrity-base-gate") {
+            config.enable_integrity_base_gate = true;
+            continue;
+        }
+        if (arg == "--no-integrity-base-gate") {
+            config.enable_integrity_base_gate = false;
+            continue;
+        }
+        if (arg == "--integrity-shadow-csv" && i + 1 < argc) {
+            config.integrity_shadow_csv_path = argv[++i];
+            config.enable_realtime_fix_integrity = true;
+            continue;
+        }
+        if (arg == "--integrity-shadow-match-tolerance" && i + 1 < argc) {
+            config.integrity_shadow_match_tolerance_s = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--integrity-shadow-max-age" && i + 1 < argc) {
+            config.integrity_shadow_max_age_s = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--integrity-shadow-max-gdop" && i + 1 < argc) {
+            config.integrity_shadow_max_gdop = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--integrity-shadow-max-ddpr-rms" && i + 1 < argc) {
+            config.integrity_shadow_max_ddpr_rms_m = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--integrity-shadow-min-satellites" && i + 1 < argc) {
+            config.integrity_shadow_min_satellites = std::stoi(argv[++i]);
+            continue;
+        }
+        if (arg == "--integrity-shadow-max-covariance-trace" && i + 1 < argc) {
+            config.integrity_shadow_max_covariance_trace_m2 = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--integrity-shadow-default-covariance-trace" && i + 1 < argc) {
+            config.integrity_shadow_default_covariance_trace_m2 = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--integrity-shadow-assume-default-covariance-trace") {
+            config.integrity_shadow_assume_default_covariance_trace = true;
+            continue;
+        }
+        if (arg == "--integrity-shadow-require-fixed-status") {
+            config.integrity_shadow_require_fixed_status = true;
+            continue;
+        }
+        if (arg == "--integrity-shadow-allow-float-status") {
+            config.integrity_shadow_require_fixed_status = false;
+            continue;
+        }
+        if (arg == "--integrity-log" && i + 1 < argc) {
+            config.integrity_log_path = argv[++i];
+            config.enable_realtime_fix_integrity = true;
             continue;
         }
         if (arg == "--low-ratio-guard-threshold" && i + 1 < argc) {
@@ -2473,6 +2831,46 @@ int main(int argc, char* argv[]) {
             writeDiagnosticsHeader(diagnostics_csv);
         }
 
+        std::unique_ptr<IntegrityShadowTimeline> integrity_shadow;
+        if (!config.integrity_shadow_csv_path.empty()) {
+            IntegrityShadowTimeline::Config shadow_config;
+            shadow_config.match_tolerance_s = config.integrity_shadow_match_tolerance_s;
+            shadow_config.health.max_age_s = config.integrity_shadow_max_age_s;
+            shadow_config.health.max_gdop = config.integrity_shadow_max_gdop;
+            shadow_config.health.max_ddpr_rms_m = config.integrity_shadow_max_ddpr_rms_m;
+            shadow_config.health.min_satellites = config.integrity_shadow_min_satellites;
+            shadow_config.health.max_covariance_trace_m2 =
+                config.integrity_shadow_max_covariance_trace_m2;
+            shadow_config.health.assume_default_covariance_trace =
+                config.integrity_shadow_assume_default_covariance_trace;
+            shadow_config.health.default_covariance_trace_m2 =
+                config.integrity_shadow_default_covariance_trace_m2;
+            shadow_config.health.require_fixed_status =
+                config.integrity_shadow_require_fixed_status;
+            integrity_shadow = std::make_unique<IntegrityShadowTimeline>(shadow_config);
+            if (!integrity_shadow->load(config.integrity_shadow_csv_path)) {
+                std::cerr << "Error: failed to load integrity shadow CSV: "
+                          << config.integrity_shadow_csv_path << std::endl;
+                return 1;
+            }
+        }
+
+        std::unique_ptr<libgnss::RealtimeFixIntegrityGate> integrity_gate;
+        IntegrityTelemetryWriter integrity_writer;
+        if (config.enable_realtime_fix_integrity) {
+            libgnss::RealtimeFixIntegrityGate::Config integrity_config;
+            integrity_config.enable_consensus = integrity_shadow != nullptr;
+            integrity_config.enable_base_confidence_policy =
+                config.enable_integrity_base_gate;
+            integrity_gate =
+                std::make_unique<libgnss::RealtimeFixIntegrityGate>(integrity_config);
+            if (!integrity_writer.open(config.integrity_log_path)) {
+                std::cerr << "Error: failed to open integrity log: "
+                          << config.integrity_log_path << std::endl;
+                return 1;
+            }
+        }
+
         std::cout << "libgnss++ post-process solver" << std::endl;
         std::cout << "  rover: " << config.rover_obs_path << std::endl;
         std::cout << "  base: " << config.base_obs_path << std::endl;
@@ -2496,6 +2894,11 @@ int main(int argc, char* argv[]) {
                   << std::endl;
         std::cout << "  base interpolation: "
                   << (config.enable_base_interpolation ? "enabled" : "disabled") << std::endl;
+        if (integrity_gate) {
+            std::cout << "  real-time FIX integrity: enabled (max latency "
+                      << integrity_gate->maxOutputLatencyEpochs() << " epochs, consensus "
+                      << (integrity_shadow ? "enabled" : "disabled") << ')' << std::endl;
+        }
 
         libgnss::io::RINEXReader rover_reader;
         libgnss::io::RINEXReader base_reader;
@@ -2606,6 +3009,32 @@ int main(int argc, char* argv[]) {
         int fixed_bridge_burst_guard_rejected_epochs = 0;
         libgnss::PositionSolution last_fixed_output;
         bool have_last_fixed_output = false;
+        libgnss::PositionSolution last_guard_output;
+        bool have_last_guard_output = false;
+
+        const auto record_output = [&](const libgnss::PositionSolution& output_solution) {
+            if (!output_solution.isValid()) return;
+            solution.addSolution(output_solution);
+            ++valid_solution_count;
+            if (output_solution.isFixed()) ++fixed_solution_count;
+            if (config.verbose &&
+                (valid_solution_count <= 5 || valid_solution_count % 100 == 0)) {
+                std::cout << "epoch " << valid_solution_count
+                          << " tow=" << std::fixed << std::setprecision(3)
+                          << output_solution.time.tow
+                          << " status=" << static_cast<int>(output_solution.status)
+                          << " sats=" << output_solution.num_satellites
+                          << " ratio=" << std::setprecision(2) << output_solution.ratio
+                          << std::endl;
+            }
+        };
+
+        const auto record_integrity_emissions = [&](const auto& emissions) {
+            for (const auto& emission : emissions) {
+                integrity_writer.write(emission);
+                record_output(emission.solution);
+            }
+        };
 
         while (rover_ok) {
             if (config.max_epochs > 0 && processed_rover_epochs >= config.max_epochs) {
@@ -2668,8 +3097,9 @@ int main(int argc, char* argv[]) {
             }
 
             auto pos_solution = rtk_processor.processRTKEpoch(rover_obs, aligned_base_obs, nav_data);
-            const libgnss::PositionSolution* last_output = solution.getLastSolution();
-            const bool have_last_output = last_output != nullptr && last_output->isValid();
+            const libgnss::PositionSolution* last_output =
+                have_last_guard_output ? &last_guard_output : nullptr;
+            const bool have_last_output = last_output != nullptr;
             const auto jump_from_last_output = [&](const libgnss::PositionSolution& candidate) {
                 if (!have_last_output || !candidate.isValid()) {
                     return std::numeric_limits<double>::infinity();
@@ -2742,6 +3172,29 @@ int main(int argc, char* argv[]) {
                 pos_solution.status = libgnss::SolutionStatus::FLOAT;
             }
 
+            auto gated_feedback_solution = feedback_solution;
+            bool integrity_reset_requested = false;
+            if (integrity_gate) {
+                libgnss::RealtimeFixIntegrityGate::EpochInput integrity_input;
+                integrity_input.primary = pos_solution;
+                if (integrity_shadow) {
+                    integrity_input.independent = integrity_shadow->lookup(pos_solution.time);
+                }
+                auto integrity_update = integrity_gate->push(std::move(integrity_input));
+                if (integrity_update.current.output_demoted) {
+                    pos_solution.status = libgnss::SolutionStatus::FLOAT;
+                    if (gated_feedback_solution.isFixed()) {
+                        gated_feedback_solution.status = libgnss::SolutionStatus::FLOAT;
+                    }
+                }
+                integrity_reset_requested =
+                    integrity_update.current.consensus.request_primary_reset ||
+                    integrity_update.current.residual_streak_demoted ||
+                    integrity_update.current.residual_spike_demoted ||
+                    integrity_update.current.base_confidence_demoted;
+                record_integrity_emissions(integrity_update.emitted);
+            }
+
             debug_writer.write(pos_solution, rtk_processor.getLastDebugTelemetry());
 
             if (diagnostics_csv.is_open()) {
@@ -2765,24 +3218,20 @@ int main(int argc, char* argv[]) {
                 writeDiagnosticsRow(diagnostics_csv, diag);
             }
 
-            if (pos_solution.isValid()) {
-                solution.addSolution(pos_solution);
-                valid_solution_count++;
-                if (pos_solution.isFixed()) {
-                    fixed_solution_count++;
-                }
-                if (feedback_solution.isFixed()) {
-                    last_fixed_output = feedback_solution;
-                    have_last_fixed_output = true;
-                }
+            if (integrity_reset_requested) {
+                rtk_processor.reset();
+                have_last_fixed_output = false;
+            }
 
-                if (config.verbose && (valid_solution_count <= 5 || valid_solution_count % 100 == 0)) {
-                    std::cout << "epoch " << valid_solution_count
-                              << " tow=" << std::fixed << std::setprecision(3) << pos_solution.time.tow
-                              << " status=" << static_cast<int>(pos_solution.status)
-                              << " sats=" << pos_solution.num_satellites
-                              << " ratio=" << std::setprecision(2) << pos_solution.ratio
-                              << std::endl;
+            if (!integrity_gate) {
+                record_output(pos_solution);
+            }
+            if (pos_solution.isValid()) {
+                last_guard_output = pos_solution;
+                have_last_guard_output = true;
+                if (gated_feedback_solution.isFixed()) {
+                    last_fixed_output = gated_feedback_solution;
+                    have_last_fixed_output = true;
                 }
             }
 
@@ -2792,8 +3241,8 @@ int main(int argc, char* argv[]) {
                 const bool trusted_spp_seed =
                     pos_solution.status == libgnss::SolutionStatus::SPP &&
                     pos_solution.num_satellites >= 7;
-                if (feedback_solution.isFixed()) {
-                    rover_obs.receiver_position = feedback_solution.position_ecef;
+                if (gated_feedback_solution.isFixed()) {
+                    rover_obs.receiver_position = gated_feedback_solution.position_ecef;
                 } else if (trusted_spp_seed) {
                     rover_obs.receiver_position = pos_solution.position_ecef;
                 } else {
@@ -2801,6 +3250,10 @@ int main(int argc, char* argv[]) {
                 }
             }
             processed_rover_epochs++;
+        }
+
+        if (integrity_gate) {
+            record_integrity_emissions(integrity_gate->flush());
         }
 
         if (config.enable_nonfix_drift_guard &&
@@ -2994,6 +3447,18 @@ int main(int argc, char* argv[]) {
             rover_header.approximate_position.norm() > 0.0 && mean_count > 0) {
             std::cout << "  header vs mean diff: "
                       << (mean_pos - rover_header.approximate_position).norm() << " m" << std::endl;
+        }
+        if (integrity_shadow) {
+            const auto lookups = integrity_shadow->lookups();
+            const auto healthy = integrity_shadow->healthyLookups();
+            std::cout << "  integrity shadow health: " << healthy << '/' << lookups;
+            if (lookups > 0) {
+                std::cout << " (" << std::fixed << std::setprecision(2)
+                          << (100.0 * static_cast<double>(healthy) /
+                              static_cast<double>(lookups))
+                          << "% qualified as demotion authority)";
+            }
+            std::cout << std::endl;
         }
         std::cout << "  output written: " << config.output_pos_path << std::endl;
         if (config.write_kml) {

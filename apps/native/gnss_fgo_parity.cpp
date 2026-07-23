@@ -1420,7 +1420,8 @@ HorizError horizontalErrorVsRef(const libgnss::FGOProcessor::FGOResult& r,
 // exact same nearest-in-time reference cursor as horizontalErrorVsRef() so the
 // per-epoch numbers are consistent with the printed headline metrics. Columns:
 //   tow,status,e_err_m,n_err_m,u_err_m,horiz_err_m,e_pos_m,n_pos_m,u_pos_m,
-//   x_ecef_m,y_ecef_m,z_ecef_m,ref_e_pos_m,ref_n_pos_m,ref_u_pos_m
+//   x_ecef_m,y_ecef_m,z_ecef_m,position_covariance_trace_m2,
+//   ref_e_pos_m,ref_n_pos_m,ref_u_pos_m
 // where *_err_m is the ENU delta vs the time-matched reference.csv row (the
 // same quantity the fix-rate/RMS metrics are computed from) and *_pos_m is the
 // solution/reference position in local ENU relative to the trajectory start
@@ -1446,7 +1447,8 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
     out << std::fixed;
     out.precision(3);
     out << "tow,status,e_err_m,n_err_m,u_err_m,horiz_err_m,e_pos_m,n_pos_m,u_pos_m,"
-           "x_ecef_m,y_ecef_m,z_ecef_m,ref_e_pos_m,ref_n_pos_m,ref_u_pos_m,"
+           "x_ecef_m,y_ecef_m,z_ecef_m,position_covariance_trace_m2,"
+           "ref_e_pos_m,ref_n_pos_m,ref_u_pos_m,"
            "vel_e_mps,vel_n_mps,vel_u_mps,"
            "ratio,ratio_threshold,nfixed,ar_outcome,ddpr_rms_m,sd_doppler_rms_mps,gdop,nsat,sd_doppler_n,"
            "amb_candidates,lambda_attempts,lambda_stage,amb_var_median,amb_var_max,"
@@ -1484,10 +1486,30 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
             si < r.epoch_velocity_nav_mps.size()
                 ? r.epoch_velocity_nav_mps[si]
                 : libgnss::Vector3d::Zero();
+        // Fix 3 (agent/realtime-fix-integrity follow-up): a non-positive (or
+        // exactly all-zero) covariance is never a genuine position
+        // uncertainty for any real KF/FGO estimator -- it means this
+        // solution path never populated position_covariance (PositionSolution
+        // leaves it default-constructed/uninitialized). Emitting 0.000 in
+        // that case is indistinguishable downstream from a real sub-
+        // millimetre estimate; ShadowEstimateHealthGate on the consuming
+        // side then (correctly) either trusts a fake perfect covariance or,
+        // once fixed, treats a bare 0.0 as unpopulated -- so the CSV must
+        // carry "missing", not "zero", here. See
+        // output/ppc_realtime_fix_integrity_matrix.md's "After fix" section
+        // (Gap 2) for the regression this closes.
+        const double covariance_trace = s.position_covariance.trace();
+        const bool covariance_populated = std::isfinite(covariance_trace) &&
+            covariance_trace > 0.0 &&
+            !(s.position_covariance.array() == 0.0).all();
         out << s.time.tow << ',' << status << ','
             << err_enu.x() << ',' << err_enu.y() << ',' << err_enu.z() << ','
             << horiz << ',' << pos_enu.x() << ',' << pos_enu.y() << ',' << pos_enu.z() << ','
-            << s.position_ecef.x() << ',' << s.position_ecef.y() << ',' << s.position_ecef.z() << ','
+            << s.position_ecef.x() << ',' << s.position_ecef.y() << ',' << s.position_ecef.z() << ',';
+        if (covariance_populated) {
+            out << covariance_trace;
+        }
+        out << ','
             << ref_pos_enu.x() << ',' << ref_pos_enu.y() << ',' << ref_pos_enu.z() << ','
             << velocity_nav.x() << ',' << velocity_nav.y() << ',' << velocity_nav.z() << ','
             << s.ratio;

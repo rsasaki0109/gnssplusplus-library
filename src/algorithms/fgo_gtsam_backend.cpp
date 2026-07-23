@@ -4762,6 +4762,26 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
     }
 
     // --- Per-epoch solutions ---
+    // TODO(agent/realtime-fix-integrity follow-up, Fix 3): solution.position_
+    // covariance is intentionally left unpopulated (default-constructed) on
+    // this fixed-lag path -- dumpEpochCsv() in gnss_fgo_parity.cpp now emits
+    // an empty CSV field for it rather than a fake 0.0, so downstream
+    // consumers (e.g. ShadowEstimateHealthGate) correctly treat it as
+    // missing. A real per-epoch trace IS already computed nearby
+    // (antenna_position_cov / provisional_fixed_cov, both derived from
+    // smoother.getISAM2().jointMarginalCovariance(keys) during the per-epoch
+    // LAMBDA block above) but only for the pose_i snapshot AT THE MOMENT
+    // LAMBDA runs for epoch i. epoch_float_position[i] (see the window
+    // re-read loop above, "Re-read every still-in-window pose") keeps being
+    // refined by later epochs until i leaves the fixed-lag window, so that
+    // captured trace would silently stop matching the final reported
+    // position by the time this loop reads it -- wiring it through without
+    // re-deriving a matching marginal at emission time would trade a
+    // visibly-missing value for a silently-stale one. Left unpopulated
+    // rather than risk feeding a mismatched covariance into a health/
+    // consensus gate; a correct fix would recompute (or cache) the marginal
+    // for each epoch's FINAL window-exit pose, which is a larger, separately
+    // scoped change.
     const bool have_amb = !problem.ambiguity_states.empty();
     result.epoch_diagnostics = std::move(epoch_diagnostics);
     result.epoch_attitude_rpy_deg.resize(num_epochs);

@@ -164,6 +164,38 @@ and harmed zero correct FIX, yielding
 Because Shinjuku had only 51 FIX epochs (0.29%), this is active but limited
 receiver-diversity evidence rather than a broad multi-city generalization.
 
+## Realtime output gate
+
+`RealtimeFixIntegrityGate` (algorithms/integrity_consensus) is the causal C++
+port of the policies above, wired into `gnss_solve` behind
+`--realtime-fix-integrity`, `--integrity-shadow-csv`, `--integrity-log`, and
+the opt-in `--integrity-base-gate`. It buffers at most seven epochs so a
+confirmed eight-epoch residual streak can demote its prefix, and it never
+consumes reference truth or a future shadow epoch.
+
+Validation on 2026-07-23 (reports:
+`output/ppc_realtime_fix_integrity_matrix.md`,
+`output/urbannav_realtime_fix_integrity_external.md`):
+
+- Default configuration (residual streak/spike only) on the six public PPC
+  runs over a plain `low-cost` KF baseline: total wrong FIX 3618 to 2847
+  (495 caught, 8 correct harmed); bit-inert on Tokyo 1-3 and Nagoya 3; the
+  gated matrix keeps macro FIX 73.4% versus the 54.3% GICI reproduction.
+- The offline `base` low-satellite/ratio gate is ported but **off by
+  default**: on the plain KF stream it over-demotes (Nagoya 2 net-harmful),
+  because its frozen thresholds were validated against the staged FGO
+  pipeline. With `--integrity-base-gate`, the UrbanNav Trimble Shinjuku
+  holdout reproduces the offline external audit exactly (22 caught above
+  2 m, zero harmed; Odaiba zero demotions).
+- Shadow consensus fails closed: a shadow epoch without a positive
+  `position_covariance_trace_m2` (or failing the FIXED-status/GDOP/DDPR/nsat/
+  age bars) is treated as absent, cannot arm or hold `QUARANTINE`, and the
+  strict default is byte-identical to running without a shadow. The
+  `--integrity-shadow-assume-default-covariance-trace` escape hatch exists
+  but the Tokyo 1 FGO shadow is not accurate enough to be net-positive;
+  populating a real fixed-lag marginal trace is a scoped follow-up
+  (see the TODO in `fgo_gtsam_backend.cpp`).
+
 ## License boundary
 
 The manager, state machine, telemetry schema, tests, and libgnss++ estimator
