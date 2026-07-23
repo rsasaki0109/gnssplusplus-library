@@ -554,21 +554,36 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libeigen3-dev libgtest-dev cmake build-essential python3-dev pybind11-dev
+        sudo apt-get install -y libeigen3-dev libgtest-dev cmake build-essential python3-dev pybind11-dev ccache
+
+    - name: Restore MADOCA ccache
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/ccache
+        key: Linux-madoca-ccache-${{ hashFiles('CMakeLists.txt', 'src/**', 'include/**', 'tests/test_madoca_parity.cpp') }}
+        restore-keys: |
+          Linux-madoca-ccache-
+          Linux-ccache-
 
     - name: Configure CMake with MADOCALIB parity link
       run: |
         cmake -B build-madoca-parity \
           -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF \
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
           -DMADOCALIB_PARITY_LINK=ON \
           -DMADOCALIB_ROOT_DIR="${GITHUB_WORKSPACE}/external/madocalib"
 
     - name: Build MadocaParity tests and bridge tool
-      run: cmake --build build-madoca-parity --config Release --parallel --target run_tests
+      run: cmake --build build-madoca-parity --config Release --parallel --target gnss_madoca_parity_tests gnss_ppp
+
+    - name: Show MADOCA ccache stats
+      run: ccache -s
 
     - name: Run MadocaParity
       working-directory: build-madoca-parity
-      run: ./tests/run_tests --gtest_filter='*MadocaParity*:MadocaBridgeConfig.*'
+      run: ./tests/madoca_parity_tests --gtest_filter='*MadocaParity*:MadocaBridgeConfig.*'
 
     - name: Run MADOCALIB bridge smoke
       working-directory: build-madoca-parity
