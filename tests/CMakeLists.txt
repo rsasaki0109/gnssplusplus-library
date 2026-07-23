@@ -130,8 +130,48 @@ if(GTest_FOUND)
         gnss_vel_d
     )
 
+    # Keep the MADOCALIB oracle job independent from the monolithic test
+    # executable.  The parity workflow only executes tests from
+    # test_madoca_parity.cpp; compiling every unrelated test translation unit
+    # made the Ubuntu runner vulnerable to infrastructure SIGTERM (exit 143)
+    # before the oracle tests could start.
+    add_executable(gnss_madoca_parity_tests test_madoca_parity.cpp)
+    set_target_properties(gnss_madoca_parity_tests PROPERTIES
+        OUTPUT_NAME madoca_parity_tests
+    )
+    if(NOT MSVC)
+        target_compile_options(gnss_madoca_parity_tests PRIVATE -g)
+    endif()
+    target_compile_definitions(gnss_madoca_parity_tests PRIVATE
+        GNSSPP_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+        GNSSPP_BINARY_DIR="${CMAKE_BINARY_DIR}"
+    )
+    target_link_libraries(gnss_madoca_parity_tests
+        gnss_lib gnss_lib_noopt
+        sofa
+        ginan_iers2010
+        GTest::GTest
+        GTest::Main
+        Threads::Threads
+    )
+    add_dependencies(gnss_madoca_parity_tests gnss_ppp)
+
+    add_executable(gnss_integrity_tests test_integrity_consensus.cpp)
+    target_link_libraries(gnss_integrity_tests
+        gnss_lib gnss_lib_noopt
+        GTest::GTest
+        GTest::Main
+        Threads::Threads
+    )
+
     # Add test to CTest
     add_test(NAME run_tests COMMAND gnss_run_tests)
+    add_test(
+        NAME madoca_parity_tests
+        COMMAND gnss_madoca_parity_tests
+                --gtest_filter=*MadocaParity*:MadocaBridgeConfig.*
+    )
+    add_test(NAME integrity_tests COMMAND gnss_integrity_tests)
     add_test(
         NAME python_benchmark_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_benchmark_scripts.py

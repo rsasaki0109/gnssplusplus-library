@@ -209,7 +209,14 @@ if(MADOCALIB_PARITY_LINK)
             NFREQ=5
             NEXOBS=5
     )
-    target_link_libraries(madocalib PUBLIC m Threads::Threads)
+    target_link_libraries(madocalib PUBLIC Threads::Threads)
+    if(WIN32)
+        # rtkcmn.c tickget() calls timeGetTime.
+        target_link_libraries(madocalib PUBLIC winmm)
+    else()
+        # libm is implicit in the MSVC CRT; an explicit m.lib breaks the link.
+        target_link_libraries(madocalib PUBLIC m)
+    endif()
     if(UNIX AND NOT APPLE)
         target_link_libraries(madocalib PUBLIC rt)
     endif()
