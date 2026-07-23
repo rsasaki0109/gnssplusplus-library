@@ -922,6 +922,11 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     bool clas_seed_untrusted_this_epoch = false;
     bool clas_baseline_seed_maxdiff_this_epoch = false;
     bool clas_seed_failed_before_continuity_fallback = false;
+    // Mirrors the block-scoped `clas_seed_chi_square_failed` local below (its
+    // scope ends with the `if (clas_mrtklib_parity)` block); kept alive at
+    // function scope for the hold-continuation carve-out computed just before
+    // the AR call, well after that block has closed.
+    bool clas_seed_chi_square_failed_this_epoch = false;
     bool clas_seed_ar_recovery_this_epoch = false;
     PositionSolution clas_continuity_output;
     bool has_clas_continuity_output = false;
@@ -993,6 +998,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         // failure classes have different sol.rr semantics below.
         const bool clas_seed_chi_square_failed =
             seed.isValid() && clasSeedFailsChiSquareGate(seed);
+        clas_seed_chi_square_failed_this_epoch = clas_seed_chi_square_failed;
         const bool clas_seed_dof_failed =
             seed.isValid() && clasSeedLacksRedundancy(seed);
         const PositionSolution clas_validation_rejected_candidate = seed;
@@ -1781,6 +1787,46 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     const PPPState clas_float_filter_state = filter_state_;
     const auto clas_float_ambiguity_states = ambiguity_states_;
 
+    // MRTKLIB mrtk_ppp_rtk.c:2296-2330 parity: validate the fixed solution with
+    // the post-fix DD phase chi-square. Publish FIX only when chisq < thres_fix
+    // (5.0) and hold (constrain the float filter toward the fixed DD
+    // ambiguities, holdamb()) only when chisq < thres_hold (0.5). AR-failed
+    // epochs publish FLOAT and reset the nfix counter; there is no hold-driven
+    // FIX publication.
+    //
+    // Computed here (ahead of the AR call below) so the hold-continuation
+    // carve-out that follows can reference it.
+    const bool kinematic_clas_wlnl_hold_path =
+        ppp_config_.kinematic_mode &&
+        ppp_config_.use_clas_osr_filter &&
+        ppp_config_.ar_method == PPPConfig::ARMethod::DD_WLNL;
+
+    // Hold-continuation carve-out (parity + kinematic WLNL path only). A
+    // maxdiff-only seed rejection -- the extrinsic masked-SPP cross-check
+    // disagreed with the filter by more than kMrtklibMaxSppDivergenceM while
+    // the seed itself was otherwise valid (no chi-square/dof failure, no
+    // jump/coast) -- does not by itself mean the current WLNL fix is wrong:
+    // MRTKLIB has no equivalent extrinsic seed check and holds through these
+    // windows (see the diagnosis in the commit message). Native was
+    // suppressing the AR *attempt* outright on every such epoch, silently
+    // dropping an otherwise-good hold to FLOAT.
+    //
+    // Only continue an *already active* hold: wlnlHoldStillValid() requires
+    // clas_wlnl_hold_.active from a prior epoch's low-chisq fix plus no slip
+    // on any held satellite this epoch (ambiguity_states_ already reflects
+    // this epoch's cycle-slip detection at this point in the function). AR
+    // can therefore never originate a brand-new fix through this carve-out:
+    // an epoch with no active hold coming in still gets full suppression,
+    // exactly as before.
+    const bool clas_seed_maxdiff_only_this_epoch =
+        clas_baseline_seed_maxdiff_this_epoch &&
+        !clas_seed_failed_before_continuity_fallback &&
+        !clas_seed_chi_square_failed_this_epoch;
+    const bool clas_maxdiff_hold_continuation_this_epoch =
+        kinematic_clas_wlnl_hold_path &&
+        clas_seed_maxdiff_only_this_epoch &&
+        ppp_ar::wlnlHoldStillValid(clas_wlnl_hold_, ambiguity_states_);
+
     const auto ambiguity_resolution =
         ppp_clas::resolveAndValidateAmbiguities(
             filter_state_,
@@ -1789,9 +1835,14 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
                 // clas_seed_untrusted_this_epoch (parity path only; always
                 // false otherwise) -- do not let AR originate a new
                 // publishable fix from a coasted/stale state; see the long
-                // comment at its assignment above.
+                // comment at its assignment above. The maxdiff-only
+                // hold-continuation carve-out is the sole exception: it lets
+                // AR continue validating an already-active, still-valid WLNL
+                // hold (see clas_maxdiff_hold_continuation_this_epoch above)
+                // instead of blacking out the epoch.
                 return ppp_config_.enable_ambiguity_resolution &&
-                       !clas_seed_untrusted_this_epoch &&
+                       (!clas_seed_untrusted_this_epoch ||
+                        clas_maxdiff_hold_continuation_this_epoch) &&
                        resolveAmbiguities(obs, nav);
             },
             (ppp_config_.ar_method == PPPConfig::ARMethod::DD_WLNL)
@@ -1804,16 +1855,6 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
                   }},
             pppDebugEnabled());
 
-    // MRTKLIB mrtk_ppp_rtk.c:2296-2330 parity: validate the fixed solution with
-    // the post-fix DD phase chi-square. Publish FIX only when chisq < thres_fix
-    // (5.0) and hold (constrain the float filter toward the fixed DD
-    // ambiguities, holdamb()) only when chisq < thres_hold (0.5). AR-failed
-    // epochs publish FLOAT and reset the nfix counter; there is no hold-driven
-    // FIX publication.
-    const bool kinematic_clas_wlnl_hold_path =
-        ppp_config_.kinematic_mode &&
-        ppp_config_.use_clas_osr_filter &&
-        ppp_config_.ar_method == PPPConfig::ARMethod::DD_WLNL;
     bool clas_kinematic_chisq_rejected = false;
     if (kinematic_clas_wlnl_hold_path &&
         ppp_config_.enable_ambiguity_resolution) {
@@ -1823,7 +1864,9 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
 
         if (ambiguity_resolution.accepted &&
             !ppp_shared::clasRecoveryFixIsSupported(
-                clas_seed_ar_recovery_this_epoch, last_fixed_ambiguities_,
+                clas_seed_ar_recovery_this_epoch &&
+                    !clas_maxdiff_hold_continuation_this_epoch,
+                last_fixed_ambiguities_,
                 last_ar_ratio_, kClasKinematicMinFixRatio)) {
             // Native's minimum-row fixes immediately after a maxdiff event
             // are the remaining wrong-integer mode (Tokyo run2: 24 bad FIX,
@@ -1831,6 +1874,15 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             // native equivalent at nb=7 with ratio above the normal
             // kinematic publication floor, so keep AR running but reject
             // only the under-supported recovery candidate.
+            //
+            // clas_maxdiff_hold_continuation_this_epoch exempts this specific
+            // fix from that elevated floor: it is not a fresh, evidence-thin
+            // recovery attempt but an already-active hold (see its
+            // definition above) simply continuing through a maxdiff-only
+            // seed disagreement. Every other epoch inside the 30-epoch
+            // quarantine window (a genuine cold recovery with no valid hold,
+            // or one whose hold broke to a slip) still requires nb>=7 and
+            // the elevated ratio floor, unchanged.
             clas_kinematic_chisq_rejected = true;
             if (pppDebugEnabled()) {
                 std::cerr << "[CLAS-KIN-RECOVERY] reject nb="
