@@ -4,20 +4,22 @@ Benchmark source: [GNSS測位エコシステムの統合を目指して - モダ
 
 ## Current verdict
 
-The full six-run PPC moving-data validation is complete. Across 58,258 scored
-epochs, LibGNSS++ produced 13,775 FIX epochs (23.645%) with 0.593 m aggregate
-FIX RMS2D, 0.558 m FIX p68, and no FIX epoch above 3 m. Every run covers 100% of
-the reference interval and at least 99.95% of observation epochs.
+The full six-run PPC moving-data validation is complete. After the
+hold-continuation carve-out landed in #349, across 58,258 scored epochs
+LibGNSS++ produced 14,046 FIX epochs (24.110%) with 0.592 m aggregate FIX
+RMS2D, 0.547 m FIX p68, and no FIX epoch above 3 m (up from the prior
+23.645% / 0.593 m aggregate). Every run covers 100% of the reference interval
+and at least 99.95% of observation epochs.
 
 The same gate now reports non-FIX quality explicitly. Aggregate all-solution
-RMS2D is 36.510 m, FLOAT RMS2D is 16.777 m, and SINGLE RMS2D is 70.316 m.
+RMS2D is 36.510 m, FLOAT RMS2D is 16.847 m, and SINGLE RMS2D is 70.296 m.
 
 Compared with the published MRTKLIB v0.4.2 results, native FIX rate is higher
-on Tokyo 1, Tokyo 3, and Nagoya 1; it is within 0.3 percentage points on
-Nagoya 2 and remains lower on Tokyo 2 and Nagoya 3. Native FIX RMS2D is lower
-on five of six runs. The precision comparison is contextual: native scoring
-transforms PPC vehicle truth to the antenna phase center, while the published
-MRTKLIB values use the unmodified reference point.
+on Tokyo 1, Tokyo 3, Nagoya 1, and Nagoya 2; it remains lower on Tokyo 2 and
+Nagoya 3. Native FIX RMS2D is lower on five of six runs. The precision
+comparison is contextual: native scoring transforms PPC vehicle truth to the
+antenna phase center, while the published MRTKLIB values use the unmodified
+reference point.
 
 This is therefore a completed six-run safety and performance sign-off, not a
 claim of per-metric equivalence on every run. The active remaining work is
