@@ -64,6 +64,62 @@ constexpr double kMrtklibPhaseResidualSigmaGate = 2.0;
 // (pos2-rejdiffpse -> opt.maxdiffp, pos2-poserrcnt; mrtk_ppp_rtk.c:2333-2352)
 constexpr double kMrtklibMaxSppDivergenceM = 10.0;
 constexpr int kMrtklibMaxSppDivergenceEpochs = 5;
+// Maxdiff-only WLNL hold-continuation carve-out: let AR continue validating
+// an already-active WLNL hold on an epoch whose masked-SPP seed trips only
+// the maxdiff watchdog (see clas_maxdiff_hold_continuation_this_epoch,
+// computed below). Two designs were measured and superseded before this one:
+//
+// v1 (no extra gate beyond maxdiff-only + wlnlHoldStillValid()): diagnosed
+// on nagoya_run2 tow 556406-556427 letting the carve-out keep re-engaging
+// across an already-multi-epoch-long divergence run, building a hold right
+// up to the reset watchdog's teardown threshold (kMrtklibMaxSppDivergence-
+// Epochs above); the watchdog then tore the position out from under that
+// hold -- either discarding otherwise-good work or, on the post-reset
+// re-fix attempt into weak geometry, producing an outright wrong integer.
+//
+// v2 (require the reset watchdog's own entry divergence-epoch count == 0):
+// falsified by measurement. n2 v2 reproduced the identical 323 lost epochs
+// (the full destructive 317-epoch block included) -- that counter resets to
+// 0 the instant divergence dips <=10 m even mid-episode, so it is ~0 at
+// *both* productive and destructive activations and separates nothing.
+//
+// v3 (this one): gate on the hold's own track record instead of any
+// divergence counter. clas_wlnl_hold_.consecutive_fix_count (the entry,
+// pre-update-carried-over value -- see its capture at the carve-out site
+// below) counts consecutive prior epochs the hold has already survived the
+// post-fix chi-square gate. CLAS-HOLDCONT-DBG instrumentation over n2's
+// destructive episode and t2's 365 gained-FIX epochs showed a clean split:
+// n2's destructive continuation never exceeded consecutive_fix_count=44
+// (climbing from a freshly-rebuilt hold, ages 1-2 then 21-44, before the
+// reset hit); every t2-productive activation with a consecutive-maxdiff
+// streak beyond 5 epochs had consecutive_fix_count >= 71 entering it (the
+// four long gained-FIX clusters, ~80% of t2's gains, start their carve-out
+// episodes at track-record ages 76/126/145 -- comfortably clear). A raw
+// streak-length cap was also tried and rejected: t2 has productive
+// activations at streak up to 75, so any cap tight enough to stop n2 (<=5)
+// would also gut t2's long clusters, and a streak<=5 allowance alone is a
+// superset of what v2 already let through at the start of n2's destructive
+// episode (v2's entry==0 gate fired there too, at streak 1-5, and still
+// lost the block) -- so streak cannot be the gating axis by itself either.
+// Track record (not streak, not the reset watchdog's own counter) is the
+// only measured axis that cleanly separates the two cases.
+constexpr int kClasHoldContinuationMinTrackRecordFixes = 60;
+// Kill switch only (A/B use during this investigation): unset/any value
+// other than "-1" runs the age-gated carve-out above; exactly "-1" disables
+// the maxdiff-only hold-continuation carve-out entirely (both touch points
+// always false, reproducing baseline develop semantics on the parity path
+// -- verified bit-identical: raw PPP fixed solutions 2225/float 4046 on
+// nagoya_run2 match unmodified develop's own log exactly). The default
+// (unset) path does not depend on this env var's *value*, only on its
+// absence, so normal runs never need it set.
+bool clasMaxdiffHoldContinuationDisabledByEnv() {
+    static const bool disabled = [] {
+        const char* env =
+            std::getenv("GNSS_PPP_CLAS_HOLD_CONT_MAX_DIVCNT");
+        return env != nullptr && std::atoi(env) == -1;
+    }();
+    return disabled;
+}
 // A candidate that failed valsol-equivalent validation is weaker evidence than
 // an accepted SPP seed. Use it only to recover a catastrophically stale FLOAT
 // state, not to turn ordinary urban tens-of-metres disagreement into a reset.
@@ -922,7 +978,17 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     bool clas_seed_untrusted_this_epoch = false;
     bool clas_baseline_seed_maxdiff_this_epoch = false;
     bool clas_seed_failed_before_continuity_fallback = false;
+    // Mirrors the block-scoped `clas_seed_chi_square_failed` local below (its
+    // scope ends with the `if (clas_mrtklib_parity)` block); kept alive at
+    // function scope for the hold-continuation carve-out computed just before
+    // the AR call, well after that block has closed.
+    bool clas_seed_chi_square_failed_this_epoch = false;
     bool clas_seed_ar_recovery_this_epoch = false;
+    // CLAS-HOLDCONT-DBG diagnostic: mirrors the block-scoped
+    // baseline_filter_spp_distance_m local (same reasoning as
+    // clas_seed_chi_square_failed_this_epoch above).
+    double clas_baseline_filter_spp_distance_m_this_epoch =
+        std::numeric_limits<double>::quiet_NaN();
     PositionSolution clas_continuity_output;
     bool has_clas_continuity_output = false;
     bool clas_rejected_seed_output_prepared = false;
@@ -978,6 +1044,15 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             seed.isValid() && filter_initialized_ &&
             std::isfinite(baseline_filter_spp_distance_m) &&
             baseline_filter_spp_distance_m > kMrtklibMaxSppDivergenceM;
+        clas_baseline_filter_spp_distance_m_this_epoch =
+            baseline_filter_spp_distance_m;
+        // CLAS-HOLDCONT-DBG diagnostic: streak length is inclusive of this
+        // epoch (updated here, immediately after the flag above is known).
+        if (clas_baseline_seed_maxdiff_this_epoch) {
+            ++clas_maxdiff_consecutive_streak_epochs_;
+        } else {
+            clas_maxdiff_consecutive_streak_epochs_ = 0;
+        }
         if (clas_seed_needs_fde) {
             clas_spp_config.enable_raim_fde = true;
             spp_processor_.setSPPConfig(clas_spp_config);
@@ -993,6 +1068,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         // failure classes have different sol.rr semantics below.
         const bool clas_seed_chi_square_failed =
             seed.isValid() && clasSeedFailsChiSquareGate(seed);
+        clas_seed_chi_square_failed_this_epoch = clas_seed_chi_square_failed;
         const bool clas_seed_dof_failed =
             seed.isValid() && clasSeedLacksRedundancy(seed);
         const PositionSolution clas_validation_rejected_candidate = seed;
@@ -1781,6 +1857,63 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     const PPPState clas_float_filter_state = filter_state_;
     const auto clas_float_ambiguity_states = ambiguity_states_;
 
+    // MRTKLIB mrtk_ppp_rtk.c:2296-2330 parity: validate the fixed solution with
+    // the post-fix DD phase chi-square. Publish FIX only when chisq < thres_fix
+    // (5.0) and hold (constrain the float filter toward the fixed DD
+    // ambiguities, holdamb()) only when chisq < thres_hold (0.5). AR-failed
+    // epochs publish FLOAT and reset the nfix counter; there is no hold-driven
+    // FIX publication.
+    //
+    // Computed here (ahead of the AR call below) so the hold-continuation
+    // carve-out that follows can reference it.
+    const bool kinematic_clas_wlnl_hold_path =
+        ppp_config_.kinematic_mode &&
+        ppp_config_.use_clas_osr_filter &&
+        ppp_config_.ar_method == PPPConfig::ARMethod::DD_WLNL;
+
+    // Hold-continuation carve-out (parity + kinematic WLNL path only). A
+    // maxdiff-only seed rejection -- the extrinsic masked-SPP cross-check
+    // disagreed with the filter by more than kMrtklibMaxSppDivergenceM while
+    // the seed itself was otherwise valid (no chi-square/dof failure, no
+    // jump/coast) -- does not by itself mean the current WLNL fix is wrong:
+    // MRTKLIB has no equivalent extrinsic seed check and holds through these
+    // windows (see the diagnosis in the commit message). Native was
+    // suppressing the AR *attempt* outright on every such epoch, silently
+    // dropping an otherwise-good hold to FLOAT.
+    //
+    // Only continue an *already active* hold: wlnlHoldStillValid() requires
+    // clas_wlnl_hold_.active from a prior epoch's low-chisq fix plus no slip
+    // on any held satellite this epoch (ambiguity_states_ already reflects
+    // this epoch's cycle-slip detection at this point in the function). AR
+    // can therefore never originate a brand-new fix through this carve-out:
+    // an epoch with no active hold coming in still gets full suppression,
+    // exactly as before.
+    //
+    // Also require a proven track record: the hold must already have
+    // survived >= kClasHoldContinuationMinTrackRecordFixes consecutive
+    // post-fix chi-square validations *before* this epoch (see the measured
+    // n2-vs-t2 evidence at the constant's definition above). hold_age is
+    // captured here, ahead of this epoch's own AR/hold processing further
+    // below, so it is the as-of-epoch-entry value -- consecutive_fix_count
+    // is not touched between here and the read.
+    const int clas_maxdiff_hold_cont_entry_divcnt =
+        clas_kinematic_spp_divergence_count_;
+    const bool clas_seed_maxdiff_only_this_epoch =
+        clas_baseline_seed_maxdiff_this_epoch &&
+        !clas_seed_failed_before_continuity_fallback &&
+        !clas_seed_chi_square_failed_this_epoch;
+    const bool clas_maxdiff_hold_cont_hold_valid =
+        ppp_ar::wlnlHoldStillValid(clas_wlnl_hold_, ambiguity_states_);
+    const int clas_maxdiff_hold_cont_hold_age_nfix =
+        clas_wlnl_hold_.consecutive_fix_count;
+    const bool clas_maxdiff_hold_continuation_this_epoch =
+        !clasMaxdiffHoldContinuationDisabledByEnv() &&
+        kinematic_clas_wlnl_hold_path &&
+        clas_seed_maxdiff_only_this_epoch &&
+        clas_maxdiff_hold_cont_hold_valid &&
+        clas_maxdiff_hold_cont_hold_age_nfix >=
+            kClasHoldContinuationMinTrackRecordFixes;
+
     const auto ambiguity_resolution =
         ppp_clas::resolveAndValidateAmbiguities(
             filter_state_,
@@ -1789,9 +1922,14 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
                 // clas_seed_untrusted_this_epoch (parity path only; always
                 // false otherwise) -- do not let AR originate a new
                 // publishable fix from a coasted/stale state; see the long
-                // comment at its assignment above.
+                // comment at its assignment above. The maxdiff-only
+                // hold-continuation carve-out is the sole exception: it lets
+                // AR continue validating an already-active, still-valid WLNL
+                // hold (see clas_maxdiff_hold_continuation_this_epoch above)
+                // instead of blacking out the epoch.
                 return ppp_config_.enable_ambiguity_resolution &&
-                       !clas_seed_untrusted_this_epoch &&
+                       (!clas_seed_untrusted_this_epoch ||
+                        clas_maxdiff_hold_continuation_this_epoch) &&
                        resolveAmbiguities(obs, nav);
             },
             (ppp_config_.ar_method == PPPConfig::ARMethod::DD_WLNL)
@@ -1804,16 +1942,6 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
                   }},
             pppDebugEnabled());
 
-    // MRTKLIB mrtk_ppp_rtk.c:2296-2330 parity: validate the fixed solution with
-    // the post-fix DD phase chi-square. Publish FIX only when chisq < thres_fix
-    // (5.0) and hold (constrain the float filter toward the fixed DD
-    // ambiguities, holdamb()) only when chisq < thres_hold (0.5). AR-failed
-    // epochs publish FLOAT and reset the nfix counter; there is no hold-driven
-    // FIX publication.
-    const bool kinematic_clas_wlnl_hold_path =
-        ppp_config_.kinematic_mode &&
-        ppp_config_.use_clas_osr_filter &&
-        ppp_config_.ar_method == PPPConfig::ARMethod::DD_WLNL;
     bool clas_kinematic_chisq_rejected = false;
     if (kinematic_clas_wlnl_hold_path &&
         ppp_config_.enable_ambiguity_resolution) {
@@ -1823,7 +1951,9 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
 
         if (ambiguity_resolution.accepted &&
             !ppp_shared::clasRecoveryFixIsSupported(
-                clas_seed_ar_recovery_this_epoch, last_fixed_ambiguities_,
+                clas_seed_ar_recovery_this_epoch &&
+                    !clas_maxdiff_hold_continuation_this_epoch,
+                last_fixed_ambiguities_,
                 last_ar_ratio_, kClasKinematicMinFixRatio)) {
             // Native's minimum-row fixes immediately after a maxdiff event
             // are the remaining wrong-integer mode (Tokyo run2: 24 bad FIX,
@@ -1831,6 +1961,15 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             // native equivalent at nb=7 with ratio above the normal
             // kinematic publication floor, so keep AR running but reject
             // only the under-supported recovery candidate.
+            //
+            // clas_maxdiff_hold_continuation_this_epoch exempts this specific
+            // fix from that elevated floor: it is not a fresh, evidence-thin
+            // recovery attempt but an already-active hold (see its
+            // definition above) simply continuing through a maxdiff-only
+            // seed disagreement. Every other epoch inside the 30-epoch
+            // quarantine window (a genuine cold recovery with no valid hold,
+            // or one whose hold broke to a slip) still requires nb>=7 and
+            // the elevated ratio floor, unchanged.
             clas_kinematic_chisq_rejected = true;
             if (pppDebugEnabled()) {
                 std::cerr << "[CLAS-KIN-RECOVERY] reject nb="
@@ -1952,6 +2091,30 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         if (ppp_config_.kinematic_mode && ppp_config_.use_clas_osr_filter) {
             ppp_ar::clearWlnlHoldState(clas_wlnl_hold_);
         }
+    }
+
+    // CLAS-HOLDCONT-DBG: one line per epoch where the extrinsic masked-SPP
+    // seed tripped the maxdiff watchdog, for offline mining of the features
+    // that separate a productive hold-continuation activation from the
+    // nagoya_run2 destructive one (see the carve-out comment above). Not
+    // gated on kinematic_clas_wlnl_hold_path so it also captures maxdiff
+    // epochs on paths where the carve-out structurally cannot apply.
+    if (pppDebugEnabled() && clas_baseline_seed_maxdiff_this_epoch) {
+        std::cerr << "[CLAS-HOLDCONT-DBG] tow=" << obs.time.tow
+                  << " overshoot_m="
+                  << (clas_baseline_filter_spp_distance_m_this_epoch -
+                      kMrtklibMaxSppDivergenceM)
+                  << " divcnt_entry=" << clas_maxdiff_hold_cont_entry_divcnt
+                  << " streak=" << clas_maxdiff_consecutive_streak_epochs_
+                  << " hold_valid=" << clas_maxdiff_hold_cont_hold_valid
+                  << " hold_age_nfix=" << clas_maxdiff_hold_cont_hold_age_nfix
+                  << " min_track_record=" << kClasHoldContinuationMinTrackRecordFixes
+                  << " carve_out_fired=" << clas_maxdiff_hold_continuation_this_epoch
+                  << " ar_attempted=" << ambiguity_resolution.attempted
+                  << " ar_accepted=" << ambiguity_resolution.accepted
+                  << " ratio=" << last_ar_ratio_
+                  << " nfix=" << last_fixed_ambiguities_
+                  << "\n";
     }
 
     if (pppDebugEnabled()) {
@@ -2172,6 +2335,15 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
                               << (clas_maxdiff_uses_validation_rejected_candidate
                                       ? "validation-rejected"
                                       : "accepted")
+                              << "\n";
+                    // Same tag family as CLAS-HOLDCONT-DBG above: the
+                    // divcnt value that just crossed the reset threshold
+                    // (pre-reset-to-zero) and the independent maxdiff streak
+                    // counter at the moment the teardown fires.
+                    std::cerr << "[CLAS-HOLDCONT-DBG-RESET] tow=" << obs.time.tow
+                              << " dist=" << spp_divergence_m
+                              << " divcnt=" << clas_kinematic_spp_divergence_count_
+                              << " streak=" << clas_maxdiff_consecutive_streak_epochs_
                               << "\n";
                 }
                 filter_state_.state.segment(filter_state_.pos_index, 3) =

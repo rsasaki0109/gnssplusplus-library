@@ -375,6 +375,12 @@ private:
     bool had_fixed_last_epoch_ = false;  ///< AR succeeded in previous epoch
     int clas_kinematic_fix_candidate_streak_ = 0;
     int clas_kinematic_spp_divergence_count_ = 0;
+    // Diagnostic-only (CLAS-HOLDCONT-DBG): consecutive epochs in a row with
+    // clas_baseline_seed_maxdiff_this_epoch true, independent of/simpler than
+    // clas_kinematic_spp_divergence_count_ above (different seed-selection
+    // basis; see the maxdiff-only hold-continuation carve-out). Not read by
+    // any gating logic.
+    int clas_maxdiff_consecutive_streak_epochs_ = 0;
     // MRTKLIB clas.toml float_count=15: consecutive PPP-FLOAT epochs before
     // the kinematic CLAS filter is reinitialized from the current SPP seed.
     int clas_mrtklib_float_count_ = 0;
