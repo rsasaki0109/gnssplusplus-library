@@ -83,6 +83,7 @@ def load_run(
     key: str,
     *,
     min_epoch_coverage: float = MIN_INTERVAL_COVERAGE,
+    apply_lever_arm: bool = False,
 ) -> dict[str, Any]:
     city, run = key.split("_", 1)
     run_dir = dataset_root / city / run
@@ -90,7 +91,7 @@ def load_run(
         run_dir / "rover.obs"
     )
     reference = scorecard.read_reference_csv(
-        run_dir / "reference.csv", apply_lever_arm=True, city=city
+        run_dir / "reference.csv", apply_lever_arm=apply_lever_arm, city=city
     )
     pos_path = results_dir / f"{key}.pos"
     if not pos_path.exists():
@@ -220,7 +221,9 @@ def write_trajectory_figure(runs: list[dict[str, Any]], output: Path) -> None:
     plt.close(figure)
 
 
-def write_metric_figure(runs: list[dict[str, Any]], output: Path) -> None:
+def write_metric_figure(
+    runs: list[dict[str, Any]], output: Path, *, apply_lever_arm: bool = False
+) -> None:
     plt.style.use("seaborn-v0_8-whitegrid")
     labels = [label for _, label in RUNS]
     x = np.arange(len(runs))
@@ -248,11 +251,17 @@ def write_metric_figure(runs: list[dict[str, Any]], output: Path) -> None:
         ncol=2,
     )
     figure.suptitle("PPC full-run CLAS comparison", fontsize=15, fontweight="bold")
+    note_text = (
+        "Precision reference note: libgnss++ uses vehicle→antenna lever-arm correction; "
+        "the published MRTKLIB values do not."
+        if apply_lever_arm
+        else "Precision reference note: both libgnss++ and the published MRTKLIB values "
+        "are scored against the raw (antenna-positioned) PPC reference — directly comparable."
+    )
     figure.text(
         0.5,
         0.015,
-        "Precision reference note: libgnss++ uses vehicle→antenna lever-arm correction; "
-        "the published MRTKLIB values do not.",
+        note_text,
         ha="center",
         fontsize=8.5,
         color="#4b5563",
@@ -314,7 +323,11 @@ def markdown_value(value: float | None, suffix: str = "") -> str:
 
 
 def write_markdown_table(
-    runs: list[dict[str, Any]], aggregate: dict[str, Any], output: Path
+    runs: list[dict[str, Any]],
+    aggregate: dict[str, Any],
+    output: Path,
+    *,
+    apply_lever_arm: bool = False,
 ) -> None:
     lines = [
         "| Run | Coverage (time / epochs) | libgnss++ FIX | MRTKLIB FIX | libgnss++ FIX RMS2D* | MRTKLIB RMS2D† | libgnss++ FIX p68* | MRTKLIB p68† | All RMS2D* | FLOAT RMS2D* | SINGLE RMS2D* | libgnss++ max FIX* | >3 m FIX* | libgnss++ TTFF | MRTKLIB TTFF |",
@@ -355,13 +368,17 @@ def write_markdown_table(
         f"**{markdown_value(aggregate['max_fixed_m'], ' m')}** | "
         f"**{aggregate['fixed_over_3m']}** | — | — |"
     )
-    lines.extend(
-        [
-            "",
+    if apply_lever_arm:
+        footnotes = [
             "\\* libgnss++ precision uses PPC vehicle truth transformed to the antenna phase center.",
             "† Published MRTKLIB v0.4.2 precision uses the unmodified PPC reference point; precision columns are contextual rather than reference-identical.",
         ]
-    )
+    else:
+        footnotes = [
+            "\\* libgnss++ precision uses the raw PPC reference point (already antenna-positioned; no lever-arm transform applied).",
+            "† Published MRTKLIB v0.4.2 precision also uses the raw PPC reference point; precision columns use the same reference convention and are directly comparable.",
+        ]
+    lines.extend(["", *footnotes])
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -385,6 +402,17 @@ def main() -> int:
             f"({MIN_INTERVAL_COVERAGE})."
         ),
     )
+    parser.add_argument(
+        "--apply-lever-arm",
+        action="store_true",
+        help=(
+            "Apply the IMU->antenna lever-arm correction to the reference "
+            "trajectory before scoring. PPC reference.csv is already "
+            "antenna-positioned, so this double-corrects and inflates FIX "
+            "RMS2D by ~0.3-0.9 m. Off by default; kept only to reproduce "
+            "historical lever-arm-corrected numbers."
+        ),
+    )
     args = parser.parse_args()
 
     runs = [
@@ -393,6 +421,7 @@ def main() -> int:
             args.results_dir,
             key,
             min_epoch_coverage=args.min_epoch_coverage,
+            apply_lever_arm=args.apply_lever_arm,
         )
         for key, _ in RUNS
     ]
@@ -419,7 +448,13 @@ def main() -> int:
                 "--emit-epoch-time",
             ],
             "parity_environment": scorecard.PARITY_ENV,
-            "reference": "PPC vehicle reference transformed to the antenna phase center",
+            "reference": (
+                "PPC vehicle reference transformed to the antenna phase center"
+                if args.apply_lever_arm
+                else "PPC reference.csv used as-is (already antenna-positioned; "
+                "no lever-arm transform applied)"
+            ),
+            "apply_lever_arm": args.apply_lever_arm,
             "lever_arm_body_m": {
                 city: scorecard.lever_arm_for_city(city).tolist()
                 for city in ("tokyo", "nagoya")
@@ -429,7 +464,13 @@ def main() -> int:
             "fixed_status": scorecard.PPP_FIXED_STATUS,
             "ttff": f"first run of {scorecard.ARTICLE_TTFF_CONSECUTIVE_FIX_EPOCHS} consecutive FIX epochs",
             "comparison_source": "https://zenn.dev/hatognss/articles/7a54dd82606faf",
-            "comparison_caveat": "MRTKLIB article values use the published reference without this lever-arm transform",
+            "comparison_caveat": (
+                "MRTKLIB article values use the published (raw) reference; "
+                "this run uses the same raw-reference convention and is "
+                "directly comparable"
+                if not args.apply_lever_arm
+                else "MRTKLIB article values use the published reference without this lever-arm transform"
+            ),
         },
         "runs": {
             run["key"]: {
@@ -466,10 +507,12 @@ def main() -> int:
     }
     args.metrics.parent.mkdir(parents=True, exist_ok=True)
     args.metrics.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-    write_markdown_table(runs, payload["aggregate"], args.markdown)
+    write_markdown_table(
+        runs, payload["aggregate"], args.markdown, apply_lever_arm=args.apply_lever_arm
+    )
     write_trajectory_figure(runs, args.trajectory_figure)
     write_error_figure(runs, args.error_figure)
-    write_metric_figure(runs, args.metric_figure)
+    write_metric_figure(runs, args.metric_figure, apply_lever_arm=args.apply_lever_arm)
     return 0
 
 

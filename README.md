@@ -22,7 +22,7 @@ handling without an external RTKLIB runtime.
 |---|---|---|
 | RTK | PPC Tokyo/Nagoya vs RTKLIB `demo5` | +17.0 pp positioning, +28.1 pp official score, -11.96 m P95 H delta |
 | GNSS/IMU FGO | PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | Higher <50 cm fraction (avg +5.3 pp) and fix-rate (avg +7.9 pp) on all 3 runs; fixed-only RMS also wins 2 of 3 runs |
-| CLAS PPP | Six PPC Tokyo/Nagoya runs vs MRTKLIB CLAS | 24.110% aggregate FIX, 0.592 m FIX RMS2D, 36.510 m all-solution RMS2D, and 0 FIX epochs above 3 m across 58,258 scored epochs |
+| CLAS PPP | Six PPC Tokyo/Nagoya runs vs MRTKLIB CLAS | 24.110% aggregate FIX, 0.370 m FIX RMS2D (lower than MRTKLIB on all six runs), 36.446 m all-solution RMS2D across 58,258 scored epochs; 19 FIX epochs (0.03%) exceed 3 m, all in one pre-existing 4 s Nagoya 2 burst |
 | Urban RTK | UrbanNav Tokyo Odaiba vs RTKLIB `demo5` | More fixes, lower Hp95/Vp95; `--preset odaiba` closes Hmed |
 | SPP | PPC SPP adaptive robust + policy gate | No P95 regression with <=1 pp positioning drop |
 
@@ -255,17 +255,22 @@ coverage and at least 99.92% epoch coverage.
 
 | Run | libgnss++ FIX | MRTKLIB FIX | FIX RMS2D* | MRTKLIB RMS2D† | All RMS2D* | FLOAT RMS2D* | SINGLE RMS2D* | max FIX* | >3 m FIX* |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Tokyo 1 | **9.735%** | 4.900% | 0.452 m | 0.747 m | 41.713 m | 16.624 m | 80.050 m | 1.533 m | **0** |
-| Tokyo 2 | 20.891% | **21.700%** | 0.381 m | 0.514 m | 25.920 m | 18.158 m | 45.343 m | 1.036 m | **0** |
-| Tokyo 3 | **37.623%** | 7.400% | 0.327 m | 0.801 m | 35.286 m | 19.774 m | 88.586 m | 2.826 m | **0** |
-| Nagoya 1 | **36.724%** | 17.000% | 0.889 m | 1.105 m | 57.257 m | 8.076 m | 119.220 m | 1.501 m | **0** |
-| Nagoya 2 | **23.863%** | 23.400% | 0.787 m | 1.119 m | 25.848 m | 16.593 m | 40.321 m | 2.486 m | **0** |
-| Nagoya 3 | 4.865% | **6.300%** | 0.959 m | 0.318 m | 13.554 m | 13.795 m | 14.040 m | 1.494 m | **0** |
-| **Six-run aggregate** | **24.110%** | — | **0.592 m** | — | **36.510 m** | **16.847 m** | **70.296 m** | **2.826 m** | **0** |
+| Tokyo 1 | **9.735%** | 4.900% | **0.306 m** | 0.747 m | 41.661 m | 16.645 m | 79.925 m | 1.545 m | 0 |
+| Tokyo 2 | 20.891% | **21.700%** | **0.326 m** | 0.514 m | 25.877 m | 18.159 m | 45.239 m | 1.013 m | 0 |
+| Tokyo 3 | **37.623%** | 7.400% | **0.185 m** | 0.801 m | 35.246 m | 19.747 m | 88.489 m | 2.986 m | 0 |
+| Nagoya 1 | **36.724%** | 17.000% | **0.444 m** | 1.105 m | 57.154 m | 7.885 m | 119.031 m | 1.049 m | 0 |
+| Nagoya 2 | **23.863%** | 23.400% | **0.614 m** | 1.119 m | 25.706 m | 16.352 m | 40.178 m | 3.200 m | 19 |
+| Nagoya 3 | 4.865% | **6.300%** | **0.317 m** | 0.318 m | 13.550 m | 13.748 m | 14.102 m | 0.591 m | 0 |
+| **Six-run aggregate** | **24.110%** | — | **0.370 m** | — | **36.446 m** | **16.800 m** | **70.182 m** | **3.200 m** | **19** |
 
-\* libgnss++ precision uses PPC vehicle truth transformed to the antenna phase
-center. † The published MRTKLIB precision uses the unmodified PPC reference,
-so cross-solver precision columns are contextual rather than reference-identical.
+\* libgnss++ precision uses the raw PPC reference point (already
+antenna-positioned; no lever-arm transform is applied — an earlier revision
+of this table double-applied a vehicle→antenna lever arm on top of an
+already-antenna-positioned reference, inflating FIX RMS2D by ~0.3–0.9 m and
+incidentally masking the Nagoya 2 tail below the 3 m line). † The published
+MRTKLIB precision uses the same raw PPC reference, so the FIX RMS2D and p68
+columns are directly comparable, not merely contextual — libgnss++ FIX
+RMS2D is now lower than MRTKLIB's on all six runs (bolded above).
 
 ![PPC six-run moving CLAS metric comparison](docs/ppc_clas_full_comparison.png)
 
@@ -275,8 +280,18 @@ excluded from ordinary filter admission, cold starts, and AR. For catastrophic
 FLOAT/SPP disagreement above 250 m only, it can continue the counted MRTKLIB
 `maxdiffp` recovery path. On Tokyo 2 this moves the bad-seed recovery from TOW
 177750.0 to 177747.4 (311.6 m to 5.4 m), 0.8 s before the MRTKLIB recovery at
-177748.2. The six-run all-solution RMS2D is 36.510 m; FLOAT and SINGLE RMS2D are
-16.847 m and 70.296 m respectively.
+177748.2. The six-run all-solution RMS2D is 36.446 m; FLOAT and SINGLE RMS2D are
+16.800 m and 70.182 m respectively.
+
+Of the 14,046 FIX epochs, 19 (0.03%) exceed 3 m horizontal error; all 19 fall
+in a single contiguous 4-second burst on Nagoya 2 (TOW 556406.4–556410.4,
+errors 3.17–3.20 m, max 3.200 m), inside the known seed-geometry `maxdiffp`
+reset zone. The identical 19 epochs, at matching TOWs and errors, are present
+in the pre-#349 baseline run, so this is a pre-existing wrong-fix tail, not a
+regression from the hold-continuation carve-out — it was previously invisible
+because the lever-arm double-correction happened to shift it under the 3 m
+line (old Nagoya 2 max was 2.486 m). The other five runs still have zero FIX
+epochs above 3 m.
 
 | Complete trajectories | Horizontal error and FIX epochs |
 |---|---|
