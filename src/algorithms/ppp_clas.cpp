@@ -1222,12 +1222,44 @@ ClasSlipDetectionStats detectClasCycleSlips(
         bool per_sat_outage = false;
         bool l1_outage_overflow = false;
         bool l2_outage_overflow = false;
-        int l1_outage_count = ambiguity.outage_count;
-        int l2_outage_count = 0;
         const SatelliteId l2_ambiguity_satellite(
             osr.satellite.system,
             static_cast<uint8_t>(std::min(
                 255, static_cast<int>(osr.satellite.prn) + 100)));
+        // MRTKLIB udbias_ppp() increments outc[f] for every extant ambiguity
+        // (mirrored at the top of this function), then clears it back to 0
+        // for every satellite whose phase row survives that epoch's
+        // post-fit residual test (mrtk_ppp_rtk.c ~2342: "if (!vsat[f])
+        // continue; ...outc[f]=0;"). Our post-fit acceptance path
+        // (updateObservedAmbiguities()) mirrors that clear, but only for
+        // rows that actually reach DD/measurement construction; a satellite
+        // that silently drops out of that build for one epoch (reference
+        // reselection etc., not a slip or a genuine residual-test
+        // rejection) never gets the chance, and because the overflow branch
+        // below deliberately *preserves* -- never zeroes -- an already
+        // elevated count (matching MRTKLIB's own increment-before-test
+        // ordering), the counter is then parked above maxout permanently:
+        // "outage_sat" re-fires every subsequent epoch even though the
+        // satellite continues to be observed and corrected (G15 at
+        // nagoya/run3 tow 553825-553830: fires every 0.2s epoch once
+        // tripped, though raw obs + OSR corrections are valid throughout).
+        // Clear the counter directly from this epoch's raw observation
+        // validity -- the same underlying signal MRTKLIB's vsat[f]
+        // ultimately reduces to for a satellite that was never rejected --
+        // so a continuously observed satellite cannot get stuck above
+        // maxout. Kill switch: GNSS_PPP_CLAS_OUTAGE_RESET_PARITY=0 restores
+        // the unconditional-increment-only legacy behavior exactly.
+        if (mrtklib_float_parity && !outage_gap &&
+            pppEnvOverrides().clas_outage_reset_parity) {
+            if (l1_raw_usable) {
+                ambiguity.outage_count = 0;
+            }
+            if (l2_raw_usable) {
+                ambiguity_states[l2_ambiguity_satellite].outage_count = 0;
+            }
+        }
+        int l1_outage_count = ambiguity.outage_count;
+        int l2_outage_count = 0;
         const auto l2_ambiguity_it = ambiguity_states.find(l2_ambiguity_satellite);
         if (l2_ambiguity_it != ambiguity_states.end()) {
             l2_outage_count = l2_ambiguity_it->second.outage_count;

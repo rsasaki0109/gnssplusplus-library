@@ -57,6 +57,29 @@ constexpr int kClasKinematicMinFixCount = 1;
 // MRTKLIB clas.toml rejection.hold_chi_square / fix_chi_square (mrtk_ppp_rtk.c:2312-2315)
 constexpr double kMrtklibHoldChiSquareGate = 0.5;
 constexpr double kMrtklibFixChiSquareGate = 5.0;
+// Measurement-only override for the post-fix DD phase chi-square gate
+// (kMrtklibFixChiSquareGate above, applied at its use site further down this
+// file). Unset (the default): behavior is exactly kMrtklibFixChiSquareGate,
+// bit-identical to before this override existed. Set to a finite float: that
+// value replaces the gate threshold for this process, so
+// GNSS_PPP_CLAS_KIN_CHISQ_MAX=1e9 effectively disables the gate (chisq is
+// never >= 1e9) while e.g. =20 loosens it. Used to measure how much of the
+// kinematic AR attrition on nagoya_run3 (292 AR-accepted epochs vs. 250
+// scored FIX) this single gate accounts for -- see [CLAS-KIN-CHISQ] reject
+// logging at the use site.
+double clasKinematicChiSquareGateM() {
+    static const double gate = [] {
+        const char* env = std::getenv("GNSS_PPP_CLAS_KIN_CHISQ_MAX");
+        if (env == nullptr) return kMrtklibFixChiSquareGate;
+        char* end = nullptr;
+        const double parsed = std::strtod(env, &end);
+        if (end == env || !std::isfinite(parsed)) {
+            return kMrtklibFixChiSquareGate;
+        }
+        return parsed;
+    }();
+    return gate;
+}
 // MRTKLIB clas.toml rejection.l1_l2_residual (pos2-rejionno1) sigma gate used
 // by residual_test() to drop individual outlier carrier residuals.
 constexpr double kMrtklibPhaseResidualSigmaGate = 2.0;
@@ -2022,7 +2045,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
                           << " ratio=" << last_ar_ratio_ << "\n";
             }
             if (!std::isfinite(phase_chisq) ||
-                phase_chisq >= kMrtklibFixChiSquareGate) {
+                phase_chisq >= clasKinematicChiSquareGateM()) {
                 clas_kinematic_chisq_rejected = true;
             } else if (phase_chisq < kMrtklibHoldChiSquareGate) {
                 std::map<SatelliteId, double> clas_satellite_elevations_rad;
@@ -2082,7 +2105,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         ppp_ar::clearWlnlHoldState(clas_wlnl_hold_);
         if (pppDebugEnabled()) {
             std::cerr << "[CLAS-KIN-CHISQ] reject fix (chisq >= "
-                      << kMrtklibFixChiSquareGate << ")\n";
+                      << clasKinematicChiSquareGateM() << ")\n";
         }
     }
     if (ambiguity_resolution.rejected_after_fix) {
