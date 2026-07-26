@@ -188,6 +188,19 @@ struct PPPEnvOverrides {
     // GNSS_PPP_CLAS_MRTKLIB_FLOAT_PARITY: use the MRTKLIB-equivalent CLAS
     // float variance model unless set exactly to "0". Default true.
     bool clas_mrtklib_float_parity = true;
+    // GNSS_PPP_CLAS_OUTAGE_RESET_PARITY: clear a satellite's per-frequency
+    // outage counter (ambiguity.outage_count) as soon as this epoch's raw
+    // observation for that frequency is usable, mirroring MRTKLIB's
+    // udbias_ppp()/vsat-gated outc[f]=0 clear (mrtk_ppp_rtk.c ~2342) that
+    // our port was missing at the point per_sat_outage is evaluated. Without
+    // it, a single missed post-fit acceptance leaves the counter parked
+    // above maxout forever (reset_frequency() preserves, never zeroes, an
+    // overflowed count -- matching MRTKLIB's own increment-before-test
+    // ordering) and "outage_sat" re-fires every subsequent epoch even while
+    // the satellite is observed and corrected continuously. Default true
+    // (fix ON); exact "0" restores the unconditional-increment-only legacy
+    // behavior byte-for-byte.
+    bool clas_outage_reset_parity = true;
     // GNSS_PPP_CLAS_SIS_BOUNDARY: apply the CLAS SIS continuity delta with
     // CLASLIB-style SSR-update-boundary semantics (hold the delta captured at
     // a 30s orbit/clock boundary for the following 15s, matching the
