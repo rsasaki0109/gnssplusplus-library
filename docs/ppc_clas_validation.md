@@ -5,29 +5,43 @@ Benchmark source: [GNSS測位エコシステムの統合を目指して - モダ
 ## Current verdict
 
 The full six-run PPC moving-data validation is complete. After the
-hold-continuation carve-out landed in #349, across 58,258 scored epochs
-LibGNSS++ produced 14,046 FIX epochs (24.110%) with 0.370 m aggregate FIX
-RMS2D and 0.349 m FIX p68 (up from the prior 23.645% / 0.593 m aggregate).
-Every run covers 100% of the reference interval and at least 99.95% of
-observation epochs.
+hold-continuation carve-out landed in #349 and the outage-counter parity fix
+landed in #351, across 58,259 scored epochs LibGNSS++ produced 14,478 FIX
+epochs (24.851%) with 0.377 m aggregate FIX RMS2D and 0.349 m FIX p68 (up
+from the pre-#351 24.110% / 0.370 m aggregate, and the earlier 23.645% /
+0.593 m aggregate before #349). The outage-counter fix clears a
+per-satellite outage counter from that epoch's raw observation validity
+(matching MRTKLIB's reset), instead of leaving it reachable only through a
+narrower DD/measurement-row path; previously a satellite that briefly
+dropped out of that path for one epoch could park above the outage
+threshold indefinitely and keep re-triggering false "outage_sat" flags and
+float-state wipes even while still being observed and corrected. The effect
+is largest on Nagoya 3, where it was breaking healthy fix holds most often
+(FIX rate nearly doubles, 4.865% to 8.776%), with smaller gains on the other
+five runs. Every run covers 100% of the reference interval and at
+least 99.95% of observation epochs.
 
-Of the 14,046 FIX epochs, 19 (0.03%) exceed 3 m horizontal error. All 19 sit
+Of the 14,478 FIX epochs, 19 (0.03%) exceed 3 m horizontal error. All 19 sit
 in a single contiguous 4-second burst on Nagoya 2 (TOW 556406.4–556410.4,
 errors 3.17–3.20 m, max 3.200 m), inside the known seed-geometry `maxdiffp`
 reset zone. The identical 19 epochs, at matching TOWs and errors to 0.01 m,
-are present in the pre-#349 baseline run (`clas_current_develop_20260723`),
-so this is a pre-existing wrong-fix tail rather than a regression from the
-hold-continuation carve-out. The other five runs have zero FIX epochs above
-3 m. See "Reference-point methodology" below for why this tail was not
-visible in earlier tables.
+are present in the pre-#349 baseline run (`clas_current_develop_20260723`)
+and are unchanged by the #351 outage-counter fix, so this is a pre-existing
+wrong-fix tail rather than a regression from either change. The other five
+runs have zero FIX epochs above 3 m. See "Reference-point methodology" below
+for why this tail was not visible in earlier tables.
 
 The same gate now reports non-FIX quality explicitly. Aggregate all-solution
-RMS2D is 36.446 m, FLOAT RMS2D is 16.800 m, and SINGLE RMS2D is 70.182 m.
+RMS2D is 36.523 m, FLOAT RMS2D is 16.843 m, and SINGLE RMS2D is 70.337 m.
 
-Compared with the published MRTKLIB v0.4.2 results, native FIX rate is higher
-on Tokyo 1, Tokyo 3, Nagoya 1, and Nagoya 2; it remains lower on Tokyo 2 and
-Nagoya 3. Native FIX RMS2D is now lower than MRTKLIB's on all six runs. The
-precision comparison is directly comparable, not merely contextual: both
+Compared with the published MRTKLIB v0.4.2 results, native FIX rate is now
+higher on five of the six runs — Tokyo 1, Tokyo 3, Nagoya 1, Nagoya 2, and
+Nagoya 3, which the outage-counter fix pushes from 4.865% (below its 6.3%
+target) to 8.776% (above it). Tokyo 2 remains the sole run below target,
+and only narrowly: 21.507% native vs. 21.7% MRTKLIB, within 0.2 percentage
+points. Native FIX RMS2D is now lower than MRTKLIB's on all six runs,
+including Nagoya 3 (0.304 m vs. 0.318 m), which had been the closest margin.
+The precision comparison is directly comparable, not merely contextual: both
 sides now score against the same raw (already antenna-positioned) PPC
 reference point, with no lever-arm transform applied on either side.
 
