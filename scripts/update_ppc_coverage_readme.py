@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Synchronize README/docs PPC coverage tables from ppc-coverage-matrix JSON."""
+"""Synchronize the PPC coverage table from ppc-coverage-matrix JSON."""
 
 from __future__ import annotations
 
@@ -14,7 +14,6 @@ from typing import Any
 ROOT_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_SUMMARY_JSON = ROOT_DIR / "output" / "ppc_coverage_matrix" / "summary.json"
 DEFAULT_TARGETS = (
-    ROOT_DIR / "README.md",
     ROOT_DIR / "docs" / "benchmarks.md",
 )
 START_MARKER = "<!-- PPC_COVERAGE_MATRIX:START -->"

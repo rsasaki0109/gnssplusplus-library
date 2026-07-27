@@ -4852,6 +4852,12 @@ class KfFgoAlignmentTest(unittest.TestCase):
 
 
 class PPCCoverageReadmeUpdateTest(unittest.TestCase):
+    def test_default_target_keeps_generated_table_in_benchmarks(self) -> None:
+        self.assertEqual(
+            ppc_coverage_readme.DEFAULT_TARGETS,
+            (ppc_coverage_readme.ROOT_DIR / "docs" / "benchmarks.md",),
+        )
+
     def sample_summary(self) -> dict[str, object]:
         return {
             "runs": [
