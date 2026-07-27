@@ -41,6 +41,58 @@ TEST(RTKMeasurementTest, SuppressesOutlierRowsInResidualsAndDesignMatrix) {
     EXPECT_EQ(design.row(2).sum(), 0.0);
 }
 
+TEST(RTKMeasurementTest, SuppressOutlierRowsPerRowThresholdMatchesLegacyWhenEmpty) {
+    Eigen::VectorXd residuals(3);
+    residuals << 0.5, 35.0, -40.0;
+    Eigen::MatrixXd design = Eigen::MatrixXd::Ones(3, 4);
+    Eigen::VectorXd residuals_legacy = residuals;
+    Eigen::MatrixXd design_legacy = design;
+
+    const int suppressed =
+        rtk_measurement::suppressOutlierRows(residuals, design, 30.0, {});
+    const int suppressed_legacy =
+        rtk_measurement::suppressOutlierRows(residuals_legacy, design_legacy, 30.0);
+
+    EXPECT_EQ(suppressed, suppressed_legacy);
+    EXPECT_TRUE(residuals.isApprox(residuals_legacy, 0.0));
+    EXPECT_TRUE(design.isApprox(design_legacy, 0.0));
+}
+
+TEST(RTKMeasurementTest, SuppressOutlierRowsUsesPerRowThreshold) {
+    // Row 2 is a Doppler-domain row (m/s): 1.2 m/s must be suppressed by its
+    // own 1.0 m/s threshold even though the metre-domain threshold is 30.
+    Eigen::VectorXd residuals(3);
+    residuals << 0.5, 1.2, 35.0;
+    Eigen::MatrixXd design = Eigen::MatrixXd::Ones(3, 4);
+    const std::vector<double> per_row{0.0, 1.0, 0.0};  // 0 = fall back to scalar
+
+    const int suppressed =
+        rtk_measurement::suppressOutlierRows(residuals, design, 30.0, per_row);
+
+    EXPECT_EQ(suppressed, 2);
+    EXPECT_DOUBLE_EQ(residuals(0), 0.5);
+    EXPECT_DOUBLE_EQ(residuals(1), 0.0);  // per-row 1.0 caught it
+    EXPECT_DOUBLE_EQ(residuals(2), 0.0);  // scalar 30.0 caught it
+    EXPECT_EQ(design.row(1).sum(), 0.0);
+}
+
+TEST(RTKMeasurementTest, SummarizeCountsDopplerBlocks) {
+    rtk_measurement::MeasurementBlock doppler_block;
+    doppler_block.kind = rtk_measurement::MeasurementKind::DOPPLER;
+    rtk_measurement::MeasurementRow row;
+    row.residual = 0.1;
+    doppler_block.rows.push_back(row);
+    doppler_block.rows.push_back(row);
+
+    const auto diagnostics =
+        rtk_measurement::summarizeMeasurementBlocks({doppler_block});
+
+    EXPECT_EQ(diagnostics.observation_count, 2);
+    EXPECT_EQ(diagnostics.doppler_observation_count, 2);
+    EXPECT_EQ(diagnostics.phase_observation_count, 0);
+    EXPECT_EQ(diagnostics.code_observation_count, 0);
+}
+
 TEST(RTKMeasurementTest, AssemblesExactSizeMeasurementSystemFromBlocks) {
     rtk_measurement::MeasurementBlock phase_block;
     rtk_measurement::MeasurementRow phase_row;

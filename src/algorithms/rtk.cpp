@@ -684,6 +684,7 @@ std::map<SatelliteId, RTKProcessor::SatelliteData> RTKProcessor::collectSatellit
         }
         SatelliteData sd; sd.satellite = sat; sd.sat_pos = corrected_sat_pos;
         sd.sat_pos_base = base_sat_pos; sd.has_ephemeris = true;
+        sd.sat_vel = sat_vel; sd.sat_clock_drift = clk_drift; sd.has_sat_velocity = true;
         auto geom = nav.calculateGeometry(rover_pos_for_clk, corrected_sat_pos);
         sd.elevation = geom.elevation;
         auto base_geom = nav.calculateGeometry(base_position_, base_sat_pos);

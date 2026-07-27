@@ -1236,6 +1236,13 @@ private:
         double elevation = 0.0;       // elevation from rover position
         double base_elevation = 0.0;   // elevation from base position
         bool has_ephemeris = false;
+        // navi.776 B: satellite velocity / clock drift at the rover-side
+        // transmit time, for SD Doppler measurement rows. Populated from
+        // the same calculateSatelliteState call that yields sat_pos, so
+        // filling them is behavior-neutral.
+        Vector3d sat_vel = Vector3d::Zero();      // ECEF m/s
+        double sat_clock_drift = 0.0;             // s/s
+        bool has_sat_velocity = false;
     };
 
     // WP7: current epoch's time (tow), used to look up the NLOS weight

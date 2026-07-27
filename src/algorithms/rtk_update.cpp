@@ -126,7 +126,8 @@ FilterUpdateResult applyMeasurementUpdate(Eigen::VectorXd& state,
     }
 
     result.suppressed_outliers = rtk_measurement::suppressOutlierRows(
-        measurement_system.residuals, measurement_system.design_matrix, outlier_threshold);
+        measurement_system.residuals, measurement_system.design_matrix, outlier_threshold,
+        measurement_system.row_outlier_thresholds);
     result.post_suppression_residual_rms_m = residualRms(measurement_system.residuals);
     result.post_suppression_residual_max_abs_m = residualMaxAbs(measurement_system.residuals);
 
