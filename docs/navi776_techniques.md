@@ -167,3 +167,26 @@ IMU logs (e.g. `data/rtklibexplorer_gnss_imu` u-blox/ICM runs or GSDC
 smartphone logs, once an adapter exists); rerun with
 `--coupling-flags="--tc-ins-time-update"` there and check the convexity
 warning before trusting any argmin.
+
+## Combined configuration (A3 gate + B sigma 0.5 on the M4 closed loop)
+
+`--tc-closed-loop --tc-velocity-states --tc-doppler-rows
+--tc-doppler-sigma 0.5 --rtk-adaptive-noise
+--rtk-adaptive-noise-max-baseline 1000`, same binary, full runs, scored
+on the `--rtk-pos-out` stream (OFF arms rerun; they reproduced the gate B
+OFF numbers exactly):
+
+| run | variant | fix% | 50cm-matched% | official% | p95_h m |
+|---|---|---|---|---|---|
+| tokyo1 | OFF (M4) | 77.36 | 75.75 | 70.07 | 7.53 |
+| tokyo1 | combined | **79.19** | **76.00** | **72.24** | **7.38** |
+| tokyo3 | OFF | 78.52 | 79.23 | 74.69 | 4.69 |
+| tokyo3 | combined | 78.69 | 77.07 | 72.68 | 7.68 |
+
+tokyo1 is a clean all-metric win (fix +1.83 pp, official +2.16 pp, p95_h
+improved) — the best tokyo1 tight-coupling result recorded in this repo.
+tokyo3 fails (accuracy/p95 regress, dominated by the Doppler-row
+component, which was already negative on tokyo3 accuracy in gate B).
+Verdict: run-dependent opt-in, not a blanket preset; the adaptive-noise
+gate composes cleanly with Doppler rows (the DOPPLER-kind adaptation path
+exercised here for the first time, no instability observed).
