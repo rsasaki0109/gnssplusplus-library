@@ -146,6 +146,10 @@ struct FuseOptions {
     bool tc_trusted_reanchor = false;
     int tc_trusted_reanchor_max_epochs = 0;
     bool tc_velocity_states = false;
+    // navi.776 B2: SD Doppler rows making the M4 velocity states directly
+    // observable. Requires --tc-velocity-states.
+    bool tc_doppler_rows = false;
+    double tc_doppler_sigma_mps = 0.2;
     bool tc_tdcp_diagnostics = false;
     double tc_ins_position_q_floor_m2 = 25.0;
     double tc_ins_max_sample_gap_s = 0.1;
@@ -390,6 +394,10 @@ void printUsage(const char* program_name) {
         << "                                Maximum consecutive FLOAT/SPP epochs bridged before\n"
         << "                                re-anchoring to the next available posterior (0 = no\n"
         << "                                limit). Requires --tc-trusted-reanchor. Default: 0.\n"
+        << "  --tc-doppler-rows            navi.776: rover-only between-satellite SD Doppler\n"
+        << "                                observation rows (velocity observability). Requires\n"
+        << "                                --tc-velocity-states. Default: off.\n"
+        << "  --tc-doppler-sigma <mps>     SD Doppler row sigma in m/s (default: 0.2)\n"
         << "  --tc-velocity-states         M4 ECEF velocity states appended after legacy RTK state.\n"
         << "                                Requires --tc-closed-loop. Default: off.\n"
         << "  --tc-tdcp-diagnostics        M5 measurement-neutral SD-TDCP vs Doppler diagnostics.\n"
@@ -675,6 +683,10 @@ FuseOptions parseArguments(int argc, char* argv[]) {
                 std::stoi(requireValue(arg, i, argc, argv));
         } else if (arg == "--tc-velocity-states") {
             options.tc_velocity_states = true;
+        } else if (arg == "--tc-doppler-rows") {
+            options.tc_doppler_rows = true;
+        } else if (arg == "--tc-doppler-sigma") {
+            options.tc_doppler_sigma_mps = std::stod(requireValue(arg, i, argc, argv));
         } else if (arg == "--tc-tdcp-diagnostics") {
             options.tc_tdcp_diagnostics = true;
         } else if (arg == "--tc-ins-position-q-floor") {
@@ -760,6 +772,9 @@ FuseOptions parseArguments(int argc, char* argv[]) {
     if (options.tc_closed_loop && (options.tc_ins_time_update || options.rtk_ins_prior)) {
         argumentError("--tc-closed-loop is mutually exclusive with legacy INS prior/time-update modes",
                       argv[0]);
+    }
+    if (options.tc_doppler_rows && !options.tc_velocity_states) {
+        argumentError("--tc-doppler-rows requires --tc-velocity-states", argv[0]);
     }
     if (options.tc_velocity_states && !options.tc_closed_loop) {
         argumentError("--tc-velocity-states requires --tc-closed-loop", argv[0]);
@@ -972,6 +987,8 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
     rtk_config.use_external_position_time_update =
         options.tc_ins_time_update || options.tc_closed_loop;
     rtk_config.enable_velocity_states = options.tc_velocity_states;
+    rtk_config.enable_doppler_measurement_rows = options.tc_doppler_rows;
+    rtk_config.doppler_row_sigma_mps = options.tc_doppler_sigma_mps;
     rtk_config.enable_tdcp_diagnostics = options.tc_tdcp_diagnostics;
     rtk_config.ins_time_update_position_q_floor_m2 = options.tc_ins_position_q_floor_m2;
     rtk_config.enable_cp_pr_fixed_gate = options.tc_cp_pr_gate || options.tc_closed_loop;

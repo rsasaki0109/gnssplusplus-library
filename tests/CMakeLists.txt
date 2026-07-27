@@ -36,6 +36,7 @@ if(GTest_FOUND)
         test_float_trust_policy.cpp
         test_rtk_slip_detection.cpp
         test_rtk_adaptive_noise.cpp
+        test_rtk_doppler_rows.cpp
         test_rtk_measurement.cpp
         test_rtk_update.cpp
         test_rtk_ins_time_update.cpp

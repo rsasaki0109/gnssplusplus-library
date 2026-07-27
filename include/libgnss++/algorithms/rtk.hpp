@@ -126,6 +126,17 @@ public:
         double adaptive_noise_max_variance_scale = 25.0;
         double adaptive_noise_reset_gap_s = 5.0;    // outage prune horizon
 
+        /// navi.776 B: rover-only between-satellite SD Doppler measurement
+        /// rows. Receiver clock drift cancels in the between-satellite
+        /// difference; rows touch only the M4 velocity tail states (which
+        /// must exist: requires enable_velocity_states) and are skipped
+        /// until the first INS position/velocity time update initializes
+        /// the velocity covariance. Never participates in AR, slip, or
+        /// lock counting. Off by default; bit-identical when off.
+        bool enable_doppler_measurement_rows = false;
+        double doppler_row_sigma_mps = 0.2;  // FGO SD-Doppler sigma parity
+        double doppler_row_outlier_threshold_mps = 1.0;
+
         // Quality control
         bool enable_cycle_slip_detection = true;
         double cycle_slip_threshold = 0.05;
@@ -802,6 +813,10 @@ public:
         int adaptive_noise_tracked_entries = 0;
         double adaptive_noise_mean_phase_scale = std::numeric_limits<double>::quiet_NaN();
         double adaptive_noise_mean_code_scale = std::numeric_limits<double>::quiet_NaN();
+        // navi.776 B: SD Doppler measurement rows in this epoch's float
+        // update and their prefit residual RMS (m/s domain).
+        int float_update_doppler_observation_count = 0;
+        double doppler_row_residual_rms_mps = std::numeric_limits<double>::quiet_NaN();
     };
 
     RTKProcessor();

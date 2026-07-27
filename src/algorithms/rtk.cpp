@@ -2605,6 +2605,32 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
     const auto selection_snapshot = buildSelectionSnapshot(sat_data);
     std::vector<rtk_measurement::MeasurementBlock> blocks;
 
+    // navi.776 B2: rover-only between-satellite SD Doppler rows. Skipped
+    // until the first INS position/velocity time update has initialized the
+    // velocity covariance -- before that the rows would carry residuals with
+    // no active velocity columns and pollute NIS.
+    const bool build_doppler_rows =
+        rtk_config_.enable_doppler_measurement_rows &&
+        rtk_config_.enable_velocity_states &&
+        filter_state_.state.size() >= VELOCITY_STATE_INDEX + VELOCITY_STATES &&
+        filter_state_.covariance(VELOCITY_STATE_INDEX, VELOCITY_STATE_INDEX) > 0.0;
+    const Vector3d velocity_estimate =
+        build_doppler_rows ? Vector3d(filter_state_.state.segment<3>(VELOCITY_STATE_INDEX))
+                           : Vector3d::Zero();
+    // Predicted range rate at the current velocity estimate (RTKLIB resdop
+    // form): e.(v_sat - v_rx) + Sagnac rate term - c * sat clock drift. The
+    // receiver clock drift term is omitted -- it cancels exactly in the
+    // between-satellite difference.
+    auto predicted_range_rate_mps = [&](const SatelliteData& s) -> double {
+        const Vector3d e = (s.sat_pos - rover_pos).normalized();
+        const double sagnac_rate =
+            constants::OMEGA_E / constants::SPEED_OF_LIGHT *
+            (s.sat_vel.y() * rover_pos.x() + s.sat_pos.y() * velocity_estimate.x() -
+             s.sat_vel.x() * rover_pos.y() - s.sat_pos.x() * velocity_estimate.y());
+        return (s.sat_vel - velocity_estimate).dot(e) + sagnac_rate -
+               constants::SPEED_OF_LIGHT * s.sat_clock_drift;
+    };
+
     // WP7: NLOS/multipath sigma inflation. Returns 1.0 (no-op) whenever the
     // feature is off or no table/entry is available, so this is bit-identical
     // to pre-WP7 behavior by construction when nlos_weight_mode == OFF.
@@ -2679,6 +2705,23 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
             if (freq == 1) return sd.rover_l2_code - sd.base_l2_code;
             return sd.rover_l5_code - sd.base_l5_code;
         };
+        auto freq_rover_doppler_local = [](const SatelliteData& sd, int freq) -> double {
+            if (freq == 0) return sd.rover_l1_doppler;
+            if (freq == 1) return sd.rover_l2_doppler;
+            return sd.rover_l5_doppler;
+        };
+        auto freq_has_doppler_local = [](const SatelliteData& sd, int freq) -> bool {
+            if (freq == 0) return sd.has_l1_doppler;
+            if (freq == 1) return sd.has_l2_doppler;
+            return sd.has_l5_doppler;
+        };
+        // Elevation-law Doppler variance, same 1/sin^2(el) family as varerr.
+        auto doppler_variance = [&](double elevation) -> double {
+            double sin_el = std::sin(elevation);
+            if (sin_el < 0.1) sin_el = 0.1;
+            const double sigma = rtk_config_.doppler_row_sigma_mps;
+            return sigma * sigma * (1.0 + 1.0 / (sin_el * sin_el));
+        };
 
         auto append_frequency_blocks = [&](int freq) {
             rtk_measurement::MeasurementBlock phase_block;
@@ -2687,6 +2730,26 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
             rtk_measurement::MeasurementBlock code_block;
             code_block.kind = rtk_measurement::MeasurementKind::CODE;
             code_block.frequency_index = freq;
+            rtk_measurement::MeasurementBlock doppler_block;
+            doppler_block.kind = rtk_measurement::MeasurementKind::DOPPLER;
+            doppler_block.frequency_index = freq;
+            const bool ref_doppler_ok =
+                build_doppler_rows && freq_has_doppler_local(ref_sd, freq) &&
+                ref_sd.has_sat_velocity &&
+                freq_frequency_hz_local(ref_sd, freq) > 0.0;
+            // Between-satellite SD reference terms: measured range rate
+            // (RINEX sign: rr = -D * c / f) and prediction at current v_hat.
+            const double rr_obs_ref =
+                ref_doppler_ok
+                    ? -freq_rover_doppler_local(ref_sd, freq) *
+                          (constants::SPEED_OF_LIGHT / freq_frequency_hz_local(ref_sd, freq))
+                    : 0.0;
+            const double rr_pred_ref = ref_doppler_ok ? predicted_range_rate_mps(ref_sd) : 0.0;
+            const Vector3d e_ref_doppler =
+                ref_doppler_ok ? Vector3d((ref_sd.sat_pos - rover_pos).normalized())
+                               : Vector3d::Zero();
+            const double ref_doppler_variance =
+                ref_doppler_ok ? doppler_variance(ref_sd.elevation) : 0.0;
             const auto& ref_indices = (freq == 0) ? filter_state_.n1_indices :
                                       (freq == 1) ? filter_state_.n2_indices :
                                                     filter_state_.n5_indices;
@@ -2845,9 +2908,47 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
                 code_row.adaptive_key = adaptive_key;
                 code_row.adaptive_model_variance = sat_code_model_variance;
                 code_block.rows.push_back(std::move(code_row));
+
+                // navi.776 B2: SD Doppler row for this satellite pair.
+                if (ref_doppler_ok && freq_has_doppler_local(sd, freq) &&
+                    sd.has_sat_velocity &&
+                    freq_frequency_hz_local(sd, freq) > 0.0) {
+                    const double rr_obs_sat =
+                        -freq_rover_doppler_local(sd, freq) *
+                        (constants::SPEED_OF_LIGHT / freq_frequency_hz_local(sd, freq));
+                    const double rr_pred_sat = predicted_range_rate_mps(sd);
+                    const Vector3d e_sat = (sd.sat_pos - rover_pos).normalized();
+
+                    rtk_measurement::MeasurementRow doppler_row;
+                    doppler_row.residual =
+                        (rr_obs_sat - rr_pred_sat) - (rr_obs_ref - rr_pred_ref);
+                    // d(h)/d(v_rx) = e_ref - e_sat (h = rr_sat - rr_ref,
+                    // d(rr)/d(v_rx) = -e). Position/ambiguity/iono columns
+                    // stay zero: baseline_coefficients untouched.
+                    for (int axis = 0; axis < 3; ++axis) {
+                        doppler_row.state_coefficients.push_back(
+                            {VELOCITY_STATE_INDEX + axis,
+                             e_ref_doppler(axis) - e_sat(axis)});
+                    }
+                    doppler_row.reference_variance = ref_doppler_variance;
+                    double sat_doppler_variance = doppler_variance(sd.elevation);
+                    const double sat_doppler_model_variance = sat_doppler_variance;
+                    if (rtk_config_.enable_adaptive_measurement_noise) {
+                        sat_doppler_variance = adaptive_noise_tracker_.adaptedVariance(
+                            adaptive_key, rtk_measurement::MeasurementKind::DOPPLER,
+                            sat_doppler_model_variance, adaptiveNoiseConfig());
+                    }
+                    doppler_row.satellite_variance = sat_doppler_variance;
+                    doppler_row.adaptive_key = adaptive_key;
+                    doppler_row.adaptive_model_variance = sat_doppler_model_variance;
+                    doppler_block.rows.push_back(std::move(doppler_row));
+                }
             }
             blocks.push_back(std::move(phase_block));
             blocks.push_back(std::move(code_block));
+            if (!doppler_block.rows.empty()) {
+                blocks.push_back(std::move(doppler_block));
+            }
         };
 
         append_frequency_blocks(0);
@@ -2867,6 +2968,30 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
     const auto measurement_diagnostics = rtk_measurement::summarizeMeasurementBlocks(blocks);
     auto measurement_system = rtk_measurement::assembleMeasurementSystem(
         blocks, filter_state_.state.size());
+
+    // navi.776 B2: Doppler rows live in the m/s domain -- give them their
+    // own outlier threshold instead of the metre-domain scalar.
+    debug_telemetry_.float_update_doppler_observation_count =
+        measurement_diagnostics.doppler_observation_count;
+    if (measurement_diagnostics.doppler_observation_count > 0) {
+        measurement_system.row_outlier_thresholds.assign(
+            static_cast<size_t>(measurement_system.residuals.size()), 0.0);
+        double doppler_residual_sum_sq = 0.0;
+        int row_index = 0;
+        for (const auto& block : blocks) {
+            for (const auto& row : block.rows) {
+                if (block.kind == rtk_measurement::MeasurementKind::DOPPLER) {
+                    measurement_system.row_outlier_thresholds[static_cast<size_t>(row_index)] =
+                        rtk_config_.doppler_row_outlier_threshold_mps;
+                    doppler_residual_sum_sq += row.residual * row.residual;
+                }
+                ++row_index;
+            }
+        }
+        debug_telemetry_.doppler_row_residual_rms_mps = std::sqrt(
+            doppler_residual_sum_sq /
+            static_cast<double>(measurement_diagnostics.doppler_observation_count));
+    }
     std::vector<bool> force_active;
     if (rtk_config_.enable_velocity_states &&
         filter_state_.state.size() >= VELOCITY_STATE_INDEX + VELOCITY_STATES) {
