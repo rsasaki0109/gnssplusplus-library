@@ -107,6 +107,37 @@ recommended over the paper's 0.2); do not enable on long baselines.
 
 ## C. Offline GNSS-IMU time-offset search
 
-_pending — `ImuSeries::shiftTime` + `gnss_fuse --imu-time-offset` +
-`scripts/search_imu_time_offset.py`, J(dt) = mean squared KF position
-correction over INS-time-update epochs, coarse (100 ms) -> fine (20 ms)._
+Machinery: `ImuSeries::shiftTime` (week-rollover-safe), `gnss_fuse
+--imu-time-offset <s>` (applied at load, 0.0 = guarded exact no-op, OFF
+bit-identity verified), per-run `imu_time_offset_score:` stdout line
+(J(dt) = mean squared Kalman position correction accumulated ONLY on
+INS-time-update epochs), and `scripts/search_imu_time_offset.py`
+(coarse 100 ms -> fine 20 ms, coverage guard, boundary warning;
+`--coarse-fine off` gives the paper-faithful 101-candidate sweep).
+
+### Gate C result (2026-07-27, 3000-epoch prefixes, closed-loop coupling)
+
+| window | argmin dt | J spread across candidates | shape |
+|---|---|---|---|
+| tokyo run1 | -0.32 s | 0.063 vs 0.16 m^2 | bimodal noise (two solution branches, no convexity) |
+| tokyo run3 | -0.30 s | 0.0143-0.0166 m^2 (1.16x) | flat |
+| nagoya run1 | -0.90 s | 0.504-0.665 m^2 (1.32x) | flat, argmin near boundary |
+
+**Verdict: null result — no reliable time offset detectable; the applied
+offset stays 0.0.** The pre-registered acceptance criteria (locally convex
+J around the argmin, two-window agreement) fail on every window: the
+tokyo1 curve is a bimodal fix-branch lottery, tokyo3/nagoya1 are flat to
+within run-to-run noise. Two causes, both expected in hindsight: (1) the
+PPC-Dataset's Septentrio mosaic-X5 + tactical IMU logging is
+hardware-synchronized, so the true offset is ~0 and there is no signal to
+find; (2) the M3 closed loop re-anchors the INS at RTK's own posterior
+every epoch, so a mistimed IMU only perturbs one ~0.2 s mechanization
+interval per update — J barely responds even to a +/-1 s shift. The
+paper's method needs an unanchored GNSS/INS EKF over device-quality data
+(its smartphone context) to make J sharply dt-sensitive.
+
+The tool remains useful as-is for datasets with genuinely unsynchronized
+IMU logs (e.g. `data/rtklibexplorer_gnss_imu` u-blox/ICM runs or GSDC
+smartphone logs, once an adapter exists); rerun with
+`--coupling-flags="--tc-ins-time-update"` there and check the convexity
+warning before trusting any argmin.
