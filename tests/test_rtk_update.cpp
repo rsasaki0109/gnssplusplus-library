@@ -99,6 +99,43 @@ TEST(RTKUpdateTest, ForceActiveMaskUpdatesAZeroValuedState) {
     EXPECT_TRUE(covariance.isApprox(0.5 * Eigen::MatrixXd::Identity(2, 2), 1e-12));
 }
 
+TEST(RTKUpdateTest, ApplyMeasurementUpdateExportsRowStatsOnlyWhenRequested) {
+    Eigen::VectorXd state = Eigen::VectorXd::Constant(2, 1.0);
+    Eigen::MatrixXd covariance = 2.0 * Eigen::MatrixXd::Identity(2, 2);
+    rtk_measurement::MeasurementSystem system;
+    system.design_matrix = Eigen::MatrixXd::Identity(2, 2);
+    system.residuals = Eigen::VectorXd::Constant(2, 0.5);
+    system.covariance = Eigen::MatrixXd::Identity(2, 2);
+
+    // Default path: no row stats allocated.
+    {
+        Eigen::VectorXd s = state;
+        Eigen::MatrixXd p = covariance;
+        auto sys = system;
+        const auto result = rtk_update::applyMeasurementUpdate(s, p, sys, 30.0, 2);
+        ASSERT_TRUE(result.ok);
+        EXPECT_EQ(result.row_innovations.size(), 0);
+        EXPECT_EQ(result.row_hph_diagonal.size(), 0);
+    }
+
+    // Opt-in path: prefit innovations and diag(H P- H') exported.
+    {
+        Eigen::VectorXd s = state;
+        Eigen::MatrixXd p = covariance;
+        auto sys = system;
+        const auto result = rtk_update::applyMeasurementUpdate(
+            s, p, sys, 30.0, 2, 0.0, {}, /*compute_row_stats=*/true);
+        ASSERT_TRUE(result.ok);
+        ASSERT_EQ(result.row_innovations.size(), 2);
+        ASSERT_EQ(result.row_hph_diagonal.size(), 2);
+        EXPECT_DOUBLE_EQ(result.row_innovations(0), 0.5);
+        EXPECT_DOUBLE_EQ(result.row_innovations(1), 0.5);
+        // H = I, P- = 2I -> diag(H P- H') = 2 (prior covariance, not posterior).
+        EXPECT_DOUBLE_EQ(result.row_hph_diagonal(0), 2.0);
+        EXPECT_DOUBLE_EQ(result.row_hph_diagonal(1), 2.0);
+    }
+}
+
 TEST(RTKUpdateTest, RejectsWrongSizedForceActiveMaskWithoutMutation) {
     Eigen::VectorXd state = Eigen::VectorXd::Zero(2);
     Eigen::MatrixXd covariance = Eigen::MatrixXd::Identity(2, 2);

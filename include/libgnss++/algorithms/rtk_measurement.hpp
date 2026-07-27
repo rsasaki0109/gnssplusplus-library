@@ -24,6 +24,12 @@ struct MeasurementRow {
     std::vector<StateCoefficient> state_coefficients;
     double reference_variance = 0.0;
     double satellite_variance = 0.0;
+    // Bookkeeping for the innovation-based adaptive noise tracker. -1 means
+    // this row does not participate in adaptation. adaptive_model_variance
+    // carries the unadapted model variance (varerr * inflation factors) so
+    // the tracker can clamp relative to the current geometry.
+    int adaptive_key = -1;
+    double adaptive_model_variance = 0.0;
 };
 
 struct MeasurementBlock {
