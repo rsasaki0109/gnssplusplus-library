@@ -231,16 +231,31 @@ OFF numbers exactly):
 |---|---|---|---|---|---|
 | tokyo1 | OFF (M4) | 77.36 | 75.75 | 70.07 | 7.53 |
 | tokyo1 | combined | **79.19** | **76.00** | **72.24** | **7.38** |
+| tokyo2 | OFF (M4) | 77.58 | 82.39 | 84.03 | 2.95 |
+| tokyo2 | combined | **85.09** | **84.85** | **84.57** | 3.18 |
 | tokyo3 | OFF | 78.52 | 79.23 | 74.69 | 4.69 |
 | tokyo3 | combined | 78.69 | 77.07 | 72.68 | 7.68 |
+| nagoya1 | OFF / combined (md5 equal) | 78.27 | 74.39 | 55.46 | 9.66 |
+| nagoya2 | OFF / combined (md5 equal) | 54.18 | 53.85 | 39.59 | 27.81 |
 
 tokyo1 is a clean all-metric win (fix +1.83 pp, official +2.16 pp, p95_h
 improved) — the best tokyo1 tight-coupling result recorded in this repo.
-tokyo3 fails (accuracy/p95 regress, dominated by the Doppler-row
+Tokyo2 is a strong fix/threshold win (fix +7.50 pp, 50cm +2.46 pp,
+official +0.55 pp), but p95_h regresses by 0.24 m (8.0%). Its parallel
+A/B wall time was 702.3 s OFF vs 833.9 s ON (+18.8%), also failing the
+pre-registered <=+5% wall bar; nagoya2, where the gates disarm, was
+414.6 s vs 417.0 s (+0.58%). Tokyo3 fails (accuracy/p95 regress, dominated by the Doppler-row
 component, which was already negative on tokyo3 accuracy in gate B).
-Verdict: run-dependent opt-in, not a blanket preset; the adaptive-noise
-gate composes cleanly with Doppler rows (the DOPPLER-kind adaptation path
-exercised here for the first time, no instability observed).
+
+Across all three short-baseline Tokyo runs, fix rate improves every time
+(+1.83/+7.50/+0.17 pp), while 50cm and official improve on run1/run2 but
+regress on run3, and p95 improves only on run1. Across both 9.4 km Nagoya
+runs, the scored RTK stream is bit-identical. Verdict: the result is not a
+tokyo1-only accident and is a promising short-baseline fix-rate booster,
+but it remains a run-dependent opt-in rather than a blanket preset because
+tail accuracy and active-path runtime are not consistently safe. The
+adaptive-noise gate composes cleanly with Doppler rows (the DOPPLER-kind
+adaptation path exercised here for the first time, no instability observed).
 
 The whole combo is exposed as one flag: `gnss_fuse --navi776-tc`
 (closed loop + velocity states + Doppler rows sigma 0.5 gated 1000 m +
@@ -249,4 +264,6 @@ rows carry their own baseline gate (`--tc-doppler-max-baseline`,
 `RTKConfig::doppler_row_max_baseline_m`), so on nagoya run1 (9.4 km)
 both components disarm and the `--navi776-tc` RTK stream is
 **bit-identical to the M4 OFF baseline (md5-equal .pos)** — the combo is
-provably harmless on long baselines and needs no per-run opt-out.
+provably harmless on long baselines and needs no per-run opt-out. Nagoya
+run2 independently reproduces this result (both RTK files MD5
+`30d61358688fd1a34f5f71b14c3e2803`; every score identical).
