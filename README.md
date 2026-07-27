@@ -147,19 +147,6 @@ generalization claim. Definitions, commands, paths, and the machine-readable
 audit are in [PPC reproduction commands](docs/ppc_reproduction.md) and
 [`docs/ppc_kf_fgo_goal_metrics.json`](docs/ppc_kf_fgo_goal_metrics.json).
 
-### PPC RTK vs RTKLIB demo5
-
-Across six public PPC Tokyo/Nagoya moving-RTK replays, the coverage profile
-averages a **+17.0 pp** Positioning-rate lead, **+28.1 pp** PPC
-official-score lead, and **-11.96 m** P95 horizontal-error delta versus
-RTKLIB `demo5`.
-
-![PPC RTK coverage scorecard](docs/ppc_rtk_demo5_scorecard.png)
-
-See [Benchmarks](docs/benchmarks.md#ppc-coverage-profile) for the per-run
-matrix and analysis, and [PPC reproduction commands](docs/ppc_reproduction.md)
-for the evaluation workflow.
-
 ### GNSS/IMU Tightly-Coupled FGO vs tightly-coupled-gnss-imu-fgo
 
 GTSAM-based fixed-lag factor-graph backend (`FGOBackend::GTSAM`) with
