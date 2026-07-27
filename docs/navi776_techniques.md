@@ -75,9 +75,35 @@ per-row outlier threshold (m/s domain) instead of the metre-domain scalar.
 Rows are skipped until the first INS position/velocity time update
 initializes the velocity covariance.
 
-### Gate B result
+### Gate B result (2026-07-27, same binary, full runs)
 
-_pending_
+Both arms `--tc-closed-loop --tc-velocity-states` + canonical RTK knobs +
+per-city lever arm; scored on the `--rtk-pos-out` stream. OFF numbers
+reproduce docs/tight_coupling.md's M4 table exactly (77.36/75.75/7.53 on
+tokyo1), confirming measurement consistency.
+
+| run | variant | fix% | 50cm-matched% | official% | p95_h m |
+|---|---|---|---|---|---|
+| tokyo1 | OFF (M4) | 77.36 | 75.75 | 70.07 | 7.53 |
+| tokyo1 | ON (sigma 0.2) | 78.24 | 74.17 | 71.36 | 10.05 |
+| tokyo1 | ON2 (sigma 0.5) | **78.39** | **76.20** | **72.66** | 8.23 |
+| tokyo3 | OFF | 78.52 | 79.23 | 74.69 | 4.69 |
+| tokyo3 | ON | 76.11 | 72.80 | 69.96 | 11.01 |
+| tokyo3 | ON2 | 79.50 | 77.53 | 73.85 | 6.97 |
+| nagoya1 | OFF | 78.27 | 74.39 | 55.46 | 9.66 |
+| nagoya1 | ON | 78.14 | 69.26 | 53.30 | 10.37 |
+| nagoya1 | ON2 | 73.27 | 63.81 | 45.91 | 9.92 |
+
+**Verdict: mixed-negative as a blanket default — flag stays OFF.**
+The paper sigma (0.2 m/s) over-constrains automotive urban Doppler:
+50cm/p95 regress everywhere. The retune (sigma 0.5) turns tokyo1 into a
+near-clean win (fix +1.03 pp, 50cm +0.46 pp, official +2.59 pp; only p95_h
++9% fails the bar) and improves tokyo3 fix (+0.98 pp) at small accuracy
+cost, but nagoya1 regresses badly under both sigmas. Pattern mirrors gate
+A: on the 9.4 km baseline the extra velocity coupling propagates
+model-error-driven velocity into the position/ambiguity block through the
+INS reanchor loop. Usable as an opt-in on short-baseline runs (sigma 0.5
+recommended over the paper's 0.2); do not enable on long baselines.
 
 ## C. Offline GNSS-IMU time-offset search
 
