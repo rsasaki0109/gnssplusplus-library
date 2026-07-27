@@ -190,3 +190,12 @@ component, which was already negative on tokyo3 accuracy in gate B).
 Verdict: run-dependent opt-in, not a blanket preset; the adaptive-noise
 gate composes cleanly with Doppler rows (the DOPPLER-kind adaptation path
 exercised here for the first time, no instability observed).
+
+The whole combo is exposed as one flag: `gnss_fuse --navi776-tc`
+(closed loop + velocity states + Doppler rows sigma 0.5 gated 1000 m +
+adaptive noise gated 1000 m; flags given after it override). The Doppler
+rows carry their own baseline gate (`--tc-doppler-max-baseline`,
+`RTKConfig::doppler_row_max_baseline_m`), so on nagoya run1 (9.4 km)
+both components disarm and the `--navi776-tc` RTK stream is
+**bit-identical to the M4 OFF baseline (md5-equal .pos)** — the combo is
+provably harmless on long baselines and needs no per-run opt-out.
