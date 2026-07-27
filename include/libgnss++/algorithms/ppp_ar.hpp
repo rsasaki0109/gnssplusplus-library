@@ -136,6 +136,10 @@ struct WlnlNlInfo {
 struct WlnlFixAttempt {
     bool fixed = false;
     bool has_constrained_state = false;
+    // Candidate passed ordinary AR but failed the optional post-reset hazard
+    // floor. The caller may keep its internal state/hold effects while
+    // quarantining publication quality.
+    bool post_reset_ratio_floor_failed = false;
     bool state_lambda_solved = false;
     bool state_lambda_used = false;
     double ratio = 0.0;
@@ -189,6 +193,13 @@ std::map<SatelliteId, WlnlNlInfo> buildWlnlNlInfoMap(
     const std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
     const WlnlNlInfoProvider& provider);
 
+// post_reset_ratio_floor / within_post_reset_settle_window: measurement-only
+// GNSS_PPP_CLAS_POST_RESET_RATIO_FLOOR plumbing for the direct state-DD path
+// (see tryDirectStateDdFix in ppp_ar.cpp). Defaults (0.0 / false) are
+// bit-identical to before these parameters existed.
+// post_reset_recent_maxdiff: caller-measured hazard signature indicating a
+// maxdiff-only seed rejection since the reset, within the same settle window.
+// The elevated floor applies only when this signature is present.
 WlnlFixAttempt resolveWlnlFix(
     const ppp_shared::PPPConfig& config,
     ppp_shared::PPPState& filter_state,
@@ -197,7 +208,10 @@ WlnlFixAttempt resolveWlnlFix(
     const EligibleAmbiguities& eligible_ambiguities,
     const WlnlNlInfoProvider& provider,
     bool debug_enabled,
-    const std::map<SatelliteId, double>* satellite_elevations_rad = nullptr);
+    const std::map<SatelliteId, double>* satellite_elevations_rad = nullptr,
+    double post_reset_ratio_floor = 0.0,
+    bool within_post_reset_settle_window = false,
+    bool post_reset_recent_maxdiff = false);
 
 WlnlFixAttempt resolveWlnlFix(
     const ppp_shared::PPPConfig& config,
@@ -206,7 +220,10 @@ WlnlFixAttempt resolveWlnlFix(
     const EligibleAmbiguities& eligible_ambiguities,
     const WlnlNlInfoProvider& provider,
     bool debug_enabled,
-    const std::map<SatelliteId, double>* satellite_elevations_rad = nullptr);
+    const std::map<SatelliteId, double>* satellite_elevations_rad = nullptr,
+    double post_reset_ratio_floor = 0.0,
+    bool within_post_reset_settle_window = false,
+    bool post_reset_recent_maxdiff = false);
 
 WlnlFixAttempt tryWlnlFix(
     const ppp_shared::PPPConfig& config,

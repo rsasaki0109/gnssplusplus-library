@@ -143,6 +143,21 @@ bool clasMaxdiffHoldContinuationDisabledByEnv() {
     }();
     return disabled;
 }
+// Measurement-only override for kClasHoldContinuationMinTrackRecordFixes
+// above (GNSS_PPP_CLAS_HOLD_CONT_MIN_TRACK). PPPEnvOverrides carries the raw
+// env int with an unset sentinel of -1; this wrapper substitutes the
+// built-in default whenever the override is unset (or explicitly < 0), so
+// the default path is bit-identical to before this override existed. This
+// remains an experiment-only probe: min_track=10 recovers t2 fixes but is
+// rejected for production because n2 loses its 322-fix productive block and
+// raises >3 m fixes from 19 to 42.
+int clasHoldContinuationMinTrackRecordFixes() {
+    static const int value = [] {
+        const int env_value = pppEnvOverrides().clas_hold_cont_min_track;
+        return env_value >= 0 ? env_value : kClasHoldContinuationMinTrackRecordFixes;
+    }();
+    return value;
+}
 // A candidate that failed valsol-equivalent validation is weaker evidence than
 // an accepted SPP seed. Use it only to recover a catastrophically stale FLOAT
 // state, not to turn ordinary urban tens-of-metres disagreement into a reset.
@@ -1073,6 +1088,21 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         // epoch (updated here, immediately after the flag above is known).
         if (clas_baseline_seed_maxdiff_this_epoch) {
             ++clas_maxdiff_consecutive_streak_epochs_;
+            if (has_clas_last_full_state_reset_time_ &&
+                (obs.time - clas_last_full_state_reset_time_) >= 0.0 &&
+                (obs.time - clas_last_full_state_reset_time_) <= 1.0) {
+                if (!clas_post_reset_saw_maxdiff_ &&
+                    env_overrides_.clas_post_reset_ratio_floor > 0.0) {
+                    std::cerr << "[CLAS-POST-RESET-HAZARD] tow="
+                              << obs.time.tow
+                              << " reset_age="
+                              << (obs.time - clas_last_full_state_reset_time_)
+                              << " filter_spp_distance_m="
+                              << clas_baseline_filter_spp_distance_m_this_epoch
+                              << "\n";
+                }
+                clas_post_reset_saw_maxdiff_ = true;
+            }
         } else {
             clas_maxdiff_consecutive_streak_epochs_ = 0;
         }
@@ -1400,6 +1430,13 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         last_fixed_ambiguities_ = 0;
         clas_mrtklib_float_count_ = 0;
         clas_mrtklib_floatcnt_reset_this_epoch = true;
+        // Feeds GNSS_PPP_CLAS_POST_RESET_RATIO_FLOOR's settle-window gate;
+        // see clas_last_full_state_reset_time_'s declaration in ppp.hpp.
+        clas_last_full_state_reset_time_ = obs.time;
+        has_clas_last_full_state_reset_time_ = true;
+        clas_post_reset_saw_maxdiff_ = false;
+        last_clas_post_reset_floor_failed_ = false;
+        clas_post_reset_fix_quarantine_ = false;
     }
     // The parity path runs detectClasCycleSlips() below on OSR phase-bias-
     // corrected GF/MW. Running the generic detector first stores raw GF/MW
@@ -1935,7 +1972,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         clas_seed_maxdiff_only_this_epoch &&
         clas_maxdiff_hold_cont_hold_valid &&
         clas_maxdiff_hold_cont_hold_age_nfix >=
-            kClasHoldContinuationMinTrackRecordFixes;
+            clasHoldContinuationMinTrackRecordFixes();
 
     const auto ambiguity_resolution =
         ppp_clas::resolveAndValidateAmbiguities(
@@ -2096,8 +2133,24 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         }
     }
 
+    if (ambiguity_resolution.accepted &&
+        last_clas_post_reset_floor_failed_) {
+        clas_post_reset_fix_quarantine_ = true;
+    }
+    const bool clas_post_reset_quarantined_fix_this_epoch =
+        ambiguity_resolution.accepted &&
+        !clas_kinematic_chisq_rejected &&
+        clas_post_reset_fix_quarantine_;
     bool ambiguity_fixed_epoch =
-        ambiguity_resolution.accepted && !clas_kinematic_chisq_rejected;
+        ambiguity_resolution.accepted &&
+        !clas_kinematic_chisq_rejected &&
+        !clas_post_reset_quarantined_fix_this_epoch;
+    if (clas_post_reset_quarantined_fix_this_epoch &&
+        env_overrides_.clas_post_reset_ratio_floor > 0.0) {
+        std::cerr << "[CLAS-POST-RESET-QUARANTINE] tow=" << obs.time.tow
+                  << " ratio=" << last_ar_ratio_
+                  << " nfix=" << last_fixed_ambiguities_ << "\n";
+    }
     if (clas_kinematic_chisq_rejected) {
         last_ar_ratio_ = 0.0;
         last_fixed_ambiguities_ = 0;
@@ -2131,7 +2184,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
                   << " streak=" << clas_maxdiff_consecutive_streak_epochs_
                   << " hold_valid=" << clas_maxdiff_hold_cont_hold_valid
                   << " hold_age_nfix=" << clas_maxdiff_hold_cont_hold_age_nfix
-                  << " min_track_record=" << kClasHoldContinuationMinTrackRecordFixes
+                  << " min_track_record=" << clasHoldContinuationMinTrackRecordFixes()
                   << " carve_out_fired=" << clas_maxdiff_hold_continuation_this_epoch
                   << " ar_attempted=" << ambiguity_resolution.attempted
                   << " ar_accepted=" << ambiguity_resolution.accepted
@@ -2369,6 +2422,16 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
                               << " streak=" << clas_maxdiff_consecutive_streak_epochs_
                               << "\n";
                 }
+                // Feeds GNSS_PPP_CLAS_POST_RESET_RATIO_FLOOR's settle-window
+                // gate; see clas_last_full_state_reset_time_'s declaration
+                // in ppp.hpp. This teardown (maxdiff watchdog / the
+                // wlnl-hold reset logged above as CLAS-HOLDCONT-DBG-RESET)
+                // is the second of the two full-state reset events tracked.
+                clas_last_full_state_reset_time_ = obs.time;
+                has_clas_last_full_state_reset_time_ = true;
+                clas_post_reset_saw_maxdiff_ = false;
+                last_clas_post_reset_floor_failed_ = false;
+                clas_post_reset_fix_quarantine_ = false;
                 filter_state_.state.segment(filter_state_.pos_index, 3) =
                     clas_maxdiff_seed->position_ecef;
                 for (int i = 0; i < 3; ++i) {
@@ -2439,7 +2502,11 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         solution.status == SolutionStatus::PPP_FIXED && !clas_kinematic_fix_rejected;
 
     if (clas_mrtklib_parity) {
-        if (solution.status == SolutionStatus::PPP_FIXED) {
+        if (solution.status == SolutionStatus::PPP_FIXED ||
+            clas_post_reset_quarantined_fix_this_epoch) {
+            // Publication-only quarantine must not count as an internal FLOAT
+            // or trigger a lifecycle reset earlier than the accepted AR/hold
+            // baseline would.
             clas_mrtklib_float_count_ = 0;
         } else if (solution.status == SolutionStatus::PPP_FLOAT) {
             ++clas_mrtklib_float_count_;

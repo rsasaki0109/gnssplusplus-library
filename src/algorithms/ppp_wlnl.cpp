@@ -114,6 +114,7 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
     last_ar_ratio_ = 0.0;
     last_fixed_ambiguities_ = 0;
     last_clas_constrained_fixed_state_valid_ = false;
+    last_clas_post_reset_floor_failed_ = false;
     clas_wlnl_candidate_hold_constraints_.clear();
 
     auto wlnl_preparation = ppp_ar::prepareWlnlCandidates(
@@ -219,6 +220,17 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
         std::cerr << '\n';
     }
 
+    // GNSS_PPP_CLAS_POST_RESET_RATIO_FLOOR settle window: within 1.0 s
+    // (inclusive) of clas_last_full_state_reset_time_ (set at the FLOATCNT
+    // and MAXDIFFP/HOLDCONT-DBG-RESET reset sites in ppp_clas_epoch.cpp).
+    // With env_overrides_.clas_post_reset_ratio_floor at its default (0.0)
+    // this bool is computed but never consulted downstream (the gate in
+    // tryDirectStateDdFix short-circuits on the floor value first), so the
+    // default path is unaffected.
+    const bool clas_within_post_reset_settle_window =
+        has_clas_last_full_state_reset_time_ &&
+        (obs.time - clas_last_full_state_reset_time_) >= 0.0 &&
+        (obs.time - clas_last_full_state_reset_time_) <= 1.0;
     const ppp_ar::WlnlFixAttempt attempt = ppp_ar::resolveWlnlFix(
         ppp_config_,
         filter_state_,
@@ -231,7 +243,12 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
                 osr_by_sat, sat, info);
         },
         pppDebugEnabled(),
-        elevation_ref_map);
+        elevation_ref_map,
+        env_overrides_.clas_post_reset_ratio_floor,
+        clas_within_post_reset_settle_window,
+        clas_post_reset_saw_maxdiff_);
+    last_clas_post_reset_floor_failed_ =
+        attempt.post_reset_ratio_floor_failed;
     if (!attempt.fixed) {
         return false;
     }

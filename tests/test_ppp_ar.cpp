@@ -349,6 +349,23 @@ TEST(PPPArTest, DirectStateDdHoldUsesOnlyCurrentAcceptedRows) {
         EXPECT_NE(ppp_ar::clasRealSatellite(constraint.ref_satellite), stale_satellite);
         EXPECT_NE(ppp_ar::clasRealSatellite(constraint.sat_satellite), stale_satellite);
     }
+
+    const double elevated_floor =
+        std::numeric_limits<double>::max();
+    const auto benign_post_reset = ppp_ar::resolveWlnlFix(
+        config, state, state.covariance, ambiguity_states, eligible,
+        ppp_ar::WlnlNlInfoProvider{}, false, &elevations,
+        elevated_floor, true, false);
+    EXPECT_TRUE(benign_post_reset.fixed);
+
+    const auto hazardous_post_reset = ppp_ar::resolveWlnlFix(
+        config, state, state.covariance, ambiguity_states, eligible,
+        ppp_ar::WlnlNlInfoProvider{}, false, &elevations,
+        elevated_floor, true, true);
+    EXPECT_TRUE(hazardous_post_reset.fixed);
+    EXPECT_TRUE(hazardous_post_reset.has_constrained_state);
+    EXPECT_TRUE(hazardous_post_reset.post_reset_ratio_floor_failed);
+    EXPECT_DOUBLE_EQ(hazardous_post_reset.ratio, attempt.ratio);
 }
 
 TEST(PPPArTest, DirectStateDdRatioRejectPreservesRatioForNextParIteration) {

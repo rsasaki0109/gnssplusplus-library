@@ -299,6 +299,25 @@ struct PPPEnvOverrides {
     // GNSS_PPP_CLAS_CODE_DUMP CSV when set exactly to "1". Default false so
     // legacy code-only dumps (A4b anchor) stay byte-identical.
     bool clas_phase_row_dump = false;
+    // GNSS_PPP_CLAS_POST_RESET_RATIO_FLOOR: measurement-only override that
+    // rejects an otherwise-accepted CLAS kinematic direct-state-DD AR
+    // candidate (tryDirectStateDdFix in ppp_ar.cpp) when it occurs within
+    // 1.0 s of the most recent CLAS kinematic full-state reset (FLOATCNT
+    // wipe or MAXDIFFP/HOLDCONT-DBG-RESET teardown, tracked by
+    // clas_last_full_state_reset_time_ in ppp_clas_epoch.cpp), a maxdiff-only
+    // seed rejection has occurred since that reset, and the candidate ratio
+    // is below this floor. The accepted AR/hold remains internal, but its
+    // hold series is quarantined from FIX publication until the next
+    // full-state reset; these administrative FLOAT outputs do not advance
+    // FLOATCNT. Default 0.0 disables the feature (bit-identical); any value
+    // > 0 activates it.
+    double clas_post_reset_ratio_floor = 0.0;
+    // GNSS_PPP_CLAS_HOLD_CONT_MIN_TRACK: measurement-only override for the
+    // CLAS kinematic maxdiff-only hold-continuation carve-out's minimum
+    // track-record age gate (kClasHoldContinuationMinTrackRecordFixes at its
+    // definition in ppp_clas_epoch.cpp). Default -1 (unset) preserves the
+    // built-in default of 60, bit-identical; any value >= 0 overrides it.
+    int clas_hold_cont_min_track = -1;
     // GNSS_PPP_DEBUG: general PPP debug logging. Default false.
     bool debug = false;
 

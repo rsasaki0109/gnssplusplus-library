@@ -435,6 +435,20 @@ private:
     std::unique_ptr<ppp_clas_dd::DdFilterScaffold> clas_dd_filter_;
     PPPState last_clas_constrained_fixed_state_;
     bool last_clas_constrained_fixed_state_valid_ = false;
+    // Tow of the most recent CLAS kinematic full-state reset (FLOATCNT wipe
+    // in ppp_clas_epoch.cpp, or the MAXDIFFP/HOLDCONT-DBG-RESET teardown).
+    // Feeds the measurement-only GNSS_PPP_CLAS_POST_RESET_RATIO_FLOOR
+    // settle-window gate; unused when that override is at its default (0).
+    GNSSTime clas_last_full_state_reset_time_;
+    bool has_clas_last_full_state_reset_time_ = false;
+    // Whether a maxdiff-only seed rejection has occurred since that reset,
+    // while still inside its 1 s settle window. This measured signature
+    // separates n2's destructive seed from its productive prompt re-fixes.
+    bool clas_post_reset_saw_maxdiff_ = false;
+    // Per-attempt signal from resolveAmbiguitiesWLNL(), then persistent
+    // publication quarantine for the hold series seeded by that attempt.
+    bool last_clas_post_reset_floor_failed_ = false;
+    bool clas_post_reset_fix_quarantine_ = false;
     int last_obs_gps_week_ = 0;  ///< GPS week from latest observation (for L6 decode)
 
     // Statistics
