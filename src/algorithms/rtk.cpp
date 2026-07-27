@@ -2612,8 +2612,15 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
     // velocity covariance -- before that the rows would carry residuals with
     // no active velocity columns and pollute NIS.
     const bool adaptive_noise_active = adaptiveNoiseActiveThisEpoch();
+    const bool doppler_baseline_gate_passes =
+        rtk_config_.doppler_row_max_baseline_m <= 0.0 ||
+        !std::isfinite(rtk_config_.doppler_row_max_baseline_m) ||
+        filter_state_.state.size() < 3 ||
+        !(filter_state_.state.head<3>().norm() >
+          rtk_config_.doppler_row_max_baseline_m);
     const bool build_doppler_rows =
         rtk_config_.enable_doppler_measurement_rows &&
+        doppler_baseline_gate_passes &&
         rtk_config_.enable_velocity_states &&
         filter_state_.state.size() >= VELOCITY_STATE_INDEX + VELOCITY_STATES &&
         filter_state_.covariance(VELOCITY_STATE_INDEX, VELOCITY_STATE_INDEX) > 0.0;

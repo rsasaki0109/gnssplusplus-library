@@ -150,6 +150,7 @@ struct FuseOptions {
     // observable. Requires --tc-velocity-states.
     bool tc_doppler_rows = false;
     double tc_doppler_sigma_mps = 0.2;
+    double tc_doppler_max_baseline_m = 0.0;
     // navi.776 C: constant GNSS-IMU time offset (s), applied to all IMU
     // timestamps right after load. Positive = IMU later.
     double imu_time_offset_s = 0.0;
@@ -402,6 +403,13 @@ void printUsage(const char* program_name) {
         << "                                observation rows (velocity observability). Requires\n"
         << "                                --tc-velocity-states. Default: off.\n"
         << "  --tc-doppler-sigma <mps>     SD Doppler row sigma in m/s (default: 0.2)\n"
+        << "  --tc-doppler-max-baseline <m>\n"
+        << "                                Build Doppler rows only while the float baseline is\n"
+        << "                                at or below this many meters (default: 0 = no gate)\n"
+        << "  --navi776-tc                 Enable the validated navi.776 short-baseline combo:\n"
+        << "                                closed loop + velocity states + Doppler rows\n"
+        << "                                (sigma 0.5, 1000 m gate) + gated adaptive noise\n"
+        << "                                (1000 m). Flags given after this one override it.\n"
         << "  --imu-time-offset <s>        navi.776: constant GNSS-IMU time offset applied to\n"
         << "                                all IMU timestamps at load (positive = IMU later).\n"
         << "                                Default: 0.0 (exact no-op).\n"
@@ -681,6 +689,19 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             options.rtk_ins_prior_max_nis = 0.0;
         } else if (arg == "--tc-ins-time-update") {
             options.tc_ins_time_update = true;
+        } else if (arg == "--navi776-tc") {
+            // Validated navi.776 short-baseline combo (docs/navi776_techniques.md,
+            // combined-configuration table): M3 closed loop + M4 velocity
+            // states + SD Doppler rows (sigma 0.5, gated 1000 m) + gated
+            // innovation-adaptive measurement noise. Positional: flags given
+            // AFTER this one override its settings.
+            options.tc_closed_loop = true;
+            options.tc_velocity_states = true;
+            options.tc_doppler_rows = true;
+            options.tc_doppler_sigma_mps = 0.5;
+            options.tc_doppler_max_baseline_m = 1000.0;
+            options.rtk_adaptive_noise = true;
+            options.rtk_adaptive_noise_max_baseline_m = 1000.0;
         } else if (arg == "--tc-closed-loop") {
             options.tc_closed_loop = true;
         } else if (arg == "--tc-trusted-reanchor") {
@@ -694,6 +715,8 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             options.tc_doppler_rows = true;
         } else if (arg == "--tc-doppler-sigma") {
             options.tc_doppler_sigma_mps = std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--tc-doppler-max-baseline") {
+            options.tc_doppler_max_baseline_m = std::stod(requireValue(arg, i, argc, argv));
         } else if (arg == "--imu-time-offset") {
             options.imu_time_offset_s = std::stod(requireValue(arg, i, argc, argv));
         } else if (arg == "--tc-tdcp-diagnostics") {
@@ -1000,6 +1023,7 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
     rtk_config.enable_velocity_states = options.tc_velocity_states;
     rtk_config.enable_doppler_measurement_rows = options.tc_doppler_rows;
     rtk_config.doppler_row_sigma_mps = options.tc_doppler_sigma_mps;
+    rtk_config.doppler_row_max_baseline_m = options.tc_doppler_max_baseline_m;
     rtk_config.enable_tdcp_diagnostics = options.tc_tdcp_diagnostics;
     rtk_config.ins_time_update_position_q_floor_m2 = options.tc_ins_position_q_floor_m2;
     rtk_config.enable_cp_pr_fixed_gate = options.tc_cp_pr_gate || options.tc_closed_loop;

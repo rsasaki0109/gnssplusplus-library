@@ -142,6 +142,11 @@ public:
         bool enable_doppler_measurement_rows = false;
         double doppler_row_sigma_mps = 0.2;  // FGO SD-Doppler sigma parity
         double doppler_row_outlier_threshold_mps = 1.0;
+        /// Baseline-length gate mirroring adaptive_noise_max_baseline_m:
+        /// Doppler rows are built only while the prior float baseline is at
+        /// or below this many meters (0 = no gate). Gate B showed the rows
+        /// regress accuracy on the 9.4 km nagoya baseline.
+        double doppler_row_max_baseline_m = 0.0;
 
         // Quality control
         bool enable_cycle_slip_detection = true;
