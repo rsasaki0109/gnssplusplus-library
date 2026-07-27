@@ -162,11 +162,62 @@ interval per update — J barely responds even to a +/-1 s shift. The
 paper's method needs an unanchored GNSS/INS EKF over device-quality data
 (its smartphone context) to make J sharply dt-sensitive.
 
-The tool remains useful as-is for datasets with genuinely unsynchronized
-IMU logs (e.g. `data/rtklibexplorer_gnss_imu` u-blox/ICM runs or GSDC
-smartphone logs, once an adapter exists); rerun with
-`--coupling-flags="--tc-ins-time-update"` there and check the convexity
-warning before trusting any argmin.
+### ESKF / precomputed-solution extension (2026-07-27)
+
+The adapter and non-RTK scoring path are now implemented:
+
+- `gnss_fuse --gnss-pos <solution.pos>` feeds a precomputed LibGNSS++ or
+  RTKLIB position/velocity stream directly to `LooseCouplingProcessor`; raw
+  rover/base observations and navigation data are not required.
+- `Solution::loadFromFile()` accepts RTKLIB calendar-time LLH rows and
+  converts their full NEU position/velocity covariance to ECEF.
+- `--imu-format rtklibexplorer-sf` loads the upstream GPST-referenced Unix
+  timestamps, converts acceleration g to m/s2, and preserves gyro rad/s.
+  `--imu-misalignment-rpy-deg` applies upstream `Euler_to_CTM` followed by
+  FRD-to-FLU conversion.
+- In this path, J uses only the accepted GNSS **position-update injection**,
+  captured before the same-epoch velocity update. This avoids contaminating
+  the position-correction objective with velocity-update cross-covariance.
+  `--imu-time-offset-score-start-epoch` permits a warm-up prefix followed by
+  a disjoint scoring window.
+- `search_imu_time_offset.py` accepts `--gnss-pos`, `--imu`, the format and
+  mounting arguments while retaining its original RTK-data-dir interface.
+
+Validation used upstream `rtklibexplorer/GNSS_IMU` at commit
+`a6d74e83f35636859c2cb9a3a397df39bd044a07`. These logs are on a common
+GPST axis, but upstream documents a fixed logging-delay correction of
+-0.125 s for `drive_0708` and 0 s for `walk_0827`, providing known targets.
+
+| run / scoring window | expected dt | grid | argmin dt | result |
+|---|---:|---:|---:|---|
+| drive epochs 0-999 | -0.125 s | 50 ms | -0.100 s | pass, 25 ms error |
+| drive epochs 1000-1999 | -0.125 s | 50 ms | -0.250 s | fail, route-dependent minimum |
+| walk epochs 0-267 | 0.000 s | 50 ms | 0.000 s | pass |
+| walk epochs 268-535 | 0.000 s | 50 ms | 0.000 s | pass |
+| walk full run | 0.000 s | 50 ms | 0.000 s | pass |
+
+The walk two-window acceptance criterion passes exactly, and the drive first
+window recovers the documented nonzero delay within 25 ms. The drive second
+window does not reproduce it: J instead bottoms near -0.25 s. Therefore the
+extension is a **partial positive** demonstrating that the machinery can
+recover both zero and nonzero known offsets, but the original safeguards
+remain mandatory: never accept an offset without local shape and independent
+window agreement. The drive failure also shows that an ESKF correction-norm
+objective can remain motion/model dependent even without RTK re-anchoring.
+
+Example (drive first window):
+
+```bash
+python scripts/search_imu_time_offset.py \
+  --gnss-pos ../data/rtklibexplorer_gnss_imu/drive_0708/gnss_1934_sf.pos \
+  --imu ../data/rtklibexplorer_gnss_imu/drive_0708/imu_1934_sf.csv \
+  --imu-format rtklibexplorer-sf \
+  --imu-misalignment-rpy-deg=179.71,-6.60,185.35 \
+  --lever-arm 0,0.05,0 --coupling-flags= \
+  --offset-min -0.2 --offset-max 0 --offset-step 0.05 \
+  --coarse-fine off --max-epochs 1000 \
+  --out-dir output/navi776_eskf_offset_drive_w1
+```
 
 ## Combined configuration (A3 gate + B sigma 0.5 on the M4 closed loop)
 

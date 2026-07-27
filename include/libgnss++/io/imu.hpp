@@ -110,4 +110,15 @@ struct ImuCsvLoadResult {
  */
 ImuCsvLoadResult loadImuCsv(const std::string& path, ImuSeries& out);
 
+/**
+ * @brief Load rtklibexplorer/GNSS_IMU's cleaned `imu_*_sf.csv` format.
+ *
+ * Column 0 is a GPST-referenced Unix-epoch timestamp, accelerometer columns
+ * are in g, and gyro columns are already rad/s. This loader converts them to
+ * GNSSTime, m/s^2, and rad/s respectively but deliberately leaves the raw
+ * sensor axes untouched; mounting rotation and FRD/FLU conversion remain an
+ * explicit caller responsibility.
+ */
+ImuCsvLoadResult loadRtklibExplorerImuCsv(const std::string& path, ImuSeries& out);
+
 }  // namespace libgnss

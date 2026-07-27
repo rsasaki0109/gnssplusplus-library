@@ -90,6 +90,31 @@ TEST(ImuCsvTest, MissingFileProducesError) {
     EXPECT_FALSE(result.error.empty());
 }
 
+TEST(ImuCsvTest, ParsesRtklibExplorerSelfFormattedCsv) {
+    const auto path =
+        std::filesystem::temp_directory_path() / "libgnss_imu_rtklibexplorer_test.csv";
+    writeFile(
+        path,
+        "% UNIX time(s),    accX(g),  accY(g),  accZ(g),  gyroX(r/s),gyroY(r/s),"
+        "gyroZ(r/s),magX(uT),magY(uT),magZ(uT), unused\n"
+        "1752003261.8540001,0.1,-0.2,1.0,-0.01,0.02,-0.03,0,0,0,0\n");
+
+    ImuSeries series;
+    const auto result = loadRtklibExplorerImuCsv(path.string(), series);
+    std::filesystem::remove(path);
+
+    ASSERT_TRUE(result.ok) << result.error;
+    ASSERT_EQ(series.samples.size(), 1u);
+    EXPECT_EQ(series.samples[0].time.week, 2374);
+    EXPECT_NEAR(series.samples[0].time.tow, 243261.854, 1e-6);
+    EXPECT_NEAR(series.samples[0].accel_raw.x(), 0.980665, 1e-12);
+    EXPECT_NEAR(series.samples[0].accel_raw.y(), -1.96133, 1e-12);
+    EXPECT_NEAR(series.samples[0].accel_raw.z(), 9.80665, 1e-12);
+    EXPECT_NEAR(series.samples[0].gyro_raw_radps.x(), -0.01, 1e-12);
+    EXPECT_NEAR(series.samples[0].gyro_raw_radps.y(), 0.02, 1e-12);
+    EXPECT_NEAR(series.samples[0].gyro_raw_radps.z(), -0.03, 1e-12);
+}
+
 TEST(ImuAxisConventionTest, IdentityMappingIsPassthrough) {
     ImuAxisConvention convention;
     const Eigen::Vector3d raw(1.0, 2.0, 3.0);

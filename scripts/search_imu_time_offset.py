@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """navi.776 C: offline GNSS-IMU constant time-offset search.
 
-Runs gnss_fuse with --tc-ins-time-update (or --tc-closed-loop) over a grid of
-candidate --imu-time-offset values on a bounded epoch prefix, parses the
-imu_time_offset_score line from stdout/log, and picks the offset minimizing
-J(dt) = mean squared Kalman position correction over INS-time-update epochs
-(Motooka 2026, NAVIGATION navi.776).
+Runs gnss_fuse over a grid of candidate --imu-time-offset values on a bounded
+epoch prefix, parses the imu_time_offset_score line from stdout/log, and picks
+the offset minimizing J(dt) = mean squared Kalman position correction
+(Motooka 2026, NAVIGATION navi.776). It supports both the original RTK
+observation path (--data-dir plus a TC mode) and the Stage-1 ESKF path fed by
+a precomputed position/velocity log (--gnss-pos plus --imu).
 
 Default is a coarse->fine search: 100 ms steps over [--offset-min,
 --offset-max], then 20 ms steps over +/-120 ms around the coarse argmin.
@@ -59,17 +60,30 @@ def run_candidate(args: argparse.Namespace, offset: float, out_dir: Path) -> dic
     command = [
         # Windows CreateProcess rejects forward-slash relative paths.
         os.path.abspath(args.gnss_fuse),
-        "--data-dir", args.data_dir,
         "--lever-arm", args.lever_arm,
-        "--preset", args.preset,
-        "--ratio", str(args.ratio),
-        "--max-subset-ar-drop-steps", str(args.max_subset_ar_drop_steps),
-        "--rtk-snr-weighting",
-        "--no-arfilter",
         "--max-epochs", str(args.max_epochs),
+        "--imu-time-offset-score-start-epoch", str(args.score_start_epoch),
         "--imu-time-offset", str(offset),
         "--out", str(out_dir / f"cand_{tag}_fused.pos"),
     ]
+    if args.gnss_pos:
+        command.extend([
+            "--gnss-pos", args.gnss_pos,
+            "--imu", args.imu,
+            "--imu-format", args.imu_format,
+        ])
+        if args.imu_misalignment_rpy_deg:
+            command.extend(["--imu-misalignment-rpy-deg",
+                            args.imu_misalignment_rpy_deg])
+    else:
+        command.extend([
+            "--data-dir", args.data_dir,
+            "--preset", args.preset,
+            "--ratio", str(args.ratio),
+            "--max-subset-ar-drop-steps", str(args.max_subset_ar_drop_steps),
+            "--rtk-snr-weighting",
+            "--no-arfilter",
+        ])
     command.extend(args.coupling_flags.split())
     result = subprocess.run(command, capture_output=True, text=True)
     log_path.write_text(result.stdout + "\n--- stderr ---\n" + result.stderr,
@@ -113,7 +127,17 @@ def pick_argmin(rows: list[dict], min_coverage: float) -> dict | None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--data-dir", required=True)
+    parser.add_argument("--data-dir",
+                        help="RTK observation dataset directory (legacy path)")
+    parser.add_argument("--gnss-pos",
+                        help="Precomputed LibGNSS++/RTKLIB position+velocity log")
+    parser.add_argument("--imu",
+                        help="IMU CSV used with --gnss-pos")
+    parser.add_argument("--imu-format", default="ppc",
+                        choices=["ppc", "rtklibexplorer-sf"])
+    parser.add_argument("--imu-misalignment-rpy-deg",
+                        help="Raw sensor -> body-FRD RPY used by "
+                             "rtklibexplorer/GNSS_IMU")
     parser.add_argument("--lever-arm", required=True)
     parser.add_argument("--gnss-fuse",
                         default="build/clang-ninja/apps/gnss_fuse.exe")
@@ -131,10 +155,17 @@ def main() -> int:
     parser.add_argument("--fine-half-window", type=float, default=0.12)
     parser.add_argument("--coarse-fine", choices=["on", "off"], default="on")
     parser.add_argument("--max-epochs", type=int, default=3000)
+    parser.add_argument("--score-start-epoch", type=int, default=0,
+                        help="Warm-up GNSS epochs excluded from J (--gnss-pos)")
     parser.add_argument("--jobs", type=int, default=2)
     parser.add_argument("--min-coverage", type=float, default=0.8)
     parser.add_argument("--out-dir", default="output/imu_offset_search")
     args = parser.parse_args()
+    if args.gnss_pos:
+        if not args.imu:
+            parser.error("--imu is required with --gnss-pos")
+    elif not args.data_dir:
+        parser.error("one of --data-dir or --gnss-pos is required")
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

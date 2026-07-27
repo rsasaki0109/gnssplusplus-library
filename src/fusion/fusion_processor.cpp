@@ -338,6 +338,8 @@ void LooseCouplingProcessor::processImuSample(const ImuSample& sample_body_flu) 
 }
 
 void LooseCouplingProcessor::processGnssSolution(const PositionSolution& solution) {
+    last_gnss_position_update_applied_ = false;
+    last_gnss_position_correction_enu_.setZero();
     if (!initialized_ || !solution.isValid()) {
         return;
     }
@@ -356,8 +358,16 @@ void LooseCouplingProcessor::processGnssSolution(const PositionSolution& solutio
 
     const auto position_system = fusion_measurement::buildGnssPositionUpdate(
         state_, antenna_position_enu, position_covariance_enu, config_.lever_arm_body);
-    applyUpdateAndInject(position_system, config_.max_position_update_nis_per_observation,
-                        position_consecutive_gate_rejections_);
+    const Eigen::Vector3d position_before = state_.nominal.position_enu;
+    const auto position_result =
+        applyUpdateAndInject(position_system,
+                             config_.max_position_update_nis_per_observation,
+                             position_consecutive_gate_rejections_);
+    if (position_result.ok) {
+        last_gnss_position_update_applied_ = true;
+        last_gnss_position_correction_enu_ =
+            state_.nominal.position_enu - position_before;
+    }
 
     if (solution.has_velocity) {
         const Eigen::Vector3d antenna_velocity_enu = r_e2n * solution.velocity_ecef;

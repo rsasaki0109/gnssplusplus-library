@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <fstream>
 #include <sstream>
 #include <unordered_map>
@@ -15,6 +16,9 @@ namespace {
 #endif
 
 constexpr double kDegToRad = M_PI / 180.0;
+constexpr double kStandardGravityMps2 = 9.80665;
+constexpr double kUnixSecondsAtGpsEpoch = 315964800.0;
+constexpr double kSecondsPerGpsWeek = 604800.0;
 
 // Direct port of analyze_ppc_imu_coverage.py's normalize_header(): strip to
 // lowercase alphanumeric characters only, so "GPS TOW (s)", " Ang Rate X (deg/s)"
@@ -238,6 +242,124 @@ ImuCsvLoadResult loadImuCsv(const std::string& path, ImuSeries& out) {
             sample.gyro_raw_radps(axis) = gyro_value_degps * kDegToRad;
         }
 
+        out.samples.push_back(sample);
+    }
+
+    result.row_count = static_cast<int>(out.samples.size());
+    result.ok = true;
+    return result;
+}
+
+ImuCsvLoadResult loadRtklibExplorerImuCsv(const std::string& path, ImuSeries& out) {
+    ImuCsvLoadResult result;
+    out.samples.clear();
+
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        result.error = "could not open IMU CSV file: " + path;
+        return result;
+    }
+
+    std::string header_line;
+    if (!std::getline(file, header_line)) {
+        result.error = "IMU CSV file is empty: " + path;
+        return result;
+    }
+    if (!header_line.empty() && header_line.back() == '\r') {
+        header_line.pop_back();
+    }
+
+    const std::vector<std::string> raw_headers = splitCsvLine(header_line);
+    HeaderLookup lookup;
+    for (size_t i = 0; i < raw_headers.size(); ++i) {
+        lookup.emplace(normalizeHeader(raw_headers[i]), i);
+    }
+
+    size_t time_index = 0;
+    std::array<size_t, 3> accel_index{};
+    std::array<size_t, 3> gyro_index{};
+    result.time_column =
+        findColumn(lookup, raw_headers, {"unixtimes", "unixtime", "timestamp"},
+                   time_index);
+    if (result.time_column.empty()) {
+        result.error = "could not find GPST-referenced UNIX time column";
+        return result;
+    }
+
+    static const std::array<std::vector<std::string>, 3> kAccelCandidates = {
+        std::vector<std::string>{"accxg", "accx"},
+        std::vector<std::string>{"accyg", "accy"},
+        std::vector<std::string>{"acczg", "accz"},
+    };
+    static const std::array<std::vector<std::string>, 3> kGyroCandidates = {
+        std::vector<std::string>{"gyroxrs", "gyrox"},
+        std::vector<std::string>{"gyroyrs", "gyroy"},
+        std::vector<std::string>{"gyrozrs", "gyroz"},
+    };
+    static const char* kAxisNames[3] = {"X", "Y", "Z"};
+    for (int axis = 0; axis < 3; ++axis) {
+        result.accel_columns[axis] =
+            findColumn(lookup, raw_headers, kAccelCandidates[axis], accel_index[axis]);
+        result.gyro_columns[axis] =
+            findColumn(lookup, raw_headers, kGyroCandidates[axis], gyro_index[axis]);
+        if (result.accel_columns[axis].empty() ||
+            result.gyro_columns[axis].empty()) {
+            result.error = std::string("could not find rtklibexplorer accel/gyro ") +
+                           kAxisNames[axis] + " columns";
+            return result;
+        }
+    }
+
+    const size_t required_columns = raw_headers.size();
+    std::string line;
+    int row_number = 1;
+    while (std::getline(file, line)) {
+        ++row_number;
+        if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+        }
+        if (line.empty()) {
+            continue;
+        }
+        const std::vector<std::string> fields = splitCsvLine(line);
+        if (fields.size() < required_columns) {
+            result.error = "row " + std::to_string(row_number) +
+                           ": expected " + std::to_string(required_columns) +
+                           " columns, got " + std::to_string(fields.size());
+            return result;
+        }
+
+        bool ok = true;
+        const double unix_gpst = parseDouble(fields[time_index], ok);
+        if (!ok || !std::isfinite(unix_gpst) ||
+            unix_gpst < kUnixSecondsAtGpsEpoch) {
+            result.error = "row " + std::to_string(row_number) +
+                           ": invalid GPST-referenced UNIX time value";
+            return result;
+        }
+        const double gps_seconds = unix_gpst - kUnixSecondsAtGpsEpoch;
+        const int gps_week =
+            static_cast<int>(std::floor(gps_seconds / kSecondsPerGpsWeek));
+        ImuSample sample;
+        sample.time =
+            GNSSTime(gps_week, gps_seconds - gps_week * kSecondsPerGpsWeek);
+
+        for (int axis = 0; axis < 3; ++axis) {
+            const double accel_g = parseDouble(fields[accel_index[axis]], ok);
+            if (!ok) {
+                result.error = "row " + std::to_string(row_number) +
+                               ": invalid accel value";
+                return result;
+            }
+            const double gyro_radps = parseDouble(fields[gyro_index[axis]], ok);
+            if (!ok) {
+                result.error = "row " + std::to_string(row_number) +
+                               ": invalid gyro value";
+                return result;
+            }
+            sample.accel_raw(axis) = accel_g * kStandardGravityMps2;
+            sample.gyro_raw_radps(axis) = gyro_radps;
+        }
         out.samples.push_back(sample);
     }
 

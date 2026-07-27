@@ -229,6 +229,17 @@ public:
      */
     double getVelocityNisEma() const { return velocity_nis_ema_; }
 
+    /** Position-state injection from the most recent accepted GNSS position
+     * update, before any same-epoch velocity update. Used by offline
+     * GNSS/IMU time-offset scoring; false means no position update applied.
+     */
+    bool lastGnssPositionUpdateApplied() const {
+        return last_gnss_position_update_applied_;
+    }
+    const Eigen::Vector3d& lastGnssPositionCorrectionEnu() const {
+        return last_gnss_position_correction_enu_;
+    }
+
 private:
     Config config_;
     FusionState state_;
@@ -248,6 +259,9 @@ private:
 
     int position_consecutive_gate_rejections_ = 0;
     int velocity_consecutive_gate_rejections_ = 0;
+    bool last_gnss_position_update_applied_ = false;
+    Eigen::Vector3d last_gnss_position_correction_enu_ =
+        Eigen::Vector3d::Zero();
     std::unique_ptr<dd_imu_bridge::DDIMUBridge> dd_imu_bridge_;
     Eigen::Matrix<double, 15, 15> dd_transition_since_update_ =
         Eigen::Matrix<double, 15, 15>::Identity();
