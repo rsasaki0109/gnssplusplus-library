@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import csv
+import os
 import re
 import subprocess
 import sys
@@ -56,7 +57,8 @@ def run_candidate(args: argparse.Namespace, offset: float, out_dir: Path) -> dic
     tag = f"dt{offset:+.3f}".replace("+", "p").replace("-", "m").replace(".", "_")
     log_path = out_dir / f"cand_{tag}.log"
     command = [
-        args.gnss_fuse,
+        # Windows CreateProcess rejects forward-slash relative paths.
+        os.path.abspath(args.gnss_fuse),
         "--data-dir", args.data_dir,
         "--lever-arm", args.lever_arm,
         "--preset", args.preset,
