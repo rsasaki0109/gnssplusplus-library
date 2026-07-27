@@ -149,25 +149,16 @@ audit are in [PPC reproduction commands](docs/ppc_reproduction.md) and
 
 ### PPC RTK vs RTKLIB demo5
 
-These are public PPC Tokyo/Nagoya moving-RTK replays using the same
-rover/base/nav observations for libgnss++ and RTKLIB `demo5`.
-
-<!-- PPC_COVERAGE_MATRIX:START -->
-| Run | gnssplusplus Positioning | RTKLIB Positioning | Delta | gnssplusplus Fix | RTKLIB Fix | PPC official score | RTKLIB official score | Official delta | P95 H delta |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Tokyo run1 | **90.0%** | 66.3% | **+23.7 pp** | **54.4%** | 30.5% | **34.9%** | 0.0% | **+34.9 pp** | +3.39 m |
-| Tokyo run2 | **95.3%** | 84.3% | **+11.0 pp** | **64.1%** | 27.6% | **69.0%** | 16.9% | **+52.1 pp** | -18.51 m |
-| Tokyo run3 | **95.7%** | 93.1% | **+2.5 pp** | **63.0%** | 40.5% | **60.6%** | 35.6% | **+25.0 pp** | -0.24 m |
-| Nagoya run1 | **88.8%** | 65.8% | **+23.0 pp** | **64.5%** | 33.8% | **49.5%** | 22.4% | **+27.1 pp** | -23.78 m |
-| Nagoya run2 | **85.6%** | 69.8% | **+15.8 pp** | **51.4%** | 18.8% | **20.9%** | 11.0% | **+9.9 pp** | -27.24 m |
-| Nagoya run3 | **93.8%** | 67.7% | **+26.1 pp** | **27.1%** | 13.9% | **27.4%** | 7.6% | **+19.7 pp** | -5.37 m |
-
-Across these six public runs, the coverage profile averages **+17.0 pp**
-Positioning-rate lead, **+28.1 pp** PPC official-score lead, and
-**-11.96 m** P95 horizontal-error delta versus RTKLIB `demo5`.
-<!-- PPC_COVERAGE_MATRIX:END -->
+Across six public PPC Tokyo/Nagoya moving-RTK replays, the coverage profile
+averages a **+17.0 pp** Positioning-rate lead, **+28.1 pp** PPC
+official-score lead, and **-11.96 m** P95 horizontal-error delta versus
+RTKLIB `demo5`.
 
 ![PPC RTK coverage scorecard](docs/ppc_rtk_demo5_scorecard.png)
+
+See [Benchmarks](docs/benchmarks.md#ppc-coverage-profile) for the per-run
+matrix and analysis, and [PPC reproduction commands](docs/ppc_reproduction.md)
+for the evaluation workflow.
 
 ### GNSS/IMU Tightly-Coupled FGO vs tightly-coupled-gnss-imu-fgo
 

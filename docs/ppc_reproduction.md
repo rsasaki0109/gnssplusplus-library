@@ -61,7 +61,8 @@ not accept relative `kinematic`, while the CLI option does.
 
 ## Coverage Matrix
 
-Use this for the README RTKLIB `demo5` comparison table:
+Use this for the RTKLIB `demo5` comparison table in
+[`docs/benchmarks.md`](benchmarks.md#ppc-coverage-profile):
 
 ```bash
 python3 apps/gnss.py ppc-coverage-matrix \
