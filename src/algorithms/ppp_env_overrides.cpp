@@ -200,6 +200,8 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
         envStringOrEmpty("GNSS_PPP_CLAS_DD_ROW_DUMP");
     overrides.clas_mrtklib_float_parity =
         !envExactZero("GNSS_PPP_CLAS_MRTKLIB_FLOAT_PARITY");
+    overrides.clas_outage_reset_parity =
+        !envExactZero("GNSS_PPP_CLAS_OUTAGE_RESET_PARITY");
     overrides.clas_sis_boundary =
         envExactOne("GNSS_PPP_CLAS_SIS_BOUNDARY");
     overrides.clas_base_clock_parity =

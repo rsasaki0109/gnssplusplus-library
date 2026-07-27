@@ -669,12 +669,14 @@ def score_run(
     fixed_status: int = PPP_FIXED_STATUS,
     match_tolerance_s: float = MATCH_TOLERANCE_S,
     skip_epochs: int = ARTICLE_SKIP_EPOCHS,
+    apply_lever_arm: bool = False,
 ) -> dict[str, Any]:
-    # PPC reference.csv is a vehicle/IMU trajectory. Compare the GNSS solution
-    # at the antenna phase center by rotating the city-specific body-frame
-    # lever arm through each reference attitude sample.
+    # PPC reference.csv is already antenna-positioned (not an IMU/vehicle
+    # trajectory), so scoring compares directly against the raw reference by
+    # default. The lever-arm rotation below is kept only as an explicit
+    # opt-in for reproducing historical (double-corrected) numbers.
     reference = read_reference_csv(
-        reference_csv, apply_lever_arm=True, city=city
+        reference_csv, apply_lever_arm=apply_lever_arm, city=city
     )
     solutions = read_ppp_pos(pos_path)
     if solutions and all(
@@ -703,7 +705,11 @@ def score_run(
     return {
         "matched_epochs": len(matched),
         "skip_epochs": skip_epochs,
-        "reference_point": "ppc_reference_with_city_specific_antenna_lever_arm",
+        "reference_point": (
+            "ppc_reference_with_city_specific_antenna_lever_arm"
+            if apply_lever_arm
+            else "ppc_reference_raw_antenna_position"
+        ),
         "ttff_consecutive_fix_epochs": ARTICLE_TTFF_CONSECUTIVE_FIX_EPOCHS,
         "reference_epochs": len(reference),
         "solution_epochs": len(solutions),
@@ -953,6 +959,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--skip-l6", action="store_true", help="Reuse cached L6/SSR files.")
     parser.add_argument("--force-fetch", action="store_true", help="Re-download L6 even if cached.")
     parser.add_argument("--force-ssr", action="store_true", help="Re-expand SSR CSV.")
+    parser.add_argument(
+        "--apply-lever-arm",
+        action="store_true",
+        help=(
+            "Apply the IMU->antenna lever-arm correction to the reference "
+            "trajectory before scoring. PPC reference.csv is already "
+            "antenna-positioned, so this double-corrects and inflates FIX "
+            "RMS2D by ~0.3-0.9 m. Off by default; kept only to reproduce "
+            "historical lever-arm-corrected numbers."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -1065,7 +1082,11 @@ def main() -> int:
                 )
 
             metrics = score_run(
-                pos_path, paths.reference_csv, paths.rover_obs, city=city
+                pos_path,
+                paths.reference_csv,
+                paths.rover_obs,
+                city=city,
+                apply_lever_arm=args.apply_lever_arm,
             )
             metrics["notes"] = gap_notes(run_key, config_key, metrics, MRTKLIB_TARGETS[run_key])
             config_metrics[config_key] = metrics

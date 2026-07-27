@@ -22,7 +22,7 @@ handling without an external RTKLIB runtime.
 |---|---|---|
 | RTK | PPC Tokyo/Nagoya vs RTKLIB `demo5` | +17.0 pp positioning, +28.1 pp official score, -11.96 m P95 H delta |
 | GNSS/IMU FGO | PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | Higher <50 cm fraction (avg +5.3 pp) and fix-rate (avg +7.9 pp) on all 3 runs; fixed-only RMS also wins 2 of 3 runs |
-| CLAS PPP | Six PPC Tokyo/Nagoya runs vs MRTKLIB CLAS | 23.645% aggregate FIX, 0.593 m FIX RMS2D, 36.510 m all-solution RMS2D, and 0 FIX epochs above 3 m across 58,258 scored epochs |
+| CLAS PPP | Six PPC Tokyo/Nagoya runs vs MRTKLIB CLAS | 24.851% aggregate FIX, 0.377 m FIX RMS2D (lower than MRTKLIB on all six runs), 36.523 m all-solution RMS2D across 58,259 scored epochs; 19 FIX epochs (0.03%) exceed 3 m, all in one pre-existing 4 s Nagoya 2 burst |
 | Urban RTK | UrbanNav Tokyo Odaiba vs RTKLIB `demo5` | More fixes, lower Hp95/Vp95; `--preset odaiba` closes Hmed |
 | SPP | PPC SPP adaptive robust + policy gate | No P95 regression with <=1 pp positioning drop |
 
@@ -50,124 +50,24 @@ and the PPC score target from the [Turing tight-coupling slides](https://www.den
 
 ![PPC public targets](docs/ppc_public_targets.png)
 
-The XY view below shows where each selected solution is FIXED or FLOAT. Green
-points are correct FIX epochs, red crosses are FIX epochs with 3D error above
-0.5 m, orange points are FLOAT, and the light-gray line is the reference
-trajectory.
-
-Before the final confidence gate, a truth-free wrong-basin escape replaces 35
-Nagoya 2 FIX positions with its independent TC-FGO candidate and emits them as
-FLOAT only when baseline prefit RMS exceeds 8 m and at least 45 observations
-were suppressed. Nagoya 2 FIX errors above 10 m fall from 36 to 4 and those
-above 5 m from 42 to 10, while its P95 horizontal error improves from 19.092 m
-to 18.144 m.
-
-Nagoya 3 now uses a causal, truth-free KF/FGO consensus state machine. The FGO
-shadow never replaces the KF position: it only quarantines a FIX label while
-the estimators disagree, and recovery requires consecutive agreement. A
-runtime-only provisional-recovery gate retains five healthy FIX epochs without
-promoting the joint anchor early. This removes 16 wrong FIX labels and 15
-errors above 10 m without losing a correct FIX epoch.
-
-The final confidence layer demotes FIX to FLOAT when fewer than 8 satellites
-are used, or when at most 11 satellites are used and the AR ratio is at most
-15. Strong same-epoch telemetry may exonerate the boundary case only with at
-least 11 satellites, prefit RMS at most 0.5 m, and NIS/observation at most 0.2.
-A causal kinematic guard then quarantines the current and next two epochs after
-a jump above 12 m with acceleration above 200 m/s2. A bounded plateau extension
-continues quarantine for at most eight epochs while jumps stay below 0.1 m. A
-secondary trigger requires a jump above 5 m, acceleration above 100 m/s2,
-prefit RMS above 5 m, ratio at most 10, at least 10 suppressed outliers, and at
-most 13 satellites. It changes no positions and reads no reference truth.
-
-Tokyo 3 additionally replays two overlapping, independently initialized
-GNSS/IMU FGO shadow windows through the consensus state machine. FIX is
-quarantined after sustained KF/FGO separation above 5 m when the shadow has
-GDOP at most 4, DDPR RMS at most 40 m, and at least 8 satellites. The FGO
-position is never substituted. Soft primary telemetry cannot start an
-unrecoverable quarantine while the independent estimator is unavailable; hard
-primary suspects remain fail-closed. The two-window replay removes 142 wrong
-FIX labels at a cost of five correct FIX labels and finishes in NORMAL state.
-
-The final staged residual guard adds at most seven epochs (1.4 seconds at
-5 Hz) of output latency. It confirms eight consecutive FIX epochs only when
-prefit RMS exceeds 40 m, ratio is at most 15, at least 12 observations are
-suppressed, and suppressed observations comprise at least half of `RTKObs`.
-A separate single-epoch gate requires prefit RMS at least 40 m and at most 14
-satellites. These rules consume emitted RTK telemetry only and change status,
-not position. They remove 57 wrong FIX labels at a cost of ten correct FIX
-labels on PPC.
-
-The official score reaches **78.845491%**. Across six runs, aggregate wrong FIX
-falls from 869 to **574**, wrong FIX above 5 m from 96 to **42**, and wrong FIX
-above 10 m from 59 to **5**. Correct FIX/reference remains above its 66.230%
-floor and Tokyo 1 remains above its public FIX target. In six-fold leave-one-run-out selection,
-five folds select the production 12 m / 3-epoch primary policy and the remaining
-fold selects a 5-epoch hold. All extension folds select an eight-epoch maximum
-plateau age; the secondary thresholds vary and provide held-out catches only on
-two runs, so that component remains exploratory. See the
-[kinematic integrity LOO report](docs/ppc_kinematic_integrity_loo.md). This is
-a run-level robustness check, not an external-dataset generalization claim. The full severity audit is
-in [PPC FIX integrity audit](docs/ppc_fix_integrity_audit.md). The
-[wrong-FIX event ledger](docs/ppc_wrong_fix_event_ledger.md) groups all 574
-residual wrong-FIX epochs into 188 contiguous events and records truth-free
-runtime fingerprints for root-cause and regression work.
-The [Nagoya 3 root-cause report](docs/ppc_nagoya3_wrong_fix_root_cause.md)
-shows that the largest event is an overconfident float-KF basin followed by
-integer certification, rather than an inherited hold-FIX failure.
-The [online consensus design](docs/ppc_online_consensus_design.md) specifies the
-truth-free KF/FGO quarantine and recovery state machine that follows from it.
-The frozen staged policy was also replayed on full UrbanNav Odaiba/Shinjuku
-Trimble rover solutions. It demoted 22 of 49 FIX errors above 2 m, harmed zero
-correct FIX epochs, and consumed no reference truth at runtime; see the
-[external integrity audit](docs/ppc_residual_integrity_external_audit.md).
-The machine-readable requirement audit is tracked in
-[PPC goal completion audit](docs/ppc_goal_completion_audit.md).
+The audited runtime profile uses candidate telemetry only; reference truth is
+used after output generation for scoring. It reaches an official score of
+**78.845491%** while reducing aggregate wrong FIX from 869 to **574**, errors
+above 5 m from 96 to **42**, and errors above 10 m from 59 to **5**.
 
 ![PPC selected XY trajectories by FIX status](docs/ppc_kf_fgo_fix_status_xy.png)
 
 `gici-open` was reproduced from commit
 `e7666110a88d22e08aad24345a253564af9b8024` on its `forppc2024` branch and
-evaluated from exported NMEA with the same six references and metric code.
-The six-run libgnss++ FIX macro is **+16.613 pp** above that reproduction, and
-its macro Wrong FIX/FIX is **1.025 pp lower**.
-The GPL-3.0 program remains an external executable: no GICI source is copied,
-linked, or distributed here, so libgnss++ remains MIT.
+evaluated with the same six references and metric code. The libgnss++ FIX macro
+is **+16.613 pp** higher and Wrong FIX/FIX is **1.025 pp** lower. These are
+in-sample benchmark results, not a held-out generalization claim.
 
-The position selectors use candidate status/ratio/satellite/residual telemetry
-and candidate-to-current separation only. They preserve the baseline epoch
-grid and telemetry; the wrong-basin and consensus escapes intentionally
-replace position and status for their selected epochs. The final
-satellite-count/ratio confidence gate changes only
-the emitted status, from FIX to FLOAT; the online consensus and kinematic
-guards likewise retain the primary position. Reference truth is used only after
-output generation for scoring. Thresholds were tuned on this public benchmark,
-so these results are an in-sample benchmark rather than a held-out
-generalization claim. Definitions, commands, paths, and the machine-readable
-audit are in [PPC reproduction commands](docs/ppc_reproduction.md) and
-[`docs/ppc_kf_fgo_goal_metrics.json`](docs/ppc_kf_fgo_goal_metrics.json).
-
-### PPC RTK vs RTKLIB demo5
-
-These are public PPC Tokyo/Nagoya moving-RTK replays using the same
-rover/base/nav observations for libgnss++ and RTKLIB `demo5`.
-
-<!-- PPC_COVERAGE_MATRIX:START -->
-| Run | gnssplusplus Positioning | RTKLIB Positioning | Delta | gnssplusplus Fix | RTKLIB Fix | PPC official score | RTKLIB official score | Official delta | P95 H delta |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Tokyo run1 | **90.0%** | 66.3% | **+23.7 pp** | **54.4%** | 30.5% | **34.9%** | 0.0% | **+34.9 pp** | +3.39 m |
-| Tokyo run2 | **95.3%** | 84.3% | **+11.0 pp** | **64.1%** | 27.6% | **69.0%** | 16.9% | **+52.1 pp** | -18.51 m |
-| Tokyo run3 | **95.7%** | 93.1% | **+2.5 pp** | **63.0%** | 40.5% | **60.6%** | 35.6% | **+25.0 pp** | -0.24 m |
-| Nagoya run1 | **88.8%** | 65.8% | **+23.0 pp** | **64.5%** | 33.8% | **49.5%** | 22.4% | **+27.1 pp** | -23.78 m |
-| Nagoya run2 | **85.6%** | 69.8% | **+15.8 pp** | **51.4%** | 18.8% | **20.9%** | 11.0% | **+9.9 pp** | -27.24 m |
-| Nagoya run3 | **93.8%** | 67.7% | **+26.1 pp** | **27.1%** | 13.9% | **27.4%** | 7.6% | **+19.7 pp** | -5.37 m |
-
-Across these six public runs, the coverage profile averages **+17.0 pp**
-Positioning-rate lead, **+28.1 pp** PPC official-score lead, and
-**-11.96 m** P95 horizontal-error delta versus RTKLIB `demo5`.
-<!-- PPC_COVERAGE_MATRIX:END -->
-
-![PPC RTK coverage scorecard](docs/ppc_rtk_demo5_scorecard.png)
+See the [goal audit](docs/ppc_goal_completion_audit.md),
+[FIX integrity audit](docs/ppc_fix_integrity_audit.md),
+[kinematic integrity LOO report](docs/ppc_kinematic_integrity_loo.md), and
+[reproduction commands](docs/ppc_reproduction.md) for the gate design,
+external replay, event ledger, machine-readable metrics, and licensing details.
 
 ### GNSS/IMU Tightly-Coupled FGO vs tightly-coupled-gnss-imu-fgo
 
@@ -249,34 +149,50 @@ and defines TTFF as the first run of at least 30 consecutive FIX epochs.
 
 MRTKLIB columns are the published v0.4.2 results from the
 [CLAS benchmark article](https://zenn.dev/hatognss/articles/7a54dd82606faf).
-The native results below are the complete-run outputs after the float-recovery
-fix landed in #345; each run has 100% interval coverage and at least 99.92%
-epoch coverage.
+The native results below are the complete-run outputs after the
+hold-continuation carve-out landed in #349 and the outage-counter parity
+fix landed in #351; each run has 100% interval coverage and at least
+99.92% epoch coverage.
 
 | Run | libgnss++ FIX | MRTKLIB FIX | FIX RMS2D* | MRTKLIB RMS2D† | All RMS2D* | FLOAT RMS2D* | SINGLE RMS2D* | max FIX* | >3 m FIX* |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Tokyo 1 | **9.702%** | 4.900% | 0.453 m | 0.747 m | 41.713 m | 16.619 m | 80.050 m | 1.533 m | **0** |
-| Tokyo 2 | 19.219% | **21.700%** | 0.387 m | 0.514 m | 25.922 m | 17.896 m | 45.343 m | 1.036 m | **0** |
-| Tokyo 3 | **37.387%** | 7.400% | 0.327 m | 0.801 m | 35.286 m | 19.727 m | 88.586 m | 2.826 m | **0** |
-| Nagoya 1 | **36.605%** | 17.000% | 0.888 m | 1.105 m | 57.257 m | 8.064 m | 119.220 m | 1.501 m | **0** |
-| Nagoya 2 | 23.117% | **23.400%** | 0.783 m | 1.119 m | 25.841 m | 16.480 m | 40.344 m | 2.486 m | **0** |
-| Nagoya 3 | 4.865% | **6.300%** | 0.959 m | 0.318 m | 13.554 m | 13.795 m | 14.040 m | 1.494 m | **0** |
-| **Six-run aggregate** | **23.645%** | — | **0.593 m** | — | **36.510 m** | **16.777 m** | **70.316 m** | **2.826 m** | **0** |
+| Tokyo 1 | **10.704%** | 4.900% | **0.352 m** | 0.747 m | 41.862 m | 16.800 m | 80.343 m | 1.961 m | 0 |
+| Tokyo 2 | 21.507% | **21.700%** | **0.322 m** | 0.514 m | 25.882 m | 18.287 m | 45.148 m | 1.013 m | 0 |
+| Tokyo 3 | **37.951%** | 7.400% | **0.192 m** | 0.801 m | 35.276 m | 19.531 m | 88.519 m | 2.986 m | 0 |
+| Nagoya 1 | **36.737%** | 17.000% | **0.450 m** | 1.105 m | 57.163 m | 7.948 m | 119.111 m | 1.043 m | 0 |
+| Nagoya 2 | **23.959%** | 23.400% | **0.625 m** | 1.119 m | 25.829 m | 16.230 m | 40.405 m | 3.200 m | 19 |
+| Nagoya 3 | **8.776%** | 6.300% | **0.304 m** | 0.318 m | 13.724 m | 14.360 m | 14.380 m | 0.587 m | 0 |
+| **Six-run aggregate** | **24.851%** | — | **0.377 m** | — | **36.523 m** | **16.843 m** | **70.337 m** | **3.200 m** | **19** |
 
-\* libgnss++ precision uses PPC vehicle truth transformed to the antenna phase
-center. † The published MRTKLIB precision uses the unmodified PPC reference,
-so cross-solver precision columns are contextual rather than reference-identical.
+\* libgnss++ precision uses the raw PPC reference point (already
+antenna-positioned; no lever-arm transform is applied — an earlier revision
+of this table double-applied a vehicle→antenna lever arm on top of an
+already-antenna-positioned reference, inflating FIX RMS2D by ~0.3–0.9 m and
+incidentally masking the Nagoya 2 tail below the 3 m line). † The published
+MRTKLIB precision uses the same raw PPC reference, so the FIX RMS2D and p68
+columns are directly comparable, not merely contextual — libgnss++ FIX
+RMS2D is now lower than MRTKLIB's on all six runs (bolded above).
 
 ![PPC six-run moving CLAS metric comparison](docs/ppc_clas_full_comparison.png)
 
-Across 58,258 scored epochs, native CLAS produced 13,775 FIX epochs. A finite
+Across 58,259 scored epochs, native CLAS produced 14,478 FIX epochs. A finite
 SPP candidate rejected by the chi-square/redundancy validation still remains
 excluded from ordinary filter admission, cold starts, and AR. For catastrophic
 FLOAT/SPP disagreement above 250 m only, it can continue the counted MRTKLIB
 `maxdiffp` recovery path. On Tokyo 2 this moves the bad-seed recovery from TOW
 177750.0 to 177747.4 (311.6 m to 5.4 m), 0.8 s before the MRTKLIB recovery at
-177748.2. The six-run all-solution RMS2D is 36.510 m; FLOAT and SINGLE RMS2D are
-16.777 m and 70.316 m respectively.
+177748.2. The six-run all-solution RMS2D is 36.523 m; FLOAT and SINGLE RMS2D are
+16.843 m and 70.337 m respectively.
+
+Of the 14,478 FIX epochs, 19 (0.03%) exceed 3 m horizontal error; all 19 fall
+in a single contiguous 4-second burst on Nagoya 2 (TOW 556406.4–556410.4,
+errors 3.17–3.20 m, max 3.200 m), inside the known seed-geometry `maxdiffp`
+reset zone. The identical 19 epochs, at matching TOWs and errors, are present
+in the pre-#349 baseline run, so this is a pre-existing wrong-fix tail, not a
+regression from the hold-continuation carve-out or the #351 outage-counter
+parity fix — it was previously invisible because the lever-arm
+double-correction happened to shift it under the 3 m line (old Nagoya 2 max
+was 2.486 m). The other five runs still have zero FIX epochs above 3 m.
 
 | Complete trajectories | Horizontal error and FIX epochs |
 |---|---|
