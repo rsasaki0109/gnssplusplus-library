@@ -169,6 +169,15 @@ if(GTest_FOUND)
     # Add test to CTest
     add_test(NAME run_tests COMMAND gnss_run_tests)
     add_test(
+        NAME clas_outage_legacy_kill_switch
+        COMMAND gnss_run_tests
+                --gtest_filter=PPPClasTest.MrtklibOutageResetKillSwitchRestoresLegacyOverflow
+    )
+    set_tests_properties(
+        clas_outage_legacy_kill_switch
+        PROPERTIES ENVIRONMENT "GNSS_PPP_CLAS_OUTAGE_RESET_PARITY=0"
+    )
+    add_test(
         NAME madoca_parity_tests
         COMMAND gnss_madoca_parity_tests
                 --gtest_filter=*MadocaParity*:MadocaBridgeConfig.*
@@ -419,6 +428,7 @@ if(GTest_FOUND)
 
     set(GNSSPP_CORE_TESTS
         run_tests
+        clas_outage_legacy_kill_switch
         python_ppc_integrity_policy_tests
         python_ppc_goal_completion_audit_tests
         python_artifact_manifest_contract_validator_tests
