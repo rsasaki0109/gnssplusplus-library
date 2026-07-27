@@ -476,6 +476,12 @@ def parse_args() -> argparse.Namespace:
         help="Adaptive variance ceiling as a multiple of the model variance (default: 25.0).",
     )
     parser.add_argument(
+        "--rtk-adaptive-noise-max-baseline",
+        type=float,
+        default=None,
+        help="Only adapt while the float baseline is at or below this many meters (0 = no gate).",
+    )
+    parser.add_argument(
         "--cmc-ref",
         action="store_true",
         help="Phase 2a: enable CMC-aware DD reference-satellite selection with hysteresis.",
@@ -1560,6 +1566,10 @@ def run_solver(
         if getattr(args, "rtk_adaptive_noise_max_scale", None) is not None:
             command.extend(
                 ["--rtk-adaptive-noise-max-scale", str(args.rtk_adaptive_noise_max_scale)]
+            )
+        if getattr(args, "rtk_adaptive_noise_max_baseline", None) is not None:
+            command.extend(
+                ["--rtk-adaptive-noise-max-baseline", str(args.rtk_adaptive_noise_max_baseline)]
             )
         if getattr(args, "rtk_snr_reference_dbhz", None) is not None:
             command.extend(["--rtk-snr-reference-dbhz", str(args.rtk_snr_reference_dbhz)])

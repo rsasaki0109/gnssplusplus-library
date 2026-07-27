@@ -125,6 +125,12 @@ public:
         double adaptive_noise_min_variance_scale = 0.25;
         double adaptive_noise_max_variance_scale = 25.0;
         double adaptive_noise_reset_gap_s = 5.0;    // outage prune horizon
+        /// Baseline-length gate: adaptation active only while the float
+        /// baseline is at or below this many meters (0 = no gate). Gate A
+        /// showed the innovation stream on a 9.4 km baseline carries real
+        /// DD ionosphere error that the tracker absorbs into R, collapsing
+        /// the fix rate -- the mirror image of snr_min_baseline_m.
+        double adaptive_noise_max_baseline_m = 0.0;
 
         /// navi.776 B: rover-only between-satellite SD Doppler measurement
         /// rows. Receiver clock drift cancels in the between-satellite
@@ -1317,6 +1323,16 @@ private:
     // Only populated/consulted when enable_adaptive_measurement_noise is on;
     // keyed freq * MAXSAT + satelliteSlot(sat) per MeasurementKind.
     rtk_adaptive_noise::AdaptiveNoiseTracker adaptive_noise_tracker_;
+    // True when adaptation applies this epoch: knob on AND the float
+    // baseline is within the optional adaptive_noise_max_baseline_m gate.
+    bool adaptiveNoiseActiveThisEpoch() const {
+        if (!rtk_config_.enable_adaptive_measurement_noise) return false;
+        const double max_baseline = rtk_config_.adaptive_noise_max_baseline_m;
+        if (!std::isfinite(max_baseline) || max_baseline <= 0.0) return true;
+        if (filter_state_.state.size() < 3) return true;
+        const double baseline_m = filter_state_.state.head<3>().norm();
+        return !std::isfinite(baseline_m) || baseline_m <= max_baseline;
+    }
     rtk_adaptive_noise::AdaptiveNoiseConfig adaptiveNoiseConfig() const {
         rtk_adaptive_noise::AdaptiveNoiseConfig config;
         config.alpha_phase = rtk_config_.adaptive_noise_alpha_phase;

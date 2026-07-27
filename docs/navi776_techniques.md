@@ -57,9 +57,35 @@ the paper's context — short smartphone baselines with device-quality noise
 as the dominant innovation source. Usable as an opt-in for short-baseline
 urban runs; do not enable on long baselines.
 
-Follow-up candidates (not pursued now): baseline-length gate on the
-adaptation (mirror `snr_min_baseline_m`), phase-only adaptation, per-system
-alpha.
+### A3 follow-up: baseline-length gate (`adaptive_noise_max_baseline_m`)
+
+`--rtk-adaptive-noise-max-baseline <m>` (0 = no gate): adaptation is
+active only while the float baseline is at or below the threshold,
+evaluated on the prior state each epoch. With the gate at 1000 m
+(same binary, full runs, vs the same OFF baselines as gate A):
+
+| run | variant | fix% | 50cm-matched% | official% | p95_h m | wall s |
+|---|---|---|---|---|---|---|
+| tokyo1 | OFF | 86.71 | 82.63 | 68.97 | 1.381 | 73.5 |
+| tokyo1 | gated ON | **87.16** | 82.26 | 68.38 | 1.381 | 83.6 |
+| tokyo3 | OFF | 81.82 | 87.09 | 77.54 | 0.883 | 218.1 |
+| tokyo3 | gated ON | **83.09** | **88.57** | 77.56 | 0.880 | 234.1 |
+| nagoya1 | gated ON | bit-identical to OFF (md5-equal .pos) | | | | |
+
+**Verdict: PASSES the gate bar on all three runs** — fix +0.45 pp
+(tokyo1) / +1.27 pp (tokyo3) / unchanged (nagoya1), p95_h flat
+everywhere, nagoya1 exactly neutralized. The gate also fires on tokyo
+SPP-reseed excursions (transient float baselines > 1 km), which
+incidentally stops the tracker from learning during resets — that is why
+gated tokyo1 beats ungated ON on fix by 2.4 pp. Cost: the ungated 50cm
+gains shrink (tokyo1 +1.75 -> -0.37 pp; tokyo3 +3.28 -> +1.48 pp), and
+wall +7-14%% from the extra bookkeeping. Recommended opt-in:
+`--rtk-adaptive-noise --rtk-adaptive-noise-max-baseline 1000`.
+The feature remains default-OFF pending a user decision on making this
+combination a preset.
+
+Other follow-up candidates (not pursued): phase-only adaptation,
+per-system alpha.
 
 ## B. SD Doppler observation rows (velocity observability)
 

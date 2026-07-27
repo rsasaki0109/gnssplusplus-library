@@ -308,6 +308,7 @@ struct SolveConfig {
     double rtk_adaptive_noise_alpha_code = 0.5;
     double rtk_adaptive_noise_min_scale = 0.25;
     double rtk_adaptive_noise_max_scale = 25.0;
+    double rtk_adaptive_noise_max_baseline_m = 0.0;
     // Self-reference-free integer validation. This is independently opt-in;
     // it does not require the IMU tight-coupling path.
     bool cp_pr_fixed_gate = false;
@@ -1359,6 +1360,10 @@ void printUsage(const char* program_name) {
         << "  --rtk-adaptive-noise-max-scale <s>\n"
         << "                             Adapted variance ceiling as a multiple of the model\n"
         << "                             variance (default: 25.0)\n"
+        << "  --rtk-adaptive-noise-max-baseline <m>\n"
+        << "                             Only adapt while the float baseline is at or below\n"
+        << "                             this many meters (default: 0 = no gate). Long\n"
+        << "                             baselines feed DD iono error into the adaptation\n"
         << "  --cp-pr-fixed-gate         Validate an integer candidate with independent\n"
         << "                             DD code-vs-carrier innovations before accepting it\n"
         << "                             (default: off; does not require tight coupling)\n"
@@ -1730,6 +1735,10 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         }
         if (arg == "--rtk-adaptive-noise-max-scale" && i + 1 < argc) {
             config.rtk_adaptive_noise_max_scale = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--rtk-adaptive-noise-max-baseline" && i + 1 < argc) {
+            config.rtk_adaptive_noise_max_baseline_m = std::stod(argv[++i]);
             continue;
         }
         if (arg == "--cp-pr-fixed-gate") {
@@ -2736,6 +2745,7 @@ int main(int argc, char* argv[]) {
         rtk_config.adaptive_noise_alpha_code = config.rtk_adaptive_noise_alpha_code;
         rtk_config.adaptive_noise_min_variance_scale = config.rtk_adaptive_noise_min_scale;
         rtk_config.adaptive_noise_max_variance_scale = config.rtk_adaptive_noise_max_scale;
+        rtk_config.adaptive_noise_max_baseline_m = config.rtk_adaptive_noise_max_baseline_m;
         rtk_config.enable_cp_pr_fixed_gate = config.cp_pr_fixed_gate;
         rtk_config.cp_pr_fixed_gate_threshold_m = config.cp_pr_fixed_gate_threshold_m;
         rtk_config.cp_pr_fixed_gate_min_pairs = config.cp_pr_fixed_gate_min_pairs;

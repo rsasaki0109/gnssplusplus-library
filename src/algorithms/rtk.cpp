@@ -2611,6 +2611,7 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
     // until the first INS position/velocity time update has initialized the
     // velocity covariance -- before that the rows would carry residuals with
     // no active velocity columns and pollute NIS.
+    const bool adaptive_noise_active = adaptiveNoiseActiveThisEpoch();
     const bool build_doppler_rows =
         rtk_config_.enable_doppler_measurement_rows &&
         rtk_config_.enable_velocity_states &&
@@ -2812,7 +2813,7 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
                 const int adaptive_key = freq * MAXSAT + satelliteSlot(sat);
                 const double sat_phase_model_variance = sat_phase_variance;
                 const double sat_code_model_variance = sat_code_variance;
-                if (rtk_config_.enable_adaptive_measurement_noise) {
+                if (adaptive_noise_active) {
                     const auto adaptive_config = adaptiveNoiseConfig();
                     sat_phase_variance = adaptive_noise_tracker_.adaptedVariance(
                         adaptive_key, rtk_measurement::MeasurementKind::PHASE,
@@ -2935,7 +2936,7 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
                     doppler_row.reference_variance = ref_doppler_variance;
                     double sat_doppler_variance = doppler_variance(sd.elevation);
                     const double sat_doppler_model_variance = sat_doppler_variance;
-                    if (rtk_config_.enable_adaptive_measurement_noise) {
+                    if (adaptive_noise_active) {
                         sat_doppler_variance = adaptive_noise_tracker_.adaptedVariance(
                             adaptive_key, rtk_measurement::MeasurementKind::DOPPLER,
                             sat_doppler_model_variance, adaptiveNoiseConfig());
@@ -3005,6 +3006,8 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
     // navi.776 C: position before the measurement update, for the Kalman
     // position-correction statistic driving the offline time-offset search.
     const Vector3d position_before_update = filter_state_.state.head<3>();
+    // Evaluated on the prior state, before the update moves the baseline.
+    const bool adaptive_noise_active = adaptiveNoiseActiveThisEpoch();
 
     const auto update_result = rtk_update::applyMeasurementUpdate(filter_state_.state,
                                                                   filter_state_.covariance,
@@ -3015,7 +3018,7 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
                                                                   6,
                                                                   rtk_config_.max_update_nis_per_observation,
                                                                   force_active,
-                                                                  rtk_config_.enable_adaptive_measurement_noise);
+                                                                  adaptive_noise_active);
 
     if (update_result.ok) {
         const double correction_norm_m =
@@ -3031,7 +3034,7 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
     // noise tracker (consumed by the NEXT epoch's buildMeasurementBlocks —
     // the paper's R_{k+1} recursion). Never learn from rejected or failed
     // updates, and skip rows zeroed by suppressOutlierRows.
-    if (rtk_config_.enable_adaptive_measurement_noise && update_result.ok &&
+    if (adaptive_noise_active && update_result.ok &&
         !update_result.rejected_by_innovation_gate &&
         update_result.row_innovations.size() > 0 &&
         update_result.row_hph_diagonal.size() == update_result.row_innovations.size()) {
