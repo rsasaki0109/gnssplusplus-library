@@ -447,6 +447,35 @@ def parse_args() -> argparse.Namespace:
         help="Apply RTK SNR weighting only when baseline length is at least this many meters.",
     )
     parser.add_argument(
+        "--rtk-adaptive-noise",
+        action="store_true",
+        help="navi.776: enable innovation-based adaptive RTK measurement variance.",
+    )
+    parser.add_argument(
+        "--rtk-adaptive-noise-alpha-phase",
+        type=float,
+        default=None,
+        help="Carrier-phase EWMA memory factor for adaptive noise (default: 0.9).",
+    )
+    parser.add_argument(
+        "--rtk-adaptive-noise-alpha-code",
+        type=float,
+        default=None,
+        help="Pseudorange EWMA memory factor for adaptive noise (default: 0.5).",
+    )
+    parser.add_argument(
+        "--rtk-adaptive-noise-min-scale",
+        type=float,
+        default=None,
+        help="Adaptive variance floor as a fraction of the model variance (default: 0.25).",
+    )
+    parser.add_argument(
+        "--rtk-adaptive-noise-max-scale",
+        type=float,
+        default=None,
+        help="Adaptive variance ceiling as a multiple of the model variance (default: 25.0).",
+    )
+    parser.add_argument(
         "--cmc-ref",
         action="store_true",
         help="Phase 2a: enable CMC-aware DD reference-satellite selection with hysteresis.",
@@ -1514,6 +1543,24 @@ def run_solver(
             )
         if getattr(args, "rtk_snr_weighting", False):
             command.append("--rtk-snr-weighting")
+        if getattr(args, "rtk_adaptive_noise", False):
+            command.append("--rtk-adaptive-noise")
+        if getattr(args, "rtk_adaptive_noise_alpha_phase", None) is not None:
+            command.extend(
+                ["--rtk-adaptive-noise-alpha-phase", str(args.rtk_adaptive_noise_alpha_phase)]
+            )
+        if getattr(args, "rtk_adaptive_noise_alpha_code", None) is not None:
+            command.extend(
+                ["--rtk-adaptive-noise-alpha-code", str(args.rtk_adaptive_noise_alpha_code)]
+            )
+        if getattr(args, "rtk_adaptive_noise_min_scale", None) is not None:
+            command.extend(
+                ["--rtk-adaptive-noise-min-scale", str(args.rtk_adaptive_noise_min_scale)]
+            )
+        if getattr(args, "rtk_adaptive_noise_max_scale", None) is not None:
+            command.extend(
+                ["--rtk-adaptive-noise-max-scale", str(args.rtk_adaptive_noise_max_scale)]
+            )
         if getattr(args, "rtk_snr_reference_dbhz", None) is not None:
             command.extend(["--rtk-snr-reference-dbhz", str(args.rtk_snr_reference_dbhz)])
         if getattr(args, "rtk_snr_max_variance_scale", None) is not None:
@@ -2027,6 +2074,9 @@ def build_summary_payload(
         ),
         "rtk_snr_weighting_enabled": bool(
             args.solver == "rtk" and getattr(args, "rtk_snr_weighting", False)
+        ),
+        "rtk_adaptive_noise_enabled": bool(
+            args.solver == "rtk" and getattr(args, "rtk_adaptive_noise", False)
         ),
         "rtk_snr_reference_dbhz": (
             getattr(args, "rtk_snr_reference_dbhz", None) if args.solver == "rtk" else None

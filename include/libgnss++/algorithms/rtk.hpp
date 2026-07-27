@@ -6,6 +6,7 @@
 #include "../core/solution.hpp"
 #include "nlos_weights.hpp"
 #include "float_trust_policy.hpp"
+#include "rtk_adaptive_noise.hpp"
 #include "rtk_cmc_reference.hpp"
 #include "rtk_measurement.hpp"
 #include "rtk_selection.hpp"
@@ -108,6 +109,22 @@ public:
         double snr_reference_dbhz = 45.0;         // No inflation at or above this SNR
         double snr_max_variance_scale = 25.0;     // Clamp low-SNR variance inflation
         double snr_min_baseline_m = 0.0;          // Optional baseline-length floor for SNR weighting
+
+        /// Innovation-based adaptive measurement variance (Motooka 2026,
+        /// NAVIGATION navi.776): per-satellite EWMA of v^2 - HPH' - ref_var
+        /// replaces the model satellite_variance fed into the DD covariance,
+        /// clamped to [min,max]*model so varerr/SNR/NLOS trends stay the
+        /// backbone. Off by default; bit-identical when off. Note the SNR
+        /// inflation above and this adaptation both react to degraded
+        /// signals; when tuning, prefer lowering
+        /// adaptive_noise_max_variance_scale over stacking both.
+        bool enable_adaptive_measurement_noise = false;
+        double adaptive_noise_alpha_phase = 0.9;    // paper: slow, stability
+        double adaptive_noise_alpha_code = 0.5;     // paper: fast adaptation
+        double adaptive_noise_alpha_doppler = 0.5;  // consumed once Doppler rows exist
+        double adaptive_noise_min_variance_scale = 0.25;
+        double adaptive_noise_max_variance_scale = 25.0;
+        double adaptive_noise_reset_gap_s = 5.0;    // outage prune horizon
 
         // Quality control
         bool enable_cycle_slip_detection = true;
@@ -778,6 +795,13 @@ public:
         // update -- a direct, model-based answer to "is the float position
         // covariance collapsing (overconfident)".
         double float_position_covariance_trace_m2 = std::numeric_limits<double>::quiet_NaN();
+        // Innovation-based adaptive measurement noise telemetry (navi.776).
+        // Entries tracked after this epoch's update, and the mean
+        // adapted/model variance ratio per measurement kind (1.0 = tracker
+        // agrees with the model / nothing tracked).
+        int adaptive_noise_tracked_entries = 0;
+        double adaptive_noise_mean_phase_scale = std::numeric_limits<double>::quiet_NaN();
+        double adaptive_noise_mean_code_scale = std::numeric_limits<double>::quiet_NaN();
     };
 
     RTKProcessor();
@@ -1238,6 +1262,21 @@ private:
     std::map<SatelliteId, TdcpHistory> tdcp_history_l1_;
     std::map<SatelliteId, TdcpHistory> tdcp_history_l2_;
     std::map<SatelliteId, TdcpHistory> tdcp_history_l5_;
+
+    // navi.776 A2: innovation-based adaptive measurement variance state.
+    // Only populated/consulted when enable_adaptive_measurement_noise is on;
+    // keyed freq * MAXSAT + satelliteSlot(sat) per MeasurementKind.
+    rtk_adaptive_noise::AdaptiveNoiseTracker adaptive_noise_tracker_;
+    rtk_adaptive_noise::AdaptiveNoiseConfig adaptiveNoiseConfig() const {
+        rtk_adaptive_noise::AdaptiveNoiseConfig config;
+        config.alpha_phase = rtk_config_.adaptive_noise_alpha_phase;
+        config.alpha_code = rtk_config_.adaptive_noise_alpha_code;
+        config.alpha_doppler = rtk_config_.adaptive_noise_alpha_doppler;
+        config.min_variance_scale = rtk_config_.adaptive_noise_min_variance_scale;
+        config.max_variance_scale = rtk_config_.adaptive_noise_max_variance_scale;
+        config.reset_gap_s = rtk_config_.adaptive_noise_reset_gap_s;
+        return config;
+    }
 
     // Phase 2a: CMC-aware DD reference-satellite selection state (only
     // populated/consulted when rtk_config_.cmc_aware_reference_selection is

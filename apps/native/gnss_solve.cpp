@@ -300,6 +300,14 @@ struct SolveConfig {
     double cmc_ref_return_min_elev_deg = 5.0;
     double cmc_ref_switch_max_elev_drop_deg = 10.0;
     double cmc_ref_switch_min_elev_deg = 30.0;
+    // navi.776 A2: innovation-based adaptive measurement variance
+    // (RTKConfig::enable_adaptive_measurement_noise). Off by default; see
+    // the config field's doc comment in rtk.hpp.
+    bool rtk_adaptive_noise = false;
+    double rtk_adaptive_noise_alpha_phase = 0.9;
+    double rtk_adaptive_noise_alpha_code = 0.5;
+    double rtk_adaptive_noise_min_scale = 0.25;
+    double rtk_adaptive_noise_max_scale = 25.0;
     // Self-reference-free integer validation. This is independently opt-in;
     // it does not require the IMU tight-coupling path.
     bool cp_pr_fixed_gate = false;
@@ -1337,6 +1345,20 @@ void printUsage(const char* program_name) {
         << "                             Companion absolute floor: the switch-away replacement\n"
         << "                             must also be above this elevation (default: 30.0). No\n"
         << "                             effect without --cmc-ref\n"
+        << "  --rtk-adaptive-noise       Innovation-based adaptive measurement variance\n"
+        << "                             (navi.776): per-satellite EWMA of v^2-HPH'-ref_var\n"
+        << "                             replaces the model DD satellite variance, clamped\n"
+        << "                             relative to it (default: off)\n"
+        << "  --rtk-adaptive-noise-alpha-phase <a>\n"
+        << "                             Carrier-phase EWMA memory factor (default: 0.9)\n"
+        << "  --rtk-adaptive-noise-alpha-code <a>\n"
+        << "                             Pseudorange EWMA memory factor (default: 0.5)\n"
+        << "  --rtk-adaptive-noise-min-scale <s>\n"
+        << "                             Adapted variance floor as a fraction of the model\n"
+        << "                             variance (default: 0.25)\n"
+        << "  --rtk-adaptive-noise-max-scale <s>\n"
+        << "                             Adapted variance ceiling as a multiple of the model\n"
+        << "                             variance (default: 25.0)\n"
         << "  --cp-pr-fixed-gate         Validate an integer candidate with independent\n"
         << "                             DD code-vs-carrier innovations before accepting it\n"
         << "                             (default: off; does not require tight coupling)\n"
@@ -1688,6 +1710,26 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         }
         if (arg == "--cmc-ref-switch-min-elev" && i + 1 < argc) {
             config.cmc_ref_switch_min_elev_deg = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--rtk-adaptive-noise") {
+            config.rtk_adaptive_noise = true;
+            continue;
+        }
+        if (arg == "--rtk-adaptive-noise-alpha-phase" && i + 1 < argc) {
+            config.rtk_adaptive_noise_alpha_phase = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--rtk-adaptive-noise-alpha-code" && i + 1 < argc) {
+            config.rtk_adaptive_noise_alpha_code = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--rtk-adaptive-noise-min-scale" && i + 1 < argc) {
+            config.rtk_adaptive_noise_min_scale = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--rtk-adaptive-noise-max-scale" && i + 1 < argc) {
+            config.rtk_adaptive_noise_max_scale = std::stod(argv[++i]);
             continue;
         }
         if (arg == "--cp-pr-fixed-gate") {
@@ -2247,6 +2289,18 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     if (config.cmc_ref_switch_min_elev_deg < 0.0) {
         argumentError("--cmc-ref-switch-min-elev must be >= 0", argv[0]);
     }
+    if (config.rtk_adaptive_noise_alpha_phase < 0.0 || config.rtk_adaptive_noise_alpha_phase > 1.0) {
+        argumentError("--rtk-adaptive-noise-alpha-phase must be in [0, 1]", argv[0]);
+    }
+    if (config.rtk_adaptive_noise_alpha_code < 0.0 || config.rtk_adaptive_noise_alpha_code > 1.0) {
+        argumentError("--rtk-adaptive-noise-alpha-code must be in [0, 1]", argv[0]);
+    }
+    if (config.rtk_adaptive_noise_min_scale <= 0.0) {
+        argumentError("--rtk-adaptive-noise-min-scale must be > 0", argv[0]);
+    }
+    if (config.rtk_adaptive_noise_max_scale < config.rtk_adaptive_noise_min_scale) {
+        argumentError("--rtk-adaptive-noise-max-scale must be >= min scale", argv[0]);
+    }
     if (config.cp_pr_fixed_gate_threshold_m <= 0.0) {
         argumentError("--cp-pr-fixed-gate-threshold must be > 0", argv[0]);
     }
@@ -2677,6 +2731,11 @@ int main(int argc, char* argv[]) {
         rtk_config.cmc_ref_return_min_elev_deg = config.cmc_ref_return_min_elev_deg;
         rtk_config.cmc_ref_switch_max_elev_drop_deg = config.cmc_ref_switch_max_elev_drop_deg;
         rtk_config.cmc_ref_switch_min_elev_deg = config.cmc_ref_switch_min_elev_deg;
+        rtk_config.enable_adaptive_measurement_noise = config.rtk_adaptive_noise;
+        rtk_config.adaptive_noise_alpha_phase = config.rtk_adaptive_noise_alpha_phase;
+        rtk_config.adaptive_noise_alpha_code = config.rtk_adaptive_noise_alpha_code;
+        rtk_config.adaptive_noise_min_variance_scale = config.rtk_adaptive_noise_min_scale;
+        rtk_config.adaptive_noise_max_variance_scale = config.rtk_adaptive_noise_max_scale;
         rtk_config.enable_cp_pr_fixed_gate = config.cp_pr_fixed_gate;
         rtk_config.cp_pr_fixed_gate_threshold_m = config.cp_pr_fixed_gate_threshold_m;
         rtk_config.cp_pr_fixed_gate_min_pairs = config.cp_pr_fixed_gate_min_pairs;

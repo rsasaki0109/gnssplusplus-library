@@ -174,6 +174,14 @@ struct FuseOptions {
     double rtk_snr_max_variance_scale = 25.0;
     int max_subset_ar_drop_steps = -1;  // < 0 leaves RTKConfig's own default (6)
 
+    // navi.776 A2: innovation-based adaptive measurement variance, mirroring
+    // gnss_solve's --rtk-adaptive-noise family. Off by default.
+    bool rtk_adaptive_noise = false;
+    double rtk_adaptive_noise_alpha_phase = 0.9;
+    double rtk_adaptive_noise_alpha_code = 0.5;
+    double rtk_adaptive_noise_min_scale = 0.25;
+    double rtk_adaptive_noise_max_scale = 25.0;
+
     // Phase 2a: CMC-aware DD reference-satellite selection with hysteresis
     // (RTKConfig::cmc_aware_reference_selection), mirroring gnss_solve's
     // --cmc-ref family so gnss_fuse's underlying RTKProcessor can be tuned
@@ -701,6 +709,16 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             options.rtk_snr_max_variance_scale = std::stod(requireValue(arg, i, argc, argv));
         } else if (arg == "--max-subset-ar-drop-steps") {
             options.max_subset_ar_drop_steps = std::stoi(requireValue(arg, i, argc, argv));
+        } else if (arg == "--rtk-adaptive-noise") {
+            options.rtk_adaptive_noise = true;
+        } else if (arg == "--rtk-adaptive-noise-alpha-phase") {
+            options.rtk_adaptive_noise_alpha_phase = std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--rtk-adaptive-noise-alpha-code") {
+            options.rtk_adaptive_noise_alpha_code = std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--rtk-adaptive-noise-min-scale") {
+            options.rtk_adaptive_noise_min_scale = std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--rtk-adaptive-noise-max-scale") {
+            options.rtk_adaptive_noise_max_scale = std::stod(requireValue(arg, i, argc, argv));
         } else if (arg == "--rtk-pos-out") {
             options.rtk_pos_out = requireValue(arg, i, argc, argv);
         } else if (arg == "--cmc-ref") {
@@ -969,6 +987,11 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
     rtk_config.enable_snr_weighting = options.rtk_snr_weighting;
     rtk_config.snr_reference_dbhz = options.rtk_snr_reference_dbhz;
     rtk_config.snr_max_variance_scale = options.rtk_snr_max_variance_scale;
+    rtk_config.enable_adaptive_measurement_noise = options.rtk_adaptive_noise;
+    rtk_config.adaptive_noise_alpha_phase = options.rtk_adaptive_noise_alpha_phase;
+    rtk_config.adaptive_noise_alpha_code = options.rtk_adaptive_noise_alpha_code;
+    rtk_config.adaptive_noise_min_variance_scale = options.rtk_adaptive_noise_min_scale;
+    rtk_config.adaptive_noise_max_variance_scale = options.rtk_adaptive_noise_max_scale;
     if (options.max_subset_ar_drop_steps >= 0) {
         rtk_config.max_subset_drop_steps_for_ar = options.max_subset_ar_drop_steps;
     }

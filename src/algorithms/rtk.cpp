@@ -321,6 +321,7 @@ PositionSolution RTKProcessor::processEpoch(const ObservationData& rover_obs, co
 
 void RTKProcessor::reset() {
     filter_initialized_ = false;
+    adaptive_noise_tracker_.clear();
     debug_telemetry_ = EpochDebugTelemetry{};
     debug_telemetry_.prior_held_integer_count = static_cast<int>(last_dd_fixed_.size());
     debug_telemetry_.prior_held_pair_count = static_cast<int>(last_best_subset_.size());
@@ -1446,6 +1447,13 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
             auto idx_it = indices.find(sat);
             if (idx_it != indices.end() && slip) {
                 ambiguity_reset_count++;
+                // navi.776 A2: a slip invalidates the learned phase variance
+                // for this satellite/frequency; code memory survives.
+                if (rtk_config_.enable_adaptive_measurement_noise) {
+                    adaptive_noise_tracker_.resetKey(
+                        freq * MAXSAT + satelliteSlot(sat),
+                        rtk_measurement::MeasurementKind::PHASE);
+                }
                 int idx = idx_it->second;
                 filter_state_.state(idx) = 0.0;
                 filter_state_.covariance(idx, idx) = 0.0;
@@ -1583,6 +1591,8 @@ void RTKProcessor::handleConsecutiveFloatReset(const ObservationData& rover_obs,
 void RTKProcessor::resetAmbiguityStatesForReacquisition(const ObservationData& rover_obs,
                                                         const NavigationData& nav,
                                                         bool clear_hold_state) {
+    // navi.776 A2: a full reacquisition invalidates all learned variances.
+    adaptive_noise_tracker_.clear();
     if (!filter_initialized_) {
         consecutive_float_count_ = 0;
         consecutive_nonfix_count_ = 0;
@@ -2727,8 +2737,24 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
                 if (sat_wavelength <= 0.0) continue;
                 const double sat_snr = signal_snr_dbhz(sd, freq);
                 const double sat_nlos_factor = nlos_variance_factor(sat);
-                const double sat_phase_variance = varerr(sd.elevation, true, sat_snr) * sat_nlos_factor;
-                const double sat_code_variance = varerr(sd.elevation, false, sat_snr) * sat_nlos_factor;
+                double sat_phase_variance = varerr(sd.elevation, true, sat_snr) * sat_nlos_factor;
+                double sat_code_variance = varerr(sd.elevation, false, sat_snr) * sat_nlos_factor;
+                // navi.776 A2: replace the satellite-side model variance with
+                // the innovation-adapted one. The reference-side variance
+                // stays at the model value so the DD block structure
+                // (ref_var*11' + diag) keeps its known correlated part.
+                const int adaptive_key = freq * MAXSAT + satelliteSlot(sat);
+                const double sat_phase_model_variance = sat_phase_variance;
+                const double sat_code_model_variance = sat_code_variance;
+                if (rtk_config_.enable_adaptive_measurement_noise) {
+                    const auto adaptive_config = adaptiveNoiseConfig();
+                    sat_phase_variance = adaptive_noise_tracker_.adaptedVariance(
+                        adaptive_key, rtk_measurement::MeasurementKind::PHASE,
+                        sat_phase_model_variance, adaptive_config);
+                    sat_code_variance = adaptive_noise_tracker_.adaptedVariance(
+                        adaptive_key, rtk_measurement::MeasurementKind::CODE,
+                        sat_code_model_variance, adaptive_config);
+                }
                 const int sat_iono_idx = estimate_iono ? II(sat) : -1;
                 const double sat_iono_scale =
                     estimate_iono
@@ -2802,6 +2828,8 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
                 phase_row.baseline_coefficients = dd_los;
                 phase_row.reference_variance = ref_phase_variance;
                 phase_row.satellite_variance = sat_phase_variance;
+                phase_row.adaptive_key = adaptive_key;
+                phase_row.adaptive_model_variance = sat_phase_model_variance;
                 phase_block.rows.push_back(std::move(phase_row));
 
                 rtk_measurement::MeasurementRow code_row;
@@ -2813,6 +2841,8 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
                 code_row.baseline_coefficients = dd_los;
                 code_row.reference_variance = ref_code_variance;
                 code_row.satellite_variance = sat_code_variance;
+                code_row.adaptive_key = adaptive_key;
+                code_row.adaptive_model_variance = sat_code_model_variance;
                 code_block.rows.push_back(std::move(code_row));
             }
             blocks.push_back(std::move(phase_block));
@@ -2852,7 +2882,49 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
                                                                       : 30.0,
                                                                   6,
                                                                   rtk_config_.max_update_nis_per_observation,
-                                                                  force_active);
+                                                                  force_active,
+                                                                  rtk_config_.enable_adaptive_measurement_noise);
+
+    // navi.776 A2: feed this epoch's innovations back into the adaptive
+    // noise tracker (consumed by the NEXT epoch's buildMeasurementBlocks —
+    // the paper's R_{k+1} recursion). Never learn from rejected or failed
+    // updates, and skip rows zeroed by suppressOutlierRows.
+    if (rtk_config_.enable_adaptive_measurement_noise && update_result.ok &&
+        !update_result.rejected_by_innovation_gate &&
+        update_result.row_innovations.size() > 0 &&
+        update_result.row_hph_diagonal.size() == update_result.row_innovations.size()) {
+        const auto adaptive_config = adaptiveNoiseConfig();
+        const double tow = current_epoch_time_.tow;
+        int row_index = 0;
+        for (const auto& block : blocks) {
+            for (const auto& row : block.rows) {
+                if (row_index >= update_result.row_innovations.size()) break;
+                const bool suppressed =
+                    measurement_system.design_matrix.row(row_index).isZero(0.0);
+                if (row.adaptive_key >= 0 && !suppressed) {
+                    adaptive_noise_tracker_.update(
+                        row.adaptive_key,
+                        block.kind,
+                        update_result.row_innovations(row_index),
+                        update_result.row_hph_diagonal(row_index),
+                        row.reference_variance,
+                        row.adaptive_model_variance,
+                        tow,
+                        adaptive_config);
+                }
+                ++row_index;
+            }
+        }
+        adaptive_noise_tracker_.pruneStale(tow, rtk_config_.adaptive_noise_reset_gap_s);
+        debug_telemetry_.adaptive_noise_tracked_entries =
+            static_cast<int>(adaptive_noise_tracker_.size());
+        debug_telemetry_.adaptive_noise_mean_phase_scale =
+            adaptive_noise_tracker_.meanVarianceScale(
+                rtk_measurement::MeasurementKind::PHASE);
+        debug_telemetry_.adaptive_noise_mean_code_scale =
+            adaptive_noise_tracker_.meanVarianceScale(
+                rtk_measurement::MeasurementKind::CODE);
+    }
     current_update_diagnostics_.observation_count = update_result.observation_count;
     current_update_diagnostics_.phase_observation_count =
         measurement_diagnostics.phase_observation_count;
