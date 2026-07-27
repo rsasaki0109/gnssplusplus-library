@@ -267,3 +267,46 @@ both components disarm and the `--navi776-tc` RTK stream is
 provably harmless on long baselines and needs no per-run opt-out. Nagoya
 run2 independently reproduces this result (both RTK files MD5
 `30d61358688fd1a34f5f71b14c3e2803`; every score identical).
+
+### Tokyo2 tail/runtime investigation
+
+The Tokyo2 regression was decomposed with full-run ablations using the
+same M4 baseline:
+
+| variant | fix% | 50cm-matched% | official% | p95_h m | wall s |
+|---|---:|---:|---:|---:|---:|
+| OFF | 77.58 | 82.39 | 84.03 | **2.95** | 702.3 |
+| adaptive only | 80.18 | 82.61 | 83.14 | 3.02 | 508.3 |
+| Doppler only (sigma 0.5) | 84.74 | 83.59 | 82.36 | 3.41 | 632.2 |
+| combined (sigma 0.5) | **85.09** | **84.85** | **84.57** | 3.18 | 833.9 |
+| combined, primary-frequency Doppler only | 83.08 | 82.19 | 77.95 | 4.37 | 475.1 |
+| combined, sigma 0.35 | 83.45 | 83.56 | 82.77 | 3.68 | 591.8 |
+| combined, sigma 0.75 | 84.87 | 83.50 | 82.55 | 3.45 | 683.8* |
+| combined, sigma 1.0 | 83.91 | 84.05 | 81.76 | 3.41 | 687.0* |
+
+`*` The 0.75 and 1.0 arms ran concurrently, so their wall values are not
+used for absolute runtime comparison. Accuracy remains directly comparable.
+
+The Doppler rows are the main source of both the fix gain and the tail/cost
+regression. Adaptive noise alone is not a clean score win, but in the
+combined arm it recovers much of the Doppler-only official/50 cm loss and
+reduces p95. Neither removing correlated secondary-frequency Doppler rows
+nor retuning sigma on either side of 0.5 preserved the combined gain; those
+experimental changes were therefore removed.
+
+An epoch/status breakdown localizes the Tokyo2 tail to non-fixed solutions:
+FIX p95 improves from 0.196 m OFF to 0.164 m ON, while FLOAT p95 worsens
+from 5.01 m to 11.79 m. More aggressive existing non-FIX/float bridge-tail
+post-filter thresholds did not change the score. A prototype that reused
+the diagnostic innovation factorization cut one Tokyo2 run from 833.9 s to
+339.9 s, but its changed factorization numerics altered the RTK trajectory.
+A second prototype skipped NIS calculation when its immediate gate was
+disabled and reproduced Tokyo2 RTK output exactly (MD5 equal) in 404.5 s,
+but changed Tokyo1 through downstream NIS consumers. Both optimizations
+were rejected and fully removed. The safe conclusion is therefore:
+
+- keep Doppler sigma 0.5 as the best measured accuracy trade-off;
+- do not claim a generally safe p95 or active-path runtime fix;
+- keep `--navi776-tc` opt-in and preserve both 1000 m long-baseline gates;
+- optimize the dense update only with an end-to-end NIS-equivalent method,
+  validated on all Tokyo runs rather than a single-run MD5 check.
