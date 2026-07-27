@@ -77,6 +77,8 @@ MeasurementDiagnostics summarizeMeasurementBlocks(const std::vector<MeasurementB
             diagnostics.phase_observation_count += block_observations;
         } else if (block.kind == MeasurementKind::CODE) {
             diagnostics.code_observation_count += block_observations;
+        } else if (block.kind == MeasurementKind::DOPPLER) {
+            diagnostics.doppler_observation_count += block_observations;
         }
         for (const auto& row : block.rows) {
             sum_sq += row.residual * row.residual;
@@ -136,10 +138,17 @@ AmbiguityTransform buildAmbiguityTransform(const Eigen::VectorXd& state,
 
 int suppressOutlierRows(Eigen::VectorXd& residuals,
                         Eigen::MatrixXd& design_matrix,
-                        double threshold) {
+                        double threshold,
+                        const std::vector<double>& per_row_thresholds) {
+    const bool use_per_row =
+        static_cast<int>(per_row_thresholds.size()) == residuals.size();
     int suppressed = 0;
     for (int row = 0; row < residuals.size(); ++row) {
-        if (std::abs(residuals(row)) > threshold) {
+        double row_threshold = threshold;
+        if (use_per_row && per_row_thresholds[static_cast<size_t>(row)] > 0.0) {
+            row_threshold = per_row_thresholds[static_cast<size_t>(row)];
+        }
+        if (std::abs(residuals(row)) > row_threshold) {
             residuals(row) = 0.0;
             design_matrix.row(row).setZero();
             ++suppressed;

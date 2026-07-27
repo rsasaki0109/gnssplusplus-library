@@ -15,7 +15,12 @@ struct StateCoefficient {
 enum class MeasurementKind {
     UNKNOWN = 0,
     PHASE = 1,
-    CODE = 2
+    CODE = 2,
+    // navi.776 B: rover-only between-satellite single-difference Doppler
+    // rows (range-rate domain, m/s). Receiver clock drift cancels in the
+    // between-satellite difference; rows touch only the velocity tail
+    // states, never ambiguities or AR.
+    DOPPLER = 3
 };
 
 struct MeasurementRow {
@@ -24,6 +29,12 @@ struct MeasurementRow {
     std::vector<StateCoefficient> state_coefficients;
     double reference_variance = 0.0;
     double satellite_variance = 0.0;
+    // Bookkeeping for the innovation-based adaptive noise tracker. -1 means
+    // this row does not participate in adaptation. adaptive_model_variance
+    // carries the unadapted model variance (varerr * inflation factors) so
+    // the tracker can clamp relative to the current geometry.
+    int adaptive_key = -1;
+    double adaptive_model_variance = 0.0;
 };
 
 struct MeasurementBlock {
@@ -36,12 +47,19 @@ struct MeasurementSystem {
     Eigen::MatrixXd design_matrix;
     Eigen::VectorXd residuals;
     Eigen::MatrixXd covariance;
+    // navi.776 B: optional per-row outlier thresholds. Empty (default) keeps
+    // the single scalar-threshold behavior. When sized to the row count,
+    // entries > 0 override the scalar threshold for that row — Doppler rows
+    // live in the m/s domain and must not be judged by the metre-domain
+    // threshold.
+    std::vector<double> row_outlier_thresholds;
 };
 
 struct MeasurementDiagnostics {
     int observation_count = 0;
     int phase_observation_count = 0;
     int code_observation_count = 0;
+    int doppler_observation_count = 0;
     double residual_rms_m = 0.0;
     double residual_max_abs_m = 0.0;
 };
@@ -75,7 +93,8 @@ AmbiguityTransform buildAmbiguityTransform(const Eigen::VectorXd& state,
 
 int suppressOutlierRows(Eigen::VectorXd& residuals,
                         Eigen::MatrixXd& design_matrix,
-                        double threshold);
+                        double threshold,
+                        const std::vector<double>& per_row_thresholds = {});
 
 }  // namespace rtk_measurement
 }  // namespace libgnss

@@ -48,6 +48,43 @@ PhaseCommand commandAt(double t) {
     return kPhases.back();
 }
 
+TEST(FusionProcessorSyntheticTest, ReportsAcceptedGnssPositionCorrectionBeforeVelocityUpdate) {
+    LooseCouplingProcessor::Config config;
+    config.align_static_window_s = 0.1;
+    config.zupt_enable = false;
+    LooseCouplingProcessor processor(config);
+
+    GNSSTime time(2200, 100000.0);
+    for (int i = 0; i < 20; ++i) {
+        ImuSample sample;
+        sample.time = time;
+        sample.accel_raw = Eigen::Vector3d(0.0, 0.0, kGravity);
+        processor.processImuSample(sample);
+        time = time + kDt;
+    }
+    ASSERT_TRUE(processor.isInitialized());
+    EXPECT_FALSE(processor.lastGnssPositionUpdateApplied());
+
+    PositionSolution solution;
+    solution.time = time;
+    solution.status = SolutionStatus::FIXED;
+    solution.num_satellites = 10;
+    solution.position_ecef = geodetic2ecef(
+        35.6 * M_PI / 180.0, 139.7 * M_PI / 180.0, 50.0);
+    solution.position_covariance =
+        0.01 * Eigen::Matrix3d::Identity();
+    processor.processGnssSolution(solution);
+    ASSERT_TRUE(processor.lastGnssPositionUpdateApplied());
+
+    solution.position_ecef +=
+        processor.ecefToLocalEnuRotation().transpose() *
+        Eigen::Vector3d(1.0, 0.0, 0.0);
+    processor.processGnssSolution(solution);
+    EXPECT_TRUE(processor.lastGnssPositionUpdateApplied());
+    EXPECT_GT(processor.lastGnssPositionCorrectionEnu().x(), 0.0);
+    EXPECT_TRUE(processor.lastGnssPositionCorrectionEnu().allFinite());
+}
+
 TEST(FusionProcessorSyntheticTest, AppliesTightlyCoupledDDRowsToLiveINSState) {
     LooseCouplingProcessor::Config config;
     config.align_static_window_s = 0.1;

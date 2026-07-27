@@ -43,6 +43,14 @@ public:
 
     /** @brief Sort samples by time (stable, ascending). */
     void sortByTime();
+
+    /**
+     * @brief Shift every sample time by offset_s (navi.776 C: constant
+     * GNSS-IMU time-offset application). Positive = IMU timestamps move
+     * later. GPS week rollover is normalized via GNSSTime's own +/-
+     * operators. Zero is an exact no-op.
+     */
+    void shiftTime(double offset_s);
 };
 
 /**
@@ -101,5 +109,16 @@ struct ImuCsvLoadResult {
  * @return      Load result: ok/error, resolved column names, row count
  */
 ImuCsvLoadResult loadImuCsv(const std::string& path, ImuSeries& out);
+
+/**
+ * @brief Load rtklibexplorer/GNSS_IMU's cleaned `imu_*_sf.csv` format.
+ *
+ * Column 0 is a GPST-referenced Unix-epoch timestamp, accelerometer columns
+ * are in g, and gyro columns are already rad/s. This loader converts them to
+ * GNSSTime, m/s^2, and rad/s respectively but deliberately leaves the raw
+ * sensor axes untouched; mounting rotation and FRD/FLU conversion remain an
+ * explicit caller responsibility.
+ */
+ImuCsvLoadResult loadRtklibExplorerImuCsv(const std::string& path, ImuSeries& out);
 
 }  // namespace libgnss

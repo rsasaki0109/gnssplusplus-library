@@ -6,6 +6,7 @@
 #include "../core/solution.hpp"
 #include "nlos_weights.hpp"
 #include "float_trust_policy.hpp"
+#include "rtk_adaptive_noise.hpp"
 #include "rtk_cmc_reference.hpp"
 #include "rtk_measurement.hpp"
 #include "rtk_selection.hpp"
@@ -108,6 +109,53 @@ public:
         double snr_reference_dbhz = 45.0;         // No inflation at or above this SNR
         double snr_max_variance_scale = 25.0;     // Clamp low-SNR variance inflation
         double snr_min_baseline_m = 0.0;          // Optional baseline-length floor for SNR weighting
+
+        /// Innovation-based adaptive measurement variance (Motooka 2026,
+        /// NAVIGATION navi.776): per-satellite EWMA of v^2 - HPH' - ref_var
+        /// replaces the model satellite_variance fed into the DD covariance,
+        /// clamped to [min,max]*model so varerr/SNR/NLOS trends stay the
+        /// backbone. Off by default; bit-identical when off. Note the SNR
+        /// inflation above and this adaptation both react to degraded
+        /// signals; when tuning, prefer lowering
+        /// adaptive_noise_max_variance_scale over stacking both.
+        bool enable_adaptive_measurement_noise = false;
+        double adaptive_noise_alpha_phase = 0.9;    // paper: slow, stability
+        double adaptive_noise_alpha_code = 0.5;     // paper: fast adaptation
+        double adaptive_noise_alpha_doppler = 0.5;  // consumed once Doppler rows exist
+        double adaptive_noise_min_variance_scale = 0.25;
+        double adaptive_noise_max_variance_scale = 25.0;
+        double adaptive_noise_reset_gap_s = 5.0;    // outage prune horizon
+        /// Baseline-length gate: adaptation active only while the float
+        /// baseline is at or below this many meters (0 = no gate). Gate A
+        /// showed the innovation stream on a 9.4 km baseline carries real
+        /// DD ionosphere error that the tracker absorbs into R, collapsing
+        /// the fix rate -- the mirror image of snr_min_baseline_m.
+        double adaptive_noise_max_baseline_m = 0.0;
+
+        /// navi.776 B: rover-only between-satellite SD Doppler measurement
+        /// rows. Receiver clock drift cancels in the between-satellite
+        /// difference; rows touch only the M4 velocity tail states (which
+        /// must exist: requires enable_velocity_states) and are skipped
+        /// until the first INS position/velocity time update initializes
+        /// the velocity covariance. Never participates in AR, slip, or
+        /// lock counting. Off by default; bit-identical when off.
+        bool enable_doppler_measurement_rows = false;
+        /// Reuse the Kalman update's LU factorization for diagnostic NIS and
+        /// HPH row statistics. This preserves the state-update operation
+        /// order while avoiding a separate innovation LDLT. It is used only
+        /// when both update/fixed NIS gates are disabled.
+        bool reuse_kalman_factorization_for_nis = false;
+        /// Apply phase/code and Doppler blocks as two sequential Kalman
+        /// updates. Their measurement covariance is block diagonal; this
+        /// reduces the cubic measurement-space solve cost.
+        bool sequential_doppler_update = false;
+        double doppler_row_sigma_mps = 0.2;  // FGO SD-Doppler sigma parity
+        double doppler_row_outlier_threshold_mps = 1.0;
+        /// Baseline-length gate mirroring adaptive_noise_max_baseline_m:
+        /// Doppler rows are built only while the prior float baseline is at
+        /// or below this many meters (0 = no gate). Gate B showed the rows
+        /// regress accuracy on the 9.4 km nagoya baseline.
+        double doppler_row_max_baseline_m = 0.0;
 
         // Quality control
         bool enable_cycle_slip_detection = true;
@@ -778,6 +826,20 @@ public:
         // update -- a direct, model-based answer to "is the float position
         // covariance collapsing (overconfident)".
         double float_position_covariance_trace_m2 = std::numeric_limits<double>::quiet_NaN();
+        // Innovation-based adaptive measurement noise telemetry (navi.776).
+        // Entries tracked after this epoch's update, and the mean
+        // adapted/model variance ratio per measurement kind (1.0 = tracker
+        // agrees with the model / nothing tracked).
+        int adaptive_noise_tracked_entries = 0;
+        double adaptive_noise_mean_phase_scale = std::numeric_limits<double>::quiet_NaN();
+        double adaptive_noise_mean_code_scale = std::numeric_limits<double>::quiet_NaN();
+        // navi.776 B: SD Doppler measurement rows in this epoch's float
+        // update and their prefit residual RMS (m/s domain).
+        int float_update_doppler_observation_count = 0;
+        double doppler_row_residual_rms_mps = std::numeric_limits<double>::quiet_NaN();
+        // navi.776 C: |post - pre| of the position states across this
+        // epoch's measurement update (m).
+        double position_correction_norm_m = std::numeric_limits<double>::quiet_NaN();
     };
 
     RTKProcessor();
@@ -899,6 +961,27 @@ public:
                 ins_time_update_applied_last_epoch_};
     }
 
+    /// navi.776 C: Kalman position-correction statistics for the offline
+    /// GNSS-IMU time-offset search. Accumulates |post - pre| of the position
+    /// states across the measurement update, but ONLY on epochs whose prior
+    /// came from the INS time update -- on SPP-reseed epochs the correction
+    /// measures SPP error, not time-offset-induced INS prediction error.
+    /// J(dt) = mean_square_m2 is the paper's search objective.
+    struct PositionCorrectionStats {
+        std::size_t count = 0;
+        double mean_square_m2 = 0.0;
+    };
+    PositionCorrectionStats getPositionCorrectionStats() const {
+        PositionCorrectionStats stats;
+        stats.count = position_correction_count_;
+        stats.mean_square_m2 =
+            position_correction_count_ > 0
+                ? position_correction_sum_sq_m2_ /
+                      static_cast<double>(position_correction_count_)
+                : 0.0;
+        return stats;
+    }
+
     /// Return RTK's current FLOAT posterior antenna position/covariance. The
     /// ambiguity-fixed candidate is intentionally not used as the INS anchor.
     bool getFloatPosteriorPosition(Vector3d& position_ecef,
@@ -971,6 +1054,10 @@ private:
     Matrix3d external_velocity_initial_covariance_ecef_ = Matrix3d::Zero();
     bool has_external_velocity_time_update_ = false;
     std::size_t ins_time_update_applied_count_ = 0;
+    // navi.776 C: position-correction accumulators (see
+    // getPositionCorrectionStats).
+    std::size_t position_correction_count_ = 0;
+    double position_correction_sum_sq_m2_ = 0.0;
     std::size_t ins_time_update_rejected_count_ = 0;
     bool ins_time_update_applied_last_epoch_ = false;
     int consecutive_cp_pr_gate_rejections_ = 0;
@@ -1212,6 +1299,13 @@ private:
         double elevation = 0.0;       // elevation from rover position
         double base_elevation = 0.0;   // elevation from base position
         bool has_ephemeris = false;
+        // navi.776 B: satellite velocity / clock drift at the rover-side
+        // transmit time, for SD Doppler measurement rows. Populated from
+        // the same calculateSatelliteState call that yields sat_pos, so
+        // filling them is behavior-neutral.
+        Vector3d sat_vel = Vector3d::Zero();      // ECEF m/s
+        double sat_clock_drift = 0.0;             // s/s
+        bool has_sat_velocity = false;
     };
 
     // WP7: current epoch's time (tow), used to look up the NLOS weight
@@ -1238,6 +1332,31 @@ private:
     std::map<SatelliteId, TdcpHistory> tdcp_history_l1_;
     std::map<SatelliteId, TdcpHistory> tdcp_history_l2_;
     std::map<SatelliteId, TdcpHistory> tdcp_history_l5_;
+
+    // navi.776 A2: innovation-based adaptive measurement variance state.
+    // Only populated/consulted when enable_adaptive_measurement_noise is on;
+    // keyed freq * MAXSAT + satelliteSlot(sat) per MeasurementKind.
+    rtk_adaptive_noise::AdaptiveNoiseTracker adaptive_noise_tracker_;
+    // True when adaptation applies this epoch: knob on AND the float
+    // baseline is within the optional adaptive_noise_max_baseline_m gate.
+    bool adaptiveNoiseActiveThisEpoch() const {
+        if (!rtk_config_.enable_adaptive_measurement_noise) return false;
+        const double max_baseline = rtk_config_.adaptive_noise_max_baseline_m;
+        if (!std::isfinite(max_baseline) || max_baseline <= 0.0) return true;
+        if (filter_state_.state.size() < 3) return true;
+        const double baseline_m = filter_state_.state.head<3>().norm();
+        return !std::isfinite(baseline_m) || baseline_m <= max_baseline;
+    }
+    rtk_adaptive_noise::AdaptiveNoiseConfig adaptiveNoiseConfig() const {
+        rtk_adaptive_noise::AdaptiveNoiseConfig config;
+        config.alpha_phase = rtk_config_.adaptive_noise_alpha_phase;
+        config.alpha_code = rtk_config_.adaptive_noise_alpha_code;
+        config.alpha_doppler = rtk_config_.adaptive_noise_alpha_doppler;
+        config.min_variance_scale = rtk_config_.adaptive_noise_min_variance_scale;
+        config.max_variance_scale = rtk_config_.adaptive_noise_max_variance_scale;
+        config.reset_gap_s = rtk_config_.adaptive_noise_reset_gap_s;
+        return config;
+    }
 
     // Phase 2a: CMC-aware DD reference-satellite selection state (only
     // populated/consulted when rtk_config_.cmc_aware_reference_selection is

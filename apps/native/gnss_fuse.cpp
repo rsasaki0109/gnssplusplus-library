@@ -40,7 +40,11 @@ struct FuseOptions {
     std::string rover_path;
     std::string base_path;
     std::string nav_path;
+    std::string gnss_pos_path;
     std::string imu_path;
+    bool rtklibexplorer_imu_format = false;
+    bool imu_mount_rotation_enabled = false;
+    Eigen::Matrix3d imu_raw_to_body_flu = Eigen::Matrix3d::Identity();
     std::string out_path = "output/fused_solution.pos";
     std::string kml_path;
     bool write_kml = false;
@@ -146,6 +150,17 @@ struct FuseOptions {
     bool tc_trusted_reanchor = false;
     int tc_trusted_reanchor_max_epochs = 0;
     bool tc_velocity_states = false;
+    // navi.776 B2: SD Doppler rows making the M4 velocity states directly
+    // observable. Requires --tc-velocity-states.
+    bool tc_doppler_rows = false;
+    bool tc_reuse_update_factorization = false;
+    bool tc_sequential_doppler_update = false;
+    double tc_doppler_sigma_mps = 0.2;
+    double tc_doppler_max_baseline_m = 0.0;
+    // navi.776 C: constant GNSS-IMU time offset (s), applied to all IMU
+    // timestamps right after load. Positive = IMU later.
+    double imu_time_offset_s = 0.0;
+    int imu_time_offset_score_start_epoch = 0;
     bool tc_tdcp_diagnostics = false;
     double tc_ins_position_q_floor_m2 = 25.0;
     double tc_ins_max_sample_gap_s = 0.1;
@@ -173,6 +188,15 @@ struct FuseOptions {
     double rtk_snr_reference_dbhz = 45.0;
     double rtk_snr_max_variance_scale = 25.0;
     int max_subset_ar_drop_steps = -1;  // < 0 leaves RTKConfig's own default (6)
+
+    // navi.776 A2: innovation-based adaptive measurement variance, mirroring
+    // gnss_solve's --rtk-adaptive-noise family. Off by default.
+    bool rtk_adaptive_noise = false;
+    double rtk_adaptive_noise_alpha_phase = 0.9;
+    double rtk_adaptive_noise_alpha_code = 0.5;
+    double rtk_adaptive_noise_min_scale = 0.25;
+    double rtk_adaptive_noise_max_scale = 25.0;
+    double rtk_adaptive_noise_max_baseline_m = 0.0;
 
     // Phase 2a: CMC-aware DD reference-satellite selection with hysteresis
     // (RTKConfig::cmc_aware_reference_selection), mirroring gnss_solve's
@@ -219,6 +243,40 @@ Eigen::Vector3d parseVector3(const std::string& text, const std::string& arg) {
     return Eigen::Vector3d(values[0], values[1], values[2]);
 }
 
+Eigen::Matrix3d rtklibExplorerRawToBodyFlu(const Eigen::Vector3d& rpy_deg) {
+    constexpr double kDegreesToRadians = M_PI / 180.0;
+    const Eigen::Vector3d rpy = rpy_deg * kDegreesToRadians;
+    const double sphi = std::sin(rpy.x());
+    const double cphi = std::cos(rpy.x());
+    const double stheta = std::sin(rpy.y());
+    const double ctheta = std::cos(rpy.y());
+    const double spsi = std::sin(rpy.z());
+    const double cpsi = std::cos(rpy.z());
+
+    // Exact Euler_to_CTM convention used by upstream GNSS_IMU.py: raw
+    // sensor axes -> body FRD. The diagonal then converts FRD to FLU.
+    Eigen::Matrix3d raw_to_body_frd;
+    raw_to_body_frd
+        << ctheta * cpsi, ctheta * spsi, -stheta,
+        -cphi * spsi + sphi * stheta * cpsi,
+        cphi * cpsi + sphi * stheta * spsi, sphi * ctheta,
+        sphi * spsi + cphi * stheta * cpsi,
+        -sphi * cpsi + cphi * stheta * spsi, cphi * ctheta;
+    return Eigen::Vector3d(1.0, -1.0, -1.0).asDiagonal() * raw_to_body_frd;
+}
+
+void transformImuSample(libgnss::ImuSample& sample, const FuseOptions& options,
+                        const libgnss::ImuAxisConvention& axis_convention) {
+    if (options.imu_mount_rotation_enabled) {
+        sample.accel_raw = options.imu_raw_to_body_flu * sample.accel_raw;
+        sample.gyro_raw_radps =
+            options.imu_raw_to_body_flu * sample.gyro_raw_radps;
+        return;
+    }
+    sample.accel_raw = axis_convention.apply(sample.accel_raw);
+    sample.gyro_raw_radps = axis_convention.apply(sample.gyro_raw_radps);
+}
+
 void applyImuGradePreset(const std::string& grade, libgnss::ProcessNoiseConfig& cfg) {
     // Continuous-time spectral-density presets, matching
     // reference_notes.md 7's IMU_PRESETS table (same names/values as the
@@ -262,12 +320,19 @@ void printUsage(const char* program_name) {
         << "  --data-dir <dir>             Use <dir>/rover.obs, base.obs, base.nav, imu.csv as\n"
         << "                                defaults for --rover/--base/--nav/--imu\n"
         << "  --rover <rover.obs>          RINEX observation file (required)\n"
+        << "  --gnss-pos <solution.pos>    Read a LibGNSS++/RTKLIB position+velocity log\n"
+        << "                                directly instead of solving --rover/--nav\n"
         << "  --base <base.obs>            RINEX base observation file. When given, gnss_fuse\n"
         << "                                runs the RTKProcessor pipeline (same as `solve`) and\n"
         << "                                feeds its per-epoch PositionSolution to the fusion\n"
         << "                                filter instead of an SPP-only solution.\n"
         << "  --nav <nav.rnx>              RINEX navigation file (required)\n"
-        << "  --imu <imu.csv>              PPC-Dataset-style IMU CSV file (required)\n"
+        << "  --imu <imu.csv>              IMU CSV file (required)\n"
+        << "  --imu-format <format>        ppc (default) or rtklibexplorer-sf. The latter\n"
+        << "                                converts GPST Unix seconds, accel g, gyro rad/s\n"
+        << "  --imu-misalignment-rpy-deg r,p,y\n"
+        << "                                Upstream Euler_to_CTM raw -> body-FRD rotation,\n"
+        << "                                followed by FRD -> FLU conversion\n"
         << "  --out <fused.pos>            Output position file (default: output/fused_solution.pos)\n"
         << "  --kml <fused.kml>            Optional KML trajectory output\n"
         << "  --attitude-csv <path>        Optional roll/pitch/yaw (deg) debug CSV, one row per\n"
@@ -382,6 +447,29 @@ void printUsage(const char* program_name) {
         << "                                Maximum consecutive FLOAT/SPP epochs bridged before\n"
         << "                                re-anchoring to the next available posterior (0 = no\n"
         << "                                limit). Requires --tc-trusted-reanchor. Default: 0.\n"
+        << "  --tc-doppler-rows            navi.776: rover-only between-satellite SD Doppler\n"
+        << "                                observation rows (velocity observability). Requires\n"
+        << "                                --tc-velocity-states. Default: off.\n"
+        << "  --tc-reuse-update-factorization\n"
+        << "                                Reuse the Kalman LU for NIS/row diagnostics when\n"
+        << "                                NIS gates are disabled. Default: off.\n"
+        << "  --tc-sequential-doppler-update\n"
+        << "                                Apply phase/code and Doppler blocks sequentially\n"
+        << "                                to reduce dense KF cost. Default: off.\n"
+        << "  --tc-doppler-sigma <mps>     SD Doppler row sigma in m/s (default: 0.2)\n"
+        << "  --tc-doppler-max-baseline <m>\n"
+        << "                                Build Doppler rows only while the float baseline is\n"
+        << "                                at or below this many meters (default: 0 = no gate)\n"
+        << "  --navi776-tc                 Enable the validated navi.776 short-baseline combo:\n"
+        << "                                closed loop + velocity states + Doppler rows\n"
+        << "                                (sigma 0.5, 1000 m gate) + gated adaptive noise\n"
+        << "                                (1000 m). Flags given after this one override it.\n"
+        << "  --imu-time-offset <s>        navi.776: constant GNSS-IMU time offset applied to\n"
+        << "                                all IMU timestamps at load (positive = IMU later).\n"
+        << "                                Default: 0.0 (exact no-op).\n"
+        << "  --imu-time-offset-score-start-epoch <n>\n"
+        << "                                With --gnss-pos, exclude the first n GNSS epochs\n"
+        << "                                from J while retaining them as filter warm-up\n"
         << "  --tc-velocity-states         M4 ECEF velocity states appended after legacy RTK state.\n"
         << "                                Requires --tc-closed-loop. Default: off.\n"
         << "  --tc-tdcp-diagnostics        M5 measurement-neutral SD-TDCP vs Doppler diagnostics.\n"
@@ -553,8 +641,24 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             options.base_path = requireValue(arg, i, argc, argv);
         } else if (arg == "--nav") {
             options.nav_path = requireValue(arg, i, argc, argv);
+        } else if (arg == "--gnss-pos") {
+            options.gnss_pos_path = requireValue(arg, i, argc, argv);
         } else if (arg == "--imu") {
             options.imu_path = requireValue(arg, i, argc, argv);
+        } else if (arg == "--imu-format") {
+            const std::string format = requireValue(arg, i, argc, argv);
+            if (format == "ppc") {
+                options.rtklibexplorer_imu_format = false;
+            } else if (format == "rtklibexplorer-sf") {
+                options.rtklibexplorer_imu_format = true;
+            } else {
+                argumentError("--imu-format must be ppc or rtklibexplorer-sf",
+                              argv[0]);
+            }
+        } else if (arg == "--imu-misalignment-rpy-deg") {
+            options.imu_raw_to_body_flu = rtklibExplorerRawToBodyFlu(
+                parseVector3(requireValue(arg, i, argc, argv), arg));
+            options.imu_mount_rotation_enabled = true;
         } else if (arg == "--out") {
             options.out_path = requireValue(arg, i, argc, argv);
         } else if (arg == "--kml") {
@@ -658,6 +762,21 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             options.rtk_ins_prior_max_nis = 0.0;
         } else if (arg == "--tc-ins-time-update") {
             options.tc_ins_time_update = true;
+        } else if (arg == "--navi776-tc") {
+            // Validated navi.776 short-baseline combo (docs/navi776_techniques.md,
+            // combined-configuration table): M3 closed loop + M4 velocity
+            // states + SD Doppler rows (sigma 0.5, gated 1000 m) + gated
+            // innovation-adaptive measurement noise. Positional: flags given
+            // AFTER this one override its settings.
+            options.tc_closed_loop = true;
+            options.tc_velocity_states = true;
+            options.tc_doppler_rows = true;
+            options.tc_reuse_update_factorization = true;
+            options.tc_sequential_doppler_update = true;
+            options.tc_doppler_sigma_mps = 0.5;
+            options.tc_doppler_max_baseline_m = 1000.0;
+            options.rtk_adaptive_noise = true;
+            options.rtk_adaptive_noise_max_baseline_m = 1000.0;
         } else if (arg == "--tc-closed-loop") {
             options.tc_closed_loop = true;
         } else if (arg == "--tc-trusted-reanchor") {
@@ -667,6 +786,21 @@ FuseOptions parseArguments(int argc, char* argv[]) {
                 std::stoi(requireValue(arg, i, argc, argv));
         } else if (arg == "--tc-velocity-states") {
             options.tc_velocity_states = true;
+        } else if (arg == "--tc-doppler-rows") {
+            options.tc_doppler_rows = true;
+        } else if (arg == "--tc-reuse-update-factorization") {
+            options.tc_reuse_update_factorization = true;
+        } else if (arg == "--tc-sequential-doppler-update") {
+            options.tc_sequential_doppler_update = true;
+        } else if (arg == "--tc-doppler-sigma") {
+            options.tc_doppler_sigma_mps = std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--tc-doppler-max-baseline") {
+            options.tc_doppler_max_baseline_m = std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--imu-time-offset") {
+            options.imu_time_offset_s = std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--imu-time-offset-score-start-epoch") {
+            options.imu_time_offset_score_start_epoch =
+                std::stoi(requireValue(arg, i, argc, argv));
         } else if (arg == "--tc-tdcp-diagnostics") {
             options.tc_tdcp_diagnostics = true;
         } else if (arg == "--tc-ins-position-q-floor") {
@@ -701,6 +835,18 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             options.rtk_snr_max_variance_scale = std::stod(requireValue(arg, i, argc, argv));
         } else if (arg == "--max-subset-ar-drop-steps") {
             options.max_subset_ar_drop_steps = std::stoi(requireValue(arg, i, argc, argv));
+        } else if (arg == "--rtk-adaptive-noise") {
+            options.rtk_adaptive_noise = true;
+        } else if (arg == "--rtk-adaptive-noise-alpha-phase") {
+            options.rtk_adaptive_noise_alpha_phase = std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--rtk-adaptive-noise-alpha-code") {
+            options.rtk_adaptive_noise_alpha_code = std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--rtk-adaptive-noise-min-scale") {
+            options.rtk_adaptive_noise_min_scale = std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--rtk-adaptive-noise-max-scale") {
+            options.rtk_adaptive_noise_max_scale = std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--rtk-adaptive-noise-max-baseline") {
+            options.rtk_adaptive_noise_max_baseline_m = std::stod(requireValue(arg, i, argc, argv));
         } else if (arg == "--rtk-pos-out") {
             options.rtk_pos_out = requireValue(arg, i, argc, argv);
         } else if (arg == "--cmc-ref") {
@@ -723,25 +869,44 @@ FuseOptions parseArguments(int argc, char* argv[]) {
     applyImuGradePreset(imu_grade, options.fusion_config.process_noise);
 
     if (!options.data_dir.empty()) {
-        if (options.rover_path.empty()) options.rover_path = options.data_dir + "/rover.obs";
-        if (options.base_path.empty()) options.base_path = options.data_dir + "/base.obs";
-        if (options.nav_path.empty()) options.nav_path = options.data_dir + "/base.nav";
+        if (options.gnss_pos_path.empty()) {
+            if (options.rover_path.empty()) options.rover_path = options.data_dir + "/rover.obs";
+            if (options.base_path.empty()) options.base_path = options.data_dir + "/base.obs";
+            if (options.nav_path.empty()) options.nav_path = options.data_dir + "/base.nav";
+        }
         if (options.imu_path.empty()) options.imu_path = options.data_dir + "/imu.csv";
     }
 
-    if (options.rover_path.empty()) argumentError("--rover is required", argv[0]);
-    if (options.nav_path.empty()) argumentError("--nav is required", argv[0]);
+    if (options.gnss_pos_path.empty() && options.rover_path.empty()) {
+        argumentError("--rover is required unless --gnss-pos is supplied", argv[0]);
+    }
+    if (options.gnss_pos_path.empty() && options.nav_path.empty()) {
+        argumentError("--nav is required unless --gnss-pos is supplied", argv[0]);
+    }
     if (options.imu_path.empty()) argumentError("--imu is required", argv[0]);
+    if (!options.gnss_pos_path.empty() &&
+        (!options.rover_path.empty() || !options.base_path.empty() ||
+         !options.nav_path.empty())) {
+        argumentError("--gnss-pos is mutually exclusive with --rover/--base/--nav",
+                      argv[0]);
+    }
     if (options.tightly_coupled_dd_imu && options.base_path.empty()) {
         argumentError("--tight-dd-imu requires --base", argv[0]);
     }
     if (options.max_epochs < 0) argumentError("--max-epochs must be non-negative", argv[0]);
+    if (options.imu_time_offset_score_start_epoch < 0) {
+        argumentError("--imu-time-offset-score-start-epoch must be non-negative",
+                      argv[0]);
+    }
     if (options.rtk_ins_prior && options.tc_ins_time_update) {
         argumentError("--rtk-ins-prior and --tc-ins-time-update are mutually exclusive", argv[0]);
     }
     if (options.tc_closed_loop && (options.tc_ins_time_update || options.rtk_ins_prior)) {
         argumentError("--tc-closed-loop is mutually exclusive with legacy INS prior/time-update modes",
                       argv[0]);
+    }
+    if (options.tc_doppler_rows && !options.tc_velocity_states) {
+        argumentError("--tc-doppler-rows requires --tc-velocity-states", argv[0]);
     }
     if (options.tc_velocity_states && !options.tc_closed_loop) {
         argumentError("--tc-velocity-states requires --tc-closed-loop", argv[0]);
@@ -842,8 +1007,7 @@ int runSppFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
         while (imu_cursor < imu_series.samples.size() &&
                imu_series.samples[imu_cursor].time <= obs.time) {
             libgnss::ImuSample sample = imu_series.samples[imu_cursor];
-            sample.accel_raw = axis_convention.apply(sample.accel_raw);
-            sample.gyro_raw_radps = axis_convention.apply(sample.gyro_raw_radps);
+            transformImuSample(sample, options, axis_convention);
             fusion_processor.processImuSample(sample);
             ++imu_cursor;
         }
@@ -889,6 +1053,109 @@ int runSppFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
         if (options.write_kml) {
             std::cout << "KML: " << options.kml_path << "\n";
         }
+    }
+    return 0;
+}
+
+// Precomputed-solution path (--gnss-pos): drives the same Stage-1 ESKF from
+// a LibGNSS++ or RTKLIB .pos stream. This is useful when raw observations or
+// base data are unavailable but an external GNSS position+velocity solution
+// and raw IMU are available (for example rtklibexplorer/GNSS_IMU).
+int runPositionSolutionFusion(
+    const FuseOptions& options, libgnss::ImuSeries& imu_series,
+    const libgnss::ImuAxisConvention& axis_convention) {
+    libgnss::Solution gnss_solution;
+    if (!gnss_solution.loadFromFile(options.gnss_pos_path)) {
+        std::cerr << "Error: failed to load GNSS solution file: "
+                  << options.gnss_pos_path << "\n";
+        return 1;
+    }
+    gnss_solution.sortByTime();
+
+    libgnss::LooseCouplingProcessor fusion_processor(options.fusion_config);
+    libgnss::Solution fused_solution;
+    AttitudeCsvWriter attitude_writer;
+    if (!attitude_writer.open(options.attitude_csv_path)) {
+        std::cerr << "Error: failed to open attitude CSV: "
+                  << options.attitude_csv_path << "\n";
+        return 1;
+    }
+
+    size_t imu_cursor = 0;
+    int processed_epochs = 0;
+    int valid_solutions = 0;
+    int correction_epochs = 0;
+    double correction_sum_squares = 0.0;
+
+    for (const auto& solution : gnss_solution.solutions) {
+        if (options.max_epochs > 0 && processed_epochs >= options.max_epochs) {
+            break;
+        }
+        while (imu_cursor < imu_series.samples.size() &&
+               imu_series.samples[imu_cursor].time <= solution.time) {
+            libgnss::ImuSample sample = imu_series.samples[imu_cursor];
+            transformImuSample(sample, options, axis_convention);
+            fusion_processor.processImuSample(sample);
+            ++imu_cursor;
+        }
+
+        const bool can_measure_correction =
+            solution.isValid() && fusion_processor.isInitialized() &&
+            fusion_processor.isOriginSet() &&
+            processed_epochs >= options.imu_time_offset_score_start_epoch;
+        if (solution.isValid()) {
+            fusion_processor.processGnssSolution(solution);
+            ++valid_solutions;
+        }
+        if (can_measure_correction &&
+            fusion_processor.lastGnssPositionUpdateApplied()) {
+            const double correction_sq =
+                fusion_processor.lastGnssPositionCorrectionEnu().squaredNorm();
+            if (std::isfinite(correction_sq)) {
+                correction_sum_squares += correction_sq;
+                ++correction_epochs;
+            }
+        }
+
+        if (fusion_processor.isOriginSet()) {
+            fused_solution.addSolution(fusion_processor.toPositionSolution());
+            attitude_writer.write(
+                fusion_processor.state().nominal.time,
+                fusion_processor.state().nominal.attitude_body_to_enu);
+        }
+        ++processed_epochs;
+    }
+
+    if (!fused_solution.writeToFile(options.out_path)) {
+        std::cerr << "Error: failed to write fused solution file: "
+                  << options.out_path << "\n";
+        return 1;
+    }
+    if (options.write_kml && !fused_solution.writeKML(options.kml_path)) {
+        std::cerr << "Error: failed to write KML file: " << options.kml_path
+                  << "\n";
+        return 1;
+    }
+
+    const double score =
+        correction_epochs > 0
+            ? correction_sum_squares / static_cast<double>(correction_epochs)
+            : std::numeric_limits<double>::quiet_NaN();
+    std::cout << "imu_time_offset_score:"
+              << " offset_s=" << options.imu_time_offset_s
+              << " J_mean_sq_correction_m2=" << score
+              << " correction_epochs=" << correction_epochs
+              << " applied_updates=" << correction_epochs << "\n";
+
+    if (!options.quiet) {
+        std::cout << "GNSS half: precomputed position solution\n"
+                  << "IMU samples loaded: " << imu_series.samples.size() << "\n"
+                  << "GNSS epochs processed: " << processed_epochs << "\n"
+                  << "Valid GNSS solutions: " << valid_solutions << "\n"
+                  << "Fused epochs written: " << fused_solution.size() << "\n"
+                  << "Fusion initialized: "
+                  << (fusion_processor.isInitialized() ? "yes" : "no") << "\n"
+                  << "Output: " << options.out_path << "\n";
     }
     return 0;
 }
@@ -954,6 +1221,13 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
     rtk_config.use_external_position_time_update =
         options.tc_ins_time_update || options.tc_closed_loop;
     rtk_config.enable_velocity_states = options.tc_velocity_states;
+    rtk_config.enable_doppler_measurement_rows = options.tc_doppler_rows;
+    rtk_config.reuse_kalman_factorization_for_nis =
+        options.tc_reuse_update_factorization;
+    rtk_config.sequential_doppler_update =
+        options.tc_sequential_doppler_update;
+    rtk_config.doppler_row_sigma_mps = options.tc_doppler_sigma_mps;
+    rtk_config.doppler_row_max_baseline_m = options.tc_doppler_max_baseline_m;
     rtk_config.enable_tdcp_diagnostics = options.tc_tdcp_diagnostics;
     rtk_config.ins_time_update_position_q_floor_m2 = options.tc_ins_position_q_floor_m2;
     rtk_config.enable_cp_pr_fixed_gate = options.tc_cp_pr_gate || options.tc_closed_loop;
@@ -969,6 +1243,12 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
     rtk_config.enable_snr_weighting = options.rtk_snr_weighting;
     rtk_config.snr_reference_dbhz = options.rtk_snr_reference_dbhz;
     rtk_config.snr_max_variance_scale = options.rtk_snr_max_variance_scale;
+    rtk_config.enable_adaptive_measurement_noise = options.rtk_adaptive_noise;
+    rtk_config.adaptive_noise_alpha_phase = options.rtk_adaptive_noise_alpha_phase;
+    rtk_config.adaptive_noise_alpha_code = options.rtk_adaptive_noise_alpha_code;
+    rtk_config.adaptive_noise_min_variance_scale = options.rtk_adaptive_noise_min_scale;
+    rtk_config.adaptive_noise_max_variance_scale = options.rtk_adaptive_noise_max_scale;
+    rtk_config.adaptive_noise_max_baseline_m = options.rtk_adaptive_noise_max_baseline_m;
     if (options.max_subset_ar_drop_steps >= 0) {
         rtk_config.max_subset_drop_steps_for_ar = options.max_subset_ar_drop_steps;
     }
@@ -1194,8 +1474,7 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
         while (imu_cursor < imu_series.samples.size() &&
                imu_series.samples[imu_cursor].time <= rover_obs.time) {
             libgnss::ImuSample sample = imu_series.samples[imu_cursor];
-            sample.accel_raw = axis_convention.apply(sample.accel_raw);
-            sample.gyro_raw_radps = axis_convention.apply(sample.gyro_raw_radps);
+            transformImuSample(sample, options, axis_convention);
             fusion_processor.processImuSample(sample);
             if (options.tc_ins_time_update && tc_preintegrator.initialized()) {
                 const auto status = tc_preintegrator.integrate(sample);
@@ -1670,6 +1949,19 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
         if (!options.rtk_pos_out.empty()) {
             std::cout << "RTK solution stream written: " << options.rtk_pos_out << "\n";
         }
+        {
+            // navi.776 C: J(dt) line for scripts/search_imu_time_offset.py.
+            // correction_epochs counts only INS-time-update epochs; the
+            // script must reject candidates whose applied-update coverage is
+            // too low for J to be meaningful.
+            const auto correction_stats = rtk_processor.getPositionCorrectionStats();
+            const auto tc_diag = rtk_processor.getInsTimeUpdateDiagnostics();
+            std::cout << "imu_time_offset_score:"
+                      << " offset_s=" << options.imu_time_offset_s
+                      << " J_mean_sq_correction_m2=" << correction_stats.mean_square_m2
+                      << " correction_epochs=" << correction_stats.count
+                      << " applied_updates=" << tc_diag.applied_count << "\n";
+        }
         if (options.cmc_aware_reference_selection) {
             const auto cmc_ref_diag = rtk_processor.getCmcReferenceDiagnostics();
             std::cout << "CMC-aware reference selection: enabled"
@@ -1732,18 +2024,34 @@ int main(int argc, char* argv[]) {
         // Load IMU samples up front (this is the whole file: for the
         // PPC-Dataset's tokyo/run1, ~239k samples / ~2.4 MB in memory).
         libgnss::ImuSeries imu_series;
-        const auto imu_result = libgnss::loadImuCsv(options.imu_path, imu_series);
+        const auto imu_result =
+            options.rtklibexplorer_imu_format
+                ? libgnss::loadRtklibExplorerImuCsv(options.imu_path, imu_series)
+                : libgnss::loadImuCsv(options.imu_path, imu_series);
         if (!imu_result.ok) {
             std::cerr << "Error: failed to load IMU CSV: " << imu_result.error << "\n";
             return 1;
         }
         imu_series.sortByTime();
+        // navi.776 C: constant GNSS-IMU time offset, applied before the
+        // axis remap and monotone cursor ever see a sample. 0.0 (default)
+        // is a guarded exact no-op.
+        if (options.imu_time_offset_s != 0.0) {
+            imu_series.shiftTime(options.imu_time_offset_s);
+            std::cout << "IMU time offset applied: " << options.imu_time_offset_s
+                      << " s\n";
+        }
 
         // Default axis convention is identity (raw sensor axes already FLU),
         // matching the PPC-Dataset default per docs/design.md 1.1.1. A
         // future CLI revision could expose --forward-axis/--up-axis/etc. if
         // a non-PPC, non-FLU dataset needs it.
         const libgnss::ImuAxisConvention axis_convention;
+
+        if (!options.gnss_pos_path.empty()) {
+            return runPositionSolutionFusion(options, imu_series,
+                                             axis_convention);
+        }
 
         libgnss::io::RINEXReader nav_reader;
         if (!nav_reader.open(options.nav_path)) {
