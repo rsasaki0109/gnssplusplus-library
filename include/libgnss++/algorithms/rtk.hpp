@@ -817,6 +817,9 @@ public:
         // update and their prefit residual RMS (m/s domain).
         int float_update_doppler_observation_count = 0;
         double doppler_row_residual_rms_mps = std::numeric_limits<double>::quiet_NaN();
+        // navi.776 C: |post - pre| of the position states across this
+        // epoch's measurement update (m).
+        double position_correction_norm_m = std::numeric_limits<double>::quiet_NaN();
     };
 
     RTKProcessor();
@@ -938,6 +941,27 @@ public:
                 ins_time_update_applied_last_epoch_};
     }
 
+    /// navi.776 C: Kalman position-correction statistics for the offline
+    /// GNSS-IMU time-offset search. Accumulates |post - pre| of the position
+    /// states across the measurement update, but ONLY on epochs whose prior
+    /// came from the INS time update -- on SPP-reseed epochs the correction
+    /// measures SPP error, not time-offset-induced INS prediction error.
+    /// J(dt) = mean_square_m2 is the paper's search objective.
+    struct PositionCorrectionStats {
+        std::size_t count = 0;
+        double mean_square_m2 = 0.0;
+    };
+    PositionCorrectionStats getPositionCorrectionStats() const {
+        PositionCorrectionStats stats;
+        stats.count = position_correction_count_;
+        stats.mean_square_m2 =
+            position_correction_count_ > 0
+                ? position_correction_sum_sq_m2_ /
+                      static_cast<double>(position_correction_count_)
+                : 0.0;
+        return stats;
+    }
+
     /// Return RTK's current FLOAT posterior antenna position/covariance. The
     /// ambiguity-fixed candidate is intentionally not used as the INS anchor.
     bool getFloatPosteriorPosition(Vector3d& position_ecef,
@@ -1010,6 +1034,10 @@ private:
     Matrix3d external_velocity_initial_covariance_ecef_ = Matrix3d::Zero();
     bool has_external_velocity_time_update_ = false;
     std::size_t ins_time_update_applied_count_ = 0;
+    // navi.776 C: position-correction accumulators (see
+    // getPositionCorrectionStats).
+    std::size_t position_correction_count_ = 0;
+    double position_correction_sum_sq_m2_ = 0.0;
     std::size_t ins_time_update_rejected_count_ = 0;
     bool ins_time_update_applied_last_epoch_ = false;
     int consecutive_cp_pr_gate_rejections_ = 0;

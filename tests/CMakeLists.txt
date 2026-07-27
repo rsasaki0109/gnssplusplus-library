@@ -394,6 +394,10 @@ if(GTest_FOUND)
         NAME python_experiment_runner_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_experiment_runner.py
     )
+    add_test(
+        NAME python_search_imu_time_offset_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_search_imu_time_offset.py
+    )
     set_tests_properties(
         python_bindings_tests
         PROPERTIES ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}/python"
@@ -445,6 +449,7 @@ if(GTest_FOUND)
         python_spp_iteration_dump_summary_tests
         python_web_http_ux_tests
         python_experiment_runner_tests
+        python_search_imu_time_offset_tests
     )
     set(GNSSPP_EXTENDED_TESTS
         python_packaging_tests

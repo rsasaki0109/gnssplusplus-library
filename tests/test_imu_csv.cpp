@@ -130,5 +130,49 @@ TEST(ImuSeriesTest, GetSamplesFiltersByInclusiveTimeRange) {
     EXPECT_NEAR(filtered.back().time.tow, 103.0, 1e-9);
 }
 
+TEST(ImuSeriesTest, ShiftTimeShiftsAllSamples) {
+    ImuSeries series;
+    for (int i = 0; i < 3; ++i) {
+        ImuSample sample;
+        sample.time = GNSSTime(2000, 100.0 + i);
+        series.samples.push_back(sample);
+    }
+    series.shiftTime(0.25);
+    EXPECT_NEAR(series.samples[0].time.tow, 100.25, 1e-12);
+    EXPECT_NEAR(series.samples[2].time.tow, 102.25, 1e-12);
+    series.shiftTime(-0.5);
+    EXPECT_NEAR(series.samples[0].time.tow, 99.75, 1e-12);
+    EXPECT_EQ(series.samples[0].time.week, 2000);
+}
+
+TEST(ImuSeriesTest, ShiftTimeHandlesWeekRollover) {
+    ImuSeries series;
+    ImuSample near_end;
+    near_end.time = GNSSTime(2000, 604799.9);
+    ImuSample near_start;
+    near_start.time = GNSSTime(2000, 0.05);
+    series.samples.push_back(near_end);
+    series.samples.push_back(near_start);
+
+    series.shiftTime(0.2);  // pushes near_end across the rollover
+    EXPECT_EQ(series.samples[0].time.week, 2001);
+    EXPECT_NEAR(series.samples[0].time.tow, 0.1, 1e-6);
+
+    series.shiftTime(-0.3);  // pulls near_start (now 0.25) back across
+    EXPECT_EQ(series.samples[0].time.week, 2000);
+    EXPECT_NEAR(series.samples[0].time.tow, 604799.8, 1e-6);
+    EXPECT_EQ(series.samples[1].time.week, 1999);
+}
+
+TEST(ImuSeriesTest, ShiftTimeZeroIsIdentity) {
+    ImuSeries series;
+    ImuSample sample;
+    sample.time = GNSSTime(2000, 123.456);
+    series.samples.push_back(sample);
+    series.shiftTime(0.0);
+    EXPECT_EQ(series.samples[0].time.week, 2000);
+    EXPECT_DOUBLE_EQ(series.samples[0].time.tow, 123.456);
+}
+
 }  // namespace
 }  // namespace libgnss

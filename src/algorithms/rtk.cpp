@@ -368,6 +368,8 @@ void RTKProcessor::reset() {
     ins_time_update_applied_count_ = 0;
     ins_time_update_rejected_count_ = 0;
     ins_time_update_applied_last_epoch_ = false;
+    position_correction_count_ = 0;
+    position_correction_sum_sq_m2_ = 0.0;
     consecutive_cp_pr_gate_rejections_ = 0;
     has_last_ddpr_anchor_ = false;
     consecutive_fix_count_ = 0;
@@ -3000,6 +3002,10 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
             force_active[VELOCITY_STATE_INDEX + i] = true;
         }
     }
+    // navi.776 C: position before the measurement update, for the Kalman
+    // position-correction statistic driving the offline time-offset search.
+    const Vector3d position_before_update = filter_state_.state.head<3>();
+
     const auto update_result = rtk_update::applyMeasurementUpdate(filter_state_.state,
                                                                   filter_state_.covariance,
                                                                   measurement_system,
@@ -3010,6 +3016,16 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
                                                                   rtk_config_.max_update_nis_per_observation,
                                                                   force_active,
                                                                   rtk_config_.enable_adaptive_measurement_noise);
+
+    if (update_result.ok) {
+        const double correction_norm_m =
+            (filter_state_.state.head<3>() - position_before_update).norm();
+        debug_telemetry_.position_correction_norm_m = correction_norm_m;
+        if (ins_time_update_applied_last_epoch_) {
+            ++position_correction_count_;
+            position_correction_sum_sq_m2_ += correction_norm_m * correction_norm_m;
+        }
+    }
 
     // navi.776 A2: feed this epoch's innovations back into the adaptive
     // noise tracker (consumed by the NEXT epoch's buildMeasurementBlocks —

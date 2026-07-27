@@ -43,6 +43,14 @@ public:
 
     /** @brief Sort samples by time (stable, ascending). */
     void sortByTime();
+
+    /**
+     * @brief Shift every sample time by offset_s (navi.776 C: constant
+     * GNSS-IMU time-offset application). Positive = IMU timestamps move
+     * later. GPS week rollover is normalized via GNSSTime's own +/-
+     * operators. Zero is an exact no-op.
+     */
+    void shiftTime(double offset_s);
 };
 
 /**

@@ -150,6 +150,9 @@ struct FuseOptions {
     // observable. Requires --tc-velocity-states.
     bool tc_doppler_rows = false;
     double tc_doppler_sigma_mps = 0.2;
+    // navi.776 C: constant GNSS-IMU time offset (s), applied to all IMU
+    // timestamps right after load. Positive = IMU later.
+    double imu_time_offset_s = 0.0;
     bool tc_tdcp_diagnostics = false;
     double tc_ins_position_q_floor_m2 = 25.0;
     double tc_ins_max_sample_gap_s = 0.1;
@@ -398,6 +401,9 @@ void printUsage(const char* program_name) {
         << "                                observation rows (velocity observability). Requires\n"
         << "                                --tc-velocity-states. Default: off.\n"
         << "  --tc-doppler-sigma <mps>     SD Doppler row sigma in m/s (default: 0.2)\n"
+        << "  --imu-time-offset <s>        navi.776: constant GNSS-IMU time offset applied to\n"
+        << "                                all IMU timestamps at load (positive = IMU later).\n"
+        << "                                Default: 0.0 (exact no-op).\n"
         << "  --tc-velocity-states         M4 ECEF velocity states appended after legacy RTK state.\n"
         << "                                Requires --tc-closed-loop. Default: off.\n"
         << "  --tc-tdcp-diagnostics        M5 measurement-neutral SD-TDCP vs Doppler diagnostics.\n"
@@ -687,6 +693,8 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             options.tc_doppler_rows = true;
         } else if (arg == "--tc-doppler-sigma") {
             options.tc_doppler_sigma_mps = std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--imu-time-offset") {
+            options.imu_time_offset_s = std::stod(requireValue(arg, i, argc, argv));
         } else if (arg == "--tc-tdcp-diagnostics") {
             options.tc_tdcp_diagnostics = true;
         } else if (arg == "--tc-ins-position-q-floor") {
@@ -1710,6 +1718,19 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
         if (!options.rtk_pos_out.empty()) {
             std::cout << "RTK solution stream written: " << options.rtk_pos_out << "\n";
         }
+        {
+            // navi.776 C: J(dt) line for scripts/search_imu_time_offset.py.
+            // correction_epochs counts only INS-time-update epochs; the
+            // script must reject candidates whose applied-update coverage is
+            // too low for J to be meaningful.
+            const auto correction_stats = rtk_processor.getPositionCorrectionStats();
+            const auto tc_diag = rtk_processor.getInsTimeUpdateDiagnostics();
+            std::cout << "imu_time_offset_score:"
+                      << " offset_s=" << options.imu_time_offset_s
+                      << " J_mean_sq_correction_m2=" << correction_stats.mean_square_m2
+                      << " correction_epochs=" << correction_stats.count
+                      << " applied_updates=" << tc_diag.applied_count << "\n";
+        }
         if (options.cmc_aware_reference_selection) {
             const auto cmc_ref_diag = rtk_processor.getCmcReferenceDiagnostics();
             std::cout << "CMC-aware reference selection: enabled"
@@ -1778,6 +1799,14 @@ int main(int argc, char* argv[]) {
             return 1;
         }
         imu_series.sortByTime();
+        // navi.776 C: constant GNSS-IMU time offset, applied before the
+        // axis remap and monotone cursor ever see a sample. 0.0 (default)
+        // is a guarded exact no-op.
+        if (options.imu_time_offset_s != 0.0) {
+            imu_series.shiftTime(options.imu_time_offset_s);
+            std::cout << "IMU time offset applied: " << options.imu_time_offset_s
+                      << " s\n";
+        }
 
         // Default axis convention is identity (raw sensor axes already FLU),
         // matching the PPC-Dataset default per docs/design.md 1.1.1. A

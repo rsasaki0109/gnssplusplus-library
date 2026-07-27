@@ -98,6 +98,21 @@ void ImuSeries::sortByTime() {
                      [](const ImuSample& a, const ImuSample& b) { return a.time < b.time; });
 }
 
+void ImuSeries::shiftTime(double offset_s) {
+    if (offset_s == 0.0) {
+        return;
+    }
+    for (auto& sample : samples) {
+        // GNSSTime::operator+ only normalizes tow overflow and operator-
+        // only underflow, so route by sign.
+        if (offset_s > 0.0) {
+            sample.time = sample.time + offset_s;
+        } else {
+            sample.time = sample.time - (-offset_s);
+        }
+    }
+}
+
 ImuCsvLoadResult loadImuCsv(const std::string& path, ImuSeries& out) {
     ImuCsvLoadResult result;
     out.samples.clear();
