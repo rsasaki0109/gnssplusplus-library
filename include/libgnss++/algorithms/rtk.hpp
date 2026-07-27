@@ -140,6 +140,15 @@ public:
         /// the velocity covariance. Never participates in AR, slip, or
         /// lock counting. Off by default; bit-identical when off.
         bool enable_doppler_measurement_rows = false;
+        /// Reuse the Kalman update's LU factorization for diagnostic NIS and
+        /// HPH row statistics. This preserves the state-update operation
+        /// order while avoiding a separate innovation LDLT. It is used only
+        /// when both update/fixed NIS gates are disabled.
+        bool reuse_kalman_factorization_for_nis = false;
+        /// Apply phase/code and Doppler blocks as two sequential Kalman
+        /// updates. Their measurement covariance is block diagonal; this
+        /// reduces the cubic measurement-space solve cost.
+        bool sequential_doppler_update = false;
         double doppler_row_sigma_mps = 0.2;  // FGO SD-Doppler sigma parity
         double doppler_row_outlier_threshold_mps = 1.0;
         /// Baseline-length gate mirroring adaptive_noise_max_baseline_m:

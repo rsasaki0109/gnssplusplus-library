@@ -42,7 +42,9 @@ using Eigen::MatrixXd;
 inline int kalmanFilter(VectorXd& x, MatrixXd& P,
                         const MatrixXd& H, const VectorXd& v,
                         const MatrixXd& R,
-                        const std::vector<bool>& force_active = {}) {
+                        const std::vector<bool>& force_active = {},
+                        VectorXd* weighted_innovation = nullptr,
+                        VectorXd* hph_diagonal = nullptr) {
     const int n = static_cast<int>(x.size());
     const int m = static_cast<int>(v.size());
 
@@ -81,6 +83,9 @@ inline int kalmanFilter(VectorXd& x, MatrixXd& P,
 
     // Q = H_ * P_ * H_' + R = H_ * F + R  (m x m)
     MatrixXd Q = H_ * F + R;
+    if (hph_diagonal != nullptr) {
+        *hph_diagonal = Q.diagonal() - R.diagonal();
+    }
 
     // K = F * Q^{-1}  =>  Q' * K' = F'  =>  K' = Q^{-T} * F'
     // Since Q is symmetric: K' = Q^{-1} * F', so K = (Q^{-1} * F')'
@@ -88,6 +93,10 @@ inline int kalmanFilter(VectorXd& x, MatrixXd& P,
     Eigen::PartialPivLU<MatrixXd> lu(Q);
     MatrixXd Kt = lu.solve(F.transpose());  // (m x k)
     if (!Kt.allFinite()) return -1;
+    if (weighted_innovation != nullptr) {
+        *weighted_innovation = lu.solve(v);
+        if (!weighted_innovation->allFinite()) return -1;
+    }
     MatrixXd K = Kt.transpose();  // (k x m)
 
     // State update: xp = x_ + K * v

@@ -37,7 +37,8 @@ FilterUpdateResult applyMeasurementUpdate(Eigen::VectorXd& state,
                                           int min_observation_count,
                                           double max_normalized_innovation_squared_per_observation = 0.0,
                                           const std::vector<bool>& force_active = {},
-                                          bool compute_row_stats = false);
+                                          bool compute_row_stats = false,
+                                          bool reuse_kalman_factorization_for_nis = false);
 
 }  // namespace rtk_update
 }  // namespace libgnss

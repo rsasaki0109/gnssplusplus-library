@@ -154,5 +154,107 @@ TEST(RTKUpdateTest, RejectsWrongSizedForceActiveMaskWithoutMutation) {
     EXPECT_TRUE(covariance.isApprox(covariance_before, 0.0));
 }
 
+TEST(RTKUpdateTest, ReusedKalmanFactorizationPreservesUpdateAndRowStats) {
+    Eigen::VectorXd legacy_state(3);
+    legacy_state << 0.4, -0.2, 0.0;
+    Eigen::MatrixXd legacy_covariance(3, 3);
+    legacy_covariance <<
+        2.0, 0.2, 0.0,
+        0.2, 1.5, 0.0,
+        0.0, 0.0, 1.0;
+    rtk_measurement::MeasurementSystem legacy_system;
+    legacy_system.design_matrix.resize(4, 3);
+    legacy_system.design_matrix <<
+        1.0, 0.2,  0.5,
+       -0.3, 1.0, -0.2,
+        0.7, 0.4,  0.1,
+       -0.2, 0.8,  0.6;
+    legacy_system.residuals.resize(4);
+    legacy_system.residuals << 0.3, -0.1, 0.2, 0.05;
+    legacy_system.covariance =
+        0.5 * Eigen::MatrixXd::Identity(4, 4);
+    legacy_system.covariance(0, 1) = legacy_system.covariance(1, 0) = 0.04;
+    const std::vector<bool> force_active{false, false, true};
+
+    auto reused_state = legacy_state;
+    auto reused_covariance = legacy_covariance;
+    auto reused_system = legacy_system;
+    const auto legacy = rtk_update::applyMeasurementUpdate(
+        legacy_state, legacy_covariance, legacy_system, 30.0, 4, 0.0,
+        force_active, /*compute_row_stats=*/true);
+    const auto reused = rtk_update::applyMeasurementUpdate(
+        reused_state, reused_covariance, reused_system, 30.0, 4, 0.0,
+        force_active, /*compute_row_stats=*/true,
+        /*reuse_kalman_factorization_for_nis=*/true);
+
+    ASSERT_TRUE(legacy.ok);
+    ASSERT_TRUE(reused.ok);
+    EXPECT_TRUE(reused_state.isApprox(legacy_state, 0.0));
+    EXPECT_TRUE(reused_covariance.isApprox(legacy_covariance, 0.0));
+    EXPECT_TRUE(reused.row_innovations.isApprox(legacy.row_innovations, 0.0));
+    EXPECT_TRUE(reused.row_hph_diagonal.isApprox(legacy.row_hph_diagonal, 0.0));
+    EXPECT_NEAR(reused.normalized_innovation_squared,
+                legacy.normalized_innovation_squared, 1e-12);
+}
+
+TEST(RTKUpdateTest, SequentialIndependentBlocksMatchJointUpdate) {
+    Eigen::VectorXd joint_state(4);
+    joint_state << 0.5, -0.3, 0.2, 0.1;
+    Eigen::MatrixXd joint_covariance(4, 4);
+    joint_covariance <<
+        2.0, 0.2, 0.1, 0.0,
+        0.2, 1.8, 0.0, 0.1,
+        0.1, 0.0, 1.5, 0.2,
+        0.0, 0.1, 0.2, 1.2;
+    rtk_measurement::MeasurementSystem first;
+    first.design_matrix.resize(4, 4);
+    first.design_matrix <<
+        1.0,  0.2, 0.0, -0.1,
+       -0.3,  1.0, 0.2,  0.0,
+        0.4, -0.2, 1.0,  0.1,
+        0.1,  0.3, 0.0,  1.0;
+    first.residuals.resize(4);
+    first.residuals << 0.2, -0.1, 0.3, 0.05;
+    first.covariance = 0.4 * Eigen::MatrixXd::Identity(4, 4);
+    first.covariance(0, 1) = first.covariance(1, 0) = 0.03;
+
+    rtk_measurement::MeasurementSystem second;
+    second.design_matrix.resize(3, 4);
+    second.design_matrix <<
+        0.0, 0.0,  1.0,  0.3,
+        0.0, 0.0, -0.2,  1.0,
+        0.0, 0.0,  0.7, -0.4;
+    second.residuals.resize(3);
+    second.residuals << 0.12, -0.08, 0.04;
+    second.covariance = 0.25 * Eigen::MatrixXd::Identity(3, 3);
+    second.covariance(0, 2) = second.covariance(2, 0) = 0.02;
+
+    rtk_measurement::MeasurementSystem joint;
+    joint.design_matrix.resize(7, 4);
+    joint.design_matrix.topRows(4) = first.design_matrix;
+    joint.design_matrix.bottomRows(3) = second.design_matrix;
+    joint.residuals.resize(7);
+    joint.residuals.head(4) = first.residuals;
+    joint.residuals.tail(3) = second.residuals;
+    joint.covariance = Eigen::MatrixXd::Zero(7, 7);
+    joint.covariance.topLeftCorner(4, 4) = first.covariance;
+    joint.covariance.bottomRightCorner(3, 3) = second.covariance;
+
+    auto sequential_state = joint_state;
+    auto sequential_covariance = joint_covariance;
+    const Eigen::VectorXd prior_state = sequential_state;
+    ASSERT_TRUE(rtk_update::applyMeasurementUpdate(
+        joint_state, joint_covariance, joint, 30.0, 7).ok);
+    ASSERT_TRUE(rtk_update::applyMeasurementUpdate(
+        sequential_state, sequential_covariance, first, 30.0, 4).ok);
+    second.residuals -=
+        second.design_matrix * (sequential_state - prior_state);
+    ASSERT_TRUE(rtk_update::applyMeasurementUpdate(
+        sequential_state, sequential_covariance, second, 30.0, 3).ok);
+
+    EXPECT_TRUE(sequential_state.isApprox(joint_state, 1e-12));
+    EXPECT_TRUE(sequential_covariance.isApprox(joint_covariance, 1e-12));
+}
+
 }  // namespace
 }  // namespace libgnss

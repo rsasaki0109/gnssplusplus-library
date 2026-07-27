@@ -219,94 +219,108 @@ python scripts/search_imu_time_offset.py \
   --out-dir output/navi776_eskf_offset_drive_w1
 ```
 
-## Combined configuration (A3 gate + B sigma 0.5 on the M4 closed loop)
+## Final combined configuration and five-run sign-off
 
-`--tc-closed-loop --tc-velocity-states --tc-doppler-rows
---tc-doppler-sigma 0.5 --rtk-adaptive-noise
---rtk-adaptive-noise-max-baseline 1000`, same binary, full runs, scored
-on the `--rtk-pos-out` stream (OFF arms rerun; they reproduced the gate B
-OFF numbers exactly):
+The public opt-in is `gnss_fuse --navi776-tc`. It enables the M4 closed
+loop, velocity states, Doppler rows at sigma 0.5, and adaptive noise; both
+Doppler and adaptive-noise paths are gated at a 1000 m baseline. It also
+enables two measured-update optimizations:
 
-| run | variant | fix% | 50cm-matched% | official% | p95_h m |
-|---|---|---|---|---|---|
-| tokyo1 | OFF (M4) | 77.36 | 75.75 | 70.07 | 7.53 |
-| tokyo1 | combined | **79.19** | **76.00** | **72.24** | **7.38** |
-| tokyo2 | OFF (M4) | 77.58 | 82.39 | 84.03 | 2.95 |
-| tokyo2 | combined | **85.09** | **84.85** | **84.57** | 3.18 |
-| tokyo3 | OFF | 78.52 | 79.23 | 74.69 | 4.69 |
-| tokyo3 | combined | 78.69 | 77.07 | 72.68 | 7.68 |
-| nagoya1 | OFF / combined (md5 equal) | 78.27 | 74.39 | 55.46 | 9.66 |
-| nagoya2 | OFF / combined (md5 equal) | 54.18 | 53.85 | 39.59 | 27.81 |
+- the Kalman update returns the already-solved weighted innovation and
+  `diag(H P H^T)`, avoiding a second innovation-matrix factorization while
+  preserving the adaptive tracker's row statistics;
+- carrier/code rows and Doppler rows are applied as two sequential,
+  mathematically equivalent measurement blocks. This reduces the cubic
+  solve size without discarding Doppler information.
 
-tokyo1 is a clean all-metric win (fix +1.83 pp, official +2.16 pp, p95_h
-improved) — the best tokyo1 tight-coupling result recorded in this repo.
-Tokyo2 is a strong fix/threshold win (fix +7.50 pp, 50cm +2.46 pp,
-official +0.55 pp), but p95_h regresses by 0.24 m (8.0%). Its parallel
-A/B wall time was 702.3 s OFF vs 833.9 s ON (+18.8%), also failing the
-pre-registered <=+5% wall bar; nagoya2, where the gates disarm, was
-414.6 s vs 417.0 s (+0.58%). Tokyo3 fails (accuracy/p95 regress, dominated by the Doppler-row
-component, which was already negative on tokyo3 accuracy in gate B).
+The individual optimization flags are
+`--tc-reuse-update-factorization` and
+`--tc-sequential-doppler-update`. Both default off outside the preset.
+The reuse path automatically stays off when the immediate NIS gate needs
+its legacy pre-update calculation.
 
-Across all three short-baseline Tokyo runs, fix rate improves every time
-(+1.83/+7.50/+0.17 pp), while 50cm and official improve on run1/run2 but
-regress on run3, and p95 improves only on run1. Across both 9.4 km Nagoya
-runs, the scored RTK stream is bit-identical. Verdict: the result is not a
-tokyo1-only accident and is a promising short-baseline fix-rate booster,
-but it remains a run-dependent opt-in rather than a blanket preset because
-tail accuracy and active-path runtime are not consistently safe. The
-adaptive-noise gate composes cleanly with Doppler rows (the DOPPLER-kind
-adaptation path exercised here for the first time, no instability observed).
+The table below is the authoritative sign-off. Every OFF/ON pair is a
+serial full run of the same final binary and is scored on its raw
+`--rtk-pos-out` stream:
 
-The whole combo is exposed as one flag: `gnss_fuse --navi776-tc`
-(closed loop + velocity states + Doppler rows sigma 0.5 gated 1000 m +
-adaptive noise gated 1000 m; flags given after it override). The Doppler
-rows carry their own baseline gate (`--tc-doppler-max-baseline`,
-`RTKConfig::doppler_row_max_baseline_m`), so on nagoya run1 (9.4 km)
-both components disarm and the `--navi776-tc` RTK stream is
-**bit-identical to the M4 OFF baseline (md5-equal .pos)** — the combo is
-provably harmless on long baselines and needs no per-run opt-out. Nagoya
-run2 independently reproduces this result (both RTK files MD5
-`30d61358688fd1a34f5f71b14c3e2803`; every score identical).
+| run | variant | fix% | 50cm-matched% | official% | p95_h m | wall s |
+|---|---|---:|---:|---:|---:|---:|
+| tokyo1 | OFF | 77.36 | 75.75 | 70.07 | 7.53 | 375.0 |
+| tokyo1 | `--navi776-tc` | **79.77** | **77.75** | **76.28** | **7.50** | 408.3 |
+| tokyo2 | OFF | 77.58 | 82.39 | 84.03 | **2.95** | 403.5 |
+| tokyo2 | `--navi776-tc` | **85.09** | **84.85** | **84.57** | 3.18 | 490.0 |
+| tokyo3 | OFF | 78.52 | **79.23** | 74.69 | 4.69 | 896.4 |
+| tokyo3 | `--navi776-tc` | **80.31** | 78.04 | **75.71** | **4.61** | 921.3 |
+| nagoya1 | OFF | 78.27 | 74.39 | 55.46 | 9.66 | 260.5 |
+| nagoya1 | `--navi776-tc` | 78.27 | 74.39 | 55.46 | 9.66 | 259.2 |
+| nagoya2 | OFF | 54.18 | 53.85 | 39.59 | 27.81 | 364.5 |
+| nagoya2 | `--navi776-tc` | 54.18 | 53.85 | 39.59 | 27.81 | 362.4 |
 
-### Tokyo2 tail/runtime investigation
+The final preset improves fix rate on every short-baseline run by
++2.41/+7.50/+1.79 pp and improves official score on all three by
++6.21/+0.55/+1.02 pp. Raw p95 improves on tokyo1 and tokyo3. Tokyo2 still
+regresses by 0.237 m, and tokyo3's 50 cm score regresses by 1.19 pp; these
+remaining trade-offs are why the preset remains opt-in.
 
-The Tokyo2 regression was decomposed with full-run ablations using the
-same M4 baseline:
+Wall overhead is +8.9%, +21.4%, and +2.8% on tokyo1/2/3. The optimized
+tokyo2 ON run is about 41% faster than the earlier 833.9 s implementation,
+but only tokyo3 meets the pre-registered <=+5% relative-wall bar. The
+optimization is therefore a material absolute improvement, not a claim
+that active-path runtime is universally neutral.
 
-| variant | fix% | 50cm-matched% | official% | p95_h m | wall s |
-|---|---:|---:|---:|---:|---:|
-| OFF | 77.58 | 82.39 | 84.03 | **2.95** | 702.3 |
-| adaptive only | 80.18 | 82.61 | 83.14 | 3.02 | 508.3 |
-| Doppler only (sigma 0.5) | 84.74 | 83.59 | 82.36 | 3.41 | 632.2 |
-| combined (sigma 0.5) | **85.09** | **84.85** | **84.57** | 3.18 | 833.9 |
-| combined, primary-frequency Doppler only | 83.08 | 82.19 | 77.95 | 4.37 | 475.1 |
-| combined, sigma 0.35 | 83.45 | 83.56 | 82.77 | 3.68 | 591.8 |
-| combined, sigma 0.75 | 84.87 | 83.50 | 82.55 | 3.45 | 683.8* |
-| combined, sigma 1.0 | 83.91 | 84.05 | 81.76 | 3.41 | 687.0* |
+The long-baseline guard is stronger than score equality: the OFF and ON
+RTK files are bit-identical. Nagoya1 MD5 is
+`ac8f1f079296a4f10ed3603b4e672f54`; Nagoya2 MD5 is
+`30d61358688fd1a34f5f71b14c3e2803`. The ON wall times are also slightly
+lower, so the disabled path is harmless in both 9.4 km validation runs.
 
-`*` The 0.75 and 1.0 arms ran concurrently, so their wall values are not
-used for absolute runtime comparison. Accuracy remains directly comparable.
+Earlier tokyo1/tokyo3 “combined” numbers in the experiment log were
+generated with explicit component flags before the Doppler baseline gate
+became part of `--navi776-tc`. They remain useful ablations but are not
+current-preset results; the table above supersedes them.
 
-The Doppler rows are the main source of both the fix gain and the tail/cost
-regression. Adaptive noise alone is not a clean score win, but in the
-combined arm it recovers much of the Doppler-only official/50 cm loss and
-reduces p95. Neither removing correlated secondary-frequency Doppler rows
-nor retuning sigma on either side of 0.5 preserved the combined gain; those
-experimental changes were therefore removed.
+### Tokyo2 tail and runtime diagnosis
 
-An epoch/status breakdown localizes the Tokyo2 tail to non-fixed solutions:
-FIX p95 improves from 0.196 m OFF to 0.164 m ON, while FLOAT p95 worsens
-from 5.01 m to 11.79 m. More aggressive existing non-FIX/float bridge-tail
-post-filter thresholds did not change the score. A prototype that reused
-the diagnostic innovation factorization cut one Tokyo2 run from 833.9 s to
-339.9 s, but its changed factorization numerics altered the RTK trajectory.
-A second prototype skipped NIS calculation when its immediate gate was
-disabled and reproduced Tokyo2 RTK output exactly (MD5 equal) in 404.5 s,
-but changed Tokyo1 through downstream NIS consumers. Both optimizations
-were rejected and fully removed. The safe conclusion is therefore:
+Full-run ablations identified the Doppler rows as the main source of both
+fix gain and tail/compute cost. Adaptive noise alone is not a clean score
+win, but in combination it recovers much of the Doppler-only official and
+50 cm loss and lowers p95. Primary-frequency-only Doppler and sigma
+0.35/0.75/1.0 all lost more accuracy, so sigma 0.5 and all accepted
+Doppler rows were retained.
 
-- keep Doppler sigma 0.5 as the best measured accuracy trade-off;
-- do not claim a generally safe p95 or active-path runtime fix;
-- keep `--navi776-tc` opt-in and preserve both 1000 m long-baseline gates;
-- optimize the dense update only with an end-to-end NIS-equivalent method,
-  validated on all Tokyo runs rather than a single-run MD5 check.
+The raw Tokyo2 tail is specifically a non-fixed-solution problem: FIX p95
+improves from 0.196 m OFF to 0.164 m ON, while FLOAT p95 worsens from
+5.01 m to 11.79 m. This rules out fixed-solution degradation as the cause.
+
+The first factorization prototypes either changed downstream NIS consumers
+or changed the RTK trajectory and were rejected. The final implementation
+instead preserves the legacy `H P H^T` evaluation used by adaptive
+statistics, reuses the Kalman LU result only for the weighted innovation,
+and splits independent observation blocks sequentially. Unit tests verify
+the reused row statistics and joint-versus-sequential update equivalence;
+the final five-run table verifies the end-to-end behavior.
+
+For offline tail recovery, the existing reference-free Hermite-horizontal
+fixed-anchor bridge can be applied with the same configuration to OFF and
+ON:
+
+```text
+python scripts/bridge_pos_fixed_anchors.py \
+  --max-anchor-gap-s 30 --anchor-max-post-rms-m 0 \
+  --anchor-max-nis-per-observation 0 --replace-nonfixed \
+  --no-fill-missing --interpolation hermite-horizontal ...
+```
+
+| run | variant after bridge | fix% | 50cm-matched% | official% | p95_h m |
+|---|---|---:|---:|---:|---:|
+| tokyo1 | OFF | 77.36 | 76.83 | 71.67 | 7.91 |
+| tokyo1 | ON | **79.77** | **79.30** | **78.63** | **7.14** |
+| tokyo2 | OFF | 77.58 | 78.80 | 77.53 | 4.56 |
+| tokyo2 | ON | **85.09** | **86.79** | **85.76** | **2.29** |
+| tokyo3 | OFF | 78.52 | **81.58** | **78.82** | **3.66** |
+| tokyo3 | ON | **80.31** | 79.64 | 78.37 | 4.00 |
+
+The bridge resolves the Tokyo2 ON tail and preserves fix statuses, but it
+is not a universal preset: bridged OFF is better on tokyo3 and the bridge
+hurts the tokyo2 OFF p95. Keep it as an explicit offline recovery option,
+not an automatic part of `--navi776-tc`.

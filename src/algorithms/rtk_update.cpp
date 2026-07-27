@@ -39,7 +39,8 @@ InnovationStats computeInnovationStats(const Eigen::VectorXd& state,
                                        const Eigen::VectorXd& residuals,
                                        const Eigen::MatrixXd& measurement_covariance,
                                        const std::vector<bool>& force_active,
-                                       bool export_hph_diagonal) {
+                                       bool export_hph_diagonal,
+                                       bool compute_nis = true) {
     InnovationStats stats;
     const int n = static_cast<int>(state.size());
     const int m = static_cast<int>(residuals.size());
@@ -89,6 +90,10 @@ InnovationStats computeInnovationStats(const Eigen::VectorXd& state,
         stats.hph_diagonal =
             innovation_covariance.diagonal() - measurement_covariance.diagonal();
     }
+    if (!compute_nis) {
+        stats.ok = true;
+        return stats;
+    }
     Eigen::LDLT<Eigen::MatrixXd> ldlt(innovation_covariance);
     if (ldlt.info() != Eigen::Success) {
         return stats;
@@ -114,7 +119,8 @@ FilterUpdateResult applyMeasurementUpdate(Eigen::VectorXd& state,
                                           int min_observation_count,
                                           double max_normalized_innovation_squared_per_observation,
                                           const std::vector<bool>& force_active,
-                                          bool compute_row_stats) {
+                                          bool compute_row_stats,
+                                          bool reuse_kalman_factorization_for_nis) {
     FilterUpdateResult result;
     result.observation_count = static_cast<int>(measurement_system.residuals.size());
     result.prefit_residual_rms_m = residualRms(measurement_system.residuals);
@@ -130,6 +136,52 @@ FilterUpdateResult applyMeasurementUpdate(Eigen::VectorXd& state,
         measurement_system.row_outlier_thresholds);
     result.post_suppression_residual_rms_m = residualRms(measurement_system.residuals);
     result.post_suppression_residual_max_abs_m = residualMaxAbs(measurement_system.residuals);
+
+    const bool can_reuse_kalman_factorization =
+        reuse_kalman_factorization_for_nis &&
+        !(std::isfinite(max_normalized_innovation_squared_per_observation) &&
+          max_normalized_innovation_squared_per_observation > 0.0);
+    if (can_reuse_kalman_factorization) {
+        // Preserve the legacy H*P*H' evaluation order used by adaptive
+        // row statistics, but skip its LDLT. The Kalman update below returns
+        // the weighted innovation from the LU it already requires.
+        const auto row_stats = computeInnovationStats(
+            state,
+            covariance,
+            measurement_system.design_matrix,
+            measurement_system.residuals,
+            measurement_system.covariance,
+            force_active,
+            compute_row_stats,
+            /*compute_nis=*/false);
+        result.innovation_observation_count = row_stats.observation_count;
+        Eigen::VectorXd weighted_innovation;
+        const int info = kalmanFilter(
+            state,
+            covariance,
+            measurement_system.design_matrix,
+            measurement_system.residuals,
+            measurement_system.covariance,
+            force_active,
+            &weighted_innovation,
+            nullptr);
+        result.ok = (info == 0);
+        if (result.ok &&
+            weighted_innovation.size() == measurement_system.residuals.size() &&
+            result.innovation_observation_count > 0) {
+            result.normalized_innovation_squared =
+                measurement_system.residuals.dot(weighted_innovation);
+            result.normalized_innovation_squared_per_observation =
+                result.normalized_innovation_squared /
+                static_cast<double>(result.innovation_observation_count);
+        }
+        if (compute_row_stats && result.ok &&
+            row_stats.hph_diagonal.size() == measurement_system.residuals.size()) {
+            result.row_innovations = measurement_system.residuals;
+            result.row_hph_diagonal = row_stats.hph_diagonal;
+        }
+        return result;
+    }
 
     const auto innovation_stats = computeInnovationStats(state,
                                                          covariance,

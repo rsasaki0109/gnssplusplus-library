@@ -3015,17 +3015,166 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
     const Vector3d position_before_update = filter_state_.state.head<3>();
     // Evaluated on the prior state, before the update moves the baseline.
     const bool adaptive_noise_active = adaptiveNoiseActiveThisEpoch();
+    const bool nis_gates_disabled =
+        !(std::isfinite(rtk_config_.max_update_nis_per_observation) &&
+          rtk_config_.max_update_nis_per_observation > 0.0) &&
+        !(std::isfinite(rtk_config_.max_fixed_update_nis_per_observation) &&
+          rtk_config_.max_fixed_update_nis_per_observation > 0.0);
 
-    const auto update_result = rtk_update::applyMeasurementUpdate(filter_state_.state,
-                                                                  filter_state_.covariance,
-                                                                  measurement_system,
-                                                                  rtk_config_.outlier_threshold > 0.0
-                                                                      ? rtk_config_.outlier_threshold
-                                                                      : 30.0,
-                                                                  6,
-                                                                  rtk_config_.max_update_nis_per_observation,
-                                                                  force_active,
-                                                                  adaptive_noise_active);
+    const double update_outlier_threshold =
+        rtk_config_.outlier_threshold > 0.0
+            ? rtk_config_.outlier_threshold
+            : 30.0;
+    bool adaptive_tracker_updated = false;
+    auto feed_adaptive_tracker =
+        [&](const std::vector<rtk_measurement::MeasurementBlock>& update_blocks,
+            const rtk_measurement::MeasurementSystem& update_system,
+            const rtk_update::FilterUpdateResult& result) {
+            if (!adaptive_noise_active || !result.ok ||
+                result.rejected_by_innovation_gate ||
+                result.row_innovations.size() == 0 ||
+                result.row_hph_diagonal.size() !=
+                    result.row_innovations.size()) {
+                return;
+            }
+            const auto adaptive_config = adaptiveNoiseConfig();
+            const double tow = current_epoch_time_.tow;
+            int row_index = 0;
+            for (const auto& block : update_blocks) {
+                for (const auto& row : block.rows) {
+                    if (row_index >= result.row_innovations.size()) break;
+                    const bool suppressed =
+                        update_system.design_matrix.row(row_index).isZero(0.0);
+                    if (row.adaptive_key >= 0 && !suppressed) {
+                        adaptive_noise_tracker_.update(
+                            row.adaptive_key,
+                            block.kind,
+                            result.row_innovations(row_index),
+                            result.row_hph_diagonal(row_index),
+                            row.reference_variance,
+                            row.adaptive_model_variance,
+                            tow,
+                            adaptive_config);
+                    }
+                    ++row_index;
+                }
+            }
+            adaptive_tracker_updated = true;
+        };
+
+    rtk_update::FilterUpdateResult update_result;
+    const bool use_sequential_doppler_update =
+        rtk_config_.sequential_doppler_update &&
+        measurement_diagnostics.doppler_observation_count >= 3 &&
+        nis_gates_disabled;
+    if (use_sequential_doppler_update) {
+        std::vector<rtk_measurement::MeasurementBlock> position_blocks;
+        std::vector<rtk_measurement::MeasurementBlock> doppler_blocks;
+        position_blocks.reserve(blocks.size());
+        doppler_blocks.reserve(blocks.size());
+        for (const auto& block : blocks) {
+            if (block.kind == rtk_measurement::MeasurementKind::DOPPLER) {
+                doppler_blocks.push_back(block);
+            } else {
+                position_blocks.push_back(block);
+            }
+        }
+        auto position_system = rtk_measurement::assembleMeasurementSystem(
+            position_blocks, filter_state_.state.size());
+        auto doppler_system = rtk_measurement::assembleMeasurementSystem(
+            doppler_blocks, filter_state_.state.size());
+        doppler_system.row_outlier_thresholds.assign(
+            static_cast<size_t>(doppler_system.residuals.size()),
+            rtk_config_.doppler_row_outlier_threshold_mps);
+
+        const VectorXd state_before_sequential = filter_state_.state;
+        const MatrixXd covariance_before_sequential = filter_state_.covariance;
+        auto position_result = rtk_update::applyMeasurementUpdate(
+            filter_state_.state,
+            filter_state_.covariance,
+            position_system,
+            update_outlier_threshold,
+            6,
+            0.0,
+            force_active,
+            adaptive_noise_active,
+            rtk_config_.reuse_kalman_factorization_for_nis);
+        rtk_update::FilterUpdateResult doppler_result;
+        if (position_result.ok) {
+            const VectorXd state_correction =
+                filter_state_.state - state_before_sequential;
+            doppler_system.residuals -=
+                doppler_system.design_matrix * state_correction;
+            doppler_result = rtk_update::applyMeasurementUpdate(
+                filter_state_.state,
+                filter_state_.covariance,
+                doppler_system,
+                update_outlier_threshold,
+                3,
+                0.0,
+                force_active,
+                adaptive_noise_active,
+                rtk_config_.reuse_kalman_factorization_for_nis);
+        }
+        update_result.ok = position_result.ok && doppler_result.ok;
+        if (!update_result.ok) {
+            filter_state_.state = state_before_sequential;
+            filter_state_.covariance = covariance_before_sequential;
+        }
+        update_result.rejected_by_innovation_gate =
+            position_result.rejected_by_innovation_gate ||
+            doppler_result.rejected_by_innovation_gate;
+        update_result.observation_count =
+            position_result.observation_count + doppler_result.observation_count;
+        update_result.innovation_observation_count =
+            position_result.innovation_observation_count +
+            doppler_result.innovation_observation_count;
+        update_result.suppressed_outliers =
+            position_result.suppressed_outliers +
+            doppler_result.suppressed_outliers;
+        update_result.prefit_residual_rms_m =
+            measurement_diagnostics.residual_rms_m;
+        update_result.prefit_residual_max_abs_m =
+            measurement_diagnostics.residual_max_abs_m;
+        const double post_sum_sq =
+            position_system.residuals.squaredNorm() +
+            doppler_system.residuals.squaredNorm();
+        if (update_result.observation_count > 0) {
+            update_result.post_suppression_residual_rms_m =
+                std::sqrt(post_sum_sq /
+                          static_cast<double>(update_result.observation_count));
+        }
+        update_result.post_suppression_residual_max_abs_m =
+            std::max(position_system.residuals.cwiseAbs().maxCoeff(),
+                     doppler_system.residuals.cwiseAbs().maxCoeff());
+        update_result.normalized_innovation_squared =
+            position_result.normalized_innovation_squared +
+            doppler_result.normalized_innovation_squared;
+        if (update_result.innovation_observation_count > 0) {
+            update_result.normalized_innovation_squared_per_observation =
+                update_result.normalized_innovation_squared /
+                static_cast<double>(update_result.innovation_observation_count);
+        }
+        if (update_result.ok) {
+            feed_adaptive_tracker(
+                position_blocks, position_system, position_result);
+            feed_adaptive_tracker(
+                doppler_blocks, doppler_system, doppler_result);
+        }
+    } else {
+        update_result = rtk_update::applyMeasurementUpdate(
+            filter_state_.state,
+            filter_state_.covariance,
+            measurement_system,
+            update_outlier_threshold,
+            6,
+            rtk_config_.max_update_nis_per_observation,
+            force_active,
+            adaptive_noise_active,
+            rtk_config_.reuse_kalman_factorization_for_nis &&
+                nis_gates_disabled);
+        feed_adaptive_tracker(blocks, measurement_system, update_result);
+    }
 
     if (update_result.ok) {
         const double correction_norm_m =
@@ -3041,32 +3190,8 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
     // noise tracker (consumed by the NEXT epoch's buildMeasurementBlocks —
     // the paper's R_{k+1} recursion). Never learn from rejected or failed
     // updates, and skip rows zeroed by suppressOutlierRows.
-    if (adaptive_noise_active && update_result.ok &&
-        !update_result.rejected_by_innovation_gate &&
-        update_result.row_innovations.size() > 0 &&
-        update_result.row_hph_diagonal.size() == update_result.row_innovations.size()) {
-        const auto adaptive_config = adaptiveNoiseConfig();
+    if (adaptive_tracker_updated) {
         const double tow = current_epoch_time_.tow;
-        int row_index = 0;
-        for (const auto& block : blocks) {
-            for (const auto& row : block.rows) {
-                if (row_index >= update_result.row_innovations.size()) break;
-                const bool suppressed =
-                    measurement_system.design_matrix.row(row_index).isZero(0.0);
-                if (row.adaptive_key >= 0 && !suppressed) {
-                    adaptive_noise_tracker_.update(
-                        row.adaptive_key,
-                        block.kind,
-                        update_result.row_innovations(row_index),
-                        update_result.row_hph_diagonal(row_index),
-                        row.reference_variance,
-                        row.adaptive_model_variance,
-                        tow,
-                        adaptive_config);
-                }
-                ++row_index;
-            }
-        }
         adaptive_noise_tracker_.pruneStale(tow, rtk_config_.adaptive_noise_reset_gap_s);
         debug_telemetry_.adaptive_noise_tracked_entries =
             static_cast<int>(adaptive_noise_tracker_.size());

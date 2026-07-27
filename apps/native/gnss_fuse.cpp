@@ -153,6 +153,8 @@ struct FuseOptions {
     // navi.776 B2: SD Doppler rows making the M4 velocity states directly
     // observable. Requires --tc-velocity-states.
     bool tc_doppler_rows = false;
+    bool tc_reuse_update_factorization = false;
+    bool tc_sequential_doppler_update = false;
     double tc_doppler_sigma_mps = 0.2;
     double tc_doppler_max_baseline_m = 0.0;
     // navi.776 C: constant GNSS-IMU time offset (s), applied to all IMU
@@ -448,6 +450,12 @@ void printUsage(const char* program_name) {
         << "  --tc-doppler-rows            navi.776: rover-only between-satellite SD Doppler\n"
         << "                                observation rows (velocity observability). Requires\n"
         << "                                --tc-velocity-states. Default: off.\n"
+        << "  --tc-reuse-update-factorization\n"
+        << "                                Reuse the Kalman LU for NIS/row diagnostics when\n"
+        << "                                NIS gates are disabled. Default: off.\n"
+        << "  --tc-sequential-doppler-update\n"
+        << "                                Apply phase/code and Doppler blocks sequentially\n"
+        << "                                to reduce dense KF cost. Default: off.\n"
         << "  --tc-doppler-sigma <mps>     SD Doppler row sigma in m/s (default: 0.2)\n"
         << "  --tc-doppler-max-baseline <m>\n"
         << "                                Build Doppler rows only while the float baseline is\n"
@@ -763,6 +771,8 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             options.tc_closed_loop = true;
             options.tc_velocity_states = true;
             options.tc_doppler_rows = true;
+            options.tc_reuse_update_factorization = true;
+            options.tc_sequential_doppler_update = true;
             options.tc_doppler_sigma_mps = 0.5;
             options.tc_doppler_max_baseline_m = 1000.0;
             options.rtk_adaptive_noise = true;
@@ -778,6 +788,10 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             options.tc_velocity_states = true;
         } else if (arg == "--tc-doppler-rows") {
             options.tc_doppler_rows = true;
+        } else if (arg == "--tc-reuse-update-factorization") {
+            options.tc_reuse_update_factorization = true;
+        } else if (arg == "--tc-sequential-doppler-update") {
+            options.tc_sequential_doppler_update = true;
         } else if (arg == "--tc-doppler-sigma") {
             options.tc_doppler_sigma_mps = std::stod(requireValue(arg, i, argc, argv));
         } else if (arg == "--tc-doppler-max-baseline") {
@@ -1208,6 +1222,10 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
         options.tc_ins_time_update || options.tc_closed_loop;
     rtk_config.enable_velocity_states = options.tc_velocity_states;
     rtk_config.enable_doppler_measurement_rows = options.tc_doppler_rows;
+    rtk_config.reuse_kalman_factorization_for_nis =
+        options.tc_reuse_update_factorization;
+    rtk_config.sequential_doppler_update =
+        options.tc_sequential_doppler_update;
     rtk_config.doppler_row_sigma_mps = options.tc_doppler_sigma_mps;
     rtk_config.doppler_row_max_baseline_m = options.tc_doppler_max_baseline_m;
     rtk_config.enable_tdcp_diagnostics = options.tc_tdcp_diagnostics;
