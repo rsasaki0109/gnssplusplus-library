@@ -35,6 +35,11 @@ TEST(PPPCorrectionContractTest, MadocaPreservesRawCodeIonosphereSeed) {
     EXPECT_TRUE(contract::rederiveIonosphereSeedAfterSsrBias(false));
 }
 
+TEST(PPPCorrectionContractTest, MadocaExcludesWindupFromAmbiguitySeed) {
+    EXPECT_TRUE(contract::excludePhaseWindupFromAmbiguitySeed(true));
+    EXPECT_FALSE(contract::excludePhaseWindupFromAmbiguitySeed(false));
+}
+
 TEST(PPPCorrectionContractTest, AtmosphereSignsMatchCodeAndPhasePhysics) {
     EXPECT_DOUBLE_EQ(contract::measurementCorrectionSign(false, false), -1.0);
     EXPECT_DOUBLE_EQ(contract::measurementCorrectionSign(true, false), -1.0);

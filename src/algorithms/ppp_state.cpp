@@ -1,5 +1,6 @@
 #include "ppp_internal.hpp"
 
+#include <libgnss++/algorithms/ppp_correction_contract.hpp>
 #include <libgnss++/algorithms/ppp_multifrequency.hpp>
 
 #include <libgnss++/algorithms/ppp_utils.hpp>
@@ -1274,13 +1275,27 @@ void PPPProcessor::initializeAmbiguityState(const IonosphereFreeObs& observation
             observation.modeled_trop_delay_m);
     auto& ambiguity = ambiguity_states_[observation.satellite];
     if (!ppp_config_.use_ionosphere_free && ppp_config_.estimate_ionosphere) {
+        const bool madoca_per_frequency =
+            require_coherent_ssr_ && ssr_products_loaded_ &&
+            !ppp_config_.use_clas_osr_filter;
+        const auto windup_it = windup_cache_.find(observation.satellite);
+        const double windup_cycles =
+            windup_it != windup_cache_.end() && std::isfinite(windup_it->second)
+                ? windup_it->second
+                : 0.0;
+        const double seed_windup_m =
+            algorithms::ppp_correction_contract::excludePhaseWindupFromAmbiguitySeed(
+                madoca_per_frequency)
+                ? windup_cycles * observation.wavelength_l1
+                : 0.0;
         // Per-frequency L1 ambiguity in meters, seeded geometry-free consistent
         // with the ionosphere state: bias_1 = L1 - P1 + 2*ion*(f1/f1)^2.
         // (f1/f1)^2 = 1; this removes the +/-iono on code/phase so the residual
         // is the integer-recoverable phase bias lambda1*N1.
         const double ion = observation.has_iono_init ? observation.iono_init_m : 0.0;
         filter_state_.state(state_index) =
-            observation.carrier_phase_l1 - observation.pseudorange_l1 + 2.0 * ion;
+            observation.carrier_phase_l1 + seed_windup_m -
+            observation.pseudorange_l1 + 2.0 * ion;
         filter_state_.covariance(state_index, state_index) =
             ppp_config_.initial_ambiguity_variance;
         ambiguity.wavelength_l1 = observation.wavelength_l1;
@@ -1347,7 +1362,20 @@ int PPPProcessor::getOrCreateAmbiguityStateL2(const IonosphereFreeObs& observati
     const double ion = observation.has_iono_init ? observation.iono_init_m : 0.0;
     const double ratio =
         observation.freq_l2 > 0.0 ? (observation.freq_l1 / observation.freq_l2) : 0.0;
-    filter_state_.state(index) = observation.carrier_phase_l2 -
+    const bool madoca_per_frequency =
+        require_coherent_ssr_ && ssr_products_loaded_ &&
+        !ppp_config_.use_clas_osr_filter;
+    const auto windup_it = windup_cache_.find(observation.satellite);
+    const double windup_cycles =
+        windup_it != windup_cache_.end() && std::isfinite(windup_it->second)
+            ? windup_it->second
+            : 0.0;
+    const double seed_windup_m =
+        algorithms::ppp_correction_contract::excludePhaseWindupFromAmbiguitySeed(
+            madoca_per_frequency)
+            ? windup_cycles * observation.wavelength_l2
+            : 0.0;
+    filter_state_.state(index) = observation.carrier_phase_l2 + seed_windup_m -
                                  observation.pseudorange_l2 +
                                  2.0 * ion * ratio * ratio;
     filter_state_.covariance(index, index) = ppp_config_.initial_ambiguity_variance;
@@ -1385,12 +1413,26 @@ int PPPProcessor::getOrCreateAdditionalAmbiguityState(
     const auto existing = filter_state_.additional_ambiguity_indices.find(key);
     auto& lifecycle =
         ambiguity_states_[observation.satellite].frequency_lifecycle[frequency.signal];
+    const bool madoca_per_frequency =
+        require_coherent_ssr_ && ssr_products_loaded_ &&
+        !ppp_config_.use_clas_osr_filter;
+    const auto windup_it = windup_cache_.find(observation.satellite);
+    const double windup_cycles =
+        windup_it != windup_cache_.end() && std::isfinite(windup_it->second)
+            ? windup_it->second
+            : 0.0;
+    const double seed_windup_m =
+        algorithms::ppp_correction_contract::excludePhaseWindupFromAmbiguitySeed(
+            madoca_per_frequency)
+            ? windup_cycles * frequency.wavelength
+            : 0.0;
     if (existing != filter_state_.additional_ambiguity_indices.end()) {
         if (lifecycle.state_index != existing->second) {
             const double ion = observation.has_iono_init ? observation.iono_init_m : 0.0;
             filter_state_.state(existing->second) =
                 algorithms::ppp_multifrequency::ambiguitySeedMeters(
-                    frequency.carrier_phase, frequency.pseudorange, ion,
+                    frequency.carrier_phase + seed_windup_m,
+                    frequency.pseudorange, ion,
                     observation.freq_l1, frequency.frequency);
             filter_state_.covariance.row(existing->second).setZero();
             filter_state_.covariance.col(existing->second).setZero();
@@ -1411,7 +1453,8 @@ int PPPProcessor::getOrCreateAdditionalAmbiguityState(
     const double ion = observation.has_iono_init ? observation.iono_init_m : 0.0;
     filter_state_.state(index) =
         algorithms::ppp_multifrequency::ambiguitySeedMeters(
-            frequency.carrier_phase, frequency.pseudorange, ion,
+            frequency.carrier_phase + seed_windup_m,
+            frequency.pseudorange, ion,
             observation.freq_l1, frequency.frequency);
     filter_state_.covariance(index, index) =
         60.0 * 60.0;
