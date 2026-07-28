@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <cctype>
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
@@ -22,6 +21,7 @@
 #include <libgnss++/io/imu.hpp>
 #include <libgnss++/io/rinex.hpp>
 
+#include "cli_toml_config.hpp"
 #include "rtk_base_epoch_align.hpp"
 
 namespace {
@@ -632,299 +632,6 @@ private:
     std::exit(1);
 }
 
-std::string trim(std::string value) {
-    const auto first = std::find_if_not(value.begin(), value.end(), [](unsigned char ch) {
-        return std::isspace(ch) != 0;
-    });
-    const auto last = std::find_if_not(value.rbegin(), value.rend(), [](unsigned char ch) {
-        return std::isspace(ch) != 0;
-    }).base();
-    if (first >= last) {
-        return {};
-    }
-    return std::string(first, last);
-}
-
-std::string stripTomlComment(const std::string& line) {
-    bool in_single_quote = false;
-    bool in_double_quote = false;
-    bool escaped = false;
-    for (std::size_t i = 0; i < line.size(); ++i) {
-        const char ch = line[i];
-        if (in_double_quote && ch == '\\' && !escaped) {
-            escaped = true;
-            continue;
-        }
-        if (ch == '\'' && !in_double_quote) {
-            in_single_quote = !in_single_quote;
-        } else if (ch == '"' && !in_single_quote && !escaped) {
-            in_double_quote = !in_double_quote;
-        } else if (ch == '#' && !in_single_quote && !in_double_quote) {
-            return line.substr(0, i);
-        }
-        escaped = false;
-    }
-    return line;
-}
-
-std::size_t findTomlEquals(const std::string& line) {
-    bool in_single_quote = false;
-    bool in_double_quote = false;
-    bool escaped = false;
-    for (std::size_t i = 0; i < line.size(); ++i) {
-        const char ch = line[i];
-        if (in_double_quote && ch == '\\' && !escaped) {
-            escaped = true;
-            continue;
-        }
-        if (ch == '\'' && !in_double_quote) {
-            in_single_quote = !in_single_quote;
-        } else if (ch == '"' && !in_single_quote && !escaped) {
-            in_double_quote = !in_double_quote;
-        } else if (ch == '=' && !in_single_quote && !in_double_quote) {
-            return i;
-        }
-        escaped = false;
-    }
-    return std::string::npos;
-}
-
-std::string parseTomlString(const std::string& raw_value, const std::string& context) {
-    const std::string value = trim(raw_value);
-    if (value.size() < 2 ||
-        !((value.front() == '"' && value.back() == '"') ||
-          (value.front() == '\'' && value.back() == '\''))) {
-        return value;
-    }
-    if (value.front() == '\'') {
-        return value.substr(1, value.size() - 2);
-    }
-
-    std::string parsed;
-    parsed.reserve(value.size() - 2);
-    for (std::size_t i = 1; i + 1 < value.size(); ++i) {
-        if (value[i] != '\\') {
-            parsed.push_back(value[i]);
-            continue;
-        }
-        if (++i + 1 > value.size()) {
-            throw std::invalid_argument("invalid escape in " + context);
-        }
-        switch (value[i]) {
-            case '\\': parsed.push_back('\\'); break;
-            case '"': parsed.push_back('"'); break;
-            case 'n': parsed.push_back('\n'); break;
-            case 'r': parsed.push_back('\r'); break;
-            case 't': parsed.push_back('\t'); break;
-            default:
-                throw std::invalid_argument("unsupported escape in " + context +
-                                            " (use TOML single quotes for Windows paths)");
-        }
-    }
-    return parsed;
-}
-
-std::vector<std::string> parseTomlArray(const std::string& raw_value,
-                                        const std::string& context) {
-    const std::string value = trim(raw_value);
-    if (value.size() < 2 || value.front() != '[' || value.back() != ']') {
-        return {};
-    }
-    std::vector<std::string> values;
-    std::string item;
-    bool in_single_quote = false;
-    bool in_double_quote = false;
-    bool escaped = false;
-    for (std::size_t i = 1; i + 1 < value.size(); ++i) {
-        const char ch = value[i];
-        if (in_double_quote && ch == '\\' && !escaped) {
-            escaped = true;
-            item.push_back(ch);
-            continue;
-        }
-        if (ch == '\'' && !in_double_quote) {
-            in_single_quote = !in_single_quote;
-        } else if (ch == '"' && !in_single_quote && !escaped) {
-            in_double_quote = !in_double_quote;
-        }
-        if (ch == ',' && !in_single_quote && !in_double_quote) {
-            if (trim(item).empty()) {
-                throw std::invalid_argument("empty array item in " + context);
-            }
-            values.push_back(parseTomlString(item, context));
-            item.clear();
-        } else {
-            item.push_back(ch);
-        }
-        escaped = false;
-    }
-    if (in_single_quote || in_double_quote || trim(item).empty()) {
-        throw std::invalid_argument("malformed array in " + context);
-    }
-    values.push_back(parseTomlString(item, context));
-    return values;
-}
-
-struct TomlConfigEntry {
-    std::string key;
-    std::string value;
-    int line_number = 0;
-};
-
-std::vector<TomlConfigEntry> loadFuseTomlEntries(const std::string& path) {
-    std::ifstream input(path);
-    if (!input.is_open()) {
-        throw std::invalid_argument("cannot open --config file: " + path);
-    }
-
-    std::vector<TomlConfigEntry> root_entries;
-    std::vector<TomlConfigEntry> fuse_entries;
-    std::string section;
-    bool has_fuse_section = false;
-    std::string line;
-    int line_number = 0;
-    while (std::getline(input, line)) {
-        ++line_number;
-        line = trim(stripTomlComment(line));
-        if (line.empty()) {
-            continue;
-        }
-        if (line.front() == '[') {
-            if (line.size() < 3 || line.back() != ']') {
-                throw std::invalid_argument(path + ":" + std::to_string(line_number) +
-                                            ": malformed TOML table");
-            }
-            section = trim(line.substr(1, line.size() - 2));
-            if (section == "gnss_fuse") {
-                has_fuse_section = true;
-            }
-            continue;
-        }
-        const std::size_t equals = findTomlEquals(line);
-        if (equals == std::string::npos) {
-            throw std::invalid_argument(path + ":" + std::to_string(line_number) +
-                                        ": expected key = value");
-        }
-        TomlConfigEntry entry{trim(line.substr(0, equals)), trim(line.substr(equals + 1)),
-                              line_number};
-        if (entry.key.empty() || entry.value.empty()) {
-            throw std::invalid_argument(path + ":" + std::to_string(line_number) +
-                                        ": expected non-empty key and value");
-        }
-        if (section.empty()) {
-            root_entries.push_back(std::move(entry));
-        } else if (section == "gnss_fuse") {
-            fuse_entries.push_back(std::move(entry));
-        }
-    }
-    return has_fuse_section ? fuse_entries : root_entries;
-}
-
-std::string configKeyToOption(std::string key) {
-    key = trim(std::move(key));
-    if (key.size() >= 2 &&
-        ((key.front() == '"' && key.back() == '"') ||
-         (key.front() == '\'' && key.back() == '\''))) {
-        key = key.substr(1, key.size() - 2);
-    }
-    std::replace(key.begin(), key.end(), '_', '-');
-    if (key.empty() || key.front() == '-') {
-        throw std::invalid_argument("invalid gnss_fuse config key: " + key);
-    }
-    return "--" + key;
-}
-
-std::vector<std::string> configEntryToArguments(const TomlConfigEntry& entry,
-                                                const std::string& path) {
-    const std::string context = path + ":" + std::to_string(entry.line_number);
-    const std::string option = configKeyToOption(entry.key);
-    const std::string value = trim(entry.value);
-    std::string lowercase = value;
-    std::transform(lowercase.begin(), lowercase.end(), lowercase.begin(),
-                   [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
-
-    if (lowercase == "true") {
-        if (option == "--base-interp") {
-            return {};
-        }
-        return {option};
-    }
-    if (lowercase == "false") {
-        if (option == "--zupt" || option == "--nhc" || option == "--arfilter") {
-            return {"--no-" + option.substr(2)};
-        }
-        if (option == "--base-interp") {
-            return {"--no-base-interp"};
-        }
-        // False is the default for the remaining enable-only switches.
-        return {};
-    }
-
-    const auto array_values = parseTomlArray(value, context);
-    if (!array_values.empty()) {
-        if (option == "--lever-arm" || option == "--imu-misalignment-rpy-deg") {
-            if (array_values.size() != 3) {
-                throw std::invalid_argument(context + ": " + entry.key +
-                                            " requires exactly 3 values");
-            }
-            return {option, array_values[0] + "," + array_values[1] + "," + array_values[2]};
-        }
-        if (option == "--base-ecef") {
-            if (array_values.size() != 3) {
-                throw std::invalid_argument(context + ": base_ecef requires exactly 3 values");
-            }
-            return {option, array_values[0], array_values[1], array_values[2]};
-        }
-        throw std::invalid_argument(context + ": arrays are not supported for " + entry.key);
-    }
-    return {option, parseTomlString(value, context)};
-}
-
-std::vector<std::string> expandConfigArguments(int argc, char* argv[]) {
-    std::string config_path;
-    std::vector<std::string> cli_arguments;
-    cli_arguments.reserve(static_cast<std::size_t>(argc));
-    cli_arguments.emplace_back(argv[0]);
-    for (int i = 1; i < argc; ++i) {
-        const std::string arg = argv[i];
-        if (arg == "--config") {
-            if (i + 1 >= argc) {
-                throw std::invalid_argument("--config requires a path");
-            }
-            if (!config_path.empty()) {
-                throw std::invalid_argument("--config may only be specified once");
-            }
-            config_path = argv[++i];
-        } else if (arg.rfind("--config=", 0) == 0) {
-            if (!config_path.empty()) {
-                throw std::invalid_argument("--config may only be specified once");
-            }
-            config_path = arg.substr(std::string("--config=").size());
-            if (config_path.empty()) {
-                throw std::invalid_argument("--config requires a path");
-            }
-        } else {
-            cli_arguments.push_back(arg);
-        }
-    }
-    if (config_path.empty()) {
-        return cli_arguments;
-    }
-
-    std::vector<std::string> expanded;
-    expanded.push_back(argv[0]);
-    for (const auto& entry : loadFuseTomlEntries(config_path)) {
-        auto entry_arguments = configEntryToArguments(entry, config_path);
-        expanded.insert(expanded.end(),
-                        std::make_move_iterator(entry_arguments.begin()),
-                        std::make_move_iterator(entry_arguments.end()));
-    }
-    expanded.insert(expanded.end(),
-                    std::make_move_iterator(cli_arguments.begin() + 1),
-                    std::make_move_iterator(cli_arguments.end()));
-    return expanded;
-}
-
 FuseOptions parseArguments(int argc, char* argv[]) {
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
@@ -938,7 +645,26 @@ FuseOptions parseArguments(int argc, char* argv[]) {
         }
     }
 
-    std::vector<std::string> expanded_arguments = expandConfigArguments(argc, argv);
+    const libgnss_apps::TomlCliSchema schema{
+        "gnss_fuse",
+        {
+            {"--base-interp", ""},
+        },
+        {
+            {"--arfilter", "--no-arfilter"},
+            {"--base-interp", "--no-base-interp"},
+            {"--nhc", "--no-nhc"},
+            {"--navi776-tc", ""},
+            {"--zupt", "--no-zupt"},
+        },
+        {
+            {"--base-ecef", libgnss_apps::TomlArrayStyle::SEPARATE_ARGUMENTS},
+            {"--imu-misalignment-rpy-deg", libgnss_apps::TomlArrayStyle::COMMA_JOINED},
+            {"--lever-arm", libgnss_apps::TomlArrayStyle::COMMA_JOINED},
+        },
+    };
+    std::vector<std::string> expanded_arguments =
+        libgnss_apps::expandTomlConfigArguments(argc, argv, schema);
     std::vector<char*> expanded_argv;
     expanded_argv.reserve(expanded_arguments.size());
     for (auto& argument : expanded_arguments) {

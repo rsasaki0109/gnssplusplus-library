@@ -49,6 +49,20 @@ The `.pos` file is the trajectory. The `.json` file is the experiment record:
 it captures metrics, solver settings, wall time, reference matching, and
 threshold results.
 
+For direct native-solver runs, keep the RTK defaults in
+`configs/examples/solve.example.toml` and use:
+
+```bash
+gnss_solve --config configs/examples/solve.example.toml \
+  --max-epochs 1000 \
+  --out output/research/native_rtk.pos
+```
+
+The native solver applies CLI arguments after `[gnss_solve]`, so temporary
+overrides do not require copying or editing the profile. Its normal `--help`
+shows only inputs, outputs, and high-level choices; use `--help-advanced` for
+the backward-compatible research controls.
+
 ## Add explicit thresholds
 
 When promoting an experiment result, add requirements so the command fails if a

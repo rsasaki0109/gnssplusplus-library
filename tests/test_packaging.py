@@ -130,6 +130,7 @@ class PackagingSmokeTest(unittest.TestCase):
                 prefix / "configs" / "README.md",
                 prefix / "configs" / "examples" / "fuse.example.toml",
                 prefix / "configs" / "examples" / "live.example.conf",
+                prefix / "configs" / "examples" / "solve.example.toml",
                 prefix / "configs" / "examples" / "web.example.toml",
                 prefix / "configs" / "signoff" / "ppp_products_ppc.example.toml",
                 prefix / "configs" / "signoff" / "moving_base_signoff.example.toml",

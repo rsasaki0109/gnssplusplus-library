@@ -26,6 +26,7 @@
 #include <libgnss++/io/solution_writer.hpp>
 #include <libgnss++/models/troposphere.hpp>
 
+#include "cli_toml_config.hpp"
 #include "rtk_base_epoch_align.hpp"
 
 namespace {
@@ -1057,7 +1058,38 @@ private:
 
 void printUsage(const char* program_name) {
     std::cout
+        << "Usage: " << program_name << " --data-dir <dir> [options]\n"
+        << "       " << program_name
+        << " --rover <file> --base <file> --nav <file> [options]\n\n"
+        << "Batch RTK post-processing. Prefer a preset or TOML config for repeatable runs.\n\n"
+        << "Inputs:\n"
+        << "  --data-dir <dir>        Load rover.obs, base.obs, and navigation.nav\n"
+        << "  --rover <file>          Rover RINEX observation file\n"
+        << "  --base <file>           Base RINEX observation file\n"
+        << "  --nav <file>            Navigation RINEX file\n\n"
+        << "Common options:\n"
+        << "  --config <path>         Load flat TOML defaults; CLI options override them\n"
+        << "  --preset <name>         survey|low-cost|moving-base|odaiba\n"
+        << "  --mode <name>           auto|kinematic|static|moving-base\n"
+        << "  --iono <name>           auto|off|iflc|est\n"
+        << "  --ratio <value>         Ambiguity ratio threshold\n"
+        << "  --max-epochs <n>        Stop after n epochs (0 = no limit)\n"
+        << "  --out <file>            Solution output (default: output/rtk_solution.pos)\n"
+        << "  --kml <file>            Optional KML output path\n"
+        << "  --no-kml                Disable KML output\n"
+        << "  --verbose               Print per-epoch progress\n\n"
+        << "Help:\n"
+        << "  -h, --help              Show this everyday-use help\n"
+        << "  --help-advanced         Show every tuning, experiment, and diagnostic option\n\n"
+        << "Example:\n"
+        << "  " << program_name
+        << " --data-dir <run-dir> --preset low-cost --out output/rtk.pos\n";
+}
+
+void printAdvancedUsage(const char* program_name) {
+    std::cout
         << "Usage: " << program_name << " [options]\n"
+        << "  --config <path>           Load flat TOML defaults from [gnss_solve]; CLI wins\n"
         << "  --data-dir <dir>           Use <dir>/rover.obs, base.obs, navigation.nav\n"
         << "  --rover <file>             Rover RINEX observation file\n"
         << "  --base <file>              Base RINEX observation file\n"
@@ -1504,7 +1536,8 @@ void printUsage(const char* program_name) {
         << "  --no-kinematic-post-filter Disable the kinematic output post-filter\n"
         << "  --no-base-interp           Require exact rover/base epoch alignment\n"
         << "  --verbose                  Print per-epoch progress summary\n"
-        << "  -h, --help                 Show this help\n";
+        << "  -h, --help                 Show concise everyday-use help\n"
+        << "  --help-advanced            Show this complete option reference\n";
 }
 
 [[noreturn]] void argumentError(const std::string& message, const char* program_name) {
@@ -1643,6 +1676,55 @@ libgnss::io::SolutionWriter::Format parseOutputFormat(const std::string& value,
 }
 
 SolveConfig parseArguments(int argc, char* argv[]) {
+    for (int i = 1; i < argc; ++i) {
+        const std::string arg = argv[i];
+        if (arg == "-h" || arg == "--help") {
+            printUsage(argv[0]);
+            std::exit(0);
+        }
+        if (arg == "--help-advanced") {
+            printAdvancedUsage(argv[0]);
+            std::exit(0);
+        }
+    }
+
+    const libgnss_apps::TomlCliSchema schema{
+        "gnss_solve",
+        {
+            {"--base-interp", ""},
+            {"--beidou", ""},
+            {"--glonass", ""},
+            {"--kinematic-post-filter", ""},
+            {"--kml", ""},
+            {"--wide-lane-ar", "--enable-wide-lane-ar"},
+        },
+        {
+            {"--arfilter", "--no-arfilter"},
+            {"--base-interp", "--no-base-interp"},
+            {"--beidou", "--no-beidou"},
+            {"--fixed-bridge-burst-guard", "--no-fixed-bridge-burst-guard"},
+            {"--float-bridge-tail-guard", "--no-float-bridge-tail-guard"},
+            {"--glonass", "--no-glonass"},
+            {"--integrity-base-gate", "--no-integrity-base-gate"},
+            {"--kinematic-post-filter", "--no-kinematic-post-filter"},
+            {"--kml", "--no-kml"},
+            {"--nonfix-drift-guard", "--no-nonfix-drift-guard"},
+            {"--spp-height-step-guard", "--no-spp-height-step-guard"},
+            {"--enable-wide-lane-ar", "--no-wide-lane-ar"},
+            {"--wide-lane-ar", "--no-wide-lane-ar"},
+        },
+        {},
+    };
+    std::vector<std::string> expanded_arguments =
+        libgnss_apps::expandTomlConfigArguments(argc, argv, schema);
+    std::vector<char*> expanded_argv;
+    expanded_argv.reserve(expanded_arguments.size());
+    for (auto& argument : expanded_arguments) {
+        expanded_argv.push_back(argument.data());
+    }
+    argc = static_cast<int>(expanded_argv.size());
+    argv = expanded_argv.data();
+
     SolveConfig config;
 
     for (int i = 1; i < argc; ++i) {
