@@ -130,10 +130,30 @@ TEST(PPPArTrialState, PerFrequencyAttemptsAreAlwaysEphemeral) {
 TEST(PPPIonospherePrediction, MatchesMadocalibCarrierDeltaAndElevationNoise) {
     constexpr double f1 = 1575.42e6;
     constexpr double f2 = 1227.60e6;
-    const double denominator = 1.0 - (f1 / f2) * (f1 / f2);
+    const double denominator =
+        std::pow(constants::GPS_L1_FREQ / f1, 2) -
+        std::pow(constants::GPS_L1_FREQ / f2, 2);
     EXPECT_NEAR(
         ppp_internal::madocaCarrierIonosphereMeters(12.4, 12.1, f1, f2),
         -0.3 / denominator,
+        1e-12);
+    constexpr double bds_b1i = 1561.098e6;
+    constexpr double bds_b3i = 1268.52e6;
+    const double bds_primary_scale =
+        std::pow(constants::GPS_L1_FREQ / bds_b1i, 2);
+    const double bds_secondary_scale =
+        std::pow(constants::GPS_L1_FREQ / bds_b3i, 2);
+    EXPECT_NEAR(ppp_internal::madocaIonosphereScale(bds_b1i),
+                bds_primary_scale, 1e-15);
+    EXPECT_NEAR(
+        ppp_internal::madocaIonosphereStateFromPrimaryMeters(
+            4.25, bds_b1i),
+        4.25 / bds_primary_scale,
+        1e-12);
+    EXPECT_NEAR(
+        ppp_internal::madocaCarrierIonosphereMeters(
+            12.4, 12.1, bds_b1i, bds_b3i),
+        -0.3 / (bds_primary_scale - bds_secondary_scale),
         1e-12);
     EXPECT_NEAR(
         ppp_internal::madocaIonosphereProcessVariance(1e-4, M_PI / 6.0, 30.0),

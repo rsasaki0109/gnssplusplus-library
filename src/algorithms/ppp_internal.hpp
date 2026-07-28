@@ -2,6 +2,7 @@
 
 #include <libgnss++/algorithms/ppp.hpp>
 #include <libgnss++/algorithms/ppp_utils.hpp>
+#include <libgnss++/core/constants.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -57,19 +58,39 @@ inline bool alwaysRestoreArTrialState(PPPProcessor::PPPConfig::ARMethod method) 
     return method == PPPProcessor::PPPConfig::ARMethod::DD_PER_FREQ;
 }
 
+inline double madocaIonosphereScale(double frequency_hz) {
+    if (!(frequency_hz > 0.0)) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    const double ratio = constants::GPS_L1_FREQ / frequency_hz;
+    return ratio * ratio;
+}
+
+inline double madocaIonosphereStateFromPrimaryMeters(
+    double primary_frequency_ionosphere_m,
+    double primary_frequency_hz) {
+    const double primary_scale = madocaIonosphereScale(primary_frequency_hz);
+    if (!std::isfinite(primary_scale) || !(primary_scale > 0.0)) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    return primary_frequency_ionosphere_m / primary_scale;
+}
+
 inline double madocaCarrierIonosphereMeters(double phase_l1_m,
                                             double phase_l2_m,
                                             double frequency_l1_hz,
                                             double frequency_l2_hz) {
-    if (!(frequency_l1_hz > 0.0) || !(frequency_l2_hz > 0.0)) {
+    const double scale_l1 = madocaIonosphereScale(frequency_l1_hz);
+    const double scale_l2 = madocaIonosphereScale(frequency_l2_hz);
+    if (!std::isfinite(scale_l1) || !std::isfinite(scale_l2)) {
         return std::numeric_limits<double>::quiet_NaN();
     }
-    const double ratio = frequency_l1_hz / frequency_l2_hz;
-    const double denominator = 1.0 - ratio * ratio;
+    const double denominator = scale_l1 - scale_l2;
     if (std::abs(denominator) < 1e-12) {
         return std::numeric_limits<double>::quiet_NaN();
     }
-    // MADOCALIB udiono_ppp(): ionc = -(L1-L2)/(1-(f1/f2)^2).
+    // MADOCALIB udiono_ppp(): the estimated STEC state is referenced to the
+    // fixed GPS L1 frequency, including for non-GPS primary signals.
     return -(phase_l1_m - phase_l2_m) / denominator;
 }
 
