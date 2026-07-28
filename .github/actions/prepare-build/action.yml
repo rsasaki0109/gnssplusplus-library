@@ -126,4 +126,9 @@ runs:
 
     - name: Build
       shell: bash
-      run: cmake --build build --config "${{ inputs.build-type }}" --parallel
+      run: |
+        if [[ "${{ inputs.os-name }}" == ubuntu* && "${{ inputs.compiler }}" == "gcc" ]]; then
+          cmake --build build --config "${{ inputs.build-type }}" --parallel 2
+        else
+          cmake --build build --config "${{ inputs.build-type }}" --parallel
+        fi
