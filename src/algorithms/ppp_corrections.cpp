@@ -1525,7 +1525,10 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
         // position shift bit-identical (corrections stay 0).
         observation.rx_ant_corr_l1_m = 0.0;
         observation.rx_ant_corr_l2_m = 0.0;
-        if (env_overrides_.pf_rx_antenna && receiver_antex_loaded_ &&
+        const bool coherent_madoca_receiver_antenna =
+            require_coherent_ssr_ && ssr_products_loaded_;
+        if ((env_overrides_.pf_rx_antenna || coherent_madoca_receiver_antenna) &&
+            receiver_antex_loaded_ &&
             !ppp_config_.use_ionosphere_free && ppp_config_.estimate_ionosphere &&
             !ppp_config_.use_clas_osr_filter && geometry.distance > 0.0 &&
             !ppp_config_.receiver_antenna_type.empty()) {
