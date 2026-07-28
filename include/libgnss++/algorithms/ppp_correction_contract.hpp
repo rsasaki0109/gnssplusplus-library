@@ -70,6 +70,13 @@ constexpr bool rederiveIonosphereSeedAfterSsrBias(bool madoca_convention) {
     return !madoca_convention;
 }
 
+// MADOCALIB udbias_ppp() deliberately calls corr_meas() with phw=0 while the
+// ordinary measurement residual uses the accumulated phase windup. Match that
+// initialization convention only for coherent MADOCA processing.
+constexpr bool excludePhaseWindupFromAmbiguitySeed(bool madoca_convention) {
+    return madoca_convention;
+}
+
 // Neutral atmosphere delays are removed from code and phase alike, while the
 // first-order ionosphere is dispersive: remove it from code, add it to phase.
 constexpr double measurementCorrectionSign(bool carrier_phase, bool dispersive) {
