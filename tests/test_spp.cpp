@@ -805,6 +805,11 @@ TEST_F(SPPTest, UsesMultipleConstellationsOnOdaibaEpoch) {
     EXPECT_TRUE(used_systems.count(GNSSSystem::BeiDou));
     EXPECT_TRUE(used_systems.count(GNSSSystem::QZSS));
     EXPECT_GE(used_systems.size(), 4U);
+    const auto& system_biases = spp_processor_->getSystemBiases();
+    ASSERT_TRUE(system_biases.count(GNSSSystem::GLONASS));
+    ASSERT_TRUE(system_biases.count(GNSSSystem::BeiDou));
+    EXPECT_TRUE(std::isfinite(system_biases.at(GNSSSystem::GLONASS)));
+    EXPECT_TRUE(std::isfinite(system_biases.at(GNSSSystem::BeiDou)));
 }
 
 TEST_F(SPPTest, BeiDouEnabledSPPStaysCloseOnOdaibaSequence) {

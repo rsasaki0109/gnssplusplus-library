@@ -115,6 +115,13 @@ public:
     const SPPConfig& getSPPConfig() const { return spp_config_; }
 
     /**
+     * @brief Get estimated inter-system clock biases in metres
+     */
+    const std::map<GNSSSystem, double>& getSystemBiases() const {
+        return system_biases_;
+    }
+
+    /**
      * @brief Load IONEX ionosphere products for SPP ionosphere corrections
      */
     bool loadIONEXProducts(const std::string& ionex_file);

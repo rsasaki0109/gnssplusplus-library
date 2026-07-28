@@ -1628,7 +1628,7 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
 
     estimated_position_ = position;
     receiver_clock_bias_ = clock_bias;
-    system_biases_.clear();
+    system_biases_ = bias_estimates;
     return solution;
 }
 
