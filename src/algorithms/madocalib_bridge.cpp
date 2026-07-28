@@ -219,6 +219,7 @@ void applySignalSelection(const prcopt_t& prcopt) {
     const int freq_nums_l1l2[MAXFREQ] = {1, 2, 0, 0, 0};
     const int freq_nums_l1l5[MAXFREQ] = {1, 5, 0, 0, 0};
     const int freq_nums_l1l2l5[MAXFREQ] = {1, 2, 5, 0, 0};
+    const int freq_nums_l1l5l2[MAXFREQ] = {1, 5, 2, 0, 0};
 
     const int freq_nums_e1e5a[MAXFREQ] = {1, 5, 0, 0, 0};
     const int freq_nums_e1e5b[MAXFREQ] = {1, 7, 0, 0, 0};
@@ -251,7 +252,9 @@ void applySignalSelection(const prcopt_t& prcopt) {
         set_obsdef(SYS_QZS, freq_nums_l1l2);
         break;
     default:
-        set_obsdef(SYS_QZS, freq_nums_l1l2l5);
+        // Match rnx2rtkp's pos2-sigqzs=L1/L5/L2 contract. QZSS uses L5 as
+        // frequency slot 1 and L2 as slot 2, unlike GPS L1/L2/L5.
+        set_obsdef(SYS_QZS, freq_nums_l1l5l2);
         break;
     }
     switch (prcopt.pppsig[2]) {
