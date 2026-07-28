@@ -68,6 +68,12 @@ presets. The accepted tuning and research flags remain backward-compatible
 and are listed under `gnss fuse --help-advanced`. Prefer `--navi776-tc`
 instead of spelling out its component tight-coupling flags.
 
+For repeatable runs, put defaults in a flat TOML `[gnss_fuse]` table and pass
+`--config <path>`. Keys may use `snake_case` or `kebab-case`; vector values
+such as `lever_arm` and `base_ecef` use three-element arrays. Command-line
+options are applied after the file regardless of where `--config` appears, so
+they are reliable one-run overrides. See `configs/examples/fuse.example.toml`.
+
 The fusion deliberately does not reuse `algorithms/kalman.hpp`: its
 RTKLIB-style "active state" convention (`x[i] != 0`) is incompatible with an
 error state that is legitimately zero after injection.
