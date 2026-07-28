@@ -508,29 +508,42 @@ void PPPProcessor::predictState(double dt, const PositionSolution* seed_solution
     if (use_broadcast_rtklib_model && seed_solution != nullptr && seed_solution->isValid()) {
         if (ppp_config_.reset_clock_to_spp_each_epoch || useLowDynamicsBroadcastSeedAssist()) {
             const double gps_clock_before_reset = filter_state_.state(filter_state_.clock_index);
-            const auto reinitializeSystemClock = [&](int index) {
+            const bool madoca_per_frequency_clock_reset =
+                require_coherent_ssr_ && ssr_products_loaded_ &&
+                !ppp_config_.use_ionosphere_free && ppp_config_.estimate_ionosphere;
+            const auto& spp_system_biases = spp_processor_.getSystemBiases();
+            const auto reinitializeSystemClock =
+                [&](int index, GNSSSystem system, bool reset_to_gps_clock) {
                 if (index < 0) {
                     return;
                 }
                 const double inter_system_offset =
                     filter_state_.state(index) - gps_clock_before_reset;
+                const auto spp_bias_it = spp_system_biases.find(system);
+                const double reset_offset =
+                    madoca_per_frequency_clock_reset &&
+                            spp_bias_it != spp_system_biases.end()
+                        ? spp_bias_it->second
+                        : (reset_to_gps_clock ? 0.0 : inter_system_offset);
                 reinitializeScalarState(
                     index,
-                    seed_solution->receiver_clock_bias + inter_system_offset,
+                    seed_solution->receiver_clock_bias + reset_offset,
                     ppp_config_.initial_clock_variance);
             };
             reinitializeScalarState(
                 filter_state_.clock_index,
                 seed_solution->receiver_clock_bias,
                 ppp_config_.initial_clock_variance);
-            reinitializeScalarState(
-                filter_state_.glo_clock_index,
-                seed_solution->receiver_clock_bias,
-                ppp_config_.initial_clock_variance);
-            reinitializeSystemClock(filter_state_.gal_clock_index);
-            reinitializeSystemClock(filter_state_.qzs_clock_index);
-            reinitializeSystemClock(filter_state_.bds_clock_index);
-            reinitializeSystemClock(filter_state_.bds2_clock_index);
+            reinitializeSystemClock(
+                filter_state_.glo_clock_index, GNSSSystem::GLONASS, true);
+            reinitializeSystemClock(
+                filter_state_.gal_clock_index, GNSSSystem::Galileo, false);
+            reinitializeSystemClock(
+                filter_state_.qzs_clock_index, GNSSSystem::QZSS, false);
+            reinitializeSystemClock(
+                filter_state_.bds_clock_index, GNSSSystem::BeiDou, false);
+            reinitializeSystemClock(
+                filter_state_.bds2_clock_index, GNSSSystem::BeiDou, false);
         }
         if (ppp_config_.kinematic_mode &&
             !ppp_config_.low_dynamics_mode &&
