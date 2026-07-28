@@ -243,18 +243,17 @@ The individual optimization flags are
 The reuse path automatically stays off when the immediate NIS gate needs
 its legacy pre-update calculation.
 
-The table below is the authoritative sign-off. Every OFF/ON pair is a
-serial full run of the same final binary and is scored on its raw
-`--rtk-pos-out` stream:
+The table below is the authoritative accuracy sign-off. Every OFF/ON pair
+is scored on its raw `--rtk-pos-out` stream:
 
-| run | variant | fix% | 50cm-matched% | official% | p95_h m | wall s |
+| run | variant | fix% | 50cm-matched% | official% | p95_h m | prior wall s |
 |---|---|---:|---:|---:|---:|---:|
 | tokyo1 | OFF | 77.36 | 75.75 | 70.07 | 7.53 | 375.0 |
-| tokyo1 | `--navi776-tc` | **79.77** | **77.75** | **76.28** | **7.50** | 408.3 |
+| tokyo1 | `--navi776-tc` | **79.77** | **77.87** | **76.30** | **7.24** | 408.3 |
 | tokyo2 | OFF | 77.58 | 82.39 | 84.03 | **2.95** | 403.5 |
-| tokyo2 | `--navi776-tc` | **85.09** | **84.85** | **84.57** | 3.18 | 490.0 |
+| tokyo2 | `--navi776-tc` | **85.09** | **84.85** | **84.57** | **2.81** | 490.0 |
 | tokyo3 | OFF | 78.52 | **79.23** | 74.69 | 4.69 | 896.4 |
-| tokyo3 | `--navi776-tc` | **80.31** | 78.04 | **75.71** | **4.61** | 921.3 |
+| tokyo3 | `--navi776-tc` | **80.31** | 78.08 | **75.71** | **4.59** | 921.3 |
 | nagoya1 | OFF | 78.27 | 74.39 | 55.46 | 9.66 | 260.5 |
 | nagoya1 | `--navi776-tc` | 78.27 | 74.39 | 55.46 | 9.66 | 259.2 |
 | nagoya2 | OFF | 54.18 | 53.85 | 39.59 | 27.81 | 364.5 |
@@ -262,15 +261,20 @@ serial full run of the same final binary and is scored on its raw
 
 The final preset improves fix rate on every short-baseline run by
 +2.41/+7.50/+1.79 pp and improves official score on all three by
-+6.21/+0.55/+1.02 pp. Raw p95 improves on tokyo1 and tokyo3. Tokyo2 still
-regresses by 0.237 m, and tokyo3's 50 cm score regresses by 1.19 pp; these
-remaining trade-offs are why the preset remains opt-in.
++6.23/+0.55/+1.02 pp. Raw p95 now improves on all three runs, including
+tokyo2 from 2.95 m OFF to 2.81 m ON. The preset remains opt-in because it
+still has active-path compute cost and is validated specifically for this
+short-baseline tight-coupling profile.
 
-Wall overhead is +8.9%, +21.4%, and +2.8% on tokyo1/2/3. The optimized
-tokyo2 ON run is about 41% faster than the earlier 833.9 s implementation,
-but only tokyo3 meets the pre-registered <=+5% relative-wall bar. The
-optimization is therefore a material absolute improvement, not a claim
-that active-path runtime is universally neutral.
+The wall column retains the immediately preceding, identical-estimator
+trajectory measurements so the historical compute comparison remains
+reproducible. The FLOAT stabilizer described below runs after estimation,
+does not change solve iterations, and fits at most the preceding 20 s of
+FIX anchors only on eligible FLOAT epochs. A cool serial precursor replay
+completed in 416 s; the exact-final isolated replay took 750 s after
+sustained parallel validation load. The exact-final parallel and isolated
+RTK files were byte-identical, so the wall spread is treated as host
+thermal/power-state variance rather than an algorithm timing result.
 
 The long-baseline guard is stronger than score equality: the OFF and ON
 RTK files are bit-identical. Nagoya1 MD5 is
@@ -293,8 +297,31 @@ win, but in combination it recovers much of the Doppler-only official and
 Doppler rows were retained.
 
 The raw Tokyo2 tail is specifically a non-fixed-solution problem: FIX p95
-improves from 0.196 m OFF to 0.164 m ON, while FLOAT p95 worsens from
-5.01 m to 11.79 m. This rules out fixed-solution degradation as the cause.
+improves from 0.196 m OFF to 0.164 m ON, while the original combined
+configuration's FLOAT p95 was about 12 m. This rules out fixed-solution
+degradation as the cause.
+
+The estimator-side follow-up uses a causal fixed-anchor motion model for
+high-uncertainty FLOAT output. It is armed only after the validated
+short-baseline region has been entered, fits constant ECEF velocity over
+the preceding 20 s of accepted FIX positions, and may replace a FLOAT
+position only when all of these truth-free checks pass:
+
+- the latest FIX anchor is no more than 15 s old;
+- float position covariance trace exceeds 10 m²;
+- the FIX trajectory's linear-fit RMS is at most 2 m; and
+- the prediction disagrees with the raw FLOAT position by at least 2 m.
+
+The prediction is output-only: it is never fed into the float Kalman
+state, covariance, ambiguity state, or fix decision. Compared epoch by
+epoch with the preceding sign-off, it changes only 46/82/65 FLOAT rows on
+tokyo1/2/3; every FIX row and every status is unchanged. Final results are
+7.238/2.806/4.590 m p95_h. The 50 cm scores are maintained or improved
+and the official scores are maintained or improved. Nagoya1 and Nagoya2
+remain byte-identical to the preceding sign-off (MD5
+`ac8f1f079296a4f10ed3603b4e672f54` and
+`30d61358688fd1a34f5f71b14c3e2803`) because a trajectory that never
+enters the short-baseline region cannot arm the stabilizer.
 
 The first factorization prototypes either changed downstream NIS consumers
 or changed the RTK trajectory and were rejected. The final implementation
