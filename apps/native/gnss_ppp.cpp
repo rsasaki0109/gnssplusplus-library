@@ -69,6 +69,7 @@ struct Options {
     std::string madocalib_end_time;
     double madocalib_time_interval_seconds = 0.0;
     int madocalib_trace_level = 0;
+    bool madocalib_trace_ar = false;
     bool kinematic_mode = false;
     bool low_dynamics_mode = false;
     bool use_dynamics_model = false;
@@ -175,6 +176,8 @@ void printUsage(const char* program_name) {
         << "                          MADOCALIB output interval passed to postpos()\n"
         << "  --madocalib-trace <level>\n"
         << "                          MADOCALIB trace level (default: 0)\n"
+        << "  --madocalib-trace-ar   Include MADOCALIB ambiguity means, covariance,\n"
+        << "                          LAMBDA candidates, and partial-AR decisions in trace\n"
         << "  --static                Use a static PPP motion model (default)\n"
         << "  --kinematic             Use a kinematic PPP motion model\n"
         << "  --use-dynamics-model    Continuous pos/vel dynamics (MRTKLIB accel model)\n"
@@ -354,6 +357,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.madocalib_time_interval_seconds = std::stod(argv[++i]);
         } else if (arg == "--madocalib-trace" && i + 1 < argc) {
             options.madocalib_trace_level = std::stoi(argv[++i]);
+        } else if (arg == "--madocalib-trace-ar") {
+            options.madocalib_trace_ar = true;
         } else if (arg == "--no-ionosphere-free") {
             options.use_ionosphere_free = false;
         } else if (arg == "--ionosphere-free") {
@@ -750,6 +755,7 @@ int main(int argc, char* argv[]) {
             bridge_options.time_interval_seconds =
                 options.madocalib_time_interval_seconds;
             bridge_options.trace_level = options.madocalib_trace_level;
+            bridge_options.trace_ar = options.madocalib_trace_ar;
             if (!options.sp3_path.empty()) {
                 bridge_options.auxiliary_input_paths.push_back(options.sp3_path);
             }
@@ -837,6 +843,8 @@ int main(int argc, char* argv[]) {
                         << ",\n"
                         << "  \"madocalib_time_interval_seconds\": "
                         << options.madocalib_time_interval_seconds << ",\n"
+                        << "  \"madocalib_trace_ar\": "
+                        << (options.madocalib_trace_ar ? "true" : "false") << ",\n"
                         << "  \"madocalib_l6_inputs\": [";
                 bool first_l6 = true;
                 for (const std::string& l6_path : options.madocalib_l6_paths) {

@@ -61,6 +61,10 @@ else()
     message(STATUS "CHOLMOD disabled; using Eigen sparse covariance solver")
 endif()
 option(MADOCALIB_PARITY_LINK "Link external MADOCALIB C sources for opt-in parity oracle tests" OFF)
+option(
+    MADOCALIB_PARITY_ORACLE
+    "Enable the full MADOCALIB C++ oracle wrapper (disable for bridge-only parity runs)"
+    ON)
 set(MADOCALIB_ROOT_DIR
     ""
     CACHE PATH "Path to the MADOCALIB checkout root")
@@ -212,6 +216,12 @@ if(MADOCALIB_PARITY_LINK)
     )
     target_link_libraries(madocalib PUBLIC Threads::Threads)
     if(WIN32)
+        # The Visual Studio generator defines WIN32 implicitly, but Ninja with
+        # MSVC does not. MADOCALIB uses this spelling (rather than _WIN32) to
+        # select its Win32 headers and synchronization implementation. The
+        # native oracle wrapper includes the same upstream header.
+        target_compile_definitions(madocalib PRIVATE WIN32)
+        target_compile_definitions(gnss_lib PRIVATE WIN32)
         # rtkcmn.c tickget() calls timeGetTime.
         target_link_libraries(madocalib PUBLIC winmm)
     else()
@@ -226,7 +236,6 @@ if(MADOCALIB_PARITY_LINK)
     target_compile_definitions(gnss_lib
         PUBLIC
             GNSSPP_HAS_MADOCALIB_BRIDGE=1
-            GNSSPP_HAS_MADOCALIB_ORACLE=1
         PRIVATE
             TRACE
             ENAGLO
@@ -238,8 +247,21 @@ if(MADOCALIB_PARITY_LINK)
             NEXOBS=5
             "GNSSPP_MADOCALIB_ROOT=\"${MADOCALIB_ROOT_DIR}\""
     )
+    if(MADOCALIB_PARITY_ORACLE)
+        target_compile_definitions(gnss_lib PUBLIC GNSSPP_HAS_MADOCALIB_ORACLE=1)
+    else()
+        target_compile_definitions(gnss_lib PUBLIC GNSSPP_HAS_MADOCALIB_ORACLE=0)
+    endif()
     target_compile_definitions(gnss_lib PRIVATE GNSSPP_HAS_MADOCALIB_TIDE=1)
     target_link_libraries(gnss_lib PUBLIC madocalib)
+    if(MSVC)
+        # Optimizing the C oracle wrapper can make cl.exe consume more than
+        # 20 GiB even though the wrapper is not runtime-hot. Keep Windows
+        # parity builds locally repeatable without changing solver code.
+        set_source_files_properties(
+            src/algorithms/madocalib_oracle.cpp
+            PROPERTIES COMPILE_OPTIONS "/Od")
+    endif()
 else()
     target_compile_definitions(gnss_lib
         PUBLIC

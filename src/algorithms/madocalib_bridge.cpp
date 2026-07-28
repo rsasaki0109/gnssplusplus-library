@@ -385,6 +385,18 @@ int runPostpos(const PostposOptions& options, std::string* error_message) {
     if (prcopt.ionocorr || prcopt.modear >= ARMODE_CONT) {
         prcopt.ionoopt = IONOOPT_EST;
     }
+    if (options.trace_ar && std::strstr(prcopt.pppopt, "-TRACE_AR") == nullptr) {
+        const std::string current_options(prcopt.pppopt);
+        const std::string trace_options =
+            current_options.empty() ? "-TRACE_AR" : current_options + " -TRACE_AR";
+        if (trace_options.size() >= sizeof(prcopt.pppopt)) {
+            if (error_message != nullptr) {
+                *error_message = "MADOCALIB pppopt is too long to enable -TRACE_AR";
+            }
+            return -1;
+        }
+        std::snprintf(prcopt.pppopt, sizeof(prcopt.pppopt), "%s", trace_options.c_str());
+    }
     applySignalSelection(prcopt);
 
     for (size_t i = 0; i < options.mdciono_paths.size() && i < MIONO_MAX_PRN; ++i) {
