@@ -75,7 +75,13 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
             continue;
         }
 
-        const Observation* primary = findObservationForSignals(obs, sat, primarySignals(sat.system));
+        const Observation* primary =
+            findObservationForSignals(obs, sat, primarySignals(sat.system));
+        if (require_coherent_ssr_) {
+            primary =
+                algorithms::ppp_bias_identity::madocaFrequencySlotObservation(
+                    obs, sat, 0, primary);
+        }
         if (primary == nullptr) {
             continue;
         }
@@ -155,6 +161,11 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
         const Observation* secondary = findObservationForSignals(
             obs, sat, secondarySignalsForObservation(
                 sat, prefer_qzss_l5, require_coherent_ssr_));
+        if (require_coherent_ssr_) {
+            secondary =
+                algorithms::ppp_bias_identity::madocaFrequencySlotObservation(
+                    obs, sat, 1, secondary);
+        }
 
         // Per-frequency mode: carry BOTH L1 and L2 raw observables.
         // SSR corrections (orbit/clock/bias/iono) still applied below.
