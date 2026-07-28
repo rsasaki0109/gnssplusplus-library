@@ -128,6 +128,7 @@ class PackagingSmokeTest(unittest.TestCase):
                 prefix / "scripts" / "generate_feature_overview_card.py",
                 prefix / "scripts" / "generate_odaiba_social_card.py",
                 prefix / "configs" / "README.md",
+                prefix / "configs" / "examples" / "fuse.example.toml",
                 prefix / "configs" / "examples" / "live.example.conf",
                 prefix / "configs" / "examples" / "web.example.toml",
                 prefix / "configs" / "signoff" / "ppp_products_ppc.example.toml",

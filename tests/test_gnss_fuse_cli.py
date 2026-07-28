@@ -1,9 +1,10 @@
-"""Regression tests for the concise and advanced gnss_fuse help surfaces."""
+"""Regression tests for gnss_fuse's concise help and TOML config surface."""
 
 from __future__ import annotations
 
 import os
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -27,9 +28,9 @@ class GnssFuseCliTest(unittest.TestCase):
             raise RuntimeError(f"gnss_fuse executable not found; checked: {rendered}")
 
     @classmethod
-    def run_fuse(cls, option: str) -> subprocess.CompletedProcess[str]:
+    def run_fuse(cls, *options: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            [str(cls.executable), option],
+            [str(cls.executable), *options],
             check=False,
             capture_output=True,
             text=True,
@@ -40,11 +41,54 @@ class GnssFuseCliTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stderr)
         self.assertIn("--data-dir <dir>", result.stdout)
+        self.assertIn("--config <path>", result.stdout)
         self.assertIn("--navi776-tc", result.stdout)
         self.assertIn("--help-advanced", result.stdout)
         self.assertNotIn("--tc-doppler-sigma", result.stdout)
         self.assertNotIn("--rtk-ins-prior-inflation", result.stdout)
         self.assertLess(len(result.stdout), 5000)
+
+    def test_config_supplies_defaults_and_cli_always_overrides_them(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_fuse_config_") as temp_dir:
+            config_path = Path(temp_dir) / "fuse.toml"
+            config_path.write_text(
+                "\n".join(
+                    [
+                        "[gnss_fuse]",
+                        'gnss_pos = "missing-solution.pos"',
+                        'imu = "missing-imu.csv"',
+                        "lever_arm = [0.31, 0.0, 0.55]",
+                        "navi776_tc = false",
+                        "max_epochs = -1",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_fuse(
+                "--max-epochs",
+                "0",
+                "--config",
+                str(config_path),
+            )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("failed to load IMU CSV", result.stderr)
+        self.assertNotIn("--max-epochs must be non-negative", result.stderr)
+
+    def test_unknown_config_key_is_rejected_by_the_existing_option_parser(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_fuse_config_") as temp_dir:
+            config_path = Path(temp_dir) / "fuse.toml"
+            config_path.write_text(
+                "[gnss_fuse]\nthis_option_does_not_exist = 1\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_fuse("--config", str(config_path))
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("unknown or incomplete argument: --this-option-does-not-exist",
+                      result.stderr)
 
     def test_advanced_help_retains_research_option_discoverability(self) -> None:
         result = self.run_fuse("--help-advanced")
