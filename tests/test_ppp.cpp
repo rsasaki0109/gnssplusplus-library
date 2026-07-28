@@ -145,6 +145,18 @@ TEST(PPPIonospherePrediction, MatchesMadocalibCarrierDeltaAndElevationNoise) {
         1e-12);
 }
 
+TEST(PPPStateInitialization, MadocaPerFrequencyUsesMadocalibZtdPrior) {
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::initialTroposphereVariance(true, true, 0.36),
+        0.12 * 0.12);
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::initialTroposphereVariance(false, true, 0.36),
+        0.36);
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::initialTroposphereVariance(false, false, 0.36),
+        25.0);
+}
+
 TEST(PPPEnvOverridesTest, MadocaQzssL5DefaultsToThreeFrequencyParity) {
     EXPECT_TRUE(PPPEnvOverrides::fromEnvironment().madoca_qzss_l5);
 }
