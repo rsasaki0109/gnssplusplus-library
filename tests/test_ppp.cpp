@@ -2503,6 +2503,32 @@ TEST(PPPMultifrequencyTest, PreservesMadocalibBeiDouExactBiasIdentity) {
               static_cast<std::uint8_t>(parity::kCodeL2I));
 }
 
+TEST(PPPMultifrequencyTest, UsesMadocalibHeaderFrequencySlotWithoutFallback) {
+    namespace identity = algorithms::ppp_bias_identity;
+    ObservationData epoch;
+    const SatelliteId satellite(GNSSSystem::GPS, 27);
+
+    Observation fallback;
+    fallback.satellite = satellite;
+    fallback.signal = SignalType::GPS_L2C;
+    fallback.pseudorange_observation_type = "C2L";
+    fallback.carrier_phase_observation_type = "L2L";
+
+    Observation exact = fallback;
+    exact.pseudorange_observation_type = "C2W";
+    exact.carrier_phase_observation_type = "L2W";
+    epoch.setRinexFrequencySlot(GNSSSystem::GPS, 1, "2W");
+    epoch.addRinexTrackingObservation("2W", exact);
+
+    EXPECT_EQ(
+        identity::madocaFrequencySlotObservation(epoch, satellite, 1, &fallback),
+        epoch.getRinexTrackingObservation(satellite, "2W"));
+    EXPECT_EQ(
+        identity::madocaFrequencySlotObservation(
+            epoch, SatelliteId(GNSSSystem::GPS, 31), 1, &fallback),
+        nullptr);
+}
+
 TEST(PPPMultifrequencyTest, SeparatesMadocalibBeiDouGenerationsForDoubleDifferences) {
     const auto bds2 = ppp_ar::ambiguityDdGroup(
         SatelliteId(GNSSSystem::BeiDou, 18));
