@@ -121,6 +121,22 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
             continue;
         }
 
+        const bool madoca_gps_l1_ionosphere =
+            require_coherent_ssr_ && ssr_products_loaded_ &&
+            !ppp_config_.use_ionosphere_free &&
+            ppp_config_.estimate_ionosphere &&
+            !ppp_config_.use_clas_osr_filter;
+        const auto ionosphereScale = [&](double frequency_hz) {
+            return madoca_gps_l1_ionosphere
+                ? ppp_internal::madocaIonosphereScale(frequency_hz)
+                : algorithms::ppp_multifrequency::ionosphereScale(
+                      observation.freq_l1, frequency_hz);
+        };
+        const double primary_ionosphere_scale =
+            madoca_gps_l1_ionosphere
+                ? ionosphereScale(observation.freq_l1)
+                : 1.0;
+
         const Vector3d receiver_position =
             observation.receiver_position.norm() > 1000.0 ?
                 observation.receiver_position :
@@ -173,7 +189,7 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
         if (ppp_config_.estimate_ionosphere) {
             const auto iono_it = filter_state_.ionosphere_indices.find(observation.satellite);
             if (iono_it != filter_state_.ionosphere_indices.end()) {
-                row(iono_it->second) = 1.0;  // +iono for pseudorange
+                row(iono_it->second) = primary_ionosphere_scale;
                 iono_state_m = filter_state_.state(iono_it->second);
             }
         }
@@ -181,7 +197,8 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
         const double predicted =
             geometric_range + clock_bias_m -
             constants::SPEED_OF_LIGHT * observation.satellite_clock_bias + troposphere_delay
-            + iono_state_m + observation.rx_ant_corr_l1_m;
+            + primary_ionosphere_scale * iono_state_m +
+            observation.rx_ant_corr_l1_m;
         const double residual = observation.pseudorange_if - predicted;
 
         // Env-gated pre-fit residual dump for native-vs-bridge measurement diff.
@@ -311,7 +328,9 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                 if (ppp_config_.estimate_ionosphere) {
                     const auto iono_it = filter_state_.ionosphere_indices.find(observation.satellite);
                     if (iono_it != filter_state_.ionosphere_indices.end()) {
-                        iono_phase_correction = -2.0 * filter_state_.state(iono_it->second);
+                        iono_phase_correction =
+                            -2.0 * primary_ionosphere_scale *
+                            filter_state_.state(iono_it->second);
                     }
                 }
                 const double predicted_phase = predicted + iono_phase_correction
@@ -339,7 +358,8 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                     if (ppp_config_.estimate_ionosphere) {
                         const auto iono_it = filter_state_.ionosphere_indices.find(observation.satellite);
                         if (iono_it != filter_state_.ionosphere_indices.end()) {
-                            phase_row(iono_it->second) = -1.0;
+                            phase_row(iono_it->second) =
+                                -primary_ionosphere_scale;
                         }
                     }
                     phase_row(ambiguity_index) = 1.0;
@@ -363,8 +383,7 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
         // by (f1/f2)^2. Code carries +iono, phase carries -iono (oracle ppp.c).
         if (!ppp_config_.use_ionosphere_free && ppp_config_.estimate_ionosphere &&
             observation.has_l2 && observation.freq_l1 > 0.0 && observation.freq_l2 > 0.0) {
-            const double ratio = observation.freq_l1 / observation.freq_l2;
-            const double ratio2 = ratio * ratio;
+            const double ratio2 = ionosphereScale(observation.freq_l2);
             const auto iono_it = filter_state_.ionosphere_indices.find(observation.satellite);
             const int iono_index =
                 iono_it != filter_state_.ionosphere_indices.end() ? iono_it->second : -1;
@@ -475,9 +494,7 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                 !(frequency.frequency > 0.0)) {
                 continue;
             }
-            const double ratio2 =
-                algorithms::ppp_multifrequency::ionosphereScale(
-                    observation.freq_l1, frequency.frequency);
+            const double ratio2 = ionosphereScale(frequency.frequency);
             const auto iono_it =
                 filter_state_.ionosphere_indices.find(observation.satellite);
             const int iono_index = iono_it != filter_state_.ionosphere_indices.end()

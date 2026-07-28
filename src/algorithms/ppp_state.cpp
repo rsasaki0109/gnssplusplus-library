@@ -1326,8 +1326,22 @@ int PPPProcessor::getOrCreateIonosphereState(const IonosphereFreeObs& observatio
         filter_state_.total_states, filter_state_.total_states);
     filter_state_.covariance.row(new_index).setZero();
     filter_state_.covariance.col(new_index).setZero();
-    filter_state_.state(new_index) =
+    const bool madoca_per_frequency =
+        require_coherent_ssr_ && ssr_products_loaded_ &&
+        !ppp_config_.use_ionosphere_free &&
+        ppp_config_.estimate_ionosphere &&
+        !ppp_config_.use_clas_osr_filter;
+    double initial_ionosphere_m =
         observation.has_iono_init ? observation.iono_init_m : 0.0;
+    if (observation.has_iono_init && madoca_per_frequency) {
+        const double gps_l1_ionosphere_m =
+            ppp_internal::madocaIonosphereStateFromPrimaryMeters(
+                observation.iono_init_m, observation.freq_l1);
+        if (std::isfinite(gps_l1_ionosphere_m)) {
+            initial_ionosphere_m = gps_l1_ionosphere_m;
+        }
+    }
+    filter_state_.state(new_index) = initial_ionosphere_m;
     // Mirror the GNSS_PPP_INIT_IONO_VAR override at the lazy-create site so a
     // satellite appearing mid-run lands in the same anchored gauge.
     filter_state_.covariance(new_index, new_index) =
