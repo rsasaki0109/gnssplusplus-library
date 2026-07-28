@@ -226,6 +226,10 @@ loop, velocity states, Doppler rows at sigma 0.5, and adaptive noise; both
 Doppler and adaptive-noise paths are gated at a 1000 m baseline. It also
 enables two measured-update optimizations:
 
+This preset is the only navi.776 control shown in the default
+`gnss_fuse --help`. The component controls remain accepted for reproducible
+experiments and are documented by `gnss_fuse --help-advanced`.
+
 - the Kalman update returns the already-solved weighted innovation and
   `diag(H P H^T)`, avoiding a second innovation-matrix factorization while
   preserving the adaptive tracker's row statistics;

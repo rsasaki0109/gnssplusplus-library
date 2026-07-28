@@ -458,8 +458,8 @@ class CliUxTest(unittest.TestCase):
         clas_row = clas_rows[0]
         for snippet in (
             "Six PPC Tokyo/Nagoya runs",
-            "22.055% aggregate FIX",
-            "36 FIX epochs above 3 m",
+            "24.851% aggregate FIX",
+            "19 FIX epochs (0.03%) exceed 3 m",
         ):
             self.assertIn(snippet, clas_row)
 
@@ -472,12 +472,12 @@ class CliUxTest(unittest.TestCase):
         for snippet in (
             "current moving-data gate",
             "all six public PPC Tokyo/Nagoya runs",
-            "Across 58,258 scored epochs",
+            "Across 58,259 scored epochs",
             "All RMS2D*",
             "SINGLE RMS2D*",
             "catastrophic FLOAT/SPP disagreement above 250 m",
             "excluded from ordinary filter admission, cold starts, and AR",
-            "FLOAT and SINGLE RMS2D are 16.615 m and 70.291 m",
+            "FLOAT and SINGLE RMS2D are 16.843 m and 70.337 m",
         ):
             self.assertIn(snippet, normalized_section)
 
