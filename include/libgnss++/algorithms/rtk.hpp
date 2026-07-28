@@ -7,6 +7,7 @@
 #include "nlos_weights.hpp"
 #include "float_trust_policy.hpp"
 #include "rtk_adaptive_noise.hpp"
+#include "rtk_float_stabilizer.hpp"
 #include "rtk_cmc_reference.hpp"
 #include "rtk_measurement.hpp"
 #include "rtk_selection.hpp"
@@ -15,6 +16,7 @@
 #include "spp.hpp"
 #include <libgnss++/fusion/dd_imu_bridge.hpp>
 #include <Eigen/Dense>
+#include <deque>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -534,6 +536,10 @@ public:
         /// Existing position/hardware-bias/iono/ambiguity indices therefore
         /// never move. Requires an external position/velocity time update.
         bool enable_velocity_states = false;
+        /// Causal FLOAT output stabilization for the validated short-baseline
+        /// Doppler/adaptive-noise combination. It never feeds the predicted
+        /// position back into the float filter or ambiguity state.
+        bool enable_fixed_anchor_float_stabilization = false;
 
         /// M5 measurement-neutral single-difference TDCP-vs-Doppler
         /// diagnostics. No filter row or state mutation is performed.
@@ -1206,6 +1212,9 @@ private:
     // Epoch tracking
     GNSSTime last_epoch_time_;
     bool has_last_epoch_ = false;
+    bool fixed_anchor_float_stabilizer_armed_ = false;
+    std::deque<rtk_float_stabilizer::FixedAnchor>
+        fixed_anchor_float_history_;
     GNSSTime last_trusted_time_;
     bool has_last_trusted_time_ = false;
     // WP9: the trusted position/time recorded just *before* the current
@@ -1457,7 +1466,8 @@ private:
         bool saved_has_last_trusted,
         const GNSSTime& saved_last_trusted_time,
         bool saved_has_last_trusted_time);
-    void recordFixedEpoch();
+    void recordFixedEpoch(const PositionSolution& solution);
+    void stabilizeFloatOutput(PositionSolution& solution) const;
     void recordFloatEpoch(const ObservationData& rover_obs, const NavigationData& nav);
     void recordFallbackEpoch(const ObservationData& rover_obs, const NavigationData& nav);
 

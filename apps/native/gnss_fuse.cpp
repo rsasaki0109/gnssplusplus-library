@@ -1263,6 +1263,11 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
     rtk_config.use_external_position_time_update =
         options.tc_ins_time_update || options.tc_closed_loop;
     rtk_config.enable_velocity_states = options.tc_velocity_states;
+    rtk_config.enable_fixed_anchor_float_stabilization =
+        options.tc_doppler_rows &&
+        options.rtk_adaptive_noise &&
+        options.tc_doppler_max_baseline_m == 1000.0 &&
+        options.rtk_adaptive_noise_max_baseline_m == 1000.0;
     rtk_config.enable_doppler_measurement_rows = options.tc_doppler_rows;
     rtk_config.reuse_kalman_factorization_for_nis =
         options.tc_reuse_update_factorization;

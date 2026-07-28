@@ -346,6 +346,8 @@ void RTKProcessor::reset() {
     has_last_epoch_ = false;
     has_last_trusted_time_ = false;
     has_prev_trusted_position_ = false;
+    fixed_anchor_float_stabilizer_armed_ = false;
+    fixed_anchor_float_history_.clear();
     has_last_doppler_velocity_ = false;
     has_doppler_continuity_position_ = false;
     current_epoch_nlos_fraction_ = std::numeric_limits<double>::quiet_NaN();
@@ -1732,10 +1734,58 @@ bool RTKProcessor::shouldResetAfterFloatResidualGate(
     return true;
 }
 
-void RTKProcessor::recordFixedEpoch() {
+void RTKProcessor::recordFixedEpoch(const PositionSolution& solution) {
     consecutive_float_count_ = 0;
     consecutive_nonfix_count_ = 0;
     consecutive_high_float_residual_count_ = 0;
+    if (!rtk_config_.enable_fixed_anchor_float_stabilization ||
+        !solution.position_ecef.allFinite()) {
+        return;
+    }
+    const double max_baseline_m =
+        rtk_config_.doppler_row_max_baseline_m;
+    if (!fixed_anchor_float_stabilizer_armed_) {
+        const double baseline_m =
+            (solution.position_ecef - base_position_).norm();
+        fixed_anchor_float_stabilizer_armed_ =
+            rtk_float_stabilizer::shouldArm(
+                baseline_m, max_baseline_m);
+        if (!fixed_anchor_float_stabilizer_armed_) return;
+    }
+    const double time_s =
+        static_cast<double>(solution.time.week) * 604800.0 +
+        solution.time.tow;
+    fixed_anchor_float_history_.push_back(
+        {time_s, solution.position_ecef});
+    while (fixed_anchor_float_history_.size() > 2 &&
+           time_s - fixed_anchor_float_history_.front().time_s > 20.0) {
+        fixed_anchor_float_history_.pop_front();
+    }
+}
+
+void RTKProcessor::stabilizeFloatOutput(PositionSolution& solution) const {
+    if (!rtk_config_.enable_fixed_anchor_float_stabilization ||
+        solution.status != SolutionStatus::FLOAT) {
+        return;
+    }
+    const double time_s =
+        static_cast<double>(solution.time.week) * 604800.0 +
+        solution.time.tow;
+    const auto prediction = rtk_float_stabilizer::predict(
+        fixed_anchor_float_history_,
+        time_s,
+        solution.position_ecef,
+        debug_telemetry_.float_position_covariance_trace_m2);
+    if (!prediction.has_value()) return;
+
+    solution.position_ecef = *prediction;
+    solution.baseline_length =
+        (solution.position_ecef - base_position_).norm();
+    ecef2geodetic(
+        solution.position_ecef,
+        solution.position_geodetic.latitude,
+        solution.position_geodetic.longitude,
+        solution.position_geodetic.height);
 }
 
 void RTKProcessor::recordFloatEpoch(const ObservationData& rover_obs, const NavigationData& nav) {
@@ -2492,7 +2542,7 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                         updateStatistics(SolutionStatus::FIXED);
                         consecutive_fix_count_++;
                         consecutive_float_count_ = 0;
-                        recordFixedEpoch();
+                        recordFixedEpoch(solution);
                         debug_telemetry_.final_fixed_applied = true;
 
                         // Save fixed position for next epoch's position reset
@@ -2541,7 +2591,7 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                         updateStatistics(SolutionStatus::FIXED);
                         consecutive_fix_count_++;
                         consecutive_float_count_ = 0;
-                        recordFixedEpoch();
+                        recordFixedEpoch(solution);
                         debug_telemetry_.final_fixed_applied = true;
                         if (consecutive_fix_count_ >= rtk_config_.min_hold_count) {
                             applyHoldAmbiguity();
@@ -2594,6 +2644,7 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
         adaptive_dynamic_slip_hold_count_ = 0;
         return spp;
     }
+    stabilizeFloatOutput(solution);
     return solution;
 }
 
