@@ -83,6 +83,16 @@ inline double madocaIonosphereProcessVariance(double zenith_variance_per_second,
            (sin_elevation * sin_elevation);
 }
 
+inline double initialTroposphereVariance(bool madoca_per_frequency,
+                                         bool broadcast_model,
+                                         double configured_variance) {
+    // MADOCALIB ppp.c initializes estimated ZTD with VAR_ZTD=SQR(0.12).
+    if (madoca_per_frequency) {
+        return 0.12 * 0.12;
+    }
+    return broadcast_model ? configured_variance : 25.0;
+}
+
 inline std::string trimCopy(const std::string& text) {
     const auto is_not_space = [](unsigned char ch) {
         return !std::isspace(ch);

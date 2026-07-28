@@ -373,8 +373,14 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
         use_broadcast_rtklib_model ? ppp_config_.initial_clock_variance : 1e8;
     filter_state_.covariance(filter_state_.glo_clock_index, filter_state_.glo_clock_index) =
         use_broadcast_rtklib_model ? ppp_config_.initial_clock_variance : 1e8;
+    const bool madoca_per_frequency =
+        require_coherent_ssr_ && !ppp_config_.use_ionosphere_free &&
+        ppp_config_.estimate_ionosphere;
     filter_state_.covariance(filter_state_.trop_index, filter_state_.trop_index) =
-        use_broadcast_rtklib_model ? ppp_config_.initial_troposphere_variance : 25.0;
+        ppp_internal::initialTroposphereVariance(
+            madoca_per_frequency,
+            use_broadcast_rtklib_model,
+            ppp_config_.initial_troposphere_variance);
     // Per-system receiver clocks use the same epoch prior as GPS by default.
     const double system_clock_initial_variance =
         use_broadcast_rtklib_model ? ppp_config_.initial_clock_variance : 1e8;
