@@ -4033,6 +4033,7 @@ class CLIToolsTest(unittest.TestCase):
         result = self.run_gnss("ppp", "--help")
         self.assertEqual(result.returncode, 0, msg=result.stderr)
         self.assertIn("--madocalib-bridge", result.stdout)
+        self.assertIn("--madocalib-trace-ar", result.stdout)
         self.assertIn("--madocalib-l6", result.stdout)
         self.assertIn("--madocalib-mdciono", result.stdout)
         self.assertIn("--madocalib-profile", result.stdout)

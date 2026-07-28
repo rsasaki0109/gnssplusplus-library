@@ -17,6 +17,7 @@ struct PostposOptions {
     std::string end_time;
     double time_interval_seconds = 0.0;
     int trace_level = 0;
+    bool trace_ar = false;
 };
 
 bool isAvailable();
