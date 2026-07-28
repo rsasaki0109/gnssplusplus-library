@@ -1194,8 +1194,12 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                             extra.phase_bias_m = pb;
                         }
                     }
-                    // Re-derive the ionosphere seed from bias-corrected codes.
-                    if (observation.has_l2 && observation.pseudorange_l1 != 0.0 &&
+                    // MADOCALIB's udbias_ppp() intentionally combines
+                    // corrected L/P with an ionosphere seed from raw P1/P2.
+                    if (algorithms::ppp_correction_contract::
+                            rederiveIonosphereSeedAfterSsrBias(
+                                require_coherent_ssr_) &&
+                        observation.has_l2 && observation.pseudorange_l1 != 0.0 &&
                         observation.freq_l1 > 0.0 && observation.freq_l2 > 0.0) {
                         const double ratio = observation.freq_l1 / observation.freq_l2;
                         const double denom = 1.0 - ratio * ratio;

@@ -63,6 +63,13 @@ constexpr double ssrMeasurementBiasSign(bool madoca_convention) {
     return madoca_convention ? 1.0 : -1.0;
 }
 
+// MADOCALIB initializes per-frequency ambiguity states with corrected carrier
+// phase/code observations but computes the ionosphere seed from the original
+// raw P1/P2 pair. Preserve that seed for coherent MADOCA SSR processing.
+constexpr bool rederiveIonosphereSeedAfterSsrBias(bool madoca_convention) {
+    return !madoca_convention;
+}
+
 // Neutral atmosphere delays are removed from code and phase alike, while the
 // first-order ionosphere is dispersive: remove it from code, add it to phase.
 constexpr double measurementCorrectionSign(bool carrier_phase, bool dispersive) {

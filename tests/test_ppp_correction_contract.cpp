@@ -30,6 +30,11 @@ TEST(PPPCorrectionContractTest, MadocaBiasConventionAddsMeasurementBiases) {
     EXPECT_DOUBLE_EQ(contract::ssrMeasurementBiasSign(false), -1.0);
 }
 
+TEST(PPPCorrectionContractTest, MadocaPreservesRawCodeIonosphereSeed) {
+    EXPECT_FALSE(contract::rederiveIonosphereSeedAfterSsrBias(true));
+    EXPECT_TRUE(contract::rederiveIonosphereSeedAfterSsrBias(false));
+}
+
 TEST(PPPCorrectionContractTest, AtmosphereSignsMatchCodeAndPhasePhysics) {
     EXPECT_DOUBLE_EQ(contract::measurementCorrectionSign(false, false), -1.0);
     EXPECT_DOUBLE_EQ(contract::measurementCorrectionSign(true, false), -1.0);
