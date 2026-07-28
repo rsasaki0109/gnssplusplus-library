@@ -40,7 +40,10 @@ if(GTSAM_FOUND)
     target_link_libraries(gnss_fgo_parity PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
 endif()
 
-add_executable(gnss_fuse ${GNSS_NATIVE_DIR}/gnss_fuse.cpp)
+add_executable(gnss_fuse
+    ${GNSS_NATIVE_DIR}/gnss_fuse.cpp
+    ${GNSS_NATIVE_DIR}/cli_toml_config.cpp
+)
 target_link_libraries(gnss_fuse PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
 
 add_executable(gnss_vel_d ${GNSS_NATIVE_DIR}/gnss_vel_d.cpp)
@@ -58,7 +61,10 @@ target_link_libraries(gnss_pos_vel_pdc PRIVATE gnss_lib gnss_lib_noopt Threads::
 add_executable(gnss_pos_vel_pd ${GNSS_NATIVE_DIR}/gnss_pos_vel_pd.cpp)
 target_link_libraries(gnss_pos_vel_pd PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
 
-add_executable(gnss_solve ${GNSS_NATIVE_DIR}/gnss_solve.cpp)
+add_executable(gnss_solve
+    ${GNSS_NATIVE_DIR}/gnss_solve.cpp
+    ${GNSS_NATIVE_DIR}/cli_toml_config.cpp
+)
 target_link_libraries(gnss_solve PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
 
 add_executable(gnss_ppp ${GNSS_NATIVE_DIR}/gnss_ppp.cpp)
@@ -212,6 +218,7 @@ install(FILES
 install(FILES
     ${CMAKE_SOURCE_DIR}/configs/examples/fuse.example.toml
     ${CMAKE_SOURCE_DIR}/configs/examples/live.example.conf
+    ${CMAKE_SOURCE_DIR}/configs/examples/solve.example.toml
     ${CMAKE_SOURCE_DIR}/configs/examples/web.example.toml
     DESTINATION configs/examples
 )

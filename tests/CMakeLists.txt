@@ -412,8 +412,12 @@ if(GTest_FOUND)
         NAME python_gnss_fuse_cli_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_gnss_fuse_cli.py
     )
+    add_test(
+        NAME python_gnss_solve_cli_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_gnss_solve_cli.py
+    )
     set_tests_properties(
-        python_gnss_fuse_cli_tests
+        python_gnss_fuse_cli_tests python_gnss_solve_cli_tests
         PROPERTIES ENVIRONMENT "GNSSPP_BINARY_DIR=${CMAKE_BINARY_DIR}"
     )
     set_tests_properties(
@@ -469,6 +473,7 @@ if(GTest_FOUND)
         python_web_http_ux_tests
         python_experiment_runner_tests
         python_gnss_fuse_cli_tests
+        python_gnss_solve_cli_tests
         python_search_imu_time_offset_tests
     )
     set(GNSSPP_EXTENDED_TESTS
