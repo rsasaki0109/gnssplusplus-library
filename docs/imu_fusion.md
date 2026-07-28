@@ -63,6 +63,11 @@ Acc Z ≈ +9.81, despite the upstream README saying FRD).
 | Doppler LS velocity (feeds SPP/RTK solutions) | `src/algorithms/spp_velocity.cpp` |
 | CLI | `apps/native/gnss_fuse.cpp` (registered as `fuse` in `apps/gnss.py`) |
 
+`gnss fuse --help` intentionally shows only everyday inputs, outputs, and
+presets. The accepted tuning and research flags remain backward-compatible
+and are listed under `gnss fuse --help-advanced`. Prefer `--navi776-tc`
+instead of spelling out its component tight-coupling flags.
+
 The fusion deliberately does not reuse `algorithms/kalman.hpp`: its
 RTKLIB-style "active state" convention (`x[i] != 0`) is incompatible with an
 error state that is legitimately zero after injection.

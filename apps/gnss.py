@@ -126,7 +126,7 @@ COMMANDS = {
     "fuse": {
         "kind": "binary",
         "target": "gnss_fuse",
-        "summary": "Loosely-coupled IMU+GNSS fusion over a rover.obs/nav plus imu.csv.",
+        "summary": "GNSS/IMU fusion with SPP/RTK and validated tight-coupling presets.",
     },
     "vel-d": {
         "kind": "binary",

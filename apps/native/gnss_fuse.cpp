@@ -310,6 +310,44 @@ void applyImuGradePreset(const std::string& grade, libgnss::ProcessNoiseConfig& 
 void printUsage(const char* program_name) {
     std::cout
         << "Usage: " << program_name
+        << " --data-dir <run-dir> [--navi776-tc] [options]\n"
+        << "       " << program_name
+        << " --rover <rover.obs> --nav <nav.rnx> --imu <imu.csv>"
+           " [--base <base.obs>] [options]\n\n"
+        << "GNSS/IMU fusion with in-process SPP or RTK positioning.\n"
+        << "Use --data-dir when a run directory contains rover.obs, base.obs,\n"
+        << "base.nav, and imu.csv. Existing advanced flags remain supported.\n\n"
+        << "Inputs:\n"
+        << "  --data-dir <dir>        Load the standard run files from one directory\n"
+        << "  --rover <path>          Rover RINEX observation file\n"
+        << "  --base <path>           Base RINEX observation file; enables RTK\n"
+        << "  --nav <path>            RINEX navigation file\n"
+        << "  --imu <path>            IMU CSV file\n"
+        << "  --gnss-pos <path>       Use an existing position/velocity solution\n\n"
+        << "Common options:\n"
+        << "  --navi776-tc            Validated short-baseline tight-coupling preset\n"
+        << "  --lever-arm x,y,z       IMU-to-antenna lever arm, body FLU, meters\n"
+        << "  --preset <name>         RTK preset: survey|low-cost|moving-base|odaiba\n"
+        << "  --ratio <value>         RTK ambiguity ratio threshold (default: 3.0)\n"
+        << "  --max-epochs <n>        Stop after n GNSS epochs (0 = no limit)\n"
+        << "  --out <path>            Fused solution output"
+           " (default: output/fused_solution.pos)\n"
+        << "  --rtk-pos-out <path>    Optional pre-fusion RTK solution output\n"
+        << "  --kml <path>            Optional KML trajectory output\n"
+        << "  --verbose               Print periodic progress\n"
+        << "  --quiet                 Suppress the run summary\n\n"
+        << "Help:\n"
+        << "  -h, --help              Show this everyday-use help\n"
+        << "  --help-advanced         Show every tuning, experiment, and diagnostic option\n\n"
+        << "Recommended PPC invocation:\n"
+        << "  " << program_name
+        << " --data-dir <run-dir> --lever-arm x,y,z --preset low-cost"
+           " --navi776-tc --rtk-pos-out output/rtk.pos\n";
+}
+
+void printAdvancedUsage(const char* program_name) {
+    std::cout
+        << "Usage: " << program_name
         << " --rover <rover.obs> --nav <nav.rnx> --imu <imu.csv> [--base <base.obs>] --out <fused.pos>\n"
         << "Loosely-coupled GNSS/IMU fusion (Stage 1, docs/design.md): a 15-state\n"
         << "error-state EKF mechanizes 100 Hz IMU samples and opportunistically\n"
@@ -515,7 +553,8 @@ void printUsage(const char* program_name) {
         << "                                replacement's elevation (default: 30.0)\n"
         << "  --verbose                    Print periodic per-epoch progress\n"
         << "  --quiet                      Suppress run summary\n"
-        << "  -h, --help                   Show this help\n";
+        << "  -h, --help                   Show concise everyday-use help\n"
+        << "  --help-advanced              Show this complete option reference\n";
 }
 
 // Converts the fusion filter's body(FLU)->ENU attitude quaternion into
@@ -632,6 +671,9 @@ FuseOptions parseArguments(int argc, char* argv[]) {
         const std::string arg = argv[i];
         if (arg == "-h" || arg == "--help") {
             printUsage(argv[0]);
+            std::exit(0);
+        } else if (arg == "--help-advanced") {
+            printAdvancedUsage(argv[0]);
             std::exit(0);
         } else if (arg == "--data-dir") {
             options.data_dir = requireValue(arg, i, argc, argv);
