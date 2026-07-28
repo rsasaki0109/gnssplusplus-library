@@ -66,6 +66,9 @@ in-sample benchmark results, not a held-out generalization claim.
 See the [goal audit](docs/ppc_goal_completion_audit.md),
 [FIX integrity audit](docs/ppc_fix_integrity_audit.md),
 [kinematic integrity LOO report](docs/ppc_kinematic_integrity_loo.md), and
+[external residual-integrity holdout](docs/ppc_residual_integrity_external_audit.md).
+The [Nagoya 3 root-cause analysis](docs/ppc_nagoya3_wrong_fix_root_cause.md)
+documents the catastrophic float-KF wrong basin. See the
 [reproduction commands](docs/ppc_reproduction.md) for the gate design,
 external replay, event ledger, machine-readable metrics, and licensing details.
 
