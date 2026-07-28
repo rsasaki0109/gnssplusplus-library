@@ -165,6 +165,24 @@ TEST(PPPIonospherePrediction, MatchesMadocalibCarrierDeltaAndElevationNoise) {
         1e-12);
 }
 
+TEST(PPPIonospherePrediction, SeedsStateFromCorrectedCodesWithoutChangingRawFallback) {
+    constexpr double f1 = 1575.42e6;
+    constexpr double f2 = 1227.60e6;
+    constexpr double corrected_p1 = 24000000.0;
+    constexpr double corrected_p2 = 24000005.0;
+    const double expected_primary =
+        (corrected_p1 - corrected_p2) / (1.0 - std::pow(f1 / f2, 2));
+    EXPECT_NEAR(
+        ppp_internal::madocaCorrectedCodeIonosphereStateMeters(
+            7.5, corrected_p1, corrected_p2, f1, f2),
+        expected_primary,
+        1e-12);
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::madocaCorrectedCodeIonosphereStateMeters(
+            7.5, corrected_p1, corrected_p2, f1, 0.0),
+        7.5);
+}
+
 TEST(PPPStateInitialization, MadocaPerFrequencyUsesMadocalibZtdPrior) {
     EXPECT_DOUBLE_EQ(
         ppp_internal::initialTroposphereVariance(true, true, 0.36),
