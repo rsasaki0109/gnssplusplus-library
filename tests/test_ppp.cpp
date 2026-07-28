@@ -1304,6 +1304,8 @@ TEST(PPPTest, CalculatePhaseWindupResolvesAmbiguityAgainstPriorAccumulator) {
     const double w0 = calculatePhaseWindup(receiver, satellite, sun, 0.0);
     EXPECT_TRUE(std::isfinite(w0));
     EXPECT_LE(std::abs(w0), 0.5);
+    // RTKLIB/MADOCALIB model_phw() uses receiver North/West dipoles.
+    EXPECT_NEAR(w0, 0.16090686844133648, 1e-12);
 
     // Same geometry, accumulator advanced by 5 cycles → output must track it
     // within half a cycle (the function rounds to the nearest integer of
