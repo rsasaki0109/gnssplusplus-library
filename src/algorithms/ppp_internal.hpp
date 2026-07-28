@@ -76,6 +76,29 @@ inline double madocaIonosphereStateFromPrimaryMeters(
     return primary_frequency_ionosphere_m / primary_scale;
 }
 
+inline double madocaCorrectedCodeIonosphereStateMeters(
+    double fallback_primary_ionosphere_m,
+    double corrected_primary_code_m,
+    double corrected_secondary_code_m,
+    double primary_frequency_hz,
+    double secondary_frequency_hz) {
+    double primary_ionosphere_m = fallback_primary_ionosphere_m;
+    if (primary_frequency_hz > 0.0 &&
+        secondary_frequency_hz > 0.0 &&
+        std::isfinite(corrected_primary_code_m) &&
+        std::isfinite(corrected_secondary_code_m)) {
+        const double ratio = primary_frequency_hz / secondary_frequency_hz;
+        const double denominator = 1.0 - ratio * ratio;
+        if (std::abs(denominator) > 1e-6) {
+            primary_ionosphere_m =
+                (corrected_primary_code_m - corrected_secondary_code_m) /
+                denominator;
+        }
+    }
+    return madocaIonosphereStateFromPrimaryMeters(
+        primary_ionosphere_m, primary_frequency_hz);
+}
+
 inline double madocaCarrierIonosphereMeters(double phase_l1_m,
                                             double phase_l2_m,
                                             double frequency_l1_hz,

@@ -1334,9 +1334,17 @@ int PPPProcessor::getOrCreateIonosphereState(const IonosphereFreeObs& observatio
     double initial_ionosphere_m =
         observation.has_iono_init ? observation.iono_init_m : 0.0;
     if (observation.has_iono_init && madoca_per_frequency) {
+        // MADOCALIB initializes the STEC state from corr_meas() P1/P2 after
+        // receiver-antenna and SSR code-bias corrections. Its ambiguity seeds
+        // retain the separately captured raw-code ionosphere value, so only
+        // rederive the state value here.
         const double gps_l1_ionosphere_m =
-            ppp_internal::madocaIonosphereStateFromPrimaryMeters(
-                observation.iono_init_m, observation.freq_l1);
+            ppp_internal::madocaCorrectedCodeIonosphereStateMeters(
+                observation.iono_init_m,
+                observation.pseudorange_l1,
+                observation.pseudorange_l2,
+                observation.freq_l1,
+                observation.has_l2 ? observation.freq_l2 : 0.0);
         if (std::isfinite(gps_l1_ionosphere_m)) {
             initial_ionosphere_m = gps_l1_ionosphere_m;
         }
