@@ -624,6 +624,37 @@ bool PPPProcessor::updateFilter(const ObservationData& obs,
 
     applyPreciseCorrections(if_obs, nav, obs.time);
     ensureAmbiguityStates(if_obs);
+    if (env_overrides_.pfdump) {
+        const std::streamsize previous_precision = std::cerr.precision();
+        std::cerr << std::setprecision(17);
+        for (const auto& entry : if_obs) {
+            const auto l1_it =
+                filter_state_.ambiguity_indices.find(entry.satellite);
+            const auto l2_it =
+                filter_state_.ambiguity_l2_indices.find(entry.satellite);
+            const auto ion_it =
+                filter_state_.ionosphere_indices.find(entry.satellite);
+            if (!entry.valid ||
+                l1_it == filter_state_.ambiguity_indices.end() ||
+                l2_it == filter_state_.ambiguity_l2_indices.end() ||
+                ion_it == filter_state_.ionosphere_indices.end()) {
+                continue;
+            }
+            std::cerr << "[PFSEED] week=" << obs.time.week
+                      << " tow=" << obs.time.tow
+                      << " sat=" << entry.satellite.toString()
+                      << " l1_state_m=" << filter_state_.state(l1_it->second)
+                      << " l2_state_m=" << filter_state_.state(l2_it->second)
+                      << " ion_state_m=" << filter_state_.state(ion_it->second)
+                      << " ion_init_m=" << entry.iono_init_m
+                      << " p1_m=" << entry.pseudorange_l1
+                      << " p2_m=" << entry.pseudorange_l2
+                      << " l1_m=" << entry.carrier_phase_l1
+                      << " l2_m=" << entry.carrier_phase_l2
+                      << "\n";
+        }
+        std::cerr << std::setprecision(previous_precision);
+    }
     if (apply_iono_prediction) {
         updateMadocaPerFrequencyIonospherePrediction(if_obs, dt);
     }
