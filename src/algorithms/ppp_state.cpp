@@ -582,10 +582,18 @@ void PPPProcessor::updateMadocaPerFrequencyIonospherePrediction(
             ambiguity.has_last_carrier_ionosphere = false;
             continue;
         }
+        const auto windup_it = windup_cache_.find(observation.satellite);
+        const double windup_cycles =
+            windup_it != windup_cache_.end() && std::isfinite(windup_it->second)
+                ? windup_it->second
+                : 0.0;
         const double carrier_ionosphere =
-            ppp_internal::madocaCarrierIonosphereMeters(
+            ppp_internal::madocaCarrierIonosphereMetersExcludingWindup(
                 observation.carrier_phase_l1,
                 observation.carrier_phase_l2,
+                observation.wavelength_l1,
+                observation.wavelength_l2,
+                windup_cycles,
                 observation.freq_l1,
                 observation.freq_l2);
         if (!std::isfinite(carrier_ionosphere)) {

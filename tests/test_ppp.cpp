@@ -216,6 +216,33 @@ TEST(PPPIonospherePrediction, MatchesMadocalibCarrierDeltaAndElevationNoise) {
         1e-12);
 }
 
+TEST(PPPIonospherePrediction, ExcludesPhaseWindupFromCarrierDelta) {
+    constexpr double f1 = 1575.42e6;
+    constexpr double f2 = 1227.60e6;
+    constexpr double windup_cycles = 0.37;
+    const double wavelength_l1 = constants::SPEED_OF_LIGHT / f1;
+    const double wavelength_l2 = constants::SPEED_OF_LIGHT / f2;
+    constexpr double raw_phase_l1 = 12.4;
+    constexpr double raw_phase_l2 = 12.1;
+    const double corrected_phase_l1 =
+        raw_phase_l1 - windup_cycles * wavelength_l1;
+    const double corrected_phase_l2 =
+        raw_phase_l2 - windup_cycles * wavelength_l2;
+
+    EXPECT_NEAR(
+        ppp_internal::madocaCarrierIonosphereMetersExcludingWindup(
+            corrected_phase_l1,
+            corrected_phase_l2,
+            wavelength_l1,
+            wavelength_l2,
+            windup_cycles,
+            f1,
+            f2),
+        ppp_internal::madocaCarrierIonosphereMeters(
+            raw_phase_l1, raw_phase_l2, f1, f2),
+        1e-12);
+}
+
 TEST(PPPIonospherePrediction, SeedsStateFromCorrectedCodesWithoutChangingRawFallback) {
     constexpr double f1 = 1575.42e6;
     constexpr double f2 = 1227.60e6;
