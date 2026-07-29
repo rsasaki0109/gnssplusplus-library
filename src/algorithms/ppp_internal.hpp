@@ -36,6 +36,23 @@ inline double geometryFreeSlipThresholdMeters(
             : kDefaultMinimumMeters);
 }
 
+inline std::set<SignalType> geometryFreeSlippedSignals(
+    const std::map<SignalType, double>& previous_m,
+    const std::map<SignalType, double>& current_m,
+    double threshold_m) {
+    std::set<SignalType> slipped;
+    for (const auto& [signal, current] : current_m) {
+        const auto previous = previous_m.find(signal);
+        if (previous != previous_m.end() &&
+            std::isfinite(previous->second) &&
+            std::isfinite(current) &&
+            std::abs(current - previous->second) > threshold_m) {
+            slipped.insert(signal);
+        }
+    }
+    return slipped;
+}
+
 inline int perFrequencyArMinLockCount(bool madoca_per_frequency,
                                       bool ssr_products_loaded,
                                       int convergence_min_epochs) {
