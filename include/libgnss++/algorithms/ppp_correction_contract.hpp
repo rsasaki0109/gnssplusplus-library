@@ -77,6 +77,13 @@ constexpr bool excludePhaseWindupFromAmbiguitySeed(bool madoca_convention) {
     return madoca_convention;
 }
 
+// MADOCALIB's PPP receiver geometry uses its legacy Love-number solid-earth
+// tide model. Keep the IERS model selectable for every other PPP profile.
+constexpr bool useIersSolidEarthTide(bool madoca_convention,
+                                     bool configured_iers_model) {
+    return configured_iers_model && !madoca_convention;
+}
+
 // Neutral atmosphere delays are removed from code and phase alike, while the
 // first-order ionosphere is dispersive: remove it from code, add it to phase.
 constexpr double measurementCorrectionSign(bool carrier_phase, bool dispersive) {

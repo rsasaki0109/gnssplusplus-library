@@ -1719,7 +1719,13 @@ Vector3d PPPProcessor::calculateSolidEarthTides(const Vector3d& position,
         return Vector3d::Zero();
     }
 
-    if (ppp_config_.use_iers_solid_tide) {
+    const bool madoca_per_frequency =
+        require_coherent_ssr_ && ssr_products_loaded_ &&
+        !ppp_config_.use_ionosphere_free &&
+        ppp_config_.estimate_ionosphere &&
+        !ppp_config_.use_clas_osr_filter;
+    if (algorithms::ppp_correction_contract::useIersSolidEarthTide(
+            madoca_per_frequency, ppp_config_.use_iers_solid_tide)) {
         // IERS Conventions 2010 §7.1.1 (Dehant) Step-1 + Step-2 model
         // via the libgnss::iers wrapper. Sun and Moon are supplied in
         // ICRS — see the FRAME NOTE in libgnss++/iers/tides.hpp for

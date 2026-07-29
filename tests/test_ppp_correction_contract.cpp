@@ -40,6 +40,12 @@ TEST(PPPCorrectionContractTest, MadocaExcludesWindupFromAmbiguitySeed) {
     EXPECT_FALSE(contract::excludePhaseWindupFromAmbiguitySeed(false));
 }
 
+TEST(PPPCorrectionContractTest, MadocaUsesMadocalibSolidEarthTideModel) {
+    EXPECT_FALSE(contract::useIersSolidEarthTide(true, true));
+    EXPECT_TRUE(contract::useIersSolidEarthTide(false, true));
+    EXPECT_FALSE(contract::useIersSolidEarthTide(false, false));
+}
+
 TEST(PPPCorrectionContractTest, AtmosphereSignsMatchCodeAndPhasePhysics) {
     EXPECT_DOUBLE_EQ(contract::measurementCorrectionSign(false, false), -1.0);
     EXPECT_DOUBLE_EQ(contract::measurementCorrectionSign(true, false), -1.0);
