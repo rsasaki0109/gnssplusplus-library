@@ -324,6 +324,21 @@ solution epochs remain aligned, native remains at 90 Fix / 28 Float with no
 wrong Fix, and full-window 3D delta RMS improves from 0.196 m to 0.193 m.
 M2 remains open because the early-window status agreement gate is not met.
 
+#### M2h -- GLONASS receiver code-IFB variance
+
+MADOCALIB adds `VAR_GLO_IFB=SQR(0.6)` to every GLONASS pseudorange row
+while leaving carrier-phase rows unchanged. Native previously used the common
+code variance for GLONASS, underestimating its code sigma after the constellation
+entered the filter.
+
+Coherent MADOCA per-frequency mode now adds the same `0.36 m^2` code-only
+variance. At GPS week 2360, TOW 173160, the native/oracle GLONASS code sigmas
+agree at trace precision: R09 is 3.1256 m, R19 is 6.3378 m, and R21 is
+2.5205 m. On the pinned 120-epoch MIZU probe, all 118 solution epochs remain
+aligned, native remains at 90 Fix / 28 Float with no wrong Fix, and full-window
+3D delta RMS is 0.193236 m with a 0.330669 m maximum. M2 remains open because
+the early-window status agreement gate is not met.
+
 ### M3 -- Apply L6D ionosphere products
 
 - Promote the proven snapshot lookup from shadow telemetry to an explicit

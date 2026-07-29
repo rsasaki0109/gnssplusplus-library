@@ -151,6 +151,21 @@ TEST(PPPPostfitGeometry, PreservesUnsetReceiverPosition) {
     EXPECT_TRUE(recentered.isZero());
 }
 
+TEST(PPPMeasurementVariance, MadocaPerFrequencyAddsGlonassCodeIfb) {
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::madocaGlonassCodeIfbVariance(
+            true, GNSSSystem::GLONASS),
+        0.36);
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::madocaGlonassCodeIfbVariance(
+            false, GNSSSystem::GLONASS),
+        0.0);
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::madocaGlonassCodeIfbVariance(
+            true, GNSSSystem::GPS),
+        0.0);
+}
+
 TEST(PPPIonospherePrediction, MatchesMadocalibCarrierDeltaAndElevationNoise) {
     constexpr double f1 = 1575.42e6;
     constexpr double f2 = 1227.60e6;
