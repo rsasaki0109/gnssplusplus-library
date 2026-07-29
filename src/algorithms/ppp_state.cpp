@@ -828,15 +828,34 @@ bool PPPProcessor::updateFilter(const ObservationData& obs,
         filter_state_.state += delta_state;
         constrainStaticAnchorPosition();
 
-        const MatrixXd identity =
-            MatrixXd::Identity(
-                filter_state_.total_states,
-                filter_state_.total_states);
-        const MatrixXd kh = gain * meas_eq.design_matrix;
-        filter_state_.covariance =
-            (identity - kh) * filter_state_.covariance *
-                (identity - kh).transpose() +
-            gain * meas_eq.weight_matrix * gain.transpose();
+        if (madoca_per_frequency_update) {
+            MatrixXd updated_covariance = filter_state_.covariance;
+            for (int row = 0; row < filter_state_.total_states; ++row) {
+                for (int col = 0; col < filter_state_.total_states; ++col) {
+                    double reduction = 0.0;
+                    for (int measurement = 0;
+                         measurement < meas_eq.observations.size();
+                         ++measurement) {
+                        reduction +=
+                            gain(row, measurement) *
+                            madoca_prior_times_design(col, measurement);
+                    }
+                    updated_covariance(row, col) -= reduction;
+                }
+            }
+            filter_state_.covariance = 0.5 *
+                (updated_covariance + updated_covariance.transpose());
+        } else {
+            const MatrixXd identity =
+                MatrixXd::Identity(
+                    filter_state_.total_states,
+                    filter_state_.total_states);
+            const MatrixXd kh = gain * meas_eq.design_matrix;
+            filter_state_.covariance =
+                (identity - kh) * filter_state_.covariance *
+                    (identity - kh).transpose() +
+                gain * meas_eq.weight_matrix * gain.transpose();
+        }
         completed_filter_iterations = iteration + 1;
 
         if (delta_state.segment(filter_state_.pos_index, 3).norm() < 1e-4 &&
