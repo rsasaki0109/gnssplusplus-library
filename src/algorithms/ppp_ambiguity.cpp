@@ -762,14 +762,22 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
         const double wl_dd = wl_cycles(ref) - wl_cycles(sat);
         const double n = std::round(wl_dd);
         const double frac = std::abs(n - wl_dd);
+        const auto& ref_ambiguity = ambiguity_states_.at(ref.sat);
+        const auto& sat_ambiguity = ambiguity_states_.at(sat.sat);
+        const double mw_dd =
+            ref_ambiguity.mw_count > 0 && sat_ambiguity.mw_count > 0
+                ? ref_ambiguity.mw_mean_cycles -
+                      sat_ambiguity.mw_mean_cycles
+                : std::numeric_limits<double>::quiet_NaN();
+        const bool mw_supported =
+            madocaGalileoMwSupportsWideLaneAdmission(
+                sat.sat.system,
+                mw_dd,
+                ref_ambiguity.mw_count,
+                sat_ambiguity.mw_count);
         if (env_overrides_.pfdump) {
-            const auto& ref_ambiguity = ambiguity_states_.at(ref.sat);
-            const auto& sat_ambiguity = ambiguity_states_.at(sat.sat);
             if (ref_ambiguity.mw_count > 0 &&
                 sat_ambiguity.mw_count > 0) {
-                const double mw_dd =
-                    ref_ambiguity.mw_mean_cycles -
-                    sat_ambiguity.mw_mean_cycles;
                 std::cerr << "[PFWL-MW] " << ref.sat.toString()
                           << "-" << sat.sat.toString()
                           << " mw=" << mw_dd
@@ -777,6 +785,7 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
                           << std::abs(std::round(mw_dd) - mw_dd)
                           << " ref_n=" << ref_ambiguity.mw_count
                           << " sat_n=" << sat_ambiguity.mw_count
+                          << " supported=" << mw_supported
                           << "\n";
             }
         }
@@ -802,7 +811,7 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
             std::cerr << "[PFWL] " << ref.sat.toString() << "-" << sat.sat.toString()
                       << " wl=" << wl_dd << " frac=" << frac << " std=" << sd << "\n";
         }
-        if (frac < kMaxFracWl && sd < kMaxStdWl) {
+        if ((frac < kMaxFracWl || mw_supported) && sd < kMaxStdWl) {
             const double constraint_sigma =
                 sat.sat.system == GNSSSystem::BeiDou ? 0.05 : 0.01;
             wl_pairs.push_back({

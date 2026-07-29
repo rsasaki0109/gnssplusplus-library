@@ -166,6 +166,17 @@ TEST(PPPMeasurementVariance, MadocaPerFrequencyDoesNotDeweightQzssL5) {
         false, SignalType::GPS_L1CA, SignalType::GPS_L2C));
 }
 
+TEST(PPPArAdmission, MatureGalileoMwCanSupportWideLaneAdmission) {
+    EXPECT_TRUE(ppp_internal::madocaGalileoMwSupportsWideLaneAdmission(
+        GNSSSystem::Galileo, -7.142, 81, 81));
+    EXPECT_FALSE(ppp_internal::madocaGalileoMwSupportsWideLaneAdmission(
+        GNSSSystem::Galileo, -7.142, 59, 81));
+    EXPECT_FALSE(ppp_internal::madocaGalileoMwSupportsWideLaneAdmission(
+        GNSSSystem::Galileo, -7.250, 81, 81));
+    EXPECT_FALSE(ppp_internal::madocaGalileoMwSupportsWideLaneAdmission(
+        GNSSSystem::BeiDou, -161.865, 81, 81));
+}
+
 TEST(PPPArTrialState, PerFrequencyAttemptsAreAlwaysEphemeral) {
     using ARMethod = PPPProcessor::PPPConfig::ARMethod;
     EXPECT_TRUE(ppp_internal::alwaysRestoreArTrialState(ARMethod::DD_PER_FREQ));
