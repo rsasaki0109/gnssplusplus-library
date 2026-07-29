@@ -115,6 +115,25 @@ TEST(PPPCycleSlips, MadocaPerFrequencyUsesMadocalibGeometryFreeThreshold) {
         0.5);
 }
 
+TEST(PPPCycleSlips, MadocaChecksEveryNonPrimaryFrequency) {
+    const std::map<SignalType, double> previous{
+        {SignalType::GPS_L2P, 12.840},
+        {SignalType::GPS_L5, 7.984},
+    };
+    const std::map<SignalType, double> current{
+        {SignalType::GPS_L2P, 12.984},
+        {SignalType::GPS_L5, 8.159},
+    };
+
+    EXPECT_EQ(
+        ppp_internal::geometryFreeSlippedSignals(previous, current, 0.15),
+        std::set<SignalType>{SignalType::GPS_L5});
+    EXPECT_TRUE(ppp_internal::geometryFreeSlippedSignals(
+        {{SignalType::GPS_L2P, previous.at(SignalType::GPS_L2P)}},
+        {{SignalType::GPS_L2P, current.at(SignalType::GPS_L2P)}},
+        0.15).empty());
+}
+
 TEST(PPPArAdmission, CoherentSsrDoesNotAddALockCountGate) {
     EXPECT_EQ(ppp_internal::perFrequencyArMinLockCount(true, true, 20), 0);
     EXPECT_EQ(ppp_internal::perFrequencyArMinLockCount(false, true, 20), 10);

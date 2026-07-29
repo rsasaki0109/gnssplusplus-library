@@ -367,6 +367,8 @@ public:
 
 private:
     std::map<SatelliteId, PPPAmbiguityInfo> ambiguity_states_;
+    std::map<SatelliteId, std::set<SignalType>>
+        pending_ambiguity_frequency_resets_;
     std::map<SatelliteId, CLASDispersionCompensationInfo> clas_dispersion_compensation_;
     std::map<SatelliteId, CLASSisContinuityInfo> clas_sis_continuity_;
 
@@ -830,6 +832,14 @@ private:
      * @brief Reset ambiguity for satellite
      */
     void resetAmbiguity(const SatelliteId& satellite, SignalType signal);
+    void resetMadocaAmbiguityFrequencies(
+        const SatelliteId& satellite,
+        SignalType primary_signal,
+        const std::set<SignalType>& slipped_nonprimary_signals);
+    bool ambiguityFrequencyNeedsReset(
+        const SatelliteId& satellite, SignalType signal) const;
+    void completeAmbiguityFrequencyReset(
+        const SatelliteId& satellite, SignalType signal);
 
     void reinitializeVectorState(int start_index, const Vector3d& value, double variance);
     void reinitializeScalarState(int index, double value, double variance);
