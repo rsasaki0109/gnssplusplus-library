@@ -85,7 +85,7 @@ does not yet match end-to-end behavior; **open** has no accepted native parity.
 | PPP commit-on-success and diagnostics | Native postfit validation/shadow telemetry | native | MIZU 1 h/6 h/24 h and ALIC regression gates remain green |
 | GLONASS phase in MADOCA PPP | Native L1/L2 rows plus corrected postfit-shadow audit | native | Keep the pinned per-satellite demeaned RMS at millimetre scale and span below 4 cm |
 | MADOCALIB `exec_ppp` | Native PPP runs end to end; remaining solution delta is tracked | partial | M4/M5 matrix meets the declared trajectory thresholds |
-| MADOCALIB `exec_pppar` | Native per-frequency path reaches 90 Fix versus 108 oracle Fix in 118 matched epochs, with no native-only Fix | partial | M2 must close the remaining early-window status gap |
+| MADOCALIB `exec_pppar` | Native per-frequency path reaches 95 Fix versus 108 oracle Fix in 118 matched epochs, with no native-only Fix | partial | M2 must resolve the remaining 13 oracle-Fix/native-Float epochs |
 | MADOCALIB `exec_pppar-ion` | Bridge profile/input validation exists; native L6D state injection does not | open | M3 then M5 PPP-AR-ion sign-off |
 | Triple/quad-frequency PPP-AR | Upstream 2.0 behavior has not been fully audited or signed off | open | Dedicated fixtures and ambiguity/state parity after dual-frequency M2 |
 | Linked `postpos()` bridge | `madocalib_bridge` | oracle-only | Retain until M6; never select it in production runtime |
@@ -93,16 +93,20 @@ does not yet match end-to-end behavior; **open** has no accepted native parity.
 ## Current Numerical Baselines
 
 The frozen one-hour MIZU PPP-AR CI window has 118 matched output epochs.  The
-MADOCALIB `pppar` oracle produces 108 Fix and 10 Float; after M2f and the QZSS
-oracle-order bridge correction, the native per-frequency path produces 90 Fix
-and 28 Float with no native-only Fix.  Status agreement is 100/118 (84.75%).
-The recorded native/oracle 3D delta RMS is 0.196 m with a 0.325 m maximum.
+MADOCALIB `pppar` oracle produces 108 Fix and 10 Float.  After frequency-scoped
+multi-frequency geometry-free slip handling and the MADOCALIB solid-earth-tide
+convention, the native per-frequency path produces 95 Fix and 23 Float with no
+native-only Fix.  Status agreement is 105/118 (88.98%).  The recorded
+native/oracle 3D delta RMS is 0.112100 m, with 0.070070 m over the trailing
+1800 seconds.
 
-Convergence telemetry localizes the immediate blocker before LAMBDA: 118
-evaluations comprise 19 insufficient-history epochs and 99 position-deviation
-rejects.  The final 20-epoch window has a 1.17008 m maximum ECEF deviation
-against the current 0.1 m threshold.  The configuration calls this a horizontal
-threshold, but the implementation currently uses a full ECEF 3D norm.
+The convergence gate now admits the per-frequency resolver after the declared
+local-ENU warm-up policy.  The remaining M2 blocker is inside the float-state
+trajectory presented to LAMBDA: at the first oracle-Fix/native-Float split
+(TOW 173190), both implementations form the same 10 N1 double differences and
+exclude J03 first, but the oracle's reduced ratio is 2.846 while native remains
+at 1.232.  Candidate identities and diagonal sigmas align; float DD means
+differ by up to about 0.21 cycle.
 
 The float-PPP history and older MIZU/ALIC/full-day measurements remain in issue
 #148 and `madoca_port_plan.md`; they are regression context, not proof that
@@ -339,6 +343,35 @@ aligned, native remains at 90 Fix / 28 Float with no wrong Fix, and full-window
 3D delta RMS is 0.193236 m with a 0.330669 m maximum. M2 remains open because
 the early-window status agreement gate is not met.
 
+#### M2i -- Multi-frequency geometry-free slip scope
+
+MADOCALIB evaluates the primary carrier against every configured secondary
+frequency and resets only the primary plus the frequency whose geometry-free
+jump crosses `pos2-slipthres=0.15 m`.  Native previously checked only its first
+secondary and then reset every ambiguity for the satellite.
+
+The coherent MADOCA path now uses the oracle threshold without the generic
+0.5 m floor, evaluates every retained frequency, and performs frequency-scoped
+resets.  The pinned G28 event at 00:02:00 has a 0.144 m L1-L2 change and a
+0.175 m L1-L5 change, so L1/L5 reset immediately while L2 remains continuous.
+Across the 118 aligned output epochs, native improves from 91 Fix / 27 Float
+to 95 Fix / 23 Float, with no native-only Fix.  Status agreement is 88.98%.
+M2 remains open because 13 oracle Fix epochs are still native Float.
+
+#### M2j -- Solid-earth-tide convention
+
+MADOCALIB uses the legacy Love-number solid-earth-tide displacement for this
+profile.  Native's default IERS Step-1+2 model created a real receiver-geometry
+difference even though it was not the remaining AR admission cause.  Coherent
+MADOCA now selects the legacy convention while other PPP profiles retain their
+configured tide model.
+
+On the pinned window, the default output is exactly equal to the explicit
+legacy-tide A/B output for all 118 rows.  Fix/Float counts remain 95/23, while
+the full native/oracle 3D RMS improves from 0.209425 m to 0.112100 m and the
+trailing-1800-second RMS improves from 0.221474 m to 0.070070 m.  M2 remains
+open because the status and native-Fix-count gates are not met.
+
 ### M3 -- Apply L6D ionosphere products
 
 - Promote the proven snapshot lookup from shadow telemetry to an explicit
@@ -407,8 +440,11 @@ remains open.
 
 ## Immediate Slice
 
-Continue M2 from the now-matched measurement variance surface.  Compare the
-remaining float-state initialization/process-noise and ambiguity candidate-row
-differences before changing admission thresholds.  Preserve the two hard
-guards established so far: never publish a wide-lane-only result as Fix, and
-never publish a native Fix outside an oracle Fix epoch.
+Continue M2 from the first float measurement update.  Compare the code-driven
+allocation among position, constellation clocks, ZTD, STEC, receiver-frequency
+biases, and carrier ambiguities before changing admission thresholds.  EWL/WL
+conditioning, PAR availability, active-state filtering, IFB process noise,
+wet-troposphere mapping, and nominal-yaw phase windup have been excluded as the
+remaining status cause.  Preserve the two hard guards established so far:
+never publish a wide-lane-only result as Fix, and never publish a native Fix
+outside an oracle Fix epoch.
