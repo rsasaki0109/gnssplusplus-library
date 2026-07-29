@@ -719,24 +719,81 @@ bool PPPProcessor::updateFilter(const ObservationData& obs,
             return false;
         }
 
-        const MatrixXd innovation_covariance =
-            meas_eq.design_matrix * filter_state_.covariance * meas_eq.design_matrix.transpose() +
-            meas_eq.weight_matrix;
-        MatrixXd innovation_inverse;
+        MatrixXd gain;
+        VectorXd delta_state;
+        MatrixXd madoca_prior_times_design;
         if (madoca_per_frequency_update) {
-            innovation_inverse = innovation_covariance;
+            const int state_count = filter_state_.total_states;
+            const int measurement_count =
+                static_cast<int>(meas_eq.observations.size());
+            madoca_prior_times_design =
+                MatrixXd::Zero(state_count, measurement_count);
+            for (int state = 0; state < state_count; ++state) {
+                for (int measurement = 0;
+                     measurement < measurement_count;
+                     ++measurement) {
+                    double value = 0.0;
+                    for (int k = 0; k < state_count; ++k) {
+                        value += filter_state_.covariance(state, k) *
+                                 meas_eq.design_matrix(measurement, k);
+                    }
+                    madoca_prior_times_design(state, measurement) = value;
+                }
+            }
+
+            MatrixXd innovation_inverse = meas_eq.weight_matrix;
+            for (int row = 0; row < measurement_count; ++row) {
+                for (int col = 0; col < measurement_count; ++col) {
+                    double value = innovation_inverse(row, col);
+                    for (int state = 0; state < state_count; ++state) {
+                        value += meas_eq.design_matrix(row, state) *
+                                 madoca_prior_times_design(state, col);
+                    }
+                    innovation_inverse(row, col) = value;
+                }
+            }
             if (!invertMadocaInnovation(innovation_inverse)) {
                 return false;
             }
+
+            gain = MatrixXd::Zero(state_count, measurement_count);
+            for (int state = 0; state < state_count; ++state) {
+                for (int measurement = 0;
+                     measurement < measurement_count;
+                     ++measurement) {
+                    double value = 0.0;
+                    for (int k = 0; k < measurement_count; ++k) {
+                        value +=
+                            madoca_prior_times_design(state, k) *
+                            innovation_inverse(k, measurement);
+                    }
+                    gain(state, measurement) = value;
+                }
+            }
+            delta_state = VectorXd::Zero(state_count);
+            for (int state = 0; state < state_count; ++state) {
+                for (int measurement = 0;
+                     measurement < measurement_count;
+                     ++measurement) {
+                    delta_state(state) +=
+                        gain(state, measurement) *
+                        meas_eq.residuals(measurement);
+                }
+            }
         } else {
-            innovation_inverse =
+            const MatrixXd innovation_covariance =
+                meas_eq.design_matrix * filter_state_.covariance *
+                    meas_eq.design_matrix.transpose() +
+                meas_eq.weight_matrix;
+            const MatrixXd innovation_inverse =
                 innovation_covariance.ldlt().solve(MatrixXd::Identity(
                     innovation_covariance.rows(),
                     innovation_covariance.cols()));
+            gain = filter_state_.covariance *
+                   meas_eq.design_matrix.transpose() *
+                   innovation_inverse;
+            delta_state = gain * meas_eq.residuals;
         }
-        const MatrixXd gain =
-            filter_state_.covariance * meas_eq.design_matrix.transpose() * innovation_inverse;
-        const VectorXd delta_state = gain * meas_eq.residuals;
         const double position_delta_norm =
             delta_state.segment(filter_state_.pos_index, 3).norm();
 
@@ -772,10 +829,13 @@ bool PPPProcessor::updateFilter(const ObservationData& obs,
         constrainStaticAnchorPosition();
 
         const MatrixXd identity =
-            MatrixXd::Identity(filter_state_.total_states, filter_state_.total_states);
+            MatrixXd::Identity(
+                filter_state_.total_states,
+                filter_state_.total_states);
         const MatrixXd kh = gain * meas_eq.design_matrix;
         filter_state_.covariance =
-            (identity - kh) * filter_state_.covariance * (identity - kh).transpose() +
+            (identity - kh) * filter_state_.covariance *
+                (identity - kh).transpose() +
             gain * meas_eq.weight_matrix * gain.transpose();
         completed_filter_iterations = iteration + 1;
 
