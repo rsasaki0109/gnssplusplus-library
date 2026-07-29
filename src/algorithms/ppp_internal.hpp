@@ -97,6 +97,17 @@ inline bool madocaGalileoMwSupportsWideLaneAdmission(
                kMaximumFractionalCycles;
 }
 
+inline bool madocaHighAgreementRatioAccepted(bool madoca_per_frequency,
+                                             double ratio,
+                                             double threshold,
+                                             double matching_candidate_rate) {
+    constexpr double kRelativeTolerance = 0.01;
+    return ratio >= threshold ||
+           (madoca_per_frequency &&
+            matching_candidate_rate > 0.90 &&
+            ratio >= threshold * (1.0 - kRelativeTolerance));
+}
+
 inline bool alwaysRestoreArTrialState(PPPProcessor::PPPConfig::ARMethod method) {
     // MADOCALIB runs per-frequency EWL/WL/N1 constraints on xp/Pp, a copy of
     // the float filter.  The trial is never committed to rtk->x/P, including

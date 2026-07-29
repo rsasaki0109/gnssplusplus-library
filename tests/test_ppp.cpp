@@ -162,6 +162,19 @@ TEST(PPPArAdmission, MatureGalileoMwCanSupportWideLaneAdmission) {
         GNSSSystem::BeiDou, -161.865, 81, 81));
 }
 
+TEST(PPPArAdmission, HighAgreementMadocaRatioHasOnePercentTolerance) {
+    EXPECT_TRUE(ppp_internal::madocaHighAgreementRatioAccepted(
+        true, 1.19231, 1.2, 0.933));
+    EXPECT_FALSE(ppp_internal::madocaHighAgreementRatioAccepted(
+        true, 1.187, 1.2, 0.933));
+    EXPECT_FALSE(ppp_internal::madocaHighAgreementRatioAccepted(
+        true, 1.19231, 1.2, 0.90));
+    EXPECT_FALSE(ppp_internal::madocaHighAgreementRatioAccepted(
+        false, 1.19231, 1.2, 0.933));
+    EXPECT_TRUE(ppp_internal::madocaHighAgreementRatioAccepted(
+        false, 1.2, 1.2, 0.0));
+}
+
 TEST(PPPArTrialState, PerFrequencyAttemptsAreAlwaysEphemeral) {
     using ARMethod = PPPProcessor::PPPConfig::ARMethod;
     EXPECT_TRUE(ppp_internal::alwaysRestoreArTrialState(ARMethod::DD_PER_FREQ));

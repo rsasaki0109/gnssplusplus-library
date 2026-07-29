@@ -1004,7 +1004,11 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
                       << " threshold=" << effective_threshold
                       << " match_rate=" << match_rate << "\n";
         }
-        if (ratio >= effective_threshold) {
+        if (madocaHighAgreementRatioAccepted(
+                require_coherent_ssr_ && ssr_products_loaded_,
+                ratio,
+                effective_threshold,
+                match_rate)) {
             n1_accepted = true;
             break;
         }
