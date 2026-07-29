@@ -103,6 +103,21 @@ TEST(PPPFilterIterations, MadocaPerFrequencyCommitsOneUpdatePerEpoch) {
     EXPECT_EQ(ppp_internal::filterIterationCount(false, false, 8), 8);
 }
 
+TEST(PPPFilterUpdate, MadocaScaledLuInvertsInnovationMatrix) {
+    MatrixXd matrix(3, 3);
+    matrix << 4.0, 2.0, 0.0,
+              2.0, 5.0, 1.0,
+              0.0, 1.0, 3.0;
+    const MatrixXd original = matrix;
+
+    ASSERT_TRUE(ppp_internal::invertMadocaInnovation(matrix));
+    EXPECT_TRUE((original * matrix).isApprox(
+        MatrixXd::Identity(3, 3), 1e-12));
+
+    MatrixXd singular = MatrixXd::Zero(2, 2);
+    EXPECT_FALSE(ppp_internal::invertMadocaInnovation(singular));
+}
+
 TEST(PPPCycleSlips, MadocaPerFrequencyUsesMadocalibGeometryFreeThreshold) {
     EXPECT_DOUBLE_EQ(
         ppp_internal::geometryFreeSlipThresholdMeters(true, 0.05),

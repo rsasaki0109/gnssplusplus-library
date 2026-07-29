@@ -24,6 +24,103 @@ inline int filterIterationCount(bool madoca_per_frequency_update,
     return precise_products_loaded ? 3 : configured_iterations;
 }
 
+inline bool invertMadocaInnovation(MatrixXd& matrix) {
+    const int n = static_cast<int>(matrix.rows());
+    if (n <= 0 || matrix.cols() != n) {
+        return false;
+    }
+
+    // Match RTKLIB/MADOCALIB rtkcmn.c::matinv(): scaled partial-pivot LU,
+    // including its last-row tie break. The per-frequency filter contains
+    // weak ionosphere/ambiguity gauge directions where Eigen's LDLT pivoting
+    // can choose materially different state means across platforms.
+    MatrixXd lu = matrix;
+    std::vector<double> row_scale(static_cast<size_t>(n), 0.0);
+    std::vector<int> pivots(static_cast<size_t>(n), 0);
+    for (int row = 0; row < n; ++row) {
+        double largest = 0.0;
+        for (int col = 0; col < n; ++col) {
+            largest = std::max(largest, std::abs(lu(row, col)));
+        }
+        if (!(largest > 0.0)) {
+            return false;
+        }
+        row_scale[static_cast<size_t>(row)] = 1.0 / largest;
+    }
+
+    for (int col = 0; col < n; ++col) {
+        for (int row = 0; row < col; ++row) {
+            double value = lu(row, col);
+            for (int k = 0; k < row; ++k) {
+                value -= lu(row, k) * lu(k, col);
+            }
+            lu(row, col) = value;
+        }
+
+        double largest = 0.0;
+        int pivot = col;
+        for (int row = col; row < n; ++row) {
+            double value = lu(row, col);
+            for (int k = 0; k < col; ++k) {
+                value -= lu(row, k) * lu(k, col);
+            }
+            lu(row, col) = value;
+            const double scaled =
+                row_scale[static_cast<size_t>(row)] * std::abs(value);
+            if (scaled >= largest) {
+                largest = scaled;
+                pivot = row;
+            }
+        }
+        if (pivot != col) {
+            for (int k = 0; k < n; ++k) {
+                std::swap(lu(pivot, k), lu(col, k));
+            }
+            row_scale[static_cast<size_t>(pivot)] =
+                row_scale[static_cast<size_t>(col)];
+        }
+        pivots[static_cast<size_t>(col)] = pivot;
+        if (lu(col, col) == 0.0) {
+            return false;
+        }
+        if (col != n - 1) {
+            const double reciprocal = 1.0 / lu(col, col);
+            for (int row = col + 1; row < n; ++row) {
+                lu(row, col) *= reciprocal;
+            }
+        }
+    }
+
+    matrix.setZero();
+    for (int col = 0; col < n; ++col) {
+        VectorXd rhs = VectorXd::Zero(n);
+        rhs(col) = 1.0;
+        int first_nonzero = -1;
+        for (int row = 0; row < n; ++row) {
+            const int pivot = pivots[static_cast<size_t>(row)];
+            double value = rhs(pivot);
+            rhs(pivot) = rhs(row);
+            if (first_nonzero >= 0) {
+                for (int k = first_nonzero; k < row; ++k) {
+                    value -= lu(row, k) * rhs(k);
+                }
+            } else if (value != 0.0) {
+                first_nonzero = row;
+            }
+            rhs(row) = value;
+        }
+        for (int row = n - 1; row >= 0; --row) {
+            double value = rhs(row);
+            for (int k = row + 1; k < n; ++k) {
+                value -= lu(row, k) * rhs(k);
+            }
+            rhs(row) = value / lu(row, row);
+        }
+        matrix.col(col) = rhs;
+    }
+    return matrix.allFinite();
+}
+
 inline double geometryFreeSlipThresholdMeters(
     bool madoca_per_frequency,
     double configured_threshold_m) {
