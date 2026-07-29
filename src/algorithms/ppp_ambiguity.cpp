@@ -570,22 +570,33 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
     const int nx = filter_state_.total_states;
 
     if (env_overrides_.pfdump) {
-        for (const Cand& cand : cands) {
-            const auto ion_it =
-                filter_state_.ionosphere_indices.find(cand.sat);
-            const int ion_index =
-                ion_it != filter_state_.ionosphere_indices.end()
-                    ? ion_it->second
-                    : -1;
-            std::cerr << "[PFSTATE] " << cand.sat.toString()
-                      << " l1_m=" << x(cand.l1_index)
-                      << " l1_cyc=" << x(cand.l1_index) / cand.lambda1
-                      << " l2_m=" << x(cand.l2_index)
-                      << " l2_cyc=" << x(cand.l2_index) / cand.lambda2;
-            if (ion_index >= 0 && ion_index < nx) {
-                std::cerr << " ion_m=" << x(ion_index);
+        for (const auto& [sat, l1_index] : filter_state_.ambiguity_indices) {
+            if (observed_now.count(sat) == 0) {
+                continue;
             }
-            std::cerr << "\n";
+            const auto l2_it =
+                filter_state_.ambiguity_l2_indices.find(sat);
+            const auto ion_it =
+                filter_state_.ionosphere_indices.find(sat);
+            const auto amb_it = ambiguity_states_.find(sat);
+            if (l2_it == filter_state_.ambiguity_l2_indices.end() ||
+                ion_it == filter_state_.ionosphere_indices.end() ||
+                amb_it == ambiguity_states_.end() ||
+                l1_index < 0 || l1_index >= nx ||
+                l2_it->second < 0 || l2_it->second >= nx ||
+                ion_it->second < 0 || ion_it->second >= nx ||
+                !(amb_it->second.wavelength_l1 > 0.0) ||
+                !(amb_it->second.wavelength_l2 > 0.0)) {
+                continue;
+            }
+            std::cerr << "[PFSTATE] " << sat.toString()
+                      << " l1_m=" << x(l1_index)
+                      << " l1_cyc="
+                      << x(l1_index) / amb_it->second.wavelength_l1
+                      << " l2_m=" << x(l2_it->second)
+                      << " l2_cyc="
+                      << x(l2_it->second) / amb_it->second.wavelength_l2
+                      << " ion_m=" << x(ion_it->second) << "\n";
         }
         for (size_t i = 0; i < cands.size(); ++i) {
             const auto ref_it = ref_of_group.find(
