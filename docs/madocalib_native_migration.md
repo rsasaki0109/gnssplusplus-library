@@ -83,9 +83,9 @@ does not yet match end-to-end behavior; **open** has no accepted native parity.
 | L6D use inside PPP | `--madoca-l6d-shadow` performs measurement-neutral lookup only | partial | M3 must add opt-in STEC state/row application and prove row/value parity |
 | PPP correction signs and ordering | Native correction contract plus materialization/residual diff tools | native | Default PPP parity matrix remains within the accepted MIZU/ALIC envelope |
 | PPP commit-on-success and diagnostics | Native postfit validation/shadow telemetry | native | MIZU 1 h/6 h/24 h and ALIC regression gates remain green |
-| GLONASS phase in MADOCA PPP | Intentionally excluded: no MADOCA phase-bias product and measured time-varying residual | native policy | Keep phase preview off unless new correction evidence changes the model |
+| GLONASS phase in MADOCA PPP | Native L1/L2 rows plus corrected postfit-shadow audit | native | Keep the pinned per-satellite demeaned RMS at millimetre scale and span below 4 cm |
 | MADOCALIB `exec_ppp` | Native PPP runs end to end; remaining solution delta is tracked | partial | M4/M5 matrix meets the declared trajectory thresholds |
-| MADOCALIB `exec_pppar` | Native per-frequency path is reachable, but the pinned baseline is 0 native Fix versus 108 oracle Fix in 118 matched epochs | open | M1/M2 must match candidate, admission, status, and constrained-state behavior |
+| MADOCALIB `exec_pppar` | Native per-frequency path reaches 90 Fix versus 108 oracle Fix in 118 matched epochs, with no native-only Fix | partial | M2 must close the remaining early-window status gap |
 | MADOCALIB `exec_pppar-ion` | Bridge profile/input validation exists; native L6D state injection does not | open | M3 then M5 PPP-AR-ion sign-off |
 | Triple/quad-frequency PPP-AR | Upstream 2.0 behavior has not been fully audited or signed off | open | Dedicated fixtures and ambiguity/state parity after dual-frequency M2 |
 | Linked `postpos()` bridge | `madocalib_bridge` | oracle-only | Retain until M6; never select it in production runtime |
@@ -93,10 +93,10 @@ does not yet match end-to-end behavior; **open** has no accepted native parity.
 ## Current Numerical Baselines
 
 The frozen one-hour MIZU PPP-AR CI window has 118 matched output epochs.  The
-MADOCALIB `pppar` oracle produces 108 Fix and 10 Float; the native per-frequency
-path produces 0 Fix and 118 Float.  The recorded native/oracle 3D delta RMS is
-10.090 m with a 45.380 m maximum after selecting the correct uncombined/STEC
-state model.
+MADOCALIB `pppar` oracle produces 108 Fix and 10 Float; after M2f and the QZSS
+oracle-order bridge correction, the native per-frequency path produces 90 Fix
+and 28 Float with no native-only Fix.  Status agreement is 100/118 (84.75%).
+The recorded native/oracle 3D delta RMS is 0.196 m with a 0.325 m maximum.
 
 Convergence telemetry localizes the immediate blocker before LAMBDA: 118
 evaluations comprise 19 insufficient-history epochs and 99 position-deviation
@@ -301,8 +301,28 @@ epochs, with no wrong Fix.  Full-window native/oracle 3D delta RMS is 0.337 m,
 maximum is 0.854 m, horizontal RMS is 0.232 m, Up RMS is 0.244 m, and the
 final-30-minute RMS is 0.309 m.  The full RMS is 0.020 m above M2e while the
 maximum improves by 0.134 m; this slice accepts the exact oracle row contract.
-GLONASS phase remains intentionally excluded until its measured FDMA residual
-drift is modelled, and M2 remains open.
+M2 remains open.
+
+#### M2g -- GLONASS phase rows and STEC prior parity
+
+MADOCALIB initializes each estimated STEC state with `VAR_IONO=SQR(60.0)` and
+admits both GLONASS L1 and L2 carrier-phase rows in the float filter.  Native
+previously used a 100 m² generic STEC prior and suppressed only the GLONASS L1
+phase row; L2 remained active despite the code-only comment and opt-out.
+
+Coherent MADOCA now uses the oracle's 3600 m² STEC prior and enables both
+GLONASS phase rows by default.  `GNSS_PPP_INIT_IONO_VAR` remains an explicit
+prior override, and `GNSS_PPP_MADOCA_GLONASS_PHASE=0` consistently suppresses
+both GLONASS phase rows.
+
+The earlier metre-scale GLONASS drift diagnosis was caused by postfit telemetry
+using receiver geometry materialized before the accepted filter update.  With
+the corrected shadow from M2g's prerequisite PR, the four pinned GLONASS
+satellites show demeaned residual RMS of 2.4--5.2 mm, spans of 1.6--3.4 cm, and
+near-zero residual/elevation correlation.  On the 120-epoch MIZU probe, all 118
+solution epochs remain aligned, native remains at 90 Fix / 28 Float with no
+wrong Fix, and full-window 3D delta RMS improves from 0.196 m to 0.193 m.
+M2 remains open because the early-window status agreement gate is not met.
 
 ### M3 -- Apply L6D ionosphere products
 

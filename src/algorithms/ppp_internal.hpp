@@ -152,6 +152,17 @@ inline double initialTroposphereVariance(bool madoca_per_frequency,
     return broadcast_model ? configured_variance : 25.0;
 }
 
+inline double initialIonosphereVariance(bool madoca_per_frequency,
+                                        double configured_override,
+                                        double configured_variance) {
+    if (configured_override > 0.0) {
+        return configured_override;
+    }
+    // MADOCALIB ppp.c initializes every estimated STEC state with
+    // VAR_IONO=SQR(60.0).
+    return madoca_per_frequency ? 60.0 * 60.0 : configured_variance;
+}
+
 inline std::string trimCopy(const std::string& text) {
     const auto is_not_space = [](unsigned char ch) {
         return !std::isspace(ch);

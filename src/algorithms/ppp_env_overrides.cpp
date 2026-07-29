@@ -152,7 +152,8 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
     overrides.madoca_qzss_phase = !envExactZero("GNSS_PPP_MADOCA_QZSS_PHASE");
     overrides.madoca_qzss_l5 = !envExactZero("GNSS_PPP_MADOCA_QZSS_L5");
     overrides.madoca_glonass = !envExactZero("GNSS_PPP_MADOCA_GLONASS");
-    overrides.madoca_glonass_phase = envExactOne("GNSS_PPP_MADOCA_GLONASS_PHASE");
+    overrides.madoca_glonass_phase =
+        !envExactZero("GNSS_PPP_MADOCA_GLONASS_PHASE");
     overrides.madoca_low_elev = !envExactZero("GNSS_PPP_MADOCA_LOW_ELEV");
     overrides.madoca_galileo_gate =
         envExactOne("GNSS_PPP_MADOCA_GALILEO_GATE") ||

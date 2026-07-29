@@ -219,8 +219,24 @@ TEST(PPPStateInitialization, MadocaPerFrequencyUsesMadocalibZtdPrior) {
         25.0);
 }
 
+TEST(PPPStateInitialization, MadocaPerFrequencyUsesMadocalibStecPrior) {
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::initialIonosphereVariance(true, 0.0, 100.0),
+        60.0 * 60.0);
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::initialIonosphereVariance(false, 0.0, 100.0),
+        100.0);
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::initialIonosphereVariance(true, 25.0, 100.0),
+        25.0);
+}
+
 TEST(PPPEnvOverridesTest, MadocaQzssL5DefaultsToThreeFrequencyParity) {
     EXPECT_TRUE(PPPEnvOverrides::fromEnvironment().madoca_qzss_l5);
+}
+
+TEST(PPPEnvOverridesTest, MadocaGlonassPhaseDefaultsToParityRows) {
+    EXPECT_TRUE(PPPEnvOverrides::fromEnvironment().madoca_glonass_phase);
 }
 
 TEST(NavigationSsrIodeSelection, DoesNotFallBackWhenGpsIodeIsUnavailable) {

@@ -78,9 +78,9 @@ struct PPPEnvOverrides {
     // GNSS_PPP_MADOCA_GLONASS: include GLONASS in coherent MADOCA unless set
     // exactly to "0". Default true.
     bool madoca_glonass = true;
-    // GNSS_PPP_MADOCA_GLONASS_PHASE: allow GLONASS phase rows in MADOCA when
-    // set exactly to "1". Default false.
-    bool madoca_glonass_phase = false;
+    // GNSS_PPP_MADOCA_GLONASS_PHASE: allow GLONASS phase rows in coherent
+    // MADOCA. Default true for MADOCALIB parity; set exactly to "0" to opt out.
+    bool madoca_glonass_phase = true;
     // GNSS_PPP_MADOCA_LOW_ELEV: admit coherent MADOCA observations down to the
     // MADOCALIB 10 degree mask unless set exactly to "0". Default true.
     bool madoca_low_elev = true;

@@ -41,15 +41,14 @@ the remaining preview-only knobs stay default-off.
 The repro harness and per-slice history live in the memory note
 `madoca-ppp-frontier` and in issue #148.
 
-GLONASS phase was re-diagnosed and closed as a parity lever: the per-satellite
-~1.5 m residual is not an unabsorbed constant but a covariance-collapse plus
-within-pass-varying (elevation-arched) phase error — the float ambiguity
-variance collapses to ~0.03 within ~38 epochs and can no longer track the drift,
-and GLONASS code carries large FDMA inter-frequency biases too.  MADOCA SSR
-provides no GLONASS phase-bias product, so default GLONASS-phase-off is correct
-(matches MADOCALIB excluding GLO from the precise phase/AR solution).
+The original GLONASS-phase diagnosis below was invalidated in M2g.  Its
+metre-scale residual used stale pre-update receiver geometry in the postfit
+shadow.  Corrected geometry shows 2.4--5.2 mm demeaned RMS and 1.6--3.4 cm
+spans, and MADOCALIB does admit GLONASS L1/L2 phase in the float filter.
+GLONASS phase is therefore default-on for coherent MADOCA; it remains excluded
+from integer ambiguity candidates, matching `gen_sat_sd()`.
 
-Generate the evidence with `GNSS_PPP_MADOCA_GLONASS_PHASE=1` and
+Generate the default-on evidence with
 `GNSS_PPP_MADOCA_POSTFIT_SHADOW=<csv>`, then run
 `scripts/analysis/madoca_glonass_phase_audit.py <csv> --json-out <json>`.
 The `madoca_glonass_phase_audit.v1` report records per-satellite raw and
