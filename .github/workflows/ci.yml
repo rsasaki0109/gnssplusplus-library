@@ -651,7 +651,7 @@ jobs:
           grep -q '"convergence_policy": "legacy-3d"' native_pppar_smoke.json
           grep -q '"ar_stage_last":' native_pppar_smoke.json
           grep -q '"ar_per_frequency_attempts":' native_pppar_smoke.json
-          GNSS_PPP_PFDUMP=1 ./apps/gnss_ppp \
+          GNSS_PPP_INIT_IONO_VAR=100 GNSS_PPP_PFDUMP=1 ./apps/gnss_ppp \
             --kinematic \
             --enable-ar \
             --ar-method per-freq \
