@@ -398,20 +398,13 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
         filter_state_.covariance(
             filter_state_.bds2_clock_index, filter_state_.bds2_clock_index) =
             system_clock_initial_variance;
-    // Initialize per-satellite ionosphere states. GNSS_PPP_INIT_IONO_VAR (>0)
-    // overrides the per-satellite initial ionosphere covariance. The est-stec
-    // KF has a rank-deficient gauge in (iono, N1, N2, cdtr) -- a uniform shift
-    // (iono+Δ, λN+Δ, cdtr−Δ) leaves the phase observations invariant -- so
-    // when the constellation membership shifts (e.g. orbit-fix dropping a sat
-    // missing its SSR orbit correction) the null-space anchor moves and the
-    // filter settles to a different common-mode iono level. A tight prior pins
-    // this gauge: on the MADOCA est-stec parity workload, var=1 lets a
-    // low-latitude station (ALIC) stack cleanly with the orbit-fix lever for
-    // bridge-parity float, while the default (100) is correct at mid-latitude
-    // (MIZU); the right value is station-dependent, so this is opt-in.
-    const double iono_init_var = env_overrides_.init_iono_var > 0.0
-                                     ? env_overrides_.init_iono_var
-                                     : ppp_config_.initial_ionosphere_variance;
+    // Initialize per-satellite ionosphere states. Coherent MADOCA uses the
+    // frozen oracle's 60 m STEC sigma; GNSS_PPP_INIT_IONO_VAR (>0) remains an
+    // explicit diagnostic override.
+    const double iono_init_var = initialIonosphereVariance(
+        madoca_per_frequency,
+        env_overrides_.init_iono_var,
+        ppp_config_.initial_ionosphere_variance);
     if (ppp_config_.estimate_ionosphere) {
         for (const auto& [sat, idx] : filter_state_.ionosphere_indices) {
             filter_state_.state(idx) = 0.0;  // Initial iono delay = 0 (will be constrained by STEC)
@@ -1370,9 +1363,10 @@ int PPPProcessor::getOrCreateIonosphereState(const IonosphereFreeObs& observatio
     // Mirror the GNSS_PPP_INIT_IONO_VAR override at the lazy-create site so a
     // satellite appearing mid-run lands in the same anchored gauge.
     filter_state_.covariance(new_index, new_index) =
-        env_overrides_.init_iono_var > 0.0
-            ? env_overrides_.init_iono_var
-            : ppp_config_.initial_ionosphere_variance;
+        initialIonosphereVariance(
+            madoca_per_frequency,
+            env_overrides_.init_iono_var,
+            ppp_config_.initial_ionosphere_variance);
     filter_state_.ionosphere_indices[observation.satellite] = new_index;
     return new_index;
 }

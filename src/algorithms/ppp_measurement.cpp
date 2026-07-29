@@ -289,9 +289,8 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
         const bool qzss_code_only =
             env_overrides_.qzss_code_only ||
             (require_coherent_ssr_ && !env_overrides_.madoca_qzss_phase);
-        // GLONASS FDMA phase rows remain preview-only in coherent MADOCA:
-        // full-row enablement exposes a time-varying relative phase residual,
-        // while code rows improve bridge parity.
+        // MADOCALIB admits both GLONASS FDMA phase rows. Keep a diagnostic
+        // code-only opt-out, applied consistently to L1 and L2.
         const bool glonass_code_only =
             require_coherent_ssr_ && env_overrides_.madoca_glonass &&
             !env_overrides_.madoca_glonass_phase &&
@@ -436,6 +435,7 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
             const auto amb_it = ambiguity_states_.find(observation.satellite);
             const bool l2_phase_ready =
                 use_phase_rows && observation.has_carrier_phase_l2 &&
+                !glonass_code_only &&
                 amb2_it != filter_state_.ambiguity_l2_indices.end() &&
                 amb_it != ambiguity_states_.end() &&
                 !amb_it->second.needs_reinitialization &&
