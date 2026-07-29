@@ -144,6 +144,24 @@ inline double madocaCarrierIonosphereMeters(double phase_l1_m,
     return -(phase_l1_m - phase_l2_m) / denominator;
 }
 
+inline double madocaCarrierIonosphereMetersExcludingWindup(
+    double corrected_phase_l1_m,
+    double corrected_phase_l2_m,
+    double wavelength_l1_m,
+    double wavelength_l2_m,
+    double windup_cycles,
+    double frequency_l1_hz,
+    double frequency_l2_hz) {
+    // MADOCALIB udiono_ppp() calls corr_meas(..., phw=0). Native corrected
+    // phases already have phw*lambda removed, so restore that term before
+    // deriving the temporal carrier-ionosphere increment.
+    return madocaCarrierIonosphereMeters(
+        corrected_phase_l1_m + windup_cycles * wavelength_l1_m,
+        corrected_phase_l2_m + windup_cycles * wavelength_l2_m,
+        frequency_l1_hz,
+        frequency_l2_hz);
+}
+
 inline double madocaIonosphereProcessVariance(double zenith_variance_per_second,
                                               double elevation_rad,
                                               double dt_seconds) {
