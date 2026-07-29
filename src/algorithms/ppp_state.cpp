@@ -863,7 +863,6 @@ void PPPProcessor::detectCycleSlips(const ObservationData& obs, const Navigation
         return;
     }
 
-    constexpr double kMinimumGeometryFreeSlipThresholdMeters = 0.5;
     constexpr double kMinimumMwSlipThresholdMeters = 10.0;
     // Enable combination (GF/MW) slip detection in SSR mode even for static,
     // because MW averaging is needed for Wide-Lane AR. CLAS kinematic OSR uses
@@ -966,11 +965,18 @@ void PPPProcessor::detectCycleSlips(const ObservationData& obs, const Navigation
             if (lambda1 > 0.0 && lambda2 > 0.0) {
                 gf_m = primary->carrier_phase * lambda1 - secondary->carrier_phase * lambda2;
                 have_gf = std::isfinite(gf_m);
+                const bool madoca_per_frequency =
+                    require_coherent_ssr_ && ssr_products_loaded_ &&
+                    !ppp_config_.use_ionosphere_free &&
+                    ppp_config_.estimate_ionosphere;
+                const double gf_slip_threshold =
+                    ppp_internal::geometryFreeSlipThresholdMeters(
+                        madoca_per_frequency,
+                        ppp_config_.cycle_slip_threshold);
                 if (have_gf &&
                     ambiguity.has_last_geometry_free &&
                     std::abs(gf_m - ambiguity.last_geometry_free_m) >
-                        std::max(ppp_config_.cycle_slip_threshold,
-                                 kMinimumGeometryFreeSlipThresholdMeters)) {
+                        gf_slip_threshold) {
                     gf_slip = true;
                 }
             }
