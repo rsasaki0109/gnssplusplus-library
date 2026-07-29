@@ -570,6 +570,23 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
     const int nx = filter_state_.total_states;
 
     if (env_overrides_.pfdump) {
+        for (const Cand& cand : cands) {
+            const auto ion_it =
+                filter_state_.ionosphere_indices.find(cand.sat);
+            const int ion_index =
+                ion_it != filter_state_.ionosphere_indices.end()
+                    ? ion_it->second
+                    : -1;
+            std::cerr << "[PFSTATE] " << cand.sat.toString()
+                      << " l1_m=" << x(cand.l1_index)
+                      << " l1_cyc=" << x(cand.l1_index) / cand.lambda1
+                      << " l2_m=" << x(cand.l2_index)
+                      << " l2_cyc=" << x(cand.l2_index) / cand.lambda2;
+            if (ion_index >= 0 && ion_index < nx) {
+                std::cerr << " ion_m=" << x(ion_index);
+            }
+            std::cerr << "\n";
+        }
         for (size_t i = 0; i < cands.size(); ++i) {
             const auto ref_it = ref_of_group.find(
                 ppp_ar::ambiguityDdGroup(cands[i].sat));
