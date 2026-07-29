@@ -651,7 +651,7 @@ jobs:
           grep -q '"convergence_policy": "legacy-3d"' native_pppar_smoke.json
           grep -q '"ar_stage_last":' native_pppar_smoke.json
           grep -q '"ar_per_frequency_attempts":' native_pppar_smoke.json
-          GNSS_PPP_PFDUMP=1 ./apps/gnss_ppp \
+          ./apps/gnss_ppp \
             --kinematic \
             --enable-ar \
             --ar-method per-freq \
@@ -668,7 +668,7 @@ jobs:
             --emit-epoch-time \
             --out native_pppar_partial_ar_smoke.pos \
             --summary-json native_pppar_partial_ar_smoke.json \
-            --quiet 2> native_pppar_partial_ar_trace.log
+            --quiet
           grep -q '"convergence_policy": "local-enu"' native_pppar_partial_ar_smoke.json
           n1_fixed="$(python3 -c 'import json; print(json.load(open("native_pppar_partial_ar_smoke.json"))["ar_n1_fixed_epochs"])')"
           fixed_solutions="$(python3 -c 'import json; print(json.load(open("native_pppar_partial_ar_smoke.json"))["ppp_fixed_solutions"])')"
@@ -698,7 +698,7 @@ jobs:
           test "$matched_epochs" -eq 118
           oracle_fixes="$(awk -F, 'NR > 1 && $5 == 1 {n++} END {print n+0}' madoca_pppar_solution_matches.csv)"
           test "$oracle_fixes" -eq 108
-          test "$fixed_solutions" -ge 77
+          test "$fixed_solutions" -ge 83
           wrong_fixes="$(awk -F, 'NR > 1 && $6 == 6 && $5 != 1 {n++} END {print n+0}' madoca_pppar_solution_matches.csv)"
           test "$wrong_fixes" -eq 0
           python3 -c 'import json; d=json.load(open("madoca_pppar_solution_diff.json")); assert d["comparison"]["delta_rms_3d_m"] <= 0.2; assert d["events"]["max_delta_3d"]["delta_3d_m"] <= 1.0'
@@ -715,7 +715,6 @@ jobs:
           build-madoca-parity/native_pppar_smoke.json
           build-madoca-parity/native_pppar_partial_ar_smoke.pos
           build-madoca-parity/native_pppar_partial_ar_smoke.json
-          build-madoca-parity/native_pppar_partial_ar_trace.log
           build-madoca-parity/madoca_pppar_solution_diff.json
           build-madoca-parity/madoca_pppar_solution_matches.csv
         if-no-files-found: warn
