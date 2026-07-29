@@ -768,7 +768,24 @@ bool PPPProcessor::updateFilter(const ObservationData& obs,
         (ppp_config_.apply_static_anchor_blend || madoca_static_anchor_blend) &&
         !(precise_products_loaded_ && !ppp_config_.estimate_troposphere);
     if (madoca_postfit_shadow) {
-        const MeasurementEquation& postfit_eq = getPostfitEquation();
+        // applyPreciseCorrections() materializes each antenna phase-centre
+        // position at the epoch prior.  Recenter that corrected geometry on
+        // the accepted filter position for the diagnostic shadow; otherwise
+        // its nominal "postfit" residuals still use the SPP seed and show a
+        // metre-level, geometry-shaped false drift.
+        auto shadow_observations = if_obs;
+        const Vector3d prior_position =
+            pre_update_state.state.segment(pre_update_state.pos_index, 3);
+        const Vector3d updated_position =
+            filter_state_.state.segment(filter_state_.pos_index, 3);
+        for (auto& observation : shadow_observations) {
+            observation.receiver_position = recenterPostfitReceiverPosition(
+                observation.receiver_position,
+                prior_position,
+                updated_position);
+        }
+        const MeasurementEquation postfit_eq =
+            formMeasurementEquations(shadow_observations, nav, obs.time, false);
         const MadocaPostfitEpochStats postfit_stats =
             computeMadocaPostfitEpochStats(postfit_eq);
         writeMadocaPostfitShadow(
