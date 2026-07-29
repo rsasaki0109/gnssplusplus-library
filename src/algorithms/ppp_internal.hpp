@@ -24,6 +24,18 @@ inline int filterIterationCount(bool madoca_per_frequency_update,
     return precise_products_loaded ? 3 : configured_iterations;
 }
 
+inline double geometryFreeSlipThresholdMeters(
+    bool madoca_per_frequency,
+    double configured_threshold_m) {
+    constexpr double kDefaultMinimumMeters = 0.5;
+    constexpr double kMadocalibMinimumMeters = 0.15;
+    return std::max(
+        configured_threshold_m,
+        madoca_per_frequency
+            ? kMadocalibMinimumMeters
+            : kDefaultMinimumMeters);
+}
+
 inline int perFrequencyArMinLockCount(bool madoca_per_frequency,
                                       bool ssr_products_loaded,
                                       int convergence_min_epochs) {

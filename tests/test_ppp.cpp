@@ -103,6 +103,18 @@ TEST(PPPFilterIterations, MadocaPerFrequencyCommitsOneUpdatePerEpoch) {
     EXPECT_EQ(ppp_internal::filterIterationCount(false, false, 8), 8);
 }
 
+TEST(PPPCycleSlips, MadocaPerFrequencyUsesMadocalibGeometryFreeThreshold) {
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::geometryFreeSlipThresholdMeters(true, 0.05),
+        0.15);
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::geometryFreeSlipThresholdMeters(true, 0.2),
+        0.2);
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::geometryFreeSlipThresholdMeters(false, 0.05),
+        0.5);
+}
+
 TEST(PPPArAdmission, CoherentSsrDoesNotAddALockCountGate) {
     EXPECT_EQ(ppp_internal::perFrequencyArMinLockCount(true, true, 20), 0);
     EXPECT_EQ(ppp_internal::perFrequencyArMinLockCount(false, true, 20), 10);
