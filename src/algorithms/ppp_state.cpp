@@ -691,18 +691,9 @@ bool PPPProcessor::updateFilter(const ObservationData& obs,
         const MatrixXd innovation_covariance =
             meas_eq.design_matrix * filter_state_.covariance * meas_eq.design_matrix.transpose() +
             meas_eq.weight_matrix;
-        MatrixXd innovation_inverse;
-        if (madoca_per_frequency_update) {
-            innovation_inverse = innovation_covariance;
-            if (!invertMadocaInnovation(innovation_inverse)) {
-                return false;
-            }
-        } else {
-            innovation_inverse =
-                innovation_covariance.ldlt().solve(MatrixXd::Identity(
-                    innovation_covariance.rows(),
-                    innovation_covariance.cols()));
-        }
+        const MatrixXd innovation_inverse =
+            innovation_covariance.ldlt().solve(MatrixXd::Identity(
+                innovation_covariance.rows(), innovation_covariance.cols()));
         const MatrixXd gain =
             filter_state_.covariance * meas_eq.design_matrix.transpose() * innovation_inverse;
         const VectorXd delta_state = gain * meas_eq.residuals;
