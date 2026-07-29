@@ -127,6 +127,30 @@ TEST(PPPArTrialState, PerFrequencyAttemptsAreAlwaysEphemeral) {
     EXPECT_FALSE(ppp_internal::alwaysRestoreArTrialState(ARMethod::DD_WLNL));
 }
 
+TEST(PPPPostfitGeometry, RecentersMaterializedReceiverPositionOnAcceptedState) {
+    const Vector3d corrected_position(3875000.0, 332500.0, 5029000.0);
+    const Vector3d prior_position(3874998.0, 332501.5, 5028996.0);
+    const Vector3d updated_position(3875000.5, 332499.0, 5029001.0);
+
+    const Vector3d recentered =
+        ppp_internal::recenterPostfitReceiverPosition(
+            corrected_position, prior_position, updated_position);
+
+    EXPECT_TRUE(recentered.isApprox(
+        corrected_position + updated_position - prior_position, 1e-12));
+}
+
+TEST(PPPPostfitGeometry, PreservesUnsetReceiverPosition) {
+    const Vector3d unset_position = Vector3d::Zero();
+    const Vector3d recentered =
+        ppp_internal::recenterPostfitReceiverPosition(
+            unset_position,
+            Vector3d(1.0, 2.0, 3.0),
+            Vector3d(4.0, 5.0, 6.0));
+
+    EXPECT_TRUE(recentered.isZero());
+}
+
 TEST(PPPIonospherePrediction, MatchesMadocalibCarrierDeltaAndElevationNoise) {
     constexpr double f1 = 1575.42e6;
     constexpr double f2 = 1227.60e6;

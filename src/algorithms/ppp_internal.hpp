@@ -58,6 +58,21 @@ inline bool alwaysRestoreArTrialState(PPPProcessor::PPPConfig::ARMethod method) 
     return method == PPPProcessor::PPPConfig::ARMethod::DD_PER_FREQ;
 }
 
+inline Vector3d recenterPostfitReceiverPosition(
+    const Vector3d& corrected_receiver_position,
+    const Vector3d& prior_filter_position,
+    const Vector3d& updated_filter_position) {
+    // Precise corrections materialize the antenna phase-centre position at
+    // the epoch prior.  Only absolute positions should be recentered; a zero
+    // vector means the measurement model must obtain its receiver position
+    // from the filter state.
+    if (corrected_receiver_position.norm() <= 1000.0) {
+        return corrected_receiver_position;
+    }
+    return corrected_receiver_position +
+           (updated_filter_position - prior_filter_position);
+}
+
 inline double madocaIonosphereScale(double frequency_hz) {
     if (!(frequency_hz > 0.0)) {
         return std::numeric_limits<double>::quiet_NaN();
