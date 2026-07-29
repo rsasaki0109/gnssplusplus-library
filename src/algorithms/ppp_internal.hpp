@@ -142,6 +142,15 @@ inline double madocaIonosphereProcessVariance(double zenith_variance_per_second,
            (sin_elevation * sin_elevation);
 }
 
+inline double madocaGlonassCodeIfbVariance(bool madoca_per_frequency,
+                                           GNSSSystem system) {
+    // MADOCALIB ppp_res(): VAR_GLO_IFB=SQR(0.6) is added to GLONASS
+    // pseudorange rows only. Carrier rows never call this helper.
+    return madoca_per_frequency && system == GNSSSystem::GLONASS
+        ? 0.6 * 0.6
+        : 0.0;
+}
+
 inline double initialTroposphereVariance(bool madoca_per_frequency,
                                          bool broadcast_model,
                                          double configured_variance) {

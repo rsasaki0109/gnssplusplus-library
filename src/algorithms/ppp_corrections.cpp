@@ -1497,6 +1497,13 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
             deferred_variance_pr += kMadocalibEstimatedTropVarianceM2;
             deferred_variance_cp += kMadocalibEstimatedTropVarianceM2;
         }
+        const bool madoca_per_frequency =
+            require_coherent_ssr_ &&
+            !ppp_config_.use_ionosphere_free &&
+            ppp_config_.estimate_ionosphere;
+        deferred_variance_pr += ppp_internal::madocaGlonassCodeIfbVariance(
+            madoca_per_frequency,
+            observation.satellite.system);
         observation.variance_pr = safeVariance(observation.variance_pr + deferred_variance_pr, 1e-6);
         observation.variance_cp = safeVariance(observation.variance_cp + deferred_variance_cp, 1e-8);
         // Optional diagnostic scaling after the RTKLIB code/phase ratio. The
