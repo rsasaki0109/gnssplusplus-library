@@ -85,28 +85,26 @@ does not yet match end-to-end behavior; **open** has no accepted native parity.
 | PPP commit-on-success and diagnostics | Native postfit validation/shadow telemetry | native | MIZU 1 h/6 h/24 h and ALIC regression gates remain green |
 | GLONASS phase in MADOCA PPP | Native L1/L2 rows plus corrected postfit-shadow audit | native | Keep the pinned per-satellite demeaned RMS at millimetre scale and span below 4 cm |
 | MADOCALIB `exec_ppp` | Native PPP runs end to end; remaining solution delta is tracked | partial | M4/M5 matrix meets the declared trajectory thresholds |
-| MADOCALIB `exec_pppar` | Native per-frequency path matches the oracle's 108 Fix / 10 Float in all 118 matched epochs, with no native-only Fix | native | Keep the pinned M2 status, wrong-Fix, and trajectory gates green |
+| MADOCALIB `exec_pppar` | Windows Release matches 108 Fix / 10 Float; authoritative Ubuntu Release reaches 77 Fix / 41 Float, with no native-only Fix | partial | M2 must resolve the 31 Ubuntu oracle-Fix/native-Float epochs |
 | MADOCALIB `exec_pppar-ion` | Bridge profile/input validation exists; native L6D state injection does not | open | M3 then M5 PPP-AR-ion sign-off |
 | Triple/quad-frequency PPP-AR | Upstream 2.0 behavior has not been fully audited or signed off | open | Dedicated fixtures and ambiguity/state parity after dual-frequency M2 |
 | Linked `postpos()` bridge | `madocalib_bridge` | oracle-only | Retain until M6; never select it in production runtime |
 
 ## Current Numerical Baselines
 
-The frozen one-hour MIZU PPP-AR CI window has 118 matched output epochs.  The
-MADOCALIB `pppar` oracle and the native per-frequency path both produce 108 Fix
-and 10 Float.  Status agreement is 118/118, with no native-only or oracle-only
-Fix.  The recorded native/oracle 3D delta RMS is 0.040094 m, the maximum is
-0.246063 m, and the trailing-1800-second RMS is 0.032859 m.
+The frozen one-hour MIZU PPP-AR window has 118 matched output epochs.  On the
+Windows Release evidence lane, the MADOCALIB `pppar` oracle and native path both
+produce 108 Fix / 10 Float.  Status agreement is 118/118, with no native-only
+or oracle-only Fix.  The native/oracle 3D delta RMS is 0.040094 m, the maximum
+is 0.246063 m, and the trailing-1800-second RMS is 0.032859 m.
 
-M2 is complete.  The final discrepancy came from MADOCALIB `satpos_ssr()`
-replacing the broadcast eccentric-anomaly clock-relativity approximation with
-RTKLIB's position/1-ms-forward-velocity dot product.  Harmonic orbit terms made
-the two nominally equivalent forms differ by satellite-specific centimetres.
-After aligning that clock contract, a single near-threshold initial LAMBDA
-candidate ordering could still publish one native Fix one epoch early.  The
-coherent-MADOCA path now requires the first N1 success to repeat on the next AR
-attempt before publishing Fix; thresholds and later reacquisition behavior are
-unchanged.
+The authoritative Ubuntu Release job exposes a remaining numerical path
+difference: oracle remains 108 Fix / 10 Float while native produces 77 Fix /
+41 Float.  Status agreement is 87/118 (73.73%), with no native-only Fix and 31
+oracle-Fix/native-Float epochs.  Full-window native/oracle 3D delta RMS is
+0.155003 m, the maximum is 0.420124 m, and the trailing-1800-second RMS is
+0.212379 m.  M2 therefore remains open even though the Windows lane satisfies
+its status and trajectory criteria.
 
 The float-PPP history and older MIZU/ALIC/full-day measurements remain in issue
 #148 and `madoca_port_plan.md`; they are regression context, not proof that
@@ -383,19 +381,29 @@ shift the tightly weighted carrier residuals and PAR candidate ordering.
 Coherent MADOCA now reproduces the state-vector form with the exact SSR IODE;
 other PPP profiles keep their existing clock convention.
 
-The clock correction alone recovers every oracle Fix but admits one
-near-threshold native Fix one epoch early.  To keep the established
+On Windows Release, the clock correction alone recovers every oracle Fix but
+admits one near-threshold native Fix one epoch early.  To keep the established
 no-wrong-Fix guard without tuning the ratio threshold, the first
 coherent-MADOCA N1 success is provisional and must be followed by a consecutive
 successful AR attempt.  The already-applied EWL/WL state is retained and
 published as Float during that confirmation epoch.  After the first N1 commit,
 normal single-attempt reacquisition applies.
 
-On the pinned 120-input-epoch MIZU probe, all 118 solution epochs align: native
-and oracle both produce 108 Fix / 10 Float, with zero native-only and zero
-oracle-only Fix.  The native/oracle 3D delta RMS is 0.040094 m, the maximum is
-0.246063 m, and the trailing-1800-second RMS is 0.032859 m.  This satisfies
-every M2 exit criterion.
+On the Windows Release probe, all 118 solution epochs align: native and oracle
+both produce 108 Fix / 10 Float, with zero native-only and zero oracle-only Fix.
+The native/oracle 3D delta RMS is 0.040094 m, the maximum is 0.246063 m, and the
+trailing-1800-second RMS is 0.032859 m.
+
+The authoritative Ubuntu Release probe improves from its previous 76 Fix / 42
+Float baseline to 77 Fix / 41 Float, still with zero native-only Fix.  It
+misses 31 oracle Fix epochs, so M2 remains open.  At the first cross-platform
+split (TOW 175260), Windows retains 16 WL pairs and reaches an N1 Fix, while
+Ubuntu retains 15 after E31-E06 crosses the 0.20-cycle WL admission boundary.
+The oracle starts with 18 N1 pairs, excludes only G31 and C09, then fixes 16 at
+ratio 2.333 against its 1.20 dimension-adjusted threshold.  Ubuntu exhausts
+ten PAR exclusions without a fix.  Covariance sigmas remain closely aligned;
+the remaining cause is the accumulated float ambiguity mean and WL candidate
+path, not the SSR clock formula.
 
 ### M3 -- Apply L6D ionosphere products
 
@@ -465,8 +473,10 @@ remains open.
 
 ## Immediate Slice
 
-Begin M3 by promoting the proven L6D snapshot lookup from measurement-neutral
-shadow telemetry to an opt-in PPP STEC state and row.  Preserve the completed
-M2 guards: never publish a wide-lane-only result as Fix, require confirmation
-before the first coherent-MADOCA N1 commit, and never publish a native Fix
-outside an oracle Fix epoch.
+Continue M2 at the first authoritative-CI split, TOW 175260.  Compare the
+Windows, Ubuntu, and oracle float ambiguity means before EWL conditioning,
+after EWL, and at WL admission, starting with E31-E06 and the oracle-only
+G02/G31 pairs.  Preserve the established guards: never publish a
+wide-lane-only result as Fix, require confirmation before the first
+coherent-MADOCA N1 commit, and never publish a native Fix outside an oracle Fix
+epoch.
