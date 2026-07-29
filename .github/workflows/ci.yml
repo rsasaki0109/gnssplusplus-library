@@ -698,7 +698,7 @@ jobs:
           test "$matched_epochs" -eq 118
           oracle_fixes="$(awk -F, 'NR > 1 && $5 == 1 {n++} END {print n+0}' madoca_pppar_solution_matches.csv)"
           test "$oracle_fixes" -eq 108
-          test "$fixed_solutions" -ge 77
+          test "$fixed_solutions" -ge 83
           wrong_fixes="$(awk -F, 'NR > 1 && $6 == 6 && $5 != 1 {n++} END {print n+0}' madoca_pppar_solution_matches.csv)"
           test "$wrong_fixes" -eq 0
           python3 -c 'import json; d=json.load(open("madoca_pppar_solution_diff.json")); assert d["comparison"]["delta_rms_3d_m"] <= 0.2; assert d["events"]["max_delta_3d"]["delta_3d_m"] <= 1.0'

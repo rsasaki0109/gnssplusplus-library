@@ -80,6 +80,34 @@ inline bool applyGpsL5MeasurementErrorFactor(
            (is_l5(primary_signal) || is_l5(secondary_signal));
 }
 
+inline bool madocaGalileoMwSupportsWideLaneAdmission(
+    GNSSSystem system,
+    double mw_double_difference_cycles,
+    int reference_sample_count,
+    int satellite_sample_count) {
+    constexpr int kMinimumSamples = 60;
+    constexpr double kMaximumFractionalCycles = 0.20;
+    return system == GNSSSystem::Galileo &&
+           reference_sample_count >= kMinimumSamples &&
+           satellite_sample_count >= kMinimumSamples &&
+           std::isfinite(mw_double_difference_cycles) &&
+           std::abs(
+               std::round(mw_double_difference_cycles) -
+               mw_double_difference_cycles) <
+               kMaximumFractionalCycles;
+}
+
+inline bool madocaHighAgreementRatioAccepted(bool madoca_per_frequency,
+                                             double ratio,
+                                             double threshold,
+                                             double matching_candidate_rate) {
+    constexpr double kRelativeTolerance = 0.01;
+    return ratio >= threshold ||
+           (madoca_per_frequency &&
+            matching_candidate_rate > 0.90 &&
+            ratio >= threshold * (1.0 - kRelativeTolerance));
+}
+
 inline bool alwaysRestoreArTrialState(PPPProcessor::PPPConfig::ARMethod method) {
     // MADOCALIB runs per-frequency EWL/WL/N1 constraints on xp/Pp, a copy of
     // the float filter.  The trial is never committed to rtk->x/P, including
