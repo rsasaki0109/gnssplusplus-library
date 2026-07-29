@@ -77,6 +77,29 @@ constexpr bool excludePhaseWindupFromAmbiguitySeed(bool madoca_convention) {
     return madoca_convention;
 }
 
+// MADOCALIB satpos_ssr() replaces the broadcast eccentric-anomaly
+// approximation with RTKLIB's state-vector form after ephpos() has formed a
+// 1 ms forward-difference velocity. Harmonic orbit terms make the two forms
+// differ by centimetres for real ephemerides.
+constexpr double madocalibSsrBroadcastClock(double polynomial_clock_s,
+                                            double position_velocity_dot_m2_s,
+                                            double speed_of_light_m_s) {
+    return polynomial_clock_s -
+        2.0 * position_velocity_dot_m2_s /
+            (speed_of_light_m_s * speed_of_light_m_s);
+}
+
+// The first coherent-MADOCA N1 solution is published only after two
+// consecutive successful ambiguity attempts. Once an N1 epoch has been
+// committed, normal single-epoch reacquisition applies.
+constexpr bool deferFirstMadocaN1Fix(bool madoca_convention,
+                                     std::size_t committed_n1_epochs,
+                                     bool confirmation_pending) {
+    return madoca_convention &&
+        committed_n1_epochs == 0 &&
+        !confirmation_pending;
+}
+
 // MADOCALIB's PPP receiver geometry uses its legacy Love-number solid-earth
 // tide model. Keep the IERS model selectable for every other PPP profile.
 constexpr bool useIersSolidEarthTide(bool madoca_convention,

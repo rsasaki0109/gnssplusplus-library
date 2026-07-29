@@ -2,6 +2,7 @@
 
 #include <libgnss++/algorithms/lambda.hpp>
 #include <libgnss++/algorithms/ppp_ar.hpp>
+#include <libgnss++/algorithms/ppp_correction_contract.hpp>
 #include <libgnss++/algorithms/ppp_multifrequency.hpp>
 #include <libgnss++/algorithms/ppp_utils.hpp>
 #include <libgnss++/core/constants.hpp>
@@ -370,6 +371,13 @@ bool PPPProcessor::resolveAmbiguitiesDecoupledIf(const ObservationData& obs,
 
 bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
                                              const NavigationData& nav) {
+    // Consume the prior epoch's provisional success at the start of every
+    // attempt. Any early return below therefore breaks the required
+    // consecutive-success sequence.
+    const bool had_madoca_n1_confirmation =
+        madoca_first_n1_confirmation_pending_;
+    madoca_first_n1_confirmation_pending_ = false;
+
     last_ar_ratio_ = 0.0;
     last_fixed_ambiguities_ = 0;
     ++ar_stage_telemetry_.per_frequency_attempts;
@@ -998,6 +1006,25 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
         return false;
     }
 
+    // Require one independent epoch of confirmation before the first
+    // coherent-MADOCA N1 commit. This keeps the first ratio/PAR success
+    // provisional (the already-applied EWL/WL state is retained) and prevents
+    // a single sensitive LAMBDA candidate ordering from publishing an early
+    // Fix. Subsequent accepted epochs use the normal commit path.
+    if (algorithms::ppp_correction_contract::deferFirstMadocaN1Fix(
+            require_coherent_ssr_,
+            ar_stage_telemetry_.n1_fixed_epochs,
+            had_madoca_n1_confirmation)) {
+        madoca_first_n1_confirmation_pending_ = true;
+        last_ar_ratio_ = ratio;
+        last_fixed_ambiguities_ = nwl;
+        ++ar_stage_telemetry_.wide_lane_only_epochs;
+        ar_stage_telemetry_.last_stage =
+            "wide_lane_only_n1_confirmation_pending";
+        last_ar_wide_lane_only_ = true;
+        return false;
+    }
+
     // 5) Apply the fixed N1 double differences as a tight Kalman pseudo-obs on
     //    the L1 ambiguity states (cycles).
     MatrixXd Hn = MatrixXd::Zero(nb, nx);
@@ -1067,6 +1094,7 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
     last_ar_ratio_ = ratio;
     last_fixed_ambiguities_ = nb;
     ++ar_stage_telemetry_.n1_fixed_epochs;
+    madoca_first_n1_confirmation_pending_ = false;
     ar_stage_telemetry_.last_stage = "n1_fixed";
     return true;
 }

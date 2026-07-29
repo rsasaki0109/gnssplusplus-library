@@ -85,7 +85,7 @@ does not yet match end-to-end behavior; **open** has no accepted native parity.
 | PPP commit-on-success and diagnostics | Native postfit validation/shadow telemetry | native | MIZU 1 h/6 h/24 h and ALIC regression gates remain green |
 | GLONASS phase in MADOCA PPP | Native L1/L2 rows plus corrected postfit-shadow audit | native | Keep the pinned per-satellite demeaned RMS at millimetre scale and span below 4 cm |
 | MADOCALIB `exec_ppp` | Native PPP runs end to end; remaining solution delta is tracked | partial | M4/M5 matrix meets the declared trajectory thresholds |
-| MADOCALIB `exec_pppar` | Native per-frequency path reaches 95 Fix versus 108 oracle Fix in 118 matched epochs, with no native-only Fix | partial | M2 must resolve the remaining 13 oracle-Fix/native-Float epochs |
+| MADOCALIB `exec_pppar` | Native per-frequency path matches the oracle's 108 Fix / 10 Float in all 118 matched epochs, with no native-only Fix | native | Keep the pinned M2 status, wrong-Fix, and trajectory gates green |
 | MADOCALIB `exec_pppar-ion` | Bridge profile/input validation exists; native L6D state injection does not | open | M3 then M5 PPP-AR-ion sign-off |
 | Triple/quad-frequency PPP-AR | Upstream 2.0 behavior has not been fully audited or signed off | open | Dedicated fixtures and ambiguity/state parity after dual-frequency M2 |
 | Linked `postpos()` bridge | `madocalib_bridge` | oracle-only | Retain until M6; never select it in production runtime |
@@ -93,20 +93,20 @@ does not yet match end-to-end behavior; **open** has no accepted native parity.
 ## Current Numerical Baselines
 
 The frozen one-hour MIZU PPP-AR CI window has 118 matched output epochs.  The
-MADOCALIB `pppar` oracle produces 108 Fix and 10 Float.  After frequency-scoped
-multi-frequency geometry-free slip handling and the MADOCALIB solid-earth-tide
-convention, the native per-frequency path produces 95 Fix and 23 Float with no
-native-only Fix.  Status agreement is 105/118 (88.98%).  The recorded
-native/oracle 3D delta RMS is 0.112100 m, with 0.070070 m over the trailing
-1800 seconds.
+MADOCALIB `pppar` oracle and the native per-frequency path both produce 108 Fix
+and 10 Float.  Status agreement is 118/118, with no native-only or oracle-only
+Fix.  The recorded native/oracle 3D delta RMS is 0.040094 m, the maximum is
+0.246063 m, and the trailing-1800-second RMS is 0.032859 m.
 
-The convergence gate now admits the per-frequency resolver after the declared
-local-ENU warm-up policy.  The remaining M2 blocker is inside the float-state
-trajectory presented to LAMBDA: at the first oracle-Fix/native-Float split
-(TOW 173190), both implementations form the same 10 N1 double differences and
-exclude J03 first, but the oracle's reduced ratio is 2.846 while native remains
-at 1.232.  Candidate identities and diagonal sigmas align; float DD means
-differ by up to about 0.21 cycle.
+M2 is complete.  The final discrepancy came from MADOCALIB `satpos_ssr()`
+replacing the broadcast eccentric-anomaly clock-relativity approximation with
+RTKLIB's position/1-ms-forward-velocity dot product.  Harmonic orbit terms made
+the two nominally equivalent forms differ by satellite-specific centimetres.
+After aligning that clock contract, a single near-threshold initial LAMBDA
+candidate ordering could still publish one native Fix one epoch early.  The
+coherent-MADOCA path now requires the first N1 success to repeat on the next AR
+attempt before publishing Fix; thresholds and later reacquisition behavior are
+unchanged.
 
 The float-PPP history and older MIZU/ALIC/full-day measurements remain in issue
 #148 and `madoca_port_plan.md`; they are regression context, not proof that
@@ -372,6 +372,31 @@ the full native/oracle 3D RMS improves from 0.209425 m to 0.112100 m and the
 trailing-1800-second RMS improves from 0.221474 m to 0.070070 m.  M2 remains
 open because the status and native-Fix-count gates are not met.
 
+#### M2k -- SSR clock relativity and first-N1 confirmation
+
+MADOCALIB `satpos_ssr()` recomputes broadcast clock relativity as
+`-2 * dot(position, velocity) / c^2`, using RTKLIB's 1 ms forward-difference
+velocity.  Native previously retained the eccentric-anomaly form returned by
+its broadcast ephemeris propagation.  The difference is satellite-specific at
+centimetre scale once harmonic orbit terms are included and was sufficient to
+shift the tightly weighted carrier residuals and PAR candidate ordering.
+Coherent MADOCA now reproduces the state-vector form with the exact SSR IODE;
+other PPP profiles keep their existing clock convention.
+
+The clock correction alone recovers every oracle Fix but admits one
+near-threshold native Fix one epoch early.  To keep the established
+no-wrong-Fix guard without tuning the ratio threshold, the first
+coherent-MADOCA N1 success is provisional and must be followed by a consecutive
+successful AR attempt.  The already-applied EWL/WL state is retained and
+published as Float during that confirmation epoch.  After the first N1 commit,
+normal single-attempt reacquisition applies.
+
+On the pinned 120-input-epoch MIZU probe, all 118 solution epochs align: native
+and oracle both produce 108 Fix / 10 Float, with zero native-only and zero
+oracle-only Fix.  The native/oracle 3D delta RMS is 0.040094 m, the maximum is
+0.246063 m, and the trailing-1800-second RMS is 0.032859 m.  This satisfies
+every M2 exit criterion.
+
 ### M3 -- Apply L6D ionosphere products
 
 - Promote the proven snapshot lookup from shadow telemetry to an explicit
@@ -440,11 +465,8 @@ remains open.
 
 ## Immediate Slice
 
-Continue M2 from the first float measurement update.  Compare the code-driven
-allocation among position, constellation clocks, ZTD, STEC, receiver-frequency
-biases, and carrier ambiguities before changing admission thresholds.  EWL/WL
-conditioning, PAR availability, active-state filtering, IFB process noise,
-wet-troposphere mapping, and nominal-yaw phase windup have been excluded as the
-remaining status cause.  Preserve the two hard guards established so far:
-never publish a wide-lane-only result as Fix, and never publish a native Fix
+Begin M3 by promoting the proven L6D snapshot lookup from measurement-neutral
+shadow telemetry to an opt-in PPP STEC state and row.  Preserve the completed
+M2 guards: never publish a wide-lane-only result as Fix, require confirmation
+before the first coherent-MADOCA N1 commit, and never publish a native Fix
 outside an oracle Fix epoch.

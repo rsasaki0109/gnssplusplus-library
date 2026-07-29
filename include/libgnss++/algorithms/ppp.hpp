@@ -347,6 +347,7 @@ private:
     double last_ar_ratio_ = 0.0;
     int last_fixed_ambiguities_ = 0;
     bool last_ar_wide_lane_only_ = false;
+    bool madoca_first_n1_confirmation_pending_ = false;
     PPPConvergenceTelemetry convergence_telemetry_;
     PPPARStageTelemetry ar_stage_telemetry_;
     int last_applied_atmos_trop_corrections_ = 0;

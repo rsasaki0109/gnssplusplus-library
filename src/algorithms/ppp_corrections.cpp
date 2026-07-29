@@ -979,6 +979,55 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                     observation.valid = false;
                     continue;
                 }
+                // satpos_ssr() recomputes the broadcast clock relativity term
+                // from the state-vector dot product after ephpos() forms its
+                // 1 ms forward-difference velocity. The usual eccentric-
+                // anomaly expression differs by centimetres once harmonic
+                // orbit terms are included, which is enough to alter the
+                // tightly weighted MADOCA carrier update and N1 candidates.
+                const Ephemeris* ssr_eph =
+                    nav.getEphemeris(
+                        observation.satellite, emission_time, ssr_orbit_iode);
+                const bool madocalib_ssr_clock_system =
+                    observation.satellite.system == GNSSSystem::GPS ||
+                    observation.satellite.system == GNSSSystem::Galileo ||
+                    observation.satellite.system == GNSSSystem::QZSS ||
+                    observation.satellite.system == GNSSSystem::BeiDou;
+                if (require_coherent_ssr_ && madocalib_ssr_clock_system) {
+                    if (ssr_eph == nullptr) {
+                        observation.valid = false;
+                        continue;
+                    }
+                    constexpr double kRtklibVelocityStepSeconds = 1.0e-3;
+                    Vector3d forward_position = Vector3d::Zero();
+                    Vector3d ignored_velocity = Vector3d::Zero();
+                    double ignored_clock_bias = 0.0;
+                    double ignored_clock_drift = 0.0;
+                    if (!ssr_eph->calculateSatelliteState(
+                            emission_time + kRtklibVelocityStepSeconds,
+                            forward_position,
+                            ignored_velocity,
+                            ignored_clock_bias,
+                            ignored_clock_drift)) {
+                        observation.valid = false;
+                        continue;
+                    }
+                    const Vector3d rtklib_velocity =
+                        (forward_position - sat_position) /
+                        kRtklibVelocityStepSeconds;
+                    const double tc = emission_time - ssr_eph->toc;
+                    const double polynomial_clock =
+                        ssr_eph->af0 + ssr_eph->af1 * tc +
+                        ssr_eph->af2 * tc * tc;
+                    sat_clock_bias =
+                        algorithms::ppp_correction_contract::
+                            madocalibSsrBroadcastClock(
+                                polynomial_clock,
+                                sat_position.dot(rtklib_velocity),
+                                constants::SPEED_OF_LIGHT);
+                    sat_clock_drift =
+                        ssr_eph->af1 + 2.0 * ssr_eph->af2 * tc;
+                }
             }
         }
 
