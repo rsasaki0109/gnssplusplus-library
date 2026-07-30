@@ -185,6 +185,7 @@ def pos_status_name(record: PosRecord) -> str:
         4: "FIXED",
         5: "PPP_FLOAT",
         6: "PPP_FIXED",
+        7: "PROPAGATED",
     }.get(record.status, f"STATUS_{record.status}")
 
 

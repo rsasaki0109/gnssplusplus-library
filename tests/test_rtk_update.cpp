@@ -256,5 +256,155 @@ TEST(RTKUpdateTest, SequentialIndependentBlocksMatchJointUpdate) {
     EXPECT_TRUE(sequential_covariance.isApprox(joint_covariance, 1e-12));
 }
 
+TEST(RTKUpdateTest, StudentTInflationPreservesMeasurementCorrelation) {
+    Eigen::VectorXd residuals(2);
+    residuals << 1.0, 0.1;
+    Eigen::MatrixXd covariance(2, 2);
+    covariance << 0.04, 0.01,
+                  0.01, 0.04;
+    const double correlation_before =
+        covariance(0, 1) /
+        std::sqrt(covariance(0, 0) * covariance(1, 1));
+    rtk_update::StudentTFrontEndConfig config;
+    config.enabled = true;
+    const auto result =
+        rtk_update::applyStudentTMeasurementWeights(
+            residuals, covariance, config);
+    const double correlation_after =
+        covariance(0, 1) /
+        std::sqrt(covariance(0, 0) * covariance(1, 1));
+
+    EXPECT_TRUE(result.applied);
+    EXPECT_EQ(result.downweighted_rows, 1);
+    EXPECT_NEAR(result.minimum_weight, 5.0 / 29.0, 1e-12);
+    EXPECT_NEAR(correlation_after, correlation_before, 1e-12);
+    EXPECT_GT(covariance(0, 0), 0.04);
+    EXPECT_NEAR(covariance(1, 1), 0.04, 1e-12);
+}
+
+TEST(RTKUpdateTest, StudentTDefaultOffIsExactNoOp) {
+    Eigen::VectorXd residuals(1);
+    residuals << 100.0;
+    Eigen::MatrixXd covariance(1, 1);
+    covariance << 2.0;
+    const Eigen::MatrixXd before = covariance;
+
+    const auto result =
+        rtk_update::applyStudentTMeasurementWeights(
+            residuals, covariance, {});
+
+    EXPECT_FALSE(result.applied);
+    EXPECT_TRUE(covariance.isApprox(before, 0.0));
+}
+
+TEST(RTKUpdateTest, StudentTUsesInnovationNotOnlyMeasurementVariance) {
+    Eigen::VectorXd residuals(1);
+    residuals << 1.0;
+    Eigen::VectorXd innovation_variances(1);
+    innovation_variances << 4.0;
+    Eigen::MatrixXd covariance(1, 1);
+    covariance << 0.04;
+    rtk_update::StudentTFrontEndConfig config;
+    config.enabled = true;
+
+    const auto result =
+        rtk_update::applyStudentTMeasurementWeights(
+            residuals, innovation_variances, covariance, config);
+
+    EXPECT_TRUE(result.applied);
+    EXPECT_EQ(result.downweighted_rows, 0);
+    EXPECT_DOUBLE_EQ(result.minimum_weight, 1.0);
+    EXPECT_DOUBLE_EQ(covariance(0, 0), 0.04);
+}
+
+TEST(RTKUpdateTest, StudentTLeavesCentralInnovationExactlyUntouched) {
+    Eigen::VectorXd residuals(2);
+    residuals << 2.49, -2.5;
+    Eigen::VectorXd innovation_variances =
+        Eigen::VectorXd::Ones(2);
+    Eigen::MatrixXd covariance(2, 2);
+    covariance << 1.0, 0.25,
+                  0.25, 1.0;
+    const Eigen::MatrixXd before = covariance;
+    rtk_update::StudentTFrontEndConfig config;
+    config.enabled = true;
+
+    const auto result =
+        rtk_update::applyStudentTMeasurementWeights(
+            residuals, innovation_variances, covariance, config);
+
+    EXPECT_TRUE(result.applied);
+    EXPECT_EQ(result.downweighted_rows, 1);
+    EXPECT_DOUBLE_EQ(covariance(0, 0), before(0, 0));
+    EXPECT_GT(covariance(1, 1), before(1, 1));
+}
+
+TEST(RTKUpdateTest, StudentTDegreesOneUsesCauchyTailWeight) {
+    Eigen::VectorXd residuals(1);
+    residuals << 4.0;
+    Eigen::VectorXd innovation_variances =
+        Eigen::VectorXd::Ones(1);
+    Eigen::MatrixXd covariance =
+        Eigen::MatrixXd::Identity(1, 1);
+    rtk_update::StudentTFrontEndConfig config;
+    config.enabled = true;
+    config.degrees_of_freedom = 1.0;
+
+    const auto result =
+        rtk_update::applyStudentTMeasurementWeights(
+            residuals, innovation_variances, covariance, config);
+
+    EXPECT_TRUE(result.applied);
+    EXPECT_EQ(result.downweighted_rows, 1);
+    EXPECT_NEAR(result.minimum_weight, 2.0 / 17.0, 1e-12);
+    EXPECT_NEAR(covariance(0, 0), 8.5, 1e-12);
+}
+
+TEST(RTKUpdateTest, LaplacianModelUsesL1IrlsWeight) {
+    Eigen::VectorXd residuals(1);
+    residuals << 4.0;
+    Eigen::VectorXd innovation_variances =
+        Eigen::VectorXd::Ones(1);
+    Eigen::MatrixXd covariance =
+        Eigen::MatrixXd::Identity(1, 1);
+    rtk_update::StudentTFrontEndConfig config;
+    config.enabled = true;
+    config.weight_model =
+        rtk_update::HeavyTailWeightModel::LAPLACIAN;
+
+    const auto result =
+        rtk_update::applyStudentTMeasurementWeights(
+            residuals, innovation_variances, covariance, config);
+
+    EXPECT_TRUE(result.applied);
+    EXPECT_EQ(result.downweighted_rows, 1);
+    EXPECT_NEAR(result.minimum_weight, 0.25, 1e-12);
+    EXPECT_NEAR(covariance(0, 0), 4.0, 1e-12);
+}
+
+TEST(RTKUpdateTest, HuberModelIsContinuousAtActivationThreshold) {
+    Eigen::VectorXd residuals(2);
+    residuals << 2.5, 5.0;
+    Eigen::VectorXd innovation_variances =
+        Eigen::VectorXd::Ones(2);
+    Eigen::MatrixXd covariance =
+        Eigen::MatrixXd::Identity(2, 2);
+    rtk_update::StudentTFrontEndConfig config;
+    config.enabled = true;
+    config.weight_model =
+        rtk_update::HeavyTailWeightModel::HUBER;
+    config.activation_threshold_sigma = 2.5;
+
+    const auto result =
+        rtk_update::applyStudentTMeasurementWeights(
+            residuals, innovation_variances, covariance, config);
+
+    EXPECT_TRUE(result.applied);
+    EXPECT_EQ(result.downweighted_rows, 1);
+    EXPECT_NEAR(result.minimum_weight, 0.5, 1e-12);
+    EXPECT_NEAR(covariance(0, 0), 1.0, 1e-12);
+    EXPECT_NEAR(covariance(1, 1), 2.0, 1e-12);
+}
+
 }  // namespace
 }  // namespace libgnss

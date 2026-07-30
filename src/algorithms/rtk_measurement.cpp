@@ -44,12 +44,14 @@ MeasurementSystem assembleMeasurementSystem(const std::vector<MeasurementBlock>&
     MeasurementSystem system;
     system.design_matrix = Eigen::MatrixXd::Zero(observation_count, n_states);
     system.residuals = Eigen::VectorXd::Zero(observation_count);
+    system.row_kinds.reserve(observation_count);
     system.covariance = buildDoubleDifferenceCovariance(
         block_sizes, ref_variances, sat_variances, observation_count);
 
     int row_index = 0;
     for (const auto& block : blocks) {
         for (const auto& row : block.rows) {
+            system.row_kinds.push_back(block.kind);
             system.residuals(row_index) = row.residual;
             system.design_matrix(row_index, 0) = row.baseline_coefficients(0);
             system.design_matrix(row_index, 1) = row.baseline_coefficients(1);
