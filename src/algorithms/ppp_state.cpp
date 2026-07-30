@@ -1833,6 +1833,7 @@ void PPPProcessor::resetMadocaAmbiguityFrequencies(
     ambiguity.fractional_bias_samples = 0;
     ambiguity.wl_is_fixed = false;
     ambiguity.nl_is_fixed = false;
+    ppp_internal::clearCarrierIonospherePredictionHistory(ambiguity);
     ambiguity.frequency_lifecycle.erase(primary_signal);
     for (const auto signal : slipped_nonprimary_signals) {
         ambiguity.frequency_lifecycle.erase(signal);

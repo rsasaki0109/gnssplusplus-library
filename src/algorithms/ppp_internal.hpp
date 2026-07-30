@@ -53,6 +53,16 @@ inline std::set<SignalType> geometryFreeSlippedSignals(
     return slipped;
 }
 
+inline void clearCarrierIonospherePredictionHistory(
+    ppp_shared::PPPAmbiguityInfo& ambiguity) {
+    // A geometry-free discontinuity invalidates the carrier-derived temporal
+    // ionosphere delta along with the affected ambiguities. Applying that
+    // discontinuity to the ionosphere state before re-seeding the ambiguities
+    // double-counts the slip; MADOCALIB keeps the ionosphere state unchanged
+    // on the reset epoch and establishes a new carrier baseline instead.
+    ambiguity.has_last_carrier_ionosphere = false;
+}
+
 inline int perFrequencyArMinLockCount(bool madoca_per_frequency,
                                       bool ssr_products_loaded,
                                       int convergence_min_epochs) {
