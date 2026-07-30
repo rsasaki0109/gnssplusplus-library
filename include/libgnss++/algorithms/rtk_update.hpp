@@ -9,6 +9,29 @@
 namespace libgnss {
 namespace rtk_update {
 
+enum class HeavyTailWeightModel {
+    STUDENT_T,
+    LAPLACIAN,
+    HUBER,
+};
+
+struct StudentTFrontEndConfig {
+    bool enabled = false;
+    bool code_only = true;
+    HeavyTailWeightModel weight_model =
+        HeavyTailWeightModel::STUDENT_T;
+    double degrees_of_freedom = 4.0;
+    double minimum_weight = 0.05;
+    double activation_threshold_sigma = 2.5;
+};
+
+struct StudentTFrontEndResult {
+    bool applied = false;
+    int downweighted_rows = 0;
+    double minimum_weight = 1.0;
+    double mean_weight = 1.0;
+};
+
 struct FilterUpdateResult {
     bool ok = false;
     bool rejected_by_innovation_gate = false;
@@ -28,7 +51,18 @@ struct FilterUpdateResult {
     // innovation-based adaptive measurement noise tracker.
     Eigen::VectorXd row_innovations;
     Eigen::VectorXd row_hph_diagonal;
+    StudentTFrontEndResult student_t;
 };
+
+StudentTFrontEndResult applyStudentTMeasurementWeights(
+    const Eigen::VectorXd& residuals,
+    Eigen::MatrixXd& measurement_covariance,
+    const StudentTFrontEndConfig& config);
+StudentTFrontEndResult applyStudentTMeasurementWeights(
+    const Eigen::VectorXd& residuals,
+    const Eigen::VectorXd& innovation_variances,
+    Eigen::MatrixXd& measurement_covariance,
+    const StudentTFrontEndConfig& config);
 
 FilterUpdateResult applyMeasurementUpdate(Eigen::VectorXd& state,
                                           Eigen::MatrixXd& covariance,
@@ -38,7 +72,8 @@ FilterUpdateResult applyMeasurementUpdate(Eigen::VectorXd& state,
                                           double max_normalized_innovation_squared_per_observation = 0.0,
                                           const std::vector<bool>& force_active = {},
                                           bool compute_row_stats = false,
-                                          bool reuse_kalman_factorization_for_nis = false);
+                                          bool reuse_kalman_factorization_for_nis = false,
+                                          const StudentTFrontEndConfig& student_t_config = {});
 
 }  // namespace rtk_update
 }  // namespace libgnss

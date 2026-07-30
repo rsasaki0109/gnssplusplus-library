@@ -155,6 +155,34 @@ set(GNSS_SOURCES_NO_OPTIMIZATION
     src/core/observation.cpp
 )
 
+# Production RTK applications must not inherit the historical -O0 workaround
+# used by the monolithic FGO/test support archive.  Keep FGO in
+# gnss_lib_noopt, while compiling the online RTK/SPP/LAMBDA path as its own
+# optimized archive so the documented per-epoch runtime budget is meaningful.
+set(GNSS_RTK_RUNTIME_SOURCES
+    src/algorithms/rtk_ar_selection.cpp
+    src/algorithms/rtk_ar_evaluation.cpp
+    src/algorithms/nlos_weights.cpp
+    src/algorithms/float_trust_policy.cpp
+    src/algorithms/rtk_adaptive_noise.cpp
+    src/algorithms/rtk_measurement.cpp
+    src/algorithms/rtk_selection.cpp
+    src/algorithms/rtk_cmc_reference.cpp
+    src/algorithms/rtk_cp_pr_gate.cpp
+    src/algorithms/rtk_ddpr_anchor.cpp
+    src/algorithms/rtk_update.cpp
+    src/algorithms/rtk_ins_time_update.cpp
+    src/algorithms/rtk_tdcp_diagnostics.cpp
+    src/algorithms/rtk_validation.cpp
+    src/algorithms/integrity_consensus.cpp
+    src/algorithms/rtk.cpp
+    src/algorithms/spp.cpp
+    src/algorithms/spp_velocity.cpp
+    src/algorithms/lambda.cpp
+    src/core/navigation.cpp
+    src/core/observation.cpp
+)
+
 # Create the main library
 add_library(gnss_lib STATIC ${GNSS_SOURCES})
 target_include_directories(gnss_lib PUBLIC
@@ -288,6 +316,18 @@ if(CHOLMOD_INCLUDE_DIR AND CHOLMOD_LIBRARY)
     target_compile_definitions(gnss_lib_noopt PRIVATE GNSSPP_HAS_CHOLMOD=1)
     target_link_libraries(gnss_lib_noopt PRIVATE ${CHOLMOD_LIBRARY})
 endif()
+
+add_library(gnss_rtk_runtime STATIC ${GNSS_RTK_RUNTIME_SOURCES})
+target_include_directories(gnss_rtk_runtime PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+target_link_libraries(gnss_rtk_runtime PUBLIC Eigen3::Eigen)
+if(MSVC)
+    target_compile_options(gnss_rtk_runtime PRIVATE /O2)
+else()
+    target_compile_options(gnss_rtk_runtime PRIVATE -O2)
+endif()
 if(GTSAM_FOUND)
     # fgo.cpp (FGOProcessor::optimizeProblem) lives in gnss_lib_noopt, so the
     # GTSAM backend TU and the gtsam link dependency must live here too, not
@@ -311,7 +351,12 @@ if(GTSAM_FOUND)
     endif()
 endif()
 
-set(GNSS_INSTALL_TARGETS gnss_lib gnss_lib_noopt sofa ginan_iers2010)
+set(GNSS_INSTALL_TARGETS
+    gnss_lib
+    gnss_lib_noopt
+    gnss_rtk_runtime
+    sofa
+    ginan_iers2010)
 if(MADOCALIB_PARITY_LINK)
     list(APPEND GNSS_INSTALL_TARGETS madocalib)
 endif()

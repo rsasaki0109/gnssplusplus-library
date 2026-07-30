@@ -33,6 +33,8 @@ std::string solutionStatusName(libgnss::SolutionStatus status) {
             return "PPP_FLOAT";
         case libgnss::SolutionStatus::PPP_FIXED:
             return "PPP_FIXED";
+        case libgnss::SolutionStatus::PROPAGATED:
+            return "PROPAGATED";
         default:
             return "UNKNOWN";
     }
@@ -361,7 +363,8 @@ PYBIND11_MODULE(_libgnsspp, m) {
         .value("FLOAT", libgnss::SolutionStatus::FLOAT)
         .value("FIXED", libgnss::SolutionStatus::FIXED)
         .value("PPP_FLOAT", libgnss::SolutionStatus::PPP_FLOAT)
-        .value("PPP_FIXED", libgnss::SolutionStatus::PPP_FIXED);
+        .value("PPP_FIXED", libgnss::SolutionStatus::PPP_FIXED)
+        .value("PROPAGATED", libgnss::SolutionStatus::PROPAGATED);
 
     py::class_<libgnss::GNSSTime>(m, "GNSSTime")
         .def(py::init<int, double>(), py::arg("week"), py::arg("tow"))

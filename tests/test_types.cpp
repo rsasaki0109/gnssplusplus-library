@@ -3,6 +3,7 @@
 #include <libgnss++/core/types.hpp>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 
 using namespace libgnss;
 
@@ -76,6 +77,20 @@ TEST_F(TypesTest, Constants) {
     EXPECT_GT(constants::WGS84_A, 6.3e6);
     EXPECT_GT(constants::WGS84_F, 0.0);
     EXPECT_LT(constants::WGS84_F, 1.0);
+}
+
+TEST_F(TypesTest, PropagatedSolutionIsValidWithoutCurrentSatellitesButNeverFixed) {
+    PositionSolution solution;
+    solution.status = SolutionStatus::PROPAGATED;
+    solution.position_ecef = Vector3d(1.0, 2.0, 3.0);
+    solution.num_satellites = 0;
+
+    EXPECT_TRUE(solution.isValid());
+    EXPECT_FALSE(solution.isFixed());
+
+    solution.position_ecef.x() =
+        std::numeric_limits<double>::quiet_NaN();
+    EXPECT_FALSE(solution.isValid());
 }
 
 TEST_F(TypesTest, SolutionFileRoundTripsFgoQualityColumns) {
