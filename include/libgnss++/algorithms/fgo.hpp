@@ -1725,6 +1725,7 @@ public:
         std::size_t surplus_validation_fails = 0;
         std::size_t surplus_validation_insufficient_surplus = 0;  ///< too few surplus sats at every fallback level
         std::size_t surplus_validation_rescued_epochs = 0;  ///< epochs FIXED only because this test passed a relaxed-ratio candidate
+        std::size_t surplus_validation_separation_rejects = 0;  ///< surplus-pass rescues rejected by the existing fixed-vs-float/IMU separation aperture
         std::size_t surplus_validation_vetoed_epochs = 0;   ///< established-ratio fixes demoted by surplus_validation_veto_high_ratio_fails
         std::size_t surplus_validation_fallback_level_histogram[6] = {0, 0, 0, 0, 0, 0};  ///< index = deciding fallback level (0=GQEBR .. 5=GQ)
         // --- Below-floor low-count AR rescue (use_low_count_ambiguity_resolution) ---

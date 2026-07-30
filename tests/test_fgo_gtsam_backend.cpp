@@ -2639,6 +2639,7 @@ TEST(FGOSurplusValidationTest, DefaultOffIsNoOp) {
     EXPECT_EQ(result.diagnostics.surplus_validation_fails, 0u);
     EXPECT_EQ(result.diagnostics.surplus_validation_insufficient_surplus, 0u);
     EXPECT_EQ(result.diagnostics.surplus_validation_rescued_epochs, 0u);
+    EXPECT_EQ(result.diagnostics.surplus_validation_separation_rejects, 0u);
     EXPECT_EQ(result.diagnostics.surplus_validation_vetoed_epochs, 0u);
     for (auto count : result.diagnostics.surplus_validation_fallback_level_histogram) {
         EXPECT_EQ(count, 0u);
@@ -2669,6 +2670,7 @@ TEST(FGOSurplusValidationTest, EnabledWithoutExclusionsReportsInsufficientSurplu
     EXPECT_EQ(on_result.diagnostics.surplus_validation_fails, 0u);
     EXPECT_GT(on_result.diagnostics.surplus_validation_insufficient_surplus, 0u);
     EXPECT_EQ(on_result.diagnostics.surplus_validation_rescued_epochs, 0u);
+    EXPECT_EQ(on_result.diagnostics.surplus_validation_separation_rejects, 0u);
     EXPECT_EQ(on_result.diagnostics.surplus_validation_vetoed_epochs, 0u);
 
     // With nothing to rescue or veto, the held-arc outcome must be
