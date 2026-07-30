@@ -893,6 +893,68 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
     bool n1_accepted = false;
     bool lambda_failed = false;
 
+    const auto build_n1_problem =
+        [&](const std::vector<int>& selection,
+            VectorXd& float_values,
+            MatrixXd& covariance) {
+            const int count = static_cast<int>(selection.size());
+            float_values = VectorXd::Zero(count);
+            covariance = MatrixXd::Zero(count, count);
+            for (int k = 0; k < count; ++k) {
+                const DdPair& pair_k = wl_pairs[static_cast<size_t>(
+                    selection[static_cast<size_t>(k)])];
+                const Cand& rk = cands[static_cast<size_t>(pair_k.ref)];
+                const Cand& sk = cands[static_cast<size_t>(pair_k.sat)];
+                float_values(k) =
+                    filter_state_.state(rk.l1_index) / rk.lambda1 -
+                    filter_state_.state(sk.l1_index) / sk.lambda1;
+                for (int l = 0; l < count; ++l) {
+                    const DdPair& pair_l = wl_pairs[static_cast<size_t>(
+                        selection[static_cast<size_t>(l)])];
+                    const Cand& rl = cands[static_cast<size_t>(pair_l.ref)];
+                    const Cand& sl = cands[static_cast<size_t>(pair_l.sat)];
+                    covariance(k, l) =
+                        filter_state_.covariance(
+                            rk.l1_index, rl.l1_index) /
+                            (rk.lambda1 * rl.lambda1) -
+                        filter_state_.covariance(
+                            rk.l1_index, sl.l1_index) /
+                            (rk.lambda1 * sl.lambda1) -
+                        filter_state_.covariance(
+                            sk.l1_index, rl.l1_index) /
+                            (sk.lambda1 * rl.lambda1) +
+                        filter_state_.covariance(
+                            sk.l1_index, sl.l1_index) /
+                            (sk.lambda1 * sl.lambda1);
+                }
+            }
+        };
+    const auto n1_ratio_threshold =
+        [&](int count,
+            const VectorXd& fixed,
+            const VectorXd& second,
+            double& match_rate) {
+            double threshold = ppp_config_.ar_ratio_threshold;
+            const int dimension_offset = count - kMinN1Ambiguities;
+            if (dimension_offset >= 0 && dimension_offset < 5) {
+                threshold *= kDimensionThresholdFactors[dimension_offset];
+            }
+            int matching = 0;
+            for (int k = 0; k < count; ++k) {
+                if (std::abs(fixed(k) - second(k)) < 0.001) {
+                    ++matching;
+                }
+            }
+            match_rate = static_cast<double>(matching) / count;
+            if (match_rate > 0.90) {
+                threshold *= 0.8;
+            }
+            if (match_rate < 0.10) {
+                threshold = 99.99;
+            }
+            return threshold;
+        };
+
     // MADOCALIB partial AR: when the ratio test rejects the full set, remove
     // one non-reference satellite implicated by the disagreement between the
     // first and second LAMBDA candidates, then retry.  QZSS and BDS IGSO are
@@ -903,31 +965,9 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
             break;
         }
 
-        VectorXd n1_float = VectorXd::Zero(trial_nb);
-        MatrixXd n1_cov = MatrixXd::Zero(trial_nb, trial_nb);
-        for (int k = 0; k < trial_nb; ++k) {
-            const DdPair& pair_k =
-                wl_pairs[static_cast<size_t>(n1_sel[static_cast<size_t>(k)])];
-            const Cand& rk = cands[static_cast<size_t>(pair_k.ref)];
-            const Cand& sk = cands[static_cast<size_t>(pair_k.sat)];
-            n1_float(k) = filter_state_.state(rk.l1_index) / rk.lambda1 -
-                          filter_state_.state(sk.l1_index) / sk.lambda1;
-            for (int l = 0; l < trial_nb; ++l) {
-                const DdPair& pair_l =
-                    wl_pairs[static_cast<size_t>(n1_sel[static_cast<size_t>(l)])];
-                const Cand& rl = cands[static_cast<size_t>(pair_l.ref)];
-                const Cand& sl = cands[static_cast<size_t>(pair_l.sat)];
-                n1_cov(k, l) =
-                    filter_state_.covariance(rk.l1_index, rl.l1_index) /
-                        (rk.lambda1 * rl.lambda1) -
-                    filter_state_.covariance(rk.l1_index, sl.l1_index) /
-                        (rk.lambda1 * sl.lambda1) -
-                    filter_state_.covariance(sk.l1_index, rl.l1_index) /
-                        (sk.lambda1 * rl.lambda1) +
-                    filter_state_.covariance(sk.l1_index, sl.l1_index) /
-                        (sk.lambda1 * sl.lambda1);
-            }
-        }
+        VectorXd n1_float;
+        MatrixXd n1_cov;
+        build_n1_problem(n1_sel, n1_float, n1_cov);
         if (env_overrides_.pfdump) {
             for (int k = 0; k < trial_nb; ++k) {
                 const DdPair& pair =
@@ -949,25 +989,9 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
             break;
         }
 
-        effective_threshold = ppp_config_.ar_ratio_threshold;
-        const int dimension_offset = trial_nb - kMinN1Ambiguities;
-        if (dimension_offset >= 0 && dimension_offset < 5) {
-            effective_threshold *= kDimensionThresholdFactors[dimension_offset];
-        }
-        int matching_candidates = 0;
-        for (int k = 0; k < trial_nb; ++k) {
-            if (std::abs(n1_fixed(k) - n1_second(k)) < 0.001) {
-                ++matching_candidates;
-            }
-        }
-        const double match_rate =
-            static_cast<double>(matching_candidates) / trial_nb;
-        if (match_rate > 0.90) {
-            effective_threshold *= 0.8;
-        }
-        if (match_rate < 0.10) {
-            effective_threshold = 99.99;
-        }
+        double match_rate = 0.0;
+        effective_threshold = n1_ratio_threshold(
+            trial_nb, n1_fixed, n1_second, match_rate);
         ar_stage_telemetry_.last_n1_candidates = trial_nb;
         ar_stage_telemetry_.last_n1_ratio = ratio;
         if (env_overrides_.pfdump) {
@@ -986,6 +1010,82 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
         }
 
         int exclude_position = -1;
+        // The oracle's greedy lowest-elevation removal is deterministic for
+        // its float means, but a weak ambiguity/STEC gauge can change the
+        // disagreement set across platforms. Before committing that removal,
+        // test each implicated one-satellite child with the same LAMBDA ratio,
+        // dimension, and candidate-agreement gates. This adds no candidate and
+        // relaxes no threshold: it only accepts a subset that already passes
+        // the ordinary N1 contract. If none passes, retain the oracle's greedy
+        // removal below.
+        if (require_coherent_ssr_ && ssr_products_loaded_) {
+            for (int removed = 0; removed < trial_nb; ++removed) {
+                if (std::abs(n1_fixed(removed) - n1_second(removed)) < 0.001) {
+                    continue;
+                }
+                std::vector<int> child_sel = n1_sel;
+                child_sel.erase(child_sel.begin() + removed);
+                const int child_nb = static_cast<int>(child_sel.size());
+                if (child_nb < kMinN1Ambiguities) {
+                    continue;
+                }
+                VectorXd child_float;
+                MatrixXd child_cov;
+                build_n1_problem(child_sel, child_float, child_cov);
+                VectorXd child_fixed;
+                VectorXd child_second;
+                double child_ratio = 0.0;
+                if (!lambdaSearchCandidates(
+                        child_float,
+                        child_cov,
+                        child_fixed,
+                        child_second,
+                        child_ratio) ||
+                    !std::isfinite(child_ratio)) {
+                    continue;
+                }
+                double child_match_rate = 0.0;
+                const double child_threshold = n1_ratio_threshold(
+                    child_nb,
+                    child_fixed,
+                    child_second,
+                    child_match_rate);
+                const double child_score =
+                    child_threshold > 0.0
+                        ? child_ratio / child_threshold
+                        : -std::numeric_limits<double>::infinity();
+                if (env_overrides_.pfdump) {
+                    const DdPair& removed_pair =
+                        wl_pairs[static_cast<size_t>(
+                            n1_sel[static_cast<size_t>(removed)])];
+                    std::cerr << "[PFN1-LOOKAHEAD] removed="
+                              << cands[static_cast<size_t>(
+                                     removed_pair.sat)].sat.toString()
+                              << " ratio=" << child_ratio
+                              << " threshold=" << child_threshold
+                              << " match_rate=" << child_match_rate
+                              << " score=" << child_score << "\n";
+                }
+                if (madocaHighAgreementRatioAccepted(
+                        true,
+                        child_ratio,
+                        child_threshold,
+                        child_match_rate)) {
+                    n1_sel = std::move(child_sel);
+                    n1_fixed = std::move(child_fixed);
+                    n1_second = std::move(child_second);
+                    ratio = child_ratio;
+                    effective_threshold = child_threshold;
+                    n1_accepted = true;
+                    ar_stage_telemetry_.last_n1_candidates = child_nb;
+                    ar_stage_telemetry_.last_n1_ratio = ratio;
+                    break;
+                }
+            }
+            if (n1_accepted) {
+                break;
+            }
+        }
         double lowest_priority_elevation = std::numeric_limits<double>::infinity();
         for (int k = 0; k < trial_nb; ++k) {
             if (std::abs(n1_fixed(k) - n1_second(k)) < 0.001) {
