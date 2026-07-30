@@ -112,6 +112,50 @@ TEST(MadocaBridgeConfig, AvailabilityMatchesBuildFlag) {
 #endif
 }
 
+TEST(MadocaBridgeConfig, CondensesHourlyFilesByL6Stream) {
+    namespace bridge = libgnss::external::madocalib;
+    const std::filesystem::path root =
+        std::filesystem::path("archive") / "2025" / "091";
+    const std::vector<std::string> inputs = {
+        (root / "2025091A.200.l6").string(),
+        (root / "2025091A.201.l6").string(),
+        (root / "2025091B.200.l6").string(),
+        (root / "2025091B.201.l6").string(),
+    };
+
+    const std::vector<std::string> condensed =
+        bridge::detail::condenseHourlyL6Inputs(inputs, true);
+
+    ASSERT_EQ(condensed.size(), 2u);
+    EXPECT_EQ(condensed[0],
+              (std::filesystem::path("archive") / "%Y" / "%n" /
+               "%Y%n%HU.200.l6").string());
+    EXPECT_EQ(condensed[1],
+              (std::filesystem::path("archive") / "%Y" / "%n" /
+               "%Y%n%HU.201.l6").string());
+
+    const std::vector<std::string> l6e_inputs = {
+        (root / "2025091A.204.l6").string(),
+        (root / "2025091B.204.l6").string(),
+    };
+    EXPECT_EQ(bridge::detail::condenseHourlyL6Inputs(l6e_inputs, false),
+              std::vector<std::string>({
+                  (std::filesystem::path("archive") / "%Y" / "%n" /
+                   "%Y%n%HU.204.l6").string(),
+              }));
+}
+
+TEST(MadocaBridgeConfig, PreservesSingleAndNonmatchingL6Inputs) {
+    namespace bridge = libgnss::external::madocalib;
+    const std::vector<std::string> inputs = {
+        "2025091A.200.l6",
+        "2025091A.204.l6",
+        "custom-ionosphere.l6",
+    };
+
+    EXPECT_EQ(bridge::detail::condenseHourlyL6Inputs(inputs, true), inputs);
+}
+
 TEST(MadocaBridgeConfig, TideOracleIsAlsoOptIn) {
 #if GNSSPP_HAS_MADOCALIB_ORACLE
     EXPECT_TRUE(libgnss::external::madocalib_oracle::tideAvailable());

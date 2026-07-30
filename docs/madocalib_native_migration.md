@@ -538,6 +538,31 @@ Exit: all supported materialization and residual identities are accounted for;
 configured common component deltas pass their explicit tolerances; MIZU 24-hour
 maximum native/oracle 3D delta is at most 1.0 m with no new boundary spike.
 
+#### M4 24-hour input and boundary gate
+
+The CLI previously limited native `--madoca-l6d` and shadow input to three
+files, while the linked bridge copied only the first three
+`--madocalib-mdciono` paths into MADOCALIB's three stream slots.  That made an
+explicit A--X hourly sequence impossible even though RTKLIB time-path
+expansion supports it.  Native now accepts the complete sequence.  The bridge
+validates every explicit file, then condenses two or more files from the same
+PRN stream into `%Y/%n/%Y%n%HU.<prn>.l6`; independent L6D streams still fail
+when they exceed the three-slot limit.
+
+On the full-day MIZU `pppar-ion` run, the bridge publishes 2,878 solutions and
+native publishes 2,855, all of which match a bridge epoch.  Native/oracle 3D
+delta RMS is 0.097181 m and the maximum is 0.459645 m; no matched epoch exceeds
+1 m.  Across the 23 hourly boundaries, using the eight epochs within
+plus/minus 120 seconds of each boundary, the largest 3D delta is 0.280746 m.
+This satisfies the M4 24-hour trajectory and boundary clause without a
+time-window-specific position guard.
+
+Status remains deliberately conservative and is not hidden by that trajectory
+result: the bridge reports 2,857 Fix and 21 non-Fix solutions, while native
+reports 1,916 Fix and 939 Float solutions.  All native Fix epochs are bridge
+Fix epochs, so there are zero wrong Fix and 918 matched missed-Fix epochs.
+The status baseline and any safe convergence improvement remain M5 evidence.
+
 ### M5 -- Make parity a release gate
 
 - Run MIZU and ALIC for 1 h and 6 h on every solver-change PR.
