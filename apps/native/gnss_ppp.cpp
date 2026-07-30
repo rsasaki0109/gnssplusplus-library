@@ -1119,8 +1119,7 @@ int main(int argc, char* argv[]) {
             const int rows = libgnss::io::writeMadocaL6eMaterializationCsv(
                 options.madoca_l6_paths,
                 ppp_config.l6_gps_week,
-                options.madoca_materialization_dump_path,
-                ppp_env_overrides.madoca_ssr_replay);
+                options.madoca_materialization_dump_path);
             if (rows < 0) {
                 std::cerr << "Error: failed to write MADOCA materialization dump: "
                           << options.madoca_materialization_dump_path << "\n";

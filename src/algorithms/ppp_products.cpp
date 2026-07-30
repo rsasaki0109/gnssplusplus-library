@@ -211,8 +211,7 @@ bool PPPProcessor::loadMadocaL6Products(const std::vector<std::string>& l6_files
     }
     const int gps_week = ppp_config_.l6_gps_week > 0 ? ppp_config_.l6_gps_week
                                                      : last_obs_gps_week_;
-    const int added = env_overrides_.madoca_ssr_replay ?
-        io::decodeMadocaL6eFilesToProductsReplay(l6_files, gps_week, ssr_products_) :
+    const int added =
         io::decodeMadocaL6eFilesToProducts(l6_files, gps_week, ssr_products_);
     ssr_products_loaded_ = added > 0;
     require_coherent_ssr_ =

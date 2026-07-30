@@ -664,7 +664,7 @@ bool PPPProcessor::hasEnoughCoherentSsrObservations(const ObservationData& obs,
             nullptr,
             &status,
             false);
-        if (env_overrides_.madoca_galileo_gate &&
+        if (env_overrides_.madoca_early_window &&
             observation.satellite.system == GNSSSystem::Galileo &&
             !nav.hasMadocaGalileoEphemeris(
                 observation.satellite, obs.time, status.orbit_iode)) {
@@ -948,7 +948,7 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                 observation.valid = false;
                 continue;
             }
-            if (env_overrides_.madoca_galileo_gate &&
+            if (env_overrides_.madoca_early_window &&
                 require_coherent_ssr_ &&
                 observation.satellite.system == GNSSSystem::Galileo &&
                 !nav.hasMadocaGalileoEphemeris(
