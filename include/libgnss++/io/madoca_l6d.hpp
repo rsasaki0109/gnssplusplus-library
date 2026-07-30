@@ -72,6 +72,11 @@ public:
     // the staleness gate consumed by MadocaIonoStore::getCorr / miono_get_corr.
     const MadocaGtime& decodeTime() const { return channels_[0].gt; }
 
+    // Epoch of the most recently completed message, mirroring
+    // mdcl6d_t::time. Unlike decodeTime(), this advances for PRN 201/197 and is
+    // therefore the causal key for file snapshots from a secondary channel.
+    const MadocaGtime& messageTime() const { return last_message_time_; }
+
     // Mirror postpos.c update_qzssl6d() reset of the scratch region between
     // messages: clear rvalid and every area's avalid plus per-sat t0.time.
     void clearRegionAfterUse();
@@ -101,6 +106,7 @@ private:
     int nbyte_ = 0;
     MadocaGtime seed_;                  // week-determination reference epoch
     ChannelState channels_[kMaxPrn];
+    MadocaGtime last_message_time_;
     MadocaIonoRegion re_;               // decoded scratch region (mdcl6d.re)
     int rid_ = 0;                       // decoded region ID (mdcl6d.rid)
 };

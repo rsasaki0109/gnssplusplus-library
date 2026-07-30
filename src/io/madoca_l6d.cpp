@@ -196,6 +196,7 @@ void MadocaL6dDecoder::reset() {
         channels_[p] = ChannelState{};
         channels_[p].gt = seed_;  // seed week-number determination
     }
+    last_message_time_ = seed_;
     re_ = MadocaIonoRegion{};
     rid_ = 0;
 }
@@ -422,6 +423,11 @@ int MadocaL6dDecoder::decodeL6dMessage() {
         if (i >= imax) break;
     }
     ch.maxframe = 0;
+    // MADOCALIB assigns mdcl6d->time from the channel that completed this
+    // message. The primary-channel clock remains a separate global staleness
+    // gate; using it as a secondary-file snapshot key placed every PRN-201
+    // update at the reference epoch and exposed future per-satellite t0 values.
+    last_message_time_ = ch.gt;
     return ret;
 }
 
@@ -691,7 +697,7 @@ bool decodeMadocaL6dFileToSnapshots(
         }
         ++completed_messages;
         store->update(decoder->regionId(), decoder->region());
-        appendMadocaIonoSnapshot(*store, receiver_ecef, decoder->decodeTime(),
+        appendMadocaIonoSnapshot(*store, receiver_ecef, decoder->messageTime(),
                                  decoder->regionId(), snapshots, gloFreqHz);
         decoder->clearRegionAfterUse();
     }

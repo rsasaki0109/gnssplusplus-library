@@ -479,6 +479,26 @@ within `1e-6`; the configured common residual row set has no unmatched rows;
 MIZU `pppar-ion` produces no wrong Fix and improves or preserves M2 trajectory
 metrics.  The feature remains opt-in until M5.
 
+#### M3 prerequisite -- key snapshots by the completed L6D message
+
+The file decoder previously keyed every snapshot with `decodeTime()`, whose
+contract is the primary PRN-200 channel time used by the global staleness gate.
+When a PRN-201 ionosphere message completed independently, its satellite
+correction times advanced but the snapshot key remained at the PRN-200
+reference time.  A downstream causal lookup could therefore select a snapshot
+whose corrections appeared about 3,487 seconds in the future and reject every
+one against MADOCALIB's 300-second age gate.
+
+`messageTime()` now records the channel time of the most recently completed
+message, while `decodeTime()` retains its primary-channel contract.  File
+snapshots use `messageTime()`.  The real MIZU PRN-201 fixture verifies that no
+satellite correction is newer than its snapshot and that completed corrections
+share the snapshot time.  In a layered, not-yet-published M3 STEC application
+experiment, this changes the first valid epochs from zero accepted rows to
+9, 9, and 10 rows, each with a 24-second correction age.  This establishes the
+causal snapshot fix as a prerequisite; row/value and solution parity remain M3
+work.
+
 ### M4 -- Close remaining row and boundary differences
 
 - Resolve QZSS atmosphere admission and every unexplained native-only or
@@ -534,9 +554,10 @@ remains open.
 
 ## Immediate Slice
 
-Begin M3 by promoting the existing measurement-neutral L6D shadow lookup to an
-explicit opt-in STEC input.  First pin receiver-area selection, correction age,
-delay, standard deviation, signal coefficient, and snapshot application keys;
-then compare the common native/oracle `pppar-ion` residual rows before judging
-Fix status or trajectories.  Preserve the established M2 guards and keep the
+Begin M3 by landing the completed-message snapshot-time prerequisite, then
+promote the existing measurement-neutral L6D shadow lookup to an explicit
+opt-in STEC input.  Pin receiver-area selection, correction age, delay,
+standard deviation, signal coefficient, and snapshot application keys; then
+compare the common native/oracle `pppar-ion` residual rows before judging Fix
+status or trajectories.  Preserve the established M2 guards and keep the
 feature opt-in until the M5 matrix passes.
