@@ -230,6 +230,30 @@ TEST(FGOGtsamBackendTest, FloatSolutionMatchesEigenBackendOnDoubleDifferenceProb
         << " gtsam=" << gtsam_result.diagnostics.double_difference_carrier_residual_rms_m;
 }
 
+TEST(FGOGtsamBackendTest, ReportsBuiltTdcpThatIsNotInsertedByGtsamBackend) {
+    FGOProcessor::FGOProblem problem = makeGtsamParityDoubleDifferenceProblem();
+    FGOProcessor::TimeDifferencedCarrierFactor tdcp;
+    tdcp.previous_epoch_index = 0;
+    tdcp.current_epoch_index = 1;
+    tdcp.satellite = SatelliteId(GNSSSystem::GPS, 1);
+    tdcp.signal = SignalType::GPS_L1CA;
+    tdcp.previous_satellite_position_ecef = gtsamParitySatelliteGeometry().front();
+    tdcp.current_satellite_position_ecef = gtsamParitySatelliteGeometry().front();
+    tdcp.delta_carrier_m = 0.0;
+    tdcp.sigma_m = 0.03;
+    problem.tdcp_factors.push_back(tdcp);
+
+    FGOProcessor::FGOConfig config = makeParityBaseConfig();
+    config.backend = FGOBackend::GTSAM;
+    config.use_tdcp_factors = true;
+
+    const FGOProcessor processor(config);
+    const FGOProcessor::FGOResult result = processor.optimizeProblem(problem);
+
+    EXPECT_EQ(result.diagnostics.tdcp_factors, 1u);
+    EXPECT_EQ(result.diagnostics.tdcp_factors_inserted, 0u);
+}
+
 TEST(FGOGtsamBackendTest, GtsamBackendRecoversFloatAmbiguitiesNearIntegers) {
     const FGOProcessor::FGOProblem problem = makeGtsamParityDoubleDifferenceProblem();
     FGOProcessor::FGOConfig config = makeParityBaseConfig();

@@ -1682,9 +1682,15 @@ public:
         bool converged = false;
         std::size_t epochs = 0;
         std::size_t pseudorange_factors = 0;
+        /// TDCP measurements present in the backend-independent problem.
         std::size_t tdcp_factors = 0;
+        /// TDCP residual rows/factors actually inserted by the selected backend.
+        std::size_t tdcp_factors_inserted = 0;
         std::size_t single_difference_doppler_factors = 0;
+        /// Satellite-single-difference TDCP measurements present in the problem.
         std::size_t single_difference_tdcp_factors = 0;
+        /// Satellite-single-difference TDCP rows/factors actually inserted by the backend.
+        std::size_t single_difference_tdcp_factors_inserted = 0;
         std::size_t carrier_phase_factors = 0;
         std::size_t double_difference_pseudorange_factors = 0;
         std::size_t double_difference_carrier_factors = 0;
