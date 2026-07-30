@@ -1699,6 +1699,10 @@ public:
         std::size_t lambda_ambiguity_candidates = 0;
         std::size_t lambda_ambiguity_used_candidates = 0;
         std::size_t lambda_ambiguity_attempts = 0;
+        /// Ambiguity keys removed before LAMBDA because they left the active smoother.
+        std::size_t lambda_stale_candidates_filtered = 0;
+        /// Exceptions while requesting the active pose/ambiguity joint marginal.
+        std::size_t lambda_joint_marginal_failures = 0;
         std::size_t integer_constrained_reoptimization_attempts = 0;
         std::size_t integer_constrained_reoptimization_accepts = 0;
         std::size_t integer_constrained_reoptimization_rejects = 0;

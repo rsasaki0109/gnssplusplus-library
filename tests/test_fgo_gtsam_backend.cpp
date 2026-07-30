@@ -228,6 +228,8 @@ TEST(FGOGtsamBackendTest, FloatSolutionMatchesEigenBackendOnDoubleDifferenceProb
                 gtsam_result.diagnostics.double_difference_carrier_residual_rms_m, 1e-3)
         << "eigen=" << eigen_result.diagnostics.double_difference_carrier_residual_rms_m
         << " gtsam=" << gtsam_result.diagnostics.double_difference_carrier_residual_rms_m;
+    EXPECT_EQ(gtsam_result.diagnostics.lambda_stale_candidates_filtered, 0u);
+    EXPECT_EQ(gtsam_result.diagnostics.lambda_joint_marginal_failures, 0u);
 }
 
 TEST(FGOGtsamBackendTest, ReportsBuiltTdcpThatIsNotInsertedByGtsamBackend) {

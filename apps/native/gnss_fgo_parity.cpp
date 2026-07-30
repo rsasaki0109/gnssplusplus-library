@@ -2391,7 +2391,11 @@ int main(int argc, char** argv) {
                   << "  per-epoch LAMBDA: attempts=" << fl.diagnostics.lambda_ambiguity_attempts
                   << ", fixed_epochs=" << fl_fixed << "/" << ne << " ("
                   << (ne > 0 ? 100.0 * double(fl_fixed) / double(ne) : 0.0)
-                  << "% fix-rate), best_ratio=" << fl.diagnostics.lambda_ambiguity_ratio << "\n"
+                  << "% fix-rate), best_ratio=" << fl.diagnostics.lambda_ambiguity_ratio
+                  << ", stale_candidates_filtered="
+                  << fl.diagnostics.lambda_stale_candidates_filtered
+                  << ", joint_marginal_failures="
+                  << fl.diagnostics.lambda_joint_marginal_failures << "\n"
                   << "  partial AR: " << (config.use_fixed_lag_partial_lambda ? "on" : "off")
                   << " (min_fraction=" << config.fixed_lag_partial_lambda_min_fraction
                   << ", min_fixed=" << config.min_fixed_ambiguities

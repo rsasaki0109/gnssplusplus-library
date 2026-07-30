@@ -1925,6 +1925,10 @@ void writeSummaryJson(const Options& options,
            << diagnostics.lambda_ambiguity_used_candidates << ",\n";
     output << "  \"lambda_ambiguity_attempts\": "
            << diagnostics.lambda_ambiguity_attempts << ",\n";
+    output << "  \"lambda_stale_candidates_filtered\": "
+           << diagnostics.lambda_stale_candidates_filtered << ",\n";
+    output << "  \"lambda_joint_marginal_failures\": "
+           << diagnostics.lambda_joint_marginal_failures << ",\n";
     output << "  \"integer_constrained_reoptimization_attempts\": "
            << diagnostics.integer_constrained_reoptimization_attempts << ",\n";
     output << "  \"integer_constrained_reoptimization_accepts\": "
@@ -3562,6 +3566,10 @@ int main(int argc, char* argv[]) {
                       << result.diagnostics.lambda_ambiguity_used_candidates << "\n";
             std::cout << "LAMBDA attempts: "
                       << result.diagnostics.lambda_ambiguity_attempts << "\n";
+            std::cout << "LAMBDA stale candidates filtered: "
+                      << result.diagnostics.lambda_stale_candidates_filtered << "\n";
+            std::cout << "LAMBDA joint marginal failures: "
+                      << result.diagnostics.lambda_joint_marginal_failures << "\n";
             std::cout << "LAMBDA solved: "
                       << (result.diagnostics.lambda_ambiguity_fix_solved ? "yes" : "no")
                       << "\n";

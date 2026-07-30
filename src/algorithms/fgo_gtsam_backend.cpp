@@ -3098,6 +3098,24 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
 
         // --- Per-epoch LAMBDA off the bounded windowed marginals ---
         if (fix_allowed && config.use_lambda_ambiguity_fix && !epoch_amb_indices.empty()) {
+            // FDE, exception recovery, or an ambiguity-generation bump can
+            // invalidate a candidate after epoch_amb_indices was assembled.
+            // Never request a joint marginal containing a key that has
+            // already left the active smoother.
+            const gtsam::Values& lambda_linearization_point =
+                smoother.getLinearizationPoint();
+            const std::size_t candidates_before_filter = epoch_amb_indices.size();
+            epoch_amb_indices.erase(
+                std::remove_if(
+                    epoch_amb_indices.begin(), epoch_amb_indices.end(),
+                    [&](std::size_t idx) {
+                        return !lambda_linearization_point.exists(
+                            ambiguityKey(ambSymbolId(idx)));
+                    }),
+                epoch_amb_indices.end());
+            result.diagnostics.lambda_stale_candidates_filtered +=
+                candidates_before_filter - epoch_amb_indices.size();
+
             std::sort(epoch_amb_indices.begin(), epoch_amb_indices.end(),
                       [&](std::size_t a, std::size_t b) {
                           const auto& sa = problem.ambiguity_states[a];
@@ -3174,6 +3192,7 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                     }
                 } catch (const std::exception&) {
                     ok = false;
+                    ++result.diagnostics.lambda_joint_marginal_failures;
                 }
                 if (ok && float_amb.allFinite() && q_amb.allFinite()) {
                     epoch_diagnostics[i].ar_outcome =
