@@ -1,0 +1,505 @@
+{
+  "cases": {
+    "alic.ppp.1h": {
+      "base_only_epochs": 0,
+      "base_status_counts": {
+        "6": 118
+      },
+      "boundary_max_delta_3d_m": 3.4893895548867557,
+      "candidate_only_epochs": 0,
+      "candidate_status_counts": {
+        "5": 118
+      },
+      "delta_max_3d_m": 3.4893895548867557,
+      "delta_rms_3d_m": 1.2890065263482149,
+      "matched_epochs": 118,
+      "missed_fixes": 0,
+      "native_row_counts": {
+        "madoca_l6d_constraint_epochs": 0,
+        "madoca_l6d_constraint_position_gate_epochs": 0,
+        "madoca_l6d_constraint_rows": 0
+      },
+      "native_runtime_s": 11.436742382000034,
+      "status_pair_counts": {
+        "6->5": 118
+      },
+      "wrong_fixes": 0
+    },
+    "alic.ppp.24h": {
+      "base_only_epochs": 23,
+      "base_status_counts": {
+        "6": 2878
+      },
+      "boundary_max_delta_3d_m": 3.4893895548867557,
+      "candidate_only_epochs": 0,
+      "candidate_status_counts": {
+        "5": 2855
+      },
+      "delta_max_3d_m": 3.4893895548867557,
+      "delta_rms_3d_m": 0.8051494758745736,
+      "matched_epochs": 2855,
+      "missed_fixes": 0,
+      "native_row_counts": {
+        "madoca_l6d_constraint_epochs": 0,
+        "madoca_l6d_constraint_position_gate_epochs": 0,
+        "madoca_l6d_constraint_rows": 0
+      },
+      "native_runtime_s": 131.36953157799996,
+      "status_pair_counts": {
+        "6->5": 2855
+      },
+      "wrong_fixes": 0
+    },
+    "alic.ppp.6h": {
+      "base_only_epochs": 5,
+      "base_status_counts": {
+        "6": 718
+      },
+      "boundary_max_delta_3d_m": 3.4893895548867557,
+      "candidate_only_epochs": 0,
+      "candidate_status_counts": {
+        "5": 713
+      },
+      "delta_max_3d_m": 3.4893895548867557,
+      "delta_rms_3d_m": 0.8830304718044313,
+      "matched_epochs": 713,
+      "missed_fixes": 0,
+      "native_row_counts": {
+        "madoca_l6d_constraint_epochs": 0,
+        "madoca_l6d_constraint_position_gate_epochs": 0,
+        "madoca_l6d_constraint_rows": 0
+      },
+      "native_runtime_s": 30.89363381999999,
+      "status_pair_counts": {
+        "6->5": 713
+      },
+      "wrong_fixes": 0
+    },
+    "alic.pppar-ion.1h": {
+      "base_only_epochs": 0,
+      "base_status_counts": {
+        "1": 108,
+        "6": 10
+      },
+      "boundary_max_delta_3d_m": 0.049686039760109706,
+      "candidate_only_epochs": 0,
+      "candidate_status_counts": {
+        "5": 11,
+        "6": 107
+      },
+      "delta_max_3d_m": 0.4679434691068333,
+      "delta_rms_3d_m": 0.06480974657394407,
+      "matched_epochs": 118,
+      "missed_fixes": 1,
+      "native_row_counts": {
+        "madoca_l6d_constraint_epochs": 1,
+        "madoca_l6d_constraint_position_gate_epochs": 117,
+        "madoca_l6d_constraint_rows": 10
+      },
+      "native_runtime_s": 9.629612201999407,
+      "status_pair_counts": {
+        "1->5": 1,
+        "1->6": 107,
+        "6->5": 10
+      },
+      "wrong_fixes": 0
+    },
+    "alic.pppar-ion.24h": {
+      "base_only_epochs": 23,
+      "base_status_counts": {
+        "1": 2868,
+        "6": 10
+      },
+      "boundary_max_delta_3d_m": 0.25449669666628116,
+      "candidate_only_epochs": 0,
+      "candidate_status_counts": {
+        "5": 589,
+        "6": 2266
+      },
+      "delta_max_3d_m": 0.4679434691068333,
+      "delta_rms_3d_m": 0.0988556114378096,
+      "matched_epochs": 2855,
+      "missed_fixes": 579,
+      "native_row_counts": {
+        "madoca_l6d_constraint_epochs": 1,
+        "madoca_l6d_constraint_position_gate_epochs": 2854,
+        "madoca_l6d_constraint_rows": 10
+      },
+      "native_runtime_s": 142.66633428399837,
+      "status_pair_counts": {
+        "1->5": 579,
+        "1->6": 2266,
+        "6->5": 10
+      },
+      "wrong_fixes": 0
+    },
+    "alic.pppar-ion.6h": {
+      "base_only_epochs": 5,
+      "base_status_counts": {
+        "1": 708,
+        "6": 10
+      },
+      "boundary_max_delta_3d_m": 0.07188465649969084,
+      "candidate_only_epochs": 0,
+      "candidate_status_counts": {
+        "5": 11,
+        "6": 702
+      },
+      "delta_max_3d_m": 0.4679434691068333,
+      "delta_rms_3d_m": 0.06788443368825045,
+      "matched_epochs": 713,
+      "missed_fixes": 1,
+      "native_row_counts": {
+        "madoca_l6d_constraint_epochs": 1,
+        "madoca_l6d_constraint_position_gate_epochs": 712,
+        "madoca_l6d_constraint_rows": 10
+      },
+      "native_runtime_s": 38.80786048999926,
+      "status_pair_counts": {
+        "1->5": 1,
+        "1->6": 702,
+        "6->5": 10
+      },
+      "wrong_fixes": 0
+    },
+    "alic.pppar.1h": {
+      "base_only_epochs": 0,
+      "base_status_counts": {
+        "1": 99,
+        "6": 19
+      },
+      "boundary_max_delta_3d_m": 0.06386913021118062,
+      "candidate_only_epochs": 0,
+      "candidate_status_counts": {
+        "5": 9,
+        "6": 109
+      },
+      "delta_max_3d_m": 0.5414620290120746,
+      "delta_rms_3d_m": 0.125636073390556,
+      "matched_epochs": 118,
+      "missed_fixes": 1,
+      "native_row_counts": {
+        "madoca_l6d_constraint_epochs": 0,
+        "madoca_l6d_constraint_position_gate_epochs": 0,
+        "madoca_l6d_constraint_rows": 0
+      },
+      "native_runtime_s": 10.679893317999813,
+      "status_pair_counts": {
+        "1->5": 1,
+        "1->6": 98,
+        "6->5": 8,
+        "6->6": 11
+      },
+      "wrong_fixes": 11
+    },
+    "alic.pppar.24h": {
+      "base_only_epochs": 23,
+      "base_status_counts": {
+        "1": 2859,
+        "6": 19
+      },
+      "boundary_max_delta_3d_m": 0.25462907181110384,
+      "candidate_only_epochs": 0,
+      "candidate_status_counts": {
+        "5": 562,
+        "6": 2293
+      },
+      "delta_max_3d_m": 0.5414620290120746,
+      "delta_rms_3d_m": 0.10158191517621844,
+      "matched_epochs": 2855,
+      "missed_fixes": 554,
+      "native_row_counts": {
+        "madoca_l6d_constraint_epochs": 0,
+        "madoca_l6d_constraint_position_gate_epochs": 0,
+        "madoca_l6d_constraint_rows": 0
+      },
+      "native_runtime_s": 139.58109996999974,
+      "status_pair_counts": {
+        "1->5": 554,
+        "1->6": 2282,
+        "6->5": 8,
+        "6->6": 11
+      },
+      "wrong_fixes": 11
+    },
+    "alic.pppar.6h": {
+      "base_only_epochs": 5,
+      "base_status_counts": {
+        "1": 699,
+        "6": 19
+      },
+      "boundary_max_delta_3d_m": 0.0740519076073963,
+      "candidate_only_epochs": 0,
+      "candidate_status_counts": {
+        "5": 9,
+        "6": 704
+      },
+      "delta_max_3d_m": 0.5414620290120746,
+      "delta_rms_3d_m": 0.08203649874343641,
+      "matched_epochs": 713,
+      "missed_fixes": 1,
+      "native_row_counts": {
+        "madoca_l6d_constraint_epochs": 0,
+        "madoca_l6d_constraint_position_gate_epochs": 0,
+        "madoca_l6d_constraint_rows": 0
+      },
+      "native_runtime_s": 41.08398776000013,
+      "status_pair_counts": {
+        "1->5": 1,
+        "1->6": 693,
+        "6->5": 8,
+        "6->6": 11
+      },
+      "wrong_fixes": 11
+    },
+    "mizu.ppp.1h": {
+      "base_only_epochs": 0,
+      "base_status_counts": {
+        "6": 118
+      },
+      "boundary_max_delta_3d_m": 4.284246515935533,
+      "candidate_only_epochs": 0,
+      "candidate_status_counts": {
+        "5": 118
+      },
+      "delta_max_3d_m": 4.284246515935533,
+      "delta_rms_3d_m": 1.6156750831405513,
+      "matched_epochs": 118,
+      "missed_fixes": 0,
+      "native_row_counts": {
+        "madoca_l6d_constraint_epochs": 0,
+        "madoca_l6d_constraint_position_gate_epochs": 0,
+        "madoca_l6d_constraint_rows": 0
+      },
+      "native_runtime_s": 16.425533881999996,
+      "status_pair_counts": {
+        "6->5": 118
+      },
+      "wrong_fixes": 0
+    },
+    "mizu.ppp.24h": {
+      "base_only_epochs": 281,
+      "base_status_counts": {
+        "6": 2878
+      },
+      "boundary_max_delta_3d_m": 4.284246515935533,
+      "candidate_only_epochs": 0,
+      "candidate_status_counts": {
+        "5": 2597
+      },
+      "delta_max_3d_m": 4.284246515935533,
+      "delta_rms_3d_m": 1.3352679575116697,
+      "matched_epochs": 2597,
+      "missed_fixes": 0,
+      "native_row_counts": {
+        "madoca_l6d_constraint_epochs": 0,
+        "madoca_l6d_constraint_position_gate_epochs": 0,
+        "madoca_l6d_constraint_rows": 0
+      },
+      "native_runtime_s": 172.97892152600002,
+      "status_pair_counts": {
+        "6->5": 2597
+      },
+      "wrong_fixes": 0
+    },
+    "mizu.ppp.6h": {
+      "base_only_epochs": 5,
+      "base_status_counts": {
+        "6": 718
+      },
+      "boundary_max_delta_3d_m": 4.284246515935533,
+      "candidate_only_epochs": 0,
+      "candidate_status_counts": {
+        "5": 713
+      },
+      "delta_max_3d_m": 4.284246515935533,
+      "delta_rms_3d_m": 1.2209054962011483,
+      "matched_epochs": 713,
+      "missed_fixes": 0,
+      "native_row_counts": {
+        "madoca_l6d_constraint_epochs": 0,
+        "madoca_l6d_constraint_position_gate_epochs": 0,
+        "madoca_l6d_constraint_rows": 0
+      },
+      "native_runtime_s": 36.26635522999999,
+      "status_pair_counts": {
+        "6->5": 713
+      },
+      "wrong_fixes": 0
+    },
+    "mizu.pppar-ion.1h": {
+      "base_only_epochs": 0,
+      "base_status_counts": {
+        "1": 97,
+        "6": 21
+      },
+      "boundary_max_delta_3d_m": 0.2759272510010001,
+      "candidate_only_epochs": 0,
+      "candidate_status_counts": {
+        "5": 29,
+        "6": 89
+      },
+      "delta_max_3d_m": 0.4826277238332499,
+      "delta_rms_3d_m": 0.25659075945906673,
+      "matched_epochs": 118,
+      "missed_fixes": 8,
+      "native_row_counts": {
+        "madoca_l6d_constraint_epochs": 1,
+        "madoca_l6d_constraint_position_gate_epochs": 117,
+        "madoca_l6d_constraint_rows": 9
+      },
+      "native_runtime_s": 10.386064764000366,
+      "status_pair_counts": {
+        "1->5": 8,
+        "1->6": 89,
+        "6->5": 21
+      },
+      "wrong_fixes": 0
+    },
+    "mizu.pppar-ion.24h": {
+      "base_only_epochs": 23,
+      "base_status_counts": {
+        "1": 2857,
+        "6": 21
+      },
+      "boundary_max_delta_3d_m": 0.29478379262475907,
+      "candidate_only_epochs": 0,
+      "candidate_status_counts": {
+        "5": 939,
+        "6": 1916
+      },
+      "delta_max_3d_m": 0.4826277238332499,
+      "delta_rms_3d_m": 0.10718095823174646,
+      "matched_epochs": 2855,
+      "missed_fixes": 918,
+      "native_row_counts": {
+        "madoca_l6d_constraint_epochs": 1,
+        "madoca_l6d_constraint_position_gate_epochs": 2854,
+        "madoca_l6d_constraint_rows": 9
+      },
+      "native_runtime_s": 148.60230188199967,
+      "status_pair_counts": {
+        "1->5": 918,
+        "1->6": 1916,
+        "6->5": 21
+      },
+      "wrong_fixes": 0
+    },
+    "mizu.pppar-ion.6h": {
+      "base_only_epochs": 5,
+      "base_status_counts": {
+        "1": 697,
+        "6": 21
+      },
+      "boundary_max_delta_3d_m": 0.29478379262475907,
+      "candidate_only_epochs": 0,
+      "candidate_status_counts": {
+        "5": 105,
+        "6": 608
+      },
+      "delta_max_3d_m": 0.4826277238332499,
+      "delta_rms_3d_m": 0.1826056177591525,
+      "matched_epochs": 713,
+      "missed_fixes": 84,
+      "native_row_counts": {
+        "madoca_l6d_constraint_epochs": 1,
+        "madoca_l6d_constraint_position_gate_epochs": 712,
+        "madoca_l6d_constraint_rows": 9
+      },
+      "native_runtime_s": 38.12038253399987,
+      "status_pair_counts": {
+        "1->5": 84,
+        "1->6": 608,
+        "6->5": 21
+      },
+      "wrong_fixes": 0
+    },
+    "mizu.pppar.1h": {
+      "base_only_epochs": 0,
+      "base_status_counts": {
+        "1": 108,
+        "6": 10
+      },
+      "boundary_max_delta_3d_m": 0.2597104677024002,
+      "candidate_only_epochs": 0,
+      "candidate_status_counts": {
+        "5": 10,
+        "6": 108
+      },
+      "delta_max_3d_m": 0.47406375508602866,
+      "delta_rms_3d_m": 0.196377796388336,
+      "matched_epochs": 118,
+      "missed_fixes": 0,
+      "native_row_counts": {
+        "madoca_l6d_constraint_epochs": 0,
+        "madoca_l6d_constraint_position_gate_epochs": 0,
+        "madoca_l6d_constraint_rows": 0
+      },
+      "native_runtime_s": 9.705306623999604,
+      "status_pair_counts": {
+        "1->6": 108,
+        "6->5": 10
+      },
+      "wrong_fixes": 0
+    },
+    "mizu.pppar.24h": {
+      "base_only_epochs": 23,
+      "base_status_counts": {
+        "1": 2868,
+        "6": 10
+      },
+      "boundary_max_delta_3d_m": 0.2940535550794953,
+      "candidate_only_epochs": 0,
+      "candidate_status_counts": {
+        "5": 931,
+        "6": 1924
+      },
+      "delta_max_3d_m": 0.47406375508602866,
+      "delta_rms_3d_m": 0.09848191265734747,
+      "matched_epochs": 2855,
+      "missed_fixes": 921,
+      "native_row_counts": {
+        "madoca_l6d_constraint_epochs": 0,
+        "madoca_l6d_constraint_position_gate_epochs": 0,
+        "madoca_l6d_constraint_rows": 0
+      },
+      "native_runtime_s": 152.86657481400016,
+      "status_pair_counts": {
+        "1->5": 921,
+        "1->6": 1924,
+        "6->5": 10
+      },
+      "wrong_fixes": 0
+    },
+    "mizu.pppar.6h": {
+      "base_only_epochs": 5,
+      "base_status_counts": {
+        "1": 708,
+        "6": 10
+      },
+      "boundary_max_delta_3d_m": 0.2940535550794953,
+      "candidate_only_epochs": 0,
+      "candidate_status_counts": {
+        "5": 86,
+        "6": 627
+      },
+      "delta_max_3d_m": 0.47406375508602866,
+      "delta_rms_3d_m": 0.16204316868841126,
+      "matched_epochs": 713,
+      "missed_fixes": 76,
+      "native_row_counts": {
+        "madoca_l6d_constraint_epochs": 0,
+        "madoca_l6d_constraint_position_gate_epochs": 0,
+        "madoca_l6d_constraint_rows": 0
+      },
+      "native_runtime_s": 36.12640814400038,
+      "status_pair_counts": {
+        "1->5": 76,
+        "1->6": 627,
+        "6->5": 10
+      },
+      "wrong_fixes": 0
+    }
+  },
+  "schema_version": "madoca_release_baseline.v1"
+}
