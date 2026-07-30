@@ -104,7 +104,8 @@ void printUsage(const char* program_name) {
         << "  --madoca-l6 <file>       Native MADOCA L6E SSR channel (repeatable,\n"
         << "                          e.g. PRN 204 and 206); requires --nav\n"
         << "  --madoca-l6d <file>      Native MADOCA L6D STEC input (repeatable);\n"
-        << "                          opt-in application for per-frequency PPP\n"
+        << "                          opt-in application for per-frequency PPP;\n"
+        << "                          accepts hourly sequences for multi-hour runs\n"
         << "  --madoca-l6d-shadow <file>\n"
         << "                          Native L6D ionosphere shadow input (repeatable);\n"
         << "                          reports lookup diagnostics without changing PPP\n"
@@ -167,7 +168,8 @@ void printUsage(const char* program_name) {
         << "                          (requires CMake -DMADOCALIB_PARITY_LINK=ON)\n"
         << "  --madocalib-l6 <file>   Extra MADOCA L6 input file; repeat for two-channel L6E\n"
         << "  --madocalib-mdciono <file>\n"
-        << "                          Extra MADOCA L6D ionosphere file; repeat up to three\n"
+        << "                          Extra MADOCA L6D ionosphere file (repeatable);\n"
+        << "                          hourly sequences are condensed by stream\n"
         << "  --madocalib-config <file>\n"
         << "                          MADOCALIB rnx2rtkp config (default: sample.conf)\n"
         << "  --madocalib-profile <ppp|pppar|pppar-ion>\n"
@@ -468,12 +470,6 @@ Options parseArguments(int argc, char* argv[]) {
         options.ar_method != "per-freq") {
         argumentError(
             "--madoca-l6d requires --ar-method per-freq",
-            argv[0]);
-    }
-    if (options.madoca_l6d_paths.size() > 3 ||
-        options.madoca_l6d_shadow_paths.size() > 3) {
-        argumentError(
-            "MADOCA L6D input accepts at most three files",
             argv[0]);
     }
     if (options.max_epochs < 0) {

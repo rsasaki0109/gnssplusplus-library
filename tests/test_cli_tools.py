@@ -4057,6 +4057,29 @@ class CLIToolsTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("--madocalib-profile must be one of", result.stderr)
 
+    def test_ppp_cli_accepts_more_than_three_hourly_madoca_l6d_inputs(self) -> None:
+        result = self.run_gnss(
+            "ppp",
+            "--obs",
+            "missing.obs",
+            "--nav",
+            "missing.nav",
+            "--out",
+            "unused.pos",
+            "--ar-method",
+            "per-freq",
+            "--madoca-l6",
+            "missing-l6e.l6",
+            *[
+                option
+                for hour in "ABCD"
+                for option in ("--madoca-l6d", f"2025091{hour}.200.l6")
+            ],
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("accepts at most three files", result.stderr)
+
     def test_ppp_cli_rejects_madoca_materialization_dump_only_without_dump_path(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppp_madoca_materialization_dump_only_cli_") as temp_dir:
             temp_root = Path(temp_dir)
