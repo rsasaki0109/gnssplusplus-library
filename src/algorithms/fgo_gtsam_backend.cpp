@@ -3651,12 +3651,42 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                         // consistency bound used by IMU-aided relaxed-ratio
                         // fixes. Monitor mode never reaches here.
                         bool surplus_rescue_applied = false;
-                        const bool surplus_rescue_candidate =
+                        const bool surplus_rescue_pre_candidate =
                             !config.surplus_validation_monitor_only &&
                             !normal_ratio_pass && !aperture_pass &&
                             std::isfinite(ratio) &&
                             ratio > config.imu_aided_relaxed_ratio_threshold &&
                             has_provisional_fixed_ant && surplus_evaluated && surplus_pass;
+                        // A relaxed-ratio rescue must be supported by a
+                        // well-observed, globally code-consistent epoch, a
+                        // carrier-consistent fixed hypothesis, and the
+                        // strongest cross-constellation surplus pool.
+                        // Sparse geometry, gross DD-code disagreement,
+                        // carrier post-fit RMS above roughly a quarter cycle,
+                        // and GQ-only fallback each admitted wrong-but-
+                        // internally-consistent fixes in full PPC runs.
+                        // Monitoring and established-ratio vetoes still
+                        // retain all fallback levels; this floor applies only
+                        // when the surplus verdict would create a new FIXED
+                        // solution.
+                        constexpr int kSurplusRescueMinSatellites = 10;
+                        constexpr double kSurplusRescueMaxDdprRmsM = 5.0;
+                        constexpr double kSurplusRescueMaxPostfitDdcpRmsM = 0.05;
+                        const bool surplus_rescue_quality_pass =
+                            nsat >= kSurplusRescueMinSatellites &&
+                            std::isfinite(ddpr_rms) &&
+                            ddpr_rms <= kSurplusRescueMaxDdprRmsM &&
+                            epoch_diagnostics[i].fixed_postfit_ddcp_factors >= 4 &&
+                            std::isfinite(
+                                epoch_diagnostics[i].fixed_postfit_ddcp_rms_m) &&
+                            epoch_diagnostics[i].fixed_postfit_ddcp_rms_m <=
+                                kSurplusRescueMaxPostfitDdcpRmsM &&
+                            epoch_diagnostics[i].surplus_validation_fallback_level == 0;
+                        const bool surplus_rescue_candidate =
+                            surplus_rescue_pre_candidate && surplus_rescue_quality_pass;
+                        if (surplus_rescue_pre_candidate && !surplus_rescue_quality_pass) {
+                            ++result.diagnostics.surplus_validation_quality_rejects;
+                        }
                         if (surplus_rescue_candidate) {
                             const bool separation_pass =
                                 epoch_diagnostics[i].fixed_float_separation_m <=
@@ -3951,7 +3981,8 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                             is_low_count_attempt && std::isfinite(ratio) &&
                             (config.low_count_min_ratio <= 0.0 ||
                              ratio > config.low_count_min_ratio) &&
-                            surplus_evaluated && surplus_pass;
+                            surplus_evaluated && surplus_pass &&
+                            surplus_rescue_quality_pass;
                         const bool fixed_decision_pass = std::isfinite(ratio) &&
                             (is_low_count_attempt
                                  ? low_count_pass
