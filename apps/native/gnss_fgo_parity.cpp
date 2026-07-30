@@ -2522,6 +2522,8 @@ int main(int argc, char** argv) {
                   << ", rescued_epochs=" << fl.diagnostics.surplus_validation_rescued_epochs
                   << ", separation_rejects="
                   << fl.diagnostics.surplus_validation_separation_rejects
+                  << ", quality_rejects="
+                  << fl.diagnostics.surplus_validation_quality_rejects
                   << ", vetoed_epochs=" << fl.diagnostics.surplus_validation_vetoed_epochs
                   << ", min_n=" << config.surplus_validation_min_surplus_satellites
                   << ", aperture_cycles(lt1/1to2/gt2)=" << config.surplus_validation_aperture_pdop_lt1_cycles

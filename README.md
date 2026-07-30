@@ -21,7 +21,7 @@ handling without an external RTKLIB runtime.
 | Area | Public comparison | Evidence / status |
 |---|---|---|
 | RTK | PPC Tokyo/Nagoya vs RTKLIB `demo5` | +17.0 pp positioning, +28.1 pp official score, -11.96 m P95 H delta |
-| GNSS/IMU FGO | PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | Higher <50 cm fraction (avg +5.3 pp) and fix-rate (avg +7.9 pp) on all 3 runs; fixed-only RMS also wins 2 of 3 runs |
+| GNSS/IMU FGO | PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | Higher <50 cm fraction (avg +5.6 pp) and fix-rate (avg +8.2 pp) on all 3 runs; fixed-only RMS also wins 2 of 3 runs |
 | CLAS PPP | Six PPC Tokyo/Nagoya runs vs MRTKLIB CLAS | 24.851% aggregate FIX, 0.377 m FIX RMS2D (lower than MRTKLIB on all six runs), 36.523 m all-solution RMS2D across 58,259 scored epochs; 19 FIX epochs (0.03%) exceed 3 m, all in one pre-existing 4 s Nagoya 2 burst |
 | Urban RTK | UrbanNav Tokyo Odaiba vs RTKLIB `demo5` | More fixes, lower Hp95/Vp95; `--preset odaiba` closes Hmed |
 | SPP | PPC SPP adaptive robust + policy gate | No P95 regression with <=1 pp positioning drop |
@@ -77,16 +77,17 @@ external replay, event ledger, machine-readable metrics, and licensing details.
 GTSAM-based fixed-lag factor-graph backend (`FGOBackend::GTSAM`) with
 tightly-coupled IMU, multi-frequency DD RTK, per-epoch partial LAMBDA,
 fix-and-hold, and an urban-robustness stack (CMC multipath screening,
-CP-hold recovery, DDPR-anchored resets, FDE, elevation-dependent sigma).
+CP-hold recovery, DDPR-anchored resets, FDE, elevation-dependent sigma,
+and independent surplus-satellite validation).
 Public PPC Tokyo moving-RTK replays with the dataset's tactical-grade IMU,
 versus [inuex35/tightly-coupled-gnss-imu-fgo](https://github.com/inuex35/tightly-coupled-gnss-imu-fgo)
 (Python + GTSAM) on the same rover/base/IMU data:
 
 | Run | libgnss++ <50cm | Reference <50cm | libgnss++ fix | Reference fix | libgnss++ fixed RMS | Reference fixed RMS |
 |---|---:|---:|---:|---:|---:|---:|
-| Tokyo run1 | **56.9%** | 56.7% | **50.0%** | 49.5% | **0.655 m** | 0.815 m |
-| Tokyo run2 | **80.6%** | 69.9% | **71.5%** | 60.8% | **0.261 m** | 0.277 m |
-| Tokyo run3 | **72.8%** | 67.9% | **71.8%** | 59.4% | 0.272 m | **0.211 m** |
+| Tokyo run1 | **57.0%** | 56.7% | **49.8%** | 49.5% | **0.662 m** | 0.815 m |
+| Tokyo run2 | **81.2%** | 69.9% | **72.7%** | 60.8% | **0.217 m** | 0.277 m |
+| Tokyo run3 | **73.0%** | 67.9% | **71.7%** | 59.4% | 0.257 m | **0.211 m** |
 
 ![Tokyo run1 GNSS/IMU FGO](docs/gnss_imu_fgo_tokyo_run1.png)
 ![Tokyo run2 GNSS/IMU FGO](docs/gnss_imu_fgo_tokyo_run2.png)
@@ -94,7 +95,7 @@ versus [inuex35/tightly-coupled-gnss-imu-fgo](https://github.com/inuex35/tightly
 
 libgnss++ beats the reference on <50 cm fraction and fix-rate on all three
 runs, and on fixed-only RMS on two of three runs (run3's fixed RMS remains
-behind the reference, over the largest fixed population of the three: 10973
+behind the reference, over the largest fixed population of the three: 10965
 epochs). Every feature is opt-in and the library is unchanged when built
 without GTSAM. Reproduce with `gnss_fgo_parity` (requires a GTSAM build) and
 the shipping preset:
@@ -103,21 +104,41 @@ the shipping preset:
 --imu <run>/imu.csv --fixed-lag 5 --multi-freq --partial-ar --hold \
 --elev-mask 25 --snr-mask 30 --imu-preset-tactical --cmc --cmc-level 0.75 \
 --cp-hold --cp-hold-res 2.0 --exc-recovery --ddpr-anchor --fde --varerr \
---fix-demote --fix-demote-dist 5 --fix-demote-res 25 --fix-demote-posthold 5
+--fix-demote --fix-demote-dist 5 --fix-demote-res 25 --fix-demote-posthold 5 \
+--imu-ratio-relaxed 1.5 --surplus-validation --surplus-validation-min-n 3 \
+--surplus-validation-aperture-lt1 0.15 --surplus-validation-aperture-1to2 0.3 \
+--surplus-validation-aperture-gt2 0.45
 ```
 
-#### Surplus-satellite rescue (opt-in)
+#### Surplus-satellite rescue integrity
 
 LAMBDA candidates that fall short of the ratio gate can be rescued by an
 independent integrity test: DD carrier observations that were excluded from
 the fix (FDE quarantine, CMC exclusion, partial-AR drops) are re-differenced
 against an alternate reference satellite at the candidate fixed position and
 checked against a PDOP-scaled nearest-integer aperture, with a
-GQEBR→GQEB→GQER→GQE→GQB→GQ constellation fallback. Counterfactual auditing of
-the demotion guard on the same runs also moved `--fix-demote-res` from 25 to
-40 for this configuration (25 demoted mostly sub-0.5 m fixes on run1/run3
-while run2's genuine wrong-basin cluster sits far above 40). Tokyo PPC
-full-run results with the fixed-lag-QR configuration:
+GQEBR→GQEB→GQER→GQE→GQB→GQ constellation fallback. A rescue additionally
+requires at least 10 observed satellites, global DD-code RMS at most 5 m,
+fixed-hypothesis carrier post-fit RMS at most 0.05 m, and the strongest GQEBR
+surplus pool. The weaker fallback pools remain available for monitoring and
+established-fix veto experiments, but cannot create a relaxed-ratio fix.
+Low-count ambiguity rescue remains off.
+
+The final fixed-lag-5 preset was replayed over all epochs of all three Tokyo
+runs. “Correct” and “wrong” below classify FIXED epochs by 3D error below or
+above 0.5 m:
+
+| Run | Correct FIX | Wrong FIX | Fixed horizontal RMS | All epochs 3D <50 cm |
+|---|---:|---:|---:|---:|
+| Tokyo run1 | 4759 → **4955** | 1088 → **978** | 0.6866 → **0.6616 m** | 5722 → **5932** |
+| Tokyo run2 | 6336 → **6339** | **314 → 314** | 0.21668 → **0.21663 m** | **7130 → 7130** |
+| Tokyo run3 | 9961 → **9963** | **1002 → 1002** | 0.25744 → **0.25742 m** | **10407 → 10407** |
+
+The rescue remains opt-in at the library API level; the command above is the
+validated shipping preset. Separately, counterfactual auditing of the
+fixed-lag-QR configuration moved its `--fix-demote-res` from 25 to 40 (25
+demoted mostly sub-0.5 m fixes on run1/run3 while run2's genuine wrong-basin
+cluster sits far above 40). Its Tokyo PPC full-run results are:
 
 ```
 --imu <run>/imu.csv --fixed-lag 1 --fixed-lag-qr --hold \
