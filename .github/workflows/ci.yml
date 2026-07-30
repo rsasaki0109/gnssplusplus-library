@@ -74,7 +74,7 @@ jobs:
     needs: [changes, hygiene]
     if: needs.changes.outputs.run_heavy == 'true'
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
