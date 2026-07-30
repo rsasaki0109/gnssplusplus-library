@@ -3642,22 +3642,33 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                             anchorValidationAgrees(provisional_fixed_ant)) {
                             aperture_pass = true;
                         }
-                        // Stage B rescue: a candidate in the relaxed ratio
-                        // zone that independently passes the surplus-
-                        // satellite test is treated exactly like an IMU-
-                        // aperture pass (eligible for FIXED output AND,
-                        // subject to the SAME downstream holdBlockedByImu
-                        // Aperture()/plausibility checks as every other
-                        // path, fix-and-hold pinning). Monitor mode never
-                        // reaches here (decision-affecting).
+                        // Stage B rescue: require both the independent
+                        // surplus-satellite pass and the existing fixed-vs-
+                        // float / IMU-prediction separation aperture.  The
+                        // latter is correlated with this graph, so it cannot
+                        // replace the surplus test, but it prevents a
+                        // surplus pass from bypassing the same gross
+                        // consistency bound used by IMU-aided relaxed-ratio
+                        // fixes. Monitor mode never reaches here.
                         bool surplus_rescue_applied = false;
-                        if (!config.surplus_validation_monitor_only &&
+                        const bool surplus_rescue_candidate =
+                            !config.surplus_validation_monitor_only &&
                             !normal_ratio_pass && !aperture_pass &&
                             std::isfinite(ratio) &&
                             ratio > config.imu_aided_relaxed_ratio_threshold &&
-                            has_provisional_fixed_ant && surplus_evaluated && surplus_pass) {
-                            aperture_pass = true;
-                            surplus_rescue_applied = true;
+                            has_provisional_fixed_ant && surplus_evaluated && surplus_pass;
+                        if (surplus_rescue_candidate) {
+                            const bool separation_pass =
+                                epoch_diagnostics[i].fixed_float_separation_m <=
+                                    config.imu_aided_max_float_separation_m &&
+                                epoch_diagnostics[i].fixed_imu_prediction_separation_m <=
+                                    config.imu_aided_max_prediction_separation_m;
+                            if (separation_pass) {
+                                aperture_pass = true;
+                                surplus_rescue_applied = true;
+                            } else {
+                                ++result.diagnostics.surplus_validation_separation_rejects;
+                            }
                         }
                         // Integrity-aided aperture: the conventional
                         // fixed-vs-float separation is correlated because
