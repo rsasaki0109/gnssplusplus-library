@@ -1,9 +1,11 @@
 # MADOCA Port Plan
 
-> **Active plan:** [MADOCALIB Native Migration Ledger](madocalib_native_migration.md)
-> is the current issue-#148 capability table, frozen oracle contract, milestone
-> plan, and acceptance gate.  This document retains the detailed migration
-> history and earlier design analysis.
+> **Completed migration:** [MADOCALIB Native Migration Ledger](madocalib_native_migration.md)
+> is the final issue-#148 capability table, frozen oracle contract, milestone
+> evidence, and release gate.  This document retains the detailed migration
+> history and earlier design analysis.  Future triple/quad-frequency solver
+> expansion is tracked separately in
+> [issue #387](https://github.com/rsasaki0109/gnssplusplus-library/issues/387).
 
 This plan scopes a MADOCA foundation pass.  The goal is to capture what should
 be ported from MADOCALIB, what should be shared with the existing CLAS work,
@@ -11,8 +13,8 @@ and how to build oracle parity without dragging reference code into production.
 
 > The sections from "Reference Inputs" onward are the original foundation plan
 > (through the iter4 MADOCALIB bridge baseline, 2026-06-10).  They are kept as
-> reference.  For the current state of native parity and the next architecture
-> step, read "Status (2026-06-13)" immediately below first.
+> reference.  The dated status immediately below is a historical snapshot; use
+> the migration ledger for the completed 2026-07-30 state.
 
 ## Status (2026-06-13) — Native Parity Achieved, AR/Filter Architecture Is The Wall
 
@@ -57,8 +59,10 @@ demeaned RMS, residual span, duration, and residual/elevation correlation.
 The shadow CSV header includes the signal-family, RINEX-code, and RTKLIB-code
 columns emitted by each data row so these residual fields remain aligned.
 
-Open MADOCA levers (measured, none yet a default win): PPP-AR parity
-(`exec_pppar` window); QZSS atmosphere row-set.
+The formerly open PPP-AR and QZSS-atmosphere levers were resolved or bounded by
+the M2--M5 acceptance gates.  Their intermediate measurements below remain
+historical evidence, while the versioned release matrix is the current
+regression contract.
 
 Correction-materialization snapshot: use
 `gnss ppp --madoca-l6 <file> --madoca-materialization-dump <csv>` to record the

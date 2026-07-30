@@ -67,9 +67,11 @@ Therefore:
 
 ## Capability Ledger
 
-Status meanings: **native** is implemented without MADOCALIB; **oracle-only**
-exists only in the opt-in linked lane; **partial** has a native foundation but
-does not yet match end-to-end behavior; **open** has no accepted native parity.
+Status meanings: **native** is implemented without MADOCALIB and satisfies the
+declared #148 acceptance envelope; **native opt-in** additionally requires an
+explicit native feature input; **oracle-only** exists only in the opt-in linked
+lane; **deferred** is outside the frozen #148 solver/fixture contract and has a
+dedicated follow-up.
 
 | MADOCALIB surface | Native implementation/evidence | Status | Exit evidence |
 |---|---|---|---|
@@ -84,10 +86,10 @@ does not yet match end-to-end behavior; **open** has no accepted native parity.
 | PPP correction signs and ordering | Native correction contract plus materialization/residual diff tools | native | Default PPP parity matrix remains within the accepted MIZU/ALIC envelope |
 | PPP commit-on-success and diagnostics | Native postfit validation/shadow telemetry | native | MIZU 1 h/6 h/24 h and ALIC regression gates remain green |
 | GLONASS phase in MADOCA PPP | Native L1/L2 rows plus corrected postfit-shadow audit | native | Keep the pinned per-satellite demeaned RMS at millimetre scale and span below 4 cm |
-| MADOCALIB `exec_ppp` | Native PPP runs end to end; remaining solution delta is tracked | partial | M4/M5 matrix meets the declared trajectory thresholds |
+| MADOCALIB `exec_ppp` | Native PPP runs end to end across the MIZU/ALIC release matrix | native | Keep all 1 h/6 h/24 h trajectory and runtime baselines green |
 | MADOCALIB `exec_pppar` | Windows and authoritative Ubuntu Release both match the oracle's 108 Fix / 10 Float over all 118 epochs | native | Keep exact status agreement, no wrong/missed Fix, RMS at most 0.20 m, and maximum at most 1.0 m |
-| MADOCALIB `exec_pppar-ion` | Bridge and native opt-in profiles run in the required parity lane | partial | M4 closes eight missed Fix and M5 expands the dataset/duration matrix |
-| Triple/quad-frequency PPP-AR | Upstream 2.0 behavior has not been fully audited or signed off | open | Dedicated fixtures and ambiguity/state parity after dual-frequency M2 |
+| MADOCALIB `exec_pppar-ion` | Native opt-in L6D application runs across the MIZU/ALIC release matrix with explicit status baselines | native opt-in | Keep all 1 h/6 h/24 h trajectory, status, row, and runtime baselines green |
+| Triple/quad-frequency PPP-AR expansion | Not part of the frozen dual-frequency #148 profiles or fixtures | deferred to #387 | Add dedicated fixtures, ambiguity/state parity, and release baselines before claiming support |
 | Linked `postpos()` bridge | Non-installed `gnss_madocalib_oracle` | oracle-only | Available only in `MADOCALIB_PARITY_LINK=ON` builds; absent from normal `gnss_ppp` help and parsing |
 
 ## Current Numerical Baselines
@@ -100,12 +102,18 @@ exact 118/118 status agreement and no native-only or oracle-only Fix.
 On Windows, the native/oracle 3D delta RMS is 0.054269 m, the maximum is
 0.419804 m, and the trailing-1800-second RMS is 0.035616 m.  On Ubuntu, the
 3D delta RMS is 0.189146 m and the maximum is 0.451489 m.  These results meet
-the M2 status and trajectory exit gates.  M3--M6 remain open, so this does not
-complete the overall migration.
+the M2 status and trajectory exit gates.
+
+M3--M6 are also complete for the frozen contract.  The versioned M5 baseline
+covers all 18 combinations of MIZU/ALIC, `ppp`/`pppar`/`pppar-ion`, and
+1 h/6 h/24 h.  Required 1 h/6 h and manually dispatched 24 h matrices passed
+with their declared trajectory, status, row, artifact, and runtime gates.
+The milestone subsections below are chronological evidence: statements that a
+milestone "remains open" describe that intermediate slice, not the final state.
 
 The float-PPP history and older MIZU/ALIC/full-day measurements remain in issue
-#148 and `madoca_port_plan.md`; they are regression context, not proof that
-PPP-AR or L6D integration is complete.
+#148 and `madoca_port_plan.md` as regression context.  The versioned release
+matrix and milestone gates above are the current completion evidence.
 
 ## Migration Milestones
 
@@ -664,10 +672,27 @@ for controlled rollback.  Diagnostic dumps and measurement-neutral shadow
 inputs are retained because they observe the accepted path rather than select
 an alternative solver implementation.
 
-Exit: production code, installed targets, and default CI have no MADOCALIB
-dependency; the linked checkout is used only by the labeled oracle lane; native
-PPP, PPP-AR, and PPP-AR-ion satisfy the M5 matrix; no required migration item
-remains open.
+#### M6 closeout evidence (2026-07-30)
+
+PR #384 made the 18-case matrix a versioned release gate and passed both the
+required 1 h/6 h lane and the manually dispatched 24 h lane.  PR #385 moved all
+linked `postpos()` parsing into the non-installed oracle executable.  PR #386
+removed the rejected replay implementation and redundant Galileo preview
+selector; its Docs, hygiene, Linux GCC/Clang, macOS Clang, static analysis,
+MADOCA parity, extended-test, and optional-signoff jobs all passed.
+
+The accepted `ppp` and `pppar-ion` envelopes intentionally preserve measured
+non-zero solution/status deltas recorded by M5; #148 requires bounded,
+regression-gated native behavior rather than byte-identical whole-solver output.
+Complete MADOCALIB triple/quad-frequency solver parity was never exercised by
+the frozen profiles and is tracked separately in
+[#387](https://github.com/rsasaki0109/gnssplusplus-library/issues/387).  It is a
+capability expansion, not an unaccounted item in the supported #148 matrix.
+
+Exit (satisfied): production code, installed targets, and default CI have no
+MADOCALIB dependency; the linked checkout is used only by the labeled oracle
+lane; native PPP, PPP-AR, and PPP-AR-ion satisfy the M5 matrix; no required
+migration item remains open.
 
 ## PR and Evidence Rules
 
@@ -683,11 +708,12 @@ remains open.
   evidence.
 - Record rejected hypotheses in issue #148 and remove their runtime wiring.
 
-## Immediate Slice
+## Post-migration follow-up
 
-Begin M4 with the eight conservative `pppar-ion` missed-Fix epochs.  Compare
-materialization, satellite and row sets, residual components, then N1
-candidates without relaxing the zero-wrong-Fix gate.  In parallel, reduce the
-0.244372 m one-hour native/oracle delta RMS toward the M2 baseline and extend
-the same accounting to QZSS atmosphere admission and the 24-hour boundary.
-Keep L6D application opt-in until the M5 matrix passes.
+Issue #148 has no remaining implementation slice.  Keep the M5 matrix as the
+release regression contract, remove the compatibility opt-outs only after their
+documented one-release-cycle window, and use
+[#387](https://github.com/rsasaki0109/gnssplusplus-library/issues/387) for any
+future triple/quad-frequency solver expansion.  Such expansion must add
+fixtures and baselines rather than silently widening the completed #148
+contract.
