@@ -575,6 +575,56 @@ Exit: all six solver/dataset profiles have pinned baselines; required lanes fail
 on missing artifacts, status regression, trajectory regression, or runtime over
 2x their accepted native baseline; default builds still run without MADOCALIB.
 
+#### M5 implementation evidence (2026-07-30)
+
+`scripts/ci/run_madoca_release_matrix.py` now owns the versioned
+`madoca_release_matrix.v1`, `madoca_release_commands.v1`, and
+`madoca_release_baseline.v1` contracts.  Every case preserves the exact bridge
+and native argv, both summaries and logs, both solution files, the solution
+diff, matched epochs, L6D constraint-row counters, and wall runtimes.  The
+checked-in `docs/madoca_release_baseline.json` contains all 18 combinations of
+MIZU/ALIC, `ppp`/`pppar`/`pppar-ion`, and 1 h/6 h/24 h.
+
+The native `ppp` command deliberately uses the CLI's static motion model.  That
+is the historical Issue #148 native contract for these stationary receivers;
+an initial matrix draft incorrectly forced `--kinematic` on every profile and
+produced 24-hour deltas of 5.93 m (MIZU) and 4.50 m (ALIC).  Restoring the
+profile-specific command gives MIZU 1 h/6 h/24 h RMS of
+1.538738/1.162767/1.271684 m, consistent with the earlier tracker evidence.
+The AR profiles remain kinematic, matching the M2--M4 commands.
+
+Selected measured results before the declared trajectory margin are:
+
+| Station/profile | Window | matched | oracle-only | wrong Fix | missed Fix | RMS 3D | max 3D |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| MIZU PPP | 24 h | 2,597 | 281 | 0 | 0 | 1.271684 m | 4.080235 m |
+| MIZU PPP-AR | 1 h | 118 | 0 | 0 | 0 | 0.186378 m | 0.451489 m |
+| MIZU PPP-AR | 24 h | 2,855 | 23 | 0 | 921 | 0.088482 m | 0.451489 m |
+| MIZU PPP-AR-ion | 24 h | 2,855 | 23 | 0 | 918 | 0.097181 m | 0.459645 m |
+| ALIC PPP | 24 h | 2,855 | 23 | 0 | 0 | 0.766809 m | 3.323228 m |
+| ALIC PPP-AR | 1 h | 118 | 0 | 11 | 1 | 0.115636 m | 0.515678 m |
+| ALIC PPP-AR | 24 h | 2,855 | 23 | 11 | 554 | 0.091582 m | 0.515678 m |
+| ALIC PPP-AR-ion | 24 h | 2,855 | 23 | 0 | 579 | 0.088856 m | 0.445660 m |
+
+Here `wrong Fix` means oracle non-Fix/native Fix, not a truth-labeled position
+blunder.  The 11 ALIC PPP-AR epochs were investigated before accepting the
+baseline.  Disabling the M2 canonical one-removal lookahead reduces them to
+seven but does not remove the later cluster; the oracle's float/covariance
+trajectory assigns low candidate agreement and rejects it, while native assigns
+94--95% agreement near ratio 1.23--1.27.  A 1.30 ratio floor would also remove
+at least 23 correct low-ratio MIZU fixes, and fixed-position shift does not
+separate the stations.  No station- or time-specific solver guard was accepted.
+The mismatch remains explicit and any increase fails the status baseline.
+
+Trajectory ceilings are the larger of 5% or 1 cm above the measured value.
+Native wall runtime is capped at twice its accepted measurement.  Bridge runtime
+is still recorded but is not a production-runtime gate.  The ordinary
+`madoca-parity` lane runs every 1 h and 6 h case; a manual
+`workflow_dispatch` additionally runs all 24 h cases.  Both lanes upload the
+complete matrix and append schema, metric, and exact-command artifact links to
+the GitHub job summary.  Default CMake builds retain
+`MADOCALIB_PARITY_LINK=OFF`.
+
 ### M6 -- Complete the migration
 
 - Promote native behavior only after M2--M5 pass with an explicit opt-out for

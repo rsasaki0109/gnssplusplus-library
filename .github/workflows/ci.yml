@@ -540,7 +540,7 @@ jobs:
     needs: [changes, hygiene]
     if: needs.changes.outputs.run_heavy == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
     - uses: actions/checkout@v4
 
@@ -764,6 +764,35 @@ jobs:
           ion_missed_fixes="$(awk -F, 'NR > 1 && $5 == 1 && $6 != 6 {n++} END {print n+0}' madoca_pppar_ion_solution_matches.csv)"
           test "$ion_missed_fixes" -eq 8
           python3 -c 'import json; m2=json.load(open("madoca_pppar_solution_diff.json")); ion=json.load(open("madoca_pppar_ion_solution_diff.json")); assert ion["base"]["reference_rms_3d_m"] <= m2["base"]["reference_rms_3d_m"]; assert ion["candidate"]["reference_rms_3d_m"] <= m2["candidate"]["reference_rms_3d_m"]; assert ion["comparison"]["delta_rms_3d_m"] <= 0.25; assert ion["events"]["max_delta_3d"]["delta_3d_m"] <= 1.0'
+
+    - name: Run required MADOCA release matrix
+      run: |
+        python3 scripts/ci/run_madoca_release_matrix.py \
+          --binary build-madoca-parity/apps/gnss_ppp \
+          --data-root external/madocalib/sample_data/data \
+          --output-dir output/madoca_release_matrix_required \
+          --hours 1,6 \
+          --baseline docs/madoca_release_baseline.json
+
+    - name: Run optional 24-hour MADOCA release matrix
+      if: github.event_name == 'workflow_dispatch'
+      run: |
+        python3 scripts/ci/run_madoca_release_matrix.py \
+          --binary build-madoca-parity/apps/gnss_ppp \
+          --data-root external/madocalib/sample_data/data \
+          --output-dir output/madoca_release_matrix_24h \
+          --hours 24 \
+          --baseline docs/madoca_release_baseline.json
+
+    - name: Upload MADOCA release matrix
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: madoca-release-matrix
+        path: |
+          output/madoca_release_matrix_required
+          output/madoca_release_matrix_24h
+        if-no-files-found: warn
 
     - name: Upload MADOCA PPP-AR baseline
       if: always()
