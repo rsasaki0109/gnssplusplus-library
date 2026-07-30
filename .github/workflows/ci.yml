@@ -706,6 +706,64 @@ jobs:
           status_mismatches="$(awk -F, 'NR > 1 && !(($5 == 1 && $6 == 6) || ($5 == 6 && $6 == 5)) {n++} END {print n+0}' madoca_pppar_solution_matches.csv)"
           test "$status_mismatches" -eq 0
           python3 -c 'import json; d=json.load(open("madoca_pppar_solution_diff.json")); assert d["comparison"]["delta_rms_3d_m"] <= 0.2; assert d["events"]["max_delta_3d"]["delta_3d_m"] <= 1.0'
+          ./apps/gnss_ppp \
+            --madocalib-bridge \
+            --madocalib-profile pppar-ion \
+            --obs "$ROOT/sample_data/data/rinex/MIZU00JPN_R_20250910000_01D_30S_MO.rnx" \
+            --nav "$ROOT/sample_data/data/rinex/BRDM00DLR_S_20250910000_01D_MN.rnx" \
+            --madocalib-l6 "$ROOT/sample_data/data/l6_is-qzss-mdc-004/2025/091/2025091A.204.l6" \
+            --madocalib-l6 "$ROOT/sample_data/data/l6_is-qzss-mdc-004/2025/091/2025091A.206.l6" \
+            --madocalib-mdciono "$ROOT/sample_data/data/l6/2025/091/2025091A.200.l6" \
+            --madocalib-mdciono "$ROOT/sample_data/data/l6/2025/091/2025091A.201.l6" \
+            --antex "$ROOT/sample_data/data/igs20.atx" \
+            --madocalib-start "2025/04/01 00:00:00" \
+            --madocalib-end "2025/04/01 00:59:30" \
+            --madocalib-ti 30 \
+            --out madocalib_pppar_ion_smoke.pos \
+            --summary-json madocalib_pppar_ion_smoke.json \
+            --quiet
+          ./apps/gnss_ppp \
+            --kinematic \
+            --enable-ar \
+            --ar-method per-freq \
+            --ar-ratio-threshold 1.5 \
+            --convergence-policy local-enu \
+            --convergence-threshold-horizontal 0.75 \
+            --convergence-threshold-vertical 1.25 \
+            --obs "$ROOT/sample_data/data/rinex/MIZU00JPN_R_20250910000_01D_30S_MO.rnx" \
+            --nav "$ROOT/sample_data/data/rinex/BRDM00DLR_S_20250910000_01D_MN.rnx" \
+            --madoca-l6 "$ROOT/sample_data/data/l6_is-qzss-mdc-004/2025/091/2025091A.204.l6" \
+            --madoca-l6 "$ROOT/sample_data/data/l6_is-qzss-mdc-004/2025/091/2025091A.206.l6" \
+            --madoca-l6d "$ROOT/sample_data/data/l6/2025/091/2025091A.200.l6" \
+            --madoca-l6d "$ROOT/sample_data/data/l6/2025/091/2025091A.201.l6" \
+            --antex "$ROOT/sample_data/data/igs20.atx" \
+            --max-epochs 120 \
+            --emit-epoch-time \
+            --out native_pppar_ion_smoke.pos \
+            --summary-json native_pppar_ion_smoke.json \
+            --quiet
+          test "$(python3 -c 'import json; print(json.load(open("native_pppar_ion_smoke.json"))["madoca_l6d_constraint_epochs"])')" -eq 1
+          test "$(python3 -c 'import json; print(json.load(open("native_pppar_ion_smoke.json"))["madoca_l6d_constraint_rows"])')" -eq 9
+          test "$(python3 -c 'import json; print(json.load(open("native_pppar_ion_smoke.json"))["madoca_l6d_constraint_position_gate_epochs"])')" -eq 117
+          ion_fixed_solutions="$(python3 -c 'import json; print(json.load(open("native_pppar_ion_smoke.json"))["ppp_fixed_solutions"])')"
+          test "$ion_fixed_solutions" -eq 89
+          python3 "${GITHUB_WORKSPACE}/scripts/analysis/madoca_solution_diff.py" \
+            madocalib_pppar_ion_smoke.pos \
+            native_pppar_ion_smoke.pos \
+            --reference-ecef -3857167.6484 3108694.9138 4004041.6876 \
+            --base-label bridge-pppar-ion \
+            --candidate-label native-pppar-ion \
+            --json-out madoca_pppar_ion_solution_diff.json \
+            --match-csv madoca_pppar_ion_solution_matches.csv
+          ion_matched_epochs="$(awk -F, 'NR > 1 {n++} END {print n+0}' madoca_pppar_ion_solution_matches.csv)"
+          test "$ion_matched_epochs" -eq 118
+          ion_oracle_fixes="$(awk -F, 'NR > 1 && $5 == 1 {n++} END {print n+0}' madoca_pppar_ion_solution_matches.csv)"
+          test "$ion_oracle_fixes" -eq 97
+          ion_wrong_fixes="$(awk -F, 'NR > 1 && $6 == 6 && $5 != 1 {n++} END {print n+0}' madoca_pppar_ion_solution_matches.csv)"
+          test "$ion_wrong_fixes" -eq 0
+          ion_missed_fixes="$(awk -F, 'NR > 1 && $5 == 1 && $6 != 6 {n++} END {print n+0}' madoca_pppar_ion_solution_matches.csv)"
+          test "$ion_missed_fixes" -eq 8
+          python3 -c 'import json; m2=json.load(open("madoca_pppar_solution_diff.json")); ion=json.load(open("madoca_pppar_ion_solution_diff.json")); assert ion["base"]["reference_rms_3d_m"] <= m2["base"]["reference_rms_3d_m"]; assert ion["candidate"]["reference_rms_3d_m"] <= m2["candidate"]["reference_rms_3d_m"]; assert ion["comparison"]["delta_rms_3d_m"] <= 0.25; assert ion["events"]["max_delta_3d"]["delta_3d_m"] <= 1.0'
 
     - name: Upload MADOCA PPP-AR baseline
       if: always()
@@ -721,6 +779,12 @@ jobs:
           build-madoca-parity/native_pppar_partial_ar_smoke.json
           build-madoca-parity/madoca_pppar_solution_diff.json
           build-madoca-parity/madoca_pppar_solution_matches.csv
+          build-madoca-parity/madocalib_pppar_ion_smoke.pos
+          build-madoca-parity/madocalib_pppar_ion_smoke.json
+          build-madoca-parity/native_pppar_ion_smoke.pos
+          build-madoca-parity/native_pppar_ion_smoke.json
+          build-madoca-parity/madoca_pppar_ion_solution_diff.json
+          build-madoca-parity/madoca_pppar_ion_solution_matches.csv
         if-no-files-found: warn
 
     - name: Upload MadocaParity diagnostics
@@ -741,6 +805,12 @@ jobs:
           build-madoca-parity/native_pppar_smoke.json
           build-madoca-parity/madoca_pppar_solution_diff.json
           build-madoca-parity/madoca_pppar_solution_matches.csv
+          build-madoca-parity/madocalib_pppar_ion_smoke.pos
+          build-madoca-parity/madocalib_pppar_ion_smoke.json
+          build-madoca-parity/native_pppar_ion_smoke.pos
+          build-madoca-parity/native_pppar_ion_smoke.json
+          build-madoca-parity/madoca_pppar_ion_solution_diff.json
+          build-madoca-parity/madoca_pppar_ion_solution_matches.csv
         if-no-files-found: ignore
 
   static-analysis:

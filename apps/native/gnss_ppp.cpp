@@ -27,6 +27,7 @@ struct Options {
     std::string ssr_path;
     std::string ssr_rtcm_path;
     std::vector<std::string> madoca_l6_paths;
+    std::vector<std::string> madoca_l6d_paths;
     std::vector<std::string> madoca_l6d_shadow_paths;
     std::string madoca_materialization_dump_path;
     bool madoca_materialization_dump_only = false;
@@ -102,6 +103,8 @@ void printUsage(const char* program_name) {
         << "                          RTCM SSR source converted/read for PPP use\n"
         << "  --madoca-l6 <file>       Native MADOCA L6E SSR channel (repeatable,\n"
         << "                          e.g. PRN 204 and 206); requires --nav\n"
+        << "  --madoca-l6d <file>      Native MADOCA L6D STEC input (repeatable);\n"
+        << "                          opt-in application for per-frequency PPP\n"
         << "  --madoca-l6d-shadow <file>\n"
         << "                          Native L6D ionosphere shadow input (repeatable);\n"
         << "                          reports lookup diagnostics without changing PPP\n"
@@ -275,6 +278,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.ssr_rtcm_path = argv[++i];
         } else if (arg == "--madoca-l6" && i + 1 < argc) {
             options.madoca_l6_paths.push_back(argv[++i]);
+        } else if (arg == "--madoca-l6d" && i + 1 < argc) {
+            options.madoca_l6d_paths.push_back(argv[++i]);
         } else if (arg == "--madoca-l6d-shadow" && i + 1 < argc) {
             options.madoca_l6d_shadow_paths.push_back(argv[++i]);
         } else if (arg == "--madoca-materialization-dump" && i + 1 < argc) {
@@ -446,6 +451,30 @@ Options parseArguments(int argc, char* argv[]) {
     }
     if (!options.madoca_l6_paths.empty() && options.nav_path.empty()) {
         argumentError("--madoca-l6 requires --nav (broadcast ephemeris)", argv[0]);
+    }
+    if (!options.madoca_l6d_paths.empty() &&
+        !options.madoca_l6d_shadow_paths.empty()) {
+        argumentError(
+            "--madoca-l6d cannot be combined with --madoca-l6d-shadow",
+            argv[0]);
+    }
+    if (!options.madoca_l6d_paths.empty() &&
+        options.madoca_l6_paths.empty()) {
+        argumentError(
+            "--madoca-l6d requires native --madoca-l6 corrections",
+            argv[0]);
+    }
+    if (!options.madoca_l6d_paths.empty() &&
+        options.ar_method != "per-freq") {
+        argumentError(
+            "--madoca-l6d requires --ar-method per-freq",
+            argv[0]);
+    }
+    if (options.madoca_l6d_paths.size() > 3 ||
+        options.madoca_l6d_shadow_paths.size() > 3) {
+        argumentError(
+            "MADOCA L6D input accepts at most three files",
+            argv[0]);
     }
     if (options.max_epochs < 0) {
         argumentError("--max-epochs must be non-negative", argv[0]);
@@ -939,6 +968,8 @@ int main(int argc, char* argv[]) {
         const bool per_frequency_ar = options.ar_method == "per-freq";
         ppp_config.estimate_ionosphere = options.estimate_ionosphere || per_frequency_ar;
         ppp_config.use_ionosphere_free = options.use_ionosphere_free && !per_frequency_ar;
+        ppp_config.apply_madoca_l6d_ionosphere =
+            !options.madoca_l6d_paths.empty();
         ppp_config.use_clas_osr_filter = options.use_clas_osr_filter;
         ppp_config.clas_epoch_policy =
             parseClasEpochPolicy(options.clas_epoch_policy);
@@ -1169,10 +1200,14 @@ int main(int argc, char* argv[]) {
             std::cerr << "Error: failed to load MADOCA L6E corrections\n";
             return 1;
         }
-        if (!options.madoca_l6d_shadow_paths.empty()) {
+        const auto& madoca_l6d_input_paths =
+            !options.madoca_l6d_paths.empty()
+                ? options.madoca_l6d_paths
+                : options.madoca_l6d_shadow_paths;
+        if (!madoca_l6d_input_paths.empty()) {
             if (obs_header.first_obs.week <= 0 ||
                 obs_header.approximate_position.norm() <= 1e3) {
-                std::cerr << "Error: --madoca-l6d-shadow requires RINEX first-observation "
+                std::cerr << "Error: MADOCA L6D input requires RINEX first-observation "
                              "time and approximate receiver position\n";
                 return 1;
             }
@@ -1199,8 +1234,8 @@ int main(int argc, char* argv[]) {
                 obs_header.approximate_position.z(),
             };
             if (!processor.loadMadocaL6dProducts(
-                    options.madoca_l6d_shadow_paths, reference_epoch, receiver_ecef)) {
-                std::cerr << "Error: failed to load MADOCA L6D shadow corrections\n";
+                    madoca_l6d_input_paths, reference_epoch, receiver_ecef)) {
+                std::cerr << "Error: failed to load MADOCA L6D corrections\n";
                 return 1;
             }
         }
@@ -1223,6 +1258,9 @@ int main(int argc, char* argv[]) {
         double madoca_l6d_shadow_max_age_s = 0.0;
         int madoca_l6d_shadow_last_region = -1;
         int madoca_l6d_shadow_last_area = 0;
+        int madoca_l6d_constraint_epochs = 0;
+        int madoca_l6d_constraint_rows = 0;
+        int madoca_l6d_constraint_position_gate_epochs = 0;
         std::map<std::string, int> clas_hybrid_fallback_reasons;
         double atmospheric_trop_meters = 0.0;
         double atmospheric_iono_meters = 0.0;
@@ -1265,6 +1303,14 @@ int main(int argc, char* argv[]) {
                 madoca_l6d_shadow_last_area = l6d_shadow.area_number;
             } else if (l6d_shadow.stale) {
                 ++madoca_l6d_shadow_stale_epochs;
+            }
+            if (l6d_shadow.constraint_rows > 0) {
+                ++madoca_l6d_constraint_epochs;
+                madoca_l6d_constraint_rows +=
+                    l6d_shadow.constraint_rows;
+            }
+            if (l6d_shadow.constraint_skipped_position_covariance) {
+                ++madoca_l6d_constraint_position_gate_epochs;
             }
             if (processor.getLastClasHybridFallbackUsed()) {
                 ++clas_hybrid_fallback_epochs;
@@ -1410,6 +1456,15 @@ int main(int argc, char* argv[]) {
                     << madoca_l6d_shadow_last_region << ",\n"
                     << "  \"madoca_l6d_shadow_last_area\": "
                     << madoca_l6d_shadow_last_area << ",\n"
+                    << "  \"madoca_l6d_apply_enabled\": "
+                    << (ppp_config.apply_madoca_l6d_ionosphere ? "true" : "false")
+                    << ",\n"
+                    << "  \"madoca_l6d_constraint_epochs\": "
+                    << madoca_l6d_constraint_epochs << ",\n"
+                    << "  \"madoca_l6d_constraint_rows\": "
+                    << madoca_l6d_constraint_rows << ",\n"
+                    << "  \"madoca_l6d_constraint_position_gate_epochs\": "
+                    << madoca_l6d_constraint_position_gate_epochs << ",\n"
                     << "  \"clas_hybrid_fallback_reasons\": {";
             bool first_reason = true;
             for (const auto& [reason, count] : clas_hybrid_fallback_reasons) {
@@ -1510,12 +1565,18 @@ int main(int argc, char* argv[]) {
                           << options.madoca_materialization_dump_path << "\n";
             }
             if (processor.hasLoadedMadocaL6dProducts()) {
-                std::cout << "  MADOCA L6D shadow snapshot epochs: "
+                std::cout << "  MADOCA L6D snapshot epochs: "
                           << madoca_l6d_shadow_snapshot_epochs << "\n";
-                std::cout << "  MADOCA L6D shadow stale epochs: "
+                std::cout << "  MADOCA L6D stale epochs: "
                           << madoca_l6d_shadow_stale_epochs << "\n";
-                std::cout << "  MADOCA L6D shadow matched satellites: "
+                std::cout << "  MADOCA L6D matched satellites: "
                           << madoca_l6d_shadow_matched_satellites << "\n";
+                if (ppp_config.apply_madoca_l6d_ionosphere) {
+                    std::cout << "  MADOCA L6D constraint epochs: "
+                              << madoca_l6d_constraint_epochs << "\n";
+                    std::cout << "  MADOCA L6D constraint rows: "
+                              << madoca_l6d_constraint_rows << "\n";
+                }
             }
             if (atmospheric_trop_corrections > 0 || atmospheric_iono_corrections > 0) {
                 std::cout << "  atmospheric trop corrections: "

@@ -125,6 +125,111 @@ inline bool alwaysRestoreArTrialState(PPPProcessor::PPPConfig::ARMethod method) 
     return method == PPPProcessor::PPPConfig::ARMethod::DD_PER_FREQ;
 }
 
+struct MadocaIonoConstraintInput {
+    SatelliteId satellite;
+    int state_index = -1;
+    double ionosphere_state_m = 0.0;
+    double delay_m = 0.0;
+    double std_m = 0.0;
+    double age_s = std::numeric_limits<double>::infinity();
+};
+
+struct MadocaIonoConstraintRow {
+    SatelliteId satellite;
+    int state_index = -1;
+    double target_m = 0.0;
+    double residual_m = 0.0;
+    double variance_m2 = 0.0;
+    double system_bias_m = 0.0;
+};
+
+inline int madocaIonoConstraintSystemSlot(GNSSSystem system) {
+    switch (system) {
+        case GNSSSystem::GPS: return 0;
+        case GNSSSystem::GLONASS: return 1;
+        case GNSSSystem::Galileo: return 2;
+        case GNSSSystem::QZSS: return 3;
+        default: return -1;
+    }
+}
+
+inline bool madocaIonoConstraintPositionGatePasses(
+    double horizontal_position_std_m,
+    double vertical_position_std_m) {
+    constexpr double kHorizontalThresholdM = 2.0;
+    constexpr double kVerticalThresholdM = 3.0;
+    // MADOCALIB applies L6D constraints while the previous position covariance
+    // is still loose. It stops only when both non-zero ENU standard deviations
+    // are below their convergence thresholds.
+    return !(
+        horizontal_position_std_m != 0.0 &&
+        vertical_position_std_m != 0.0 &&
+        horizontal_position_std_m < kHorizontalThresholdM &&
+        vertical_position_std_m < kVerticalThresholdM);
+}
+
+inline std::vector<MadocaIonoConstraintRow> buildMadocaIonoConstraintRows(
+    const std::vector<MadocaIonoConstraintInput>& inputs,
+    double horizontal_position_std_m,
+    double vertical_position_std_m) {
+    constexpr double kMaximumAgeSeconds = 300.0;
+    constexpr double kMaximumStdM = 1.0;
+    if (!madocaIonoConstraintPositionGatePasses(
+            horizontal_position_std_m, vertical_position_std_m)) {
+        return {};
+    }
+
+    std::array<double, 4> bias_sums{};
+    std::array<int, 4> bias_counts{};
+    const auto accepted = [&](const MadocaIonoConstraintInput& input) {
+        return madocaIonoConstraintSystemSlot(input.satellite.system) >= 0 &&
+               input.state_index >= 0 &&
+               std::isfinite(input.ionosphere_state_m) &&
+               std::isfinite(input.delay_m) &&
+               std::isfinite(input.std_m) &&
+               input.std_m <= kMaximumStdM &&
+               std::isfinite(input.age_s) &&
+               std::abs(input.age_s) <= kMaximumAgeSeconds;
+    };
+    for (const auto& input : inputs) {
+        if (!accepted(input)) {
+            continue;
+        }
+        const int slot = madocaIonoConstraintSystemSlot(input.satellite.system);
+        bias_sums[static_cast<size_t>(slot)] +=
+            input.delay_m - input.ionosphere_state_m;
+        ++bias_counts[static_cast<size_t>(slot)];
+    }
+
+    std::array<double, 4> system_biases{};
+    for (size_t slot = 0; slot < system_biases.size(); ++slot) {
+        if (bias_counts[slot] > 0) {
+            system_biases[slot] =
+                bias_sums[slot] / static_cast<double>(bias_counts[slot]);
+        }
+    }
+
+    std::vector<MadocaIonoConstraintRow> rows;
+    rows.reserve(inputs.size());
+    for (const auto& input : inputs) {
+        if (!accepted(input)) {
+            continue;
+        }
+        const int slot = madocaIonoConstraintSystemSlot(input.satellite.system);
+        const double system_bias = system_biases[static_cast<size_t>(slot)];
+        const double target = input.delay_m - system_bias;
+        rows.push_back({
+            input.satellite,
+            input.state_index,
+            target,
+            target - input.ionosphere_state_m,
+            input.std_m * input.std_m,
+            system_bias,
+        });
+    }
+    return rows;
+}
+
 inline Vector3d recenterPostfitReceiverPosition(
     const Vector3d& corrected_receiver_position,
     const Vector3d& prior_filter_position,

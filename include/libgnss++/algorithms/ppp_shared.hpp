@@ -230,6 +230,7 @@ struct PPPConfig {
     // Atmospheric modeling
     bool estimate_troposphere = true;
     bool estimate_ionosphere = false;
+    bool apply_madoca_l6d_ionosphere = false;
     double initial_ionosphere_variance = 100.0;
     double process_noise_ionosphere = 1e-3;
     bool use_ionosphere_free = true;
