@@ -10,6 +10,7 @@
 #include <array>
 #include <cmath>
 #include <cstdio>
+#include <limits>
 #include <set>
 #include <vector>
 
@@ -499,6 +500,92 @@ FGOProcessor::FGOConfig makeCpHoldBaseConfig() {
 }
 
 }  // namespace
+
+TEST(FGOAmbiguityCandidateTelemetryTest, ReportsDisabledCandidateFunnel) {
+    CpHoldTestOptions opt;
+    opt.num_epochs = 3;
+    const auto problem = makeCpHoldFixedLagProblem(opt);
+    FGOProcessor::FGOConfig config = makeCpHoldBaseConfig();
+
+    const FGOProcessor processor(config);
+    const FGOProcessor::FGOResult result = processor.optimizeProblem(problem);
+
+    ASSERT_EQ(result.epoch_diagnostics.size(), problem.epochs.size());
+    for (const auto& epoch : result.epoch_diagnostics) {
+        EXPECT_EQ(epoch.carrier_factors_available, 5);
+        EXPECT_EQ(epoch.carrier_factors_added, 5);
+        EXPECT_EQ(epoch.ambiguity_candidates_after_hold, 5);
+        EXPECT_EQ(epoch.ambiguity_candidates, 5);
+        EXPECT_EQ(epoch.ambiguity_candidates_final, 0);
+        EXPECT_EQ(epoch.ambiguity_candidates_excluded_build_time, 0);
+        EXPECT_EQ(epoch.ambiguity_candidates_excluded_hold, 0);
+        EXPECT_EQ(epoch.ambiguity_candidates_excluded_one_band, 0);
+        EXPECT_EQ(epoch.ambiguity_candidates_excluded_constellation, 0);
+        EXPECT_EQ(epoch.ambiguity_candidates_excluded_previous_residual, 0);
+        EXPECT_EQ(epoch.ambiguity_candidates_excluded_fde, 0);
+        EXPECT_EQ(epoch.ambiguity_candidates_excluded_stale, 0);
+        ASSERT_EQ(epoch.ambiguity_candidate_trace.size(), 5u);
+        for (const auto& candidate : epoch.ambiguity_candidate_trace) {
+            EXPECT_EQ(
+                candidate.disposition,
+                FGOProcessor::AmbiguityCandidateDisposition::
+                    AmbiguityResolutionDisabled);
+        }
+    }
+}
+
+TEST(FGOAmbiguityCandidateTelemetryTest,
+     ReportsFinalCandidatesBeforeInsufficientCountDecision) {
+    CpHoldTestOptions opt;
+    opt.num_epochs = 3;
+    const auto problem = makeCpHoldFixedLagProblem(opt);
+    FGOProcessor::FGOConfig config = makeCpHoldBaseConfig();
+    config.use_lambda_ambiguity_fix = true;
+
+    const FGOProcessor processor(config);
+    const FGOProcessor::FGOResult result = processor.optimizeProblem(problem);
+
+    ASSERT_EQ(result.epoch_diagnostics.size(), problem.epochs.size());
+    for (const auto& epoch : result.epoch_diagnostics) {
+        // Preserve the existing terminal outcome semantics: without the hold
+        // reporting path enabled, a below-floor epoch retains NoCandidates.
+        // The new funnel is what disambiguates that label (five candidates
+        // did reach the count gate).
+        EXPECT_EQ(
+            epoch.ar_outcome,
+            FGOProcessor::AmbiguityResolutionOutcome::NoCandidates);
+        EXPECT_EQ(epoch.ambiguity_candidates_after_hold, 5);
+        EXPECT_EQ(epoch.ambiguity_candidates, 5);
+        EXPECT_EQ(epoch.ambiguity_candidates_final, 5);
+        ASSERT_EQ(epoch.ambiguity_candidate_trace.size(), 5u);
+        for (const auto& candidate : epoch.ambiguity_candidate_trace) {
+            EXPECT_EQ(
+                candidate.disposition,
+                FGOProcessor::AmbiguityCandidateDisposition::LambdaEligible);
+        }
+    }
+}
+
+TEST(FGOAmbiguityCandidateTelemetryTest, ReportsBuildTimeExcludedCarrierRows) {
+    CpHoldTestOptions opt;
+    opt.num_epochs = 3;
+    auto problem = makeCpHoldFixedLagProblem(opt);
+    auto excluded = problem.double_difference_carrier_factors.front();
+    excluded.ambiguity_index = std::numeric_limits<std::size_t>::max();
+    problem.excluded_double_difference_carrier_factors.push_back(excluded);
+
+    FGOProcessor::FGOConfig config = makeCpHoldBaseConfig();
+    const FGOProcessor processor(config);
+    const FGOProcessor::FGOResult result = processor.optimizeProblem(problem);
+
+    ASSERT_FALSE(result.epoch_diagnostics.empty());
+    const auto& epoch = result.epoch_diagnostics.front();
+    EXPECT_EQ(epoch.ambiguity_candidates_excluded_build_time, 1);
+    ASSERT_EQ(epoch.ambiguity_candidate_trace.size(), 6u);
+    EXPECT_EQ(
+        epoch.ambiguity_candidate_trace.front().disposition,
+        FGOProcessor::AmbiguityCandidateDisposition::BuildTimeExcluded);
+}
 
 TEST(FGOCpHoldFsmTest, DefaultOffIsNoOp) {
     CpHoldTestOptions opt;

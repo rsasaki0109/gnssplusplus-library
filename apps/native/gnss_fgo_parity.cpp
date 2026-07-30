@@ -1457,7 +1457,10 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
            "ddpr_anchor_h_err_m,ddpr_anchor_u_err_m,ddpr_anchor_prior,"
            "fixed_float_sep_m,fixed_imu_pred_sep_m,fixed_postfit_ddcp_rms_m,fixed_postfit_ddcp_max_norm,fixed_postfit_ddcp_chi2_dof,fixed_postfit_ddcp_n,external_dr_sep_m,external_dr_mahal2,external_dr_age,external_doppler_valid,external_doppler_vel_e_mps,external_doppler_vel_n_mps,external_doppler_vel_u_mps,external_dr_eval,external_dr_accept,external_dr_reject,cp_hold,"
            "imu_aperture_accept,imu_aperture_reject,cp_available,cp_added,"
-           "cp_suppressed_hold,gen_bump_hold,gen_bump_fde,gen_bump_reset,"
+           "cp_suppressed_hold,amb_after_hold,amb_final,amb_excl_build,"
+           "amb_excl_hold,amb_excl_one_band,amb_excl_constellation,"
+           "amb_excl_prev_residual,amb_excl_fde,amb_excl_stale,"
+           "gen_bump_hold,gen_bump_fde,gen_bump_reset,"
            "gen_bump_warm_reset,gen_bump_stale_pin,"
            "surplus_eval,surplus_pass,surplus_level,surplus_used,surplus_rescue,surplus_veto,"
            "low_count_attempted,low_count_used,"
@@ -1570,6 +1573,15 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
                 << ',' << d.carrier_factors_available
                 << ',' << d.carrier_factors_added
                 << ',' << d.carrier_factors_suppressed_hold
+                << ',' << d.ambiguity_candidates_after_hold
+                << ',' << d.ambiguity_candidates_final
+                << ',' << d.ambiguity_candidates_excluded_build_time
+                << ',' << d.ambiguity_candidates_excluded_hold
+                << ',' << d.ambiguity_candidates_excluded_one_band
+                << ',' << d.ambiguity_candidates_excluded_constellation
+                << ',' << d.ambiguity_candidates_excluded_previous_residual
+                << ',' << d.ambiguity_candidates_excluded_fde
+                << ',' << d.ambiguity_candidates_excluded_stale
                 << ',' << d.ambiguity_generation_bumps_hold
                 << ',' << d.ambiguity_generation_bumps_fde
                 << ',' << d.ambiguity_generation_bumps_reset
@@ -1601,6 +1613,39 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
                 << ',' << (d.dr_bypass_applied ? 1 : 0);
         }
         out << '\n';
+    }
+
+    // Normalized companion table: the epoch CSV above answers "how many",
+    // while this row-per-satellite/signal trace answers exactly which carrier
+    // row left the LAMBDA funnel and at which existing gate.  It deliberately
+    // shares --dump-csv rather than adding another command-line switch.
+    const std::string trace_path = path + ".ar_candidates.csv";
+    std::ofstream trace_out(trace_path);
+    if (!trace_out) {
+        std::cerr << "Warning: cannot open AR candidate trace output file "
+                  << trace_path << "\n";
+        return;
+    }
+    trace_out << "tow,satellite,reference_satellite,system,prn,"
+                 "reference_system,reference_prn,signal,ambiguity_index,disposition\n";
+    trace_out << std::fixed;
+    trace_out.precision(3);
+    for (const auto& epoch : r.epoch_diagnostics) {
+        for (const auto& candidate : epoch.ambiguity_candidate_trace) {
+            trace_out << epoch.time.tow << ','
+                      << candidate.satellite.toString() << ','
+                      << candidate.reference_satellite.toString() << ','
+                      << static_cast<int>(candidate.satellite.system) << ','
+                      << static_cast<int>(candidate.satellite.prn) << ','
+                      << static_cast<int>(candidate.reference_satellite.system) << ','
+                      << static_cast<int>(candidate.reference_satellite.prn) << ','
+                      << static_cast<int>(candidate.signal) << ',';
+            if (candidate.ambiguity_index !=
+                std::numeric_limits<std::size_t>::max()) {
+                trace_out << candidate.ambiguity_index;
+            }
+            trace_out << ',' << static_cast<int>(candidate.disposition) << '\n';
+        }
     }
 }
 

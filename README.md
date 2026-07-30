@@ -110,6 +110,28 @@ the shipping preset:
 --surplus-validation-aperture-gt2 0.45
 ```
 
+With `--dump-csv <path>`, the epoch table includes the ambiguity-candidate
+funnel (`amb_after_hold`, `amb_final`, and `amb_excl_*`). A normalized
+satellite/signal trace is written beside it as
+`<path>.ar_candidates.csv`. Its `disposition` values are:
+
+| Value | Meaning |
+|---:|---|
+| 0 | Reached the final per-epoch LAMBDA candidate set |
+| 1 | Excluded while building the problem (currently sustained CMC level) |
+| 2 | Carrier factor suppressed by full CP hold |
+| 3 | Carrier retained as float but quarantined from AR during CP recovery |
+| 4 | Removed by one-band-per-satellite selection |
+| 5 | Removed by constellation exclusion |
+| 6 | Removed by the previous epoch's per-satellite residual gate |
+| 7 | Removed by carrier FDE |
+| 8 | Removed because its ambiguity key left the active smoother |
+| 9 | Candidate present, but the whole epoch failed the quality gate |
+| 10 | Candidate present, but ambiguity resolution was disabled |
+
+These fields only report decisions already made by the solver; enabling the
+CSV dump does not alter candidate selection or FIX/FLOAT decisions.
+
 #### Surplus-satellite rescue integrity
 
 LAMBDA candidates that fall short of the ratio gate can be rescued by an
