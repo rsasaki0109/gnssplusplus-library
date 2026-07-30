@@ -409,6 +409,13 @@ TEST(PPPEnvOverridesTest, MadocaGlonassPhaseDefaultsToParityRows) {
     EXPECT_TRUE(PPPEnvOverrides::fromEnvironment().madoca_glonass_phase);
 }
 
+TEST(PPPEnvOverridesTest, MadocaPromotedPathRetainsReleaseCycleOptOuts) {
+    const PPPEnvOverrides overrides = PPPEnvOverrides::fromEnvironment();
+    EXPECT_TRUE(overrides.madoca_early_window);
+    EXPECT_TRUE(overrides.madoca_postfit_commit);
+    EXPECT_TRUE(overrides.madoca_spike_guard);
+}
+
 TEST(NavigationSsrIodeSelection, DoesNotFallBackWhenGpsIodeIsUnavailable) {
     NavigationData navigation;
     const SatelliteId satellite(GNSSSystem::GPS, 8);

@@ -34,10 +34,11 @@ post-fit commit-on-success gate (#146/#147) was promoted to the default
 second station (ALIC, neutral) with 1 h/6 h staying byte-exact.  The interim
 #145 boundary guard was retired (commit-on-success subsumes it; guard on/off was
 byte-identical under commit); the #144 spike guard (100 m) is kept as the
-opt-out-path safety net.  GLONASS
-phase, QZSS L5, SSR-replay, bias-identity, and pair-selection hypotheses were
-each measured.  QZSS L5 was later promoted for M2 three-frequency row parity;
-the remaining preview-only knobs stay default-off.
+opt-out-path safety net.  GLONASS phase, QZSS L5, SSR-replay, bias-identity,
+and pair-selection hypotheses were each measured.  QZSS L5 was later promoted
+for M2 three-frequency row parity.  The rejected SSR-replay selector and
+implementation were removed in M6 rather than retained as a default-off
+production path.
 The repro harness and per-slice history live in the memory note
 `madoca-ppp-frontier` and in issue #148.
 

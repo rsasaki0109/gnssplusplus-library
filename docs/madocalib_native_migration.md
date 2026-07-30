@@ -76,7 +76,7 @@ does not yet match end-to-end behavior; **open** has no accepted native parity.
 | System, signal, update-interval, URA, and bias-code helpers | `madoca_core`, `madoca_parity`, `MadocaParity` tests | native | Keep deterministic helper parity at exact integer or `1e-6` scaled tolerance |
 | L6E byte sync and subframe assembly | `MadocaL6eDecoder` | native | Byte-stepped oracle test remains green |
 | L6E mask/orbit/clock/code-bias/phase-bias/URA | `madoca_l6`, `SSRProducts` materialization | native | No missing keys; supported numeric fields match the pinned oracle |
-| Multi-file L6E replay and correction ordering | `decodeMadocaL6eFilesToProductsReplay`, correction contract | native | Materialization key, time, IOD, identity, and value diffs are zero for the pinned fixture |
+| Multi-file L6E decode and correction ordering | `decodeMadocaL6eFilesToProducts`, correction contract | native | Materialization key, time, IOD, identity, and value diffs are zero for the pinned fixture |
 | L6D coverage/correction decode | `MadocaL6dDecoder` | native | Byte-stepped region/area parity remains green |
 | L6D receiver-area selection and delay/std | `MadocaIonoStore` | native | Selected receiver correction values match the oracle |
 | L6D causal product snapshots | `MadocaIonoSnapshot`, `MadocaIonoProducts` | native | File snapshot/application sequence parity remains green |
@@ -644,6 +644,25 @@ executable accepts `--madocalib-bridge` and the accompanying oracle arguments.
 The labeled parity lane uses the oracle executable for both sides of the
 comparison so exact commands remain reproducible without making the external
 runtime a user-facing solver choice.
+
+#### M6 preview cleanup (2026-07-30)
+
+Two superseded preview selectors were removed after the M5 matrix froze their
+accepted replacements.  `GNSS_PPP_MADOCA_SSR_REPLAY` and its independent-stream
+decoder/API represented the rejected #136 replay hypothesis; production and
+materialization paths now have one `decodeMadocaL6eFilesToProducts` contract.
+The explicit `GNSS_PPP_MADOCA_GALILEO_GATE` selector was redundant after the
+Galileo admission behavior became part of default-on
+`GNSS_PPP_MADOCA_EARLY_WINDOW`; the latter remains the one-release-cycle
+opt-out.
+
+The other promoted compatibility opt-outs remain for that release cycle.
+`GNSS_PPP_MADOCA_POSTFIT_COMMIT=0` still selects the pre-promotion update
+behavior, and the 100 m spike guard remains its safety backstop.  Bias,
+frequency, constellation, and early-window opt-outs likewise remain available
+for controlled rollback.  Diagnostic dumps and measurement-neutral shadow
+inputs are retained because they observe the accepted path rather than select
+an alternative solver implementation.
 
 Exit: production code, installed targets, and default CI have no MADOCALIB
 dependency; the linked checkout is used only by the labeled oracle lane; native
