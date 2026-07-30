@@ -821,8 +821,24 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
             shadow_satellites.push_back(observation.satellite);
         }
     }
-    last_madoca_l6d_shadow_status_ =
+    const MadocaL6dShadowStatus previous_l6d_status =
+        last_madoca_l6d_shadow_status_;
+    MadocaL6dShadowStatus inspected_l6d_status =
         inspectMadocaL6dShadow(shadow_satellites, time);
+    // Correction application can run again after the prefit measurement
+    // update. Preserve the constraint telemetry captured while forming that
+    // update instead of replacing it with the second shadow inspection.
+    inspected_l6d_status.constraint_enabled =
+        previous_l6d_status.constraint_enabled;
+    inspected_l6d_status.constraint_skipped_position_covariance =
+        previous_l6d_status.constraint_skipped_position_covariance;
+    inspected_l6d_status.constraint_rows =
+        previous_l6d_status.constraint_rows;
+    inspected_l6d_status.constraint_horizontal_position_std_m =
+        previous_l6d_status.constraint_horizontal_position_std_m;
+    inspected_l6d_status.constraint_vertical_position_std_m =
+        previous_l6d_status.constraint_vertical_position_std_m;
+    last_madoca_l6d_shadow_status_ = inspected_l6d_status;
 
     // Pre-fetch epoch-wide atmosphere tokens from any satellite that has them.
     // CLAS atmosphere corrections are network-wide, not per-satellite, so we

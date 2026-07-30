@@ -80,13 +80,13 @@ does not yet match end-to-end behavior; **open** has no accepted native parity.
 | L6D coverage/correction decode | `MadocaL6dDecoder` | native | Byte-stepped region/area parity remains green |
 | L6D receiver-area selection and delay/std | `MadocaIonoStore` | native | Selected receiver correction values match the oracle |
 | L6D causal product snapshots | `MadocaIonoSnapshot`, `MadocaIonoProducts` | native | File snapshot/application sequence parity remains green |
-| L6D use inside PPP | `--madoca-l6d-shadow` performs measurement-neutral lookup only | partial | M3 must add opt-in STEC state/row application and prove row/value parity |
+| L6D use inside PPP | `--madoca-l6d` applies opt-in STEC rows; `--madoca-l6d-shadow` remains measurement-neutral | native opt-in | M3 one-hour row, gate, status-safety, and trajectory gates are pinned |
 | PPP correction signs and ordering | Native correction contract plus materialization/residual diff tools | native | Default PPP parity matrix remains within the accepted MIZU/ALIC envelope |
 | PPP commit-on-success and diagnostics | Native postfit validation/shadow telemetry | native | MIZU 1 h/6 h/24 h and ALIC regression gates remain green |
 | GLONASS phase in MADOCA PPP | Native L1/L2 rows plus corrected postfit-shadow audit | native | Keep the pinned per-satellite demeaned RMS at millimetre scale and span below 4 cm |
 | MADOCALIB `exec_ppp` | Native PPP runs end to end; remaining solution delta is tracked | partial | M4/M5 matrix meets the declared trajectory thresholds |
 | MADOCALIB `exec_pppar` | Windows and authoritative Ubuntu Release both match the oracle's 108 Fix / 10 Float over all 118 epochs | native | Keep exact status agreement, no wrong/missed Fix, RMS at most 0.20 m, and maximum at most 1.0 m |
-| MADOCALIB `exec_pppar-ion` | Bridge profile/input validation exists; native L6D state injection does not | open | M3 then M5 PPP-AR-ion sign-off |
+| MADOCALIB `exec_pppar-ion` | Bridge and native opt-in profiles run in the required parity lane | partial | M4 closes eight missed Fix and M5 expands the dataset/duration matrix |
 | Triple/quad-frequency PPP-AR | Upstream 2.0 behavior has not been fully audited or signed off | open | Dedicated fixtures and ambiguity/state parity after dual-frequency M2 |
 | Linked `postpos()` bridge | `madocalib_bridge` | oracle-only | Retain until M6; never select it in production runtime |
 
@@ -499,6 +499,32 @@ experiment, this changes the first valid epochs from zero accepted rows to
 causal snapshot fix as a prerequisite; row/value and solution parity remain M3
 work.
 
+#### M3 opt-in STEC application
+
+`--madoca-l6d` now promotes the proven snapshots to prefit STEC state rows only
+for coherent native MADOCA per-frequency PPP.  The default path and
+`--madoca-l6d-shadow` remain measurement-neutral.  Admission matches
+`const_iono_corr()`: GPS, GLONASS, Galileo, and QZSS only; absolute age at most
+300 seconds; standard deviation at most 1 m; independent constellation mean
+bias removal; `H=1`; and variance `std^2`.
+
+The convergence gate uses the previous published solution covariance, matching
+MADOCALIB `prev_qr`, rather than the current predicted filter covariance.  On
+the pinned MIZU hour this applies exactly the oracle's nine rows at the first
+valid epoch and skips the following 117 epochs after the horizontal/vertical
+2 m/3 m covariance gate closes.  The real decoder/oracle tests retain
+delay/std equality within `1e-6`, and the first-epoch row satellites, residuals,
+standard deviations, and constellation biases match the oracle trace.
+
+The active L6D constraint removes the unconstrained STEC-gauge premise of the
+M2 one-child N1 lookahead, so this opt-in path retains MADOCALIB's literal
+greedy partial-AR removal.  The one-hour gate records native 89 Fix / 29 Float
+against oracle 97 Fix / 21 Float: eight Fix are conservatively missed and
+there are zero wrong Fix.  Both reference trajectories improve over M2
+(oracle 3D RMS 4.49578 to 4.44821 m; native 4.51256 to 4.44202 m).
+Native/oracle 3D delta RMS is 0.244372 m with a 0.459645 m maximum; the
+remaining status and component convergence belongs to M4.
+
 ### M4 -- Close remaining row and boundary differences
 
 - Resolve QZSS atmosphere admission and every unexplained native-only or
@@ -554,10 +580,9 @@ remains open.
 
 ## Immediate Slice
 
-Begin M3 by landing the completed-message snapshot-time prerequisite, then
-promote the existing measurement-neutral L6D shadow lookup to an explicit
-opt-in STEC input.  Pin receiver-area selection, correction age, delay,
-standard deviation, signal coefficient, and snapshot application keys; then
-compare the common native/oracle `pppar-ion` residual rows before judging Fix
-status or trajectories.  Preserve the established M2 guards and keep the
-feature opt-in until the M5 matrix passes.
+Begin M4 with the eight conservative `pppar-ion` missed-Fix epochs.  Compare
+materialization, satellite and row sets, residual components, then N1
+candidates without relaxing the zero-wrong-Fix gate.  In parallel, reduce the
+0.244372 m one-hour native/oracle delta RMS toward the M2 baseline and extend
+the same accounting to QZSS atmosphere admission and the 24-hour boundary.
+Keep L6D application opt-in until the M5 matrix passes.

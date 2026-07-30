@@ -753,7 +753,9 @@ bool PPPProcessor::updateFilter(const ObservationData& obs,
     bool have_cached_postfit_eq = false;
     const auto getPostfitEquation = [&]() -> const MeasurementEquation& {
         if (!have_cached_postfit_eq) {
-            cached_postfit_eq = formMeasurementEquations(if_obs, nav, obs.time, false);
+            cached_postfit_eq =
+                formMeasurementEquations(
+                    if_obs, nav, obs.time, false, false);
             have_cached_postfit_eq = true;
         }
         return cached_postfit_eq;
@@ -786,7 +788,8 @@ bool PPPProcessor::updateFilter(const ObservationData& obs,
                 updated_position);
         }
         const MeasurementEquation postfit_eq =
-            formMeasurementEquations(shadow_observations, nav, obs.time, false);
+            formMeasurementEquations(
+                shadow_observations, nav, obs.time, false, false);
         const MadocaPostfitEpochStats postfit_stats =
             computeMadocaPostfitEpochStats(postfit_eq);
         writeMadocaPostfitShadow(

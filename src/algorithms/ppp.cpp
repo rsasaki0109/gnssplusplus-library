@@ -725,6 +725,11 @@ PositionSolution PPPProcessor::processEpochStandard(
 
     has_last_processed_time_ = true;
     last_processed_time_ = obs.time;
+    if (solution.isValid() && solution.position_covariance.allFinite()) {
+        previous_solution_position_covariance_ =
+            solution.position_covariance;
+        has_previous_solution_position_covariance_ = true;
+    }
 
     return finalizeSolution(solution);
 }
@@ -799,6 +804,8 @@ void PPPProcessor::reset() {
     last_applied_ionex_m_ = 0.0;
     last_applied_dcb_m_ = 0.0;
     last_madoca_l6d_shadow_status_ = {};
+    previous_solution_position_covariance_.setZero();
+    has_previous_solution_position_covariance_ = false;
 
     std::lock_guard<std::mutex> lock(stats_mutex_);
     total_epochs_processed_ = 0;

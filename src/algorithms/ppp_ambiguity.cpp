@@ -1011,14 +1011,17 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
 
         int exclude_position = -1;
         // The oracle's greedy lowest-elevation removal is deterministic for
-        // its float means, but a weak ambiguity/STEC gauge can change the
-        // disagreement set across platforms. Before committing that removal,
-        // test each implicated one-satellite child with the same LAMBDA ratio,
-        // dimension, and candidate-agreement gates. This adds no candidate and
-        // relaxes no threshold: it only accepts a subset that already passes
-        // the ordinary N1 contract. If none passes, retain the oracle's greedy
+        // its float means, but a weak unconstrained ambiguity/STEC gauge can
+        // change the disagreement set across platforms. Before committing
+        // that removal, test each implicated one-satellite child with the same
+        // LAMBDA ratio, dimension, and candidate-agreement gates. Active L6D
+        // STEC rows remove that unconstrained-gauge premise, so that mode keeps
+        // the literal oracle greedy path. This adds no candidate and relaxes
+        // no threshold: it only accepts a subset that already passes the
+        // ordinary N1 contract. If none passes, retain the oracle's greedy
         // removal below.
-        if (require_coherent_ssr_ && ssr_products_loaded_) {
+        if (require_coherent_ssr_ && ssr_products_loaded_ &&
+            !ppp_config_.apply_madoca_l6d_ionosphere) {
             for (int removed = 0; removed < trial_nb; ++removed) {
                 if (std::abs(n1_fixed(removed) - n1_second(removed)) < 0.001) {
                     continue;

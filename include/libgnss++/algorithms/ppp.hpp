@@ -49,6 +49,11 @@ struct MadocaL6dShadowStatus {
     int region_id = -1;
     int area_number = 0;
     int matched_satellites = 0;
+    bool constraint_enabled = false;
+    bool constraint_skipped_position_covariance = false;
+    int constraint_rows = 0;
+    double constraint_horizontal_position_std_m = 0.0;
+    double constraint_vertical_position_std_m = 0.0;
 };
 
 struct PPPConvergenceTelemetry {
@@ -149,8 +154,9 @@ public:
      */
     bool loadMadocaL6Products(const std::vector<std::string>& l6_files);
 
-    // Load receiver-specific L6D ionosphere snapshots for diagnostic shadow
-    // lookup. This does not change PPP measurements or filter state.
+    // Load receiver-specific L6D ionosphere snapshots. They remain
+    // measurement-neutral unless PPPConfig::apply_madoca_l6d_ionosphere is
+    // explicitly enabled.
     bool loadMadocaL6dProducts(const std::vector<std::string>& l6d_files,
                                const double reference_epoch[6],
                                const double receiver_ecef[3]);
@@ -359,6 +365,8 @@ private:
     double last_applied_ionex_m_ = 0.0;
     double last_applied_dcb_m_ = 0.0;
     MadocaL6dShadowStatus last_madoca_l6d_shadow_status_;
+    Matrix3d previous_solution_position_covariance_ = Matrix3d::Zero();
+    bool has_previous_solution_position_covariance_ = false;
     bool last_clas_hybrid_fallback_used_ = false;
     std::string last_clas_hybrid_fallback_reason_;
     
@@ -806,7 +814,8 @@ private:
         const std::vector<IonosphereFreeObs>& observations,
         const NavigationData& nav,
         const GNSSTime& time,
-        bool apply_outlier_detection = true);
+        bool apply_outlier_detection = true,
+        bool include_external_constraints = true);
     
     /**
      * @brief Check convergence

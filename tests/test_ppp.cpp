@@ -103,6 +103,68 @@ TEST(PPPFilterIterations, MadocaPerFrequencyCommitsOneUpdatePerEpoch) {
     EXPECT_EQ(ppp_internal::filterIterationCount(false, false, 8), 8);
 }
 
+TEST(PPPMadocaL6dConstraints, RemovesIndependentConstellationBiases) {
+    const std::vector<ppp_internal::MadocaIonoConstraintInput> inputs = {
+        {SatelliteId(GNSSSystem::GPS, 1), 10, 1.0, 3.0, 0.2, 30.0},
+        {SatelliteId(GNSSSystem::GPS, 2), 11, 2.0, 5.0, 0.3, 30.0},
+        {SatelliteId(GNSSSystem::Galileo, 1), 12, 4.0, 10.0, 0.4, 30.0},
+        {SatelliteId(GNSSSystem::BeiDou, 1), 13, 6.0, 8.0, 0.5, 30.0},
+    };
+
+    const auto rows =
+        ppp_internal::buildMadocaIonoConstraintRows(inputs, 2.0, 3.0);
+
+    ASSERT_EQ(rows.size(), 3U);
+    EXPECT_EQ(rows[0].satellite, SatelliteId(GNSSSystem::GPS, 1));
+    EXPECT_EQ(rows[0].state_index, 10);
+    EXPECT_DOUBLE_EQ(rows[0].system_bias_m, 2.5);
+    EXPECT_DOUBLE_EQ(rows[0].target_m, 0.5);
+    EXPECT_DOUBLE_EQ(rows[0].residual_m, -0.5);
+    EXPECT_DOUBLE_EQ(rows[0].variance_m2, 0.04);
+    EXPECT_DOUBLE_EQ(rows[1].system_bias_m, 2.5);
+    EXPECT_DOUBLE_EQ(rows[1].target_m, 2.5);
+    EXPECT_DOUBLE_EQ(rows[1].residual_m, 0.5);
+    EXPECT_DOUBLE_EQ(rows[1].variance_m2, 0.09);
+    EXPECT_DOUBLE_EQ(rows[2].system_bias_m, 6.0);
+    EXPECT_DOUBLE_EQ(rows[2].target_m, 4.0);
+    EXPECT_DOUBLE_EQ(rows[2].residual_m, 0.0);
+    EXPECT_DOUBLE_EQ(rows[2].variance_m2, 0.16);
+}
+
+TEST(PPPMadocaL6dConstraints, MatchesAgeStdAndPositionAdmissionBoundaries) {
+    const auto gps = SatelliteId(GNSSSystem::GPS, 1);
+    const std::vector<ppp_internal::MadocaIonoConstraintInput> inputs = {
+        {gps, 10, 1.0, 3.0, 1.0, 300.0},
+        {SatelliteId(GNSSSystem::GPS, 2), 11, 2.0, 5.0, 0.2, 300.001},
+        {SatelliteId(GNSSSystem::GPS, 3), 12, 3.0, 6.0, 1.001, 30.0},
+        {SatelliteId(GNSSSystem::GPS, 4), -1, 4.0, 7.0, 0.2, 30.0},
+        {SatelliteId(GNSSSystem::GPS, 5), 14, 5.0, 8.0, 0.0, 30.0},
+    };
+
+    const auto boundary_rows =
+        ppp_internal::buildMadocaIonoConstraintRows(inputs, 2.0, 3.0);
+    ASSERT_EQ(boundary_rows.size(), 2U);
+    EXPECT_EQ(boundary_rows.front().satellite, gps);
+    EXPECT_DOUBLE_EQ(boundary_rows.front().system_bias_m, 2.5);
+    EXPECT_DOUBLE_EQ(boundary_rows.front().variance_m2, 1.0);
+    EXPECT_EQ(
+        boundary_rows[1].satellite,
+        SatelliteId(GNSSSystem::GPS, 5));
+    EXPECT_DOUBLE_EQ(boundary_rows[1].system_bias_m, 2.5);
+    EXPECT_DOUBLE_EQ(boundary_rows[1].variance_m2, 0.0);
+
+    EXPECT_TRUE(ppp_internal::buildMadocaIonoConstraintRows(
+        inputs, 1.999, 2.999).empty());
+    EXPECT_EQ(
+        ppp_internal::buildMadocaIonoConstraintRows(
+            inputs, 0.0, 2.999).size(),
+        2U);
+    EXPECT_EQ(
+        ppp_internal::buildMadocaIonoConstraintRows(
+            inputs, 1.999, 0.0).size(),
+        2U);
+}
+
 TEST(PPPCycleSlips, MadocaPerFrequencyUsesMadocalibGeometryFreeThreshold) {
     EXPECT_DOUBLE_EQ(
         ppp_internal::geometryFreeSlipThresholdMeters(true, 0.05),
