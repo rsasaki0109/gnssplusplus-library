@@ -88,7 +88,7 @@ does not yet match end-to-end behavior; **open** has no accepted native parity.
 | MADOCALIB `exec_pppar` | Windows and authoritative Ubuntu Release both match the oracle's 108 Fix / 10 Float over all 118 epochs | native | Keep exact status agreement, no wrong/missed Fix, RMS at most 0.20 m, and maximum at most 1.0 m |
 | MADOCALIB `exec_pppar-ion` | Bridge and native opt-in profiles run in the required parity lane | partial | M4 closes eight missed Fix and M5 expands the dataset/duration matrix |
 | Triple/quad-frequency PPP-AR | Upstream 2.0 behavior has not been fully audited or signed off | open | Dedicated fixtures and ambiguity/state parity after dual-frequency M2 |
-| Linked `postpos()` bridge | `madocalib_bridge` | oracle-only | Retain until M6; never select it in production runtime |
+| Linked `postpos()` bridge | Non-installed `gnss_madocalib_oracle` | oracle-only | Available only in `MADOCALIB_PARITY_LINK=ON` builds; absent from normal `gnss_ppp` help and parsing |
 
 ## Current Numerical Baselines
 
@@ -633,6 +633,17 @@ the GitHub job summary.  Default CMake builds retain
   retaining the opt-in oracle build and tests.
 - Remove superseded preview knobs and guards after proving their replacements.
 - Update user documentation and close issue #148 with the final matrix.
+
+#### M6 oracle CLI isolation (2026-07-30)
+
+The linked `postpos()` selector is no longer part of the normal `gnss_ppp`
+command surface.  Production and installed builds neither list nor accept any
+`--madocalib-*` options.  An opt-in `MADOCALIB_PARITY_LINK=ON` configure creates
+the separate, non-installed `gnss_madocalib_oracle` executable; only that
+executable accepts `--madocalib-bridge` and the accompanying oracle arguments.
+The labeled parity lane uses the oracle executable for both sides of the
+comparison so exact commands remain reproducible without making the external
+runtime a user-facing solver choice.
 
 Exit: production code, installed targets, and default CI have no MADOCALIB
 dependency; the linked checkout is used only by the labeled oracle lane; native

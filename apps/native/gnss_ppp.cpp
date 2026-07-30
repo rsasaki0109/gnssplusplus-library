@@ -17,6 +17,10 @@
 #include <libgnss++/io/madoca_l6.hpp>
 #include <libgnss++/io/rinex.hpp>
 
+#ifndef GNSSPP_MADOCALIB_ORACLE_CLI
+#define GNSSPP_MADOCALIB_ORACLE_CLI 0
+#endif
+
 namespace {
 
 struct Options {
@@ -164,6 +168,7 @@ void printUsage(const char* program_name) {
         << "                          CLAS atmosphere token selection policy (default: grid-first)\n"
         << "  --clas-atmos-stale-after-seconds <seconds>\n"
         << "                          Balanced policy stale threshold (default: 15.0)\n"
+#if GNSSPP_MADOCALIB_ORACLE_CLI
         << "  --madocalib-bridge      Delegate this run to linked MADOCALIB postpos()\n"
         << "                          (requires CMake -DMADOCALIB_PARITY_LINK=ON)\n"
         << "  --madocalib-l6 <file>   Extra MADOCA L6 input file; repeat for two-channel L6E\n"
@@ -183,6 +188,7 @@ void printUsage(const char* program_name) {
         << "                          MADOCALIB trace level (default: 0)\n"
         << "  --madocalib-trace-ar   Include MADOCALIB ambiguity means, covariance,\n"
         << "                          LAMBDA candidates, and partial-AR decisions in trace\n"
+#endif
         << "  --static                Use a static PPP motion model (default)\n"
         << "  --kinematic             Use a kinematic PPP motion model\n"
         << "  --use-dynamics-model    Continuous pos/vel dynamics (MRTKLIB accel model)\n"
@@ -346,6 +352,7 @@ Options parseArguments(int argc, char* argv[]) {
             options.clas_atmos_selection = argv[++i];
         } else if (arg == "--clas-atmos-stale-after-seconds" && i + 1 < argc) {
             options.clas_atmos_stale_after_seconds = std::stod(argv[++i]);
+#if GNSSPP_MADOCALIB_ORACLE_CLI
         } else if (arg == "--madocalib-bridge") {
             options.madocalib_bridge = true;
         } else if (arg == "--madocalib-l6" && i + 1 < argc) {
@@ -366,6 +373,7 @@ Options parseArguments(int argc, char* argv[]) {
             options.madocalib_trace_level = std::stoi(argv[++i]);
         } else if (arg == "--madocalib-trace-ar") {
             options.madocalib_trace_ar = true;
+#endif
         } else if (arg == "--no-ionosphere-free") {
             options.use_ionosphere_free = false;
         } else if (arg == "--ionosphere-free") {
@@ -497,6 +505,7 @@ Options parseArguments(int argc, char* argv[]) {
     if (options.ssr_step_seconds <= 0.0) {
         argumentError("--ssr-step-seconds must be positive", argv[0]);
     }
+#if GNSSPP_MADOCALIB_ORACLE_CLI
     if (options.madocalib_time_interval_seconds < 0.0) {
         argumentError("--madocalib-ti must be non-negative", argv[0]);
     }
@@ -514,6 +523,7 @@ Options parseArguments(int argc, char* argv[]) {
     if (options.madocalib_profile == "pppar-ion" && options.madocalib_mdciono_paths.empty()) {
         argumentError("--madocalib-profile pppar-ion requires --madocalib-mdciono", argv[0]);
     }
+#endif
     if (options.clas_epoch_policy != "strict-osr" &&
         options.clas_epoch_policy != "hybrid-standard-ppp") {
         argumentError(
@@ -752,6 +762,7 @@ int main(int argc, char* argv[]) {
     try {
         const Options options = parseArguments(argc, argv);
 
+#if GNSSPP_MADOCALIB_ORACLE_CLI
         if (options.madocalib_bridge) {
             namespace madocalib = libgnss::external::madocalib;
             if (!madocalib::isAvailable()) {
@@ -889,6 +900,7 @@ int main(int argc, char* argv[]) {
             }
             return 0;
         }
+#endif
 
         libgnss::io::RINEXReader obs_reader;
         const auto& ppp_env_overrides = libgnss::pppEnvOverrides();

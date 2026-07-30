@@ -4029,19 +4029,19 @@ class CLIToolsTest(unittest.TestCase):
         self.assertIn("--window-size", result.stdout)
         self.assertIn("--output-csv", result.stdout)
 
-    def test_ppp_help_lists_madocalib_bridge_options(self) -> None:
+    def test_ppp_help_hides_madocalib_oracle_options(self) -> None:
         result = self.run_gnss("ppp", "--help")
         self.assertEqual(result.returncode, 0, msg=result.stderr)
-        self.assertIn("--madocalib-bridge", result.stdout)
-        self.assertIn("--madocalib-trace-ar", result.stdout)
-        self.assertIn("--madocalib-l6", result.stdout)
-        self.assertIn("--madocalib-mdciono", result.stdout)
-        self.assertIn("--madocalib-profile", result.stdout)
+        self.assertNotIn("--madocalib-bridge", result.stdout)
+        self.assertNotIn("--madocalib-trace-ar", result.stdout)
+        self.assertNotIn("--madocalib-l6", result.stdout)
+        self.assertNotIn("--madocalib-mdciono", result.stdout)
+        self.assertNotIn("--madocalib-profile", result.stdout)
         self.assertIn("--madoca-l6d-shadow", result.stdout)
         self.assertIn("--madoca-materialization-dump", result.stdout)
         self.assertIn("--madoca-materialization-dump-only", result.stdout)
 
-    def test_ppp_cli_rejects_unknown_madocalib_profile(self) -> None:
+    def test_ppp_cli_rejects_madocalib_oracle_selector(self) -> None:
         result = self.run_gnss(
             "ppp",
             "--obs",
@@ -4055,7 +4055,10 @@ class CLIToolsTest(unittest.TestCase):
             "unknown",
         )
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("--madocalib-profile must be one of", result.stderr)
+        self.assertIn(
+            "unknown or incomplete argument: --madocalib-bridge",
+            result.stderr,
+        )
 
     def test_ppp_cli_accepts_more_than_three_hourly_madoca_l6d_inputs(self) -> None:
         result = self.run_gnss(

@@ -518,13 +518,15 @@ Future oracle modules, test-only and opt-in:
 The first whole-run oracle path is an opt-in static-link delegate:
 
 - Configure with `-DMADOCALIB_PARITY_LINK=ON`.
-- Run `gnss_ppp --madocalib-bridge` to delegate the whole run to MADOCALIB
-  `postpos()`.
+- Build and run the non-installed
+  `gnss_madocalib_oracle --madocalib-bridge` tool to delegate the whole run to
+  MADOCALIB `postpos()`.
 - Pass MADOCA L6E files with repeated `--madocalib-l6 <file>` arguments.
 - Pass L6D ionosphere files with repeated `--madocalib-mdciono <file>`
   arguments when using the ionosphere scenario.
-- The default build does not link MADOCALIB and rejects `--madocalib-bridge`
-  before producing output.
+- The normal `gnss_ppp` command never exposes the oracle arguments, including
+  in a linked parity build.  The default build does not link MADOCALIB or
+  create `gnss_madocalib_oracle`.
 
 The public sample-data smoke case uses the `exec_ppp.bat` MIZU scenario with
 the two L6E channels from the `is-qzss-mdc-004` tree:
@@ -532,7 +534,7 @@ the two L6E channels from the `is-qzss-mdc-004` tree:
 ```sh
 ROOT=${MADOCALIB_ROOT}
 
-./build_iter4_madocalib/apps/gnss_ppp \
+./build_iter4_madocalib/apps/gnss_madocalib_oracle \
   --madocalib-bridge \
   --obs "$ROOT/sample_data/data/rinex/MIZU00JPN_R_20250910000_01D_30S_MO.rnx" \
   --nav "$ROOT/sample_data/data/rinex/BRDM00DLR_S_20250910000_01D_MN.rnx" \
@@ -746,8 +748,8 @@ Deferred large slices:
 - PPP-AR parity against MADOCALIB sample windows.
 - L6D ionosphere integration into PPP.
 - Triple/quad-frequency PPP-AR behavior.
-- First-class production MADOCALIB bridge behavior beyond the opt-in oracle
-  path.
+- Keep the linked MADOCALIB bridge confined to the non-installed oracle tool
+  and labeled parity CI; it is intentionally not a production workflow.
 
 ## MADOCALIB License Notes
 
