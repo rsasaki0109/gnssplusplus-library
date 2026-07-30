@@ -1647,6 +1647,93 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
             trace_out << ',' << static_cast<int>(candidate.disposition) << '\n';
         }
     }
+
+    // One row per concrete LAMBDA subset attempt.  This is a shadow ledger:
+    // FFRT pass flags are counterfactual only and never feed the solver's
+    // existing static ratio/integrity decision.
+    const std::string attempts_path = path + ".ar_attempts.csv";
+    std::ofstream attempts_out(attempts_path);
+    if (!attempts_out) {
+        std::cerr << "Warning: cannot open AR attempt trace output file "
+                  << attempts_path << "\n";
+        return;
+    }
+    attempts_out
+        << "tow,attempt_index,subset_size,lambda_stage,lambda_search_solved,"
+           "ratio,candidate_position_valid,candidate_x_ecef_m,"
+           "candidate_y_ecef_m,candidate_z_ecef_m,fixed_float_sep_m,"
+           "fixed_imu_pred_sep_m,configured_ratio_pass,effective_ratio_pass";
+    for (const int scale : {1, 2, 4, 8, 16}) {
+        attempts_out << ",bsr_q" << scale
+                     << ",ffrt_min_ratio_q" << scale
+                     << ",ffrt_supported_q" << scale
+                     << ",ffrt_accepts_any_candidate_q" << scale
+                     << ",ffrt_pass_q" << scale;
+    }
+    attempts_out
+        << ",surplus_eval,surplus_pass,surplus_level,surplus_used,"
+           "postfit_ddcp_n,postfit_ddcp_rms_m,postfit_ddcp_max_norm,"
+           "postfit_ddcp_chi2_dof,static_fixed_decision_pass,"
+           "accepted_by_existing_pipeline\n";
+    attempts_out.precision(17);
+    for (const auto& epoch : r.epoch_diagnostics) {
+        for (const auto& attempt :
+             epoch.ambiguity_resolution_attempt_trace) {
+            attempts_out
+                << epoch.time.tow << ',' << attempt.attempt_index << ','
+                << attempt.subset_size << ',' << attempt.lambda_stage << ','
+                << (attempt.lambda_search_solved ? 1 : 0) << ','
+                << attempt.ratio << ','
+                << (attempt.candidate_position_valid ? 1 : 0) << ',';
+            if (attempt.candidate_position_valid) {
+                attempts_out
+                    << attempt.candidate_position_ecef.x() << ','
+                    << attempt.candidate_position_ecef.y() << ','
+                    << attempt.candidate_position_ecef.z();
+            } else {
+                attempts_out << ",,";
+            }
+            attempts_out
+                << ',' << attempt.fixed_float_separation_m
+                << ',' << attempt.fixed_imu_prediction_separation_m
+                << ',' << (attempt.configured_ratio_pass ? 1 : 0)
+                << ',' << (attempt.effective_ratio_pass ? 1 : 0);
+            for (std::size_t scale_index = 0;
+                 scale_index <
+                 libgnss::FGOProcessor::
+                     AmbiguityResolutionAttemptTrace::
+                         covariance_scales.size();
+                 ++scale_index) {
+                attempts_out
+                    << ','
+                    << attempt.bootstrapped_success_rate[scale_index]
+                    << ','
+                    << attempt.ffrt_minimum_ratio[scale_index]
+                    << ','
+                    << (attempt.ffrt_supported[scale_index] ? 1 : 0)
+                    << ','
+                    << (attempt.ffrt_accepts_any_candidate[scale_index]
+                            ? 1
+                            : 0)
+                    << ','
+                    << (attempt.ffrt_pass[scale_index] ? 1 : 0);
+            }
+            attempts_out
+                << ',' << (attempt.surplus_evaluated ? 1 : 0)
+                << ',' << (attempt.surplus_pass ? 1 : 0)
+                << ',' << attempt.surplus_fallback_level
+                << ',' << attempt.surplus_used
+                << ',' << attempt.postfit_ddcp_factors
+                << ',' << attempt.postfit_ddcp_rms_m
+                << ',' << attempt.postfit_ddcp_max_normalized
+                << ',' << attempt.postfit_ddcp_chi2_per_dof
+                << ','
+                << (attempt.static_fixed_decision_pass ? 1 : 0)
+                << ','
+                << (attempt.accepted_by_existing_pipeline ? 1 : 0)
+                << '\n';
+        }
+    }
 }
 
 // Populate problem.imu from an imu.csv + the already-built FGOProblem epochs.

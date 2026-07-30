@@ -6,6 +6,7 @@
 #include <libgnss++/core/types.hpp>
 #include <libgnss++/io/imu.hpp>
 
+#include <array>
 #include <cstddef>
 #include <limits>
 #include <map>
@@ -1934,6 +1935,43 @@ public:
             AmbiguityCandidateDisposition::LambdaEligible;
     };
 
+    /// Behavior-neutral trace for one concrete LAMBDA subset attempt.
+    ///
+    /// The five covariance scales deliberately match the safe-library
+    /// shadow telemetry.  They expose covariance sensitivity before any
+    /// scale is allowed to influence an FGO FIX/FLOAT decision.
+    struct AmbiguityResolutionAttemptTrace {
+        inline static constexpr std::array<double, 5> covariance_scales{
+            1.0, 2.0, 4.0, 8.0, 16.0};
+
+        int attempt_index = -1;
+        int subset_size = 0;
+        int lambda_stage = -1;  ///< PPC cascade: 0=GQEBR ... 5=GQ
+        bool lambda_search_solved = false;
+        double ratio = 0.0;
+        std::array<double, 5> bootstrapped_success_rate{};
+        std::array<double, 5> ffrt_minimum_ratio{};
+        std::array<bool, 5> ffrt_supported{};
+        std::array<bool, 5> ffrt_accepts_any_candidate{};
+        std::array<bool, 5> ffrt_pass{};
+        bool candidate_position_valid = false;
+        Vector3d candidate_position_ecef = Vector3d::Zero();
+        double fixed_float_separation_m = 0.0;
+        double fixed_imu_prediction_separation_m = 0.0;
+        bool configured_ratio_pass = false;
+        bool effective_ratio_pass = false;
+        bool surplus_evaluated = false;
+        bool surplus_pass = false;
+        int surplus_fallback_level = -1;
+        int surplus_used = 0;
+        int postfit_ddcp_factors = 0;
+        double postfit_ddcp_rms_m = 0.0;
+        double postfit_ddcp_max_normalized = 0.0;
+        double postfit_ddcp_chi2_per_dof = 0.0;
+        bool static_fixed_decision_pass = false;
+        bool accepted_by_existing_pipeline = false;
+    };
+
     /// Per-epoch fixed-lag integrity state.  These values expose why an epoch
     /// did or did not fix, rather than only reporting the final FIX/FLOAT label.
     struct FGOEpochDiagnostics {
@@ -2014,6 +2052,8 @@ public:
         int ambiguity_candidates_excluded_fde = 0;
         int ambiguity_candidates_excluded_stale = 0;
         std::vector<AmbiguityCandidateTrace> ambiguity_candidate_trace;
+        std::vector<AmbiguityResolutionAttemptTrace>
+            ambiguity_resolution_attempt_trace;
         int ambiguity_generation_bumps_hold = 0;
         int ambiguity_generation_bumps_fde = 0;
         int ambiguity_generation_bumps_reset = 0;

@@ -132,6 +132,21 @@ satellite/signal trace is written beside it as
 These fields only report decisions already made by the solver; enabling the
 CSV dump does not alter candidate selection or FIX/FLOAT decisions.
 
+The same dump also writes `<path>.ar_attempts.csv`, with one row for every
+concrete LAMBDA subset search. It records the subset/stage, integer candidate
+position, static-ratio and existing-pipeline verdicts, surplus/post-fit
+evidence, and covariance-only bootstrapped success rate (BSR) at covariance
+scales 1/2/4/8/16. `ffrt_min_ratio_q*`,
+`ffrt_accepts_any_candidate_q*`, and `ffrt_pass_q*` are shadow results for a
+tolerable failure rate of 0.001 using the published
+[Hou–Verhagen–Wu FFRT](https://doi.org/10.3390/s16070945) coefficients.
+They never promote or demote a solution. Multiple covariance scales are
+reported because success-rate PAR is sensitive to stochastic-model
+optimism; no scale is selected until Tokyo1 development and independent
+Tokyo2 validation are complete. This follows the model/data separation
+described by the
+[two-step success-rate criterion](https://doi.org/10.1007/s10291-022-01317-0).
+
 #### Surplus-satellite rescue integrity
 
 LAMBDA candidates that fall short of the ratio gate can be rescued by an

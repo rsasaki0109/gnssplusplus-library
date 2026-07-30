@@ -587,6 +587,87 @@ TEST(FGOAmbiguityCandidateTelemetryTest, ReportsBuildTimeExcludedCarrierRows) {
         FGOProcessor::AmbiguityCandidateDisposition::BuildTimeExcluded);
 }
 
+TEST(FGOAmbiguityAttemptTelemetryTest,
+     ReportsFfrtShadowWithoutChangingStaticRatioDecision) {
+    CpHoldTestOptions opt;
+    opt.num_epochs = 8;
+    opt.satellites = gtsamParitySatelliteGeometry();
+    opt.satellites.emplace_back(-20000000.0, 10000000.0, 12000000.0);
+    opt.satellites.emplace_back(9000000.0, 20000000.0, 15000000.0);
+    const auto problem = makeCpHoldFixedLagProblem(opt);
+
+    FGOProcessor::FGOConfig config = makeCpHoldBaseConfig();
+    config.use_lambda_ambiguity_fix = true;
+    config.lambda_ratio_threshold =
+        std::numeric_limits<double>::max();
+    config.min_fixed_ambiguities = 5;
+
+    const FGOProcessor processor(config);
+    const FGOProcessor::FGOResult result =
+        processor.optimizeProblem(problem);
+
+    ASSERT_EQ(result.epoch_diagnostics.size(), problem.epochs.size());
+    bool saw_solved_attempt = false;
+    for (std::size_t epoch_index = 0;
+         epoch_index < result.epoch_diagnostics.size();
+         ++epoch_index) {
+        const auto& epoch = result.epoch_diagnostics[epoch_index];
+        EXPECT_EQ(
+            epoch.ambiguity_resolution_attempt_trace.size(),
+            static_cast<std::size_t>(epoch.lambda_attempts));
+        for (const auto& attempt :
+             epoch.ambiguity_resolution_attempt_trace) {
+            EXPECT_EQ(attempt.subset_size, 7);
+            EXPECT_EQ(attempt.lambda_stage, -1);
+            if (!attempt.lambda_search_solved) continue;
+            saw_solved_attempt = true;
+            EXPECT_TRUE(std::isfinite(attempt.ratio));
+            EXPECT_TRUE(attempt.candidate_position_valid);
+            EXPECT_TRUE(
+                attempt.candidate_position_ecef.allFinite());
+            EXPECT_FALSE(attempt.configured_ratio_pass);
+            EXPECT_FALSE(attempt.effective_ratio_pass);
+            EXPECT_FALSE(attempt.static_fixed_decision_pass);
+            EXPECT_FALSE(attempt.accepted_by_existing_pipeline);
+            EXPECT_NE(
+                result.solution.solutions[epoch_index].status,
+                SolutionStatus::FIXED);
+            for (std::size_t scale_index = 0;
+                 scale_index <
+                 FGOProcessor::AmbiguityResolutionAttemptTrace::
+                     covariance_scales.size();
+                 ++scale_index) {
+                EXPECT_TRUE(std::isfinite(
+                    attempt.bootstrapped_success_rate[scale_index]));
+                EXPECT_GE(
+                    attempt.bootstrapped_success_rate[scale_index],
+                    0.0);
+                EXPECT_LE(
+                    attempt.bootstrapped_success_rate[scale_index],
+                    1.0);
+                EXPECT_TRUE(
+                    attempt.ffrt_supported[scale_index]);
+                EXPECT_EQ(
+                    attempt.ffrt_pass[scale_index],
+                    attempt.ffrt_accepts_any_candidate[scale_index] &&
+                        std::isfinite(attempt.ratio) &&
+                        attempt.ratio >=
+                            attempt.ffrt_minimum_ratio[scale_index]);
+                if (!attempt.ffrt_accepts_any_candidate[scale_index]) {
+                    EXPECT_FALSE(attempt.ffrt_pass[scale_index]);
+                }
+                if (scale_index > 0) {
+                    EXPECT_LE(
+                        attempt.bootstrapped_success_rate[scale_index],
+                        attempt.bootstrapped_success_rate[
+                            scale_index - 1]);
+                }
+            }
+        }
+    }
+    EXPECT_TRUE(saw_solved_attempt);
+}
+
 TEST(FGOCpHoldFsmTest, DefaultOffIsNoOp) {
     CpHoldTestOptions opt;
     opt.carrier_corrupt_epochs = {5, 6, 7, 8, 9, 10, 11, 12};

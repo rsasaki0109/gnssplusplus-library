@@ -3520,14 +3520,70 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
 
                         Eigen::VectorXd fixed_amb;
                         double ratio = 0.0;
+                        auto& attempt_trace =
+                            epoch_diagnostics[i]
+                                .ambiguity_resolution_attempt_trace
+                                .emplace_back();
+                        attempt_trace.attempt_index =
+                            static_cast<int>(
+                                epoch_diagnostics[i]
+                                    .ambiguity_resolution_attempt_trace
+                                    .size()) -
+                            1;
+                        attempt_trace.subset_size = subset;
+                        attempt_trace.lambda_stage =
+                            lambda_stages[lambda_order_idx];
                         ++lambda_attempts;
                         ++result.diagnostics.lambda_ambiguity_attempts;
                         ++epoch_diagnostics[i].lambda_attempts;
                         result.diagnostics.lambda_ambiguity_candidates +=
                             static_cast<std::size_t>(subset);
-                        if (!lambdaSearch(sub_float, sub_q, fixed_amb, ratio)) {
+                        LambdaCandidateDiagnostics lambda_diagnostics;
+                        if (!lambdaSearchTopK(
+                                sub_float, sub_q, 2, lambda_diagnostics)) {
                             if (!config.use_fixed_lag_partial_lambda) break;
                             continue;
+                        }
+                        fixed_amb = lambda_diagnostics.candidates.col(0);
+                        const double best_squared_residual =
+                            lambda_diagnostics.squared_residuals(0);
+                        ratio = best_squared_residual > 0.0
+                                    ? lambda_diagnostics.squared_residuals(1) /
+                                          best_squared_residual
+                                    : 0.0;
+                        attempt_trace.lambda_search_solved = true;
+                        attempt_trace.ratio = ratio;
+                        for (std::size_t scale_index = 0;
+                             scale_index <
+                             FGOProcessor::AmbiguityResolutionAttemptTrace::
+                                 covariance_scales.size();
+                             ++scale_index) {
+                            const double bsr = bootstrappedSuccessRate(
+                                lambda_diagnostics.conditional_variances,
+                                FGOProcessor::
+                                    AmbiguityResolutionAttemptTrace::
+                                        covariance_scales[scale_index]);
+                            attempt_trace.bootstrapped_success_rate
+                                [scale_index] = bsr;
+                            FixedFailureRateRatioThreshold ffrt;
+                            const bool supported =
+                                fixedFailureRateRatioThreshold(
+                                    subset, bsr, 0.001, ffrt);
+                            attempt_trace.ffrt_supported[scale_index] =
+                                supported;
+                            attempt_trace.ffrt_accepts_any_candidate
+                                [scale_index] =
+                                supported && ffrt.accepts_any_candidate;
+                            attempt_trace.ffrt_minimum_ratio[scale_index] =
+                                supported
+                                    ? ffrt.minimum_second_to_best_ratio
+                                    : std::numeric_limits<double>::infinity();
+                            attempt_trace.ffrt_pass[scale_index] =
+                                attempt_trace.ffrt_accepts_any_candidate
+                                    [scale_index] &&
+                                std::isfinite(ratio) &&
+                                ratio >=
+                                    ffrt.minimum_second_to_best_ratio;
                         }
                         result.diagnostics.lambda_ambiguity_fix_solved = true;
                         epoch_diagnostics[i].ar_outcome =
@@ -3555,6 +3611,17 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                                         epoch_diagnostics[i].fixed_imu_prediction_separation_m =
                                             (provisional_fixed_ant - Eigen::Vector3d(
                                                  antennaOf(pose_seed))).norm();
+                                        attempt_trace.candidate_position_valid =
+                                            true;
+                                        attempt_trace.candidate_position_ecef =
+                                            provisional_fixed_ant;
+                                        attempt_trace.fixed_float_separation_m =
+                                            epoch_diagnostics[i]
+                                                .fixed_float_separation_m;
+                                        attempt_trace
+                                            .fixed_imu_prediction_separation_m =
+                                            epoch_diagnostics[i]
+                                                .fixed_imu_prediction_separation_m;
                                         if (has_antenna_position_cov) {
                                             provisional_fixed_cov =
                                                 antenna_position_cov -
@@ -3688,6 +3755,10 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                             std::isfinite(ratio) &&
                             (effective_ratio_threshold <= 0.0 ||
                              ratio > effective_ratio_threshold);
+                        attempt_trace.configured_ratio_pass =
+                            configured_ratio_pass;
+                        attempt_trace.effective_ratio_pass =
+                            normal_ratio_pass;
                         // --- Surplus-satellite independent integrity
                         // validation (use_surplus_satellite_validation).
                         // Evaluated for EVERY attempt (both the established
@@ -3710,6 +3781,13 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                                     surplus_pool, fixed_cycles_by_index, provisional_fixed_ant, config);
                             surplus_evaluated = surplus_diag.evaluated;
                             surplus_pass = surplus_diag.pass;
+                            attempt_trace.surplus_evaluated =
+                                surplus_evaluated;
+                            attempt_trace.surplus_pass = surplus_pass;
+                            attempt_trace.surplus_fallback_level =
+                                surplus_diag.fallback_level;
+                            attempt_trace.surplus_used =
+                                surplus_diag.surplus_used;
                             epoch_diagnostics[i].surplus_validation_evaluated = surplus_evaluated;
                             epoch_diagnostics[i].surplus_validation_pass = surplus_pass;
                             epoch_diagnostics[i].surplus_validation_fallback_level =
@@ -4109,6 +4187,22 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                                  : (established_path_pass || incremental_integrity_pass)) &&
                             !defer_relaxed_fix_to_existing_hold &&
                             relaxed_plausibility_pass && fixed_amb.size() == subset;
+                        if (attempt_trace.candidate_position_valid) {
+                            attempt_trace.postfit_ddcp_factors =
+                                epoch_diagnostics[i]
+                                    .fixed_postfit_ddcp_factors;
+                            attempt_trace.postfit_ddcp_rms_m =
+                                epoch_diagnostics[i]
+                                    .fixed_postfit_ddcp_rms_m;
+                            attempt_trace.postfit_ddcp_max_normalized =
+                                epoch_diagnostics[i]
+                                    .fixed_postfit_ddcp_max_normalized;
+                            attempt_trace.postfit_ddcp_chi2_per_dof =
+                                epoch_diagnostics[i]
+                                    .fixed_postfit_ddcp_chi2_per_dof;
+                        }
+                        attempt_trace.static_fixed_decision_pass =
+                            fixed_decision_pass;
                         bool integer_constrained_pass = true;
                         if (fixed_decision_pass &&
                             config.use_integer_constrained_reoptimization) {
@@ -4192,6 +4286,8 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                         }
                         const bool fixed_epoch =
                             fixed_decision_pass && integer_constrained_pass;
+                        attempt_trace.accepted_by_existing_pipeline =
+                            fixed_epoch;
                         // Record float ambiguity values for the result mapping
                         // (full candidate set, once).
                         if (!float_cycles_recorded) {
