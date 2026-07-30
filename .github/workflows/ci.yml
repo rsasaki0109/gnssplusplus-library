@@ -575,8 +575,8 @@ jobs:
           -DMADOCALIB_PARITY_LINK=ON \
           -DMADOCALIB_ROOT_DIR="${GITHUB_WORKSPACE}/external/madocalib"
 
-    - name: Build MadocaParity tests and bridge tool
-      run: cmake --build build-madoca-parity --config Release --parallel --target gnss_madoca_parity_tests gnss_ppp
+    - name: Build MadocaParity tests and oracle tool
+      run: cmake --build build-madoca-parity --config Release --parallel --target gnss_madoca_parity_tests gnss_madocalib_oracle
 
     - name: Show MADOCA ccache stats
       run: ccache -s
@@ -589,7 +589,8 @@ jobs:
       working-directory: build-madoca-parity
       run: |
         ROOT="${GITHUB_WORKSPACE}/external/madocalib"
-        ./apps/gnss_ppp \
+        ./apps/gnss_madocalib_oracle --help | grep -q -- "--madocalib-bridge"
+        ./apps/gnss_madocalib_oracle \
           --madocalib-bridge \
           --obs "$ROOT/sample_data/data/rinex/MIZU00JPN_R_20250910000_01D_30S_MO.rnx" \
           --nav "$ROOT/sample_data/data/rinex/BRDM00DLR_S_20250910000_01D_MN.rnx" \
@@ -607,7 +608,7 @@ jobs:
         test "$rows" -eq 118
         non_q6="$(awk '$0 !~ /^%/ && NF > 0 && $6 != 6 {n++} END {print n+0}' madocalib_bridge_smoke.pos)"
           test "$non_q6" -eq 0
-          ./apps/gnss_ppp \
+          ./apps/gnss_madocalib_oracle \
             --madocalib-bridge \
             --madocalib-profile pppar \
             --obs "$ROOT/sample_data/data/rinex/MIZU00JPN_R_20250910000_01D_30S_MO.rnx" \
@@ -624,7 +625,7 @@ jobs:
           grep -q '"madocalib_profile": "pppar"' madocalib_pppar_smoke.json
           fixed="$(awk '$0 !~ /^%/ && NF > 0 && $6 == 1 {n++} END {print n+0}' madocalib_pppar_smoke.pos)"
           test "$fixed" -gt 0
-          ./apps/gnss_ppp \
+          ./apps/gnss_madocalib_oracle \
             --kinematic \
             --enable-ar \
             --ar-method per-freq \
@@ -651,7 +652,7 @@ jobs:
           grep -q '"convergence_policy": "legacy-3d"' native_pppar_smoke.json
           grep -q '"ar_stage_last":' native_pppar_smoke.json
           grep -q '"ar_per_frequency_attempts":' native_pppar_smoke.json
-          ./apps/gnss_ppp \
+          ./apps/gnss_madocalib_oracle \
             --kinematic \
             --enable-ar \
             --ar-method per-freq \
@@ -706,7 +707,7 @@ jobs:
           status_mismatches="$(awk -F, 'NR > 1 && !(($5 == 1 && $6 == 6) || ($5 == 6 && $6 == 5)) {n++} END {print n+0}' madoca_pppar_solution_matches.csv)"
           test "$status_mismatches" -eq 0
           python3 -c 'import json; d=json.load(open("madoca_pppar_solution_diff.json")); assert d["comparison"]["delta_rms_3d_m"] <= 0.2; assert d["events"]["max_delta_3d"]["delta_3d_m"] <= 1.0'
-          ./apps/gnss_ppp \
+          ./apps/gnss_madocalib_oracle \
             --madocalib-bridge \
             --madocalib-profile pppar-ion \
             --obs "$ROOT/sample_data/data/rinex/MIZU00JPN_R_20250910000_01D_30S_MO.rnx" \
@@ -722,7 +723,7 @@ jobs:
             --out madocalib_pppar_ion_smoke.pos \
             --summary-json madocalib_pppar_ion_smoke.json \
             --quiet
-          ./apps/gnss_ppp \
+          ./apps/gnss_madocalib_oracle \
             --kinematic \
             --enable-ar \
             --ar-method per-freq \
@@ -768,7 +769,7 @@ jobs:
     - name: Run required MADOCA release matrix
       run: |
         python3 scripts/ci/run_madoca_release_matrix.py \
-          --binary build-madoca-parity/apps/gnss_ppp \
+          --binary build-madoca-parity/apps/gnss_madocalib_oracle \
           --data-root external/madocalib/sample_data/data \
           --output-dir output/madoca_release_matrix_required \
           --hours 1,6 \
@@ -778,7 +779,7 @@ jobs:
       if: github.event_name == 'workflow_dispatch'
       run: |
         python3 scripts/ci/run_madoca_release_matrix.py \
-          --binary build-madoca-parity/apps/gnss_ppp \
+          --binary build-madoca-parity/apps/gnss_madocalib_oracle \
           --data-root external/madocalib/sample_data/data \
           --output-dir output/madoca_release_matrix_24h \
           --hours 24 \

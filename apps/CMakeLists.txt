@@ -70,6 +70,16 @@ target_link_libraries(gnss_solve PRIVATE gnss_lib gnss_lib_noopt Threads::Thread
 add_executable(gnss_ppp ${GNSS_NATIVE_DIR}/gnss_ppp.cpp)
 target_link_libraries(gnss_ppp PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
 
+if(MADOCALIB_PARITY_LINK)
+    # The linked MADOCALIB runtime is an oracle-only CI surface. Keep its
+    # command-line selector out of the installed production gnss_ppp binary.
+    add_executable(gnss_madocalib_oracle ${GNSS_NATIVE_DIR}/gnss_ppp.cpp)
+    target_compile_definitions(
+        gnss_madocalib_oracle PRIVATE GNSSPP_MADOCALIB_ORACLE_CLI=1)
+    target_link_libraries(
+        gnss_madocalib_oracle PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
+endif()
+
 add_executable(gnss_visibility ${GNSS_NATIVE_DIR}/gnss_visibility.cpp)
 target_link_libraries(gnss_visibility PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
 
