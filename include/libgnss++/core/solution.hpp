@@ -105,6 +105,9 @@ struct PositionSolution {
      * @brief Check if solution is valid
      */
     bool isValid() const {
+        if (status == SolutionStatus::PROPAGATED) {
+            return position_ecef.allFinite();
+        }
         return status != SolutionStatus::NONE && num_satellites >= 4;
     }
     

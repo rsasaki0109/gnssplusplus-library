@@ -112,6 +112,7 @@ void DDIMUBridge::acceptPropagatedINS(
 }
 
 UpdateResult DDIMUBridge::update(const std::vector<DDObservation>& observations) {
+    last_joint_posterior_valid_ = false;
     // A DD ambiguity is only meaningful for its current satellite/reference
     // arc. Retire states that disappeared or whose reference changed before
     // augmenting the current epoch. Keeping them forever makes the covariance
@@ -179,6 +180,11 @@ UpdateResult DDIMUBridge::update(const std::vector<DDObservation>& observations)
                                     config_.max_nis_per_observation);
     result.joint_nis_per_observation = result.nis_per_observation;
     result.carrier_update_accepted = result.ok && carrier_rows > 0;
+    if (result.ok && carrier_rows > 0) {
+        last_ins_prediction_ = pre_joint_state;
+        last_joint_posterior_ = state_;
+        last_joint_posterior_valid_ = true;
+    }
 
     // A bad carrier arc must not discard an otherwise healthy code-DD update.
     // First attempt the genuinely joint update; if it fails, retain the live
@@ -207,6 +213,193 @@ UpdateResult DDIMUBridge::update(const std::vector<DDObservation>& observations)
         result.joint_nis_per_observation = joint_nis;
     }
     if (result.ok) consecutive_innovation_rejections_ = 0;
+    return result;
+}
+
+SSEPartialARResult DDIMUBridge::evaluateSSEPartialAmbiguities(
+    const std::vector<DDObservation>& observations,
+    bool external_solution_healthy) const {
+    SSEPartialARResult result;
+    if (!external_solution_healthy ||
+        !last_joint_posterior_valid_ ||
+        last_joint_posterior_.augmented_covariance.rows() <=
+            fusion_index::SIZE) {
+        return result;
+    }
+    result.available = true;
+    std::vector<int> indices;
+    for (const auto& observation : observations) {
+        const auto it = std::find_if(
+            last_joint_posterior_.ambiguities.begin(),
+            last_joint_posterior_.ambiguities.end(),
+            [&](const AmbiguityErrorState& ambiguity) {
+                return ambiguity.key == observation.key;
+            });
+        if (it == last_joint_posterior_.ambiguities.end() ||
+            observation.cycle_slip ||
+            observation.lock_count < config_.partial_ar_min_lock_count) {
+            continue;
+        }
+        indices.push_back(static_cast<int>(
+            std::distance(
+                last_joint_posterior_.ambiguities.begin(), it)));
+    }
+    std::sort(indices.begin(), indices.end(), [&](int a, int b) {
+        const auto quality = [&](int index) {
+            const auto& key =
+                last_joint_posterior_.ambiguities[index].key;
+            const auto it = std::find_if(
+                observations.begin(), observations.end(),
+                [&](const DDObservation& observation) {
+                    return observation.key == key;
+                });
+            if (it == observations.end()) {
+                return -std::numeric_limits<double>::infinity();
+            }
+            const double variance =
+                std::max(1e-9, it->carrier_variance_m2);
+            return 2.0 * it->elevation_rad +
+                   0.02 * it->lock_count -
+                   std::abs(it->posterior_abs_residual_m) /
+                       std::sqrt(variance);
+        };
+        return quality(a) > quality(b);
+    });
+    indices.erase(
+        std::unique(indices.begin(), indices.end()), indices.end());
+    result.attempted = static_cast<int>(indices.size());
+
+    const int minimum_sse_ambiguities = std::max(
+        config_.partial_ar_min_ambiguities,
+        config_.sse_min_fixed_ambiguities);
+    for (int count = static_cast<int>(indices.size());
+         count >= minimum_sse_ambiguities; --count) {
+        ++result.subsets_evaluated;
+        Eigen::VectorXd float_ambiguities(count);
+        Eigen::MatrixXd Qaa(count, count);
+        Eigen::MatrixXd Pxa(3, count);
+        for (int row = 0; row < count; ++row) {
+            const int ambiguity = indices[row];
+            float_ambiguities[row] =
+                last_joint_posterior_.ambiguities[ambiguity]
+                    .float_value_cycles;
+            Pxa.col(row) =
+                last_joint_posterior_.augmented_covariance.block(
+                    fusion_index::POSITION,
+                    fusion_index::SIZE + ambiguity, 3, 1);
+            for (int column = 0; column < count; ++column) {
+                Qaa(row, column) =
+                    last_joint_posterior_.augmented_covariance(
+                        fusion_index::SIZE + ambiguity,
+                        fusion_index::SIZE + indices[column]);
+            }
+        }
+        Qaa = (Qaa + Qaa.transpose()) * 0.5;
+        Eigen::LDLT<Eigen::MatrixXd> ambiguity_decomposition(Qaa);
+        if (ambiguity_decomposition.info() != Eigen::Success ||
+            (ambiguity_decomposition.vectorD().array() <= 1e-12).any()) {
+            continue;
+        }
+        LambdaCandidateDiagnostics search;
+        if (!lambdaSearchTopK(
+                float_ambiguities, Qaa, 2, search) ||
+            search.candidates.cols() < 1 ||
+            search.squared_residuals.size() < 2) {
+            continue;
+        }
+        const double ratio =
+            search.squared_residuals(0) > 0.0
+                ? search.squared_residuals(1) /
+                      search.squared_residuals(0)
+                : 0.0;
+        const double bsr = bootstrappedSuccessRate(
+            search.conditional_variances,
+            config_.sse_ffrt_covariance_scale);
+        FixedFailureRateRatioThreshold ffrt;
+        if (!fixedFailureRateRatioThreshold(
+                count, bsr, 0.001, ffrt)) {
+            continue;
+        }
+        result.ratio = std::max(result.ratio, ratio);
+        result.bootstrapped_success_rate =
+            std::max(result.bootstrapped_success_rate, bsr);
+        if (std::isfinite(ffrt.minimum_second_to_best_ratio)) {
+            result.ffrt_minimum_ratio =
+                ffrt.minimum_second_to_best_ratio;
+        }
+        if (!ffrt.accepts_any_candidate ||
+            !std::isfinite(ratio) ||
+            ratio < ffrt.minimum_second_to_best_ratio) {
+            continue;
+        }
+        ++result.ratio_passed_subsets;
+        const Eigen::VectorXd fixed =
+            search.candidates.col(0);
+        const Eigen::VectorXd ambiguity_innovation =
+            fixed - float_ambiguities;
+        const Eigen::VectorXd solved_innovation =
+            ambiguity_decomposition.solve(ambiguity_innovation);
+        if (ambiguity_decomposition.info() != Eigen::Success ||
+            !solved_innovation.allFinite()) {
+            continue;
+        }
+        const Eigen::Vector3d fixed_position =
+            last_joint_posterior_.eskf.nominal.position_enu +
+            Pxa * solved_innovation;
+        const Eigen::Vector3d separation =
+            fixed_position -
+            last_ins_prediction_.eskf.nominal.position_enu;
+        const Eigen::Matrix3d fixed_position_covariance =
+            last_joint_posterior_.augmented_covariance.block<3, 3>(
+                fusion_index::POSITION,
+                fusion_index::POSITION) -
+            Pxa * ambiguity_decomposition.solve(Pxa.transpose());
+        // The carrier posterior and external INS prediction are not
+        // independent: the posterior was formed from that INS prior. For a
+        // linear Kalman update Cov(x_post, x_prior) = P_post, so the
+        // solution-separation covariance is P_prior - P_post. Treating them
+        // as independent and adding the covariances makes the gate
+        // dangerously permissive.
+        Eigen::Matrix3d separation_covariance =
+            last_ins_prediction_.augmented_covariance.block<3, 3>(
+                fusion_index::POSITION,
+                fusion_index::POSITION) -
+            fixed_position_covariance;
+        separation_covariance =
+            (separation_covariance +
+             separation_covariance.transpose()) *
+            0.5;
+        Eigen::LDLT<Eigen::Matrix3d> separation_decomposition(
+            separation_covariance);
+        if (separation_decomposition.info() != Eigen::Success ||
+            (separation_decomposition.vectorD().array() <= 1e-12).any()) {
+            continue;
+        }
+        const Eigen::Vector3d normalized =
+            separation_decomposition.solve(separation);
+        if (separation_decomposition.info() != Eigen::Success ||
+            !normalized.allFinite()) {
+            continue;
+        }
+        const double statistic_per_dof =
+            separation.dot(normalized) / 3.0;
+        if (!std::isfinite(statistic_per_dof)) {
+            continue;
+        }
+        result.statistic_per_dof = statistic_per_dof;
+        result.position_separation_m = separation.norm();
+        result.fixed_position_enu = fixed_position;
+        if (statistic_per_dof >
+            config_.sse_max_statistic_per_dof) {
+            ++result.separation_rejected_subsets;
+            continue;
+        }
+        result.passed = true;
+        result.fixed_count = count;
+        result.dropped_count =
+            static_cast<int>(indices.size()) - count;
+        return result;
+    }
     return result;
 }
 

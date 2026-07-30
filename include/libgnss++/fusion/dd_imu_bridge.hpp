@@ -72,7 +72,11 @@ struct BridgeConfig {
     double lambda_ratio_threshold = 3.0;
     int partial_ar_min_ambiguities = 3;
     int partial_ar_min_lock_count = 300;
+    int sse_min_fixed_ambiguities = 10;
     double fixed_ambiguity_sigma_cycles = 0.01;
+    double sse_ffrt_covariance_scale = 16.0;
+    /// Chi-square(3) 99.9% quantile divided by three position DOF.
+    double sse_max_statistic_per_dof = 5.422;
     double soft_reset_max_innovation_m = 30.0;
     double soft_reset_position_sigma_m = 5.0;
     double rejected_reset_covariance_scale = 4.0;
@@ -97,6 +101,23 @@ struct PartialARResult {
     double ratio = 0.0;
 };
 
+struct SSEPartialARResult {
+    bool available = false;
+    bool passed = false;
+    int attempted = 0;
+    int subsets_evaluated = 0;
+    int ratio_passed_subsets = 0;
+    int separation_rejected_subsets = 0;
+    int fixed_count = 0;
+    int dropped_count = 0;
+    double ratio = 0.0;
+    double bootstrapped_success_rate = 0.0;
+    double ffrt_minimum_ratio = 0.0;
+    double statistic_per_dof = 0.0;
+    double position_separation_m = 0.0;
+    Eigen::Vector3d fixed_position_enu = Eigen::Vector3d::Zero();
+};
+
 enum class SoftResetAction { REJECTED, MEASUREMENT_UPDATE, COVARIANCE_INFLATION };
 
 class DDIMUBridge {
@@ -115,6 +136,12 @@ public:
     /// Quality-ordered sequential partial AR; never holds a subset that fails LAMBDA ratio.
     PartialARResult resolvePartialAmbiguities(const std::vector<DDObservation>& observations);
 
+    /// Evaluate a fresh joint carrier posterior against the independent INS
+    /// prediction. This never commits a carrier update or holds integers.
+    SSEPartialARResult evaluateSSEPartialAmbiguities(
+        const std::vector<DDObservation>& observations,
+        bool external_solution_healthy = true) const;
+
     /// Preserve a valid propagated state during reacquisition; never hard-overwrite position.
     SoftResetAction softResetPosition(const Eigen::Vector3d& spp_position_enu,
                                       bool propagated_state_valid);
@@ -131,6 +158,9 @@ private:
     void inject(const Eigen::VectorXd& correction);
 
     TightlyCoupledState state_;
+    TightlyCoupledState last_joint_posterior_;
+    TightlyCoupledState last_ins_prediction_;
+    bool last_joint_posterior_valid_ = false;
     BridgeConfig config_;
     int consecutive_innovation_rejections_ = 0;
 };

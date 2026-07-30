@@ -53,6 +53,7 @@ struct MeasurementSystem {
     // live in the m/s domain and must not be judged by the metre-domain
     // threshold.
     std::vector<double> row_outlier_thresholds;
+    std::vector<MeasurementKind> row_kinds;
 };
 
 struct MeasurementDiagnostics {

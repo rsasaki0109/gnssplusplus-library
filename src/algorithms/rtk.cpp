@@ -1,6 +1,8 @@
 #include <libgnss++/algorithms/rtk.hpp>
 #include <libgnss++/algorithms/rtk_ar_evaluation.hpp>
 #include <libgnss++/algorithms/rtk_ar_selection.hpp>
+#include <libgnss++/algorithms/disjoint_satellite_fix_evidence.hpp>
+#include <libgnss++/algorithms/fix_failure_budget.hpp>
 #include <libgnss++/algorithms/lambda.hpp>
 #include <libgnss++/algorithms/rtk_cp_pr_gate.hpp>
 #include <libgnss++/algorithms/rtk_ddpr_anchor.hpp>
@@ -18,6 +20,7 @@
 #include <iostream>
 #include <iterator>
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <limits>
 #include <map>
@@ -289,12 +292,30 @@ static inline double geodist_range(const Vector3d& rs, const Vector3d& rr) {
     return geodist(rs, rr);
 }
 
-RTKProcessor::RTKProcessor() : spp_processor_(makeRTKSppProcessor(rtk_config_)) { filter_initialized_ = false; }
+RTKProcessor::RTKProcessor()
+    : spp_processor_(makeRTKSppProcessor(rtk_config_)),
+      l1_l5_mw_arc_bank_(
+          rtk_config_.lambda_l1_l5_wlnl_causal_arc_config),
+      ambiguity_arc_bank_(
+          rtk_config_.lambda_causal_arc_readiness_config) {
+    filter_initialized_ = false;
+}
 RTKProcessor::RTKProcessor(const RTKConfig& rtk_config)
-    : rtk_config_(rtk_config), spp_processor_(makeRTKSppProcessor(rtk_config_)) { filter_initialized_ = false; }
+    : rtk_config_(rtk_config),
+      spp_processor_(makeRTKSppProcessor(rtk_config_)),
+      l1_l5_mw_arc_bank_(
+          rtk_config_.lambda_l1_l5_wlnl_causal_arc_config),
+      ambiguity_arc_bank_(
+          rtk_config_.lambda_causal_arc_readiness_config) {
+    filter_initialized_ = false;
+}
 
 void RTKProcessor::setRTKConfig(const RTKConfig& config) {
     rtk_config_ = config;
+    l1_l5_mw_arc_bank_ = causal_ambiguity_arc::Bank(
+        rtk_config_.lambda_l1_l5_wlnl_causal_arc_config);
+    ambiguity_arc_bank_ = causal_ambiguity_arc::Bank(
+        rtk_config_.lambda_causal_arc_readiness_config);
     syncSPPConfig();
     // Phase 2a: cmc_suspect_tracker_ is lazily constructed with the
     // cmc_ref_level_m threshold captured at construction time; drop it so a
@@ -330,6 +351,16 @@ void RTKProcessor::reset() {
         static_cast<int>(lock_count_l1_.size() +
                          lock_count_l2_.size() +
                          lock_count_l5_.size());
+    safe_fix_shadow_state_machine_.reset();
+    disjoint_consensus_state_machine_.reset();
+    causal_arc_consensus_state_machine_.reset();
+    satellite_par_consensus_state_machine_.reset();
+    src_par_consensus_state_machine_.reset();
+    inertial_referenced_consensus_state_machine_.reset();
+    multifrequency_consensus_state_machine_.reset();
+    l1_l2_multifrequency_consensus_state_machine_.reset();
+    satellite_par_persistent_satellites_.clear();
+    l1_l5_mw_arc_bank_.reset();
     filter_state_ = RTKState{};
     filter_state_.next_state_idx = REAL_STATES + IONO_STATES;
     ambiguity_states_.clear();
@@ -353,8 +384,10 @@ void RTKProcessor::reset() {
     current_epoch_nlos_fraction_ = std::numeric_limits<double>::quiet_NaN();
     current_sat_data_.clear();
     gf_l1l2_history_.clear();
+    gf_l1l5_history_.clear();
     doppler_phase_history_l1_m_.clear();
     doppler_phase_history_l2_m_.clear();
+    doppler_phase_history_l5_m_.clear();
     code_phase_history_l1_m_.clear();
     code_phase_history_l2_m_.clear();
     tdcp_history_l1_.clear();
@@ -374,6 +407,11 @@ void RTKProcessor::reset() {
     position_correction_sum_sq_m2_ = 0.0;
     consecutive_cp_pr_gate_rejections_ = 0;
     has_last_ddpr_anchor_ = false;
+    code_phase_history_l5_m_.clear();
+    current_epoch_slips_l1_.clear();
+    current_epoch_slips_l2_.clear();
+    current_epoch_slips_l5_.clear();
+    ambiguity_arc_bank_.reset();
     consecutive_fix_count_ = 0;
     consecutive_float_count_ = 0;
     consecutive_nonfix_count_ = 0;
@@ -593,9 +631,14 @@ std::map<SatelliteId, RTKProcessor::SatelliteData> RTKProcessor::collectSatellit
     const ObservationData& rover_obs, const ObservationData& base_obs, const NavigationData& nav) {
     std::map<SatelliteId, SatelliteData> result;
     std::map<SatelliteId, std::vector<const Observation*>> rover_l1, rover_l2, base_l1, base_l2;
-    // Phase 18 Step 3: L5 collection (only populated when enable_l5=true).
+    // L5 may also be collected for the shadow-only L1/L5 WL->NL diagnostic.
+    // In that mode L5 remains available as independent evidence but is not
+    // added to the production filter's states or measurement blocks.
     std::map<SatelliteId, std::vector<const Observation*>> rover_l5, base_l5;
-    const bool l5_enabled = rtk_config_.enable_l5;
+    const bool l5_collection_enabled =
+        rtk_config_.enable_l5 ||
+        rtk_config_.lambda_l1_l5_wlnl_shadow ||
+        rtk_config_.lambda_l2_l5_wlnl_shadow;
     for (const auto& obs : rover_obs.observations) {
         if (!isEnabledRTKSystem(rtk_config_, obs.satellite.system)) continue;
         if (!isUsableRTKSatellite(obs.satellite)) continue;
@@ -607,8 +650,13 @@ std::map<SatelliteId, RTKProcessor::SatelliteData> RTKProcessor::collectSatellit
             obs.has_carrier_phase && obs.has_pseudorange) {
             // When L5 enabled, exclude L5-class obs from L2 slot so they don't
             // displace true L2C signals or pollute the L2 wavelength.
-            if (l5_enabled && isL5RTKSignal(obs.satellite.system, obs.signal)) {
+            if (l5_collection_enabled &&
+                isL5RTKSignal(obs.satellite.system, obs.signal)) {
                 rover_l5[obs.satellite].push_back(&obs);
+                if (!rtk_config_.enable_l5) {
+                    // Preserve the legacy L5-off signal-selection inputs.
+                    rover_l2[obs.satellite].push_back(&obs);
+                }
             } else {
                 rover_l2[obs.satellite].push_back(&obs);
             }
@@ -623,8 +671,12 @@ std::map<SatelliteId, RTKProcessor::SatelliteData> RTKProcessor::collectSatellit
         }
         if (isSecondaryRTKSignal(obs.satellite.system, obs.signal) &&
             obs.has_carrier_phase && obs.has_pseudorange) {
-            if (l5_enabled && isL5RTKSignal(obs.satellite.system, obs.signal)) {
+            if (l5_collection_enabled &&
+                isL5RTKSignal(obs.satellite.system, obs.signal)) {
                 base_l5[obs.satellite].push_back(&obs);
+                if (!rtk_config_.enable_l5) {
+                    base_l2[obs.satellite].push_back(&obs);
+                }
             } else {
                 base_l2[obs.satellite].push_back(&obs);
             }
@@ -728,7 +780,7 @@ std::map<SatelliteId, RTKProcessor::SatelliteData> RTKProcessor::collectSatellit
             }
         }
         // Phase 18 Step 3: L5 pairing (no-op until rtk_config_.enable_l5 is set).
-        if (l5_enabled) {
+        if (l5_collection_enabled) {
             auto r_l5 = rover_l5.find(sat); auto b_l5 = base_l5.find(sat);
             if (r_l5 != rover_l5.end() && b_l5 != base_l5.end()) {
                 const Observation* r_l5_obs = nullptr;
@@ -1154,6 +1206,9 @@ void RTKProcessor::updateTdcpDiagnostics(
 
 void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_data, double dt_s) {
     updateTdcpDiagnostics(sat_data, dt_s);
+    current_epoch_slips_l1_.clear();
+    current_epoch_slips_l2_.clear();
+    current_epoch_slips_l5_.clear();
     std::vector<SatelliteId> sats_to_remove;
     for (const auto& [sat, idx] : filter_state_.n1_indices) {
         if (sat_data.find(sat) == sat_data.end()) sats_to_remove.push_back(sat);
@@ -1448,6 +1503,44 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
                        gf_slips_l1l5.find(sat) != gf_slips_l1l5.end() ||
                        code_slips_l5.find(sat) != code_slips_l5.end() ||
                        doppler_slips_l5.find(sat) != doppler_slips_l5.end();
+            }
+            const int detector_votes =
+                (freq == 0
+                     ? static_cast<int>(
+                           gf_slips.find(sat) != gf_slips.end() ||
+                           gf_slips_l1l5.find(sat) !=
+                               gf_slips_l1l5.end())
+                     : freq == 2
+                           ? static_cast<int>(
+                                 gf_slips_l1l5.find(sat) !=
+                                 gf_slips_l1l5.end())
+                           : 0) +
+                (freq == 0
+                     ? static_cast<int>(
+                           code_slips_l1.find(sat) !=
+                           code_slips_l1.end())
+                     : freq == 2
+                           ? static_cast<int>(
+                                 code_slips_l5.find(sat) !=
+                                 code_slips_l5.end())
+                           : 0) +
+                (freq == 0
+                     ? static_cast<int>(
+                           doppler_slips_l1.find(sat) !=
+                           doppler_slips_l1.end())
+                     : freq == 2
+                           ? static_cast<int>(
+                                 doppler_slips_l5.find(sat) !=
+                                 doppler_slips_l5.end())
+                           : 0);
+            const bool confirmed_arc_slip =
+                lli_slip || detector_votes >= 2;
+            if (confirmed_arc_slip && freq == 0) {
+                current_epoch_slips_l1_.insert(sat);
+            } else if (confirmed_arc_slip && freq == 1) {
+                current_epoch_slips_l2_.insert(sat);
+            } else if (confirmed_arc_slip && freq == 2) {
+                current_epoch_slips_l5_.insert(sat);
             }
             auto idx_it = indices.find(sat);
             if (idx_it != indices.end() && slip) {
@@ -2077,6 +2170,8 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
         }
     }
     PositionSolution solution = processRTKEpochInternal(rover_obs, base_obs, nav);
+    updateSafeFixShadowStateMachine(rover_obs.time);
+    applyLibraryFixedQualityGate(solution);
 
     // Doppler-derived velocity: SPPProcessor now populates has_velocity on
     // its own solutions (spp.cpp), so the fallback-to-SPP paths inside
@@ -2119,12 +2214,1362 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
         has_doppler_continuity_position_ = true;
     }
 
+    // A nominal DD path can still finish with an invalid generated FLOAT
+    // (for example after a rank-deficient update) without taking
+    // fallback_spp() or throwing. Apply the same bounded FLOAT-only bridge
+    // here so every no-solution exit is governed by one fail-closed policy.
+    if (solution.status == SolutionStatus::NONE ||
+        !solution.isValid()) {
+        auto continuity = makeSafeFloatContinuity(rover_obs.time);
+        if (continuity.isValid()) {
+            recordFallbackEpoch(rover_obs, nav);
+            external_inertial_fix_evidence_ =
+                ExternalInertialFixEvidence{};
+            external_disjoint_satellite_fix_evidence_ =
+                ExternalDisjointSatelliteFixEvidence{};
+            return continuity;
+        }
+    }
+    external_inertial_fix_evidence_ = ExternalInertialFixEvidence{};
+    external_disjoint_satellite_fix_evidence_ =
+        ExternalDisjointSatelliteFixEvidence{};
     return solution;
+}
+
+void RTKProcessor::applyLibraryFixedQualityGate(
+    PositionSolution& solution) {
+    const auto& config = rtk_config_.library_fixed_quality_gate;
+    debug_telemetry_.library_fixed_quality_gate_enabled = config.enabled;
+    if (!config.enabled) {
+        return;
+    }
+    const PositionSolution original_solution = solution;
+    debug_telemetry_.library_fixed_quality_gate_original_status =
+        static_cast<int>(original_solution.status);
+    debug_telemetry_.library_fixed_quality_gate_original_ecef_x =
+        original_solution.position_ecef.x();
+    debug_telemetry_.library_fixed_quality_gate_original_ecef_y =
+        original_solution.position_ecef.y();
+    debug_telemetry_.library_fixed_quality_gate_original_ecef_z =
+        original_solution.position_ecef.z();
+    debug_telemetry_.library_fixed_quality_gate_original_ratio =
+        original_solution.ratio;
+    bool promoted_current_epoch_candidate = false;
+    const Vector3d primary_candidate_position(
+        debug_telemetry_.lambda_shadow_best_ecef_x,
+        debug_telemetry_.lambda_shadow_best_ecef_y,
+        debug_telemetry_.lambda_shadow_best_ecef_z);
+    const auto disjoint_consensus =
+        disjoint_satellite_fix_evidence::closestPairConsensus(
+            primary_candidate_position,
+            external_disjoint_satellite_fix_evidence_
+                .partition_a_candidate_ecef,
+            external_disjoint_satellite_fix_evidence_
+                .partition_b_candidate_ecef);
+    double selected_pair_min_ratio =
+        std::numeric_limits<double>::quiet_NaN();
+    const auto finite_min_ratio = [](double first, double second) {
+        return std::isfinite(first) && std::isfinite(second)
+                   ? std::min(first, second)
+                   : std::numeric_limits<double>::quiet_NaN();
+    };
+    switch (disjoint_consensus.selected_pair) {
+        case disjoint_satellite_fix_evidence::SelectedPair::PRIMARY_A:
+            selected_pair_min_ratio = finite_min_ratio(
+                debug_telemetry_.full_ratio,
+                external_disjoint_satellite_fix_evidence_
+                    .partition_a_ratio);
+            break;
+        case disjoint_satellite_fix_evidence::SelectedPair::PRIMARY_B:
+            selected_pair_min_ratio = finite_min_ratio(
+                debug_telemetry_.full_ratio,
+                external_disjoint_satellite_fix_evidence_
+                    .partition_b_ratio);
+            break;
+        case disjoint_satellite_fix_evidence::SelectedPair::A_B:
+            selected_pair_min_ratio = finite_min_ratio(
+                external_disjoint_satellite_fix_evidence_
+                    .partition_a_ratio,
+                external_disjoint_satellite_fix_evidence_
+                    .partition_b_ratio);
+            break;
+        case disjoint_satellite_fix_evidence::SelectedPair::NONE:
+            break;
+    }
+    debug_telemetry_.disjoint_consensus_selected_pair =
+        static_cast<int>(disjoint_consensus.selected_pair);
+    debug_telemetry_.disjoint_consensus_selected_pair_min_ratio =
+        selected_pair_min_ratio;
+    safe_fix::Candidate disjoint_state_candidate;
+    disjoint_state_candidate.time_s =
+        static_cast<double>(solution.time.week) * 604800.0 +
+        solution.time.tow;
+    if (solution.isValid() && disjoint_consensus.valid) {
+        disjoint_state_candidate.correction_m =
+            disjoint_consensus.position_ecef -
+            primary_candidate_position;
+    }
+    disjoint_state_candidate.nis_per_observation =
+        debug_telemetry_.float_update_nis_per_observation;
+    disjoint_state_candidate.prefit_residual_rms_m =
+        debug_telemetry_.float_update_prefit_residual_rms_m;
+    disjoint_state_candidate.pair_count =
+        debug_telemetry_.pair_count;
+    disjoint_state_candidate.ambiguity_ratio =
+        rtk_config_.disjoint_consensus_use_selected_pair_ratio
+            ? selected_pair_min_ratio
+            : debug_telemetry_.full_ratio;
+    disjoint_state_candidate.independent_consensus_delta_m =
+        debug_telemetry_
+            .disjoint_satellite_fix_partition_separation_m;
+    disjoint_state_candidate.independent_failure_budget_passed =
+        debug_telemetry_.safe_fix_shadow_failure_budget_passed;
+    disjoint_state_candidate.acquisition_eligible =
+        solution.isValid() &&
+        disjoint_consensus.valid &&
+        debug_telemetry_.disjoint_satellite_fix_evidence_passed &&
+        debug_telemetry_.lambda_shadow_ffrt_passed &&
+        debug_telemetry_.pair_count >=
+            rtk_config_.safe_fix_shadow_minimum_pairs &&
+        std::isfinite(
+            disjoint_state_candidate.nis_per_observation) &&
+        disjoint_state_candidate.nis_per_observation <=
+            rtk_config_
+                .safe_fix_shadow_maximum_nis_per_observation &&
+        std::isfinite(
+            disjoint_state_candidate.prefit_residual_rms_m) &&
+        disjoint_state_candidate.prefit_residual_rms_m <=
+            rtk_config_
+                .safe_fix_shadow_maximum_prefit_residual_rms_m;
+    const auto disjoint_state_decision =
+        disjoint_consensus_state_machine_.update(
+            rtk_config_.disjoint_consensus_state_machine,
+            disjoint_state_candidate);
+    debug_telemetry_.disjoint_consensus_declared_fixed =
+        disjoint_state_decision.declared_fixed;
+    debug_telemetry_.disjoint_consensus_state =
+        static_cast<int>(disjoint_state_decision.state);
+    debug_telemetry_.disjoint_consensus_acquisition_streak =
+        disjoint_state_decision.acquisition_streak;
+    const Vector3d causal_arc_candidate_position(
+        debug_telemetry_.lambda_causal_arc_subset_best_ecef_x,
+        debug_telemetry_.lambda_causal_arc_subset_best_ecef_y,
+        debug_telemetry_.lambda_causal_arc_subset_best_ecef_z);
+    disjoint_satellite_fix_evidence::Config
+        causal_arc_disjoint_config;
+    causal_arc_disjoint_config.maximum_partition_separation_m =
+        rtk_config_
+            .disjoint_satellite_fix_max_partition_separation_m;
+    causal_arc_disjoint_config.maximum_primary_separation_m =
+        rtk_config_
+            .disjoint_satellite_fix_max_primary_separation_m;
+    causal_arc_disjoint_config.covariance_scale =
+        rtk_config_.disjoint_satellite_fix_covariance_scale;
+    causal_arc_disjoint_config.maximum_nis_per_dimension =
+        rtk_config_
+            .disjoint_satellite_fix_max_nis_per_dimension;
+    causal_arc_disjoint_config.maximum_statistical_separation_m =
+        rtk_config_
+            .disjoint_satellite_fix_max_statistical_separation_m;
+    disjoint_satellite_fix_evidence::Evidence
+        causal_arc_disjoint_evidence;
+    causal_arc_disjoint_evidence.available =
+        external_disjoint_satellite_fix_evidence_.available;
+    causal_arc_disjoint_evidence.inputs_verified_disjoint =
+        external_disjoint_satellite_fix_evidence_
+            .inputs_verified_disjoint;
+    causal_arc_disjoint_evidence.primary_ffrt_passed =
+        debug_telemetry_.lambda_causal_arc_subset_ffrt_passed &&
+        std::isfinite(
+            debug_telemetry_.lambda_causal_arc_subset_ratio) &&
+        debug_telemetry_.lambda_causal_arc_subset_ratio >=
+            rtk_config_.causal_arc_consensus_state_machine
+                .minimum_absolute_ratio;
+    causal_arc_disjoint_evidence.partition_a_ffrt_passed =
+        external_disjoint_satellite_fix_evidence_
+            .partition_a_ffrt_passed;
+    causal_arc_disjoint_evidence.partition_b_ffrt_passed =
+        external_disjoint_satellite_fix_evidence_
+            .partition_b_ffrt_passed;
+    causal_arc_disjoint_evidence.primary_candidate_ecef =
+        causal_arc_candidate_position;
+    causal_arc_disjoint_evidence.partition_a_candidate_ecef =
+        external_disjoint_satellite_fix_evidence_
+            .partition_a_candidate_ecef;
+    causal_arc_disjoint_evidence.partition_b_candidate_ecef =
+        external_disjoint_satellite_fix_evidence_
+            .partition_b_candidate_ecef;
+    causal_arc_disjoint_evidence.partition_a_covariance_ecef =
+        external_disjoint_satellite_fix_evidence_
+            .partition_a_covariance_ecef;
+    causal_arc_disjoint_evidence.partition_b_covariance_ecef =
+        external_disjoint_satellite_fix_evidence_
+            .partition_b_covariance_ecef;
+    if (std::isfinite(
+            debug_telemetry_.float_position_covariance_trace_m2) &&
+        debug_telemetry_.float_position_covariance_trace_m2 > 0.0) {
+        causal_arc_disjoint_evidence.primary_covariance_ecef =
+            Matrix3d::Identity() *
+            (debug_telemetry_.float_position_covariance_trace_m2 /
+             3.0);
+    }
+    const auto causal_arc_disjoint_decision =
+        disjoint_satellite_fix_evidence::evaluate(
+            causal_arc_disjoint_config,
+            causal_arc_disjoint_evidence);
+    debug_telemetry_.causal_arc_disjoint_evidence_passed =
+        causal_arc_disjoint_decision.passed;
+    safe_fix::Candidate causal_arc_state_candidate;
+    causal_arc_state_candidate.time_s =
+        disjoint_state_candidate.time_s;
+    if (solution.isValid() &&
+        causal_arc_candidate_position.allFinite()) {
+        causal_arc_state_candidate.correction_m =
+            causal_arc_candidate_position -
+            solution.position_ecef;
+    }
+    causal_arc_state_candidate.nis_per_observation =
+        debug_telemetry_.float_update_nis_per_observation;
+    causal_arc_state_candidate.prefit_residual_rms_m =
+        debug_telemetry_.float_update_prefit_residual_rms_m;
+    causal_arc_state_candidate.pair_count =
+        debug_telemetry_.lambda_causal_arc_subset_pair_count;
+    causal_arc_state_candidate.ambiguity_ratio =
+        debug_telemetry_.lambda_causal_arc_subset_ratio;
+    causal_arc_state_candidate.independent_consensus_delta_m =
+        std::max(
+            causal_arc_disjoint_decision
+                .partition_a_primary_separation_m,
+            causal_arc_disjoint_decision
+                .partition_b_primary_separation_m);
+    causal_arc_state_candidate.independent_failure_budget_passed =
+        causal_arc_disjoint_decision.passed;
+    causal_arc_state_candidate.acquisition_eligible =
+        solution.isValid() &&
+        causal_arc_disjoint_decision.passed &&
+        debug_telemetry_.lambda_causal_arc_subset_pair_count >=
+            rtk_config_.safe_fix_shadow_minimum_pairs &&
+        std::isfinite(
+            causal_arc_state_candidate.nis_per_observation) &&
+        causal_arc_state_candidate.nis_per_observation <=
+            rtk_config_
+                .safe_fix_shadow_maximum_nis_per_observation &&
+        std::isfinite(
+            causal_arc_state_candidate.prefit_residual_rms_m) &&
+        causal_arc_state_candidate.prefit_residual_rms_m <=
+            rtk_config_
+                .safe_fix_shadow_maximum_prefit_residual_rms_m;
+    const auto causal_arc_state_decision =
+        causal_arc_consensus_state_machine_.update(
+            rtk_config_.causal_arc_consensus_state_machine,
+            causal_arc_state_candidate);
+    debug_telemetry_.causal_arc_consensus_declared_fixed =
+        causal_arc_state_decision.declared_fixed;
+    debug_telemetry_.causal_arc_consensus_state =
+        static_cast<int>(causal_arc_state_decision.state);
+    debug_telemetry_.causal_arc_consensus_acquisition_streak =
+        causal_arc_state_decision.acquisition_streak;
+    const Vector3d satellite_par_candidate_position(
+        debug_telemetry_.lambda_satellite_par_shadow_best_ecef_x,
+        debug_telemetry_.lambda_satellite_par_shadow_best_ecef_y,
+        debug_telemetry_.lambda_satellite_par_shadow_best_ecef_z);
+    auto satellite_par_disjoint_evidence =
+        causal_arc_disjoint_evidence;
+    satellite_par_disjoint_evidence.primary_ffrt_passed =
+        debug_telemetry_.lambda_satellite_par_shadow_ffrt_passed;
+    satellite_par_disjoint_evidence.primary_candidate_ecef =
+        satellite_par_candidate_position;
+    const auto satellite_par_disjoint_decision =
+        disjoint_satellite_fix_evidence::evaluate(
+            causal_arc_disjoint_config,
+            satellite_par_disjoint_evidence);
+    debug_telemetry_.satellite_par_disjoint_evidence_passed =
+        satellite_par_disjoint_decision.passed;
+    safe_fix::Candidate satellite_par_state_candidate;
+    satellite_par_state_candidate.time_s =
+        disjoint_state_candidate.time_s;
+    if (solution.isValid() &&
+        satellite_par_candidate_position.allFinite()) {
+        satellite_par_state_candidate.correction_m =
+            satellite_par_candidate_position -
+            solution.position_ecef;
+    }
+    satellite_par_state_candidate.nis_per_observation =
+        debug_telemetry_.float_update_nis_per_observation;
+    satellite_par_state_candidate.prefit_residual_rms_m =
+        debug_telemetry_.float_update_prefit_residual_rms_m;
+    satellite_par_state_candidate.pair_count =
+        debug_telemetry_.lambda_satellite_par_shadow_subset_size;
+    satellite_par_state_candidate.ambiguity_ratio =
+        debug_telemetry_.lambda_satellite_par_shadow_ratio;
+    satellite_par_state_candidate.independent_consensus_delta_m =
+        std::max(
+            satellite_par_disjoint_decision
+                .partition_a_primary_separation_m,
+            satellite_par_disjoint_decision
+                .partition_b_primary_separation_m);
+    satellite_par_state_candidate
+        .independent_failure_budget_passed =
+        satellite_par_disjoint_decision.passed;
+    satellite_par_state_candidate.acquisition_eligible =
+        solution.isValid() &&
+        satellite_par_disjoint_decision.passed &&
+        debug_telemetry_.lambda_satellite_par_shadow_subset_size >=
+            rtk_config_.safe_fix_shadow_minimum_pairs &&
+        std::isfinite(
+            satellite_par_state_candidate.nis_per_observation) &&
+        satellite_par_state_candidate.nis_per_observation <=
+            rtk_config_
+                .safe_fix_shadow_maximum_nis_per_observation &&
+        std::isfinite(
+            satellite_par_state_candidate
+                .prefit_residual_rms_m) &&
+        satellite_par_state_candidate.prefit_residual_rms_m <=
+            rtk_config_
+                .safe_fix_shadow_maximum_prefit_residual_rms_m;
+    const auto satellite_par_state_decision =
+        satellite_par_consensus_state_machine_.update(
+            rtk_config_.satellite_par_consensus_state_machine,
+            satellite_par_state_candidate);
+    debug_telemetry_.satellite_par_consensus_declared_fixed =
+        satellite_par_state_decision.declared_fixed;
+    debug_telemetry_.satellite_par_consensus_state =
+        static_cast<int>(satellite_par_state_decision.state);
+    debug_telemetry_.satellite_par_consensus_acquisition_streak =
+        satellite_par_state_decision.acquisition_streak;
+    const Vector3d src_par_candidate_position(
+        debug_telemetry_.lambda_src_par_shadow_best_ecef_x,
+        debug_telemetry_.lambda_src_par_shadow_best_ecef_y,
+        debug_telemetry_.lambda_src_par_shadow_best_ecef_z);
+    auto src_par_disjoint_evidence =
+        causal_arc_disjoint_evidence;
+    src_par_disjoint_evidence.primary_ffrt_passed =
+        debug_telemetry_.lambda_src_par_shadow_ffrt_passed;
+    src_par_disjoint_evidence.primary_candidate_ecef =
+        src_par_candidate_position;
+    const auto src_par_disjoint_decision =
+        disjoint_satellite_fix_evidence::evaluate(
+            causal_arc_disjoint_config,
+            src_par_disjoint_evidence);
+    debug_telemetry_.src_par_disjoint_evidence_passed =
+        src_par_disjoint_decision.passed;
+    debug_telemetry_.src_par_partition_a_separation_m =
+        src_par_disjoint_decision.partition_a_primary_separation_m;
+    debug_telemetry_.src_par_partition_b_separation_m =
+        src_par_disjoint_decision.partition_b_primary_separation_m;
+    safe_fix::Candidate src_par_state_candidate;
+    src_par_state_candidate.time_s =
+        disjoint_state_candidate.time_s;
+    if (solution.isValid() && src_par_candidate_position.allFinite()) {
+        src_par_state_candidate.correction_m =
+            src_par_candidate_position - solution.position_ecef;
+    }
+    src_par_state_candidate.nis_per_observation =
+        debug_telemetry_.float_update_nis_per_observation;
+    src_par_state_candidate.prefit_residual_rms_m =
+        debug_telemetry_.float_update_prefit_residual_rms_m;
+    src_par_state_candidate.pair_count =
+        debug_telemetry_.lambda_src_par_shadow_subset_size;
+    src_par_state_candidate.ambiguity_ratio =
+        debug_telemetry_.lambda_src_par_shadow_ratio;
+    src_par_state_candidate.independent_consensus_delta_m =
+        std::max(
+            src_par_disjoint_decision
+                .partition_a_primary_separation_m,
+            src_par_disjoint_decision
+                .partition_b_primary_separation_m);
+    src_par_state_candidate.independent_failure_budget_passed =
+        src_par_disjoint_decision.passed;
+    const bool src_par_hard_primary_separation_passed =
+        std::isfinite(
+            src_par_disjoint_decision
+                .partition_a_primary_separation_m) &&
+        std::isfinite(
+            src_par_disjoint_decision
+                .partition_b_primary_separation_m) &&
+        src_par_disjoint_decision
+                .partition_a_primary_separation_m <=
+            rtk_config_
+                .disjoint_satellite_fix_max_primary_separation_m &&
+        src_par_disjoint_decision
+                .partition_b_primary_separation_m <=
+            rtk_config_
+                .disjoint_satellite_fix_max_primary_separation_m;
+    const bool src_par_current_epoch_eligible =
+        solution.isValid() &&
+        src_par_disjoint_decision.passed &&
+        src_par_hard_primary_separation_passed &&
+        debug_telemetry_.lambda_src_par_shadow_ffrt_passed &&
+        std::isfinite(
+            debug_telemetry_
+                .lambda_src_par_shadow_second_position_delta_m) &&
+        debug_telemetry_
+                .lambda_src_par_shadow_second_position_delta_m <=
+            rtk_config_
+                .safe_fix_shadow_maximum_second_position_delta_m &&
+        debug_telemetry_.lambda_src_par_shadow_subset_size >=
+            rtk_config_.safe_fix_shadow_minimum_pairs &&
+        std::isfinite(src_par_state_candidate.nis_per_observation) &&
+        src_par_state_candidate.nis_per_observation <=
+            rtk_config_
+                .safe_fix_shadow_maximum_nis_per_observation &&
+        std::isfinite(
+            src_par_state_candidate.prefit_residual_rms_m) &&
+        src_par_state_candidate.prefit_residual_rms_m <=
+            rtk_config_
+                .safe_fix_shadow_maximum_prefit_residual_rms_m;
+    src_par_state_candidate.acquisition_eligible =
+        src_par_current_epoch_eligible;
+    const auto src_par_state_decision =
+        src_par_consensus_state_machine_.update(
+            rtk_config_.src_par_consensus_state_machine,
+            src_par_state_candidate);
+    debug_telemetry_.src_par_consensus_declared_fixed =
+        src_par_state_decision.declared_fixed;
+    debug_telemetry_.src_par_consensus_state =
+        static_cast<int>(src_par_state_decision.state);
+    debug_telemetry_.src_par_consensus_acquisition_streak =
+        src_par_state_decision.acquisition_streak;
+    safe_fix::Candidate inertial_referenced_state_candidate;
+    inertial_referenced_state_candidate.time_s =
+        disjoint_state_candidate.time_s;
+    if (primary_candidate_position.allFinite() &&
+        external_inertial_fix_evidence_.position_ecef.allFinite()) {
+        inertial_referenced_state_candidate.correction_m =
+            primary_candidate_position -
+            external_inertial_fix_evidence_.position_ecef;
+        debug_telemetry_.inertial_referenced_correction_x =
+            inertial_referenced_state_candidate.correction_m.x();
+        debug_telemetry_.inertial_referenced_correction_y =
+            inertial_referenced_state_candidate.correction_m.y();
+        debug_telemetry_.inertial_referenced_correction_z =
+            inertial_referenced_state_candidate.correction_m.z();
+    }
+    inertial_referenced_state_candidate.nis_per_observation =
+        debug_telemetry_.float_update_nis_per_observation;
+    inertial_referenced_state_candidate.prefit_residual_rms_m =
+        debug_telemetry_.float_update_prefit_residual_rms_m;
+    inertial_referenced_state_candidate.pair_count =
+        debug_telemetry_.pair_count;
+    inertial_referenced_state_candidate.ambiguity_ratio =
+        debug_telemetry_.full_ratio;
+    inertial_referenced_state_candidate
+        .independent_consensus_delta_m =
+        debug_telemetry_.inertial_fix_evidence_position_delta_m;
+    inertial_referenced_state_candidate
+        .independent_failure_budget_passed =
+        debug_telemetry_.inertial_fix_evidence_passed &&
+        debug_telemetry_.safe_fix_shadow_failure_budget_passed;
+    inertial_referenced_state_candidate.acquisition_eligible =
+        solution.isValid() &&
+        debug_telemetry_.lambda_shadow_ffrt_passed &&
+        debug_telemetry_.inertial_fix_evidence_passed &&
+        debug_telemetry_.pair_count >=
+            rtk_config_.safe_fix_shadow_minimum_pairs &&
+        std::isfinite(
+            inertial_referenced_state_candidate
+                .nis_per_observation) &&
+        inertial_referenced_state_candidate.nis_per_observation <=
+            rtk_config_
+                .safe_fix_shadow_maximum_nis_per_observation &&
+        std::isfinite(
+            inertial_referenced_state_candidate
+                .prefit_residual_rms_m) &&
+        inertial_referenced_state_candidate.prefit_residual_rms_m <=
+            rtk_config_
+                .safe_fix_shadow_maximum_prefit_residual_rms_m;
+    const auto inertial_referenced_state_decision =
+        inertial_referenced_consensus_state_machine_.update(
+            rtk_config_.inertial_referenced_consensus_state_machine,
+            inertial_referenced_state_candidate);
+    debug_telemetry_
+        .inertial_referenced_consensus_declared_fixed =
+        inertial_referenced_state_decision.declared_fixed;
+    debug_telemetry_.inertial_referenced_consensus_state =
+        static_cast<int>(inertial_referenced_state_decision.state);
+    debug_telemetry_
+        .inertial_referenced_consensus_acquisition_streak =
+        inertial_referenced_state_decision.acquisition_streak;
+    const Vector3d multifrequency_candidate_position(
+        debug_telemetry_.lambda_l1_l5_wlnl_shadow_best_ecef_x,
+        debug_telemetry_.lambda_l1_l5_wlnl_shadow_best_ecef_y,
+        debug_telemetry_.lambda_l1_l5_wlnl_shadow_best_ecef_z);
+    auto multifrequency_disjoint_evidence =
+        causal_arc_disjoint_evidence;
+    multifrequency_disjoint_evidence.primary_ffrt_passed =
+        debug_telemetry_.lambda_l1_l5_wlnl_shadow_wl_ffrt_passed &&
+        debug_telemetry_.lambda_l1_l5_wlnl_shadow_nl_ffrt_passed;
+    multifrequency_disjoint_evidence.primary_candidate_ecef =
+        multifrequency_candidate_position;
+    const auto multifrequency_disjoint_decision =
+        disjoint_satellite_fix_evidence::evaluate(
+            causal_arc_disjoint_config,
+            multifrequency_disjoint_evidence);
+    debug_telemetry_.multifrequency_disjoint_evidence_passed =
+        multifrequency_disjoint_decision.passed;
+    safe_fix::Candidate multifrequency_state_candidate;
+    multifrequency_state_candidate.time_s =
+        disjoint_state_candidate.time_s;
+    if (solution.isValid() &&
+        multifrequency_candidate_position.allFinite()) {
+        multifrequency_state_candidate.correction_m =
+            multifrequency_candidate_position -
+            solution.position_ecef;
+    }
+    multifrequency_state_candidate.nis_per_observation =
+        debug_telemetry_.float_update_nis_per_observation;
+    multifrequency_state_candidate.prefit_residual_rms_m =
+        debug_telemetry_.float_update_prefit_residual_rms_m;
+    multifrequency_state_candidate.pair_count =
+        debug_telemetry_
+            .lambda_l1_l5_wlnl_shadow_candidate_pair_count;
+    multifrequency_state_candidate.ambiguity_ratio =
+        debug_telemetry_.lambda_l1_l5_wlnl_shadow_nl_ratio;
+    multifrequency_state_candidate.independent_consensus_delta_m =
+        std::max(
+            multifrequency_disjoint_decision
+                .partition_a_primary_separation_m,
+            multifrequency_disjoint_decision
+                .partition_b_primary_separation_m);
+    multifrequency_state_candidate
+        .independent_failure_budget_passed =
+        multifrequency_disjoint_decision.passed;
+    multifrequency_state_candidate.acquisition_eligible =
+        solution.isValid() &&
+        multifrequency_disjoint_decision.passed &&
+        multifrequency_state_candidate.pair_count >=
+            rtk_config_.safe_fix_shadow_minimum_pairs &&
+        std::isfinite(
+            multifrequency_state_candidate.nis_per_observation) &&
+        multifrequency_state_candidate.nis_per_observation <=
+            rtk_config_
+                .safe_fix_shadow_maximum_nis_per_observation &&
+        std::isfinite(
+            multifrequency_state_candidate.prefit_residual_rms_m) &&
+        multifrequency_state_candidate.prefit_residual_rms_m <=
+            rtk_config_
+                .safe_fix_shadow_maximum_prefit_residual_rms_m;
+    const auto multifrequency_state_decision =
+        multifrequency_consensus_state_machine_.update(
+            rtk_config_.multifrequency_consensus_state_machine,
+            multifrequency_state_candidate);
+    debug_telemetry_.multifrequency_consensus_declared_fixed =
+        multifrequency_state_decision.declared_fixed;
+    debug_telemetry_.multifrequency_consensus_state =
+        static_cast<int>(multifrequency_state_decision.state);
+    debug_telemetry_.multifrequency_consensus_acquisition_streak =
+        multifrequency_state_decision.acquisition_streak;
+    const Vector3d l1_l2_multifrequency_candidate_position(
+        debug_telemetry_.lambda_l1_l2_wlnl_shadow_best_ecef_x,
+        debug_telemetry_.lambda_l1_l2_wlnl_shadow_best_ecef_y,
+        debug_telemetry_.lambda_l1_l2_wlnl_shadow_best_ecef_z);
+    auto l1_l2_multifrequency_disjoint_evidence =
+        causal_arc_disjoint_evidence;
+    l1_l2_multifrequency_disjoint_evidence.primary_ffrt_passed =
+        debug_telemetry_.lambda_l1_l2_wlnl_shadow_wl_ffrt_passed &&
+        debug_telemetry_.lambda_l1_l2_wlnl_shadow_nl_ffrt_passed;
+    l1_l2_multifrequency_disjoint_evidence.primary_candidate_ecef =
+        l1_l2_multifrequency_candidate_position;
+    const auto l1_l2_multifrequency_disjoint_decision =
+        disjoint_satellite_fix_evidence::evaluate(
+            causal_arc_disjoint_config,
+            l1_l2_multifrequency_disjoint_evidence);
+    debug_telemetry_.l1_l2_multifrequency_disjoint_evidence_passed =
+        l1_l2_multifrequency_disjoint_decision.passed;
+    safe_fix::Candidate l1_l2_multifrequency_state_candidate;
+    l1_l2_multifrequency_state_candidate.time_s =
+        disjoint_state_candidate.time_s;
+    if (solution.isValid() &&
+        l1_l2_multifrequency_candidate_position.allFinite()) {
+        l1_l2_multifrequency_state_candidate.correction_m =
+            l1_l2_multifrequency_candidate_position -
+            solution.position_ecef;
+    }
+    l1_l2_multifrequency_state_candidate.nis_per_observation =
+        debug_telemetry_.float_update_nis_per_observation;
+    l1_l2_multifrequency_state_candidate.prefit_residual_rms_m =
+        debug_telemetry_.float_update_prefit_residual_rms_m;
+    l1_l2_multifrequency_state_candidate.pair_count =
+        debug_telemetry_
+            .lambda_l1_l2_wlnl_shadow_candidate_pair_count;
+    l1_l2_multifrequency_state_candidate.ambiguity_ratio =
+        debug_telemetry_.lambda_l1_l2_wlnl_shadow_nl_ratio;
+    l1_l2_multifrequency_state_candidate
+        .independent_consensus_delta_m =
+        std::max(
+            l1_l2_multifrequency_disjoint_decision
+                .partition_a_primary_separation_m,
+            l1_l2_multifrequency_disjoint_decision
+                .partition_b_primary_separation_m);
+    l1_l2_multifrequency_state_candidate
+        .independent_failure_budget_passed =
+        l1_l2_multifrequency_disjoint_decision.passed;
+    l1_l2_multifrequency_state_candidate.acquisition_eligible =
+        solution.isValid() &&
+        l1_l2_multifrequency_disjoint_decision.passed &&
+        l1_l2_multifrequency_state_candidate.pair_count >=
+            rtk_config_.safe_fix_shadow_minimum_pairs &&
+        std::isfinite(
+            l1_l2_multifrequency_state_candidate
+                .nis_per_observation) &&
+        l1_l2_multifrequency_state_candidate
+                .nis_per_observation <=
+            rtk_config_
+                .safe_fix_shadow_maximum_nis_per_observation &&
+        std::isfinite(
+            l1_l2_multifrequency_state_candidate
+                .prefit_residual_rms_m) &&
+        l1_l2_multifrequency_state_candidate
+                .prefit_residual_rms_m <=
+            rtk_config_
+                .safe_fix_shadow_maximum_prefit_residual_rms_m;
+    const auto l1_l2_multifrequency_state_decision =
+        l1_l2_multifrequency_consensus_state_machine_.update(
+            rtk_config_.multifrequency_consensus_state_machine,
+            l1_l2_multifrequency_state_candidate);
+    debug_telemetry_
+        .l1_l2_multifrequency_consensus_declared_fixed =
+        l1_l2_multifrequency_state_decision.declared_fixed;
+    debug_telemetry_.l1_l2_multifrequency_consensus_state =
+        static_cast<int>(l1_l2_multifrequency_state_decision.state);
+    debug_telemetry_
+        .l1_l2_multifrequency_consensus_acquisition_streak =
+        l1_l2_multifrequency_state_decision.acquisition_streak;
+    const bool safe_shadow_candidate =
+        config.allow_safe_shadow_promotion &&
+        debug_telemetry_.safe_fix_shadow_declared_fixed;
+    const bool disjoint_state_safe_candidate =
+        config.allow_safe_shadow_promotion &&
+        disjoint_state_decision.declared_fixed &&
+        disjoint_consensus.valid;
+    fixed_quality_gate::Evidence original_quality_evidence;
+    original_quality_evidence.safe_fix_shadow_declared_fixed =
+        debug_telemetry_.safe_fix_shadow_declared_fixed ||
+        disjoint_state_decision.declared_fixed;
+    original_quality_evidence.independent_failure_budget_passed =
+        debug_telemetry_.safe_fix_shadow_failure_budget_passed;
+    original_quality_evidence.float_position_covariance_trace_m2 =
+        debug_telemetry_.float_position_covariance_trace_m2;
+    original_quality_evidence.update_observations =
+        debug_telemetry_.float_update_observation_count;
+    original_quality_evidence.suppressed_outliers =
+        debug_telemetry_.float_update_suppressed_outliers;
+    original_quality_evidence.update_nis_per_observation =
+        debug_telemetry_.float_update_nis_per_observation;
+    const bool replace_rejected_original_fixed_candidate =
+        solution.isFixed() &&
+        !fixed_quality_gate::evaluate(
+             config, original_quality_evidence).passed;
+    const bool causal_arc_state_safe_candidate =
+        rtk_config_.causal_arc_consensus_promotion &&
+        causal_arc_state_decision.declared_fixed &&
+        causal_arc_disjoint_decision.passed &&
+        causal_arc_candidate_position.allFinite();
+    const bool causal_arc_promotion_candidate =
+        causal_arc_state_safe_candidate &&
+        (!solution.isFixed() ||
+         replace_rejected_original_fixed_candidate);
+    const bool satellite_par_state_safe_candidate =
+        rtk_config_.satellite_par_consensus_promotion &&
+        satellite_par_state_decision.declared_fixed &&
+        satellite_par_disjoint_decision.passed &&
+        satellite_par_candidate_position.allFinite();
+    const bool satellite_par_promotion_candidate =
+        satellite_par_state_safe_candidate &&
+        (!solution.isFixed() ||
+         replace_rejected_original_fixed_candidate) &&
+        !causal_arc_promotion_candidate;
+    const bool src_par_state_safe_candidate =
+        rtk_config_.src_par_consensus_promotion &&
+        src_par_state_decision.declared_fixed &&
+        src_par_current_epoch_eligible &&
+        src_par_candidate_position.allFinite();
+    const bool src_par_promotion_candidate =
+        src_par_state_safe_candidate &&
+        (!solution.isFixed() ||
+         replace_rejected_original_fixed_candidate) &&
+        !causal_arc_promotion_candidate &&
+        !satellite_par_promotion_candidate;
+    const bool inertial_referenced_state_safe_candidate =
+        rtk_config_.inertial_referenced_consensus_promotion &&
+        inertial_referenced_state_decision.declared_fixed &&
+        debug_telemetry_.inertial_fix_evidence_passed &&
+        primary_candidate_position.allFinite();
+    const bool inertial_referenced_promotion_candidate =
+        inertial_referenced_state_safe_candidate &&
+        (!solution.isFixed() ||
+         replace_rejected_original_fixed_candidate) &&
+        !causal_arc_promotion_candidate &&
+        !satellite_par_promotion_candidate &&
+        !src_par_promotion_candidate;
+    const bool multifrequency_state_safe_candidate =
+        rtk_config_.multifrequency_consensus_promotion &&
+        multifrequency_state_decision.declared_fixed &&
+        multifrequency_disjoint_decision.passed &&
+        multifrequency_candidate_position.allFinite();
+    const bool multifrequency_promotion_candidate =
+        multifrequency_state_safe_candidate &&
+        (!solution.isFixed() ||
+         replace_rejected_original_fixed_candidate) &&
+        !causal_arc_promotion_candidate &&
+        !satellite_par_promotion_candidate &&
+        !src_par_promotion_candidate &&
+        !inertial_referenced_promotion_candidate;
+    const bool l1_l2_multifrequency_state_safe_candidate =
+        rtk_config_.multifrequency_consensus_promotion &&
+        l1_l2_multifrequency_state_decision.declared_fixed &&
+        l1_l2_multifrequency_disjoint_decision.passed &&
+        l1_l2_multifrequency_candidate_position.allFinite();
+    const bool l1_l2_multifrequency_promotion_candidate =
+        l1_l2_multifrequency_state_safe_candidate &&
+        (!solution.isFixed() ||
+         replace_rejected_original_fixed_candidate) &&
+        !causal_arc_promotion_candidate &&
+        !satellite_par_promotion_candidate &&
+        !src_par_promotion_candidate &&
+        !inertial_referenced_promotion_candidate &&
+        !multifrequency_promotion_candidate;
+    const bool disjoint_consensus_candidate =
+        config.allow_failure_budget_candidate_promotion &&
+        debug_telemetry_.disjoint_satellite_fix_evidence_passed;
+    const bool independent_replacement_candidate =
+        causal_arc_promotion_candidate ||
+        satellite_par_promotion_candidate ||
+        src_par_promotion_candidate ||
+        inertial_referenced_promotion_candidate ||
+        multifrequency_promotion_candidate ||
+        l1_l2_multifrequency_promotion_candidate;
+    if ((!solution.isFixed() ||
+         independent_replacement_candidate ||
+         disjoint_state_safe_candidate) &&
+        (safe_shadow_candidate ||
+         disjoint_state_safe_candidate ||
+         causal_arc_promotion_candidate ||
+         satellite_par_promotion_candidate ||
+         src_par_promotion_candidate ||
+         inertial_referenced_promotion_candidate ||
+         multifrequency_promotion_candidate ||
+         l1_l2_multifrequency_promotion_candidate ||
+         disjoint_consensus_candidate) &&
+        solution.isValid() &&
+        ((causal_arc_promotion_candidate &&
+          causal_arc_disjoint_decision.passed) ||
+         (satellite_par_promotion_candidate &&
+          satellite_par_disjoint_decision.passed) ||
+         (src_par_promotion_candidate &&
+          src_par_disjoint_decision.passed) ||
+         (inertial_referenced_promotion_candidate &&
+          debug_telemetry_.inertial_fix_evidence_passed) ||
+         (multifrequency_promotion_candidate &&
+          multifrequency_disjoint_decision.passed) ||
+         (l1_l2_multifrequency_promotion_candidate &&
+          l1_l2_multifrequency_disjoint_decision.passed) ||
+         (debug_telemetry_.safe_fix_shadow_failure_budget_passed &&
+          debug_telemetry_.lambda_shadow_ffrt_passed)) &&
+        (safe_shadow_candidate ||
+         disjoint_state_safe_candidate ||
+         causal_arc_promotion_candidate ||
+         satellite_par_promotion_candidate ||
+         src_par_promotion_candidate ||
+         inertial_referenced_promotion_candidate ||
+         multifrequency_promotion_candidate ||
+         l1_l2_multifrequency_promotion_candidate ||
+         disjoint_consensus_candidate)) {
+        Vector3d promoted_position = primary_candidate_position;
+        if (causal_arc_promotion_candidate) {
+            promoted_position = causal_arc_candidate_position;
+            debug_telemetry_
+                .library_fixed_quality_gate_causal_arc_promoted = true;
+            debug_telemetry_
+                .safe_fix_shadow_failure_budget_passed = true;
+            debug_telemetry_
+                .safe_fix_shadow_independent_source_families = 2;
+            debug_telemetry_
+                .safe_fix_shadow_joint_failure_probability = 1e-6;
+        } else if (satellite_par_promotion_candidate) {
+            promoted_position = satellite_par_candidate_position;
+            debug_telemetry_
+                .library_fixed_quality_gate_satellite_par_promoted =
+                true;
+            debug_telemetry_
+                .safe_fix_shadow_failure_budget_passed = true;
+            debug_telemetry_
+                .safe_fix_shadow_independent_source_families = 2;
+            debug_telemetry_
+                .safe_fix_shadow_joint_failure_probability = 1e-6;
+        } else if (src_par_promotion_candidate) {
+            promoted_position = src_par_candidate_position;
+            debug_telemetry_
+                .library_fixed_quality_gate_src_par_promoted = true;
+            debug_telemetry_
+                .safe_fix_shadow_failure_budget_passed = true;
+            debug_telemetry_
+                .safe_fix_shadow_independent_source_families = 2;
+            debug_telemetry_
+                .safe_fix_shadow_joint_failure_probability = 1e-6;
+        } else if (inertial_referenced_promotion_candidate) {
+            promoted_position = primary_candidate_position;
+            debug_telemetry_
+                .library_fixed_quality_gate_inertial_referenced_promoted =
+                true;
+            debug_telemetry_
+                .safe_fix_shadow_failure_budget_passed = true;
+            debug_telemetry_
+                .safe_fix_shadow_independent_source_families = 2;
+            debug_telemetry_
+                .safe_fix_shadow_joint_failure_probability = 1e-6;
+        } else if (multifrequency_promotion_candidate) {
+            promoted_position = multifrequency_candidate_position;
+            debug_telemetry_
+                .library_fixed_quality_gate_multifrequency_promoted =
+                true;
+            debug_telemetry_
+                .safe_fix_shadow_failure_budget_passed = true;
+            debug_telemetry_
+                .safe_fix_shadow_independent_source_families = 2;
+            debug_telemetry_
+                .safe_fix_shadow_joint_failure_probability = 1e-6;
+        } else if (l1_l2_multifrequency_promotion_candidate) {
+            promoted_position =
+                l1_l2_multifrequency_candidate_position;
+            debug_telemetry_
+                .library_fixed_quality_gate_multifrequency_promoted =
+                true;
+            debug_telemetry_
+                .safe_fix_shadow_failure_budget_passed = true;
+            debug_telemetry_
+                .safe_fix_shadow_independent_source_families = 2;
+            debug_telemetry_
+                .safe_fix_shadow_joint_failure_probability = 1e-6;
+        } else if (disjoint_state_safe_candidate ||
+            (!safe_shadow_candidate &&
+             disjoint_consensus_candidate)) {
+            promoted_position = disjoint_consensus.position_ecef;
+            debug_telemetry_
+                .library_fixed_quality_gate_disjoint_consensus_promoted =
+                disjoint_consensus.valid;
+        }
+        if (promoted_position.allFinite()) {
+            solution.position_ecef = promoted_position;
+            solution.position_geodetic =
+                spp_utils::ecefToGeodetic(promoted_position);
+            solution.status = SolutionStatus::FIXED;
+            solution.ratio =
+                causal_arc_promotion_candidate
+                    ? debug_telemetry_
+                          .lambda_causal_arc_subset_ratio
+                    : satellite_par_promotion_candidate
+                        ? debug_telemetry_
+                              .lambda_satellite_par_shadow_ratio
+                    : src_par_promotion_candidate
+                        ? debug_telemetry_
+                              .lambda_src_par_shadow_ratio
+                    : inertial_referenced_promotion_candidate
+                        ? debug_telemetry_.full_ratio
+                    : multifrequency_promotion_candidate
+                        ? debug_telemetry_
+                              .lambda_l1_l5_wlnl_shadow_nl_ratio
+                    : l1_l2_multifrequency_promotion_candidate
+                        ? debug_telemetry_
+                              .lambda_l1_l2_wlnl_shadow_nl_ratio
+                    : debug_telemetry_.full_ratio;
+            solution.num_fixed_ambiguities =
+                causal_arc_promotion_candidate
+                    ? debug_telemetry_
+                          .lambda_causal_arc_ready_pairs
+                    : satellite_par_promotion_candidate
+                        ? debug_telemetry_
+                              .lambda_satellite_par_shadow_subset_size
+                    : src_par_promotion_candidate
+                        ? debug_telemetry_
+                              .lambda_src_par_shadow_subset_size
+                    : inertial_referenced_promotion_candidate
+                        ? debug_telemetry_.pair_count
+                    : multifrequency_promotion_candidate
+                        ? debug_telemetry_
+                              .lambda_l1_l5_wlnl_shadow_candidate_pair_count
+                    : l1_l2_multifrequency_promotion_candidate
+                        ? debug_telemetry_
+                              .lambda_l1_l2_wlnl_shadow_candidate_pair_count
+                    : debug_telemetry_.pair_count;
+            debug_telemetry_
+                .library_fixed_quality_gate_promoted = true;
+            promoted_current_epoch_candidate = true;
+        }
+    }
+    if (!solution.isFixed()) {
+        return;
+    }
+    fixed_quality_gate::Evidence evidence;
+    evidence.safe_fix_shadow_declared_fixed =
+        debug_telemetry_.safe_fix_shadow_declared_fixed ||
+        disjoint_state_decision.declared_fixed ||
+        debug_telemetry_
+            .library_fixed_quality_gate_causal_arc_promoted ||
+        debug_telemetry_
+            .library_fixed_quality_gate_satellite_par_promoted;
+    evidence.safe_fix_shadow_declared_fixed =
+        evidence.safe_fix_shadow_declared_fixed ||
+        debug_telemetry_
+            .library_fixed_quality_gate_src_par_promoted ||
+        debug_telemetry_
+            .library_fixed_quality_gate_inertial_referenced_promoted ||
+        debug_telemetry_
+            .library_fixed_quality_gate_multifrequency_promoted;
+    evidence.independent_failure_budget_passed =
+        debug_telemetry_.safe_fix_shadow_failure_budget_passed;
+    evidence.float_position_covariance_trace_m2 =
+        debug_telemetry_.float_position_covariance_trace_m2;
+    evidence.update_observations =
+        debug_telemetry_.float_update_observation_count;
+    evidence.suppressed_outliers =
+        debug_telemetry_.float_update_suppressed_outliers;
+    evidence.update_nis_per_observation =
+        debug_telemetry_.float_update_nis_per_observation;
+    const auto decision = fixed_quality_gate::evaluate(config, evidence);
+    const bool unresolved_raw_partition_conflict =
+        original_solution.isFixed() &&
+        !causal_arc_promotion_candidate &&
+        !satellite_par_promotion_candidate &&
+        !src_par_promotion_candidate &&
+        !inertial_referenced_promotion_candidate &&
+        !multifrequency_promotion_candidate &&
+        !l1_l2_multifrequency_promotion_candidate &&
+        !debug_telemetry_.safe_fix_shadow_declared_fixed &&
+        !debug_telemetry_.inertial_fix_evidence_healthy_anchor &&
+        disjoint_state_decision.state == safe_fix::State::IDLE &&
+        debug_telemetry_.disjoint_satellite_fix_evidence_passed &&
+        !debug_telemetry_
+             .disjoint_satellite_fix_hard_separation_passed &&
+        std::isfinite(
+            debug_telemetry_
+                .disjoint_satellite_fix_partition_separation_m) &&
+        debug_telemetry_
+                .disjoint_satellite_fix_partition_separation_m <
+            debug_telemetry_
+                .disjoint_satellite_fix_partition_a_primary_separation_m &&
+        debug_telemetry_
+                .disjoint_satellite_fix_partition_separation_m <
+            debug_telemetry_
+                .disjoint_satellite_fix_partition_b_primary_separation_m;
+    debug_telemetry_.library_fixed_quality_gate_raw_partition_conflict =
+        unresolved_raw_partition_conflict;
+    const bool quality_passed =
+        decision.passed && !unresolved_raw_partition_conflict;
+    debug_telemetry_.library_fixed_quality_gate_passed =
+        quality_passed;
+    debug_telemetry_.library_fixed_quality_gate_safe_shadow_branch =
+        decision.safe_shadow_branch;
+    debug_telemetry_.library_fixed_quality_gate_covariance_branch =
+        decision.covariance_branch;
+    debug_telemetry_
+        .library_fixed_quality_gate_strong_innovation_branch =
+        decision.strong_innovation_branch;
+    if (!quality_passed) {
+        if (promoted_current_epoch_candidate) {
+            // A provisional current-epoch integer candidate must not leak into
+            // the exported FLOAT solution or become an inertial/filter seed
+            // after the ordinary quality gate rejects it.
+            solution = original_solution;
+        }
+        solution.status = SolutionStatus::FLOAT;
+        debug_telemetry_.library_fixed_quality_gate_demoted = true;
+    }
+}
+
+void RTKProcessor::updateIndependentFailureBudgetTelemetry() {
+    double bsr = std::numeric_limits<double>::quiet_NaN();
+    switch (rtk_config_.safe_fix_shadow_covariance_scale) {
+        case 1: bsr = debug_telemetry_.lambda_shadow_bsr; break;
+        case 2: bsr = debug_telemetry_.lambda_shadow_bsr_qscale2; break;
+        case 4: bsr = debug_telemetry_.lambda_shadow_bsr_qscale4; break;
+        case 8: bsr = debug_telemetry_.lambda_shadow_bsr_qscale8; break;
+        case 16: bsr = debug_telemetry_.lambda_shadow_bsr_qscale16; break;
+        default: break;
+    }
+    FixedFailureRateRatioThreshold threshold;
+    const bool ffrt_passed =
+        debug_telemetry_.lambda_shadow_solved &&
+        fixedFailureRateRatioThreshold(
+            debug_telemetry_.pair_count, bsr, 0.001, threshold) &&
+        threshold.accepts_any_candidate &&
+        std::isfinite(debug_telemetry_.full_ratio) &&
+        debug_telemetry_.full_ratio >=
+            threshold.minimum_second_to_best_ratio;
+
+    const auto& inertial = external_inertial_fix_evidence_;
+    debug_telemetry_.inertial_fix_evidence_available =
+        inertial.available;
+    debug_telemetry_.inertial_fix_evidence_healthy_anchor =
+        inertial.healthy_independent_anchor;
+    const Vector3d primary_candidate_ecef(
+        debug_telemetry_.lambda_shadow_best_ecef_x,
+        debug_telemetry_.lambda_shadow_best_ecef_y,
+        debug_telemetry_.lambda_shadow_best_ecef_z);
+    bool inertial_passed = false;
+    if (inertial.available &&
+        inertial.healthy_independent_anchor &&
+        inertial.position_ecef.allFinite() &&
+        inertial.position_covariance_ecef.allFinite() &&
+        primary_candidate_ecef.allFinite()) {
+        const double time_error_s =
+            std::abs(inertial.time - current_epoch_time_);
+        debug_telemetry_.inertial_fix_evidence_time_error_s =
+            time_error_s;
+        inertial_fix_evidence::Config monitor_config;
+        monitor_config.maximum_time_error_s =
+            rtk_config_.inertial_fix_evidence_max_time_error_s;
+        monitor_config.covariance_scale =
+            rtk_config_.inertial_fix_evidence_covariance_scale;
+        monitor_config.maximum_nis_per_dimension =
+            rtk_config_
+                .inertial_fix_evidence_max_nis_per_dimension;
+        monitor_config.maximum_position_delta_m =
+            rtk_config_
+                .inertial_fix_evidence_max_position_delta_m;
+        inertial_fix_evidence::Evidence monitor_evidence;
+        monitor_evidence.available = inertial.available;
+        monitor_evidence.healthy_independent_anchor =
+            inertial.healthy_independent_anchor;
+        monitor_evidence.time_error_s = time_error_s;
+        monitor_evidence.predicted_position_ecef =
+            inertial.position_ecef;
+        monitor_evidence.predicted_position_covariance_ecef =
+            inertial.position_covariance_ecef;
+        monitor_evidence.primary_candidate_ecef =
+            primary_candidate_ecef;
+        const auto monitor_decision =
+            inertial_fix_evidence::evaluate(
+                monitor_config, monitor_evidence);
+        debug_telemetry_
+            .inertial_fix_evidence_position_delta_m =
+            monitor_decision.position_delta_m;
+        debug_telemetry_
+            .inertial_fix_evidence_nis_per_dimension =
+            monitor_decision.nis_per_dimension;
+        inertial_passed = monitor_decision.passed;
+    }
+    debug_telemetry_.inertial_fix_evidence_passed =
+        inertial_passed;
+
+    const auto& disjoint =
+        external_disjoint_satellite_fix_evidence_;
+    debug_telemetry_.disjoint_satellite_fix_evidence_available =
+        disjoint.available;
+    debug_telemetry_.disjoint_satellite_fix_inputs_verified =
+        disjoint.inputs_verified_disjoint;
+    debug_telemetry_
+        .disjoint_satellite_fix_partition_a_ffrt_passed =
+        disjoint.partition_a_ffrt_passed;
+    debug_telemetry_
+        .disjoint_satellite_fix_partition_b_ffrt_passed =
+        disjoint.partition_b_ffrt_passed;
+    disjoint_satellite_fix_evidence::Config disjoint_config;
+    disjoint_config.maximum_partition_separation_m =
+        rtk_config_
+            .disjoint_satellite_fix_max_partition_separation_m;
+    disjoint_config.maximum_primary_separation_m =
+        rtk_config_
+            .disjoint_satellite_fix_max_primary_separation_m;
+    disjoint_config.covariance_scale =
+        rtk_config_.disjoint_satellite_fix_covariance_scale;
+    disjoint_config.maximum_nis_per_dimension =
+        rtk_config_
+            .disjoint_satellite_fix_max_nis_per_dimension;
+    disjoint_config.maximum_statistical_separation_m =
+        rtk_config_
+            .disjoint_satellite_fix_max_statistical_separation_m;
+    disjoint_satellite_fix_evidence::Evidence disjoint_evidence;
+    disjoint_evidence.available = disjoint.available;
+    disjoint_evidence.inputs_verified_disjoint =
+        disjoint.inputs_verified_disjoint;
+    disjoint_evidence.primary_ffrt_passed = ffrt_passed;
+    disjoint_evidence.partition_a_ffrt_passed =
+        disjoint.partition_a_ffrt_passed;
+    disjoint_evidence.partition_b_ffrt_passed =
+        disjoint.partition_b_ffrt_passed;
+    disjoint_evidence.partition_a_candidate_ecef =
+        disjoint.partition_a_candidate_ecef;
+    disjoint_evidence.partition_b_candidate_ecef =
+        disjoint.partition_b_candidate_ecef;
+    disjoint_evidence.primary_candidate_ecef =
+        primary_candidate_ecef;
+    disjoint_evidence.partition_a_covariance_ecef =
+        disjoint.partition_a_covariance_ecef;
+    disjoint_evidence.partition_b_covariance_ecef =
+        disjoint.partition_b_covariance_ecef;
+    if (std::isfinite(
+            debug_telemetry_
+                .float_position_covariance_trace_m2) &&
+        debug_telemetry_
+                .float_position_covariance_trace_m2 > 0.0) {
+        disjoint_evidence.primary_covariance_ecef =
+            Matrix3d::Identity() *
+            (debug_telemetry_
+                 .float_position_covariance_trace_m2 /
+             3.0);
+    }
+    const auto disjoint_decision =
+        disjoint_satellite_fix_evidence::evaluate(
+            disjoint_config, disjoint_evidence);
+    debug_telemetry_.disjoint_satellite_fix_evidence_passed =
+        disjoint_decision.passed;
+    debug_telemetry_
+        .disjoint_satellite_fix_partition_separation_m =
+        disjoint_decision.partition_separation_m;
+    debug_telemetry_
+        .disjoint_satellite_fix_partition_a_primary_separation_m =
+        disjoint_decision.partition_a_primary_separation_m;
+    debug_telemetry_
+        .disjoint_satellite_fix_partition_b_primary_separation_m =
+        disjoint_decision.partition_b_primary_separation_m;
+    debug_telemetry_
+        .disjoint_satellite_fix_hard_separation_passed =
+        disjoint_decision.hard_separation_passed;
+    debug_telemetry_
+        .disjoint_satellite_fix_statistical_separation_passed =
+        disjoint_decision.statistical_separation_passed;
+    debug_telemetry_
+        .disjoint_satellite_fix_partition_nis_per_dimension =
+        disjoint_decision.partition_nis_per_dimension;
+    debug_telemetry_
+        .disjoint_satellite_fix_partition_a_primary_nis_per_dimension =
+        disjoint_decision
+            .partition_a_primary_nis_per_dimension;
+    debug_telemetry_
+        .disjoint_satellite_fix_partition_b_primary_nis_per_dimension =
+        disjoint_decision
+            .partition_b_primary_nis_per_dimension;
+
+    // When two genuinely disjoint partitions both pass, they provide the
+    // two independent fault domains themselves. Do not also count the
+    // overlapping all-satellite primary solution as an independent family.
+    const bool use_disjoint_partitions =
+        disjoint_decision.passed;
+    const std::array<fix_failure_budget::Evidence, 6>
+        failure_evidence{{
+            {
+                fix_failure_budget::SourceFamily::
+                    PRIMARY_CARRIER_AR,
+                ffrt_passed && !use_disjoint_partitions,
+                0.001,
+            },
+            {
+                // Full and satellite-PAR share carrier observations and
+                // ambiguity states, so they deliberately occupy the same
+                // fault domain.
+                fix_failure_budget::SourceFamily::
+                    PRIMARY_CARRIER_AR,
+                debug_telemetry_
+                        .lambda_satellite_par_shadow_ffrt_passed &&
+                    debug_telemetry_
+                        .lambda_satellite_par_shadow_solved &&
+                    !use_disjoint_partitions,
+                0.001,
+            },
+            {
+                fix_failure_budget::SourceFamily::
+                    MULTIFREQUENCY_CASCADE,
+                (debug_telemetry_
+                         .lambda_l1_l5_wlnl_shadow_wl_ffrt_passed &&
+                 debug_telemetry_
+                         .lambda_l1_l5_wlnl_shadow_nl_ffrt_passed &&
+                 std::isfinite(
+                     debug_telemetry_
+                         .lambda_l1_l5_wlnl_shadow_best_ecef_x) &&
+                 std::isfinite(
+                     debug_telemetry_
+                         .lambda_l1_l5_wlnl_shadow_best_ecef_y) &&
+                 std::isfinite(
+                     debug_telemetry_
+                         .lambda_l1_l5_wlnl_shadow_best_ecef_z)) ||
+                    (debug_telemetry_
+                         .lambda_l1_l2_wlnl_shadow_wl_ffrt_passed &&
+                     debug_telemetry_
+                         .lambda_l1_l2_wlnl_shadow_nl_ffrt_passed &&
+                     std::isfinite(
+                         debug_telemetry_
+                             .lambda_l1_l2_wlnl_shadow_best_ecef_x) &&
+                     std::isfinite(
+                         debug_telemetry_
+                             .lambda_l1_l2_wlnl_shadow_best_ecef_y) &&
+                     std::isfinite(
+                         debug_telemetry_
+                             .lambda_l1_l2_wlnl_shadow_best_ecef_z)) ||
+                    (debug_telemetry_
+                         .lambda_l2_l5_wlnl_shadow_wl_ffrt_passed &&
+                     debug_telemetry_
+                         .lambda_l2_l5_wlnl_shadow_nl_ffrt_passed &&
+                     std::isfinite(
+                         debug_telemetry_
+                             .lambda_l2_l5_wlnl_shadow_best_ecef_x) &&
+                     std::isfinite(
+                         debug_telemetry_
+                             .lambda_l2_l5_wlnl_shadow_best_ecef_y) &&
+                     std::isfinite(
+                         debug_telemetry_
+                             .lambda_l2_l5_wlnl_shadow_best_ecef_z)),
+                0.002,
+            },
+            {
+                fix_failure_budget::SourceFamily::
+                    INERTIAL_SOLUTION_SEPARATION,
+                inertial_passed,
+                rtk_config_
+                    .inertial_fix_evidence_failure_probability,
+            },
+            {
+                fix_failure_budget::SourceFamily::
+                    DISJOINT_SATELLITE_PARTITION_A,
+                use_disjoint_partitions,
+                rtk_config_
+                    .disjoint_satellite_fix_failure_probability,
+            },
+            {
+                fix_failure_budget::SourceFamily::
+                    DISJOINT_SATELLITE_PARTITION_B,
+                use_disjoint_partitions,
+                rtk_config_
+                    .disjoint_satellite_fix_failure_probability,
+            },
+        }};
+    const auto failure_budget =
+        fix_failure_budget::evaluate(
+            fix_failure_budget::Config{}, failure_evidence);
+    debug_telemetry_
+        .safe_fix_shadow_independent_source_families =
+        failure_budget.independent_families;
+    debug_telemetry_
+        .safe_fix_shadow_joint_failure_probability =
+        failure_budget.joint_failure_probability;
+    debug_telemetry_
+        .safe_fix_shadow_failure_budget_passed =
+        failure_budget.passed;
+    independent_failure_budget_evaluated_this_epoch_ = true;
+}
+
+void RTKProcessor::updateSafeFixShadowStateMachine(const GNSSTime& time) {
+    const auto& config = rtk_config_.safe_fix_shadow_state_machine;
+    debug_telemetry_.safe_fix_shadow_enabled = config.enabled;
+
+    safe_fix::Candidate candidate;
+    candidate.time_s =
+        static_cast<double>(time.week) * 604800.0 + time.tow;
+    candidate.correction_m = Vector3d(
+        debug_telemetry_.lambda_shadow_best_correction_x,
+        debug_telemetry_.lambda_shadow_best_correction_y,
+        debug_telemetry_.lambda_shadow_best_correction_z);
+    candidate.nis_per_observation =
+        debug_telemetry_.float_update_nis_per_observation;
+    candidate.prefit_residual_rms_m =
+        debug_telemetry_.float_update_prefit_residual_rms_m;
+    candidate.pair_count = debug_telemetry_.pair_count;
+    candidate.ambiguity_ratio = debug_telemetry_.full_ratio;
+    const Vector3d satellite_candidate_ecef(
+        debug_telemetry_.lambda_satellite_par_shadow_best_ecef_x,
+        debug_telemetry_.lambda_satellite_par_shadow_best_ecef_y,
+        debug_telemetry_.lambda_satellite_par_shadow_best_ecef_z);
+    const Vector3d full_candidate_ecef(
+        debug_telemetry_.lambda_shadow_best_ecef_x,
+        debug_telemetry_.lambda_shadow_best_ecef_y,
+        debug_telemetry_.lambda_shadow_best_ecef_z);
+    if (satellite_candidate_ecef.allFinite() &&
+        full_candidate_ecef.allFinite()) {
+        candidate.independent_consensus_delta_m =
+            (satellite_candidate_ecef - full_candidate_ecef).norm();
+    }
+    debug_telemetry_
+        .safe_fix_shadow_independent_consensus_delta_m =
+        candidate.independent_consensus_delta_m;
+
+    double bsr = std::numeric_limits<double>::quiet_NaN();
+    switch (rtk_config_.safe_fix_shadow_covariance_scale) {
+        case 1: bsr = debug_telemetry_.lambda_shadow_bsr; break;
+        case 2: bsr = debug_telemetry_.lambda_shadow_bsr_qscale2; break;
+        case 4: bsr = debug_telemetry_.lambda_shadow_bsr_qscale4; break;
+        case 8: bsr = debug_telemetry_.lambda_shadow_bsr_qscale8; break;
+        case 16: bsr = debug_telemetry_.lambda_shadow_bsr_qscale16; break;
+        default: break;
+    }
+    FixedFailureRateRatioThreshold threshold;
+    const bool ffrt_passed =
+        debug_telemetry_.lambda_shadow_solved &&
+        fixedFailureRateRatioThreshold(
+            candidate.pair_count, bsr, 0.001, threshold) &&
+        threshold.accepts_any_candidate &&
+        std::isfinite(debug_telemetry_.full_ratio) &&
+        debug_telemetry_.full_ratio >=
+            threshold.minimum_second_to_best_ratio;
+    if (!independent_failure_budget_evaluated_this_epoch_) {
+        updateIndependentFailureBudgetTelemetry();
+    }
+    candidate.independent_failure_budget_passed =
+        debug_telemetry_.safe_fix_shadow_failure_budget_passed;
+    candidate.acquisition_eligible =
+        ffrt_passed &&
+        candidate.pair_count >= rtk_config_.safe_fix_shadow_minimum_pairs &&
+        std::isfinite(
+            debug_telemetry_.lambda_shadow_second_position_delta_m) &&
+        debug_telemetry_.lambda_shadow_second_position_delta_m <=
+            rtk_config_
+                .safe_fix_shadow_maximum_second_position_delta_m &&
+        std::isfinite(candidate.nis_per_observation) &&
+        candidate.nis_per_observation <=
+            rtk_config_.safe_fix_shadow_maximum_nis_per_observation &&
+        std::isfinite(candidate.prefit_residual_rms_m) &&
+        candidate.prefit_residual_rms_m <=
+            rtk_config_
+                .safe_fix_shadow_maximum_prefit_residual_rms_m;
+    candidate.strong_acquisition_eligible =
+        candidate.acquisition_eligible &&
+        std::isfinite(candidate.ambiguity_ratio) &&
+        candidate.ambiguity_ratio >= 10.0 &&
+        candidate.pair_count >= 20 &&
+        std::isfinite(
+            debug_telemetry_.lambda_shadow_second_position_delta_m) &&
+        debug_telemetry_.lambda_shadow_second_position_delta_m <= 0.05 &&
+        std::isfinite(candidate.independent_consensus_delta_m) &&
+        candidate.independent_consensus_delta_m <= 0.01 &&
+        candidate.correction_m.norm() <= 0.05;
+    candidate.change_point_acquisition_eligible =
+        ffrt_passed &&
+        std::isfinite(candidate.ambiguity_ratio) &&
+        candidate.ambiguity_ratio >= 1.10 &&
+        candidate.pair_count >= 20 &&
+        std::isfinite(
+            debug_telemetry_.lambda_shadow_second_position_delta_m) &&
+        debug_telemetry_.lambda_shadow_second_position_delta_m <= 0.07 &&
+        std::isfinite(candidate.nis_per_observation) &&
+        candidate.nis_per_observation <= 3.0 &&
+        std::isfinite(candidate.prefit_residual_rms_m) &&
+        candidate.prefit_residual_rms_m <= 50.0 &&
+        std::isfinite(candidate.independent_consensus_delta_m) &&
+        candidate.independent_consensus_delta_m <= 0.05;
+
+    const auto decision =
+        safe_fix_shadow_state_machine_.update(config, candidate);
+    debug_telemetry_.safe_fix_shadow_state =
+        static_cast<int>(decision.state);
+    debug_telemetry_.safe_fix_shadow_declared_fixed =
+        decision.declared_fixed;
+    debug_telemetry_.safe_fix_shadow_candidate_accepted =
+        decision.candidate_accepted;
+    debug_telemetry_.safe_fix_shadow_held = decision.held;
+    debug_telemetry_.safe_fix_shadow_revoked = decision.revoked;
+    debug_telemetry_.safe_fix_shadow_strong_acquisition =
+        decision.strong_acquisition;
+    debug_telemetry_.safe_fix_shadow_change_point_acquisition =
+        decision.change_point_acquisition;
+    debug_telemetry_.safe_fix_shadow_acquisition_streak =
+        decision.acquisition_streak;
+    debug_telemetry_.safe_fix_shadow_hold_epochs =
+        decision.hold_epochs;
 }
 
 PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& rover_obs,
     const ObservationData& base_obs, const NavigationData& nav) {
     debug_telemetry_ = EpochDebugTelemetry{};
+    independent_failure_budget_evaluated_this_epoch_ = false;
     PositionSolution solution;
     solution.time = rover_obs.time;
     solution.status = SolutionStatus::NONE;
@@ -2175,8 +3620,17 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                     spp.status = SolutionStatus::NONE;
                 }
             }
-            if (spp.isValid()) spp.status = SolutionStatus::SPP;
-            rememberSolution(spp);
+            if (!spp.isValid()) {
+                spp = makeSafeFloatContinuity(rover_obs.time);
+            }
+            if (
+                spp.isValid() &&
+                !debug_telemetry_.safe_float_continuity_used) {
+                spp.status = SolutionStatus::SPP;
+            }
+            if (!debug_telemetry_.safe_float_continuity_used) {
+                rememberSolution(spp);
+            }
             recordFallbackEpoch(rover_obs, nav);
             return spp;
         };
@@ -2380,6 +3834,9 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                 std::vector<DDPair> dd_pairs;
                 std::vector<int> best_subset;
                 VectorXd dd_fixed;
+                bool independent_failure_budget_passed = false;
+                int independent_source_families = 0;
+                double joint_failure_probability = 1.0;
             };
 
             auto capture_candidate = [&]() {
@@ -2394,6 +3851,15 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                 candidate.dd_pairs = last_dd_pairs_;
                 candidate.best_subset = last_best_subset_;
                 candidate.dd_fixed = last_dd_fixed_;
+                candidate.independent_failure_budget_passed =
+                    debug_telemetry_
+                        .safe_fix_shadow_failure_budget_passed;
+                candidate.independent_source_families =
+                    debug_telemetry_
+                        .safe_fix_shadow_independent_source_families;
+                candidate.joint_failure_probability =
+                    debug_telemetry_
+                        .safe_fix_shadow_joint_failure_probability;
                 return candidate;
             };
 
@@ -2405,6 +3871,15 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                 last_dd_pairs_ = candidate.dd_pairs;
                 last_best_subset_ = candidate.best_subset;
                 last_dd_fixed_ = candidate.dd_fixed;
+                debug_telemetry_
+                    .safe_fix_shadow_failure_budget_passed =
+                    candidate.independent_failure_budget_passed;
+                debug_telemetry_
+                    .safe_fix_shadow_independent_source_families =
+                    candidate.independent_source_families;
+                debug_telemetry_
+                    .safe_fix_shadow_joint_failure_probability =
+                    candidate.joint_failure_probability;
             };
 
             const int min_lock = std::max(1, rtk_config_.min_lock_count);
@@ -2428,6 +3903,7 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                     has_fixed_solution_;
                 ARCandidate candidate;
                 if (resolved) {
+                    updateIndependentFailureBudgetTelemetry();
                     candidate = capture_candidate();
                 }
                 rtk_config_.glonass_ar_mode = saved_mode;
@@ -2483,6 +3959,30 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                 }
             } else if (resolveAmbiguities() && has_fixed_solution_) {
                 have_fix_candidate = true;
+            }
+
+            // A declaration-time independent-budget gate must run before
+            // validate/apply/hold mutates any trusted-FIX state.  A later
+            // output-only demotion would still let a rejected integer
+            // candidate seed hold ambiguities and future trusted positions.
+            const bool require_independent_budget =
+                rtk_config_.library_fixed_quality_gate.enabled &&
+                rtk_config_.library_fixed_quality_gate
+                    .require_independent_failure_budget;
+            if (require_independent_budget) {
+                if (rtk_config_.glonass_ar_mode !=
+                    RTKConfig::GlonassARMode::AUTOCAL) {
+                    updateIndependentFailureBudgetTelemetry();
+                }
+                if (!debug_telemetry_
+                         .safe_fix_shadow_failure_budget_passed) {
+                    have_fix_candidate = false;
+                    has_fixed_solution_ = false;
+                    if (debug_telemetry_.reject_reason.empty()) {
+                        debug_telemetry_.reject_reason =
+                            "independent_failure_budget";
+                    }
+                }
             }
 
             bool applied_fix_solution = false;
@@ -2578,6 +4078,9 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                 !applied_fix_solution &&
                 !forced_fixed_reacquisition_reset &&
                 !fixed_prefit_quarantine &&
+                (!require_independent_budget ||
+                 debug_telemetry_
+                     .safe_fix_shadow_failure_budget_passed) &&
                 rtk_config_.ar_policy != RTKConfig::ARPolicy::DEMO5_CONTINUOUS &&
                 rtk_validation::canAttemptHoldFix(consecutive_fix_count_,
                                                   rtk_config_.min_hold_count,
@@ -2635,7 +4138,15 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
     } catch (const std::exception& e) {
         std::cerr << "RTK exception: " << e.what() << std::endl;
         auto spp = spp_processor_.processEpoch(rover_obs, nav);
-        rememberSolution(spp);
+        if (!spp.isValid()) {
+            spp = makeSafeFloatContinuity(rover_obs.time);
+        }
+        if (spp.isValid() &&
+            !debug_telemetry_.safe_float_continuity_used) {
+            spp.status = SolutionStatus::SPP;
+            rememberSolution(spp);
+        }
+        recordFallbackEpoch(rover_obs, nav);
         consecutive_fix_count_ = 0;
         consecutive_float_count_ = 0;
         consecutive_nonfix_count_ = 0;
@@ -3029,7 +4540,6 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
     const auto measurement_diagnostics = rtk_measurement::summarizeMeasurementBlocks(blocks);
     auto measurement_system = rtk_measurement::assembleMeasurementSystem(
         blocks, filter_state_.state.size());
-
     // navi.776 B2: Doppler rows live in the m/s domain -- give them their
     // own outlier threshold instead of the metre-domain scalar.
     debug_telemetry_.float_update_doppler_observation_count =
@@ -3149,7 +4659,8 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
             0.0,
             force_active,
             adaptive_noise_active,
-            rtk_config_.reuse_kalman_factorization_for_nis);
+            rtk_config_.reuse_kalman_factorization_for_nis,
+            rtk_config_.student_t_front_end);
         rtk_update::FilterUpdateResult doppler_result;
         if (position_result.ok) {
             const VectorXd state_correction =
@@ -3165,7 +4676,8 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
                 0.0,
                 force_active,
                 adaptive_noise_active,
-                rtk_config_.reuse_kalman_factorization_for_nis);
+                rtk_config_.reuse_kalman_factorization_for_nis,
+                rtk_config_.student_t_front_end);
         }
         update_result.ok = position_result.ok && doppler_result.ok;
         if (!update_result.ok) {
@@ -3223,7 +4735,8 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
             force_active,
             adaptive_noise_active,
             rtk_config_.reuse_kalman_factorization_for_nis &&
-                nis_gates_disabled);
+                nis_gates_disabled,
+            rtk_config_.student_t_front_end);
         feed_adaptive_tracker(blocks, measurement_system, update_result);
     }
 
@@ -3284,6 +4797,14 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
     debug_telemetry_.float_update_nis_per_observation =
         update_result.normalized_innovation_squared_per_observation;
     debug_telemetry_.float_update_suppressed_outliers = update_result.suppressed_outliers;
+    debug_telemetry_.float_update_student_t_downweighted_rows =
+        update_result.student_t.downweighted_rows;
+    if (update_result.student_t.applied) {
+        debug_telemetry_.float_update_student_t_minimum_weight =
+            update_result.student_t.minimum_weight;
+        debug_telemetry_.float_update_student_t_mean_weight =
+            update_result.student_t.mean_weight;
+    }
     debug_telemetry_.float_position_covariance_trace_m2 =
         filter_state_.covariance.rows() >= 3 && filter_state_.covariance.cols() >= 3
             ? filter_state_.covariance(0, 0) + filter_state_.covariance(1, 1) +
@@ -3437,6 +4958,76 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
                 debug_telemetry_.ar_skip_reason = ARSkipReason::DD_PAIRS_LT_4_AFTER_VAR_FILTER;
             }
         }
+    }
+
+    std::vector<int> causal_arc_ready_subset;
+    std::vector<double> causal_arc_smoothed_dd(
+        nb, std::numeric_limits<double>::quiet_NaN());
+    std::vector<double> causal_arc_satellite_variance(
+        nb, std::numeric_limits<double>::infinity());
+    std::vector<double> causal_arc_reference_variance(
+        nb, std::numeric_limits<double>::infinity());
+    if (rtk_config_.lambda_causal_arc_readiness_shadow) {
+        debug_telemetry_.lambda_causal_arc_readiness_attempted = true;
+        debug_telemetry_.lambda_causal_arc_total_pairs = nb;
+        causal_arc_ready_subset.reserve(nb);
+        const double time_s =
+            static_cast<double>(current_epoch_time_.week) * 604800.0 +
+            current_epoch_time_.tow;
+        const auto slipped = [&](const SatelliteId& sat, int freq) {
+            if (freq == 0) {
+                return current_epoch_slips_l1_.count(sat) > 0;
+            }
+            if (freq == 1) {
+                return current_epoch_slips_l2_.count(sat) > 0;
+            }
+            return current_epoch_slips_l5_.count(sat) > 0;
+        };
+        for (int index = 0; index < nb; ++index) {
+            const auto& pair = dd_pairs[index];
+            if (pair.sat_idx < 0 ||
+                pair.sat_idx >= filter_state_.state.size() ||
+                pair.ref_idx < 0 ||
+                pair.ref_idx >= filter_state_.state.size()) {
+                continue;
+            }
+            const auto satellite_arc =
+                ambiguity_arc_bank_.updateSignal(
+                    pair.sat, pair.freq, time_s,
+                    filter_state_.state(pair.sat_idx),
+                    slipped(pair.sat, pair.freq));
+            const auto reference_arc =
+                ambiguity_arc_bank_.updateSignal(
+                    pair.ref_sat, pair.freq, time_s,
+                    filter_state_.state(pair.ref_idx),
+                    slipped(pair.ref_sat, pair.freq));
+            if (satellite_arc.reset) {
+                ++debug_telemetry_.lambda_causal_arc_resets;
+            }
+            if (reference_arc.reset) {
+                ++debug_telemetry_.lambda_causal_arc_resets;
+            }
+            if (satellite_arc.ready && reference_arc.ready &&
+                std::isfinite(satellite_arc.smoothed_value) &&
+                std::isfinite(reference_arc.smoothed_value) &&
+                std::isfinite(
+                    satellite_arc.smoothed_value_variance) &&
+                std::isfinite(
+                    reference_arc.smoothed_value_variance) &&
+                satellite_arc.smoothed_value_variance >= 0.0 &&
+                reference_arc.smoothed_value_variance >= 0.0) {
+                causal_arc_ready_subset.push_back(index);
+                causal_arc_smoothed_dd[index] =
+                    reference_arc.smoothed_value -
+                    satellite_arc.smoothed_value;
+                causal_arc_satellite_variance[index] =
+                    satellite_arc.smoothed_value_variance;
+                causal_arc_reference_variance[index] =
+                    reference_arc.smoothed_value_variance;
+            }
+        }
+        debug_telemetry_.lambda_causal_arc_ready_pairs =
+            static_cast<int>(causal_arc_ready_subset.size());
     }
 
     // Try full set first
@@ -3648,6 +5239,555 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
         return std::isfinite(wide_lane_float);
     };
 
+    // Shadow-only L1/L5 WL->NL cascade. Unlike enable_l5, this path does not
+    // add L5 ambiguity states or L5 measurements to the production KF. It
+    // derives an independent L5 DD ambiguity from the carrier observation and
+    // current float geometry, resolves N1-N5 first, then resolves N1 on the
+    // matching L1 subset. Both integer searches must independently pass
+    // covariance-inflated FFRT, and the WL integer must agree with MW.
+    if (rtk_config_.lambda_l1_l5_wlnl_shadow ||
+        rtk_config_.lambda_l1_l2_wlnl_shadow ||
+        rtk_config_.lambda_l2_l5_wlnl_shadow) {
+        // 0=L1/L5, 1=L1/L2, 2=L2/L5.
+        std::vector<int> wlnl_modes;
+        if (rtk_config_.lambda_l1_l5_wlnl_shadow) {
+            wlnl_modes.push_back(0);
+        }
+        if (rtk_config_.lambda_l1_l2_wlnl_shadow) {
+            wlnl_modes.push_back(1);
+        }
+        if (rtk_config_.lambda_l2_l5_wlnl_shadow) {
+            wlnl_modes.push_back(2);
+        }
+        const auto wlnl_started = std::chrono::steady_clock::now();
+        for (const int wlnl_mode : wlnl_modes) {
+        const bool use_l2_wlnl = wlnl_mode == 1;
+        const bool use_l2_primary = wlnl_mode == 2;
+        auto& wlnl_attempted = use_l2_wlnl
+            ? debug_telemetry_.lambda_l1_l2_wlnl_shadow_attempted
+            : use_l2_primary
+                ? debug_telemetry_.lambda_l2_l5_wlnl_shadow_attempted
+                : debug_telemetry_.lambda_l1_l5_wlnl_shadow_attempted;
+        auto& wlnl_pair_count = use_l2_wlnl
+            ? debug_telemetry_.lambda_l1_l2_wlnl_shadow_pair_count
+            : use_l2_primary
+                ? debug_telemetry_.lambda_l2_l5_wlnl_shadow_pair_count
+                : debug_telemetry_.lambda_l1_l5_wlnl_shadow_pair_count;
+        auto& wlnl_wl_bsr = use_l2_wlnl
+            ? debug_telemetry_.lambda_l1_l2_wlnl_shadow_wl_bsr
+            : use_l2_primary
+                ? debug_telemetry_.lambda_l2_l5_wlnl_shadow_wl_bsr
+                : debug_telemetry_.lambda_l1_l5_wlnl_shadow_wl_bsr;
+        auto& wlnl_wl_ratio = use_l2_wlnl
+            ? debug_telemetry_.lambda_l1_l2_wlnl_shadow_wl_ratio
+            : use_l2_primary
+                ? debug_telemetry_.lambda_l2_l5_wlnl_shadow_wl_ratio
+                : debug_telemetry_.lambda_l1_l5_wlnl_shadow_wl_ratio;
+        auto& wlnl_wl_ffrt_min_ratio = use_l2_wlnl
+            ? debug_telemetry_
+                  .lambda_l1_l2_wlnl_shadow_wl_ffrt_min_ratio
+            : use_l2_primary
+                ? debug_telemetry_
+                      .lambda_l2_l5_wlnl_shadow_wl_ffrt_min_ratio
+                : debug_telemetry_
+                      .lambda_l1_l5_wlnl_shadow_wl_ffrt_min_ratio;
+        auto& wlnl_wl_ffrt_passed = use_l2_wlnl
+            ? debug_telemetry_.lambda_l1_l2_wlnl_shadow_wl_ffrt_passed
+            : use_l2_primary
+                ? debug_telemetry_
+                      .lambda_l2_l5_wlnl_shadow_wl_ffrt_passed
+                : debug_telemetry_
+                      .lambda_l1_l5_wlnl_shadow_wl_ffrt_passed;
+        auto& wlnl_mw_disagreements = use_l2_wlnl
+            ? debug_telemetry_.lambda_l1_l2_wlnl_shadow_mw_disagreements
+            : use_l2_primary
+                ? debug_telemetry_
+                      .lambda_l2_l5_wlnl_shadow_mw_disagreements
+                : debug_telemetry_
+                      .lambda_l1_l5_wlnl_shadow_mw_disagreements;
+        auto& wlnl_raw_mw_disagreements = use_l2_wlnl
+            ? debug_telemetry_
+                  .lambda_l1_l2_wlnl_shadow_raw_mw_disagreements
+            : use_l2_primary
+                ? debug_telemetry_
+                      .lambda_l2_l5_wlnl_shadow_raw_mw_disagreements
+                : debug_telemetry_
+                      .lambda_l1_l5_wlnl_shadow_raw_mw_disagreements;
+        auto& wlnl_causal_arc_ready_pairs = use_l2_wlnl
+            ? debug_telemetry_
+                  .lambda_l1_l2_wlnl_shadow_causal_arc_ready_pairs
+            : use_l2_primary
+                ? debug_telemetry_
+                      .lambda_l2_l5_wlnl_shadow_causal_arc_ready_pairs
+                : debug_telemetry_
+                      .lambda_l1_l5_wlnl_shadow_causal_arc_ready_pairs;
+        auto& wlnl_causal_arc_resets = use_l2_wlnl
+            ? debug_telemetry_.lambda_l1_l2_wlnl_shadow_causal_arc_resets
+            : use_l2_primary
+                ? debug_telemetry_
+                      .lambda_l2_l5_wlnl_shadow_causal_arc_resets
+                : debug_telemetry_
+                      .lambda_l1_l5_wlnl_shadow_causal_arc_resets;
+        auto& wlnl_nl_bsr = use_l2_wlnl
+            ? debug_telemetry_.lambda_l1_l2_wlnl_shadow_nl_bsr
+            : use_l2_primary
+                ? debug_telemetry_.lambda_l2_l5_wlnl_shadow_nl_bsr
+                : debug_telemetry_.lambda_l1_l5_wlnl_shadow_nl_bsr;
+        auto& wlnl_nl_ratio = use_l2_wlnl
+            ? debug_telemetry_.lambda_l1_l2_wlnl_shadow_nl_ratio
+            : use_l2_primary
+                ? debug_telemetry_.lambda_l2_l5_wlnl_shadow_nl_ratio
+                : debug_telemetry_.lambda_l1_l5_wlnl_shadow_nl_ratio;
+        auto& wlnl_nl_ffrt_min_ratio = use_l2_wlnl
+            ? debug_telemetry_
+                  .lambda_l1_l2_wlnl_shadow_nl_ffrt_min_ratio
+            : use_l2_primary
+                ? debug_telemetry_
+                      .lambda_l2_l5_wlnl_shadow_nl_ffrt_min_ratio
+                : debug_telemetry_
+                      .lambda_l1_l5_wlnl_shadow_nl_ffrt_min_ratio;
+        auto& wlnl_nl_ffrt_passed = use_l2_wlnl
+            ? debug_telemetry_.lambda_l1_l2_wlnl_shadow_nl_ffrt_passed
+            : use_l2_primary
+                ? debug_telemetry_
+                      .lambda_l2_l5_wlnl_shadow_nl_ffrt_passed
+                : debug_telemetry_
+                      .lambda_l1_l5_wlnl_shadow_nl_ffrt_passed;
+        auto& wlnl_candidate_pair_count = use_l2_wlnl
+            ? debug_telemetry_
+                  .lambda_l1_l2_wlnl_shadow_candidate_pair_count
+            : use_l2_primary
+                ? debug_telemetry_
+                      .lambda_l2_l5_wlnl_shadow_candidate_pair_count
+                : debug_telemetry_
+                      .lambda_l1_l5_wlnl_shadow_candidate_pair_count;
+        auto& wlnl_best_ecef_x = use_l2_wlnl
+            ? debug_telemetry_.lambda_l1_l2_wlnl_shadow_best_ecef_x
+            : use_l2_primary
+                ? debug_telemetry_.lambda_l2_l5_wlnl_shadow_best_ecef_x
+                : debug_telemetry_.lambda_l1_l5_wlnl_shadow_best_ecef_x;
+        auto& wlnl_best_ecef_y = use_l2_wlnl
+            ? debug_telemetry_.lambda_l1_l2_wlnl_shadow_best_ecef_y
+            : use_l2_primary
+                ? debug_telemetry_.lambda_l2_l5_wlnl_shadow_best_ecef_y
+                : debug_telemetry_.lambda_l1_l5_wlnl_shadow_best_ecef_y;
+        auto& wlnl_best_ecef_z = use_l2_wlnl
+            ? debug_telemetry_.lambda_l1_l2_wlnl_shadow_best_ecef_z
+            : use_l2_primary
+                ? debug_telemetry_.lambda_l2_l5_wlnl_shadow_best_ecef_z
+                : debug_telemetry_.lambda_l1_l5_wlnl_shadow_best_ecef_z;
+        const auto has_secondary =
+            [&](const SatelliteData& data) {
+                return use_l2_wlnl ? data.has_l2 : data.has_l5;
+            };
+        const auto primary_wavelength =
+            [&](const SatelliteData& data) {
+                return use_l2_primary
+                    ? data.l2_wavelength
+                    : data.l1_wavelength;
+            };
+        const auto primary_frequency =
+            [&](const SatelliteData& data) {
+                return use_l2_primary
+                    ? data.l2_frequency_hz
+                    : data.l1_frequency_hz;
+            };
+        const auto primary_phase_sd_m =
+            [&](const SatelliteData& data) {
+                return use_l2_primary
+                    ? (data.rover_l2_phase - data.base_l2_phase) *
+                          data.l2_wavelength
+                    : (data.rover_l1_phase - data.base_l1_phase) *
+                          data.l1_wavelength;
+            };
+        const auto primary_code_sd =
+            [&](const SatelliteData& data) {
+                return use_l2_primary
+                    ? data.rover_l2_code - data.base_l2_code
+                    : data.rover_l1_code - data.base_l1_code;
+            };
+        const auto secondary_wavelength =
+            [&](const SatelliteData& data) {
+                return use_l2_wlnl
+                    ? data.l2_wavelength
+                    : data.l5_wavelength;
+            };
+        const auto secondary_frequency =
+            [&](const SatelliteData& data) {
+                return use_l2_wlnl
+                    ? data.l2_frequency_hz
+                    : data.l5_frequency_hz;
+            };
+        const auto secondary_phase_sd_m =
+            [&](const SatelliteData& data) {
+                return use_l2_wlnl
+                    ? (data.rover_l2_phase - data.base_l2_phase) *
+                          data.l2_wavelength
+                    : (data.rover_l5_phase - data.base_l5_phase) *
+                          data.l5_wavelength;
+            };
+        const auto secondary_code_sd =
+            [&](const SatelliteData& data) {
+                return use_l2_wlnl
+                    ? data.rover_l2_code - data.base_l2_code
+                    : data.rover_l5_code - data.base_l5_code;
+            };
+        wlnl_attempted = true;
+        std::vector<int> l1_indices;
+        std::vector<double> n5_float_values;
+        std::vector<double> mw_values;
+        std::vector<double> raw_mw_values;
+        std::vector<double> causal_reference_variances;
+        std::vector<double> causal_satellite_variances;
+        std::vector<SatelliteId> causal_references;
+        const Vector3d shadow_rover_position =
+            base_position_ + base_head_state.head<3>();
+        for (int i = 0; i < nb; ++i) {
+            const auto& pair = dd_pairs[i];
+            if (pair.freq != (use_l2_primary ? 1 : 0) ||
+                pair.ref_sat.system == GNSSSystem::GLONASS) {
+                continue;
+            }
+            const auto ref_it = sat_data.find(pair.ref_sat);
+            const auto sat_it = sat_data.find(pair.sat);
+            if (ref_it == sat_data.end() || sat_it == sat_data.end()) {
+                continue;
+            }
+            const auto& ref_sd = ref_it->second;
+            const auto& sd = sat_it->second;
+            if (!has_secondary(ref_sd) || !has_secondary(sd) ||
+                secondary_wavelength(ref_sd) <= 0.0 ||
+                secondary_wavelength(sd) <= 0.0 ||
+                std::abs(
+                    secondary_wavelength(ref_sd) -
+                    secondary_wavelength(sd)) > 1e-6) {
+                continue;
+            }
+            const double rr_ref =
+                geodist_range(ref_sd.sat_pos, shadow_rover_position) +
+                tropModel(shadow_rover_position, ref_sd.elevation);
+            const double br_ref =
+                geodist_range(ref_sd.sat_pos_base, base_position_) +
+                tropModel(base_position_, ref_sd.base_elevation);
+            const double rr =
+                geodist_range(sd.sat_pos, shadow_rover_position) +
+                tropModel(shadow_rover_position, sd.elevation);
+            const double br =
+                geodist_range(sd.sat_pos_base, base_position_) +
+                tropModel(base_position_, sd.base_elevation);
+            const double geometry_dd = (rr_ref - br_ref) - (rr - br);
+            const double phase_dd_m =
+                secondary_phase_sd_m(ref_sd) -
+                secondary_phase_sd_m(sd);
+            const double n5_float =
+                (phase_dd_m - geometry_dd) /
+                secondary_wavelength(ref_sd);
+
+            // Reuse the observation-domain MW implementation by pairing the
+            // L1 entry with a synthetic index only for validation. The helper
+            // requires an L5 DDPair, which is intentionally absent in shadow
+            // mode, so calculate the identical L1/L5 MW expression directly.
+            const double f1 = primary_frequency(ref_sd);
+            const double f5 = secondary_frequency(ref_sd);
+            const double lambda_wl_m = wideLaneWavelength(f1, f5);
+            if (!std::isfinite(n5_float) || f1 <= 0.0 || f5 <= 0.0 ||
+                lambda_wl_m <= 0.0) {
+                continue;
+            }
+            auto single_difference_mw = [&](const SatelliteData& data) {
+                const double phi1_m = primary_phase_sd_m(data);
+                const double phi5_m =
+                    secondary_phase_sd_m(data);
+                const double code_term =
+                    (f1 * primary_code_sd(data) +
+                     f5 * secondary_code_sd(data)) /
+                    (f1 + f5);
+                return ((f1 * phi1_m - f5 * phi5_m) / (f1 - f5) -
+                        code_term) /
+                       lambda_wl_m;
+            };
+            const double reference_mw =
+                single_difference_mw(ref_sd);
+            const double satellite_mw =
+                single_difference_mw(sd);
+            const double mw = reference_mw - satellite_mw;
+            if (!std::isfinite(mw)) {
+                continue;
+            }
+            double validation_mw = mw;
+            double causal_reference_variance =
+                std::numeric_limits<double>::infinity();
+            double causal_satellite_variance =
+                std::numeric_limits<double>::infinity();
+            if (rtk_config_
+                    .lambda_l1_l5_wlnl_causal_arc_smoothing) {
+                const bool satellite_slip =
+                    (use_l2_primary
+                         ? current_epoch_slips_l2_.count(pair.sat) > 0
+                         : current_epoch_slips_l1_.count(pair.sat) > 0) ||
+                    (use_l2_wlnl
+                         ? current_epoch_slips_l2_.count(pair.sat) > 0
+                         : current_epoch_slips_l5_.count(pair.sat) > 0);
+                const bool reference_slip =
+                    (use_l2_primary
+                         ? current_epoch_slips_l2_.count(pair.ref_sat) > 0
+                         : current_epoch_slips_l1_.count(pair.ref_sat) > 0) ||
+                    (use_l2_wlnl
+                         ? current_epoch_slips_l2_.count(pair.ref_sat) > 0
+                         : current_epoch_slips_l5_.count(pair.ref_sat) > 0);
+                const double time_s =
+                    static_cast<double>(current_epoch_time_.week) *
+                        604800.0 +
+                    current_epoch_time_.tow;
+                const auto satellite_arc =
+                    l1_l5_mw_arc_bank_.updateSignal(
+                        pair.sat,
+                        use_l2_primary ? 25 : (use_l2_wlnl ? 12 : 15),
+                        time_s, satellite_mw,
+                        satellite_slip);
+                const auto reference_arc =
+                    l1_l5_mw_arc_bank_.updateSignal(
+                        pair.ref_sat,
+                        use_l2_primary ? 25 : (use_l2_wlnl ? 12 : 15),
+                        time_s, reference_mw,
+                        reference_slip);
+                if (satellite_arc.reset) {
+                    ++wlnl_causal_arc_resets;
+                }
+                if (reference_arc.reset) {
+                    ++wlnl_causal_arc_resets;
+                }
+                if (satellite_arc.ready && reference_arc.ready) {
+                    validation_mw =
+                        reference_arc.smoothed_value -
+                        satellite_arc.smoothed_value;
+                    causal_reference_variance =
+                        reference_arc.smoothed_value_variance;
+                    causal_satellite_variance =
+                        satellite_arc.smoothed_value_variance;
+                    ++wlnl_causal_arc_ready_pairs;
+                } else {
+                    validation_mw =
+                        std::numeric_limits<double>::quiet_NaN();
+                }
+            }
+            l1_indices.push_back(i);
+            n5_float_values.push_back(n5_float);
+            mw_values.push_back(validation_mw);
+            raw_mw_values.push_back(mw);
+            causal_reference_variances.push_back(
+                causal_reference_variance);
+            causal_satellite_variances.push_back(
+                causal_satellite_variance);
+            causal_references.push_back(pair.ref_sat);
+        }
+
+        const int pair_count = static_cast<int>(l1_indices.size());
+        wlnl_pair_count = pair_count;
+        if (pair_count >= 4) {
+            VectorXd wl_float(pair_count);
+            MatrixXd wl_covariance(pair_count, pair_count);
+            VectorXd model_wl_float(pair_count);
+            MatrixXd model_wl_covariance(pair_count, pair_count);
+            for (int row = 0; row < pair_count; ++row) {
+                model_wl_float(row) =
+                    base_dd_float(l1_indices[row]) - n5_float_values[row];
+                const bool causal_observation =
+                    rtk_config_
+                        .lambda_l1_l5_wlnl_causal_arc_smoothing &&
+                    std::isfinite(mw_values[row]) &&
+                    std::isfinite(causal_reference_variances[row]) &&
+                    std::isfinite(causal_satellite_variances[row]);
+                wl_float(row) =
+                    causal_observation
+                        ? mw_values[row]
+                        : base_dd_float(l1_indices[row]) -
+                              n5_float_values[row];
+                for (int column = 0; column < pair_count; ++column) {
+                    model_wl_covariance(row, column) =
+                        base_Qb(l1_indices[row], l1_indices[column]);
+                    const bool causal_column =
+                        rtk_config_
+                            .lambda_l1_l5_wlnl_causal_arc_smoothing &&
+                        std::isfinite(mw_values[column]) &&
+                        std::isfinite(causal_reference_variances[column]) &&
+                        std::isfinite(causal_satellite_variances[column]);
+                    if (causal_observation && causal_column) {
+                        wl_covariance(row, column) =
+                            causal_references[row] ==
+                                    causal_references[column]
+                                ? std::max(
+                                      1e-6,
+                                      std::min(
+                                          causal_reference_variances[row],
+                                          causal_reference_variances[column]))
+                                : 0.0;
+                    } else {
+                        wl_covariance(row, column) =
+                            base_Qb(
+                                l1_indices[row], l1_indices[column]);
+                    }
+                }
+                if (causal_observation) {
+                    wl_covariance(row, row) += std::max(
+                        1e-6, causal_satellite_variances[row]);
+                } else {
+                    // Conservative independent L5 carrier/geometry
+                    // uncertainty.
+                    wl_covariance(row, row) += 0.0025;
+                }
+                // N1/N5-derived covariance retains the N1 cross-covariance
+                // needed by the subsequent Gaussian conditioning.  The
+                // causal MW covariance above is only for the independent WL
+                // integer search.
+                model_wl_covariance(row, row) += 0.0025;
+            }
+            wl_covariance =
+                (wl_covariance + wl_covariance.transpose()) * 0.5;
+            model_wl_covariance =
+                (model_wl_covariance +
+                 model_wl_covariance.transpose()) *
+                0.5;
+
+            LambdaCandidateDiagnostics wl_search;
+            if (lambdaSearchTopK(wl_float, wl_covariance, 2, wl_search) &&
+                wl_search.squared_residuals.size() >= 2 &&
+                wl_search.candidates.cols() >= 1) {
+                const double covariance_scale =
+                    std::max(
+                        1.0,
+                        rtk_config_
+                            .lambda_l1_l5_wlnl_shadow_covariance_scale);
+                const double wl_bsr = bootstrappedSuccessRate(
+                    wl_search.conditional_variances, covariance_scale);
+                const double wl_ratio =
+                    wl_search.squared_residuals(0) > 0.0
+                        ? wl_search.squared_residuals(1) /
+                              wl_search.squared_residuals(0)
+                        : 0.0;
+                wlnl_wl_bsr = wl_bsr;
+                wlnl_wl_ratio = wl_ratio;
+                FixedFailureRateRatioThreshold wl_ffrt;
+                const bool wl_table_supported =
+                    fixedFailureRateRatioThreshold(
+                        pair_count, wl_bsr, 0.001, wl_ffrt);
+                if (wl_table_supported) {
+                    wlnl_wl_ffrt_min_ratio =
+                        wl_ffrt.minimum_second_to_best_ratio;
+                }
+                int mw_disagreements = 0;
+                int raw_mw_disagreements = 0;
+                for (int row = 0; row < pair_count; ++row) {
+                    const double mw = mw_values[row];
+                    const double raw_mw = raw_mw_values[row];
+                    const bool causal_validation =
+                        rtk_config_
+                            .lambda_l1_l5_wlnl_causal_arc_smoothing;
+                    if (!std::isfinite(mw) ||
+                        (!causal_validation &&
+                         distanceToNearestInteger(mw) >= 0.25) ||
+                        std::abs(
+                            wl_search.candidates(row, 0) -
+                            std::round(mw)) > 0.5) {
+                        ++mw_disagreements;
+                    }
+                    if (distanceToNearestInteger(raw_mw) >= 0.25 ||
+                        std::abs(
+                            wl_search.candidates(row, 0) -
+                            std::round(raw_mw)) > 0.5) {
+                        ++raw_mw_disagreements;
+                    }
+                }
+                wlnl_mw_disagreements = mw_disagreements;
+                wlnl_raw_mw_disagreements = raw_mw_disagreements;
+                const bool wl_passed =
+                    wl_table_supported && wl_ffrt.accepts_any_candidate &&
+                    std::isfinite(wl_ratio) &&
+                    wl_ratio >= wl_ffrt.minimum_second_to_best_ratio &&
+                    mw_disagreements == 0;
+                wlnl_wl_ffrt_passed = wl_passed;
+
+                if (wl_passed) {
+                    const auto nl_problem =
+                        rtk_ar_evaluation::extractSubset(
+                            base_dd_float, base_Qb, base_Qab, l1_indices);
+                    VectorXd conditioned_head_state;
+                    MatrixXd conditioned_Qab;
+                    VectorXd conditioned_n1_float;
+                    MatrixXd conditioned_Qb;
+                    const bool conditioned =
+                        rtk_ar_selection::
+                            conditionNarrowLaneOnFixedWideLane(
+                                base_head_state,
+                                nl_problem.Qab,
+                                nl_problem.dd_float,
+                                nl_problem.Qb,
+                                model_wl_float,
+                                model_wl_covariance,
+                                wl_search.candidates.col(0),
+                                conditioned_head_state,
+                                conditioned_Qab,
+                                conditioned_n1_float,
+                                conditioned_Qb);
+                    LambdaCandidateDiagnostics nl_search;
+                    if (conditioned &&
+                        lambdaSearchTopK(
+                            conditioned_n1_float, conditioned_Qb, 2,
+                            nl_search) &&
+                        nl_search.squared_residuals.size() >= 2 &&
+                        nl_search.candidates.cols() >= 1) {
+                        const double nl_bsr = bootstrappedSuccessRate(
+                            nl_search.conditional_variances,
+                            covariance_scale);
+                        const double nl_ratio =
+                            nl_search.squared_residuals(0) > 0.0
+                                ? nl_search.squared_residuals(1) /
+                                      nl_search.squared_residuals(0)
+                                : 0.0;
+                        wlnl_nl_bsr = nl_bsr;
+                        wlnl_nl_ratio = nl_ratio;
+                        FixedFailureRateRatioThreshold nl_ffrt;
+                        const bool nl_table_supported =
+                            fixedFailureRateRatioThreshold(
+                                pair_count, nl_bsr, 0.001, nl_ffrt);
+                        if (nl_table_supported) {
+                            wlnl_nl_ffrt_min_ratio =
+                                nl_ffrt.minimum_second_to_best_ratio;
+                        }
+                        const bool nl_passed =
+                            nl_table_supported &&
+                            nl_ffrt.accepts_any_candidate &&
+                            std::isfinite(nl_ratio) &&
+                            nl_ratio >=
+                                nl_ffrt.minimum_second_to_best_ratio;
+                        wlnl_nl_ffrt_passed = nl_passed;
+                        if (nl_passed) {
+                            wlnl_candidate_pair_count = pair_count;
+                        }
+                        VectorXd best_head;
+                        if (nl_passed &&
+                            rtk_ar_evaluation::solveFixedHeadState(
+                                conditioned_head_state, conditioned_Qab,
+                                conditioned_Qb, conditioned_n1_float,
+                                nl_search.candidates.col(0), best_head) &&
+                            best_head.size() >= 3) {
+                            const Vector3d ecef =
+                                base_position_ + best_head.head<3>();
+                            wlnl_best_ecef_x = ecef.x();
+                            wlnl_best_ecef_y = ecef.y();
+                            wlnl_best_ecef_z = ecef.z();
+                        }
+                    }
+                }
+            }
+        }
+        }
+        debug_telemetry_.lambda_l1_l5_wlnl_shadow_runtime_ms =
+            std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - wlnl_started)
+                .count();
+    }
+
     if (rtk_config_.enable_wide_lane_ar) {
         const double wide_lane_threshold =
             std::max(0.0, rtk_config_.wide_lane_acceptance_threshold);
@@ -3801,6 +5941,829 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
         const bool full_solved =
             lambdaMethod(full_problem.dd_float, full_problem.Qb, dd_fixed, ratio);
         debug_telemetry_.full_lambda_solved = full_solved;
+        const int shadow_count = rtk_config_.lambda_candidate_shadow_count;
+        if (shadow_count > 0) {
+            debug_telemetry_.lambda_shadow_attempted = true;
+            const auto shadow_started = std::chrono::steady_clock::now();
+            LambdaCandidateDiagnostics shadow;
+            if (lambdaSearchTopK(
+                    full_problem.dd_float, full_problem.Qb, shadow_count, shadow)) {
+                debug_telemetry_.lambda_shadow_solved = true;
+                debug_telemetry_.lambda_shadow_candidate_count =
+                    static_cast<int>(shadow.squared_residuals.size());
+                debug_telemetry_.lambda_shadow_bsr =
+                    shadow.bootstrapped_success_rate;
+                debug_telemetry_.lambda_shadow_bsr_qscale2 =
+                    bootstrappedSuccessRate(
+                        shadow.conditional_variances, 2.0);
+                debug_telemetry_.lambda_shadow_bsr_qscale4 =
+                    bootstrappedSuccessRate(
+                        shadow.conditional_variances, 4.0);
+                debug_telemetry_.lambda_shadow_bsr_qscale8 =
+                    bootstrappedSuccessRate(
+                        shadow.conditional_variances, 8.0);
+                debug_telemetry_.lambda_shadow_bsr_qscale16 =
+                    bootstrappedSuccessRate(
+                        shadow.conditional_variances, 16.0);
+                FixedFailureRateRatioThreshold ffrt;
+                if (fixedFailureRateRatioThreshold(
+                        static_cast<int>(full_problem.dd_float.size()),
+                        shadow.bootstrapped_success_rate, 0.001, ffrt)) {
+                    debug_telemetry_.lambda_shadow_ffrt_table_supported = true;
+                    debug_telemetry_.lambda_shadow_ffrt_accepts_any =
+                        ffrt.accepts_any_candidate;
+                    debug_telemetry_.lambda_shadow_ffrt_min_ratio =
+                        ffrt.minimum_second_to_best_ratio;
+                }
+                if (shadow.squared_residuals.size() >= 1) {
+                    const double best_cost = shadow.squared_residuals(0);
+                    debug_telemetry_.lambda_shadow_best_cost = best_cost;
+                    const int logged_candidates = std::min(
+                        8, static_cast<int>(
+                               shadow.squared_residuals.size()));
+                    for (int candidate = 0;
+                         candidate < logged_candidates; ++candidate) {
+                        debug_telemetry_.lambda_shadow_candidate_costs(
+                            candidate) =
+                            shadow.squared_residuals(candidate);
+                    }
+                    double weight_sum = 0.0;
+                    double squared_weight_sum = 0.0;
+                    for (int i = 0; i < shadow.squared_residuals.size(); ++i) {
+                        const double weight = std::exp(
+                            -0.5 * (shadow.squared_residuals(i) - best_cost));
+                        weight_sum += weight;
+                        squared_weight_sum += weight * weight;
+                    }
+                    if (weight_sum > 0.0) {
+                        debug_telemetry_.lambda_shadow_best_mass =
+                            1.0 / weight_sum;
+                        debug_telemetry_.lambda_shadow_effective_candidates =
+                            weight_sum * weight_sum / squared_weight_sum;
+                    }
+                }
+                if (shadow.squared_residuals.size() >= 2) {
+                    debug_telemetry_.lambda_shadow_second_cost =
+                        shadow.squared_residuals(1);
+                    debug_telemetry_.lambda_shadow_best_second_disagreements =
+                        static_cast<int>(
+                            (shadow.candidates.col(0).array() !=
+                             shadow.candidates.col(1).array()).count());
+                    const double shadow_ratio =
+                        shadow.squared_residuals(0) > 0.0
+                            ? shadow.squared_residuals(1) /
+                                  shadow.squared_residuals(0)
+                            : 0.0;
+                    debug_telemetry_.lambda_shadow_ffrt_passed =
+                        debug_telemetry_.lambda_shadow_ffrt_accepts_any &&
+                        std::isfinite(shadow_ratio) &&
+                        shadow_ratio >=
+                            debug_telemetry_.lambda_shadow_ffrt_min_ratio;
+                }
+
+                VectorXd best_head;
+                if (shadow.candidates.cols() >= 1 &&
+                    rtk_ar_evaluation::solveFixedHeadState(
+                        full_problem.head_state, full_problem.Qab,
+                        full_problem.Qb, full_problem.dd_float,
+                        shadow.candidates.col(0), best_head) &&
+                    best_head.size() >= 3) {
+                    const Vector3d best_ecef =
+                        base_position_ + best_head.head<3>();
+                    debug_telemetry_.lambda_shadow_best_ecef_x = best_ecef.x();
+                    debug_telemetry_.lambda_shadow_best_ecef_y = best_ecef.y();
+                    debug_telemetry_.lambda_shadow_best_ecef_z = best_ecef.z();
+                    debug_telemetry_.lambda_shadow_candidate_ecef_m.col(0) =
+                        best_ecef;
+                    const Vector3d best_correction =
+                        best_head.head<3>() -
+                        full_problem.head_state.head<3>();
+                    debug_telemetry_.lambda_shadow_best_correction_x =
+                        best_correction.x();
+                    debug_telemetry_.lambda_shadow_best_correction_y =
+                        best_correction.y();
+                    debug_telemetry_.lambda_shadow_best_correction_z =
+                        best_correction.z();
+                    double max_spread_m = 0.0;
+                    for (int candidate = 1;
+                         candidate < shadow.candidates.cols(); ++candidate) {
+                        VectorXd candidate_head;
+                        if (!rtk_ar_evaluation::solveFixedHeadState(
+                                full_problem.head_state, full_problem.Qab,
+                                full_problem.Qb, full_problem.dd_float,
+                                shadow.candidates.col(candidate),
+                                candidate_head) ||
+                            candidate_head.size() < 3) {
+                            continue;
+                        }
+                        const double spread_m =
+                            (candidate_head.head<3>() -
+                             best_head.head<3>()).norm();
+                        debug_telemetry_.lambda_shadow_candidate_ecef_m
+                            .col(candidate) =
+                            base_position_ + candidate_head.head<3>();
+                        max_spread_m = std::max(max_spread_m, spread_m);
+                        if (candidate == 1) {
+                            debug_telemetry_
+                                .lambda_shadow_second_position_delta_m =
+                                spread_m;
+                            const Vector3d second_ecef =
+                                base_position_ +
+                                candidate_head.head<3>();
+                            debug_telemetry_.lambda_shadow_second_ecef_x =
+                                second_ecef.x();
+                            debug_telemetry_.lambda_shadow_second_ecef_y =
+                                second_ecef.y();
+                            debug_telemetry_.lambda_shadow_second_ecef_z =
+                                second_ecef.z();
+                            const Vector3d second_correction =
+                                candidate_head.head<3>() -
+                                full_problem.head_state.head<3>();
+                            debug_telemetry_
+                                .lambda_shadow_second_correction_x =
+                                second_correction.x();
+                            debug_telemetry_
+                                .lambda_shadow_second_correction_y =
+                                second_correction.y();
+                            debug_telemetry_
+                                .lambda_shadow_second_correction_z =
+                                second_correction.z();
+                        }
+                    }
+                    debug_telemetry_.lambda_shadow_position_spread_max_m =
+                        max_spread_m;
+                }
+
+                if (rtk_config_.lambda_causal_arc_readiness_shadow &&
+                    causal_arc_ready_subset.size() >= 4) {
+                    std::vector<int> causal_arc_search_subset =
+                        causal_arc_ready_subset;
+                    if (rtk_config_.lambda_causal_arc_smoothed_search &&
+                        rtk_config_
+                                .lambda_causal_arc_smoothed_max_pairs >
+                            0 &&
+                        static_cast<int>(
+                            causal_arc_search_subset.size()) >
+                            rtk_config_
+                                .lambda_causal_arc_smoothed_max_pairs) {
+                        std::stable_sort(
+                            causal_arc_search_subset.begin(),
+                            causal_arc_search_subset.end(),
+                            [&](int left, int right) {
+                                const double left_variance =
+                                    causal_arc_satellite_variance[left] +
+                                    causal_arc_reference_variance[left];
+                                const double right_variance =
+                                    causal_arc_satellite_variance[right] +
+                                    causal_arc_reference_variance[right];
+                                if (left_variance != right_variance) {
+                                    return left_variance < right_variance;
+                                }
+                                return left < right;
+                            });
+                        causal_arc_search_subset.resize(
+                            rtk_config_
+                                .lambda_causal_arc_smoothed_max_pairs);
+                        std::sort(
+                            causal_arc_search_subset.begin(),
+                            causal_arc_search_subset.end());
+                    }
+                    debug_telemetry_
+                        .lambda_causal_arc_subset_pair_count =
+                        static_cast<int>(
+                            causal_arc_search_subset.size());
+                    const auto arc_problem =
+                        build_search_problem(causal_arc_search_subset);
+                    VectorXd arc_search_float = arc_problem.dd_float;
+                    MatrixXd arc_search_covariance = arc_problem.Qb;
+                    if (rtk_config_.lambda_causal_arc_smoothed_search) {
+                        const int arc_count = static_cast<int>(
+                            causal_arc_search_subset.size());
+                        arc_search_float.resize(arc_count);
+                        arc_search_covariance =
+                            MatrixXd::Zero(arc_count, arc_count);
+                        const auto shared_variance =
+                            [](double left, double right) {
+                                return std::max(
+                                    1e-6, std::min(left, right));
+                            };
+                        for (int row = 0; row < arc_count; ++row) {
+                            const int source_row =
+                                causal_arc_search_subset[row];
+                            arc_search_float(row) =
+                                causal_arc_smoothed_dd[source_row];
+                            const auto& row_pair =
+                                dd_pairs[source_row];
+                            for (int column = 0;
+                                 column < arc_count; ++column) {
+                                const int source_column =
+                                    causal_arc_search_subset[column];
+                                const auto& column_pair =
+                                    dd_pairs[source_column];
+                                if (row_pair.freq != column_pair.freq) {
+                                    continue;
+                                }
+                                double covariance = 0.0;
+                                if (row_pair.ref_sat ==
+                                    column_pair.ref_sat) {
+                                    covariance += shared_variance(
+                                        causal_arc_reference_variance[
+                                            source_row],
+                                        causal_arc_reference_variance[
+                                            source_column]);
+                                }
+                                if (row_pair.ref_sat ==
+                                    column_pair.sat) {
+                                    covariance -= shared_variance(
+                                        causal_arc_reference_variance[
+                                            source_row],
+                                        causal_arc_satellite_variance[
+                                            source_column]);
+                                }
+                                if (row_pair.sat ==
+                                    column_pair.ref_sat) {
+                                    covariance -= shared_variance(
+                                        causal_arc_satellite_variance[
+                                            source_row],
+                                        causal_arc_reference_variance[
+                                            source_column]);
+                                }
+                                if (row_pair.sat ==
+                                    column_pair.sat) {
+                                    covariance += shared_variance(
+                                        causal_arc_satellite_variance[
+                                            source_row],
+                                        causal_arc_satellite_variance[
+                                            source_column]);
+                                }
+                                arc_search_covariance(row, column) =
+                                    covariance;
+                            }
+                            arc_search_covariance(row, row) =
+                                std::max(
+                                    1e-6,
+                                    arc_search_covariance(row, row));
+                        }
+                        arc_search_covariance =
+                            (arc_search_covariance +
+                             arc_search_covariance.transpose()) *
+                            0.5;
+                        // Distinct DD rows can momentarily describe the same
+                        // signal relation.  Keep the empirical shared-signal
+                        // covariance conservative and strictly positive
+                        // definite instead of allowing an exact, overconfident
+                        // zero-noise relation to enter LAMBDA/FFRT.
+                        arc_search_covariance.diagonal().array() += 1e-4;
+                        for (int row = 0;
+                             row < arc_search_covariance.rows(); ++row) {
+                            double off_diagonal_sum = 0.0;
+                            for (int column = 0;
+                                 column < arc_search_covariance.cols();
+                                 ++column) {
+                                if (column != row) {
+                                    off_diagonal_sum += std::abs(
+                                        arc_search_covariance(row, column));
+                                }
+                            }
+                            arc_search_covariance(row, row) =
+                                std::max(
+                                    arc_search_covariance(row, row),
+                                    off_diagonal_sum + 1e-4);
+                        }
+                    }
+                    LambdaCandidateDiagnostics arc_shadow;
+                    if (lambdaSearchTopK(
+                            arc_search_float, arc_search_covariance, 2,
+                            arc_shadow) &&
+                        arc_shadow.squared_residuals.size() >= 2) {
+                        debug_telemetry_
+                            .lambda_causal_arc_subset_solved = true;
+                        const double arc_ratio =
+                            arc_shadow.squared_residuals(0) > 0.0
+                                ? arc_shadow.squared_residuals(1) /
+                                      arc_shadow.squared_residuals(0)
+                                : 0.0;
+                        debug_telemetry_
+                            .lambda_causal_arc_subset_ratio = arc_ratio;
+                        VectorXd arc_ffrt_variances =
+                            arc_shadow.conditional_variances;
+                        if (arc_ffrt_variances.array()
+                                .isFinite()
+                                .all()) {
+                            arc_ffrt_variances =
+                                arc_ffrt_variances
+                                    .array()
+                                    .max(1e-4)
+                                    .matrix();
+                            debug_telemetry_
+                                .lambda_causal_arc_subset_variance_min =
+                                arc_ffrt_variances.minCoeff();
+                            debug_telemetry_
+                                .lambda_causal_arc_subset_variance_max =
+                                arc_ffrt_variances.maxCoeff();
+                        }
+                        const double arc_bsr =
+                            bootstrappedSuccessRate(
+                                arc_ffrt_variances,
+                                rtk_config_
+                                    .lambda_causal_arc_readiness_covariance_scale);
+                        debug_telemetry_.lambda_causal_arc_subset_bsr =
+                            arc_bsr;
+                        FixedFailureRateRatioThreshold arc_ffrt;
+                        if (fixedFailureRateRatioThreshold(
+                                static_cast<int>(
+                                    causal_arc_search_subset.size()),
+                                arc_bsr, 0.001, arc_ffrt)) {
+                            debug_telemetry_
+                                .lambda_causal_arc_subset_ffrt_min_ratio =
+                                arc_ffrt.minimum_second_to_best_ratio;
+                            debug_telemetry_
+                                .lambda_causal_arc_subset_ffrt_passed =
+                                arc_ffrt.accepts_any_candidate &&
+                                std::isfinite(arc_ratio) &&
+                                arc_ratio >=
+                                    arc_ffrt.minimum_second_to_best_ratio;
+                        }
+                        VectorXd arc_best_head;
+                        VectorXd arc_second_head;
+                        const bool arc_best_solved =
+                            rtk_ar_evaluation::solveFixedHeadState(
+                                arc_problem.head_state, arc_problem.Qab,
+                                arc_problem.Qb, arc_problem.dd_float,
+                                arc_shadow.candidates.col(0),
+                                arc_best_head);
+                        const bool arc_second_solved =
+                            rtk_ar_evaluation::solveFixedHeadState(
+                                arc_problem.head_state, arc_problem.Qab,
+                                arc_problem.Qb, arc_problem.dd_float,
+                                arc_shadow.candidates.col(1),
+                                arc_second_head);
+                        if (arc_best_solved &&
+                            arc_best_head.size() >= 3) {
+                            const Vector3d arc_best_ecef =
+                                base_position_ +
+                                arc_best_head.head<3>();
+                            debug_telemetry_
+                                .lambda_causal_arc_subset_best_ecef_x =
+                                arc_best_ecef.x();
+                            debug_telemetry_
+                                .lambda_causal_arc_subset_best_ecef_y =
+                                arc_best_ecef.y();
+                            debug_telemetry_
+                                .lambda_causal_arc_subset_best_ecef_z =
+                                arc_best_ecef.z();
+                            const auto& external_disjoint =
+                                external_disjoint_satellite_fix_evidence_;
+                            if (external_disjoint
+                                    .partition_a_candidate_ecef
+                                    .allFinite()) {
+                                debug_telemetry_
+                                    .lambda_causal_arc_subset_partition_a_separation_m =
+                                    (arc_best_ecef -
+                                     external_disjoint
+                                         .partition_a_candidate_ecef)
+                                        .norm();
+                            }
+                            if (external_disjoint
+                                    .partition_b_candidate_ecef
+                                    .allFinite()) {
+                                debug_telemetry_
+                                    .lambda_causal_arc_subset_partition_b_separation_m =
+                                    (arc_best_ecef -
+                                     external_disjoint
+                                         .partition_b_candidate_ecef)
+                                        .norm();
+                            }
+                        }
+                        if (arc_best_solved && arc_second_solved &&
+                            arc_best_head.size() >= 3 &&
+                            arc_second_head.size() >= 3) {
+                            debug_telemetry_
+                                .lambda_causal_arc_subset_second_position_delta_m =
+                                (arc_best_head.head<3>() -
+                                 arc_second_head.head<3>())
+                                    .norm();
+                        }
+                    }
+                }
+
+                const double src_threshold =
+                    rtk_config_.lambda_src_par_shadow_success_rate;
+                if (src_threshold > 0.0) {
+                    debug_telemetry_.lambda_src_par_shadow_attempted = true;
+                    const auto src_started =
+                        std::chrono::steady_clock::now();
+                    const double covariance_scale =
+                        rtk_config_.lambda_src_par_shadow_covariance_scale;
+                    const int subset_size = successRateCriterionSubsetSize(
+                        shadow.conditional_variances, covariance_scale,
+                        src_threshold);
+                    debug_telemetry_.lambda_src_par_shadow_subset_size =
+                        subset_size;
+                    if (subset_size >= 4) {
+                        const VectorXd src_float =
+                            shadow.decorrelated_float.tail(subset_size);
+                        const MatrixXd src_covariance =
+                            shadow.decorrelated_covariance.bottomRightCorner(
+                                subset_size, subset_size);
+                        LambdaCandidateDiagnostics src;
+                        if (lambdaSearchTopK(
+                                src_float, src_covariance, 2, src)) {
+                            debug_telemetry_.lambda_src_par_shadow_solved =
+                                true;
+                            const double src_bsr =
+                                bootstrappedSuccessRate(
+                                    src.conditional_variances,
+                                    covariance_scale);
+                            debug_telemetry_.lambda_src_par_shadow_bsr =
+                                src_bsr;
+                            const double src_ratio =
+                                src.squared_residuals(0) > 0.0
+                                    ? src.squared_residuals(1) /
+                                          src.squared_residuals(0)
+                                    : 0.0;
+                            debug_telemetry_.lambda_src_par_shadow_ratio =
+                                src_ratio;
+                            FixedFailureRateRatioThreshold src_ffrt;
+                            if (fixedFailureRateRatioThreshold(
+                                    subset_size, src_bsr, 0.001,
+                                    src_ffrt)) {
+                                debug_telemetry_
+                                    .lambda_src_par_shadow_ffrt_min_ratio =
+                                    src_ffrt
+                                        .minimum_second_to_best_ratio;
+                                debug_telemetry_
+                                    .lambda_src_par_shadow_ffrt_passed =
+                                    src_ffrt.accepts_any_candidate &&
+                                    std::isfinite(src_ratio) &&
+                                    src_ratio >=
+                                        src_ffrt
+                                            .minimum_second_to_best_ratio;
+                            }
+
+                            const MatrixXd head_z_covariance =
+                                full_problem.Qab *
+                                shadow.decorrelation_transform;
+                            const MatrixXd src_head_covariance =
+                                head_z_covariance.rightCols(subset_size);
+                            VectorXd src_best_head;
+                            VectorXd src_second_head;
+                            const bool best_solved =
+                                rtk_ar_evaluation::solveFixedHeadState(
+                                    full_problem.head_state,
+                                    src_head_covariance, src_covariance,
+                                    src_float, src.candidates.col(0),
+                                    src_best_head);
+                            const bool second_solved =
+                                rtk_ar_evaluation::solveFixedHeadState(
+                                    full_problem.head_state,
+                                    src_head_covariance, src_covariance,
+                                    src_float, src.candidates.col(1),
+                                    src_second_head);
+                            if (best_solved && src_best_head.size() >= 3) {
+                                const Vector3d src_best_ecef =
+                                    base_position_ +
+                                    src_best_head.head<3>();
+                                debug_telemetry_
+                                    .lambda_src_par_shadow_best_ecef_x =
+                                    src_best_ecef.x();
+                                debug_telemetry_
+                                    .lambda_src_par_shadow_best_ecef_y =
+                                    src_best_ecef.y();
+                                debug_telemetry_
+                                    .lambda_src_par_shadow_best_ecef_z =
+                                    src_best_ecef.z();
+                                const Vector3d src_best_correction =
+                                    src_best_head.head<3>() -
+                                    full_problem.head_state.head<3>();
+                                debug_telemetry_
+                                    .lambda_src_par_shadow_best_correction_x =
+                                    src_best_correction.x();
+                                debug_telemetry_
+                                    .lambda_src_par_shadow_best_correction_y =
+                                    src_best_correction.y();
+                                debug_telemetry_
+                                    .lambda_src_par_shadow_best_correction_z =
+                                    src_best_correction.z();
+                            }
+                            if (best_solved && second_solved &&
+                                src_best_head.size() >= 3 &&
+                                src_second_head.size() >= 3) {
+                                debug_telemetry_
+                                    .lambda_src_par_shadow_second_position_delta_m =
+                                    (src_second_head.head<3>() -
+                                     src_best_head.head<3>()).norm();
+                            }
+                        }
+                    }
+                    debug_telemetry_.lambda_src_par_shadow_runtime_ms =
+                        std::chrono::duration<double, std::milli>(
+                            std::chrono::steady_clock::now() -
+                            src_started).count();
+                }
+
+                const int satellite_par_max_drops =
+                    rtk_config_
+                        .lambda_satellite_par_shadow_max_drop_steps;
+                if (satellite_par_max_drops > 0 &&
+                    (!rtk_config_
+                          .lambda_satellite_par_only_after_full_ffrt_failure ||
+                     !debug_telemetry_.lambda_shadow_ffrt_passed)) {
+                    debug_telemetry_
+                        .lambda_satellite_par_shadow_attempted = true;
+                    const auto satellite_par_started =
+                        std::chrono::steady_clock::now();
+                    std::vector<rtk_ar_selection::PairDescriptor>
+                        satellite_descriptors;
+                    satellite_descriptors.reserve(nb);
+                    auto pair_snr = [&](const DDPair& pair) {
+                        const auto ref_it = sat_data.find(pair.ref_sat);
+                        const auto sat_it = sat_data.find(pair.sat);
+                        if (ref_it == sat_data.end() ||
+                            sat_it == sat_data.end()) {
+                            return std::numeric_limits<double>::quiet_NaN();
+                        }
+                        const auto& ref = ref_it->second;
+                        const auto& sat = sat_it->second;
+                        if (pair.freq == 0) {
+                            return std::min(
+                                {ref.rover_l1_snr, ref.base_l1_snr,
+                                 sat.rover_l1_snr, sat.base_l1_snr});
+                        }
+                        if (pair.freq == 1) {
+                            return std::min(
+                                {ref.rover_l2_snr, ref.base_l2_snr,
+                                 sat.rover_l2_snr, sat.base_l2_snr});
+                        }
+                        if (pair.freq == 2) {
+                            return std::min(
+                                {ref.rover_l5_snr, ref.base_l5_snr,
+                                 sat.rover_l5_snr, sat.base_l5_snr});
+                        }
+                        return std::numeric_limits<double>::quiet_NaN();
+                    };
+                    for (int index = 0; index < nb; ++index) {
+                        double elevation =
+                            std::numeric_limits<double>::quiet_NaN();
+                        double wavelength =
+                            std::numeric_limits<double>::quiet_NaN();
+                        double azimuth =
+                            std::numeric_limits<double>::quiet_NaN();
+                        const auto sat_it =
+                            sat_data.find(dd_pairs[index].sat);
+                        if (sat_it != sat_data.end()) {
+                            elevation = sat_it->second.elevation;
+                            if (dd_pairs[index].freq == 0) {
+                                wavelength =
+                                    sat_it->second.l1_wavelength;
+                            } else if (dd_pairs[index].freq == 1) {
+                                wavelength =
+                                    sat_it->second.l2_wavelength;
+                            } else if (dd_pairs[index].freq == 2) {
+                                wavelength =
+                                    sat_it->second.l5_wavelength;
+                            }
+                            if (full_problem.head_state.size() >= 3) {
+                                const Vector3d rover_position =
+                                    base_position_ +
+                                    full_problem.head_state.head<3>();
+                                const auto geodetic =
+                                    spp_utils::ecefToGeodetic(
+                                        rover_position);
+                                const Vector3d los_enu = ecef2enu(
+                                    sat_it->second.sat_pos -
+                                        rover_position,
+                                    geodetic.latitude,
+                                    geodetic.longitude);
+                                azimuth =
+                                    std::atan2(los_enu.x(), los_enu.y());
+                                if (azimuth < 0.0) {
+                                    azimuth += 2.0 * M_PI;
+                                }
+                            }
+                        }
+                        satellite_descriptors.push_back(
+                            {dd_pairs[index].sat.system,
+                             full_problem.Qb(index, index),
+                             dd_pairs[index].sat,
+                             elevation,
+                             pair_snr(dd_pairs[index]),
+                             distanceToNearestInteger(
+                                 full_problem.dd_float(index))});
+                        auto& descriptor =
+                            satellite_descriptors.back();
+                        if (std::isfinite(wavelength) &&
+                            wavelength > 0.0) {
+                            descriptor.posterior_abs_residual_m =
+                                wavelength *
+                                descriptor
+                                    .fractional_distance_cycles;
+                        }
+                        descriptor.azimuth_rad = azimuth;
+                    }
+                    auto satellite_subsets =
+                        rtk_config_
+                                .lambda_satellite_par_shadow_quality_diverse
+                            ? rtk_ar_selection::
+                                  buildSatelliteQualityDiverseDropSubsets(
+                                      satellite_descriptors,
+                                      min_subset_pairs_for_ar,
+                                      satellite_par_max_drops,
+                                      32)
+                            : rtk_ar_selection::
+                                  buildSatelliteQualityDropSubsets(
+                                      satellite_descriptors,
+                                  min_subset_pairs_for_ar,
+                                  satellite_par_max_drops);
+                    std::vector<int> persistent_subset;
+                    if (rtk_config_
+                            .lambda_satellite_par_persistent_subset &&
+                        !satellite_par_persistent_satellites_.empty()) {
+                        debug_telemetry_
+                            .lambda_satellite_par_persistent_subset_attempted =
+                            true;
+                        bool selected_signal_slipped = false;
+                        for (const auto& satellite :
+                             satellite_par_persistent_satellites_) {
+                            selected_signal_slipped =
+                                selected_signal_slipped ||
+                                current_epoch_slips_l1_.count(satellite) > 0 ||
+                                current_epoch_slips_l2_.count(satellite) > 0 ||
+                                current_epoch_slips_l5_.count(satellite) > 0;
+                        }
+                        if (!selected_signal_slipped) {
+                            for (int index = 0; index < nb; ++index) {
+                                if (satellite_par_persistent_satellites_
+                                        .count(dd_pairs[index].sat) > 0) {
+                                    persistent_subset.push_back(index);
+                                }
+                            }
+                        } else {
+                            satellite_par_persistent_satellites_.clear();
+                        }
+                        if (static_cast<int>(persistent_subset.size()) >=
+                            min_subset_pairs_for_ar) {
+                            const bool already_first =
+                                !satellite_subsets.empty() &&
+                                satellite_subsets.front() ==
+                                    persistent_subset;
+                            if (!already_first) {
+                                satellite_subsets.insert(
+                                    satellite_subsets.begin(),
+                                    persistent_subset);
+                            }
+                        }
+                    }
+                    std::set<SatelliteId> full_satellites;
+                    for (const auto& pair : dd_pairs) {
+                        full_satellites.insert(pair.sat);
+                    }
+                    for (const auto& subset : satellite_subsets) {
+                        debug_telemetry_
+                            .lambda_satellite_par_shadow_subsets_evaluated++;
+                        const auto satellite_problem =
+                            build_search_problem(subset);
+                        LambdaCandidateDiagnostics satellite_candidate;
+                        if (!lambdaSearchTopK(
+                                satellite_problem.dd_float,
+                                satellite_problem.Qb, 2,
+                                satellite_candidate)) {
+                            continue;
+                        }
+                        debug_telemetry_
+                            .lambda_satellite_par_shadow_solved = true;
+                        const double covariance_scale =
+                            rtk_config_
+                                .lambda_satellite_par_shadow_covariance_scale;
+                        const double satellite_bsr =
+                            bootstrappedSuccessRate(
+                                satellite_candidate.conditional_variances,
+                                covariance_scale);
+                        const double satellite_ratio =
+                            satellite_candidate.squared_residuals(0) > 0.0
+                                ? satellite_candidate.squared_residuals(1) /
+                                      satellite_candidate
+                                          .squared_residuals(0)
+                                : 0.0;
+                        FixedFailureRateRatioThreshold satellite_ffrt;
+                        if (!fixedFailureRateRatioThreshold(
+                                static_cast<int>(subset.size()),
+                                satellite_bsr, 0.001,
+                                satellite_ffrt) ||
+                            !satellite_ffrt.accepts_any_candidate ||
+                            !std::isfinite(satellite_ratio) ||
+                            satellite_ratio <
+                                satellite_ffrt
+                                    .minimum_second_to_best_ratio) {
+                            continue;
+                        }
+                        VectorXd satellite_best_head;
+                        VectorXd satellite_second_head;
+                        const bool best_solved =
+                            rtk_ar_evaluation::solveFixedHeadState(
+                                satellite_problem.head_state,
+                                satellite_problem.Qab,
+                                satellite_problem.Qb,
+                                satellite_problem.dd_float,
+                                satellite_candidate.candidates.col(0),
+                                satellite_best_head);
+                        const bool second_solved =
+                            rtk_ar_evaluation::solveFixedHeadState(
+                                satellite_problem.head_state,
+                                satellite_problem.Qab,
+                                satellite_problem.Qb,
+                                satellite_problem.dd_float,
+                                satellite_candidate.candidates.col(1),
+                                satellite_second_head);
+                        if (!best_solved ||
+                            satellite_best_head.size() < 3) {
+                            continue;
+                        }
+                        debug_telemetry_
+                            .lambda_satellite_par_shadow_subset_size =
+                            static_cast<int>(subset.size());
+                        std::set<SatelliteId> subset_satellites;
+                        for (int index : subset) {
+                            subset_satellites.insert(
+                                dd_pairs[index].sat);
+                        }
+                        debug_telemetry_
+                            .lambda_satellite_par_shadow_dropped_satellites =
+                            static_cast<int>(
+                                full_satellites.size() -
+                                subset_satellites.size());
+                        debug_telemetry_
+                            .lambda_satellite_par_shadow_bsr =
+                            satellite_bsr;
+                        debug_telemetry_
+                            .lambda_satellite_par_shadow_ratio =
+                            satellite_ratio;
+                        debug_telemetry_
+                            .lambda_satellite_par_shadow_ffrt_min_ratio =
+                            satellite_ffrt
+                                .minimum_second_to_best_ratio;
+                        debug_telemetry_
+                            .lambda_satellite_par_shadow_ffrt_passed = true;
+                        if (rtk_config_
+                                .lambda_satellite_par_persistent_subset) {
+                            debug_telemetry_
+                                .lambda_satellite_par_persistent_subset_used =
+                                subset == persistent_subset &&
+                                !persistent_subset.empty();
+                            satellite_par_persistent_satellites_.clear();
+                            for (int index : subset) {
+                                satellite_par_persistent_satellites_.insert(
+                                    dd_pairs[index].sat);
+                            }
+                        }
+                        const Vector3d satellite_best_ecef =
+                            base_position_ +
+                            satellite_best_head.head<3>();
+                        debug_telemetry_
+                            .lambda_satellite_par_shadow_best_ecef_x =
+                            satellite_best_ecef.x();
+                        debug_telemetry_
+                            .lambda_satellite_par_shadow_best_ecef_y =
+                            satellite_best_ecef.y();
+                        debug_telemetry_
+                            .lambda_satellite_par_shadow_best_ecef_z =
+                            satellite_best_ecef.z();
+                        const Vector3d satellite_correction =
+                            satellite_best_head.head<3>() -
+                            satellite_problem.head_state.head<3>();
+                        debug_telemetry_
+                            .lambda_satellite_par_shadow_best_correction_x =
+                            satellite_correction.x();
+                        debug_telemetry_
+                            .lambda_satellite_par_shadow_best_correction_y =
+                            satellite_correction.y();
+                        debug_telemetry_
+                            .lambda_satellite_par_shadow_best_correction_z =
+                            satellite_correction.z();
+                        if (second_solved &&
+                            satellite_second_head.size() >= 3) {
+                            debug_telemetry_
+                                .lambda_satellite_par_shadow_second_position_delta_m =
+                                (satellite_second_head.head<3>() -
+                                 satellite_best_head.head<3>())
+                                    .norm();
+                        }
+                        // Sequential PAR stops at the first (largest)
+                        // satellite subset passing the fail-closed FFRT.
+                        break;
+                    }
+                    debug_telemetry_
+                        .lambda_satellite_par_shadow_runtime_ms =
+                        std::chrono::duration<double, std::milli>(
+                            std::chrono::steady_clock::now() -
+                            satellite_par_started)
+                            .count();
+                }
+            }
+            debug_telemetry_.lambda_shadow_runtime_ms =
+                std::chrono::duration<double, std::milli>(
+                    std::chrono::steady_clock::now() - shadow_started).count();
+        }
         if (full_solved) {
             debug_telemetry_.full_ratio = ratio;
             // WP7 dead-knob fix: passesArFilter is a no-op AND term when
@@ -5107,6 +8070,87 @@ void RTKProcessor::rememberSolution(const PositionSolution& solution) {
         last_trusted_time_ = solution.time;
         has_last_trusted_time_ = true;
     }
+}
+
+PositionSolution RTKProcessor::makeSafeFloatContinuity(
+    const GNSSTime& time) {
+    PositionSolution solution;
+    solution.time = time;
+    solution.status = SolutionStatus::NONE;
+
+    const double trusted_anchor_age_s =
+        has_last_trusted_time_
+            ? time - last_trusted_time_
+            : std::numeric_limits<double>::quiet_NaN();
+    const double velocity_age_s =
+        has_last_doppler_velocity_
+            ? time - last_doppler_velocity_time_
+            : std::numeric_limits<double>::quiet_NaN();
+    debug_telemetry_.safe_float_continuity_attempted =
+        rtk_config_.safe_float_continuity.enabled;
+    debug_telemetry_.safe_float_continuity_anchor_age_s =
+        trusted_anchor_age_s;
+    debug_telemetry_.safe_float_continuity_velocity_age_s =
+        velocity_age_s;
+    auto continuity = safe_float_continuity::propagate(
+        rtk_config_.safe_float_continuity,
+        last_trusted_position_,
+        trusted_anchor_age_s,
+        last_doppler_velocity_ecef_,
+        velocity_age_s);
+    double anchor_age_s = trusted_anchor_age_s;
+    bool solver_gap_anchor = false;
+
+    // If the trusted anchor is too old, bridge only an isolated sub-second
+    // solver gap from the last real solver output. Continuity outputs are
+    // never remembered, so this path cannot recursively dead-reckon.
+    if (!continuity.valid &&
+        has_last_solution_position_ &&
+        has_last_epoch_) {
+        anchor_age_s = time - last_epoch_time_;
+        auto short_gap_config = rtk_config_.safe_float_continuity;
+        short_gap_config.maximum_anchor_age_s =
+            std::min(
+                short_gap_config.maximum_anchor_age_s,
+                short_gap_config.maximum_solver_gap_anchor_age_s);
+        continuity = safe_float_continuity::propagate(
+            short_gap_config,
+            last_solution_position_,
+            anchor_age_s,
+            last_doppler_velocity_ecef_,
+            velocity_age_s);
+        solver_gap_anchor = continuity.valid;
+    }
+    if (!has_last_doppler_velocity_ || !continuity.valid) {
+        return solution;
+    }
+
+    solution.status = SolutionStatus::FLOAT;
+    solution.position_ecef = continuity.position_ecef;
+    solution.position_geodetic =
+        spp_utils::ecefToGeodetic(solution.position_ecef);
+    solution.position_covariance =
+        Matrix3d::Identity() * continuity.position_variance_m2;
+    solution.velocity_ecef = last_doppler_velocity_ecef_;
+    solution.velocity_covariance =
+        Matrix3d::Identity() *
+        std::pow(
+            rtk_config_.safe_float_continuity.velocity_sigma_mps,
+            2.0);
+    solution.has_velocity = true;
+    // Four is the minimum valid FLOAT output and deliberately prevents
+    // rememberSolution() from refreshing trust.
+    solution.num_satellites = 4;
+    solution.ratio = 0.0;
+    solution.num_fixed_ambiguities = 0;
+    debug_telemetry_.safe_float_continuity_used = true;
+    debug_telemetry_.safe_float_continuity_solver_gap_anchor =
+        solver_gap_anchor;
+    debug_telemetry_.safe_float_continuity_anchor_age_s =
+        anchor_age_s;
+    debug_telemetry_.safe_float_continuity_velocity_age_s =
+        velocity_age_s;
+    return solution;
 }
 
 void RTKProcessor::updateStatistics(SolutionStatus status) const {
