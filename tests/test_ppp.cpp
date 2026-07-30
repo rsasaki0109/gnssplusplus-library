@@ -134,6 +134,17 @@ TEST(PPPCycleSlips, MadocaChecksEveryNonPrimaryFrequency) {
         0.15).empty());
 }
 
+TEST(PPPCycleSlips, MadocaResetInvalidatesCarrierIonosphereDeltaHistory) {
+    ppp_shared::PPPAmbiguityInfo ambiguity;
+    ambiguity.last_carrier_ionosphere_m = 19.7377;
+    ambiguity.has_last_carrier_ionosphere = true;
+
+    ppp_internal::clearCarrierIonospherePredictionHistory(ambiguity);
+
+    EXPECT_FALSE(ambiguity.has_last_carrier_ionosphere);
+    EXPECT_DOUBLE_EQ(ambiguity.last_carrier_ionosphere_m, 19.7377);
+}
+
 TEST(PPPArAdmission, CoherentSsrDoesNotAddALockCountGate) {
     EXPECT_EQ(ppp_internal::perFrequencyArMinLockCount(true, true, 20), 0);
     EXPECT_EQ(ppp_internal::perFrequencyArMinLockCount(false, true, 20), 10);
