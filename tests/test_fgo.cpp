@@ -620,6 +620,7 @@ TEST(FGOTest, TimeDifferencedCarrierFactorsRecoverSyntheticTrajectory) {
     EXPECT_EQ(stats.fixed_solutions, 0u);
     EXPECT_EQ(result.diagnostics.pseudorange_factors, 12u);
     EXPECT_EQ(result.diagnostics.tdcp_factors, 6u);
+    EXPECT_EQ(result.diagnostics.tdcp_factors_inserted, 6u);
     EXPECT_EQ(result.diagnostics.tdcp_candidate_pairs, 6u);
     EXPECT_LT(result.diagnostics.residual_rms_m, 1e-5);
     EXPECT_LT(result.diagnostics.tdcp_residual_rms_m, 1e-5);
@@ -643,6 +644,7 @@ TEST(FGOTest, SingleDifferenceDopplerAndTdcpFactorsConstrainMotion) {
     EXPECT_TRUE(result.diagnostics.converged);
     EXPECT_EQ(result.diagnostics.single_difference_doppler_factors, 5u);
     EXPECT_EQ(result.diagnostics.single_difference_tdcp_factors, 5u);
+    EXPECT_EQ(result.diagnostics.single_difference_tdcp_factors_inserted, 5u);
     EXPECT_LT(result.diagnostics.single_difference_doppler_residual_rms_mps,
               1e-5);
     EXPECT_LT(result.diagnostics.single_difference_tdcp_residual_rms_m,

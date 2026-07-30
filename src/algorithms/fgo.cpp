@@ -2539,6 +2539,13 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
     }
 #endif
 
+    // The native optimizer consumes every TDCP entry in the problem as one
+    // residual row. Keep this separate from tdcp_factors (measurements built)
+    // so a backend can never silently report generated factors as inserted.
+    result.diagnostics.tdcp_factors_inserted = problem.tdcp_factors.size();
+    result.diagnostics.single_difference_tdcp_factors_inserted =
+        problem.single_difference_tdcp_factors.size();
+
     const int num_epochs = static_cast<int>(problem.epochs.size());
     std::vector<GNSSSystem> bias_groups;
     std::map<GNSSSystem, int> bias_group_columns;
