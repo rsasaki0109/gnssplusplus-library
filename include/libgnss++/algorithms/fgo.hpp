@@ -394,6 +394,11 @@ public:
         int continuous_unfix_min_satellites = 10;
         double continuous_unfix_max_gdop = 2.0;
         double continuous_unfix_max_fde_reject_fraction = 0.1;
+        // Fail-closed variant: reset live ambiguities only when a trusted
+        // current-epoch DDPR anchor also disagrees with the optimized
+        // antenna position.
+        bool continuous_unfix_require_ddpr_anchor_disagreement = false;
+        double continuous_unfix_anchor_min_gap_m = 1.0;
         int min_fixed_ambiguities = 4;
         int max_lambda_ambiguities = 12;
         // --- Surplus-satellite independent integrity validation ---
@@ -1788,6 +1793,8 @@ public:
         std::size_t ambiguity_generation_bumps_reset = 0;
         std::size_t ambiguity_generation_bumps_warm_reset = 0;
         std::size_t ambiguity_continuous_unfix_resets = 0;
+        std::size_t ambiguity_continuous_unfix_anchor_allows = 0;
+        std::size_t ambiguity_continuous_unfix_anchor_skips = 0;
         std::size_t ambiguity_generation_bumps_stale_pin = 0;
         // --- Stale-pin invalidation diagnostics (use_stale_pin_invalidation) ---
         std::size_t stale_pin_invalidations = 0;  ///< pinned arcs released per-arc at a trigger epoch

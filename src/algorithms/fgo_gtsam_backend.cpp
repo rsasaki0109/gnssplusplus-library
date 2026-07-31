@@ -4514,8 +4514,51 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
             if (continuous_unfix_streak >
                     std::max(0, config.continuous_unfix_reset_epochs) &&
                 !live_ambiguity_indices.empty()) {
-                resetAmbiguitiesWithCpHold(i, /*engage_cp_hold=*/false);
-                ++result.diagnostics.ambiguity_continuous_unfix_resets;
+                bool reset_allowed = true;
+                if (config
+                        .continuous_unfix_require_ddpr_anchor_disagreement) {
+                    ++result.diagnostics.ddpr_anchor_solves;
+                    const DdprAnchorResult anchor =
+                        solveDdprAnchor(i, pose_seed);
+                    const double anchor_seed_gap =
+                        anchor.ok
+                            ? (antennaOf(anchor.pose) -
+                               antennaOf(pose_seed))
+                                  .norm()
+                            : std::numeric_limits<double>::infinity();
+                    const bool trusted =
+                        anchor.ok &&
+                        anchor.n_active >= config.ddpr_anchor_min_factors &&
+                        anchor.res_rms <=
+                            config.ddpr_anchor_max_residual_m &&
+                        anchor_seed_gap <=
+                            config.ddpr_anchor_imu_max_gap_m;
+                    const double state_gap =
+                        trusted
+                            ? (antennaOf(anchor.pose) - antennaOf(pose_i))
+                                  .norm()
+                            : 0.0;
+                    reset_allowed =
+                        trusted && std::isfinite(state_gap) &&
+                        state_gap >=
+                            config.continuous_unfix_anchor_min_gap_m;
+                    if (trusted) {
+                        ++result.diagnostics.ddpr_anchor_successes;
+                    }
+                    if (reset_allowed) {
+                        ++result.diagnostics
+                              .ambiguity_continuous_unfix_anchor_allows;
+                    } else {
+                        ++result.diagnostics
+                              .ambiguity_continuous_unfix_anchor_skips;
+                    }
+                }
+                if (reset_allowed) {
+                    resetAmbiguitiesWithCpHold(
+                        i, /*engage_cp_hold=*/false);
+                    ++result.diagnostics
+                          .ambiguity_continuous_unfix_resets;
+                }
                 continuous_unfix_streak = 0;
             }
         }

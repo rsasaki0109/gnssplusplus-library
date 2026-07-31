@@ -148,6 +148,26 @@ Full-run A/B replays added only correct fixes:
 | Tokyo run2 | 6339 → **6357** | **314 → 314** |
 | Tokyo run3 | 9963 → **9969** | **1002 → 1002** |
 
+`--anchor-gated-unfix-reset` adds a fail-closed ambiguity-reacquisition
+policy for sustained fresh-AR outages. The existing satellite-count, GDOP,
+and FDE-fraction gates still apply; at each surviving trigger, a current-epoch
+DD-code anchor must also have enough factors, pass its residual gate, remain
+within 20 m of the IMU prediction, and disagree with the optimized antenna
+position by at least 1 m. Only then are live ambiguity generations renewed.
+The reset does not engage CP hold, break the IMU chain, or label its trigger
+epoch FIXED. Full Tokyo replays combined it with the anchor reprieve above:
+
+| Run | Anchor-only correct/wrong FIX | Anchor-gated reset correct/wrong FIX | Resets allowed / skipped |
+|---|---:|---:|---:|
+| Tokyo run1 | 5144 / 978 | **5469 / 649** | 4 / 5 |
+| Tokyo run2 | **6357 / 314** | **6357 / 314** | 0 / 3 |
+| Tokyo run3 | **9969 / 1002** | **9969 / 1002** | 0 / 4 |
+
+Across the three courses, distance-weighted correct FIX improved from
+57.0731% at the pre-reprieve baseline to **57.9735%**, while
+distance-weighted wrong FIX fell from 7.7043% to **7.0089%**. The policy is
+opt-in and leaves the default library behavior unchanged.
+
 The rescue remains opt-in at the library API level; the command above is the
 validated shipping preset. Separately, counterfactual auditing of the
 fixed-lag-QR configuration moved its `--fix-demote-res` from 25 to 40 (25
