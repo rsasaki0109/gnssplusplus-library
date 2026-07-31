@@ -2295,6 +2295,24 @@ TEST(FGOAmbiguityOutcomeTelemetryTest, BelowFloorCandidatesAreInsufficient) {
     }
 }
 
+TEST(FGOSppSeedTelemetryTest, ReportsFreshnessAndBuilderPositionReadOnly) {
+    auto problem = makeStalePinProblem();
+    for (std::size_t i = 0; i < problem.epochs.size(); ++i) {
+        problem.epochs[i].fresh_spp_solution = (i % 2u) == 0u;
+    }
+    FGOProcessor processor(makeStalePinBaseConfig());
+    const auto result = processor.optimizeProblem(problem);
+
+    ASSERT_EQ(result.epoch_diagnostics.size(), problem.epochs.size());
+    for (std::size_t i = 0; i < problem.epochs.size(); ++i) {
+        EXPECT_EQ(result.epoch_diagnostics[i].fresh_spp_solution,
+                  problem.epochs[i].fresh_spp_solution);
+        EXPECT_TRUE(result.epoch_diagnostics[i]
+                        .spp_seed_position_ecef.isApprox(
+                            problem.epochs[i].position_ecef, 1e-12));
+    }
+}
+
 TEST(FGOStalePinTest, ReleasesOnlyOffendingPinAtTrigger) {
     const auto problem = makeStalePinProblem();
 
