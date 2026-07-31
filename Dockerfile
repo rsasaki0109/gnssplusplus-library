@@ -18,8 +18,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /src
 COPY . .
 
+ARG CMAKE_BUILD_PARALLEL_LEVEL=2
+
 RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
- && cmake --build build --parallel \
+ && cmake --build build --parallel "${CMAKE_BUILD_PARALLEL_LEVEL}" \
  && cmake --install build --prefix /opt/libgnsspp \
  && py_site="$(find /opt/libgnsspp/lib -type d -path '*/site-packages' | head -n 1)" \
  && test -n "${py_site}" \
