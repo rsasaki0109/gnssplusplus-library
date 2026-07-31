@@ -1,0 +1,497 @@
+#!/usr/bin/env python3
+"""Lightweight CLI user-experience smoke tests."""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+import re
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+GNSS_CLI = ROOT_DIR / "apps" / "gnss.py"
+GNSS_EXAMPLE_COMMAND_RE = re.compile(
+    r"python3\s+apps/gnss\.py(?:\s+([^\s\\`),'\"),]+))?"
+)
+
+
+class CliUxTest(unittest.TestCase):
+    @classmethod
+    def dispatcher_module(cls):
+        spec = importlib.util.spec_from_file_location("gnss_dispatcher", GNSS_CLI)
+        if spec is None or spec.loader is None:
+            raise RuntimeError(f"failed to load dispatcher module from {GNSS_CLI}")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    @classmethod
+    def dispatcher_commands(cls) -> set[str]:
+        return set(cls.dispatcher_module().COMMANDS)
+
+    def run_gnss(self, *args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, str(GNSS_CLI), *args],
+            cwd=ROOT_DIR,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+    def assert_no_traceback(self, result: subprocess.CompletedProcess[str]) -> None:
+        combined = result.stdout + result.stderr
+        self.assertNotIn("Traceback (most recent call last)", combined)
+        self.assertNotIn("ModuleNotFoundError", combined)
+
+    def commands_from_gnss_example(self, text: str) -> list[str]:
+        commands: list[str] = []
+        for match in GNSS_EXAMPLE_COMMAND_RE.finditer(text):
+            command = match.group(1)
+            if command is None or command.startswith("-"):
+                continue
+            commands.append(command)
+        return commands
+
+    def stale_gnss_example_commands_in_lines(
+        self,
+        lines: list[tuple[str, str]],
+    ) -> tuple[int, list[str]]:
+        known_commands = self.dispatcher_commands()
+        seen_examples = 0
+        stale_examples: list[str] = []
+
+        for label, line in lines:
+            for command in self.commands_from_gnss_example(line):
+                seen_examples += 1
+                if command not in known_commands:
+                    stale_examples.append(f"{label}: {command}")
+
+        return seen_examples, stale_examples
+
+    def stale_gnss_example_commands_in_files(
+        self,
+        paths: list[Path],
+    ) -> tuple[int, list[str]]:
+        lines: list[tuple[str, str]] = []
+        for path in paths:
+            relative_path = path.relative_to(ROOT_DIR)
+            for line_number, line in enumerate(
+                path.read_text(encoding="utf-8").splitlines(),
+                1,
+            ):
+                lines.append((f"{relative_path}:{line_number}", line))
+        return self.stale_gnss_example_commands_in_lines(lines)
+
+    def test_top_level_help_keeps_primary_workflows_discoverable(self) -> None:
+        result = self.run_gnss("--help")
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assert_no_traceback(result)
+        self.assertIn("Usage: gnss <command> [args...]", result.stdout)
+        self.assertIn("Commands:", result.stdout)
+        self.assertIn("Examples:", result.stdout)
+        for command in (
+            "doctor",
+            "solve",
+            "ppp",
+            "clas-ppp",
+            "qzss-l6-info",
+            "ppc-rtk-signoff",
+            "web",
+        ):
+            self.assertIn(f"  {command}", result.stdout)
+
+        examples = [
+            line.strip()
+            for line in result.stdout.splitlines()
+            if line.strip().startswith("python3 apps/gnss.py ")
+        ]
+        duplicates = sorted({line for line in examples if examples.count(line) > 1})
+        self.assertEqual(duplicates, [])
+
+        seen_examples, stale_examples = self.stale_gnss_example_commands_in_lines(
+            [(line, line) for line in examples]
+        )
+        self.assertGreaterEqual(seen_examples, 1)
+        self.assertEqual(stale_examples, [])
+
+    def test_representative_subcommand_help_uses_dispatcher_names(self) -> None:
+        expectations = {
+            "doctor": ("usage: gnss doctor", "--strict"),
+            "qzss-l6-info": (
+                "usage: gnss qzss-l6-info",
+                "--compact-bias-row-materialization",
+            ),
+            "clas-ppp": (
+                "usage: gnss clas-ppp",
+                "--receiver-antenna-type",
+                "--compact-code-bias-composition-policy",
+            ),
+            "web": ("usage: gnss web", "--artifact-manifest"),
+        }
+
+        for command, snippets in expectations.items():
+            with self.subTest(command=command):
+                result = self.run_gnss(command, "--help")
+                self.assertEqual(result.returncode, 0, msg=result.stderr)
+                self.assert_no_traceback(result)
+                for snippet in snippets:
+                    self.assertIn(snippet, result.stdout)
+
+    def test_help_command_dispatches_to_subcommand_help(self) -> None:
+        expectations = {
+            "commands": ("Usage: gnss commands", "--json", "--query"),
+            "doctor": ("usage: gnss doctor", "--strict"),
+            "qzss-l6-info": (
+                "usage: gnss qzss-l6-info",
+                "--compact-bias-row-materialization",
+            ),
+            "web": ("usage: gnss web", "--artifact-manifest"),
+        }
+
+        for command, snippets in expectations.items():
+            with self.subTest(command=command):
+                result = self.run_gnss("help", command)
+                self.assertEqual(result.returncode, 0, msg=result.stderr)
+                self.assert_no_traceback(result)
+                self.assertEqual(result.stderr, "")
+                self.assertNotIn("Usage: gnss <command> [args...]", result.stdout)
+                for snippet in snippets:
+                    self.assertIn(snippet, result.stdout)
+
+    def test_commands_text_output_lists_dispatcher_registry(self) -> None:
+        result = self.run_gnss("commands")
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assert_no_traceback(result)
+        self.assertEqual(result.stderr, "")
+        self.assertIn("Commands:", result.stdout)
+        self.assertIn("  commands", result.stdout)
+        self.assertIn("  doctor", result.stdout)
+        self.assertIn("  clas-ppp", result.stdout)
+        self.assertIn("Run `gnss help <command>`", result.stdout)
+        self.assertNotIn("Examples:", result.stdout)
+
+    def test_commands_query_text_output_filters_registry(self) -> None:
+        result = self.run_gnss("commands", "--query", "clas")
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assert_no_traceback(result)
+        self.assertEqual(result.stderr, "")
+        self.assertIn("Commands matching `clas`:", result.stdout)
+        self.assertIn("  clas-ppp", result.stdout)
+        self.assertNotIn("  doctor", result.stdout)
+
+        no_match = self.run_gnss("commands", "--query", "definitely-not-a-command")
+        self.assertEqual(no_match.returncode, 0, msg=no_match.stderr)
+        self.assert_no_traceback(no_match)
+        self.assertIn("Commands matching `definitely-not-a-command`:", no_match.stdout)
+        self.assertIn("  (none)", no_match.stdout)
+        self.assertIn("Run `gnss commands`", no_match.stdout)
+
+    def test_commands_json_output_is_stable_for_tooling(self) -> None:
+        result = self.run_gnss("commands", "--json")
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assert_no_traceback(result)
+        self.assertEqual(result.stderr, "")
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["schema_version"], 1)
+        self.assertEqual(payload["filters"], {"kind": None})
+        self.assertEqual(payload["count"], len(payload["commands"]))
+
+        names = [item["name"] for item in payload["commands"]]
+        self.assertEqual(names, sorted(names))
+        self.assertIn("commands", names)
+        self.assertIn("help", names)
+        self.assertIn("doctor", names)
+
+        for item in payload["commands"]:
+            self.assertEqual(set(item), {"kind", "name", "summary"})
+            self.assertIn(item["kind"], {"binary", "builtin", "python"})
+            self.assertIsInstance(item["summary"], str)
+            self.assertTrue(item["summary"].strip())
+
+    def test_commands_query_json_output_is_stable_for_tooling(self) -> None:
+        result = self.run_gnss(
+            "commands",
+            "--kind",
+            "python",
+            "--query",
+            "ppp",
+            "--limit",
+            "3",
+            "--json",
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assert_no_traceback(result)
+        self.assertEqual(result.stderr, "")
+        payload = json.loads(result.stdout)
+        self.assertEqual(
+            payload["filters"],
+            {"kind": "python", "query": "ppp", "limit": 3},
+        )
+        self.assertLessEqual(payload["count"], 3)
+        self.assertEqual(payload["count"], len(payload["commands"]))
+        self.assertGreater(payload["count"], 0)
+        for item in payload["commands"]:
+            self.assertEqual(item["kind"], "python")
+            self.assertIn(
+                "ppp",
+                f"{item['name']} {item['summary']}".lower(),
+            )
+
+    def test_commands_kind_filter_and_errors_are_actionable(self) -> None:
+        builtin_result = self.run_gnss("commands", "--kind", "builtin", "--json")
+
+        self.assertEqual(builtin_result.returncode, 0, msg=builtin_result.stderr)
+        self.assert_no_traceback(builtin_result)
+        self.assertEqual(builtin_result.stderr, "")
+        payload = json.loads(builtin_result.stdout)
+        self.assertEqual(payload["filters"], {"kind": "builtin"})
+        self.assertEqual(
+            [item["name"] for item in payload["commands"]],
+            ["commands", "help"],
+        )
+
+        invalid_result = self.run_gnss("commands", "--kind", "solver")
+        self.assertEqual(invalid_result.returncode, 2)
+        self.assert_no_traceback(invalid_result)
+        self.assertEqual(invalid_result.stdout, "")
+        self.assertIn("Error: unknown command kind `solver`.", invalid_result.stderr)
+        self.assertIn("Usage: gnss commands", invalid_result.stderr)
+
+        bad_limit = self.run_gnss("commands", "--limit", "0")
+        self.assertEqual(bad_limit.returncode, 2)
+        self.assert_no_traceback(bad_limit)
+        self.assertEqual(bad_limit.stdout, "")
+        self.assertIn("Error: invalid --limit value `0`", bad_limit.stderr)
+
+        missing_query = self.run_gnss("commands", "--query")
+        self.assertEqual(missing_query.returncode, 2)
+        self.assert_no_traceback(missing_query)
+        self.assertEqual(missing_query.stdout, "")
+        self.assertIn("Error: --query requires a non-empty search string.", missing_query.stderr)
+
+    def test_user_input_errors_are_actionable_not_tracebacks(self) -> None:
+        cases = [
+            (
+                ("does-not-exist",),
+                1,
+                "Error: unknown command `does-not-exist`.",
+                "Commands:",
+            ),
+            (
+                ("qzss-l6-info",),
+                2,
+                "usage: gnss qzss-l6-info",
+                "the following arguments are required: --input",
+            ),
+            (
+                ("clas-ppp",),
+                2,
+                "usage: gnss clas-ppp",
+                "the following arguments are required: --obs, --nav, --out",
+            ),
+        ]
+
+        for args, expected_code, *snippets in cases:
+            with self.subTest(args=args):
+                result = self.run_gnss(*args)
+                self.assertEqual(result.returncode, expected_code)
+                self.assert_no_traceback(result)
+                combined = result.stdout + result.stderr
+                for snippet in snippets:
+                    self.assertIn(snippet, combined)
+
+    def test_unknown_command_suggests_registered_dispatcher_names(self) -> None:
+        cases = [
+            ("clas_ppp", "clas-ppp"),
+            ("ppc-rtk-signof", "ppc-rtk-signoff"),
+            ("qzss-l6-inf", "qzss-l6-info"),
+        ]
+
+        for typo, expected_command in cases:
+            with self.subTest(typo=typo):
+                result = self.run_gnss(typo)
+                self.assertEqual(result.returncode, 1)
+                self.assert_no_traceback(result)
+                self.assertEqual(result.stdout, "")
+                self.assertIn(f"Error: unknown command `{typo}`.", result.stderr)
+                self.assertIn("Did you mean", result.stderr)
+                self.assertIn(expected_command, result.stderr)
+                self.assertIn("Commands:", result.stderr)
+
+    def test_help_command_unknown_target_uses_command_suggestions(self) -> None:
+        result = self.run_gnss("help", "clas_ppp")
+
+        self.assertEqual(result.returncode, 1)
+        self.assert_no_traceback(result)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("Error: unknown command `clas_ppp`.", result.stderr)
+        self.assertIn("Did you mean `clas-ppp`?", result.stderr)
+        self.assertIn("Commands:", result.stderr)
+
+    def test_doctor_json_stays_machine_readable_for_setup_tools(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_cli_ux_doctor_") as temp_dir:
+            missing_root = Path(temp_dir) / "missing-root"
+            expected_root = str(missing_root.resolve())
+            result = self.run_gnss("doctor", "--root", str(missing_root), "--json")
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assert_no_traceback(result)
+        self.assertEqual(result.stderr, "")
+        payload = json.loads(result.stdout)
+        self.assertIs(payload["ok"], False)
+        self.assertEqual(payload["root"], expected_root)
+        self.assertIsInstance(payload["checks"], list)
+        self.assertGreaterEqual(len(payload["checks"]), 3)
+        self.assertIn("next_commands", payload)
+
+    def test_doctor_strict_json_failure_stays_machine_readable(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_cli_ux_doctor_strict_") as temp_dir:
+            missing_root = Path(temp_dir) / "missing-root"
+            expected_root = str(missing_root.resolve())
+            result = self.run_gnss(
+                "doctor",
+                "--root",
+                str(missing_root),
+                "--json",
+                "--strict",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        self.assert_no_traceback(result)
+        self.assertEqual(result.stderr, "")
+        payload = json.loads(result.stdout)
+        self.assertIs(payload["ok"], False)
+        self.assertEqual(payload["root"], expected_root)
+        missing_checks = [
+            item for item in payload["checks"] if item["status"] == "missing"
+        ]
+        self.assertGreaterEqual(len(missing_checks), 1)
+
+    def test_doctor_text_output_stays_actionable_for_first_run(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_cli_ux_doctor_text_") as temp_dir:
+            missing_root = Path(temp_dir) / "missing-root"
+            result = self.run_gnss("doctor", "--root", str(missing_root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assert_no_traceback(result)
+        self.assertEqual(result.stderr, "")
+        self.assertIn("libgnss++ doctor", result.stdout)
+        self.assertIn("[missing] repository root:", result.stdout)
+        self.assertIn("Recommended next commands:", result.stdout)
+
+        next_command_lines = [
+            line.strip()
+            for line in result.stdout.splitlines()
+            if line.strip().startswith("python3 apps/gnss.py ")
+        ]
+        seen_examples, stale_examples = self.stale_gnss_example_commands_in_lines(
+            [(line, line) for line in next_command_lines]
+        )
+        self.assertGreaterEqual(seen_examples, 4)
+        self.assertEqual(stale_examples, [])
+
+    def test_dispatcher_registry_keeps_python_targets_runnable(self) -> None:
+        dispatcher = self.dispatcher_module()
+        failures: list[str] = []
+        repo_root = ROOT_DIR.resolve()
+
+        for command, metadata in sorted(dispatcher.COMMANDS.items()):
+            kind = metadata.get("kind")
+            target = metadata.get("target")
+            summary = metadata.get("summary")
+
+            if kind not in {"python", "binary", "builtin"}:
+                failures.append(f"{command}: unsupported kind {kind!r}")
+            if not isinstance(summary, str) or not summary.strip():
+                failures.append(f"{command}: missing summary")
+
+            if kind == "builtin":
+                if target:
+                    failures.append(f"{command}: builtin should not declare target")
+                continue
+
+            if not isinstance(target, str) or not target:
+                failures.append(f"{command}: missing target")
+                continue
+
+            if kind != "python":
+                continue
+            target_path = Path(target)
+            if not target_path.exists():
+                failures.append(f"{command}: python target missing: {target}")
+                continue
+            try:
+                target_path.resolve().relative_to(repo_root)
+            except ValueError:
+                failures.append(f"{command}: python target escapes repo root: {target}")
+
+        self.assertEqual(failures, [])
+
+    def test_markdown_gnss_examples_use_registered_dispatcher_commands(self) -> None:
+        markdown_files = [ROOT_DIR / "README.md", *sorted((ROOT_DIR / "docs").rglob("*.md"))]
+        seen_examples, stale_examples = self.stale_gnss_example_commands_in_files(markdown_files)
+
+        self.assertGreaterEqual(seen_examples, 20)
+        self.assertEqual(stale_examples, [])
+
+    def test_readme_clas_maturity_claim_is_explicit(self) -> None:
+        readme = (ROOT_DIR / "README.md").read_text(encoding="utf-8")
+
+        self.assertNotIn("| Area | Public comparison | Current result |", readme)
+        self.assertIn("| Area | Public comparison | Evidence / status |", readme)
+
+        clas_rows = [
+            line for line in readme.splitlines()
+            if line.startswith("| CLAS PPP |")
+        ]
+        self.assertEqual(len(clas_rows), 1)
+        clas_row = clas_rows[0]
+        for snippet in (
+            "Six PPC Tokyo/Nagoya runs",
+            "24.851% aggregate FIX",
+            "19 FIX epochs (0.03%) exceed 3 m",
+        ):
+            self.assertIn(snippet, clas_row)
+
+        section_heading = "### Moving CLAS PPP vs MRTKLIB"
+        self.assertIn(section_heading, readme)
+        section_start = readme.index(section_heading)
+        section_end = readme.find("\n### ", section_start + len(section_heading))
+        clas_section = readme[section_start:] if section_end == -1 else readme[section_start:section_end]
+        normalized_section = re.sub(r"\s+", " ", clas_section)
+        for snippet in (
+            "current moving-data gate",
+            "all six public PPC Tokyo/Nagoya runs",
+            "Across 58,259 scored epochs",
+            "All RMS2D*",
+            "SINGLE RMS2D*",
+            "catastrophic FLOAT/SPP disagreement above 250 m",
+            "excluded from ordinary filter admission, cold starts, and AR",
+            "FLOAT and SINGLE RMS2D are 16.843 m and 70.337 m",
+        ):
+            self.assertIn(snippet, normalized_section)
+
+        self.assertNotIn("full six-run sign-off pending", normalized_section)
+        self.assertNotIn("Historical static CLASLIB oracle", normalized_section)
+
+    def test_app_generated_gnss_examples_use_registered_dispatcher_commands(self) -> None:
+        app_files = [ROOT_DIR / "apps" / "gnss.py"]
+        app_files.extend(sorted((ROOT_DIR / "apps" / "commands").rglob("gnss_*.py")))
+        seen_examples, stale_examples = self.stale_gnss_example_commands_in_files(app_files)
+
+        self.assertGreaterEqual(seen_examples, 20)
+        self.assertEqual(stale_examples, [])
+
+
+if __name__ == "__main__":
+    unittest.main()

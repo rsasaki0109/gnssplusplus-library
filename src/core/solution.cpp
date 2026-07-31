@@ -1,4 +1,5 @@
 #include <libgnss++/core/solution.hpp>
+#include <libgnss++/core/coordinates.hpp>
 #include <fstream>
 #include <sstream>
 #include <iomanip>
@@ -9,6 +10,14 @@ namespace libgnss {
 namespace {
 
 constexpr std::size_t kMandatorySolutionColumns = 11;
+
+Matrix3d ecefToEnuRotation(double latitude_rad, double longitude_rad) {
+    Matrix3d rotation;
+    rotation.col(0) = ecef2enu(Vector3d::UnitX(), latitude_rad, longitude_rad);
+    rotation.col(1) = ecef2enu(Vector3d::UnitY(), latitude_rad, longitude_rad);
+    rotation.col(2) = ecef2enu(Vector3d::UnitZ(), latitude_rad, longitude_rad);
+    return rotation;
+}
 
 std::vector<std::string> parseSolutionColumnsHeader(const std::string& line) {
     const std::string columns_marker = "% Columns:";
@@ -99,6 +108,163 @@ void applyOptionalSolutionColumns(PositionSolution& sol,
             sol.rtk_update_rejected_by_innovation_gate = optionalColumnToInt(value);
         }
     }
+}
+
+bool isLeapYear(int year) {
+    return (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+}
+
+GNSSTime gpstCalendarToTime(int year, int month, int day, int hour, int minute,
+                            double second) {
+    if (year < 1980 || month < 1 || month > 12 || day < 1 || hour < 0 ||
+        hour > 23 || minute < 0 || minute > 59 || !std::isfinite(second) ||
+        second < 0.0 || second >= 61.0) {
+        return {};
+    }
+
+    int days_since_gps_epoch = 0;
+    for (int current_year = 1980; current_year < year; ++current_year) {
+        days_since_gps_epoch += isLeapYear(current_year) ? 366 : 365;
+    }
+    const int days_in_month[] = {31, 28, 31, 30, 31, 30,
+                                 31, 31, 30, 31, 30, 31};
+    for (int current_month = 1; current_month < month; ++current_month) {
+        days_since_gps_epoch +=
+            current_month == 2 && isLeapYear(year)
+                ? 29
+                : days_in_month[current_month - 1];
+    }
+    days_since_gps_epoch += day - 6;  // 1980-01-06 is GPS day zero.
+
+    const int gps_week = days_since_gps_epoch / 7;
+    const int day_of_week = days_since_gps_epoch % 7;
+    return GNSSTime(gps_week,
+                    static_cast<double>(day_of_week) * 86400.0 +
+                        static_cast<double>(hour) * 3600.0 +
+                        static_cast<double>(minute) * 60.0 + second);
+}
+
+bool parseDateToken(const std::string& token, int& year, int& month, int& day) {
+    char slash1 = '\0';
+    char slash2 = '\0';
+    std::istringstream input(token);
+    return static_cast<bool>(input >> year >> slash1 >> month >> slash2 >> day) &&
+           slash1 == '/' && slash2 == '/' && input.peek() == EOF;
+}
+
+bool parseTimeToken(const std::string& token, int& hour, int& minute, double& second) {
+    char colon1 = '\0';
+    char colon2 = '\0';
+    std::istringstream input(token);
+    return static_cast<bool>(input >> hour >> colon1 >> minute >> colon2 >> second) &&
+           colon1 == ':' && colon2 == ':' && input.peek() == EOF;
+}
+
+double signedSquare(double value) {
+    return std::copysign(value * value, value);
+}
+
+SolutionStatus rtklibQualityToStatus(int quality) {
+    switch (quality) {
+        case 1: return SolutionStatus::FIXED;
+        case 2: return SolutionStatus::FLOAT;
+        case 4: return SolutionStatus::DGPS;
+        case 5: return SolutionStatus::SPP;
+        case 6: return SolutionStatus::PPP_FLOAT;
+        default: return SolutionStatus::NONE;
+    }
+}
+
+bool parseRtklibSolutionLine(const std::string& line, PositionSolution& sol) {
+    std::istringstream input(line);
+    std::string date_token;
+    std::string time_token;
+    if (!(input >> date_token >> time_token)) {
+        return false;
+    }
+
+    int year = 0;
+    int month = 0;
+    int day = 0;
+    int hour = 0;
+    int minute = 0;
+    double second = 0.0;
+    if (!parseDateToken(date_token, year, month, day) ||
+        !parseTimeToken(time_token, hour, minute, second)) {
+        return false;
+    }
+
+    double latitude_deg = 0.0;
+    double longitude_deg = 0.0;
+    double height_m = 0.0;
+    double quality_value = 0.0;
+    double satellite_value = 0.0;
+    double sdn = 0.0;
+    double sde = 0.0;
+    double sdu = 0.0;
+    double sdne = 0.0;
+    double sdeu = 0.0;
+    double sdun = 0.0;
+    double age = 0.0;
+    double ratio = 0.0;
+    if (!(input >> latitude_deg >> longitude_deg >> height_m >> quality_value >>
+          satellite_value >> sdn >> sde >> sdu >> sdne >> sdeu >> sdun >> age >>
+          ratio)) {
+        return false;
+    }
+
+    constexpr double kDegreesToRadians = M_PI / 180.0;
+    const double latitude_rad = latitude_deg * kDegreesToRadians;
+    const double longitude_rad = longitude_deg * kDegreesToRadians;
+    sol.time = gpstCalendarToTime(year, month, day, hour, minute, second);
+    sol.position_geodetic =
+        GeodeticCoord(latitude_rad, longitude_rad, height_m);
+    sol.position_ecef = geodetic2ecef(latitude_rad, longitude_rad, height_m);
+    sol.status = rtklibQualityToStatus(static_cast<int>(std::lround(quality_value)));
+    sol.num_satellites = static_cast<int>(std::lround(satellite_value));
+    sol.ratio = ratio;
+
+    // RTKLIB reports N/E/U standard deviations and signed square roots of
+    // covariance. Convert the full local covariance to ECEF, matching the
+    // PositionSolution contract consumed by LooseCouplingProcessor.
+    Matrix3d covariance_neu;
+    covariance_neu << sdn * sdn, signedSquare(sdne), signedSquare(sdun),
+        signedSquare(sdne), sde * sde, signedSquare(sdeu),
+        signedSquare(sdun), signedSquare(sdeu), sdu * sdu;
+    Matrix3d covariance_enu;
+    const Eigen::PermutationMatrix<3> neu_to_enu(Eigen::Vector3i(1, 0, 2));
+    covariance_enu = neu_to_enu * covariance_neu * neu_to_enu.transpose();
+    const Matrix3d ecef_to_enu = ecefToEnuRotation(latitude_rad, longitude_rad);
+    sol.position_covariance =
+        ecef_to_enu.transpose() * covariance_enu * ecef_to_enu;
+
+    double vn = 0.0;
+    double ve = 0.0;
+    double vu = 0.0;
+    double sdvn = 0.0;
+    double sdve = 0.0;
+    double sdvu = 0.0;
+    double sdvne = 0.0;
+    double sdveu = 0.0;
+    double sdvun = 0.0;
+    if (input >> vn >> ve >> vu >> sdvn >> sdve >> sdvu >> sdvne >> sdveu >>
+        sdvun) {
+        sol.velocity_ned = Vector3d(vn, ve, -vu);
+        const Vector3d velocity_enu(ve, vn, vu);
+        sol.velocity_ecef = ecef_to_enu.transpose() * velocity_enu;
+
+        Matrix3d velocity_covariance_neu;
+        velocity_covariance_neu
+            << sdvn * sdvn, signedSquare(sdvne), signedSquare(sdvun),
+            signedSquare(sdvne), sdve * sdve, signedSquare(sdveu),
+            signedSquare(sdvun), signedSquare(sdveu), sdvu * sdvu;
+        const Matrix3d velocity_covariance_enu =
+            neu_to_enu * velocity_covariance_neu * neu_to_enu.transpose();
+        sol.velocity_covariance =
+            ecef_to_enu.transpose() * velocity_covariance_enu * ecef_to_enu;
+        sol.has_velocity = true;
+    }
+    return sol.position_ecef.allFinite() && sol.position_ecef.norm() > 1e6;
 }
 
 } // namespace
@@ -306,6 +472,14 @@ bool Solution::loadFromFile(const std::string& filename) {
             std::vector<std::string> parsed_columns = parseSolutionColumnsHeader(line);
             if (!parsed_columns.empty()) {
                 columns = std::move(parsed_columns);
+            }
+            continue;
+        }
+
+        if (line.find('/') != std::string::npos) {
+            PositionSolution rtklib_solution;
+            if (parseRtklibSolutionLine(line, rtklib_solution)) {
+                solutions.push_back(rtklib_solution);
             }
             continue;
         }

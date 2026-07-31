@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import difflib
 import glob
+import json
 import os
 import sys
 
@@ -13,30 +15,102 @@ APPS_DIR = os.path.dirname(os.path.abspath(__file__))
 EXE_SUFFIX = ".exe" if os.name == "nt" else ""
 BUILD_CONFIGS = ("Release", "RelWithDebInfo", "Debug", "MinSizeRel")
 
+PYTHON_COMMAND_GROUPS = {
+    "diagnostics": {
+        "gnss_dd_residuals.py", "gnss_doctor.py", "gnss_field_report.py",
+        "gnss_mode_compare.py", "gnss_robotics_smoke.py",
+        "gnss_ros2_bag_doctor.py", "gnss_ros2_doctor.py",
+    },
+    "receivers": {
+        "gnss_binex_info.py", "gnss_nmea_info.py", "gnss_novatel_info.py",
+        "gnss_qzss_l6_info.py", "gnss_rcv.py", "gnss_sbf_info.py",
+        "gnss_sbp_info.py", "gnss_skytraq_info.py", "gnss_trimble_info.py",
+    },
+    "products": {
+        "gnss_dcb_info.py", "gnss_fetch_products.py", "gnss_ionex_info.py",
+        "gnss_vmf_atl.py",
+    },
+    "positioning": {
+        "gnss_clas_ppp.py", "gnss_live_signoff.py",
+        "gnss_moving_base_prepare.py", "gnss_moving_base_signoff.py",
+        "gnss_ppp_kinematic_signoff.py", "gnss_ppp_products_signoff.py",
+        "gnss_ppp_static_signoff.py", "gnss_rtk_kinematic_signoff.py",
+        "gnss_scorpion_moving_base_signoff.py", "gnss_short_baseline_signoff.py",
+    },
+    "visualization": {
+        "gnss_artifact_manifest.py", "gnss_moving_base_plot.py",
+        "gnss_visibility_plot.py", "gnss_web.py",
+    },
+    "benchmarks": {
+        "gnss_odaiba_benchmark.py", "gnss_odaiba_scan.py",
+        "gnss_ppc_commercial.py", "gnss_ppc_coverage_matrix.py",
+        "gnss_ppc_demo.py", "gnss_ppc_metrics.py", "gnss_ppc_rtk_signoff.py",
+        "gnss_ppc_spp_compare.py", "gnss_ppc_spp_jump_sweep.py",
+        "gnss_ppc_spp_policy_report.py", "gnss_ppc_spp_policy_suite.py",
+        "gnss_ppc_taroz_amb_pdc_smoke.py",
+        "gnss_ppp_iers_atm_tidal_loading_bench.py",
+        "gnss_ppp_iers_atm_tidal_loading_multisite_bench.py",
+        "gnss_ppp_iers_ocean_loading_bench.py",
+        "gnss_ppp_iers_pole_tide_bench.py",
+        "gnss_ppp_iers_pole_tide_multisite_bench.py",
+        "gnss_ppp_iers_solid_tide_bench.py",
+        "gnss_ppp_iers_sub_daily_eop_bench.py",
+        "gnss_ppp_iers_sub_daily_eop_multisite_bench.py",
+        "gnss_ppp_iers_truth_bench.py", "gnss_ppp_iers_truth_multisite_bench.py",
+        "gnss_public_rtk_benchmarks.py", "gnss_smartloc_adapter.py",
+        "gnss_smartloc_signoff.py", "gnss_taroz_observable_dogfood.py",
+        "gnss_taroz_oracle_suite.py", "gnss_taroz_p_dogfood.py",
+        "gnss_taroz_pc_dogfood.py", "gnss_taroz_pd_dogfood.py",
+        "gnss_taroz_pos_vel_amb_pdc_dogfood.py",
+    },
+}
+PYTHON_COMMAND_GROUP = {
+    filename: group
+    for group, filenames in PYTHON_COMMAND_GROUPS.items()
+    for filename in filenames
+}
+
+
+def python_target(filename: str) -> str:
+    """Resolve a grouped source command or its flat installed counterpart."""
+    group = PYTHON_COMMAND_GROUP[filename]
+    source_target = os.path.join(APPS_DIR, "commands", group, filename)
+    if os.path.isfile(source_target):
+        return source_target
+    return os.path.join(APPS_DIR, filename)
+
 COMMANDS = {
+    "commands": {
+        "kind": "builtin",
+        "summary": "List registered dispatcher commands as text or JSON for users, docs, and tooling.",
+    },
+    "help": {
+        "kind": "builtin",
+        "summary": "Show top-level help or dispatch to a command's own --help output.",
+    },
     "doctor": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_doctor.py"),
+        "target": python_target("gnss_doctor.py"),
         "summary": "Check local setup, built tools, datasets, docs, Docker, and ROS2 readiness.",
     },
     "robotics-smoke": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_robotics_smoke.py"),
+        "target": python_target("gnss_robotics_smoke.py"),
         "summary": "Run a short PPC RTK replay with robotics-friendly realtime gates.",
     },
     "ros2-doctor": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_ros2_doctor.py"),
+        "target": python_target("gnss_ros2_doctor.py"),
         "summary": "Check ROS2 receiver readiness, serial permissions, launch, record, and topic debug commands.",
     },
     "ros2-bag-doctor": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_ros2_bag_doctor.py"),
+        "target": python_target("gnss_ros2_bag_doctor.py"),
         "summary": "Inspect ROS2 GNSS bag topics, rates, gaps, and raw-binary replayability.",
     },
     "field-report": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_field_report.py"),
+        "target": python_target("gnss_field_report.py"),
         "summary": "Aggregate setup, ROS2, bag, and robotics smoke diagnostics into Markdown/JSON reports.",
     },
     "spp": {
@@ -48,6 +122,11 @@ COMMANDS = {
         "kind": "binary",
         "target": "gnss_fgo",
         "summary": "Batch factor-graph post-processing from rover/nav RINEX files.",
+    },
+    "fuse": {
+        "kind": "binary",
+        "target": "gnss_fuse",
+        "summary": "GNSS/IMU fusion with SPP/RTK and validated tight-coupling presets.",
     },
     "vel-d": {
         "kind": "binary",
@@ -76,62 +155,62 @@ COMMANDS = {
     },
     "compare-modes": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_mode_compare.py"),
+        "target": python_target("gnss_mode_compare.py"),
         "summary": "Run SPP/FGO/RTK on shared RINEX inputs and emit a mode-comparison JSON summary.",
     },
     "taroz-pc-dogfood": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_taroz_pc_dogfood.py"),
+        "target": python_target("gnss_taroz_pc_dogfood.py"),
         "summary": "Regenerate taroz PC FGO outputs and verify intermediate/final parity.",
     },
     "taroz-p-dogfood": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_taroz_p_dogfood.py"),
+        "target": python_target("gnss_taroz_p_dogfood.py"),
         "summary": "Regenerate taroz P FGO smoke outputs and verify raw-pseudorange configuration.",
     },
     "taroz-pd-dogfood": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_taroz_pd_dogfood.py"),
+        "target": python_target("gnss_taroz_pd_dogfood.py"),
         "summary": "Regenerate taroz position/velocity PD outputs and verify internal parity.",
     },
     "taroz-pos-vel-amb-pdc-dogfood": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_taroz_pos_vel_amb_pdc_dogfood.py"),
+        "target": python_target("gnss_taroz_pos_vel_amb_pdc_dogfood.py"),
         "summary": "Regenerate taroz position/velocity ambiguity PDC FGO outputs and verify parity.",
     },
     "taroz-observable-dogfood": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_taroz_observable_dogfood.py"),
+        "target": python_target("gnss_taroz_observable_dogfood.py"),
         "summary": "Regenerate taroz D/position PD/PDC/position-velocity PDC outputs and verify parity.",
     },
     "taroz-oracle-suite": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_taroz_oracle_suite.py"),
+        "target": python_target("gnss_taroz_oracle_suite.py"),
         "summary": "Run all taroz MATLAB-oracle dogfood harnesses from one suite entrypoint.",
     },
     "ppc-taroz-amb-pdc-smoke": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_ppc_taroz_amb_pdc_smoke.py"),
+        "target": python_target("gnss_ppc_taroz_amb_pdc_smoke.py"),
         "summary": "Run taroz ambiguity PDC FGO checks on PPC-Dataset runs.",
     },
     "ppc-spp-jump-sweep": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_ppc_spp_jump_sweep.py"),
+        "target": python_target("gnss_ppc_spp_jump_sweep.py"),
         "summary": "Sweep post-hoc SPP position-jump gates against a PPC reference trajectory.",
     },
     "ppc-spp-compare": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_ppc_spp_compare.py"),
+        "target": python_target("gnss_ppc_spp_compare.py"),
         "summary": "Compare multiple SPP .pos files against a PPC reference and render CSV/PNG artifacts.",
     },
     "ppc-spp-policy-report": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_ppc_spp_policy_report.py"),
+        "target": python_target("gnss_ppc_spp_policy_report.py"),
         "summary": "Summarize PPC SPP jump-gate policy sweep JSONs across runs.",
     },
     "ppc-spp-policy-suite": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_ppc_spp_policy_suite.py"),
+        "target": python_target("gnss_ppc_spp_policy_suite.py"),
         "summary": "Run PPC SPP jump-gate sweeps, policy reports, and comparisons as one suite.",
     },
     "solve": {
@@ -151,7 +230,7 @@ COMMANDS = {
     },
     "visibility-plot": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_visibility_plot.py"),
+        "target": python_target("gnss_visibility_plot.py"),
         "summary": "Render a visibility CSV into a polar/elevation PNG quick-look.",
     },
     "nav-products": {
@@ -161,12 +240,12 @@ COMMANDS = {
     },
     "fetch-products": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_fetch_products.py"),
+        "target": python_target("gnss_fetch_products.py"),
         "summary": "Fetch and cache SP3/CLK/IONEX/DCB-style product files from local paths or URLs.",
     },
     "artifact-manifest": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_artifact_manifest.py"),
+        "target": python_target("gnss_artifact_manifest.py"),
         "summary": "Scan generated summaries and build a web/CI-friendly artifact manifest JSON.",
     },
     "rinex-info": {
@@ -186,52 +265,52 @@ COMMANDS = {
     },
     "ionex-info": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_ionex_info.py"),
+        "target": python_target("gnss_ionex_info.py"),
         "summary": "Inspect IONEX headers, map counts, grid metadata, and auxiliary DCB blocks.",
     },
     "dcb-info": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_dcb_info.py"),
+        "target": python_target("gnss_dcb_info.py"),
         "summary": "Inspect Bias-SINEX or IONEX auxiliary DCB products and summarize systems/bias types.",
     },
     "nmea-info": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_nmea_info.py"),
+        "target": python_target("gnss_nmea_info.py"),
         "summary": "Inspect NMEA GGA/RMC logs or serial streams and print decoded position summaries.",
     },
     "novatel-info": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_novatel_info.py"),
+        "target": python_target("gnss_novatel_info.py"),
         "summary": "Inspect NovAtel ASCII BESTPOS/BESTVEL logs or serial streams.",
     },
     "sbp-info": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_sbp_info.py"),
+        "target": python_target("gnss_sbp_info.py"),
         "summary": "Inspect Swift Binary Protocol GPS_TIME/POS_LLH/VEL_NED logs or serial streams.",
     },
     "sbf-info": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_sbf_info.py"),
+        "target": python_target("gnss_sbf_info.py"),
         "summary": "Inspect Septentrio SBF PVTGeodetic/LBandTrackerStatus/P2PPStatus logs or serial streams.",
     },
     "trimble-info": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_trimble_info.py"),
+        "target": python_target("gnss_trimble_info.py"),
         "summary": "Inspect Trimble GSOF GENOUT Type 1/2/8 packets from file or serial input.",
     },
     "skytraq-info": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_skytraq_info.py"),
+        "target": python_target("gnss_skytraq_info.py"),
         "summary": "Inspect SkyTraq binary epoch/raw/rawx/ack logs or serial streams.",
     },
     "binex-info": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_binex_info.py"),
+        "target": python_target("gnss_binex_info.py"),
         "summary": "Inspect BINEX big-endian regular-CRC metadata/navigation/prototyping records from file or serial input.",
     },
     "qzss-l6-info": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_qzss_l6_info.py"),
+        "target": python_target("gnss_qzss_l6_info.py"),
         "summary": "Inspect direct QZSS L6 250-byte frames and optionally export subframes, subtype 10 service-info packets, Compact SSR message inventory, or sampled corrections from subtype 1/2/3/4/5/6/7/8/9/11/12.",
     },
     "convert": {
@@ -251,37 +330,37 @@ COMMANDS = {
     },
     "live-signoff": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_live_signoff.py"),
+        "target": python_target("gnss_live_signoff.py"),
         "summary": "Run gnss live with realtime/error-handling thresholds and emit summary JSON.",
     },
     "moving-base-signoff": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_moving_base_signoff.py"),
+        "target": python_target("gnss_moving_base_signoff.py"),
         "summary": "Run a real moving-base replay/live dataset against reference baseline/heading CSV and emit summary JSON.",
     },
     "scorpion-moving-base-signoff": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_scorpion_moving_base_signoff.py"),
+        "target": python_target("gnss_scorpion_moving_base_signoff.py"),
         "summary": "Prepare and validate the public SCORPION moving-base ROS2 bag through replay plus receiver side-by-side output.",
     },
     "moving-base-prepare": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_moving_base_prepare.py"),
+        "target": python_target("gnss_moving_base_prepare.py"),
         "summary": "Extract rover/base UBX files plus reference and optional receiver CSVs from a ROS2 moving-base bag.",
     },
     "moving-base-plot": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_moving_base_plot.py"),
+        "target": python_target("gnss_moving_base_plot.py"),
         "summary": "Render moving-base sign-off solution/reference pairs into a baseline and heading PNG quick-look.",
     },
     "rcv": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_rcv.py"),
+        "target": python_target("gnss_rcv.py"),
         "summary": "Run the live solver from an rtkrcv-style config file and emit status snapshots.",
     },
     "web": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_web.py"),
+        "target": python_target("gnss_web.py"),
         "summary": "Serve a local web UI for benchmark snapshots, live sign-offs, 2D trajectories, and receiver status.",
     },
     "stats": {
@@ -311,7 +390,7 @@ COMMANDS = {
     },
     "pos2kml": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_pos2kml"),
+        "target": os.path.join(APPS_DIR, "compat", "gnss_pos2kml"),
         "summary": "Convert libgnss++ or RTKLIB .pos output into KML.",
     },
     "driving-compare": {
@@ -336,127 +415,127 @@ COMMANDS = {
     },
     "odaiba-benchmark": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_odaiba_benchmark.py"),
+        "target": python_target("gnss_odaiba_benchmark.py"),
         "summary": "Run the full libgnss++ vs RTKLIB Odaiba benchmark pipeline.",
     },
     "odaiba-scan": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_odaiba_scan.py"),
+        "target": python_target("gnss_odaiba_scan.py"),
         "summary": "Scan Odaiba in epoch windows and report reference-based metrics.",
     },
     "short-baseline-signoff": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_short_baseline_signoff.py"),
+        "target": python_target("gnss_short_baseline_signoff.py"),
         "summary": "Run a mixed-GNSS short-baseline static sign-off and emit summary JSON.",
     },
     "rtk-kinematic-signoff": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_rtk_kinematic_signoff.py"),
+        "target": python_target("gnss_rtk_kinematic_signoff.py"),
         "summary": "Run the bundled mixed-GNSS RTK kinematic sign-off and emit summary JSON.",
     },
     "ppp-static-signoff": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_ppp_static_signoff.py"),
+        "target": python_target("gnss_ppp_static_signoff.py"),
         "summary": "Run the bundled static PPP sign-off and emit summary JSON.",
     },
     "ppp-kinematic-signoff": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_ppp_kinematic_signoff.py"),
+        "target": python_target("gnss_ppp_kinematic_signoff.py"),
         "summary": "Run the bundled kinematic PPP sign-off against an RTK reference and emit summary JSON.",
     },
     "ppp-iers-solid-tide-bench": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_ppp_iers_solid_tide_bench.py"),
+        "target": python_target("gnss_ppp_iers_solid_tide_bench.py"),
         "summary": "Run the same PPP setup with and without --use-iers-solid-tide and summarize the per-epoch displacement (Phase C-1 truth-bench harness).",
     },
     "ppp-iers-pole-tide-bench": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_ppp_iers_pole_tide_bench.py"),
+        "target": python_target("gnss_ppp_iers_pole_tide_bench.py"),
         "summary": "Run the same PPP setup with and without --use-iers-pole-tide and summarize the per-epoch displacement (Phase D-1 truth-bench harness; requires --eop-c04).",
     },
     "ppp-iers-atm-tidal-loading-bench": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_ppp_iers_atm_tidal_loading_bench.py"),
+        "target": python_target("gnss_ppp_iers_atm_tidal_loading_bench.py"),
         "summary": "Run the same PPP setup with and without --use-iers-atm-tidal-loading and summarize the per-epoch displacement (Phase D-3 truth-bench harness; requires --atm-tidal-loading).",
     },
     "ppp-iers-atm-tidal-loading-multisite-bench": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_ppp_iers_atm_tidal_loading_multisite_bench.py"),
+        "target": python_target("gnss_ppp_iers_atm_tidal_loading_multisite_bench.py"),
         "summary": "Run the Phase D-3 atmospheric-tidal-loading bench across an arbitrary list of IGS stations and emit an aggregate per-site distribution summary.",
     },
     "vmf-atl": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_vmf_atl.py"),
+        "target": python_target("gnss_vmf_atl.py"),
         "summary": "Fetch or read VMF site-wise GNSS tidal APL coefficients and write libgnss++ ATL coefficient files.",
     },
     "ppp-iers-pole-tide-multisite-bench": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_ppp_iers_pole_tide_multisite_bench.py"),
+        "target": python_target("gnss_ppp_iers_pole_tide_multisite_bench.py"),
         "summary": "Run the Phase D-1 pole-tide bench across an arbitrary list of IGS stations and emit an aggregate per-site distribution summary (gates the use_iers_pole_tide flip-default).",
     },
     "ppp-iers-sub-daily-eop-bench": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_ppp_iers_sub_daily_eop_bench.py"),
+        "target": python_target("gnss_ppp_iers_sub_daily_eop_bench.py"),
         "summary": "Run the same PPP setup with and without --use-iers-sub-daily-eop (pole-tide ON in both runs) and summarize the per-epoch displacement (Phase D-2 truth-bench harness; requires --eop-c04).",
     },
     "ppp-iers-sub-daily-eop-multisite-bench": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_ppp_iers_sub_daily_eop_multisite_bench.py"),
+        "target": python_target("gnss_ppp_iers_sub_daily_eop_multisite_bench.py"),
         "summary": "Run the Phase D-2 sub-daily-EOP bench across an arbitrary list of IGS stations and emit an aggregate per-site distribution summary.",
     },
     "ppp-iers-truth-bench": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_ppp_iers_truth_bench.py"),
+        "target": python_target("gnss_ppp_iers_truth_bench.py"),
         "summary": "Run an end-to-end PPP truth bench with all IERS defaults ON, comparing the converged static position to the RINEX header's APPROX POSITION XYZ; --ab also runs all-IERS-OFF to report the on/off residual delta.",
     },
     "ppp-iers-truth-multisite-bench": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_ppp_iers_truth_multisite_bench.py"),
+        "target": python_target("gnss_ppp_iers_truth_multisite_bench.py"),
         "summary": "Run the IERS end-to-end truth bench across an arbitrary list of IGS stations and emit an aggregate per-site residual distribution.",
     },
     "ppp-iers-ocean-loading-bench": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_ppp_iers_ocean_loading_bench.py"),
+        "target": python_target("gnss_ppp_iers_ocean_loading_bench.py"),
         "summary": "Run the same PPP setup with and without --use-iers-ocean-loading and summarize the per-epoch displacement (Phase A-2b HARDISP truth-bench harness).",
     },
     "ppp-products-signoff": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_ppp_products_signoff.py"),
+        "target": python_target("gnss_ppp_products_signoff.py"),
         "summary": "Run static, kinematic, or PPC PPP sign-off with fetched SP3/CLK/IONEX/DCB products and emit summary JSON.",
     },
     "ppc-demo": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_ppc_demo.py"),
+        "target": python_target("gnss_ppc_demo.py"),
         "summary": "Run an external PPC-Dataset Tokyo/Nagoya run through RTK or PPP and compare against reference.csv.",
     },
     "ppc-rtk-signoff": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_ppc_rtk_signoff.py"),
+        "target": python_target("gnss_ppc_rtk_signoff.py"),
         "summary": "Run the PPC-Dataset RTK sign-off profile for Tokyo/Nagoya, with optional RTKLIB side-by-side gates.",
     },
     "ppc-coverage-matrix": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_ppc_coverage_matrix.py"),
+        "target": python_target("gnss_ppc_coverage_matrix.py"),
         "summary": "Run all six PPC Tokyo/Nagoya RTK coverage-profile replays and emit JSON/Markdown summaries.",
     },
     "public-rtk-benchmarks": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_public_rtk_benchmarks.py"),
+        "target": python_target("gnss_public_rtk_benchmarks.py"),
         "summary": "List public moving-RTK benchmark profiles, adapter status, and caveats.",
     },
     "smartloc-adapter": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_smartloc_adapter.py"),
+        "target": python_target("gnss_smartloc_adapter.py"),
         "summary": "Export smartLoc NAV-POSLLH.csv into reference and receiver CSV comparison artifacts.",
     },
     "smartloc-signoff": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_smartloc_signoff.py"),
+        "target": python_target("gnss_smartloc_signoff.py"),
         "summary": "Run smartLoc adapter export plus receiver-fix comparison gates.",
     },
     "clas-ppp": {
         "kind": "python",
-        "target": os.path.join(APPS_DIR, "gnss_clas_ppp.py"),
+        "target": python_target("gnss_clas_ppp.py"),
         "summary": "Run PPP with a named CLAS/MADOCA correction profile over RTCM, compact sampled transport, or raw QZSS L6 subtype 1/2/3/4/5/6/7/8/9/11/12 input.",
     },
     "ros2-solution-node": {
@@ -467,18 +546,75 @@ COMMANDS = {
 }
 
 
+def command_kinds() -> list[str]:
+    return sorted({metadata["kind"] for metadata in COMMANDS.values()})
+
+
+def command_matches_query(record: dict[str, str], query: str) -> bool:
+    query_words = query.lower().replace("_", "-").split()
+    haystack = " ".join(
+        [
+            record["name"],
+            record["kind"],
+            record["summary"],
+        ]
+    ).lower()
+    return all(word in haystack for word in query_words)
+
+
+def command_records(
+    kind_filter: str | None = None,
+    query: str | None = None,
+    limit: int | None = None,
+) -> list[dict[str, str]]:
+    records: list[dict[str, str]] = []
+    for name, metadata in sorted(COMMANDS.items()):
+        kind = metadata["kind"]
+        if kind_filter is not None and kind != kind_filter:
+            continue
+        record = {
+            "name": name,
+            "kind": kind,
+            "summary": metadata["summary"],
+        }
+        if query is not None and not command_matches_query(record, query):
+            continue
+        records.append(record)
+        if limit is not None and len(records) >= limit:
+            break
+    return records
+
+
+def format_command_records(
+    records: list[dict[str, str]],
+    *,
+    query: str | None = None,
+) -> str:
+    width = max((len(record["name"]) for record in records), default=7)
+    lines = [f"Commands matching `{query}`:" if query is not None else "Commands:"]
+    if not records:
+        lines.append("  (none)")
+        lines.extend(["", "Run `gnss commands` to list all registered commands."])
+        return "\n".join(lines)
+    for record in records:
+        lines.append(f"  {record['name']:<{width}}  {record['summary']}")
+    lines.extend(["", "Run `gnss help <command>` for command-specific options."])
+    return "\n".join(lines)
+
+
 def usage() -> str:
     lines = [
         "Usage: gnss <command> [args...]",
         "",
-        "Commands:",
+        format_command_records(command_records()),
     ]
-    for name in sorted(COMMANDS):
-        lines.append(f"  {name:<10} {COMMANDS[name]['summary']}")
     lines.extend(
         [
             "",
             "Examples:",
+            "  python3 apps/gnss.py commands",
+            "  python3 apps/gnss.py commands --json",
+            "  python3 apps/gnss.py help doctor",
             "  python3 apps/gnss.py doctor",
             "  python3 apps/gnss.py robotics-smoke --profile realtime",
             "  python3 apps/gnss.py ros2-doctor --device /dev/ttyUSB0",
@@ -503,7 +639,7 @@ def usage() -> str:
             "  python3 apps/gnss.py visibility --obs data/rover_static.obs --nav data/navigation_static.nav --csv output/visibility.csv --summary-json output/visibility.json --max-epochs 60",
             "  python3 apps/gnss.py visibility-plot output/visibility.csv output/visibility.png",
             "  python3 apps/gnss.py solve --rover data/rover_kinematic.obs --base data/base_kinematic.obs --nav data/navigation_kinematic.nav --iono est --max-epochs 5",
-            "  python3 apps/gnss.py ppp --static --obs data/rover_static.obs --nav data/navigation_static.nav --sp3 precise.sp3 --clk precise.clk --antex igs20.atx --blq station.blq --out output/ppp_solution.pos",
+            "  python3 apps/gnss.py ppp --static --obs data/rover_static.obs --nav data/navigation_static.nav --sp3 precise.sp3 --clk precise.clk --antex igs20.atx --receiver-antenna-type \"TRM59800.80     NONE\" --blq station.blq --out output/ppp_solution.pos",
             "  python3 apps/gnss.py ppp --kinematic --enable-ar --convergence-min-epochs 4 --ar-ratio-threshold 2.0 --obs rover.obs --sp3 precise.sp3 --clk precise.clk --out output/ppp_ar.pos",
             "  python3 apps/gnss.py nav-products --obs data/rover_static.obs --nav data/navigation_static.nav --sp3-out output/static_products.sp3 --clk-out output/static_products.clk --max-epochs 60",
             "  python3 apps/gnss.py fetch-products --date 2024-01-02 --product sp3=https://example.net/{yyyy}{doy}.sp3.gz --product clk=file:///data/{yyyy}{doy}.clk.gz --summary-json output/products.json",
@@ -517,7 +653,6 @@ def usage() -> str:
             "  python3 apps/gnss.py ubx-info --input serial:///dev/ttyACM0?baud=115200 --limit 10",
             "  python3 apps/gnss.py ionex-info --input products/codg0020.24i --summary-json output/ionex.json",
             "  python3 apps/gnss.py dcb-info --input products/CAS0MGXRAP_20240020000_01D_01D_DCB.BSX --summary-json output/dcb.json",
-            "  python3 apps/gnss.py nmea-info --input logs/session.nmea --decode-gga --decode-rmc",
             "  python3 apps/gnss.py nmea-info --input serial:///dev/ttyUSB0?baud=9600 --limit 10",
             "  python3 apps/gnss.py novatel-info --input logs/novatel.log --decode-bestpos --decode-bestvel",
             "  python3 apps/gnss.py novatel-info --input serial:///dev/ttyUSB0?baud=115200 --limit 10",
@@ -544,7 +679,7 @@ def usage() -> str:
             "  python3 apps/gnss.py replay --rover-rinex data/rover_kinematic.obs --base-rinex data/base_kinematic.obs --nav-rinex data/navigation_kinematic.nav --out output/replay.pos",
             "  python3 apps/gnss.py live --rover-rtcm rover.rtcm3 --base-rtcm base.rtcm3 --nav-rinex nav.rnx",
             "  python3 apps/gnss.py live-signoff --rover-rtcm rover.rtcm3 --base-rtcm base.rtcm3 --out output/live.pos --summary-json output/live_summary.json --require-written-solutions-min 3 --require-realtime-factor-min 1.0",
-            "  python3 apps/gnss.py rcv start --config configs/live.conf --status-out output/receiver_status.json",
+            "  python3 apps/gnss.py rcv start --config configs/examples/live.example.conf --status-out output/receiver_status.json",
             "  python3 apps/gnss.py rcv status --status-out output/receiver_status.json --wait-seconds 5",
             "  python3 apps/gnss.py rcv status --status-out output/receiver_status.json --tail-log-lines 20",
             "  python3 apps/gnss.py rcv reload --status-out output/receiver_status.json --wait-seconds 1",
@@ -574,6 +709,254 @@ def usage() -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def suggest_commands(command_name: str, *, limit: int = 3) -> list[str]:
+    suggestions: list[str] = []
+    normalized = command_name.replace("_", "-")
+    if normalized in COMMANDS:
+        suggestions.append(normalized)
+
+    for match in difflib.get_close_matches(
+        normalized,
+        sorted(COMMANDS),
+        n=limit,
+        cutoff=0.55,
+    ):
+        if match not in suggestions:
+            suggestions.append(match)
+        if len(suggestions) >= limit:
+            break
+    return suggestions
+
+
+def unknown_command_message(command_name: str) -> str:
+    lines = [f"Error: unknown command `{command_name}`."]
+    suggestions = suggest_commands(command_name)
+    if suggestions:
+        lines.append("")
+        if len(suggestions) == 1:
+            lines.append(f"Did you mean `{suggestions[0]}`?")
+        else:
+            lines.append("Did you mean one of these?")
+            for name in suggestions:
+                lines.append(f"  {name:<22} {COMMANDS[name]['summary']}")
+    lines.extend(["", usage()])
+    return "\n".join(lines)
+
+
+def help_usage() -> str:
+    return "\n".join(
+        [
+            "Usage: gnss help [command]",
+            "",
+            "Show top-level help, or show the named command's own --help output.",
+            "",
+            "Examples:",
+            "  python3 apps/gnss.py help",
+            "  python3 apps/gnss.py help doctor",
+            "  python3 apps/gnss.py help clas-ppp",
+        ]
+    )
+
+
+def commands_usage() -> str:
+    return "\n".join(
+        [
+            "Usage: gnss commands [--json] [--kind KIND] [--query TEXT] [--limit N]",
+            "",
+            "List registered dispatcher commands without invoking solver binaries.",
+            "",
+            "Options:",
+            "  --json       Emit a machine-readable command registry.",
+            f"  --kind KIND  Filter by command kind: {', '.join(command_kinds())}.",
+            "  --query TEXT Search command names, kinds, and summaries.",
+            "  --limit N    Return at most N commands after filtering.",
+            "",
+            "Examples:",
+            "  python3 apps/gnss.py commands",
+            "  python3 apps/gnss.py commands --json",
+            "  python3 apps/gnss.py commands --kind python",
+            "  python3 apps/gnss.py commands --query ppp --limit 10",
+        ]
+    )
+
+
+def run_help(args: list[str]) -> int:
+    if not args:
+        print(usage())
+        return 0
+    if args == ["-h"] or args == ["--help"]:
+        print(help_usage())
+        return 0
+    if len(args) > 1:
+        print(
+            f"Error: gnss help accepts at most one command, got {len(args)}.",
+            "",
+            help_usage(),
+            sep="\n",
+            file=sys.stderr,
+        )
+        return 2
+    return dispatch_command(args[0], ["--help"])
+
+
+def run_commands(args: list[str]) -> int:
+    emit_json = False
+    kind_filter: str | None = None
+    query: str | None = None
+    limit: int | None = None
+    index = 0
+    valid_kinds = set(command_kinds())
+
+    while index < len(args):
+        arg = args[index]
+        if arg in ("-h", "--help"):
+            print(commands_usage())
+            return 0
+        if arg == "--json":
+            emit_json = True
+            index += 1
+            continue
+        if arg == "--query":
+            if index + 1 >= len(args):
+                print(
+                    "Error: --query requires a non-empty search string.",
+                    "",
+                    commands_usage(),
+                    sep="\n",
+                    file=sys.stderr,
+                )
+                return 2
+            query = args[index + 1].strip()
+            if not query:
+                print(
+                    "Error: --query requires a non-empty search string.",
+                    "",
+                    commands_usage(),
+                    sep="\n",
+                    file=sys.stderr,
+                )
+                return 2
+            index += 2
+            continue
+        if arg.startswith("--query="):
+            query = arg.split("=", 1)[1].strip()
+            if not query:
+                print(
+                    "Error: --query requires a non-empty search string.",
+                    "",
+                    commands_usage(),
+                    sep="\n",
+                    file=sys.stderr,
+                )
+                return 2
+            index += 1
+            continue
+        if arg == "--limit":
+            if index + 1 >= len(args):
+                print(
+                    "Error: --limit requires a positive integer.",
+                    "",
+                    commands_usage(),
+                    sep="\n",
+                    file=sys.stderr,
+                )
+                return 2
+            raw_limit = args[index + 1]
+            index += 2
+        elif arg.startswith("--limit="):
+            raw_limit = arg.split("=", 1)[1]
+            index += 1
+        else:
+            raw_limit = None
+
+        if raw_limit is not None:
+            try:
+                limit = int(raw_limit)
+            except ValueError:
+                print(
+                    f"Error: invalid --limit value `{raw_limit}`; expected a positive integer.",
+                    "",
+                    commands_usage(),
+                    sep="\n",
+                    file=sys.stderr,
+                )
+                return 2
+            if limit < 1:
+                print(
+                    f"Error: invalid --limit value `{raw_limit}`; expected a positive integer.",
+                    "",
+                    commands_usage(),
+                    sep="\n",
+                    file=sys.stderr,
+                )
+                return 2
+            continue
+        if arg == "--kind":
+            if index + 1 >= len(args):
+                print(
+                    "Error: --kind requires one of: "
+                    + ", ".join(sorted(valid_kinds))
+                    + ".",
+                    "",
+                    commands_usage(),
+                    sep="\n",
+                    file=sys.stderr,
+                )
+                return 2
+            kind_filter = args[index + 1]
+            index += 2
+        elif arg.startswith("--kind="):
+            kind_filter = arg.split("=", 1)[1]
+            index += 1
+        else:
+            print(
+                f"Error: unknown option for gnss commands: `{arg}`.",
+                "",
+                commands_usage(),
+                sep="\n",
+                file=sys.stderr,
+            )
+            return 2
+
+        if kind_filter is not None and kind_filter not in valid_kinds:
+            print(
+                f"Error: unknown command kind `{kind_filter}`. "
+                f"Expected one of: {', '.join(sorted(valid_kinds))}.",
+                "",
+                commands_usage(),
+                sep="\n",
+                file=sys.stderr,
+            )
+            return 2
+
+    records = command_records(kind_filter, query, limit)
+    if emit_json:
+        filters = {"kind": kind_filter}
+        if query is not None:
+            filters["query"] = query
+        if limit is not None:
+            filters["limit"] = limit
+        payload = {
+            "schema_version": 1,
+            "filters": filters,
+            "count": len(records),
+            "commands": records,
+        }
+        print(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        print(format_command_records(records, query=query))
+    return 0
+
+
+def run_builtin(command_name: str, args: list[str]) -> int:
+    if command_name == "help":
+        return run_help(args)
+    if command_name == "commands":
+        return run_commands(args)
+    print(f"Error: unsupported builtin command `{command_name}`.", file=sys.stderr)
+    return 1
 
 
 def find_binary(target_name: str) -> str | None:
@@ -613,6 +996,24 @@ def find_binary(target_name: str) -> str | None:
 def run_python(target: str, command_name: str, args: list[str]) -> int:
     env = os.environ.copy()
     env["GNSS_CLI_NAME"] = f"gnss {command_name}"
+    source_import_dirs = [
+        os.path.join(APPS_DIR, "commands", group)
+        for group in PYTHON_COMMAND_GROUPS
+    ]
+    source_import_dirs.append(os.path.join(APPS_DIR, "commands"))
+    existing_pythonpath = env.get("PYTHONPATH")
+    if existing_pythonpath:
+        source_import_dirs.append(existing_pythonpath)
+    env["PYTHONPATH"] = os.pathsep.join(source_import_dirs)
+    if os.name == "nt":
+        # os.exec* on Windows has spawn semantics (the parent console
+        # regains control while the child still runs, and the reported
+        # exit status is unreliable). Use a regular subprocess instead.
+        import subprocess
+
+        return subprocess.run(
+            [sys.executable, target, *args], env=env, check=False
+        ).returncode
     try:
         os.execvpe(sys.executable, [sys.executable, target, *args], env)
     except OSError as exc:
@@ -629,6 +1030,10 @@ def run_binary(target_name: str, args: list[str]) -> int:
             file=sys.stderr,
         )
         return 1
+    if os.name == "nt":
+        import subprocess
+
+        return subprocess.run([binary, *args], check=False).returncode
     try:
         os.execv(binary, [binary, *args])
     except OSError as exc:
@@ -636,22 +1041,29 @@ def run_binary(target_name: str, args: list[str]) -> int:
         return 1
 
 
-def main() -> int:
-    if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help", "help"):
-        print(usage())
-        return 0 if len(sys.argv) >= 2 else 1
-
-    command_name = sys.argv[1]
+def dispatch_command(command_name: str, args: list[str]) -> int:
     command = COMMANDS.get(command_name)
     if command is None:
-        print(f"Error: unknown command `{command_name}`.\n", file=sys.stderr)
-        print(usage(), file=sys.stderr)
+        print(unknown_command_message(command_name), file=sys.stderr)
         return 1
 
-    args = sys.argv[2:]
+    if command["kind"] == "builtin":
+        return run_builtin(command_name, args)
     if command["kind"] == "python":
         return run_python(command["target"], command_name, args)
     return run_binary(command["target"], args)
+
+
+def main() -> int:
+    if len(sys.argv) < 2:
+        print(usage())
+        return 1
+
+    if sys.argv[1] in ("-h", "--help"):
+        print(usage())
+        return 0
+
+    return dispatch_command(sys.argv[1], sys.argv[2:])
 
 
 if __name__ == "__main__":

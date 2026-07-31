@@ -1,18 +1,109 @@
 #pragma once
 
+#include <libgnss++/algorithms/ppp_env_overrides.hpp>
 #include <libgnss++/core/observation.hpp>
 #include <libgnss++/core/types.hpp>
 
+#include <algorithm>
 #include <array>
-#include <cstdlib>
+#include <cmath>
 #include <map>
 #include <string>
 
 namespace libgnss::ppp_shared {
 
-/// Check if PPP debug output is enabled via GNSS_PPP_DEBUG environment variable.
+enum class ConvergencePolicy {
+    LEGACY_ECEF_3D,
+    LOCAL_ENU_COMPONENTS,
+};
+
+/// Check if PPP debug output is enabled via GNSS_PPP_DEBUG.
 inline bool pppDebugEnabled() {
-    return std::getenv("GNSS_PPP_DEBUG") != nullptr;
+    return pppEnvOverrides().debug;
+}
+
+/// Retry a CLAS reset seed with leave-one-out FDE only after the baseline
+/// seed has demonstrated the same failure that would feed the parity guards.
+inline bool shouldRetryClasSeedWithFde(bool seed_valid,
+                                       bool redundancy_gate_failed,
+                                       bool filter_initialized,
+                                       double filter_spp_distance_m,
+                                       double max_spp_divergence_m) {
+    return seed_valid &&
+           (redundancy_gate_failed ||
+            (filter_initialized && std::isfinite(filter_spp_distance_m) &&
+             max_spp_divergence_m > 0.0 &&
+             filter_spp_distance_m > max_spp_divergence_m));
+}
+
+/// MRTKLIB writes a finite estpos() candidate to sol.rr before valsol()
+/// rejects it. In dynamics mode that candidate remains available only to the
+/// later counted maxdiffp recovery path; it is not an accepted SPP seed.
+inline bool clasMaxdiffCanUseValidationRejectedCandidate(
+    bool clas_mrtklib_parity,
+    bool validation_failed,
+    bool candidate_valid,
+    double filter_spp_distance_m,
+    double minimum_recovery_distance_m) {
+    return clas_mrtklib_parity && validation_failed && candidate_valid &&
+           std::isfinite(filter_spp_distance_m) &&
+           filter_spp_distance_m > minimum_recovery_distance_m;
+}
+
+/// A validation-rejected SPP candidate is never admitted to the PPP filter,
+/// but a causally continuous candidate is safer SINGLE output than freezing
+/// an old position while the vehicle moves. The tracker is output-only.
+inline bool clasRejectedSeedOutputIsContinuous(bool candidate_valid,
+                                                bool validation_failed,
+                                                bool has_anchor,
+                                                double jump_m,
+                                                double dt_s,
+                                                double jump_floor_m,
+                                                double speed_limit_mps,
+                                                double trusted_distance_m,
+                                                double trusted_limit_m) {
+    if (!candidate_valid || !validation_failed || !has_anchor ||
+        !std::isfinite(jump_m) || !std::isfinite(dt_s) ||
+        !std::isfinite(trusted_distance_m)) {
+        return false;
+    }
+    const double limit = std::max(jump_floor_m,
+                                  speed_limit_mps * std::max(dt_s, 0.0));
+    return jump_m <= limit && trusted_distance_m <= trusted_limit_m;
+}
+
+/// MRTKLIB dynamics keeps the previous sol.rr when pntpos fails before
+/// estpos() converges. Native guard rejections still require a minimally
+/// populated solve.
+inline bool shouldCoastClasSeed(bool masked_admission_failed,
+                                bool filter_initialized,
+                                int satellites_used) {
+    return masked_admission_failed ||
+           (!filter_initialized && satellites_used >= 4);
+}
+
+/// Keep the maxdiff recovery marker active while raw maxdiff observations
+/// continue, then retain it for a bounded validation window.
+inline bool updateClasSeedArQuarantine(bool trigger,
+                                       int recovery_epochs,
+                                       int& remaining_epochs) {
+    if (trigger) {
+        remaining_epochs = std::max(recovery_epochs, 0);
+    } else if (remaining_epochs > 0) {
+        --remaining_epochs;
+    }
+    return remaining_epochs > 0;
+}
+
+/// A just-recovered native state needs one more DD row than MRTKLIB's normal
+/// minamb=6 floor and must clear the kinematic ratio floor before it can
+/// publish FIX. Outside recovery, MRTKLIB's nb-dependent threshold is
+/// unchanged.
+inline bool clasRecoveryFixIsSupported(bool recovery_active,
+                                       int nb,
+                                       double ratio,
+                                       double ratio_floor) {
+    return !recovery_active || (nb >= 7 && ratio >= ratio_floor);
 }
 
 struct PPPConfig {
@@ -85,6 +176,7 @@ struct PPPConfig {
     std::string clock_file_path;
     bool use_ssr_corrections = false;
     bool use_clas_osr_filter = false;
+    bool use_clas_dd_filter = false;
     std::string ssr_file_path;
     int l6_gps_week = 0;  // GPS week for L6 binary decode (0 = auto-detect)
     Vector3d approximate_position = Vector3d::Zero();  // RINEX APPROX POS for L6 network selection
@@ -110,6 +202,7 @@ struct PPPConfig {
     bool use_dynamics_model = false;
     bool reset_clock_to_spp_each_epoch = true;
     bool reset_kinematic_position_to_spp_each_epoch = true;
+    bool emit_solution_epoch_time = false;
 
     // Kalman filter parameters
     double process_noise_position = 0.0;
@@ -137,6 +230,7 @@ struct PPPConfig {
     // Atmospheric modeling
     bool estimate_troposphere = true;
     bool estimate_ionosphere = false;
+    bool apply_madoca_l6d_ionosphere = false;
     double initial_ionosphere_variance = 100.0;
     double process_noise_ionosphere = 1e-3;
     bool use_ionosphere_free = true;
@@ -169,11 +263,32 @@ struct PPPConfig {
     double clas_trop_process_noise = 1e-6;        // Small: CLAS grid trop is stable
     double clas_initial_position_variance = 100.0; // Position covariance at filter init
     double clas_clock_variance = 1e8;             // Clock state variance (reset each epoch)
+    // Dynamics-mode receiver clock model (white-noise clock, RTKLIB PPP
+    // udclk_ppp semantics: state reseeded from SPP every epoch, then the
+    // measurement update refines it within this prior variance). 3600 m^2
+    // matches RTKLIB VAR_CLK = SQR(60.0). Do not raise toward
+    // clas_clock_variance (1e8): that destroys the LAMBDA float-covariance
+    // conditioning; do not shrink toward 0: that freezes the clock at the
+    // (meter-level noisy) SPP value and biases all phase residuals.
+    double clas_dynamic_clock_reseed_variance = 3600.0;
+    // Clock coast drift bound (m/s) used only in dynamics mode on epochs
+    // where no SPP seed is available (deep canyon): the clock variance is
+    // inflated by (drift * dt)^2 because consumer receiver clock drift is
+    // quasi-deterministic (grows with dt^2, not dt). Measured drift on the
+    // PPC tokyo_run2 rover is ~152 m/s; 200 gives headroom.
+    double clas_dynamic_clock_coast_drift_mps = 200.0;
     double clas_iono_prior_variance = 0.25;       // Ionosphere pseudo-observation variance
     double clas_ambiguity_reinit_threshold = 3000.0; // Re-init ambiguity when cov exceeds this
     double clas_anchor_sigma = 5.0;               // SPP anchor constraint sigma (m)
     double clas_outlier_sigma_scale = 50.0;       // Inflate variance when residual > N*sigma
     bool clas_decouple_clock_position = true;      // Zero clock cross-covariance each epoch
+    // MRTKLIB literal-port track (kinematic CLAS + dynamics model only):
+    // when set, the float chain uses MRTKLIB's varerr() measurement
+    // variance model (elevation-dependent, code = 50x phase, L2 phase
+    // factor) instead of the historical flat clas_phase_variance /
+    // clas_code_variance_scale weighting. White-noise kinematic, static
+    // and all non-CLAS paths ignore this flag entirely.
+    bool clas_mrtklib_float_parity = false;
 
     bool apply_ocean_loading = false;
     bool apply_solid_earth_tides = true;
@@ -267,6 +382,7 @@ struct PPPConfig {
     bool apply_relativity = true;
 
     // Convergence criteria
+    ConvergencePolicy convergence_policy = ConvergencePolicy::LEGACY_ECEF_3D;
     double convergence_threshold_horizontal = 0.1;
     double convergence_threshold_vertical = 0.2;
     int convergence_min_epochs = 20;
@@ -285,22 +401,48 @@ struct PPPState {
 
     int pos_index = 0;
     int vel_index = 3;
+    int accel_index = -1;
     int clock_index = 6;
     int glo_clock_index = 7;
     int gal_clock_index = -1;
     int qzs_clock_index = -1;
     int bds_clock_index = -1;
+    int bds2_clock_index = -1;
     int trop_index = 8;
     int iono_index = 9;
     int amb_index = 9;
 
     std::map<SatelliteId, int> ionosphere_indices;
+    // MRTKLIB IONOOPT_EST_ADPT rtk->Q diagonal, in m^2/s. This is distinct
+    // from P: filter2 updates it from (K*v)^2 and udion clamps/adds it at the
+    // following epoch.
+    std::map<SatelliteId, double> adaptive_ionosphere_process_noise;
     std::map<SatelliteId, int> ambiguity_indices;
+    // Physical scale of ambiguity states stored in metres. The CLAS path
+    // uses this to transform MRTKLIB's cycle-domain bias covariance/noise.
+    std::map<SatelliteId, double> ambiguity_wavelengths_m;
     // Per-frequency (est-stec) L2 ambiguity states. Empty in IFLC mode, so
     // amb_index/total_states and the ambiguity_indices layout are byte-identical
     // to the ionosphere-free path. L1 ambiguities stay in ambiguity_indices.
     std::map<SatelliteId, int> ambiguity_l2_indices;
+    // Third/fourth-frequency ambiguity states use the actual signal as part of
+    // the key because the available band depends on the constellation.
+    std::map<std::pair<SatelliteId, SignalType>, int> additional_ambiguity_indices;
+    // MADOCALIB I3/I4 receiver inter-frequency code biases. The integer key is
+    // the zero-based additional-frequency ordinal (2 = L3, 3 = L4).
+    std::map<std::pair<GNSSSystem, int>, int> receiver_frequency_bias_indices;
     int total_states = 9;
+};
+
+struct PPPFrequencyAmbiguityLifecycle {
+    double last_phase = 0.0;
+    GNSSTime last_time;
+    int lock_count = 0;
+    double quality_indicator = 0.0;
+    bool has_last_phase = false;
+    double float_value_m = 0.0;
+    double wavelength_m = 0.0;
+    int state_index = -1;
 };
 
 struct PPPAmbiguityInfo {
@@ -308,8 +450,17 @@ struct PPPAmbiguityInfo {
     double fixed_value = 0.0;
     bool is_fixed = false;
     int lock_count = 0;
+    // MRTKLIB ssat[].outc[f]: incremented before every ambiguity time update
+    // and cleared only when that frequency survives the post-fit update.
+    int outage_count = 0;
     double last_phase = 0.0;
     GNSSTime last_time;
+    std::array<SignalType, 2> last_observation_signals{};
+    std::array<bool, 2> has_last_observation_signal{false, false};
+    // MRTKLIB detslp_code() compares the exact RTKLIB observation code, not
+    // only the frequency-family SignalType. Keep the selected carrier RINEX
+    // identity so parity mode also detects switches such as L2W <-> L2X.
+    std::array<std::string, 2> last_carrier_observation_types{};
     double quality_indicator = 0.0;
     double ambiguity_scale_m = 0.0;
     bool needs_reinitialization = true;
@@ -317,8 +468,12 @@ struct PPPAmbiguityInfo {
     int fractional_bias_samples = 0;
     double last_geometry_free_m = 0.0;
     bool has_last_geometry_free = false;
+    double last_carrier_ionosphere_m = 0.0;
+    bool has_last_carrier_ionosphere = false;
     double last_melbourne_wubbena_m = 0.0;
     bool has_last_melbourne_wubbena = false;
+    GNSSTime last_slip_time;
+    bool has_last_slip_time = false;
     double mw_sum_cycles = 0.0;
     int mw_count = 0;
     double mw_mean_cycles = 0.0;
@@ -326,12 +481,31 @@ struct PPPAmbiguityInfo {
     bool wl_is_fixed = false;
     double nl_fixed_cycles = 0.0;
     bool nl_is_fixed = false;
+    double clas_nl_phase_bias_datum_cycles = 0.0;
+    bool has_clas_nl_phase_bias_datum = false;
     // Per-frequency (est-stec) float ambiguities in meters, surfaced for WL/N1
     // AR without re-indexing the state vector. Zero in IFLC mode.
     double float_value_l1 = 0.0;
     double float_value_l2 = 0.0;
     double wavelength_l1 = 0.0;
     double wavelength_l2 = 0.0;
+    // Per-signal observation lifecycle used by multi-frequency PPP-AR. The
+    // satellite-level fields above remain the primary/secondary compatibility
+    // view until every ambiguity state is keyed by frequency.
+    std::map<SignalType, PPPFrequencyAmbiguityLifecycle> frequency_lifecycle;
 };
+
+inline void updateFrequencyAmbiguityLifecycle(PPPAmbiguityInfo& ambiguity,
+                                              SignalType signal,
+                                              double carrier_phase,
+                                              const GNSSTime& time,
+                                              double quality_indicator) {
+    auto& frequency = ambiguity.frequency_lifecycle[signal];
+    frequency.last_phase = carrier_phase;
+    frequency.last_time = time;
+    frequency.lock_count++;
+    frequency.quality_indicator = quality_indicator;
+    frequency.has_last_phase = true;
+}
 
 }  // namespace libgnss::ppp_shared

@@ -60,6 +60,8 @@ python3 apps/gnss.py replay \
 
 | Command | Purpose |
 |---|---|
+| `gnss commands` | List or search registered dispatcher commands as text or JSON |
+| `gnss help <command>` | Show focused help for one command |
 | `gnss doctor` | Check local setup, built tools, dataset/docs readiness, Docker, and ROS2 hints |
 | `gnss ros2-doctor` | Check ROS2 receiver readiness, serial permissions, launch/record commands, and topic debug commands |
 | `gnss ros2-bag-doctor` | Inspect a ROS2 GNSS bag for required topics, message rates, timestamp gaps, raw-binary replayability, and MCAP reader/metadata fallback |
@@ -119,10 +121,10 @@ The local web UI auto-discovers `output/field_report*.json` and surfaces the
 report links, Markdown preview, setup/ROS2/bag/smoke status, and next debug
 commands near the top of the dashboard.
 
-You can also store the same arguments in `configs/web.example.toml` and run:
+You can also store the same arguments in `configs/examples/web.example.toml` and run:
 
 ```bash
-python3 apps/gnss.py web --config-toml configs/web.example.toml
+python3 apps/gnss.py web --config-toml configs/examples/web.example.toml
 ```
 
 Docker form:
@@ -154,15 +156,15 @@ python3 apps/gnss.py scorpion-moving-base-signoff \
   --summary-json output/scorpion_moving_base_summary.json
 
 python3 apps/gnss.py moving-base-signoff \
-  --config-toml configs/moving_base_signoff.example.toml
+  --config-toml configs/signoff/moving_base_signoff.example.toml
 
 python3 apps/gnss.py moving-base-signoff \
-  --config-toml configs/moving_base_signoff.example.toml \
+  --config-toml configs/signoff/moving_base_signoff.example.toml \
   --commercial-pos output/commercial_receiver_solution.csv \
   --commercial-matched-csv output/commercial_receiver_matches.csv
 
 python3 apps/gnss.py live-signoff \
-  --config-toml configs/live_signoff.example.toml
+  --config-toml configs/signoff/live_signoff.example.toml
 ```
 
 ## Product-driven PPP
@@ -197,10 +199,10 @@ python3 apps/gnss.py ppp-kinematic-signoff \
   --require-ppp-solution-rate-min 100
 
 python3 apps/gnss.py ppp-products-signoff \
-  --config-toml configs/ppp_products_ppc.example.toml
+  --config-toml configs/signoff/ppp_products_ppc.example.toml
 
 python3 apps/gnss.py ppc-rtk-signoff \
-  --config-toml configs/ppc_rtk_signoff.example.toml
+  --config-toml configs/signoff/ppc_rtk_signoff.example.toml
 
 python3 apps/gnss.py ppc-rtk-signoff \
   --dataset-root /datasets/PPC-Dataset \
@@ -222,7 +224,7 @@ python3 apps/gnss.py vmf-atl \
   --output-dir test_data/iers
 
 python3 apps/gnss.py ppp-iers-atm-tidal-loading-multisite-bench \
-  --sites configs/iers_atl_multisite_vmf.example.json \
+  --sites configs/benchmarks/iers_atl_multisite_vmf.example.json \
   --output-dir output/iers_atm_tidal_loading_multisite_bench_vmf
 ```
 

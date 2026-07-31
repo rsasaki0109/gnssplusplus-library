@@ -1,8 +1,15 @@
 #include <gtest/gtest.h>
 
 #include <libgnss++/algorithms/ppp.hpp>
+#include <libgnss++/algorithms/madoca_core.hpp>
+#include <libgnss++/algorithms/ppp_ar.hpp>
+#include <libgnss++/algorithms/ppp_bias_identity.hpp>
+#include <libgnss++/algorithms/ppp_env_overrides.hpp>
+#include <libgnss++/algorithms/ppp_multifrequency.hpp>
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/models/troposphere.hpp>
+
+#include "../src/algorithms/ppp_internal.hpp"
 
 #include <chrono>
 #include <cmath>
@@ -19,6 +26,458 @@ using namespace libgnss;
 
 namespace {
 
+TEST(PPPClasSeedFde, RetriesOnlyRejectedOrMaxdiffInconsistentSeeds) {
+    EXPECT_FALSE(ppp_shared::shouldRetryClasSeedWithFde(
+        false, true, true, 20.0, 10.0));
+    EXPECT_TRUE(ppp_shared::shouldRetryClasSeedWithFde(
+        true, true, false, 0.0, 10.0));
+    EXPECT_FALSE(ppp_shared::shouldRetryClasSeedWithFde(
+        true, false, true, 10.0, 10.0));
+    EXPECT_TRUE(ppp_shared::shouldRetryClasSeedWithFde(
+        true, false, true, 10.001, 10.0));
+    EXPECT_FALSE(ppp_shared::shouldRetryClasSeedWithFde(
+        true, false, false, 20.0, 10.0));
+}
+
+TEST(PPPClasSeedFde, RejectedOutputRequiresCausalContinuity) {
+    EXPECT_TRUE(ppp_shared::clasRejectedSeedOutputIsContinuous(
+        true, true, true, 80.0, 0.2, 100.0, 100.0, 120.0, 150.0));
+    EXPECT_FALSE(ppp_shared::clasRejectedSeedOutputIsContinuous(
+        true, true, true, 101.0, 0.2, 100.0, 100.0, 120.0, 150.0));
+    EXPECT_TRUE(ppp_shared::clasRejectedSeedOutputIsContinuous(
+        true, true, true, 150.0, 2.0, 100.0, 100.0, 120.0, 150.0));
+    EXPECT_FALSE(ppp_shared::clasRejectedSeedOutputIsContinuous(
+        true, false, true, 1.0, 0.2, 100.0, 100.0, 1.0, 150.0));
+    EXPECT_FALSE(ppp_shared::clasRejectedSeedOutputIsContinuous(
+        true, true, false, 1.0, 0.2, 100.0, 100.0, 1.0, 150.0));
+    EXPECT_FALSE(ppp_shared::clasRejectedSeedOutputIsContinuous(
+        true, true, true, 1.0, 0.2, 100.0, 100.0, 151.0, 150.0));
+}
+
+TEST(PPPClasSeedFde, RejectedMaxdiffRequiresParityAndCatastrophicDistance) {
+    EXPECT_TRUE(ppp_shared::clasMaxdiffCanUseValidationRejectedCandidate(
+        true, true, true, 101.0, 100.0));
+    EXPECT_FALSE(ppp_shared::clasMaxdiffCanUseValidationRejectedCandidate(
+        false, true, true, 101.0, 100.0));
+    EXPECT_FALSE(ppp_shared::clasMaxdiffCanUseValidationRejectedCandidate(
+        true, false, true, 101.0, 100.0));
+    EXPECT_FALSE(ppp_shared::clasMaxdiffCanUseValidationRejectedCandidate(
+        true, true, false, 101.0, 100.0));
+    EXPECT_FALSE(ppp_shared::clasMaxdiffCanUseValidationRejectedCandidate(
+        true, true, true, 100.0, 100.0));
+    EXPECT_FALSE(ppp_shared::clasMaxdiffCanUseValidationRejectedCandidate(
+        true, true, true, std::numeric_limits<double>::quiet_NaN(), 100.0));
+}
+
+TEST(PPPClasSeedFde, RecoveryMarkerCountsDownAfterMaxdiffClears) {
+    int remaining = 0;
+    EXPECT_TRUE(ppp_shared::updateClasSeedArQuarantine(true, 3, remaining));
+    EXPECT_EQ(remaining, 3);
+    EXPECT_TRUE(ppp_shared::updateClasSeedArQuarantine(true, 3, remaining));
+    EXPECT_EQ(remaining, 3);
+    EXPECT_TRUE(ppp_shared::updateClasSeedArQuarantine(false, 3, remaining));
+    EXPECT_EQ(remaining, 2);
+    EXPECT_TRUE(ppp_shared::updateClasSeedArQuarantine(false, 3, remaining));
+    EXPECT_FALSE(ppp_shared::updateClasSeedArQuarantine(false, 3, remaining));
+    EXPECT_EQ(remaining, 0);
+}
+
+TEST(PPPClasSeedFde, RecoveryFixRequiresRowsAndKinematicRatioFloor) {
+    EXPECT_TRUE(ppp_shared::clasRecoveryFixIsSupported(false, 6, 2.0, 3.0));
+    EXPECT_FALSE(ppp_shared::clasRecoveryFixIsSupported(true, 6, 4.0, 3.0));
+    EXPECT_FALSE(ppp_shared::clasRecoveryFixIsSupported(true, 7, 2.9, 3.0));
+    EXPECT_TRUE(ppp_shared::clasRecoveryFixIsSupported(true, 7, 3.0, 3.0));
+}
+
+TEST(PPPClasSeedFde, MaskedAdmissionFailureCoastsWithTooFewSatellites) {
+    EXPECT_TRUE(ppp_shared::shouldCoastClasSeed(true, true, 0));
+    EXPECT_TRUE(ppp_shared::shouldCoastClasSeed(true, false, 0));
+    EXPECT_TRUE(ppp_shared::shouldCoastClasSeed(false, false, 4));
+    EXPECT_FALSE(ppp_shared::shouldCoastClasSeed(false, true, 4));
+    EXPECT_FALSE(ppp_shared::shouldCoastClasSeed(false, false, 3));
+}
+
+TEST(PPPFilterIterations, MadocaPerFrequencyCommitsOneUpdatePerEpoch) {
+    EXPECT_EQ(ppp_internal::filterIterationCount(true, false, 8), 1);
+    EXPECT_EQ(ppp_internal::filterIterationCount(false, true, 8), 3);
+    EXPECT_EQ(ppp_internal::filterIterationCount(false, false, 8), 8);
+}
+
+TEST(PPPMadocaL6dConstraints, RemovesIndependentConstellationBiases) {
+    const std::vector<ppp_internal::MadocaIonoConstraintInput> inputs = {
+        {SatelliteId(GNSSSystem::GPS, 1), 10, 1.0, 3.0, 0.2, 30.0},
+        {SatelliteId(GNSSSystem::GPS, 2), 11, 2.0, 5.0, 0.3, 30.0},
+        {SatelliteId(GNSSSystem::Galileo, 1), 12, 4.0, 10.0, 0.4, 30.0},
+        {SatelliteId(GNSSSystem::BeiDou, 1), 13, 6.0, 8.0, 0.5, 30.0},
+    };
+
+    const auto rows =
+        ppp_internal::buildMadocaIonoConstraintRows(inputs, 2.0, 3.0);
+
+    ASSERT_EQ(rows.size(), 3U);
+    EXPECT_EQ(rows[0].satellite, SatelliteId(GNSSSystem::GPS, 1));
+    EXPECT_EQ(rows[0].state_index, 10);
+    EXPECT_DOUBLE_EQ(rows[0].system_bias_m, 2.5);
+    EXPECT_DOUBLE_EQ(rows[0].target_m, 0.5);
+    EXPECT_DOUBLE_EQ(rows[0].residual_m, -0.5);
+    EXPECT_DOUBLE_EQ(rows[0].variance_m2, 0.04);
+    EXPECT_DOUBLE_EQ(rows[1].system_bias_m, 2.5);
+    EXPECT_DOUBLE_EQ(rows[1].target_m, 2.5);
+    EXPECT_DOUBLE_EQ(rows[1].residual_m, 0.5);
+    EXPECT_DOUBLE_EQ(rows[1].variance_m2, 0.09);
+    EXPECT_DOUBLE_EQ(rows[2].system_bias_m, 6.0);
+    EXPECT_DOUBLE_EQ(rows[2].target_m, 4.0);
+    EXPECT_DOUBLE_EQ(rows[2].residual_m, 0.0);
+    EXPECT_DOUBLE_EQ(rows[2].variance_m2, 0.16);
+}
+
+TEST(PPPMadocaL6dConstraints, MatchesAgeStdAndPositionAdmissionBoundaries) {
+    const auto gps = SatelliteId(GNSSSystem::GPS, 1);
+    const std::vector<ppp_internal::MadocaIonoConstraintInput> inputs = {
+        {gps, 10, 1.0, 3.0, 1.0, 300.0},
+        {SatelliteId(GNSSSystem::GPS, 2), 11, 2.0, 5.0, 0.2, 300.001},
+        {SatelliteId(GNSSSystem::GPS, 3), 12, 3.0, 6.0, 1.001, 30.0},
+        {SatelliteId(GNSSSystem::GPS, 4), -1, 4.0, 7.0, 0.2, 30.0},
+        {SatelliteId(GNSSSystem::GPS, 5), 14, 5.0, 8.0, 0.0, 30.0},
+    };
+
+    const auto boundary_rows =
+        ppp_internal::buildMadocaIonoConstraintRows(inputs, 2.0, 3.0);
+    ASSERT_EQ(boundary_rows.size(), 2U);
+    EXPECT_EQ(boundary_rows.front().satellite, gps);
+    EXPECT_DOUBLE_EQ(boundary_rows.front().system_bias_m, 2.5);
+    EXPECT_DOUBLE_EQ(boundary_rows.front().variance_m2, 1.0);
+    EXPECT_EQ(
+        boundary_rows[1].satellite,
+        SatelliteId(GNSSSystem::GPS, 5));
+    EXPECT_DOUBLE_EQ(boundary_rows[1].system_bias_m, 2.5);
+    EXPECT_DOUBLE_EQ(boundary_rows[1].variance_m2, 0.0);
+
+    EXPECT_TRUE(ppp_internal::buildMadocaIonoConstraintRows(
+        inputs, 1.999, 2.999).empty());
+    EXPECT_EQ(
+        ppp_internal::buildMadocaIonoConstraintRows(
+            inputs, 0.0, 2.999).size(),
+        2U);
+    EXPECT_EQ(
+        ppp_internal::buildMadocaIonoConstraintRows(
+            inputs, 1.999, 0.0).size(),
+        2U);
+}
+
+TEST(PPPCycleSlips, MadocaPerFrequencyUsesMadocalibGeometryFreeThreshold) {
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::geometryFreeSlipThresholdMeters(true, 0.05),
+        0.15);
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::geometryFreeSlipThresholdMeters(true, 0.2),
+        0.2);
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::geometryFreeSlipThresholdMeters(false, 0.05),
+        0.5);
+}
+
+TEST(PPPCycleSlips, MadocaChecksEveryNonPrimaryFrequency) {
+    const std::map<SignalType, double> previous{
+        {SignalType::GPS_L2P, 12.840},
+        {SignalType::GPS_L5, 7.984},
+    };
+    const std::map<SignalType, double> current{
+        {SignalType::GPS_L2P, 12.984},
+        {SignalType::GPS_L5, 8.159},
+    };
+
+    EXPECT_EQ(
+        ppp_internal::geometryFreeSlippedSignals(previous, current, 0.15),
+        std::set<SignalType>{SignalType::GPS_L5});
+    EXPECT_TRUE(ppp_internal::geometryFreeSlippedSignals(
+        {{SignalType::GPS_L2P, previous.at(SignalType::GPS_L2P)}},
+        {{SignalType::GPS_L2P, current.at(SignalType::GPS_L2P)}},
+        0.15).empty());
+}
+
+TEST(PPPCycleSlips, MadocaResetInvalidatesCarrierIonosphereDeltaHistory) {
+    ppp_shared::PPPAmbiguityInfo ambiguity;
+    ambiguity.last_carrier_ionosphere_m = 19.7377;
+    ambiguity.has_last_carrier_ionosphere = true;
+
+    ppp_internal::clearCarrierIonospherePredictionHistory(ambiguity);
+
+    EXPECT_FALSE(ambiguity.has_last_carrier_ionosphere);
+    EXPECT_DOUBLE_EQ(ambiguity.last_carrier_ionosphere_m, 19.7377);
+}
+
+TEST(PPPArAdmission, CoherentSsrDoesNotAddALockCountGate) {
+    EXPECT_EQ(ppp_internal::perFrequencyArMinLockCount(true, true, 20), 0);
+    EXPECT_EQ(ppp_internal::perFrequencyArMinLockCount(false, true, 20), 10);
+    EXPECT_EQ(ppp_internal::perFrequencyArMinLockCount(false, false, 20), 20);
+}
+
+TEST(PPPMeasurementVariance, MadocaPerFrequencyDoesNotDeweightQzssL5) {
+    EXPECT_FALSE(ppp_internal::applyGpsL5MeasurementErrorFactor(
+        true, SignalType::QZS_L1CA, SignalType::QZS_L5));
+    EXPECT_TRUE(ppp_internal::applyGpsL5MeasurementErrorFactor(
+        false, SignalType::QZS_L1CA, SignalType::QZS_L5));
+    EXPECT_TRUE(ppp_internal::applyGpsL5MeasurementErrorFactor(
+        false, SignalType::GPS_L1CA, SignalType::GPS_L5));
+    EXPECT_FALSE(ppp_internal::applyGpsL5MeasurementErrorFactor(
+        false, SignalType::GPS_L1CA, SignalType::GPS_L2C));
+}
+
+TEST(PPPArAdmission, MatureGalileoMwCanSupportWideLaneAdmission) {
+    EXPECT_TRUE(ppp_internal::madocaGalileoMwSupportsWideLaneAdmission(
+        GNSSSystem::Galileo, -7.142, 81, 81));
+    EXPECT_FALSE(ppp_internal::madocaGalileoMwSupportsWideLaneAdmission(
+        GNSSSystem::Galileo, -7.142, 59, 81));
+    EXPECT_FALSE(ppp_internal::madocaGalileoMwSupportsWideLaneAdmission(
+        GNSSSystem::Galileo, -7.250, 81, 81));
+    EXPECT_FALSE(ppp_internal::madocaGalileoMwSupportsWideLaneAdmission(
+        GNSSSystem::BeiDou, -161.865, 81, 81));
+}
+
+TEST(PPPArAdmission, HighAgreementMadocaRatioHasOnePercentTolerance) {
+    EXPECT_TRUE(ppp_internal::madocaHighAgreementRatioAccepted(
+        true, 1.19231, 1.2, 0.933));
+    EXPECT_FALSE(ppp_internal::madocaHighAgreementRatioAccepted(
+        true, 1.187, 1.2, 0.933));
+    EXPECT_FALSE(ppp_internal::madocaHighAgreementRatioAccepted(
+        true, 1.19231, 1.2, 0.90));
+    EXPECT_FALSE(ppp_internal::madocaHighAgreementRatioAccepted(
+        false, 1.19231, 1.2, 0.933));
+    EXPECT_TRUE(ppp_internal::madocaHighAgreementRatioAccepted(
+        false, 1.2, 1.2, 0.0));
+}
+
+TEST(PPPArTrialState, PerFrequencyAttemptsAreAlwaysEphemeral) {
+    using ARMethod = PPPProcessor::PPPConfig::ARMethod;
+    EXPECT_TRUE(ppp_internal::alwaysRestoreArTrialState(ARMethod::DD_PER_FREQ));
+    EXPECT_FALSE(ppp_internal::alwaysRestoreArTrialState(ARMethod::DD_IFLC));
+    EXPECT_FALSE(ppp_internal::alwaysRestoreArTrialState(ARMethod::DD_WLNL));
+}
+
+TEST(PPPPostfitGeometry, RecentersMaterializedReceiverPositionOnAcceptedState) {
+    const Vector3d corrected_position(3875000.0, 332500.0, 5029000.0);
+    const Vector3d prior_position(3874998.0, 332501.5, 5028996.0);
+    const Vector3d updated_position(3875000.5, 332499.0, 5029001.0);
+
+    const Vector3d recentered =
+        ppp_internal::recenterPostfitReceiverPosition(
+            corrected_position, prior_position, updated_position);
+
+    EXPECT_TRUE(recentered.isApprox(
+        corrected_position + updated_position - prior_position, 1e-12));
+}
+
+TEST(PPPPostfitGeometry, PreservesUnsetReceiverPosition) {
+    const Vector3d unset_position = Vector3d::Zero();
+    const Vector3d recentered =
+        ppp_internal::recenterPostfitReceiverPosition(
+            unset_position,
+            Vector3d(1.0, 2.0, 3.0),
+            Vector3d(4.0, 5.0, 6.0));
+
+    EXPECT_TRUE(recentered.isZero());
+}
+
+TEST(PPPMeasurementVariance, MadocaPerFrequencyAddsGlonassCodeIfb) {
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::madocaGlonassCodeIfbVariance(
+            true, GNSSSystem::GLONASS),
+        0.36);
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::madocaGlonassCodeIfbVariance(
+            false, GNSSSystem::GLONASS),
+        0.0);
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::madocaGlonassCodeIfbVariance(
+            true, GNSSSystem::GPS),
+        0.0);
+}
+
+TEST(PPPIonospherePrediction, MatchesMadocalibCarrierDeltaAndElevationNoise) {
+    constexpr double f1 = 1575.42e6;
+    constexpr double f2 = 1227.60e6;
+    const double denominator =
+        std::pow(constants::GPS_L1_FREQ / f1, 2) -
+        std::pow(constants::GPS_L1_FREQ / f2, 2);
+    EXPECT_NEAR(
+        ppp_internal::madocaCarrierIonosphereMeters(12.4, 12.1, f1, f2),
+        -0.3 / denominator,
+        1e-12);
+    constexpr double bds_b1i = 1561.098e6;
+    constexpr double bds_b3i = 1268.52e6;
+    const double bds_primary_scale =
+        std::pow(constants::GPS_L1_FREQ / bds_b1i, 2);
+    const double bds_secondary_scale =
+        std::pow(constants::GPS_L1_FREQ / bds_b3i, 2);
+    EXPECT_NEAR(ppp_internal::madocaIonosphereScale(bds_b1i),
+                bds_primary_scale, 1e-15);
+    EXPECT_NEAR(
+        ppp_internal::madocaIonosphereStateFromPrimaryMeters(
+            4.25, bds_b1i),
+        4.25 / bds_primary_scale,
+        1e-12);
+    EXPECT_NEAR(
+        ppp_internal::madocaCarrierIonosphereMeters(
+            12.4, 12.1, bds_b1i, bds_b3i),
+        -0.3 / (bds_primary_scale - bds_secondary_scale),
+        1e-12);
+    EXPECT_NEAR(
+        ppp_internal::madocaIonosphereProcessVariance(1e-4, M_PI / 6.0, 30.0),
+        0.012,
+        1e-12);
+    EXPECT_NEAR(
+        ppp_internal::madocaIonosphereProcessVariance(1e-4, M_PI / 2.0, 30.0),
+        0.003,
+        1e-12);
+}
+
+TEST(PPPIonospherePrediction, ExcludesPhaseWindupFromCarrierDelta) {
+    constexpr double f1 = 1575.42e6;
+    constexpr double f2 = 1227.60e6;
+    constexpr double windup_cycles = 0.37;
+    const double wavelength_l1 = constants::SPEED_OF_LIGHT / f1;
+    const double wavelength_l2 = constants::SPEED_OF_LIGHT / f2;
+    constexpr double raw_phase_l1 = 12.4;
+    constexpr double raw_phase_l2 = 12.1;
+    const double corrected_phase_l1 =
+        raw_phase_l1 - windup_cycles * wavelength_l1;
+    const double corrected_phase_l2 =
+        raw_phase_l2 - windup_cycles * wavelength_l2;
+
+    EXPECT_NEAR(
+        ppp_internal::madocaCarrierIonosphereMetersExcludingWindup(
+            corrected_phase_l1,
+            corrected_phase_l2,
+            wavelength_l1,
+            wavelength_l2,
+            windup_cycles,
+            f1,
+            f2),
+        ppp_internal::madocaCarrierIonosphereMeters(
+            raw_phase_l1, raw_phase_l2, f1, f2),
+        1e-12);
+}
+
+TEST(PPPIonospherePrediction, SeedsStateFromCorrectedCodesWithoutChangingRawFallback) {
+    constexpr double f1 = 1575.42e6;
+    constexpr double f2 = 1227.60e6;
+    constexpr double corrected_p1 = 24000000.0;
+    constexpr double corrected_p2 = 24000005.0;
+    const double expected_primary =
+        (corrected_p1 - corrected_p2) / (1.0 - std::pow(f1 / f2, 2));
+    EXPECT_NEAR(
+        ppp_internal::madocaCorrectedCodeIonosphereStateMeters(
+            7.5, corrected_p1, corrected_p2, f1, f2),
+        expected_primary,
+        1e-12);
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::madocaCorrectedCodeIonosphereStateMeters(
+            7.5, corrected_p1, corrected_p2, f1, 0.0),
+        7.5);
+}
+
+TEST(PPPStateInitialization, MadocaPerFrequencyUsesMadocalibZtdPrior) {
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::initialTroposphereVariance(true, true, 0.36),
+        0.12 * 0.12);
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::initialTroposphereVariance(false, true, 0.36),
+        0.36);
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::initialTroposphereVariance(false, false, 0.36),
+        25.0);
+}
+
+TEST(PPPStateInitialization, MadocaPerFrequencyUsesMadocalibStecPrior) {
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::initialIonosphereVariance(true, 0.0, 100.0),
+        60.0 * 60.0);
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::initialIonosphereVariance(false, 0.0, 100.0),
+        100.0);
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::initialIonosphereVariance(true, 25.0, 100.0),
+        25.0);
+}
+
+TEST(PPPEnvOverridesTest, MadocaQzssL5DefaultsToThreeFrequencyParity) {
+    EXPECT_TRUE(PPPEnvOverrides::fromEnvironment().madoca_qzss_l5);
+}
+
+TEST(PPPEnvOverridesTest, MadocaGlonassPhaseDefaultsToParityRows) {
+    EXPECT_TRUE(PPPEnvOverrides::fromEnvironment().madoca_glonass_phase);
+}
+
+TEST(PPPEnvOverridesTest, MadocaPromotedPathRetainsReleaseCycleOptOuts) {
+    const PPPEnvOverrides overrides = PPPEnvOverrides::fromEnvironment();
+    EXPECT_TRUE(overrides.madoca_early_window);
+    EXPECT_TRUE(overrides.madoca_postfit_commit);
+    EXPECT_TRUE(overrides.madoca_spike_guard);
+}
+
+TEST(NavigationSsrIodeSelection, DoesNotFallBackWhenGpsIodeIsUnavailable) {
+    NavigationData navigation;
+    const SatelliteId satellite(GNSSSystem::GPS, 8);
+    const GNSSTime query_time(2300, 100000.0);
+
+    Ephemeris available;
+    available.satellite = satellite;
+    available.toe = query_time - 60.0;
+    available.toes = available.toe.tow;
+    available.iode = 17;
+    available.valid = true;
+    navigation.addEphemeris(available);
+
+    ASSERT_NE(navigation.getEphemeris(satellite, query_time), nullptr);
+    EXPECT_EQ(navigation.getEphemeris(satellite, query_time, 18), nullptr);
+}
+
+TEST(NavigationSsrIodeSelection, SelectsTheExactGpsIodeInsteadOfNearestAge) {
+    NavigationData navigation;
+    const SatelliteId satellite(GNSSSystem::GPS, 8);
+    const GNSSTime query_time(2300, 100000.0);
+
+    Ephemeris nearest;
+    nearest.satellite = satellite;
+    nearest.toe = query_time - 30.0;
+    nearest.toes = nearest.toe.tow;
+    nearest.iode = 17;
+    nearest.valid = true;
+    navigation.addEphemeris(nearest);
+
+    Ephemeris referenced = nearest;
+    referenced.toe = query_time - 120.0;
+    referenced.toes = referenced.toe.tow;
+    referenced.iode = 18;
+    navigation.addEphemeris(referenced);
+
+    const Ephemeris* selected =
+        navigation.getEphemeris(satellite, query_time, 18);
+    ASSERT_NE(selected, nullptr);
+    EXPECT_EQ(selected->iode, 18);
+}
+
+TEST(NavigationSsrIodeSelection, MatchesBeiDouIodeAgainstToeModuloCycle) {
+    NavigationData navigation;
+    const SatelliteId satellite(GNSSSystem::BeiDou, 19);
+    const GNSSTime query_time(2300, 100000.0);
+
+    Ephemeris referenced;
+    referenced.satellite = satellite;
+    referenced.toe = query_time - 60.0;
+    referenced.toes = 100000.0;
+    referenced.iode = 999;  // BeiDou AODE is not the Compact SSR IODE key.
+    referenced.valid = true;
+    navigation.addEphemeris(referenced);
+
+    constexpr int matching_iode = 212;  // 100000 mod 2048 == (212 * 8) mod 2048
+    ASSERT_NE(
+        navigation.getEphemeris(satellite, query_time, matching_iode), nullptr);
+    EXPECT_EQ(
+        navigation.getEphemeris(satellite, query_time, matching_iode + 1), nullptr);
+}
+
 GNSSTime makeTime(int year, int month, int day, int hour, int minute, double second) {
     std::tm epoch_tm{};
     epoch_tm.tm_year = year - 1900;
@@ -27,7 +486,11 @@ GNSSTime makeTime(int year, int month, int day, int hour, int minute, double sec
     epoch_tm.tm_hour = hour;
     epoch_tm.tm_min = minute;
     epoch_tm.tm_sec = static_cast<int>(std::floor(second));
+#if defined(_WIN32)
+    const time_t unix_seconds = _mkgmtime(&epoch_tm);
+#else
     const time_t unix_seconds = timegm(&epoch_tm);
+#endif
     const auto tp = std::chrono::system_clock::from_time_t(unix_seconds) +
         std::chrono::microseconds(
             static_cast<long long>(std::llround((second - std::floor(second)) * 1e6)));
@@ -1096,6 +1559,8 @@ TEST(PPPTest, CalculatePhaseWindupResolvesAmbiguityAgainstPriorAccumulator) {
     const double w0 = calculatePhaseWindup(receiver, satellite, sun, 0.0);
     EXPECT_TRUE(std::isfinite(w0));
     EXPECT_LE(std::abs(w0), 0.5);
+    // RTKLIB/MADOCALIB model_phw() uses receiver North/West dipoles.
+    EXPECT_NEAR(w0, 0.16090686844133648, 1e-12);
 
     // Same geometry, accumulator advanced by 5 cycles → output must track it
     // within half a cycle (the function rounds to the nearest integer of
@@ -1316,13 +1781,175 @@ TEST(PPPTest, SSRProductsLoadCsvAndInterpolateMidpoint) {
     std::filesystem::remove(ssr_path);
 }
 
+TEST(PPPTest, SSRProductsQzssParityWithdrawsOrbitMissingFromNewConstellationBank) {
+    SSRProducts products;
+    const SatelliteId j01(GNSSSystem::QZSS, 1);
+    const SatelliteId j02(GNSSSystem::QZSS, 2);
+    const GNSSTime old_bank_time(2068, 230580.0);
+    const GNSSTime held_clock_time(2068, 230605.0);
+    const GNSSTime new_bank_time(2068, 230609.0);
+
+    SSROrbitClockCorrection j01_old_orbit;
+    j01_old_orbit.satellite = j01;
+    j01_old_orbit.time = old_bank_time;
+    j01_old_orbit.orbit_reference_time = old_bank_time;
+    j01_old_orbit.orbit_correction_ecef = Vector3d(1.0, 2.0, 3.0);
+    j01_old_orbit.orbit_valid = true;
+    products.addCorrection(j01_old_orbit);
+
+    // J01 still has a recent clock row, but no row at the query boundary; the
+    // new constellation orbit bank (represented by J02) intentionally omits
+    // J01. This exercises the non-exact/sample-hold path used by the fixture.
+    SSROrbitClockCorrection j01_new_clock;
+    j01_new_clock.satellite = j01;
+    j01_new_clock.time = held_clock_time;
+    j01_new_clock.clock_reference_time = held_clock_time;
+    j01_new_clock.clock_correction_m = 0.25;
+    j01_new_clock.clock_valid = true;
+    j01_new_clock.mrtklib_base_clock_correction_m = 0.25;
+    j01_new_clock.mrtklib_base_clock_reference_time = held_clock_time;
+    j01_new_clock.mrtklib_base_clock_valid = true;
+    products.addCorrection(j01_new_clock);
+
+    SSROrbitClockCorrection j02_new_orbit;
+    j02_new_orbit.satellite = j02;
+    j02_new_orbit.time = new_bank_time;
+    j02_new_orbit.orbit_reference_time = new_bank_time;
+    j02_new_orbit.orbit_correction_ecef = Vector3d(4.0, 5.0, 6.0);
+    j02_new_orbit.orbit_valid = true;
+    products.addCorrection(j02_new_orbit);
+
+    Vector3d orbit_correction = Vector3d::Zero();
+    double clock_correction_m = 0.0;
+    SSRCorrectionStatus status;
+    const bool available = products.interpolateCorrection(
+        j01, new_bank_time, orbit_correction, clock_correction_m,
+        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+        0, nullptr, nullptr, &status, false, nullptr, nullptr,
+        SSRClockSelectionPolicy::MrtklibLiteralBaseHold);
+    EXPECT_TRUE(status.clock_valid);
+    EXPECT_DOUBLE_EQ(clock_correction_m, 0.25);
+    if (pppEnvOverrides().clas_qzss_s_prn_fix) {
+        EXPECT_FALSE(available);
+        EXPECT_FALSE(status.orbit_valid);
+        EXPECT_TRUE(status.orbit_withdrawn);
+        EXPECT_TRUE(orbit_correction.isZero());
+    } else {
+        EXPECT_TRUE(available);
+        EXPECT_TRUE(status.orbit_valid);
+        EXPECT_FALSE(status.orbit_withdrawn);
+        EXPECT_EQ(orbit_correction, j01_old_orbit.orbit_correction_ecef);
+    }
+}
+
+TEST(PPPTest, SSRProductsCausalHoldScansCompleteSameEpochVariantGroup) {
+    SSRProducts products;
+    const SatelliteId j01(GNSSSystem::QZSS, 1);
+    const GNSSTime old_time(2068, 230430.0);
+    const GNSSTime current_time(2068, 230435.0);
+
+    SSROrbitClockCorrection old_orbit;
+    old_orbit.satellite = j01;
+    old_orbit.time = old_time;
+    old_orbit.orbit_reference_time = old_time;
+    old_orbit.orbit_correction_ecef = Vector3d(1.0, 2.0, 3.0);
+    old_orbit.orbit_valid = true;
+    products.addCorrection(old_orbit);
+
+    SSROrbitClockCorrection current_orbit_clock;
+    current_orbit_clock.satellite = j01;
+    current_orbit_clock.time = current_time;
+    current_orbit_clock.orbit_reference_time = current_time;
+    current_orbit_clock.orbit_correction_ecef = Vector3d(4.0, 5.0, 6.0);
+    current_orbit_clock.orbit_valid = true;
+    current_orbit_clock.clock_correction_m = 0.25;
+    current_orbit_clock.clock_valid = true;
+    products.addCorrection(current_orbit_clock);
+
+    // Insert a later variant at the same TOW without orbit/clock. The causal
+    // selector must inspect the entire 230435 group, not jump to 230430 when
+    // starting its backward scan from this final entry.
+    SSROrbitClockCorrection bias_variant;
+    bias_variant.satellite = j01;
+    bias_variant.time = current_time;
+    bias_variant.bias_network_id = 1;
+    bias_variant.code_bias_m[2] = 0.5;
+    bias_variant.code_bias_valid = true;
+    products.addCorrection(bias_variant);
+
+    Vector3d orbit_correction = Vector3d::Zero();
+    double clock_correction_m = 0.0;
+    SSRCorrectionStatus status;
+    ASSERT_TRUE(products.interpolateCorrection(
+        j01, GNSSTime(2068, 230436.0), orbit_correction, clock_correction_m,
+        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+        0, nullptr, nullptr, &status, false, nullptr, nullptr,
+        SSRClockSelectionPolicy::MrtklibLiteralBaseHold));
+    EXPECT_EQ(orbit_correction, current_orbit_clock.orbit_correction_ecef);
+    EXPECT_DOUBLE_EQ(clock_correction_m, current_orbit_clock.clock_correction_m);
+    EXPECT_TRUE(status.orbit_valid);
+    EXPECT_FALSE(status.orbit_withdrawn);
+    EXPECT_EQ(status.orbit_reference_time, current_time);
+}
+
+TEST(PPPTest, SSRProductsGalileoLiteralClockHonorsLatestBankWithdrawal) {
+    const auto ssr_path = tempFilePath("libgnss_ppp_gal_clock_withdrawal.csv");
+    std::filesystem::remove(ssr_path);
+
+    const std::string ssr_text =
+        "# week,tow,sat,dx,dy,dz,dclock_m[,atmos_network_id=<n>]\n"
+        "2068,233460.0,E30,1.0,2.0,3.0,0.0\n"
+        "2068,233465.0,E30,0.0,0.0,0.0,0.2864,atmos_network_id=2\n"
+        "2068,233490.0,E30,4.0,5.0,6.0,0.0\n"
+        "2068,233490.0,E30,0.0,0.0,0.0,0.3088,atmos_network_id=1\n"
+        "2068,233490.0,E30,0.0,0.0,0.0,nan,atmos_network_id=2\n";
+    writeTextFile(ssr_path, ssr_text);
+
+    SSRProducts products;
+    ASSERT_TRUE(products.loadCSVFile(ssr_path.string()));
+    const SatelliteId e30(GNSSSystem::Galileo, 30);
+    const auto entries_it = products.orbit_clock_corrections.find(e30);
+    ASSERT_NE(entries_it, products.orbit_clock_corrections.end());
+    ASSERT_TRUE(std::any_of(
+        entries_it->second.begin(), entries_it->second.end(),
+        [](const SSROrbitClockCorrection& entry) {
+            return entry.atmos_network_id == 2 && entry.clock_withdrawn;
+        }));
+
+    Vector3d orbit_correction = Vector3d::Zero();
+    double clock_correction_m = 0.0;
+    SSRCorrectionStatus status;
+    EXPECT_FALSE(products.interpolateCorrection(
+        e30, GNSSTime(2068, 233490.0), orbit_correction, clock_correction_m,
+        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+        2, nullptr, nullptr, &status, false, nullptr, nullptr,
+        SSRClockSelectionPolicy::MrtklibLiteralBaseHold));
+    EXPECT_FALSE(status.clock_valid);
+    EXPECT_TRUE(status.clock_withdrawn);
+    EXPECT_DOUBLE_EQ(clock_correction_m, 0.0);
+
+    // Gate-off/ordinary interpolation preserves the historical finite clock;
+    // the withdrawal is a typed CLASLIB literal-policy behavior.
+    status = SSRCorrectionStatus{};
+    ASSERT_TRUE(products.interpolateCorrection(
+        e30, GNSSTime(2068, 233490.0), orbit_correction, clock_correction_m,
+        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+        1, nullptr, nullptr, &status, false, nullptr, nullptr,
+        SSRClockSelectionPolicy::MergedInterpolate));
+    EXPECT_TRUE(status.clock_valid);
+    EXPECT_FALSE(status.clock_withdrawn);
+    EXPECT_DOUBLE_EQ(clock_correction_m, 0.3088);
+
+    std::filesystem::remove(ssr_path);
+}
+
 TEST(PPPTest, SSRProductsLoadCsvParsesOptionalUraCodeBiasPhaseBiasAndAtmosTokens) {
     const auto ssr_path = tempFilePath("libgnss_ppp_ssr_optional_tokens_test.csv");
     std::filesystem::remove(ssr_path);
 
     const std::string ssr_text =
         "# week,tow,sat,dx,dy,dz,dclock_m[,ura_sigma_m=<m>][,cbias:<id>=<m>...][,pbias:<id>=<m>...][,atmos_<name>=<value>...]\n"
-        "2414,345600.0,G01,1.0,-2.0,3.0,4.0,ura_sigma_m=0.002750,cbias:2=-0.120000,cbias:8=0.050000,pbias:2=0.015000,atmos_network_id=1,atmos_trop_quality=9\n";
+        "2414,345600.0,G01,1.0,-2.0,3.0,4.0,ura_sigma_m=0.002750,cbias:2=-0.120000,cbias:8=0.050000,pbias:2=0.015000,cbias_code:1=-0.120000,pbias_code:17=nan,pbias_code:18=0.025000,atmos_network_id=1,atmos_trop_quality=9\n";
     writeTextFile(ssr_path, ssr_text);
 
     SSRProducts ssr_products;
@@ -1333,6 +1960,8 @@ TEST(PPPTest, SSRProductsLoadCsvParsesOptionalUraCodeBiasPhaseBiasAndAtmosTokens
     double ura_sigma_m = 0.0;
     std::map<uint8_t, double> code_bias_m;
     std::map<uint8_t, double> phase_bias_m;
+    std::map<uint8_t, double> code_bias_rtklib_m;
+    std::map<uint8_t, double> phase_bias_rtklib_m;
     std::map<std::string, std::string> atmos_tokens;
     ASSERT_TRUE(ssr_products.interpolateCorrection(
         SatelliteId(GNSSSystem::GPS, 1),
@@ -1342,7 +1971,10 @@ TEST(PPPTest, SSRProductsLoadCsvParsesOptionalUraCodeBiasPhaseBiasAndAtmosTokens
         &ura_sigma_m,
         &code_bias_m,
         &phase_bias_m,
-        &atmos_tokens));
+        &atmos_tokens,
+        nullptr, nullptr, nullptr, 0, nullptr, nullptr, nullptr, true,
+        nullptr, nullptr, SSRClockSelectionPolicy::MergedInterpolate,
+        &code_bias_rtklib_m, &phase_bias_rtklib_m));
 
     EXPECT_NEAR(ura_sigma_m, 0.00275, 1e-12);
     ASSERT_EQ(code_bias_m.size(), 2U);
@@ -1350,11 +1982,308 @@ TEST(PPPTest, SSRProductsLoadCsvParsesOptionalUraCodeBiasPhaseBiasAndAtmosTokens
     EXPECT_NEAR(code_bias_m.at(8U), 0.05, 1e-12);
     ASSERT_EQ(phase_bias_m.size(), 1U);
     EXPECT_NEAR(phase_bias_m.at(2U), 0.015, 1e-12);
+    ASSERT_EQ(code_bias_rtklib_m.size(), 1U);
+    EXPECT_NEAR(code_bias_rtklib_m.at(1U), -0.12, 1e-12);
+    ASSERT_EQ(phase_bias_rtklib_m.size(), 2U);
+    EXPECT_TRUE(std::isnan(phase_bias_rtklib_m.at(17U)));
+    EXPECT_NEAR(phase_bias_rtklib_m.at(18U), 0.025, 1e-12);
     ASSERT_EQ(atmos_tokens.size(), 2U);
     EXPECT_EQ(atmos_tokens.at("atmos_network_id"), "1");
     EXPECT_EQ(atmos_tokens.at("atmos_trop_quality"), "9");
 
     std::filesystem::remove(ssr_path);
+}
+
+TEST(PPPTest, SSRProductsDoesNotUseFutureCodeBiasBetweenClockRows) {
+    const auto ssr_path = tempFilePath("libgnss_ppp_ssr_code_bias_no_future_test.csv");
+    std::filesystem::remove(ssr_path);
+
+    const std::string ssr_text =
+        "# week,tow,sat,dx,dy,dz,dclock_m[,cbias:<id>=<m>...]\n"
+        "2414,345570.0,G01,0.0,0.0,0.0,0.5,cbias:2=-0.120000\n"
+        "2414,345600.0,G01,1.0,-2.0,3.0,4.0\n"
+        "2414,345605.0,G01,1.1,-2.1,3.1,4.5\n"
+        "2414,345610.0,G01,1.2,-2.2,3.2,5.0,cbias:2=0.040000\n";
+    writeTextFile(ssr_path, ssr_text);
+
+    SSRProducts ssr_products;
+    ASSERT_TRUE(ssr_products.loadCSVFile(ssr_path.string()));
+
+    Vector3d orbit_correction = Vector3d::Zero();
+    double clock_correction_m = 0.0;
+    std::map<uint8_t, double> code_bias_m;
+    SSRCorrectionStatus status;
+    ASSERT_TRUE(ssr_products.interpolateCorrection(
+        SatelliteId(GNSSSystem::GPS, 1),
+        GNSSTime(2414, 345607.0),
+        orbit_correction,
+        clock_correction_m,
+        nullptr,
+        &code_bias_m,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        0,
+        nullptr,
+        nullptr,
+        &status));
+
+    ASSERT_EQ(code_bias_m.size(), 1U);
+    EXPECT_NEAR(code_bias_m.at(2U), -0.12, 1e-12);
+    EXPECT_TRUE(status.code_bias_valid);
+    EXPECT_EQ(status.code_bias_reference_time.week, 2414);
+    EXPECT_NEAR(status.code_bias_reference_time.tow, 345570.0, 1e-12);
+
+    std::filesystem::remove(ssr_path);
+}
+
+TEST(PPPTest, SSRProductsUsesNearestCodeBiasGroupBeforeOlderLargerBank) {
+    const auto ssr_path = tempFilePath("libgnss_ppp_ssr_code_bias_nearest_group_test.csv");
+    std::filesystem::remove(ssr_path);
+
+    const std::string ssr_text =
+        "# week,tow,sat,dx,dy,dz,dclock_m[,cbias:<id>=<m>...][,bias_network_id=<n>][,atmos_<name>=<value>...]\n"
+        "2414,345570.0,G01,0.0,0.0,0.0,0.5,cbias:2=-0.120000,cbias:8=0.050000,bias_network_id=7\n"
+        "2414,345590.0,G01,0.0,0.0,0.0,0.6,cbias:2=0.040000,bias_network_id=7\n"
+        "2414,345590.0,G01,0.0,0.0,0.0,0.6,atmos_network_id=7,atmos_trop_quality=9\n"
+        "2414,345595.0,G01,0.0,0.0,0.0,0.7\n";
+    writeTextFile(ssr_path, ssr_text);
+
+    SSRProducts ssr_products;
+    ASSERT_TRUE(ssr_products.loadCSVFile(ssr_path.string()));
+
+    Vector3d orbit_correction = Vector3d::Zero();
+    double clock_correction_m = 0.0;
+    std::map<uint8_t, double> code_bias_m;
+    SSRCorrectionStatus status;
+    ASSERT_TRUE(ssr_products.interpolateCorrection(
+        SatelliteId(GNSSSystem::GPS, 1),
+        GNSSTime(2414, 345592.0),
+        orbit_correction,
+        clock_correction_m,
+        nullptr,
+        &code_bias_m,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        7,
+        nullptr,
+        nullptr,
+        &status));
+
+    ASSERT_EQ(code_bias_m.size(), 1U);
+    EXPECT_NEAR(code_bias_m.at(2U), 0.04, 1e-12);
+    EXPECT_TRUE(status.code_bias_valid);
+    EXPECT_EQ(status.code_bias_reference_time.week, 2414);
+    EXPECT_NEAR(status.code_bias_reference_time.tow, 345590.0, 1e-12);
+
+    std::filesystem::remove(ssr_path);
+}
+
+TEST(PPPTest, SSRProductsUsesExactCodeBiasNetworkRefreshAtBoundary) {
+    const auto ssr_path = tempFilePath("libgnss_ppp_ssr_code_bias_exact_boundary_test.csv");
+    std::filesystem::remove(ssr_path);
+
+    const std::string ssr_text =
+        "# week,tow,sat,dx,dy,dz,dclock_m[,cbias:<id>=<m>...][,bias_network_id=<n>][,atmos_<name>=<value>...]\n"
+        "2068,230430.000,G14,0.0,0.0,0.0,0.2,cbias:2=0.000000,cbias:9=0.760000,bias_network_id=7\n"
+        "2068,230445.000,G14,0.0,0.0,0.0,0.0,cbias:2=0.000000,cbias:9=0.740000\n"
+        "2068,230445.000,G14,0.0,0.0,0.0,0.0,cbias:2=0.000000,cbias:9=0.740000,bias_network_id=7\n"
+        "2068,230445.000,G14,0.0,0.0,0.0,0.0,atmos_network_id=7,atmos_trop_quality=9\n"
+        "2068,230445.000,G14,0.0,0.0,0.0,0.2\n";
+    writeTextFile(ssr_path, ssr_text);
+
+    SSRProducts ssr_products;
+    ASSERT_TRUE(ssr_products.loadCSVFile(ssr_path.string()));
+
+    Vector3d orbit_correction = Vector3d::Zero();
+    double clock_correction_m = 0.0;
+    std::map<uint8_t, double> code_bias_m;
+    SSRCorrectionStatus status;
+    ASSERT_TRUE(ssr_products.interpolateCorrection(
+        SatelliteId(GNSSSystem::GPS, 14),
+        GNSSTime(2068, 230445.0),
+        orbit_correction,
+        clock_correction_m,
+        nullptr,
+        &code_bias_m,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        7,
+        nullptr,
+        nullptr,
+        &status));
+
+    ASSERT_EQ(code_bias_m.size(), 2U);
+    EXPECT_NEAR(code_bias_m.at(9U), 0.74, 1e-12);
+    EXPECT_TRUE(status.code_bias_valid);
+    EXPECT_EQ(status.code_bias_reference_time.week, 2068);
+    EXPECT_NEAR(status.code_bias_reference_time.tow, 230445.0, 1e-12);
+
+    std::filesystem::remove(ssr_path);
+}
+
+TEST(PPPTest, SSRProductsHoldsSelectedBiasNetworkPastNewerForeignBank) {
+    SSRProducts products;
+    const SatelliteId satellite(GNSSSystem::GPS, 6);
+
+    const auto add_phase_bias = [&](double tow, int network_id, double bias_m) {
+        SSROrbitClockCorrection correction;
+        correction.satellite = satellite;
+        correction.time = GNSSTime(2324, tow);
+        correction.phase_bias_valid = true;
+        correction.phase_bias_m[2] = bias_m;
+        correction.bias_network_id = network_id;
+        products.addCorrection(correction);
+    };
+    add_phase_bias(177000.0, 7, -1.837);
+    add_phase_bias(177025.0, 1, 1.727);
+    // At the query epoch this matching bank is still inside the literal
+    // reception-lag window, so network 7 must continue holding its older bank.
+    add_phase_bias(177030.0, 7, -1.834);
+
+    const auto add_code_bias = [&](double tow, int network_id, double bias_m) {
+        SSROrbitClockCorrection correction;
+        correction.satellite = satellite;
+        correction.time = GNSSTime(2324, tow);
+        correction.code_bias_valid = true;
+        correction.code_bias_m[9] = bias_m;
+        correction.bias_network_id = network_id;
+        products.addCorrection(correction);
+    };
+    add_code_bias(177000.0, 0, 0.96);
+    add_code_bias(177025.0, 1, 0.34);
+    add_code_bias(177030.0, 0, 0.96);
+
+    for (double tow : {177040.0, 177040.2, 177040.4}) {
+        SSROrbitClockCorrection clock;
+        clock.satellite = satellite;
+        clock.time = GNSSTime(2324, tow);
+        clock.orbit_valid = true;
+        clock.orbit_correction_ecef = Vector3d::Zero();
+        clock.clock_valid = true;
+        clock.clock_correction_m = -1.0208;
+        products.addCorrection(clock);
+    }
+
+    for (double tow : {177040.0, 177040.2}) {
+        SCOPED_TRACE(tow);
+        Vector3d orbit_correction = Vector3d::Zero();
+        double clock_correction_m = 0.0;
+        std::map<uint8_t, double> code_bias_m;
+        std::map<uint8_t, double> phase_bias_m;
+        GNSSTime phase_bias_reference_time;
+        ASSERT_TRUE(products.interpolateCorrection(
+            satellite,
+            GNSSTime(2324, tow),
+            orbit_correction,
+            clock_correction_m,
+            nullptr,
+            &code_bias_m,
+            &phase_bias_m,
+            nullptr,
+            nullptr,
+            &phase_bias_reference_time,
+            nullptr,
+            7,
+            nullptr,
+            nullptr,
+            nullptr,
+            false,
+            nullptr,
+            nullptr,
+            SSRClockSelectionPolicy::MrtklibLiteralBaseHold));
+        ASSERT_EQ(code_bias_m.size(), 1U);
+        EXPECT_DOUBLE_EQ(code_bias_m.at(9), 0.96);
+        ASSERT_EQ(phase_bias_m.size(), 1U);
+        EXPECT_DOUBLE_EQ(phase_bias_m.at(2), -1.837);
+        EXPECT_DOUBLE_EQ(phase_bias_reference_time.tow, 177000.0);
+    }
+}
+
+TEST(PPPTest, SSRProductsRepicksClasPhaseBiasByServiceNetworkWithReceptionLag) {
+    SSRProducts products;
+    const SatelliteId satellite(GNSSSystem::GPS, 25);
+    const auto add_phase_bias = [&](double tow, int network_id, double bias_m) {
+        SSROrbitClockCorrection correction;
+        correction.satellite = satellite;
+        correction.time = GNSSTime(2068, tow);
+        correction.phase_bias_valid = true;
+        correction.phase_bias_m[9] = bias_m;
+        correction.bias_network_id = network_id;
+        products.addCorrection(correction);
+    };
+    add_phase_bias(230670.0, 7, 11.208);
+    add_phase_bias(230695.0, 1, -6.365);
+
+    std::map<uint8_t, double> phase_bias_m;
+    GNSSTime reference_time;
+    ASSERT_TRUE(products.heldClasPhaseBiasForServiceNetwork(
+        satellite, GNSSTime(2068, 230695.0), 7, &phase_bias_m,
+        nullptr, &reference_time, true));
+    ASSERT_EQ(phase_bias_m.size(), 1U);
+    EXPECT_DOUBLE_EQ(phase_bias_m.at(9), 11.208);
+    EXPECT_DOUBLE_EQ(reference_time.tow, 230670.0);
+}
+
+TEST(PPPTest, SSRProductsExpiresClasPhaseBiasAtNextNetworkBank) {
+    SSRProducts products;
+    const SatelliteId satellite(GNSSSystem::GPS, 26);
+    SSROrbitClockCorrection correction;
+    correction.satellite = satellite;
+    correction.time = GNSSTime(2068, 230430.0);
+    correction.phase_bias_valid = true;
+    correction.phase_bias_m[9] = 6.063;
+    correction.bias_network_id = 7;
+    products.addCorrection(correction);
+
+    std::map<uint8_t, double> phase_bias_m;
+    EXPECT_TRUE(products.heldClasPhaseBiasForServiceNetwork(
+        satellite, GNSSTime(2068, 230474.0), 7, &phase_bias_m,
+        nullptr, nullptr, true, 30.0));
+    EXPECT_FALSE(products.heldClasPhaseBiasForServiceNetwork(
+        satellite, GNSSTime(2068, 230475.0), 7, &phase_bias_m,
+        nullptr, nullptr, true, 30.0));
+}
+
+TEST(PPPTest, SSRProductsHoldsCodeBiasAfterFinalClockOnlyRow) {
+    SSRProducts products;
+    const SatelliteId satellite(GNSSSystem::GPS, 32);
+
+    SSROrbitClockCorrection bias;
+    bias.satellite = satellite;
+    bias.time = GNSSTime(2068, 233985.0);
+    bias.code_bias_valid = true;
+    bias.code_bias_m[9] = 1.44;
+    products.addCorrection(bias);
+
+    SSROrbitClockCorrection clock;
+    clock.satellite = satellite;
+    clock.time = GNSSTime(2068, 233995.0);
+    clock.clock_valid = true;
+    clock.clock_correction_m = 0.25;
+    products.addCorrection(clock);
+
+    Vector3d orbit_correction = Vector3d::Zero();
+    double clock_correction_m = 0.0;
+    std::map<uint8_t, double> code_bias_m;
+    SSRCorrectionStatus status;
+    ASSERT_TRUE(products.interpolateCorrection(
+        satellite, GNSSTime(2068, 233999.0), orbit_correction,
+        clock_correction_m, nullptr, &code_bias_m, nullptr, nullptr,
+        nullptr, nullptr, nullptr, 0, nullptr, nullptr, &status, true,
+        nullptr, nullptr, SSRClockSelectionPolicy::MergedInterpolate));
+    ASSERT_EQ(code_bias_m.size(), 1U);
+    EXPECT_DOUBLE_EQ(code_bias_m.at(9), 1.44);
+    EXPECT_TRUE(status.code_bias_valid);
+    EXPECT_DOUBLE_EQ(status.code_bias_reference_time.tow, 233985.0);
 }
 
 TEST(PPPTest, ProcessorLoadsRtcmSsrCorrectionsFromFile) {
@@ -1468,6 +2397,45 @@ TEST(PPPTest, ProcessorLoadsRtcmSsrCodeBiasFromFile) {
     EXPECT_DOUBLE_EQ(ura_sigma_m, 0.0);
 
     std::filesystem::remove(rtcm_path);
+}
+
+TEST(PPPTest, MadocaL6dShadowSelectsFreshCausalSatelliteCorrections) {
+    const GNSSTime epoch(2414, 345600.0);
+    io::MadocaIonoSnapshot snapshot;
+    snapshot.decode_time = algorithms::madoca_core::madocaGtimeFromGpsTime(epoch);
+    snapshot.updated_region_id = 7;
+    snapshot.correction.rid = 7;
+    snapshot.correction.anum = 3;
+    const int gps1 = algorithms::madoca_core::rtklibSatelliteNumber(
+        SatelliteId(GNSSSystem::GPS, 1));
+    ASSERT_GT(gps1, 0);
+    snapshot.correction.t0[gps1 - 1] = snapshot.decode_time;
+    snapshot.correction.dly[gps1 - 1] = 1.25;
+    snapshot.correction.std[gps1 - 1] = 0.15;
+
+    io::MadocaIonoProducts products;
+    ASSERT_TRUE(products.addSnapshot(snapshot));
+    PPPProcessor processor;
+    processor.setMadocaIonoProductsForShadow(products);
+
+    const auto fresh = processor.inspectMadocaL6dShadow(
+        {SatelliteId(GNSSSystem::GPS, 1), SatelliteId(GNSSSystem::GPS, 2)},
+        epoch + 5.0, 10.0);
+    EXPECT_TRUE(fresh.snapshot_available);
+    EXPECT_FALSE(fresh.stale);
+    EXPECT_DOUBLE_EQ(fresh.age_s, 5.0);
+    EXPECT_EQ(fresh.region_id, 7);
+    EXPECT_EQ(fresh.area_number, 3);
+    EXPECT_EQ(fresh.matched_satellites, 1);
+
+    const auto stale = processor.inspectMadocaL6dShadow(
+        {SatelliteId(GNSSSystem::GPS, 1)}, epoch + 11.0, 10.0);
+    EXPECT_FALSE(stale.snapshot_available);
+    EXPECT_TRUE(stale.stale);
+    const auto before = processor.inspectMadocaL6dShadow(
+        {SatelliteId(GNSSSystem::GPS, 1)}, epoch - 1.0, 10.0);
+    EXPECT_FALSE(before.snapshot_available);
+    EXPECT_FALSE(before.stale);
 }
 
 TEST(PPPTest, ProcessorProducesConvergedFloatSolutionWithSyntheticPreciseProducts) {
@@ -1738,6 +2706,12 @@ TEST(PPPTest, ProcessorFixesSyntheticAmbiguitiesWithPreciseProducts) {
     EXPECT_LT((last_solution.position_ecef - true_receiver_position).norm(), 1.0);
     EXPECT_GE(last_solution.ratio, 0.0);
     EXPECT_GE(last_solution.num_fixed_ambiguities, 0);
+    const auto& convergence = processor.getConvergenceTelemetry();
+    EXPECT_GE(convergence.evaluated_epochs, 4u);
+    EXPECT_EQ(convergence.required_window_epochs, 4u);
+    EXPECT_EQ(convergence.position_deviation_threshold_m, 0.2);
+    EXPECT_EQ(convergence.policy, "legacy-3d");
+    EXPECT_NE(convergence.gate_reason, "not_evaluated");
     if (saw_fixed_solution) {
         EXPECT_GE(best_fixed_ambiguities, 1);
         EXPECT_GT(best_ratio, 2.0);
@@ -1745,4 +2719,136 @@ TEST(PPPTest, ProcessorFixesSyntheticAmbiguitiesWithPreciseProducts) {
 
     std::filesystem::remove(sp3_path);
     std::filesystem::remove(clk_path);
+}
+
+TEST(PPPTest, ConvergenceWindowReportsEcefHorizontalAndVerticalComponents) {
+    const double latitude = 35.0 * M_PI / 180.0;
+    const double longitude = 139.0 * M_PI / 180.0;
+    const Vector3d center = geodetic2ecef(latitude, longitude, 45.0);
+    const Vector3d offset_enu(3.0, 4.0, 2.0);
+    const std::vector<Vector3d> positions = {
+        center + enu2ecef(offset_enu, latitude, longitude),
+        center - enu2ecef(offset_enu, latitude, longitude),
+    };
+
+    const PPPConvergenceWindowMetrics metrics =
+        evaluatePPPConvergenceWindow(positions);
+    EXPECT_NEAR(metrics.max_ecef_3d_m, std::sqrt(29.0), 1e-6);
+    EXPECT_NEAR(metrics.max_horizontal_m, 5.0, 1e-6);
+    EXPECT_NEAR(metrics.max_vertical_m, 2.0, 1e-6);
+}
+
+TEST(PPPMultifrequencyTest, UsesMadocalibFrequencyOrdinalOrder) {
+    using algorithms::ppp_multifrequency::signalsForFrequencyOrdinal;
+
+    EXPECT_EQ(signalsForFrequencyOrdinal(SatelliteId(GNSSSystem::GPS, 1), 2),
+              std::vector<SignalType>({SignalType::GPS_L5}));
+    EXPECT_EQ(signalsForFrequencyOrdinal(SatelliteId(GNSSSystem::Galileo, 1), 2),
+              std::vector<SignalType>({SignalType::GAL_E5B}));
+    EXPECT_EQ(signalsForFrequencyOrdinal(SatelliteId(GNSSSystem::Galileo, 1), 3),
+              std::vector<SignalType>({SignalType::GAL_E6}));
+    EXPECT_EQ(signalsForFrequencyOrdinal(SatelliteId(GNSSSystem::QZSS, 1), 2),
+              std::vector<SignalType>({SignalType::QZS_L2C}));
+    EXPECT_EQ(signalsForFrequencyOrdinal(SatelliteId(GNSSSystem::BeiDou, 18), 2),
+              std::vector<SignalType>({SignalType::BDS_B2I}));
+    EXPECT_EQ(signalsForFrequencyOrdinal(SatelliteId(GNSSSystem::BeiDou, 19), 2),
+              std::vector<SignalType>({SignalType::BDS_B2A}));
+    EXPECT_TRUE(signalsForFrequencyOrdinal(
+                    SatelliteId(GNSSSystem::BeiDou, 19), 3).empty());
+}
+
+TEST(PPPMultifrequencyTest, PreservesMadocalibBeiDouExactBiasIdentity) {
+    namespace identity = algorithms::ppp_bias_identity;
+    namespace parity = algorithms::madoca_parity;
+
+    EXPECT_EQ(identity::rtklibCodeForObservationType("C2I"), parity::kCodeL2I);
+    EXPECT_EQ(identity::rtklibCodeForObservationType("L2I"), parity::kCodeL2I);
+    EXPECT_EQ(identity::rtklibCodeForObservationType("C6I"), parity::kCodeL6I);
+    EXPECT_EQ(identity::rtklibCodeForObservationType("L6I"), parity::kCodeL6I);
+    EXPECT_EQ(identity::rtklibCodeForObservationType("C5P"), parity::kCodeL5P);
+    EXPECT_EQ(identity::rtklibCodeForObservationType("L5P"), parity::kCodeL5P);
+    EXPECT_EQ(identity::madocaBiasIdentityIdForObservation(
+                  GNSSSystem::BeiDou, SignalType::BDS_B1I, "C2I", true),
+              static_cast<std::uint8_t>(parity::kCodeL2I));
+}
+
+TEST(PPPMultifrequencyTest, UsesMadocalibHeaderFrequencySlotWithoutFallback) {
+    namespace identity = algorithms::ppp_bias_identity;
+    ObservationData epoch;
+    const SatelliteId satellite(GNSSSystem::GPS, 27);
+
+    Observation fallback;
+    fallback.satellite = satellite;
+    fallback.signal = SignalType::GPS_L2C;
+    fallback.pseudorange_observation_type = "C2L";
+    fallback.carrier_phase_observation_type = "L2L";
+
+    Observation exact = fallback;
+    exact.pseudorange_observation_type = "C2W";
+    exact.carrier_phase_observation_type = "L2W";
+    epoch.setRinexFrequencySlot(GNSSSystem::GPS, 1, "2W");
+    epoch.addRinexTrackingObservation("2W", exact);
+
+    EXPECT_EQ(
+        identity::madocaFrequencySlotObservation(epoch, satellite, 1, &fallback),
+        epoch.getRinexTrackingObservation(satellite, "2W"));
+    EXPECT_EQ(
+        identity::madocaFrequencySlotObservation(
+            epoch, SatelliteId(GNSSSystem::GPS, 31), 1, &fallback),
+        nullptr);
+}
+
+TEST(PPPMultifrequencyTest, SeparatesMadocalibBeiDouGenerationsForDoubleDifferences) {
+    const auto bds2 = ppp_ar::ambiguityDdGroup(
+        SatelliteId(GNSSSystem::BeiDou, 18));
+    const auto bds3 = ppp_ar::ambiguityDdGroup(
+        SatelliteId(GNSSSystem::BeiDou, 19));
+
+    EXPECT_NE(bds2, bds3);
+    EXPECT_EQ(ppp_ar::ambiguityDdGroup(SatelliteId(GNSSSystem::GPS, 19)),
+              std::make_pair(GNSSSystem::GPS, 0));
+    EXPECT_NE(algorithms::ppp_multifrequency::receiverFrequencyBiasKey(
+                  SatelliteId(GNSSSystem::BeiDou, 18), 2),
+              algorithms::ppp_multifrequency::receiverFrequencyBiasKey(
+                  SatelliteId(GNSSSystem::BeiDou, 19), 2));
+}
+
+TEST(PPPMultifrequencyTest, MatchesMadocalibIonosphereAndAmbiguityEquations) {
+    using algorithms::ppp_multifrequency::ambiguitySeedMeters;
+    using algorithms::ppp_multifrequency::ionosphereScale;
+
+    constexpr double f1 = 1575.42e6;
+    constexpr double f3 = 1207.14e6;
+    constexpr double ion_l1 = 4.25;
+    constexpr double carrier_m = 20200012.5;
+    constexpr double code_m = 20200003.0;
+    const double expected_scale = (f1 / f3) * (f1 / f3);
+
+    EXPECT_NEAR(ionosphereScale(f1, f3), expected_scale, 1e-15);
+    EXPECT_NEAR(ambiguitySeedMeters(carrier_m, code_m, ion_l1, f1, f3),
+                carrier_m - code_m + 2.0 * ion_l1 * expected_scale,
+                1e-12);
+    EXPECT_EQ(ionosphereScale(0.0, f3), 0.0);
+}
+
+TEST(PPPMultifrequencyTest, MatchesMadocalibExtraWideLaneDoubleDifference) {
+    using algorithms::ppp_multifrequency::extraWideLaneDoubleDifferenceCycles;
+
+    constexpr double lambda2 = 0.2442102134;
+    constexpr double lambda3 = 0.2548280488;
+    constexpr double ref_n2_cycles = 120.25;
+    constexpr double ref_n3_cycles = 80.10;
+    constexpr double sat_n2_cycles = 105.05;
+    constexpr double sat_n3_cycles = 65.02;
+    const double value = extraWideLaneDoubleDifferenceCycles(
+        ref_n2_cycles * lambda2, lambda2,
+        ref_n3_cycles * lambda3, lambda3,
+        sat_n2_cycles * lambda2, lambda2,
+        sat_n3_cycles * lambda3, lambda3);
+
+    EXPECT_NEAR(value,
+                (ref_n2_cycles - ref_n3_cycles) -
+                    (sat_n2_cycles - sat_n3_cycles),
+                1e-12);
+    EXPECT_NEAR(value, 0.12, 1e-12);
 }

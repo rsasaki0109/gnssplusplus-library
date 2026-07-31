@@ -24,6 +24,44 @@ spec.loader.exec_module(solution_diff)
 
 
 class MadocaSolutionDiffTest(unittest.TestCase):
+    def test_tail_window_uses_absolute_gps_time_across_week_rollover(self) -> None:
+        def pair(week: int, tow: float) -> object:
+            epoch = solution_diff.SolutionEpoch(
+                week, tow, 1.0, 2.0, 3.0, 0.0, 0.0, 0.0, 1, 10
+            )
+            return solution_diff.MatchedPair(
+                epoch, epoch, 0.0, (0.0, 0.0, 0.0),
+                (0.0, 0.0, 0.0), (0.0, 0.0, 0.0)
+            )
+
+        matches = [
+            pair(2028, 604799.0),
+            pair(2029, 0.0),
+            pair(2029, 1.0),
+            pair(2029, 2.0),
+        ]
+
+        tail = solution_diff.subset_tail(matches, 2.0)
+
+        self.assertEqual([(item.base.week, item.base.tow) for item in tail], [
+            (2029, 1.0), (2029, 2.0)
+        ])
+
+    def test_reads_claslib_rmc_gga_nmea(self) -> None:
+        rows = solution_diff.read_nmea_solution(
+            [
+                "$GPRMC,160002.00,A,3606.2180069,N,14005.1791604,E,0.00,0.00,270819,0.0,E,D*3B",
+                "$GPGGA,160002.00,3606.2180069,N,14005.1791604,E,5,11,1.1,32.072,M,38.037,M,0.0,*73",
+            ]
+        )
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].week, 2068)
+        self.assertAlmostEqual(rows[0].tow, 230420.0)
+        self.assertEqual(rows[0].status, 5)
+        self.assertEqual(rows[0].satellites, 11)
+        self.assertAlmostEqual(rows[0].height_m, 70.109)
+
     def test_reads_libgnss_and_madocalib_pos_formats(self) -> None:
         lib_epoch = solution_diff.parse_solution_line(
             "2360 172800.000000 -3857171.270216 3108692.758967 4004040.095338 "
@@ -40,6 +78,7 @@ class MadocaSolutionDiffTest(unittest.TestCase):
         self.assertEqual(lib_epoch.week, 2360)
         self.assertAlmostEqual(lib_epoch.tow, 172800.0)
         self.assertEqual(lib_epoch.status, 5)
+        self.assertEqual(lib_epoch.fixed_ambiguities, 0)
         self.assertEqual(bridge_epoch.week, 2360)
         self.assertAlmostEqual(bridge_epoch.tow, 172800.0)
         self.assertEqual(bridge_epoch.status, 1)

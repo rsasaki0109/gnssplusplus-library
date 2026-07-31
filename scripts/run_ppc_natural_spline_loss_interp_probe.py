@@ -21,7 +21,7 @@ from scipy.interpolate import CubicSpline, Akima1DInterpolator, PchipInterpolato
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = Path(__file__).resolve().parent
-APPS_DIR = ROOT_DIR / "apps"
+APPS_DIR = ROOT_DIR / "apps" / "commands" / "benchmarks"
 for _p in (str(SCRIPTS_DIR), str(APPS_DIR)):
     if _p not in sys.path:
         sys.path.insert(0, _p)

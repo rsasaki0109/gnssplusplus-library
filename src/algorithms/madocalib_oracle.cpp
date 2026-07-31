@@ -5,8 +5,11 @@
 #ifndef GNSSPP_HAS_MADOCALIB_ORACLE
 #define GNSSPP_HAS_MADOCALIB_ORACLE 0
 #endif
+#ifndef GNSSPP_HAS_MADOCALIB_TIDE
+#define GNSSPP_HAS_MADOCALIB_TIDE 0
+#endif
 
-#if GNSSPP_HAS_MADOCALIB_ORACLE
+#if GNSSPP_HAS_MADOCALIB_ORACLE || GNSSPP_HAS_MADOCALIB_TIDE
 extern "C" {
 #include "rtklib.h"
 }
@@ -25,6 +28,10 @@ void zero3(double out[3]) {
 
 bool available() {
     return GNSSPP_HAS_MADOCALIB_ORACLE != 0;
+}
+
+bool tideAvailable() {
+    return GNSSPP_HAS_MADOCALIB_TIDE != 0;
 }
 
 int satno(int sys, int prn) {
@@ -67,6 +74,38 @@ double geodist(const double rs[3], const double rr[3], double e[3]) {
     (void)rr;
     zero3(e);
     return -1.0;
+#endif
+}
+
+void tideDisplacement(int gps_week, double gps_tow, const double rr[3],
+                      int options, const double* ocean_loading, double dr[3]) {
+#if GNSSPP_HAS_MADOCALIB_TIDE
+    // The MRTKLIB v0.5.1 CLAS reference loads igu00p01.erp.  Tokyo/run2 is
+    // later than that file's final epoch, so geterp() extrapolates this final
+    // record (MJD 59992.25).  Supplying the same record preserves its exact
+    // solid-earth/pole-tide geometry without making the parity path depend on
+    // an external ERP file at runtime.
+    constexpr double kArcsecToRad = 4.8481368110953599359e-6;
+    erpd_t erp_data{};
+    erp_data.mjd = 59992.25;
+    erp_data.xp = -32133.0e-6 * kArcsecToRad;
+    erp_data.yp = 283630.0e-6 * kArcsecToRad;
+    erp_data.ut1_utc = -115514.0e-7;
+    erp_data.lod = -3787.0e-7;
+    erp_data.xpr = -2029.0e-6 * kArcsecToRad;
+    erp_data.ypr = 2122.0e-6 * kArcsecToRad;
+    erp_t erp{};
+    erp.n = erp.nmax = 1;
+    erp.data = &erp_data;
+    const gtime_t gpst = gpst2time(gps_week, gps_tow);
+    ::tidedisp(gpst2utc(gpst), rr, options, &erp, ocean_loading, dr);
+#else
+    (void)gps_week;
+    (void)gps_tow;
+    (void)rr;
+    (void)options;
+    (void)ocean_loading;
+    zero3(dr);
 #endif
 }
 

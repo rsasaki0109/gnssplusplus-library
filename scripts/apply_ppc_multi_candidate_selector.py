@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import dataclasses
 import json
 import os
 from pathlib import Path
@@ -26,11 +27,15 @@ import sys
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = Path(__file__).resolve().parent
-APPS_DIR = ROOT_DIR / "apps"
+COMMANDS_DIR = ROOT_DIR / "apps" / "commands"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
-if str(APPS_DIR) not in sys.path:
-    sys.path.insert(0, str(APPS_DIR))
+for command_path in (
+    COMMANDS_DIR,
+    *(COMMANDS_DIR / group for group in ("benchmarks", "positioning", "products", "receivers")),
+):
+    if str(command_path) not in sys.path:
+        sys.path.insert(0, str(command_path))
 
 import analyze_ppc_profile_segment_delta as profile_delta  # noqa: E402
 import analyze_ppc_segment_selector_sweep as selector_sweep  # noqa: E402
@@ -121,6 +126,11 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument("--out-pos", type=Path, required=True)
+    parser.add_argument(
+        "--preserve-baseline-status",
+        action="store_true",
+        help="Use selected candidate positions but retain the baseline status label.",
+    )
     parser.add_argument("--summary-json", type=Path, default=None)
     parser.add_argument("--segments-csv", type=Path, default=None)
     return parser.parse_args()
@@ -524,7 +534,24 @@ def write_pos(path: Path, epochs: list[comparison.SolutionEpoch]) -> None:
                     tokens.append(str(value))
                 else:
                     tokens.append(format_float(float(value), 4))
-            handle.write(" ".join(tokens) + "\n")
+                handle.write(" ".join(tokens) + "\n")
+
+
+def preserve_baseline_statuses(
+    selected_epochs: list[comparison.SolutionEpoch],
+    baseline_epochs: list[comparison.SolutionEpoch],
+) -> tuple[list[comparison.SolutionEpoch], int]:
+    """Retain baseline labels when a selector is used for position fusion only."""
+    baseline_by_key = {epoch_key(epoch): epoch for epoch in baseline_epochs}
+    preserved: list[comparison.SolutionEpoch] = []
+    changed = 0
+    for epoch in selected_epochs:
+        baseline = baseline_by_key.get(epoch_key(epoch))
+        if baseline is not None and epoch.status != baseline.status:
+            epoch = dataclasses.replace(epoch, status=baseline.status)
+            changed += 1
+        preserved.append(epoch)
+    return preserved, changed
 
 
 def write_segments_csv(path: Path, rows: list[dict[str, object]]) -> None:
@@ -696,6 +723,12 @@ def main() -> None:
     if not selected_epochs:
         raise SystemExit("Selector produced no solution epochs")
 
+    status_labels_preserved = 0
+    if args.preserve_baseline_status:
+        selected_epochs, status_labels_preserved = preserve_baseline_statuses(
+            selected_epochs, baseline_epochs
+        )
+
     # Write outputs
     write_pos(args.out_pos, selected_epochs)
 
@@ -711,6 +744,8 @@ def main() -> None:
         args.out_pos,
         args.selection_mode,
     )
+    payload["preserve_baseline_status"] = args.preserve_baseline_status
+    payload["status_labels_preserved"] = status_labels_preserved
 
     if args.summary_json is not None:
         args.summary_json.parent.mkdir(parents=True, exist_ok=True)

@@ -81,7 +81,8 @@ struct Ephemeris {
                                Vector3d& pos,
                                Vector3d& vel,
                                double& clock_bias,
-                               double& clock_drift) const;
+                               double& clock_drift,
+                               bool use_mrtklib_galileo_mu = true) const;
     
     /**
      * @brief Check if ephemeris is valid for given time
@@ -169,13 +170,22 @@ public:
     /**
      * @brief Get best ephemeris matching a desired IODE.
      *
-     * When desired_iode >= 0, prefer the ephemeris whose IODE equals it (so the
-     * broadcast orbit matches the IODE an SSR orbit correction references, as
-     * RTKLIB's ephpos(...,ssr->iode,...) does). Falls back to the nearest-age
-     * ephemeris when no IODE match exists or desired_iode < 0.
+     * When desired_iode >= 0, require the ephemeris referenced by an SSR orbit
+     * correction, as RTKLIB's ephpos(...,ssr->iode,...) does. BeiDou SSR IODE
+     * is matched against the broadcast toe modulo 2048 seconds. Returns null
+     * when no matching valid ephemeris exists. When desired_iode < 0, uses the
+     * ordinary nearest-age selection.
      */
     const Ephemeris* getEphemeris(const SatelliteId& sat, const GNSSTime& time,
                                   int desired_iode) const;
+
+    /**
+     * @brief True when MADOCALIB seleph() would admit a Galileo broadcast
+     * ephemeris for MADOCA SSR at this epoch.
+     */
+    bool hasMadocaGalileoEphemeris(const SatelliteId& sat,
+                                   const GNSSTime& time,
+                                   int desired_iode) const;
 
     /**
      * @brief Get all ephemeris for satellite
@@ -193,7 +203,7 @@ public:
                                double& clock_drift) const;
 
     /**
-     * @brief Calculate satellite state using the IODE-matched ephemeris.
+     * @brief Calculate satellite state using the strictly IODE-matched ephemeris.
      */
     bool calculateSatelliteState(const SatelliteId& sat,
                                const GNSSTime& time,
@@ -275,6 +285,40 @@ public:
     };
     
     NavigationStats getStats(const GNSSTime& current_time) const;
+
+private:
+    struct SatelliteStateCacheKey {
+        SatelliteId satellite;
+        GNSSTime time;
+        int desired_iode = -1;
+
+        bool operator<(const SatelliteStateCacheKey& other) const {
+            if (satellite < other.satellite) {
+                return true;
+            }
+            if (other.satellite < satellite) {
+                return false;
+            }
+            if (time < other.time) {
+                return true;
+            }
+            if (other.time < time) {
+                return false;
+            }
+            return desired_iode < other.desired_iode;
+        }
+    };
+
+    struct SatelliteStateCacheValue {
+        Vector3d position = Vector3d::Zero();
+        Vector3d velocity = Vector3d::Zero();
+        double clock_bias = 0.0;
+        double clock_drift = 0.0;
+        bool valid = false;
+    };
+
+    mutable std::map<SatelliteStateCacheKey, SatelliteStateCacheValue>
+        satellite_state_cache_;
 };
 
 /**
@@ -346,24 +390,64 @@ public:
 struct SSROrbitClockCorrection {
     SatelliteId satellite;
     GNSSTime time;
+    GNSSTime orbit_reference_time;
+    GNSSTime clock_reference_time;
 
     Vector3d orbit_correction_ecef = Vector3d::Zero();   ///< Orbit delta in meters (ECEF or RAC per container flag)
     double clock_correction_m = 0.0;                     ///< Clock delta in meters
+    double base_clock_correction_m = 0.0;                  ///< Base (ST3) clock delta stashed for SIS sampling
+    GNSSTime base_clock_reference_time;                    ///< Reference time for base_clock_correction_m
+    double mrtklib_base_clock_correction_m = 0.0;           ///< First same-epoch base clock retained for literal parity
+    GNSSTime mrtklib_base_clock_reference_time;
     double ura_sigma_m = 0.0;                            ///< SSR URA sigma in meters
     std::map<uint8_t, double> code_bias_m;               ///< SSR code biases keyed by RTCM signal id
     std::map<uint8_t, double> phase_bias_m;              ///< SSR phase biases keyed by RTCM signal id
+    std::map<uint8_t, double> code_bias_rtklib_m;        ///< CLAS biases keyed by exact RTKLIB CODE_*
+    std::map<uint8_t, double> phase_bias_rtklib_m;       ///< CLAS biases keyed by exact RTKLIB CODE_*
     std::map<uint8_t, int> phase_bias_discnt;            ///< SSR phase-bias discontinuity counters keyed by RTCM signal id
     int bias_network_id = 0;                             ///< Optional CLAS bias network id (0 when unset)
     int atmos_network_id = 0;                            ///< Optional CLAS atmosphere network id (0 when unset)
+    int clock_network_id = 0;                            ///< Clock provenance on ingest (0=base ST3, >0=ST11 network)
     int iode = -1;                                       ///< IODE the orbit correction references (-1 when unset)
+    int ssr_orbit_iod = -1;
+    int ssr_clock_iod = -1;
     std::map<std::string, std::string> atmos_tokens;     ///< Optional atmospheric metadata tokens
 
     bool orbit_valid = false;
     bool clock_valid = false;
+    bool clock_withdrawn = false;                       ///< Explicit invalid clock cell in the current CLAS network bank
+    bool base_clock_valid = false;
+    bool mrtklib_base_clock_valid = false;
     bool ura_valid = false;
     bool code_bias_valid = false;
     bool phase_bias_valid = false;
     bool atmos_valid = false;
+};
+
+enum class SSRClockSelectionPolicy {
+    MergedInterpolate,
+    ClaslibBaseHold,
+    MrtklibLiteralBaseHold,
+};
+
+struct SSRCorrectionStatus {
+    bool orbit_valid = false;
+    bool orbit_withdrawn = false;
+    bool clock_valid = false;
+    bool clock_withdrawn = false;
+    bool ura_valid = false;
+    bool code_bias_valid = false;
+    bool phase_bias_valid = false;
+    bool atmos_valid = false;
+    GNSSTime orbit_reference_time;
+    GNSSTime clock_reference_time;
+    GNSSTime ura_reference_time;
+    GNSSTime code_bias_reference_time;
+    GNSSTime phase_bias_reference_time;
+    GNSSTime atmos_reference_time;
+    int orbit_iode = -1;
+    int ssr_orbit_iod = -1;
+    int ssr_clock_iod = -1;
 };
 
 /**
@@ -376,8 +460,10 @@ struct SSROrbitClockCorrection {
 class SSRProducts {
 public:
     std::map<SatelliteId, std::vector<SSROrbitClockCorrection>> orbit_clock_corrections;
+    std::vector<SSROrbitClockCorrection> clas_trop_bank_corrections;
 
     void addCorrection(const SSROrbitClockCorrection& correction);
+    void addCorrections(const std::vector<SSROrbitClockCorrection>& corrections);
 
     bool interpolateCorrection(const SatelliteId& sat,
                                const GNSSTime& time,
@@ -392,7 +478,54 @@ public:
                                GNSSTime* clock_reference_time = nullptr,
                                int preferred_network_id = 0,
                                int* orbit_iode = nullptr,
-                               std::map<uint8_t, int>* phase_bias_discnt = nullptr) const;
+                               std::map<uint8_t, int>* phase_bias_discnt = nullptr,
+                               SSRCorrectionStatus* status = nullptr,
+                               bool allow_future_samples = true,
+                               double* base_clock_correction_m = nullptr,
+                               bool* base_clock_valid = nullptr,
+                               SSRClockSelectionPolicy clock_selection_policy =
+                                   SSRClockSelectionPolicy::MergedInterpolate,
+                               std::map<uint8_t, double>* code_bias_rtklib_m = nullptr,
+                               std::map<uint8_t, double>* phase_bias_rtklib_m = nullptr) const;
+
+    bool heldQzssPhaseBiasForServiceNetwork(
+        const SatelliteId& sat,
+        const GNSSTime& time,
+        int service_network_id,
+        std::map<uint8_t, double>* phase_bias_m,
+        std::map<uint8_t, int>* phase_bias_discnt = nullptr,
+        GNSSTime* phase_bias_reference_time = nullptr,
+        bool include_equal_time_group = false,
+        double max_hold_age_seconds = -1.0) const;
+
+    bool heldClasPhaseBiasForServiceNetwork(
+        const SatelliteId& sat,
+        const GNSSTime& time,
+        int service_network_id,
+        std::map<uint8_t, double>* phase_bias_m,
+        std::map<uint8_t, int>* phase_bias_discnt = nullptr,
+        GNSSTime* phase_bias_reference_time = nullptr,
+        bool apply_reception_lag = true,
+        double max_hold_age_seconds = -1.0) const;
+
+    bool heldAtmosTokensForNetwork(int network_id,
+                                   const GNSSTime& time,
+                                   double max_age_seconds,
+                                   std::map<std::string, std::string>& atmos_tokens,
+                                   GNSSTime* atmos_reference_time = nullptr) const;
+
+    bool heldClasTropTokens(const GNSSTime& time,
+                            double max_age_seconds,
+                            int network_id,
+                            int minimum_grid_count,
+                            std::map<std::string, std::string>& atmos_tokens,
+                            GNSSTime* atmos_reference_time = nullptr) const;
+
+    const std::map<std::string, std::string>* heldClasAtmosBankTokens(
+        const GNSSTime& time,
+        double max_age_seconds,
+        int network_id,
+        GNSSTime* atmos_reference_time = nullptr) const;
 
     bool loadCSVFile(const std::string& filename);
 

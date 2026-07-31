@@ -33,8 +33,8 @@ Relevant code entrypoints today:
 - `include/libgnss++/algorithms/rtk_ar_selection.hpp`
 - `include/libgnss++/algorithms/rtk_ar_evaluation.hpp`
 - `include/libgnss++/algorithms/rtk_validation.hpp`
-- `apps/gnss_ppc_demo.py`
-- `apps/gnss_ppc_rtk_signoff.py`
+- `apps/commands/benchmarks/gnss_ppc_demo.py`
+- `apps/commands/benchmarks/gnss_ppc_rtk_signoff.py`
 
 ## Already aligned enough to build on
 

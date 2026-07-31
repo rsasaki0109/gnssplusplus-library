@@ -18,10 +18,21 @@ struct ClasGridReference {
     size_t residual_index = 0;
     int network_id = 0;
     int grid_no = 0;
-    // 4-grid bilinear interpolation (CLASLIB-style)
+    double nearest_grid_distance_m = 0.0;
+    // Historical 4-grid fields kept for diagnostics. With the CLASLIB matrix
+    // policy enabled these hold the effective matrix weights in selected-grid
+    // order, not quadrant bilinear SW/SE/NW/NE order.
     bool has_bilinear = false;
-    double bilinear_weights[4] = {};       // SW, SE, NW, NE
-    size_t bilinear_grid_indices[4] = {};  // residual indices for 4 grids
+    double bilinear_weights[4] = {};
+    size_t bilinear_grid_indices[4] = {};
+    int interpolation_grid_count = 0;
+    double interpolation_weights[4] = {};
+    size_t interpolation_grid_indices[4] = {};
+    // STEC/trop polynomial offsets for the selected grids. In the CLASLIB
+    // matrix policy these are relative to grid 1 of the network, matching the
+    // decoded grid-value materialization in cssr.c.
+    double interpolation_grid_dlat_deg[4] = {};
+    double interpolation_grid_dlon_deg[4] = {};
 };
 
 bool parseAtmosTokenDouble(const std::map<std::string, std::string>& atmos_tokens,
@@ -45,6 +56,20 @@ bool resolveClasGridReference(const std::map<std::string, std::string>& atmos_to
                               const Vector3d& receiver_position,
                               ClasGridReference& reference);
 
+bool resolveClasNearestRegionalGridReference(const Vector3d& receiver_position,
+                                               ClasGridReference& reference);
+
+bool hasParityTropGridTokens(const std::map<std::string, std::string>& atmos_tokens);
+
+double claslibTropGridCorrectionMeters(
+    const std::map<std::string, std::string>& atmos_tokens,
+    const Vector3d& receiver_position,
+    const GNSSTime& time,
+    double elevation_rad,
+    ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy residual_sampling_policy =
+        ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy::INDEXED_OR_MEAN,
+    bool allow_native_subtype12 = false);
+
 double atmosphericTroposphereCorrectionMeters(
     const std::map<std::string, std::string>& atmos_tokens,
     const Vector3d& receiver_position,
@@ -55,7 +80,8 @@ double atmosphericTroposphereCorrectionMeters(
     ppp_shared::PPPConfig::ClasSubtype12ValueConstructionPolicy subtype12_value_policy =
         ppp_shared::PPPConfig::ClasSubtype12ValueConstructionPolicy::FULL,
     ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy residual_sampling_policy =
-        ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy::INDEXED_OR_MEAN);
+        ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy::INDEXED_OR_MEAN,
+    bool allow_native_subtype12 = false);
 
 double atmosphericStecTecu(const std::map<std::string, std::string>& atmos_tokens,
                            const SatelliteId& satellite,
@@ -65,7 +91,8 @@ double atmosphericStecTecu(const std::map<std::string, std::string>& atmos_token
                            ppp_shared::PPPConfig::ClasSubtype12ValueConstructionPolicy subtype12_value_policy =
                                ppp_shared::PPPConfig::ClasSubtype12ValueConstructionPolicy::FULL,
                            ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy residual_sampling_policy =
-                               ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy::INDEXED_OR_MEAN);
+                               ppp_shared::PPPConfig::ClasExpandedResidualSamplingPolicy::INDEXED_OR_MEAN,
+                           bool use_claslib_matrix_grid = false);
 
 double ionosphereDelayMetersFromTecu(SignalType signal,
                                      const Ephemeris* eph,

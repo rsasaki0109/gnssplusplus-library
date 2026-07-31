@@ -1,0 +1,89 @@
+# Canonical local profiles for the MRTKLIB v0.5.1 CLAS literal-port work.
+# Run with:
+#   python3 scripts/run_clas_mrtklib_v051.py <profile> --print-command
+# Copy this file before changing local paths or epoch limits; the checked-in
+# example records the fixtures used for parity and safety decisions.
+
+[runner]
+gnss_ppp = "build/apps/gnss_ppp"
+
+[runner.env]
+GNSS_PPP_CLAS_BASE_CLOCK_PARITY = "1"
+GNSS_PPP_CLAS_SIS_BOUNDARY = "1"
+GNSS_PPP_CLAS_TROP_GRID_PARITY = "1"
+GNSS_PPP_CLAS_QZSS_S_PRN_FIX = "1"
+
+[profiles.dynamic_parity_600]
+description = "MRTKLIB v0.5.1 PVA/DD literal-port comparison on PPC Tokyo run2"
+obs = "data/PPC-Dataset/tokyo/run2/rover.obs"
+nav = "data/PPC-Dataset/tokyo/run2/base.nav"
+ssr = "/tmp/tokyo_run2_current_expanded.csv"
+ssr_md5 = "51602f10496a24d2800ed040d130dd78"
+out = "/tmp/clas_mrtklib_v051_dynamic600.pos"
+env = [
+  "GNSS_PPP_CLAS_BASE_CLOCK_PARITY",
+  "GNSS_PPP_CLAS_SIS_BOUNDARY",
+  "GNSS_PPP_CLAS_TROP_GRID_PARITY",
+  "GNSS_PPP_CLAS_QZSS_S_PRN_FIX",
+]
+args = [
+  "--kinematic",
+  "--use-dynamics-model",
+  "--estimate-troposphere",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+  "--enable-ar",
+  "--ar-ratio-threshold", "3.0",
+  "--ar-method", "wlnl",
+  "--clas-osr",
+  "--emit-epoch-time",
+  "--max-epochs", "600",
+  "--quiet",
+]
+
+[profiles.white_safety_3000]
+description = "Parity-gate leakage proof for the non-dynamics kinematic path"
+obs = "data/PPC-Dataset/tokyo/run2/rover.obs"
+nav = "data/PPC-Dataset/tokyo/run2/base.nav"
+ssr = "/tmp/ppc_clas_baseline/tokyo_run2/ssr/tokyo_run2_expanded.csv"
+ssr_md5 = "bbe8635c3ffb4c044203035393f82dc9"
+out = "/tmp/clas_mrtklib_v051_white3000.pos"
+expected_output_md5 = "de39cae31df186df11c9bd184ef0a198"
+env = [
+  "GNSS_PPP_CLAS_BASE_CLOCK_PARITY",
+  "GNSS_PPP_CLAS_SIS_BOUNDARY",
+  "GNSS_PPP_CLAS_TROP_GRID_PARITY",
+  "GNSS_PPP_CLAS_QZSS_S_PRN_FIX",
+]
+args = [
+  "--kinematic",
+  "--estimate-troposphere",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+  "--enable-ar",
+  "--ar-ratio-threshold", "3.0",
+  "--ar-method", "wlnl",
+  "--clas-osr",
+  "--emit-epoch-time",
+  "--max-epochs", "3000",
+  "--quiet",
+]
+
+[profiles.static_safety]
+description = "Static-path leakage proof; intentionally uses no parity env gates"
+obs = "/tmp/claslib/data/0627239Q.obs"
+nav = "/tmp/claslib/data/sept_2019239.nav"
+ssr = "/tmp/clas_expanded4_final.csv"
+out = "/tmp/clas_mrtklib_v051_static.pos"
+expected_output_md5 = "57012becb3f6c1e16958e00c621dba51"
+env = []
+args = [
+  "--static",
+  "--estimate-troposphere",
+  "--no-ionosphere-free",
+  "--estimate-ionosphere",
+  "--enable-ar",
+  "--ar-ratio-threshold", "2.0",
+  "--clas-osr",
+  "--quiet",
+]

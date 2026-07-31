@@ -1,4 +1,4 @@
-"""Unit tests for ``apps/gnss_dd_residuals_statistics``."""
+"""Unit tests for ``apps/support/gnss_dd_residuals_statistics``."""
 
 from __future__ import annotations
 
@@ -9,10 +9,10 @@ from pathlib import Path
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
-APPS_DIR = ROOT_DIR / "apps"
+APPS_DIR = ROOT_DIR / "apps" / "commands"
 sys.path.insert(0, str(APPS_DIR))
 
-import gnss_dd_residuals_statistics as stats  # noqa: E402
+from support import gnss_dd_residuals_statistics as stats  # noqa: E402
 
 
 def _row(

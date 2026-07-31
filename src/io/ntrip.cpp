@@ -4,10 +4,23 @@
 #include <cerrno>
 #include <cstring>
 #include <iterator>
+
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#pragma comment(lib, "ws2_32.lib")
+#else
 #include <netdb.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#endif
 
 namespace libgnss {
 namespace io {
@@ -16,6 +29,25 @@ namespace {
 
 constexpr uint8_t kRTCMPreamble = 0xD3;
 constexpr size_t kMaxHeaderSize = 8192;
+
+#ifdef _WIN32
+inline void closeSocketFd(int fd) {
+    ::closesocket(static_cast<SOCKET>(fd));
+}
+// One-time Winsock initialization for this translation unit.
+struct WinsockInit {
+    WinsockInit() {
+        WSADATA data;
+        WSAStartup(MAKEWORD(2, 2), &data);
+    }
+    ~WinsockInit() { WSACleanup(); }
+};
+const WinsockInit winsock_init;
+#else
+inline void closeSocketFd(int fd) {
+    ::close(fd);
+}
+#endif
 
 std::string trimSlashes(std::string value) {
     while (!value.empty() && value.front() == '/') {
@@ -123,14 +155,14 @@ bool NTRIPClient::connect(const std::string& host,
     }
 
     for (addrinfo* addr = result; addr != nullptr; addr = addr->ai_next) {
-        socket_fd_ = ::socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
+        socket_fd_ = static_cast<int>(::socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol));
         if (socket_fd_ < 0) {
             continue;
         }
-        if (::connect(socket_fd_, addr->ai_addr, addr->ai_addrlen) == 0) {
+        if (::connect(socket_fd_, addr->ai_addr, static_cast<int>(addr->ai_addrlen)) == 0) {
             break;
         }
-        ::close(socket_fd_);
+        closeSocketFd(socket_fd_);
         socket_fd_ = -1;
     }
     ::freeaddrinfo(result);
@@ -157,7 +189,7 @@ bool NTRIPClient::connect(const std::string& host,
 
 void NTRIPClient::disconnect() {
     if (socket_fd_ >= 0) {
-        ::close(socket_fd_);
+        closeSocketFd(socket_fd_);
         socket_fd_ = -1;
     }
     buffer_.clear();
@@ -250,7 +282,7 @@ bool NTRIPClient::sendRequest(const NTRIPStreamInfo& info) {
     }
     request += "\r\n";
 
-    const ssize_t sent = ::send(socket_fd_, request.data(), request.size(), 0);
+    const auto sent = ::send(socket_fd_, request.data(), static_cast<int>(request.size()), 0);
     if (sent < 0 || static_cast<size_t>(sent) != request.size()) {
         last_error_ = "failed to send NTRIP request";
         return false;
@@ -279,7 +311,8 @@ bool NTRIPClient::readResponseHeader() {
         }
 
         uint8_t chunk[1024];
-        const ssize_t received = ::recv(socket_fd_, chunk, sizeof(chunk), 0);
+        const auto received =
+            ::recv(socket_fd_, reinterpret_cast<char*>(chunk), sizeof(chunk), 0);
         if (received <= 0) {
             last_error_ = "failed to read NTRIP response header";
             return false;
@@ -310,7 +343,7 @@ bool NTRIPClient::receiveIntoBuffer(int timeout_ms) {
     }
 
     uint8_t chunk[4096];
-    const ssize_t received = ::recv(socket_fd_, chunk, sizeof(chunk), 0);
+    const auto received = ::recv(socket_fd_, reinterpret_cast<char*>(chunk), sizeof(chunk), 0);
     if (received <= 0) {
         last_error_ = "NTRIP stream closed";
         disconnect();

@@ -64,15 +64,14 @@ runs:
           ccache
           python3-dev
           pybind11-dev
-          python3-numpy
-          python3-matplotlib
         )
         if [ "${{ inputs.compiler }}" = "clang" ]; then
           packages+=(clang)
         fi
-        sudo apt-get update
-        sudo apt-get install -y "${packages[@]}"
+        sudo apt-get -o Acquire::Retries=3 update
+        sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends "${packages[@]}"
         python -m pip install --upgrade pip
+        python -m pip install numpy matplotlib
         if [ "${{ inputs.install-docs-deps }}" = "true" ]; then
           python -m pip install --user -r requirements-docs.txt
         fi
@@ -116,6 +115,7 @@ runs:
         cmake_args=(
           -B build
           -DCMAKE_BUILD_TYPE=${{ inputs.build-type }}
+          -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF
           "-DCMAKE_C_COMPILER_LAUNCHER=${CMAKE_C_COMPILER_LAUNCHER}"
           "-DCMAKE_CXX_COMPILER_LAUNCHER=${CMAKE_CXX_COMPILER_LAUNCHER}"
         )
@@ -126,4 +126,9 @@ runs:
 
     - name: Build
       shell: bash
-      run: cmake --build build --config "${{ inputs.build-type }}" --parallel
+      run: |
+        if [[ "${{ inputs.os-name }}" == ubuntu* && "${{ inputs.compiler }}" == "gcc" ]]; then
+          cmake --build build --config "${{ inputs.build-type }}" --parallel 2
+        else
+          cmake --build build --config "${{ inputs.build-type }}" --parallel
+        fi

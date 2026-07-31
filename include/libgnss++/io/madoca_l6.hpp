@@ -1,6 +1,9 @@
 #pragma once
 
+#include <libgnss++/algorithms/ppp_env_overrides.hpp>
+
 #include <cstdint>
+#include <iosfwd>
 #include <string>
 #include <vector>
 
@@ -72,6 +75,8 @@ public:
     // Out-of-range satellites return a static empty correction.
     const MadocaSsrCorrection& correction(int sat) const;
 
+    const PPPEnvOverrides& envOverrides() const { return env_overrides_; }
+
     // Clear all decoder and correction state.
     void reset();
 
@@ -114,14 +119,15 @@ private:
     MadocaGtime seed_;                 // week-determination reference epoch
     ChannelState channels_[kMaxPrn];
     MadocaSsrCorrection ssr_[kMaxSat];
+    PPPEnvOverrides env_overrides_;
 };
 
-// Map a MADOCA Compact SSR bias code (an RTKLIB CODE_* enum value, i.e. the
-// 1-based index used by MadocaSsrCorrection::cbias/pbias) to the RTCM SSR signal
-// id that keys SSRProducts code/phase biases (see core/signals.hpp
+// Legacy map from a MADOCA Compact SSR bias code (an RTKLIB CODE_* enum value,
+// i.e. the 1-based index used by MadocaSsrCorrection::cbias/pbias) to the RTCM
+// SSR signal id that keys SSRProducts code/phase biases (see core/signals.hpp
 // rtcmSsrSignalId). Returns 0 when the code has no native RTCM SSR id for the
-// system. Only the per-band representative codes emitted by mcssr_sel_biascode
-// are mapped, so distinct codes never collide on one id.
+// system. Several MADOCA tracking-mode identities intentionally collapse to one
+// RTCM band id on this legacy path.
 std::uint8_t madocaBiasCodeToRtcmSsrId(libgnss::GNSSSystem system, int code);
 
 // Convert the decoder's current per-satellite Compact SSR snapshot into native
@@ -132,6 +138,10 @@ std::uint8_t madocaBiasCodeToRtcmSsrId(libgnss::GNSSSystem system, int code);
 int madocaL6eSnapshotToProducts(const MadocaL6eDecoder& decoder,
                                 libgnss::SSRProducts& products);
 
+// Compact SSR DF389 URA indicator to one-sigma accuracy in meters. Matches
+// MADOCALIB var_urassr() before its configured variance ratio is applied.
+double madocaSsrUraSigmaMeters(int ura_index);
+
 // Decode one or more MADOCA L6E files into a time series of SSR products,
 // driving the decoder byte-for-byte and snapshotting each satellite whenever
 // its orbit or clock correction epoch advances. gps_week seeds the decoder's
@@ -140,5 +150,20 @@ int madocaL6eSnapshotToProducts(const MadocaL6eDecoder& decoder,
 int decodeMadocaL6eFilesToProducts(const std::vector<std::string>& files,
                                    int gps_week,
                                    libgnss::SSRProducts& products);
+
+// Write the materialized native SSRProducts view used by MADOCA PPP. This is a
+// diagnostic boundary dump: it records the satellite key, correction epoch,
+// component reference times, IODs, orbit/clock values, and code/phase bias
+// identities after decoder output has been converted into native products.
+// Returns the number of correction rows written.
+int writeMadocaMaterializationCsv(const libgnss::SSRProducts& products,
+                                  std::ostream& output);
+
+// Decode MADOCA L6E files through the native converter and write the same
+// materialization CSV without running PPP. Returns the number of rows written;
+// <0 means the output file could not be opened.
+int writeMadocaL6eMaterializationCsv(const std::vector<std::string>& files,
+                                     int gps_week,
+                                     const std::string& output_path);
 
 }  // namespace libgnss::io

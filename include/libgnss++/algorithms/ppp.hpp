@@ -6,9 +6,11 @@
 #include "../core/solution.hpp"
 #include "lambda.hpp"
 #include "ppp_ar.hpp"
+#include "ppp_clas_dd.hpp"
 #include "ppp_shared.hpp"
 #include "ppp_clas_sd.hpp"
 #include "ppp_osr_types.hpp"
+#include "../io/madoca_l6d.hpp"
 #include "spp.hpp"
 #include "../iers/eop_table.hpp"
 #include "../iers/tides.hpp"
@@ -40,6 +42,62 @@ struct ReceiverPcvGrid {
     std::vector<double> noazi_m;  // PCV at each zenith node (metres)
 };
 
+struct MadocaL6dShadowStatus {
+    bool snapshot_available = false;
+    bool stale = false;
+    double age_s = 0.0;
+    int region_id = -1;
+    int area_number = 0;
+    int matched_satellites = 0;
+    bool constraint_enabled = false;
+    bool constraint_skipped_position_covariance = false;
+    int constraint_rows = 0;
+    double constraint_horizontal_position_std_m = 0.0;
+    double constraint_vertical_position_std_m = 0.0;
+};
+
+struct PPPConvergenceTelemetry {
+    size_t evaluated_epochs = 0;
+    size_t insufficient_history_epochs = 0;
+    size_t unstable_position_epochs = 0;
+    size_t unstable_horizontal_epochs = 0;
+    size_t unstable_vertical_epochs = 0;
+    size_t window_epochs = 0;
+    size_t required_window_epochs = 0;
+    double max_position_deviation_m = 0.0;
+    double max_horizontal_position_deviation_m = 0.0;
+    double max_vertical_position_deviation_m = 0.0;
+    double position_deviation_threshold_m = 0.0;
+    double horizontal_position_deviation_threshold_m = 0.0;
+    double vertical_position_deviation_threshold_m = 0.0;
+    std::string policy = "legacy-3d";
+    std::string gate_reason = "not_evaluated";
+};
+
+struct PPPConvergenceWindowMetrics {
+    double max_ecef_3d_m = 0.0;
+    double max_horizontal_m = 0.0;
+    double max_vertical_m = 0.0;
+};
+
+struct PPPARStageTelemetry {
+    size_t per_frequency_attempts = 0;
+    size_t insufficient_satellite_epochs = 0;
+    size_t no_wide_lane_epochs = 0;
+    size_t wide_lane_only_epochs = 0;
+    size_t n1_lambda_failure_epochs = 0;
+    size_t n1_ratio_rejection_epochs = 0;
+    size_t n1_fixed_epochs = 0;
+    int last_satellite_candidates = 0;
+    int last_wide_lane_pairs = 0;
+    int last_n1_candidates = 0;
+    double last_n1_ratio = 0.0;
+    std::string last_stage = "not_attempted";
+};
+
+PPPConvergenceWindowMetrics evaluatePPPConvergenceWindow(
+    const std::vector<Vector3d>& positions_ecef);
+
 /**
  * @brief Precise Point Positioning (PPP) processor
  *
@@ -65,7 +123,10 @@ public:
     /**
      * @brief Set PPP configuration
      */
-    void setPPPConfig(const PPPConfig& config) { ppp_config_ = config; }
+    void setPPPConfig(const PPPConfig& config) {
+        ppp_config_ = config;
+        applyEnvironmentOverridesToPPPConfig();
+    }
     
     /**
      * @brief Get PPP configuration
@@ -92,6 +153,24 @@ public:
      * were produced. Distinct from loadL6Products (CLAS-oriented decoder).
      */
     bool loadMadocaL6Products(const std::vector<std::string>& l6_files);
+
+    // Load receiver-specific L6D ionosphere snapshots. They remain
+    // measurement-neutral unless PPPConfig::apply_madoca_l6d_ionosphere is
+    // explicitly enabled.
+    bool loadMadocaL6dProducts(const std::vector<std::string>& l6d_files,
+                               const double reference_epoch[6],
+                               const double receiver_ecef[3]);
+    void setMadocaIonoProductsForShadow(const io::MadocaIonoProducts& products) {
+        madoca_iono_products_ = products;
+    }
+    MadocaL6dShadowStatus inspectMadocaL6dShadow(
+        const std::vector<SatelliteId>& satellites,
+        const GNSSTime& time,
+        double max_age_s = 300.0) const;
+    const MadocaL6dShadowStatus& getLastMadocaL6dShadowStatus() const {
+        return last_madoca_l6d_shadow_status_;
+    }
+    bool hasLoadedMadocaL6dProducts() const { return !madoca_iono_products_.empty(); }
 
     /**
      * @brief Load IONEX ionosphere products for future PPP hooks.
@@ -213,14 +292,24 @@ public:
      * @brief Get convergence time
      */
     double getConvergenceTime() const { return convergence_time_; }
+    const PPPConvergenceTelemetry& getConvergenceTelemetry() const {
+        return convergence_telemetry_;
+    }
+    const PPPARStageTelemetry& getARStageTelemetry() const {
+        return ar_stage_telemetry_;
+    }
 
 private:
+    void applyEnvironmentOverridesToPPPConfig();
+
     PPPConfig ppp_config_;
+    PPPEnvOverrides env_overrides_;
     SPPProcessor spp_processor_;  ///< Fallback SPP processor
     PreciseProducts precise_products_;
     SSRProducts ssr_products_;
     IONEXProducts ionex_products_;
     DCBProducts dcb_products_;
+    io::MadocaIonoProducts madoca_iono_products_;
     
     PPPState filter_state_;
     bool filter_initialized_ = false;
@@ -232,8 +321,11 @@ private:
     std::vector<Vector3d> recent_positions_;
     GNSSTime last_processed_time_;
     bool has_last_processed_time_ = false;
+    int last_clas_atmos_network_id_ = -1;
+    bool has_last_clas_atmos_network_id_ = false;
     bool precise_products_loaded_ = false;
     bool ssr_products_loaded_ = false;
+    bool require_coherent_ssr_ = false;
     bool ionex_products_loaded_ = false;
     bool dcb_products_loaded_ = false;
     struct OceanLoadingCoefficients {
@@ -260,6 +352,10 @@ private:
     bool has_static_anchor_position_ = false;
     double last_ar_ratio_ = 0.0;
     int last_fixed_ambiguities_ = 0;
+    bool last_ar_wide_lane_only_ = false;
+    bool madoca_first_n1_confirmation_pending_ = false;
+    PPPConvergenceTelemetry convergence_telemetry_;
+    PPPARStageTelemetry ar_stage_telemetry_;
     int last_applied_atmos_trop_corrections_ = 0;
     int last_applied_atmos_iono_corrections_ = 0;
     double last_applied_atmos_trop_m_ = 0.0;
@@ -268,6 +364,9 @@ private:
     int last_applied_dcb_corrections_ = 0;
     double last_applied_ionex_m_ = 0.0;
     double last_applied_dcb_m_ = 0.0;
+    MadocaL6dShadowStatus last_madoca_l6d_shadow_status_;
+    Matrix3d previous_solution_position_covariance_ = Matrix3d::Zero();
+    bool has_previous_solution_position_covariance_ = false;
     bool last_clas_hybrid_fallback_used_ = false;
     std::string last_clas_hybrid_fallback_reason_;
     
@@ -277,18 +376,76 @@ public:
 
 private:
     std::map<SatelliteId, PPPAmbiguityInfo> ambiguity_states_;
+    std::map<SatelliteId, std::set<SignalType>>
+        pending_ambiguity_frequency_resets_;
     std::map<SatelliteId, CLASDispersionCompensationInfo> clas_dispersion_compensation_;
     std::map<SatelliteId, CLASSisContinuityInfo> clas_sis_continuity_;
 
     // Pre-anchor covariance saved for DD-AR position correction
     Eigen::MatrixXd pre_anchor_covariance_;
     bool had_fixed_last_epoch_ = false;  ///< AR succeeded in previous epoch
+    int clas_kinematic_fix_candidate_streak_ = 0;
+    int clas_kinematic_spp_divergence_count_ = 0;
+    // Diagnostic-only (CLAS-HOLDCONT-DBG): consecutive epochs in a row with
+    // clas_baseline_seed_maxdiff_this_epoch true, independent of/simpler than
+    // clas_kinematic_spp_divergence_count_ above (different seed-selection
+    // basis; see the maxdiff-only hold-continuation carve-out). Not read by
+    // any gating logic.
+    int clas_maxdiff_consecutive_streak_epochs_ = 0;
+    // MRTKLIB clas.toml float_count=15: consecutive PPP-FLOAT epochs before
+    // the kinematic CLAS filter is reinitialized from the current SPP seed.
+    int clas_mrtklib_float_count_ = 0;
+    int clas_seed_ar_quarantine_epochs_ = 0;
+    // The CSV correction store is precomposed, while MRTKLIB's L6 decoder
+    // starts empty and needs one 15 s CSSR cycle before CLAS OSR is usable.
+    bool has_clas_mrtklib_stream_start_time_ = false;
+    GNSSTime clas_mrtklib_stream_start_time_;
+    // Per-epoch analogue of MRTKLIB ssat[].vsat[f]: ambiguity states whose
+    // carrier row did not survive the final post-fit residual selection must
+    // not enter ddmat/LAMBDA in this epoch.
+    std::set<SatelliteId> clas_mrtklib_ar_rejected_ambiguities_;
+    ppp_ar::WlnlHoldState clas_wlnl_hold_;
+    // Current accepted ddmat/LAMBDA rows, carried to the post-fix chi-square
+    // gate so holdamb parity does not reconstruct participants from stale
+    // ambiguity flags.
+    std::vector<ppp_ar::WlnlHoldConstraint> clas_wlnl_candidate_hold_constraints_;
+    // MRTKLIB estpos() writes rtk->sol.rr before valsol(), but admitting that
+    // validation-rejected candidate into native's filter regresses the
+    // six-run gate. Keep the last admitted SPP seed separate from both filter
+    // publications and the bounded rejected-candidate output tracker below.
+    PositionSolution clas_last_valid_spp_seed_;
+    bool has_clas_last_valid_spp_seed_ = false;
+    // Output-only continuity tracker for validation-rejected SPP candidates.
+    // These candidates never initialize or reset the PPP filter.
+    Vector3d clas_last_rejected_output_position_ecef_ = Vector3d::Zero();
+    GNSSTime clas_last_rejected_output_time_;
+    bool has_clas_last_rejected_output_ = false;
+    Vector3d last_published_solution_position_ecef_ = Vector3d::Zero();
+    bool has_last_published_solution_position_ = false;
+    // Anchors MRTKLIB rtk->sol.time's role in tt (=timediff) computation
+    // (mrtk_rtkpos.c ~2395-2416): a failure before estpos() converges leaves
+    // sol.time unchanged, while a later valsol() chi-square failure retains
+    // the current time. In dynamics mode an early failure falls through
+    // with tt==0 for that epoch and the accumulated gap is applied once a
+    // usable current candidate returns. On the
+    // kinematic CLAS parity path (ppp_clas_epoch.cpp), the redundancy/jump
+    // guards on the SPP seed are this port's equivalent of pntpos()
+    // rejecting a position. Native deliberately keeps its existing filter
+    // lifecycle here: this anchor advances only for an admitted seed, while
+    // rejected candidates can be used by the separate output-only tracker --
+    // independent of last_processed_time_,
+    // which keeps advancing every epoch for its other (non-parity) uses.
+    GNSSTime clas_last_accepted_seed_time_;
+    bool has_clas_last_accepted_seed_time_ = false;
     std::map<SatelliteId, double> windup_cache_;  ///< Phase wind-up cache for OSR
     std::map<SatelliteId, int> est_stec_outage_;   ///< Epochs since last seen (est-stec pruning)
     std::map<SatelliteId, std::map<uint8_t, int>> prev_phase_bias_discnt_;  ///< Last-seen SSR phase-bias discontinuity counters (GNSS_PPP_SSR_DISCNT_SLIP)
     std::map<SatelliteId, CLASPhaseBiasRepairInfo> clas_phase_bias_repair_;
     ppp_clas_sd::SdFilterState clas_sd_state_;  ///< Clock-free SD filter
     ppp_clas_sd::DdAmbAccumulator clas_dd_accumulator_;  ///< Multi-epoch DD amb accumulator
+    std::unique_ptr<ppp_clas_dd::DdFilterScaffold> clas_dd_filter_;
+    PPPState last_clas_constrained_fixed_state_;
+    bool last_clas_constrained_fixed_state_valid_ = false;
     int last_obs_gps_week_ = 0;  ///< GPS week from latest observation (for L6 decode)
 
     // Statistics
@@ -313,21 +470,63 @@ private:
      * @brief Predict filter state
      */
     void predictState(double dt, const PositionSolution* seed_solution = nullptr);
+
+    struct IonosphereFreeObs;
     
     /**
      * @brief Update filter with measurements
      */
-    bool updateFilter(const ObservationData& obs, const NavigationData& nav);
+    bool updateFilter(const ObservationData& obs, const NavigationData& nav,
+                      double dt, bool apply_iono_prediction = true);
+
+    void updateMadocaPerFrequencyIonospherePrediction(
+        const std::vector<IonosphereFreeObs>& observations, double dt);
+
+    bool hasEnoughCoherentSsrObservations(const ObservationData& obs,
+                                          const NavigationData& nav);
     
     /**
      * @brief Form ionosphere-free combinations
      */
     struct IonosphereFreeObs {
+        struct AdditionalFrequencyObs {
+            int ordinal = 2;
+            SignalType signal = SignalType::SIGNAL_TYPE_COUNT;
+            std::string observation_type;
+            std::string pseudorange_observation_type;
+            std::string carrier_phase_observation_type;
+            int pseudorange_rtklib_code = 0;
+            int carrier_phase_rtklib_code = 0;
+            double pseudorange = 0.0;
+            double carrier_phase = 0.0;
+            double wavelength = 0.0;
+            double frequency = 0.0;
+            double variance_pr = 0.0;
+            double variance_cp = 0.0;
+            double code_bias_m = 0.0;
+            double phase_bias_m = 0.0;
+            double rx_ant_corr_m = 0.0;
+            bool has_carrier_phase = false;
+            bool valid = false;
+        };
         SatelliteId satellite;
         SignalType primary_signal = SignalType::SIGNAL_TYPE_COUNT;
         SignalType secondary_signal = SignalType::SIGNAL_TYPE_COUNT;
+        std::string primary_observation_type;
+        std::string secondary_observation_type;
+        std::string primary_pseudorange_observation_type;
+        std::string primary_carrier_phase_observation_type;
+        std::string secondary_pseudorange_observation_type;
+        std::string secondary_carrier_phase_observation_type;
+        int primary_pseudorange_rtklib_code = 0;
+        int primary_carrier_phase_rtklib_code = 0;
+        int secondary_pseudorange_rtklib_code = 0;
+        int secondary_carrier_phase_rtklib_code = 0;
         double primary_code_bias_coeff = 1.0;
         double secondary_code_bias_coeff = 0.0;
+        double primary_frequency_hz = 0.0;
+        double secondary_frequency_hz = 0.0;
+        int glonass_frequency_channel = -99;
         double pseudorange_if = 0.0;
         double carrier_phase_if = 0.0;
         double pseudorange_code_bias_m = 0.0;
@@ -354,6 +553,11 @@ private:
         double ambiguity_scale_m = 0.0;
         double atmospheric_trop_correction_m = 0.0;
         double atmospheric_iono_correction_m = 0.0;
+        double ssr_orbit_age_s = -1.0;
+        double ssr_clock_age_s = -1.0;
+        int ssr_orbit_iod = -1;
+        int ssr_clock_iod = -1;
+        int ssr_orbit_iode = -1;
         std::map<std::string, std::string> ssr_atmos_tokens;
         bool has_carrier_phase = false;
         bool valid = false;
@@ -385,6 +589,7 @@ private:
         bool has_iono_init = false;
         bool has_l2 = false;
         bool has_carrier_phase_l2 = false;
+        std::vector<AdditionalFrequencyObs> additional_frequencies;
         // Wet mapping function and a priori zenith hydrostatic delay for the
         // RTKLIB-style split trop model (est-stec): trop = m_h*ZHD + m_w*(ZTD-ZHD).
         double trop_mapping_wet = 0.0;
@@ -409,11 +614,17 @@ private:
     // available. Sign matches RTKLIB antmodel(): the value is added to the
     // modeled range (equivalently subtracted from the observable).
     double receiverAntennaPcvMeters(SignalType signal, double elevation_rad) const;
+    double clasReceiverAntennaRangeCorrectionMeters(
+        SignalType signal,
+        double azimuth_rad,
+        double elevation_rad) const;
+    void materializeClasReceiverAntennaCorrections(
+        std::vector<OSRCorrection>& osr_corrections) const;
 
     /**
      * @brief Detect cycle slips
      */
-    void detectCycleSlips(const ObservationData& obs);
+    void detectCycleSlips(const ObservationData& obs, const NavigationData& nav);
 
     /**
      * @brief Ensure ambiguity states exist for valid carrier-phase observations.
@@ -439,6 +650,11 @@ private:
      * @brief Get or create the per-frequency L2 ambiguity state (est-stec only).
      */
     int getOrCreateAmbiguityStateL2(const IonosphereFreeObs& observation);
+    int getOrCreateAdditionalAmbiguityState(
+        const IonosphereFreeObs& observation,
+        const IonosphereFreeObs::AdditionalFrequencyObs& frequency);
+    int getOrCreateReceiverFrequencyBiasState(const SatelliteId& satellite,
+                                              int frequency_ordinal);
 
     /**
      * @brief Get or create the per-satellite ionosphere (STEC) state, seeded
@@ -471,7 +687,8 @@ private:
         const NavigationData& nav,
         const Vector3d& receiver_position,
         double clock_bias_m,
-        double trop_zenith) const;
+        double trop_zenith,
+        bool include_single_frequency = false) const;
     bool buildWlnlNlInfoForSatellite(
         const ObservationData& obs,
         const NavigationData& nav,
@@ -574,12 +791,31 @@ private:
         VectorXd residuals;
         std::vector<SatelliteId> row_satellites;  ///< Satellite for each row
         std::vector<bool> row_is_phase;           ///< true=carrier phase, false=code
+        std::vector<double> row_elevations;        ///< Elevation angle in radians
+        std::vector<double> row_azimuths;          ///< Azimuth angle in radians
+        std::vector<SignalType> row_signals;       ///< Signal identity for each row
+        std::vector<std::string> row_signal_bands; ///< IF/L1/L2 label for each row
+        std::vector<std::string> row_rinex_codes;
+        std::vector<int> row_rtklib_codes;
+        std::vector<std::string> row_signal_families;
+        std::vector<int> row_glonass_frequency_channels;
+        std::vector<double> row_primary_frequencies_hz;
+        std::vector<double> row_secondary_frequencies_hz;
+        std::vector<double> row_primary_if_coefficients;
+        std::vector<double> row_secondary_if_coefficients;
+        std::vector<double> row_ssr_orbit_ages_s;
+        std::vector<double> row_ssr_clock_ages_s;
+        std::vector<int> row_ssr_orbit_iods;
+        std::vector<int> row_ssr_clock_iods;
+        std::vector<int> row_ssr_orbit_iodes;
     };
     
     MeasurementEquation formMeasurementEquations(
         const std::vector<IonosphereFreeObs>& observations,
         const NavigationData& nav,
-        const GNSSTime& time);
+        const GNSSTime& time,
+        bool apply_outlier_detection = true,
+        bool include_external_constraints = true);
     
     /**
      * @brief Check convergence
@@ -606,6 +842,14 @@ private:
      * @brief Reset ambiguity for satellite
      */
     void resetAmbiguity(const SatelliteId& satellite, SignalType signal);
+    void resetMadocaAmbiguityFrequencies(
+        const SatelliteId& satellite,
+        SignalType primary_signal,
+        const std::set<SignalType>& slipped_nonprimary_signals);
+    bool ambiguityFrequencyNeedsReset(
+        const SatelliteId& satellite, SignalType signal) const;
+    void completeAmbiguityFrequencyReset(
+        const SatelliteId& satellite, SignalType signal);
 
     void reinitializeVectorState(int start_index, const Vector3d& value, double variance);
     void reinitializeScalarState(int index, double value, double variance);

@@ -1,0 +1,605 @@
+# CLAS DD Filter A5 Parity Closure
+
+This pass is a STOP report rather than a model change.  The highest-value
+tractable lead was QZSS remap, but the CLASLIB comparison shows that admitting
+`S120..S122` as `J01..J03` exposes an upstream OSR correction mismatch rather
+than a DD row-construction bug.  No default-path or gate-on accuracy behavior was
+changed.
+
+Gate-on is therefore not ready for the A5 default flip under #161.
+
+## Verification Baseline
+
+Run: 2019-08-27 CLAS, `--ar-ratio-threshold 2.0`, compared with
+`/tmp/s31_ref/claslib_oracle_xyz_full.pos`.  Solution X/Y/Z are `.pos` columns
+3-5; fixed epochs use `FixedAmbiguities` column 13 > 0.
+
+| Path | Fixed epochs | Fixed 3D mean | Fixed Up mean | All-epoch 3D mean |
+| --- | ---: | ---: | ---: | ---: |
+| A4#2 entry | 1067 | 1.122978 m | 0.353088 m | 1.007274 m |
+| A5 safe tree | 1067 | 1.122978 m | 0.353088 m | 1.007274 m |
+| Native fixed parity target | - | ~0.935 m | - | - |
+| CLASLIB target | - | ~0.06 m | - | - |
+
+Reject split from `/tmp/a5_check_clas_dd_diag.csv`:
+
+| Reject reason | Split | Count |
+| --- | --- | ---: |
+| `fixed` | accepted | 1067 |
+| `postfit_dd_residual` | no worst-row split recorded | 969 |
+| `ratio` | ratio gate | 932 |
+| `insufficient_ambiguities` | ambiguity count | 553 |
+| `postfit_rms` | `m0 f1` GPS/native L2 | 69 |
+| `postfit_max` | `m0 f1` GPS/native L2 | 8 |
+| `postfit_rms` | `m0 f0` GPS L1 | 1 |
+
+## Lead 1 - GPS L2W Identity
+
+CLASLIB's GPS `f1` DD rows use RTKLIB code `20` (`L2W`/`C2W`).  At the common
+230425 epoch, `/tmp/a4_claslib_dd_rows_codes.csv` has GPS `m=0,freq=1` rows with
+`ref_code=sat_code=20`; examples:
+
+| Row | CLASLIB ref > target | Type | Residual |
+| --- | --- | --- | ---: |
+| 5 | 14 > 25 | phase | -0.008342690570 m |
+| 15 | 14 > 25 | code | 0.079478304651 m |
+| 19 | 14 > 32 | code | 0.010024597729 m |
+
+The native OSR/component dump at the same epoch labels the GPS L2 rows as
+`signal=3`, the collapsed `SignalType::GPS_L2C` identity, even when the RINEX
+observation type is C2W/L2W:
+
+| Native sample | Frequency | Signal | Component |
+| --- | ---: | ---: | ---: |
+| G14 code | 1 | 3 | `PRC=0.552408556406` |
+| G25 code | 1 | 3 | `PRC=10.719942900064` |
+| G14 phase | 1 | 3 | `CPC=4.948411342899` |
+| G25 phase | 1 | 3 | `CPC=-2.501550299340` |
+
+This cannot be fixed faithfully inside `ppp_clas_dd.cpp`: the DD builder can only
+request observations by `SignalType`, and the epoch store has already collapsed
+GPS band 2 to `GPS_L2C`.  A safe fix needs a shared, default-bit-exact design that
+preserves GPS C2W/L2W identity through RINEX observation selection, OSR bias and
+antenna lookup, WL/NL, and DD row building.  A gate-only DD tweak would still use
+the wrong raw observation key and would be a model alias, not parity.
+
+## Lead 2 - QZSS PRC/CPC Residual Parity
+
+With explicit `GNSS_PPP_CLAS_QZSS_S_PRN_FIX=1`, native row topology matches
+CLASLIB's QZSS reference choice at 230425: J02 is the reference and J01/J03 are
+targets on L1 and L2.  The residuals do not match.
+
+CLASLIB DD rows from `/tmp/a4_claslib_dd_rows_codes.csv`:
+
+| Row | CLASLIB ref > target | Type | Freq | Residual |
+| --- | --- | --- | ---: | ---: |
+| 24 | J02 > J01 | phase | 0 | -0.003311505300 m |
+| 25 | J02 > J03 | phase | 0 | 0.004681515684 m |
+| 26 | J02 > J01 | phase | 1 | -0.014786717596 m |
+| 27 | J02 > J03 | phase | 1 | -0.007062330676 m |
+| 28 | J02 > J01 | code | 0 | -0.489158532707 m |
+| 29 | J02 > J03 | code | 0 | -0.153980115389 m |
+| 30 | J02 > J01 | code | 1 | 0.058317956512 m |
+| 31 | J02 > J03 | code | 1 | 0.313130616906 m |
+
+Native DD rows from a temporary row probe with
+`GNSS_PPP_CLAS_DD_FILTER=1 GNSS_PPP_CLAS_QZSS_S_PRN_FIX=1`:
+
+| Native stage | Native ref > target | Type | Freq | Residual |
+| --- | --- | --- | ---: | ---: |
+| prefit | J02 > J01 | code | 0 | -7.644313218630 m |
+| prefit | J02 > J03 | code | 0 | -6.766124047531 m |
+| prefit | J02 > J01 | phase | 0 | 8.084038047135 m |
+| prefit | J02 > J03 | phase | 0 | 7.503420391175 m |
+| prefit | J02 > J01 | code | 1 | -13.557480467596 m |
+| prefit | J02 > J03 | code | 1 | -10.581925403847 m |
+| prefit | J02 > J01 | phase | 1 | 13.209885538428 m |
+| prefit | J02 > J03 | phase | 1 | 11.803313726309 m |
+| postfit | J02 > J01 | phase | 0 | 1.132620151406 m |
+| postfit | J02 > J03 | phase | 0 | 1.159074998545 m |
+| postfit | J02 > J01 | phase | 1 | 1.776547525946 m |
+| postfit | J02 > J03 | phase | 1 | 1.445458916695 m |
+
+The component dumps explain why automatic remap still worsens the oracle result.
+CLASLIB has nonzero QZSS bias and antenna terms:
+
+| CLASLIB sat | Freq | PRC | CPC | L1 iono | Phase bias | Code bias | Receiver ant |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| J01 | 0 | 3.789371397254 | 5.364220448267 | -1.299466527107 | -0.425999999046 | 0.000000000000 | -0.054425941737 |
+| J01 | 1 | 5.470865926566 | 5.481619447307 | -1.299466527107 | -0.953000009060 | 2.339999914169 | -0.057853936632 |
+| J02 | 0 | 5.254326729746 | 0.400651602189 | 3.358765603601 | 0.370999991894 | 0.000000000000 | -0.086889480078 |
+| J02 | 1 | 7.862920437506 | -1.168542003417 | 3.358765603601 | 0.495000004768 | 0.920000016689 | -0.091491696104 |
+| J03 | 0 | 6.959985942442 | 3.457236432554 | 3.372070618832 | 1.730000019073 | 0.000000000000 | -0.061036169481 |
+| J03 | 1 | 9.416675272577 | -2.437588956221 | 3.372070618832 | -2.467999935150 | 0.759999990463 | -0.064249962117 |
+
+Native QZSS components at the same epoch have zero QZSS code/phase bias and zero
+receiver antenna terms, plus different STEC/PRC/CPC values:
+
+| Native sat | Freq | Signal | PRC | CPC | L1 iono | Code bias | Phase bias | Receiver ant |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| J01 | 0 | 18 | -1.611013831296 | 11.198163480636 | -6.362446855882 | 0 | 0 | 0 |
+| J01 | 1 | 19 | -5.727163477782 | 15.338193480503 | -6.362446855882 | 0 | 0 | 0 |
+| J02 | 0 | 18 | 7.726374369924 | -2.388152604420 | 5.061142288767 | 0 | 0 | 0 |
+| J02 | 1 | 19 | 11.000652256185 | -5.660232503110 | 5.061142288767 | 0 | 0 | 0 |
+| J03 | 0 | 18 | 1.840911616063 | 6.668529936110 | -2.457599675458 | 0 | 0 | 0 |
+| J03 | 1 | 19 | 0.250981159358 | 8.233645767403 | -2.457599675458 | 0 | 0 | 0 |
+
+The input expansion also shows the issue before interpolation: near 230400 the
+`S121`/`S122` rows carry atmosphere fields but no `cbias:`/`pbias:` tokens, while
+the GPS/Galileo rows in the same network carry bias tokens.  The next fix belongs
+in CLAS compact expansion or OSR correction materialization, not in DD row
+selection.  Do not auto-enable `GNSS_PPP_CLAS_QZSS_S_PRN_FIX` until the QZSS
+native PRC/CPC components match CLASLIB at the ZD level.
+
+## Lead 3 - Galileo ZD Admission
+
+### P3.1 closure update (2026-07-14)
+
+The canonical CLASLIB exporter now includes Galileo E1X (RTKLIB code 12) and
+E5a-X (code 26), so the full 3580-epoch A4b surface is measured directly rather
+than inferred from DD rows.  The first native-only E30 boundary at TOW 233490
+was traced to CLASLIB's explicit `no ssr clock correction`: the expanded stream
+contains a finite clock followed by a same-epoch `nan` cell from a newer bank.
+Native CSV ingest previously discarded that invalid cell and held the older
+clock.
+
+`SSROrbitClockCorrection::clock_withdrawn` and
+`SSRCorrectionStatus::clock_withdrawn` now preserve that event.  Galileo uses it
+only under the typed CLAS ZD/literal parity paths; ordinary merged interpolation
+keeps its historical behavior.  The authoritative artifacts are:
+
+- `output/clas_p3_galileo_clock_withdrawal_final_3580/galileo_code_diff.json`
+- `output/clas_p3_galileo_clock_withdrawal_final_3580/galileo_phase_diff.json`
+
+Both code and phase now have 15,640 oracle rows, 15,640 native rows, 15,640
+common rows, and zero unmatched rows.  This closes the Galileo ZD admission
+surface.
+
+The subsequent P3.3 IODE audit found that CLASLIB `eph2pos()` uses Galileo's
+`MU_GAL=3.986004418e14`, while native continuity compensation left the existing
+RTKLIB-compatible Galileo-mu switch disabled and therefore introduced false
+0.2--0.4 m ephemeris discontinuities.  Recomputing only the old/current IODE
+continuity models with Galileo mu preserves shared/MADOCA propagation while
+reducing the full-run metrics as follows:
+
+| Metric | Before | After |
+| --- | ---: | ---: |
+| PRC RMS | 22.289 mm | 2.300 mm |
+| CPC RMS | 22.386 mm | 1.648 mm |
+| IODE geometry RMS | 22.334 mm | 0.672 mm |
+| IODE geometry max | 391.117 mm | 2.371 mm |
+
+The authoritative joint GPS/QZSS/Galileo post-fix artifacts are under
+`output/clas_p3_zd_profile_mu_final_3580/`; the component-only IODE figures are
+retained under `output/clas_p3_galileo_mu_final_3580/`. Galileo has 15,640
+common code and phase rows, zero unmatched rows, and clears the 10 mm ZD RMS
+gate, so P3 numeric closure is complete. Sparse 40 mm code-bias and 24--26 mm
+SIS-continuity bank boundaries remain diagnostic leads for P4/P5. A trial that
+treated the service-network id as a direct code-bias bank id was rejected
+(code-bias RMS regressed from 1.677 mm to 8.741 mm) and is not part of the
+implementation.
+
+### P4 DD measurement contract update (2026-07-14)
+
+The native DD scaffold and an instrumented CLASLIB work copy now emit the same
+`clas_dd_measurement.v3` CSV contract. Instrumentation is applied only to the
+runner checkout or to a copied user source, never to the configured source
+tree. `scripts/analysis/clas_dd_measurement_diff.py` keys rows by week/TOW,
+stage, system group, frequency, phase/code, reference satellite, and target
+satellite; duplicates and any one-sided rows fail the gate.
+
+On the five-epoch contract probe, the first comparison isolated Galileo E5a as
+CLASLIB DD slot 2 versus native slot 1. Explicit Galileo DD frequency mapping
+closes the row surface at 160/160, with 80 phase and 80 code rows and zero
+unmatched rows. The current prefit-residual baseline remains 0.624 m phase RMS
+and 1.316 m code RMS, so P4 remains open. Evidence is under
+`output/clas_dd_contract_v2_probe_5/`; per-system/frequency metrics identify the
+next state/linearization investigation without conflating this baseline with a
+passing parity claim.
+
+A4#2 admits the native Galileo row subset visible at 230425:
+
+```
+m2f0C=2;m2f0P=2;m2f1C=2;m2f1P=2
+m2f0C=E27;m2f0P=E27;m2f1C=E27;m2f1P=E27
+```
+
+CLASLIB still has a different Galileo frequency surface at the same epoch.  In
+`/tmp/a4_claslib_dd_rows_codes.csv`, the Galileo-like group has `freq=0` and
+`freq=2` rows:
+
+| Row | Group | Ref sat | Target sat | Type | Freq | Code | Residual |
+| --- | ---: | ---: | ---: | --- | ---: | ---: | ---: |
+| 20 | 3 | 59 | 39 | phase | 0 | 12 | 0.006493092184 m |
+| 21 | 3 | 59 | 39 | phase | 2 | 26 | 0.008112591655 m |
+| 22 | 3 | 59 | 39 | code | 0 | 12 | 0.015709226291 m |
+| 23 | 3 | 59 | 39 | code | 2 | 26 | 0.019745366191 m |
+
+The broad broadcast-clock guard tried during A4 admitted the missing epoch-local
+target but missed the all-epoch oracle bar.  The required A5 work is a targeted
+CLASLIB-valid ZD admission source: preserve which Galileo ZD rows CLASLIB admits,
+then map the native frequency slot to CLASLIB `f2` only when that ZD source says
+the satellite/signal is valid.  A broad clock heuristic is not safe enough for the
+default flip.
+
+## Decision
+
+No safe improvement was reachable without changing shared observation/correction
+identity or enabling QZSS rows that are known to be wrong at the component level.
+The safe A5 tree remains bit-exact gate-off and numerically identical to A4#2
+gate-on.
+
+Next phase should start outside the DD translation unit:
+
+1. Add a default-bit-exact GPS L2W identity design that preserves C2W/L2W through
+   RINEX selection, SSR bias id 9, antenna lookup, WL/NL, and DD.
+2. Fix QZSS CLAS compact bias and STEC materialization until native ZD PRC/CPC
+   matches CLASLIB before remap is considered automatic.
+3. Build a CLASLIB-valid Galileo ZD admission source, then re-test the `f2`
+   frequency-slot parity with the all-epoch oracle.
+
+The first diagnostic artifact for that phase is
+`scripts/analysis/clas_zd_component_diff.py`.  It compares native CLAS
+zero-difference component CSV dumps, such as `GNSS_PPP_CLAS_CODE_DUMP`, against a
+CLASLIB-side component dump and writes a `clas_zd_component_diff.v1` JSON report
+plus optional component-delta CSV.  The tool intentionally changes no solver
+model; it is the gate for classifying PRC, CPC, ionosphere, bias, antenna,
+wind-up, and related component deltas before any GPS L2W, QZSS, or Galileo model
+change is attempted.
+
+The optional CI wrapper `scripts/ci/run_optional_clas_zd_component_diff.py`
+runs that comparison when `GNSSPP_CLAS_ZD_BASE_CSV` and
+`GNSSPP_CLAS_ZD_CANDIDATE_CSV` point at generated CLASLIB/native component
+dumps.  It writes `ci_optional_clas_zd_component_summary.json`, a log, and the
+`clas_zd_component_diff.{json,csv}` artifacts, plus
+`clas_zd_component_summary.v2` JSON for both CLASLIB and native input snapshots.
+In GitHub Actions, the CLAS A4b native self-diff step runs first and exposes its
+public-data `native_code_dump.csv` as `GNSSPP_CLAS_ZD_NATIVE_CSV`; if
+`GNSSPP_CLAS_ZD_CANDIDATE_CSV` is unset, the optional ZD diff uses that generated
+native dump as the candidate side.  The CLASLIB-side normalized base CSV remains
+an explicit input until the CLASLIB oracle dump itself is generated in CI.
+The input summaries validate row keys, observation identity, duplicate groups,
+and component presence before any deltas are compared.  When those inputs are
+absent, the CI step records `status: blocked_infrastructure` with next actions
+instead of silently treating the missing oracle/native evidence as a passing
+sign-off.  The workflow upload treats the summary/log bundle as required
+evidence.  The `ci_optional_clas_zd_component_diff.v7` and later summaries surface
+the global largest component delta, the top ZD row's dominant component, and a
+per-component max-delta map, so the next A4b model PR can be scoped to one
+correction component instead of tuning final solution RMS.  The
+`ci_optional_clas_zd_component_diff.v11` and later summaries also carry top-row values for
+highlighted components. Present-on-both components, such as `stec_tecu`,
+`iono_l1_m`, `iono_scaled_m`, `code_bias_m`, and `trop_correction_m`, include
+CLASLIB/native/delta values; present-on-one-side components still expose native
+`atmos_ref_tow`, `clock_ref_tow`, `code_bias_ref_tow`, and
+`atmos_clock_gap_s` when CLASLIB has no comparable reference-epoch columns.
+Native code dumps also include selected
+CLAS atmosphere network/grid provenance (`atmos_network_id`, `atmos_grid_no`,
+`atmos_grid*_no`, and `atmos_grid*_weight`) so A4b STEC differences can be
+separated into correction-value versus grid-weight selection issues.
+`ci_optional_clas_zd_component_diff.v12` extends the highlighted evidence to
+those grid provenance columns when the CLASLIB-side normalized dump provides
+them. `ci_optional_clas_zd_component_diff.v13` adds native code-bias reference
+TOW so GPS L2W code-bias bank timing can be diagnosed independently from the
+clock reference epoch.
+Optional filters are `GNSSPP_CLAS_ZD_COMPONENTS`, `GNSSPP_CLAS_ZD_STAGE`,
+`GNSSPP_CLAS_ZD_ROW_TYPE`, `GNSSPP_CLAS_ZD_THRESHOLD_M`, and
+`GNSSPP_CLAS_ZD_FAIL_ON_DIFF`.  GPS L2W A4b probes can also narrow the row set
+with `GNSSPP_CLAS_ZD_SAT`, `GNSSPP_CLAS_ZD_FREQ`, and
+`GNSSPP_CLAS_ZD_RINEX_CODE`, matching the analysis script's `--sat`, `--freq`,
+and `--rinex-code` filters.  CLASLIB dumps can contain repeated rows for the
+same ZD key, so `GNSSPP_CLAS_ZD_DUPLICATE_POLICY` maps to
+`--duplicate-policy`; use `mean` for A4b slice summaries and `fail` when a
+sign-off must reject ambiguous row keys.
+
+CLASLIB-side disposable dumps must first be normalized with
+`scripts/analysis/claslib_zd_component_export.py`.  That export step converts
+numeric CLASLIB `sys`/`prn`/RTKLIB `code` fields into the native row-key space
+(`G14`, `J01`, `E07`, `C2W`, `L2W`, and related exact RINEX identities) without
+linking CLASLIB into the production binaries.  Unmodified CLASLIB `.osr`
+`OSRRES(ch*)` output is also accepted for the current A4b GPS L2W probe: pass
+`--gps-week` because the `.osr` row carries TOW but not week, and use the
+resulting normalized CSV as `GNSSPP_CLAS_ZD_BASE_CSV`.  For `.osr` input,
+`iono_scaled_m` is reconstructed from the CLASLIB `PRC` closure, not from the
+raw display `iono` column, so the diff compares the ionosphere term that was
+actually applied to `PRC1/PRC2/PRC5`.  `iono_l1_m` is the L1-equivalent of that
+same frequency-slot-specific closure value; it is not copied from the L1 slot.
+The normalized `stec_tecu` field is derived from that L1-equivalent delay with
+the GPS L1 TECU-to-meter factor.  The exporter also writes
+`claslib_iono_source=prc_closure`, `claslib_raw_iono_l1_m`, and
+`claslib_raw_stec_tecu`, so the raw `.osr` display ionosphere is visible
+without changing the default effective-PRC component diff.  The CI wrapper
+passes `clas_grid.def` to the normalizer so `.osr` rows also carry test-only
+CLASLIB-side grid provenance derived from the row receiver latitude/longitude.
+The `.osr` path maps only GPS L1/L2/L5 slots where the exact row identity is
+deterministic; QZSS and Galileo still need explicit disposable dumps until
+their ZD materialization and admission sources are fixed.
+
+In CI, `scripts/ci/run_claslib_osr_zd_export.py` now performs that CLASLIB-side
+step from public data: it checks out pinned CLASLIB as a test-only source tree,
+builds `rnx2rtkp`, runs `-s` on the A4b window, normalizes the emitted `.osr`,
+validates the normalized dump with `clas_zd_component_summary.v2`, and fails the
+contract when GPS L2W rows lack CLASLIB-side grid provenance.  If
+`GNSSPP_CLAS_ZD_BASE_CSV` is unset, the optional CLAS ZD diff uses this generated
+normalized dump as the CLASLIB base side.
+
+The native side of the A4b `G14/C2W` slice is generated in CI by
+`scripts/ci/run_clas_a4b_native_selfdiff.py`.  That wrapper sparse-checks out
+the public CLASLIB data fixture, runs the gated native CLAS command with
+`GNSS_PPP_CLAS_CODE_DUMP`, writes `clas_zd_component_summary.v2` for the
+resulting native dump, and self-diffs it before any oracle comparison.  The
+summary step catches malformed row keys, missing observation identity, missing
+component values, GPS L2W exact-identity loss, fallback rows, and duplicate row
+keys before the self-diff can pass.  This is not a
+replacement for CLASLIB ZD parity; it removes the manually staged native CSV
+from the next oracle-backed PR and guards exact observation-code identity and
+fallback counts on remote CI.
+
+Native RINEX observations now expose exact `pseudorange_rinex_code`,
+`carrier_rinex_code`, RTKLIB code id, and `signal_family` columns in the CLAS
+code/phase diagnostic dumps.  This lets the GPS L2W investigation distinguish
+`C2W/L2W` from other GPS L2 tracking codes even though both still use the
+current `SignalType::GPS_L2C` runtime family.  The CLAS ZD component diff keys
+rows by the exact row-specific RINEX code so alias mismatches show up as row-set
+differences before component deltas are computed.
+When `GNSSPP_CLAS_ZD_COMPONENTS` is unset, the optional CI diff compares the
+component-level `prc_m`, `prc_component_sum_m`, `prc_closure_residual_m`,
+`stec_tecu`, `iono_l1_m`, `iono_l1_from_stec_m`,
+`iono_l1_stec_closure_residual_m`, `iono_scaled_m`, `iono_scale`,
+`iono_scaled_closure_residual_m`, `trop_correction_m`, `code_bias_m`,
+`receiver_antenna_m`, `relativity_m`, `atmos_ref_tow`, `clock_ref_tow`,
+`code_bias_ref_tow`, and `atmos_clock_gap_s` fields, plus CLAS grid
+id/count/weight provenance, rather than using the aggregate `applied_pr_corr_m`
+to select the dominant row component.  `atmos_grid_distance_m` remains an
+explicit diagnostic component
+because receiver-coordinate differences can otherwise dominate the top-row
+summary without representing a correction-value regression.  The PRC closure
+residual is derived at diff time from the PRC component inputs, the L1-STEC
+closure residual is derived as
+`iono_l1_m - stec_tecu * GPS_L1_TECU_TO_METERS`, and the ionosphere scale
+closure residual is derived as `iono_scaled_m - iono_scale * iono_l1_m`.
+Together these make the remote artifact show whether the remaining GPS L2W PRC
+gap is explained by component deltas, TECU/L1 conversion, frequency scaling, or
+a PRC convention/rounding mismatch.
+The native code-row dump also carries the atmosphere reference TOW, clock
+reference TOW, code-bias reference TOW, atmosphere-clock gap, lifecycle TOW,
+selected-satellite count, valid-grid count, materialized STEC grid-value count,
+and selected-grid STEC value count used for each OSR row.  The
+`clas_zd_component_summary.v2` snapshot summary reports numeric min/max stats
+for those fields, so lifecycle or epoch-selection mismatches can be diagnosed
+before changing the STEC model.
+CLASLIB `.osr` summaries also report numeric stats for
+`claslib_raw_iono_l1_m` and `claslib_raw_stec_tecu`; those raw display fields
+remain explicit diagnostics and are not part of the default native diff.
+
+Native SSR interpolation must not consume a future code-bias sample merely
+because the next clock neighbour carries one.  The A4b G14/C2W slice exposed
+this as an early bank switch: native selected the `230430` code-bias row at
+TOW `230426` before the row was causally available.  The core SSRProducts
+contract now forward-fills code bias only from current or older rows.  On the
+same CLASLIB/native G14/C2W comparison this reduces `code_bias_m` mismatches
+from 156/280 common rows to 120/280, with `mean_abs` moving from `0.01114 m`
+to `0.00857 m` and `rms` from `0.01493 m` to `0.01309 m`.  The A4b expansion
+then applies `--compact-code-bias-bank-policy delayed-15s-bank` so code-bias
+base-bank lookup uses the latest bank effective at `tow - 15 s`.  This moves
+the same slice to 112/280 `code_bias_m` mismatches with `mean_abs=0.00800 m`
+and `rms=0.01265 m`.  The A4b L6 expansion also materializes delayed base-bank
+refresh rows for selected subtype-6 network replacements, so the preferred
+network lookup can switch at the same half-window boundary.  This moves the
+same G14/C2W slice to 16/280 `code_bias_m` mismatches with
+`mean_abs=0.00114 m` and `rms=0.00478 m`; aggregate `PRC` moved to
+`mean_abs=0.00879 m` and `rms=0.01481 m`.  On current `develop`, public-data
+A4b regeneration closes the remaining 5-second boundary rows: all 280 common
+G14/C2W rows have `code_bias_m` delta `0.0 m`.  CI now hard-gates that
+component independently while leaving the remaining ionosphere and aggregate
+PRC differences diagnostic.
+The GitHub step summary highlights raw STEC, L1 ionosphere, scaled ionosphere,
+code-bias, trop, L1-from-STEC, L1-STEC closure, scaled-ionosphere closure, PRC
+closure, and atmosphere-reference components, keeping the primary review
+evidence in the CI summary while the full row breakdown remains in the JSON
+artifact.
+When `GNSS_PPP_CLAS_DD_FILTER=1` and
+`GNSS_PPP_CLAS_CODE_ROW_PARITY=bias,full-prc` are set, the CLAS OSR
+materializer uses that exact GPS L2 RINEX identity to choose the code/phase SSR
+bias signal id, and the native code-row dump reports the full PRC convention
+used by CLASLIB `.osr` rows instead of the solver-internal `PRC - trop` code-row
+application convention. The A4b sign-off runner also enables
+`GNSS_PPP_CLAS_ATMOS_GRID_MATRIX=1` and
+`GNSS_PPP_CLAS_ATMOS_LIFECYCLE=1` so the GPS L2W PRC diff measures the remaining
+component gap after CLASLIB-style atmosphere grid selection and lifecycle
+materialization. It also sets `GNSS_PPP_CLAS_TROP_CLIMATOLOGY=1`, limiting the
+hydro/wet zenith-baseline change to the A4b trop-parity lane while default CLAS
+output keeps the legacy constants.
+The same stored identity now drives CLAS float/DD/SD/WLNL raw observation lookup,
+so a `C2W/L2W` OSR row consumes the matching `C2W/L2W` measurement instead of the
+first collapsed GPS L2 family row.
+Gate-off behavior still uses the existing `SignalType` family id path, and the
+diagnostic dumps include the selected `code_bias_signal_id` /
+`phase_bias_signal_id` for oracle comparison.  They also expose the bias lookup
+source ids, present flags, fallback flags, and exact-identity gate state so GPS
+L2 rows that were satisfied through the legacy L2 class fallback can be separated
+from exact `C2W/L2W` matches.  The native dumps also carry the requested
+`C2W/L2W` identity plus `observation_exact_match` and
+`observation_family_fallback` flags, separating a bias lookup fallback from a raw
+observation lookup fallback before the A4b GPS L2W correction model changes.
+For the GPS L2W A4b correction-materialization probe, run the raw CLAS L6
+expansion with `--compact-code-bias-composition-policy base-only-if-present` and
+`--compact-code-bias-bank-policy delayed-15s-bank`. The 2019 G14/C2W
+network code-bias rows behave as subtype-4 base-value replacements: using direct
+subtype-6 values leaves periodic `-0.70 m` native rows against `+0.76 m`
+CLASLIB rows, while adding base plus network leaves the same rows near
+`+0.06 m`. The base-only policy removes that 30-second sign flip without
+changing default CLAS behavior, and the delayed bank policy matches CLASLIB's
+first-half hold before the next selected-network replacement rows are handled.
+
+## A4b: network_compensation_m materialization (plumbing) and SIS-window finding
+
+Native now wires the applied SIS continuity delta into the `network_compensation_m`
+dump column, which was a `0.0` stub.  On the reference dataset the column remains
+`0.0` and the dump/`.pos` output stay byte-identical, because instrumentation
+proved the 30-second phase-bias-lag apply window never matches on real data:
+the phase-bias lag cycles `0..25 s` on real CLAS updates, so the `abs(pbias_lag
+- 30) < 0.5` gate is unreachable by construction.  In other words, native
+currently never applies the SIS delta, while CLASLIB applies `compN` at SSR
+update boundaries (G14/C2W: 135/280 nonzero rows, `rms=0.0526 m`,
+`max=0.219 m`).
+
+Because the CLASLIB exporter reconstructs ionosphere from PRC closure,
+CLASLIB's SIS subtraction currently surfaces inside the stec/iono diff columns
+instead of a dedicated component (`stec_tecu rms=0.0527 m` is close to the
+`compN rms=0.0526 m` above), so the residual stec/iono mismatch reported by the
+A4b diff is largely misattributed `compN`.  Closing that gap is deferred to a
+follow-up slice that applies the SIS delta with boundary semantics (lag ≈ 0,
+matching CLASLIB's `adjust_prc`/`adjust_cpc`); that slice changes PRC/solution
+output and requires full #161 sign-off.  This commit only adds the dump
+plumbing it will rely on.
+
+## A4b: SIS-boundary apply behind `GNSS_PPP_CLAS_SIS_BOUNDARY` (gated)
+
+### Pinned boundary rule
+
+Correlating the 135 nonzero `network_compensation_m` (`compN`) rows for the
+G14/C2W probe against `tow` in the CLASLIB oracle CSV shows a clean,
+consistent rule across all 9 SSR update cycles in the 300s reference window:
+`compN` is nonzero and **constant** for observation epochs with
+`tow % 30` in `[0, 14]` (the first half of each 30s SSR update cycle) and
+exactly `0.0` for `tow % 30` in `[15, 29]` (the second half). Every nonzero
+segment starts precisely at a `tow % 30 == 0` boundary and runs for exactly
+15 consecutive 1 Hz epochs, e.g. `[230430, 230444]`, `[230460, 230474]`,
+... `[230670, 230684]`; the held value equals the SIS delta computed at the
+5s-consecutive clock-reference-time transition that crosses the 30s orbit
+boundary (`current_sis_m(offset0) - previous_sis_m(offset25)`, matching
+`captureClasSisBoundary()`'s observation-epoch pairing) and does **not** change again
+until the next boundary.
+
+Two subtleties surfaced while pinning the rule against the actual native
+harness (`scripts/ci/run_clas_a4b_native_selfdiff.py`, which decodes CLAS L6
+live rather than reading a pre-expanded CSV):
+
+- Native's `clock_reference_time` reaches a new 30s-aligned value a few
+  seconds *before* the observation epoch with the same `tow` is processed
+  (e.g. `clock_reference_time.tow == 230430` first appears at observation
+  `tow == 230426`). CLASLIB's own dumped `compN` window has no such lead, so
+  the boundary *capture* and the 15s hold window are both anchored to the
+  **observation epoch** (`obs.time`), not to `clock_reference_time` — see
+  `captureClasSisBoundary()` in `src/algorithms/ppp_osr.cpp`.
+- Real CLAS data has brief (multi-epoch) `clock_reference_time` gaps
+  (`clock_time_valid == false`) that can fall *inside* a 15s hold window.
+  CLASLIB's held `satcorr[].currsis` outlives such gaps, so the held
+  `boundary_delta_m` is explicitly preserved across a `clock_time_valid`
+  reset in `updateSisContinuity()`, and `computeClasSisApplyDecision()`'s
+  gated branch no longer requires `clock_time_valid` for the *current*
+  epoch. With both fixes the native gate-ON window position, duration, and
+  held-value-constancy match the CLASLIB oracle exactly for all 9 cycles in
+  the reference window.
+
+### Implementation
+
+`GNSS_PPP_CLAS_SIS_BOUNDARY=1` (exact-`"1"`, `envExactOne`-style, default
+off) switches the apply branch in `ppp_osr.cpp` from the legacy
+(real-data-unreachable) 30s phase-bias-lag condition to the boundary rule
+above: `osr.CPC[f]`/`osr.PRC[f]` are decremented by, and
+`osr.network_compensation_m` is set to, the delta captured by
+`captureClasSisBoundary()`, applied by `computeClasSisApplyDecision()`. The
+decision logic is factored into small, directly gtest-covered pure functions
+(`isSsrOrbitBoundaryTow`, `captureClasSisBoundary`,
+`computeClasSisApplyDecision`, plus the preservation behavior in
+`updateSisContinuity`) because `PPPEnvOverrides` is memoized per-process, so
+toggling `GNSS_PPP_CLAS_SIS_BOUNDARY` mid-gtest-binary is not reliable;
+env-integration itself is exercised through the CLI harness scripts, matching
+the existing convention for other `GNSS_PPP_CLAS_*` gates. Gate-off output
+(dump/`.pos`) is unaffected: the legacy branch is untouched, and the new
+boundary-tracking fields on `CLASSisContinuityInfo` are only written when the
+gate is on.
+
+### Measured effect (gate-ON, not yet default)
+
+Gate-OFF bit-exactness is preserved: the A4b native selfdiff dump md5
+(`61faeccafb63cfebe101357c3cb3163d`) and the standard CLAS `.pos` md5
+(`e63f4d63357abed86fd4fd5b58208f07`) are both unchanged.
+
+With the gate on, the G14/C2W `compN` window now lines up with the
+regenerated CLASLIB oracle exactly (same 9 boundary-aligned 15-row segments),
+but the **held delta magnitude** does not: `network_compensation_m` RMS moves
+from `0.0526 m` (gate-off, native always `0.0`) to `0.132 m` (gate-on) against
+the regenerated oracle — worse, not better. Root cause is a pre-existing,
+separate defect: the raw CLAS-expanded SSR product carries a spurious/
+differently-scoped orbit-correction record at the mid-cycle (`tow % 30 == 25`)
+sample that native's `orbit_projection_m` picks up (e.g. `dx=-0.2512,
+dy=-0.832` versus the neighboring `dx≈-0.31, dy≈+0.70` records), while
+CLASLIB's own `orbit_projection_m` stays flat across the same window. This
+inflates the boundary-crossing SIS delta computed by the existing (unchanged)
+`updateSisContinuity()` formula; it is unrelated to, and predates, the
+boundary-gating logic in this change, which the window-alignment result
+above shows is otherwise correct. Fixing it is out of scope here and is
+deferred to a follow-up slice on the SSR compact-message orbit-record
+selection.
+
+Position-level impact (full 3600-epoch standard CLAS run, `.pos` vs the
+CLASLIB same-epoch oracle, row-index-matched at 1 Hz since this `.pos` format
+does not populate `GPS_TOW`) is roughly neutral: fixed-epoch count drops
+slightly (270 → 259), fixed-only mean/p95/max 3D error each improve slightly
+(`1.584 m` → `1.437 m` mean, `5.018 m` → `4.981 m` p95, `5.028 m` → `4.999 m`
+max), and all-epoch mean is unchanged (`1.549 m`) with a lower max
+(`39.796 m` → `34.318 m`). Given the diagnosed root cause and the mixed
+position signal, the default stays off pending the orbit-record-selection
+fix; `GNSS_PPP_CLAS_SIS_BOUNDARY` remains available for further
+investigation.
+
+## ST11 network-orbit suppression in the L6 expander
+
+CSSR subtype 11 (`flg_net=1`) mid-cycle records (`tow % 30 == 25`) carry
+network-scoped orbit deltas that CLASLIB stores in a separate bank and does
+not apply to base-orbit projection.  The Python L6 expander
+(`decode_cssr_combined_message` in `apps/commands/receivers/gnss_qzss_l6_info.py`) previously
+wrote those network orbit values into `pending_orbit` unconditionally, so the
+expanded SSR CSV treated them as base-orbit refreshes.  Native
+`interpolateCorrection` then swung `orbit_projection_m` through the outlier
+(e.g. G14 ~0.356→0.221→0.356 m) and inflated the SIS-boundary delta when
+`GNSS_PPP_CLAS_SIS_BOUNDARY=1` was enabled.
+
+The expander now skips `pending_orbit` updates when `flg_net` is set while
+still consuming the orbit bits from the message.  Network ST11 clock samples
+are written to `pending_clock` again and tagged with `clock_network_id=1` in
+the compact CSV; the SSR loader stashes the base clock on merged variants so
+the gated SIS capture path can sample base-only SIS while the default PPP path
+keeps network-wins merged clocks (State B byte identity).
+
+### SIS boundary delta pairing at observation epochs
+
+The gated `captureClasSisBoundary()` path now samples SIS
+(`-base_clock_correction_m + orbit_projection_m` when a stashed base clock
+exists, otherwise `-clock_correction_m + orbit_projection_m`) at the
+**observation epoch**
+rather than reusing the 5 s `clock_reference_time` step delta from
+`updateSisContinuity()`.  CLASLIB captures `prevsis` at the mid-cycle
+offset-25 obs epoch (`tow % 30 == 25`) and forms the held compN delta at the
+following offset-0 boundary (`tow % 30 == 0`) as `currsis - prevsis`
+(`ephemeris.c` `satpos_ssr_sis`).  This avoids pairing a boundary clock step
+with an orbit sample that `interpolateCorrection` may have advanced early via
+`clock_reference_time`.
+
+## CLAS base-clock parity gate (`GNSS_PPP_CLAS_BASE_CLOCK_PARITY`)
+
+Default-path CLAS OSR positioning still uses merged network-wins clocks with
+linear interpolation between 5 s SSR grid points (State B byte identity).
+Setting `GNSS_PPP_CLAS_BASE_CLOCK_PARITY=1` switches the positioning clock
+branch to CLASLIB-equivalent semantics:
+
+- base bank only (`base_clock_valid` / `clock_network_id == 0`)
+- no future clock samples (`clock.time <= obs.time`)
+- orbit-anchored age (newest `orbit_valid` with `orbit.time <= obs.time` within
+  180 s; clock within `[orbit_ref, orbit_ref + 30 s)` and `<= obs.time`)
+- newest-eligible step-hold (no linear interpolation)
+- failure sets `clock_valid = false` and excludes the satellite
+
+The gated SIS capture path (`captureClasSisBoundary`) is unchanged and
+continues to sample stashed base clocks.  `sameCorrectionVariant` merge
+semantics are unchanged.
+
+Acceptance targets with the gate on:
+
+- `clock_correction_m` RMS vs CLASLIB oracle `< 5 mm` over the 300-epoch A4b
+  selfdiff window
+- gate-OFF `.pos` md5 and A4b selfdiff md5 unchanged (State B identity)
+- `GNSS_PPP_CLAS_SIS_BOUNDARY=1` compN RMS stays `<= 0.001 m`

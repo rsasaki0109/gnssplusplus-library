@@ -3,6 +3,7 @@
 
 #include <libgnss++/algorithms/ppp.hpp>
 #include <libgnss++/algorithms/ppp_ar.hpp>
+#include <libgnss++/algorithms/ppp_env_overrides.hpp>
 #include <libgnss++/algorithms/ppp_osr.hpp>
 #include <libgnss++/algorithms/ppp_utils.hpp>
 #include <libgnss++/core/constants.hpp>
@@ -10,7 +11,12 @@
 #include <libgnss++/core/signals.hpp>
 
 #include <cmath>
+#include <fstream>
+#include <iomanip>
 #include <iostream>
+#include <limits>
+#include <map>
+#include <vector>
 
 namespace libgnss {
 
@@ -21,6 +27,79 @@ namespace {
 
 bool pppDebugEnabled() {
     return ppp_shared::pppDebugEnabled();
+}
+
+double quietNaN() {
+    return std::numeric_limits<double>::quiet_NaN();
+}
+
+std::ofstream* clasNlDebugStream() {
+    const auto& path = pppEnvOverrides().clas_nl_debug_path;
+    if (path.empty()) {
+        return nullptr;
+    }
+
+    static std::ofstream stream;
+    static bool initialized = false;
+    if (!initialized) {
+        initialized = true;
+        stream.open(path, std::ios::out | std::ios::trunc);
+        if (stream) {
+            stream << "record,week,tow,sat,signal1,signal2,"
+                   << "lambda1_m,lambda2_m,lambda_nl_m,lambda_wl_m,"
+                   << "alpha1,alpha2,beta,"
+                   << "phase1_cycles,phase2_cycles,phase1_m,phase2_m,"
+                   << "raw_nl_m,applied_cpc_minus_windup_comp_m,full_cpc_m,"
+                   << "current_nl_phase_m,full_cpc_nl_phase_m,"
+                   << "geo_m,receiver_clock_m,satellite_clock_m,trop_pred_m,nl_iono_pred_m,predicted_m,"
+                   << "obs_total_cycles,obs_full_cpc_total_cycles,"
+                   << "state_l1_m,state_l2_m,state_l1_cycles,state_l2_cycles,"
+                   << "state_sum_cycles,state_l1_wl_cycles,state_l2_wl_cycles,state_beta_wl_cycles,"
+                   << "delta_state_sum_cycles,delta_l1_wl_cycles,delta_l2_wl_cycles,delta_beta_wl_cycles,"
+                   << "wl_fixed,wl_integer,mw_mean_cycles,mw_minus_wl_cycles,mw_count,lock_count,"
+                   << "cpc1_m,cpc2_m,phase_bias1_m,phase_bias2_m,"
+                   << "windup1_m,windup2_m,phase_comp1_m,phase_comp2_m,"
+                   << "receiver_ant1_m,receiver_ant2_m,relativity_m,"
+                   << "iono_l1_m,iono_cpc1_m,iono_cpc2_m,trop_correction_m,"
+                   << "current_minus_full_cpc_cycles,phase_bias_nl_cycles,"
+                   << "windup_nl_cycles,phase_comp_nl_cycles,receiver_ant_nl_cycles,"
+                   << "relativity_nl_cycles,iono_cpc_nl_cycles,trop_correction_cycles\n";
+        }
+    }
+    return stream ? &stream : nullptr;
+}
+
+std::ofstream* clasFixDebugStream() {
+    const auto& path = pppEnvOverrides().clas_fix_debug_path;
+    if (path.empty()) {
+        return nullptr;
+    }
+
+    static std::ofstream stream;
+    static bool initialized = false;
+    if (!initialized) {
+        initialized = true;
+        stream.open(path, std::ios::out | std::ios::trunc);
+        if (stream) {
+            stream << "record,week,tow,sat,ref_sat,nobs,"
+                   << "row_index,row_type,weight,"
+                   << "initial_x_m,initial_y_m,initial_z_m,"
+                   << "fixed_x_m,fixed_y_m,fixed_z_m,position_shift_m,"
+                   << "final_clock_m,residual_m,dd_residual_m,"
+                   << "sat_x_m,sat_y_m,sat_z_m,satellite_clock_s,satellite_clock_m,"
+                   << "geo_m,trop_applied_m,extra_prediction_m,"
+                   << "fixed_nl_m,nl_phase_m,cpc_nl_m,"
+                   << "osr_trop_correction_m,osr_nl_iono_m,receiver_ant_nl_m,"
+                   << "lambda_nl_m,fixed_nl_cycles,use_trop_model,"
+                   << "signal1,signal2,frequency1_hz,frequency2_hz,"
+                   << "raw_phase1_m,raw_phase2_m,corrected_phase1_m,corrected_phase2_m,"
+                   << "raw_code1_m,raw_code2_m,corrected_code1_m,corrected_code2_m,"
+                   << "cpc1_m,cpc2_m,prc1_m,prc2_m,"
+                   << "receiver_ant1_m,receiver_ant2_m,"
+                   << "tide_x_m,tide_y_m,tide_z_m\n";
+        }
+    }
+    return stream ? &stream : nullptr;
 }
 
 }  // namespace
@@ -34,13 +113,38 @@ bool pppDebugEnabled() {
 bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const NavigationData& nav) {
     last_ar_ratio_ = 0.0;
     last_fixed_ambiguities_ = 0;
+    last_clas_constrained_fixed_state_valid_ = false;
+    clas_wlnl_candidate_hold_constraints_.clear();
 
-    const auto wlnl_preparation = ppp_ar::prepareWlnlCandidates(
+    auto wlnl_preparation = ppp_ar::prepareWlnlCandidates(
         ppp_config_,
         filter_state_,
         ambiguity_states_,
         ssr_products_loaded_,
+        obs.time,
         pppDebugEnabled());
+    if (ppp_config_.clas_mrtklib_float_parity &&
+        ppp_config_.kinematic_mode && !ppp_config_.low_dynamics_mode &&
+        ppp_config_.use_clas_osr_filter && ppp_config_.use_dynamics_model &&
+        !clas_mrtklib_ar_rejected_ambiguities_.empty()) {
+        auto& eligible = wlnl_preparation.eligible_ambiguities;
+        size_t write = 0;
+        for (size_t read = 0; read < eligible.satellites.size(); ++read) {
+            if (clas_mrtklib_ar_rejected_ambiguities_.count(
+                    eligible.satellites[read]) != 0) {
+                continue;
+            }
+            if (write != read) {
+                eligible.satellites[write] = eligible.satellites[read];
+                eligible.state_indices[write] = eligible.state_indices[read];
+                eligible.scales[write] = eligible.scales[read];
+            }
+            ++write;
+        }
+        eligible.satellites.resize(write);
+        eligible.state_indices.resize(write);
+        eligible.scales.resize(write);
+    }
     const auto& eligible_ambiguities = wlnl_preparation.eligible_ambiguities;
 
     const int n = static_cast<int>(eligible_ambiguities.satellites.size());
@@ -49,6 +153,7 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
             std::cerr << "[PPP-WLNL] insufficient candidates: " << n
                       << " (total_amb=" << eligible_ambiguities.total_ambiguities
                       << " reinit=" << eligible_ambiguities.skipped_reinitialization
+                      << " slipwin=" << eligible_ambiguities.skipped_slip_window
                       << " lock=" << eligible_ambiguities.skipped_lock
                       << " scale=" << eligible_ambiguities.skipped_scale
                       << " idx=" << eligible_ambiguities.skipped_index << ")\n";
@@ -57,7 +162,24 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
     }
 
     const auto& wl_summary = wlnl_preparation.wl_summary;
-    if (wl_summary.fixed_count < ppp_config_.min_satellites_for_ar) {
+    // MRTKLIB parity (kinematic CLAS): resamb_LAMBDA needs minamb = 6 DD rows
+    // = 3 dual-band DD pairs = 4 satellites sharing a system reference. The
+    // WL-fixed count only tallies real (L1) satellites, so requiring
+    // min_satellites_for_ar (6) here demanded 6 WL-fixed satellites -- two
+    // more than the DD geometry MRTKLIB fixes with (median 7 tracked sats,
+    // SNR-masked subset). Non-kinematic paths keep the historical floor.
+    const int min_wl_fixes =
+        (ppp_config_.use_clas_osr_filter && ppp_config_.kinematic_mode)
+            ? 4
+            : ppp_config_.min_satellites_for_ar;
+    // MRTKLIB literal-port track: the direct ddmat-style state-DD fix has no
+    // wide-lane prerequisite (mrtk_ppp_rtk.c ddmat admits every locked
+    // satellite), so the WL-fixed floor does not apply on that path.
+    const bool direct_state_dd_path =
+        ppp_config_.clas_mrtklib_float_parity &&
+        ppp_config_.use_clas_osr_filter && ppp_config_.kinematic_mode &&
+        !ppp_config_.low_dynamics_mode && ppp_config_.use_dynamics_model;
+    if (!direct_state_dd_path && wl_summary.fixed_count < min_wl_fixes) {
         if (pppDebugEnabled()) {
             std::cerr << "[PPP-WLNL] insufficient WL fixes: " << wl_summary.fixed_count
                       << " n=" << n << " max_mw=" << wl_summary.max_mw_count << "\n";
@@ -70,11 +192,37 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
     const double trop_zenith =
         ppp_config_.estimate_troposphere ? filter_state_.state(filter_state_.trop_index) : 2.3;
     const auto osr_by_sat = computeWlnlOsrCorrections(
-        obs, nav, receiver_position, clock_bias_m, trop_zenith);
+        obs, nav, receiver_position, clock_bias_m, trop_zenith,
+        /*include_single_frequency=*/direct_state_dd_path);
+
+    std::map<SatelliteId, double> satellite_elevations_rad;
+    for (const auto& [satellite, osr] : osr_by_sat) {
+        satellite_elevations_rad[satellite] = osr.elevation;
+    }
+    const std::map<SatelliteId, double>* elevation_ref_map =
+        satellite_elevations_rad.empty() ? nullptr : &satellite_elevations_rad;
+
+    if (pppDebugEnabled() && direct_state_dd_path) {
+        std::cerr << std::setprecision(15)
+                  << "[PPP-AR-EPOCH] week=" << obs.time.week
+                  << " tow=" << obs.time.tow
+                  << " eligible=" << eligible_ambiguities.satellites.size()
+                  << " sats=";
+        for (const auto& satellite : eligible_ambiguities.satellites) {
+            const auto ambiguity_it = ambiguity_states_.find(satellite);
+            std::cerr << satellite.toString();
+            if (ambiguity_it != ambiguity_states_.end()) {
+                std::cerr << "(lock=" << ambiguity_it->second.lock_count << ')';
+            }
+            std::cerr << ' ';
+        }
+        std::cerr << '\n';
+    }
 
     const ppp_ar::WlnlFixAttempt attempt = ppp_ar::resolveWlnlFix(
         ppp_config_,
         filter_state_,
+        pre_anchor_covariance_,
         ambiguity_states_,
         eligible_ambiguities,
         [&](const SatelliteId& sat, ppp_ar::WlnlNlInfo& info) {
@@ -82,13 +230,52 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
                 obs, nav, receiver_position, clock_bias_m, trop_zenith,
                 osr_by_sat, sat, info);
         },
-        pppDebugEnabled());
+        pppDebugEnabled(),
+        elevation_ref_map);
     if (!attempt.fixed) {
         return false;
     }
 
     last_ar_ratio_ = attempt.ratio;
     last_fixed_ambiguities_ = attempt.nb;
+    if (attempt.has_constrained_state) {
+        // MRTKLIB parity: the constrained fixed state is published as the
+        // solution (sol.rr = xa) but never overwrites the float filter x/P;
+        // only holdamb() constraints nudge the float states.
+        last_clas_constrained_fixed_state_ = attempt.constrained_state;
+        last_clas_constrained_fixed_state_valid_ = true;
+        clas_wlnl_candidate_hold_constraints_ = attempt.hold_constraints;
+        if (auto* debug = clasFixDebugStream(); debug != nullptr) {
+            const Vector3d initial_position =
+                filter_state_.state.segment(filter_state_.pos_index, 3);
+            const Vector3d fixed_position =
+                attempt.constrained_state.state.segment(filter_state_.pos_index, 3);
+            *debug << std::setprecision(17)
+                   << "RESAMB,"
+                   << obs.time.week << ','
+                   << obs.time.tow << ','
+                   << ','
+                   << ','
+                   << attempt.state_dd_count << ','
+                   << -1 << ','
+                   << "state_dd,"
+                   << attempt.state_lambda_ratio << ','
+                   << initial_position.x() << ','
+                   << initial_position.y() << ','
+                   << initial_position.z() << ','
+                   << fixed_position.x() << ','
+                   << fixed_position.y() << ','
+                   << fixed_position.z() << ','
+                   << attempt.state_position_shift_m << ','
+                   << attempt.constrained_state.state(filter_state_.clock_index) << ','
+                   << attempt.state_dd_residual_norm << ','
+                   << attempt.state_wlnl_max_abs_delta_cycles;
+            for (int i = 0; i < 38; ++i) {
+                *debug << ",0";
+            }
+            *debug << '\n';
+        }
+    }
     if (pppDebugEnabled()) {
         std::cerr << "[PPP-WLNL] NL fixed: nb=" << attempt.nb
                   << " ratio=" << attempt.ratio << "\n";
@@ -115,6 +302,7 @@ bool PPPProcessor::solveFixedPosition(const ObservationData& obs,
     });
 
     double position_shift_norm_m = 0.0;
+    double fixed_clock_m = clock_m;
     const bool solved = ppp_ar::solveFixedNlPosition(
         fixed_observations,
         position,
@@ -125,7 +313,125 @@ bool PPPProcessor::solveFixedPosition(const ObservationData& obs,
             return calculateMappingFunction(receiver_position, elevation, time);
         },
         fixed_position,
-        &position_shift_norm_m);
+        &position_shift_norm_m,
+        &fixed_clock_m);
+    if (solved) {
+        if (auto* debug = clasFixDebugStream(); debug != nullptr) {
+            struct ResidualRecord {
+                const ppp_ar::FixedNlObservation* observation = nullptr;
+                double residual_m = 0.0;
+                double geo_m = 0.0;
+                double trop_applied_m = 0.0;
+            };
+            std::vector<ResidualRecord> residual_records;
+            residual_records.reserve(fixed_observations.size());
+            for (const auto& fixed_observation : fixed_observations) {
+                const double geo = geodist(fixed_observation.sat_pos, fixed_position);
+                const Vector3d los =
+                    (fixed_observation.sat_pos - fixed_position).normalized();
+                const double elevation = std::asin(los.dot(fixed_position.normalized()));
+                const double trop_applied =
+                    fixed_observation.use_trop_model
+                        ? calculateMappingFunction(fixed_position, elevation, obs.time) *
+                              trop_zenith
+                        : 0.0;
+                const double predicted =
+                    geo + fixed_clock_m -
+                    constants::SPEED_OF_LIGHT * fixed_observation.sat_clk +
+                    trop_applied +
+                    fixed_observation.extra_prediction_m +
+                    fixed_observation.fixed_nl_cycles *
+                        fixed_observation.lambda_nl_m;
+                residual_records.push_back({
+                    &fixed_observation,
+                    fixed_observation.nl_phase_m - predicted,
+                    geo,
+                    trop_applied,
+                });
+            }
+
+            std::map<GNSSSystem, size_t> reference_by_system;
+            for (size_t index = 0; index < residual_records.size(); ++index) {
+                const auto system = residual_records[index].observation->satellite.system;
+                if (reference_by_system.find(system) == reference_by_system.end()) {
+                    reference_by_system[system] = index;
+                }
+            }
+
+            for (size_t row_index = 0; row_index < residual_records.size(); ++row_index) {
+                const auto& record = residual_records[row_index];
+                const auto& fixed_observation = *record.observation;
+                const auto ref_it =
+                    reference_by_system.find(fixed_observation.satellite.system);
+                const ResidualRecord* ref_record =
+                    ref_it != reference_by_system.end()
+                        ? &residual_records[ref_it->second]
+                        : &record;
+                const double dd_residual =
+                    ref_record->residual_m - record.residual_m;
+                *debug << std::setprecision(17)
+                       << "SAT,"
+                       << obs.time.week << ','
+                       << obs.time.tow << ','
+                       << fixed_observation.satellite.toString() << ','
+                       << ref_record->observation->satellite.toString() << ','
+                       << fixed_observations.size() << ','
+                       << row_index << ','
+                       << "nl_phase,"
+                       << 1.0 << ','
+                       << position.x() << ','
+                       << position.y() << ','
+                       << position.z() << ','
+                       << fixed_position.x() << ','
+                       << fixed_position.y() << ','
+                       << fixed_position.z() << ','
+                       << position_shift_norm_m << ','
+                       << fixed_clock_m << ','
+                       << record.residual_m << ','
+                       << dd_residual << ','
+                       << fixed_observation.sat_pos.x() << ','
+                       << fixed_observation.sat_pos.y() << ','
+                       << fixed_observation.sat_pos.z() << ','
+                       << fixed_observation.sat_clk << ','
+                       << constants::SPEED_OF_LIGHT * fixed_observation.sat_clk << ','
+                       << record.geo_m << ','
+                       << record.trop_applied_m << ','
+                       << fixed_observation.extra_prediction_m << ','
+                       << fixed_observation.fixed_nl_cycles *
+                              fixed_observation.lambda_nl_m << ','
+                       << fixed_observation.nl_phase_m << ','
+                       << fixed_observation.cpc_nl_m << ','
+                       << fixed_observation.osr_trop_correction_m << ','
+                       << fixed_observation.osr_nl_iono_m << ','
+                       << fixed_observation.receiver_ant_nl_m << ','
+                       << fixed_observation.lambda_nl_m << ','
+                       << fixed_observation.fixed_nl_cycles << ','
+                       << (fixed_observation.use_trop_model ? 1 : 0) << ','
+                       << static_cast<int>(fixed_observation.signal1) << ','
+                       << static_cast<int>(fixed_observation.signal2) << ','
+                       << fixed_observation.frequency1_hz << ','
+                       << fixed_observation.frequency2_hz << ','
+                       << fixed_observation.raw_phase1_m << ','
+                       << fixed_observation.raw_phase2_m << ','
+                       << fixed_observation.corrected_phase1_m << ','
+                       << fixed_observation.corrected_phase2_m << ','
+                       << fixed_observation.raw_code1_m << ','
+                       << fixed_observation.raw_code2_m << ','
+                       << fixed_observation.corrected_code1_m << ','
+                       << fixed_observation.corrected_code2_m << ','
+                       << fixed_observation.cpc1_m << ','
+                       << fixed_observation.cpc2_m << ','
+                       << fixed_observation.prc1_m << ','
+                       << fixed_observation.prc2_m << ','
+                       << fixed_observation.receiver_ant1_m << ','
+                       << fixed_observation.receiver_ant2_m << ','
+                       << 0.0 << ','
+                       << 0.0 << ','
+                       << 0.0
+                       << '\n';
+            }
+        }
+    }
     if (pppDebugEnabled() && solved) {
         std::cerr << "[PPP-WLNL] fixedWLS: sats=" << fixed_observations.size()
                   << " pos_shift=" << position_shift_norm_m << "m\n";
@@ -156,7 +462,8 @@ std::map<SatelliteId, OSRCorrection> PPPProcessor::computeWlnlOsrCorrections(
     const NavigationData& nav,
     const Vector3d& receiver_position,
     double clock_bias_m,
-    double trop_zenith) const {
+    double trop_zenith,
+    bool include_single_frequency) const {
     std::map<SatelliteId, OSRCorrection> osr_by_sat;
     const bool use_clas_osr_wlnl =
         ssr_products_loaded_ && ppp_config_.estimate_ionosphere && !ppp_config_.use_ionosphere_free;
@@ -170,12 +477,20 @@ std::map<SatelliteId, OSRCorrection> PPPProcessor::computeWlnlOsrCorrections(
     auto phase_bias_repair = clas_phase_bias_repair_;
     const auto epoch_atmos = selectClasEpochAtmosTokens(
         ssr_products_, obs.getSatellites(), obs.time, receiver_position, ppp_config_);
-    for (const auto& osr : computeOSR(obs, nav, ssr_products_, epoch_atmos,
+    auto osr_corrections = computeOSR(obs, nav, ssr_products_, epoch_atmos,
                                       receiver_position, clock_bias_m, trop_zenith,
                                       ppp_config_,
                                       windup_cache, dispersion_compensation,
-                                      sis_continuity, phase_bias_repair)) {
-        if (osr.valid && osr.num_frequencies >= 2) {
+                                      sis_continuity, phase_bias_repair);
+    materializeClasReceiverAntennaCorrections(osr_corrections);
+    for (const auto& osr : osr_corrections) {
+        // MRTKLIB ddmat admits each frequency independently via vsat[f].
+        // The direct state-DD path therefore needs an elevation entry for a
+        // returning L1-only satellite even though the legacy WL/NL observable
+        // builder still requires two frequencies.
+        if (osr.valid &&
+            (osr.num_frequencies >= 2 ||
+             (include_single_frequency && osr.num_frequencies >= 1))) {
             osr_by_sat[osr.satellite] = osr;
         }
     }
@@ -200,14 +515,44 @@ bool PPPProcessor::buildWlnlNlInfoForSatellite(
     double beta = 0.0;
     double alpha1 = 0.0;
     double alpha2 = 0.0;
+    double iono_state_scale = 0.0;
     double nl_phase_m = 0.0;
     double predicted_m = 0.0;
+    double f1_hz = 0.0;
+    double f2_hz = 0.0;
+    double lambda1_m = 0.0;
+    double lambda2_m = 0.0;
+    double phase1_m = quietNaN();
+    double phase2_m = quietNaN();
+    double raw_nl_m = quietNaN();
+    double applied_cpc_minus_windup_comp_m = quietNaN();
+    double full_cpc_m = quietNaN();
+    double full_cpc_nl_phase_m = quietNaN();
+    double geo_m = quietNaN();
+    double sat_clk_m = quietNaN();
+    double trop_pred_m = quietNaN();
+    double nl_iono_m = quietNaN();
+    double cpc1_m = quietNaN();
+    double cpc2_m = quietNaN();
+    double phase_bias1_m = quietNaN();
+    double phase_bias2_m = quietNaN();
+    double windup1_m = quietNaN();
+    double windup2_m = quietNaN();
+    double phase_comp1_m = quietNaN();
+    double phase_comp2_m = quietNaN();
+    double receiver_ant1_m = quietNaN();
+    double receiver_ant2_m = quietNaN();
+    double relativity_m = quietNaN();
+    double iono_l1_m = quietNaN();
+    double iono_cpc1_m = quietNaN();
+    double iono_cpc2_m = quietNaN();
+    double trop_correction_m = quietNaN();
 
     const auto osr_it = osr_by_sat.find(sat);
     if (osr_it != osr_by_sat.end()) {
         const auto& osr = osr_it->second;
-        l1_obs = obs.getObservation(sat, osr.signals[0]);
-        l2_obs = obs.getObservation(sat, osr.signals[1]);
+        l1_obs = findOsrFrequencyObservation(obs, osr, 0);
+        l2_obs = findOsrFrequencyObservation(obs, osr, 1);
         const double f1 = osr.frequencies[0];
         const double f2 = osr.frequencies[1];
         if (l1_obs == nullptr || l2_obs == nullptr ||
@@ -216,22 +561,70 @@ bool PPPProcessor::buildWlnlNlInfoForSatellite(
             f1 <= 0.0 || f2 <= 0.0 || std::abs(f1 - f2) < 1.0) {
             return false;
         }
+        f1_hz = f1;
+        f2_hz = f2;
+        lambda1_m = osr.wavelengths[0];
+        lambda2_m = osr.wavelengths[1];
         alpha1 = f1 / (f1 + f2);
         alpha2 = f2 / (f1 + f2);
         lambda_nl = constants::SPEED_OF_LIGHT / (f1 + f2);
         lambda_wl = constants::SPEED_OF_LIGHT / std::abs(f1 - f2);
         beta = f1 * f2 / (f1 * f1 - f2 * f2);
-        const double l1_corr_m = l1_obs->carrier_phase * osr.wavelengths[0]
-                                - (osr.CPC[0] - osr.windup_m[0] - osr.phase_compensation_m[0]);
-        const double l2_corr_m = l2_obs->carrier_phase * osr.wavelengths[1]
-                                - (osr.CPC[1] - osr.windup_m[1] - osr.phase_compensation_m[1]);
+        phase1_m = l1_obs->carrier_phase * osr.wavelengths[0];
+        phase2_m = l2_obs->carrier_phase * osr.wavelengths[1];
+        cpc1_m = osr.CPC[0];
+        cpc2_m = osr.CPC[1];
+        phase_bias1_m = osr.phase_bias_m[0];
+        phase_bias2_m = osr.phase_bias_m[1];
+        windup1_m = osr.windup_m[0];
+        windup2_m = osr.windup_m[1];
+        phase_comp1_m = osr.phase_compensation_m[0];
+        phase_comp2_m = osr.phase_compensation_m[1];
+        receiver_ant1_m = osr.receiver_antenna_m[0];
+        receiver_ant2_m = osr.receiver_antenna_m[1];
+        relativity_m = osr.relativity_correction_m;
+        iono_l1_m = osr.iono_l1_m;
+        trop_correction_m = osr.trop_correction_m;
+        const double iono_scale1 =
+            (osr.frequencies[0] > 0.0 && osr.wavelengths[0] > 0.0)
+                ? std::pow(osr.wavelengths[0] / osr.wavelengths[0], 2)
+                : 1.0;
+        const double iono_scale2 =
+            (osr.frequencies[1] > 0.0 && osr.wavelengths[0] > 0.0)
+                ? std::pow(osr.wavelengths[1] / osr.wavelengths[0], 2)
+                : 1.0;
+        iono_state_scale = alpha1 * iono_scale1 + alpha2 * iono_scale2;
+        iono_cpc1_m = -iono_scale1 * osr.iono_l1_m;
+        iono_cpc2_m = -iono_scale2 * osr.iono_l1_m;
+        raw_nl_m = alpha1 * phase1_m + alpha2 * phase2_m;
+        const bool use_full_cpc_for_nl =
+            pppEnvOverrides().clas_nl_cpc_unified &&
+            ppp_config_.use_clas_osr_filter;
+        applied_cpc_minus_windup_comp_m =
+            alpha1 * (osr.CPC[0] - osr.windup_m[0] - osr.phase_compensation_m[0]) +
+            alpha2 * (osr.CPC[1] - osr.windup_m[1] - osr.phase_compensation_m[1]);
+        full_cpc_m = alpha1 * osr.CPC[0] + alpha2 * osr.CPC[1];
+        const double l1_nl_cpc_m = use_full_cpc_for_nl
+            ? osr.CPC[0]
+            : (osr.CPC[0] - osr.windup_m[0] - osr.phase_compensation_m[0]);
+        const double l2_nl_cpc_m = use_full_cpc_for_nl
+            ? osr.CPC[1]
+            : (osr.CPC[1] - osr.windup_m[1] - osr.phase_compensation_m[1]);
+        const double l1_corr_m = phase1_m - l1_nl_cpc_m;
+        const double l2_corr_m = phase2_m - l2_nl_cpc_m;
         nl_phase_m = alpha1 * l1_corr_m + alpha2 * l2_corr_m;
+        full_cpc_nl_phase_m = raw_nl_m - full_cpc_m;
         sat_pos = osr.satellite_position;
         sat_clk = osr.satellite_clock_bias_s;
-        const double nl_iono_m = osr.has_iono ? osr.iono_l1_m * f1 / f2 : 0.0;
-        predicted_m = geodist(sat_pos, receiver_position) + clock_bias_m
-                    - constants::SPEED_OF_LIGHT * sat_clk
-                    + osr.trop_correction_m + nl_iono_m;
+        nl_iono_m = osr.has_iono ? osr.iono_l1_m * f1 / f2 : 0.0;
+        geo_m = geodist(sat_pos, receiver_position);
+        sat_clk_m = constants::SPEED_OF_LIGHT * sat_clk;
+        trop_pred_m = osr.trop_correction_m;
+        const double rcv_clock_m =
+            pppEnvOverrides().clas_qzss_s_prn_fix
+                ? receiverClockBiasMeters(sat)
+                : clock_bias_m;
+        predicted_m = geo_m + rcv_clock_m - sat_clk_m + trop_pred_m + nl_iono_m;
     } else {
         l1_obs = ppp_utils::findCarrierObservation(
             obs, sat, {SignalType::GPS_L1CA, SignalType::GPS_L1P,
@@ -253,15 +646,25 @@ bool PPPProcessor::buildWlnlNlInfoForSatellite(
             return false;
         }
 
+        f1_hz = f1;
+        f2_hz = f2;
+        lambda1_m = lambda1;
+        lambda2_m = lambda2;
         alpha1 = f1 / (f1 + f2);
         alpha2 = f2 / (f1 + f2);
         lambda_nl = constants::SPEED_OF_LIGHT / (f1 + f2);
         lambda_wl = constants::SPEED_OF_LIGHT / std::abs(f1 - f2);
         beta = f1 * f2 / (f1 * f1 - f2 * f2);
+        iono_state_scale =
+            alpha1 + alpha2 * std::pow(lambda2 / lambda1, 2);
 
         const double l1_m = l1_obs->carrier_phase * lambda1;
         const double l2_m = l2_obs->carrier_phase * lambda2;
-        nl_phase_m = alpha1 * l1_m + alpha2 * l2_m;
+        phase1_m = l1_m;
+        phase2_m = l2_m;
+        raw_nl_m = alpha1 * l1_m + alpha2 * l2_m;
+        nl_phase_m = raw_nl_m;
+        full_cpc_nl_phase_m = raw_nl_m;
 
         Vector3d sat_vel;
         double sat_drift = 0.0;
@@ -271,8 +674,18 @@ bool PPPProcessor::buildWlnlNlInfoForSatellite(
         if (ssr_products_loaded_) {
             Vector3d orbit_corr;
             double clock_corr = 0.0;
+            const auto clock_policy = pppEnvOverrides().clas_base_clock_parity
+                ? SSRClockSelectionPolicy::ClaslibBaseHold
+                : SSRClockSelectionPolicy::MergedInterpolate;
+            const bool allow_future_samples =
+                !pppEnvOverrides().clas_base_clock_parity;
             if (ssr_products_.interpolateCorrection(
-                    sat, obs.time, orbit_corr, clock_corr, nullptr, nullptr, nullptr, nullptr)) {
+                    sat, obs.time, orbit_corr, clock_corr,
+                    nullptr, nullptr, nullptr, nullptr,
+                    nullptr, nullptr, nullptr,
+                    0, nullptr, nullptr, nullptr,
+                    allow_future_samples, nullptr, nullptr,
+                    clock_policy)) {
                 if (ssr_products_.orbitCorrectionsAreRac()) {
                     orbit_corr = ppp_utils::ssrRacToEcef(sat_pos, sat_vel, orbit_corr);
                 }
@@ -285,8 +698,15 @@ bool PPPProcessor::buildWlnlNlInfoForSatellite(
             (sat_pos - receiver_position).normalized().dot(receiver_position.normalized()));
         const double trop_delay =
             calculateMappingFunction(receiver_position, elevation, obs.time) * trop_zenith;
-        predicted_m = geo_range + clock_bias_m
-                    - constants::SPEED_OF_LIGHT * sat_clk + trop_delay;
+        geo_m = geo_range;
+        sat_clk_m = constants::SPEED_OF_LIGHT * sat_clk;
+        trop_pred_m = trop_delay;
+        nl_iono_m = 0.0;
+        const double rcv_clock_m =
+            pppEnvOverrides().clas_qzss_s_prn_fix
+                ? receiverClockBiasMeters(sat)
+                : clock_bias_m;
+        predicted_m = geo_range + rcv_clock_m - sat_clk_m + trop_delay;
     }
 
     if (lambda_nl <= 0.0 || !std::isfinite(nl_phase_m) || !std::isfinite(predicted_m)) {
@@ -294,11 +714,194 @@ bool PPPProcessor::buildWlnlNlInfoForSatellite(
     }
 
     const double nl_amb_cycles = (nl_phase_m - predicted_m) / lambda_nl;
+    if (auto* debug = clasNlDebugStream(); debug != nullptr) {
+        const SatelliteId l2_satellite(
+            sat.system,
+            static_cast<uint8_t>(std::min(255, static_cast<int>(sat.prn) + 100)));
+        const auto l1_state_it = filter_state_.ambiguity_indices.find(sat);
+        const auto l2_state_it = filter_state_.ambiguity_indices.find(l2_satellite);
+        const auto l1_amb_it = ambiguity_states_.find(sat);
+        const auto l2_amb_it = ambiguity_states_.find(l2_satellite);
+
+        const bool has_l1_state =
+            l1_state_it != filter_state_.ambiguity_indices.end() &&
+            l1_state_it->second >= 0 &&
+            l1_state_it->second < filter_state_.total_states &&
+            lambda1_m > 0.0;
+        const bool has_l2_state =
+            l2_state_it != filter_state_.ambiguity_indices.end() &&
+            l2_state_it->second >= 0 &&
+            l2_state_it->second < filter_state_.total_states &&
+            lambda2_m > 0.0;
+
+        const double state_l1_m = has_l1_state
+            ? filter_state_.state(l1_state_it->second)
+            : quietNaN();
+        const double state_l2_m = has_l2_state
+            ? filter_state_.state(l2_state_it->second)
+            : quietNaN();
+        const double state_l1_cycles =
+            has_l1_state ? state_l1_m / lambda1_m : quietNaN();
+        const double state_l2_cycles =
+            has_l2_state ? state_l2_m / lambda2_m : quietNaN();
+        const bool wl_fixed =
+            l1_amb_it != ambiguity_states_.end() && l1_amb_it->second.wl_is_fixed;
+        const int wl_integer = wl_fixed ? l1_amb_it->second.wl_fixed_integer : 0;
+        const double state_sum_cycles =
+            has_l1_state && has_l2_state
+                ? state_l1_cycles + state_l2_cycles
+                : quietNaN();
+        const double state_l1_wl_cycles =
+            has_l1_state && wl_fixed
+                ? 2.0 * state_l1_cycles - static_cast<double>(wl_integer)
+                : quietNaN();
+        const double state_l2_wl_cycles =
+            has_l2_state && wl_fixed
+                ? 2.0 * state_l2_cycles + static_cast<double>(wl_integer)
+                : quietNaN();
+        const double state_beta_wl_cycles =
+            has_l1_state && wl_fixed
+                ? (state_l1_m -
+                   static_cast<double>(wl_integer) * beta * lambda_wl) / lambda_nl
+                : quietNaN();
+        const double obs_full_cpc_total_cycles =
+            std::isfinite(full_cpc_nl_phase_m)
+                ? (full_cpc_nl_phase_m - predicted_m) / lambda_nl
+                : quietNaN();
+        const double current_minus_full_cpc_cycles =
+            std::isfinite(full_cpc_nl_phase_m)
+                ? (nl_phase_m - full_cpc_nl_phase_m) / lambda_nl
+                : quietNaN();
+        const auto weighted_cycles = [&](double v1, double v2) {
+            return (std::isfinite(v1) && std::isfinite(v2) && lambda_nl > 0.0)
+                ? (alpha1 * v1 + alpha2 * v2) / lambda_nl
+                : quietNaN();
+        };
+        const double phase_bias_nl_cycles =
+            weighted_cycles(phase_bias1_m, phase_bias2_m);
+        const double windup_nl_cycles =
+            weighted_cycles(windup1_m, windup2_m);
+        const double phase_comp_nl_cycles =
+            weighted_cycles(phase_comp1_m, phase_comp2_m);
+        const double receiver_ant_nl_cycles =
+            weighted_cycles(receiver_ant1_m, receiver_ant2_m);
+        const double relativity_nl_cycles =
+            std::isfinite(relativity_m) && lambda_nl > 0.0
+                ? relativity_m / lambda_nl
+                : quietNaN();
+        const double iono_cpc_nl_cycles =
+            weighted_cycles(iono_cpc1_m, iono_cpc2_m);
+        const double trop_correction_cycles =
+            std::isfinite(trop_correction_m) && lambda_nl > 0.0
+                ? trop_correction_m / lambda_nl
+                : quietNaN();
+        const double mw_mean =
+            l1_amb_it != ambiguity_states_.end()
+                ? l1_amb_it->second.mw_mean_cycles
+                : quietNaN();
+        const double mw_minus_wl =
+            std::isfinite(mw_mean) && wl_fixed
+                ? mw_mean - static_cast<double>(wl_integer)
+                : quietNaN();
+        const int mw_count =
+            l1_amb_it != ambiguity_states_.end()
+                ? l1_amb_it->second.mw_count
+                : 0;
+        const int lock_count =
+            l1_amb_it != ambiguity_states_.end()
+                ? l1_amb_it->second.lock_count
+                : 0;
+
+        *debug << std::setprecision(17)
+               << "SAT,"
+               << obs.time.week << ','
+               << obs.time.tow << ','
+               << sat.toString() << ','
+               << static_cast<int>(l1_obs->signal) << ','
+               << static_cast<int>(l2_obs->signal) << ','
+               << lambda1_m << ','
+               << lambda2_m << ','
+               << lambda_nl << ','
+               << lambda_wl << ','
+               << alpha1 << ','
+               << alpha2 << ','
+               << beta << ','
+               << l1_obs->carrier_phase << ','
+               << l2_obs->carrier_phase << ','
+               << phase1_m << ','
+               << phase2_m << ','
+               << raw_nl_m << ','
+               << applied_cpc_minus_windup_comp_m << ','
+               << full_cpc_m << ','
+               << nl_phase_m << ','
+               << full_cpc_nl_phase_m << ','
+               << geo_m << ','
+               << clock_bias_m << ','
+               << sat_clk_m << ','
+               << trop_pred_m << ','
+               << nl_iono_m << ','
+               << predicted_m << ','
+               << nl_amb_cycles << ','
+               << obs_full_cpc_total_cycles << ','
+               << state_l1_m << ','
+               << state_l2_m << ','
+               << state_l1_cycles << ','
+               << state_l2_cycles << ','
+               << state_sum_cycles << ','
+               << state_l1_wl_cycles << ','
+               << state_l2_wl_cycles << ','
+               << state_beta_wl_cycles << ','
+               << (std::isfinite(state_sum_cycles)
+                       ? nl_amb_cycles - state_sum_cycles
+                       : quietNaN()) << ','
+               << (std::isfinite(state_l1_wl_cycles)
+                       ? nl_amb_cycles - state_l1_wl_cycles
+                       : quietNaN()) << ','
+               << (std::isfinite(state_l2_wl_cycles)
+                       ? nl_amb_cycles - state_l2_wl_cycles
+                       : quietNaN()) << ','
+               << (std::isfinite(state_beta_wl_cycles)
+                       ? nl_amb_cycles - state_beta_wl_cycles
+                       : quietNaN()) << ','
+               << (wl_fixed ? 1 : 0) << ','
+               << wl_integer << ','
+               << mw_mean << ','
+               << mw_minus_wl << ','
+               << mw_count << ','
+               << lock_count << ','
+               << cpc1_m << ','
+               << cpc2_m << ','
+               << phase_bias1_m << ','
+               << phase_bias2_m << ','
+               << windup1_m << ','
+               << windup2_m << ','
+               << phase_comp1_m << ','
+               << phase_comp2_m << ','
+               << receiver_ant1_m << ','
+               << receiver_ant2_m << ','
+               << relativity_m << ','
+               << iono_l1_m << ','
+               << iono_cpc1_m << ','
+               << iono_cpc2_m << ','
+               << trop_correction_m << ','
+               << current_minus_full_cpc_cycles << ','
+               << phase_bias_nl_cycles << ','
+               << windup_nl_cycles << ','
+               << phase_comp_nl_cycles << ','
+               << receiver_ant_nl_cycles << ','
+               << relativity_nl_cycles << ','
+               << iono_cpc_nl_cycles << ','
+               << trop_correction_cycles
+               << '\n';
+    }
     info = {
         nl_amb_cycles,
         lambda_nl,
         lambda_wl,
         beta,
+        alpha1,
+        alpha2,
+        iono_state_scale,
         {sat.system,
          {static_cast<int>(l1_obs->signal), static_cast<int>(l2_obs->signal)}},
         true
@@ -323,8 +926,8 @@ bool PPPProcessor::buildFixedNlObservationForSatellite(
     const auto osr_it = osr_by_sat.find(satellite);
     if (osr_it != osr_by_sat.end()) {
         const auto& osr = osr_it->second;
-        const Observation* l1 = obs.getObservation(satellite, osr.signals[0]);
-        const Observation* l2 = obs.getObservation(satellite, osr.signals[1]);
+        const Observation* l1 = findOsrFrequencyObservation(obs, osr, 0);
+        const Observation* l2 = findOsrFrequencyObservation(obs, osr, 1);
         const double f1 = osr.frequencies[0];
         const double f2 = osr.frequencies[1];
         if (l1 == nullptr || l2 == nullptr ||
@@ -336,13 +939,49 @@ bool PPPProcessor::buildFixedNlObservationForSatellite(
         const double alpha1 = f1 / (f1 + f2);
         const double alpha2 = f2 / (f1 + f2);
         lambda_nl = constants::SPEED_OF_LIGHT / (f1 + f2);
+        const double cpc_nl_m = alpha1 * osr.CPC[0] + alpha2 * osr.CPC[1];
         const double l1_corr_m = l1->carrier_phase * osr.wavelengths[0] - osr.CPC[0];
         const double l2_corr_m = l2->carrier_phase * osr.wavelengths[1] - osr.CPC[1];
         nl_phase_m = alpha1 * l1_corr_m + alpha2 * l2_corr_m;
         sat_pos = osr.satellite_position;
         sat_clk = osr.satellite_clock_bias_s;
         use_trop_model = false;
+        fixed_observation.signal1 = l1->signal;
+        fixed_observation.signal2 = l2->signal;
+        fixed_observation.frequency1_hz = f1;
+        fixed_observation.frequency2_hz = f2;
+        fixed_observation.raw_phase1_m = l1->carrier_phase * osr.wavelengths[0];
+        fixed_observation.raw_phase2_m = l2->carrier_phase * osr.wavelengths[1];
+        fixed_observation.corrected_phase1_m = l1_corr_m;
+        fixed_observation.corrected_phase2_m = l2_corr_m;
+        fixed_observation.raw_code1_m =
+            l1->has_pseudorange ? l1->pseudorange : quietNaN();
+        fixed_observation.raw_code2_m =
+            l2->has_pseudorange ? l2->pseudorange : quietNaN();
+        fixed_observation.corrected_code1_m =
+            l1->has_pseudorange ? l1->pseudorange - osr.PRC[0] : quietNaN();
+        fixed_observation.corrected_code2_m =
+            l2->has_pseudorange ? l2->pseudorange - osr.PRC[1] : quietNaN();
+        fixed_observation.cpc1_m = osr.CPC[0];
+        fixed_observation.cpc2_m = osr.CPC[1];
+        fixed_observation.prc1_m = osr.PRC[0];
+        fixed_observation.prc2_m = osr.PRC[1];
+        fixed_observation.receiver_ant1_m = osr.receiver_antenna_m[0];
+        fixed_observation.receiver_ant2_m = osr.receiver_antenna_m[1];
+        fixed_observation.cpc_nl_m = cpc_nl_m;
+        fixed_observation.osr_trop_correction_m = osr.trop_correction_m;
+        fixed_observation.osr_nl_iono_m = osr.has_iono ? osr.iono_l1_m * f1 / f2 : 0.0;
+        fixed_observation.extra_prediction_m =
+            pppEnvOverrides().clas_vertical_fix && ppp_config_.use_clas_osr_filter
+                ? fixed_observation.osr_trop_correction_m +
+                      fixed_observation.osr_nl_iono_m
+                : 0.0;
+        fixed_observation.receiver_ant_nl_m =
+            alpha1 * osr.receiver_antenna_m[0] + alpha2 * osr.receiver_antenna_m[1];
     } else {
+        if (ppp_config_.use_clas_osr_filter && env_overrides_.clas_fix_require_osr) {
+            return false;
+        }
         const Observation* l1 = ppp_utils::findCarrierObservation(
             obs, satellite, {SignalType::GPS_L1CA, SignalType::GAL_E1, SignalType::QZS_L1CA});
         const Observation* l2 = ppp_utils::findCarrierObservation(
@@ -365,6 +1004,20 @@ bool PPPProcessor::buildFixedNlObservationForSatellite(
         const double alpha2 = f2 / (f1 + f2);
         lambda_nl = constants::SPEED_OF_LIGHT / (f1 + f2);
         nl_phase_m = alpha1 * l1->carrier_phase * lam1 + alpha2 * l2->carrier_phase * lam2;
+        fixed_observation.signal1 = l1->signal;
+        fixed_observation.signal2 = l2->signal;
+        fixed_observation.frequency1_hz = f1;
+        fixed_observation.frequency2_hz = f2;
+        fixed_observation.raw_phase1_m = l1->carrier_phase * lam1;
+        fixed_observation.raw_phase2_m = l2->carrier_phase * lam2;
+        fixed_observation.corrected_phase1_m = fixed_observation.raw_phase1_m;
+        fixed_observation.corrected_phase2_m = fixed_observation.raw_phase2_m;
+        fixed_observation.raw_code1_m =
+            l1->has_pseudorange ? l1->pseudorange : quietNaN();
+        fixed_observation.raw_code2_m =
+            l2->has_pseudorange ? l2->pseudorange : quietNaN();
+        fixed_observation.corrected_code1_m = fixed_observation.raw_code1_m;
+        fixed_observation.corrected_code2_m = fixed_observation.raw_code2_m;
 
         Vector3d sat_vel;
         double sat_drift = 0.0;
@@ -375,8 +1028,18 @@ bool PPPProcessor::buildFixedNlObservationForSatellite(
         if (ssr_products_loaded_) {
             Vector3d orbit_corr;
             double clock_corr = 0.0;
+            const auto clock_policy = pppEnvOverrides().clas_base_clock_parity
+                ? SSRClockSelectionPolicy::ClaslibBaseHold
+                : SSRClockSelectionPolicy::MergedInterpolate;
+            const bool allow_future_samples =
+                !pppEnvOverrides().clas_base_clock_parity;
             if (ssr_products_.interpolateCorrection(
-                    satellite, obs.time, orbit_corr, clock_corr, nullptr, nullptr, nullptr, nullptr)) {
+                    satellite, obs.time, orbit_corr, clock_corr,
+                    nullptr, nullptr, nullptr, nullptr,
+                    nullptr, nullptr, nullptr,
+                    0, nullptr, nullptr, nullptr,
+                    allow_future_samples, nullptr, nullptr,
+                    clock_policy)) {
                 if (ssr_products_.orbitCorrectionsAreRac()) {
                     orbit_corr = ppp_utils::ssrRacToEcef(sat_pos, sat_vel, orbit_corr);
                 }
@@ -390,6 +1053,7 @@ bool PPPProcessor::buildFixedNlObservationForSatellite(
         return false;
     }
 
+    fixed_observation.satellite = satellite;
     fixed_observation.nl_phase_m = nl_phase_m;
     fixed_observation.fixed_nl_cycles = fixed_nl;
     fixed_observation.lambda_nl_m = lambda_nl;

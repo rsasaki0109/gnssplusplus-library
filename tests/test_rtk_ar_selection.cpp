@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
+
 #include <libgnss++/algorithms/rtk_ar_selection.hpp>
 
 using namespace libgnss;
@@ -45,6 +47,25 @@ TEST(RTKArSelectionTest, BuildsPreferredConstellationSubsets) {
     EXPECT_EQ(subsets[0], (std::vector<int>{0, 3}));
     EXPECT_EQ(subsets[1], (std::vector<int>{0, 2, 3}));
     EXPECT_EQ(subsets[2], (std::vector<int>{0, 1, 3}));
+}
+
+TEST(RTKArSelectionTest, BuildsPaperConstellationFallbackSequence) {
+    const std::vector<rtk_ar_selection::PairDescriptor> pairs = {
+        {GNSSSystem::GPS, 0.01},
+        {GNSSSystem::QZSS, 0.02},
+        {GNSSSystem::Galileo, 0.03},
+        {GNSSSystem::BeiDou, 0.04},
+        {GNSSSystem::GLONASS, 0.05},
+    };
+
+    const auto subsets =
+        rtk_ar_selection::buildPaperConstellationFallbackSubsets(pairs);
+    ASSERT_EQ(subsets.size(), 5U);
+    EXPECT_EQ(subsets[0], (std::vector<int>{0, 1, 2, 3}));  // GQEB
+    EXPECT_EQ(subsets[1], (std::vector<int>{0, 1, 2, 4}));  // GQER
+    EXPECT_EQ(subsets[2], (std::vector<int>{0, 1, 2}));     // GQE
+    EXPECT_EQ(subsets[3], (std::vector<int>{0, 1, 3}));     // GQB
+    EXPECT_EQ(subsets[4], (std::vector<int>{0, 1}));        // GQ
 }
 
 TEST(RTKArSelectionTest, BuildsProgressiveWorstVarianceDropSubsets) {
@@ -144,4 +165,171 @@ TEST(RTKArSelectionTest, BSRGuidedDecimationRejectsNonPsdCovariance) {
     const auto subsets = rtk_ar_selection::buildBSRGuidedDropSubsets(
         pairs, Qb, 3, 2, 1);
     EXPECT_TRUE(subsets.empty());
+}
+
+TEST(RTKArSelectionTest, WideLaneConditioningReducesNarrowLaneVariance) {
+    Eigen::VectorXd head(3);
+    head << 10.0, 20.0, 30.0;
+    Eigen::MatrixXd Qab = Eigen::MatrixXd::Zero(3, 2);
+    Qab(0, 0) = 0.2;
+    Qab(1, 1) = 0.1;
+    Eigen::VectorXd n1(2);
+    n1 << 4.4, -2.3;
+    Eigen::MatrixXd Qn1 = Eigen::MatrixXd::Identity(2, 2);
+    Eigen::VectorXd wl(2);
+    wl << 1.4, -1.3;
+    Eigen::MatrixXd Qwl = 2.0 * Eigen::MatrixXd::Identity(2, 2);
+    Eigen::VectorXd fixed(2);
+    fixed << 1.0, -1.0;
+    Eigen::VectorXd conditioned_head;
+    Eigen::MatrixXd conditioned_Qab;
+    Eigen::VectorXd conditioned_n1;
+    Eigen::MatrixXd conditioned_Qn1;
+
+    ASSERT_TRUE(
+        rtk_ar_selection::conditionNarrowLaneOnFixedWideLane(
+            head, Qab, n1, Qn1, wl, Qwl, fixed, conditioned_head,
+            conditioned_Qab, conditioned_n1, conditioned_Qn1));
+
+    EXPECT_TRUE(conditioned_n1.isApprox(
+        (Eigen::VectorXd(2) << 4.2, -2.15).finished(), 1e-12));
+    EXPECT_TRUE(conditioned_Qn1.isApprox(
+        0.5 * Eigen::MatrixXd::Identity(2, 2), 1e-12));
+    EXPECT_LT(conditioned_head(0), head(0));
+    EXPECT_GT(conditioned_head(1), head(1));
+}
+
+TEST(RTKArSelectionTest, WideLaneConditioningRejectsSingularCovariance) {
+    Eigen::VectorXd head = Eigen::VectorXd::Zero(3);
+    Eigen::MatrixXd Qab = Eigen::MatrixXd::Zero(3, 1);
+    Eigen::VectorXd n1 = Eigen::VectorXd::Zero(1);
+    Eigen::MatrixXd Qn1 = Eigen::MatrixXd::Identity(1, 1);
+    Eigen::VectorXd wl = Eigen::VectorXd::Zero(1);
+    Eigen::MatrixXd Qwl = Eigen::MatrixXd::Zero(1, 1);
+    Eigen::VectorXd fixed = Eigen::VectorXd::Zero(1);
+    Eigen::VectorXd conditioned_head;
+    Eigen::MatrixXd conditioned_Qab;
+    Eigen::VectorXd conditioned_n1;
+    Eigen::MatrixXd conditioned_Qn1;
+
+    EXPECT_FALSE(
+        rtk_ar_selection::conditionNarrowLaneOnFixedWideLane(
+            head, Qab, n1, Qn1, wl, Qwl, fixed, conditioned_head,
+            conditioned_Qab, conditioned_n1, conditioned_Qn1));
+}
+
+TEST(RTKArSelectionTest, SatelliteQualityDropRemovesAllFrequenciesTogether) {
+    const SatelliteId g01(GNSSSystem::GPS, 1);
+    const SatelliteId g02(GNSSSystem::GPS, 2);
+    const SatelliteId e03(GNSSSystem::Galileo, 3);
+    const std::vector<rtk_ar_selection::PairDescriptor> pairs = {
+        {GNSSSystem::GPS, 0.01, g01, 0.8, 45.0, 0.02},
+        {GNSSSystem::GPS, 0.02, g01, 0.8, 44.0, 0.03},
+        {GNSSSystem::GPS, 0.80, g02, 0.2, 24.0, 0.48},
+        {GNSSSystem::GPS, 0.70, g02, 0.2, 23.0, 0.45},
+        {GNSSSystem::Galileo, 0.04, e03, 0.6, 40.0, 0.08},
+        {GNSSSystem::Galileo, 0.05, e03, 0.6, 39.0, 0.09},
+    };
+    const auto subsets =
+        rtk_ar_selection::buildSatelliteQualityDropSubsets(
+            pairs, /*minimum_pairs=*/2, /*max_drop_steps=*/2);
+    ASSERT_EQ(subsets.size(), 2U);
+    EXPECT_EQ(subsets[0], (std::vector<int>{0, 1, 4, 5}));
+    EXPECT_EQ(subsets[1], (std::vector<int>{0, 1}));
+}
+
+TEST(RTKArSelectionTest, SatelliteQualityDropFailsClosedAtPairFloor) {
+    const SatelliteId g01(GNSSSystem::GPS, 1);
+    const SatelliteId g02(GNSSSystem::GPS, 2);
+    const std::vector<rtk_ar_selection::PairDescriptor> pairs = {
+        {GNSSSystem::GPS, 0.01, g01},
+        {GNSSSystem::GPS, 0.02, g01},
+        {GNSSSystem::GPS, 0.80, g02},
+        {GNSSSystem::GPS, 0.70, g02},
+    };
+    EXPECT_TRUE(
+        rtk_ar_selection::buildSatelliteQualityDropSubsets(
+            pairs, /*minimum_pairs=*/3, /*max_drop_steps=*/2)
+            .empty());
+}
+
+TEST(RTKArSelectionTest, SatelliteQualityDropUsesPosteriorResidualInMeters) {
+    const SatelliteId g01(GNSSSystem::GPS, 1);
+    const SatelliteId g02(GNSSSystem::GPS, 2);
+    const SatelliteId g03(GNSSSystem::GPS, 3);
+    std::vector<rtk_ar_selection::PairDescriptor> pairs(3);
+    pairs[0].system = GNSSSystem::GPS;
+    pairs[0].satellite = g01;
+    pairs[0].variance = 0.1;
+    pairs[0].posterior_abs_residual_m = 0.01;
+    pairs[1].system = GNSSSystem::GPS;
+    pairs[1].satellite = g02;
+    pairs[1].variance = 0.1;
+    pairs[1].posterior_abs_residual_m = 0.09;
+    pairs[2].system = GNSSSystem::GPS;
+    pairs[2].satellite = g03;
+    pairs[2].variance = 0.1;
+    pairs[2].posterior_abs_residual_m = 0.02;
+
+    const auto subsets =
+        rtk_ar_selection::buildSatelliteQualityDropSubsets(
+            pairs, /*minimum_pairs=*/2, /*max_drop_steps=*/1);
+    ASSERT_EQ(subsets.size(), 1U);
+    EXPECT_EQ(subsets[0], (std::vector<int>{0, 2}));
+}
+
+TEST(RTKArSelectionTest, SatelliteQualityDropPenalizesAzimuthCrowding) {
+    std::vector<rtk_ar_selection::PairDescriptor> pairs(4);
+    const std::vector<double> azimuths = {0.0, 0.05, 2.0, 4.0};
+    for (int index = 0; index < 4; ++index) {
+        pairs[index].system = GNSSSystem::GPS;
+        pairs[index].satellite =
+            SatelliteId(GNSSSystem::GPS, index + 1);
+        pairs[index].variance = 0.1;
+        pairs[index].azimuth_rad = azimuths[index];
+    }
+
+    const auto subsets =
+        rtk_ar_selection::buildSatelliteQualityDropSubsets(
+            pairs, /*minimum_pairs=*/3, /*max_drop_steps=*/1);
+    ASSERT_EQ(subsets.size(), 1U);
+    // G01 and G02 are equally crowded; the stable satellite-id tie-break
+    // makes G01 the deterministic first drop.
+    EXPECT_EQ(subsets[0], (std::vector<int>{1, 2, 3}));
+}
+
+TEST(RTKArSelectionTest, SatelliteQualityDiverseDropKeepsDistinctMetricPaths) {
+    std::vector<rtk_ar_selection::PairDescriptor> pairs(4);
+    for (int index = 0; index < 4; ++index) {
+        pairs[index].system = GNSSSystem::GPS;
+        pairs[index].satellite =
+            SatelliteId(GNSSSystem::GPS, index + 1);
+        pairs[index].variance = 0.1;
+        pairs[index].posterior_abs_residual_m = 0.01;
+        pairs[index].snr_dbhz = 45.0;
+    }
+    pairs[1].variance = 10.0;
+    pairs[2].posterior_abs_residual_m = 0.5;
+    pairs[3].snr_dbhz = 15.0;
+
+    const auto subsets =
+        rtk_ar_selection::buildSatelliteQualityDiverseDropSubsets(
+            pairs, /*minimum_pairs=*/2, /*max_drop_steps=*/1,
+            /*maximum_subsets=*/16);
+
+    EXPECT_NE(
+        std::find(
+            subsets.begin(), subsets.end(),
+            std::vector<int>({0, 2, 3})),
+        subsets.end());
+    EXPECT_NE(
+        std::find(
+            subsets.begin(), subsets.end(),
+            std::vector<int>({0, 1, 3})),
+        subsets.end());
+    EXPECT_NE(
+        std::find(
+            subsets.begin(), subsets.end(),
+            std::vector<int>({0, 1, 2})),
+        subsets.end());
 }

@@ -4,6 +4,7 @@
 
 #include <array>
 #include <cmath>
+#include <limits>
 #include <map>
 #include <vector>
 
@@ -415,6 +416,120 @@ FGOProcessor::FGOProblem makeSyntheticInterSystemBiasProblem() {
     return problem;
 }
 
+// --- CMC (Code-Minus-Carrier) screening test helper ---
+//
+// Builds a fixed-position, two-satellite (GPS PRN1/PRN2) epoch stream where
+// the per-satellite, per-epoch carrier bias is fully controlled. Reusing
+// makeSyntheticGpsL1Observation's construction (carrier_phase = (pseudorange
+// + carrier_bias_m) / wavelength) means the receiver's own geometric
+// pseudorange term cancels exactly out of the single-difference CMC, so for
+// a satellite tracked at both receivers:
+//   CMC = (PR_rover - PR_base) - (CP_rover - CP_base) * wavelength
+//       = carrier_bias_base_m - carrier_bias_rover_m
+// exactly (no residual geometry term), regardless of the rover/base
+// baseline. The same bias sequence is applied identically to BOTH
+// satellites so the test does not need to predict which one
+// select_reference() will pick as the DD reference (elevation-driven, not
+// controlled here); whichever one is NOT selected is the one the CMC
+// screening actually gates for that (system, signal) group, and it is
+// identified after the fact from the built problem.
+std::vector<ObservationData> makeCmcObservationEpochs(
+    const NavigationData& nav,
+    const Vector3d& receiver_position,
+    const std::vector<std::array<double, 2>>& carrier_bias_m,
+    double dt_s,
+    const std::vector<bool>& loss_of_lock_epochs = {}) {
+    std::vector<ObservationData> epochs;
+    for (std::size_t epoch_index = 0; epoch_index < carrier_bias_m.size();
+         ++epoch_index) {
+        ObservationData epoch(
+            GNSSTime(2300, 100100.0 + dt_s * static_cast<double>(epoch_index)));
+        epoch.receiver_position = receiver_position;
+        for (std::size_t sat_index = 0; sat_index < 2; ++sat_index) {
+            Observation observation;
+            const uint8_t prn = static_cast<uint8_t>(sat_index + 1);
+            if (makeSyntheticGpsL1Observation(nav,
+                                              SatelliteId(GNSSSystem::GPS, prn),
+                                              epoch.time,
+                                              receiver_position,
+                                              carrier_bias_m[epoch_index][sat_index],
+                                              observation)) {
+                if (epoch_index < loss_of_lock_epochs.size() &&
+                    loss_of_lock_epochs[epoch_index]) {
+                    observation.loss_of_lock = true;
+                }
+                epoch.addObservation(observation);
+            }
+        }
+        epochs.push_back(epoch);
+    }
+    return epochs;
+}
+
+// Common config for CMC integration tests: minimal DD-only problem, all
+// satellites pass (no elevation/SNR gating gets in the way of a controlled
+// synthetic scenario), matching the style of
+// BuiltSingleDifferenceTdcpFactorsUseCurrentEpochLos above.
+FGOProcessor::FGOConfig makeCmcTestConfig() {
+    FGOProcessor::FGOConfig config;
+    config.use_spp_seed = false;
+    config.use_pseudorange_factors = false;
+    config.use_motion_factors = false;
+    config.use_tdcp_factors = false;
+    config.use_double_difference_factors = true;
+    config.use_ionosphere_model = false;
+    config.use_troposphere_model = false;
+    config.min_elevation_deg = -90.0;
+    config.min_satellites_per_epoch = 2;
+    config.max_tdcp_gap_s = 10.0;
+    config.use_code_minus_carrier_screening = true;
+    config.code_minus_carrier_jump_threshold_m = 1.0;
+    config.code_minus_carrier_level_threshold_m = 0.0;  // off unless a test opts in
+    return config;
+}
+
+// Identifies, from a built DD problem, the (satellite, signal) that the CMC
+// screening actually gates -- i.e. whichever of PRN1/PRN2 was NOT picked as
+// the per-epoch DD reference -- and returns its ambiguity_index (or
+// SIZE_MAX if absent) plus whether a DD carrier/pseudorange factor exists,
+// for every requested epoch index.
+struct TrackedSatelliteRow {
+    bool has_carrier_factor = false;
+    bool has_pseudorange_factor = false;
+    std::size_t ambiguity_index = std::numeric_limits<std::size_t>::max();
+};
+
+std::map<std::size_t, TrackedSatelliteRow> trackedSatelliteRowsByEpoch(
+    const FGOProcessor::FGOProblem& problem,
+    SatelliteId* out_tracked_satellite = nullptr) {
+    SatelliteId tracked;
+    bool found_tracked = false;
+    for (const auto& factor : problem.double_difference_carrier_factors) {
+        tracked = factor.satellite;
+        found_tracked = true;
+        break;
+    }
+    std::map<std::size_t, TrackedSatelliteRow> rows;
+    if (!found_tracked) {
+        return rows;
+    }
+    for (const auto& factor : problem.double_difference_carrier_factors) {
+        if (factor.satellite == tracked) {
+            rows[factor.epoch_index].has_carrier_factor = true;
+            rows[factor.epoch_index].ambiguity_index = factor.ambiguity_index;
+        }
+    }
+    for (const auto& factor : problem.double_difference_pseudorange_factors) {
+        if (factor.satellite == tracked) {
+            rows[factor.epoch_index].has_pseudorange_factor = true;
+        }
+    }
+    if (out_tracked_satellite != nullptr) {
+        *out_tracked_satellite = tracked;
+    }
+    return rows;
+}
+
 }  // namespace
 
 TEST(FGOTest, EmptyProblemProducesNoSolutions) {
@@ -505,6 +620,7 @@ TEST(FGOTest, TimeDifferencedCarrierFactorsRecoverSyntheticTrajectory) {
     EXPECT_EQ(stats.fixed_solutions, 0u);
     EXPECT_EQ(result.diagnostics.pseudorange_factors, 12u);
     EXPECT_EQ(result.diagnostics.tdcp_factors, 6u);
+    EXPECT_EQ(result.diagnostics.tdcp_factors_inserted, 6u);
     EXPECT_EQ(result.diagnostics.tdcp_candidate_pairs, 6u);
     EXPECT_LT(result.diagnostics.residual_rms_m, 1e-5);
     EXPECT_LT(result.diagnostics.tdcp_residual_rms_m, 1e-5);
@@ -528,6 +644,7 @@ TEST(FGOTest, SingleDifferenceDopplerAndTdcpFactorsConstrainMotion) {
     EXPECT_TRUE(result.diagnostics.converged);
     EXPECT_EQ(result.diagnostics.single_difference_doppler_factors, 5u);
     EXPECT_EQ(result.diagnostics.single_difference_tdcp_factors, 5u);
+    EXPECT_EQ(result.diagnostics.single_difference_tdcp_factors_inserted, 5u);
     EXPECT_LT(result.diagnostics.single_difference_doppler_residual_rms_mps,
               1e-5);
     EXPECT_LT(result.diagnostics.single_difference_tdcp_residual_rms_m,
@@ -1023,4 +1140,517 @@ TEST(FGOTest, PropagatesTdcpQualityDiagnostics) {
     EXPECT_EQ(result.diagnostics.tdcp_rejected_missing_previous, 3u);
     EXPECT_EQ(result.diagnostics.tdcp_rejected_loss_of_lock, 4u);
     EXPECT_EQ(result.diagnostics.tdcp_rejected_code_phase_jump, 5u);
+}
+
+TEST(FGOTest, CmcJumpForcesAmbiguityArcBreak) {
+    const NavigationData nav = makeSyntheticGpsNavigation(2);
+    const Vector3d rover_position(1113194.0, -4841695.0, 3985350.0);
+    const Vector3d base_position = rover_position + Vector3d(-320.0, 180.0, 45.0);
+
+    // Both satellites: rover bias jumps by 5 m at epoch 2 (base bias stays
+    // at 0), so single-difference CMC jumps by -5 m there -- well past the
+    // 1.0 m test threshold. No jump before or after.
+    const std::vector<std::array<double, 2>> rover_bias = {
+        {0.0, 0.0}, {0.0, 0.0}, {5.0, 5.0}, {5.0, 5.0},
+    };
+    const std::vector<std::array<double, 2>> base_bias = {
+        {0.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}, {0.0, 0.0},
+    };
+    const auto rover_epochs =
+        makeCmcObservationEpochs(nav, rover_position, rover_bias, 1.0);
+    const auto base_epochs =
+        makeCmcObservationEpochs(nav, base_position, base_bias, 1.0);
+
+    FGOProcessor processor(makeCmcTestConfig());
+    const auto problem = processor.buildDoubleDifferenceProblem(
+        rover_epochs, base_epochs, nav, base_position);
+
+    const auto rows = trackedSatelliteRowsByEpoch(problem);
+    ASSERT_EQ(rows.size(), 4u);
+    for (const auto& [epoch_index, row] : rows) {
+        EXPECT_TRUE(row.has_carrier_factor) << "epoch " << epoch_index;
+        EXPECT_TRUE(row.has_pseudorange_factor) << "epoch " << epoch_index;
+    }
+
+    // No break between epoch 0 and 1 (no CMC change).
+    EXPECT_EQ(rows.at(0).ambiguity_index, rows.at(1).ambiguity_index);
+    // The jump at epoch 2 forces a NEW ambiguity for the tracked satellite.
+    EXPECT_NE(rows.at(1).ambiguity_index, rows.at(2).ambiguity_index);
+    // No further break at epoch 3 (bias held steady after the jump).
+    EXPECT_EQ(rows.at(2).ambiguity_index, rows.at(3).ambiguity_index);
+
+    // Both PRN1 and PRN2 are screened every epoch (only one of them is the
+    // DD reference and gates factor emission, but the CMC pre-pass runs over
+    // every tracked satellite), so the shared jump at epoch 2 is detected
+    // twice.
+    EXPECT_EQ(problem.diagnostics.code_minus_carrier_jump_resets, 2u);
+    EXPECT_EQ(problem.diagnostics.code_minus_carrier_level_exclusions, 0u);
+}
+
+TEST(FGOTest, CmcScreeningDefaultOffIsNoOp) {
+    const NavigationData nav = makeSyntheticGpsNavigation(2);
+    const Vector3d rover_position(1113194.0, -4841695.0, 3985350.0);
+    const Vector3d base_position = rover_position + Vector3d(-320.0, 180.0, 45.0);
+
+    const std::vector<std::array<double, 2>> rover_bias = {
+        {0.0, 0.0}, {0.0, 0.0}, {5.0, 5.0}, {5.0, 5.0},
+    };
+    const std::vector<std::array<double, 2>> base_bias = {
+        {0.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}, {0.0, 0.0},
+    };
+    const auto rover_epochs =
+        makeCmcObservationEpochs(nav, rover_position, rover_bias, 1.0);
+    const auto base_epochs =
+        makeCmcObservationEpochs(nav, base_position, base_bias, 1.0);
+
+    FGOProcessor::FGOConfig config = makeCmcTestConfig();
+    config.use_code_minus_carrier_screening = false;  // default
+    FGOProcessor processor(config);
+    const auto problem = processor.buildDoubleDifferenceProblem(
+        rover_epochs, base_epochs, nav, base_position);
+
+    const auto rows = trackedSatelliteRowsByEpoch(problem);
+    ASSERT_EQ(rows.size(), 4u);
+    for (const auto& [epoch_index, row] : rows) {
+        EXPECT_TRUE(row.has_carrier_factor) << "epoch " << epoch_index;
+        EXPECT_TRUE(row.has_pseudorange_factor) << "epoch " << epoch_index;
+    }
+    // With screening off, the same CMC jump that broke the arc in
+    // CmcJumpForcesAmbiguityArcBreak must NOT break it here: every epoch
+    // keeps the same ambiguity_index.
+    EXPECT_EQ(rows.at(0).ambiguity_index, rows.at(1).ambiguity_index);
+    EXPECT_EQ(rows.at(1).ambiguity_index, rows.at(2).ambiguity_index);
+    EXPECT_EQ(rows.at(2).ambiguity_index, rows.at(3).ambiguity_index);
+
+    EXPECT_EQ(problem.diagnostics.code_minus_carrier_jump_resets, 0u);
+    EXPECT_EQ(problem.diagnostics.code_minus_carrier_level_exclusions, 0u);
+}
+
+TEST(FGOTest, CmcLevelExclusionSkipsBothFactorsWithoutUpdatingBaseline) {
+    const NavigationData nav = makeSyntheticGpsNavigation(2);
+    const Vector3d rover_position(1113194.0, -4841695.0, 3985350.0);
+    const Vector3d base_position = rover_position + Vector3d(-320.0, 180.0, 45.0);
+
+    // Warmup = 3: epochs 0,1,2 seed/average the baseline to
+    // (0 + 2 - 1) / 3 = 1/3 (CMC = base_bias - rover_bias). Epoch 3 and 4
+    // both deviate by the SAME amount (baseline + threshold + margin) so
+    // that IF the baseline had been updated after epoch 3's exclusion,
+    // epoch 4 would no longer be excluded -- it must still be excluded,
+    // proving the baseline was left untouched.
+    FGOProcessor::FGOConfig config = makeCmcTestConfig();
+    config.code_minus_carrier_jump_threshold_m = 1000.0;  // isolate the level check
+    config.code_minus_carrier_level_threshold_m = 0.4;
+    config.code_minus_carrier_warmup_epochs = 3;
+    config.code_minus_carrier_baseline_alpha = 0.5;
+
+    // CMC[e] = base_bias[e] - rover_bias[e]:
+    //   e0: 0 - 0 = 0
+    //   e1: 2 - 0 = 2   (rover=0, base=2)
+    //   e2: -1 - 0 = -1 (rover=0, base=-1)
+    //   baseline after warmup = (0 + 2 - 1) / 3 = 1/3
+    //   e3, e4: cmc = 1/3 + 0.4 + 0.2 = 0.9333... -> |delta| = 0.6 > 0.4: excluded both times
+    const double baseline_after_warmup = (0.0 + 2.0 - 1.0) / 3.0;
+    const double excluded_cmc = baseline_after_warmup + 0.4 + 0.2;
+    const std::vector<std::array<double, 2>> base_bias = {
+        {0.0, 0.0}, {2.0, 2.0}, {-1.0, -1.0},
+        {excluded_cmc, excluded_cmc}, {excluded_cmc, excluded_cmc},
+    };
+    const std::vector<std::array<double, 2>> rover_bias = {
+        {0.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}, {0.0, 0.0},
+    };
+    const auto rover_epochs =
+        makeCmcObservationEpochs(nav, rover_position, rover_bias, 1.0);
+    const auto base_epochs =
+        makeCmcObservationEpochs(nav, base_position, base_bias, 1.0);
+
+    FGOProcessor processor(config);
+    const auto problem = processor.buildDoubleDifferenceProblem(
+        rover_epochs, base_epochs, nav, base_position);
+
+    const auto rows = trackedSatelliteRowsByEpoch(problem);
+    // Epochs 0, 1, 2 (seeding/warmup) always emit factors.
+    EXPECT_TRUE(rows.at(0).has_carrier_factor);
+    EXPECT_TRUE(rows.at(1).has_carrier_factor);
+    EXPECT_TRUE(rows.at(2).has_carrier_factor);
+    // Epochs 3 and 4 are BOTH excluded -- if the baseline had moved after
+    // epoch 3, epoch 4 (identical deviation) would no longer exceed the
+    // threshold and would NOT be excluded.
+    EXPECT_EQ(rows.find(3), rows.end());
+    EXPECT_EQ(rows.find(4), rows.end());
+
+    // No ambiguity arc break: only the level check is active here.
+    EXPECT_EQ(problem.diagnostics.code_minus_carrier_jump_resets, 0u);
+    // Both PRN1 and PRN2 are screened -> each excluded epoch counts twice.
+    EXPECT_EQ(problem.diagnostics.code_minus_carrier_level_exclusions, 4u);
+}
+
+TEST(FGOTest, CmcBaselineEwmaUpdatesInSteadyState) {
+    const NavigationData nav = makeSyntheticGpsNavigation(2);
+    const Vector3d rover_position(1113194.0, -4841695.0, 3985350.0);
+    const Vector3d base_position = rover_position + Vector3d(-320.0, 180.0, 45.0);
+
+    // Warmup = 1: epoch 0 seeds the baseline directly (count=1==warmup), so
+    // epoch 1 onward is already steady-state.
+    FGOProcessor::FGOConfig config = makeCmcTestConfig();
+    config.code_minus_carrier_jump_threshold_m = 1000.0;  // isolate the level check
+    config.code_minus_carrier_level_threshold_m = 0.5;
+    config.code_minus_carrier_warmup_epochs = 1;
+    config.code_minus_carrier_baseline_alpha = 0.5;
+
+    // baseline0 = cmc0 = 0.
+    // e1: cmc1 = 0.4 (within 0.5 of baseline0=0) -> NOT excluded;
+    //     baseline1 = 0.5*0 + 0.5*0.4 = 0.2.
+    // e2: cmc2 = 0.65 (within 0.5 of baseline1=0.2, would be EXCLUDED if
+    //     compared against the stale baseline0=0: |0.65-0|=0.65>0.5) ->
+    //     proves the baseline moved. NOT excluded;
+    //     baseline2 = 0.5*0.2 + 0.5*0.65 = 0.425.
+    // e3: cmc3 = 0.9 (within 0.5 of baseline2=0.425: |0.9-0.425|=0.475<=0.5,
+    //     but would be EXCLUDED against baseline1=0.2: |0.9-0.2|=0.7>0.5) ->
+    //     proves the second EWMA update also took effect. NOT excluded.
+    const std::vector<std::array<double, 2>> base_bias = {
+        {0.0, 0.0}, {0.4, 0.4}, {0.65, 0.65}, {0.9, 0.9},
+    };
+    const std::vector<std::array<double, 2>> rover_bias = {
+        {0.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}, {0.0, 0.0},
+    };
+    const auto rover_epochs =
+        makeCmcObservationEpochs(nav, rover_position, rover_bias, 1.0);
+    const auto base_epochs =
+        makeCmcObservationEpochs(nav, base_position, base_bias, 1.0);
+
+    FGOProcessor processor(config);
+    const auto problem = processor.buildDoubleDifferenceProblem(
+        rover_epochs, base_epochs, nav, base_position);
+
+    const auto rows = trackedSatelliteRowsByEpoch(problem);
+    ASSERT_EQ(rows.size(), 4u);
+    for (const auto& [epoch_index, row] : rows) {
+        EXPECT_TRUE(row.has_carrier_factor) << "epoch " << epoch_index;
+    }
+    EXPECT_EQ(problem.diagnostics.code_minus_carrier_level_exclusions, 0u);
+}
+
+TEST(FGOTest, CmcArcResetAlsoResetsBaseline) {
+    const NavigationData nav = makeSyntheticGpsNavigation(2);
+    const Vector3d rover_position(1113194.0, -4841695.0, 3985350.0);
+    const Vector3d base_position = rover_position + Vector3d(-320.0, 180.0, 45.0);
+
+    // Warmup = 2, level threshold = 1.0: epochs 0-1 establish a baseline of
+    // 0. At epoch 2 a loss-of-lock is injected on BOTH satellites (forcing
+    // the pre-existing rover-side arc-break machinery to start a new
+    // carrier arc) at the SAME epoch the CMC value jumps by 50 m -- an
+    // enormous deviation that would clearly exceed the level threshold
+    // against the OLD baseline. Because this port resets the CMC
+    // baseline/prev/warmup state whenever the rover-side arc restarts (the
+    // deliberate deviation from the reference, documented on
+    // FGOConfig::use_code_minus_carrier_screening), epoch 2 must be treated
+    // as a fresh baseline seed -- NOT excluded.
+    FGOProcessor::FGOConfig config = makeCmcTestConfig();
+    config.code_minus_carrier_jump_threshold_m = 1000.0;  // isolate the level check
+    config.code_minus_carrier_level_threshold_m = 1.0;
+    config.code_minus_carrier_warmup_epochs = 2;
+    config.code_minus_carrier_baseline_alpha = 0.5;
+
+    const std::vector<std::array<double, 2>> base_bias = {
+        {0.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}, {0.0, 0.0},
+    };
+    // CMC = base_bias - rover_bias, so a rover bias of -50 at/after epoch 2
+    // makes CMC jump to +50.
+    const std::vector<std::array<double, 2>> rover_bias = {
+        {0.0, 0.0}, {0.0, 0.0}, {-50.0, -50.0}, {-50.0, -50.0}, {-50.0, -50.0},
+    };
+    const std::vector<bool> loss_of_lock_epochs = {false, false, true, false, false};
+    const auto rover_epochs = makeCmcObservationEpochs(
+        nav, rover_position, rover_bias, 1.0, loss_of_lock_epochs);
+    const auto base_epochs = makeCmcObservationEpochs(
+        nav, base_position, base_bias, 1.0, loss_of_lock_epochs);
+
+    FGOProcessor processor(config);
+    const auto problem = processor.buildDoubleDifferenceProblem(
+        rover_epochs, base_epochs, nav, base_position);
+
+    const auto rows = trackedSatelliteRowsByEpoch(problem);
+    ASSERT_EQ(rows.size(), 5u);
+    // Epoch 2's huge CMC deviation is NOT excluded: the arc reset (from
+    // loss-of-lock) also reset the baseline, so epoch 2 just reseeds it.
+    EXPECT_TRUE(rows.at(2).has_carrier_factor);
+    EXPECT_TRUE(rows.at(2).has_pseudorange_factor);
+    // The loss-of-lock itself still breaks the ambiguity arc as before.
+    EXPECT_NE(rows.at(1).ambiguity_index, rows.at(2).ambiguity_index);
+    // Epochs 3, 4 continue the new arc with the reseeded baseline (stable
+    // value, count still ramping through warmup) -- also not excluded.
+    EXPECT_TRUE(rows.at(3).has_carrier_factor);
+    EXPECT_TRUE(rows.at(4).has_carrier_factor);
+    EXPECT_EQ(rows.at(2).ambiguity_index, rows.at(3).ambiguity_index);
+    EXPECT_EQ(rows.at(3).ambiguity_index, rows.at(4).ambiguity_index);
+
+    EXPECT_EQ(problem.diagnostics.code_minus_carrier_level_exclusions, 0u);
+}
+
+// --- CMC-aware DD reference selection (FGOConfig::cmc_aware_reference_
+// selection) -- select_reference() normally picks the group's highest-
+// elevation satellite as the DD reference with no regard for
+// cmc_level_exclude_this_epoch; every DD pair in the group is formed
+// against that one satellite, so a CMC-excluded (multipath/NLOS) reference
+// poisons the whole group at once. Needs a THIRD satellite (unlike the
+// 2-satellite helper above) so that after the elevation-max satellite is
+// excluded and a new reference is picked, a clean non-reference satellite
+// remains to produce an observable DD factor pointing at the NEW reference.
+std::vector<ObservationData> makeCmcObservationEpochsThreeSat(
+    const NavigationData& nav,
+    const Vector3d& receiver_position,
+    const std::vector<std::array<double, 3>>& carrier_bias_m,
+    double dt_s) {
+    std::vector<ObservationData> epochs;
+    for (std::size_t epoch_index = 0; epoch_index < carrier_bias_m.size();
+         ++epoch_index) {
+        ObservationData epoch(
+            GNSSTime(2300, 100100.0 + dt_s * static_cast<double>(epoch_index)));
+        epoch.receiver_position = receiver_position;
+        for (std::size_t sat_index = 0; sat_index < 3; ++sat_index) {
+            Observation observation;
+            const uint8_t prn = static_cast<uint8_t>(sat_index + 1);
+            if (makeSyntheticGpsL1Observation(nav,
+                                              SatelliteId(GNSSSystem::GPS, prn),
+                                              epoch.time,
+                                              receiver_position,
+                                              carrier_bias_m[epoch_index][sat_index],
+                                              observation)) {
+                epoch.addObservation(observation);
+            }
+        }
+        epochs.push_back(epoch);
+    }
+    return epochs;
+}
+
+TEST(FGOTest, CmcAwareReferenceSelectionAvoidsExcludedReference) {
+    const NavigationData nav = makeSyntheticGpsNavigation(3);
+    const Vector3d rover_position(1113194.0, -4841695.0, 3985350.0);
+    const Vector3d base_position = rover_position + Vector3d(-320.0, 180.0, 45.0);
+
+    // Step 1: probe which satellite the plain elevation-max rule currently
+    // picks as reference (geometry-driven, not controlled by this test --
+    // same reasoning as makeCmcObservationEpochs's comment above), using a
+    // single zero-bias epoch so no CMC exclusion is in play.
+    const std::vector<std::array<double, 3>> zero_bias = {{0.0, 0.0, 0.0}};
+    const auto probe_rover =
+        makeCmcObservationEpochsThreeSat(nav, rover_position, zero_bias, 1.0);
+    const auto probe_base =
+        makeCmcObservationEpochsThreeSat(nav, base_position, zero_bias, 1.0);
+    FGOProcessor probe_processor(makeCmcTestConfig());
+    const auto probe_problem = probe_processor.buildDoubleDifferenceProblem(
+        probe_rover, probe_base, nav, base_position);
+    ASSERT_FALSE(probe_problem.double_difference_carrier_factors.empty());
+    const SatelliteId elevation_reference =
+        probe_problem.double_difference_carrier_factors.front().reference_satellite;
+    const std::size_t excluded_sat_index =
+        static_cast<std::size_t>(elevation_reference.prn) - 1;
+
+    // Step 2: warmup (epochs 0-2) at zero CMC for all three satellites, then
+    // epoch 3 pushes ONLY the elevation-max satellite's single-difference
+    // CMC past the level threshold; the other two stay clean throughout.
+    // Jump threshold set far above any deviation used here so only the
+    // level check can fire (same isolation style as the level-exclusion
+    // test above).
+    FGOProcessor::FGOConfig config = makeCmcTestConfig();
+    config.code_minus_carrier_jump_threshold_m = 1000.0;
+    config.code_minus_carrier_level_threshold_m = 0.4;
+    config.code_minus_carrier_warmup_epochs = 3;
+    config.code_minus_carrier_baseline_alpha = 0.5;
+
+    std::vector<std::array<double, 3>> base_bias(4, std::array<double, 3>{0.0, 0.0, 0.0});
+    base_bias[3][excluded_sat_index] = 1.0;  // baseline 0 + 1.0 > 0.4 threshold
+    const std::vector<std::array<double, 3>> rover_bias(
+        4, std::array<double, 3>{0.0, 0.0, 0.0});
+
+    const auto rover_epochs =
+        makeCmcObservationEpochsThreeSat(nav, rover_position, rover_bias, 1.0);
+    const auto base_epochs =
+        makeCmcObservationEpochsThreeSat(nav, base_position, base_bias, 1.0);
+
+    // --- cmc_aware_reference_selection OFF (default): the CMC-excluded,
+    // elevation-max satellite is still picked as reference at epoch 3 --
+    // every surviving DD factor in the group references it (poisoned).
+    {
+        FGOProcessor processor(config);
+        const auto problem = processor.buildDoubleDifferenceProblem(
+            rover_epochs, base_epochs, nav, base_position);
+        bool found_epoch3_factor = false;
+        for (const auto& factor : problem.double_difference_carrier_factors) {
+            if (factor.epoch_index != 3) {
+                continue;
+            }
+            found_epoch3_factor = true;
+            EXPECT_TRUE(factor.reference_satellite == elevation_reference);
+        }
+        EXPECT_TRUE(found_epoch3_factor);
+        EXPECT_EQ(problem.diagnostics.cmc_ref_avoided_count, 0u);
+    }
+
+    // --- cmc_aware_reference_selection ON: epoch 3's reference must move
+    // away from the CMC-excluded elevation-max satellite, and the avoided-
+    // reference counter must record it (once for the PR-factor loop, once
+    // for the CP-factor loop -- both call select_reference for this group).
+    {
+        config.cmc_aware_reference_selection = true;
+        FGOProcessor processor(config);
+        const auto problem = processor.buildDoubleDifferenceProblem(
+            rover_epochs, base_epochs, nav, base_position);
+        bool found_epoch3_factor = false;
+        for (const auto& factor : problem.double_difference_carrier_factors) {
+            if (factor.epoch_index != 3) {
+                continue;
+            }
+            found_epoch3_factor = true;
+            EXPECT_FALSE(factor.reference_satellite == elevation_reference);
+        }
+        EXPECT_TRUE(found_epoch3_factor);
+        EXPECT_EQ(problem.diagnostics.cmc_ref_avoided_count, 2u);
+    }
+}
+
+// --- Elevation-dependent DD sigma ("varerr", FGOConfig::use_elevation_
+// dependent_sigma) -- port of the inuex35 reference's preprocess/prefit.py
+// varerr_dd_sigma / buildfactor/factors.py pair_sigma. See the knob's doc
+// comment in fgo.hpp for the full formula and dt_s/undifferenced-PR
+// decisions.
+
+TEST(FGOTest, ElevationDependentSigmaDefaultOffMatchesFlatFormula) {
+    const NavigationData nav = makeSyntheticGpsNavigation(2);
+    const Vector3d rover_position(1113194.0, -4841695.0, 3985350.0);
+    const Vector3d base_position = rover_position + Vector3d(-320.0, 180.0, 45.0);
+
+    const std::vector<std::array<double, 2>> bias = {{0.0, 0.0}, {0.0, 0.0}};
+    const auto rover_epochs = makeCmcObservationEpochs(nav, rover_position, bias, 0.5);
+    const auto base_epochs = makeCmcObservationEpochs(nav, base_position, bias, 0.5);
+
+    FGOProcessor::FGOConfig config = makeCmcTestConfig();
+    config.use_code_minus_carrier_screening = false;
+    ASSERT_FALSE(config.use_elevation_dependent_sigma);  // default OFF
+
+    FGOProcessor processor(config);
+    const auto problem = processor.buildDoubleDifferenceProblem(
+        rover_epochs, base_epochs, nav, base_position);
+
+    // With the knob off, DD PR/CP sigma must be bit-for-bit the pre-existing
+    // flat/elevation-power formula: band_scale(=1, single-freq GPS L1CA) *
+    // sigma_m / sqrt(max(0.1, sin(own elevation))).
+    ASSERT_FALSE(problem.double_difference_pseudorange_factors.empty());
+    ASSERT_FALSE(problem.double_difference_carrier_factors.empty());
+    for (const auto& f : problem.double_difference_pseudorange_factors) {
+        const double sin_el = std::max(0.1, std::sin(f.elevation_rad));
+        const double expected =
+            std::max(1e-3, config.double_difference_pseudorange_sigma_m) /
+            std::sqrt(sin_el);
+        EXPECT_DOUBLE_EQ(f.sigma_m, expected) << "epoch " << f.epoch_index;
+    }
+    for (const auto& f : problem.double_difference_carrier_factors) {
+        const double sin_el = std::max(0.1, std::sin(f.elevation_rad));
+        const double expected =
+            std::max(1e-4, config.double_difference_carrier_sigma_m) /
+            std::sqrt(sin_el);
+        EXPECT_DOUBLE_EQ(f.sigma_m, expected) << "epoch " << f.epoch_index;
+    }
+}
+
+TEST(FGOTest, ElevationDependentSigmaMatchesPortedVarerrFormula) {
+    const NavigationData nav = makeSyntheticGpsNavigation(2);
+    const Vector3d rover_position(1113194.0, -4841695.0, 3985350.0);
+    const Vector3d base_position = rover_position + Vector3d(-320.0, 180.0, 45.0);
+
+    // dt_s = 0.5 s (deliberately different from the 0.2 s epoch-0 fallback)
+    // so epoch 1's clock term proves the ACTUAL measured rover epoch spacing
+    // is used, not just the fallback default.
+    constexpr double kDtS = 0.5;
+    const std::vector<std::array<double, 2>> bias = {{0.0, 0.0}, {0.0, 0.0}};
+    const auto rover_epochs = makeCmcObservationEpochs(nav, rover_position, bias, kDtS);
+    const auto base_epochs = makeCmcObservationEpochs(nav, base_position, bias, kDtS);
+
+    FGOProcessor::FGOConfig config = makeCmcTestConfig();
+    config.use_code_minus_carrier_screening = false;
+    config.use_elevation_dependent_sigma = true;
+    // Reference defaults (config.py): these ran DEFAULT-ON in every
+    // reference benchmark.
+    config.elevation_sigma_err_a_m = 0.001;
+    config.elevation_sigma_err_b_m = 0.001;
+    config.elevation_sigma_pseudorange_ratio = 100.0;
+    config.elevation_sigma_clock_stability = 5e-12;
+
+    FGOProcessor processor(config);
+    const auto problem = processor.buildDoubleDifferenceProblem(
+        rover_epochs, base_epochs, nav, base_position);
+
+    ASSERT_FALSE(problem.double_difference_pseudorange_factors.empty());
+    ASSERT_FALSE(problem.double_difference_carrier_factors.empty());
+
+    const double el_min_rad = M_PI / 180.0 * std::max(1.0, config.min_elevation_deg);
+    constexpr double kSpeedOfLightMps = 299792458.0;
+
+    // Independent oracle re-implementing the exact ported formula (fgo.hpp's
+    // use_elevation_dependent_sigma doc comment / varerrDdSigma in fgo.cpp),
+    // so this test would catch a broken port even if it coincidentally
+    // matched at one particular elevation.
+    auto expectedSigma = [&](bool is_pseudorange, double el_pair_rad, double epoch_dt_s) {
+        const double fact = is_pseudorange ? config.elevation_sigma_pseudorange_ratio : 1.0;
+        const double a = fact * config.elevation_sigma_err_a_m;
+        const double b = fact * config.elevation_sigma_err_b_m;
+        const double d = kSpeedOfLightMps * config.elevation_sigma_clock_stability * epoch_dt_s;
+        const double sinel = std::max(std::sin(el_pair_rad), 0.05);
+        const double var_sd = 2.0 * (a * a + b * b / (sinel * sinel)) + d * d;
+        return std::sqrt(2.0 * var_sd);
+    };
+
+    auto findReferenceElevationRad = [&](std::size_t epoch_index,
+                                         const SatelliteId& reference_satellite,
+                                         SignalType signal) {
+        for (const auto& reference_observation :
+             problem.double_difference_reference_observations) {
+            if (reference_observation.epoch_index == epoch_index &&
+                reference_observation.satellite == reference_satellite &&
+                reference_observation.signal == signal) {
+                return reference_observation.elevation_rad;
+            }
+        }
+        ADD_FAILURE() << "no matching reference observation for epoch "
+                      << epoch_index;
+        return 0.0;
+    };
+
+    // Epoch 0 has no preceding epoch, so the port's epoch_dt_s is still at
+    // its initial 0.2 s default (see the fgo.hpp doc comment); epoch 1's
+    // measured spacing is exactly kDtS.
+    for (const auto& f : problem.double_difference_pseudorange_factors) {
+        const double epoch_dt_s = (f.epoch_index == 0) ? 0.2 : kDtS;
+        const double reference_el_rad = findReferenceElevationRad(
+            f.epoch_index, f.reference_satellite, f.signal);
+        const double el_pair_rad =
+            std::max(std::min(reference_el_rad, f.elevation_rad), el_min_rad);
+        const double expected = expectedSigma(/*is_pseudorange=*/true, el_pair_rad, epoch_dt_s);
+        EXPECT_NEAR(f.sigma_m, expected, 1e-9 * std::max(1.0, expected))
+            << "PR epoch " << f.epoch_index;
+    }
+    double pr_sigma_at_epoch0 = 0.0;
+    double cp_sigma_at_epoch0 = 0.0;
+    for (const auto& f : problem.double_difference_carrier_factors) {
+        const double epoch_dt_s = (f.epoch_index == 0) ? 0.2 : kDtS;
+        const double reference_el_rad = findReferenceElevationRad(
+            f.epoch_index, f.reference_satellite, f.signal);
+        const double el_pair_rad =
+            std::max(std::min(reference_el_rad, f.elevation_rad), el_min_rad);
+        const double expected = expectedSigma(/*is_pseudorange=*/false, el_pair_rad, epoch_dt_s);
+        EXPECT_NEAR(f.sigma_m, expected, 1e-9 * std::max(1.0, expected))
+            << "CP epoch " << f.epoch_index;
+        if (f.epoch_index == 0) cp_sigma_at_epoch0 = f.sigma_m;
+    }
+    for (const auto& f : problem.double_difference_pseudorange_factors) {
+        if (f.epoch_index == 0) pr_sigma_at_epoch0 = f.sigma_m;
+    }
+    // PR is roughly eratio_pr (100x) the CP sigma at the same pair-elevation
+    // -- not exactly 100x, because the additive clock term d^2 does NOT
+    // scale by eratio_pr in the reference formula (see fgo.hpp's doc
+    // comment); at these defaults d^2 is a small correction, so the ratio is
+    // close to but not exactly 100.
+    ASSERT_GT(cp_sigma_at_epoch0, 0.0);
+    EXPECT_NEAR(pr_sigma_at_epoch0 / cp_sigma_at_epoch0, 100.0, 1.0);
 }

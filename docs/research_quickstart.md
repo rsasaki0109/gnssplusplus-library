@@ -20,7 +20,9 @@ cmake --build build -j
 Confirm the dispatcher can see the command set:
 
 ```bash
-python3 apps/gnss.py --help
+python3 apps/gnss.py commands
+python3 apps/gnss.py commands --json
+python3 apps/gnss.py commands --query ppc --limit 10
 ```
 
 ## Reproduce a bounded RTK run
@@ -47,6 +49,20 @@ The `.pos` file is the trajectory. The `.json` file is the experiment record:
 it captures metrics, solver settings, wall time, reference matching, and
 threshold results.
 
+For direct native-solver runs, keep the RTK defaults in
+`configs/examples/solve.example.toml` and use:
+
+```bash
+gnss_solve --config configs/examples/solve.example.toml \
+  --max-epochs 1000 \
+  --out output/research/native_rtk.pos
+```
+
+The native solver applies CLI arguments after `[gnss_solve]`, so temporary
+overrides do not require copying or editing the profile. Its normal `--help`
+shows only inputs, outputs, and high-level choices; use `--help-advanced` for
+the backward-compatible research controls.
+
 ## Add explicit thresholds
 
 When promoting an experiment result, add requirements so the command fails if a
@@ -65,12 +81,12 @@ python3 apps/gnss.py ppc-rtk-signoff \
   --require-realtime-factor-min 1
 ```
 
-Keep threshold sets in `configs/*.toml` once they become long-lived. For
+Keep threshold sets in `configs/signoff/*.toml` once they become long-lived. For
 example:
 
 ```bash
 python3 apps/gnss.py ppc-rtk-signoff \
-  --config-toml configs/ppc_rtk_signoff.example.toml
+  --config-toml configs/signoff/ppc_rtk_signoff.example.toml
 ```
 
 ## Compare solver profiles

@@ -4,6 +4,7 @@
 #include <libgnss++/algorithms/spp.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
+#include <libgnss++/core/signal_policy.hpp>
 #include <libgnss++/core/signals.hpp>
 #include <libgnss++/models/ionosphere.hpp>
 #include <libgnss++/models/troposphere.hpp>
@@ -25,6 +26,17 @@
 #include <tuple>
 
 namespace libgnss {
+
+#ifdef GNSSPP_HAS_GTSAM
+// Implemented in fgo_gtsam_backend.cpp. Kept as a free function (rather than
+// another FGOProcessor member) so all GTSAM includes/types stay confined to
+// that translation unit; fgo.cpp itself never includes any GTSAM header.
+FGOProcessor::FGOResult optimizeProblemWithGtsam(
+    const FGOProcessor::FGOProblem& problem,
+    const FGOProcessor::FGOConfig& config,
+    FGOProcessor::FGOResult result);
+#endif
+
 namespace {
 
 bool isPrimaryFgoSignal(SignalType signal, bool use_multi_constellation) {
@@ -43,6 +55,186 @@ bool isPrimaryFgoSignal(SignalType signal, bool use_multi_constellation) {
         default:
             return false;
     }
+}
+
+// Multi-frequency DD gate: primary-band signals are always eligible (same as
+// isPrimaryFgoSignal above). When use_multi_frequency_double_difference is
+// also enabled (and multi-constellation is on), secondary-band signals
+// (GPS L2C/L5, Galileo E5A/E5B/E6, BeiDou B2I/B3I/B2A, QZSS L2C/L5, ...) are
+// eligible too, keyed by the satellite's system via signal_policy. This is
+// the single choke point that previously restricted buildPseudorangeProblem /
+// buildDoubleDifferenceProblem to L1/E1/B1I-only DD factors.
+bool isEligibleFgoSignal(const SatelliteId& satellite,
+                         SignalType signal,
+                         bool use_multi_constellation,
+                         bool use_multi_frequency_double_difference) {
+    if (isPrimaryFgoSignal(signal, use_multi_constellation)) {
+        return true;
+    }
+    if (!use_multi_constellation || !use_multi_frequency_double_difference) {
+        return false;
+    }
+    return signal_policy::isSecondarySignal(satellite.system, signal);
+}
+
+// --- MF hygiene: per-receiver secondary-band observation-code alignment ---
+//
+// Port of the cssrlib/inuex35 (RTKLIB-style) signal-selection policy
+// (tightly-coupled-gnss-imu-fgo utils/sig_autodetect.py): each RECEIVER uses
+// exactly ONE RINEX observation code per (system, band) for the whole file,
+// so every satellite of a system contributes the same code per band and the
+// between-satellite (single) difference cancels the receiver-side inter-code
+// bias exactly. Without this, the RINEX reader's per-satellite first-nonzero
+// column selection MIXES codes across satellites within one band (observed on
+// tokyo1: rover GPS L2 = C2W for 2527 sat-epochs but C2L for the satellites/
+// epochs where C2W is empty; base BeiDou B2I = C7D vs rover C7I), leaving
+// uncancelled inter-code/DCB and carrier phase-alignment biases in the DD --
+// the measured multi-frequency FLOAT blowup. Satellites whose selected column
+// is a different code simply drop that band (like-vs-like or nothing),
+// exactly like cssrlib decoding only the chosen column.
+//
+// The preferred code per (system, SignalType) is chosen per receiver from the
+// codes actually observed in its data, ordered by an RTKLIB-style tracking-
+// code priority string (rtkcmn.c codepris), ties broken by observation count.
+// Applied to SECONDARY bands only: the primary band (L1/E1/B1I) single-
+// frequency path is measured-good and stays bit-identical.
+
+// RTKLIB-style per-(system, band) tracking-code priority (earlier = higher).
+const char* trackingCodePriorityString(GNSSSystem system, int band) {
+    switch (system) {
+        case GNSSSystem::GPS:
+            switch (band) {
+                case 1: return "CPYWMNSL";
+                case 2: return "PYWCMNDLSX";
+                case 5: return "IQX";
+                default: return "";
+            }
+        case GNSSSystem::GLONASS:
+            switch (band) {
+                case 1: return "PC";
+                case 2: return "PC";
+                case 3: return "IQX";
+                default: return "";
+            }
+        case GNSSSystem::Galileo:
+            switch (band) {
+                case 1: return "CABXZ";
+                case 5: return "IQX";
+                case 6: return "ABCXZ";
+                case 7: return "IQX";
+                case 8: return "IQX";
+                default: return "";
+            }
+        case GNSSSystem::BeiDou:
+            switch (band) {
+                case 1: return "DPX";
+                case 2: return "IQX";
+                case 5: return "DPX";
+                case 6: return "IQX";
+                case 7: return "IQXDZ";
+                case 8: return "DPX";
+                default: return "";
+            }
+        case GNSSSystem::QZSS:
+            switch (band) {
+                case 1: return "CLSXZ";
+                case 2: return "LSX";
+                case 5: return "IQXDPZ";
+                case 6: return "SXZ";
+                default: return "";
+            }
+        case GNSSSystem::NavIC:
+            switch (band) {
+                case 5: return "ABCX";
+                default: return "";
+            }
+        default:
+            return "";
+    }
+}
+
+int trackingCodePriority(GNSSSystem system, const std::string& obs_type) {
+    if (obs_type.size() < 3) {
+        return 100;
+    }
+    const int band = signal_policy::rinexBand(obs_type);
+    const char code = obs_type[2];
+    const char* priorities = trackingCodePriorityString(system, band);
+    for (int i = 0; priorities[i] != '\0'; ++i) {
+        if (priorities[i] == code) {
+            return i;
+        }
+    }
+    return 100;
+}
+
+// One preferred tracking-code char per (system, secondary SignalType),
+// derived from the receiver's own observations (single pre-scan pass).
+using SecondaryCodeTable = std::map<std::pair<GNSSSystem, SignalType>, char>;
+
+SecondaryCodeTable buildSecondaryCodeTable(
+    const std::vector<ObservationData>& epochs) {
+    struct CodeStats {
+        int priority = 100;
+        std::size_t count = 0;
+    };
+    std::map<std::pair<GNSSSystem, SignalType>, std::map<char, CodeStats>> stats;
+    for (const auto& epoch : epochs) {
+        for (const auto& observation : epoch.observations) {
+            if (!observation.valid || !observation.has_pseudorange) {
+                continue;
+            }
+            const GNSSSystem system = observation.satellite.system;
+            if (!signal_policy::isSecondarySignal(system, observation.signal)) {
+                continue;
+            }
+            const std::string& obs_type = observation.exactBiasObservationType();
+            if (obs_type.size() < 3) {
+                continue;
+            }
+            auto& entry = stats[{system, observation.signal}][obs_type[2]];
+            entry.priority = trackingCodePriority(system, obs_type);
+            ++entry.count;
+        }
+    }
+
+    SecondaryCodeTable table;
+    for (const auto& [key, codes] : stats) {
+        char best_code = '\0';
+        int best_priority = 101;
+        std::size_t best_count = 0;
+        for (const auto& [code, s] : codes) {
+            if (s.priority < best_priority ||
+                (s.priority == best_priority && s.count > best_count)) {
+                best_code = code;
+                best_priority = s.priority;
+                best_count = s.count;
+            }
+        }
+        if (best_code != '\0') {
+            table[key] = best_code;
+        }
+    }
+    return table;
+}
+
+// True when the observation either is primary-band (never filtered here) or
+// carries the receiver's preferred tracking code for its (system, signal).
+bool passesSecondaryCodeAlignment(const Observation& observation,
+                                  const SecondaryCodeTable* table) {
+    if (table == nullptr) {
+        return true;
+    }
+    const GNSSSystem system = observation.satellite.system;
+    if (!signal_policy::isSecondarySignal(system, observation.signal)) {
+        return true;
+    }
+    const auto it = table->find({system, observation.signal});
+    if (it == table->end()) {
+        return true;
+    }
+    const std::string& obs_type = observation.exactBiasObservationType();
+    return obs_type.size() >= 3 && obs_type[2] == it->second;
 }
 
 GNSSSystem clockBiasGroup(GNSSSystem system) {
@@ -276,6 +468,30 @@ struct ActiveCarrierSegment {
     std::size_t last_epoch_index = 0;
 };
 
+// --- Elevation-dependent DD sigma ("varerr") ---
+//
+// Port of the inuex35 reference's preprocess/prefit.py varerr_dd_sigma
+// (itself a port of RTKLIB-demo5's rtkpos.c:402 varerr()), gated by
+// FGOConfig::use_elevation_dependent_sigma (see that knob's doc comment in
+// fgo.hpp for the full formula, dt_s mapping, and composition-order
+// rationale). `is_pseudorange` selects the reference's `fact` term
+// (elevation_sigma_pseudorange_ratio for pseudorange, 1.0 for carrier);
+// `el_pair_rad` is the caller-computed max(min(el_ref, el_target), el_min);
+// `dt_s` is the rover epoch-to-epoch interval.
+double varerrDdSigma(bool is_pseudorange, double el_pair_rad, double dt_s,
+                     const FGOProcessor::FGOConfig& config) {
+    // No clamping on the ratio -- faithful to the reference's
+    // `fact = cfg.err_eratio_pr if code else 1.0` (no floor/ceiling there).
+    const double fact =
+        is_pseudorange ? config.elevation_sigma_pseudorange_ratio : 1.0;
+    const double a = fact * config.elevation_sigma_err_a_m;
+    const double b = fact * config.elevation_sigma_err_b_m;
+    const double d = constants::SPEED_OF_LIGHT * config.elevation_sigma_clock_stability * dt_s;
+    const double sinel = std::max(std::sin(el_pair_rad), 0.05);
+    const double var_sd = 2.0 * (a * a + b * b / (sinel * sinel)) + d * d;
+    return std::sqrt(2.0 * var_sd);
+}
+
 struct FixedAmbiguityConstraint {
     std::size_t ambiguity_index = 0;
     double fixed_ambiguity_m = 0.0;
@@ -285,6 +501,22 @@ struct FixedAmbiguityConstraint {
 };
 
 using CarrierKey = std::pair<SatelliteId, SignalType>;
+
+// --- Code-Minus-Carrier (CMC) multipath screening state ---
+//
+// Port of inuex35's preprocess/slip_detect.py per-(satellite, signal) CMC
+// tracking (see FGOConfig::use_code_minus_carrier_screening for the full
+// semantics). Kept as function-local state in buildDoubleDifferenceProblem
+// (like active_dd_segments below) rather than a FGOProcessor member: one
+// build call processes one ordered epoch stream, and buildDoubleDifference-
+// Problem is const.
+struct CmcState {
+    bool has_prev = false;
+    double prev_cmc_m = 0.0;
+    bool has_baseline = false;
+    double baseline_m = 0.0;
+    int warmup_count = 0;
+};
 
 struct DoubleDifferenceAmbiguityKey {
     SatelliteId satellite;
@@ -352,7 +584,8 @@ std::map<CarrierKey, PreparedCarrierObservation> prepareCarrierObservationsForRe
     const FGOProcessor::FGOConfig& config,
     double min_snr_dbhz,
     bool require_carrier_phase = true,
-    bool apply_elevation_mask = true) {
+    bool apply_elevation_mask = true,
+    const SecondaryCodeTable* secondary_code_table = nullptr) {
     std::map<CarrierKey, PreparedCarrierObservation> carriers;
     if (receiver_position.norm() <= 1e6) {
         return carriers;
@@ -365,7 +598,13 @@ std::map<CarrierKey, PreparedCarrierObservation> prepareCarrierObservationsForRe
 
     const double min_elevation_rad = config.min_elevation_deg * M_PI / 180.0;
     for (const auto& observation : epoch.observations) {
-        if (!isPrimaryFgoSignal(observation.signal, config.use_multi_constellation)) {
+        if (!isEligibleFgoSignal(observation.satellite,
+                                 observation.signal,
+                                 config.use_multi_constellation,
+                                 config.use_multi_frequency_double_difference)) {
+            continue;
+        }
+        if (!passesSecondaryCodeAlignment(observation, secondary_code_table)) {
             continue;
         }
         const bool has_carrier_phase =
@@ -484,6 +723,7 @@ std::map<CarrierKey, PreparedCarrierObservation> prepareCarrierObservationsForRe
         model_debug.geometric_range_m = corrected_range;
         model_debug.elevation_rad = geometry.elevation;
         model_debug.azimuth_rad = geometry.azimuth;
+        model_debug.snr_dbhz = observation.snr;
 
         const double sin_el = std::max(0.1, std::sin(geometry.elevation));
         PreparedCarrierObservation carrier;
@@ -565,6 +805,18 @@ Observation interpolateObservation(const Observation& lower,
         lower.has_glonass_frequency_channel &&
         upper.has_glonass_frequency_channel &&
         lower.glonass_frequency_channel == upper.glonass_frequency_channel;
+    // MF hygiene: never blend two different observation codes of the same
+    // band across the interpolation boundary (e.g. BDS B2I C7D at t0 and C7I
+    // at t1) -- the blend would carry an inter-code bias under a single code
+    // label. Secondary bands only, so the single-frequency (primary band)
+    // path is bit-identical.
+    if (signal_policy::isSecondarySignal(lower.satellite.system, lower.signal) &&
+        (lower.pseudorange_observation_type !=
+             upper.pseudorange_observation_type ||
+         lower.carrier_phase_observation_type !=
+             upper.carrier_phase_observation_type)) {
+        interpolated.valid = false;
+    }
     return interpolated;
 }
 
@@ -688,6 +940,18 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
         return problem;
     }
 
+    // MF hygiene: one observation code per (system, secondary band) for this
+    // receiver (cssrlib/RTKLIB-style). Only meaningful when secondary bands
+    // are ingested at all.
+    SecondaryCodeTable rover_secondary_codes;
+    const SecondaryCodeTable* rover_secondary_codes_ptr = nullptr;
+    if (config_.use_multi_frequency_double_difference &&
+        config_.use_double_difference_secondary_code_alignment &&
+        config_.use_multi_constellation) {
+        rover_secondary_codes = buildSecondaryCodeTable(input_epochs);
+        rover_secondary_codes_ptr = &rover_secondary_codes;
+    }
+
     ProcessorConfig spp_processor_config;
     spp_processor_config.mode = PositioningMode::SPP;
     spp_processor_config.elevation_mask = config_.min_elevation_deg;
@@ -716,6 +980,22 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
         dd_reference_carrier_by_problem_epoch;
     std::map<SatelliteId, double> previous_gps_pseudorange_by_satellite;
 
+    // Seed continuity across a brief SPP outage (see FGOConfig::use_spp_seed):
+    // a tunnel/underpass/urban-canyon gap can drop the rover to near-zero
+    // tracked satellites for several seconds. The RINEX header's static
+    // approximate position can be kilometres from the true kinematic position
+    // at that point in the trajectory; seeding elevation/geometry from it
+    // spuriously fails the elevation mask for whatever few satellites ARE
+    // still tracked during recovery, rejecting far more marginal epochs than
+    // the min_satellites_per_epoch gate actually requires. Coast on the last
+    // valid SPP fix instead -- at the rover's epoch-to-epoch cadence this
+    // stays far closer to truth through a brief outage than the static
+    // fallback, and degrades no worse than the static fallback once the
+    // outage is long enough that both are stale.
+    Vector3d last_valid_seed_position_ecef = Vector3d::Zero();
+    double last_valid_seed_clock_bias_m = 0.0;
+    bool have_last_valid_seed = false;
+
     for (const auto& epoch : input_epochs) {
         EpochSeed seed;
         seed.time = epoch.time;
@@ -728,6 +1008,12 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
         if (spp_solution.isValid()) {
             seed.position_ecef = spp_solution.position_ecef;
             seed.receiver_clock_bias_m = spp_solution.receiver_clock_bias;
+            last_valid_seed_position_ecef = seed.position_ecef;
+            last_valid_seed_clock_bias_m = seed.receiver_clock_bias_m;
+            have_last_valid_seed = true;
+        } else if (have_last_valid_seed) {
+            seed.position_ecef = last_valid_seed_position_ecef;
+            seed.receiver_clock_bias_m = last_valid_seed_clock_bias_m;
         } else if (epoch.receiver_position.norm() > 1e6) {
             seed.position_ecef = epoch.receiver_position;
             seed.receiver_clock_bias_m = epoch.receiver_clock_bias * constants::SPEED_OF_LIGHT;
@@ -751,7 +1037,14 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
         ecef2geodetic(seed.position_ecef, receiver_lat, receiver_lon, receiver_height);
 
         for (const auto& observation : epoch.observations) {
-            if (!isPrimaryFgoSignal(observation.signal, config_.use_multi_constellation)) {
+            if (!isEligibleFgoSignal(observation.satellite,
+                                     observation.signal,
+                                     config_.use_multi_constellation,
+                                     config_.use_multi_frequency_double_difference)) {
+                continue;
+            }
+            if (!passesSecondaryCodeAlignment(observation,
+                                              rover_secondary_codes_ptr)) {
                 continue;
             }
             if (!observation.valid || !observation.has_pseudorange ||
@@ -894,6 +1187,7 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
             model_debug.geometric_range_m = corrected_range;
             model_debug.elevation_rad = geometry.elevation;
             model_debug.azimuth_rad = geometry.azimuth;
+            model_debug.snr_dbhz = observation.snr;
 
             PreparedCarrierObservation carrier;
             carrier.satellite = observation.satellite;
@@ -1247,12 +1541,34 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
         }
     }
 
+    // MF hygiene: the base receiver gets its own per-(system, secondary band)
+    // code table, mirroring the rover-side table in buildPseudorangeProblem.
+    SecondaryCodeTable base_secondary_codes;
+    const SecondaryCodeTable* base_secondary_codes_ptr = nullptr;
+    if (config_.use_multi_frequency_double_difference &&
+        config_.use_double_difference_secondary_code_alignment &&
+        config_.use_multi_constellation) {
+        base_secondary_codes = buildSecondaryCodeTable(base_epochs);
+        base_secondary_codes_ptr = &base_secondary_codes;
+    }
+
     std::size_t base_cursor = 0;
     const double match_tolerance = std::max(0.0, config_.base_epoch_match_tolerance_s);
     const double pseudorange_sigma =
         std::max(1e-3, config_.double_difference_pseudorange_sigma_m);
     const double carrier_sigma =
         std::max(1e-4, config_.double_difference_carrier_sigma_m);
+    // Elevation-dependent DD sigma ("varerr", FGOConfig::use_elevation_
+    // dependent_sigma): el_min_rad is the pair-elevation floor (reference:
+    // np.radians(max(1.0, cfg.el_mask_deg))); epoch_dt_s is the rover
+    // epoch-to-epoch interval fed to the clock-stability term, persisted
+    // across the epoch loop below and only updated on a positive delta --
+    // mirroring the reference's tc._epoch_dt / _update_epoch_dt exactly
+    // (state carried across epochs, default 0.2 s until the first update;
+    // see the knob's doc comment in fgo.hpp for why 0.2 s is also the right
+    // fallback for this dataset).
+    const double el_min_rad = M_PI / 180.0 * std::max(1.0, config_.min_elevation_deg);
+    double epoch_dt_s = 0.2;
     const double max_segment_gap = std::max(0.0, config_.max_tdcp_gap_s);
     std::map<DoubleDifferenceAmbiguityKey, ActiveCarrierSegment>
         active_dd_segments;
@@ -1263,7 +1579,32 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
     std::map<SingleDifferenceDefaultReferenceKey, std::map<SatelliteId, std::size_t>>
         sd_default_reference_counts;
 
+    // --- CMC screening state (function-scope, persists across the epoch
+    // loop below; see FGOConfig::use_code_minus_carrier_screening). ---
+    std::map<CarrierKey, CmcState> cmc_states;
+    // Last rover-side (single-receiver) ambiguity_index seen per (satellite,
+    // signal); a change here (cycle slip / loss-of-lock / outage causing the
+    // rover carrier arc in buildPseudorangeProblem to restart) is this port's
+    // signal to also reset the CMC baseline for that key (deviation from the
+    // reference documented on the config knob).
+    std::map<CarrierKey, std::size_t> cmc_last_rover_ambiguity_index;
+    std::size_t cmc_jump_reset_total = 0;
+    std::size_t cmc_level_exclusion_total = 0;
+    // FGOConfig::cmc_aware_reference_selection: count of DD reference
+    // picks steered away from a CMC-level-excluded candidate this run.
+    std::size_t cmc_ref_avoided_total = 0;
+
     for (std::size_t epoch_index = 0; epoch_index < problem.epochs.size(); ++epoch_index) {
+        // Reference: tc._update_epoch_dt(obs) runs unconditionally at the top
+        // of every epoch's processing, before any DD-eligibility gates below
+        // -- mirrored here the same way (only meaningful when varerr is on).
+        if (config_.use_elevation_dependent_sigma && epoch_index > 0) {
+            const double dt = problem.epochs[epoch_index].time -
+                              problem.epochs[epoch_index - 1].time;
+            if (dt > 0.0) {
+                epoch_dt_s = dt;
+            }
+        }
         const auto rover_it = rover_carriers_by_epoch.find(epoch_index);
         const auto rover_pseudorange_it =
             rover_pseudoranges_by_epoch.find(epoch_index);
@@ -1329,7 +1670,8 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                 config_,
                 base_min_snr_dbhz,
                 true,
-                false);
+                false,
+                base_secondary_codes_ptr);
         const auto base_pseudorange_observations =
             prepareCarrierObservationsForReceiver(
                 matched_base_epoch,
@@ -1338,7 +1680,8 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                 config_,
                 base_min_snr_dbhz,
                 false,
-                false);
+                false,
+                base_secondary_codes_ptr);
         const auto base_reference_observations =
             prepareCarrierObservationsForReceiver(
                 matched_base_epoch,
@@ -1347,7 +1690,95 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                 config_,
                 reference_min_snr_dbhz,
                 false,
-                false);
+                false,
+                base_secondary_codes_ptr);
+
+        // --- CMC screening pre-pass (this epoch) ---
+        //
+        // Runs once per (satellite, signal) that has usable carrier at BOTH
+        // rover and base this epoch (same requirement as the reference:
+        // pr/cp nonzero on both sides), independent of which satellite ends
+        // up the DD reference for its (system, signal) group below. Results
+        // gate the PR-factor loop (level exclusion, which -- because the CP
+        // loop only builds a factor when a matching PR factor already exists
+        // -- transitively also excludes the CP factor for the same epoch,
+        // matching the reference's single `continue` before either) and the
+        // CP loop's ambiguity-arc bookkeeping (jump forces a new arc).
+        std::set<CarrierKey> cmc_level_exclude_this_epoch;
+        std::set<CarrierKey> cmc_jump_reset_this_epoch;
+        if (config_.use_code_minus_carrier_screening &&
+            rover_it != rover_carriers_by_epoch.end()) {
+            for (const auto* rover_factor : rover_it->second) {
+                const CarrierKey key{rover_factor->satellite, rover_factor->signal};
+                const auto base_it = base_carriers.find(key);
+                if (base_it == base_carriers.end()) {
+                    continue;
+                }
+                const auto& base_carrier = base_it->second;
+                const double pr_rover = rover_factor->model_debug.raw_pseudorange_m;
+                const double cp_rover = rover_factor->model_debug.raw_carrier_m;
+                const double pr_base = base_carrier.model_debug.raw_pseudorange_m;
+                const double cp_base = base_carrier.model_debug.raw_carrier_m;
+                if (pr_rover == 0.0 || cp_rover == 0.0 || pr_base == 0.0 ||
+                    cp_base == 0.0) {
+                    continue;
+                }
+                const double cmc = (pr_rover - pr_base) - (cp_rover - cp_base);
+
+                // Deviation from the reference: any rover-side arc restart
+                // (cycle slip / loss-of-lock / outage -- surfaced here as a
+                // change in the rover carrier's own ambiguity_index) resets
+                // this key's CMC baseline/prev/warmup state, since CMC
+                // embeds a -wavelength*N term that a new ambiguity
+                // invalidates.
+                const auto last_arc_it =
+                    cmc_last_rover_ambiguity_index.find(key);
+                const bool rover_arc_restarted =
+                    last_arc_it == cmc_last_rover_ambiguity_index.end() ||
+                    last_arc_it->second != rover_factor->ambiguity_index;
+                cmc_last_rover_ambiguity_index[key] = rover_factor->ambiguity_index;
+
+                CmcState& state = cmc_states[key];
+                if (rover_arc_restarted) {
+                    state = CmcState{};
+                } else if (state.has_prev &&
+                           std::abs(cmc - state.prev_cmc_m) >
+                               config_.code_minus_carrier_jump_threshold_m) {
+                    cmc_jump_reset_this_epoch.insert(key);
+                    ++cmc_jump_reset_total;
+                    // Same reasoning as above: the jump itself is a fresh
+                    // arc from this epoch on, so the baseline resets too.
+                    state = CmcState{};
+                }
+
+                state.prev_cmc_m = cmc;
+                state.has_prev = true;
+
+                const double level_threshold =
+                    config_.code_minus_carrier_level_threshold_m;
+                if (level_threshold > 0.0) {
+                    if (!state.has_baseline) {
+                        state.baseline_m = cmc;
+                        state.warmup_count = 1;
+                        state.has_baseline = true;
+                    } else if (state.warmup_count <
+                               config_.code_minus_carrier_warmup_epochs) {
+                        state.baseline_m =
+                            (state.baseline_m * state.warmup_count + cmc) /
+                            (state.warmup_count + 1);
+                        ++state.warmup_count;
+                    } else if (std::abs(cmc - state.baseline_m) > level_threshold) {
+                        cmc_level_exclude_this_epoch.insert(key);
+                        ++cmc_level_exclusion_total;
+                    } else {
+                        const double alpha = config_.code_minus_carrier_baseline_alpha;
+                        state.baseline_m =
+                            (1.0 - alpha) * state.baseline_m + alpha * cmc;
+                    }
+                }
+            }
+        }
+
         if (rover_pseudorange_it != rover_pseudoranges_by_epoch.end()) {
             for (const auto* rover_factor : rover_pseudorange_it->second) {
                 const CarrierKey key{rover_factor->satellite,
@@ -1408,6 +1839,52 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                            const PreparedCarrierObservation* rhs) {
                             return lhs->elevation_rad < rhs->elevation_rad;
                         });
+
+                // --- CMC-aware reference selection
+                // (FGOConfig::cmc_aware_reference_selection) ---
+                // The plain max-elevation pick above can land on a satellite
+                // the CMC screening pre-pass above already flagged as
+                // sustained multipath/NLOS this epoch
+                // (cmc_level_exclude_this_epoch). Every DD pair in the group
+                // is formed against this ONE reference, so a multipath-
+                // biased reference poisons every DD residual in the group at
+                // once (see the config knob's doc comment for the tokyo
+                // run1 episode that motivated this). When the knob is on and
+                // CMC screening is active, prefer the highest-elevation
+                // NON-excluded candidate instead; if every candidate in the
+                // group is CMC-excluded this epoch, keep the original
+                // max-elevation choice so the group is never dropped.
+                if (config_.cmc_aware_reference_selection &&
+                    config_.use_code_minus_carrier_screening &&
+                    !cmc_level_exclude_this_epoch.empty()) {
+                    const CarrierKey default_key{
+                        base_reference_selection->satellite,
+                        base_reference_selection->signal};
+                    if (cmc_level_exclude_this_epoch.count(default_key) > 0) {
+                        const PreparedCarrierObservation* best_clean = nullptr;
+                        for (const auto* candidate : reference_group_it->second) {
+                            const CarrierKey candidate_key{candidate->satellite,
+                                                            candidate->signal};
+                            if (cmc_level_exclude_this_epoch.count(candidate_key) >
+                                0) {
+                                continue;
+                            }
+                            if (!best_clean || candidate->elevation_rad >
+                                                    best_clean->elevation_rad) {
+                                best_clean = candidate;
+                            }
+                        }
+                        if (best_clean) {
+                            base_reference_selection = best_clean;
+                            ++cmc_ref_avoided_total;
+                        }
+                        // else: every candidate in the group is CMC-excluded
+                        // -- fall back to the original max-elevation choice
+                        // (base_reference_selection unchanged) rather than
+                        // dropping the whole group.
+                    }
+                }
+
                 const CarrierKey reference_key{
                     base_reference_selection->satellite,
                     base_reference_selection->signal};
@@ -1425,6 +1902,10 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
 
         std::map<DdFactorKey, DoubleDifferencePseudorangeFactor>
             pseudorange_factors_by_key;
+        // Includes CMC-level-excluded code observations solely for carrier
+        // ambiguity initialization when code-only exclusion is requested.
+        std::map<DdFactorKey, DoubleDifferencePseudorangeFactor>
+            pseudorange_seed_factors_by_key;
         for (const auto& [group_key, group] : grouped_rover_pseudoranges) {
             if (group_key.first == GNSSSystem::GLONASS) {
                 problem.diagnostics.double_difference_rejected_no_reference +=
@@ -1447,6 +1928,18 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                     continue;
                 }
                 const CarrierKey satellite_key{satellite->satellite, satellite->signal};
+                const bool cmc_level_excluded =
+                    cmc_level_exclude_this_epoch.count(satellite_key) > 0;
+                if (cmc_level_excluded &&
+                    !config_.code_minus_carrier_level_pseudorange_only) {
+                    // Sustained CMC multipath this epoch: skip the DD
+                    // pseudorange factor. The CP loop below only builds a
+                    // carrier factor when it finds a matching entry in
+                    // pseudorange_factors_by_key, so omitting the PR factor
+                    // here transitively excludes the CP factor too (matches
+                    // the reference's single `continue` before either).
+                    continue;
+                }
                 const auto base_satellite_it =
                     base_pseudorange_observations.find(satellite_key);
                 if (base_satellite_it == base_pseudorange_observations.end()) {
@@ -1478,8 +1971,29 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                      base_satellite.corrected_pseudorange_m) -
                     (reference->corrected_pseudorange_m -
                      base_reference.corrected_pseudorange_m);
+                const double pseudorange_band_scale =
+                    signal_policy::isSecondarySignal(satellite->satellite.system,
+                                                     satellite->signal)
+                        ? std::max(1.0,
+                                   config_
+                                       .double_difference_secondary_pseudorange_sigma_scale)
+                        : 1.0;
+                // Base DD-PR sigma: varerr (FGOConfig::use_elevation_
+                // dependent_sigma) when enabled, else the pre-existing flat/
+                // elevation-power fallback -- see the knob's doc comment in
+                // fgo.hpp for the full rationale/composition order. The
+                // secondary-band scale above still multiplies on top either
+                // way (unchanged).
+                double pseudorange_base_sigma = pseudorange_sigma / satellite_sqrt_sin_el;
+                if (config_.use_elevation_dependent_sigma) {
+                    const double el_pair_rad = std::max(
+                        std::min(reference->elevation_rad, satellite->elevation_rad),
+                        el_min_rad);
+                    pseudorange_base_sigma = varerrDdSigma(
+                        /*is_pseudorange=*/true, el_pair_rad, epoch_dt_s, config_);
+                }
                 pseudorange_factor.sigma_m =
-                    pseudorange_sigma / satellite_sqrt_sin_el;
+                    pseudorange_band_scale * pseudorange_base_sigma;
                 pseudorange_factor.elevation_rad = satellite->elevation_rad;
                 pseudorange_factor.rover_satellite_model =
                     satellite->model_debug;
@@ -1489,14 +2003,18 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                     base_satellite.model_debug;
                 pseudorange_factor.base_reference_model =
                     base_reference.model_debug;
-                problem.double_difference_pseudorange_factors.push_back(
-                    pseudorange_factor);
-                pseudorange_factors_by_key[DdFactorKey{
+                const DdFactorKey factor_key{
                     epoch_index,
                     satellite->satellite,
                     reference->satellite,
                     satellite->signal,
-                }] = pseudorange_factor;
+                };
+                pseudorange_seed_factors_by_key[factor_key] = pseudorange_factor;
+                if (!cmc_level_excluded) {
+                    problem.double_difference_pseudorange_factors.push_back(
+                        pseudorange_factor);
+                    pseudorange_factors_by_key[factor_key] = pseudorange_factor;
+                }
             }
         }
 
@@ -1521,20 +2039,69 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                 if (base_satellite_it == base_carriers.end()) {
                     continue;
                 }
-                const auto pseudorange_factor_it =
-                    pseudorange_factors_by_key.find(DdFactorKey{
+                const DdFactorKey factor_key{
                         epoch_index,
                         satellite->satellite,
                         reference->satellite,
                         satellite->signal,
-                    });
-                if (pseudorange_factor_it == pseudorange_factors_by_key.end()) {
+                    };
+                const auto pseudorange_factor_it = pseudorange_factors_by_key.find(factor_key);
+                const DoubleDifferencePseudorangeFactor* pseudorange_factor_ptr =
+                    pseudorange_factor_it != pseudorange_factors_by_key.end()
+                        ? &pseudorange_factor_it->second
+                        : nullptr;
+                if (!pseudorange_factor_ptr &&
+                    config_.code_minus_carrier_level_pseudorange_only) {
+                    const auto seed_it = pseudorange_seed_factors_by_key.find(factor_key);
+                    if (seed_it != pseudorange_seed_factors_by_key.end()) {
+                        pseudorange_factor_ptr = &seed_it->second;
+                    }
+                }
+                if (!pseudorange_factor_ptr) {
+                    // Sustained CMC multipath dropped this satellite's DD-PR
+                    // factor at problem-build time (and, transitively, this
+                    // DD-CP row -- code_minus_carrier_level_pseudorange_only
+                    // is false, else pseudorange_factor_ptr would have come
+                    // from the seed map above). Retain a minimal excluded
+                    // row -- geometry + observed DD carrier, no ambiguity/
+                    // segment tracking (ambiguity_index is the sentinel
+                    // max()) -- solely so the surplus-satellite independent
+                    // integrity validator (FGOConfig::use_surplus_
+                    // satellite_validation) can see observations that never
+                    // entered ambiguity resolution at all. NEVER added to
+                    // double_difference_carrier_factors / the solved graph.
+                    if (cmc_level_exclude_this_epoch.count(satellite_key) > 0 &&
+                        reference->has_carrier_phase && base_reference.has_carrier_phase) {
+                        const auto& base_satellite_excl = base_satellite_it->second;
+                        DoubleDifferenceCarrierFactor excluded;
+                        excluded.epoch_index = epoch_index;
+                        excluded.use_ambiguity_difference = false;
+                        excluded.ambiguity_index = std::numeric_limits<std::size_t>::max();
+                        excluded.satellite = satellite->satellite;
+                        excluded.reference_satellite = reference->satellite;
+                        excluded.signal = satellite->signal;
+                        excluded.rover_satellite_position_ecef = satellite->satellite_position_ecef;
+                        excluded.rover_reference_position_ecef = reference->satellite_position_ecef;
+                        excluded.base_satellite_position_ecef =
+                            base_satellite_excl.satellite_position_ecef;
+                        excluded.base_reference_position_ecef =
+                            base_reference.satellite_position_ecef;
+                        excluded.base_position_ecef = base_position_ecef;
+                        excluded.observed_dd_carrier_m =
+                            (satellite->corrected_carrier_m -
+                             base_satellite_excl.corrected_carrier_m) -
+                            (reference->corrected_carrier_m -
+                             base_reference.corrected_carrier_m);
+                        excluded.sigma_m = carrier_sigma;  // unused by the surplus validator
+                        excluded.elevation_rad = satellite->elevation_rad;
+                        problem.excluded_double_difference_carrier_factors.push_back(excluded);
+                    }
                     continue;
                 }
                 ++problem.diagnostics.double_difference_candidate_pairs;
 
                 const auto& base_satellite = base_satellite_it->second;
-                const auto& pseudorange_factor = pseudorange_factor_it->second;
+                const auto& pseudorange_factor = *pseudorange_factor_ptr;
                 const double satellite_sin_el =
                     std::max(0.1, std::sin(satellite->elevation_rad));
                 const double satellite_sqrt_sin_el =
@@ -1565,7 +2132,27 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                      base_satellite.corrected_carrier_m) -
                     (reference->corrected_carrier_m -
                      base_reference.corrected_carrier_m);
-                factor.sigma_m = carrier_sigma / satellite_sqrt_sin_el;
+                const double carrier_band_scale =
+                    signal_policy::isSecondarySignal(satellite->satellite.system,
+                                                     satellite->signal)
+                        ? std::max(1.0,
+                                   config_
+                                       .double_difference_secondary_carrier_sigma_scale)
+                        : 1.0;
+                // Base DD-CP sigma: varerr when enabled, else the
+                // pre-existing flat/elevation-power fallback -- same source
+                // switch as the DD-PR site above (see that comment and the
+                // knob's doc comment in fgo.hpp). Secondary-band scale still
+                // multiplies on top either way.
+                double carrier_base_sigma = carrier_sigma / satellite_sqrt_sin_el;
+                if (config_.use_elevation_dependent_sigma) {
+                    const double el_pair_rad = std::max(
+                        std::min(reference->elevation_rad, satellite->elevation_rad),
+                        el_min_rad);
+                    carrier_base_sigma = varerrDdSigma(
+                        /*is_pseudorange=*/false, el_pair_rad, epoch_dt_s, config_);
+                }
+                factor.sigma_m = carrier_band_scale * carrier_base_sigma;
                 factor.elevation_rad = satellite->elevation_rad;
                 factor.rover_satellite_model = satellite->model_debug;
                 factor.rover_reference_model = reference->model_debug;
@@ -1601,6 +2188,13 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                         (max_segment_gap > 0.0 && dt > max_segment_gap)) {
                         start_new_segment = true;
                     }
+                }
+                if (cmc_jump_reset_this_epoch.count(
+                        CarrierKey{satellite->satellite, satellite->signal}) > 0) {
+                    // CMC jump: force the same arc break the loss-of-lock /
+                    // gap checks above already perform (multipath jump
+                    // breaks the integer ambiguity).
+                    start_new_segment = true;
                 }
 
                 if (start_new_segment) {
@@ -1726,6 +2320,7 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
     }
 
     if (config_.use_single_difference_doppler_factors ||
+        config_.use_external_doppler_dr_validation ||
         config_.use_single_difference_tdcp_factors) {
         std::map<CarrierKey, SingleDifferenceCarrierResidual>
             previous_sd_carrier_residuals;
@@ -1776,9 +2371,16 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                     continue;
                 }
                 const auto* reference = reference_model_it->second;
+                // A satellite differenced with itself is identically zero
+                // and adds no information (but can distort factor counts and
+                // residual diagnostics).
+                if (rover->satellite == reference_satellite) {
+                    continue;
+                }
                 const Vector3d sd_los = rover->los - reference->los;
 
-                if (config_.use_single_difference_doppler_factors &&
+                if ((config_.use_single_difference_doppler_factors ||
+                     config_.use_external_doppler_dr_validation) &&
                     rover->has_doppler_residual &&
                     reference->has_doppler_residual) {
                     SingleDifferenceDopplerFactor factor;
@@ -1790,7 +2392,8 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                     factor.residual_mps =
                         rover->doppler_residual_mps -
                         reference->doppler_residual_mps;
-                    factor.sigma_mps = rover->doppler_sigma_mps;
+                    factor.sigma_mps = std::hypot(rover->doppler_sigma_mps,
+                                                  reference->doppler_sigma_mps);
                     factor.elevation_rad = rover->elevation_rad;
                     if (std::isfinite(factor.residual_mps) &&
                         std::isfinite(factor.sigma_mps) &&
@@ -1852,6 +2455,11 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
         }
     }
 
+    problem.diagnostics.code_minus_carrier_jump_resets = cmc_jump_reset_total;
+    problem.diagnostics.code_minus_carrier_level_exclusions =
+        cmc_level_exclusion_total;
+    problem.diagnostics.cmc_ref_avoided_count = cmc_ref_avoided_total;
+
     return problem;
 }
 
@@ -1907,6 +2515,12 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
         problem.diagnostics.double_difference_rejected_no_base_epoch;
     result.diagnostics.double_difference_rejected_no_reference =
         problem.diagnostics.double_difference_rejected_no_reference;
+    result.diagnostics.code_minus_carrier_jump_resets =
+        problem.diagnostics.code_minus_carrier_jump_resets;
+    result.diagnostics.code_minus_carrier_level_exclusions =
+        problem.diagnostics.code_minus_carrier_level_exclusions;
+    result.diagnostics.cmc_ref_avoided_count =
+        problem.diagnostics.cmc_ref_avoided_count;
 
     if (problem.epochs.empty() ||
         (problem.pseudorange_factors.empty() &&
@@ -1918,6 +2532,19 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
          problem.single_difference_tdcp_factors.empty())) {
         return result;
     }
+
+#ifdef GNSSPP_HAS_GTSAM
+    if (config_.backend == FGOBackend::GTSAM) {
+        return optimizeProblemWithGtsam(problem, config_, std::move(result));
+    }
+#endif
+
+    // The native optimizer consumes every TDCP entry in the problem as one
+    // residual row. Keep this separate from tdcp_factors (measurements built)
+    // so a backend can never silently report generated factors as inserted.
+    result.diagnostics.tdcp_factors_inserted = problem.tdcp_factors.size();
+    result.diagnostics.single_difference_tdcp_factors_inserted =
+        problem.single_difference_tdcp_factors.size();
 
     const int num_epochs = static_cast<int>(problem.epochs.size());
     std::vector<GNSSSystem> bias_groups;

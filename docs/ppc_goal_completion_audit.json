@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "passed": true,
+  "checks_passed": 15,
+  "checks_total": 15,
+  "checks": [
+    {
+      "requirement": "PPC weighted official score >= 78.7%",
+      "passed": true,
+      "evidence": "docs/ppc_kf_fgo_goal_metrics.json",
+      "observed": 78.845491
+    },
+    {
+      "requirement": "Tokyo run1 FIX >= 80.8%",
+      "passed": true,
+      "evidence": "docs/ppc_kf_fgo_goal_metrics.json",
+      "observed": 80.860848
+    },
+    {
+      "requirement": "Correct FIX/reference >= 66.230%",
+      "passed": true,
+      "evidence": "docs/ppc_kf_fgo_goal_metrics.json",
+      "observed": 66.286505
+    },
+    {
+      "requirement": "Macro Wrong FIX/FIX < 1.5%",
+      "passed": true,
+      "evidence": "docs/ppc_kf_fgo_goal_metrics.json",
+      "observed": 1.463246
+    },
+    {
+      "requirement": "Total wrong FIX <= 700",
+      "passed": true,
+      "evidence": "docs/ppc_wrong_fix_event_ledger.json",
+      "observed": 574
+    },
+    {
+      "requirement": "Wrong FIX above 10 m <= 10",
+      "passed": true,
+      "evidence": "docs/ppc_wrong_fix_event_ledger.json",
+      "observed": 5
+    },
+    {
+      "requirement": "Wrong-FIX event ledger is runtime-truth-free",
+      "passed": true,
+      "evidence": "docs/ppc_wrong_fix_event_ledger.json",
+      "observed": {
+        "events": 188,
+        "events_above_10m": 4,
+        "wrong_fix_epochs": 574
+      }
+    },
+    {
+      "requirement": "Nagoya 3 106 m root cause and non-inherited hold diagnosis documented",
+      "passed": true,
+      "evidence": "docs/ppc_nagoya3_wrong_fix_root_cause.md",
+      "observed": "106.130 m; float-KF basin; no prior held integers"
+    },
+    {
+      "requirement": "KF wrong-basin prevention and FGO recovery design documented",
+      "passed": true,
+      "evidence": "docs/ppc_online_consensus_design.md",
+      "observed": "detection/recovery authority separation"
+    },
+    {
+      "requirement": "Online KF/FGO consensus implementation and tests exist",
+      "passed": true,
+      "evidence": "include/libgnss++/algorithms/integrity_consensus.hpp; tests/test_integrity_consensus.cpp",
+      "observed": {
+        "runtime_truth_used": false,
+        "positions_replaced": 0,
+        "final_state": "NORMAL"
+      }
+    },
+    {
+      "requirement": "Six-fold LOO and extension LOO are complete",
+      "passed": true,
+      "evidence": "docs/ppc_kinematic_integrity_loo.json",
+      "observed": {
+        "folds": 6,
+        "extension_folds": 6
+      }
+    },
+    {
+      "requirement": "Active non-PPC receiver holdout catches wrong FIX without truth at runtime",
+      "passed": true,
+      "evidence": "docs/ppc_residual_integrity_external_audit.json",
+      "observed": {
+        "selected": 22,
+        "wrong_caught": 22,
+        "correct_harmed": 0
+      }
+    },
+    {
+      "requirement": "CI regression gate covers staged policy",
+      "passed": true,
+      "evidence": "tests/CMakeLists.txt",
+      "observed": "core CTest registrations"
+    },
+    {
+      "requirement": "README, tables, figures, and reproduction instructions are current",
+      "passed": true,
+      "evidence": "README.md; docs/ppc_libgnss_gici_comparison.png; docs/ppc_public_targets.png; docs/ppc_kf_fgo_fix_status_xy.png; docs/ppc_reproduction.md",
+      "observed": "current staged metrics and external audit linked"
+    },
+    {
+      "requirement": "MIT/GPL boundary is explicit and libgnss++ license remains MIT",
+      "passed": true,
+      "evidence": "LICENSE; docs/ppc_kf_fgo_goal_metrics.json; docs/ppc_online_consensus_design.md",
+      "observed": "GPL-3.0 external executable; NMEA output only"
+    }
+  ]
+}

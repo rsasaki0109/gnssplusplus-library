@@ -52,6 +52,7 @@ public:
         std::vector<std::string> observation_types;
         // RINEX 3: per-system observation types (key = system char, e.g. "G", "R", "E")
         std::map<char, std::vector<std::string>> system_obs_types;
+        std::map<SatelliteId, int> glonass_frequency_channels;
         double interval = 0.0;
         GNSSTime first_obs;
         GNSSTime last_obs;
@@ -60,8 +61,45 @@ public:
         std::map<std::string, std::string> comments;
     };
     
-    RINEXReader() = default;
+    RINEXReader();
     ~RINEXReader() = default;
+
+    /**
+     * @brief Prefer QZSS L1L/L1X observations over L1C when available.
+     */
+    void setQzssL1Preference(bool prefer_l1l) { qzss_prefer_l1l_ = prefer_l1l; }
+
+    /**
+     * @brief Check whether QZSS L1L/L1X preference is enabled.
+     */
+    bool qzssL1Preference() const { return qzss_prefer_l1l_; }
+
+    /**
+     * @brief Prefer QZSS L5Q/L5X observations over L2L for the secondary PPP signal.
+     */
+    void setQzssSecondaryL5Preference(bool prefer_l5) {
+        qzss_prefer_l5_secondary_ = prefer_l5;
+    }
+
+    /**
+     * @brief Check whether QZSS secondary L5 preference is enabled.
+     */
+    bool qzssSecondaryL5Preference() const { return qzss_prefer_l5_secondary_; }
+
+    /**
+     * @brief Preserve one selected observation for every supported frequency band.
+     *
+     * The default reader contract emits only the primary and secondary signals.
+     * Per-frequency PPP-AR callers can enable this mode so L3/L4 observations
+     * needed by extra-wide-lane ambiguity resolution are not discarded at ingest.
+     */
+    void setPreserveAdditionalFrequencyBands(bool preserve) {
+        preserve_additional_frequency_bands_ = preserve;
+    }
+
+    bool preservesAdditionalFrequencyBands() const {
+        return preserve_additional_frequency_bands_;
+    }
     
     /**
      * @brief Open RINEX file
@@ -117,6 +155,9 @@ private:
     std::ifstream file_;
     RINEXHeader header_;
     int current_line_ = 0;
+    bool qzss_prefer_l1l_ = false;
+    bool qzss_prefer_l5_secondary_ = false;
+    bool preserve_additional_frequency_bands_ = false;
 
     // State for parsing RINEX 3 "SYS / # / OBS TYPES" records that span
     // continuation lines (systems with more than 13 observation types, e.g.

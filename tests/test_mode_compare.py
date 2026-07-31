@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -12,8 +13,23 @@ import unittest
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
-APPS_DIR = ROOT_DIR / "apps"
+COMMANDS_DIR = ROOT_DIR / "apps" / "commands"
+APPS_DIR = COMMANDS_DIR / "diagnostics"
+sys.path.insert(0, str(COMMANDS_DIR))
 sys.path.insert(0, str(APPS_DIR))
+SUBPROCESS_ENV = {
+    **os.environ,
+    "PYTHONPATH": os.pathsep.join(
+        filter(
+            None,
+            (
+                str(COMMANDS_DIR),
+                str(COMMANDS_DIR / "benchmarks"),
+                os.environ.get("PYTHONPATH", ""),
+            ),
+        )
+    ),
+}
 
 import gnss_mode_compare  # noqa: E402
 
@@ -133,6 +149,7 @@ class ModeCompareTest(unittest.TestCase):
                 text=True,
                 capture_output=True,
                 check=False,
+                env=SUBPROCESS_ENV,
             )
 
             self.assertEqual(result.returncode, 0, msg=result.stderr)
@@ -207,6 +224,7 @@ class ModeCompareTest(unittest.TestCase):
                 text=True,
                 capture_output=True,
                 check=False,
+                env=SUBPROCESS_ENV,
             )
 
             self.assertEqual(result.returncode, 0, msg=result.stderr)
@@ -263,6 +281,7 @@ class ModeCompareTest(unittest.TestCase):
                 text=True,
                 capture_output=True,
                 check=False,
+                env=SUBPROCESS_ENV,
             )
 
             self.assertEqual(result.returncode, 0, msg=result.stderr)
@@ -322,6 +341,7 @@ class ModeCompareTest(unittest.TestCase):
                 text=True,
                 capture_output=True,
                 check=False,
+                env=SUBPROCESS_ENV,
             )
 
             self.assertEqual(result.returncode, 2)

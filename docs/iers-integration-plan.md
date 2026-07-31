@@ -127,7 +127,7 @@ tides altogether see no change.
 
 ### 3.2 CLI plumbing
 
-`apps/gnss_ppp.cpp` follows the canonical "three-line" pattern from
+`apps/native/gnss_ppp.cpp` follows the canonical "three-line" pattern from
 the recent `--enable-ppp-holdamb` change (commit `0293f54`):
 
 1. Add field to local `Options` struct.
@@ -169,13 +169,13 @@ Add `tests/test_ppp_iers_solid_tide.cpp` exercising the dispatch:
 
 Phase C-1 only affects the PPP code path
 (`PPPProcessor::calculateSolidEarthTides`). The existing PPC
-Tokyo / Nagoya 6-run truth-bench (`apps/gnss_ppc_rtk_signoff.py`)
+Tokyo / Nagoya 6-run truth-bench (`apps/commands/benchmarks/gnss_ppc_rtk_signoff.py`)
 operates on the RTK code path and does **not** exercise the PPP
 solid-earth-tide dispatcher; it cannot be used as the validation
 oracle for this change.
 
 Phase C-2 introduces a PPP-specific paired-comparison harness at
-`apps/gnss_ppp_iers_solid_tide_bench.py`, registered with the
+`apps/commands/benchmarks/gnss_ppp_iers_solid_tide_bench.py`, registered with the
 dispatcher as `gnss ppp-iers-solid-tide-bench`. Behavior:
 
 1. Run `gnss ppp` twice on the same PPP setup — once with
@@ -249,8 +249,8 @@ atmospheric tidal loading), but they do not say whether the
 INTEGRATED stack actually delivers a better absolute position
 against an external reference.
 
-`apps/gnss_ppp_iers_truth_bench.py` and
-`apps/gnss_ppp_iers_truth_multisite_bench.py` close that loop:
+`apps/commands/benchmarks/gnss_ppp_iers_truth_bench.py` and
+`apps/commands/benchmarks/gnss_ppp_iers_truth_multisite_bench.py` close that loop:
 they run `gnss_ppp` with all IERS defaults ON, take the converged
 static-mode tail of the .pos solution, and compare it to the
 RINEX OBS header's `APPROX POSITION XYZ` (which IGS stations
@@ -330,7 +330,7 @@ does not block Phase C:
   user supplies `--eop-c04` / `--eop-bulletin-a`. `--no-iers-pole-tide`
   is a permanent escape hatch.
 
-  Phase D-1 also includes `apps/gnss_ppp_iers_pole_tide_bench.py`
+  Phase D-1 also includes `apps/commands/benchmarks/gnss_ppp_iers_pole_tide_bench.py`
   (mirroring the solid-tide harness from Phase C-1): a paired-PPP
   driver that runs `gnss_ppp` with and without the pole-tide flag
   and emits per-epoch displacement statistics (max / p95 / median,
@@ -341,7 +341,7 @@ does not block Phase C:
   motion.
 
   Phase D-1 also includes
-  `apps/gnss_ppp_iers_pole_tide_multisite_bench.py` — a multi-site
+  `apps/commands/benchmarks/gnss_ppp_iers_pole_tide_multisite_bench.py` — a multi-site
   driver that runs the per-site harness across an arbitrary list of
   IGS stations and emits an aggregate distribution summary (gates
   the eventual `use_iers_pole_tide` flip-default). On 5-station IGS
@@ -386,8 +386,8 @@ does not block Phase C:
   a permanent escape hatch.
 
   Phase D-2 also includes a paired-PPP single-site bench
-  `apps/gnss_ppp_iers_sub_daily_eop_bench.py` and a multi-site
-  driver `apps/gnss_ppp_iers_sub_daily_eop_multisite_bench.py`
+  `apps/commands/benchmarks/gnss_ppp_iers_sub_daily_eop_bench.py` and a multi-site
+  driver `apps/commands/benchmarks/gnss_ppp_iers_sub_daily_eop_multisite_bench.py`
   (mirroring the pole-tide harnesses from Phase D-1). Both keep
   `--use-iers-pole-tide` enabled in both runs and toggle only
   `--use-iers-sub-daily-eop`, so the reported displacement is the
@@ -414,7 +414,7 @@ does not block Phase C:
   shifts by mean −10.6 µm / RMS 106 µm in Z. Default off pending
   real TU Wien per-site coefficients.
 
-  Phase D-3 also includes `apps/gnss_ppp_iers_atm_tidal_loading_bench.py`
+  Phase D-3 also includes `apps/commands/benchmarks/gnss_ppp_iers_atm_tidal_loading_bench.py`
   (mirroring the pole-tide harness from Phase D-1): a paired-PPP
   driver that runs `gnss_ppp` with and without the ATL flag and
   emits per-epoch displacement statistics. On TSKB 2026-04-15 with
@@ -424,7 +424,7 @@ does not block Phase C:
   during normal pressure conditions.
 
   Phase D-3 also includes
-  `apps/gnss_ppp_iers_atm_tidal_loading_multisite_bench.py` (mirroring
+  `apps/commands/benchmarks/gnss_ppp_iers_atm_tidal_loading_multisite_bench.py` (mirroring
   the pole-tide multi-site driver from PR #69 / #73). The site config
   schema accepts a per-site `atm_tidal_loading` override on top of
   the campaign-wide `common.atm_tidal_loading` — real campaigns use
@@ -437,7 +437,7 @@ does not block Phase C:
   consistent with the IERS §7.1.5 envelope.
 
   The checked smoke config
-  `configs/iers_atl_multisite_smoke.example.json` uses the small
+  `configs/benchmarks/iers_atl_multisite_smoke.example.json` uses the small
   synthetic fixture `test_data/iers/tskb_synth.atl` and reproduces
   the single-site result exactly (`median = 0.169 mm`, `p95 =
   0.358 mm`, `max = 0.901 mm`) when the 2026-04-15 TSKB PPP

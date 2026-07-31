@@ -14,6 +14,9 @@ import time
 from typing import Mapping
 
 
+SUMMARY_SCHEMA = "ci_optional_rtk_signoffs.v1"
+
+
 @dataclass(frozen=True)
 class SignoffStep:
     name: str
@@ -125,6 +128,45 @@ def make_ppc_rtk_step(context: SignoffContext, city: str, *, require_rtklib: boo
     return make_step(step_name, slug, command, outputs)
 
 
+def make_ppc_coverage_matrix_smoke_step(context: SignoffContext) -> SignoffStep:
+    slug = "ppc_coverage_matrix_schema_smoke"
+    name = "PPC coverage matrix schema smoke"
+    out_dir = context.output_dir / slug
+    outputs = [
+        out_dir / "summary.json",
+        out_dir / "table.md",
+        *(out_dir / f"{city}_{run_name}_summary.json" for city, run_name in (
+            ("tokyo", "run1"),
+            ("tokyo", "run2"),
+            ("tokyo", "run3"),
+            ("nagoya", "run1"),
+            ("nagoya", "run2"),
+            ("nagoya", "run3"),
+        )),
+    ]
+
+    if context.dataset_root is None or not context.dataset_root.is_dir():
+        return skip_step(name, slug, outputs, "PPC-Dataset root is unavailable.")
+
+    command = [
+        *context.gnss_command,
+        "ppc-coverage-matrix",
+        "--config-toml",
+        str(context.repo_root / "configs" / "benchmarks" / "ppc_sigma_demote_nis2_ratio4.toml"),
+        "--dataset-root",
+        str(context.dataset_root),
+        "--max-epochs",
+        "2",
+        "--output-dir",
+        str(out_dir),
+        "--summary-json",
+        str(out_dir / "summary.json"),
+        "--markdown-output",
+        str(out_dir / "table.md"),
+    ]
+    return make_step(name, slug, command, outputs)
+
+
 def make_ppc_taroz_amb_pdc_long_step(context: SignoffContext) -> SignoffStep:
     slug = "ppc_taroz_amb_pdc_nagoya_run3_1000_seed"
     name = "PPC taroz ambiguity PDC long generated-seed sign-off"
@@ -224,6 +266,7 @@ def build_step_plan(
         python_executable=python_executable,
     )
     return [
+        make_ppc_coverage_matrix_smoke_step(context),
         make_ppc_rtk_step(context, "nagoya", require_rtklib=False),
         make_ppc_rtk_step(context, "tokyo", require_rtklib=True),
         make_ppc_taroz_amb_pdc_long_step(context),
@@ -268,8 +311,17 @@ def run_step(step: SignoffStep, repo_root: Path, log_dir: Path) -> dict[str, obj
     record["elapsed_s"] = elapsed
     record["returncode"] = completed.returncode
     if completed.returncode == 0:
-        record["status"] = "passed"
-        print(f"Passed {step.name} in {elapsed:.2f}s")
+        missing_outputs = [output for output in step.outputs if not Path(output).exists()]
+        record["missing_outputs"] = missing_outputs
+        if missing_outputs:
+            record["status"] = "failed"
+            print(
+                f"Failed {step.name} in {elapsed:.2f}s; "
+                f"missing expected outputs: {', '.join(missing_outputs)}"
+            )
+        else:
+            record["status"] = "passed"
+            print(f"Passed {step.name} in {elapsed:.2f}s")
     else:
         record["status"] = "failed"
         lines = combined_log.splitlines()
@@ -303,8 +355,12 @@ def render_markdown_summary(results: list[dict[str, object]]) -> str:
             elapsed = result.get("elapsed_s")
             detail = f"{elapsed:.2f}s" if isinstance(elapsed, (float, int)) else ""
         elif status == "failed":
-            log_path = result.get("log_path")
-            detail = f"see `{log_path}`" if log_path else "failed"
+            missing_outputs = result.get("missing_outputs")
+            if isinstance(missing_outputs, list) and missing_outputs:
+                detail = "missing " + ", ".join(f"`{output}`" for output in missing_outputs)
+            else:
+                log_path = result.get("log_path")
+                detail = f"see `{log_path}`" if log_path else "failed"
         lines.append(f"| {result['name']} | `{status}` | {detail} |")
     lines.append("")
     return "\n".join(lines)
@@ -313,6 +369,7 @@ def render_markdown_summary(results: list[dict[str, object]]) -> str:
 def write_summary(summary_path: Path, steps: list[SignoffStep], results: list[dict[str, object]]) -> None:
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
+        "summary_schema": SUMMARY_SCHEMA,
         "steps": [asdict(step) for step in steps],
         "results": results,
         "counts": {

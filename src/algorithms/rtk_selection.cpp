@@ -54,11 +54,23 @@ std::vector<SelectionPair> buildDoubleDifferencePairsForSystem(
     const std::vector<SatelliteSelectionData>& satellites,
     GNSSSystem system,
     int min_lock_count,
-    bool require_matched_carrier_wavelength) {
+    bool require_matched_carrier_wavelength,
+    const SatelliteId* forced_ref_sat) {
     std::vector<SelectionPair> pairs;
 
     SatelliteId ref_sat;
-    if (!selectSystemReferenceSatellite(satellites, system, min_lock_count, ref_sat)) {
+    bool have_ref = false;
+    if (forced_ref_sat != nullptr) {
+        for (const auto& satellite : satellites) {
+            if (satellite.satellite.system == system && satellite.satellite == *forced_ref_sat &&
+                satellite.has_l1 && satellite.n1_active) {
+                ref_sat = *forced_ref_sat;
+                have_ref = true;
+                break;
+            }
+        }
+    }
+    if (!have_ref && !selectSystemReferenceSatellite(satellites, system, min_lock_count, ref_sat)) {
         return pairs;
     }
 
@@ -108,6 +120,28 @@ std::vector<SelectionPair> buildDoubleDifferencePairsForSystem(
                 continue;
             }
             pairs.push_back({ref_sat, satellite.satellite, 1});
+        }
+    }
+
+    // Phase 18 Step 4: emit L5 (freq=2) pairs when ref sat carries an active L5 ambiguity.
+    // Backward-compat: when L5 collection is disabled (Step 3 default), has_l5/n5_active stay
+    // false on every snapshot entry, so this block is a no-op.
+    if (ref_data->has_l5 && ref_data->n5_active) {
+        for (const auto& satellite : satellites) {
+            if (satellite.satellite.system != system || satellite.satellite == ref_sat) {
+                continue;
+            }
+            if (!satellite.has_l5 || !satellite.n5_active) {
+                continue;
+            }
+            if (min_lock_count > 0 && satellite.lock_count_l5 < min_lock_count) {
+                continue;
+            }
+            if (require_matched_carrier_wavelength &&
+                std::abs(satellite.l5_wavelength - ref_data->l5_wavelength) > 1e-6) {
+                continue;
+            }
+            pairs.push_back({ref_sat, satellite.satellite, 2});
         }
     }
 

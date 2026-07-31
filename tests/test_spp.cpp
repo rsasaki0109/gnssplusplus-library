@@ -147,6 +147,37 @@ TEST(NavigationTest, BeiDouGeoBroadcastStateUsesGeoRotationFrame) {
     EXPECT_GT((position - non_geo_omega).norm(), 100000.0);
 }
 
+TEST(NavigationTest, GalileoBroadcastStateUsesGalileoGravitationalConstantByDefault) {
+    Ephemeris eph;
+    eph.satellite = SatelliteId(GNSSSystem::Galileo, 27);
+    eph.valid = true;
+    eph.toe = GNSSTime(2068, 223200.0);
+    eph.toc = eph.toe;
+    eph.toes = eph.toe.tow;
+    eph.sqrt_a = std::sqrt(29600000.0);
+    eph.e = 0.002;
+    eph.i0 = 0.98;
+    eph.omega0 = 1.2;
+    eph.omega = 0.4;
+    eph.m0 = 0.7;
+    eph.delta_n = 1.0e-9;
+    eph.omega_dot = -5.0e-9;
+
+    const GNSSTime eval_time(2068, 230445.0);
+    Vector3d default_position, galileo_position, gps_mu_position;
+    Vector3d velocity;
+    double clock_bias = 0.0, clock_drift = 0.0;
+    ASSERT_TRUE(eph.calculateSatelliteState(
+        eval_time, default_position, velocity, clock_bias, clock_drift));
+    ASSERT_TRUE(eph.calculateSatelliteState(
+        eval_time, galileo_position, velocity, clock_bias, clock_drift, true));
+    ASSERT_TRUE(eph.calculateSatelliteState(
+        eval_time, gps_mu_position, velocity, clock_bias, clock_drift, false));
+
+    EXPECT_LT((default_position - galileo_position).norm(), 1e-9);
+    EXPECT_GT((default_position - gps_mu_position).norm(), 0.1);
+}
+
 TEST(IonosphereModelTest, KlobucharUsesElevationInSemicircles) {
     const double latitude = 35.0 * M_PI / 180.0;
     const double longitude = 139.0 * M_PI / 180.0;
@@ -223,6 +254,19 @@ TEST(SPPUtilsTest, PseudorangeVariancePenalizesLowElevationAndWeakSnr) {
     EXPECT_TRUE(std::isfinite(high_variance));
     EXPECT_TRUE(std::isfinite(low_variance));
     EXPECT_GT(low_variance, high_variance);
+}
+
+TEST(SPPUtilsTest, MrtklibClasSnrMaskInterpolatesElevationBins) {
+    EXPECT_DOUBLE_EQ(spp_utils::mrtklibClasSnrThresholdDbHz(30.0 * M_PI / 180.0),
+                     10.0);
+    EXPECT_DOUBLE_EQ(spp_utils::mrtklibClasSnrThresholdDbHz(35.0 * M_PI / 180.0),
+                     10.0);
+    EXPECT_DOUBLE_EQ(spp_utils::mrtklibClasSnrThresholdDbHz(40.0 * M_PI / 180.0),
+                     20.0);
+    EXPECT_DOUBLE_EQ(spp_utils::mrtklibClasSnrThresholdDbHz(45.0 * M_PI / 180.0),
+                     30.0);
+    EXPECT_DOUBLE_EQ(spp_utils::mrtklibClasSnrThresholdDbHz(90.0 * M_PI / 180.0),
+                     30.0);
 }
 
 TEST(SPPUtilsTest, PseudorangeVariancePenalizesUnmodeledAtmosphere) {
@@ -761,6 +805,11 @@ TEST_F(SPPTest, UsesMultipleConstellationsOnOdaibaEpoch) {
     EXPECT_TRUE(used_systems.count(GNSSSystem::BeiDou));
     EXPECT_TRUE(used_systems.count(GNSSSystem::QZSS));
     EXPECT_GE(used_systems.size(), 4U);
+    const auto& system_biases = spp_processor_->getSystemBiases();
+    ASSERT_TRUE(system_biases.count(GNSSSystem::GLONASS));
+    ASSERT_TRUE(system_biases.count(GNSSSystem::BeiDou));
+    EXPECT_TRUE(std::isfinite(system_biases.at(GNSSSystem::GLONASS)));
+    EXPECT_TRUE(std::isfinite(system_biases.at(GNSSSystem::BeiDou)));
 }
 
 TEST_F(SPPTest, BeiDouEnabledSPPStaysCloseOnOdaibaSequence) {

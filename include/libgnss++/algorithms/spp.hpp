@@ -57,10 +57,13 @@ public:
         double max_position_jump_rate_mps = 0.0;      ///< Max accepted position step rate [m/s] (<=0 disables)
         double max_position_jump_min_m = 0.0;         ///< Minimum allowed position step [m]
         bool use_ionosphere_free_combination = false; ///< Use dual-frequency code IFLC when available
+        bool mrtklib_iflc_code_bias = false;          ///< Match MRTKLIB prange() IFLC TGD handling
+        bool mrtklib_clas_snr_mask = false;           ///< Apply the CLAS rover elevation/SNR mask
         bool use_ionex_corrections = true;            ///< Prefer loaded IONEX TEC maps over broadcast ionosphere
         bool use_dcb_corrections = true;              ///< Apply loaded OSB/DCB code-bias products when available
         bool use_precise_products = true;             ///< Use loaded SP3/CLK products for satellite orbit/clock
         bool use_ssr_corrections = true;              ///< Apply loaded SSR orbit/clock/code-bias corrections
+        double elevation_mask_override_deg = -1.0;   ///< Per-solve elevation mask; negative uses ProcessorConfig
         
         // Clock modeling
         bool model_intersystem_bias = true;           ///< Model inter-system clock biases
@@ -112,6 +115,13 @@ public:
     const SPPConfig& getSPPConfig() const { return spp_config_; }
 
     /**
+     * @brief Get estimated inter-system clock biases in metres
+     */
+    const std::map<GNSSSystem, double>& getSystemBiases() const {
+        return system_biases_;
+    }
+
+    /**
      * @brief Load IONEX ionosphere products for SPP ionosphere corrections
      */
     bool loadIONEXProducts(const std::string& ionex_file);
@@ -130,6 +140,10 @@ public:
      * @brief Load CSV SSR orbit/clock/code-bias products for SPP corrections
      */
     bool loadSSRProducts(const std::string& ssr_file);
+    void setSSRProducts(const SSRProducts& products) {
+        ssr_products_ = products;
+        ssr_products_loaded_ = !ssr_products_.orbit_clock_corrections.empty();
+    }
 
     bool hasLoadedPreciseProducts() const { return precise_products_loaded_; }
     bool hasLoadedIONEXProducts() const { return ionex_products_loaded_; }
@@ -200,6 +214,7 @@ private:
         double primary_coeff = 1.0;
         double secondary_coeff = 0.0;
         double variance_scale = 1.0;
+        double transmit_pseudorange = 0.0; ///< Raw P1 used by MRTKLIB satposs()
     };
     
     /**
@@ -360,6 +375,9 @@ namespace spp_utils {
      * @brief Apply SNR-dependent weighting
      */
     double calculateSNRWeight(double snr_db, double min_snr_db = 35.0);
+
+    /** Match the CLAS benchmark rover SNR mask used by MRTKLIB testsnr(). */
+    double mrtklibClasSnrThresholdDbHz(double elevation_rad);
 
     struct MeasurementVarianceInputs {
         double elevation_rad = 0.0;

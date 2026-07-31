@@ -82,7 +82,8 @@ enum class SolutionStatus {
     FLOAT,      ///< RTK float solution
     FIXED,      ///< RTK fixed solution
     PPP_FLOAT,  ///< PPP float solution
-    PPP_FIXED   ///< PPP fixed solution
+    PPP_FIXED,  ///< PPP fixed solution
+    PROPAGATED  ///< Causal dead-reckoned position without a current GNSS fix
 };
 
 /**
@@ -185,6 +186,10 @@ struct SatelliteId {
     
     bool operator==(const SatelliteId& other) const {
         return system == other.system && prn == other.prn;
+    }
+
+    bool operator!=(const SatelliteId& other) const {
+        return !(*this == other);
     }
 };
 

@@ -1,7 +1,10 @@
 #include <gtest/gtest.h>
 
+#include <libgnss++/algorithms/madoca_parity.hpp>
+#include <libgnss++/algorithms/ppp_bias_identity.hpp>
 #include <libgnss++/algorithms/ppp_osr.hpp>
 #include <libgnss++/core/coordinates.hpp>
+#include <libgnss++/core/navigation.hpp>
 
 #include <chrono>
 #include <cmath>
@@ -20,11 +23,36 @@ GNSSTime makeTime(int year, int month, int day, int hour, int minute, double sec
     epoch_tm.tm_hour = hour;
     epoch_tm.tm_min = minute;
     epoch_tm.tm_sec = static_cast<int>(std::floor(second));
+#if defined(_WIN32)
+    const time_t unix_seconds = _mkgmtime(&epoch_tm);
+#else
     const time_t unix_seconds = timegm(&epoch_tm);
+#endif
     const auto tp = std::chrono::system_clock::from_time_t(unix_seconds) +
         std::chrono::microseconds(
             static_cast<long long>(std::llround((second - std::floor(second)) * 1e6)));
     return GNSSTime::fromSystemTime(tp);
+}
+
+TEST(PPPOSRTest, HeldClasTropTokensUsePayloadNetworkForGridEvaluation) {
+    SSRProducts products;
+    SSROrbitClockCorrection bank;
+    bank.time = GNSSTime(2324, 177015.0);
+    bank.atmos_valid = true;
+    bank.atmos_tokens = {
+        {"atmos_trop_bank_only", "1"},
+        {"atmos_network_id", "11"},
+        {"atmos_trop_network_id", "7"},
+        {"atmos_trop_residuals_m", "0.01;0.02"},
+    };
+    products.clas_trop_bank_corrections.push_back(bank);
+
+    std::map<std::string, std::string> held;
+    ASSERT_TRUE(products.heldClasTropTokens(
+        bank.time, 30.0, 7, 0, held, nullptr));
+    ASSERT_EQ(held.count("atmos_network_id"), 1U);
+    EXPECT_EQ(held.at("atmos_network_id"), "7");
+    EXPECT_EQ(held.at("atmos_trop_network_id"), "7");
 }
 
 SSROrbitClockCorrection makeAtmosCorrection(
@@ -43,8 +71,193 @@ SSROrbitClockCorrection makeAtmosCorrection(
     return correction;
 }
 
+TEST(PPPOSRTest, HeldClasTropTokensFindPrefixWithoutAcceptingAdjacentKeys) {
+    SSRProducts products;
+    const SatelliteId satellite(GNSSSystem::GPS, 1);
+    const GNSSTime trop_time(2324, 177015.0);
+    SSROrbitClockCorrection trop =
+        makeAtmosCorrection(satellite, trop_time, 7);
+    trop.atmos_tokens = {
+        {"atmos_network_id", "7"},
+        {"atmos_trop_t00_m", "0.1"},
+        {"zzz", "not-a-trop-token"},
+    };
+    products.addCorrection(trop);
+
+    SSROrbitClockCorrection adjacent =
+        makeAtmosCorrection(satellite, GNSSTime(2324, 177016.0), 7);
+    adjacent.atmos_tokens = {
+        {"atmos_network_id", "7"},
+        {"atmos_troq_t00_m", "must-not-match-atmos-trop-prefix"},
+    };
+    products.addCorrection(adjacent);
+
+    std::map<std::string, std::string> held;
+    ASSERT_TRUE(products.heldClasTropTokens(
+        adjacent.time, 30.0, 7, 0, held, nullptr));
+    EXPECT_EQ(held.at("atmos_trop_t00_m"), "0.1");
+    EXPECT_EQ(held.count("atmos_troq_t00_m"), 0U);
+}
+
 Vector3d receiverPositionNearClasNetwork9() {
     return geodetic2ecef(39.98056 * M_PI / 180.0, 141.22509 * M_PI / 180.0, 0.0);
+}
+
+Observation makeGpsL2Observation(
+    const SatelliteId& satellite,
+    const char* pseudorange_code,
+    const char* carrier_code,
+    double pseudorange,
+    double carrier_phase) {
+    Observation obs(satellite, SignalType::GPS_L2C);
+    obs.valid = true;
+    obs.has_pseudorange = true;
+    obs.has_carrier_phase = true;
+    obs.pseudorange_observation_type = pseudorange_code;
+    obs.carrier_phase_observation_type = carrier_code;
+    obs.pseudorange = pseudorange;
+    obs.carrier_phase = carrier_phase;
+    return obs;
+}
+
+Observation makeGpsObservation(
+    const SatelliteId& satellite,
+    SignalType signal,
+    const char* pseudorange_code,
+    const char* carrier_code,
+    double pseudorange,
+    double carrier_phase) {
+    Observation obs(satellite, signal);
+    obs.valid = true;
+    obs.has_pseudorange = true;
+    obs.has_carrier_phase = true;
+    obs.pseudorange_observation_type = pseudorange_code;
+    obs.carrier_phase_observation_type = carrier_code;
+    obs.pseudorange = pseudorange;
+    obs.carrier_phase = carrier_phase;
+    return obs;
+}
+
+Ephemeris makeNetworkCompensationGpsEphemeris(
+    const SatelliteId& satellite,
+    const GNSSTime& toe) {
+    Ephemeris eph;
+    eph.satellite = satellite;
+    eph.week = static_cast<uint16_t>(toe.week);
+    eph.toe = toe;
+    eph.toc = toe;
+    eph.tof = toe;
+    eph.toes = toe.tow;
+    eph.sqrt_a = 5153.79548931;
+    eph.e = 0.0123456789;
+    eph.i0 = 0.9599310886;
+    eph.omega0 = 1.2345678901;
+    eph.omega = -0.9876543210;
+    eph.m0 = 0.4567890123;
+    eph.delta_n = 4.56789e-09;
+    eph.idot = -2.34567e-10;
+    eph.i_dot = eph.idot;
+    eph.omega_dot = -8.76543e-09;
+    eph.cuc = -1.234567e-06;
+    eph.cus = 2.345678e-06;
+    eph.crc = 245.25;
+    eph.crs = -88.75;
+    eph.cic = 8.765432e-08;
+    eph.cis = -7.654321e-08;
+    eph.af0 = 2.345678e-04;
+    eph.af1 = -4.567890e-12;
+    eph.af2 = 0.0;
+    eph.tgd = -1.2345678e-08;
+    eph.ura = 2;
+    eph.sv_accuracy = 4.85;
+    eph.health = 0;
+    eph.sv_health = 0.0;
+    eph.iode = 77;
+    eph.iodc = 301;
+    eph.valid = true;
+    return eph;
+}
+
+Vector3d receiverPositionUnderSatellite(
+    const NavigationData& nav,
+    const SatelliteId& satellite,
+    const GNSSTime& time) {
+    Vector3d sat_pos = Vector3d::Zero();
+    Vector3d sat_vel = Vector3d::Zero();
+    double sat_clk = 0.0;
+    double sat_drift = 0.0;
+    EXPECT_TRUE(nav.calculateSatelliteState(satellite, time, sat_pos, sat_vel, sat_clk, sat_drift));
+    return sat_pos.normalized() * 6378137.0;
+}
+
+ObservationData makeNetworkCompensationObservation(
+    const SatelliteId& satellite,
+    const GNSSTime& time) {
+    ObservationData obs(time);
+    obs.addObservation(makeGpsObservation(
+        satellite, SignalType::GPS_L1CA, "C1C", "L1C", 24000000.0, 100000.0));
+    obs.addObservation(makeGpsObservation(
+        satellite, SignalType::GPS_L2C, "C2W", "L2W", 24000006.0, 100010.0));
+    return obs;
+}
+
+SSROrbitClockCorrection makeClockAtmosCorrection(
+    const SatelliteId& satellite,
+    const GNSSTime& time,
+    double clock_correction_m) {
+    SSROrbitClockCorrection correction;
+    correction.satellite = satellite;
+    correction.time = time;
+    correction.clock_correction_m = clock_correction_m;
+    correction.clock_valid = true;
+    correction.atmos_valid = true;
+    correction.atmos_network_id = 1;
+    correction.atmos_tokens = {
+        {"atmos_network_id", "1"},
+        {"atmos_trop_t00_m", "2.4"},
+        {"atmos_stec_c00_tecu:" + satellite.toString(), "10.0"},
+    };
+    return correction;
+}
+
+SSROrbitClockCorrection makePhaseBiasCorrection(
+    const SatelliteId& satellite,
+    const GNSSTime& time) {
+    SSROrbitClockCorrection correction;
+    correction.satellite = satellite;
+    correction.time = time;
+    correction.phase_bias_valid = true;
+    correction.phase_bias_m = {
+        {2U, 0.10},
+        {8U, 0.20},
+        {9U, 0.20},
+    };
+    return correction;
+}
+
+std::vector<OSRCorrection> computeNetworkCompensationOsr(
+    const ObservationData& obs,
+    const NavigationData& nav,
+    const SSRProducts& ssr,
+    const Vector3d& receiver_position,
+    const ppp_shared::PPPConfig& config,
+    std::map<SatelliteId, CLASSisContinuityInfo>& sis_continuity,
+    std::map<SatelliteId, CLASPhaseBiasRepairInfo>& phase_bias_repair) {
+    std::map<SatelliteId, double> prev_windup;
+    std::map<SatelliteId, CLASDispersionCompensationInfo> dispersion_compensation;
+    return computeOSR(
+        obs,
+        nav,
+        ssr,
+        {},
+        receiver_position,
+        0.0,
+        2.3,
+        config,
+        prev_windup,
+        dispersion_compensation,
+        sis_continuity,
+        phase_bias_repair);
 }
 
 }  // namespace
@@ -69,6 +282,249 @@ TEST(PPPOSRTest, GridFirstPrefersNearestGridEvenWhenStale) {
         receiverPositionNearClasNetwork9(),
         config);
     EXPECT_EQ(preferredClasNetworkId(selected), 9);
+}
+
+TEST(PPPOSRTest, ExactObservationIdentitySelectsGpsL2wBiasId) {
+    namespace bias = libgnss::algorithms::ppp_bias_identity;
+    namespace mp = libgnss::algorithms::madoca_parity;
+
+    EXPECT_EQ(bias::rtklibCodeForObservationType("C2W"), mp::kCodeL2W);
+    EXPECT_EQ(bias::rtklibCodeForObservationType("L2W"), mp::kCodeL2W);
+    EXPECT_EQ(bias::rtklibCodeForObservationType("C2X"), mp::kCodeL2X);
+
+    EXPECT_EQ(
+        static_cast<int>(bias::madocaBiasIdentityIdForObservation(
+            GNSSSystem::GPS, SignalType::GPS_L2C, "C2W", true)),
+        mp::kCodeL2W);
+    EXPECT_EQ(
+        static_cast<int>(bias::madocaBiasIdentityIdForObservation(
+            GNSSSystem::GPS, SignalType::GPS_L2C, "L2W", true)),
+        mp::kCodeL2W);
+    EXPECT_EQ(
+        static_cast<int>(bias::madocaBiasIdentityIdForObservation(
+            GNSSSystem::GPS, SignalType::GPS_L2C, "C2X", true)),
+        mp::kCodeL2X);
+    EXPECT_EQ(
+        static_cast<int>(bias::madocaBiasIdentityIdForObservation(
+            GNSSSystem::GPS, SignalType::GPS_L2C, "C2W", false)),
+        8);
+    EXPECT_EQ(
+        static_cast<int>(bias::rtcmSsrSignalIdForObservation(
+            GNSSSystem::GPS, SignalType::GPS_L2C, "C2W", true)),
+        9);
+    EXPECT_EQ(
+        static_cast<int>(bias::rtcmSsrSignalIdForObservation(
+            GNSSSystem::GPS, SignalType::GPS_L2C, "L2W", true)),
+        9);
+    EXPECT_EQ(
+        static_cast<int>(bias::rtcmSsrSignalIdForObservation(
+            GNSSSystem::GPS, SignalType::GPS_L2C, "C2X", true)),
+        8);
+    EXPECT_TRUE(
+        bias::isGpsL2wObservation(
+            GNSSSystem::GPS, SignalType::GPS_L2C, "C2W", "L2W"));
+    EXPECT_FALSE(
+        bias::isGpsL2wObservation(
+            GNSSSystem::GPS, SignalType::GPS_L2C, "C2X", "L2X"));
+}
+
+TEST(PPPOSRTest, ClasOsrBiasMaterializationUsesExactGpsL2wIdentity) {
+    const std::map<std::uint8_t, double> code_biases = {
+        {8U, 0.08},
+        {9U, 0.09},
+    };
+    const std::map<std::uint8_t, double> phase_biases = {
+        {8U, 0.18},
+        {9U, 0.19},
+    };
+
+    const auto bias = materializeClasOsrBiases(
+        GNSSSystem::GPS,
+        SignalType::GPS_L2C,
+        "C2W",
+        "L2W",
+        code_biases,
+        phase_biases,
+        true,
+        false);
+
+    EXPECT_TRUE(bias.exact_identity);
+    EXPECT_EQ(static_cast<int>(bias.code_signal_id), 9);
+    EXPECT_EQ(static_cast<int>(bias.phase_signal_id), 9);
+    EXPECT_EQ(static_cast<int>(bias.code_source_signal_id), 9);
+    EXPECT_EQ(static_cast<int>(bias.phase_source_signal_id), 9);
+    EXPECT_TRUE(bias.code_present);
+    EXPECT_TRUE(bias.phase_present);
+    EXPECT_FALSE(bias.code_fallback);
+    EXPECT_FALSE(bias.phase_fallback);
+    EXPECT_DOUBLE_EQ(bias.code_bias_m, 0.09);
+    EXPECT_DOUBLE_EQ(bias.phase_bias_m, 0.19);
+}
+
+TEST(PPPOSRTest, ClasOsrBiasMaterializationTracksLegacyGpsL2Fallback) {
+    const std::map<std::uint8_t, double> code_biases = {
+        {9U, 0.09},
+    };
+    const std::map<std::uint8_t, double> phase_biases = {
+        {9U, 0.19},
+    };
+
+    const auto bias = materializeClasOsrBiases(
+        GNSSSystem::GPS,
+        SignalType::GPS_L2C,
+        "C2W",
+        "L2W",
+        code_biases,
+        phase_biases,
+        false,
+        true);
+
+    EXPECT_FALSE(bias.exact_identity);
+    EXPECT_EQ(static_cast<int>(bias.code_signal_id), 8);
+    EXPECT_EQ(static_cast<int>(bias.phase_signal_id), 8);
+    EXPECT_EQ(static_cast<int>(bias.code_source_signal_id), 9);
+    EXPECT_EQ(static_cast<int>(bias.phase_source_signal_id), 0);
+    EXPECT_TRUE(bias.code_present);
+    EXPECT_FALSE(bias.phase_present);
+    EXPECT_TRUE(bias.code_fallback);
+    EXPECT_FALSE(bias.phase_fallback);
+    EXPECT_DOUBLE_EQ(bias.code_bias_m, 0.09);
+    EXPECT_DOUBLE_EQ(bias.phase_bias_m, 0.0);
+}
+
+TEST(PPPOSRTest, ClasOsrBiasMaterializationDoesNotFallbackInExactMode) {
+    const std::map<std::uint8_t, double> code_biases = {
+        {8U, 0.08},
+    };
+    const std::map<std::uint8_t, double> phase_biases = {
+        {8U, 0.18},
+    };
+
+    const auto bias = materializeClasOsrBiases(
+        GNSSSystem::GPS,
+        SignalType::GPS_L2C,
+        "C2W",
+        "L2W",
+        code_biases,
+        phase_biases,
+        true,
+        true);
+
+    EXPECT_TRUE(bias.exact_identity);
+    EXPECT_EQ(static_cast<int>(bias.code_signal_id), 9);
+    EXPECT_EQ(static_cast<int>(bias.phase_signal_id), 9);
+    EXPECT_FALSE(bias.code_present);
+    EXPECT_FALSE(bias.phase_present);
+    EXPECT_FALSE(bias.code_fallback);
+    EXPECT_FALSE(bias.phase_fallback);
+    EXPECT_DOUBLE_EQ(bias.code_bias_m, 0.0);
+    EXPECT_DOUBLE_EQ(bias.phase_bias_m, 0.0);
+}
+
+TEST(PPPOSRTest, ExactOsrFrequencyLookupUsesStoredRinexIdentity) {
+    const SatelliteId sat(GNSSSystem::GPS, 14);
+    ObservationData obs(GNSSTime(2068, 230425.0));
+    obs.addObservation(makeGpsL2Observation(sat, "C2X", "L2X", 100.0, 10.0));
+    obs.addObservation(makeGpsL2Observation(sat, "C2W", "L2W", 200.0, 20.0));
+
+    OSRCorrection osr;
+    osr.satellite = sat;
+    osr.num_frequencies = 1;
+    osr.signals[0] = SignalType::GPS_L2C;
+    osr.pseudorange_rinex_codes[0] = "C2W";
+    osr.carrier_rinex_codes[0] = "L2W";
+    osr.bias_exact_identity[0] = true;
+
+    const Observation* selected = findOsrFrequencyObservation(obs, osr, 0);
+    ASSERT_NE(selected, nullptr);
+    EXPECT_EQ(selected->pseudorange_observation_type, "C2W");
+    EXPECT_EQ(selected->carrier_phase_observation_type, "L2W");
+    EXPECT_DOUBLE_EQ(selected->pseudorange, 200.0);
+
+    const auto lookup = findOsrFrequencyObservationWithProvenance(obs, osr, 0);
+    ASSERT_EQ(lookup.observation, selected);
+    EXPECT_TRUE(lookup.exact_identity_requested);
+    EXPECT_TRUE(lookup.exact_identity_matched);
+    EXPECT_FALSE(lookup.family_fallback);
+}
+
+TEST(PPPOSRTest, ExactOsrFrequencyLookupUsesPreservedTrackingCodeOutsideNormalVector) {
+    const SatelliteId sat(GNSSSystem::GPS, 25);
+    ObservationData obs(GNSSTime(2068, 230435.0));
+    obs.addObservation(makeGpsL2Observation(sat, "C2X", "L2X", 100.0, 10.0));
+    const Observation l2w =
+        makeGpsL2Observation(sat, "C2W", "L2W", 200.0, 20.0);
+    obs.addRinexTrackingObservation("2W", l2w);
+
+    OSRCorrection osr;
+    osr.satellite = sat;
+    osr.num_frequencies = 1;
+    osr.signals[0] = SignalType::GPS_L2C;
+    osr.pseudorange_rinex_codes[0] = "C2W";
+    osr.carrier_rinex_codes[0] = "L2W";
+    osr.bias_exact_identity[0] = true;
+
+    const auto lookup = findOsrFrequencyObservationWithProvenance(obs, osr, 0);
+    ASSERT_EQ(lookup.observation, obs.getRinexTrackingObservation(sat, "2W"));
+    EXPECT_TRUE(lookup.exact_identity_requested);
+    EXPECT_TRUE(lookup.exact_identity_matched);
+    EXPECT_FALSE(lookup.family_fallback);
+    EXPECT_DOUBLE_EQ(lookup.observation->pseudorange, 200.0);
+}
+
+TEST(PPPOSRTest, ExactOsrFrequencyLookupSkipsInvalidStoredRinexIdentity) {
+    const SatelliteId sat(GNSSSystem::GPS, 14);
+    ObservationData obs(GNSSTime(2068, 230425.0));
+    obs.addObservation(makeGpsL2Observation(sat, "C2X", "L2X", 100.0, 10.0));
+    Observation invalid_exact = makeGpsL2Observation(sat, "C2W", "L2W", 200.0, 20.0);
+    invalid_exact.valid = false;
+    obs.addObservation(invalid_exact);
+
+    OSRCorrection osr;
+    osr.satellite = sat;
+    osr.num_frequencies = 1;
+    osr.signals[0] = SignalType::GPS_L2C;
+    osr.pseudorange_rinex_codes[0] = "C2W";
+    osr.carrier_rinex_codes[0] = "L2W";
+    osr.bias_exact_identity[0] = true;
+
+    const Observation* selected = findOsrFrequencyObservation(obs, osr, 0);
+    ASSERT_NE(selected, nullptr);
+    EXPECT_EQ(selected->pseudorange_observation_type, "C2X");
+    EXPECT_EQ(selected->carrier_phase_observation_type, "L2X");
+    EXPECT_DOUBLE_EQ(selected->pseudorange, 100.0);
+
+    const auto lookup = findOsrFrequencyObservationWithProvenance(obs, osr, 0);
+    ASSERT_EQ(lookup.observation, selected);
+    EXPECT_TRUE(lookup.exact_identity_requested);
+    EXPECT_FALSE(lookup.exact_identity_matched);
+    EXPECT_TRUE(lookup.family_fallback);
+}
+
+TEST(PPPOSRTest, OsrFrequencyLookupPreservesSignalTypeFallbackWhenExactGateIsOff) {
+    const SatelliteId sat(GNSSSystem::GPS, 14);
+    ObservationData obs(GNSSTime(2068, 230425.0));
+    obs.addObservation(makeGpsL2Observation(sat, "C2X", "L2X", 100.0, 10.0));
+    obs.addObservation(makeGpsL2Observation(sat, "C2W", "L2W", 200.0, 20.0));
+
+    OSRCorrection osr;
+    osr.satellite = sat;
+    osr.num_frequencies = 1;
+    osr.signals[0] = SignalType::GPS_L2C;
+    osr.pseudorange_rinex_codes[0] = "C2W";
+    osr.carrier_rinex_codes[0] = "L2W";
+
+    const Observation* selected = findOsrFrequencyObservation(obs, osr, 0);
+    ASSERT_NE(selected, nullptr);
+    EXPECT_EQ(selected->pseudorange_observation_type, "C2X");
+    EXPECT_EQ(selected->carrier_phase_observation_type, "L2X");
+    EXPECT_DOUBLE_EQ(selected->pseudorange, 100.0);
+
+    const auto lookup = findOsrFrequencyObservationWithProvenance(obs, osr, 0);
+    ASSERT_EQ(lookup.observation, selected);
+    EXPECT_FALSE(lookup.exact_identity_requested);
+    EXPECT_FALSE(lookup.exact_identity_matched);
+    EXPECT_FALSE(lookup.family_fallback);
 }
 
 TEST(PPPOSRTest, BalancedPrefersFreshNetworkWhenNearestGridIsStale) {
@@ -298,4 +754,556 @@ TEST(PPPOSRTest, ClockBoundAtmosAndPhaseBiasPolicyGuardsBothTimingLayers) {
     EXPECT_STREQ(
         clasSsrTimingPolicyName(Policy::CLOCK_BOUND_ATMOS_AND_PHASE_BIAS),
         "clock-bound-atmos-and-phase-bias");
+}
+
+TEST(PPPOSRTest, NetworkCompensationMaterializesOnlyWhenSisContinuityApplied) {
+    const SatelliteId satellite(GNSSSystem::GPS, 1);
+    const GNSSTime t0(2068, 230430.0);
+    const GNSSTime t1 = t0 + 5.0;
+    const GNSSTime t2 = t1 + 5.0;
+
+    NavigationData nav;
+    nav.addEphemeris(makeNetworkCompensationGpsEphemeris(satellite, t0 - 30.0));
+    const Vector3d receiver_position =
+        receiverPositionUnderSatellite(nav, satellite, t0);
+
+    SSRProducts ssr;
+    ssr.addCorrection(makePhaseBiasCorrection(satellite, t0 - 30.0));
+    ssr.addCorrection(makePhaseBiasCorrection(satellite, t1 - 30.0));
+    ssr.addCorrection(makeClockAtmosCorrection(satellite, t0, 1.25));
+    ssr.addCorrection(makeClockAtmosCorrection(satellite, t1, 0.75));
+    ssr.addCorrection(makeClockAtmosCorrection(satellite, t2, 0.60));
+
+    ppp_shared::PPPConfig config;
+    config.clas_phase_continuity_policy =
+        ppp_shared::PPPConfig::ClasPhaseContinuityPolicy::FULL_REPAIR;
+
+    std::map<SatelliteId, CLASSisContinuityInfo> sis_continuity;
+    std::map<SatelliteId, CLASPhaseBiasRepairInfo> phase_bias_repair;
+    ASSERT_EQ(
+        computeNetworkCompensationOsr(
+            makeNetworkCompensationObservation(satellite, t0),
+            nav,
+            ssr,
+            receiver_position,
+            config,
+            sis_continuity,
+            phase_bias_repair).size(),
+        1U);
+
+    const auto boundary_osr = computeNetworkCompensationOsr(
+        makeNetworkCompensationObservation(satellite, t1),
+        nav,
+        ssr,
+        receiver_position,
+        config,
+        sis_continuity,
+        phase_bias_repair);
+    ASSERT_EQ(boundary_osr.size(), 1U);
+    EXPECT_NEAR(boundary_osr.front().network_compensation_m, 0.5, 1e-12);
+    ASSERT_GE(boundary_osr.front().num_frequencies, 2);
+    EXPECT_NEAR(
+        boundary_osr.front().PRC[0],
+        boundary_osr.front().trop_correction_m +
+            boundary_osr.front().relativity_correction_m +
+            boundary_osr.front().receiver_antenna_m[0] +
+            boundary_osr.front().iono_l1_m +
+            boundary_osr.front().code_bias_m[0] -
+            boundary_osr.front().network_compensation_m,
+        1e-12);
+    EXPECT_NEAR(boundary_osr.front().network_compensation_m, 0.5, 1e-12);
+
+    const auto off_boundary_osr = computeNetworkCompensationOsr(
+        makeNetworkCompensationObservation(satellite, t2),
+        nav,
+        ssr,
+        receiver_position,
+        config,
+        sis_continuity,
+        phase_bias_repair);
+    ASSERT_EQ(off_boundary_osr.size(), 1U);
+    EXPECT_DOUBLE_EQ(off_boundary_osr.front().network_compensation_m, 0.0);
+
+    const ppp_shared::PPPConfig::ClasPhaseContinuityPolicy sis_disabled_policies[] = {
+        ppp_shared::PPPConfig::ClasPhaseContinuityPolicy::REPAIR_ONLY,
+        ppp_shared::PPPConfig::ClasPhaseContinuityPolicy::RAW_PHASE_BIAS,
+        ppp_shared::PPPConfig::ClasPhaseContinuityPolicy::NO_PHASE_BIAS,
+    };
+    for (const auto policy : sis_disabled_policies) {
+        config.clas_phase_continuity_policy = policy;
+        sis_continuity.clear();
+        phase_bias_repair.clear();
+        ASSERT_EQ(
+            computeNetworkCompensationOsr(
+                makeNetworkCompensationObservation(satellite, t0),
+                nav,
+                ssr,
+                receiver_position,
+                config,
+                sis_continuity,
+                phase_bias_repair).size(),
+            1U);
+        const auto sis_disabled_osr = computeNetworkCompensationOsr(
+            makeNetworkCompensationObservation(satellite, t1),
+            nav,
+            ssr,
+            receiver_position,
+            config,
+            sis_continuity,
+            phase_bias_repair);
+        ASSERT_EQ(sis_disabled_osr.size(), 1U);
+        EXPECT_DOUBLE_EQ(sis_disabled_osr.front().network_compensation_m, 0.0);
+    }
+}
+
+TEST(PPPOSRTest, UpdateSisContinuityPreservesBoundaryDeltaAcrossClockInvalidGap) {
+    CLASSisContinuityInfo info;
+    info.has_boundary_delta = true;
+    info.boundary_time = GNSSTime(2068, 230430.0);
+    info.boundary_delta_m = -0.052;
+    // Seed "live" continuity state that SHOULD be wiped by the gap.
+    info.has_current = true;
+    info.has_previous = true;
+    info.has_last_delta = true;
+    info.current_time = GNSSTime(2068, 230435.0);
+    info.previous_time = GNSSTime(2068, 230430.0);
+    info.current_sis_m = 1.0;
+    info.previous_sis_m = 0.5;
+    info.last_delta_m = 0.5;
+
+    OSRCorrection osr;  // orbit/clock fields irrelevant when clock_time_valid=false
+    updateSisContinuity(info, osr, /*clock_time_valid=*/false);
+
+    // The CLASLIB-style boundary-held delta survives a transient
+    // clock-reference-time gap (real CLAS data has these mid-window).
+    EXPECT_TRUE(info.has_boundary_delta);
+    EXPECT_EQ(info.boundary_time, GNSSTime(2068, 230430.0));
+    EXPECT_DOUBLE_EQ(info.boundary_delta_m, -0.052);
+
+    // Everything else resets, matching pre-existing (gate-OFF) behavior.
+    EXPECT_FALSE(info.has_current);
+    EXPECT_FALSE(info.has_previous);
+    EXPECT_FALSE(info.has_last_delta);
+    EXPECT_DOUBLE_EQ(info.last_delta_m, 0.0);
+}
+
+TEST(PPPOSRTest, IsSsrOrbitBoundaryTowMatchesClaslibThirtySecondGrid) {
+    // Boundary instants (tow % 30 == 0) are on the grid.
+    EXPECT_TRUE(isSsrOrbitBoundaryTow(230430.0));
+    EXPECT_TRUE(isSsrOrbitBoundaryTow(230460.0));
+    EXPECT_TRUE(isSsrOrbitBoundaryTow(0.0));
+    // Values within tolerance of the grid still count.
+    EXPECT_TRUE(isSsrOrbitBoundaryTow(230430.2));
+    EXPECT_TRUE(isSsrOrbitBoundaryTow(230429.8));
+    // Mid-cycle clock ticks (5, 10, 15, 20, 25 offset) are off the grid.
+    EXPECT_FALSE(isSsrOrbitBoundaryTow(230435.0));
+    EXPECT_FALSE(isSsrOrbitBoundaryTow(230440.0));
+    EXPECT_FALSE(isSsrOrbitBoundaryTow(230445.0));
+    EXPECT_FALSE(isSsrOrbitBoundaryTow(230450.0));
+    EXPECT_FALSE(isSsrOrbitBoundaryTow(230455.0));
+}
+
+TEST(PPPOSRTest, ClasSisApplyDecisionGateOffReproducesLegacyLagWindowCondition) {
+    const GNSSTime clock_ref(2068, 230430.0);
+
+    CLASSisContinuityInfo info;
+    info.has_last_delta = true;
+    info.last_delta_m = 0.42;
+
+    // Legacy behavior: applies only when clock_reference_time leads
+    // effective_phase_bias_reference_time by exactly ~30s (unreachable on
+    // real CLAS data, but must remain byte-identical for gate-OFF callers).
+    // epoch_time is unused on the gate-OFF path; pass clock_ref for it too.
+    const GNSSTime pbias_ref_30s_lag = clock_ref - 30.0;
+    const auto applied = computeClasSisApplyDecision(
+        info, clock_ref, clock_ref, pbias_ref_30s_lag, /*clock_time_valid=*/true,
+        /*sis_boundary_gate_enabled=*/false);
+    EXPECT_TRUE(applied.applied);
+    EXPECT_DOUBLE_EQ(applied.delta_m, 0.42);
+
+    const GNSSTime pbias_ref_synced = clock_ref;
+    const auto not_applied = computeClasSisApplyDecision(
+        info, clock_ref, clock_ref, pbias_ref_synced, /*clock_time_valid=*/true,
+        /*sis_boundary_gate_enabled=*/false);
+    EXPECT_FALSE(not_applied.applied);
+    EXPECT_DOUBLE_EQ(not_applied.delta_m, 0.0);
+
+    // Boundary-delta state must never leak into the gate-OFF decision, even
+    // when populated (e.g. a caller that also runs the gated code path).
+    info.has_boundary_delta = true;
+    info.boundary_time = clock_ref;
+    info.boundary_delta_m = 99.0;
+    const auto still_legacy = computeClasSisApplyDecision(
+        info, clock_ref, clock_ref, pbias_ref_30s_lag, /*clock_time_valid=*/true,
+        /*sis_boundary_gate_enabled=*/false);
+    EXPECT_TRUE(still_legacy.applied);
+    EXPECT_DOUBLE_EQ(still_legacy.delta_m, 0.42);
+}
+
+TEST(PPPOSRTest, IsSsrOrbitBoundaryOffset25TowMatchesClaslibMidCycleGrid) {
+    EXPECT_TRUE(isSsrOrbitBoundaryOffset25Tow(230425.0));
+    EXPECT_TRUE(isSsrOrbitBoundaryOffset25Tow(230455.0));
+    EXPECT_TRUE(isSsrOrbitBoundaryOffset25Tow(230425.2));
+    EXPECT_FALSE(isSsrOrbitBoundaryOffset25Tow(230430.0));
+    EXPECT_FALSE(isSsrOrbitBoundaryOffset25Tow(230435.0));
+}
+
+TEST(PPPOSRTest, CaptureClasSisBoundaryPairsOffset25AndOffset0AtObsEpochs) {
+    CLASSisContinuityInfo info;
+
+    // Offset-25 obs epoch: capture prevsis only (no boundary delta yet).
+    captureClasSisBoundary(info, GNSSTime(2068, 230425.0), /*current_sis_m=*/0.30);
+    EXPECT_TRUE(info.has_boundary_prev_sis);
+    EXPECT_DOUBLE_EQ(info.boundary_prev_sis_m, 0.30);
+    EXPECT_FALSE(info.has_boundary_delta);
+
+    // Off-grid epoch between offset-25 and boundary: no-op.
+    captureClasSisBoundary(info, GNSSTime(2068, 230428.0), /*current_sis_m=*/0.31);
+    EXPECT_FALSE(info.has_boundary_delta);
+
+    // Offset-0 boundary 5s after offset-25: delta = currsis - prevsis.
+    captureClasSisBoundary(info, GNSSTime(2068, 230430.0), /*current_sis_m=*/0.248);
+    ASSERT_TRUE(info.has_boundary_delta);
+    EXPECT_DOUBLE_EQ(info.boundary_delta_m, 0.248 - 0.30);
+    EXPECT_EQ(info.boundary_time, GNSSTime(2068, 230430.0));
+
+    // Wrong spacing (not 5s after prevsis): rejected.
+    CLASSisContinuityInfo bad_spacing;
+    captureClasSisBoundary(bad_spacing, GNSSTime(2068, 230420.0), 0.10);
+    captureClasSisBoundary(bad_spacing, GNSSTime(2068, 230430.0), 0.20);
+    EXPECT_FALSE(bad_spacing.has_boundary_delta);
+
+    // Boundary without prior offset-25 sample: rejected.
+    CLASSisContinuityInfo no_prev;
+    captureClasSisBoundary(no_prev, GNSSTime(2068, 230430.0), 0.20);
+    EXPECT_FALSE(no_prev.has_boundary_delta);
+}
+
+TEST(PPPOSRTest, ClasSisBoundaryUsesBaseClockWhenNetworkMergedAtOffset25) {
+    SSRProducts products;
+    products.setOrbitCorrectionsAreRac(false);
+
+    const SatelliteId satellite(GNSSSystem::GPS, 14);
+    const GNSSTime offset25(2068, 230425.0);
+
+    SSROrbitClockCorrection base_row;
+    base_row.satellite = satellite;
+    base_row.time = offset25;
+    base_row.orbit_correction_ecef = Vector3d(0.0, 0.0, 0.0);
+    base_row.orbit_valid = true;
+    base_row.clock_correction_m = -0.2192;
+    base_row.clock_valid = true;
+    base_row.clock_network_id = 0;
+    products.addCorrection(base_row);
+
+    SSROrbitClockCorrection network_row;
+    network_row.satellite = satellite;
+    network_row.time = offset25;
+    network_row.clock_correction_m = 0.2064;
+    network_row.clock_valid = true;
+    network_row.clock_network_id = 1;
+    products.addCorrection(network_row);
+
+    Vector3d orbit_corr = Vector3d::Zero();
+    double merged_clock_m = 0.0;
+    double base_clock_m = 0.0;
+    bool base_clock_valid = false;
+    ASSERT_TRUE(products.interpolateCorrection(
+        satellite,
+        offset25,
+        orbit_corr,
+        merged_clock_m,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        0,
+        nullptr,
+        nullptr,
+        nullptr,
+        true,
+        &base_clock_m,
+        &base_clock_valid));
+    EXPECT_DOUBLE_EQ(merged_clock_m, 0.2064);
+    ASSERT_TRUE(base_clock_valid);
+    EXPECT_DOUBLE_EQ(base_clock_m, -0.2192);
+
+    const double orbit_projection_m = 0.356;
+    const double merged_sis_m = -merged_clock_m + orbit_projection_m;
+    const double base_sis_m = -base_clock_m + orbit_projection_m;
+    EXPECT_NEAR(merged_sis_m, 0.1496, 1e-12);
+    EXPECT_NEAR(base_sis_m, 0.5752, 1e-12);
+
+    CLASSisContinuityInfo info;
+    captureClasSisBoundary(info, offset25, base_sis_m);
+    ASSERT_TRUE(info.has_boundary_prev_sis);
+    EXPECT_DOUBLE_EQ(info.boundary_prev_sis_m, base_sis_m);
+
+    const GNSSTime boundary0(2068, 230430.0);
+    const double boundary_sis_m = base_sis_m - 0.058;
+    captureClasSisBoundary(info, boundary0, boundary_sis_m);
+    ASSERT_TRUE(info.has_boundary_delta);
+    EXPECT_NEAR(info.boundary_delta_m, -0.058, 1e-12);
+}
+
+namespace {
+
+SSROrbitClockCorrection makeClasClockTestOrbitRow(const SatelliteId& satellite,
+                                                    const GNSSTime& time,
+                                                    double clock_m,
+                                                    int clock_network_id) {
+    SSROrbitClockCorrection row;
+    row.satellite = satellite;
+    row.time = time;
+    row.orbit_correction_ecef = Vector3d(0.1, 0.2, 0.3);
+    row.orbit_valid = true;
+    row.orbit_reference_time = time;
+    row.clock_correction_m = clock_m;
+    row.clock_valid = true;
+    row.clock_network_id = clock_network_id;
+    if (clock_network_id == 0) {
+        row.base_clock_correction_m = clock_m;
+        row.base_clock_valid = true;
+    }
+    return row;
+}
+
+}  // namespace
+
+TEST(PPPOSRTest, ClaslibBaseHoldStepHoldsBetweenFiveSecondGridPoints) {
+    SSRProducts products;
+    products.setOrbitCorrectionsAreRac(false);
+
+    const SatelliteId satellite(GNSSSystem::GPS, 14);
+    const GNSSTime orbit_time(2068, 230400.0);
+    const GNSSTime clock_t0(2068, 230420.0);
+    const GNSSTime clock_t1(2068, 230425.0);
+    const GNSSTime obs_between(2068, 230422.0);
+
+    SSROrbitClockCorrection orbit_row;
+    orbit_row.satellite = satellite;
+    orbit_row.time = orbit_time;
+    orbit_row.orbit_correction_ecef = Vector3d(0.1, 0.2, 0.3);
+    orbit_row.orbit_valid = true;
+    orbit_row.orbit_reference_time = orbit_time;
+    products.addCorrection(orbit_row);
+
+    products.addCorrection(
+        makeClasClockTestOrbitRow(satellite, clock_t0, -0.2016, 0));
+    products.addCorrection(
+        makeClasClockTestOrbitRow(satellite, clock_t1, -0.2192, 0));
+
+    Vector3d orbit_corr = Vector3d::Zero();
+    double clock_m = 0.0;
+    ASSERT_TRUE(products.interpolateCorrection(
+        satellite,
+        obs_between,
+        orbit_corr,
+        clock_m,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        0,
+        nullptr,
+        nullptr,
+        nullptr,
+        false,
+        nullptr,
+        nullptr,
+        SSRClockSelectionPolicy::ClaslibBaseHold));
+    EXPECT_DOUBLE_EQ(clock_m, -0.2016);
+}
+
+TEST(PPPOSRTest, ClaslibBaseHoldIgnoresNetworkMergedClock) {
+    SSRProducts products;
+    products.setOrbitCorrectionsAreRac(false);
+
+    const SatelliteId satellite(GNSSSystem::GPS, 14);
+    const GNSSTime orbit_time(2068, 230400.0);
+    const GNSSTime offset25(2068, 230425.0);
+
+    SSROrbitClockCorrection orbit_row;
+    orbit_row.satellite = satellite;
+    orbit_row.time = orbit_time;
+    orbit_row.orbit_correction_ecef = Vector3d(0.1, 0.2, 0.3);
+    orbit_row.orbit_valid = true;
+    orbit_row.orbit_reference_time = orbit_time;
+    products.addCorrection(orbit_row);
+
+    SSROrbitClockCorrection base_row =
+        makeClasClockTestOrbitRow(satellite, offset25, -0.2192, 0);
+    products.addCorrection(base_row);
+
+    SSROrbitClockCorrection network_row;
+    network_row.satellite = satellite;
+    network_row.time = offset25;
+    network_row.clock_correction_m = 0.2064;
+    network_row.clock_valid = true;
+    network_row.clock_network_id = 1;
+    products.addCorrection(network_row);
+
+    Vector3d orbit_corr = Vector3d::Zero();
+    double gated_clock_m = 0.0;
+    ASSERT_TRUE(products.interpolateCorrection(
+        satellite,
+        offset25,
+        orbit_corr,
+        gated_clock_m,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        0,
+        nullptr,
+        nullptr,
+        nullptr,
+        false,
+        nullptr,
+        nullptr,
+        SSRClockSelectionPolicy::ClaslibBaseHold));
+    EXPECT_DOUBLE_EQ(gated_clock_m, -0.2192);
+}
+
+TEST(PPPOSRTest, ClaslibBaseHoldRejectsFutureClockSample) {
+    SSRProducts products;
+    products.setOrbitCorrectionsAreRac(false);
+
+    const SatelliteId satellite(GNSSSystem::GPS, 14);
+    const GNSSTime orbit_time(2068, 230400.0);
+    const GNSSTime obs_time(2068, 230422.0);
+    const GNSSTime future_clock(2068, 230425.0);
+
+    SSROrbitClockCorrection orbit_row;
+    orbit_row.satellite = satellite;
+    orbit_row.time = orbit_time;
+    orbit_row.orbit_correction_ecef = Vector3d(0.1, 0.2, 0.3);
+    orbit_row.orbit_valid = true;
+    orbit_row.orbit_reference_time = orbit_time;
+    products.addCorrection(orbit_row);
+
+    products.addCorrection(
+        makeClasClockTestOrbitRow(satellite, future_clock, -0.2192, 0));
+
+    Vector3d orbit_corr = Vector3d::Zero();
+    double clock_m = 0.0;
+    EXPECT_FALSE(products.interpolateCorrection(
+        satellite,
+        obs_time,
+        orbit_corr,
+        clock_m,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        0,
+        nullptr,
+        nullptr,
+        nullptr,
+        false,
+        nullptr,
+        nullptr,
+        SSRClockSelectionPolicy::ClaslibBaseHold));
+}
+
+TEST(PPPOSRTest, ClaslibBaseHoldFailsWhenNoEligibleClock) {
+    SSRProducts products;
+    products.setOrbitCorrectionsAreRac(false);
+
+    const SatelliteId satellite(GNSSSystem::GPS, 14);
+    const GNSSTime orbit_time(2068, 230400.0);
+    const GNSSTime obs_time(2068, 230422.0);
+
+    SSROrbitClockCorrection orbit_row;
+    orbit_row.satellite = satellite;
+    orbit_row.time = orbit_time;
+    orbit_row.orbit_correction_ecef = Vector3d(0.1, 0.2, 0.3);
+    orbit_row.orbit_valid = true;
+    orbit_row.orbit_reference_time = orbit_time;
+    products.addCorrection(orbit_row);
+
+    SSROrbitClockCorrection network_only;
+    network_only.satellite = satellite;
+    network_only.time = orbit_time;
+    network_only.clock_correction_m = 0.2064;
+    network_only.clock_valid = true;
+    network_only.clock_network_id = 1;
+    products.addCorrection(network_only);
+
+    Vector3d orbit_corr = Vector3d::Zero();
+    double clock_m = 0.0;
+    EXPECT_FALSE(products.interpolateCorrection(
+        satellite,
+        obs_time,
+        orbit_corr,
+        clock_m,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        0,
+        nullptr,
+        nullptr,
+        nullptr,
+        false,
+        nullptr,
+        nullptr,
+        SSRClockSelectionPolicy::ClaslibBaseHold));
+}
+
+TEST(PPPOSRTest, ClasSisApplyDecisionGateOnHoldsBoundaryDeltaForFifteenObsSeconds) {
+    const GNSSTime boundary_time(2068, 230430.0);
+    const GNSSTime phase_bias_ref = boundary_time;  // synced; irrelevant when gated.
+    const GNSSTime clock_ref = boundary_time;  // irrelevant when gated.
+
+    CLASSisContinuityInfo info;
+    info.has_boundary_delta = true;
+    info.boundary_time = GNSSTime(2068, 230430.0);
+    info.boundary_delta_m = -0.052;
+
+    // Observation epoch offsets 0..14s after the boundary: held delta
+    // applies, unchanged (matches the CLASLIB oracle's 15-row window).
+    for (const double offset : {0.0, 5.0, 10.0, 14.0}) {
+        const GNSSTime epoch_time = boundary_time + offset;
+        const auto decision = computeClasSisApplyDecision(
+            info, epoch_time, clock_ref, phase_bias_ref, /*clock_time_valid=*/true,
+            /*sis_boundary_gate_enabled=*/true);
+        EXPECT_TRUE(decision.applied) << "offset=" << offset;
+        EXPECT_DOUBLE_EQ(decision.delta_m, -0.052) << "offset=" << offset;
+    }
+
+    // Observation epoch offsets 15..29s after the boundary: zero (second
+    // half of the 30s orbit cycle), matching the CLASLIB oracle windowing.
+    for (const double offset : {15.0, 20.0, 25.0, 29.0}) {
+        const GNSSTime epoch_time = boundary_time + offset;
+        const auto decision = computeClasSisApplyDecision(
+            info, epoch_time, clock_ref, phase_bias_ref, /*clock_time_valid=*/true,
+            /*sis_boundary_gate_enabled=*/true);
+        EXPECT_FALSE(decision.applied) << "offset=" << offset;
+        EXPECT_DOUBLE_EQ(decision.delta_m, 0.0) << "offset=" << offset;
+    }
+
+    // No boundary captured yet: never applies even inside the window.
+    CLASSisContinuityInfo no_boundary;
+    no_boundary.has_last_delta = true;
+    no_boundary.last_delta_m = 0.111;
+    const auto decision_no_boundary = computeClasSisApplyDecision(
+        no_boundary, boundary_time, clock_ref, phase_bias_ref, /*clock_time_valid=*/true,
+        /*sis_boundary_gate_enabled=*/true);
+    EXPECT_FALSE(decision_no_boundary.applied);
 }

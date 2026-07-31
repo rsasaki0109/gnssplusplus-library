@@ -19,6 +19,14 @@ GPS_WEEK_SECONDS = 604800.0
 WGS84_A = 6378137.0
 WGS84_E2 = 6.69437999014e-3
 DEFAULT_EVENT_THRESHOLDS_M = (1.0, 10.0, 100.0, 1000.0)
+GPS_UTC_LEAP_DATES = (
+    dt.datetime(1981, 7, 1), dt.datetime(1982, 7, 1), dt.datetime(1983, 7, 1),
+    dt.datetime(1985, 7, 1), dt.datetime(1988, 1, 1), dt.datetime(1990, 1, 1),
+    dt.datetime(1991, 1, 1), dt.datetime(1992, 7, 1), dt.datetime(1993, 7, 1),
+    dt.datetime(1994, 7, 1), dt.datetime(1996, 1, 1), dt.datetime(1997, 7, 1),
+    dt.datetime(1999, 1, 1), dt.datetime(2006, 1, 1), dt.datetime(2009, 1, 1),
+    dt.datetime(2012, 7, 1), dt.datetime(2015, 7, 1), dt.datetime(2017, 1, 1),
+)
 
 
 @dataclass(frozen=True)
@@ -33,6 +41,7 @@ class SolutionEpoch:
     height_m: float
     status: int
     satellites: int
+    fixed_ambiguities: int = 0
 
 
 @dataclass(frozen=True)
@@ -147,7 +156,16 @@ def parse_solution_line(line: str) -> SolutionEpoch | None:
             return None
         if not is_finite_triplet((x_m, y_m, z_m)):
             return None
-        return SolutionEpoch(week, tow, x_m, y_m, z_m, lat_deg, lon_deg, height_m, status, satellites)
+        fixed_ambiguities = 0
+        if len(parts) > 12:
+            try:
+                fixed_ambiguities = int(float(parts[12]))
+            except ValueError:
+                pass
+        return SolutionEpoch(
+            week, tow, x_m, y_m, z_m, lat_deg, lon_deg, height_m,
+            status, satellites, fixed_ambiguities
+        )
 
     if len(parts) >= 7 and "/" in parts[0]:
         try:
@@ -165,13 +183,85 @@ def parse_solution_line(line: str) -> SolutionEpoch | None:
 
 
 def read_solution(path: Path) -> list[SolutionEpoch]:
+    text = path.read_text(encoding="utf-8", errors="replace")
+    if any(line.lstrip().startswith("$") and "GGA," in line for line in text.splitlines()):
+        rows = read_nmea_solution(text.splitlines())
+        rows.sort(key=lambda epoch: (epoch.week, epoch.tow))
+        return rows
     rows: list[SolutionEpoch] = []
-    with path.open(encoding="utf-8", errors="replace") as handle:
-        for line in handle:
-            epoch = parse_solution_line(line)
-            if epoch is not None:
-                rows.append(epoch)
+    for line in text.splitlines():
+        epoch = parse_solution_line(line)
+        if epoch is not None:
+            rows.append(epoch)
     rows.sort(key=lambda epoch: (epoch.week, epoch.tow))
+    return rows
+
+
+def _nmea_fields(line: str) -> list[str]:
+    payload = line.strip().split("*", 1)[0]
+    return payload.split(",")
+
+
+def _nmea_time(token: str) -> tuple[int, int, float]:
+    if len(token) < 6:
+        raise ValueError("invalid NMEA time")
+    return int(token[0:2]), int(token[2:4]), float(token[4:])
+
+
+def _nmea_degrees(token: str, hemisphere: str, degree_digits: int) -> float:
+    degrees = int(token[:degree_digits]) + float(token[degree_digits:]) / 60.0
+    if hemisphere in {"S", "W"}:
+        degrees = -degrees
+    return degrees
+
+
+def read_nmea_solution(lines: Sequence[str]) -> list[SolutionEpoch]:
+    """Read paired RMC/GGA epochs from CLASLIB NMEA output."""
+    current_date: tuple[int, int, int] | None = None
+    rows: list[SolutionEpoch] = []
+    for line in lines:
+        fields = _nmea_fields(line)
+        if not fields or not fields[0].startswith("$"):
+            continue
+        sentence = fields[0][-3:]
+        if sentence == "RMC" and len(fields) >= 10 and len(fields[9]) == 6:
+            try:
+                day = int(fields[9][0:2])
+                month = int(fields[9][2:4])
+                year_2d = int(fields[9][4:6])
+                current_date = (2000 + year_2d if year_2d < 80 else 1900 + year_2d, month, day)
+            except ValueError:
+                continue
+            continue
+        if sentence != "GGA" or current_date is None or len(fields) < 12:
+            continue
+        try:
+            hour, minute, second = _nmea_time(fields[1])
+            lat_deg = _nmea_degrees(fields[2], fields[3], 2)
+            lon_deg = _nmea_degrees(fields[4], fields[5], 3)
+            status = int(fields[6])
+            satellites = int(fields[7])
+            height_m = float(fields[9]) + float(fields[11])
+            second_int = int(math.floor(second))
+            microsecond = int(round((second - second_int) * 1_000_000))
+            stamp = dt.datetime(
+                current_date[0], current_date[1], current_date[2],
+                hour, minute, second_int, microsecond,
+            )
+            # NMEA RMC/GGA timestamps are UTC even when an RTKLIB config uses
+            # GPST for its non-NMEA solution formats.
+            gps_utc_offset_s = sum(1 for effective in GPS_UTC_LEAP_DATES if stamp >= effective)
+            total_seconds = (stamp - GPS_EPOCH).total_seconds() + gps_utc_offset_s
+            week = int(total_seconds // GPS_WEEK_SECONDS)
+            tow = total_seconds - week * GPS_WEEK_SECONDS
+            x_m, y_m, z_m = llh_to_ecef(lat_deg, lon_deg, height_m)
+        except (ValueError, OverflowError):
+            continue
+        rows.append(
+            SolutionEpoch(
+                week, tow, x_m, y_m, z_m, lat_deg, lon_deg, height_m, status, satellites
+            )
+        )
     return rows
 
 
@@ -377,9 +467,15 @@ def summarize_solution(epochs: Sequence[SolutionEpoch], reference: ReferenceFram
 def subset_tail(matches: Sequence[MatchedPair], tail_seconds: float) -> list[MatchedPair]:
     if not matches or tail_seconds <= 0.0:
         return list(matches)
-    end_tow = matches[-1].base.tow
-    start_tow = end_tow - tail_seconds
-    return [pair for pair in matches if pair.base.tow > start_tow]
+    end_absolute_s = (
+        matches[-1].base.week * GPS_WEEK_SECONDS + matches[-1].base.tow
+    )
+    start_absolute_s = end_absolute_s - tail_seconds
+    return [
+        pair
+        for pair in matches
+        if pair.base.week * GPS_WEEK_SECONDS + pair.base.tow > start_absolute_s
+    ]
 
 
 def summarize_matches(matches: Sequence[MatchedPair]) -> dict[str, Any]:

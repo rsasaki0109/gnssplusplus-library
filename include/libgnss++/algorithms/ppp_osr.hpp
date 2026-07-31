@@ -8,6 +8,7 @@
 #include <libgnss++/algorithms/ppp_atmosphere.hpp>
 #include <map>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace libgnss {
@@ -47,6 +48,60 @@ GNSSTime selectClasPhaseBiasReferenceTime(
 bool usesClasSisContinuity(
     ppp_shared::PPPConfig::ClasPhaseContinuityPolicy policy);
 
+/// Update SIS (Signal-In-Space) continuity tracking for a satellite: detects
+/// clock reference time transitions and computes `last_delta_m` for SIS
+/// correction. When `clock_time_valid` is false, resets `info` EXCEPT for
+/// the CLASLIB-style boundary-held fields (`boundary_time`,
+/// `boundary_delta_m`, `has_boundary_delta`), which survive transient
+/// per-epoch SSR gaps so a brief gap inside the 15s hold window (observed on
+/// real CLAS data) does not drop an already-captured boundary delta.
+void updateSisContinuity(
+    CLASSisContinuityInfo& info,
+    const OSRCorrection& osr,
+    bool clock_time_valid);
+
+/// True when `tow` sits on (within tolerance of) the 30s CLASLIB SSR orbit
+/// update boundary grid (tow % 30 in [0, 0.5) or (29.5, 30)).
+bool isSsrOrbitBoundaryTow(double tow);
+
+/// True when `tow` sits on (within tolerance of) the mid-cycle offset-25 grid
+/// (tow % 30 in [24.5, 25.5)), where CLASLIB captures `prevsis`.
+bool isSsrOrbitBoundaryOffset25Tow(double tow);
+
+/// Capture the CLASLIB-style SSR-update-boundary SIS delta (gated feature):
+/// sample `current_sis_m` at the observation epoch.  At tow%30==25 store
+/// `prevsis`; at the following tow%30==0 boundary compute
+/// `currsis = current_sis_m - prevsis` and freeze it into
+/// `info.boundary_delta_m` / `info.boundary_time` for the following 15s of
+/// observation epochs.  A no-op otherwise (including when the epoch is off
+/// the expected grid or no offset-25 sample precedes the boundary).
+void captureClasSisBoundary(
+    CLASSisContinuityInfo& info,
+    const GNSSTime& epoch_time,
+    double current_sis_m);
+
+/// Result of deciding whether/how much CLAS SIS continuity delta to apply
+/// to a CPC/PRC row for the current epoch.
+struct ClasSisApplyDecision {
+    bool applied = false;
+    double delta_m = 0.0;
+};
+
+/// Decide whether to apply the CLAS SIS continuity delta this epoch, and
+/// which value to use. When `sis_boundary_gate_enabled` is false, reproduces
+/// the legacy (real-data-unreachable) 30s phase-bias-lag condition
+/// byte-for-byte (using `clock_reference_time`). When true, uses
+/// CLASLIB-style SSR-update-boundary semantics: the delta captured by
+/// captureClasSisBoundary() at the most recent 30s orbit/clock boundary,
+/// held for the following 15s of observation epochs (`epoch_time`).
+ClasSisApplyDecision computeClasSisApplyDecision(
+    const CLASSisContinuityInfo& info,
+    const GNSSTime& epoch_time,
+    const GNSSTime& clock_reference_time,
+    const GNSSTime& effective_phase_bias_reference_time,
+    bool clock_time_valid,
+    bool sis_boundary_gate_enabled);
+
 bool usesClasPhaseBiasRepair(
     ppp_shared::PPPConfig::ClasPhaseContinuityPolicy policy);
 
@@ -68,6 +123,63 @@ std::map<std::string, std::string> selectClasEpochAtmosTokens(
     const GNSSTime& time,
     const Vector3d& receiver_position,
     const ppp_shared::PPPConfig& config);
+
+const Observation* findOsrFrequencyObservation(
+    const ObservationData& obs,
+    const OSRCorrection& osr,
+    int freq_index);
+
+struct OsrFrequencyObservationLookup {
+    const Observation* observation = nullptr;
+    bool exact_identity_requested = false;
+    bool exact_identity_matched = false;
+    bool family_fallback = false;
+};
+
+OsrFrequencyObservationLookup findOsrFrequencyObservationWithProvenance(
+    const ObservationData& obs,
+    const OSRCorrection& osr,
+    int freq_index);
+
+struct ClasOsrBiasMaterialization {
+    std::uint8_t code_signal_id = 0;
+    std::uint8_t phase_signal_id = 0;
+    double code_bias_m = 0.0;
+    double phase_bias_m = 0.0;
+    std::uint8_t code_source_signal_id = 0;
+    std::uint8_t phase_source_signal_id = 0;
+    bool code_present = false;
+    bool phase_present = false;
+    bool code_fallback = false;
+    bool phase_fallback = false;
+    bool exact_identity = false;
+};
+
+ClasOsrBiasMaterialization materializeClasOsrBiases(
+    GNSSSystem system,
+    SignalType signal,
+    std::string_view pseudorange_observation_type,
+    std::string_view carrier_phase_observation_type,
+    const std::map<std::uint8_t, double>& code_biases_m,
+    const std::map<std::uint8_t, double>& phase_biases_m,
+    bool exact_bias_identity,
+    bool enable_l2_class_fallback);
+
+double clasReceiverAntennaCorrectionMeters(
+    const Vector3d& receiver_delta_enu,
+    const Vector3d& antenna_offset_neu,
+    double pcv_m,
+    double azimuth_rad,
+    double elevation_rad);
+
+void setClasOsrReceiverAntennaCorrection(
+    OSRCorrection& osr,
+    int freq_index,
+    double receiver_antenna_m);
+
+SignalType clasReceiverAntennaLookupSignal(
+    const OSRCorrection& osr,
+    int freq_index);
 
 CLASEpochContext prepareClasEpochContext(
     const ObservationData& obs,

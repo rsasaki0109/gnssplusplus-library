@@ -164,6 +164,33 @@ Ephemeris makeGalileoEphemeris() {
 
 }  // namespace
 
+TEST(RINEXReaderTest, ParsesTimeOfFirstObsHeader) {
+    const auto temp_path = std::filesystem::temp_directory_path() / "libgnss_rinex_first_obs_test.obs";
+    std::filesystem::remove(temp_path);
+
+    {
+        std::ofstream file(temp_path);
+        ASSERT_TRUE(file.is_open());
+        file << rinexHeaderLine("     3.04           OBSERVATION DATA    G                   ",
+                                "RINEX VERSION / TYPE");
+        file << rinexHeaderLine("  2024    8   22    3   14  15.5000000     GPS         ",
+                                "TIME OF FIRST OBS");
+        file << rinexHeaderLine("", "END OF HEADER");
+    }
+
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(temp_path.string()));
+
+    io::RINEXReader::RINEXHeader header;
+    ASSERT_TRUE(reader.readHeader(header));
+
+    EXPECT_EQ(header.first_obs.week, 2328);
+    EXPECT_NEAR(header.first_obs.tow, 357255.5, 1e-9);
+
+    reader.close();
+    std::filesystem::remove(temp_path);
+}
+
 TEST(RINEXWriterTest, WritesGpsNavigationMessageReadableByReader) {
     const auto temp_path = std::filesystem::temp_directory_path() / "libgnss_rinex_writer_test.nav";
     std::filesystem::remove(temp_path);
@@ -418,5 +445,253 @@ TEST(RINEXReaderTest, KeepsRinex3TrackingCodeFieldsTogether) {
     EXPECT_EQ(gps_l1->lli, 0);
 
     reader.close();
+    std::filesystem::remove(temp_path);
+}
+
+TEST(RINEXReaderTest, PreservesExactGpsL2RinexObservationIdentity) {
+    auto read_l2_epoch = [](const std::string& label,
+                            const std::string& l2_obs_types,
+                            const std::string& c2_value,
+                            const std::string& l2_value) {
+        const auto temp_path =
+            std::filesystem::temp_directory_path() /
+            ("libgnss_gps_l2_identity_" + label + ".obs");
+        std::filesystem::remove(temp_path);
+
+        std::ofstream output(temp_path);
+        EXPECT_TRUE(output.is_open());
+        output << rinexHeaderLine(
+            "     3.04           OBSERVATION DATA    M",
+            "RINEX VERSION / TYPE");
+        output << rinexHeaderLine(
+            "G    4 C1C L1C " + l2_obs_types,
+            "SYS / # / OBS TYPES");
+        output << rinexHeaderLine("", "END OF HEADER");
+        output << "> 2024 08 03 09 51 20.0000000  0  1\n";
+        output << "G24"
+               << rinexObsField("22011162.552")
+               << rinexObsField("115669443.467")
+               << rinexObsField(c2_value)
+               << rinexObsField(l2_value)
+               << "\n";
+        output.close();
+
+        io::RINEXReader reader;
+        EXPECT_TRUE(reader.open(temp_path.string()));
+        io::RINEXReader::RINEXHeader header;
+        EXPECT_TRUE(reader.readHeader(header));
+        ObservationData epoch;
+        EXPECT_TRUE(reader.readObservationEpoch(epoch));
+        reader.close();
+        std::filesystem::remove(temp_path);
+        return epoch;
+    };
+
+    const SatelliteId gps_24(GNSSSystem::GPS, 24);
+
+    const ObservationData w_epoch =
+        read_l2_epoch("w", "C2W L2W", "22022262.423", "120222443.467");
+    const auto* gps_l2w = w_epoch.getObservation(gps_24, SignalType::GPS_L2C);
+    ASSERT_NE(gps_l2w, nullptr);
+    EXPECT_NEAR(gps_l2w->pseudorange, 22022262.423, 1e-3);
+    EXPECT_NEAR(gps_l2w->carrier_phase, 120222443.467, 1e-3);
+    EXPECT_EQ(gps_l2w->pseudorange_observation_type, "C2W");
+    EXPECT_EQ(gps_l2w->carrier_phase_observation_type, "L2W");
+    EXPECT_EQ(gps_l2w->exactBiasObservationType(), "C2W");
+    const auto* exact_l2w = w_epoch.getRinexTrackingObservation(gps_24, "2W");
+    ASSERT_NE(exact_l2w, nullptr);
+    EXPECT_NEAR(exact_l2w->pseudorange, 22022262.423, 1e-3);
+    EXPECT_NEAR(exact_l2w->carrier_phase, 120222443.467, 1e-3);
+    const auto* w_slot = w_epoch.getRinexFrequencySlot(GNSSSystem::GPS, 1);
+    ASSERT_NE(w_slot, nullptr);
+    EXPECT_EQ(*w_slot, "2W");
+
+    const ObservationData x_epoch =
+        read_l2_epoch("x", "C2X L2X", "22033362.423", "120333443.467");
+    const auto* gps_l2x = x_epoch.getObservation(gps_24, SignalType::GPS_L2C);
+    ASSERT_NE(gps_l2x, nullptr);
+    EXPECT_NEAR(gps_l2x->pseudorange, 22033362.423, 1e-3);
+    EXPECT_NEAR(gps_l2x->carrier_phase, 120333443.467, 1e-3);
+    EXPECT_EQ(gps_l2x->pseudorange_observation_type, "C2X");
+    EXPECT_EQ(gps_l2x->carrier_phase_observation_type, "L2X");
+    EXPECT_EQ(gps_l2x->exactBiasObservationType(), "C2X");
+    const auto* exact_l2x = x_epoch.getRinexTrackingObservation(gps_24, "2X");
+    ASSERT_NE(exact_l2x, nullptr);
+    EXPECT_NEAR(exact_l2x->pseudorange, 22033362.423, 1e-3);
+    EXPECT_NEAR(exact_l2x->carrier_phase, 120333443.467, 1e-3);
+    const auto* x_slot = x_epoch.getRinexFrequencySlot(GNSSSystem::GPS, 1);
+    ASSERT_NE(x_slot, nullptr);
+    EXPECT_EQ(*x_slot, "2X");
+}
+
+TEST(RINEXReaderTest, GpsL2HeaderSlotDoesNotFallbackWhenL2wIsMissing) {
+    const auto temp_path = std::filesystem::temp_directory_path() /
+        "libgnss_gps_l2_fixed_header_slot.obs";
+    std::filesystem::remove(temp_path);
+
+    std::ofstream output(temp_path);
+    ASSERT_TRUE(output.is_open());
+    output << rinexHeaderLine(
+        "     3.04           OBSERVATION DATA    M",
+        "RINEX VERSION / TYPE");
+    output << rinexHeaderLine(
+        "G    6 C1C L1C C2W L2W C2L L2L",
+        "SYS / # / OBS TYPES");
+    output << rinexHeaderLine("", "END OF HEADER");
+    output << "> 2024 08 03 09 51 20.0000000  0  1\n";
+    output << "G24"
+           << rinexObsField("22011162.552")
+           << rinexObsField("115669443.467")
+           << rinexObsField("")
+           << rinexObsField("")
+           << rinexObsField("22033362.423")
+           << rinexObsField("120333443.467")
+           << "\n";
+    output.close();
+
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(temp_path.string()));
+    io::RINEXReader::RINEXHeader header;
+    ASSERT_TRUE(reader.readHeader(header));
+    ObservationData epoch;
+    ASSERT_TRUE(reader.readObservationEpoch(epoch));
+
+    const auto* slot = epoch.getRinexFrequencySlot(GNSSSystem::GPS, 1);
+    ASSERT_NE(slot, nullptr);
+    EXPECT_EQ(*slot, "2W");
+    EXPECT_EQ(epoch.getRinexTrackingObservation(
+                  SatelliteId(GNSSSystem::GPS, 24), "2W"),
+              nullptr);
+    EXPECT_NE(epoch.getRinexTrackingObservation(
+                  SatelliteId(GNSSSystem::GPS, 24), "2L"),
+              nullptr);
+
+    reader.close();
+    std::filesystem::remove(temp_path);
+}
+
+TEST(RINEXReaderTest, QzssSecondaryL5PreferenceSelectsL5Q) {
+    const auto temp_path =
+        std::filesystem::temp_directory_path() / "libgnss_qzss_l5_preference_test.obs";
+    std::filesystem::remove(temp_path);
+
+    std::ofstream output(temp_path);
+    ASSERT_TRUE(output.is_open());
+    output << rinexHeaderLine(
+        "     3.04           OBSERVATION DATA    M",
+        "RINEX VERSION / TYPE");
+    output << rinexHeaderLine(
+        "J    8 C1L L1L C2L L2L C5P L5P C5Q L5Q",
+        "SYS / # / OBS TYPES");
+    output << rinexHeaderLine("", "END OF HEADER");
+    output << "> 2025 04 01 00 00 00.0000000  0  1\n";
+    output << "J02"
+           << rinexObsField("21000001.000")
+           << rinexObsField("110000001.000")
+           << rinexObsField("22000002.000")
+           << rinexObsField("120000002.000")
+           << rinexObsField("23000003.000")
+           << rinexObsField("130000003.000")
+           << rinexObsField("24000004.000")
+           << rinexObsField("140000004.000")
+           << "\n";
+    output.close();
+
+    auto read_epoch = [&](bool prefer_l5, bool preserve_additional_bands) {
+        io::RINEXReader reader;
+        reader.setQzssSecondaryL5Preference(prefer_l5);
+        reader.setPreserveAdditionalFrequencyBands(preserve_additional_bands);
+        EXPECT_TRUE(reader.open(temp_path.string()));
+        io::RINEXReader::RINEXHeader header;
+        EXPECT_TRUE(reader.readHeader(header));
+        ObservationData epoch;
+        EXPECT_TRUE(reader.readObservationEpoch(epoch));
+        reader.close();
+        return epoch;
+    };
+
+    const SatelliteId qzss_2(GNSSSystem::QZSS, 2);
+    const ObservationData default_epoch = read_epoch(false, false);
+    EXPECT_NE(default_epoch.getObservation(qzss_2, SignalType::QZS_L2C), nullptr);
+    EXPECT_EQ(default_epoch.getObservation(qzss_2, SignalType::QZS_L5), nullptr);
+
+    const ObservationData l5_epoch = read_epoch(true, false);
+    EXPECT_EQ(l5_epoch.getObservation(qzss_2, SignalType::QZS_L2C), nullptr);
+    const auto* qzss_l5 = l5_epoch.getObservation(qzss_2, SignalType::QZS_L5);
+    ASSERT_NE(qzss_l5, nullptr);
+    EXPECT_NEAR(qzss_l5->pseudorange, 24000004.000, 1e-3);
+    EXPECT_NEAR(qzss_l5->carrier_phase, 140000004.000, 1e-3);
+    EXPECT_EQ(qzss_l5->pseudorange_observation_type, "C5Q");
+    EXPECT_EQ(qzss_l5->carrier_phase_observation_type, "L5Q");
+
+    const ObservationData three_frequency_epoch = read_epoch(true, true);
+    EXPECT_EQ(three_frequency_epoch.getObservations(qzss_2).size(), 3U);
+    EXPECT_NE(
+        three_frequency_epoch.getObservation(qzss_2, SignalType::QZS_L1CA),
+        nullptr);
+    EXPECT_NE(
+        three_frequency_epoch.getObservation(qzss_2, SignalType::QZS_L5),
+        nullptr);
+    EXPECT_NE(
+        three_frequency_epoch.getObservation(qzss_2, SignalType::QZS_L2C),
+        nullptr);
+
+    std::filesystem::remove(temp_path);
+}
+
+TEST(RINEXReaderTest, AdditionalFrequencyModePreservesFourGalileoBands) {
+    const auto temp_path = std::filesystem::temp_directory_path() /
+        "libgnss_galileo_four_frequency_test.obs";
+    std::filesystem::remove(temp_path);
+
+    std::ofstream output(temp_path);
+    ASSERT_TRUE(output.is_open());
+    output << rinexHeaderLine(
+        "     3.04           OBSERVATION DATA    M",
+        "RINEX VERSION / TYPE");
+    output << rinexHeaderLine(
+        "E    8 C1C L1C C5Q L5Q C7Q L7Q C6C L6C",
+        "SYS / # / OBS TYPES");
+    output << rinexHeaderLine("", "END OF HEADER");
+    output << "> 2025 04 01 00 00 00.0000000  0  1\n";
+    output << "E09"
+           << rinexObsField("21000001.000")
+           << rinexObsField("110000001.000")
+           << rinexObsField("22000002.000")
+           << rinexObsField("120000002.000")
+           << rinexObsField("23000003.000")
+           << rinexObsField("130000003.000")
+           << rinexObsField("24000004.000")
+           << rinexObsField("140000004.000")
+           << "\n";
+    output.close();
+
+    const auto read_epoch = [&](bool preserve_additional_bands) {
+        io::RINEXReader reader;
+        reader.setPreserveAdditionalFrequencyBands(preserve_additional_bands);
+        EXPECT_TRUE(reader.open(temp_path.string()));
+        io::RINEXReader::RINEXHeader header;
+        EXPECT_TRUE(reader.readHeader(header));
+        ObservationData epoch;
+        EXPECT_TRUE(reader.readObservationEpoch(epoch));
+        reader.close();
+        return epoch;
+    };
+
+    const SatelliteId galileo_9(GNSSSystem::Galileo, 9);
+    const ObservationData default_epoch = read_epoch(false);
+    EXPECT_EQ(default_epoch.getObservations(galileo_9).size(), 2U);
+    EXPECT_NE(default_epoch.getObservation(galileo_9, SignalType::GAL_E1), nullptr);
+    EXPECT_NE(default_epoch.getObservation(galileo_9, SignalType::GAL_E5A), nullptr);
+    EXPECT_EQ(default_epoch.getObservation(galileo_9, SignalType::GAL_E5B), nullptr);
+    EXPECT_EQ(default_epoch.getObservation(galileo_9, SignalType::GAL_E6), nullptr);
+
+    const ObservationData four_frequency_epoch = read_epoch(true);
+    EXPECT_EQ(four_frequency_epoch.getObservations(galileo_9).size(), 4U);
+    EXPECT_NE(four_frequency_epoch.getObservation(galileo_9, SignalType::GAL_E1), nullptr);
+    EXPECT_NE(four_frequency_epoch.getObservation(galileo_9, SignalType::GAL_E5A), nullptr);
+    EXPECT_NE(four_frequency_epoch.getObservation(galileo_9, SignalType::GAL_E5B), nullptr);
+    EXPECT_NE(four_frequency_epoch.getObservation(galileo_9, SignalType::GAL_E6), nullptr);
+
     std::filesystem::remove(temp_path);
 }

@@ -45,6 +45,8 @@ class SolutionEpoch:
     post_rms_m: float | None
     post_max_m: float | None
     nis_per_obs: float | None
+    observations: int | None = None
+    telemetry_complete: bool = False
 
 
 @dataclass(frozen=True)
@@ -54,6 +56,19 @@ class Gate:
 
 
 GATES: tuple[Gate, ...] = (
+    Gate(
+        "nsat < 8 or (nsat <= 11 and ratio <= 15)",
+        lambda epoch: (
+            epoch.nsat is None
+            or epoch.nsat < 8
+            or (
+                epoch.nsat <= 11
+                and epoch.ratio is not None
+                and math.isfinite(epoch.ratio)
+                and epoch.ratio <= 15.0
+            )
+        ),
+    ),
     Gate("ratio < 6", lambda epoch: finite_lt(epoch.ratio, 6.0)),
     Gate("ratio < 8", lambda epoch: finite_lt(epoch.ratio, 8.0)),
     Gate("post_rms > 4 m", lambda epoch: finite_gt(epoch.post_rms_m, 4.0)),
@@ -83,6 +98,13 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=0.50,
         help="Classify status=FIXED epochs above this 3D truth error as wrong FIX.",
+    )
+    parser.add_argument(
+        "--loo-pos",
+        action="append",
+        default=[],
+        metavar="RUN_KEY=PATH",
+        help="Pre-gate POS path used for leave-one-run-out integrity-gate validation.",
     )
     parser.add_argument("--summary-json", type=Path, required=True)
     parser.add_argument("--markdown-output", type=Path, required=True)
@@ -127,7 +149,9 @@ def parse_profile(spec: str) -> ProfileSpec:
 def load_reference(path: Path) -> dict[tuple[int, float], tuple[float, float, float]]:
     records: dict[tuple[int, float], tuple[float, float, float]] = {}
     with path.open(newline="", encoding="utf-8") as handle:
-        reader = csv.DictReader(handle)
+        # UrbanNav publishes comma-space headers while PPC uses plain commas.
+        # Accept both without changing the reference/runtime separation.
+        reader = csv.DictReader(handle, skipinitialspace=True)
         for row in reader:
             try:
                 records[(int(row["GPS Week"]), round(float(row["GPS TOW (s)"]), 3))] = (
@@ -165,6 +189,8 @@ def load_solution(path: Path) -> list[SolutionEpoch]:
                         post_rms_m=maybe_float(parts, 20),
                         post_max_m=maybe_float(parts, 21),
                         nis_per_obs=maybe_float(parts, 23),
+                        observations=maybe_int(parts, 14),
+                        telemetry_complete=len(parts) >= 24,
                     )
                 )
             except ValueError:
@@ -209,6 +235,16 @@ def summarize_values(values: Iterable[float | int | None]) -> dict[str, float | 
         "p50": percentile(finite, 50.0),
         "p90": percentile(finite, 90.0),
         "p95": percentile(finite, 95.0),
+    }
+
+
+def severity_counts(errors_m: Iterable[float]) -> dict[str, int]:
+    errors = list(errors_m)
+    return {
+        "above_1m": sum(error > 1.0 for error in errors),
+        "above_2m": sum(error > 2.0 for error in errors),
+        "above_5m": sum(error > 5.0 for error in errors),
+        "above_10m": sum(error > 10.0 for error in errors),
     }
 
 
@@ -271,6 +307,114 @@ def gate_summary(good: list[SolutionEpoch], wrong: list[SolutionEpoch]) -> list[
     return rows
 
 
+def parse_pos_specs(specs: list[str]) -> dict[str, Path]:
+    paths: dict[str, Path] = {}
+    for spec in specs:
+        key, separator, path_text = spec.partition("=")
+        if not separator or key not in dict(RUNS) or key in paths or not path_text:
+            raise SystemExit(f"invalid or duplicate --loo-pos value: {spec!r}")
+        paths[key] = Path(path_text)
+    if paths and len(paths) != len(RUNS):
+        raise SystemExit("--loo-pos must provide all six PPC run keys")
+    return paths
+
+
+def integrity_rule_demotes(
+    epoch: SolutionEpoch, min_satellites: int, satellite_ceiling: int, max_ratio: float
+) -> bool:
+    return (
+        epoch.nsat is None
+        or epoch.nsat < min_satellites
+        or (
+            epoch.nsat <= satellite_ceiling
+            and epoch.ratio is not None
+            and math.isfinite(epoch.ratio)
+            and epoch.ratio <= max_ratio
+        )
+    )
+
+
+def integrity_metrics(
+    rows: Iterable[tuple[SolutionEpoch, float]], rule: tuple[int, int, float]
+) -> dict[str, int | float]:
+    kept = [(epoch, error) for epoch, error in rows if not integrity_rule_demotes(epoch, *rule)]
+    correct_before = sum(error <= 0.5 for _, error in rows)
+    correct_after = sum(error <= 0.5 for _, error in kept)
+    wrong = sum(error > 0.5 for _, error in kept)
+    severe = sum(error > 5.0 for _, error in kept)
+    return {
+        "fixed": len(kept),
+        "wrong_fix": wrong,
+        "wrong_fix_rate_pct": round(100.0 * wrong / len(kept), 6) if kept else 0.0,
+        "above_5m": severe,
+        "correct_harmed": correct_before - correct_after,
+        "correct_before": correct_before,
+    }
+
+
+def leave_one_run_out_validation(
+    dataset_root: Path, paths: dict[str, Path]
+) -> dict[str, Any] | None:
+    if not paths:
+        return None
+    labeled: dict[str, list[tuple[SolutionEpoch, float]]] = {}
+    for run_key, run_relpath in RUNS:
+        reference = load_reference(dataset_root / run_relpath / "reference.csv")
+        labeled[run_key] = [
+            (epoch, error_3d_m(epoch.ecef, reference[(epoch.week, epoch.tow_s)]))
+            for epoch in load_solution(paths[run_key])
+            if epoch.status == 4 and (epoch.week, epoch.tow_s) in reference
+        ]
+    ratios = (3.0, 4.0, 5.0, 6.0, 8.0, 10.0, 12.0, 15.0, 20.0, 30.0)
+    candidates = [
+        (min_satellites, ceiling, ratio)
+        for min_satellites in (8, 9)
+        for ceiling in range(9, 15)
+        for ratio in ratios
+    ]
+    folds: list[dict[str, Any]] = []
+    for held_out, held_rows in labeled.items():
+        training = [row for key, rows in labeled.items() if key != held_out for row in rows]
+        feasible: list[tuple[tuple[int, int, int], tuple[int, int, float], dict[str, int | float]]] = []
+        for rule in candidates:
+            metrics = integrity_metrics(training, rule)
+            harmed_rate = float(metrics["correct_harmed"]) / max(int(metrics["correct_before"]), 1)
+            if harmed_rate <= 0.02:
+                objective = (
+                    int(metrics["above_5m"]),
+                    int(metrics["wrong_fix"]),
+                    -int(metrics["fixed"]),
+                )
+                feasible.append((objective, rule, metrics))
+        _, selected_rule, training_metrics = min(feasible)
+        held_metrics = integrity_metrics(held_rows, selected_rule)
+        baseline_metrics = integrity_metrics(held_rows, (9, 0, 0.0))
+        folds.append(
+            {
+                "held_out": held_out,
+                "selected_rule": {
+                    "min_satellites": selected_rule[0],
+                    "low_satellite_ceiling": selected_rule[1],
+                    "low_satellite_max_ratio": selected_rule[2],
+                },
+                "training": training_metrics,
+                "held_out_metrics": held_metrics,
+                "min_sat9_baseline": baseline_metrics,
+            }
+        )
+    return {
+        "method": "six-fold leave-one-run-out; <=2% training correct-FIX harm; minimize >5m, wrong FIX, then FIX loss",
+        "reference_used_for_training_only": True,
+        "runtime_features": ["NumSat", "AR ratio"],
+        "folds": folds,
+        "all_held_out_runs_reduce_wrong_fix_vs_min_sat9": all(
+            int(fold["held_out_metrics"]["wrong_fix"])
+            < int(fold["min_sat9_baseline"]["wrong_fix"])
+            for fold in folds
+        ),
+    }
+
+
 def analyze_profile(profile: ProfileSpec, dataset_root: Path, wrong_fix_threshold_m: float) -> dict[str, Any]:
     total_source_counts: Counter[str] = Counter()
     total_rule_counts: Counter[str] = Counter()
@@ -278,6 +422,7 @@ def analyze_profile(profile: ProfileSpec, dataset_root: Path, wrong_fix_threshol
     total_wrong = 0
     good_epochs: list[SolutionEpoch] = []
     wrong_epochs: list[SolutionEpoch] = []
+    total_wrong_errors: list[float] = []
     run_rows: list[dict[str, Any]] = []
 
     for run_key, run_relpath in RUNS:
@@ -307,6 +452,7 @@ def analyze_profile(profile: ProfileSpec, dataset_root: Path, wrong_fix_threshol
             if error_m > wrong_fix_threshold_m:
                 run_wrong += 1
                 run_wrong_errors.append(error_m)
+                total_wrong_errors.append(error_m)
                 wrong_keys.add((epoch.week, epoch.tow_s))
                 wrong_epochs.append(epoch)
                 segment_row = segments.get(epoch.tow_s)
@@ -327,6 +473,7 @@ def analyze_profile(profile: ProfileSpec, dataset_root: Path, wrong_fix_threshol
                 "wrong_fix": run_wrong,
                 "wrong_fix_rate_pct": round(100.0 * run_wrong / run_fix, 6) if run_fix else None,
                 "wrong_error_p95_m": percentile(run_wrong_errors, 95.0),
+                "wrong_error_severity": severity_counts(run_wrong_errors),
                 "selected_candidate_counts": dict(sorted(run_source_counts.items())),
                 "rule_matched_counts": dict(sorted(run_rule_counts.items())),
                 "longest_wrong_spans": longest_spans(solution, wrong_keys),
@@ -361,6 +508,8 @@ def analyze_profile(profile: ProfileSpec, dataset_root: Path, wrong_fix_threshol
         "fixed": total_fix,
         "wrong_fix": total_wrong,
         "wrong_fix_rate_pct": round(100.0 * total_wrong / total_fix, 6) if total_fix else None,
+        "wrong_error_p95_m": percentile(total_wrong_errors, 95.0),
+        "wrong_error_severity": severity_counts(total_wrong_errors),
         "selected_candidate_counts": dict(sorted(total_source_counts.items())),
         "rule_matched_counts": dict(sorted(total_rule_counts.items())),
         "runs": run_rows,
@@ -432,19 +581,42 @@ def render_markdown(payload: dict[str, Any]) -> str:
             f"{fmt(profile['wrong_fix_rate_pct'], '%')} | {source} | {rules} |"
         )
 
+    validation = payload.get("leave_one_run_out")
+    if isinstance(validation, dict):
+        lines.extend(
+            [
+                "",
+                "## Leave-one-run-out integrity-gate validation",
+                "",
+                str(validation["method"]) + ".",
+                "",
+                "| Held-out run | Selected min sat / ceiling / ratio | min-sat9 wrong | LOO wrong | LOO >5 m |",
+                "|---|---:|---:|---:|---:|",
+            ]
+        )
+        for fold in validation["folds"]:
+            rule = fold["selected_rule"]
+            lines.append(
+                f"| {fold['held_out']} | {rule['min_satellites']} / "
+                f"{rule['low_satellite_ceiling']} / {fmt(rule['low_satellite_max_ratio'])} | "
+                f"{fold['min_sat9_baseline']['wrong_fix']} | "
+                f"{fold['held_out_metrics']['wrong_fix']} | "
+                f"{fold['held_out_metrics']['above_5m']} |"
+            )
+
     for profile in payload["profiles"]:
         lines.extend(
             [
                 "",
                 f"## {profile['name']}",
                 "",
-                "| Run | FIX epochs | Wrong FIX | Wrong/FIX | Wrong p95 | Longest wrong span |",
-                "|---|---:|---:|---:|---:|---|",
+                "| Run | FIX epochs | Wrong FIX | Wrong/FIX | >5 m | >10 m | Wrong p95 | Longest wrong span |",
+                "|---|---:|---:|---:|---:|---:|---:|---|",
             ]
         )
         for run in profile["runs"]:
             if not run.get("available"):
-                lines.append(f"| {run['key']} | n/a | n/a | n/a | n/a | missing |")
+                lines.append(f"| {run['key']} | n/a | n/a | n/a | n/a | n/a | n/a | missing |")
                 continue
             spans = run.get("longest_wrong_spans") or []
             span_text = "n/a"
@@ -456,8 +628,10 @@ def render_markdown(payload: dict[str, Any]) -> str:
                 )
             lines.append(
                 f"| {run['key']} | {run['fixed']} | {run['wrong_fix']} | "
-                f"{fmt(run['wrong_fix_rate_pct'], '%')} | {fmt(run['wrong_error_p95_m'], ' m')} | "
-                f"{span_text} |"
+                f"{fmt(run['wrong_fix_rate_pct'], '%')} | "
+                f"{run['wrong_error_severity']['above_5m']} | "
+                f"{run['wrong_error_severity']['above_10m']} | "
+                f"{fmt(run['wrong_error_p95_m'], ' m')} | {span_text} |"
             )
 
         lines.extend(
@@ -503,6 +677,9 @@ def main() -> int:
         "title": "PPC residual wrong-FIX analysis",
         "wrong_fix_threshold_m": args.wrong_fix_threshold_m,
         "profiles": profiles,
+        "leave_one_run_out": leave_one_run_out_validation(
+            args.dataset_root, parse_pos_specs(args.loo_pos)
+        ),
     }
     args.summary_json.parent.mkdir(parents=True, exist_ok=True)
     args.summary_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")

@@ -1,0 +1,71 @@
+{
+  "schema": "claslib_parity_manifest.v1",
+  "dataset": {
+    "id": "qzss-clas-2019-08-27-16h-3600s",
+    "start": "2019-08-27T16:00:00 GPST",
+    "end": "2019-08-27T16:59:59 GPST",
+    "expected_epochs": 3600,
+    "warmup_seconds": 300.0,
+    "artifacts": {
+      "observation": "/absolute/path/to/0627239Q.obs",
+      "navigation": "/absolute/path/to/sept_2019239.nav",
+      "l6": "/absolute/path/to/2019239Q.l6"
+    }
+  },
+  "oracle": {
+    "implementation": "CLASLIB",
+    "version": "pinned-build-id",
+    "commit": "replace-with-claslib-commit",
+    "solution_pos": "/absolute/path/to/claslib_oracle.pos"
+  },
+  "candidate": {
+    "implementation": "LibGNSS++",
+    "commit": "replace-with-libgnssplusplus-commit",
+    "solution_pos": "/absolute/path/to/native.pos"
+  },
+  "reference_ecef_m": [
+    -3957237.0,
+    3310375.0,
+    3737531.0
+  ],
+  "solution": {
+    "match_tolerance_s": 0.11,
+    "oracle_fix_statuses": [
+      4
+    ],
+    "oracle_fix_source": "status",
+    "candidate_fix_statuses": [
+      1
+    ],
+    "candidate_fix_source": "fixed_ambiguities"
+  },
+  "layers": {
+    "zd_diff_jsons": {
+      "gps": {
+        "code": "/absolute/path/to/gps_code_diff.json",
+        "phase": "/absolute/path/to/gps_phase_diff.json"
+      },
+      "qzss": {
+        "code": "/absolute/path/to/qzss_code_diff.json",
+        "phase": "/absolute/path/to/qzss_phase_diff.json"
+      },
+      "galileo": {
+        "code": "/absolute/path/to/galileo_code_diff.json",
+        "phase": "/absolute/path/to/galileo_phase_diff.json"
+      }
+    }
+  },
+  "thresholds": {
+    "dataset_epoch_coverage_min": 1.0,
+    "solution_match_coverage_min": 1.0,
+    "status_agreement_min": 0.99,
+    "native_only_fix_max": 0,
+    "fix_count_relative_delta_max": 0.01,
+    "float_delta_rms_3d_m_max": 0.02,
+    "trajectory_delta_rms_3d_m_max": 0.02,
+    "trajectory_delta_p95_3d_m_max": 0.03,
+    "zd_row_key_coverage_min": 1.0,
+    "zd_prc_rms_delta_m_max": 0.01,
+    "zd_cpc_rms_delta_m_max": 0.01
+  }
+}

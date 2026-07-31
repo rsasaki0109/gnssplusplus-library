@@ -1,15 +1,15 @@
 # CLAS Port Architecture
 
-> **Implementation status on `develop`**: the README describes the native CLASNAT
-> path, which is fully implemented on branch
-> [`codex/ship-of-theseus-20260418`](https://github.com/rsasaki0109/gnssplusplus-library/tree/codex/ship-of-theseus-20260418).
-> That branch has no common ancestor with `develop` (local re-init history), so
-> merging it requires either a web-UI "Allow unrelated histories" merge or an
-> incremental re-port on top of `develop`.  The README reference tables, plots,
-> and this document were ported as docs-only PRs so the plan is visible here
-> even before the implementation lands on `develop`.
+> **Current `develop` status (2026-06-19)**: this page is a historical iter55
+> port-architecture note. The current binary no longer exposes
+> `--claslib-parity`, `--ported-clasnat`, or `--legacy-strict-parity`; current
+> native CLAS runs use `gnss ppp --clas-osr`, or
+> `gnss clas-ppp --profile clas`, which forwards `--clas-osr`. The active
+> default-flip status is the A5 STOP in
+> [clas_dd_filter_a5.md](clas_dd_filter_a5.md), so do not treat the historical
+> CLI names below as current runbook commands.
 
-Status: iter55 public-validation and helper-parity note.
+Status: historical iter55 public-validation and helper-parity note.
 
 This note records the CLASLIB port structure after the native CLASNAT path
 became the default `--claslib-parity` behavior and after the iter55 cleanup that

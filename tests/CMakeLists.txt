@@ -6,19 +6,55 @@ find_package(GTest REQUIRED)
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
 if(GTest_FOUND)
-    # Consolidate all tests into a single executable
-    add_executable(run_tests
+    # Consolidate all tests into a single executable.
+    # The target is named gnss_run_tests (not run_tests): with the Visual
+    # Studio generator, CMake emits a per-directory RUN_TESTS utility whose
+    # project file collides case-insensitively with run_tests.vcxproj on
+    # Windows. OUTPUT_NAME keeps the binary named run_tests for scripts/CI.
+    add_executable(gnss_run_tests
+        test_imu_csv.cpp
+        test_attitude.cpp
+        test_mechanization.cpp
+        test_preintegration.cpp
+        test_tight_coupling_processor.cpp
+        test_fusion_process_noise.cpp
+        test_fusion_update.cpp
+        test_fusion_measurement.cpp
+        test_fusion_zupt.cpp
+        test_fusion_nhc.cpp
+        test_fusion_initialization.cpp
+        test_fusion_processor_synthetic.cpp
+        test_dd_imu_bridge.cpp
         test_ppp_clas.cpp
         test_ppp_osr.cpp
         test_ppp_ar.cpp
         test_ppp_atmosphere.cpp
+        test_ppp_correction_contract.cpp
         test_rtk_ar_evaluation.cpp
         test_rtk_ar_selection.cpp
+        test_safe_fix_state_machine.cpp
+          test_fixed_quality_gate.cpp
+          test_fix_failure_budget.cpp
+    test_inertial_fix_evidence.cpp
+    test_disjoint_satellite_fix_evidence.cpp
+        test_causal_ambiguity_arc.cpp
+        test_nlos_weights.cpp
+        test_float_trust_policy.cpp
         test_rtk_slip_detection.cpp
+        test_rtk_adaptive_noise.cpp
+        test_rtk_doppler_rows.cpp
+        test_rtk_float_stabilizer.cpp
         test_rtk_measurement.cpp
         test_rtk_update.cpp
+        test_rtk_ins_time_update.cpp
+        test_rtk_tdcp_diagnostics.cpp
         test_rtk_selection.cpp
+        test_rtk_cmc_ref.cpp
+        test_rtk_cp_pr_gate.cpp
+        test_rtk_ddpr_anchor.cpp
         test_rtk_validation.cpp
+        test_rtk_surplus_validation.cpp
+        test_integrity_consensus.cpp
         test_fgo.cpp
         test_signal_policy.cpp
         test_types.cpp
@@ -26,10 +62,13 @@ if(GTest_FOUND)
         test_gnss_live.cpp
         test_ppp.cpp
         test_rinex_writer.cpp
+        test_madoca_core.cpp
+        test_madoca_l6d_snapshots.cpp
         test_madoca_parity.cpp
-        test_rtk_legacy.cpp
         test_spp.cpp
+        test_spp_velocity.cpp
         test_rtk.cpp
+        test_rtk_ins_prior.cpp
         test_rtk_smoke.cpp
         test_ntrip.cpp
         test_rtcm.cpp
@@ -44,12 +83,42 @@ if(GTest_FOUND)
         test_iers_sub_daily_eop.cpp
     )
 
-    target_compile_options(run_tests PRIVATE -g)
-    target_compile_definitions(run_tests PRIVATE
+    # test_rtk_legacy.cpp uses "#define private public" before including
+    # rtk.hpp. MSVC encodes member access in mangled names, so the test's
+    # references never link against the library's private symbols; the
+    # trick only works on Itanium-ABI compilers (GCC/Clang). That mangling
+    # is a property of the target ABI, not of which compiler emits it: Clang
+    # targeting the MSVC ABI (e.g. a Windows build/clang-ninja config, where
+    # CMAKE_CXX_COMPILER_ID is "Clang" and MSVC is therefore false here)
+    # mangles member access the same way real MSVC does and hits the exact
+    # same undefined-symbol link failure, so it must be excluded too.
+    if(NOT MSVC AND NOT (WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
+        target_sources(gnss_run_tests PRIVATE test_rtk_legacy.cpp)
+    endif()
+
+    # GTSAM FGO backend parity tests (guarded at both CMake and #ifdef level:
+    # the source itself is a no-op TU when GNSSPP_HAS_GTSAM isn't defined, but
+    # we still only add it to the build when GTSAM was actually found so a
+    # GTSAM-less build doesn't pay for an always-empty translation unit).
+    if(GTSAM_FOUND)
+        target_sources(gnss_run_tests PRIVATE test_fgo_gtsam_backend.cpp)
+    endif()
+
+    set_target_properties(gnss_run_tests PROPERTIES OUTPUT_NAME run_tests)
+    # Backward-compatible alias for CI/scripts that build --target run_tests.
+    # Skipped for Visual Studio generators, where the name collides with
+    # CMake's auto-generated RUN_TESTS utility on a case-insensitive FS.
+    if(NOT CMAKE_GENERATOR MATCHES "Visual Studio")
+        add_custom_target(run_tests DEPENDS gnss_run_tests)
+    endif()
+    if(NOT MSVC)
+        target_compile_options(gnss_run_tests PRIVATE -g)
+    endif()
+    target_compile_definitions(gnss_run_tests PRIVATE
         GNSSPP_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
         GNSSPP_BINARY_DIR="${CMAKE_BINARY_DIR}"
     )
-    target_link_libraries(run_tests
+    target_link_libraries(gnss_run_tests
         gnss_lib gnss_lib_noopt
         sofa
         ginan_iers2010
@@ -57,9 +126,10 @@ if(GTest_FOUND)
         GTest::Main
         Threads::Threads
     )
-    add_dependencies(run_tests
+    add_dependencies(gnss_run_tests
         gnss_convert
         gnss_fgo
+        gnss_fuse
         gnss_live
         gnss_ppp
         gnss_replay
@@ -70,23 +140,188 @@ if(GTest_FOUND)
         gnss_vel_d
     )
 
+    # Keep the MADOCALIB oracle job independent from the monolithic test
+    # executable.  The parity workflow only executes tests from
+    # test_madoca_parity.cpp; compiling every unrelated test translation unit
+    # made the Ubuntu runner vulnerable to infrastructure SIGTERM (exit 143)
+    # before the oracle tests could start.
+    add_executable(gnss_madoca_parity_tests test_madoca_parity.cpp)
+    set_target_properties(gnss_madoca_parity_tests PROPERTIES
+        OUTPUT_NAME madoca_parity_tests
+    )
+    if(NOT MSVC)
+        target_compile_options(gnss_madoca_parity_tests PRIVATE -g)
+    endif()
+    target_compile_definitions(gnss_madoca_parity_tests PRIVATE
+        GNSSPP_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+        GNSSPP_BINARY_DIR="${CMAKE_BINARY_DIR}"
+    )
+    target_link_libraries(gnss_madoca_parity_tests
+        gnss_lib gnss_lib_noopt
+        sofa
+        ginan_iers2010
+        GTest::GTest
+        GTest::Main
+        Threads::Threads
+    )
+    add_dependencies(gnss_madoca_parity_tests gnss_ppp)
+
+    add_executable(gnss_integrity_tests test_integrity_consensus.cpp)
+    target_link_libraries(gnss_integrity_tests
+        gnss_lib gnss_lib_noopt
+        GTest::GTest
+        GTest::Main
+        Threads::Threads
+    )
+
     # Add test to CTest
-    add_test(NAME run_tests COMMAND run_tests)
+    add_test(NAME run_tests COMMAND gnss_run_tests)
+    add_test(
+        NAME clas_outage_legacy_kill_switch
+        COMMAND gnss_run_tests
+                --gtest_filter=PPPClasTest.MrtklibOutageResetKillSwitchRestoresLegacyOverflow
+    )
+    set_tests_properties(
+        clas_outage_legacy_kill_switch
+        PROPERTIES ENVIRONMENT "GNSS_PPP_CLAS_OUTAGE_RESET_PARITY=0"
+    )
+    add_test(
+        NAME madoca_parity_tests
+        COMMAND gnss_madoca_parity_tests
+                --gtest_filter=*MadocaParity*:MadocaBridgeConfig.*
+    )
+    add_test(NAME integrity_tests COMMAND gnss_integrity_tests)
     add_test(
         NAME python_benchmark_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_benchmark_scripts.py
+    )
+    add_test(
+        NAME python_ppc_integrity_policy_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_ppc_integrity_policy_ci.py
+    )
+    add_test(
+        NAME python_ppc_goal_completion_audit_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/verify_ppc_goal_completion.py --check-only
     )
     add_test(
         NAME python_cli_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_cli_tools.py
     )
     add_test(
+        NAME python_cli_ux_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_cli_ux.py
+    )
+    add_test(
+        NAME python_cli_json_contract_validator_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_cli_json_contract_validator.py
+    )
+    add_test(
+        NAME python_artifact_manifest_ux_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_artifact_manifest_ux.py
+    )
+    add_test(
+        NAME python_artifact_manifest_contract_validator_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_artifact_manifest_contract_validator.py
+    )
+    add_test(
         NAME python_madoca_solution_diff_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_madoca_solution_diff.py
     )
     add_test(
+        NAME python_madoca_release_matrix_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_madoca_release_matrix.py
+    )
+    add_test(
+        NAME python_madoca_residual_component_diff_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_madoca_residual_component_diff.py
+    )
+    add_test(
+        NAME python_madoca_residual_component_summary_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_madoca_residual_component_summary.py
+    )
+    add_test(
+        NAME python_madoca_glonass_phase_audit_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_madoca_glonass_phase_audit.py
+    )
+    add_test(
+        NAME python_madoca_materialization_diff_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_madoca_materialization_diff.py
+    )
+    add_test(
+        NAME python_madoca_materialization_summary_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_madoca_materialization_summary.py
+    )
+    add_test(
+        NAME python_optional_madoca_residual_component_diff_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_optional_madoca_residual_component_diff.py
+    )
+    add_test(
+        NAME python_optional_madoca_materialization_diff_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_optional_madoca_materialization_diff.py
+    )
+    add_test(
+        NAME python_madoca_materialization_selfdiff_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_madoca_materialization_selfdiff.py
+    )
+    add_test(
+        NAME python_clas_zd_component_diff_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_clas_zd_component_diff.py
+    )
+    add_test(
+        NAME python_clas_dd_measurement_diff_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_clas_dd_measurement_diff.py
+    )
+    add_test(
+        NAME python_clas_filter_state_diff_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_clas_filter_state_diff.py
+    )
+    add_test(
+        NAME python_claslib_parity_scorecard_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_claslib_parity_scorecard.py
+    )
+    add_test(
+        NAME python_qzss_l6_bias_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_qzss_l6_bias.py
+    )
+    add_test(
+        NAME python_clas_zd_component_summary_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_clas_zd_component_summary.py
+    )
+    add_test(
+        NAME python_claslib_zd_component_export_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_claslib_zd_component_export.py
+    )
+    add_test(
+        NAME python_optional_clas_zd_component_diff_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_optional_clas_zd_component_diff.py
+    )
+    add_test(
+        NAME python_clas_a4b_native_selfdiff_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_clas_a4b_native_selfdiff.py
+    )
+    add_test(
+        NAME python_claslib_osr_zd_export_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_claslib_osr_zd_export.py
+    )
+    add_test(
+        NAME python_madoca_satellite_set_diff_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_madoca_satellite_set_diff.py
+    )
+    add_test(
         NAME python_mode_compare_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_mode_compare.py
+    )
+    add_test(
+        NAME python_ppp_residual_row_set_diff_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_ppp_residual_row_set_diff.py
+    )
+    add_test(
+        NAME python_spp_residual_dump_summary_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_spp_residual_dump_summary.py
+    )
+    add_test(
+        NAME python_spp_iteration_dump_summary_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_spp_iteration_dump_summary.py
     )
     add_test(
         NAME python_ppc_taroz_amb_pdc_smoke_tests
@@ -169,12 +404,32 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_web_ui.py
     )
     add_test(
+        NAME python_web_http_ux_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_web_http_ux.py
+    )
+    add_test(
         NAME python_docs_site_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_docs_site.py
     )
     add_test(
         NAME python_experiment_runner_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_experiment_runner.py
+    )
+    add_test(
+        NAME python_search_imu_time_offset_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_search_imu_time_offset.py
+    )
+    add_test(
+        NAME python_gnss_fuse_cli_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_gnss_fuse_cli.py
+    )
+    add_test(
+        NAME python_gnss_solve_cli_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_gnss_solve_cli.py
+    )
+    set_tests_properties(
+        python_gnss_fuse_cli_tests python_gnss_solve_cli_tests
+        PROPERTIES ENVIRONMENT "GNSSPP_BINARY_DIR=${CMAKE_BINARY_DIR}"
     )
     set_tests_properties(
         python_bindings_tests
@@ -197,9 +452,40 @@ if(GTest_FOUND)
 
     set(GNSSPP_CORE_TESTS
         run_tests
+        clas_outage_legacy_kill_switch
+        python_ppc_integrity_policy_tests
+        python_ppc_goal_completion_audit_tests
+        python_artifact_manifest_contract_validator_tests
+        python_artifact_manifest_ux_tests
+        python_clas_a4b_native_selfdiff_tests
+        python_clas_filter_state_diff_tests
+        python_clas_zd_component_diff_tests
+        python_clas_zd_component_summary_tests
+        python_claslib_parity_scorecard_tests
+        python_claslib_osr_zd_export_tests
+        python_claslib_zd_component_export_tests
+        python_cli_json_contract_validator_tests
+        python_cli_ux_tests
+        python_optional_clas_zd_component_diff_tests
+        python_qzss_l6_bias_tests
+        python_madoca_materialization_diff_tests
+        python_madoca_materialization_selfdiff_tests
+        python_madoca_materialization_summary_tests
+        python_madoca_residual_component_diff_tests
+        python_madoca_residual_component_summary_tests
         python_madoca_solution_diff_tests
+        python_madoca_satellite_set_diff_tests
         python_mode_compare_tests
+        python_optional_madoca_materialization_diff_tests
+        python_optional_madoca_residual_component_diff_tests
+        python_ppp_residual_row_set_diff_tests
+        python_spp_residual_dump_summary_tests
+        python_spp_iteration_dump_summary_tests
+        python_web_http_ux_tests
         python_experiment_runner_tests
+        python_gnss_fuse_cli_tests
+        python_gnss_solve_cli_tests
+        python_search_imu_time_offset_tests
     )
     set(GNSSPP_EXTENDED_TESTS
         python_packaging_tests

@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import csv
 from datetime import timedelta
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -18,11 +20,16 @@ import numpy as np
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
-APPS_DIR = ROOT_DIR / "apps"
+COMMANDS_DIR = ROOT_DIR / "apps" / "commands"
 SCRIPTS_DIR = ROOT_DIR / "scripts"
 CI_SCRIPTS_DIR = SCRIPTS_DIR / "ci"
 
-sys.path.insert(0, str(APPS_DIR))
+for command_group in (
+    "benchmarks", "positioning", "products", "receivers",
+    "visualization", "diagnostics",
+):
+    sys.path.insert(0, str(COMMANDS_DIR / command_group))
+sys.path.insert(0, str(COMMANDS_DIR))
 sys.path.insert(0, str(SCRIPTS_DIR))
 sys.path.insert(0, str(CI_SCRIPTS_DIR))
 
@@ -58,7 +65,10 @@ import analyze_ppc_residual_reset_sweep as ppc_residual_reset_sweep  # noqa: E40
 import analyze_ppc_segment_selector_leave_one_run_out as ppc_segment_selector_loo  # noqa: E402
 import analyze_ppc_segment_selector_sweep as ppc_segment_selector_sweep  # noqa: E402
 import apply_ppc_dual_profile_selector as ppc_dual_profile_selector  # noqa: E402
+import apply_ppc_integrity_consensus as ppc_integrity_consensus  # noqa: E402
 import generate_ppc_rtk_scorecard as ppc_rtk_scorecard  # noqa: E402
+import generate_ppc_goal_scorecard as ppc_goal_scorecard  # noqa: E402
+import plot_ppc_status_trajectories as ppc_status_trajectories  # noqa: E402
 import generate_ppc_selector_validation_scorecard as ppc_selector_scorecard  # noqa: E402
 import generate_ppc_tail_cleanup_scorecard as ppc_tail_cleanup_scorecard  # noqa: E402
 import generate_ppc_rtk_trajectory as ppc_rtk_trajectory  # noqa: E402
@@ -74,6 +84,317 @@ import apply_ppc_multi_candidate_selector as ppc_multi_candidate_selector  # noq
 import run_ppc_multi_candidate_selector_matrix as ppc_multi_selector_matrix  # noqa: E402
 import run_ppc_ratio_gating_selector_sweep as ppc_ratio_gating_sweep  # noqa: E402
 import run_ppc_realtime_guard_sweep as ppc_realtime_guard_sweep  # noqa: E402
+import run_clas_mrtklib_v051 as clas_v051_runner  # noqa: E402
+import fuse_kf_fgo_alignment as kf_fgo_alignment  # noqa: E402
+import evaluate_ppc_fgo_shadow_authority as fgo_shadow_authority  # noqa: E402
+import apply_ppc_fgo_position_consensus as fgo_position_consensus  # noqa: E402
+import summarize_fgo_ppc_matrix as fgo_ppc_matrix  # noqa: E402
+import bridge_pos_fixed_anchors as fixed_anchor_bridge  # noqa: E402
+import smooth_pos_float_horizontal as float_horizontal_smoother  # noqa: E402
+import bridge_pos_velocity_fixed_anchors as velocity_fixed_anchor_bridge  # noqa: E402
+import select_pos_candidate_quality as candidate_quality_selector  # noqa: E402
+import convert_tcfgo_npz_to_pos as tcfgo_converter  # noqa: E402
+import merge_pos_status_transition as status_position_merge  # noqa: E402
+
+
+class PPCGoalScorecardTest(unittest.TestCase):
+    def test_build_payload_keeps_public_profiles_and_gici_separate(self) -> None:
+        metric_values = {
+            "fix_rate_pct": 80.0,
+            "wrong_fix_rate_pct": 2.0,
+            "correct_fix_ref_pct": 70.0,
+            "ppc_score_3d_50cm_ref_pct": 75.0,
+            "ppc_official_score_pct": 76.0,
+            "p95_h_m": 1.0,
+            "p95_abs_up_m": 2.0,
+        }
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_goal_scorecard_") as td:
+            root = Path(td)
+            gici_dir = root / "gici"
+            gici_dir.mkdir()
+            matrix = {
+                "runs": [
+                    {"label": key, **metric_values}
+                    for key, _, _ in ppc_goal_scorecard.RUNS
+                ],
+                "macro_mean": metric_values,
+                "weighted_official_score_pct": 78.75,
+            }
+            matrix_path = root / "matrix.json"
+            matrix_path.write_text(json.dumps(matrix), encoding="utf-8")
+            gici_metrics = {key: value - 10.0 for key, value in metric_values.items()}
+            for _, _, filename in ppc_goal_scorecard.RUNS:
+                (gici_dir / filename).write_text(
+                    json.dumps({"solutions": [gici_metrics]}), encoding="utf-8"
+                )
+            nagoya_path = root / "nagoya.json"
+            nagoya_path.write_text(
+                json.dumps(
+                    {
+                        "fix_rate_pct": 85.11,
+                        "wrong_fix_rate_pct": 0.9,
+                        "p95_h_m": 1.4,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            consensus_path = root / "consensus.json"
+            consensus_path.write_text(
+                json.dumps(
+                    {
+                        "runtime_truth_used": False,
+                        "positions_replaced": 0,
+                        "agreement_aperture_m": 5.0,
+                        "shadow_max_gdop": 4.0,
+                        "final_state": "NORMAL",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            integrity_path = root / "integrity.json"
+            integrity_path.write_text(
+                json.dumps(
+                    {
+                        "policy": {"streak_prefit_rms_m": 40.0},
+                        "reference_truth_used_by_runtime_policy": False,
+                        "bounded_output_latency_epochs": 7,
+                        "external_validation_status": "safe_no_false_demotions",
+                        "external_policy_active": True,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            args = argparse.Namespace(
+                lib_matrix=matrix_path,
+                gici_matrix=None,
+                gici_results_dir=gici_dir,
+                nagoya1_public_summary=nagoya_path,
+                summary_json=root / "summary.json",
+                comparison_png=root / "comparison.png",
+                targets_png=root / "targets.png",
+                gici_commit="deadbeef",
+                status_demotion_min_satellites=9,
+                status_demotion_low_satellite_ceiling=11,
+                status_demotion_low_satellite_max_ratio=15.0,
+                online_consensus_summary=[consensus_path],
+                staged_integrity_audit=integrity_path,
+            )
+
+            payload = ppc_goal_scorecard.build_payload(args)
+
+            self.assertEqual(payload["weighted_official_score_pct"], 78.75)
+            self.assertEqual(payload["macro_mean"]["libgnss"]["fix_rate_pct"], 80.0)
+            self.assertEqual(payload["macro_mean"]["gici"]["fix_rate_pct"], 70.0)
+            self.assertEqual(payload["targets"][1]["achieved_pct"], 85.11)
+            self.assertIn("separate", payload["targets"][1]["profile"])
+            self.assertFalse(payload["evaluation"]["reference_used_by_runtime_selector"])
+            self.assertEqual(
+                payload["evaluation"]["status_demotion"]["min_satellites"], 9
+            )
+            self.assertEqual(
+                payload["evaluation"]["status_demotion"]["low_satellite_ceiling"], 11
+            )
+            self.assertFalse(
+                payload["evaluation"]["status_demotion"]["reference_used"]
+            )
+            consensus = payload["evaluation"]["online_consensus_replays"][0]
+            self.assertFalse(consensus["runtime_truth_used"])
+            self.assertEqual(consensus["positions_replaced"], 0)
+            self.assertEqual(consensus["final_state"], "NORMAL")
+            staged = payload["evaluation"]["staged_integrity_policy"]
+            self.assertFalse(staged["runtime_truth_used"])
+            self.assertTrue(staged["external_policy_active"])
+            self.assertEqual(
+                staged["external_validation_status"], "safe_no_false_demotions"
+            )
+
+
+class PPCStatusTrajectoryTest(unittest.TestCase):
+    def test_loads_selected_pos_paths_from_goal_metrics(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_status_paths_") as td:
+            metrics = Path(td) / "metrics.json"
+            metrics.write_text(
+                json.dumps(
+                    {
+                        "runs": [
+                            {
+                                "key": key,
+                                "libgnss": {"pos": f"output/{key}.pos"},
+                            }
+                            for key, _, _ in ppc_status_trajectories.RUNS
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            paths = ppc_status_trajectories.load_solution_paths(None, metrics)
+
+        self.assertEqual(set(paths), {key for key, _, _ in ppc_status_trajectories.RUNS})
+        self.assertEqual(
+            paths["tokyo_run1"],
+            ppc_status_trajectories.ROOT_DIR / "output/tokyo_run1.pos",
+        )
+
+
+class StatusPositionMergeTest(unittest.TestCase):
+    @staticmethod
+    def epoch(tow: float, x_m: float, status: int) -> comparison.SolutionEpoch:
+        return comparison.SolutionEpoch(
+            2300, tow, 0.0, 0.0, 0.0, np.asarray([x_m, 0.0, 0.0]), status, 12
+        )
+
+    def test_replaces_position_only_on_requested_status_transition(self) -> None:
+        baseline = [self.epoch(0.0, 0.0, 3), self.epoch(1.0, 1.0, 4)]
+        candidate = [self.epoch(0.0, 10.0, 4), self.epoch(1.0, 11.0, 4)]
+
+        merged, summary = status_position_merge.merge_positions(baseline, candidate, 3, 4)
+
+        np.testing.assert_allclose(merged[0].ecef, candidate[0].ecef)
+        np.testing.assert_allclose(merged[1].ecef, baseline[1].ecef)
+        self.assertEqual([epoch.status for epoch in merged], [3, 4])
+        self.assertEqual(summary["replaced_positions"], 1)
+        self.assertFalse(summary["reference_truth_used"])
+
+    def test_displacement_gate_rejects_far_candidate(self) -> None:
+        baseline = [self.epoch(0.0, 0.0, 3)]
+        candidate = [self.epoch(0.0, 10.0, 4)]
+
+        merged, summary = status_position_merge.merge_positions(
+            baseline, candidate, 3, 4, max_displacement_m=5.0
+        )
+
+        np.testing.assert_allclose(merged[0].ecef, baseline[0].ecef)
+        self.assertEqual(summary["replaced_positions"], 0)
+        self.assertEqual(summary["displacement_rejected_positions"], 1)
+
+    def test_optional_satellite_gate_works_across_baseline_statuses(self) -> None:
+        baseline = [self.epoch(0.0, 0.0, 3), self.epoch(1.0, 1.0, 4)]
+        baseline[1] = dataclasses.replace(baseline[1], num_satellites=17)
+        candidate = [self.epoch(0.0, 10.0, 4), self.epoch(1.0, 11.0, 4)]
+
+        merged, summary = status_position_merge.merge_positions(
+            baseline,
+            candidate,
+            None,
+            4,
+            max_baseline_satellites=16,
+        )
+
+        np.testing.assert_allclose(merged[0].ecef, candidate[0].ecef)
+        np.testing.assert_allclose(merged[1].ecef, baseline[1].ecef)
+        self.assertEqual([epoch.status for epoch in merged], [3, 4])
+        self.assertEqual(summary["replaced_positions"], 1)
+        self.assertEqual(summary["telemetry_rejected_positions"], 1)
+
+    def test_preserve_existing_up_applies_only_horizontal_correction(self) -> None:
+        baseline = [self.epoch(0.0, 0.0, 3)]
+        candidate = [self.epoch(0.0, 10.0, 4)]
+        candidate[0] = dataclasses.replace(
+            candidate[0], ecef=np.asarray([10.0, 5.0, 0.0])
+        )
+
+        merged, summary = status_position_merge.merge_positions(
+            baseline, candidate, 3, 4, preserve_existing_up=True
+        )
+
+        np.testing.assert_allclose(merged[0].ecef, [0.0, 5.0, 0.0], atol=1e-9)
+        self.assertTrue(summary["preserve_existing_up"])
+
+    def test_can_promote_candidate_status_with_ratio_gate(self) -> None:
+        baseline = [self.epoch(0.0, 0.0, 3), self.epoch(1.0, 1.0, 3)]
+        candidate = [
+            dataclasses.replace(self.epoch(0.0, 0.05, 4), ratio=4.0),
+            dataclasses.replace(self.epoch(1.0, 1.05, 4), ratio=2.0),
+        ]
+
+        merged, summary = status_position_merge.merge_positions(
+            baseline,
+            candidate,
+            3,
+            4,
+            max_displacement_m=0.075,
+            min_candidate_ratio=3.0,
+            promote_candidate_status=True,
+        )
+
+        self.assertEqual([epoch.status for epoch in merged], [4, 3])
+        self.assertEqual(merged[0].ratio, 4.0)
+        self.assertEqual(summary["replaced_positions"], 1)
+        self.assertEqual(summary["ratio_rejected_positions"], 1)
+        self.assertFalse(summary["preserved_status_labels"])
+        self.assertFalse(summary["preserved_baseline_telemetry"])
+
+
+class TcFgoNpzConverterTest(unittest.TestCase):
+    def test_converts_estimator_fields_and_ignores_truth(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnsspp_tcfgo_convert_") as temp_dir:
+            root = Path(temp_dir)
+            source = root / "oracle.npz"
+            output = root / "oracle.pos"
+            np.savez(
+                source,
+                week=np.asarray([2323.0, 2323.0]),
+                tow=np.asarray([555720.0, 555720.2]),
+                sol_xyz=np.asarray(
+                    [[-3817680.0, 3562840.0, 3650159.0],
+                     [-3817680.1, 3562840.1, 3650159.1]]
+                ),
+                smode=np.asarray([4, 5]),
+                nb=np.asarray([8, 0]),
+                truth_xyz=np.full((2, 3), 123456789.0),
+            )
+
+            self.assertEqual(tcfgo_converter.convert(source, output), 2)
+            rows = [
+                line.split()
+                for line in output.read_text(encoding="ascii").splitlines()
+                if line and not line.startswith("%")
+            ]
+            self.assertEqual([row[8] for row in rows], ["4", "3"])
+            self.assertEqual([row[0] for row in rows], ["2323", "2323"])
+            self.assertAlmostEqual(float(rows[1][1]), 555720.2, places=3)
+
+    def test_requires_timestamps(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnsspp_tcfgo_convert_") as temp_dir:
+            root = Path(temp_dir)
+            source = root / "oracle.npz"
+            np.savez(source, sol_xyz=np.zeros((1, 3)), smode=np.asarray([4]))
+            with self.assertRaisesRegex(ValueError, "week"):
+                tcfgo_converter.convert(source, root / "oracle.pos")
+
+
+class ClasMrtklibV051RunnerTest(unittest.TestCase):
+    def test_dynamic_profile_keeps_fixture_identity_and_dynamics_flag(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnsspp_clas_v051_") as temp_dir:
+            root = Path(temp_dir)
+            for name in ("gnss_ppp", "rover.obs", "base.nav"):
+                (root / name).write_text("fixture\n", encoding="ascii")
+            ssr = root / "expanded.csv"
+            ssr.write_text("# fixture\n", encoding="ascii")
+            config = {
+                "runner": {
+                    "gnss_ppp": "gnss_ppp",
+                    "env": {"PARITY_GATE": "1"},
+                },
+                "profiles": {
+                    "dynamic": {
+                        "obs": "rover.obs",
+                        "nav": "base.nav",
+                        "ssr": "expanded.csv",
+                        "ssr_md5": clas_v051_runner.file_md5(ssr),
+                        "out": "result.pos",
+                        "env": ["PARITY_GATE"],
+                        "args": ["--kinematic", "--use-dynamics-model"],
+                    }
+                },
+            }
+            with mock.patch.object(clas_v051_runner, "ROOT_DIR", root):
+                command, env, out = clas_v051_runner.profile_command(config, "dynamic")
+
+            self.assertIn("--use-dynamics-model", command)
+            self.assertEqual(env["PARITY_GATE"], "1")
+            self.assertEqual(out, root / "result.pos")
 
 
 class IersMultisiteBenchHelpersTest(unittest.TestCase):
@@ -117,7 +438,7 @@ class IersMultisiteBenchHelpersTest(unittest.TestCase):
 
 class IersAtmTidalLoadingMultisiteBenchHelpersTest(unittest.TestCase):
     def test_smoke_example_config_references_tracked_synthetic_atl_fixture(self) -> None:
-        config_path = ROOT_DIR / "configs" / "iers_atl_multisite_smoke.example.json"
+        config_path = ROOT_DIR / "configs" / "benchmarks" / "iers_atl_multisite_smoke.example.json"
         config = json.loads(config_path.read_text(encoding="utf-8"))
 
         self.assertEqual(config["sites"][0]["name"], "TSKB")
@@ -126,7 +447,7 @@ class IersAtmTidalLoadingMultisiteBenchHelpersTest(unittest.TestCase):
         self.assertIn("S1", atl_path.read_text(encoding="ascii"))
 
     def test_vmf_example_config_references_tracked_real_atl_fixtures(self) -> None:
-        config_path = ROOT_DIR / "configs" / "iers_atl_multisite_vmf.example.json"
+        config_path = ROOT_DIR / "configs" / "benchmarks" / "iers_atl_multisite_vmf.example.json"
         config = json.loads(config_path.read_text(encoding="utf-8"))
 
         self.assertEqual([site["name"] for site in config["sites"]], ["PERT", "TSKB"])
@@ -377,6 +698,23 @@ class ClasCompactHelpersTest(unittest.TestCase):
                 "2200,345600.000,G03,0.100000,0.200000,0.300000,0.400000,atmos_network_id=1,atmos_trop_avail=3,atmos_stec_avail=3",
             )
 
+    def test_expand_compact_ssr_text_normalizes_legacy_qzss_and_iode(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_clas_compact_qzss_") as temp_dir:
+            output_csv = Path(temp_dir) / "expanded.csv"
+            clas_ppp.expand_compact_ssr_text(
+                "2200,345600.0,S,121,0.1,0.2,0.3,0.4,0.0,0,"
+                "orbit_iode=32,atmos_stec_c00_tecu:S121=12.5,"
+                "atmos_stec_satellites=G03;S121;S122",
+                output_csv,
+            )
+
+            self.assertEqual(
+                output_csv.read_text(encoding="ascii").splitlines()[1],
+                "2200,345600.000,J02,0.100000,0.200000,0.300000,0.400000,"
+                "orbit_iode=32,atmos_stec_c00_tecu:J02=12.5,"
+                "atmos_stec_satellites=G03;J02;J03",
+            )
+
     def test_parse_ppp_summary_counts_extracts_atmospheric_lines(self) -> None:
         parsed = clas_ppp._parse_ppp_summary_counts(
             "\n".join(
@@ -394,6 +732,141 @@ class ClasCompactHelpersTest(unittest.TestCase):
         self.assertEqual(parsed["ppp_atmospheric_ionosphere_corrections"], 8)
         self.assertAlmostEqual(float(parsed["ppp_atmospheric_trop_meters"]), 5.5)
         self.assertAlmostEqual(float(parsed["ppp_atmospheric_ionosphere_meters"]), 3.25)
+
+    def test_build_summary_payload_marks_clas_osr_profile(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_clas_summary_") as temp_dir:
+            temp_root = Path(temp_dir)
+            pos_path = temp_root / "solution.pos"
+            pos_path.write_text(
+                "\n".join(
+                    [
+                        "% synthetic solution",
+                        "2200 345600.000 1.0 2.0 3.0 0.0 0.0 0.0 5 8",
+                        "2200 345630.000 1.0 2.0 3.0 0.0 0.0 0.0 6 9",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+
+            common_args = {
+                "obs": Path("rover.obs"),
+                "nav": Path("nav.rnx"),
+                "sp3": None,
+                "clk": None,
+                "antex": None,
+                "receiver_antenna_type": None,
+                "ssr_rtcm": None,
+                "compact_ssr": "corrections.compact.csv",
+                "qzss_l6": None,
+                "out": pos_path,
+                "summary_json": None,
+                "enable_ar": False,
+                "ar_ratio_threshold": 3.0,
+                "kinematic": False,
+                "compact_atmos_merge_policy": "stec-coeff-carry",
+                "compact_atmos_subtype_merge_policy": "union",
+                "compact_phase_bias_merge_policy": "latest-union",
+                "compact_phase_bias_source_policy": "arrival-order",
+                "compact_code_bias_composition_policy": "direct-values",
+                "compact_code_bias_bank_policy": "pending-epoch",
+                "compact_phase_bias_composition_policy": "direct-values",
+                "compact_phase_bias_bank_policy": "pending-epoch",
+                "compact_bias_row_materialization": "overlap-only",
+                "compact_row_construction_policy": "independent",
+            }
+
+            clas_payload = clas_ppp.build_summary_payload(
+                argparse.Namespace(profile="clas", **common_args)
+            )
+            madoca_payload = clas_ppp.build_summary_payload(
+                argparse.Namespace(profile="madoca", **common_args)
+            )
+
+            self.assertTrue(clas_payload["clas_osr_filter_enabled"])
+            self.assertFalse(madoca_payload["clas_osr_filter_enabled"])
+            self.assertIsNone(clas_payload["antex"])
+            self.assertIsNone(madoca_payload["antex"])
+            self.assertIsNone(clas_payload["receiver_antenna_type"])
+            self.assertIsNone(madoca_payload["receiver_antenna_type"])
+
+    def test_main_forwards_antex_to_ppp_and_records_summary(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_clas_antex_forward_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path = temp_root / "rover.obs"
+            nav_path = temp_root / "nav.rnx"
+            compact_path = temp_root / "corrections.compact.csv"
+            antex_path = temp_root / "receiver.atx"
+            output_path = temp_root / "solution.pos"
+            summary_path = temp_root / "summary.json"
+            obs_path.write_text("synthetic obs placeholder\n", encoding="ascii")
+            nav_path.write_text("synthetic nav placeholder\n", encoding="ascii")
+            compact_path.write_text(
+                "\n".join(
+                    [
+                        "# week,tow,system,prn,dx,dy,dz,dclock_m",
+                        "2200,345600.0,G,3,0.0,0.0,0.0,0.0",
+                    ]
+                )
+                + "\n",
+                encoding="ascii",
+            )
+            antex_path.write_text("synthetic antex placeholder\n", encoding="ascii")
+            commands: list[list[str]] = []
+
+            def fake_run_command(command: list[str]) -> mock.Mock:
+                commands.append(command)
+                output_path.write_text(
+                    "% synthetic solution\n"
+                    "2200 345600.000 1.0 2.0 3.0 0.0 0.0 0.0 5 8\n",
+                    encoding="ascii",
+                )
+                return mock.Mock(stdout="PPP summary:\n  valid solutions: 1\n")
+
+            argv = [
+                "gnss_clas_ppp.py",
+                "--profile",
+                "clas",
+                "--obs",
+                str(obs_path),
+                "--nav",
+                str(nav_path),
+                "--compact-ssr",
+                str(compact_path),
+                "--antex",
+                str(antex_path),
+                "--receiver-antenna-type",
+                "TEST-ANT",
+                "--clas-atmos-selection",
+                "freshness-first",
+                "--clas-atmos-stale-after-seconds",
+                "12.5",
+                "--out",
+                str(output_path),
+                "--summary-json",
+                str(summary_path),
+            ]
+            with (
+                mock.patch.object(sys, "argv", argv),
+                mock.patch.object(clas_ppp, "resolve_gnss_command", return_value=["gnss"]),
+                mock.patch.object(clas_ppp, "run_command", side_effect=fake_run_command),
+            ):
+                self.assertEqual(clas_ppp.main(), 0)
+
+            self.assertEqual(len(commands), 1)
+            command = commands[0]
+            self.assertIn("--antex", command)
+            self.assertEqual(command[command.index("--antex") + 1], str(antex_path))
+            self.assertIn("--receiver-antenna-type", command)
+            self.assertEqual(command[command.index("--receiver-antenna-type") + 1], "TEST-ANT")
+            self.assertIn("--clas-atmos-selection", command)
+            self.assertEqual(command[command.index("--clas-atmos-selection") + 1], "freshness-first")
+            self.assertIn("--clas-atmos-stale-after-seconds", command)
+            self.assertEqual(command[command.index("--clas-atmos-stale-after-seconds") + 1], "12.5")
+            self.assertIn("--clas-osr", command)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["antex"], str(antex_path))
+            self.assertEqual(payload["receiver_antenna_type"], "TEST-ANT")
 
 
 class PPCRTKSignoffHelpersTest(unittest.TestCase):
@@ -501,6 +974,12 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
                 "demote_fixed_status_nis_per_obs": 20.0,
                 "demote_fixed_status_post_rms": 3.0,
                 "demote_fixed_status_gate_ratio": 6.0,
+                "demote_fixed_status_min_satellites": 9,
+                "demote_fixed_status_low_satellite_ceiling": 11,
+                "demote_fixed_status_low_satellite_max_ratio": 15.0,
+                "max_fixed_prefit_rms": 12.0,
+                "min_fixed_prefit_outliers": 45,
+                "fixed_prefit_reset_streak": 1,
                 "min_demote_fixed_status_baseline": 500.0,
                 "max_demote_fixed_status_baseline": 9500.0,
                 "rtk_snr_weighting": True,
@@ -599,6 +1078,17 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
             self.assertIn("3.0", command)
             self.assertIn("--demote-fixed-status-gate-ratio", command)
             self.assertIn("6.0", command)
+            self.assertIn("--demote-fixed-status-min-satellites", command)
+            self.assertIn("9", command)
+            self.assertIn("--demote-fixed-status-low-satellite-ceiling", command)
+            self.assertIn("11", command)
+            self.assertIn("--demote-fixed-status-low-satellite-max-ratio", command)
+            self.assertIn("15.0", command)
+            self.assertIn("--max-fixed-prefit-rms", command)
+            self.assertIn("12.0", command)
+            self.assertIn("--min-fixed-prefit-outliers", command)
+            self.assertIn("45", command)
+            self.assertIn("--fixed-prefit-reset-streak", command)
             self.assertIn("--min-demote-fixed-status-baseline", command)
             self.assertIn("500.0", command)
             self.assertIn("--max-demote-fixed-status-baseline", command)
@@ -763,6 +1253,116 @@ class PPCRTKSignoffHelpersTest(unittest.TestCase):
 
 
 class PPCCoverageMatrixTest(unittest.TestCase):
+    def test_default_profile_uses_guarded_deep_partial_ar(self) -> None:
+        with mock.patch.object(
+            sys,
+            "argv",
+            ["gnss_ppc_coverage_matrix.py", "--dataset-root", "data/PPC-Dataset"],
+        ):
+            args = ppc_coverage_matrix.parse_args()
+
+        self.assertEqual(args.max_subset_ar_drop_steps, 18)
+
+    def test_parse_args_loads_config_toml_profile_and_allows_cli_overrides(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppc_coverage_config_") as temp_dir:
+            temp_root = Path(temp_dir)
+            dataset_root = temp_root / "PPC-Dataset"
+            config_toml = temp_root / "coverage.toml"
+            config_toml.write_text(
+                "\n".join(
+                    [
+                        "[ppc_coverage_matrix]",
+                        f'dataset_root = "{dataset_root.as_posix()}"',
+                        'output_dir = "output/ppc_sigma_profile_runtime_demote_nis2_ratio4"',
+                        'summary_json = "output/ppc_sigma_profile_runtime_demote_nis2_ratio4/summary.json"',
+                        'markdown_output = "output/ppc_sigma_profile_runtime_demote_nis2_ratio4/table.md"',
+                        "max_epochs = -1",
+                        'preset = "low-cost"',
+                        "ratio = 2.8",
+                        "carrier_phase_sigma = 0.001",
+                        "max_postfix_rms = 0.20",
+                        "max_consec_float_reset = 10",
+                        "max_subset_ar_drop_steps = 18",
+                        "adaptive_dynamic_slip_thresholds = true",
+                        "adaptive_dynamic_slip_nonfix_count = 25",
+                        "max_pos_jump = 5.0",
+                        "max_pos_jump_min = 5.0",
+                        "max_pos_jump_rate = 25.0",
+                        "demote_fixed_status_nis_per_obs = 2.0",
+                        "demote_fixed_status_max_ratio = 4.0",
+                        "demote_fixed_status_min_satellites = 9",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with mock.patch.object(
+                sys,
+                "argv",
+                [
+                    "gnss_ppc_coverage_matrix.py",
+                    "--config-toml",
+                    str(config_toml),
+                    "--max-epochs",
+                    "20",
+                ],
+            ):
+                args = ppc_coverage_matrix.parse_args()
+
+            self.assertEqual(args.dataset_root, dataset_root)
+            self.assertEqual(
+                args.output_dir,
+                Path("output/ppc_sigma_profile_runtime_demote_nis2_ratio4"),
+            )
+            self.assertEqual(
+                args.summary_json,
+                Path("output/ppc_sigma_profile_runtime_demote_nis2_ratio4/summary.json"),
+            )
+            self.assertEqual(
+                args.markdown_output,
+                Path("output/ppc_sigma_profile_runtime_demote_nis2_ratio4/table.md"),
+            )
+            self.assertEqual(args.max_epochs, 20)
+            self.assertEqual(args.preset, "low-cost")
+            self.assertEqual(args.ratio, 2.8)
+            self.assertEqual(args.carrier_phase_sigma, 0.001)
+            self.assertEqual(args.max_postfix_rms, 0.20)
+            self.assertEqual(args.max_consec_float_reset, 10)
+            self.assertEqual(args.max_subset_ar_drop_steps, 18)
+            self.assertTrue(args.adaptive_dynamic_slip_thresholds)
+            self.assertEqual(args.adaptive_dynamic_slip_nonfix_count, 25)
+            self.assertEqual(args.max_pos_jump, 5.0)
+            self.assertEqual(args.max_pos_jump_min, 5.0)
+            self.assertEqual(args.max_pos_jump_rate, 25.0)
+            self.assertEqual(args.demote_fixed_status_nis_per_obs, 2.0)
+            self.assertEqual(args.demote_fixed_status_max_ratio, 4.0)
+            self.assertEqual(args.demote_fixed_status_min_satellites, 9)
+
+    def test_tracked_sigma_demote_profile_config_parses(self) -> None:
+        config_toml = ROOT_DIR / "configs" / "benchmarks" / "ppc_sigma_demote_nis2_ratio4.toml"
+
+        with mock.patch.object(
+            sys,
+            "argv",
+            [
+                "gnss_ppc_coverage_matrix.py",
+                "--config-toml",
+                str(config_toml),
+            ],
+        ):
+            args = ppc_coverage_matrix.parse_args()
+
+        self.assertEqual(args.dataset_root, Path("data/PPC-Dataset"))
+        self.assertEqual(args.ratio, 2.8)
+        self.assertEqual(args.carrier_phase_sigma, 0.001)
+        self.assertEqual(args.demote_fixed_status_nis_per_obs, 2.0)
+        self.assertEqual(args.demote_fixed_status_max_ratio, 4.0)
+        self.assertEqual(
+            args.summary_json,
+            Path("output/ppc_sigma_profile_runtime_demote_nis2_ratio4/summary.json"),
+        )
+
     def test_validate_inputs_rejects_invalid_epoch_limit(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppc_coverage_validate_") as temp_dir:
             dataset_root = Path(temp_dir) / "PPC-Dataset"
@@ -789,9 +1389,12 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                 preset="low-cost",
                 iono="iflc",
                 ratio=2.4,
+                elevation_mask_deg=22.5,
                 max_subset_ar_drop_steps=18,
                 max_hold_div=5.0,
                 max_pos_jump=20.0,
+                max_fixed_anchor_age=30.0,
+                max_fixed_doppler_consensus=10.0,
                 max_pos_jump_min=20.0,
                 max_pos_jump_rate=25.0,
                 max_float_spp_div=30.0,
@@ -812,6 +1415,10 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                 max_fixed_update_secondary_gate_baseline=2500.0,
                 min_fixed_update_secondary_gate_speed=7.0,
                 max_fixed_update_secondary_gate_speed=15.0,
+                max_fixed_prefit_rms=10.0,
+                min_fixed_prefit_outliers=35,
+                max_fixed_overconfidence_cov_trace=0.01,
+                fixed_prefit_reset_streak=2,
                 rtk_snr_weighting=True,
                 rtk_snr_reference_dbhz=44.0,
                 rtk_snr_max_variance_scale=16.0,
@@ -867,6 +1474,8 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertIn("--iono", command)
             self.assertIn("iflc", command)
             self.assertIn("--ratio", command)
+            self.assertIn("--elevation-mask-deg", command)
+            self.assertIn("22.5", command)
             self.assertIn("2.4", command)
             self.assertIn("--max-subset-ar-drop-steps", command)
             self.assertIn("18", command)
@@ -874,6 +1483,10 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertIn("5.0", command)
             self.assertIn("--max-pos-jump", command)
             self.assertIn("20.0", command)
+            self.assertIn("--max-fixed-anchor-age", command)
+            self.assertIn("30.0", command)
+            self.assertIn("--max-fixed-doppler-consensus", command)
+            self.assertIn("10.0", command)
             self.assertIn("--max-pos-jump-min", command)
             self.assertIn("20.0", command)
             self.assertIn("--max-pos-jump-rate", command)
@@ -890,6 +1503,11 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertIn("8.0", command)
             self.assertIn("--max-update-nis-per-obs", command)
             self.assertIn("12.0", command)
+            self.assertIn("--max-fixed-prefit-rms", command)
+            self.assertIn("--min-fixed-prefit-outliers", command)
+            self.assertIn("--max-fixed-overconfidence-cov-trace", command)
+            self.assertIn("0.01", command)
+            self.assertIn("--fixed-prefit-reset-streak", command)
             self.assertIn("--max-fixed-update-nis-per-obs", command)
             self.assertIn("10.0", command)
             self.assertIn("--max-fixed-update-post-rms", command)
@@ -1025,6 +1643,12 @@ class PPCCoverageMatrixTest(unittest.TestCase):
                             "ppc_official_score_pct": 21.0,
                             "ppc_official_score_distance_m": 210.0,
                             "ppc_official_total_distance_m": 1000.0,
+                            "ppc_score_3d_50cm_ref_pct": 0.0,
+                            "p95_h_m": 31.13,
+                            "max_h_m": 52.0,
+                            "solver_wall_time_s": 0.5,
+                            "realtime_factor": 20.0,
+                            "effective_epoch_rate_hz": 100.0,
                         },
                         "delta_vs_rtklib": {
                             "positioning_rate_pct": 19.9,
@@ -1056,6 +1680,8 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             payload = ppc_coverage_matrix.build_matrix_payload(args, [run])
             markdown = ppc_coverage_matrix.render_markdown(payload)
 
+            self.assertEqual(payload["summary_schema"], ppc_coverage_matrix.SUMMARY_SCHEMA)
+            ppc_coverage_matrix.validate_matrix_payload_schema(payload)
             self.assertEqual(payload["aggregates"]["avg_positioning_delta_pct"], 19.9)
             self.assertEqual(payload["aggregates"]["avg_official_score_delta_pct"], 21.0)
             self.assertEqual(payload["aggregates"]["weighted_official_score_pct"], 42.0)
@@ -1141,6 +1767,12 @@ class PPCCoverageMatrixTest(unittest.TestCase):
             self.assertIn("solver_wall_time_s", runtime_message)
             self.assertIn("realtime_factor", runtime_message)
             self.assertIn("effective_epoch_rate_hz", runtime_message)
+
+            invalid_payload = json.loads(json.dumps(payload))
+            del invalid_payload["runs"][0]["metrics"]["p95_h_m"]
+            with self.assertRaises(SystemExit) as schema_context:
+                ppc_coverage_matrix.validate_matrix_payload_schema(invalid_payload)
+            self.assertIn("metrics: missing `p95_h_m`", str(schema_context.exception))
 
 
 class PPCResidualResetSweepAnalysisTest(unittest.TestCase):
@@ -1893,6 +2525,29 @@ class PPCDualProfileSelectorTest(unittest.TestCase):
             )
             self.assertEqual(metrics["ppc_official_score_pct"], 100.0)
 
+    def test_common_metrics_separate_correct_and_wrong_fixed_epochs(self) -> None:
+        reference = [self.reference_epoch(index) for index in range(2)]
+        solution = [
+            self.solution_epoch(0, 0.1, 4, None),
+            self.solution_epoch(1, 11.0, 4, None),
+        ]
+
+        metrics = ppc_metrics.summarize_solution_epochs(
+            reference,
+            solution,
+            fixed_status=4,
+            label="fixed-quality-audit",
+            match_tolerance_s=0.25,
+            solver_wall_time_s=None,
+        )
+
+        self.assertEqual(metrics["fixed_epochs"], 2)
+        self.assertEqual(metrics["correct_fix_epochs"], 1)
+        self.assertEqual(metrics["wrong_fix_epochs"], 1)
+        self.assertEqual(metrics["wrong_fix_rate_pct"], 50.0)
+        self.assertEqual(metrics["correct_fix_matched_pct"], 50.0)
+        self.assertEqual(metrics["correct_fix_ref_pct"], 50.0)
+
 
 class PPCDualProfileSelectorMatrixTest(unittest.TestCase):
     @staticmethod
@@ -2567,6 +3222,1551 @@ class PPCIMUDropoutBridgeMatrixTest(unittest.TestCase):
 
 
 class PPCMetricsTest(unittest.TestCase):
+    def test_fgo_parity_csv_uses_common_ppc_epoch_metrics(self) -> None:
+        origin = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        reference = [
+            comparison.ReferenceEpoch(2300, 1.0, 35.0, 139.0, 50.0, origin),
+            comparison.ReferenceEpoch(2300, 2.0, 35.0, 139.0, 50.0, origin),
+        ]
+        with tempfile.TemporaryDirectory(prefix="fgo_ppc_csv_") as temp_dir:
+            csv_path = Path(temp_dir) / "fgo.csv"
+            csv_path.write_text(
+                "tow,status,e_pos_m,n_pos_m,u_err_m,nsat,ratio\n"
+                "1.000,FIXED,0.000,0.000,0.100,12,4.5\n"
+                "2.000,FLOAT,0.300,0.000,0.000,10,0.0\n",
+                encoding="ascii",
+            )
+
+            epochs = ppc_metrics.load_fgo_parity_csv(csv_path, reference)
+            payload = ppc_metrics.summarize_solution_epochs(
+                reference,
+                epochs,
+                fixed_status=4,
+                label="FGO test",
+                match_tolerance_s=0.11,
+                solver_wall_time_s=None,
+            )
+
+        self.assertEqual([epoch.status for epoch in epochs], [4, 3])
+        self.assertEqual(epochs[0].num_satellites, 12)
+        self.assertAlmostEqual(epochs[0].ratio, 4.5)
+        self.assertEqual(payload["fix_rate_pct"], 50.0)
+        self.assertEqual(payload["wrong_fix_epochs"], 0)
+        self.assertEqual(payload["ppc_score_3d_50cm_ref_pct"], 100.0)
+
+    def test_fgo_parity_csv_prefers_self_contained_up_position(self) -> None:
+        origin = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        reference = [
+            comparison.ReferenceEpoch(2300, 1.0, 35.0, 139.0, 50.0, origin),
+        ]
+        with tempfile.TemporaryDirectory(prefix="fgo_ppc_up_position_") as temp_dir:
+            csv_path = Path(temp_dir) / "fgo.csv"
+            csv_path.write_text(
+                "tow,status,e_pos_m,n_pos_m,u_pos_m,u_err_m,nsat,ratio\n"
+                "1.000,FLOAT,0.000,0.000,2.000,99.000,10,0.0\n",
+                encoding="ascii",
+            )
+
+            epochs = ppc_metrics.load_fgo_parity_csv(csv_path, reference)
+            error_enu = comparison.ecef_to_enu(
+                epochs[0].ecef - origin,
+                reference[0].lat_deg,
+                reference[0].lon_deg,
+            )
+
+        self.assertAlmostEqual(error_enu[2], 2.0, places=5)
+
+    def test_fgo_parity_csv_prefers_absolute_ecef_position(self) -> None:
+        origin = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        expected = origin + np.asarray([1.0, 2.0, 3.0])
+        reference = [
+            comparison.ReferenceEpoch(2300, 1.0, 35.0, 139.0, 50.0, origin),
+        ]
+        with tempfile.TemporaryDirectory(prefix="fgo_ppc_ecef_position_") as temp_dir:
+            csv_path = Path(temp_dir) / "fgo.csv"
+            csv_path.write_text(
+                "tow,status,e_pos_m,n_pos_m,u_pos_m,u_err_m,"
+                "x_ecef_m,y_ecef_m,z_ecef_m,nsat,ratio\n"
+                f"1.000,FLOAT,99,99,99,99,{expected[0]},{expected[1]},"
+                f"{expected[2]},10,0.0\n",
+                encoding="ascii",
+            )
+
+            epochs = ppc_metrics.load_fgo_parity_csv(csv_path, reference)
+
+        np.testing.assert_allclose(epochs[0].ecef, expected, atol=1e-6)
+
+
+class FixedAnchorBridgeTest(unittest.TestCase):
+    @staticmethod
+    def epoch(
+        tow: float,
+        x_m: float,
+        status: int,
+        ratio: float = 0.0,
+    ) -> comparison.SolutionEpoch:
+        return comparison.SolutionEpoch(
+            week=2300,
+            tow=tow,
+            lat_deg=0.0,
+            lon_deg=0.0,
+            height_m=0.0,
+            ecef=np.asarray([x_m, 0.0, 0.0]),
+            status=status,
+            num_satellites=12,
+            ratio=ratio,
+            rtk_update_post_suppression_residual_rms_m=0.2,
+            rtk_update_normalized_innovation_squared_per_observation=0.5,
+        )
+
+    def test_replaces_only_nonfixed_epochs_between_trusted_fixed_anchors(self) -> None:
+        epochs = [
+            self.epoch(0.0, 0.0, 4, 10.0),
+            self.epoch(1.0, 50.0, 3),
+            self.epoch(2.0, 20.0, 4, 10.0),
+        ]
+        args = argparse.Namespace(
+            nominal_interval_s=1.0,
+            max_anchor_gap_s=3.0,
+            anchor_min_ratio=2.0,
+            anchor_min_satellites=0,
+            anchor_max_post_rms_m=0.8,
+            anchor_max_nis_per_observation=5.0,
+            replace_nonfixed=True,
+            interpolation="linear",
+        )
+
+        bridged, summary = fixed_anchor_bridge.bridge_epochs(epochs, args)
+
+        self.assertEqual([epoch.status for epoch in bridged], [4, 3, 4])
+        np.testing.assert_allclose(bridged[1].ecef, [10.0, 0.0, 0.0])
+        np.testing.assert_allclose(bridged[0].ecef, epochs[0].ecef)
+        np.testing.assert_allclose(bridged[2].ecef, epochs[2].ecef)
+        self.assertEqual(summary["replaced_nonfixed_epochs"], 1)
+        self.assertEqual(summary["filled_missing_epochs"], 0)
+        self.assertFalse(summary["reference_truth_used"])
+
+    def test_gap_fill_does_not_replace_existing_nonfixed_without_opt_in(self) -> None:
+        epochs = [
+            self.epoch(0.0, 0.0, 4, 10.0),
+            self.epoch(1.0, 50.0, 3),
+            self.epoch(3.0, 30.0, 4, 10.0),
+        ]
+        args = argparse.Namespace(
+            nominal_interval_s=1.0,
+            max_anchor_gap_s=3.0,
+            anchor_min_ratio=2.0,
+            anchor_min_satellites=0,
+            anchor_max_post_rms_m=0.8,
+            anchor_max_nis_per_observation=5.0,
+            replace_nonfixed=False,
+            interpolation="linear",
+        )
+
+        bridged, summary = fixed_anchor_bridge.bridge_epochs(epochs, args)
+
+        self.assertEqual([epoch.tow for epoch in bridged], [0.0, 1.0, 2.0, 3.0])
+        np.testing.assert_allclose(bridged[1].ecef, epochs[1].ecef)
+        np.testing.assert_allclose(bridged[2].ecef, [20.0, 0.0, 0.0])
+        self.assertEqual(summary["replaced_nonfixed_epochs"], 0)
+        self.assertEqual(summary["filled_missing_epochs"], 1)
+
+    def test_fill_between_all_positions_bridges_short_float_dropout(self) -> None:
+        epochs = [
+            self.epoch(0.0, 0.0, 3),
+            self.epoch(2.0, 20.0, 3),
+        ]
+        args = argparse.Namespace(
+            nominal_interval_s=1.0,
+            max_anchor_gap_s=2.0,
+            anchor_min_ratio=2.0,
+            anchor_min_satellites=0,
+            anchor_max_post_rms_m=0.8,
+            anchor_max_nis_per_observation=5.0,
+            replace_nonfixed=False,
+            fill_between_all_positions=True,
+            interpolation="linear",
+        )
+
+        bridged, summary = fixed_anchor_bridge.bridge_epochs(epochs, args)
+
+        self.assertEqual([epoch.tow for epoch in bridged], [0.0, 1.0, 2.0])
+        np.testing.assert_allclose(bridged[1].ecef, [10.0, 0.0, 0.0])
+        self.assertEqual(bridged[1].status, 3)
+        self.assertEqual(summary["filled_missing_epochs"], 1)
+        self.assertTrue(summary["fill_between_all_positions"])
+
+    def test_no_fill_missing_preserves_epoch_grid_while_replacing_float(self) -> None:
+        epochs = [
+            self.epoch(0.0, 0.0, 4, 10.0),
+            self.epoch(1.0, 50.0, 3),
+            self.epoch(3.0, 30.0, 4, 10.0),
+        ]
+        args = argparse.Namespace(
+            nominal_interval_s=1.0,
+            max_anchor_gap_s=3.0,
+            anchor_min_ratio=2.0,
+            anchor_min_satellites=0,
+            anchor_max_post_rms_m=0.8,
+            anchor_max_nis_per_observation=5.0,
+            replace_nonfixed=True,
+            no_fill_missing=True,
+            interpolation="linear",
+        )
+
+        bridged, summary = fixed_anchor_bridge.bridge_epochs(epochs, args)
+
+        self.assertEqual([epoch.tow for epoch in bridged], [0.0, 1.0, 3.0])
+        np.testing.assert_allclose(bridged[1].ecef, [10.0, 0.0, 0.0])
+        self.assertEqual(summary["replaced_nonfixed_epochs"], 1)
+        self.assertEqual(summary["filled_missing_epochs"], 0)
+        self.assertFalse(summary["fill_missing"])
+
+    def test_preserve_up_component_removes_local_vertical_correction(self) -> None:
+        existing = self.epoch(1.0, 6378137.0, 3)
+        candidate = self.epoch(1.0, 6378147.0, 3)
+
+        horizontal = fixed_anchor_bridge.preserve_up_component(existing, candidate)
+
+        np.testing.assert_allclose(horizontal.ecef, existing.ecef, atol=1e-6)
+
+    def test_preserve_horizontal_component_applies_only_local_up_correction(self) -> None:
+        existing = dataclasses.replace(
+            self.epoch(1.0, 6378137.0, 3),
+            ecef=np.asarray([6378137.0, 5.0, 0.0]),
+        )
+        candidate = dataclasses.replace(
+            self.epoch(1.0, 6378147.0, 3),
+            ecef=np.asarray([6378147.0, 10.0, 0.0]),
+        )
+
+        vertical = fixed_anchor_bridge.preserve_horizontal_component(existing, candidate)
+
+        np.testing.assert_allclose(vertical.ecef, [6378147.0, 5.0, 0.0], atol=1e-5)
+
+    def test_replacement_displacement_gate_preserves_far_float(self) -> None:
+        epochs = [
+            self.epoch(0.0, 0.0, 4, 10.0),
+            self.epoch(1.0, 50.0, 3),
+            self.epoch(2.0, 20.0, 4, 10.0),
+        ]
+        args = argparse.Namespace(
+            nominal_interval_s=1.0,
+            max_anchor_gap_s=3.0,
+            anchor_min_ratio=2.0,
+            anchor_min_satellites=0,
+            anchor_max_post_rms_m=0.8,
+            anchor_max_nis_per_observation=5.0,
+            replace_nonfixed=True,
+            no_fill_missing=True,
+            preserve_existing_up=False,
+            max_replacement_displacement_m=5.0,
+            interpolation="linear",
+        )
+
+        bridged, summary = fixed_anchor_bridge.bridge_epochs(epochs, args)
+
+        np.testing.assert_allclose(bridged[1].ecef, epochs[1].ecef)
+        self.assertEqual(summary["replaced_nonfixed_epochs"], 0)
+        self.assertEqual(summary["displacement_rejected_epochs"], 1)
+
+    def test_hermite_outer_uses_neighboring_fixed_anchor_velocities(self) -> None:
+        epochs = [
+            self.epoch(-1.0, -10.0, 4, 10.0),
+            self.epoch(0.0, 0.0, 4, 10.0),
+            self.epoch(1.0, 50.0, 3),
+            self.epoch(2.0, 20.0, 4, 10.0),
+            self.epoch(3.0, 40.0, 4, 10.0),
+        ]
+        args = argparse.Namespace(
+            nominal_interval_s=1.0,
+            max_anchor_gap_s=3.0,
+            anchor_min_ratio=2.0,
+            anchor_min_satellites=0,
+            anchor_max_post_rms_m=0.8,
+            anchor_max_nis_per_observation=5.0,
+            replace_nonfixed=True,
+            interpolation="hermite-outer",
+        )
+
+        bridged, summary = fixed_anchor_bridge.bridge_epochs(epochs, args)
+        midpoint = next(epoch for epoch in bridged if epoch.tow == 1.0)
+
+        np.testing.assert_allclose(midpoint.ecef, [7.5, 0.0, 0.0])
+        self.assertEqual(midpoint.status, 3)
+        self.assertEqual(summary["interpolation"], "hermite-outer")
+
+    def test_hermite_horizontal_removes_up_component_from_hermite_delta(self) -> None:
+        left = self.epoch(0.0, 6378137.0, 4, 10.0)
+        right = self.epoch(2.0, 6378157.0, 4, 10.0)
+
+        full = fixed_anchor_bridge.interpolated_epoch(
+            left,
+            right,
+            1.0,
+            np.asarray([0.0, 0.0, 0.0]),
+            np.asarray([20.0, 0.0, 0.0]),
+        )
+        horizontal = fixed_anchor_bridge.interpolated_epoch(
+            left,
+            right,
+            1.0,
+            np.asarray([0.0, 0.0, 0.0]),
+            np.asarray([20.0, 0.0, 0.0]),
+            hermite_horizontal_only=True,
+        )
+
+        self.assertNotAlmostEqual(float(full.ecef[0]), 6378147.0)
+        self.assertAlmostEqual(float(horizontal.ecef[0]), 6378147.0, places=6)
+
+
+class FloatHorizontalSmootherTest(unittest.TestCase):
+    def test_preserves_fixed_status_and_up_while_smoothing_float_outlier(self) -> None:
+        origin = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        seed = comparison.SolutionEpoch(
+            week=2300,
+            tow=0.0,
+            lat_deg=35.0,
+            lon_deg=139.0,
+            height_m=50.0,
+            ecef=origin,
+            status=4,
+            num_satellites=12,
+            ratio=10.0,
+        )
+        rotation = float_horizontal_smoother.ecef_to_enu_rotation(seed)
+        epochs = []
+        for index in range(7):
+            enu = np.asarray([float(index), 4.0 if index == 3 else 0.0, 0.0])
+            ecef = origin + rotation.transpose() @ enu
+            lat, lon, height = ppc_metrics.llh_from_ecef(*ecef)
+            epochs.append(
+                comparison.SolutionEpoch(
+                    week=2300,
+                    tow=float(index),
+                    lat_deg=lat,
+                    lon_deg=lon,
+                    height_m=height,
+                    ecef=ecef,
+                    status=4 if index in (0, 6) else 3,
+                    num_satellites=12,
+                    ratio=10.0 if index in (0, 6) else 1.0,
+                )
+            )
+
+        smoothed, summary = float_horizontal_smoother.smooth_float_horizontal(
+            epochs, window_epochs=5, degree=2, max_displacement_m=5.0
+        )
+
+        np.testing.assert_allclose(smoothed[0].ecef, epochs[0].ecef)
+        np.testing.assert_allclose(smoothed[-1].ecef, epochs[-1].ecef)
+        self.assertEqual([epoch.status for epoch in smoothed], [4, 3, 3, 3, 3, 3, 4])
+        correction_enu = rotation @ (smoothed[3].ecef - epochs[3].ecef)
+        self.assertLess(abs(float(correction_enu[2])), 1e-8)
+        self.assertGreater(abs(float(correction_enu[1])), 1.0)
+        self.assertEqual(summary["preserved_fixed_epochs"], 2)
+        self.assertFalse(summary["reference_truth_used"])
+
+
+class VelocityFixedAnchorBridgeTest(unittest.TestCase):
+    def test_overlay_applies_only_candidate_horizontal_delta(self) -> None:
+        origin_ecef = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        base = comparison.SolutionEpoch(
+            2300, 0.0, 35.0, 139.0, 50.0, origin_ecef, 4, 12, ratio=10.0
+        )
+        rotation = velocity_fixed_anchor_bridge.ecef_to_enu_rotation(base)
+
+        def moved(enu: list[float], status: int) -> comparison.SolutionEpoch:
+            ecef = origin_ecef + rotation.transpose() @ np.asarray(enu)
+            lat, lon, height = ppc_metrics.llh_from_ecef(*ecef)
+            return dataclasses.replace(
+                base,
+                ecef=ecef,
+                lat_deg=lat,
+                lon_deg=lon,
+                height_m=height,
+                status=status,
+            )
+
+        combined, replaced = velocity_fixed_anchor_bridge.overlay_changed_horizontal(
+            [base], [moved([1.0, 0.0, 0.0], 3)], [moved([0.0, 0.0, 2.0], 3)]
+        )
+
+        combined_enu = rotation @ (combined[0].ecef - origin_ecef)
+        np.testing.assert_allclose(combined_enu, [1.0, 0.0, 2.0], atol=1e-5)
+        self.assertEqual(combined[0].status, 3)
+        self.assertEqual(replaced, 1)
+
+    def test_velocity_bridge_can_require_large_candidate_correction(self) -> None:
+        origin_ecef = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        seed = comparison.SolutionEpoch(
+            2300, 0.0, 35.0, 139.0, 50.0, origin_ecef, 4, 12, ratio=10.0
+        )
+        rotation = velocity_fixed_anchor_bridge.ecef_to_enu_rotation(seed)
+        epochs = []
+        for index, north_m in enumerate((0.0, 2.0, 0.0)):
+            ecef = origin_ecef + rotation.transpose() @ np.asarray(
+                [float(index), north_m, 0.0]
+            )
+            lat, lon, height = ppc_metrics.llh_from_ecef(*ecef)
+            epochs.append(
+                comparison.SolutionEpoch(
+                    2300,
+                    float(index),
+                    lat,
+                    lon,
+                    height,
+                    ecef,
+                    4 if index in (0, 2) else 3,
+                    12,
+                    ratio=10.0 if index in (0, 2) else 0.0,
+                )
+            )
+
+        bridged, summary = velocity_fixed_anchor_bridge.bridge_velocity_spans(
+            epochs,
+            np.arange(3, dtype=float),
+            np.tile(np.asarray([1.0, 0.0]), (3, 1)),
+            blend=1.0,
+            max_span_s=3.0,
+            max_candidate_correction_m=3.0,
+            max_velocity_sample_gap_s=1.1,
+            min_candidate_correction_m=2.5,
+        )
+
+        np.testing.assert_allclose(bridged[1].ecef, epochs[1].ecef)
+        self.assertEqual(summary["accepted_spans"], 0)
+        self.assertEqual(summary["minimum_correction_rejected_spans"], 1)
+
+    def test_velocity_gap_fill_emits_float_regular_grid_without_truth(self) -> None:
+        origin_ecef = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        seed = comparison.SolutionEpoch(
+            2300, 0.0, 35.0, 139.0, 50.0, origin_ecef, 4, 12, ratio=10.0
+        )
+        rotation = velocity_fixed_anchor_bridge.ecef_to_enu_rotation(seed)
+        end_ecef = origin_ecef + rotation.transpose() @ np.asarray([4.0, 0.0, 0.0])
+        end_lat, end_lon, end_height = ppc_metrics.llh_from_ecef(*end_ecef)
+        epochs = [
+            seed,
+            comparison.SolutionEpoch(
+                2300,
+                4.0,
+                end_lat,
+                end_lon,
+                end_height,
+                end_ecef,
+                4,
+                10,
+                ratio=8.0,
+            ),
+        ]
+
+        filled, summary = velocity_fixed_anchor_bridge.fill_missing_velocity_epochs(
+            epochs,
+            np.arange(5, dtype=float),
+            np.tile(np.asarray([1.0, 0.0]), (5, 1)),
+            epoch_interval_s=1.0,
+            max_fill_span_s=5.0,
+            max_candidate_correction_m=1.0,
+            max_velocity_sample_gap_s=1.1,
+        )
+
+        self.assertEqual([epoch.tow for epoch in filled], [0.0, 1.0, 2.0, 3.0, 4.0])
+        self.assertEqual([epoch.status for epoch in filled], [4, 3, 3, 3, 4])
+        self.assertEqual(summary["filled_missing_epochs"], 3)
+        self.assertEqual(summary["accepted_fill_spans"], 1)
+        for index in (1, 2, 3):
+            enu = rotation @ (filled[index].ecef - origin_ecef)
+            np.testing.assert_allclose(enu, [float(index), 0.0, 0.0], atol=1e-6)
+            self.assertEqual(filled[index].ratio, 0.0)
+            self.assertIsNone(filled[index].rtk_iterations)
+
+    def test_velocity_bridge_preserves_fixed_up_and_status(self) -> None:
+        origin_ecef = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        seed = comparison.SolutionEpoch(
+            2300, 0.0, 35.0, 139.0, 50.0, origin_ecef, 4, 12, ratio=10.0
+        )
+        rotation = velocity_fixed_anchor_bridge.ecef_to_enu_rotation(seed)
+        epochs = []
+        for index, north_m in enumerate((0.0, 2.0, 3.0, 2.0, 0.0)):
+            ecef = origin_ecef + rotation.transpose() @ np.asarray(
+                [float(index), north_m, 0.0]
+            )
+            lat, lon, height = ppc_metrics.llh_from_ecef(*ecef)
+            epochs.append(
+                comparison.SolutionEpoch(
+                    2300,
+                    float(index),
+                    lat,
+                    lon,
+                    height,
+                    ecef,
+                    4 if index in (0, 4) else 3,
+                    12,
+                    ratio=10.0 if index in (0, 4) else 0.0,
+                )
+            )
+
+        bridged, summary = velocity_fixed_anchor_bridge.bridge_velocity_spans(
+            epochs,
+            np.arange(5, dtype=float),
+            np.tile(np.asarray([1.0, 0.0]), (5, 1)),
+            blend=1.0,
+            max_span_s=5.0,
+            max_candidate_correction_m=4.0,
+            max_velocity_sample_gap_s=1.1,
+        )
+
+        self.assertEqual([epoch.status for epoch in bridged], [4, 3, 3, 3, 4])
+        np.testing.assert_allclose(bridged[0].ecef, epochs[0].ecef)
+        np.testing.assert_allclose(bridged[-1].ecef, epochs[-1].ecef)
+        for index in (1, 2, 3):
+            lat = np.radians(epochs[index].lat_deg)
+            lon = np.radians(epochs[index].lon_deg)
+            local_up = np.asarray(
+                [np.cos(lat) * np.cos(lon), np.cos(lat) * np.sin(lon), np.sin(lat)]
+            )
+            correction_ecef = bridged[index].ecef - epochs[index].ecef
+            self.assertAlmostEqual(float(np.dot(correction_ecef, local_up)), 0.0, places=7)
+            corrected_enu = rotation @ (bridged[index].ecef - origin_ecef)
+            self.assertAlmostEqual(float(corrected_enu[1]), 0.0, places=6)
+        self.assertEqual(summary["accepted_spans"], 1)
+        self.assertEqual(summary["replaced_float_epochs"], 3)
+        self.assertFalse(summary["reference_truth_used"])
+
+
+class CandidateQualityPositionSelectorTest(unittest.TestCase):
+    def test_can_gate_on_baseline_wrong_basin_telemetry_and_replace_status(self) -> None:
+        origin = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        candidate_ecef = origin + np.asarray([1.0, 0.0, 0.0])
+        lat, lon, height = ppc_metrics.llh_from_ecef(*candidate_ecef)
+        baseline = [
+            comparison.SolutionEpoch(
+                2300,
+                0.0,
+                35.0,
+                139.0,
+                50.0,
+                origin,
+                4,
+                20,
+                ratio=30.0,
+                rtk_update_suppressed_outliers=45,
+                rtk_update_prefit_residual_rms_m=8.1,
+            )
+        ]
+        candidate = [
+            comparison.SolutionEpoch(
+                2300, 0.0, lat, lon, height, candidate_ecef, 3, 0, ratio=0.0
+            )
+        ]
+        args = argparse.Namespace(
+            match_tolerance_s=0.11,
+            candidate_status=3,
+            candidate_min_ratio=0.0,
+            candidate_min_satellites=0,
+            candidate_max_post_rms_m=0.0,
+            candidate_max_nis_per_observation=0.0,
+            baseline_min_prefit_rms_m=8.0,
+            baseline_min_outliers=45,
+            min_position_separation_m=0.5,
+            max_position_separation_m=0.0,
+            replace_status=True,
+        )
+
+        selected, summary = candidate_quality_selector.select_candidate_positions(
+            baseline, candidate, args
+        )
+
+        np.testing.assert_allclose(selected[0].ecef, candidate_ecef)
+        self.assertEqual(selected[0].status, 3)
+
+    def test_can_select_low_confidence_consensus_escape_and_force_float(self) -> None:
+        origin = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        candidate_ecef = origin + np.asarray([6.0, 0.0, 0.0])
+        lat, lon, height = ppc_metrics.llh_from_ecef(*candidate_ecef)
+        baseline = comparison.SolutionEpoch(
+            2300, 100.0, 35.0, 139.0, 50.0, origin, 4, 19, ratio=6.0
+        )
+        candidate = comparison.SolutionEpoch(
+            2300, 100.0, lat, lon, height, candidate_ecef, 4, 19, ratio=2.0
+        )
+        args = argparse.Namespace(
+            match_tolerance_s=0.11,
+            candidate_status=4,
+            candidate_min_ratio=2.0,
+            candidate_max_ratio=2.0,
+            candidate_min_satellites=12,
+            candidate_max_post_rms_m=0.0,
+            candidate_max_nis_per_observation=0.0,
+            baseline_min_prefit_rms_m=0.0,
+            baseline_min_outliers=0,
+            baseline_min_satellites=19,
+            replace_status=False,
+            replacement_status=3,
+            min_position_separation_m=5.0,
+            max_position_separation_m=0.0,
+        )
+
+        selected, summary = candidate_quality_selector.select_candidate_positions(
+            [baseline], [candidate], args
+        )
+
+        self.assertEqual(summary["selected_candidate_positions"], 1)
+        self.assertEqual(summary["candidate_max_ratio"], 2.0)
+        self.assertEqual(summary["baseline_min_satellites"], 19)
+        self.assertEqual(summary["replacement_status"], 3)
+        self.assertEqual(selected[0].status, 3)
+        np.testing.assert_allclose(selected[0].ecef, candidate.ecef)
+        self.assertFalse(summary["preserved_baseline_status"])
+        self.assertTrue(summary["preserved_baseline_telemetry"])
+
+    def test_selects_position_only_when_all_quality_gates_pass(self) -> None:
+        origin = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        seed = comparison.SolutionEpoch(2300, 0.0, 35.0, 139.0, 50.0, origin, 3, 10)
+        rotation = velocity_fixed_anchor_bridge.ecef_to_enu_rotation(seed)
+
+        def epoch(
+            index: int,
+            east_m: float,
+            status: int,
+            ratio: float,
+        ) -> comparison.SolutionEpoch:
+            ecef = origin + rotation.transpose() @ np.asarray([east_m, 0.0, 0.0])
+            lat, lon, height = ppc_metrics.llh_from_ecef(*ecef)
+            return comparison.SolutionEpoch(
+                week=2300,
+                tow=float(index),
+                lat_deg=lat,
+                lon_deg=lon,
+                height_m=height,
+                ecef=ecef,
+                status=status,
+                num_satellites=12,
+                ratio=ratio,
+                rtk_update_post_suppression_residual_rms_m=0.5,
+                rtk_update_normalized_innovation_squared_per_observation=1.0,
+            )
+
+        baseline = [epoch(0, 0.0, 3, 0.0), epoch(1, 1.0, 4, 10.0), epoch(2, 2.0, 3, 0.0)]
+        candidate = [epoch(0, 1.0, 4, 3.0), epoch(1, 2.0, 4, 1.0), epoch(2, 2.1, 4, 3.0)]
+        args = argparse.Namespace(
+            match_tolerance_s=0.11,
+            candidate_status=4,
+            candidate_min_ratio=2.0,
+            candidate_min_satellites=12,
+            candidate_max_post_rms_m=1.0,
+            candidate_max_nis_per_observation=5.0,
+            min_position_separation_m=0.5,
+            max_position_separation_m=0.0,
+        )
+
+        selected, summary = candidate_quality_selector.select_candidate_positions(
+            baseline, candidate, args
+        )
+
+        np.testing.assert_allclose(selected[0].ecef, candidate[0].ecef)
+        np.testing.assert_allclose(selected[1].ecef, baseline[1].ecef)
+        np.testing.assert_allclose(selected[2].ecef, baseline[2].ecef)
+        self.assertEqual([epoch.status for epoch in selected], [3, 4, 3])
+        self.assertEqual(summary["selected_candidate_positions"], 1)
+        self.assertFalse(summary["reference_truth_used"])
+
+
+class FgoPositionConsensusTest(unittest.TestCase):
+    def test_two_fixed_shadows_replace_position_without_changing_status(self) -> None:
+        origin = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        primary_ecef = origin + np.asarray([1.0, 0.0, 0.0])
+        lat, lon, height = ppc_metrics.llh_from_ecef(*primary_ecef)
+        primary = [
+            comparison.SolutionEpoch(
+                week=2300,
+                tow=1.0,
+                lat_deg=lat,
+                lon_deg=lon,
+                height_m=height,
+                ecef=primary_ecef,
+                status=4,
+                num_satellites=12,
+                ratio=25.0,
+            )
+        ]
+        tracks = [
+            {
+                1.0: fgo_position_consensus.TrackEpoch(
+                    sample=ppc_integrity_consensus.ShadowEpoch(
+                        tow=1.0,
+                        ecef=origin + np.asarray([offset, 0.0, 0.0]),
+                        status="FIXED",
+                        gdop=2.0,
+                        ddpr_rms_m=1.0,
+                        nsat=10,
+                    ),
+                    age_epochs=10,
+                )
+            }
+            for offset in (0.0, 0.1)
+        ]
+        args = argparse.Namespace(
+            min_independent_shadows=2,
+            shadow_agreement_aperture_m=0.25,
+            primary_separation_min_m=0.5,
+            fresh_shadow_max_age_epochs=100,
+            candidate_max_prediction_error_m=0.0,
+            shadow_max_gdop=0.0,
+            shadow_max_ddpr_rms_m=0.0,
+            shadow_min_satellites=0,
+        )
+
+        output, summary, ledger = fgo_position_consensus.apply_position_consensus(
+            primary, tracks, args
+        )
+
+        np.testing.assert_allclose(output[0].ecef, origin + np.asarray([0.05, 0.0, 0.0]))
+        self.assertEqual(output[0].status, 4)
+        self.assertEqual(output[0].ratio, 25.0)
+        self.assertEqual(summary["positions_replaced"], 1)
+        self.assertEqual(summary["statuses_changed"], 0)
+        self.assertFalse(summary["runtime_truth_used"])
+        self.assertEqual(len(ledger), 1)
+
+        args.fresh_shadow_max_age_epochs = 5
+        stale_output, stale_summary, _ = (
+            fgo_position_consensus.apply_position_consensus(primary, tracks, args)
+        )
+        np.testing.assert_array_equal(stale_output[0].ecef, primary_ecef)
+        self.assertEqual(stale_summary["positions_replaced"], 0)
+
+    def test_equal_size_disagreeing_shadow_clusters_are_ambiguous(self) -> None:
+        samples = [
+            (
+                index,
+                fgo_position_consensus.TrackEpoch(
+                    sample=ppc_integrity_consensus.ShadowEpoch(
+                        tow=1.0,
+                        ecef=np.asarray([offset, 0.0, 0.0]),
+                        status="FIXED",
+                        gdop=2.0,
+                        ddpr_rms_m=1.0,
+                        nsat=10,
+                    ),
+                    age_epochs=10,
+                ),
+            )
+            for index, offset in enumerate((0.0, 0.1, 10.0, 10.1))
+        ]
+
+        cluster, _, ambiguous = fgo_position_consensus.select_unique_consensus(
+            samples, 2, 0.25
+        )
+
+        self.assertIsNone(cluster)
+        self.assertTrue(ambiguous)
+
+    def test_prediction_gate_rejects_a_consensus_position_jump(self) -> None:
+        origin = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        lat, lon, height = ppc_metrics.llh_from_ecef(*origin)
+        primary = [
+            comparison.SolutionEpoch(
+                week=2300,
+                tow=float(index),
+                lat_deg=lat,
+                lon_deg=lon,
+                height_m=height,
+                ecef=origin.copy(),
+                status=4,
+                num_satellites=12,
+            )
+            for index in range(3)
+        ]
+        jump = origin + np.asarray([10.0, 0.0, 0.0])
+        tracks = [
+            {
+                2.0: fgo_position_consensus.TrackEpoch(
+                    sample=ppc_integrity_consensus.ShadowEpoch(
+                        tow=2.0,
+                        ecef=jump + np.asarray([offset, 0.0, 0.0]),
+                        status="FIXED",
+                        gdop=2.0,
+                        ddpr_rms_m=1.0,
+                        nsat=10,
+                    ),
+                    age_epochs=10,
+                )
+            }
+            for offset in (0.0, 0.1)
+        ]
+        args = argparse.Namespace(
+            min_independent_shadows=2,
+            shadow_agreement_aperture_m=0.25,
+            primary_separation_min_m=0.5,
+            fresh_shadow_max_age_epochs=100,
+            candidate_max_prediction_error_m=2.0,
+            shadow_max_gdop=0.0,
+            shadow_max_ddpr_rms_m=0.0,
+            shadow_min_satellites=0,
+        )
+
+        output, summary, _ = fgo_position_consensus.apply_position_consensus(
+            primary, tracks, args
+        )
+
+        np.testing.assert_array_equal(output[-1].ecef, origin)
+        self.assertEqual(summary["candidate_prediction_rejections"], 1)
+        self.assertEqual(summary["positions_replaced"], 0)
+
+
+class FgoShadowAuthorityTest(unittest.TestCase):
+    def test_report_separates_recovery_from_unsafe_replacement(self) -> None:
+        origin = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        rotation = kf_fgo_alignment.ecef_to_enu_rotation(origin)
+        correct = origin.copy()
+        wrong = origin + rotation.transpose() @ np.asarray([1.0, 0.0, 0.0])
+        primary_positions = [wrong, correct, correct, wrong]
+        shadow_positions = [correct, wrong, correct, wrong]
+
+        with tempfile.TemporaryDirectory(prefix="fgo_shadow_authority_") as temp_dir:
+            root = Path(temp_dir)
+            primary_path = root / "primary.pos"
+            shadow_path = root / "shadow.csv"
+            reference_path = root / "reference.csv"
+            output_path = root / "report.json"
+            kf_fgo_alignment.write_pos(
+                primary_path,
+                [
+                    {
+                        "week": 2300,
+                        "tow": float(index),
+                        "ecef": ecef,
+                        "status": 4,
+                        "nsat": 12,
+                        "pdop": 1.0,
+                        "ratio": 10.0,
+                        "baseline": 1.0,
+                    }
+                    for index, ecef in enumerate(primary_positions)
+                ],
+            )
+            with reference_path.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.writer(handle)
+                writer.writerow(["tow", "week", "lat", "lon", "height", "x", "y", "z"])
+                for index in range(4):
+                    writer.writerow([index, 2300, 35.0, 139.0, 50.0, *origin])
+            with shadow_path.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.writer(handle)
+                writer.writerow(
+                    [
+                        "tow",
+                        "status",
+                        "x_ecef_m",
+                        "y_ecef_m",
+                        "z_ecef_m",
+                        "gdop",
+                        "ddpr_rms_m",
+                        "nsat",
+                    ]
+                )
+                for index, ecef in enumerate(shadow_positions):
+                    writer.writerow([index, "FIXED", *ecef, 2.0, 1.0, 12])
+            args = argparse.Namespace(
+                primary_pos=primary_path,
+                shadow_csv=[shadow_path],
+                reference_csv=reference_path,
+                output_json=output_path,
+                match_tolerance_s=0.11,
+                wrong_fix_threshold_m=0.5,
+                shadow_max_gdop=4.0,
+                shadow_max_ddpr_rms_m=40.0,
+                shadow_min_satellites=8,
+                aperture_m=[1.1],
+            )
+
+            report = fgo_shadow_authority.build_report(args)
+
+        self.assertTrue(report["reference_truth_used"])
+        self.assertEqual(report["matched_primary_fixed_epochs"], 4)
+        self.assertEqual(report["healthy"]["recoveries"], 1)
+        self.assertEqual(report["healthy"]["unsafe_replacements"], 1)
+        self.assertEqual(report["healthy"]["both_correct"], 1)
+        self.assertEqual(report["healthy"]["both_wrong"], 1)
+        self.assertEqual(
+            report["healthy_by_separation_aperture_m"]["1.1"]["selected_epochs"],
+            4,
+        )
+
+
+class KfFgoAlignmentTest(unittest.TestCase):
+    def test_causal_alignment_uses_only_solver_positions(self) -> None:
+        origin = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        rotation = kf_fgo_alignment.ecef_to_enu_rotation(origin)
+        offset_enu = np.asarray([0.4, -0.2, 0.3])
+        offset_ecef = rotation.transpose() @ offset_enu
+        kf_rows = [
+            {
+                "week": 2300,
+                "tow": float(index),
+                "ecef": origin + offset_ecef,
+                "status": 4,
+                "nsat": 12,
+                "pdop": 1.0,
+                "ratio": 25.0,
+                "baseline": 1.0,
+            }
+            for index in range(10)
+        ]
+        fgo_rows = [
+            {
+                "tow": float(index),
+                "ecef": origin.copy(),
+                "status": 3,
+                "nsat": 12,
+                "ratio": 0.0,
+            }
+            for index in range(10)
+        ]
+        args = argparse.Namespace(
+            match_tolerance_s=0.11,
+            horizontal_ratio_min=20.0,
+            horizontal_window=5,
+            horizontal_gate_m=0.5,
+            vertical_ratio_min=3.0,
+            vertical_window=5,
+            vertical_gate_m=0.75,
+            kf_fallback=False,
+            kf_gap_fill_only=False,
+            replace_kf_nonfixed=False,
+        )
+
+        fused, summary = kf_fgo_alignment.fuse(kf_rows, fgo_rows, args)
+
+        np.testing.assert_allclose(fused[-1]["ecef"], origin + offset_ecef, atol=1e-5)
+        self.assertFalse(summary["reference_truth_used"])
+        self.assertEqual(summary["horizontal_updates_accepted"], 10)
+        self.assertEqual(summary["vertical_updates_accepted"], 10)
+
+    def test_fixed_alignment_is_explicit_and_truth_free(self) -> None:
+        origin = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        rotation = kf_fgo_alignment.ecef_to_enu_rotation(origin)
+        offset_ecef = rotation.transpose() @ np.asarray([0.4, -0.2, 0.3])
+        kf_rows = [
+            {
+                "week": 2300,
+                "tow": float(index),
+                "ecef": origin + offset_ecef,
+                "status": 4,
+                "nsat": 12,
+                "pdop": 1.0,
+                "ratio": 25.0,
+                "baseline": 1.0,
+            }
+            for index in range(3)
+        ]
+        fgo_rows = [
+            {
+                "tow": float(index),
+                "ecef": origin.copy(),
+                "status": 4,
+                "nsat": 12,
+                "ratio": 5.0,
+            }
+            for index in range(3)
+        ]
+        args = argparse.Namespace(
+            match_tolerance_s=0.11,
+            horizontal_ratio_min=20.0,
+            horizontal_window=5,
+            horizontal_gate_m=0.5,
+            vertical_ratio_min=3.0,
+            vertical_window=5,
+            vertical_gate_m=0.75,
+            kf_fallback=False,
+            kf_gap_fill_only=False,
+            replace_kf_nonfixed=False,
+            align_fgo_fixed=True,
+        )
+
+        fused, summary = kf_fgo_alignment.fuse(kf_rows, fgo_rows, args)
+
+        np.testing.assert_allclose(fused[-1]["ecef"], origin + offset_ecef, atol=1e-5)
+        self.assertTrue(summary["align_fgo_fixed"])
+        self.assertFalse(summary["reference_truth_used"])
+
+    def test_gap_fill_mode_preserves_available_kf_epochs(self) -> None:
+        origin = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        rotation = kf_fgo_alignment.ecef_to_enu_rotation(origin)
+        offset_ecef = rotation.transpose() @ np.asarray([0.2, 0.1, 0.1])
+        kf_rows = [
+            {
+                "week": 2300,
+                "tow": tow,
+                "ecef": origin + offset_ecef,
+                "status": 4,
+                "nsat": 12,
+                "pdop": 1.0,
+                "ratio": 25.0,
+                "baseline": 1.0,
+            }
+            for tow in (0.0, 2.0)
+        ]
+        fgo_rows = [
+            {"tow": tow, "ecef": origin.copy(), "status": 4, "nsat": 10, "ratio": 5.0}
+            for tow in (0.0, 1.0, 2.0)
+        ]
+        args = argparse.Namespace(
+            match_tolerance_s=0.11,
+            horizontal_ratio_min=20.0,
+            horizontal_window=5,
+            horizontal_gate_m=0.5,
+            vertical_ratio_min=3.0,
+            vertical_window=5,
+            vertical_gate_m=0.75,
+            kf_fallback=True,
+            kf_gap_fill_only=True,
+            replace_kf_nonfixed=False,
+            min_window_alignment_updates=0,
+        )
+
+        fused, summary = kf_fgo_alignment.fuse(kf_rows, fgo_rows, args)
+
+        self.assertEqual([float(row["tow"]) for row in fused], [0.0, 1.0, 2.0])
+        np.testing.assert_array_equal(fused[0]["ecef"], kf_rows[0]["ecef"])
+        np.testing.assert_array_equal(fused[2]["ecef"], kf_rows[1]["ecef"])
+        self.assertEqual(int(fused[1]["status"]), 3)
+        self.assertTrue(summary["kf_gap_fill_only"])
+
+    def test_multiple_gap_windows_merge_in_cli_order_without_duplicates(self) -> None:
+        origin = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        kf_rows = [
+            {
+                "week": 2300,
+                "tow": 0.0,
+                "ecef": origin.copy(),
+                "status": 4,
+                "nsat": 12,
+                "pdop": 1.0,
+                "ratio": 25.0,
+                "baseline": 1.0,
+            }
+        ]
+        first = [
+            {"tow": tow, "ecef": origin.copy(), "status": 3, "nsat": 10, "ratio": 0.0}
+            for tow in (0.0, 1.0)
+        ]
+        second = [
+            {"tow": tow, "ecef": origin.copy(), "status": 3, "nsat": 10, "ratio": 0.0}
+            for tow in (1.0, 2.0)
+        ]
+        args = argparse.Namespace(
+            match_tolerance_s=0.11,
+            horizontal_ratio_min=3.0,
+            horizontal_window=10,
+            horizontal_gate_m=5.0,
+            vertical_ratio_min=3.0,
+            vertical_window=5,
+            vertical_gate_m=2.0,
+            kf_fallback=True,
+            kf_gap_fill_only=True,
+            replace_kf_nonfixed=False,
+        )
+
+        fused, summary = kf_fgo_alignment.fuse_windows(kf_rows, [first, second], args)
+
+        self.assertEqual([float(row["tow"]) for row in fused], [0.0, 1.0, 2.0])
+        self.assertEqual(summary["fgo_window_count"], 2)
+        self.assertEqual(summary["output_epochs"], 3)
+
+    def test_replace_nonfixed_preserves_kf_fix_and_uses_fgo_for_float(self) -> None:
+        origin = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        kf_rows = [
+            {
+                "week": 2300,
+                "tow": tow,
+                "ecef": origin + np.asarray([10.0 if status == 4 else 20.0, 0.0, 0.0]),
+                "status": status,
+                "nsat": 12,
+                "pdop": 1.0,
+                "ratio": 25.0 if status == 4 else 0.0,
+                "baseline": 1.0,
+            }
+            for tow, status in ((0.0, 4), (1.0, 3))
+        ]
+        fgo_rows = [
+            {"tow": tow, "ecef": origin.copy(), "status": 3, "nsat": 10, "ratio": 0.0}
+            for tow in (0.0, 1.0)
+        ]
+        args = argparse.Namespace(
+            match_tolerance_s=0.11,
+            horizontal_ratio_min=3.0,
+            horizontal_window=10,
+            horizontal_gate_m=5.0,
+            vertical_ratio_min=3.0,
+            vertical_window=5,
+            vertical_gate_m=2.0,
+            kf_fallback=True,
+            kf_gap_fill_only=True,
+            replace_kf_nonfixed=True,
+            min_window_alignment_updates=0,
+        )
+
+        fused, summary = kf_fgo_alignment.fuse(kf_rows, fgo_rows, args)
+
+        self.assertEqual(len(fused), 2)
+        self.assertEqual(len({(int(row["week"]), float(row["tow"])) for row in fused}), 2)
+        np.testing.assert_array_equal(fused[0]["ecef"], kf_rows[0]["ecef"])
+        np.testing.assert_allclose(fused[1]["ecef"], kf_rows[0]["ecef"], atol=1e-6)
+        self.assertFalse(np.array_equal(fused[1]["ecef"], kf_rows[1]["ecef"]))
+        self.assertEqual(int(fused[0]["status"]), 4)
+        self.assertEqual(int(fused[1]["status"]), 3)
+        self.assertTrue(summary["replace_kf_nonfixed"])
+
+    def test_replace_nis_rejected_fix_uses_aligned_fgo_float(self) -> None:
+        origin = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        trusted_ecef = origin + np.asarray([10.0, 0.0, 0.0])
+        rejected_ecef = origin + np.asarray([20.0, 0.0, 0.0])
+        kf_rows = [
+            {
+                "week": 2300,
+                "tow": tow,
+                "ecef": ecef,
+                "status": 4,
+                "nsat": 12,
+                "pdop": 1.0,
+                "ratio": 25.0,
+                "baseline": 1.0,
+                "nis_per_observation": nis,
+            }
+            for tow, ecef, nis in (
+                (0.0, trusted_ecef, 1.0),
+                (1.0, rejected_ecef, 10.0),
+            )
+        ]
+        fgo_rows = [
+            {"tow": tow, "ecef": origin.copy(), "status": 3, "nsat": 10, "ratio": 0.0}
+            for tow in (0.0, 1.0)
+        ]
+        args = argparse.Namespace(
+            match_tolerance_s=0.11,
+            horizontal_ratio_min=3.0,
+            horizontal_window=10,
+            horizontal_gate_m=5.0,
+            vertical_ratio_min=3.0,
+            vertical_window=5,
+            vertical_gate_m=2.0,
+            alignment_kf_max_nis_per_observation=5.0,
+            kf_fallback=True,
+            kf_gap_fill_only=True,
+            replace_kf_nonfixed=True,
+            replace_kf_nis_rejected=True,
+            min_window_alignment_updates=0,
+        )
+
+        fused, summary = kf_fgo_alignment.fuse(kf_rows, fgo_rows, args)
+
+        np.testing.assert_array_equal(fused[0]["ecef"], trusted_ecef)
+        np.testing.assert_allclose(fused[1]["ecef"], trusted_ecef, atol=1e-6)
+        self.assertEqual(int(fused[0]["status"]), 4)
+        self.assertEqual(int(fused[1]["status"]), 3)
+        self.assertEqual(summary["kf_telemetry_rejections"], 1)
+        self.assertEqual(summary["kf_nis_rejected_replacements"], 1)
+        self.assertTrue(summary["replace_kf_nis_rejected"])
+
+    def test_replacement_nis_and_fgo_quality_gates_are_independent(self) -> None:
+        origin = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        kf_rows = [
+            {
+                "week": 2300,
+                "tow": tow,
+                "ecef": origin + np.asarray([10.0 + tow, 0.0, 0.0]),
+                "status": 4,
+                "nsat": 12,
+                "pdop": 1.0,
+                "ratio": 25.0,
+                "baseline": 1.0,
+                "nis_per_observation": 10.0,
+            }
+            for tow in (0.0, 1.0)
+        ]
+        fgo_rows = [
+            {
+                "tow": 0.0,
+                "ecef": origin.copy(),
+                "status": 3,
+                "nsat": 10,
+                "ratio": 0.0,
+                "ddpr_rms_m": 2.0,
+                "gdop": 1.0,
+            },
+            {
+                "tow": 1.0,
+                "ecef": origin.copy(),
+                "status": 3,
+                "nsat": 10,
+                "ratio": 0.0,
+                "ddpr_rms_m": 10.0,
+                "gdop": 2.0,
+            },
+        ]
+        args = argparse.Namespace(
+            match_tolerance_s=0.11,
+            horizontal_ratio_min=3.0,
+            horizontal_window=10,
+            horizontal_gate_m=5.0,
+            vertical_ratio_min=3.0,
+            vertical_window=5,
+            vertical_gate_m=2.0,
+            alignment_kf_max_nis_per_observation=0.0,
+            replace_kf_nis_threshold=5.0,
+            replace_kf_nis_min_fgo_ddpr_rms_m=6.0,
+            replace_kf_nis_min_fgo_gdop=1.5,
+            kf_fallback=True,
+            kf_gap_fill_only=True,
+            replace_kf_nonfixed=True,
+            replace_kf_nis_rejected=True,
+            min_window_alignment_updates=0,
+        )
+
+        fused, summary = kf_fgo_alignment.fuse(kf_rows, fgo_rows, args)
+
+        np.testing.assert_array_equal(fused[0]["ecef"], kf_rows[0]["ecef"])
+        self.assertEqual(int(fused[0]["status"]), 4)
+        self.assertEqual(int(fused[1]["status"]), 3)
+        self.assertEqual(summary["horizontal_updates_accepted"], 2)
+        self.assertEqual(summary["kf_telemetry_rejections"], 0)
+        self.assertEqual(summary["kf_nis_rejected_replacements"], 1)
+
+    def test_multi_window_replace_nonfixed_reports_actual_merge_policy(self) -> None:
+        origin = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        kf_rows = [
+            {
+                "week": 2300,
+                "tow": 0.0,
+                "ecef": origin.copy(),
+                "status": 4,
+                "nsat": 12,
+                "pdop": 1.0,
+                "ratio": 25.0,
+                "baseline": 1.0,
+            }
+        ]
+        window = [{"tow": 0.0, "ecef": origin.copy(), "status": 3, "nsat": 10, "ratio": 0.0}]
+        args = argparse.Namespace(
+            match_tolerance_s=0.11,
+            horizontal_ratio_min=3.0,
+            horizontal_window=10,
+            horizontal_gate_m=5.0,
+            vertical_ratio_min=3.0,
+            vertical_window=5,
+            vertical_gate_m=2.0,
+            kf_fallback=True,
+            kf_gap_fill_only=True,
+            replace_kf_nonfixed=True,
+            min_window_alignment_updates=0,
+        )
+
+        _, summary = kf_fgo_alignment.fuse_windows(kf_rows, [window, window], args)
+
+        self.assertEqual(
+            summary["merge_policy"],
+            "KF FIXED preserved; FGO windows in CLI order replace non-FIXED/missing; "
+            "first solution wins per week/tow",
+        )
+
+    def test_multi_window_alignment_update_gate_rejects_unanchored_window(self) -> None:
+        origin = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        kf_rows = [
+            {
+                "week": 2300,
+                "tow": 0.0,
+                "ecef": origin.copy(),
+                "status": 3,
+                "nsat": 12,
+                "pdop": 1.0,
+                "ratio": 0.0,
+                "baseline": 1.0,
+            }
+        ]
+        window = [{"tow": 0.0, "ecef": origin.copy(), "status": 3, "nsat": 10, "ratio": 0.0}]
+        args = argparse.Namespace(
+            match_tolerance_s=0.11,
+            horizontal_ratio_min=3.0,
+            horizontal_window=10,
+            horizontal_gate_m=5.0,
+            vertical_ratio_min=3.0,
+            vertical_window=5,
+            vertical_gate_m=2.0,
+            kf_fallback=True,
+            kf_gap_fill_only=True,
+            replace_kf_nonfixed=True,
+            min_window_alignment_updates=1,
+        )
+
+        fused, summary = kf_fgo_alignment.fuse_windows(kf_rows, [window, window], args)
+
+        self.assertEqual(len(fused), 1)
+        self.assertEqual(summary["fgo_windows_accepted"], 0)
+        self.assertFalse(summary["windows"][0]["window_accepted"])
+
+    def test_alignment_age_gate_stops_unanchored_gap_fill(self) -> None:
+        origin = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        kf_rows = [
+            {
+                "week": 2300,
+                "tow": 0.0,
+                "ecef": origin.copy(),
+                "status": 4,
+                "nsat": 12,
+                "pdop": 1.0,
+                "ratio": 25.0,
+                "baseline": 1.0,
+            }
+        ]
+        fgo_rows = [
+            {"tow": tow, "ecef": origin.copy(), "status": 3, "nsat": 10, "ratio": 0.0}
+            for tow in (0.0, 1.0, 2.0)
+        ]
+        args = argparse.Namespace(
+            match_tolerance_s=0.11,
+            horizontal_ratio_min=3.0,
+            horizontal_window=10,
+            horizontal_gate_m=5.0,
+            vertical_ratio_min=3.0,
+            vertical_window=5,
+            vertical_gate_m=2.0,
+            kf_fallback=True,
+            kf_gap_fill_only=True,
+            replace_kf_nonfixed=True,
+            max_alignment_age_epochs=1,
+        )
+
+        fused, summary = kf_fgo_alignment.fuse(kf_rows, fgo_rows, args)
+
+        self.assertEqual([float(row["tow"]) for row in fused], [0.0, 1.0])
+        self.assertEqual(summary["stale_fgo_rejections"], 1)
+
+    def test_alignment_initialization_gate_rejects_pre_anchor_gap_fill(self) -> None:
+        origin = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        kf_rows = [
+            {
+                "week": 2300,
+                "tow": 1.0,
+                "ecef": origin.copy(),
+                "status": 4,
+                "nsat": 12,
+                "pdop": 1.0,
+                "ratio": 25.0,
+                "baseline": 1.0,
+            }
+        ]
+        fgo_rows = [
+            {"tow": tow, "ecef": origin.copy(), "status": 3, "nsat": 10, "ratio": 0.0}
+            for tow in (0.0, 1.0)
+        ]
+        args = argparse.Namespace(
+            match_tolerance_s=0.11,
+            horizontal_ratio_min=3.0,
+            horizontal_window=10,
+            horizontal_gate_m=5.0,
+            vertical_ratio_min=3.0,
+            vertical_window=5,
+            vertical_gate_m=2.0,
+            kf_fallback=True,
+            kf_gap_fill_only=True,
+            replace_kf_nonfixed=True,
+            max_alignment_age_epochs=0,
+            require_alignment_initialized=True,
+        )
+
+        fused, summary = kf_fgo_alignment.fuse(kf_rows, fgo_rows, args)
+
+        self.assertEqual([float(row["tow"]) for row in fused], [1.0])
+        self.assertEqual(summary["uninitialized_alignment_rejections"], 1)
+        self.assertEqual(summary["stale_fgo_rejections"], 0)
+        self.assertTrue(summary["require_alignment_initialized"])
+
+    def test_alignment_trend_causally_extrapolates_fgo_drift(self) -> None:
+        origin = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        rotation = kf_fgo_alignment.ecef_to_enu_rotation(origin)
+        kf_rows = [
+            {
+                "week": 2300,
+                "tow": float(index),
+                "ecef": origin.copy(),
+                "status": 4,
+                "nsat": 12,
+                "pdop": 1.0,
+                "ratio": 25.0,
+                "baseline": 1.0,
+            }
+            for index in range(6)
+        ]
+        fgo_rows = [
+            {
+                "tow": float(index),
+                "ecef": origin + rotation.transpose() @ np.asarray([float(index), 0.0, 0.0]),
+                "status": 3,
+                "nsat": 10,
+                "ratio": 0.0,
+                "ddpr_rms_m": 5.0,
+                "gdop": 1.5,
+            }
+            for index in range(9)
+        ]
+        args = argparse.Namespace(
+            match_tolerance_s=0.11,
+            horizontal_ratio_min=3.0,
+            horizontal_window=10,
+            horizontal_gate_m=10.0,
+            vertical_ratio_min=3.0,
+            vertical_window=5,
+            vertical_gate_m=2.0,
+            kf_fallback=False,
+            kf_gap_fill_only=True,
+            replace_kf_nonfixed=True,
+            max_alignment_age_epochs=0,
+            alignment_trend_window=6,
+            alignment_trend_max_rate_mps=2.0,
+            alignment_trend_max_ddpr_rms_m=10.0,
+        )
+
+        fused, summary = kf_fgo_alignment.fuse(kf_rows, fgo_rows, args)
+
+        np.testing.assert_allclose(fused[-1]["ecef"], origin, atol=1e-4)
+        self.assertGreater(summary["trend_prediction_epochs"], 0)
+
+        args.alignment_trend_max_ddpr_rms_m = 1.0
+        median_only, gated_summary = kf_fgo_alignment.fuse(kf_rows, fgo_rows, args)
+        self.assertGreater(float(np.linalg.norm(median_only[-1]["ecef"] - origin)), 1.0)
+        self.assertEqual(gated_summary["trend_prediction_epochs"], 0)
+
+        args.alignment_trend_max_ddpr_rms_m = 10.0
+        args.alignment_trend_max_gdop = 1.0
+        gdop_gated, gdop_summary = kf_fgo_alignment.fuse(kf_rows, fgo_rows, args)
+        self.assertGreater(float(np.linalg.norm(gdop_gated[-1]["ecef"] - origin)), 1.0)
+        self.assertEqual(gdop_summary["trend_prediction_epochs"], 0)
+        self.assertEqual(gdop_summary["alignment_trend_max_gdop"], 1.0)
+
+        args.alignment_trend_max_gdop = 0.0
+        args.alignment_kf_max_nis_per_observation = 1.0
+        _, missing_nis_summary = kf_fgo_alignment.fuse(kf_rows, fgo_rows, args)
+        self.assertEqual(missing_nis_summary["horizontal_updates_accepted"], 0)
+        self.assertEqual(missing_nis_summary["vertical_updates_accepted"], 0)
+        self.assertGreater(missing_nis_summary["kf_telemetry_rejections"], 0)
+
+        for row in kf_rows:
+            row["nis_per_observation"] = 0.5
+        nis_accepted, nis_summary = kf_fgo_alignment.fuse(kf_rows, fgo_rows, args)
+        np.testing.assert_allclose(nis_accepted[-1]["ecef"], origin, atol=1e-4)
+        self.assertGreater(nis_summary["trend_prediction_epochs"], 0)
+
+    def test_alignment_trend_dropout_rate_bridges_good_ddpr_gdop_loss(self) -> None:
+        origin = comparison.llh_to_ecef(35.0, 139.0, 50.0)
+        rotation = kf_fgo_alignment.ecef_to_enu_rotation(origin)
+        kf_rows = [
+            {
+                "week": 2300,
+                "tow": float(index),
+                "ecef": origin.copy(),
+                "status": 4,
+                "nsat": 12,
+                "pdop": 1.0,
+                "ratio": 25.0,
+                "baseline": 1.0,
+            }
+            for index in range(6)
+        ]
+        fgo_rows = [
+            {
+                "tow": float(index),
+                "ecef": origin
+                + rotation.transpose()
+                @ np.asarray([float(index), 0.0, 0.0]),
+                "status": 3,
+                "nsat": 10,
+                "ratio": 0.0,
+                "ddpr_rms_m": 1.0,
+                "gdop": 1.5 if index < 6 else np.inf,
+            }
+            for index in range(9)
+        ]
+        args = argparse.Namespace(
+            match_tolerance_s=0.11,
+            horizontal_ratio_min=3.0,
+            horizontal_window=10,
+            horizontal_gate_m=10.0,
+            vertical_ratio_min=3.0,
+            vertical_window=5,
+            vertical_gate_m=2.0,
+            kf_fallback=False,
+            kf_gap_fill_only=True,
+            replace_kf_nonfixed=True,
+            max_alignment_age_epochs=0,
+            alignment_trend_window=6,
+            alignment_trend_max_rate_mps=0.1,
+            alignment_trend_max_ddpr_rms_m=10.0,
+        )
+
+        slow, _ = kf_fgo_alignment.fuse(kf_rows, fgo_rows, args)
+        slow_error = float(np.linalg.norm(slow[-1]["ecef"] - origin))
+
+        args.alignment_trend_dropout_max_ddpr_rms_m = 1.1
+        args.alignment_trend_dropout_max_rate_mps = 2.0
+        bridged, summary = kf_fgo_alignment.fuse(kf_rows, fgo_rows, args)
+        bridged_error = float(np.linalg.norm(bridged[-1]["ecef"] - origin))
+
+        self.assertGreater(slow_error, 1.0)
+        self.assertLess(bridged_error, 1e-4)
+        self.assertLess(bridged_error, slow_error)
+        self.assertEqual(summary["alignment_trend_dropout_max_ddpr_rms_m"], 1.1)
+        self.assertEqual(summary["alignment_trend_dropout_max_rate_mps"], 2.0)
+
+    def test_alignment_pos_round_trip_preserves_kf_rtk_telemetry(self) -> None:
+        row = {
+            "week": 2300,
+            "tow": 1.0,
+            "ecef": comparison.llh_to_ecef(35.0, 139.0, 50.0),
+            "status": 4,
+            "nsat": 12,
+            "pdop": 1.0,
+            "ratio": 25.0,
+            "baseline": 1.0,
+            "rtk_fields": ["2", "20", "10", "10", "1", "0.5", "2.0", "0.4", "1.5", "8.0", "0.4", "0"],
+        }
+        with tempfile.TemporaryDirectory(prefix="kf_fgo_telemetry_") as temp_dir:
+            path = Path(temp_dir) / "aligned.pos"
+            kf_fgo_alignment.write_pos(path, [row])
+            parsed = kf_fgo_alignment.read_kf(path)
+
+        self.assertEqual(parsed[0]["rtk_fields"], row["rtk_fields"])
+        self.assertEqual(parsed[0]["nis_per_observation"], 0.4)
+
+    def test_alignment_reader_accepts_pos_without_optional_telemetry(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="kf_fgo_short_pos_") as temp_dir:
+            path = Path(temp_dir) / "short.pos"
+            path.write_text(
+                "% GPS_Week GPS_TOW X Y Z Lat Lon Height Status NumSat PDOP\n"
+                "2300 1.000 1.0 2.0 3.0 0.0 0.0 0.0 3 0 2.0\n",
+                encoding="ascii",
+            )
+
+            parsed = kf_fgo_alignment.read_kf(path)
+
+        self.assertEqual(parsed[0]["ratio"], 0.0)
+        self.assertEqual(parsed[0]["baseline"], 0.0)
+        self.assertIsNone(parsed[0]["rtk_fields"])
+        self.assertTrue(np.isnan(parsed[0]["nis_per_observation"]))
+
+    def test_ppc_matrix_pos_specs_require_each_run_once(self) -> None:
+        specs = [
+            f"{city}/{run}=output/{city}_{run}.pos"
+            for city, run in fgo_ppc_matrix.RUNS
+        ]
+
+        selected = fgo_ppc_matrix.parse_pos_specs(specs)
+
+        self.assertEqual(set(selected), set(fgo_ppc_matrix.RUNS))
+        with self.assertRaises(SystemExit):
+            fgo_ppc_matrix.parse_pos_specs(specs[:-1])
+
     def test_libgnss_pos_parser_keeps_ratio_and_baseline_telemetry(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_pos_ratio_parse_") as temp_dir:
             pos_path = Path(temp_dir) / "solution.pos"
@@ -2652,6 +4852,12 @@ class PPCMetricsTest(unittest.TestCase):
 
 
 class PPCCoverageReadmeUpdateTest(unittest.TestCase):
+    def test_default_target_keeps_generated_table_in_benchmarks(self) -> None:
+        self.assertEqual(
+            ppc_coverage_readme.DEFAULT_TARGETS,
+            (ppc_coverage_readme.ROOT_DIR / "docs" / "benchmarks.md",),
+        )
+
     def sample_summary(self) -> dict[str, object]:
         return {
             "runs": [
@@ -3040,6 +5246,7 @@ class OptionalRTKSignoffScriptTest(unittest.TestCase):
             self.assertEqual(
                 [step.slug for step in steps],
                 [
+                    "ppc_coverage_matrix_schema_smoke",
                     "ppc_nagoya_run1_rtk",
                     "ppc_tokyo_run1_rtk",
                     "ppc_taroz_amb_pdc_nagoya_run3_1000_seed",
@@ -3050,7 +5257,8 @@ class OptionalRTKSignoffScriptTest(unittest.TestCase):
             self.assertEqual(steps[0].skip_reason, "PPC-Dataset root is unavailable.")
             self.assertEqual(steps[1].skip_reason, "PPC-Dataset root is unavailable.")
             self.assertEqual(steps[2].skip_reason, "PPC-Dataset root is unavailable.")
-            self.assertEqual(steps[3].skip_reason, "SCORPION moving-base input is unavailable.")
+            self.assertEqual(steps[3].skip_reason, "PPC-Dataset root is unavailable.")
+            self.assertEqual(steps[4].skip_reason, "SCORPION moving-base input is unavailable.")
 
     def test_build_step_plan_uses_dataset_rtklib_and_scorpion_url(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ci_rtk_plan_") as temp_dir:
@@ -3069,7 +5277,14 @@ class OptionalRTKSignoffScriptTest(unittest.TestCase):
 
             steps = ci_rtk_signoffs.build_step_plan(ROOT_DIR, output_dir, env)
 
-            nagoya, tokyo, taroz_long, scorpion = steps
+            coverage, nagoya, tokyo, taroz_long, scorpion = steps
+            self.assertIsNotNone(coverage.command)
+            self.assertIn("ppc-coverage-matrix", coverage.command)
+            self.assertIn("--config-toml", coverage.command)
+            self.assertIn("--max-epochs", coverage.command)
+            self.assertIn("2", coverage.command)
+            self.assertIn("--summary-json", coverage.command)
+            self.assertIn(str(output_dir / "ppc_coverage_matrix_schema_smoke" / "summary.json"), coverage.command)
             self.assertIsNotNone(nagoya.command)
             self.assertIn("--dataset-root", nagoya.command)
             self.assertIn(str(dataset_root), nagoya.command)
@@ -3105,7 +5320,8 @@ class OptionalRTKSignoffScriptTest(unittest.TestCase):
                 {"GNSSPP_PPC_DATASET_ROOT": str(dataset_root)},
             )
 
-            nagoya, tokyo, taroz_long, _ = steps
+            coverage, nagoya, tokyo, taroz_long, _ = steps
+            self.assertIsNotNone(coverage.command)
             self.assertIsNotNone(nagoya.command)
             self.assertIsNone(tokyo.command)
             self.assertEqual(tokyo.skip_reason, "RTKLIB binary is unavailable.")
@@ -3137,7 +5353,53 @@ class OptionalRTKSignoffScriptTest(unittest.TestCase):
             passed_result = ci_rtk_signoffs.run_step(passed, ROOT_DIR, log_dir)
             self.assertEqual(passed_result["status"], "passed")
             self.assertEqual(passed_result["returncode"], 0)
+            self.assertEqual(passed_result["missing_outputs"], [])
             self.assertIn("ok", (log_dir / "pass_example.log").read_text(encoding="utf-8"))
+
+            missing_output = ci_rtk_signoffs.SignoffStep(
+                name="Missing output example",
+                slug="missing_output_example",
+                command=[sys.executable, "-c", "print('ok')"],
+                outputs=[str(temp_root / "missing.json")],
+            )
+            missing_result = ci_rtk_signoffs.run_step(missing_output, ROOT_DIR, log_dir)
+            self.assertEqual(missing_result["status"], "failed")
+            self.assertEqual(missing_result["returncode"], 0)
+            self.assertEqual(
+                missing_result["missing_outputs"],
+                [str(temp_root / "missing.json")],
+            )
+
+    def test_write_summary_records_schema_and_counts(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ci_rtk_summary_") as temp_dir:
+            temp_root = Path(temp_dir)
+            summary_path = temp_root / "summary.json"
+            steps = [
+                ci_rtk_signoffs.SignoffStep(
+                    name="PPC coverage matrix schema smoke",
+                    slug="ppc_coverage_matrix_schema_smoke",
+                    command=None,
+                    outputs=[],
+                    skip_reason="PPC-Dataset root is unavailable.",
+                )
+            ]
+            results = [
+                {
+                    "name": steps[0].name,
+                    "slug": steps[0].slug,
+                    "status": "skipped",
+                    "skip_reason": steps[0].skip_reason,
+                    "outputs": [],
+                    "log_path": str(temp_root / "ppc_coverage_matrix_schema_smoke.log"),
+                }
+            ]
+
+            ci_rtk_signoffs.write_summary(summary_path, steps, results)
+
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["summary_schema"], ci_rtk_signoffs.SUMMARY_SCHEMA)
+            self.assertEqual(payload["counts"], {"passed": 0, "failed": 0, "skipped": 1})
+            self.assertEqual(payload["steps"][0]["slug"], "ppc_coverage_matrix_schema_smoke")
 
     def test_render_markdown_summary_reports_status_table(self) -> None:
         markdown = ci_rtk_signoffs.render_markdown_summary(
@@ -3159,16 +5421,23 @@ class OptionalRTKSignoffScriptTest(unittest.TestCase):
                     "status": "failed",
                     "log_path": "/tmp/c.log",
                 },
+                {
+                    "name": "PPC coverage matrix schema smoke",
+                    "status": "failed",
+                    "missing_outputs": ["/tmp/summary.json"],
+                    "log_path": "/tmp/d.log",
+                },
             ]
         )
 
         self.assertIn("## Optional RTK Sign-offs", markdown)
         self.assertIn("`passed`: `1`", markdown)
-        self.assertIn("`failed`: `1`", markdown)
+        self.assertIn("`failed`: `2`", markdown)
         self.assertIn("`skipped`: `1`", markdown)
         self.assertIn("| PPC Nagoya RTK sign-off | `passed` | 1.25s |", markdown)
         self.assertIn("RTKLIB binary is unavailable.", markdown)
         self.assertIn("see `/tmp/c.log`", markdown)
+        self.assertIn("missing `/tmp/summary.json`", markdown)
 
 class OptionalPPPProductsSignoffScriptTest(unittest.TestCase):
     def test_build_step_plan_skips_when_malib_is_missing(self) -> None:
@@ -5254,6 +7523,8 @@ class PPCDemoTest(unittest.TestCase):
                 max_subset_ar_drop_steps=18,
                 max_hold_div=5.0,
                 max_pos_jump=20.0,
+                max_fixed_anchor_age=30.0,
+                max_fixed_doppler_consensus=10.0,
                 max_pos_jump_min=20.0,
                 max_pos_jump_rate=25.0,
                 max_float_spp_div=30.0,
@@ -5274,6 +7545,10 @@ class PPCDemoTest(unittest.TestCase):
                 max_fixed_update_secondary_gate_baseline=2500.0,
                 min_fixed_update_secondary_gate_speed=7.0,
                 max_fixed_update_secondary_gate_speed=15.0,
+                max_fixed_prefit_rms=10.0,
+                min_fixed_prefit_outliers=35,
+                max_fixed_overconfidence_cov_trace=0.01,
+                fixed_prefit_reset_streak=2,
                 max_consec_float_reset=10,
                 max_consec_nonfix_reset=10,
                 max_postfix_rms=0.20,
@@ -5334,6 +7609,8 @@ class PPCDemoTest(unittest.TestCase):
             self.assertEqual(payload["rtk_max_subset_ar_drop_steps"], 18)
             self.assertEqual(payload["rtk_max_hold_divergence_m"], 5.0)
             self.assertEqual(payload["rtk_max_position_jump_m"], 20.0)
+            self.assertEqual(payload["rtk_max_fixed_anchor_age_s"], 30.0)
+            self.assertEqual(payload["rtk_max_fixed_doppler_consensus_m"], 10.0)
             self.assertEqual(payload["rtk_max_position_jump_min_m"], 20.0)
             self.assertEqual(payload["rtk_max_position_jump_rate_mps"], 25.0)
             self.assertEqual(payload["rtk_max_float_spp_divergence_m"], 30.0)
@@ -5350,6 +7627,12 @@ class PPCDemoTest(unittest.TestCase):
             self.assertEqual(payload["rtk_min_fixed_update_gate_speed_mps"], 5.0)
             self.assertEqual(payload["rtk_max_fixed_update_gate_speed_mps"], 15.0)
             self.assertEqual(payload["rtk_max_fixed_update_secondary_gate_ratio"], 4.0)
+            self.assertEqual(payload["rtk_max_fixed_prefit_residual_rms_m"], 10.0)
+            self.assertEqual(payload["rtk_min_fixed_prefit_outliers"], 35)
+            self.assertEqual(
+                payload["rtk_max_fixed_overconfidence_covariance_trace_m2"], 0.01
+            )
+            self.assertEqual(payload["rtk_fixed_prefit_reset_streak"], 2)
             self.assertEqual(
                 payload["rtk_min_fixed_update_secondary_gate_baseline_m"], 2000.0
             )
@@ -5469,6 +7752,10 @@ class PPCDemoTest(unittest.TestCase):
             self.assertIn("effective epoch rate", message)
             self.assertIn("RTKLIB", message)
 
+    @unittest.skipIf(
+        os.name == "nt",
+        "executes a chmod +x script stub, which Windows cannot exec directly",
+    )
     def test_run_rtklib_solver_executes_binary_path(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppc_rtklib_bin_") as temp_dir:
             temp_root = Path(temp_dir)
@@ -5500,6 +7787,7 @@ from pathlib import Path
 
 args = sys.argv[1:]
 out = Path(args[args.index("-o") + 1])
+out.with_suffix(".args").write_text(" ".join(args), encoding="ascii")
 out.write_text(
     "% synthetic rtklib solution\\n"
     "2024/02/18 00:16:22.000 35.100000000 139.100000000 42.0000 1 0 0 0 0 0 0\\n"
@@ -5531,9 +7819,35 @@ out.write_text(
             self.assertTrue(rtklib_pos.exists())
             contents = rtklib_pos.read_text(encoding="ascii")
             self.assertIn("synthetic rtklib solution", contents)
+            args_text = rtklib_pos.with_suffix(".args").read_text(encoding="ascii")
+            self.assertIn("-p 2", args_text)
+
+    def test_madocalib_ppc_rtk_config_omits_unsupported_posmode(self) -> None:
+        config_path = ROOT_DIR / "scripts" / "madocalib_ppc_rtk.conf"
+
+        text = ppc_demo.rtklib_config_text(config_path, "rtk")
+        config_lines = [
+            line.strip()
+            for line in text.splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        ]
+
+        self.assertIn("pos1-frequency     =l1+2", text)
+        self.assertFalse(any(line.startswith("pos1-posmode") for line in config_lines))
 
 
 class PPCMultiCandidateSelectorTest(unittest.TestCase):
+    def test_position_only_selection_preserves_baseline_status(self) -> None:
+        baseline = [self.solution_epoch(0, 0.0, 3, 0.2)]
+        selected = [self.solution_epoch(0, 0.1, 4, 0.2)]
+
+        preserved, changed = ppc_multi_candidate_selector.preserve_baseline_statuses(
+            selected, baseline
+        )
+
+        self.assertEqual(preserved[0].status, 3)
+        self.assertEqual(changed, 1)
+
     """Tests for apply_ppc_multi_candidate_selector."""
 
     @staticmethod
@@ -5584,6 +7898,18 @@ class PPCMultiCandidateSelectorTest(unittest.TestCase):
             writer.writerow(["tow", "week", "lat", "lon", "height", "ecef_x", "ecef_y", "ecef_z"])
             for index in range(3):
                 writer.writerow([float(index), 2300, 0.0, 0.0, 0.0, 10.0 * index, 0.0, 0.0])
+
+    def test_cli_help_runs_without_test_suite_import_paths(self) -> None:
+        completed = subprocess.run(
+            [sys.executable, str(SCRIPTS_DIR / "apply_ppc_multi_candidate_selector.py"), "--help"],
+            cwd=ROOT_DIR,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("--selection-mode", completed.stdout)
 
     def test_apply_ppc_multi_candidate_selector_emits_pos_and_summary(self) -> None:
         """Multi-candidate selector writes a .pos and summary JSON with expected keys."""

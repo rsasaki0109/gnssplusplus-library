@@ -1,5 +1,7 @@
 #include "libgnss++/iers/tides.hpp"
 
+#include <libgnss++/algorithms/ppp_env_overrides.hpp>
+
 #include <cmath>
 #include <vector>
 
@@ -64,9 +66,7 @@ Eigen::Vector3d solidEarthTideDisplacement(
     // long-term choice (matches the routine's documented contract).
     Eigen::Vector3d xsun_used = xsun_icrs;
     Eigen::Vector3d xmon_used = xmon_icrs;
-    static const bool kRotateSunMoonToItrs =
-        (std::getenv("GNSS_PPP_TIDE_ITRS_SUN_MOON") != nullptr);
-    if (kRotateSunMoonToItrs) {
+    if (pppEnvOverrides().tide_itrs_sun_moon) {
         // Approximate ICRS -> ITRS rotation via GMST about z. This omits
         // precession-nutation (~arcsec) and polar motion (~0.3"), both
         // of which contribute well under 1 mm to the diurnal tide.

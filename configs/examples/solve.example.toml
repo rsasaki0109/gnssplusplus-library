@@ -1,0 +1,22 @@
+# Copy this file and replace the run directory for your dataset.
+# Command-line options are applied after these defaults.
+
+[gnss_solve]
+data_dir = "data/PPC-Dataset/tokyo/run1"
+# PPC-Dataset names this file base.nav; --data-dir otherwise expects navigation.nav.
+nav = "data/PPC-Dataset/tokyo/run1/base.nav"
+out = "output/rtk_solution.pos"
+
+# Prefer named presets over spelling out their individual tuning controls.
+preset = "low-cost"
+mode = "kinematic"
+iono = "auto"
+ratio = 2.4
+
+# Common low-cost receiver choices.
+max_subset_ar_drop_steps = 18
+rtk_snr_weighting = true
+arfilter = false
+
+# 0 processes every epoch.
+max_epochs = 0

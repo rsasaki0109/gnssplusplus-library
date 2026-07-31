@@ -27,4 +27,84 @@ using Eigen::MatrixXd;
 bool lambdaSearch(const VectorXd& float_amb, const MatrixXd& Q_amb,
                   VectorXd& fixed_amb, double& ratio);
 
+/**
+ * LAMBDA search returning both integer candidates used by the ratio test.
+ *
+ * This is useful for partial ambiguity resolution, where ambiguities that
+ * differ between the best and second-best candidates are removed before a
+ * retry.  lambdaSearch() remains the compatibility wrapper for callers that
+ * only need the best candidate.
+ */
+bool lambdaSearchCandidates(const VectorXd& float_amb, const MatrixXd& Q_amb,
+                            VectorXd& best_amb, VectorXd& second_amb,
+                            double& ratio);
+
+/**
+ * LAMBDA search diagnostics for FFRT/PAR and multi-hypothesis shadowing.
+ *
+ * Candidate integer vectors are returned as columns, ordered by increasing
+ * squared ILS residual. conditional_variances contains the diagonal D after
+ * LAMBDA reduction. bootstrapped_success_rate is
+ * product_i(2 Phi(1/(2 sqrt(D_i))) - 1), evaluated without position truth.
+ */
+struct LambdaCandidateDiagnostics {
+    MatrixXd candidates;
+    VectorXd squared_residuals;
+    VectorXd conditional_variances;
+    // z = decorrelation_transform.transpose() * float ambiguities.
+    MatrixXd decorrelation_transform;
+    VectorXd decorrelated_float;
+    MatrixXd decorrelated_covariance;
+    double bootstrapped_success_rate = 0.0;
+};
+
+/**
+ * Fixed failure-rate ratio-test threshold from Hou et al. (2016).
+ *
+ * The paper defines mu = best_squared_residual / second_squared_residual,
+ * whereas lambdaSearch() reports the reciprocal ratio. The converted
+ * threshold below is therefore 1 / mu. A zero mu means reject all candidates.
+ *
+ * The initial implementation intentionally supports only the published
+ * Pf_tol=0.001 coefficient table and ambiguity dimensions 1..66. Unsupported
+ * requests fail closed rather than interpolating or extrapolating.
+ */
+struct FixedFailureRateRatioThreshold {
+    // Conservative covariance-derived proxy: 1 - bootstrapped success rate.
+    double ils_failure_rate_proxy = 1.0;
+    double mu = 0.0;
+    double minimum_second_to_best_ratio = 0.0;
+    bool accepts_any_candidate = false;
+};
+
+bool fixedFailureRateRatioThreshold(
+    int ambiguity_count, double bootstrapped_success_rate,
+    double tolerable_failure_rate,
+    FixedFailureRateRatioThreshold& threshold);
+
+/**
+ * Re-evaluate the bootstrapped success-rate lower bound after multiplying the
+ * ambiguity covariance by a positive scalar. Returns NaN on invalid input.
+ */
+double bootstrappedSuccessRate(const VectorXd& conditional_variances,
+                               double covariance_scale = 1.0);
+
+/**
+ * Number of trailing decorrelated ambiguities meeting an SRC success-rate
+ * threshold. LAMBDA reduction orders the trailing entries as the preferred
+ * conditional-precision subset. Returns zero on invalid input or when even the
+ * most precise ambiguity misses the threshold.
+ */
+int successRateCriterionSubsetSize(
+    const VectorXd& conditional_variances, double covariance_scale,
+    double minimum_success_rate);
+
+/**
+ * Return the best candidate_count integer vectors and covariance-only quality
+ * diagnostics. This API does not apply a ratio threshold or declare FIX.
+ */
+bool lambdaSearchTopK(const VectorXd& float_amb, const MatrixXd& Q_amb,
+                      int candidate_count,
+                      LambdaCandidateDiagnostics& diagnostics);
+
 } // namespace libgnss
