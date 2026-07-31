@@ -166,8 +166,11 @@ and built DD problem (~2× faster validation loops with an /O2 build).
 Before enabling TDCP in a GTSAM graph, `gnss_fgo_parity --tdcp-audit` performs
 a measurement-neutral, no-solve audit of factor construction, rejection
 reasons, seed residuals, and source-observation overlap with the DD carrier
-graph. Normal parity output also reports TDCP measurements built versus
-factors actually inserted by each backend.
+graph. The same audit reports 0.05 m geometry-free and 10 m
+Melbourne-Wübbena cycle-slip shadow events, plus their coverage of the
+clock/common-mode-removed TDCP residual tail; these flags never reset an arc
+or affect a solution. Normal parity output also reports TDCP measurements
+built versus factors actually inserted by each backend.
 
 ### Moving CLAS PPP vs MRTKLIB
 

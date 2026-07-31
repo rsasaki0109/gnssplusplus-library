@@ -1252,6 +1252,151 @@ struct TdcpEpochGroupKey {
     }
 };
 
+struct CycleSlipShadowKey {
+    std::size_t previous_epoch_index = 0;
+    std::size_t current_epoch_index = 0;
+    libgnss::SatelliteId satellite;
+
+    bool operator<(const CycleSlipShadowKey& other) const {
+        return std::tie(previous_epoch_index, current_epoch_index, satellite) <
+               std::tie(other.previous_epoch_index,
+                        other.current_epoch_index,
+                        other.satellite);
+    }
+};
+
+struct CycleSlipCombinationHistory {
+    std::size_t epoch_index = 0;
+    double geometry_free_m = 0.0;
+    double melbourne_wubbena_m = 0.0;
+    bool has_melbourne_wubbena = false;
+};
+
+struct CycleSlipShadowSummary {
+    std::size_t geometry_free_comparisons = 0;
+    std::size_t geometry_free_pair_events = 0;
+    std::size_t melbourne_wubbena_comparisons = 0;
+    std::size_t melbourne_wubbena_pair_events = 0;
+    std::map<CycleSlipShadowKey, double> max_geometry_free_jump_m;
+    std::set<CycleSlipShadowKey> geometry_free_events;
+    std::set<CycleSlipShadowKey> melbourne_wubbena_events;
+    std::set<CycleSlipShadowKey> union_events;
+};
+
+CycleSlipShadowSummary auditCycleSlipCombinations(
+    const libgnss::FGOProcessor::FGOProblem& problem) {
+    using Carrier = libgnss::FGOProcessor::CarrierPhaseFactor;
+    using CombinationKey =
+        std::tuple<libgnss::SatelliteId, libgnss::SignalType, libgnss::SignalType>;
+
+    std::vector<std::map<libgnss::SatelliteId, std::vector<const Carrier*>>>
+        carriers_by_epoch_satellite(problem.epochs.size());
+    for (const auto& carrier : problem.carrier_observations) {
+        if (carrier.epoch_index < carriers_by_epoch_satellite.size() &&
+            carrier.has_carrier_phase &&
+            carrier.wavelength_m > 0.0 &&
+            std::isfinite(carrier.model_debug.raw_carrier_m)) {
+            carriers_by_epoch_satellite[carrier.epoch_index][carrier.satellite]
+                .push_back(&carrier);
+        }
+    }
+
+    constexpr double kGeometryFreeThresholdM = 0.05;
+    constexpr double kMelbourneWubbenaThresholdM = 10.0;
+    std::map<CombinationKey, CycleSlipCombinationHistory> history;
+    CycleSlipShadowSummary result;
+
+    for (std::size_t epoch_index = 0;
+         epoch_index < carriers_by_epoch_satellite.size();
+         ++epoch_index) {
+        for (auto& [satellite, carriers] :
+             carriers_by_epoch_satellite[epoch_index]) {
+            std::sort(
+                carriers.begin(), carriers.end(),
+                [](const Carrier* lhs, const Carrier* rhs) {
+                    return lhs->wavelength_m < rhs->wavelength_m;
+                });
+            if (carriers.size() < 2) {
+                continue;
+            }
+            const Carrier* primary = carriers.front();
+            for (std::size_t secondary_index = 1;
+                 secondary_index < carriers.size();
+                 ++secondary_index) {
+                const Carrier* secondary = carriers[secondary_index];
+                const double f1 =
+                    libgnss::constants::SPEED_OF_LIGHT / primary->wavelength_m;
+                const double f2 =
+                    libgnss::constants::SPEED_OF_LIGHT / secondary->wavelength_m;
+                if (!(f1 > 0.0) || !(f2 > 0.0) || std::abs(f1 - f2) < 1.0) {
+                    continue;
+                }
+
+                const double geometry_free_m =
+                    primary->model_debug.raw_carrier_m -
+                    secondary->model_debug.raw_carrier_m;
+                const bool has_melbourne_wubbena =
+                    primary->model_debug.raw_pseudorange_m > 0.0 &&
+                    secondary->model_debug.raw_pseudorange_m > 0.0;
+                double melbourne_wubbena_m = 0.0;
+                if (has_melbourne_wubbena) {
+                    const double primary_phase_cycles =
+                        primary->model_debug.raw_carrier_m /
+                        primary->wavelength_m;
+                    const double secondary_phase_cycles =
+                        secondary->model_debug.raw_carrier_m /
+                        secondary->wavelength_m;
+                    melbourne_wubbena_m =
+                        (primary_phase_cycles - secondary_phase_cycles) *
+                            libgnss::constants::SPEED_OF_LIGHT / (f1 - f2) -
+                        (f1 * primary->model_debug.raw_pseudorange_m +
+                         f2 * secondary->model_debug.raw_pseudorange_m) /
+                            (f1 + f2);
+                }
+
+                const CombinationKey combination_key{
+                    satellite, primary->signal, secondary->signal};
+                const auto previous_it = history.find(combination_key);
+                if (previous_it != history.end() &&
+                    previous_it->second.epoch_index + 1 == epoch_index) {
+                    const CycleSlipShadowKey event_key{
+                        epoch_index - 1, epoch_index, satellite};
+                    ++result.geometry_free_comparisons;
+                    const double geometry_free_jump_m = std::abs(
+                        geometry_free_m -
+                        previous_it->second.geometry_free_m);
+                    auto& max_jump =
+                        result.max_geometry_free_jump_m[event_key];
+                    max_jump = std::max(max_jump, geometry_free_jump_m);
+                    if (geometry_free_jump_m > kGeometryFreeThresholdM) {
+                        ++result.geometry_free_pair_events;
+                        result.geometry_free_events.insert(event_key);
+                        result.union_events.insert(event_key);
+                    }
+                    if (has_melbourne_wubbena &&
+                        previous_it->second.has_melbourne_wubbena) {
+                        ++result.melbourne_wubbena_comparisons;
+                        if (std::abs(
+                                melbourne_wubbena_m -
+                                previous_it->second.melbourne_wubbena_m) >
+                            kMelbourneWubbenaThresholdM) {
+                            ++result.melbourne_wubbena_pair_events;
+                            result.melbourne_wubbena_events.insert(event_key);
+                            result.union_events.insert(event_key);
+                        }
+                    }
+                }
+                history[combination_key] = {
+                    epoch_index,
+                    geometry_free_m,
+                    melbourne_wubbena_m,
+                    has_melbourne_wubbena};
+            }
+        }
+    }
+    return result;
+}
+
 struct TdcpResidualSummary {
     std::size_t count = 0;
     double rms_m = 0.0;
@@ -1311,6 +1456,13 @@ void printTdcpResidualSummary(const char* label, const TdcpResidualSummary& summ
               << summary.above_threshold[4] << "\n";
 }
 
+struct TdcpAuditRow {
+    CycleSlipShadowKey event_key;
+    double geometry_only_residual_m = 0.0;
+    double seed_clock_residual_m = 0.0;
+    double common_mode_removed_residual_m = 0.0;
+};
+
 void auditTdcp(const libgnss::FGOProcessor::FGOProblem& problem) {
     std::set<TdcpObservationKey> dd_carrier_observations;
     for (const auto& factor : problem.double_difference_carrier_factors) {
@@ -1321,11 +1473,9 @@ void auditTdcp(const libgnss::FGOProcessor::FGOProblem& problem) {
     }
 
     std::size_t shares_dd_carrier_at_both_epochs = 0;
-    std::vector<double> geometry_only_residuals;
-    std::vector<double> seed_clock_residuals;
-    std::map<TdcpEpochGroupKey, std::vector<double>> residuals_by_epoch_system;
-    geometry_only_residuals.reserve(problem.tdcp_factors.size());
-    seed_clock_residuals.reserve(problem.tdcp_factors.size());
+    std::vector<TdcpAuditRow> rows;
+    std::map<TdcpEpochGroupKey, std::vector<std::size_t>> rows_by_epoch_system;
+    rows.reserve(problem.tdcp_factors.size());
 
     for (const auto& factor : problem.tdcp_factors) {
         if (factor.previous_epoch_index >= problem.epochs.size() ||
@@ -1351,23 +1501,105 @@ void auditTdcp(const libgnss::FGOProcessor::FGOProblem& problem) {
             factor.delta_carrier_m - (current_range - previous_range);
         const double seed_clock_delta =
             current_epoch.receiver_clock_bias_m - previous_epoch.receiver_clock_bias_m;
-        geometry_only_residuals.push_back(geometry_residual);
-        seed_clock_residuals.push_back(geometry_residual - seed_clock_delta);
-        residuals_by_epoch_system[
+        const std::size_t row_index = rows.size();
+        rows.push_back({
+            {factor.previous_epoch_index,
+             factor.current_epoch_index,
+             factor.satellite},
+            geometry_residual,
+            geometry_residual - seed_clock_delta,
+            0.0});
+        rows_by_epoch_system[
             {factor.previous_epoch_index,
              factor.current_epoch_index,
              factor.satellite.system}]
-            .push_back(geometry_residual);
+            .push_back(row_index);
     }
 
+    std::vector<double> geometry_only_residuals;
+    std::vector<double> seed_clock_residuals;
     std::vector<double> common_mode_removed_residuals;
-    common_mode_removed_residuals.reserve(geometry_only_residuals.size());
-    for (auto& [key, residuals] : residuals_by_epoch_system) {
+    geometry_only_residuals.reserve(rows.size());
+    seed_clock_residuals.reserve(rows.size());
+    common_mode_removed_residuals.reserve(rows.size());
+    for (auto& [key, row_indices] : rows_by_epoch_system) {
         (void)key;
-        std::sort(residuals.begin(), residuals.end());
-        const double median = residuals[residuals.size() / 2];
-        for (const double residual : residuals) {
-            common_mode_removed_residuals.push_back(residual - median);
+        std::vector<double> group_residuals;
+        group_residuals.reserve(row_indices.size());
+        for (const std::size_t row_index : row_indices) {
+            group_residuals.push_back(rows[row_index].geometry_only_residual_m);
+        }
+        std::sort(group_residuals.begin(), group_residuals.end());
+        const double median = group_residuals[group_residuals.size() / 2];
+        for (const std::size_t row_index : row_indices) {
+            rows[row_index].common_mode_removed_residual_m =
+                rows[row_index].geometry_only_residual_m - median;
+        }
+    }
+    for (const auto& row : rows) {
+        geometry_only_residuals.push_back(row.geometry_only_residual_m);
+        seed_clock_residuals.push_back(row.seed_clock_residual_m);
+        common_mode_removed_residuals.push_back(
+            row.common_mode_removed_residual_m);
+    }
+
+    const CycleSlipShadowSummary slip_shadow =
+        auditCycleSlipCombinations(problem);
+    std::size_t shadow_associated_tdcp_factors = 0;
+    constexpr std::array<double, 3> tail_thresholds_m{1.0, 3.0, 10.0};
+    std::array<std::size_t, 3> tail_total{};
+    std::array<std::size_t, 3> tail_shadow_associated{};
+    constexpr std::array<double, 5> geometry_free_thresholds_m{
+        0.05, 0.1, 0.2, 0.5, 1.0};
+    std::array<std::size_t, 5> geometry_free_event_count{};
+    std::array<std::size_t, 5> geometry_free_associated_tdcp_count{};
+    std::array<std::array<std::size_t, 3>, 5>
+        geometry_free_tail_associated{};
+    for (const auto& [event_key, max_jump_m] :
+         slip_shadow.max_geometry_free_jump_m) {
+        (void)event_key;
+        for (std::size_t i = 0;
+             i < geometry_free_thresholds_m.size();
+             ++i) {
+            if (max_jump_m > geometry_free_thresholds_m[i]) {
+                ++geometry_free_event_count[i];
+            }
+        }
+    }
+    for (const auto& row : rows) {
+        const bool shadow_associated =
+            slip_shadow.union_events.count(row.event_key) > 0;
+        if (shadow_associated) {
+            ++shadow_associated_tdcp_factors;
+        }
+        const double abs_residual =
+            std::abs(row.common_mode_removed_residual_m);
+        for (std::size_t i = 0; i < tail_thresholds_m.size(); ++i) {
+            if (abs_residual > tail_thresholds_m[i]) {
+                ++tail_total[i];
+                if (shadow_associated) {
+                    ++tail_shadow_associated[i];
+                }
+            }
+        }
+        const auto gf_it =
+            slip_shadow.max_geometry_free_jump_m.find(row.event_key);
+        if (gf_it != slip_shadow.max_geometry_free_jump_m.end()) {
+            for (std::size_t i = 0;
+                 i < geometry_free_thresholds_m.size();
+                 ++i) {
+                if (gf_it->second <= geometry_free_thresholds_m[i]) {
+                    continue;
+                }
+                ++geometry_free_associated_tdcp_count[i];
+                for (std::size_t j = 0;
+                     j < tail_thresholds_m.size();
+                     ++j) {
+                    if (abs_residual > tail_thresholds_m[j]) {
+                        ++geometry_free_tail_associated[i][j];
+                    }
+                }
+            }
         }
     }
 
@@ -1397,6 +1629,40 @@ void auditTdcp(const libgnss::FGOProcessor::FGOProblem& problem) {
     printTdcpResidualSummary(
         "per-epoch/system common-mode-removed residual",
         summarizeResiduals(common_mode_removed_residuals));
+    std::cout << "  cycle-slip shadow (no arc reset): GF threshold=0.05 m"
+              << " comparisons=" << slip_shadow.geometry_free_comparisons
+              << " pair_events=" << slip_shadow.geometry_free_pair_events
+              << " satellite_epoch_events="
+              << slip_shadow.geometry_free_events.size() << "\n"
+              << "  cycle-slip shadow (no arc reset): MW threshold=10 m"
+              << " comparisons=" << slip_shadow.melbourne_wubbena_comparisons
+              << " pair_events=" << slip_shadow.melbourne_wubbena_pair_events
+              << " satellite_epoch_events="
+              << slip_shadow.melbourne_wubbena_events.size() << "\n"
+              << "  cycle-slip shadow union satellite_epoch_events="
+              << slip_shadow.union_events.size()
+              << " associated_tdcp_factors="
+              << shadow_associated_tdcp_factors << "\n"
+              << "  common-mode TDCP tail associated with GF/MW shadow"
+              << " >1m=" << tail_shadow_associated[0] << "/"
+              << tail_total[0]
+              << " >3m=" << tail_shadow_associated[1] << "/"
+              << tail_total[1]
+              << " >10m=" << tail_shadow_associated[2] << "/"
+              << tail_total[2] << "\n";
+    for (std::size_t i = 0;
+         i < geometry_free_thresholds_m.size();
+         ++i) {
+        std::cout << "  GF threshold sweep >"
+                  << geometry_free_thresholds_m[i]
+                  << "m events=" << geometry_free_event_count[i]
+                  << " associated_tdcp="
+                  << geometry_free_associated_tdcp_count[i]
+                  << " tail[>1,>3,>10]="
+                  << geometry_free_tail_associated[i][0] << ","
+                  << geometry_free_tail_associated[i][1] << ","
+                  << geometry_free_tail_associated[i][2] << "\n";
+    }
     std::cout << "  note: built factors are consumed by Eigen, but GTSAM insertion must be "
                  "verified separately via diagnostics.tdcp_factors_inserted.\n";
 }
