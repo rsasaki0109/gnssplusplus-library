@@ -2087,6 +2087,70 @@ TEST(FGOStalePinTest, DefaultOffIsNoOp) {
     EXPECT_EQ(result.solution.solutions.size(), problem.epochs.size());
 }
 
+TEST(FGOAmbiguityOutcomeTelemetryTest, HoldFallbackPreservesRatioRejection) {
+    CpHoldTestOptions opt;
+    opt.satellites = lambdaCapableSatelliteGeometry();
+    opt.num_epochs = 12;
+    const auto problem = makeCpHoldFixedLagProblem(opt);
+
+    FGOProcessor::FGOConfig config = makeStalePinBaseConfig();
+    config.lambda_ratio_threshold = 1.0e200;
+    config.ambiguity_hold_ratio_threshold = 1.0e200;
+    config.use_cp_hold_recovery = false;
+
+    FGOProcessor processor(config);
+    const auto result = processor.optimizeProblem(problem);
+
+    ASSERT_EQ(result.epoch_diagnostics.size(), problem.epochs.size());
+    EXPECT_TRUE(std::any_of(
+        result.epoch_diagnostics.begin(), result.epoch_diagnostics.end(),
+        [](const FGOProcessor::FGOEpochDiagnostics& diagnostics) {
+            return diagnostics.ar_outcome ==
+                   FGOProcessor::AmbiguityResolutionOutcome::RatioRejected;
+        }))
+        << "the held-ambiguity fallback must not overwrite a terminal ratio-test rejection";
+}
+
+TEST(FGOAmbiguityOutcomeTelemetryTest, NoCarrierCandidatesRemainNoCandidates) {
+    CpHoldTestOptions opt;
+    opt.satellites = lambdaCapableSatelliteGeometry();
+    opt.num_epochs = 4;
+    auto problem = makeCpHoldFixedLagProblem(opt);
+    problem.double_difference_carrier_factors.clear();
+
+    FGOProcessor::FGOConfig config = makeStalePinBaseConfig();
+    config.use_cp_hold_recovery = false;
+
+    FGOProcessor processor(config);
+    const auto result = processor.optimizeProblem(problem);
+
+    ASSERT_EQ(result.epoch_diagnostics.size(), problem.epochs.size());
+    for (const auto& diagnostics : result.epoch_diagnostics) {
+        EXPECT_EQ(diagnostics.ar_outcome,
+                  FGOProcessor::AmbiguityResolutionOutcome::NoCandidates);
+    }
+}
+
+TEST(FGOAmbiguityOutcomeTelemetryTest, BelowFloorCandidatesAreInsufficient) {
+    CpHoldTestOptions opt;
+    opt.satellites = gtsamParitySatelliteGeometry();
+    opt.num_epochs = 4;
+    const auto problem = makeCpHoldFixedLagProblem(opt);
+
+    FGOProcessor::FGOConfig config = makeStalePinBaseConfig();
+    config.use_cp_hold_recovery = false;
+
+    FGOProcessor processor(config);
+    const auto result = processor.optimizeProblem(problem);
+
+    ASSERT_EQ(result.epoch_diagnostics.size(), problem.epochs.size());
+    for (const auto& diagnostics : result.epoch_diagnostics) {
+        ASSERT_EQ(diagnostics.ambiguity_candidates, 5);
+        EXPECT_EQ(diagnostics.ar_outcome,
+                  FGOProcessor::AmbiguityResolutionOutcome::InsufficientCandidates);
+    }
+}
+
 TEST(FGOStalePinTest, ReleasesOnlyOffendingPinAtTrigger) {
     const auto problem = makeStalePinProblem();
 
