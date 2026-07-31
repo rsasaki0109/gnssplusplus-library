@@ -129,6 +129,17 @@ struct FuseOptions {
     bool integrity_satellite_par_persistent_subset = false;
     bool integrity_disjoint_satellite_par = false;
     int integrity_satellite_par_max_drop_steps = 8;
+    bool integrity_satellite_par_surplus_validation = false;
+    bool integrity_satellite_par_surplus_monitor_only = false;
+    bool integrity_satellite_par_surplus_low_pair_rescue = false;
+    int integrity_satellite_par_surplus_min_pairs = 2;
+    int integrity_satellite_par_surplus_min_fixed_pairs = 4;
+    double integrity_satellite_par_surplus_aperture_lt1 = 0.10;
+    double integrity_satellite_par_surplus_aperture_1to2 = 0.20;
+    double integrity_satellite_par_surplus_aperture_gt2 = 0.30;
+    bool integrity_satellite_par_surplus_majority = false;
+    double integrity_satellite_par_surplus_majority_fraction = 0.50;
+    int integrity_satellite_par_acquisition_streak = 0;
     bool integrity_wide_lane_front_end = false;
     bool integrity_l1_l2_wlnl_cascade = false;
     bool integrity_l2_l5_wlnl_cascade = false;
@@ -639,6 +650,25 @@ void printAdvancedUsage(const char* program_name) {
         << "  --integrity-satellite-par-max-drop-steps <n>\n"
         << "                                Maximum satellite subsets tried by main\n"
         << "                                and partition PAR (default: 8)\n"
+        << "  --integrity-satellite-par-surplus-validation\n"
+        << "                                Use excluded carrier DDs as additive\n"
+        << "                                independent evidence for PAR promotion\n"
+        << "  --integrity-satellite-par-surplus-validation-monitor\n"
+        << "                                Record surplus evidence without authority\n"
+        << "  --integrity-satellite-par-surplus-low-pair-rescue\n"
+        << "                                Allow a surplus pass to use the lower\n"
+        << "                                fixed-subset pair floor\n"
+        << "  --integrity-satellite-par-surplus-min-pairs <n>\n"
+        << "  --integrity-satellite-par-surplus-min-fixed-pairs <n>\n"
+        << "  --integrity-satellite-par-surplus-aperture-lt1 <cycles>\n"
+        << "  --integrity-satellite-par-surplus-aperture-1to2 <cycles>\n"
+        << "  --integrity-satellite-par-surplus-aperture-gt2 <cycles>\n"
+        << "  --integrity-satellite-par-surplus-majority <fraction>\n"
+        << "                                Optional majority aggregation; default\n"
+        << "                                requires every surplus pair to pass\n"
+        << "  --integrity-satellite-par-acquisition-streak <n>\n"
+        << "                                Override only satellite-PAR causal\n"
+        << "                                acquisition (default: shared policy)\n"
         << "  --integrity-wide-lane-front-end\n"
         << "                                Enable L1/L2 Melbourne-Wubbena wide-lane\n"
         << "                                conditioning before main integer search\n"
@@ -993,10 +1023,18 @@ public:
                  "causal_arc_candidate_ecef_z,"
                  "satellite_par_ffrt_passed,"
                  "satellite_par_subset_size,"
-                 "satellite_par_persistent_subset_attempted,"
-                 "satellite_par_persistent_subset_used,"
-                 "satellite_par_ratio,"
-                 "satellite_par_disjoint_evidence_passed,"
+                  "satellite_par_persistent_subset_attempted,"
+                  "satellite_par_persistent_subset_used,"
+                  "satellite_par_ratio,"
+                  "satellite_par_surplus_evaluated,"
+                  "satellite_par_surplus_passed,"
+                  "satellite_par_surplus_fallback_level,"
+                  "satellite_par_surplus_available,"
+                  "satellite_par_surplus_used,"
+                  "satellite_par_surplus_passing_pairs,"
+                  "satellite_par_surplus_aperture_cycles,"
+                  "satellite_par_surplus_max_distance_cycles,"
+                  "satellite_par_disjoint_evidence_passed,"
                  "satellite_par_consensus_declared_fixed,"
                  "satellite_par_consensus_state,"
                  "satellite_par_consensus_acquisition_streak,"
@@ -1201,6 +1239,32 @@ public:
                      .lambda_satellite_par_persistent_subset_used
               << ",";
         number(telemetry.lambda_satellite_par_shadow_ratio);
+        file_ << ","
+              << telemetry
+                     .lambda_satellite_par_surplus_validation_evaluated
+              << ","
+              << telemetry
+                     .lambda_satellite_par_surplus_validation_passed
+              << ","
+              << telemetry
+                     .lambda_satellite_par_surplus_validation_fallback_level
+              << ","
+              << telemetry
+                     .lambda_satellite_par_surplus_validation_available
+              << ","
+              << telemetry
+                     .lambda_satellite_par_surplus_validation_used
+              << ","
+              << telemetry
+                     .lambda_satellite_par_surplus_validation_passing_pairs
+              << ",";
+        number(
+            telemetry
+                .lambda_satellite_par_surplus_validation_aperture_cycles);
+        file_ << ",";
+        number(
+            telemetry
+                .lambda_satellite_par_surplus_validation_max_distance_cycles);
         file_ << ","
               << telemetry.satellite_par_disjoint_evidence_passed
               << ","
@@ -1462,6 +1526,123 @@ private:
     std::exit(1);
 }
 
+bool parseSatelliteParSurplusOption(const std::string& arg,
+                                    int& index,
+                                    int argc,
+                                    char* argv[],
+                                    FuseOptions& options) {
+    if (arg == "--integrity-satellite-par-quality-diverse") {
+        options.integrity_satellite_par_quality_diverse = true;
+        return true;
+    }
+    if (arg ==
+        "--integrity-satellite-par-persistent-subset-shadow") {
+        options.integrity_satellite_par_persistent_subset = true;
+        return true;
+    }
+    if (arg == "--integrity-disjoint-satellite-par-shadow") {
+        options.integrity_disjoint_satellite_par = true;
+        return true;
+    }
+    if (arg == "--integrity-satellite-par-max-drop-steps") {
+        const int value =
+            std::stoi(requireValue(arg, index, argc, argv));
+        if (value < 1 || value > 32) {
+            argumentError(
+                "--integrity-satellite-par-max-drop-steps must be in [1, 32]",
+                argv[0]);
+        }
+        options.integrity_satellite_par_max_drop_steps = value;
+        return true;
+    }
+    if (arg == "--integrity-satellite-par-acquisition-streak") {
+        const int value =
+            std::stoi(requireValue(arg, index, argc, argv));
+        if (value < 1 || value > 100) {
+            argumentError(
+                "--integrity-satellite-par-acquisition-streak must be in [1, 100]",
+                argv[0]);
+        }
+        options.integrity_satellite_par_acquisition_streak = value;
+        return true;
+    }
+    if (arg == "--integrity-satellite-par-surplus-validation") {
+        options.integrity_satellite_par_surplus_validation = true;
+        return true;
+    }
+    if (arg ==
+        "--integrity-satellite-par-surplus-validation-monitor") {
+        options.integrity_satellite_par_surplus_validation = true;
+        options.integrity_satellite_par_surplus_monitor_only = true;
+        return true;
+    }
+    if (arg == "--integrity-satellite-par-surplus-low-pair-rescue") {
+        options.integrity_satellite_par_surplus_validation = true;
+        options.integrity_satellite_par_surplus_low_pair_rescue = true;
+        return true;
+    }
+    if (arg == "--integrity-satellite-par-surplus-min-pairs") {
+        const int value =
+            std::stoi(requireValue(arg, index, argc, argv));
+        if (value < 1 || value > 32) {
+            argumentError(
+                "--integrity-satellite-par-surplus-min-pairs must be in [1, 32]",
+                argv[0]);
+        }
+        options.integrity_satellite_par_surplus_min_pairs = value;
+        return true;
+    }
+    if (arg == "--integrity-satellite-par-surplus-min-fixed-pairs") {
+        const int value =
+            std::stoi(requireValue(arg, index, argc, argv));
+        if (value < 4 || value > 64) {
+            argumentError(
+                "--integrity-satellite-par-surplus-min-fixed-pairs must be in [4, 64]",
+                argv[0]);
+        }
+        options.integrity_satellite_par_surplus_min_fixed_pairs = value;
+        return true;
+    }
+    const auto parse_aperture = [&](double& destination) {
+        const double value =
+            std::stod(requireValue(arg, index, argc, argv));
+        if (!std::isfinite(value) || value < 0.0 || value > 0.5) {
+            argumentError(arg + " must be finite and in [0, 0.5]",
+                          argv[0]);
+        }
+        destination = value;
+    };
+    if (arg == "--integrity-satellite-par-surplus-aperture-lt1") {
+        parse_aperture(
+            options.integrity_satellite_par_surplus_aperture_lt1);
+        return true;
+    }
+    if (arg == "--integrity-satellite-par-surplus-aperture-1to2") {
+        parse_aperture(
+            options.integrity_satellite_par_surplus_aperture_1to2);
+        return true;
+    }
+    if (arg == "--integrity-satellite-par-surplus-aperture-gt2") {
+        parse_aperture(
+            options.integrity_satellite_par_surplus_aperture_gt2);
+        return true;
+    }
+    if (arg == "--integrity-satellite-par-surplus-majority") {
+        const double value =
+            std::stod(requireValue(arg, index, argc, argv));
+        if (!std::isfinite(value) || value < 0.0 || value > 1.0) {
+            argumentError(
+                "--integrity-satellite-par-surplus-majority must be finite and in [0, 1]",
+                argv[0]);
+        }
+        options.integrity_satellite_par_surplus_majority = true;
+        options.integrity_satellite_par_surplus_majority_fraction =
+            value;
+        return true;
+    }
+    return false;
+}
+
 FuseOptions parseArguments(int argc, char* argv[]) {
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
@@ -1543,6 +1724,11 @@ FuseOptions parseArguments(int argc, char* argv[]) {
     std::string imu_grade = "tactical";
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
+        if (parseSatelliteParSurplusOption(
+                arg, i, argc, argv, options)) {
+            continue;
+        }
+        bool recognized_option = true;
         if (arg == "-h" || arg == "--help") {
             printUsage(argv[0]);
             std::exit(0);
@@ -1745,25 +1931,6 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             options.integrity_inertial_referenced_consensus_shadow = true;
             options.integrity_inertial_referenced_consensus_promotion =
                 true;
-        } else if (arg ==
-                   "--integrity-satellite-par-quality-diverse") {
-            options.integrity_satellite_par_quality_diverse = true;
-        } else if (arg ==
-                   "--integrity-satellite-par-persistent-subset-shadow") {
-            options.integrity_satellite_par_persistent_subset = true;
-        } else if (arg ==
-                   "--integrity-disjoint-satellite-par-shadow") {
-            options.integrity_disjoint_satellite_par = true;
-        } else if (arg ==
-                   "--integrity-satellite-par-max-drop-steps") {
-            options.integrity_satellite_par_max_drop_steps =
-                std::stoi(requireValue(arg, i, argc, argv));
-            if (options.integrity_satellite_par_max_drop_steps < 1 ||
-                options.integrity_satellite_par_max_drop_steps > 32) {
-                argumentError(
-                    "--integrity-satellite-par-max-drop-steps must be in [1, 32]",
-                    argv[0]);
-            }
         } else if (arg ==
                    "--integrity-wide-lane-front-end") {
             options.integrity_wide_lane_front_end = true;
@@ -1992,7 +2159,13 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             options.rtk_snr_weighting = true;
         } else if (arg == "--rtk-snr-reference-dbhz") {
             options.rtk_snr_reference_dbhz = std::stod(requireValue(arg, i, argc, argv));
-        } else if (arg == "--rtk-snr-max-variance-scale") {
+        } else {
+            recognized_option = false;
+        }
+        if (recognized_option) {
+            continue;
+        }
+        if (arg == "--rtk-snr-max-variance-scale") {
             options.rtk_snr_max_variance_scale = std::stod(requireValue(arg, i, argc, argv));
         } else if (arg == "--max-subset-ar-drop-steps") {
             options.max_subset_ar_drop_steps = std::stoi(requireValue(arg, i, argc, argv));
@@ -2534,6 +2707,11 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
             rtk_config.disjoint_consensus_state_machine;
         rtk_config.satellite_par_consensus_state_machine.enabled =
             options.integrity_satellite_par_consensus_shadow;
+        if (options.integrity_satellite_par_acquisition_streak > 0) {
+            rtk_config.satellite_par_consensus_state_machine
+                .acquisition_streak_epochs =
+                options.integrity_satellite_par_acquisition_streak;
+        }
         rtk_config.satellite_par_consensus_promotion =
             options.integrity_satellite_par_consensus_promotion;
         rtk_config.lambda_src_par_shadow_success_rate =
@@ -2561,6 +2739,29 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
             options.integrity_satellite_par_quality_diverse;
         rtk_config.lambda_satellite_par_persistent_subset =
             options.integrity_satellite_par_persistent_subset;
+        auto& surplus =
+            rtk_config.lambda_satellite_par_surplus_validation;
+        surplus.enabled =
+            options.integrity_satellite_par_surplus_validation;
+        surplus.monitor_only =
+            options.integrity_satellite_par_surplus_monitor_only;
+        surplus.allow_low_pair_rescue =
+            options.integrity_satellite_par_surplus_low_pair_rescue;
+        surplus.minimum_surplus_pairs =
+            options.integrity_satellite_par_surplus_min_pairs;
+        surplus.minimum_fixed_pairs_for_rescue =
+            options.integrity_satellite_par_surplus_min_fixed_pairs;
+        surplus.aperture_pdop_lt1_cycles =
+            options.integrity_satellite_par_surplus_aperture_lt1;
+        surplus.aperture_pdop_1to2_cycles =
+            options.integrity_satellite_par_surplus_aperture_1to2;
+        surplus.aperture_pdop_gt2_cycles =
+            options.integrity_satellite_par_surplus_aperture_gt2;
+        surplus.require_all =
+            !options.integrity_satellite_par_surplus_majority;
+        surplus.majority_fraction =
+            options
+                .integrity_satellite_par_surplus_majority_fraction;
         rtk_config.enable_wide_lane_ar =
             options.integrity_wide_lane_front_end;
         rtk_config.lambda_l1_l2_wlnl_shadow =
@@ -2649,6 +2850,11 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
                 options.integrity_disjoint_satellite_par
                     ? options.integrity_satellite_par_max_drop_steps
                     : 0;
+            // The two disjoint processors are themselves independent
+            // validators. Do not consume their smaller observation pools with
+            // the primary processor's surplus-holdout policy.
+            disjoint_config.lambda_satellite_par_surplus_validation.enabled =
+                false;
             disjoint_config
                 .lambda_satellite_par_only_after_full_ffrt_failure =
                 options.integrity_disjoint_satellite_par;

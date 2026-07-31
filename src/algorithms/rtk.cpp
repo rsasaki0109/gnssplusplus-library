@@ -2502,20 +2502,43 @@ void RTKProcessor::applyLibraryFixedQualityGate(
         debug_telemetry_.lambda_satellite_par_shadow_subset_size;
     satellite_par_state_candidate.ambiguity_ratio =
         debug_telemetry_.lambda_satellite_par_shadow_ratio;
+    const bool satellite_par_surplus_passed_for_promotion =
+        !rtk_config_.lambda_satellite_par_surplus_validation
+             .monitor_only &&
+        debug_telemetry_
+            .lambda_satellite_par_surplus_validation_evaluated &&
+        debug_telemetry_
+            .lambda_satellite_par_surplus_validation_passed;
     satellite_par_state_candidate.independent_consensus_delta_m =
-        std::max(
-            satellite_par_disjoint_decision
-                .partition_a_primary_separation_m,
-            satellite_par_disjoint_decision
-                .partition_b_primary_separation_m);
+        satellite_par_surplus_passed_for_promotion
+            ? 0.30 *
+                  debug_telemetry_
+                      .lambda_satellite_par_surplus_validation_max_distance_cycles
+            : std::max(
+                  satellite_par_disjoint_decision
+                      .partition_a_primary_separation_m,
+                  satellite_par_disjoint_decision
+                      .partition_b_primary_separation_m);
     satellite_par_state_candidate
         .independent_failure_budget_passed =
-        satellite_par_disjoint_decision.passed;
+        satellite_par_disjoint_decision.passed ||
+        satellite_par_surplus_passed_for_promotion;
+    const bool satellite_par_pair_count_passed =
+        debug_telemetry_.lambda_satellite_par_shadow_subset_size >=
+            rtk_config_.safe_fix_shadow_minimum_pairs ||
+        (satellite_par_surplus_passed_for_promotion &&
+         rtk_config_.lambda_satellite_par_surplus_validation
+             .allow_low_pair_rescue &&
+         debug_telemetry_.lambda_satellite_par_shadow_subset_size >=
+             std::max(
+                 4,
+                 rtk_config_.lambda_satellite_par_surplus_validation
+                     .minimum_fixed_pairs_for_rescue));
     satellite_par_state_candidate.acquisition_eligible =
         solution.isValid() &&
-        satellite_par_disjoint_decision.passed &&
-        debug_telemetry_.lambda_satellite_par_shadow_subset_size >=
-            rtk_config_.safe_fix_shadow_minimum_pairs &&
+        satellite_par_state_candidate
+            .independent_failure_budget_passed &&
+        satellite_par_pair_count_passed &&
         std::isfinite(
             satellite_par_state_candidate.nis_per_observation) &&
         satellite_par_state_candidate.nis_per_observation <=
@@ -2872,7 +2895,9 @@ void RTKProcessor::applyLibraryFixedQualityGate(
     const bool satellite_par_state_safe_candidate =
         rtk_config_.satellite_par_consensus_promotion &&
         satellite_par_state_decision.declared_fixed &&
-        satellite_par_disjoint_decision.passed &&
+        rtk_surplus_validation::promotionEvidencePassed(
+            satellite_par_disjoint_decision.passed,
+            satellite_par_surplus_passed_for_promotion) &&
         satellite_par_candidate_position.allFinite();
     const bool satellite_par_promotion_candidate =
         satellite_par_state_safe_candidate &&
@@ -2955,7 +2980,9 @@ void RTKProcessor::applyLibraryFixedQualityGate(
         ((causal_arc_promotion_candidate &&
           causal_arc_disjoint_decision.passed) ||
          (satellite_par_promotion_candidate &&
-          satellite_par_disjoint_decision.passed) ||
+          rtk_surplus_validation::promotionEvidencePassed(
+              satellite_par_disjoint_decision.passed,
+              satellite_par_surplus_passed_for_promotion)) ||
          (src_par_promotion_candidate &&
           src_par_disjoint_decision.passed) ||
          (inertial_referenced_promotion_candidate &&
@@ -6719,6 +6746,255 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
                         const Vector3d satellite_best_ecef =
                             base_position_ +
                             satellite_best_head.head<3>();
+                        const auto& surplus_config =
+                            rtk_config_
+                                .lambda_satellite_par_surplus_validation;
+                        if (surplus_config.enabled) {
+                            std::set<int> selected_indices(
+                                subset.begin(), subset.end());
+                            std::set<SatelliteId> fixed_satellites;
+                            for (int index : subset) {
+                                fixed_satellites.insert(
+                                    dd_pairs[index].ref_sat);
+                                fixed_satellites.insert(
+                                    dd_pairs[index].sat);
+                            }
+
+                            double fixed_set_pdop =
+                                std::numeric_limits<double>::infinity();
+                            if (fixed_satellites.size() >= 4) {
+                                MatrixXd geometry(
+                                    static_cast<int>(
+                                        fixed_satellites.size()),
+                                    3);
+                                int row = 0;
+                                for (const auto& satellite :
+                                     fixed_satellites) {
+                                    const auto data_it =
+                                        sat_data.find(satellite);
+                                    if (data_it == sat_data.end()) {
+                                        row = -1;
+                                        break;
+                                    }
+                                    const Vector3d delta =
+                                        data_it->second.sat_pos -
+                                        satellite_best_ecef;
+                                    const double range = delta.norm();
+                                    if (!(range > 0.0)) {
+                                        row = -1;
+                                        break;
+                                    }
+                                    geometry.row(row++) =
+                                        (-delta / range).transpose();
+                                }
+                                if (row ==
+                                    static_cast<int>(
+                                        fixed_satellites.size())) {
+                                    const Matrix3d normal =
+                                        geometry.transpose() * geometry;
+                                    Eigen::FullPivLU<Matrix3d> lu(normal);
+                                    if (lu.isInvertible()) {
+                                        const Matrix3d inverse =
+                                            lu.inverse();
+                                        if (inverse.allFinite()) {
+                                            fixed_set_pdop = std::sqrt(
+                                                std::max(
+                                                    0.0,
+                                                    inverse.trace()));
+                                        }
+                                    }
+                                }
+                            }
+
+                            std::vector<
+                                rtk_surplus_validation::Sample>
+                                surplus_samples;
+                            struct SurplusPairObservable {
+                                double observed_dd_m = 0.0;
+                                double geometry_dd_m = 0.0;
+                                double wavelength_m = 0.0;
+                            };
+                            const auto pair_observable =
+                                [&](const DDPair& pair,
+                                    SurplusPairObservable& output) {
+                                    const auto ref_it =
+                                        sat_data.find(pair.ref_sat);
+                                    const auto sat_it =
+                                        sat_data.find(pair.sat);
+                                    if (ref_it == sat_data.end() ||
+                                        sat_it == sat_data.end()) {
+                                        return false;
+                                    }
+                                    const auto& ref = ref_it->second;
+                                    const auto& sat = sat_it->second;
+                                    const auto phase_cycles =
+                                        [&](const SatelliteData& data) {
+                                            if (pair.freq == 0) {
+                                                return data.rover_l1_phase -
+                                                       data.base_l1_phase;
+                                            }
+                                            if (pair.freq == 1) {
+                                                return data.rover_l2_phase -
+                                                       data.base_l2_phase;
+                                            }
+                                            return data.rover_l5_phase -
+                                                   data.base_l5_phase;
+                                        };
+                                    const auto wavelength =
+                                        [&](const SatelliteData& data) {
+                                            if (pair.freq == 0) {
+                                                return data.l1_wavelength;
+                                            }
+                                            if (pair.freq == 1) {
+                                                return data.l2_wavelength;
+                                            }
+                                            return data.l5_wavelength;
+                                        };
+                                    const double ref_wavelength =
+                                        wavelength(ref);
+                                    const double sat_wavelength =
+                                        wavelength(sat);
+                                    if (!(ref_wavelength > 0.0) ||
+                                        !(sat_wavelength > 0.0) ||
+                                        std::abs(ref_wavelength -
+                                                 sat_wavelength) >
+                                            1e-6) {
+                                        return false;
+                                    }
+                                    const double rr_ref =
+                                        geodist_range(
+                                            ref.sat_pos,
+                                            satellite_best_ecef) +
+                                        tropModel(satellite_best_ecef,
+                                                  ref.elevation);
+                                    const double br_ref =
+                                        geodist_range(
+                                            ref.sat_pos_base,
+                                            base_position_) +
+                                        tropModel(base_position_,
+                                                  ref.base_elevation);
+                                    const double rr =
+                                        geodist_range(
+                                            sat.sat_pos,
+                                            satellite_best_ecef) +
+                                        tropModel(satellite_best_ecef,
+                                                  sat.elevation);
+                                    const double br =
+                                        geodist_range(
+                                            sat.sat_pos_base,
+                                            base_position_) +
+                                        tropModel(base_position_,
+                                                  sat.base_elevation);
+                                    output.observed_dd_m =
+                                        phase_cycles(ref) *
+                                            ref_wavelength -
+                                        phase_cycles(sat) *
+                                            sat_wavelength;
+                                    output.geometry_dd_m =
+                                        (rr_ref - br_ref) - (rr - br);
+                                    output.wavelength_m =
+                                        sat_wavelength;
+                                    return std::isfinite(
+                                               output.observed_dd_m) &&
+                                           std::isfinite(
+                                               output.geometry_dd_m);
+                                };
+                            for (int index = 0; index < nb; ++index) {
+                                if (selected_indices.count(index) > 0) {
+                                    continue;
+                                }
+                                const auto& pair = dd_pairs[index];
+                                int alternate_index = -1;
+                                double alternate_elevation =
+                                    -std::numeric_limits<double>::infinity();
+                                for (int selected_index : subset) {
+                                    const auto& selected_pair =
+                                        dd_pairs[selected_index];
+                                    if (selected_pair.freq != pair.freq ||
+                                        selected_pair.ref_sat !=
+                                            pair.ref_sat ||
+                                        selected_pair.sat.system !=
+                                            pair.sat.system) {
+                                        continue;
+                                    }
+                                    const auto data_it =
+                                        sat_data.find(selected_pair.sat);
+                                    if (data_it != sat_data.end() &&
+                                        data_it->second.elevation >
+                                            alternate_elevation) {
+                                        alternate_index =
+                                            selected_index;
+                                        alternate_elevation =
+                                            data_it->second.elevation;
+                                    }
+                                }
+                                if (alternate_index < 0) {
+                                    continue;
+                                }
+                                SurplusPairObservable dropped;
+                                SurplusPairObservable alternate;
+                                if (!pair_observable(pair, dropped) ||
+                                    !pair_observable(
+                                        dd_pairs[alternate_index],
+                                        alternate) ||
+                                    std::abs(dropped.wavelength_m -
+                                             alternate.wavelength_m) >
+                                        1e-6) {
+                                    continue;
+                                }
+                                // Re-difference the dropped satellite against
+                                // a high-elevation satellite in the fixed
+                                // subset. The original DD reference phase
+                                // cancels exactly. The alternate satellite's
+                                // fixed ambiguity is an integer, so subtracting
+                                // it cannot change distance to the nearest
+                                // integer and need not be read from the float
+                                // ambiguity state.
+                                const double ambiguity_cycles =
+                                    ((dropped.observed_dd_m -
+                                      alternate.observed_dd_m) -
+                                     (dropped.geometry_dd_m -
+                                      alternate.geometry_dd_m)) /
+                                    dropped.wavelength_m;
+                                if (!std::isfinite(
+                                        ambiguity_cycles)) {
+                                    continue;
+                                }
+                                surplus_samples.push_back(
+                                    {pair.sat.system,
+                                     distanceToNearestInteger(
+                                         ambiguity_cycles)});
+                            }
+                            const auto surplus =
+                                rtk_surplus_validation::evaluate(
+                                    surplus_samples,
+                                    fixed_set_pdop,
+                                    surplus_config);
+                            debug_telemetry_
+                                .lambda_satellite_par_surplus_validation_evaluated =
+                                surplus.evaluated;
+                            debug_telemetry_
+                                .lambda_satellite_par_surplus_validation_passed =
+                                surplus.passed;
+                            debug_telemetry_
+                                .lambda_satellite_par_surplus_validation_fallback_level =
+                                surplus.fallback_level;
+                            debug_telemetry_
+                                .lambda_satellite_par_surplus_validation_available =
+                                surplus.surplus_available;
+                            debug_telemetry_
+                                .lambda_satellite_par_surplus_validation_used =
+                                surplus.surplus_used;
+                            debug_telemetry_
+                                .lambda_satellite_par_surplus_validation_passing_pairs =
+                                surplus.passing_pairs;
+                            debug_telemetry_
+                                .lambda_satellite_par_surplus_validation_aperture_cycles =
+                                surplus.aperture_cycles;
+                            debug_telemetry_
+                                .lambda_satellite_par_surplus_validation_max_distance_cycles =
+                                surplus.maximum_distance_cycles;
+                        }
                         debug_telemetry_
                             .lambda_satellite_par_shadow_best_ecef_x =
                             satellite_best_ecef.x();

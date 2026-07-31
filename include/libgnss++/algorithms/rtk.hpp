@@ -15,6 +15,7 @@
 #include "rtk_measurement.hpp"
 #include "rtk_selection.hpp"
 #include "rtk_slip_detection.hpp"
+#include "rtk_surplus_validation.hpp"
 #include "rtk_update.hpp"
 #include "rtk_validation.hpp"
 #include "safe_float_continuity.hpp"
@@ -442,6 +443,10 @@ public:
         bool lambda_satellite_par_shadow_quality_diverse = false;
         bool lambda_satellite_par_persistent_subset = false;
         bool lambda_satellite_par_only_after_full_ffrt_failure = false;
+        /// Candidate-domain integrity check using carrier observations excluded
+        /// from the satellite-PAR subset. Default-off and fail-closed.
+        rtk_surplus_validation::Config
+            lambda_satellite_par_surplus_validation;
 
         /// Shadow-only two-stage L1/L5 ambiguity diagnostic. L5 observations
         /// are collected without adding L5 states or measurements to the
@@ -967,6 +972,16 @@ public:
             std::numeric_limits<double>::quiet_NaN();
         bool lambda_satellite_par_persistent_subset_attempted = false;
         bool lambda_satellite_par_persistent_subset_used = false;
+        bool lambda_satellite_par_surplus_validation_evaluated = false;
+        bool lambda_satellite_par_surplus_validation_passed = false;
+        int lambda_satellite_par_surplus_validation_fallback_level = -1;
+        int lambda_satellite_par_surplus_validation_available = 0;
+        int lambda_satellite_par_surplus_validation_used = 0;
+        int lambda_satellite_par_surplus_validation_passing_pairs = 0;
+        double lambda_satellite_par_surplus_validation_aperture_cycles =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_satellite_par_surplus_validation_max_distance_cycles =
+            std::numeric_limits<double>::quiet_NaN();
         bool lambda_l1_l5_wlnl_shadow_attempted = false;
         int lambda_l1_l5_wlnl_shadow_pair_count = 0;
         double lambda_l1_l5_wlnl_shadow_wl_bsr =
