@@ -4394,8 +4394,10 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                     ++result.diagnostics.fix_plausibility_anchor_gross_gated;
                 }
             }
-            if (config.fix_demote_use_ddpr_anchor && config.use_ddpr_anchor &&
-                anchor_gross_gate_open) {
+            const bool evaluate_demotion_anchor =
+                config.fix_demote_surplus_anchor_reprieve ||
+                (config.fix_demote_use_ddpr_anchor && config.use_ddpr_anchor);
+            if (evaluate_demotion_anchor && anchor_gross_gate_open) {
                 ++result.diagnostics.ddpr_anchor_solves;
                 const double trust_res = config.fix_demote_anchor_trust_res_m > 0.0
                                              ? config.fix_demote_anchor_trust_res_m
@@ -4444,7 +4446,8 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                     const double anchor_gap = (fix_ant - antennaOf(anchor.pose)).norm();
                     demotion_anchor_trusted = true;
                     demotion_anchor_gap_m = anchor_gap;
-                    if (anchor_gap > config.fix_demote_anchor_distance_m) {
+                    if (config.fix_demote_use_ddpr_anchor &&
+                        anchor_gap > config.fix_demote_anchor_distance_m) {
                         demote = true;
                         ++result.diagnostics.fix_plausibility_anchor_demotions;
                     }

@@ -30,7 +30,6 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <limits>
 #include <map>
 #include <sstream>
 #include <string>
@@ -323,7 +322,6 @@ Args parseArgs(int argc, char** argv) {
         if (a == "--fix-demote-surplus-anchor-reprieve") {
             args.fix_demote_surplus_crosscheck = true;
             args.fix_demote_surplus_anchor_reprieve = true;
-            args.fix_demote_anchor = true;
             continue;
         }
         if (a == "--cmc-ref") {
@@ -835,10 +833,6 @@ libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
     }
     if (args.fix_demote_surplus_anchor_reprieve) {
         config.fix_demote_surplus_anchor_reprieve = true;
-        if (args.fix_demote_anchor_dist < 0.0) {
-            config.fix_demote_anchor_distance_m =
-                std::numeric_limits<double>::infinity();
-        }
     }
     if (args.leaky_persist) {
         config.use_cp_hold_leaky_persist = true;
