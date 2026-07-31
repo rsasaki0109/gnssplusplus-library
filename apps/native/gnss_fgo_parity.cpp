@@ -97,6 +97,7 @@ struct Args {
     bool residual_par = false;
     bool variance_par = false;
     bool gici_par = false;          // GICI-style strict PAR + continuous-unfix reacquisition profile
+    bool anchor_gated_unfix_reset = false;
     double par_max_std = -1.0;
     double hold_ratio = 0.0;       // >0: override ambiguity_hold_ratio_threshold
     int hold_min = 0;              // >0: override ambiguity_hold_min_fixed
@@ -239,6 +240,10 @@ Args parseArgs(int argc, char** argv) {
         }
         if (a == "--gici-par") {
             args.gici_par = true;
+            continue;
+        }
+        if (a == "--anchor-gated-unfix-reset") {
+            args.anchor_gated_unfix_reset = true;
             continue;
         }
         if (a == "--integer-constrained-reoptimization") {
@@ -963,6 +968,10 @@ libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
         if (args.ratio_threshold <= 0.0) config.lambda_ratio_threshold = 3.0;
         if (args.min_fixed <= 0) config.min_fixed_ambiguities = 6;
         if (args.par_max_std < 0.0) config.partial_ar_max_std_cycles = 0.25;
+    }
+    if (args.anchor_gated_unfix_reset) {
+        config.use_continuous_unfix_ambiguity_reset = true;
+        config.continuous_unfix_require_ddpr_anchor_disagreement = true;
     }
     if (args.par_max_std >= 0.0) {
         config.partial_ar_max_std_cycles = args.par_max_std;
@@ -2473,7 +2482,18 @@ int main(int argc, char** argv) {
                   << ", min_sat=" << config.continuous_unfix_min_satellites
                   << ", max_gdop=" << config.continuous_unfix_max_gdop
                   << ", max_fde_fraction="
-                  << config.continuous_unfix_max_fde_reject_fraction << ")\n"
+                  << config.continuous_unfix_max_fde_reject_fraction
+                  << ", anchor_gate="
+                  << (config.continuous_unfix_require_ddpr_anchor_disagreement
+                          ? "on"
+                          : "off")
+                  << ", anchor_min_gap_m="
+                  << config.continuous_unfix_anchor_min_gap_m
+                  << ", anchor_allows="
+                  << fl.diagnostics.ambiguity_continuous_unfix_anchor_allows
+                  << ", anchor_skips="
+                  << fl.diagnostics.ambiguity_continuous_unfix_anchor_skips
+                  << ")\n"
                   << "  CMC screening: " << (args.cmc ? "on" : "off")
                   << " (jump_resets=" << fl.diagnostics.code_minus_carrier_jump_resets
                   << ", level_exclusions=" << fl.diagnostics.code_minus_carrier_level_exclusions

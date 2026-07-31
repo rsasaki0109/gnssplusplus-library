@@ -1864,6 +1864,9 @@ TEST(FGOImuIntegrationCovarianceTest, DefaultsMatchPortedReferenceMapping) {
     EXPECT_EQ(config.integer_constrained_max_iterations, 1);
     EXPECT_TRUE(config.report_held_ambiguities_as_fixed);
     EXPECT_FALSE(config.use_continuous_unfix_ambiguity_reset);
+    EXPECT_FALSE(
+        config.continuous_unfix_require_ddpr_anchor_disagreement);
+    EXPECT_DOUBLE_EQ(config.continuous_unfix_anchor_min_gap_m, 1.0);
     EXPECT_DOUBLE_EQ(config.fixed_postfit_normal_ratio_ceiling, 0.0);
     EXPECT_DOUBLE_EQ(config.surplus_validation_veto_ratio_ceiling, 0.0);
     EXPECT_DOUBLE_EQ(config.surplus_validation_veto_min_ddpr_rms_m, 0.0);
