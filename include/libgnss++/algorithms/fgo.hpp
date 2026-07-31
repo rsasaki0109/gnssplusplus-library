@@ -204,6 +204,17 @@ public:
         // behavior. Groups are evaluated in order and later groups are tried
         // only after an earlier group has zero passing hypotheses.
         int multisd_max_candidate_groups = 1;
+        // Later PAR groups can require corroboration from multiple independently
+        // generated subsets. The first group retains the ordinary unique top-K
+        // decision. One preserves sequential fallback behavior.
+        int multisd_fallback_min_consensus_groups = 1;
+        // Maximum pairwise latest-position separation for later-group
+        // consensus. Required when the minimum consensus group count exceeds
+        // one. Zero disables consensus acceptance in that case.
+        double multisd_fallback_max_consensus_separation_m = 0.0;
+        // Additional GNSS-only seed aperture for later PAR groups. The first
+        // group retains the ordinary validator aperture. Zero disables.
+        double multisd_fallback_max_seed_separation_m = 0.0;
         bool use_epoch_lambda_fixed_output = false;
         bool use_partial_lambda_ambiguity_fix = true;
         // Independently re-optimize the active fixed-lag graph with the

@@ -4634,6 +4634,19 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                 OptimizationOutput selected_optimization;
                 ValidationOutcome selected_outcome;
                 ValidationOutcome first_outcome;
+                struct FallbackConsensusCandidate {
+                    int rank = -1;
+                    OptimizationOutput optimization;
+                    ValidationOutcome outcome;
+                    Eigen::Vector3d latest_position_ecef =
+                        Eigen::Vector3d::Zero();
+                };
+                std::vector<FallbackConsensusCandidate>
+                    fallback_consensus_candidates;
+                const std::size_t required_fallback_consensus =
+                    static_cast<std::size_t>(std::max(
+                        1, config_.multisd_fallback_min_consensus_groups));
+                bool ambiguous_group = false;
                 std::vector<std::size_t> group_ends =
                     lambda_hypothesis_group_ends;
                 if (group_ends.empty()) {
@@ -4688,8 +4701,15 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                             total_iterations += hypothesis.iterations;
                             total_processing_ms += hypothesis.processing_ms;
                         }
-                        const ValidationOutcome outcome =
+                        ValidationOutcome outcome =
                             validate_hypothesis(hypothesis);
+                        if (group_start > 0 && outcome.pass &&
+                            config_.multisd_fallback_max_seed_separation_m > 0.0 &&
+                            outcome.seed_separation >
+                                config_
+                                    .multisd_fallback_max_seed_separation_m) {
+                            outcome.pass = false;
+                        }
                         FGOResult::MultiSdValidationHypothesis
                             hypothesis_record;
                         hypothesis_record.rank = static_cast<int>(rank);
@@ -4725,23 +4745,77 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                     }
                     passing_hypotheses = group_passes;
                     if (group_passes == 1) {
-                        selected_rank = group_selected_rank;
-                        selected_optimization =
+                        if (group_start == 0 ||
+                            required_fallback_consensus == 1) {
+                            selected_rank = group_selected_rank;
+                            selected_optimization =
+                                std::move(group_selected_optimization);
+                            selected_outcome = group_selected_outcome;
+                            break;
+                        }
+                        FallbackConsensusCandidate candidate;
+                        candidate.rank = group_selected_rank;
+                        candidate.latest_position_ecef =
+                            group_selected_optimization.state.segment<3>(
+                                epoch_state_col(latest_epoch));
+                        candidate.optimization =
                             std::move(group_selected_optimization);
-                        selected_outcome = group_selected_outcome;
-                        break;
+                        candidate.outcome = group_selected_outcome;
+                        fallback_consensus_candidates.push_back(
+                            std::move(candidate));
                     }
                     // Multiple passing hypotheses in any group are an
                     // integrity ambiguity. Fail closed instead of searching
                     // for a later group that happens to look unique.
                     if (group_passes > 1) {
+                        ambiguous_group = true;
+                        fallback_consensus_candidates.clear();
                         break;
                     }
                     group_start = group_end;
                 }
 
+                if (selected_rank < 0 && !ambiguous_group &&
+                    !fallback_consensus_candidates.empty()) {
+                    passing_hypotheses =
+                        fallback_consensus_candidates.size();
+                }
+                if (selected_rank < 0 && !ambiguous_group &&
+                    fallback_consensus_candidates.size() >=
+                        required_fallback_consensus) {
+                    bool consensus =
+                        config_
+                            .multisd_fallback_max_consensus_separation_m > 0.0;
+                    for (std::size_t i = 0;
+                         consensus &&
+                         i < fallback_consensus_candidates.size();
+                         ++i) {
+                        for (std::size_t j = i + 1;
+                             j < fallback_consensus_candidates.size(); ++j) {
+                            if ((fallback_consensus_candidates[i]
+                                     .latest_position_ecef -
+                                 fallback_consensus_candidates[j]
+                                     .latest_position_ecef)
+                                    .norm() >
+                                config_
+                                    .multisd_fallback_max_consensus_separation_m) {
+                                consensus = false;
+                                break;
+                            }
+                        }
+                    }
+                    if (consensus) {
+                        auto& candidate =
+                            fallback_consensus_candidates.front();
+                        selected_rank = candidate.rank;
+                        selected_optimization =
+                            std::move(candidate.optimization);
+                        selected_outcome = candidate.outcome;
+                    }
+                }
+
                 const bool unique_pass =
-                    passing_hypotheses == 1 && selected_rank >= 0;
+                    selected_rank >= 0;
                 const ValidationOutcome& reported_outcome =
                     unique_pass ? selected_outcome : first_outcome;
                 result.diagnostics.multisd_validation_evaluated =

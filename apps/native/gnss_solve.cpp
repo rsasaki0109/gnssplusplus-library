@@ -122,6 +122,9 @@ struct SolveConfig {
     bool multisd_fgo_shadow_variance_ranked_par = false;
     double multisd_fgo_shadow_candidate_ratio = 1.5;
     int multisd_fgo_shadow_candidate_groups = 1;
+    int multisd_fgo_shadow_fallback_consensus_groups = 1;
+    double multisd_fgo_shadow_fallback_consensus_separation_m = 0.0;
+    double multisd_fgo_shadow_fallback_max_seed_separation_m = 0.0;
     double rtk_update_outlier_threshold = 0.0;
     bool student_t_rtk_front_end = false;
     double ratio_threshold = 3.0;
@@ -1971,6 +1974,12 @@ void printAdvancedUsage(const char* program_name) {
         << "                             Top-K generation floor before disjoint validation (default: 1.5)\n"
         << "  --multisd-fgo-shadow-candidate-groups <n>\n"
         << "                             Validator-aware PAR fallback groups, 1..32 (default: 1)\n"
+        << "  --multisd-fgo-shadow-fallback-consensus-groups <n>\n"
+        << "                             Later PAR subsets required to agree, 1..32 (default: 1)\n"
+        << "  --multisd-fgo-shadow-fallback-consensus-separation <m>\n"
+        << "                             Maximum pairwise fallback position split (default: 0)\n"
+        << "  --multisd-fgo-shadow-fallback-max-seed-separation <m>\n"
+        << "                             Additional later-group GNSS-seed aperture (default: 0)\n"
         << "  --realtime-fix-integrity   Gate FIX output with bounded-latency residual checks\n"
         << "                             (default: off; maximum latency: 7 epochs)\n"
         << "  --integrity-base-gate      Also enable the frozen offline low-satellite/ratio\n"
@@ -2284,6 +2293,24 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             i + 1 < argc) {
             config.multisd_fgo_shadow_candidate_groups =
                 std::stoi(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-fallback-consensus-groups" &&
+            i + 1 < argc) {
+            config.multisd_fgo_shadow_fallback_consensus_groups =
+                std::stoi(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-fallback-consensus-separation" &&
+            i + 1 < argc) {
+            config.multisd_fgo_shadow_fallback_consensus_separation_m =
+                std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-fallback-max-seed-separation" &&
+            i + 1 < argc) {
+            config.multisd_fgo_shadow_fallback_max_seed_separation_m =
+                std::stod(argv[++i]);
             continue;
         }
         // Phase 2a CMC-aware reference selection flags: kept as STANDALONE
@@ -3513,6 +3540,33 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             "--multisd-fgo-shadow-candidate-groups must be in [1, 32]",
             argv[0]);
     }
+    if (config.multisd_fgo_shadow_fallback_consensus_groups < 1 ||
+        config.multisd_fgo_shadow_fallback_consensus_groups > 32) {
+        argumentError(
+            "--multisd-fgo-shadow-fallback-consensus-groups must be in [1, 32]",
+            argv[0]);
+    }
+    if (!std::isfinite(
+            config.multisd_fgo_shadow_fallback_consensus_separation_m) ||
+        config.multisd_fgo_shadow_fallback_consensus_separation_m < 0.0) {
+        argumentError(
+            "--multisd-fgo-shadow-fallback-consensus-separation must be >= 0",
+            argv[0]);
+    }
+    if (config.multisd_fgo_shadow_fallback_consensus_groups > 1 &&
+        config.multisd_fgo_shadow_fallback_consensus_separation_m <= 0.0) {
+        argumentError(
+            "--multisd-fgo-shadow-fallback-consensus-separation must be > 0 "
+            "when fallback consensus groups exceed 1",
+            argv[0]);
+    }
+    if (!std::isfinite(
+            config.multisd_fgo_shadow_fallback_max_seed_separation_m) ||
+        config.multisd_fgo_shadow_fallback_max_seed_separation_m < 0.0) {
+        argumentError(
+            "--multisd-fgo-shadow-fallback-max-seed-separation must be >= 0",
+            argv[0]);
+    }
 
     return config;
 }
@@ -3670,6 +3724,12 @@ libgnss::FGOProcessor::FGOConfig makeGnssOnlyMultiSdShadowConfig(
         solve_config.multisd_fgo_shadow_candidate_ratio;
     config.multisd_max_candidate_groups =
         solve_config.multisd_fgo_shadow_candidate_groups;
+    config.multisd_fallback_min_consensus_groups =
+        solve_config.multisd_fgo_shadow_fallback_consensus_groups;
+    config.multisd_fallback_max_consensus_separation_m =
+        solve_config.multisd_fgo_shadow_fallback_consensus_separation_m;
+    config.multisd_fallback_max_seed_separation_m =
+        solve_config.multisd_fgo_shadow_fallback_max_seed_separation_m;
     return config;
 }
 

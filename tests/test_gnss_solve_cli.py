@@ -87,6 +87,15 @@ class GnssSolveCliTest(unittest.TestCase):
         self.assertIn(
             "--multisd-fgo-shadow-candidate-groups", result.stdout
         )
+        self.assertIn(
+            "--multisd-fgo-shadow-fallback-consensus-groups", result.stdout
+        )
+        self.assertIn(
+            "--multisd-fgo-shadow-fallback-consensus-separation", result.stdout
+        )
+        self.assertIn(
+            "--multisd-fgo-shadow-fallback-max-seed-separation", result.stdout
+        )
 
     def test_config_supplies_defaults_and_cli_always_overrides_them(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_solve_config_") as temp_dir:
@@ -139,11 +148,19 @@ class GnssSolveCliTest(unittest.TestCase):
             "--data-dir", "missing",
             "--multisd-fgo-shadow-candidate-groups", "33"
         )
+        consensus = self.run_solve(
+            "--data-dir", "missing",
+            "--multisd-fgo-shadow-fallback-consensus-groups", "2"
+        )
 
         self.assertEqual(ratio.returncode, 1)
         self.assertIn("candidate-ratio must be >= 1", ratio.stderr)
         self.assertEqual(groups.returncode, 1)
         self.assertIn("candidate-groups must be in [1, 32]", groups.stderr)
+        self.assertEqual(consensus.returncode, 1)
+        self.assertIn(
+            "fallback-consensus-separation must be > 0", consensus.stderr
+        )
 
 
 if __name__ == "__main__":
