@@ -83,8 +83,9 @@ difference constraints for integer re-optimization are implemented. Individual
 SD states are never labelled fixed. Unit coverage verifies that a CMC-driven
 DD reference change reuses the same satellite SD state, that BSD integers are
 recovered without fixing the SD gauge, and that the legacy ambiguity path does
-not regress. The next authority gate is the disjoint causal validator; until it
-is wired into the production RTK path, MultiSD remains opt-in and experimental.
+not regress. The disjoint causal validator and a `gnss_solve` rolling-window
+shadow are now wired default-off. They have no production RTK authority, so
+MultiSD remains opt-in and experimental pending the full promotion matrix.
 
 ## Validation sequence
 
@@ -159,3 +160,38 @@ and verifies BSD/top-K fixing. The 100-epoch Tokyo sample generated 16 BSD
 candidates and four hypotheses. Total batch time ranged from about 61 to
 193 ms per 100-epoch batch on the development host; this is not yet an online
 per-epoch fixed-lag latency measurement.
+
+## Causal `gnss_solve` shadow checkpoint (2026-07-31)
+
+`gnss_solve` now has an explicit default-off GNSS-only shadow output. When
+`--multisd-fgo-shadow-csv` is supplied, it keeps a rolling observation window
+that ends at the current RTK epoch, builds the MultiSD DD code/carrier,
+single-difference Doppler, and TDCP graph, and records only the solution whose
+timestamp equals that current epoch. No future observation can enter the
+window. The RTK solution is used only as a geometry seed; the shadow never
+changes RTK state, status, or output. The path takes no IMU, LiDAR, or camera
+input.
+
+The first causal smoke used top-K=4, four disjoint holdout satellites, offset
+2, and require-all carrier agreement. These are development samples, not a
+promotion or full-run FIX-rate claim:
+
+| PPC block | window | evaluated | correct FIX | >1 m false | max FIX error | wall p95 |
+|---|---:|---:|---:|---:|---:|---:|
+| Tokyo run1 0--30 | 25 | 21 | 20 | 0 | 0.067 m | 1315 ms |
+| Tokyo run1 0--30 | 10 | 21 | 21 | 0 | 0.066 m | 201 ms |
+| Tokyo run1 500--530 | 10 | 21 | 19 | 0 | 0.034 m | 145 ms |
+| Nagoya run2 0--30 | 10 | 21 | 20 | 0 | 0.105 m | 124 ms |
+| Nagoya run2 500--530 | 10 | 21 | 8 | 0 | 0.249 m | 118 ms |
+
+The 10-epoch window preserved the safe decisions in these samples and reduced
+wall time by roughly 4x versus rebuilding 25 epochs, but it does not yet meet
+the 100 ms p95 contract. Independent fixed top-K re-solves can now run as a
+deterministic parallel batch behind `parallelize_lambda_hypotheses`; a smoke
+test requires the sequential and parallel FIX decision, selected rank, and
+latest position to match. This is the CPU fallback and intended seam for a
+future CUDA batched normal-equation/factorization backend. The remaining large
+cost is rebuilding and solving the common float graph each epoch, so GPU alone
+must not substitute for fixed-lag reuse/marginalization. Promotion still
+requires PPC run/time-block nested validation, injected fault tests, and the
+full latency distribution.

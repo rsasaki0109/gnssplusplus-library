@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <future>
 #include <limits>
 #include <map>
 #include <numeric>
@@ -4340,10 +4341,29 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                 OptimizationOutput selected_optimization;
                 ValidationOutcome selected_outcome;
                 ValidationOutcome first_outcome;
+                std::vector<std::future<OptimizationOutput>>
+                    hypothesis_futures;
+                if (config_.parallelize_lambda_hypotheses &&
+                    hypothesis_count > 1) {
+                    hypothesis_futures.reserve(hypothesis_count - 1);
+                    for (std::size_t rank = 1;
+                         rank < hypothesis_count;
+                         ++rank) {
+                        hypothesis_futures.push_back(std::async(
+                            std::launch::async,
+                            run_optimizer,
+                            float_optimization.state,
+                            lambda_hypothesis_constraints[rank],
+                            "fixed-hypothesis",
+                            fixed_global_iteration_offset));
+                    }
+                }
                 for (std::size_t rank = 0; rank < hypothesis_count; ++rank) {
                     OptimizationOutput hypothesis;
                     if (rank == 0) {
                         hypothesis = optimization;
+                    } else if (!hypothesis_futures.empty()) {
+                        hypothesis = hypothesis_futures[rank - 1].get();
                     } else {
                         hypothesis = run_optimizer(
                             float_optimization.state,

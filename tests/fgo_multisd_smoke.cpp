@@ -148,6 +148,25 @@ int main() {
     if (result.ambiguity_estimates.size() != satellites.size()) {
         return fail("missing SD ambiguity estimates");
     }
+
+    auto parallel_config = config;
+    parallel_config.parallelize_lambda_hypotheses = true;
+    const auto parallel_result =
+        FGOProcessor(parallel_config).optimizeProblem(problem);
+    if (parallel_result.diagnostics.fixed_solution !=
+            result.diagnostics.fixed_solution ||
+        parallel_result.diagnostics.multisd_validation_pass !=
+            result.diagnostics.multisd_validation_pass ||
+        parallel_result.diagnostics.multisd_validation_selected_rank !=
+            result.diagnostics.multisd_validation_selected_rank ||
+        parallel_result.multisd_validation_hypotheses.size() !=
+            result.multisd_validation_hypotheses.size() ||
+        parallel_result.solution.solutions.empty() ||
+        result.solution.solutions.empty() ||
+        (parallel_result.solution.solutions.back().position_ecef -
+         result.solution.solutions.back().position_ecef).norm() > 1e-9) {
+        return fail("parallel top-K result differs from sequential result");
+    }
     for (const auto& estimate : result.ambiguity_estimates) {
         if (estimate.is_fixed) {
             return fail("gauge-dependent SD state was labelled fixed");

@@ -163,6 +163,10 @@ public:
         // legacy ratio-test behavior; larger values supply candidates for the
         // causal/post-fit validator without rerunning decorrelation.
         int lambda_top_k_candidates = 2;
+        // Each top-K integer hypothesis is an independent fixed re-solve.
+        // Run those re-solves concurrently when explicitly enabled. This is
+        // the deterministic CPU fallback for the future GPU batch backend.
+        bool parallelize_lambda_hypotheses = false;
         // Covariance-only integer quality gates. Zero disables each gate.
         double lambda_min_bootstrapped_success_rate = 0.0;
         double lambda_max_adop_cycles = 0.0;

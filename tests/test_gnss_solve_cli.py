@@ -48,6 +48,7 @@ class GnssSolveCliTest(unittest.TestCase):
         self.assertIn("--help-advanced", result.stdout)
         self.assertNotIn("--rtk-adaptive-noise-alpha-phase", result.stdout)
         self.assertNotIn("--fixed-bridge-burst-max-residual", result.stdout)
+        self.assertNotIn("--multisd-fgo-shadow-csv", result.stdout)
         self.assertLess(len(result.stdout), 5000)
 
     def test_advanced_help_retains_research_option_discoverability(self) -> None:
@@ -57,6 +58,8 @@ class GnssSolveCliTest(unittest.TestCase):
         self.assertIn("--config <path>", result.stdout)
         self.assertIn("--rtk-adaptive-noise-alpha-phase", result.stdout)
         self.assertIn("--fixed-bridge-burst-max-residual", result.stdout)
+        self.assertIn("--multisd-fgo-shadow-csv", result.stdout)
+        self.assertIn("--multisd-fgo-shadow-window", result.stdout)
 
     def test_config_supplies_defaults_and_cli_always_overrides_them(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_solve_config_") as temp_dir:

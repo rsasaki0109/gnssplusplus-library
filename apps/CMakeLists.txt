@@ -68,7 +68,8 @@ add_executable(gnss_solve
     ${GNSS_NATIVE_DIR}/gnss_solve.cpp
     ${GNSS_NATIVE_DIR}/cli_toml_config.cpp
 )
-target_link_libraries(gnss_solve PRIVATE gnss_lib gnss_rtk_runtime Threads::Threads)
+target_link_libraries(
+    gnss_solve PRIVATE gnss_lib gnss_rtk_runtime gnss_lib_noopt Threads::Threads)
 
 add_executable(gnss_ppp ${GNSS_NATIVE_DIR}/gnss_ppp.cpp)
 target_link_libraries(gnss_ppp PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
