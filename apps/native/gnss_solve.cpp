@@ -119,7 +119,9 @@ struct SolveConfig {
     int multisd_fgo_shadow_min_fixed_ambiguities = 6;
     int multisd_fgo_shadow_holdout_satellites = 4;
     bool multisd_fgo_shadow_constellation_par = false;
+    bool multisd_fgo_shadow_interleave_constellation_par = false;
     bool multisd_fgo_shadow_variance_ranked_par = false;
+    bool multisd_fgo_shadow_quality_ranked_par = false;
     double multisd_fgo_shadow_candidate_ratio = 1.5;
     int multisd_fgo_shadow_candidate_groups = 1;
     int multisd_fgo_shadow_fallback_consensus_groups = 1;
@@ -1968,8 +1970,12 @@ void printAdvancedUsage(const char* program_name) {
         << "                             Fully disjoint satellites (default: 4)\n"
         << "  --multisd-fgo-shadow-constellation-par\n"
         << "                             Full-band constellation pool PAR (default: off)\n"
+        << "  --multisd-fgo-shadow-interleave-constellation-par\n"
+        << "                             Interleave validator groups across constellation pools (default: off)\n"
         << "  --multisd-fgo-shadow-variance-ranked-par\n"
         << "                             Rank PAR candidates by float variance (default: off)\n"
+        << "  --multisd-fgo-shadow-quality-ranked-par\n"
+        << "                             Rank PAR by PPC variance/integer-distance/carrier residual (default: off)\n"
         << "  --multisd-fgo-shadow-candidate-ratio <ratio>\n"
         << "                             Top-K generation floor before disjoint validation (default: 1.5)\n"
         << "  --multisd-fgo-shadow-candidate-groups <n>\n"
@@ -2279,8 +2285,16 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.multisd_fgo_shadow_constellation_par = true;
             continue;
         }
+        if (arg == "--multisd-fgo-shadow-interleave-constellation-par") {
+            config.multisd_fgo_shadow_interleave_constellation_par = true;
+            continue;
+        }
         if (arg == "--multisd-fgo-shadow-variance-ranked-par") {
             config.multisd_fgo_shadow_variance_ranked_par = true;
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-quality-ranked-par") {
+            config.multisd_fgo_shadow_quality_ranked_par = true;
             continue;
         }
         if (arg == "--multisd-fgo-shadow-candidate-ratio" &&
@@ -3703,8 +3717,12 @@ libgnss::FGOProcessor::FGOConfig makeGnssOnlyMultiSdShadowConfig(
     config.parallelize_lambda_hypotheses = true;
     config.use_constellation_ranked_partial_ar =
         solve_config.multisd_fgo_shadow_constellation_par;
+    config.interleave_constellation_partial_ar =
+        solve_config.multisd_fgo_shadow_interleave_constellation_par;
     config.use_variance_ranked_partial_ar =
         solve_config.multisd_fgo_shadow_variance_ranked_par;
+    config.use_quality_ranked_partial_ar =
+        solve_config.multisd_fgo_shadow_quality_ranked_par;
     config.use_multisd_ambiguities = true;
     config.use_multisd_disjoint_validation = true;
     config.multisd_validation_holdout_satellites =

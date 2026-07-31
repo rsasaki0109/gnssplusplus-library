@@ -4005,12 +4005,15 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                 int reference_ambiguity_index = -1;
                 double variance_cycles = 0.0;
                 double fractional_cycles = 0.0;
+                double carrier_residual_rms_sigma = 0.0;
+                double quality_score = 0.0;
             };
 
             std::vector<LambdaCandidate> candidates;
             candidates.reserve(problem.ambiguity_states.size());
             auto append_candidate = [&](int ambiguity_index,
-                                        int reference_ambiguity_index) {
+                                        int reference_ambiguity_index,
+                                        double carrier_residual_rms_sigma) {
                 const auto& ambiguity =
                     problem.ambiguity_states[ambiguity_index];
                 if (ambiguity.wavelength_m <= 0.0) {
@@ -4057,6 +4060,16 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                 candidate.variance_cycles = variance_cycles;
                 candidate.fractional_cycles = std::abs(
                     ambiguity_cycles - std::round(ambiguity_cycles));
+                candidate.carrier_residual_rms_sigma =
+                    carrier_residual_rms_sigma;
+                // Each term is mapped to [0, 1) so no single quantity wins
+                // merely because of its units. Fractional distance is in
+                // [0, 0.5], hence the factor of two.
+                candidate.quality_score =
+                    variance_cycles / (1.0 + variance_cycles) +
+                    carrier_residual_rms_sigma /
+                        (1.0 + carrier_residual_rms_sigma) +
+                    2.0 * candidate.fractional_cycles;
                 candidates.push_back(candidate);
             };
 
@@ -4081,13 +4094,80 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                              .second) {
                         continue;
                     }
+                    double carrier_residual_rms_sigma = 0.0;
+                    if (config_.use_quality_ranked_partial_ar) {
+                        double residual_squared_sum = 0.0;
+                        std::size_t residual_count = 0;
+                        for (const auto& track_factor :
+                             problem.double_difference_carrier_factors) {
+                            if (!track_factor.use_ambiguity_difference ||
+                                track_factor.ambiguity_index !=
+                                    factor.ambiguity_index ||
+                                track_factor.reference_ambiguity_index !=
+                                    factor.reference_ambiguity_index ||
+                                track_factor.epoch_index >=
+                                    problem.epochs.size()) {
+                                continue;
+                            }
+                        const Vector3d position = optimization.state.segment<3>(
+                            epoch_state_col(track_factor.epoch_index));
+                        const Vector3d seed_position =
+                            problem.epochs[track_factor.epoch_index]
+                                .position_ecef;
+                        const Vector3d linearization_position =
+                            config_.linearize_double_difference_factors_at_seed
+                                ? seed_position
+                                : position;
+                        const DoubleDifferencePrediction prediction =
+                            doubleDifferencePredictionAt(
+                                linearization_position,
+                                track_factor.base_position_ecef,
+                                track_factor.rover_satellite_position_ecef,
+                                track_factor.rover_reference_position_ecef,
+                                track_factor.base_satellite_position_ecef,
+                                track_factor.base_reference_position_ecef);
+                        if (!prediction.valid) {
+                            continue;
+                        }
+                        double predicted = prediction.geometry_m +
+                            optimization.state(
+                                base_state_size +
+                                static_cast<int>(
+                                    track_factor.ambiguity_index)) -
+                            optimization.state(
+                                base_state_size +
+                                static_cast<int>(track_factor
+                                                     .reference_ambiguity_index));
+                        if (config_.linearize_double_difference_factors_at_seed) {
+                            predicted += prediction.position_jacobian.dot(
+                                position - seed_position);
+                        }
+                        const double sigma =
+                            std::max(1e-4, track_factor.sigma_m);
+                        const double standardized_residual =
+                            (track_factor.observed_dd_carrier_m - predicted) /
+                            sigma;
+                            if (std::isfinite(standardized_residual)) {
+                                residual_squared_sum += standardized_residual *
+                                                        standardized_residual;
+                                ++residual_count;
+                            }
+                        }
+                        if (residual_count == 0) {
+                            continue;
+                        }
+                        carrier_residual_rms_sigma = std::sqrt(
+                            residual_squared_sum /
+                            static_cast<double>(residual_count));
+                    }
                     append_candidate(
                         static_cast<int>(factor.ambiguity_index),
-                        static_cast<int>(factor.reference_ambiguity_index));
+                        static_cast<int>(factor.reference_ambiguity_index),
+                        carrier_residual_rms_sigma);
                 }
             } else {
                 for (int i = 0; i < ambiguity_count; ++i) {
-                    append_candidate(i, -1);
+                    append_candidate(i, -1, 0.0);
                 }
             }
 
@@ -4095,6 +4175,11 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                              candidates.end(),
                              [&](const LambdaCandidate& lhs,
                                  const LambdaCandidate& rhs) {
+                                 if (config_.use_quality_ranked_partial_ar &&
+                                     lhs.quality_score != rhs.quality_score) {
+                                     return lhs.quality_score <
+                                            rhs.quality_score;
+                                 }
                                  if (config_.use_variance_ranked_partial_ar &&
                                      lhs.variance_cycles !=
                                          rhs.variance_cycles) {
@@ -4377,22 +4462,53 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                         pools.push_back(std::move(pool));
                     }
                 }
-                for (const auto& pool : pools) {
-                    candidates = pool;
-                    for (std::size_t subset_size = candidates.size();
-                         subset_size >= min_subset_size;
-                         --subset_size) {
-                        if (solve_candidate_subset(subset_size)) {
-                            built_any_group = true;
-                            if (!collect_validator_groups ||
-                                lambda_hypothesis_group_ends.size() >=
+                if (config_.interleave_constellation_partial_ar &&
+                    collect_validator_groups) {
+                    std::size_t maximum_depth = 0;
+                    for (const auto& pool : pools) {
+                        maximum_depth = std::max(
+                            maximum_depth, pool.size() - min_subset_size);
+                    }
+                    for (std::size_t depth = 0;
+                         depth <= maximum_depth;
+                         ++depth) {
+                        for (const auto& pool : pools) {
+                            if (pool.size() < min_subset_size + depth) {
+                                continue;
+                            }
+                            candidates = pool;
+                            const std::size_t subset_size =
+                                pool.size() - depth;
+                            if (solve_candidate_subset(subset_size)) {
+                                built_any_group = true;
+                                if (lambda_hypothesis_group_ends.size() >=
                                     maximum_groups) {
-                                return true;
+                                    return true;
+                                }
                             }
                         }
-                        if (!config_.use_partial_lambda_ambiguity_fix ||
-                            subset_size == min_subset_size) {
+                        if (!config_.use_partial_lambda_ambiguity_fix) {
                             break;
+                        }
+                    }
+                } else {
+                    for (const auto& pool : pools) {
+                        candidates = pool;
+                        for (std::size_t subset_size = candidates.size();
+                             subset_size >= min_subset_size;
+                             --subset_size) {
+                            if (solve_candidate_subset(subset_size)) {
+                                built_any_group = true;
+                                if (!collect_validator_groups ||
+                                    lambda_hypothesis_group_ends.size() >=
+                                        maximum_groups) {
+                                    return true;
+                                }
+                            }
+                            if (!config_.use_partial_lambda_ambiguity_fix ||
+                                subset_size == min_subset_size) {
+                                break;
+                            }
                         }
                     }
                 }

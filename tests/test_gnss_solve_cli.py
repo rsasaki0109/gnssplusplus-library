@@ -82,6 +82,12 @@ class GnssSolveCliTest(unittest.TestCase):
             "--multisd-fgo-shadow-variance-ranked-par", result.stdout
         )
         self.assertIn(
+            "--multisd-fgo-shadow-interleave-constellation-par", result.stdout
+        )
+        self.assertIn(
+            "--multisd-fgo-shadow-quality-ranked-par", result.stdout
+        )
+        self.assertIn(
             "--multisd-fgo-shadow-candidate-ratio", result.stdout
         )
         self.assertIn(

@@ -439,6 +439,9 @@ public:
         // Try the PPC constellation partial-AR cascade as separate LAMBDA
         // pools: GQEBR -> GQEB -> GQER -> GQB -> GQR -> GQ.
         bool use_constellation_ranked_partial_ar = false;
+        // When collecting multiple validator groups, visit each constellation
+        // pool at the same PAR depth before shrinking one pool again.
+        bool interleave_constellation_partial_ar = false;
         // Remove ambiguity candidates implicated by a gross current-epoch
         // DD pseudorange residual before the PPC constellation cascade.
         bool use_residual_screened_partial_ar = false;
@@ -446,6 +449,10 @@ public:
         // variance and do not attempt a subset whose least precise member
         // exceeds this standard deviation in cycles (<=0 disables the gate).
         bool use_variance_ranked_partial_ar = false;
+        // Rank PAR candidates with an all-PPC composite of marginal float
+        // variance, distance to the nearest integer, and the windowed
+        // standardized DD carrier residual. Default off for compatibility.
+        bool use_quality_ranked_partial_ar = false;
         double partial_ar_max_std_cycles = 0.25;
         // GICI-style ambiguity reacquisition: when geometry is good and FDE
         // rejects less than the configured fraction, a long run of fresh-AR
