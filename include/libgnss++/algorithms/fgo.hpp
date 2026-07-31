@@ -379,6 +379,11 @@ public:
         // Remove ambiguity candidates implicated by a gross current-epoch
         // DD pseudorange residual before the PPC constellation cascade.
         bool use_residual_screened_partial_ar = false;
+        // Diagnostic-only RTKLIB-demo5-style satellite exclusion audit.
+        // On a ratio-rejected epoch, retry LAMBDA after removing each target
+        // satellite in turn and record the best candidate. Never changes the
+        // selected subset, FIX/FLOAT status, graph, or hold state.
+        bool monitor_ratio_impact_partial_ar = false;
         // GICI-style PAR: prefer ambiguities with the smallest marginal
         // variance and do not attempt a subset whose least precise member
         // exceeds this standard deviation in cycles (<=0 disables the gate).
@@ -1973,6 +1978,13 @@ public:
         Vector3d lambda_candidate_position_ecef = Vector3d::Zero();
         int lambda_candidate_fixed_ambiguities = 0;
         double lambda_candidate_ratio = 0.0;
+        bool ratio_impact_evaluated = false;
+        int ratio_impact_trials = 0;
+        double ratio_impact_best_ratio = 0.0;
+        int ratio_impact_best_fixed_ambiguities = 0;
+        Vector3d ratio_impact_best_position_ecef = Vector3d::Zero();
+        double ratio_impact_best_float_separation_m = 0.0;
+        double ratio_impact_best_imu_separation_m = 0.0;
         bool ddpr_anchor_evaluated = false;
         bool ddpr_anchor_bootstrap_prior_applied = false;
         int ddpr_anchor_active_factors = 0;

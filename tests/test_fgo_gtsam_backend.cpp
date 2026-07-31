@@ -2201,6 +2201,49 @@ TEST(FGOAmbiguityOutcomeTelemetryTest, HoldFallbackPreservesRatioRejection) {
     EXPECT_TRUE(std::isfinite(rejected->lambda_candidate_ratio));
 }
 
+TEST(FGOAmbiguityOutcomeTelemetryTest,
+     RatioImpactMonitorIsDiagnosticOnlyAndRecordsBestExclusion) {
+    CpHoldTestOptions opt;
+    opt.satellites = lambdaCapableSatelliteGeometry();
+    opt.num_epochs = 12;
+    const auto problem = makeCpHoldFixedLagProblem(opt);
+
+    FGOProcessor::FGOConfig config = makeStalePinBaseConfig();
+    config.lambda_ratio_threshold = 1.0e200;
+    config.ambiguity_hold_ratio_threshold = 1.0e200;
+    config.use_cp_hold_recovery = false;
+    config.use_fixed_lag_partial_lambda = true;
+
+    FGOProcessor baseline_processor(config);
+    const auto baseline = baseline_processor.optimizeProblem(problem);
+
+    config.monitor_ratio_impact_partial_ar = true;
+
+    FGOProcessor processor(config);
+    const auto result = processor.optimizeProblem(problem);
+
+    ASSERT_EQ(result.solution.solutions.size(), baseline.solution.solutions.size());
+    for (std::size_t i = 0; i < result.solution.solutions.size(); ++i) {
+        EXPECT_EQ(result.solution.solutions[i].status,
+                  baseline.solution.solutions[i].status);
+        EXPECT_TRUE(result.solution.solutions[i].position_ecef.isApprox(
+            baseline.solution.solutions[i].position_ecef, 0.0));
+    }
+
+    const auto monitored = std::find_if(
+        result.epoch_diagnostics.begin(), result.epoch_diagnostics.end(),
+        [](const FGOProcessor::FGOEpochDiagnostics& diagnostics) {
+            return diagnostics.ratio_impact_evaluated &&
+                   diagnostics.ratio_impact_best_fixed_ambiguities > 0;
+        });
+    ASSERT_NE(monitored, result.epoch_diagnostics.end());
+    EXPECT_EQ(monitored->ar_outcome,
+              FGOProcessor::AmbiguityResolutionOutcome::RatioRejected);
+    EXPECT_GT(monitored->ratio_impact_trials, 0);
+    EXPECT_GT(monitored->ratio_impact_best_ratio, 0.0);
+    EXPECT_GT(monitored->ratio_impact_best_position_ecef.norm(), 1.0e6);
+}
+
 TEST(FGOAmbiguityOutcomeTelemetryTest, NoCarrierCandidatesRemainNoCandidates) {
     CpHoldTestOptions opt;
     opt.satellites = lambdaCapableSatelliteGeometry();
