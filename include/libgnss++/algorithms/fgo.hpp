@@ -215,6 +215,9 @@ public:
         // Additional GNSS-only seed aperture for later PAR groups. The first
         // group retains the ordinary validator aperture. Zero disables.
         double multisd_fallback_max_seed_separation_m = 0.0;
+        // Optional bootstrap-success aperture for validator fallback groups.
+        // The first group retains the regular LAMBDA gate.
+        double multisd_fallback_min_bootstrapped_success_rate = 0.0;
         bool use_epoch_lambda_fixed_output = false;
         bool use_partial_lambda_ambiguity_fix = true;
         // Independently re-optimize the active fixed-lag graph with the

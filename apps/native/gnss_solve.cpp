@@ -129,6 +129,7 @@ struct SolveConfig {
     double multisd_fgo_shadow_fallback_max_seed_separation_m = 0.0;
     double multisd_fgo_shadow_min_bootstrapped_success_rate = 0.0;
     double multisd_fgo_shadow_max_adop_cycles = 0.0;
+    double multisd_fgo_shadow_fallback_min_bootstrapped_success_rate = 0.0;
     double rtk_update_outlier_threshold = 0.0;
     bool student_t_rtk_front_end = false;
     double ratio_threshold = 3.0;
@@ -1992,6 +1993,8 @@ void printAdvancedUsage(const char* program_name) {
         << "                             Minimum LAMBDA bootstrap success rate (default: 0)\n"
         << "  --multisd-fgo-shadow-max-adop <cycles>\n"
         << "                             Maximum ambiguity dilution of precision (default: 0/off)\n"
+        << "  --multisd-fgo-shadow-fallback-min-bsr <0..1>\n"
+        << "                             Minimum BSR for later validator groups only (default: 0)\n"
         << "  --realtime-fix-integrity   Gate FIX output with bounded-latency residual checks\n"
         << "                             (default: off; maximum latency: 7 epochs)\n"
         << "  --integrity-base-gate      Also enable the frozen offline low-satellite/ratio\n"
@@ -2340,6 +2343,11 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         }
         if (arg == "--multisd-fgo-shadow-max-adop" && i + 1 < argc) {
             config.multisd_fgo_shadow_max_adop_cycles =
+                std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-fallback-min-bsr" && i + 1 < argc) {
+            config.multisd_fgo_shadow_fallback_min_bootstrapped_success_rate =
                 std::stod(argv[++i]);
             continue;
         }
@@ -3608,6 +3616,14 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         config.multisd_fgo_shadow_max_adop_cycles < 0.0) {
         argumentError("--multisd-fgo-shadow-max-adop must be >= 0", argv[0]);
     }
+    if (!std::isfinite(
+            config.multisd_fgo_shadow_fallback_min_bootstrapped_success_rate) ||
+        config.multisd_fgo_shadow_fallback_min_bootstrapped_success_rate < 0.0 ||
+        config.multisd_fgo_shadow_fallback_min_bootstrapped_success_rate > 1.0) {
+        argumentError(
+            "--multisd-fgo-shadow-fallback-min-bsr must be in [0, 1]",
+            argv[0]);
+    }
 
     return config;
 }
@@ -3779,6 +3795,8 @@ libgnss::FGOProcessor::FGOConfig makeGnssOnlyMultiSdShadowConfig(
         solve_config.multisd_fgo_shadow_min_bootstrapped_success_rate;
     config.lambda_max_adop_cycles =
         solve_config.multisd_fgo_shadow_max_adop_cycles;
+    config.multisd_fallback_min_bootstrapped_success_rate =
+        solve_config.multisd_fgo_shadow_fallback_min_bootstrapped_success_rate;
     return config;
 }
 

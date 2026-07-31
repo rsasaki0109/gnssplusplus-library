@@ -104,6 +104,7 @@ class GnssSolveCliTest(unittest.TestCase):
         )
         self.assertIn("--multisd-fgo-shadow-min-bsr", result.stdout)
         self.assertIn("--multisd-fgo-shadow-max-adop", result.stdout)
+        self.assertIn("--multisd-fgo-shadow-fallback-min-bsr", result.stdout)
 
     def test_config_supplies_defaults_and_cli_always_overrides_them(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_solve_config_") as temp_dir:
@@ -168,6 +169,10 @@ class GnssSolveCliTest(unittest.TestCase):
             "--data-dir", "missing",
             "--multisd-fgo-shadow-max-adop", "-0.01"
         )
+        fallback_bsr = self.run_solve(
+            "--data-dir", "missing",
+            "--multisd-fgo-shadow-fallback-min-bsr", "1.01"
+        )
 
         self.assertEqual(ratio.returncode, 1)
         self.assertIn("candidate-ratio must be >= 1", ratio.stderr)
@@ -181,6 +186,8 @@ class GnssSolveCliTest(unittest.TestCase):
         self.assertIn("min-bsr must be in [0, 1]", bsr.stderr)
         self.assertEqual(adop.returncode, 1)
         self.assertIn("max-adop must be >= 0", adop.stderr)
+        self.assertEqual(fallback_bsr.returncode, 1)
+        self.assertIn("fallback-min-bsr must be in [0, 1]", fallback_bsr.stderr)
 
 
 if __name__ == "__main__":

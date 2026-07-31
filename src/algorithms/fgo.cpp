@@ -4312,13 +4312,23 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                               config_.lambda_ratio_threshold,
                               config_.multisd_lambda_candidate_ratio_threshold)
                         : config_.lambda_ratio_threshold;
+                const double minimum_bootstrapped_success_rate =
+                    !lambda_hypothesis_group_ends.empty() &&
+                            config_
+                                    .multisd_fallback_min_bootstrapped_success_rate >
+                                0.0
+                        ? std::max(
+                              config_.lambda_min_bootstrapped_success_rate,
+                              config_
+                                  .multisd_fallback_min_bootstrapped_success_rate)
+                        : config_.lambda_min_bootstrapped_success_rate;
                 if (!lambda_solved || fixed_ambiguities.size() != n ||
                     !std::isfinite(lambda_ratio) ||
                     (candidate_ratio_threshold > 0.0 &&
                      lambda_ratio < candidate_ratio_threshold) ||
-                    (config_.lambda_min_bootstrapped_success_rate > 0.0 &&
+                    (minimum_bootstrapped_success_rate > 0.0 &&
                      lambda_diagnostics.bootstrapped_success_rate <
-                         config_.lambda_min_bootstrapped_success_rate) ||
+                         minimum_bootstrapped_success_rate) ||
                     (config_.lambda_max_adop_cycles > 0.0 &&
                      (!std::isfinite(adop_cycles) ||
                       adop_cycles > config_.lambda_max_adop_cycles))) {
