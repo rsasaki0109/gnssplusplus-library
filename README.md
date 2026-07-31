@@ -134,6 +134,20 @@ above 0.5 m:
 | Tokyo run2 | 6336 → **6339** | **314 → 314** | 0.21668 → **0.21663 m** | **7130 → 7130** |
 | Tokyo run3 | 9961 → **9963** | **1002 → 1002** | 0.25744 → **0.25742 m** | **10407 → 10407** |
 
+`--fix-demote-surplus-anchor-reprieve` is an additional opt-in, fail-closed
+recovery for otherwise demoted fixes. It requires the surplus test to pass,
+at least 12 observed satellites, fixed/float separation at most 1 m, carrier
+post-fit RMS at most 0.1 m, and a trusted independently solved DD-code anchor
+within 8 m of the fixed candidate. The anchor is used only to validate the
+reprieve; this switch does not enable additional anchor-based demotions.
+Full-run A/B replays added only correct fixes:
+
+| Run | Correct FIX | Wrong FIX |
+|---|---:|---:|
+| Tokyo run1 | 4955 → **5144** | **978 → 978** |
+| Tokyo run2 | 6339 → **6357** | **314 → 314** |
+| Tokyo run3 | 9963 → **9969** | **1002 → 1002** |
+
 The rescue remains opt-in at the library API level; the command above is the
 validated shipping preset. Separately, counterfactual auditing of the
 fixed-lag-QR configuration moved its `--fix-demote-res` from 25 to 40 (25

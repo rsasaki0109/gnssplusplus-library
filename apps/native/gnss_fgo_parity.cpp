@@ -191,6 +191,7 @@ struct Args {
     double fix_demote_anchor_gross_ratio = -1.0;  // >=0: override fix_demote_anchor_gross_ratio (default 10.0)
     double fix_demote_anchor_gross_abs = -1.0;    // >=0: override fix_demote_anchor_gross_abs_m (default 20.0)
     bool fix_demote_surplus_crosscheck = false;   // enable fix_demote_surplus_crosscheck (needs --fix-demote + --surplus-validation)
+    bool fix_demote_surplus_anchor_reprieve = false;  // fail-closed surplus + independent DDPR anchor preset
     bool surplus_overrides_dr = false;   // "c2" lever: enable surplus_validation_overrides_history_dr (needs --fixed-history-dr + --surplus-validation)
     int surplus_overrides_dr_min_used = 0;  // >0: override surplus_validation_overrides_history_dr_min_surplus_used (default 0 = no extra floor)
     int surplus_overrides_dr_max_consec = 0;  // >0: override surplus_validation_overrides_history_dr_max_consecutive (default 0 = no cap)
@@ -316,6 +317,11 @@ Args parseArgs(int argc, char** argv) {
         }
         if (a == "--fix-demote-surplus-crosscheck") {
             args.fix_demote_surplus_crosscheck = true;
+            continue;
+        }
+        if (a == "--fix-demote-surplus-anchor-reprieve") {
+            args.fix_demote_surplus_crosscheck = true;
+            args.fix_demote_surplus_anchor_reprieve = true;
             continue;
         }
         if (a == "--cmc-ref") {
@@ -824,6 +830,9 @@ libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
     }
     if (args.fix_demote_surplus_crosscheck) {
         config.fix_demote_surplus_crosscheck = true;
+    }
+    if (args.fix_demote_surplus_anchor_reprieve) {
+        config.fix_demote_surplus_anchor_reprieve = true;
     }
     if (args.leaky_persist) {
         config.use_cp_hold_leaky_persist = true;
@@ -2499,6 +2508,8 @@ int main(int argc, char** argv) {
                   << ", anchor_demotions=" << fl.diagnostics.fix_plausibility_anchor_demotions
                   << ", hold_skips=" << fl.diagnostics.fix_plausibility_hold_skips
                   << ", surplus_crosscheck=" << (args.fix_demote_surplus_crosscheck ? "on" : "off")
+                  << ", surplus_anchor_reprieve="
+                  << (args.fix_demote_surplus_anchor_reprieve ? "on" : "off")
                   << ", surplus_reprieves=" << fl.diagnostics.fix_plausibility_surplus_reprieves
                   << ", distance_m=" << config.fix_demote_distance_m
                   << ", anchor=" << (args.fix_demote_anchor ? "on" : "off")

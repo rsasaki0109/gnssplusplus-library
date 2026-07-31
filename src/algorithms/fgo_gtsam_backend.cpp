@@ -4368,6 +4368,9 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
             // wrong-basin bands from run1's diffuse-multipath false-veto
             // signature. No-op (gate always open) when the knob is off.
             bool anchor_gross_gate_open = true;
+            bool demotion_anchor_trusted = false;
+            double demotion_anchor_gap_m =
+                std::numeric_limits<double>::infinity();
             if (config.fix_demote_use_ddpr_anchor && config.fix_demote_anchor_gross) {
                 anchor_gross_gate_open = false;
                 if (!per_sat_res.empty()) {
@@ -4391,8 +4394,10 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                     ++result.diagnostics.fix_plausibility_anchor_gross_gated;
                 }
             }
-            if (!demote && config.fix_demote_use_ddpr_anchor && config.use_ddpr_anchor &&
-                anchor_gross_gate_open) {
+            const bool evaluate_demotion_anchor =
+                config.fix_demote_surplus_anchor_reprieve ||
+                (config.fix_demote_use_ddpr_anchor && config.use_ddpr_anchor);
+            if (evaluate_demotion_anchor && anchor_gross_gate_open) {
                 ++result.diagnostics.ddpr_anchor_solves;
                 const double trust_res = config.fix_demote_anchor_trust_res_m > 0.0
                                              ? config.fix_demote_anchor_trust_res_m
@@ -4428,11 +4433,21 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                         }
                     }
                 }
+                epoch_diagnostics[i].ddpr_anchor_evaluated = true;
+                epoch_diagnostics[i].ddpr_anchor_active_factors = anchor.n_active;
+                epoch_diagnostics[i].ddpr_anchor_residual_rms_m = anchor.res_rms;
+                if (anchor.ok) {
+                    epoch_diagnostics[i].ddpr_anchor_position_ecef =
+                        antennaOf(anchor.pose);
+                }
                 if (anchor.ok && anchor.n_active >= config.ddpr_anchor_min_factors &&
                     anchor.res_rms <= trust_res) {
                     ++result.diagnostics.ddpr_anchor_successes;
                     const double anchor_gap = (fix_ant - antennaOf(anchor.pose)).norm();
-                    if (anchor_gap > config.fix_demote_anchor_distance_m) {
+                    demotion_anchor_trusted = true;
+                    demotion_anchor_gap_m = anchor_gap;
+                    if (config.fix_demote_use_ddpr_anchor &&
+                        anchor_gap > config.fix_demote_anchor_distance_m) {
                         demote = true;
                         ++result.diagnostics.fix_plausibility_anchor_demotions;
                     }
@@ -4445,9 +4460,24 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
             // vouches for the fix. Fail-safe: no verdict or a failing
             // verdict demotes exactly as before. See the knob's comment in
             // fgo.hpp for the measured false-alarm/discrimination numbers.
+            const bool anchor_reprieve_pass =
+                !config.fix_demote_surplus_anchor_reprieve ||
+                (demotion_anchor_trusted &&
+                 demotion_anchor_gap_m <=
+                     config.fix_demote_surplus_anchor_max_gap_m &&
+                 nsat >= config.fix_demote_surplus_anchor_min_satellites &&
+                 std::isfinite(epoch_diagnostics[i].fixed_float_separation_m) &&
+                 epoch_diagnostics[i].fixed_float_separation_m <=
+                     config.fix_demote_surplus_anchor_max_float_separation_m &&
+                 std::isfinite(
+                     epoch_diagnostics[i].fixed_postfit_ddcp_rms_m) &&
+                 epoch_diagnostics[i].fixed_postfit_ddcp_rms_m <=
+                     config
+                         .fix_demote_surplus_anchor_max_postfit_ddcp_rms_m);
             if (demote && config.fix_demote_surplus_crosscheck &&
                 epoch_diagnostics[i].surplus_validation_evaluated &&
-                epoch_diagnostics[i].surplus_validation_pass) {
+                epoch_diagnostics[i].surplus_validation_pass &&
+                anchor_reprieve_pass) {
                 demote = false;
                 ++result.diagnostics.fix_plausibility_surplus_reprieves;
             }
