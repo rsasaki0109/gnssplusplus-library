@@ -31,6 +31,7 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <set>
 #include <sstream>
 #include <string>
 #include <type_traits>
@@ -78,6 +79,7 @@ struct Args {
     bool no_band_sigma = false;  // MF-AR ablation: disable per-band (secondary) sigma de-weighting
     bool no_code_align = false;  // MF hygiene ablation: disable secondary-band code alignment
     bool dd_resid = false;       // per-signal DD residuals at the reference trajectory (no solve)
+    bool tdcp_audit = false;     // measurement-neutral TDCP construction/overlap audit (no solve)
     bool partial_ar = false;     // MF-AR step 2: partial AR in the fixed-lag LAMBDA
     bool integer_constrained_reoptimization = false;
     double integer_constrained_prior_sigma_cycles = -1.0;
@@ -226,6 +228,10 @@ Args parseArgs(int argc, char** argv) {
         // MSVC otherwise exceeds its block-nesting limit (C1061).
         if (a == "--problem-cache" && i + 1 < argc) {
             args.problem_cache_path = argv[++i];
+            continue;
+        }
+        if (a == "--tdcp-audit") {
+            args.tdcp_audit = true;
             continue;
         }
         if (a == "--fixed-lag-qr") {
@@ -1222,6 +1228,177 @@ std::size_t countFixedEpochs(const libgnss::FGOProcessor::FGOResult& r) {
         }
     }
     return n;
+}
+
+struct TdcpObservationKey {
+    std::size_t epoch_index = 0;
+    libgnss::SatelliteId satellite;
+    libgnss::SignalType signal = libgnss::SignalType::GPS_L1CA;
+
+    bool operator<(const TdcpObservationKey& other) const {
+        return std::tie(epoch_index, satellite, signal) <
+               std::tie(other.epoch_index, other.satellite, other.signal);
+    }
+};
+
+struct TdcpEpochGroupKey {
+    std::size_t previous_epoch_index = 0;
+    std::size_t current_epoch_index = 0;
+    libgnss::GNSSSystem system = libgnss::GNSSSystem::UNKNOWN;
+
+    bool operator<(const TdcpEpochGroupKey& other) const {
+        return std::tie(previous_epoch_index, current_epoch_index, system) <
+               std::tie(other.previous_epoch_index, other.current_epoch_index, other.system);
+    }
+};
+
+struct TdcpResidualSummary {
+    std::size_t count = 0;
+    double rms_m = 0.0;
+    double median_abs_m = 0.0;
+    double p95_abs_m = 0.0;
+    double p99_abs_m = 0.0;
+    double max_abs_m = 0.0;
+    std::array<std::size_t, 5> above_threshold{};
+};
+
+TdcpResidualSummary summarizeResiduals(const std::vector<double>& residuals) {
+    TdcpResidualSummary result;
+    result.count = residuals.size();
+    if (residuals.empty()) {
+        return result;
+    }
+    std::vector<double> absolute;
+    absolute.reserve(residuals.size());
+    double sum_squares = 0.0;
+    for (const double residual : residuals) {
+        sum_squares += residual * residual;
+        const double abs_residual = std::abs(residual);
+        absolute.push_back(abs_residual);
+        constexpr std::array<double, 5> thresholds_m{0.25, 0.5, 1.0, 3.0, 10.0};
+        for (std::size_t i = 0; i < thresholds_m.size(); ++i) {
+            if (abs_residual > thresholds_m[i]) {
+                ++result.above_threshold[i];
+            }
+        }
+    }
+    std::sort(absolute.begin(), absolute.end());
+    const auto percentile = [&](double fraction) {
+        const std::size_t index = static_cast<std::size_t>(
+            std::floor(fraction * static_cast<double>(absolute.size() - 1)));
+        return absolute[index];
+    };
+    result.rms_m = std::sqrt(sum_squares / static_cast<double>(residuals.size()));
+    result.median_abs_m = percentile(0.5);
+    result.p95_abs_m = percentile(0.95);
+    result.p99_abs_m = percentile(0.99);
+    result.max_abs_m = absolute.back();
+    return result;
+}
+
+void printTdcpResidualSummary(const char* label, const TdcpResidualSummary& summary) {
+    std::cout << "  " << label << ": n=" << summary.count
+              << " rms=" << summary.rms_m
+              << " median_abs=" << summary.median_abs_m
+              << " p95_abs=" << summary.p95_abs_m
+              << " p99_abs=" << summary.p99_abs_m
+              << " max_abs=" << summary.max_abs_m << " m"
+              << " above[0.25,0.5,1,3,10]="
+              << summary.above_threshold[0] << ","
+              << summary.above_threshold[1] << ","
+              << summary.above_threshold[2] << ","
+              << summary.above_threshold[3] << ","
+              << summary.above_threshold[4] << "\n";
+}
+
+void auditTdcp(const libgnss::FGOProcessor::FGOProblem& problem) {
+    std::set<TdcpObservationKey> dd_carrier_observations;
+    for (const auto& factor : problem.double_difference_carrier_factors) {
+        dd_carrier_observations.insert(
+            {factor.epoch_index, factor.satellite, factor.signal});
+        dd_carrier_observations.insert(
+            {factor.epoch_index, factor.reference_satellite, factor.signal});
+    }
+
+    std::size_t shares_dd_carrier_at_both_epochs = 0;
+    std::vector<double> geometry_only_residuals;
+    std::vector<double> seed_clock_residuals;
+    std::map<TdcpEpochGroupKey, std::vector<double>> residuals_by_epoch_system;
+    geometry_only_residuals.reserve(problem.tdcp_factors.size());
+    seed_clock_residuals.reserve(problem.tdcp_factors.size());
+
+    for (const auto& factor : problem.tdcp_factors) {
+        if (factor.previous_epoch_index >= problem.epochs.size() ||
+            factor.current_epoch_index >= problem.epochs.size()) {
+            continue;
+        }
+        const TdcpObservationKey previous_key{
+            factor.previous_epoch_index, factor.satellite, factor.signal};
+        const TdcpObservationKey current_key{
+            factor.current_epoch_index, factor.satellite, factor.signal};
+        if (dd_carrier_observations.count(previous_key) > 0 &&
+            dd_carrier_observations.count(current_key) > 0) {
+            ++shares_dd_carrier_at_both_epochs;
+        }
+
+        const auto& previous_epoch = problem.epochs[factor.previous_epoch_index];
+        const auto& current_epoch = problem.epochs[factor.current_epoch_index];
+        const double previous_range =
+            (factor.previous_satellite_position_ecef - previous_epoch.position_ecef).norm();
+        const double current_range =
+            (factor.current_satellite_position_ecef - current_epoch.position_ecef).norm();
+        const double geometry_residual =
+            factor.delta_carrier_m - (current_range - previous_range);
+        const double seed_clock_delta =
+            current_epoch.receiver_clock_bias_m - previous_epoch.receiver_clock_bias_m;
+        geometry_only_residuals.push_back(geometry_residual);
+        seed_clock_residuals.push_back(geometry_residual - seed_clock_delta);
+        residuals_by_epoch_system[
+            {factor.previous_epoch_index,
+             factor.current_epoch_index,
+             factor.satellite.system}]
+            .push_back(geometry_residual);
+    }
+
+    std::vector<double> common_mode_removed_residuals;
+    common_mode_removed_residuals.reserve(geometry_only_residuals.size());
+    for (auto& [key, residuals] : residuals_by_epoch_system) {
+        (void)key;
+        std::sort(residuals.begin(), residuals.end());
+        const double median = residuals[residuals.size() / 2];
+        for (const double residual : residuals) {
+            common_mode_removed_residuals.push_back(residual - median);
+        }
+    }
+
+    const auto& diagnostics = problem.diagnostics;
+    std::cout << "\n=== --tdcp-audit: measurement-neutral TDCP audit (no solve) ===\n"
+              << "  built=" << problem.tdcp_factors.size()
+              << " candidates=" << diagnostics.tdcp_candidate_pairs
+              << " rejected_gap=" << diagnostics.tdcp_rejected_gap
+              << " rejected_missing_previous="
+              << diagnostics.tdcp_rejected_missing_previous
+              << " rejected_loss_of_lock="
+              << diagnostics.tdcp_rejected_loss_of_lock
+              << " rejected_code_phase_jump="
+              << diagnostics.tdcp_rejected_code_phase_jump << "\n"
+              << "  shares DD carrier observations at both epochs="
+              << shares_dd_carrier_at_both_epochs << "/"
+              << problem.tdcp_factors.size() << " ("
+              << (problem.tdcp_factors.empty()
+                      ? 0.0
+                      : 100.0 * static_cast<double>(shares_dd_carrier_at_both_epochs) /
+                            static_cast<double>(problem.tdcp_factors.size()))
+              << "%)\n";
+    printTdcpResidualSummary(
+        "seed geometry-only residual", summarizeResiduals(geometry_only_residuals));
+    printTdcpResidualSummary(
+        "seed receiver-clock-corrected residual", summarizeResiduals(seed_clock_residuals));
+    printTdcpResidualSummary(
+        "per-epoch/system common-mode-removed residual",
+        summarizeResiduals(common_mode_removed_residuals));
+    std::cout << "  note: built factors are consumed by Eigen, but GTSAM insertion must be "
+                 "verified separately via diagnostics.tdcp_factors_inserted.\n";
 }
 
 // Tokyo IMU->antenna lever arm, body FLU (docs/imu_fusion.md, project memory);
@@ -2228,6 +2405,7 @@ int main(int argc, char** argv) {
     std::cout << "FGOProblem: epochs=" << problem.epochs.size()
               << " dd_pr_factors=" << problem.double_difference_pseudorange_factors.size()
               << " dd_cp_factors=" << problem.double_difference_carrier_factors.size()
+              << " tdcp_factors=" << problem.tdcp_factors.size()
               << " sd_doppler_factors=" << problem.single_difference_doppler_factors.size()
               << " ambiguity_states=" << problem.ambiguity_states.size()
               << " pr_factors=" << problem.pseudorange_factors.size() << "\n";
@@ -2242,6 +2420,12 @@ int main(int argc, char** argv) {
               << ", cmc_ref=" << (args.cmc_ref ? "on" : "off")
               << ", ref_avoided=" << problem.diagnostics.cmc_ref_avoided_count
               << "\n";
+
+    if (args.tdcp_audit) {
+        auditTdcp(problem);
+        std::cout.flush();
+        return 0;
+    }
 
     // --- MF hygiene diagnostics: per-signal DD residuals at the reference
     // trajectory (no solver). PR residual mean exposes per-band code/DCB
@@ -2768,12 +2952,15 @@ int main(int argc, char** argv) {
     std::cout << "\n=== (a) FLOAT parity (LAMBDA off) ===\n"
               << "  eigen: " << t_ef << " s, final_cost=" << eigen_float.diagnostics.final_cost
               << ", dd_cp_rms=" << eigen_float.diagnostics.double_difference_carrier_residual_rms_m
-              << " m\n"
+              << " m, tdcp_built/inserted=" << eigen_float.diagnostics.tdcp_factors
+              << "/" << eigen_float.diagnostics.tdcp_factors_inserted << "\n"
               << "  gtsam: " << t_gf << " s, iters=" << gtsam_float.diagnostics.iterations
               << ", final_cost=" << gtsam_float.diagnostics.final_cost
               << ", dd_cp_rms=" << gtsam_float.diagnostics.double_difference_carrier_residual_rms_m
               << " m, graph_values=" << gtsam_float.diagnostics.graph_values
-              << " graph_factors=" << gtsam_float.diagnostics.graph_factors << "\n"
+              << " graph_factors=" << gtsam_float.diagnostics.graph_factors
+              << ", tdcp_built/inserted=" << gtsam_float.diagnostics.tdcp_factors
+              << "/" << gtsam_float.diagnostics.tdcp_factors_inserted << "\n"
               << "  compared_epochs=" << fp.compared_epochs << "\n"
               << "  max ECEF delta = " << fp.max_delta_m << " m\n"
               << "  rms ECEF delta = " << fp.rms_delta_m << " m\n"

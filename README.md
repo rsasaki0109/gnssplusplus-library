@@ -163,6 +163,11 @@ The rescued-only population on run1 has 0.565 m RMS (n=693). The companion
 but counterfactually false-alarm dominated — leave it off. For repeated runs
 on identical inputs, `--problem-cache <file>` caches the parsed observations
 and built DD problem (~2× faster validation loops with an /O2 build).
+Before enabling TDCP in a GTSAM graph, `gnss_fgo_parity --tdcp-audit` performs
+a measurement-neutral, no-solve audit of factor construction, rejection
+reasons, seed residuals, and source-observation overlap with the DD carrier
+graph. Normal parity output also reports TDCP measurements built versus
+factors actually inserted by each backend.
 
 ### Moving CLAS PPP vs MRTKLIB
 
