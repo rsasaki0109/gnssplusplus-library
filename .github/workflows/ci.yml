@@ -74,7 +74,8 @@ jobs:
     needs: [changes, hygiene]
     if: needs.changes.outputs.run_heavy == 'true'
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
+    # macOS Release builds can exceed 80 minutes on cold/contended runners.
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
