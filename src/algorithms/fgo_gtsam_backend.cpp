@@ -3137,6 +3137,10 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 is_low_count_attempt && config.use_low_count_ambiguity_resolution &&
                 config.use_surplus_satellite_validation &&
                 n >= std::max(1, config.low_count_min_candidates);
+            if (n > 0 && is_low_count_attempt && !low_count_entry_allowed) {
+                epoch_diagnostics[i].ar_outcome =
+                    FGOProcessor::AmbiguityResolutionOutcome::InsufficientCandidates;
+            }
             if (n >= min_candidates || low_count_entry_allowed) {
                 if (is_low_count_attempt) {
                     ++result.diagnostics.low_count_ambiguity_attempts;
@@ -4299,9 +4303,6 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                         amb_fixed_cycles[idx] = static_cast<int>(std::lround(v));
                     }
                 }
-            } else {
-                epoch_diagnostics[i].ar_outcome =
-                    FGOProcessor::AmbiguityResolutionOutcome::InsufficientCandidates;
             }
         }
 
