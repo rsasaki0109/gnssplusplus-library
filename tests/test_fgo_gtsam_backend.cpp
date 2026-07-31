@@ -598,6 +598,7 @@ TEST(FGOAmbiguityAttemptTelemetryTest,
 
     FGOProcessor::FGOConfig config = makeCpHoldBaseConfig();
     config.use_lambda_ambiguity_fix = true;
+    config.enable_src_shadow_telemetry = true;
     config.lambda_ratio_threshold =
         std::numeric_limits<double>::max();
     config.min_fixed_ambiguities = 5;
@@ -605,16 +606,52 @@ TEST(FGOAmbiguityAttemptTelemetryTest,
     const FGOProcessor processor(config);
     const FGOProcessor::FGOResult result =
         processor.optimizeProblem(problem);
+    FGOProcessor::FGOConfig disabled_config = config;
+    disabled_config.enable_src_shadow_telemetry = false;
+    const FGOProcessor disabled_processor(disabled_config);
+    const FGOProcessor::FGOResult disabled_result =
+        disabled_processor.optimizeProblem(problem);
 
     ASSERT_EQ(result.epoch_diagnostics.size(), problem.epochs.size());
+    ASSERT_EQ(
+        disabled_result.solution.solutions.size(),
+        result.solution.solutions.size());
+    ASSERT_EQ(
+        disabled_result.epoch_diagnostics.size(),
+        result.epoch_diagnostics.size());
     bool saw_solved_attempt = false;
     for (std::size_t epoch_index = 0;
          epoch_index < result.epoch_diagnostics.size();
          ++epoch_index) {
         const auto& epoch = result.epoch_diagnostics[epoch_index];
+        const auto& disabled_epoch =
+            disabled_result.epoch_diagnostics[epoch_index];
+        EXPECT_EQ(
+            disabled_result.solution.solutions[epoch_index].status,
+            result.solution.solutions[epoch_index].status);
+        EXPECT_TRUE(
+            disabled_result.solution.solutions[epoch_index]
+                .position_ecef.isApprox(
+                    result.solution.solutions[epoch_index]
+                        .position_ecef));
         EXPECT_EQ(
             epoch.ambiguity_resolution_attempt_trace.size(),
             static_cast<std::size_t>(epoch.lambda_attempts));
+        ASSERT_EQ(
+            disabled_epoch.ambiguity_resolution_attempt_trace.size(),
+            epoch.ambiguity_resolution_attempt_trace.size());
+        for (const auto& disabled_attempt :
+             disabled_epoch.ambiguity_resolution_attempt_trace) {
+            EXPECT_EQ(
+                disabled_attempt.src_subset_size,
+                (std::array<int, 5>{}));
+            EXPECT_EQ(
+                disabled_attempt.src_search_solved,
+                (std::array<bool, 5>{}));
+            EXPECT_EQ(
+                disabled_attempt.src_candidate_position_valid,
+                (std::array<bool, 5>{}));
+        }
         for (const auto& attempt :
              epoch.ambiguity_resolution_attempt_trace) {
             EXPECT_EQ(attempt.subset_size, 7);
@@ -656,11 +693,35 @@ TEST(FGOAmbiguityAttemptTelemetryTest,
                 if (!attempt.ffrt_accepts_any_candidate[scale_index]) {
                     EXPECT_FALSE(attempt.ffrt_pass[scale_index]);
                 }
+                EXPECT_GE(
+                    attempt.src_subset_size[scale_index], 0);
+                EXPECT_LE(
+                    attempt.src_subset_size[scale_index],
+                    attempt.subset_size);
+                if (attempt.src_subset_size[scale_index] > 0) {
+                    EXPECT_GE(
+                        attempt.src_bootstrapped_success_rate[scale_index],
+                        FGOProcessor::AmbiguityResolutionAttemptTrace::
+                            src_minimum_success_rate - 1e-12);
+                    EXPECT_TRUE(
+                        attempt.src_search_solved[scale_index]);
+                    EXPECT_TRUE(std::isfinite(
+                        attempt.src_ratio[scale_index]));
+                    EXPECT_TRUE(
+                        attempt.src_candidate_position_valid[scale_index]);
+                    EXPECT_TRUE(
+                        attempt
+                            .src_candidate_position_ecef[scale_index]
+                            .allFinite());
+                }
                 if (scale_index > 0) {
                     EXPECT_LE(
                         attempt.bootstrapped_success_rate[scale_index],
                         attempt.bootstrapped_success_rate[
                             scale_index - 1]);
+                    EXPECT_LE(
+                        attempt.src_subset_size[scale_index],
+                        attempt.src_subset_size[scale_index - 1]);
                 }
             }
         }

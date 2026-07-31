@@ -3553,6 +3553,15 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                                     : 0.0;
                         attempt_trace.lambda_search_solved = true;
                         attempt_trace.ratio = ratio;
+                        struct SrcShadowCandidate {
+                            bool search_solved = false;
+                            double ratio = 0.0;
+                            bool position_valid = false;
+                            Eigen::Vector3d position_ecef =
+                                Eigen::Vector3d::Zero();
+                        };
+                        std::map<int, SrcShadowCandidate>
+                            src_shadow_candidates_by_size;
                         for (std::size_t scale_index = 0;
                              scale_index <
                              FGOProcessor::AmbiguityResolutionAttemptTrace::
@@ -3584,6 +3593,130 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                                 std::isfinite(ratio) &&
                                 ratio >=
                                     ffrt.minimum_second_to_best_ratio;
+                            if (!config.enable_src_shadow_telemetry) {
+                                continue;
+                            }
+
+                            const double covariance_scale =
+                                FGOProcessor::
+                                    AmbiguityResolutionAttemptTrace::
+                                        covariance_scales[scale_index];
+                            const int src_subset_size =
+                                successRateCriterionSubsetSize(
+                                    lambda_diagnostics
+                                        .conditional_variances,
+                                    covariance_scale,
+                                    FGOProcessor::
+                                        AmbiguityResolutionAttemptTrace::
+                                            src_minimum_success_rate);
+                            attempt_trace.src_subset_size[scale_index] =
+                                src_subset_size;
+                            if (src_subset_size <= 0) continue;
+
+                            const Eigen::VectorXd src_conditional_variances =
+                                lambda_diagnostics
+                                    .conditional_variances
+                                    .tail(src_subset_size);
+                            attempt_trace
+                                .src_bootstrapped_success_rate[scale_index] =
+                                bootstrappedSuccessRate(
+                                    src_conditional_variances,
+                                    covariance_scale);
+
+                            auto candidate_it =
+                                src_shadow_candidates_by_size.find(
+                                    src_subset_size);
+                            if (candidate_it ==
+                                src_shadow_candidates_by_size.end()) {
+                                SrcShadowCandidate candidate;
+                                const Eigen::VectorXd src_float =
+                                    lambda_diagnostics
+                                        .decorrelated_float
+                                        .tail(src_subset_size);
+                                const Eigen::MatrixXd src_q =
+                                    lambda_diagnostics
+                                        .decorrelated_covariance
+                                        .bottomRightCorner(
+                                            src_subset_size,
+                                            src_subset_size);
+                                LambdaCandidateDiagnostics
+                                    src_lambda_diagnostics;
+                                Eigen::VectorXd src_fixed;
+                                if (src_subset_size == subset) {
+                                    candidate.search_solved = true;
+                                    candidate.ratio = ratio;
+                                    src_fixed =
+                                        lambda_diagnostics
+                                            .decorrelation_transform
+                                            .transpose() *
+                                        fixed_amb;
+                                } else if (lambdaSearchTopK(
+                                               src_float, src_q, 2,
+                                               src_lambda_diagnostics)) {
+                                    candidate.search_solved = true;
+                                    const double src_best_residual =
+                                        src_lambda_diagnostics
+                                            .squared_residuals(0);
+                                    candidate.ratio =
+                                        src_best_residual > 0.0
+                                            ? src_lambda_diagnostics
+                                                      .squared_residuals(1) /
+                                                  src_best_residual
+                                            : 0.0;
+                                    src_fixed =
+                                        src_lambda_diagnostics
+                                            .candidates.col(0);
+                                }
+                                if (candidate.search_solved &&
+                                    src_fixed.size() ==
+                                        src_subset_size) {
+                                    const Eigen::VectorXd src_delta =
+                                        src_float - src_fixed;
+                                    const Eigen::LDLT<Eigen::MatrixXd>
+                                        src_ldlt(src_q);
+                                    if (src_ldlt.info() ==
+                                        Eigen::Success) {
+                                        const Eigen::VectorXd src_corr =
+                                            src_ldlt.solve(src_delta);
+                                        const Eigen::MatrixXd src_pos =
+                                            sub_pos *
+                                            lambda_diagnostics
+                                                .decorrelation_transform
+                                                .rightCols(
+                                                    src_subset_size);
+                                        const Eigen::Vector3d src_pd =
+                                            src_pos * src_corr;
+                                        if (src_corr.allFinite() &&
+                                            src_pd.allFinite()) {
+                                            candidate.position_ecef =
+                                                Eigen::Vector3d(
+                                                    antennaOf(pose_i)) -
+                                                src_pd;
+                                            candidate.position_valid =
+                                                candidate.position_ecef
+                                                    .allFinite();
+                                        }
+                                    }
+                                }
+                                candidate_it =
+                                    src_shadow_candidates_by_size
+                                        .emplace(
+                                            src_subset_size,
+                                            std::move(candidate))
+                                        .first;
+                            }
+                            const SrcShadowCandidate& src_candidate =
+                                candidate_it->second;
+                            attempt_trace.src_search_solved[scale_index] =
+                                src_candidate.search_solved;
+                            attempt_trace.src_ratio[scale_index] =
+                                src_candidate.ratio;
+                            attempt_trace
+                                .src_candidate_position_valid[scale_index] =
+                                src_candidate.position_valid;
+                            attempt_trace
+                                .src_candidate_position_ecef[scale_index] =
+                                src_candidate.position_ecef;
                         }
                         result.diagnostics.lambda_ambiguity_fix_solved = true;
                         epoch_diagnostics[i].ar_outcome =

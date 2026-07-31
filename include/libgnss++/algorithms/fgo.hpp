@@ -153,6 +153,10 @@ public:
         bool fix_ambiguities = false;
         bool prefer_double_difference_ambiguity_fixing = true;
         bool use_lambda_ambiguity_fix = true;
+        // Evaluate success-rate-criterion subsets and candidate positions for
+        // diagnostics only. Default OFF because the extra ILS searches are
+        // intentionally not part of the shipping decision or runtime path.
+        bool enable_src_shadow_telemetry = false;
         bool use_epoch_lambda_fixed_output = false;
         bool use_partial_lambda_ambiguity_fix = true;
         // Independently re-optimize the active fixed-lag graph with the
@@ -1943,6 +1947,7 @@ public:
     struct AmbiguityResolutionAttemptTrace {
         inline static constexpr std::array<double, 5> covariance_scales{
             1.0, 2.0, 4.0, 8.0, 16.0};
+        inline static constexpr double src_minimum_success_rate = 0.999;
 
         int attempt_index = -1;
         int subset_size = 0;
@@ -1954,6 +1959,14 @@ public:
         std::array<bool, 5> ffrt_supported{};
         std::array<bool, 5> ffrt_accepts_any_candidate{};
         std::array<bool, 5> ffrt_pass{};
+        std::array<int, 5> src_subset_size{};
+        std::array<double, 5> src_bootstrapped_success_rate{};
+        std::array<bool, 5> src_search_solved{};
+        std::array<double, 5> src_ratio{};
+        std::array<bool, 5> src_candidate_position_valid{};
+        std::array<Vector3d, 5> src_candidate_position_ecef{
+            Vector3d::Zero(), Vector3d::Zero(), Vector3d::Zero(),
+            Vector3d::Zero(), Vector3d::Zero()};
         bool candidate_position_valid = false;
         Vector3d candidate_position_ecef = Vector3d::Zero();
         double fixed_float_separation_m = 0.0;

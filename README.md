@@ -146,6 +146,13 @@ optimism; no scale is selected until Tokyo1 development and independent
 Tokyo2 validation are complete. This follows the model/data separation
 described by the
 [two-step success-rate criterion](https://doi.org/10.1007/s10291-022-01317-0).
+The `src_*_q*` columns additionally search the trailing LAMBDA-decorrelated
+subset whose bootstrapped success rate meets 0.999. Its integer candidate is
+propagated to a shadow ECEF position through the transformed
+position/ambiguity cross-covariance. It is not treated as a subset of original
+ambiguity indices and does not create integer constraints or alter the
+shipping solution. SRC shadow evaluation is default-off in the library and is
+enabled by this parity harness only when `--dump-csv` is requested.
 
 #### Surplus-satellite rescue integrity
 

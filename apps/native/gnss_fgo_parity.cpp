@@ -686,6 +686,8 @@ libgnss::FGOProcessor::FGOConfig makeRealDataDdConfig() {
 // call, without duplicating this arg-to-config mapping logic.
 libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
     libgnss::FGOProcessor::FGOConfig config = makeRealDataDdConfig();
+    config.enable_src_shadow_telemetry =
+        !args.dump_csv_path.empty();
     config.report_held_ambiguities_as_fixed = !args.no_held_fix_label;
     if (args.max_iters > 0) {
         config.max_iterations = args.max_iters;
@@ -1668,7 +1670,15 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
                      << ",ffrt_min_ratio_q" << scale
                      << ",ffrt_supported_q" << scale
                      << ",ffrt_accepts_any_candidate_q" << scale
-                     << ",ffrt_pass_q" << scale;
+                     << ",ffrt_pass_q" << scale
+                     << ",src_subset_size_q" << scale
+                     << ",src_bsr_q" << scale
+                     << ",src_search_solved_q" << scale
+                     << ",src_ratio_q" << scale
+                     << ",src_candidate_position_valid_q" << scale
+                     << ",src_candidate_x_ecef_m_q" << scale
+                     << ",src_candidate_y_ecef_m_q" << scale
+                     << ",src_candidate_z_ecef_m_q" << scale;
     }
     attempts_out
         << ",surplus_eval,surplus_pass,surplus_level,surplus_used,"
@@ -1716,7 +1726,39 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
                             ? 1
                             : 0)
                     << ','
-                    << (attempt.ffrt_pass[scale_index] ? 1 : 0);
+                    << (attempt.ffrt_pass[scale_index] ? 1 : 0)
+                    << ','
+                    << attempt.src_subset_size[scale_index]
+                    << ','
+                    << attempt
+                           .src_bootstrapped_success_rate[scale_index]
+                    << ','
+                    << (attempt.src_search_solved[scale_index] ? 1 : 0)
+                    << ','
+                    << attempt.src_ratio[scale_index]
+                    << ','
+                    << (attempt
+                                .src_candidate_position_valid[scale_index]
+                            ? 1
+                            : 0)
+                    << ',';
+                if (attempt
+                        .src_candidate_position_valid[scale_index]) {
+                    attempts_out
+                        << attempt
+                               .src_candidate_position_ecef[scale_index]
+                               .x()
+                        << ','
+                        << attempt
+                               .src_candidate_position_ecef[scale_index]
+                               .y()
+                        << ','
+                        << attempt
+                               .src_candidate_position_ecef[scale_index]
+                               .z();
+                } else {
+                    attempts_out << ",,";
+                }
             }
             attempts_out
                 << ',' << (attempt.surplus_evaluated ? 1 : 0)
