@@ -3,7 +3,9 @@
 
 #include <array>
 #include <cmath>
+#include <cstdlib>
 #include <iostream>
+#include <string>
 #include <vector>
 
 using namespace libgnss;
@@ -124,6 +126,26 @@ int main() {
     config.multisd_validation_holdout_satellites = 4;
 
     const auto result = FGOProcessor(config).optimizeProblem(problem);
+#ifdef GNSSPP_TEST_HAS_CUDA_FGO
+    const char* cuda_mode = std::getenv("GNSSPP_FGO_CUDA_SOLVER");
+    const bool forced_cuda = cuda_mode != nullptr &&
+                             (std::string(cuda_mode) == "on" ||
+                              std::string(cuda_mode) == "1");
+    if (forced_cuda &&
+        (!result.diagnostics.cuda_dense_solver_selected ||
+         result.diagnostics.cuda_dense_solve_attempts == 0 ||
+         result.diagnostics.cuda_dense_solve_successes !=
+             result.diagnostics.cuda_dense_solve_attempts ||
+         result.diagnostics.cuda_dense_solve_fallbacks != 0 ||
+         !(result.diagnostics.cuda_dense_solve_time_ms > 0.0))) {
+        return fail("forced CUDA solve was not exercised successfully");
+    }
+    if (!forced_cuda &&
+        (result.diagnostics.cuda_dense_solver_selected ||
+         result.diagnostics.cuda_dense_solve_attempts != 0)) {
+        return fail("CUDA solve was unexpectedly selected");
+    }
+#endif
     if (!result.diagnostics.lambda_ambiguity_fix_solved ||
         !result.diagnostics.lambda_ambiguity_fix_used ||
         !result.diagnostics.fixed_solution) {

@@ -1856,6 +1856,14 @@ public:
         double initial_cost = 0.0;
         double final_cost = 0.0;
         double processing_time_ms = 0.0;
+        /// Native dense normal-equation dimension used for CPU/GPU dispatch.
+        std::size_t dense_normal_state_size = 0;
+        /// True when this solve selected the optional cuSOLVER dense path.
+        bool cuda_dense_solver_selected = false;
+        std::size_t cuda_dense_solve_attempts = 0;
+        std::size_t cuda_dense_solve_successes = 0;
+        std::size_t cuda_dense_solve_fallbacks = 0;
+        double cuda_dense_solve_time_ms = 0.0;
         double epoch_lambda_processing_time_ms = 0.0;
         double epoch_lambda_setup_time_ms = 0.0;
         double epoch_lambda_factorization_time_ms = 0.0;

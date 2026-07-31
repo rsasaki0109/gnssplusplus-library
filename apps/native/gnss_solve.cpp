@@ -3873,7 +3873,9 @@ int main(int argc, char* argv[]) {
                    "hypotheses_passed,hypotheses_evaluated,selected_rank,"
                    "carrier_passed,carrier_used,max_integer_distance_cycles,"
                    "ddpr_rms_m,x,y,z,rtk_position_delta_m,build_runtime_ms,"
-                   "optimize_wall_ms,optimizer_cpu_ms,runtime_ms\n";
+                   "optimize_wall_ms,optimizer_cpu_ms,runtime_ms,"
+                   "normal_state_size,cuda_selected,cuda_attempts,"
+                   "cuda_successes,cuda_fallbacks,cuda_runtime_ms\n";
         }
 
         std::unique_ptr<IntegrityShadowTimeline> integrity_shadow;
@@ -4296,7 +4298,14 @@ int main(int argc, char* argv[]) {
                         << ',' << shadow_build_runtime_ms
                         << ',' << shadow_optimize_wall_ms
                         << ',' << diagnostics.processing_time_ms
-                        << ',' << shadow_runtime_ms << '\n';
+                        << ',' << shadow_runtime_ms
+                        << ',' << diagnostics.dense_normal_state_size
+                        << ',' << (diagnostics.cuda_dense_solver_selected ? 1 : 0)
+                        << ',' << diagnostics.cuda_dense_solve_attempts
+                        << ',' << diagnostics.cuda_dense_solve_successes
+                        << ',' << diagnostics.cuda_dense_solve_fallbacks
+                        << ',' << diagnostics.cuda_dense_solve_time_ms
+                        << '\n';
                 }
             }
             const libgnss::PositionSolution* last_output =

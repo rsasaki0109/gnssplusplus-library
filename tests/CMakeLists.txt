@@ -193,6 +193,10 @@ if(GTest_FOUND)
         gnss_lib_noopt
         Threads::Threads
     )
+    if(GNSSPP_ENABLE_CUDA_FGO)
+        target_compile_definitions(gnss_fgo_multisd_smoke PRIVATE
+            GNSSPP_TEST_HAS_CUDA_FGO=1)
+    endif()
     target_compile_definitions(gnss_fgo_tests PRIVATE
         GNSSPP_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
         GNSSPP_BINARY_DIR="${CMAKE_BINARY_DIR}"

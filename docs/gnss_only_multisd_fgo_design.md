@@ -222,3 +222,52 @@ Thus the preliminary 25-epoch p95 is below 100 ms on this host even before a
 CUDA solve. This is still a 21-solve development sample, not the full latency
 contract. CUDA remains an optional scaling path for longer windows and larger
 hypothesis batches; CPU stays the reference and fallback.
+
+## Optional CUDA dense-solve checkpoint (2026-07-31)
+
+The native Eigen backend now has a build-time, default-off
+`GNSSPP_ENABLE_CUDA_FGO` option. When built with CUDA, the runtime selector is
+`GNSSPP_FGO_CUDA_SOLVER=off|auto|on`; an unset value is `off`. The backend uses
+cuSOLVER Cholesky (`potrf` followed by `potrs`) for the damped SPD normal
+equations and supports multi-right-hand-side ambiguity/output covariance
+solves. Its cuSOLVER handle and device allocations are retained per worker
+thread. Every CUDA error, non-SPD result, or unavailable device returns to the
+unchanged Eigen solver. CUDA is never needed for a normal build or deployment.
+NVIDIA documents this factor/solve ordering, stream parallelism, deterministic
+controls, and the newer generic API in the cuSOLVER manual:
+<https://docs.nvidia.com/cuda/cusolver/index.html>.
+
+The shadow CSV exposes the normal-state dimension, CUDA selection, attempted
+and successful solves, fallbacks, and measured CUDA-call time. A Tokyo run1
+100-epoch causal batch on the development GTX 1660 Ti produced:
+
+| selector | state | CUDA solves | total wall | selected FIX/rank | RTK SHA |
+|---|---:|---:|---:|---|---|
+| `off` | 735 | 0 | 439 ms | FIX / 0 | reference |
+| `auto` | 735 | 0 | 478 ms | FIX / 0 | exact match |
+| `on` | 735 | 19/19 | 551 ms | FIX / 0 | exact match |
+
+The selected shadow ECEF coordinates also matched at the emitted precision and
+there were no CUDA fallbacks. The forced GPU path spent 254 ms inside the 19
+CUDA calls. This is positive numerical/parity evidence, but not a speedup:
+repeated host dense assembly and host/device copies dominate at this size.
+Automatic dispatch therefore starts only at state dimension 2048; the
+real-time 10/25-epoch windows stay on the faster sparse CPU path. `on` remains
+available for explicit parity and large-batch experiments. The threshold is a
+host-specific conservative guard and must be calibrated on every deployment
+GPU before promotion.
+
+This result agrees with the architectural lesson from MegBA: reported large
+GPU gains come from end-to-end vectorized graph optimization and minimized
+communication, rather than copying each already-assembled normal matrix for an
+isolated factorization. MegBA is an Apache-2.0 architectural reference; no code
+is copied. <https://github.com/MegviiRobot/MegBA> and
+<https://arxiv.org/abs/2112.01349>.
+
+The next CUDA work is consequently limited to changes that remove transfer and
+launch overhead: assemble GNSS residual/Jacobian blocks and accumulate normal
+blocks on-device, retain the fixed-lag normal/factorization across epochs,
+apply top-K integer constraints as batched low-rank updates, and migrate the
+legacy typed cuSOLVER calls to the current generic API. CPU parity remains the
+authority at every checkpoint. No IMU, LiDAR, camera, map, or reference
+trajectory enters estimation; reference trajectories remain scorer-only.

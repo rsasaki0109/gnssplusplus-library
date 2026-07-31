@@ -9,6 +9,10 @@
 #include <libgnss++/models/ionosphere.hpp>
 #include <libgnss++/models/troposphere.hpp>
 
+#ifdef GNSSPP_HAS_CUDA_FGO
+#include "fgo_cuda_backend.hpp"
+#endif
+
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 #ifdef GNSSPP_HAS_CHOLMOD
@@ -40,6 +44,57 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
 #endif
 
 namespace {
+
+bool cudaDenseSolverEnabled(int state_size) {
+#ifdef GNSSPP_HAS_CUDA_FGO
+    return detail::fgoCudaDenseSolverEnabled(state_size);
+#else
+    (void)state_size;
+    return false;
+#endif
+}
+
+struct CudaDenseSolveStats {
+    std::size_t attempts = 0;
+    std::size_t successes = 0;
+    double processing_ms = 0.0;
+};
+
+bool tryCudaDenseSolve(const Eigen::MatrixXd& normal,
+                       const Eigen::MatrixXd& rhs,
+                       Eigen::MatrixXd& solution,
+                       CudaDenseSolveStats* stats) {
+#ifdef GNSSPP_HAS_CUDA_FGO
+    if (normal.rows() <= 0 || normal.rows() != normal.cols() ||
+        rhs.rows() != normal.rows() || rhs.cols() <= 0) {
+        return false;
+    }
+    const auto start = std::chrono::steady_clock::now();
+    if (stats != nullptr) {
+        ++stats->attempts;
+    }
+    solution.resize(rhs.rows(), rhs.cols());
+    const bool solved = detail::fgoCudaDenseSolve(
+        normal.data(), static_cast<int>(normal.rows()),
+        rhs.data(), static_cast<int>(rhs.cols()), solution.data());
+    if (stats != nullptr) {
+        stats->processing_ms +=
+            std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - start)
+                .count();
+        if (solved) {
+            ++stats->successes;
+        }
+    }
+    return solved;
+#else
+    (void)normal;
+    (void)rhs;
+    (void)solution;
+    (void)stats;
+    return false;
+#endif
+}
 
 bool isPrimaryFgoSignal(SignalType signal, bool use_multi_constellation) {
     if (!use_multi_constellation) {
@@ -2762,7 +2817,14 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
     const int ambiguity_count = static_cast<int>(problem.ambiguity_states.size());
     const int state_size = base_state_size + ambiguity_count;
     constexpr int kSparseNormalStateThreshold = 300;
-    const bool use_sparse_normal = state_size > kSparseNormalStateThreshold;
+    // cuSOLVER consumes a dense SPD normal matrix. In auto/on mode retain the
+    // dense assembly above the ordinary Eigen sparse threshold so large
+    // fixed-lag windows actually reach the GPU backend. With CUDA disabled or
+    // below its auto threshold, the historical sparse selection is unchanged.
+    const bool use_cuda_dense_normal = cudaDenseSolverEnabled(state_size);
+    const bool use_sparse_normal =
+        state_size > kSparseNormalStateThreshold && !use_cuda_dense_normal;
+    CudaDenseSolveStats cuda_solve_stats;
     Eigen::VectorXd initial_state = Eigen::VectorXd::Zero(state_size);
     for (int i = 0; i < num_epochs; ++i) {
         const int epoch_col = epoch_state_size * i;
@@ -2851,6 +2913,7 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
         Eigen::SparseMatrix<double> sparse_normal_matrix;
         std::shared_ptr<SparseNormalFactorization> sparse_factorization;
         std::shared_ptr<DenseNormalFactorization> dense_factorization;
+        double dense_damping = 0.0;
         int iterations = 0;
         bool converged = false;
         double final_cost = 0.0;
@@ -3683,6 +3746,7 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                 }
             } else {
                 output.dense_factorization.reset();
+                output.dense_damping = 0.0;
                 if (cost_converged()) {
                     store_current_linearization();
                     output.iterations = iter;
@@ -3697,6 +3761,21 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                 for (int attempt = 0; attempt < 6; ++attempt) {
                     Eigen::MatrixXd damped_normal = normal_matrix;
                     damped_normal.diagonal().array() += damping;
+                    if (cudaDenseSolverEnabled(state_size)) {
+                        Eigen::MatrixXd cuda_rhs(normal_rhs.rows(), 1);
+                        cuda_rhs.col(0) = normal_rhs;
+                        Eigen::MatrixXd cuda_solution;
+                        if (tryCudaDenseSolve(damped_normal, cuda_rhs,
+                                              cuda_solution,
+                                              &cuda_solve_stats) &&
+                            cuda_solution.cols() == 1 &&
+                            cuda_solution.allFinite()) {
+                            dx = cuda_solution.col(0);
+                            output.dense_damping = damping;
+                            solved = true;
+                            break;
+                        }
+                    }
                     auto ldlt =
                         std::make_shared<DenseNormalFactorization>(
                             damped_normal);
@@ -3704,6 +3783,7 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                         dx = ldlt->solve(normal_rhs);
                         if (dx.allFinite()) {
                             output.dense_factorization = std::move(ldlt);
+                            output.dense_damping = damping;
                             solved = true;
                             break;
                         }
@@ -3826,12 +3906,23 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
             Eigen::MatrixXd ambiguity_state_covariance =
                 Eigen::MatrixXd::Zero(ambiguity_count, ambiguity_count);
             if (optimization.normal_matrix.rows() == state_size) {
-                if (optimization.dense_factorization) {
-                    Eigen::MatrixXd ambiguity_rhs = Eigen::MatrixXd::Zero(
-                        state_size, ambiguity_count);
-                    ambiguity_rhs.block(base_state_size, 0,
-                                        ambiguity_count, ambiguity_count)
-                        .setIdentity();
+                Eigen::MatrixXd ambiguity_rhs = Eigen::MatrixXd::Zero(
+                    state_size, ambiguity_count);
+                ambiguity_rhs.block(base_state_size, 0,
+                                    ambiguity_count, ambiguity_count)
+                    .setIdentity();
+                Eigen::MatrixXd covariance_columns;
+                bool covariance_solved = false;
+                if (cudaDenseSolverEnabled(state_size)) {
+                    Eigen::MatrixXd damped_normal =
+                        optimization.normal_matrix;
+                    damped_normal.diagonal().array() +=
+                        std::max(1e-12, optimization.dense_damping);
+                    covariance_solved = tryCudaDenseSolve(
+                        damped_normal, ambiguity_rhs, covariance_columns,
+                        &cuda_solve_stats);
+                }
+                if (!covariance_solved && optimization.dense_factorization) {
                     const Eigen::MatrixXd covariance_columns =
                         optimization.dense_factorization->solve(ambiguity_rhs);
                     if (optimization.dense_factorization->info() !=
@@ -3842,7 +3933,16 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                     ambiguity_state_covariance = covariance_columns.block(
                         base_state_size, 0,
                         ambiguity_count, ambiguity_count);
-                } else {
+                    covariance_solved = true;
+                } else if (covariance_solved) {
+                    if (!covariance_columns.allFinite()) {
+                        return false;
+                    }
+                    ambiguity_state_covariance = covariance_columns.block(
+                        base_state_size, 0,
+                        ambiguity_count, ambiguity_count);
+                }
+                if (!covariance_solved) {
                     const Eigen::MatrixXd float_covariance =
                         pseudoInverse(optimization.normal_matrix);
                     if (float_covariance.rows() != state_size) {
@@ -4385,7 +4485,12 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                 ValidationOutcome first_outcome;
                 std::vector<std::future<OptimizationOutput>>
                     hypothesis_futures;
+                // CUDA uses a retained thread-local cuSOLVER workspace. Keep
+                // hypotheses on this thread so every rank reuses the same
+                // allocations/handle instead of creating one CUDA context
+                // workspace per std::async worker.
                 if (config_.parallelize_lambda_hypotheses &&
+                    !use_cuda_dense_normal &&
                     hypothesis_count > 1) {
                     hypothesis_futures.reserve(hypothesis_count - 1);
                     for (std::size_t rank = 1;
@@ -4511,15 +4616,44 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
     }
     const double processing_ms = total_processing_ms;
     result.diagnostics.processing_time_ms = processing_ms;
+    result.diagnostics.dense_normal_state_size =
+        static_cast<std::size_t>(state_size);
+    result.diagnostics.cuda_dense_solver_selected = use_cuda_dense_normal;
+    result.diagnostics.cuda_dense_solve_attempts = cuda_solve_stats.attempts;
+    result.diagnostics.cuda_dense_solve_successes = cuda_solve_stats.successes;
+    result.diagnostics.cuda_dense_solve_fallbacks =
+        cuda_solve_stats.attempts - cuda_solve_stats.successes;
+    result.diagnostics.cuda_dense_solve_time_ms =
+        cuda_solve_stats.processing_ms;
     result.diagnostics.last_update_norm_m =
         std::isfinite(optimization.last_dx_norm) ? optimization.last_dx_norm : 0.0;
 
     Eigen::MatrixXd covariance;
     if (optimization.normal_matrix.rows() == state_size) {
-        if (optimization.dense_factorization) {
+        bool covariance_solved = false;
+        if (cudaDenseSolverEnabled(state_size)) {
+            Eigen::MatrixXd damped_normal = optimization.normal_matrix;
+            damped_normal.diagonal().array() +=
+                std::max(1e-12, optimization.dense_damping);
+            covariance_solved = tryCudaDenseSolve(
+                damped_normal,
+                Eigen::MatrixXd::Identity(state_size, state_size),
+                covariance, &cuda_solve_stats);
+            result.diagnostics.cuda_dense_solve_attempts =
+                cuda_solve_stats.attempts;
+            result.diagnostics.cuda_dense_solve_successes =
+                cuda_solve_stats.successes;
+            result.diagnostics.cuda_dense_solve_fallbacks =
+                cuda_solve_stats.attempts - cuda_solve_stats.successes;
+            result.diagnostics.cuda_dense_solve_time_ms =
+                cuda_solve_stats.processing_ms;
+        }
+        if (!covariance_solved && optimization.dense_factorization) {
             covariance = optimization.dense_factorization->solve(
                 Eigen::MatrixXd::Identity(state_size, state_size));
-        } else {
+            covariance_solved = covariance.allFinite();
+        }
+        if (!covariance_solved) {
             covariance = pseudoInverse(optimization.normal_matrix);
         }
     }

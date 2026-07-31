@@ -17,7 +17,7 @@ if(MSVC OR (WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
     # Ninja does not inherit Visual Studio project's exception defaults.
     # The library and GoogleTest both use C++ exceptions, so compiling
     # without unwind semantics can crash the focused test shards at startup.
-    add_compile_options(/EHsc)
+    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/EHsc>)
 endif()
 include(CTest)
 include(GNUInstallDirs)
@@ -63,6 +63,15 @@ if(GNSSPP_USE_CHOLMOD)
     endif()
 else()
     message(STATUS "CHOLMOD disabled; using Eigen sparse covariance solver")
+endif()
+option(GNSSPP_ENABLE_CUDA_FGO
+    "Build the optional cuSOLVER dense backend for native FGO" OFF)
+if(GNSSPP_ENABLE_CUDA_FGO)
+    if(CMAKE_VERSION VERSION_LESS 3.18)
+        message(FATAL_ERROR "GNSSPP_ENABLE_CUDA_FGO requires CMake 3.18+")
+    endif()
+    enable_language(CUDA)
+    find_package(CUDAToolkit REQUIRED)
 endif()
 option(MADOCALIB_PARITY_LINK "Link external MADOCALIB C sources for opt-in parity oracle tests" OFF)
 option(
@@ -301,6 +310,22 @@ else()
             GNSSPP_HAS_MADOCALIB_ORACLE=0)
 endif()
 
+# Optional CUDA solver is isolated from the public API and from default builds.
+# Runtime selection is controlled by GNSSPP_FGO_CUDA_SOLVER=off|auto|on; every
+# failure returns to the Eigen reference path.
+if(GNSSPP_ENABLE_CUDA_FGO)
+    add_library(gnss_fgo_cuda_backend STATIC
+        src/algorithms/fgo_cuda_backend.cu)
+    target_include_directories(gnss_fgo_cuda_backend PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithms)
+    target_link_libraries(gnss_fgo_cuda_backend PRIVATE
+        CUDA::cudart CUDA::cusolver)
+    set_target_properties(gnss_fgo_cuda_backend PROPERTIES
+        CUDA_STANDARD 20
+        CUDA_STANDARD_REQUIRED ON
+        CUDA_ARCHITECTURES "60;70;75;80;86")
+endif()
+
 # Historically -O0/-Od for debuggability; the hot solver paths in this list
 # (lambda, navigation, spp, observation) made kinematic runs ~2.3x slower.
 # -O2 output is byte-identical on the CLAS kinematic parity runs.
@@ -315,6 +340,10 @@ target_include_directories(gnss_lib_noopt PUBLIC
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 target_link_libraries(gnss_lib_noopt PUBLIC Eigen3::Eigen)
+if(GNSSPP_ENABLE_CUDA_FGO)
+    target_compile_definitions(gnss_lib_noopt PRIVATE GNSSPP_HAS_CUDA_FGO=1)
+    target_link_libraries(gnss_lib_noopt PRIVATE gnss_fgo_cuda_backend)
+endif()
 if(CHOLMOD_INCLUDE_DIR AND CHOLMOD_LIBRARY)
     target_include_directories(gnss_lib_noopt PRIVATE ${CHOLMOD_INCLUDE_DIR})
     target_compile_definitions(gnss_lib_noopt PRIVATE GNSSPP_HAS_CHOLMOD=1)
@@ -361,6 +390,9 @@ set(GNSS_INSTALL_TARGETS
     gnss_rtk_runtime
     sofa
     ginan_iers2010)
+if(GNSSPP_ENABLE_CUDA_FGO)
+    list(APPEND GNSS_INSTALL_TARGETS gnss_fgo_cuda_backend)
+endif()
 if(MADOCALIB_PARITY_LINK)
     list(APPEND GNSS_INSTALL_TARGETS madocalib)
 endif()
