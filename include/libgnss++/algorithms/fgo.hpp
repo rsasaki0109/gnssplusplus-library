@@ -1051,6 +1051,14 @@ public:
         // both use_fix_plausibility_demotion and
         // use_surplus_satellite_validation are also on).
         bool fix_demote_surplus_crosscheck = false;
+        // Fail-closed reprieve preset: a surplus PASS may cancel a demotion
+        // only when an independently solved DDPR anchor also agrees with the
+        // fixed candidate and the frozen observation-quality floors pass.
+        bool fix_demote_surplus_anchor_reprieve = false;
+        int fix_demote_surplus_anchor_min_satellites = 12;
+        double fix_demote_surplus_anchor_max_float_separation_m = 1.0;
+        double fix_demote_surplus_anchor_max_postfit_ddcp_rms_m = 0.1;
+        double fix_demote_surplus_anchor_max_gap_m = 8.0;
 
         // --- Exception recovery (port of recovery.py's handle_solve_exception)
         // ---
