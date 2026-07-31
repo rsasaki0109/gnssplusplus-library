@@ -1470,7 +1470,10 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
            "vel_e_mps,vel_n_mps,vel_u_mps,"
            "ratio,ratio_threshold,nfixed,ar_outcome,ddpr_rms_m,sd_doppler_rms_mps,gdop,nsat,sd_doppler_n,"
            "amb_candidates,lambda_attempts,lambda_stage,amb_var_median,amb_var_max,"
-           "imu_pose_correction_m,ddpr_anchor_eval,ddpr_anchor_n,ddpr_anchor_res_m,"
+           "imu_pose_correction_m,lambda_candidate_valid,lambda_candidate_nfixed,"
+           "lambda_candidate_ratio,lambda_candidate_x_ecef_m,"
+           "lambda_candidate_y_ecef_m,lambda_candidate_z_ecef_m,"
+           "ddpr_anchor_eval,ddpr_anchor_n,ddpr_anchor_res_m,"
            "ddpr_anchor_x_ecef_m,ddpr_anchor_y_ecef_m,ddpr_anchor_z_ecef_m,"
            "ddpr_anchor_h_err_m,ddpr_anchor_u_err_m,ddpr_anchor_prior,"
            "fixed_float_sep_m,fixed_imu_pred_sep_m,fixed_postfit_ddcp_rms_m,fixed_postfit_ddcp_max_norm,fixed_postfit_ddcp_chi2_dof,fixed_postfit_ddcp_n,external_dr_sep_m,external_dr_mahal2,external_dr_age,external_doppler_valid,external_doppler_vel_e_mps,external_doppler_vel_n_mps,external_doppler_vel_u_mps,external_dr_eval,external_dr_accept,external_dr_reject,cp_hold,"
@@ -1546,7 +1549,13 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
                 << ',' << d.lambda_selected_stage
                 << ',' << d.ambiguity_variance_median_cycles2
                 << ',' << d.ambiguity_variance_max_cycles2
-                << ',' << d.imu_pose_correction_m;
+                << ',' << d.imu_pose_correction_m
+                << ',' << (d.lambda_candidate_available ? 1 : 0)
+                << ',' << d.lambda_candidate_fixed_ambiguities
+                << ',' << d.lambda_candidate_ratio
+                << ',' << d.lambda_candidate_position_ecef.x()
+                << ',' << d.lambda_candidate_position_ecef.y()
+                << ',' << d.lambda_candidate_position_ecef.z();
             double anchor_horiz = -1.0;
             double anchor_up = -1.0;
             if (d.ddpr_anchor_evaluated && d.ddpr_anchor_position_ecef.norm() > 1e6) {

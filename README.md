@@ -111,8 +111,10 @@ the shipping preset:
 ```
 
 With `--dump-csv <path>`, the epoch table includes the ambiguity-candidate
-funnel (`amb_after_hold`, `amb_final`, and `amb_excl_*`). A normalized
-satellite/signal trace is written beside it as
+funnel (`amb_after_hold`, `amb_final`, and `amb_excl_*`) and the last
+successfully searched LAMBDA position candidate (`lambda_candidate_*`), even
+when the ratio or a later integrity decision leaves the epoch FLOAT. A
+normalized satellite/signal trace is written beside it as
 `<path>.ar_candidates.csv`. Its `disposition` values are:
 
 | Value | Meaning |
