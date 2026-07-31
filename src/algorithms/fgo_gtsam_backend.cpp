@@ -865,15 +865,12 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
     }
     // Build-time-excluded DD carrier rows (CMC level exclusion; see
     // FGOProblem::excluded_double_difference_carrier_factors), grouped the
-    // same way, ONLY consumed by the surplus-satellite independent
-    // integrity validator below (use_surplus_satellite_validation). Empty
-    // whenever the excluding feature that populates it (CMC) is off.
+    // same way.  The surplus validator consumes these rows when enabled; the
+    // diagnostic candidate trace always records them.
     std::vector<std::vector<const FGOProcessor::DoubleDifferenceCarrierFactor*>>
-        cp_excluded_by_epoch(config.use_surplus_satellite_validation ? num_epochs : 0);
-    if (config.use_surplus_satellite_validation) {
-        for (const auto& f : problem.excluded_double_difference_carrier_factors) {
-            if (f.epoch_index < num_epochs) cp_excluded_by_epoch[f.epoch_index].push_back(&f);
-        }
+        cp_excluded_by_epoch(num_epochs);
+    for (const auto& f : problem.excluded_double_difference_carrier_factors) {
+        if (f.epoch_index < num_epochs) cp_excluded_by_epoch[f.epoch_index].push_back(&f);
     }
 
     // --- DDPR-LS anchor solve (FGOConfig::use_ddpr_anchor; port of the
@@ -1976,6 +1973,32 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
             : FGOProcessor::AmbiguityResolutionOutcome::Disabled;
         epoch_diagnostics[i].ambiguity_candidates =
             static_cast<int>(cp_by_epoch[i].size());
+        auto& candidate_trace = epoch_diagnostics[i].ambiguity_candidate_trace;
+        candidate_trace.reserve(cp_by_epoch[i].size() + cp_excluded_by_epoch[i].size());
+        for (const auto* fp : cp_excluded_by_epoch[i]) {
+            candidate_trace.push_back(
+                {fp->satellite, fp->reference_satellite, fp->signal,
+                 fp->ambiguity_index,
+                 FGOProcessor::AmbiguityCandidateDisposition::BuildTimeExcluded});
+            ++epoch_diagnostics[i].ambiguity_candidates_excluded_build_time;
+        }
+        const auto addCandidateTrace = [&](const auto& factor) -> std::size_t {
+            candidate_trace.push_back(
+                {factor.satellite, factor.reference_satellite, factor.signal,
+                 factor.ambiguity_index,
+                 FGOProcessor::AmbiguityCandidateDisposition::LambdaEligible});
+            return candidate_trace.size() - 1;
+        };
+        const auto setCandidateDisposition =
+            [&](std::size_t ambiguity_index,
+                FGOProcessor::AmbiguityCandidateDisposition disposition) {
+                for (auto& entry : candidate_trace) {
+                    if (entry.ambiguity_index == ambiguity_index) {
+                        entry.disposition = disposition;
+                        return;
+                    }
+                }
+            };
         gtsam::NonlinearFactorGraph new_factors;
         gtsam::Values new_values;
         gtsam::FixedLagSmoother::KeyTimestampMap ts;
@@ -2247,6 +2270,7 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
         std::vector<std::size_t> epoch_amb_indices;
         for (const auto* fp : cp_by_epoch[i]) {
             const auto& factor = *fp;
+            const std::size_t trace_index = addCandidateTrace(factor);
             ++epoch_diagnostics[i].carrier_factors_available;
             const bool selectively_bad_pair =
                 selective_cp_hold_bad_sats.count(factor.satellite) > 0 ||
@@ -2267,6 +2291,9 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 ++result.diagnostics.ambiguity_generation_bumps_hold;
                 ++epoch_diagnostics[i].ambiguity_generation_bumps_hold;
                 ++epoch_diagnostics[i].carrier_factors_suppressed_hold;
+                ++epoch_diagnostics[i].ambiguity_candidates_excluded_hold;
+                candidate_trace[trace_index].disposition =
+                    FGOProcessor::AmbiguityCandidateDisposition::CarrierHoldSuppressed;
                 pinned_ambiguities.erase(old_sid);
                 live_ambiguity_indices.erase(idx);
                 continue;
@@ -2352,6 +2379,10 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 !(config.use_cp_hold_recovery && skip_cp_now &&
                   config.use_cp_hold_float_recovery)) {
                 epoch_amb_indices.push_back(factor.ambiguity_index);
+            } else {
+                ++epoch_diagnostics[i].ambiguity_candidates_excluded_hold;
+                candidate_trace[trace_index].disposition =
+                    FGOProcessor::AmbiguityCandidateDisposition::CarrierHoldQuarantined;
             }
             // Track active arcs for every reset policy, not only the CP-hold
             // FSM. The GICI-style continuous-unfix reset also needs to bump
@@ -2360,6 +2391,8 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
             live_ambiguity_indices.insert(factor.ambiguity_index);
         }
         if (dummy_created) ts[dummyAmbiguityKey()] = te;
+        epoch_diagnostics[i].ambiguity_candidates_after_hold =
+            static_cast<int>(epoch_amb_indices.size());
 
         // --- DDPR-anchor bootstrap re-seed (use_ddpr_anchor; port of
         // optimize/stage.py's BOOT_DDPR_EPOCHS translation-only re-seed).
@@ -2410,11 +2443,35 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
         // correlated multi-frequency bands don't weaken the all-or-nothing fix.
         if (config.double_difference_lambda_one_band_per_satellite &&
             epoch_amb_indices.size() > 1) {
+            const std::vector<std::size_t> candidates_before_one_band =
+                epoch_amb_indices;
             epoch_amb_indices = selectOneBandPerSatellite(epoch_amb_indices, problem);
+            const std::set<std::size_t> retained(
+                epoch_amb_indices.begin(), epoch_amb_indices.end());
+            for (const std::size_t idx : candidates_before_one_band) {
+                if (retained.count(idx) == 0) {
+                    ++epoch_diagnostics[i].ambiguity_candidates_excluded_one_band;
+                    setCandidateDisposition(
+                        idx,
+                        FGOProcessor::AmbiguityCandidateDisposition::
+                            OneBandPerSatelliteExcluded);
+                }
+            }
         }
         // MF-AR step 2 (gated): keep Galileo arcs out of the integer search /
         // fix-and-hold entirely -- their DD factors still shape the float.
         if (config.exclude_galileo_ambiguity_fixing) {
+            const std::size_t candidates_before_constellation =
+                epoch_amb_indices.size();
+            for (const std::size_t idx : epoch_amb_indices) {
+                if (problem.ambiguity_states[idx].satellite.system ==
+                    GNSSSystem::Galileo) {
+                    setCandidateDisposition(
+                        idx,
+                        FGOProcessor::AmbiguityCandidateDisposition::
+                            ConstellationExcluded);
+                }
+            }
             epoch_amb_indices.erase(
                 std::remove_if(epoch_amb_indices.begin(), epoch_amb_indices.end(),
                                [&](std::size_t idx) {
@@ -2422,6 +2479,9 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                                           GNSSSystem::Galileo;
                                }),
                 epoch_amb_indices.end());
+            epoch_diagnostics[i].ambiguity_candidates_excluded_constellation +=
+                static_cast<int>(
+                    candidates_before_constellation - epoch_amb_indices.size());
         }
         epoch_diagnostics[i].ambiguity_candidates =
             static_cast<int>(epoch_amb_indices.size());
@@ -3000,6 +3060,18 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
             // out of this epoch's LAMBDA candidate set (their factors and
             // held pins are untouched).
             if (!gate_bad_sats.empty() && !epoch_amb_indices.empty()) {
+                const std::size_t candidates_before_residual_gate =
+                    epoch_amb_indices.size();
+                for (const std::size_t idx : epoch_amb_indices) {
+                    const auto& amb = problem.ambiguity_states[idx];
+                    if (gate_bad_sats.count(amb.satellite) > 0 ||
+                        gate_bad_sats.count(amb.reference_satellite) > 0) {
+                        setCandidateDisposition(
+                            idx,
+                            FGOProcessor::AmbiguityCandidateDisposition::
+                                PreviousResidualGateExcluded);
+                    }
+                }
                 epoch_amb_indices.erase(
                     std::remove_if(
                         epoch_amb_indices.begin(), epoch_amb_indices.end(),
@@ -3009,6 +3081,11 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                                    gate_bad_sats.count(amb.reference_satellite) > 0;
                         }),
                     epoch_amb_indices.end());
+                epoch_diagnostics[i]
+                    .ambiguity_candidates_excluded_previous_residual +=
+                    static_cast<int>(
+                        candidates_before_residual_gate -
+                        epoch_amb_indices.size());
             }
             gate_bad_sats.clear();
             if (config.gate_per_sat_res_max_m > 0.0) {
@@ -3066,12 +3143,25 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 // branch above, which never adds a suppressed arc to
                 // epoch_amb_indices in the first place).
                 if (!fde_rejected_amb.empty()) {
+                    for (const std::size_t idx : epoch_amb_indices) {
+                        if (fde_rejected_amb.count(idx) > 0) {
+                            setCandidateDisposition(
+                                idx,
+                                FGOProcessor::AmbiguityCandidateDisposition::
+                                    FdeExcluded);
+                        }
+                    }
+                    const std::size_t candidates_before_fde =
+                        epoch_amb_indices.size();
                     epoch_amb_indices.erase(
                         std::remove_if(epoch_amb_indices.begin(), epoch_amb_indices.end(),
                                        [&](std::size_t idx) {
                                            return fde_rejected_amb.count(idx) > 0;
                                        }),
                         epoch_amb_indices.end());
+                    epoch_diagnostics[i].ambiguity_candidates_excluded_fde +=
+                        static_cast<int>(
+                            candidates_before_fde - epoch_amb_indices.size());
                 }
                 // Refresh the post-FDE estimate: downstream LAMBDA/fix-and-
                 // hold and the REPORTED pose for this epoch must see the
@@ -3096,6 +3186,22 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
             }
         }
 
+        if (!config.use_lambda_ambiguity_fix) {
+            for (const std::size_t idx : epoch_amb_indices) {
+                setCandidateDisposition(
+                    idx,
+                    FGOProcessor::AmbiguityCandidateDisposition::
+                        AmbiguityResolutionDisabled);
+            }
+        } else if (!fix_allowed) {
+            for (const std::size_t idx : epoch_amb_indices) {
+                setCandidateDisposition(
+                    idx,
+                    FGOProcessor::AmbiguityCandidateDisposition::
+                        EpochQualityGateExcluded);
+            }
+        }
+
         // --- Per-epoch LAMBDA off the bounded windowed marginals ---
         if (fix_allowed && config.use_lambda_ambiguity_fix && !epoch_amb_indices.empty()) {
             // FDE, exception recovery, or an ambiguity-generation bump can
@@ -3105,6 +3211,15 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
             const gtsam::Values& lambda_linearization_point =
                 smoother.getLinearizationPoint();
             const std::size_t candidates_before_filter = epoch_amb_indices.size();
+            for (const std::size_t idx : epoch_amb_indices) {
+                if (!lambda_linearization_point.exists(
+                        ambiguityKey(ambSymbolId(idx)))) {
+                    setCandidateDisposition(
+                        idx,
+                        FGOProcessor::AmbiguityCandidateDisposition::
+                            StaleSmootherKeyExcluded);
+                }
+            }
             epoch_amb_indices.erase(
                 std::remove_if(
                     epoch_amb_indices.begin(), epoch_amb_indices.end(),
@@ -3115,6 +3230,11 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 epoch_amb_indices.end());
             result.diagnostics.lambda_stale_candidates_filtered +=
                 candidates_before_filter - epoch_amb_indices.size();
+            epoch_diagnostics[i].ambiguity_candidates_excluded_stale +=
+                static_cast<int>(
+                    candidates_before_filter - epoch_amb_indices.size());
+            epoch_diagnostics[i].ambiguity_candidates_final =
+                static_cast<int>(epoch_amb_indices.size());
 
             std::sort(epoch_amb_indices.begin(), epoch_amb_indices.end(),
                       [&](std::size_t a, std::size_t b) {

@@ -7,6 +7,7 @@
 #include <libgnss++/io/imu.hpp>
 
 #include <cstddef>
+#include <limits>
 #include <map>
 #include <set>
 #include <string>
@@ -1921,6 +1922,33 @@ public:
         IntegerConstrainedReoptimizationRejected = 15,
     };
 
+    /// Terminal reason why one satellite/signal DD carrier row did or did not
+    /// reach the per-epoch LAMBDA candidate set.  This is diagnostic-only:
+    /// the backend records decisions already made by the existing pipeline.
+    enum class AmbiguityCandidateDisposition : int {
+        LambdaEligible = 0,
+        BuildTimeExcluded = 1,
+        CarrierHoldSuppressed = 2,
+        CarrierHoldQuarantined = 3,
+        OneBandPerSatelliteExcluded = 4,
+        ConstellationExcluded = 5,
+        PreviousResidualGateExcluded = 6,
+        FdeExcluded = 7,
+        StaleSmootherKeyExcluded = 8,
+        EpochQualityGateExcluded = 9,
+        AmbiguityResolutionDisabled = 10,
+    };
+
+    /// Satellite/signal-level trace for one DD carrier row in one epoch.
+    struct AmbiguityCandidateTrace {
+        SatelliteId satellite;
+        SatelliteId reference_satellite;
+        SignalType signal = SignalType::SIGNAL_TYPE_COUNT;
+        std::size_t ambiguity_index = std::numeric_limits<std::size_t>::max();
+        AmbiguityCandidateDisposition disposition =
+            AmbiguityCandidateDisposition::LambdaEligible;
+    };
+
     /// Per-epoch fixed-lag integrity state.  These values expose why an epoch
     /// did or did not fix, rather than only reporting the final FIX/FLOAT label.
     struct FGOEpochDiagnostics {
@@ -1988,6 +2016,19 @@ public:
         int carrier_factors_available = 0;
         int carrier_factors_added = 0;
         int carrier_factors_suppressed_hold = 0;
+        // Candidate attrition funnel.  ambiguity_candidates retains its
+        // historical meaning (after one-band/constellation filtering, before
+        // runtime residual/FDE/stale-key filtering).
+        int ambiguity_candidates_after_hold = 0;
+        int ambiguity_candidates_final = 0;
+        int ambiguity_candidates_excluded_build_time = 0;
+        int ambiguity_candidates_excluded_hold = 0;
+        int ambiguity_candidates_excluded_one_band = 0;
+        int ambiguity_candidates_excluded_constellation = 0;
+        int ambiguity_candidates_excluded_previous_residual = 0;
+        int ambiguity_candidates_excluded_fde = 0;
+        int ambiguity_candidates_excluded_stale = 0;
+        std::vector<AmbiguityCandidateTrace> ambiguity_candidate_trace;
         int ambiguity_generation_bumps_hold = 0;
         int ambiguity_generation_bumps_fde = 0;
         int ambiguity_generation_bumps_reset = 0;
