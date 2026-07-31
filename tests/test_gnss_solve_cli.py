@@ -63,6 +63,18 @@ class GnssSolveCliTest(unittest.TestCase):
         self.assertIn(
             "--multisd-fgo-shadow-max-seed-separation", result.stdout
         )
+        self.assertIn(
+            "--multisd-fgo-shadow-validation-history", result.stdout
+        )
+        self.assertIn(
+            "--multisd-fgo-shadow-min-carrier-fraction", result.stdout
+        )
+        self.assertIn(
+            "--multisd-fgo-shadow-min-fixed-ambiguities", result.stdout
+        )
+        self.assertIn(
+            "--multisd-fgo-shadow-holdout-satellites", result.stdout
+        )
 
     def test_config_supplies_defaults_and_cli_always_overrides_them(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_solve_config_") as temp_dir:

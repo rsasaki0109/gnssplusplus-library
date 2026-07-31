@@ -301,3 +301,74 @@ is a development candidate, not a promoted threshold. It must be selected
 inside route/time-block nested CV and must survive faults. This cross-estimator
 agreement is also not statistically independent of the GNSS observations, so
 the disjoint satellite validator remains mandatory.
+
+The next development arm replaces the brittle latest-only 4/4 carrier check
+with a causal three-epoch check over the same satellites that were excluded
+from the complete candidate graph. It requires at least 75% of all 12 held-out
+carrier rows while retaining the latest-epoch DD-code and GNSS-seed apertures.
+The library default remains the legacy one epoch and 100%; only the
+`gnss_solve` research shadow enables the temporal arm. Its purpose is to
+tolerate isolated carrier noise, not sustained wrong integers, and it remains
+unpromoted until the 300-epoch counterexamples and injected faults pass.
+
+## Six-route 300-epoch audit and next availability arm (2026-07-31)
+
+The causal harness now runs all Tokyo/Nagoya routes, scores five contiguous
+time blocks, supports outer leave-one-run-out selection, records the exact
+solver command and binary SHA-256, and rejects malformed, truncated, or
+duplicate-TOW shadow files. Rover, base, and navigation RINEX are the only
+estimator inputs. Reference CSV is opened after the subprocess exits and is
+scoring-only. IMU, LiDAR, camera, maps, and other-date data are excluded.
+
+The strict one-epoch/four-satellite validator exposed a useful partition
+effect. Across the three holdout offsets, truth-blind selection of the passing
+hypothesis with the smallest GNSS-seed separation produced 698 correct and
+zero false fixes in the 873 common post-warmup Tokyo epochs (77.6% if divided
+by all 900 input epochs). Nagoya produced only 231 correct and zero false
+fixes. Requiring two offsets to agree within 0.25 m was safe in this sample but
+reduced the counts to 641 Tokyo and 25 Nagoya. Thus partition diversity is a
+viable Tokyo authority arm, but agreement-only fusion cannot solve Nagoya's
+candidate-supply deficit.
+
+The temporal 3-epoch/75%-carrier arm recovered some carrier-noise epochs but
+did not change the conclusion: shadow-only counts were 552/900 Tokyo and
+238/898 Nagoya, with zero false fixes. A 25-epoch window increased latency and
+did not materially recover Nagoya. Lowering the minimum ambiguity dimension
+from six to four produced the same FIX set. Reducing the holdout from four to
+three introduced a 0.661 m Nagoya false fix. These arms are rejected rather
+than promoted.
+
+The baseline-priority union is also not an integrity authority. In the first
+300 epochs per route, the RTK baseline itself had six Tokyo false fixes
+(0.500--0.867 m). All six were rejected by the temporal and both tested strict
+FGO partitions; their candidate/RTK disagreement was 4.1--7.7 m. The audit
+harness therefore labels this output `baseline_priority_union` and selects
+policies using the disjoint FGO shadow, not that union. A future production
+gate may use FGO as confirmation/veto authority, but it must measure the
+availability cost in nested CV.
+
+The next Nagoya arm is model- and data-driven PAR rather than a looser residual
+threshold. It will reuse the existing GTSAM backend's constellation-ranked
+PAR, continuous ambiguity arcs, and surplus-satellite monitor, then evaluate
+each top-K subset with observations excluded from candidate generation. The
+design follows three primary references:
+
+* Li et al.'s MultiSD method uses soft equality constraints between persistent
+  single-difference ambiguities instead of prematurely merging ambiguity
+  parameters: <https://doi.org/10.33012/2024.19805>.
+* Triple-checked PAR combines bootstrapped success rate, a bounded
+  fixed-failure ratio test, and baseline precision impact instead of trusting
+  a fixed ratio threshold alone: <https://doi.org/10.3390/s19225034>.
+* The fixed-failure-rate ratio test makes the threshold model-dependent; a
+  single constant ratio does not preserve a fixed failure probability as the
+  ambiguity model changes: <https://doi.org/10.1007/s10291-012-0299-z>.
+
+GraphGNSSLib is retained as an OSS factor-layout reference for DD code,
+carrier, Doppler, historical epochs, and final LAMBDA, not copied code:
+<https://github.com/weisongwen/GraphGNSSLib>. RTKLIB demo5's pre-fix
+leave-one-satellite exclusion is the operational analogue for partitioned
+candidate generation. The implementation target is a deterministic GPU batch
+of subset/top-K low-rank updates with an unchanged CPU authority and exact
+decision parity. Promotion still requires run/time-block nested CV, injected
+NLOS/outage/cycle-slip/satellite-loss faults, false/FIX at most 0.1%, no
+greater-than-1-m false fixes, and p95 latency at most 100 ms.

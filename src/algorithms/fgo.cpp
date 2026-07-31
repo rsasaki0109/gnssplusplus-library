@@ -4367,6 +4367,12 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                 };
                 const std::size_t latest_epoch =
                     static_cast<std::size_t>(num_epochs - 1);
+                const std::size_t validation_history =
+                    static_cast<std::size_t>(std::clamp(
+                        config_.multisd_validation_history_epochs,
+                        1, num_epochs));
+                const std::size_t first_validation_epoch =
+                    latest_epoch + 1 - validation_history;
                 const int required_holdout =
                     std::max(1, config_.multisd_validation_holdout_satellites);
                 const double aperture =
@@ -4394,7 +4400,8 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                             .norm();
                     for (const auto& factor :
                          problem.multisd_validation_carrier_factors) {
-                        if (factor.epoch_index != latest_epoch ||
+                        if (factor.epoch_index < first_validation_epoch ||
+                            factor.epoch_index > latest_epoch ||
                             factor.ambiguity_index >=
                                 problem.ambiguity_states.size()) {
                             continue;
@@ -4407,7 +4414,9 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                         }
                         const DoubleDifferencePrediction prediction =
                             doubleDifferencePredictionAt(
-                                fixed_position, factor.base_position_ecef,
+                                hypothesis.state.segment<3>(
+                                    epoch_state_col(factor.epoch_index)),
+                                factor.base_position_ecef,
                                 factor.rover_satellite_position_ecef,
                                 factor.rover_reference_position_ecef,
                                 factor.base_satellite_position_ecef,
@@ -4466,7 +4475,8 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                     }
                     const bool enough_rows =
                         static_cast<int>(outcome.carrier_used) >=
-                            required_holdout &&
+                            required_holdout *
+                                static_cast<int>(validation_history) &&
                         static_cast<int>(outcome.pseudorange_used) >=
                             required_holdout;
                     outcome.evaluated = enough_satellites && enough_rows;

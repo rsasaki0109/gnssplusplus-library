@@ -179,6 +179,9 @@ public:
         int multisd_validation_holdout_satellites = 4;
         int multisd_validation_holdout_offset = 0;
         double multisd_validation_aperture_cycles = 0.15;
+        // Causal carrier validation span ending at the latest epoch. A value
+        // of one preserves the legacy latest-only check.
+        int multisd_validation_history_epochs = 1;
         // Require all held-out carrier rows by default. The 3-of-4 PPC
         // ablation accepted a 1.65 m wrong fix for all 100 Nagoya epochs.
         double multisd_validation_min_carrier_fraction = 1.0;

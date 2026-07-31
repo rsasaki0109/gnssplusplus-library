@@ -240,6 +240,30 @@ int main() {
         return fail("independent carrier corruption was not rejected");
     }
 
+    // A single latest-epoch carrier outlier is recoverable only when a causal
+    // history supplies enough disjoint evidence. Persistent/multi-satellite
+    // corruption above remains rejected.
+    auto isolated_outlier_problem = problem;
+    for (auto& carrier :
+         isolated_outlier_problem.double_difference_carrier_factors) {
+        if (carrier.epoch_index + 1 == rover_positions.size() &&
+            carrier.satellite == SatelliteId(GNSSSystem::GPS, 2)) {
+            carrier.observed_dd_carrier_m += 0.35 * wavelength;
+        }
+    }
+    auto temporal_config = config;
+    temporal_config.multisd_validation_history_epochs = 3;
+    temporal_config.multisd_validation_min_carrier_fraction = 0.75;
+    const auto temporal = FGOProcessor(temporal_config).optimizeProblem(
+        isolated_outlier_problem);
+    if (!temporal.diagnostics.multisd_validation_evaluated ||
+        !temporal.diagnostics.multisd_validation_pass ||
+        !temporal.diagnostics.fixed_solution ||
+        temporal.diagnostics.multisd_validation_carrier_used < 12 ||
+        temporal.diagnostics.multisd_validation_carrier_passed < 9) {
+        return fail("causal carrier history did not tolerate one outlier");
+    }
+
     auto insufficient_config = config;
     insufficient_config.multisd_validation_holdout_satellites = 20;
     const auto insufficient =

@@ -114,6 +114,10 @@ struct SolveConfig {
     int multisd_fgo_shadow_holdout_offset = 2;
     int multisd_fgo_shadow_top_k = 4;
     double multisd_fgo_shadow_max_seed_separation_m = 0.5;
+    int multisd_fgo_shadow_validation_history_epochs = 3;
+    double multisd_fgo_shadow_min_carrier_fraction = 0.75;
+    int multisd_fgo_shadow_min_fixed_ambiguities = 6;
+    int multisd_fgo_shadow_holdout_satellites = 4;
     double rtk_update_outlier_threshold = 0.0;
     bool student_t_rtk_front_end = false;
     double ratio_threshold = 3.0;
@@ -1947,6 +1951,14 @@ void printAdvancedUsage(const char* program_name) {
         << "                             Bounded integer hypotheses, 2..32 (default: 4)\n"
         << "  --multisd-fgo-shadow-max-seed-separation <m>\n"
         << "                             GNSS-only RTK/FGO aperture; 0 disables (default: 0.5)\n"
+        << "  --multisd-fgo-shadow-validation-history <epochs>\n"
+        << "                             Causal held-out carrier span (default: 3)\n"
+        << "  --multisd-fgo-shadow-min-carrier-fraction <0..1>\n"
+        << "                             Required held-out rows (default: 0.75)\n"
+        << "  --multisd-fgo-shadow-min-fixed-ambiguities <n>\n"
+        << "                             MultiSD PAR dimension floor (default: 6)\n"
+        << "  --multisd-fgo-shadow-holdout-satellites <n>\n"
+        << "                             Fully disjoint satellites (default: 4)\n"
         << "  --realtime-fix-integrity   Gate FIX output with bounded-latency residual checks\n"
         << "                             (default: off; maximum latency: 7 epochs)\n"
         << "  --integrity-base-gate      Also enable the frozen offline low-satellite/ratio\n"
@@ -2216,6 +2228,30 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             i + 1 < argc) {
             config.multisd_fgo_shadow_max_seed_separation_m =
                 std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-validation-history" &&
+            i + 1 < argc) {
+            config.multisd_fgo_shadow_validation_history_epochs =
+                std::stoi(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-min-carrier-fraction" &&
+            i + 1 < argc) {
+            config.multisd_fgo_shadow_min_carrier_fraction =
+                std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-min-fixed-ambiguities" &&
+            i + 1 < argc) {
+            config.multisd_fgo_shadow_min_fixed_ambiguities =
+                std::stoi(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-holdout-satellites" &&
+            i + 1 < argc) {
+            config.multisd_fgo_shadow_holdout_satellites =
+                std::stoi(argv[++i]);
             continue;
         }
         // Phase 2a CMC-aware reference selection flags: kept as STANDALONE
@@ -3409,6 +3445,30 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             "--multisd-fgo-shadow-max-seed-separation must be >= 0",
             argv[0]);
     }
+    if (config.multisd_fgo_shadow_validation_history_epochs < 1) {
+        argumentError(
+            "--multisd-fgo-shadow-validation-history must be >= 1",
+            argv[0]);
+    }
+    if (!std::isfinite(config.multisd_fgo_shadow_min_carrier_fraction) ||
+        config.multisd_fgo_shadow_min_carrier_fraction <= 0.0 ||
+        config.multisd_fgo_shadow_min_carrier_fraction > 1.0) {
+        argumentError(
+            "--multisd-fgo-shadow-min-carrier-fraction must be in (0, 1]",
+            argv[0]);
+    }
+    if (config.multisd_fgo_shadow_min_fixed_ambiguities < 2 ||
+        config.multisd_fgo_shadow_min_fixed_ambiguities > 16) {
+        argumentError(
+            "--multisd-fgo-shadow-min-fixed-ambiguities must be in [2, 16]",
+            argv[0]);
+    }
+    if (config.multisd_fgo_shadow_holdout_satellites < 2 ||
+        config.multisd_fgo_shadow_holdout_satellites > 16) {
+        argumentError(
+            "--multisd-fgo-shadow-holdout-satellites must be in [2, 16]",
+            argv[0]);
+    }
 
     return config;
 }
@@ -3538,17 +3598,22 @@ libgnss::FGOProcessor::FGOConfig makeGnssOnlyMultiSdShadowConfig(
     config.fix_ambiguities = true;
     config.use_lambda_ambiguity_fix = true;
     config.lambda_ratio_threshold = 1.5;
-    config.min_fixed_ambiguities = 6;
+    config.min_fixed_ambiguities =
+        solve_config.multisd_fgo_shadow_min_fixed_ambiguities;
     config.max_lambda_ambiguities = 16;
     config.lambda_top_k_candidates = solve_config.multisd_fgo_shadow_top_k;
     config.parallelize_lambda_hypotheses = true;
     config.use_multisd_ambiguities = true;
     config.use_multisd_disjoint_validation = true;
-    config.multisd_validation_holdout_satellites = 4;
+    config.multisd_validation_holdout_satellites =
+        solve_config.multisd_fgo_shadow_holdout_satellites;
     config.multisd_validation_holdout_offset =
         solve_config.multisd_fgo_shadow_holdout_offset;
     config.multisd_validation_aperture_cycles = 0.15;
-    config.multisd_validation_min_carrier_fraction = 1.0;
+    config.multisd_validation_history_epochs =
+        solve_config.multisd_fgo_shadow_validation_history_epochs;
+    config.multisd_validation_min_carrier_fraction =
+        solve_config.multisd_fgo_shadow_min_carrier_fraction;
     config.multisd_validation_max_ddpr_rms_m = 3.0;
     config.multisd_validation_max_fixed_float_separation_m = 0.0;
     config.multisd_validation_max_seed_separation_m =
