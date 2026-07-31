@@ -95,6 +95,7 @@ struct Args {
     bool anchor_aided_validation = false;
     bool constellation_par = false;
     bool residual_par = false;
+    bool ratio_impact_monitor = false;
     bool variance_par = false;
     bool gici_par = false;          // GICI-style strict PAR + continuous-unfix reacquisition profile
     bool anchor_gated_unfix_reset = false;
@@ -244,6 +245,10 @@ Args parseArgs(int argc, char** argv) {
         }
         if (a == "--anchor-gated-unfix-reset") {
             args.anchor_gated_unfix_reset = true;
+            continue;
+        }
+        if (a == "--ratio-impact-monitor") {
+            args.ratio_impact_monitor = true;
             continue;
         }
         if (a == "--integer-constrained-reoptimization") {
@@ -945,6 +950,9 @@ libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
     if (args.residual_par) {
         config.use_residual_screened_partial_ar = true;
     }
+    if (args.ratio_impact_monitor) {
+        config.monitor_ratio_impact_partial_ar = true;
+    }
     if (args.variance_par) {
         config.use_variance_ranked_partial_ar = true;
     }
@@ -1473,6 +1481,10 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
            "imu_pose_correction_m,lambda_candidate_valid,lambda_candidate_nfixed,"
            "lambda_candidate_ratio,lambda_candidate_x_ecef_m,"
            "lambda_candidate_y_ecef_m,lambda_candidate_z_ecef_m,"
+           "ratio_impact_eval,ratio_impact_trials,ratio_impact_best_ratio,"
+           "ratio_impact_best_nfixed,ratio_impact_x_ecef_m,"
+           "ratio_impact_y_ecef_m,ratio_impact_z_ecef_m,"
+           "ratio_impact_float_sep_m,ratio_impact_imu_sep_m,"
            "ddpr_anchor_eval,ddpr_anchor_n,ddpr_anchor_res_m,"
            "ddpr_anchor_x_ecef_m,ddpr_anchor_y_ecef_m,ddpr_anchor_z_ecef_m,"
            "ddpr_anchor_h_err_m,ddpr_anchor_u_err_m,ddpr_anchor_prior,"
@@ -1555,7 +1567,16 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
                 << ',' << d.lambda_candidate_ratio
                 << ',' << d.lambda_candidate_position_ecef.x()
                 << ',' << d.lambda_candidate_position_ecef.y()
-                << ',' << d.lambda_candidate_position_ecef.z();
+                << ',' << d.lambda_candidate_position_ecef.z()
+                << ',' << (d.ratio_impact_evaluated ? 1 : 0)
+                << ',' << d.ratio_impact_trials
+                << ',' << d.ratio_impact_best_ratio
+                << ',' << d.ratio_impact_best_fixed_ambiguities
+                << ',' << d.ratio_impact_best_position_ecef.x()
+                << ',' << d.ratio_impact_best_position_ecef.y()
+                << ',' << d.ratio_impact_best_position_ecef.z()
+                << ',' << d.ratio_impact_best_float_separation_m
+                << ',' << d.ratio_impact_best_imu_separation_m;
             double anchor_horiz = -1.0;
             double anchor_up = -1.0;
             if (d.ddpr_anchor_evaluated && d.ddpr_anchor_position_ecef.norm() > 1e6) {
@@ -2471,7 +2492,9 @@ int main(int argc, char** argv) {
                   << "  partial AR: " << (config.use_fixed_lag_partial_lambda ? "on" : "off")
                   << " (min_fraction=" << config.fixed_lag_partial_lambda_min_fraction
                   << ", min_fixed=" << config.min_fixed_ambiguities
-                  << ", max_std_cycles=" << config.partial_ar_max_std_cycles << ")\n"
+                  << ", max_std_cycles=" << config.partial_ar_max_std_cycles
+                  << ", ratio_impact_monitor="
+                  << (config.monitor_ratio_impact_partial_ar ? "on" : "off") << ")\n"
                   << "  IMU ratio aperture: " << (args.imu_ratio_aperture ? "on" : "off")
                   << " (accepted=" << fl.diagnostics.imu_aided_ratio_accepts
                   << ", rejected=" << fl.diagnostics.imu_aided_ratio_rejects

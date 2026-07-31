@@ -3491,6 +3491,8 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                             lambda_stages.push_back(-1);
                         }
                     }
+                    const std::vector<int> ratio_impact_order(
+                        order.begin(), order.begin() + attempt_n);
 
                     bool float_cycles_recorded = false;
                     for (std::size_t lambda_order_idx = 0;
@@ -4395,6 +4397,91 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                             }
                         }
                         break;  // validated subset found
+                    }
+
+                    // Monitor-only satellite-impact audit, modeled after
+                    // RTKLIB demo5's AR-filter/exclusion retry. Evaluate the
+                    // actual LAMBDA ratio after removing each target
+                    // satellite from the full ranked pool. This deliberately
+                    // runs only after the established pipeline left the epoch
+                    // ratio-rejected, and cannot change any estimator state
+                    // or FIX/FLOAT decision.
+                    if (config.monitor_ratio_impact_partial_ar &&
+                        !epoch_fixed[i] &&
+                        epoch_diagnostics[i].ar_outcome ==
+                            FGOProcessor::AmbiguityResolutionOutcome::RatioRejected) {
+                        std::set<SatelliteId> drop_satellites;
+                        for (int candidate : ratio_impact_order) {
+                            drop_satellites.insert(
+                                problem.ambiguity_states[
+                                    epoch_amb_indices[candidate]].satellite);
+                        }
+                        for (const SatelliteId& drop_satellite : drop_satellites) {
+                            std::vector<int> pool;
+                            pool.reserve(ratio_impact_order.size());
+                            for (int candidate : ratio_impact_order) {
+                                if (problem.ambiguity_states[
+                                        epoch_amb_indices[candidate]].satellite !=
+                                    drop_satellite) {
+                                    pool.push_back(candidate);
+                                }
+                            }
+                            if (pool.size() < static_cast<std::size_t>(min_subset) ||
+                                pool.size() == ratio_impact_order.size()) {
+                                continue;
+                            }
+                            epoch_diagnostics[i].ratio_impact_evaluated = true;
+                            ++epoch_diagnostics[i].ratio_impact_trials;
+                            const int monitor_n = static_cast<int>(pool.size());
+                            Eigen::VectorXd monitor_float(monitor_n);
+                            Eigen::MatrixXd monitor_q(monitor_n, monitor_n);
+                            Eigen::MatrixXd monitor_pos(3, monitor_n);
+                            for (int r = 0; r < monitor_n; ++r) {
+                                monitor_float(r) = float_amb(pool[r]);
+                                monitor_pos.col(r) = pos_amb.col(pool[r]);
+                                for (int c = 0; c < monitor_n; ++c) {
+                                    monitor_q(r, c) = q_amb(pool[r], pool[c]);
+                                }
+                            }
+                            Eigen::VectorXd monitor_fixed;
+                            double monitor_ratio = 0.0;
+                            if (!lambdaSearch(monitor_float, monitor_q,
+                                              monitor_fixed, monitor_ratio) ||
+                                !std::isfinite(monitor_ratio) ||
+                                monitor_fixed.size() != monitor_n ||
+                                monitor_ratio <=
+                                    epoch_diagnostics[i].ratio_impact_best_ratio) {
+                                continue;
+                            }
+                            const Eigen::VectorXd delta =
+                                monitor_float - monitor_fixed;
+                            const Eigen::LDLT<Eigen::MatrixXd> ldlt(monitor_q);
+                            if (ldlt.info() != Eigen::Success) continue;
+                            const Eigen::VectorXd correction = ldlt.solve(delta);
+                            if (!correction.allFinite()) continue;
+                            const Eigen::Vector3d position_delta =
+                                monitor_pos * correction;
+                            if (!position_delta.allFinite()) continue;
+                            const Eigen::Vector3d candidate_position =
+                                Eigen::Vector3d(antennaOf(pose_i)) -
+                                position_delta;
+                            if (!candidate_position.allFinite()) continue;
+                            epoch_diagnostics[i].ratio_impact_best_ratio =
+                                monitor_ratio;
+                            epoch_diagnostics[i]
+                                .ratio_impact_best_fixed_ambiguities = monitor_n;
+                            epoch_diagnostics[i]
+                                .ratio_impact_best_position_ecef =
+                                    candidate_position;
+                            epoch_diagnostics[i]
+                                .ratio_impact_best_float_separation_m =
+                                    (candidate_position - Eigen::Vector3d(
+                                         antennaOf(pose_i))).norm();
+                            epoch_diagnostics[i]
+                                .ratio_impact_best_imu_separation_m =
+                                    (candidate_position - Eigen::Vector3d(
+                                         antennaOf(pose_seed))).norm();
+                        }
                     }
                 } else {
                     ++marginals_failures;

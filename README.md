@@ -134,6 +134,13 @@ normalized satellite/signal trace is written beside it as
 These fields only report decisions already made by the solver; enabling the
 CSV dump does not alter candidate selection or FIX/FLOAT decisions.
 
+`--ratio-impact-monitor` adds a counterfactual partial-AR audit for epochs
+that remain ratio-rejected. It removes each target satellite in turn, reruns
+LAMBDA, and writes the best ratio, subset size, candidate ECEF position, and
+fixed/float and fixed/IMU separations as `ratio_impact_*`. The audit is
+diagnostic-only: it cannot change the selected subset, graph, hold state, or
+reported FIX/FLOAT status.
+
 #### Surplus-satellite rescue integrity
 
 LAMBDA candidates that fall short of the ratio gate can be rescued by an
