@@ -4360,6 +4360,10 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                     double maximum_integer_distance = 0.0;
                     double ddpr_rms =
                         std::numeric_limits<double>::infinity();
+                    double fixed_float_separation =
+                        std::numeric_limits<double>::infinity();
+                    double seed_separation =
+                        std::numeric_limits<double>::infinity();
                 };
                 const std::size_t latest_epoch =
                     static_cast<std::size_t>(num_epochs - 1);
@@ -4379,6 +4383,15 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                     const Vector3d fixed_position =
                         hypothesis.state.segment<3>(
                             epoch_state_col(latest_epoch));
+                    const Vector3d float_position =
+                        float_optimization.state.segment<3>(
+                            epoch_state_col(latest_epoch));
+                    outcome.fixed_float_separation =
+                        (fixed_position - float_position).norm();
+                    outcome.seed_separation =
+                        (fixed_position -
+                         problem.epochs[latest_epoch].position_ecef)
+                            .norm();
                     for (const auto& factor :
                          problem.multisd_validation_carrier_factors) {
                         if (factor.epoch_index != latest_epoch ||
@@ -4470,7 +4483,18 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                         std::isfinite(outcome.ddpr_rms) &&
                         outcome.ddpr_rms <= std::max(
                             0.0,
-                            config_.multisd_validation_max_ddpr_rms_m);
+                            config_.multisd_validation_max_ddpr_rms_m) &&
+                        std::isfinite(outcome.fixed_float_separation) &&
+                        (config_
+                                 .multisd_validation_max_fixed_float_separation_m <=
+                             0.0 ||
+                         outcome.fixed_float_separation <=
+                             config_
+                                 .multisd_validation_max_fixed_float_separation_m) &&
+                        std::isfinite(outcome.seed_separation) &&
+                        (config_.multisd_validation_max_seed_separation_m <= 0.0 ||
+                         outcome.seed_separation <=
+                             config_.multisd_validation_max_seed_separation_m);
                     return outcome;
                 };
 
@@ -4536,6 +4560,10 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                     hypothesis_record.maximum_integer_distance_cycles =
                         outcome.maximum_integer_distance;
                     hypothesis_record.ddpr_rms_m = outcome.ddpr_rms;
+                    hypothesis_record.fixed_float_separation_m =
+                        outcome.fixed_float_separation;
+                    hypothesis_record.seed_separation_m =
+                        outcome.seed_separation;
                     result.multisd_validation_hypotheses.push_back(
                         hypothesis_record);
                     if (rank == 0) {
@@ -4572,6 +4600,11 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                     reported_outcome.maximum_integer_distance;
                 result.diagnostics.multisd_validation_ddpr_rms_m =
                     reported_outcome.ddpr_rms;
+                result.diagnostics
+                    .multisd_validation_fixed_float_separation_m =
+                    reported_outcome.fixed_float_separation;
+                result.diagnostics.multisd_validation_seed_separation_m =
+                    reported_outcome.seed_separation;
 
                 if (unique_pass) {
                     optimization = std::move(selected_optimization);

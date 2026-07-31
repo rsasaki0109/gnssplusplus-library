@@ -124,6 +124,7 @@ int main() {
     config.fixed_ambiguity_sigma_m = 1e-4;
     config.use_multisd_disjoint_validation = true;
     config.multisd_validation_holdout_satellites = 4;
+    config.multisd_validation_max_fixed_float_separation_m = 0.0;
 
     const auto result = FGOProcessor(config).optimizeProblem(problem);
 #ifdef GNSSPP_TEST_HAS_CUDA_FGO
@@ -161,6 +162,12 @@ int main() {
         result.diagnostics.multisd_validation_carrier_used < 4 ||
         result.diagnostics.multisd_validation_pseudorange_used < 4) {
         return fail("disjoint validation did not pass clean holdout data");
+    }
+    if (!std::isfinite(
+            result.diagnostics
+                .multisd_validation_fixed_float_separation_m) ||
+        !(result.diagnostics.multisd_validation_fixed_float_separation_m >= 0.0)) {
+        return fail("fixed/float separation diagnostic was not recorded");
     }
     if (!(result.diagnostics.lambda_bootstrapped_success_rate > 0.0) ||
         !std::isfinite(result.diagnostics.lambda_adop_cycles) ||

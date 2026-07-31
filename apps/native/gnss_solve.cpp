@@ -113,6 +113,7 @@ struct SolveConfig {
     int multisd_fgo_shadow_min_epochs = 10;
     int multisd_fgo_shadow_holdout_offset = 2;
     int multisd_fgo_shadow_top_k = 4;
+    double multisd_fgo_shadow_max_seed_separation_m = 0.5;
     double rtk_update_outlier_threshold = 0.0;
     bool student_t_rtk_front_end = false;
     double ratio_threshold = 3.0;
@@ -1944,6 +1945,8 @@ void printAdvancedUsage(const char* program_name) {
         << "                             Deterministic disjoint partition offset (default: 2)\n"
         << "  --multisd-fgo-shadow-top-k <n>\n"
         << "                             Bounded integer hypotheses, 2..32 (default: 4)\n"
+        << "  --multisd-fgo-shadow-max-seed-separation <m>\n"
+        << "                             GNSS-only RTK/FGO aperture; 0 disables (default: 0.5)\n"
         << "  --realtime-fix-integrity   Gate FIX output with bounded-latency residual checks\n"
         << "                             (default: off; maximum latency: 7 epochs)\n"
         << "  --integrity-base-gate      Also enable the frozen offline low-satellite/ratio\n"
@@ -2207,6 +2210,12 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         }
         if (arg == "--multisd-fgo-shadow-top-k" && i + 1 < argc) {
             config.multisd_fgo_shadow_top_k = std::stoi(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-max-seed-separation" &&
+            i + 1 < argc) {
+            config.multisd_fgo_shadow_max_seed_separation_m =
+                std::stod(argv[++i]);
             continue;
         }
         // Phase 2a CMC-aware reference selection flags: kept as STANDALONE
@@ -3393,6 +3402,13 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         argumentError("--multisd-fgo-shadow-top-k must be in [2, 32]",
                       argv[0]);
     }
+    if (!std::isfinite(
+            config.multisd_fgo_shadow_max_seed_separation_m) ||
+        config.multisd_fgo_shadow_max_seed_separation_m < 0.0) {
+        argumentError(
+            "--multisd-fgo-shadow-max-seed-separation must be >= 0",
+            argv[0]);
+    }
 
     return config;
 }
@@ -3534,6 +3550,9 @@ libgnss::FGOProcessor::FGOConfig makeGnssOnlyMultiSdShadowConfig(
     config.multisd_validation_aperture_cycles = 0.15;
     config.multisd_validation_min_carrier_fraction = 1.0;
     config.multisd_validation_max_ddpr_rms_m = 3.0;
+    config.multisd_validation_max_fixed_float_separation_m = 0.0;
+    config.multisd_validation_max_seed_separation_m =
+        solve_config.multisd_fgo_shadow_max_seed_separation_m;
     return config;
 }
 
@@ -3875,7 +3894,8 @@ int main(int argc, char* argv[]) {
                    "ddpr_rms_m,x,y,z,rtk_position_delta_m,build_runtime_ms,"
                    "optimize_wall_ms,optimizer_cpu_ms,runtime_ms,"
                    "normal_state_size,cuda_selected,cuda_attempts,"
-                   "cuda_successes,cuda_fallbacks,cuda_runtime_ms\n";
+                   "cuda_successes,cuda_fallbacks,cuda_runtime_ms,"
+                   "fixed_float_separation_m,seed_separation_m\n";
         }
 
         std::unique_ptr<IntegrityShadowTimeline> integrity_shadow;
@@ -4305,6 +4325,16 @@ int main(int argc, char* argv[]) {
                         << ',' << diagnostics.cuda_dense_solve_successes
                         << ',' << diagnostics.cuda_dense_solve_fallbacks
                         << ',' << diagnostics.cuda_dense_solve_time_ms
+                        << ',';
+                    writeOptionalCsvNumber(
+                        multisd_shadow_csv,
+                        diagnostics
+                            .multisd_validation_fixed_float_separation_m);
+                    multisd_shadow_csv << ',';
+                    writeOptionalCsvNumber(
+                        multisd_shadow_csv,
+                        diagnostics.multisd_validation_seed_separation_m);
+                    multisd_shadow_csv
                         << '\n';
                 }
             }

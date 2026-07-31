@@ -183,6 +183,13 @@ public:
         // ablation accepted a 1.65 m wrong fix for all 100 Nagoya epochs.
         double multisd_validation_min_carrier_fraction = 1.0;
         double multisd_validation_max_ddpr_rms_m = 3.0;
+        // Solution-separation aperture between a constrained top-K hypothesis
+        // and the holdout-excluded float graph at the latest epoch. Zero
+        // disables it. This is truth-free and does not use the RTK seed.
+        double multisd_validation_max_fixed_float_separation_m = 0.0;
+        // Cross-estimator aperture against the latest GNSS-only position seed.
+        // The seed must not contain truth or an external sensor. Zero disables.
+        double multisd_validation_max_seed_separation_m = 0.0;
         bool use_epoch_lambda_fixed_output = false;
         bool use_partial_lambda_ambiguity_fix = true;
         // Independently re-optimize the active fixed-lag graph with the
@@ -1899,6 +1906,10 @@ public:
             std::numeric_limits<double>::quiet_NaN();
         double multisd_validation_ddpr_rms_m =
             std::numeric_limits<double>::quiet_NaN();
+        double multisd_validation_fixed_float_separation_m =
+            std::numeric_limits<double>::quiet_NaN();
+        double multisd_validation_seed_separation_m =
+            std::numeric_limits<double>::quiet_NaN();
     };
 
     struct AmbiguityEstimate {
@@ -2054,6 +2065,10 @@ public:
             std::size_t pseudorange_used = 0;
             double maximum_integer_distance_cycles = 0.0;
             double ddpr_rms_m = std::numeric_limits<double>::infinity();
+            double fixed_float_separation_m =
+                std::numeric_limits<double>::infinity();
+            double seed_separation_m =
+                std::numeric_limits<double>::infinity();
         };
         Solution solution;
         FGODiagnostics diagnostics;

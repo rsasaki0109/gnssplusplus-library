@@ -271,3 +271,33 @@ apply top-K integer constraints as batched low-rank updates, and migrate the
 legacy typed cuSOLVER calls to the current generic API. CPU parity remains the
 authority at every checkpoint. No IMU, LiDAR, camera, map, or reference
 trajectory enters estimation; reference trajectories remain scorer-only.
+
+## 300-epoch integrity counterexample and aperture (2026-07-31)
+
+Extending the causal window-10 smoke from 30 to 300 epochs exposed two unsafe
+fixes that the four-satellite disjoint carrier/code validator accepted. Tokyo
+run1 had 144 correct fixes plus one 2.36 m false fix; Nagoya run2 had 158
+correct fixes plus one 1.07 m false fix. Both passed all four held-out carrier
+rows and had a unique top-K hypothesis. Their LAMBDA ratios were 1.88 and 1.71,
+so the earlier 30-epoch smoke was not sufficient safety evidence.
+
+A fixed-vs-float FGO separation aperture was instrumented first. It rejected
+the counterexamples, but the holdout-excluded float graph was itself weak and
+also reduced Tokyo availability from 145 to 22 fixes. It remains default-off
+diagnostic telemetry and is not an authority gate.
+
+The shadow instead applies a configurable cross-estimator aperture between
+each constrained FGO hypothesis and the latest GNSS-only RTK position seed.
+It uses neither RTK FIX status nor reference truth; both estimators consume
+GNSS observations only. With a development value of 0.5 m, the same two
+300-epoch blocks produced Tokyo 146/300 and Nagoya 163/300 correct fixes, zero
+false fixes, maximum fixed errors 0.137 m and 0.124 m, and wall p95 40.3 ms and
+23.4 ms. The previously wrong hypotheses were rejected, while removal of
+additional inconsistent hypotheses made several correct top-K outcomes unique.
+
+The aperture is exposed as
+`--multisd-fgo-shadow-max-seed-separation`; zero disables it. The 0.5 m value
+is a development candidate, not a promoted threshold. It must be selected
+inside route/time-block nested CV and must survive faults. This cross-estimator
+agreement is also not statistically independent of the GNSS observations, so
+the disjoint satellite validator remains mandatory.

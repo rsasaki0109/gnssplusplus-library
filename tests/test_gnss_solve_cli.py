@@ -60,6 +60,9 @@ class GnssSolveCliTest(unittest.TestCase):
         self.assertIn("--fixed-bridge-burst-max-residual", result.stdout)
         self.assertIn("--multisd-fgo-shadow-csv", result.stdout)
         self.assertIn("--multisd-fgo-shadow-window", result.stdout)
+        self.assertIn(
+            "--multisd-fgo-shadow-max-seed-separation", result.stdout
+        )
 
     def test_config_supplies_defaults_and_cli_always_overrides_them(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_solve_config_") as temp_dir:
