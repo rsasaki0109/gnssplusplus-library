@@ -2242,6 +2242,17 @@ TEST(FGOAmbiguityOutcomeTelemetryTest,
     EXPECT_GT(monitored->ratio_impact_trials, 0);
     EXPECT_GT(monitored->ratio_impact_best_ratio, 0.0);
     EXPECT_GT(monitored->ratio_impact_best_position_ecef.norm(), 1.0e6);
+    ASSERT_FALSE(monitored->ratio_impact_trial_trace.empty());
+    const auto available_trial = std::find_if(
+        monitored->ratio_impact_trial_trace.begin(),
+        monitored->ratio_impact_trial_trace.end(),
+        [](const FGOProcessor::RatioImpactTrialTrace& trial) {
+            return trial.candidate_available;
+        });
+    ASSERT_NE(available_trial, monitored->ratio_impact_trial_trace.end());
+    EXPECT_GT(available_trial->excluded_ambiguities, 0);
+    EXPECT_GT(available_trial->fixed_ambiguities, 0);
+    EXPECT_GT(available_trial->candidate_position_ecef.norm(), 1.0e6);
 }
 
 TEST(FGOAmbiguityOutcomeTelemetryTest, NoCarrierCandidatesRemainNoCandidates) {

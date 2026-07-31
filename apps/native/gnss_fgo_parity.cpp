@@ -1695,6 +1695,44 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
             trace_out << ',' << static_cast<int>(candidate.disposition) << '\n';
         }
     }
+
+    const bool has_ratio_impact_trials = std::any_of(
+        r.epoch_diagnostics.begin(), r.epoch_diagnostics.end(),
+        [](const auto& epoch) { return !epoch.ratio_impact_trial_trace.empty(); });
+    if (!has_ratio_impact_trials) return;
+
+    const std::string impact_path = path + ".ratio_impact.csv";
+    std::ofstream impact_out(impact_path);
+    if (!impact_out) {
+        std::cerr << "Warning: cannot open ratio-impact trial output file "
+                  << impact_path << "\n";
+        return;
+    }
+    impact_out << "tow,excluded_satellite,system,prn,excluded_ambiguities,"
+                  "excluded_max_variance_cycles2,excluded_max_fractional_cycles,"
+                  "excluded_ddpr_residual_m,candidate_available,ratio,nfixed,"
+                  "x_ecef_m,y_ecef_m,z_ecef_m,float_sep_m,imu_sep_m\n";
+    impact_out << std::fixed;
+    impact_out.precision(6);
+    for (const auto& epoch : r.epoch_diagnostics) {
+        for (const auto& trial : epoch.ratio_impact_trial_trace) {
+            impact_out << epoch.time.tow << ','
+                       << trial.excluded_satellite.toString() << ','
+                       << static_cast<int>(trial.excluded_satellite.system) << ','
+                       << static_cast<int>(trial.excluded_satellite.prn) << ','
+                       << trial.excluded_ambiguities << ','
+                       << trial.excluded_max_variance_cycles2 << ','
+                       << trial.excluded_max_fractional_cycles << ','
+                       << trial.excluded_ddpr_residual_m << ','
+                       << (trial.candidate_available ? 1 : 0) << ','
+                       << trial.ratio << ',' << trial.fixed_ambiguities << ','
+                       << trial.candidate_position_ecef.x() << ','
+                       << trial.candidate_position_ecef.y() << ','
+                       << trial.candidate_position_ecef.z() << ','
+                       << trial.float_separation_m << ','
+                       << trial.imu_separation_m << '\n';
+        }
+    }
 }
 
 // Populate problem.imu from an imu.csv + the already-built FGOProblem epochs.

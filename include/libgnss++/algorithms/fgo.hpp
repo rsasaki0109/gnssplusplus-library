@@ -1954,6 +1954,23 @@ public:
             AmbiguityCandidateDisposition::LambdaEligible;
     };
 
+    /// One counterfactual leave-one-target-satellite-out LAMBDA trial.
+    /// Populated only by monitor_ratio_impact_partial_ar and never consumed
+    /// by the estimator.
+    struct RatioImpactTrialTrace {
+        SatelliteId excluded_satellite;
+        int excluded_ambiguities = 0;
+        double excluded_max_variance_cycles2 = 0.0;
+        double excluded_max_fractional_cycles = 0.0;
+        double excluded_ddpr_residual_m = 0.0;
+        bool candidate_available = false;
+        double ratio = 0.0;
+        int fixed_ambiguities = 0;
+        Vector3d candidate_position_ecef = Vector3d::Zero();
+        double float_separation_m = 0.0;
+        double imu_separation_m = 0.0;
+    };
+
     /// Per-epoch fixed-lag integrity state.  These values expose why an epoch
     /// did or did not fix, rather than only reporting the final FIX/FLOAT label.
     struct FGOEpochDiagnostics {
@@ -1985,6 +2002,7 @@ public:
         Vector3d ratio_impact_best_position_ecef = Vector3d::Zero();
         double ratio_impact_best_float_separation_m = 0.0;
         double ratio_impact_best_imu_separation_m = 0.0;
+        std::vector<RatioImpactTrialTrace> ratio_impact_trial_trace;
         bool ddpr_anchor_evaluated = false;
         bool ddpr_anchor_bootstrap_prior_applied = false;
         int ddpr_anchor_active_factors = 0;
