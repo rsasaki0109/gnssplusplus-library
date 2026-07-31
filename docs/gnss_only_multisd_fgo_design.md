@@ -28,6 +28,14 @@ route-blocked PPC validation.
 - RTKLIB-demo5: operational comparison for staged subset AR, satellite
   admission/lock lifecycle, and fix-and-hold. No source is copied.
   <https://github.com/rtklibexplorer/RTKLIB>
+- Teunissen and Verhagen's integer-aperture/fixed-failure-rate work: a fixed
+  ratio is not a correctness test and its threshold should depend on model
+  strength and an explicit failure-rate contract. The implementation keeps
+  ratio/ADOP/BSSR as candidate-quality gates, not independent evidence.
+  <https://doi.org/10.1007/s10291-012-0299-z>
+- Teunissen (1998), bootstrapped ambiguity success probability: BSSR is a
+  conservative covariance-domain bound, but cannot expose unmodelled urban
+  bias. <https://doi.org/10.1007/s001900050199>
 
 ## Existing gap
 
@@ -105,6 +113,43 @@ model-bias failure. Raising the ratio to 2.0 rejected the entire bad block
 solution. This result makes a disjoint measurement-domain causal validator a
 hard promotion requirement. It also confirms the validator must detect common
 model bias rather than reusing the same ambiguity covariance evidence.
+
+## Disjoint top-K validator checkpoint (2026-07-31)
+
+The Eigen MultiSD path now deterministically reserves satellites before the
+float solve and removes every DD carrier/code factor involving them from the
+entire window. The lowest-elevation surplus satellites are reserved so the
+strongest satellite-PAR geometry remains in ILS. Each bounded LAMBDA hypothesis
+is independently constrained and re-optimized. A hypothesis is checked at the
+latest causal edge using only reserved DD carrier integer distance and DD code
+RMS. FIX authority requires sufficient evidence and exactly one passing top-K
+hypothesis; otherwise the result reverts to the untouched float solution.
+Individual hypothesis position and residual diagnostics are emitted to JSON.
+
+Synthetic coverage exercises clean acceptance, four-satellite independent
+carrier corruption rejection, and insufficient-evidence fail-closed behavior.
+Four holdout satellites are the safe default because two carrier equations do
+not overdetermine a 3-D candidate position. The feature and all thresholds
+remain default-off at the MultiSD authority level.
+
+On exploratory 100-epoch PPC windows, four holdouts, offset 2, top-K=4 and
+require-all carrier agreement produced 100/100 correct FIX with zero false
+fixes on Tokyo 0--100, Tokyo 500--600, and Nagoya 0--100. In particular, the
+Nagoya block that previously fixed 100/100 at about 0.65 m was changed by the
+disjoint graph to a correct 0.09--0.11 m solution. Nagoya 500--600 abstained,
+so this is a safety/candidate-quality breakthrough but not yet the availability
+target. The offset is exploratory and may not be promoted without nested
+route/time-block validation.
+
+A 3-of-4 carrier-majority ablation recovered Nagoya 500--600 availability but
+fixed all 100 epochs about 1.65 m wrong (100 >1 m false fixes). It is therefore
+rejected; require-all remains the default. Increasing top-K from 4 to 16 also
+made the Nagoya 0--100 window non-unique (two passing hypotheses about 4 cm
+apart), while K=4 retained a unique correct hypothesis. Position-domain
+hypothesis clustering is recorded as future research, not granted FIX
+authority. Candidate re-optimization currently costs roughly 0.3--0.8 s per
+100-epoch batch in these samples; this is still an offline batch measurement,
+not proof of causal online p95 latency.
 
 The original global LAMBDA path also skipped all large sparse-normal problems.
 MultiSD now retains the sparse normal matrix whenever global LAMBDA is enabled

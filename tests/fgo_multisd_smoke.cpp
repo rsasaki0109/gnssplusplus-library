@@ -33,6 +33,10 @@ int main() {
         {19170000.0, 610000.0, -18390000.0},
         {-13480000.0, -15600000.0, 17760000.0},
         {21700000.0, 13000000.0, 9000000.0},
+        {-21100000.0, 8100000.0, -13200000.0},
+        {9200000.0, 22400000.0, 10600000.0},
+        {-6400000.0, 17100000.0, 19300000.0},
+        {24100000.0, -7400000.0, 6300000.0},
     };
     std::vector<Vector3d> rover_positions;
     rover_positions.reserve(80);
@@ -116,6 +120,8 @@ int main() {
     config.min_fixed_ambiguities = 4;
     config.ambiguity_prior_sigma_m = 1000.0;
     config.fixed_ambiguity_sigma_m = 1e-4;
+    config.use_multisd_disjoint_validation = true;
+    config.multisd_validation_holdout_satellites = 4;
 
     const auto result = FGOProcessor(config).optimizeProblem(problem);
     if (!result.diagnostics.lambda_ambiguity_fix_solved ||
@@ -126,6 +132,13 @@ int main() {
     if (result.diagnostics.fixed_ambiguities != 5 ||
         result.diagnostics.lambda_top_k_generated != 4) {
         return fail("unexpected BSD/top-K candidate count");
+    }
+    if (!result.diagnostics.multisd_validation_evaluated ||
+        !result.diagnostics.multisd_validation_pass ||
+        result.diagnostics.multisd_validation_holdout_satellites != 4 ||
+        result.diagnostics.multisd_validation_carrier_used < 4 ||
+        result.diagnostics.multisd_validation_pseudorange_used < 4) {
+        return fail("disjoint validation did not pass clean holdout data");
     }
     if (!(result.diagnostics.lambda_bootstrapped_success_rate > 0.0) ||
         !std::isfinite(result.diagnostics.lambda_adop_cycles) ||
@@ -147,6 +160,46 @@ int main() {
         if (std::abs(bsd - static_cast<double>(sat)) > 1e-4) {
             return fail("fixed BSD does not match integer truth");
         }
+    }
+
+    // PRN 2 and 3 are the deterministic holdouts (all elevations tie, so the
+    // satellite-id tie-break decides). Corrupting only their latest carrier
+    // evidence cannot change the float/LAMBDA candidate, but must veto FIX.
+    auto corrupt_problem = problem;
+    for (auto& carrier : corrupt_problem.double_difference_carrier_factors) {
+        if (carrier.epoch_index + 1 == rover_positions.size() &&
+            carrier.satellite == SatelliteId(GNSSSystem::GPS, 2)) {
+            carrier.observed_dd_carrier_m += 0.35 * wavelength;
+        }
+        if (carrier.epoch_index + 1 == rover_positions.size() &&
+            carrier.satellite == SatelliteId(GNSSSystem::GPS, 3)) {
+            carrier.observed_dd_carrier_m -= 0.31 * wavelength;
+        }
+        if (carrier.epoch_index + 1 == rover_positions.size() &&
+            carrier.satellite == SatelliteId(GNSSSystem::GPS, 4)) {
+            carrier.observed_dd_carrier_m += 0.27 * wavelength;
+        }
+        if (carrier.epoch_index + 1 == rover_positions.size() &&
+            carrier.satellite == SatelliteId(GNSSSystem::GPS, 5)) {
+            carrier.observed_dd_carrier_m -= 0.23 * wavelength;
+        }
+    }
+    const auto rejected = FGOProcessor(config).optimizeProblem(corrupt_problem);
+    if (!rejected.diagnostics.multisd_validation_evaluated ||
+        rejected.diagnostics.multisd_validation_pass ||
+        rejected.diagnostics.fixed_solution ||
+        rejected.diagnostics.lambda_ambiguity_fix_used) {
+        return fail("independent carrier corruption was not rejected");
+    }
+
+    auto insufficient_config = config;
+    insufficient_config.multisd_validation_holdout_satellites = 20;
+    const auto insufficient =
+        FGOProcessor(insufficient_config).optimizeProblem(problem);
+    if (insufficient.diagnostics.multisd_validation_evaluated ||
+        insufficient.diagnostics.multisd_validation_pass ||
+        insufficient.diagnostics.fixed_solution) {
+        return fail("insufficient holdout evidence did not fail closed");
     }
 
     std::cout << "MultiSD smoke passed: BSD=5 topK=4 success_rate="

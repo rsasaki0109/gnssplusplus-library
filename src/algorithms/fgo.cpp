@@ -2555,10 +2555,106 @@ FGOProcessor::FGOResult FGOProcessor::optimize(
         buildDoubleDifferenceProblem(rover_epochs, base_epochs, nav, base_position_ecef));
 }
 
-FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem) const {
+FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
+    const FGOProblem& input_problem) const {
     const auto optimize_problem_start =
         std::chrono::high_resolution_clock::now();
     FGOResult result;
+
+    // Select the validation satellites before either float or fixed
+    // optimization, then remove every factor involving those satellites from
+    // the complete window.  Selection uses only observation metadata from the
+    // latest epoch (elevation and satellite id), never a solved state or truth.
+    // The weakest-elevation ambiguities are held out, matching satellite-PAR:
+    // strong geometry remains in the ILS candidate while the unused surplus
+    // observations provide validation evidence.
+    // This makes the post-fix evidence genuinely disjoint from candidate
+    // generation, including all earlier epochs in a multi-epoch window.
+    FGOProblem disjoint_problem;
+    const FGOProblem* active_problem = &input_problem;
+    if (config_.backend == FGOBackend::Eigen &&
+        config_.use_multisd_ambiguities &&
+        config_.use_multisd_disjoint_validation &&
+        !input_problem.double_difference_carrier_factors.empty()) {
+        disjoint_problem = input_problem;
+        std::size_t latest_epoch = 0;
+        for (const auto& factor :
+             input_problem.double_difference_carrier_factors) {
+            latest_epoch = std::max(latest_epoch, factor.epoch_index);
+        }
+
+        std::map<SatelliteId, double> latest_target_elevation;
+        for (const auto& factor :
+             input_problem.double_difference_carrier_factors) {
+            if (factor.epoch_index == latest_epoch &&
+                factor.use_ambiguity_difference) {
+                auto [it, inserted] = latest_target_elevation.emplace(
+                    factor.satellite, factor.elevation_rad);
+                if (!inserted) {
+                    it->second = std::max(it->second, factor.elevation_rad);
+                }
+            }
+        }
+        std::vector<std::pair<SatelliteId, double>> ranked_targets(
+            latest_target_elevation.begin(), latest_target_elevation.end());
+        std::stable_sort(
+            ranked_targets.begin(), ranked_targets.end(),
+            [](const auto& lhs, const auto& rhs) {
+                if (lhs.second != rhs.second) {
+                    return lhs.second < rhs.second;
+                }
+                return lhs.first < rhs.first;
+            });
+        const std::size_t requested = static_cast<std::size_t>(
+            std::max(1, config_.multisd_validation_holdout_satellites));
+        std::set<SatelliteId> held_out_satellites;
+        const std::size_t offset = ranked_targets.empty()
+            ? 0
+            : static_cast<std::size_t>(
+                  std::max(0, config_.multisd_validation_holdout_offset)) %
+                  ranked_targets.size();
+        for (std::size_t i = 0;
+             i < ranked_targets.size() &&
+             held_out_satellites.size() < requested;
+             ++i) {
+            const auto& [satellite, elevation] =
+                ranked_targets[(offset + i) % ranked_targets.size()];
+            (void)elevation;
+            held_out_satellites.insert(satellite);
+        }
+        result.diagnostics.multisd_validation_holdout_satellites =
+            held_out_satellites.size();
+
+        auto involves_holdout = [&](const auto& factor) {
+            return held_out_satellites.count(factor.satellite) > 0 ||
+                   held_out_satellites.count(factor.reference_satellite) > 0;
+        };
+        auto& carriers = disjoint_problem.double_difference_carrier_factors;
+        for (const auto& factor : carriers) {
+            if (involves_holdout(factor)) {
+                disjoint_problem.multisd_validation_carrier_factors.push_back(
+                    factor);
+            }
+        }
+        carriers.erase(
+            std::remove_if(carriers.begin(), carriers.end(), involves_holdout),
+            carriers.end());
+
+        auto& pseudoranges =
+            disjoint_problem.double_difference_pseudorange_factors;
+        for (const auto& factor : pseudoranges) {
+            if (involves_holdout(factor)) {
+                disjoint_problem.multisd_validation_pseudorange_factors.push_back(
+                    factor);
+            }
+        }
+        pseudoranges.erase(
+            std::remove_if(pseudoranges.begin(), pseudoranges.end(),
+                           involves_holdout),
+            pseudoranges.end());
+        active_problem = &disjoint_problem;
+    }
+    const FGOProblem& problem = *active_problem;
     result.diagnostics.epochs = problem.epochs.size();
     result.diagnostics.pseudorange_factors = problem.pseudorange_factors.size();
     result.diagnostics.tdcp_factors = problem.tdcp_factors.size();
@@ -3641,6 +3737,9 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
     int total_iterations = optimization.iterations;
     double total_processing_ms = optimization.processing_ms;
     std::vector<FixedAmbiguityConstraint> fixed_constraints;
+    std::vector<std::vector<FixedAmbiguityConstraint>>
+        lambda_hypothesis_constraints;
+    std::vector<double> lambda_hypothesis_residual_square_sums;
     const bool has_ambiguity_measurements =
         !problem.carrier_phase_factors.empty() ||
         !problem.double_difference_carrier_factors.empty();
@@ -3660,9 +3759,8 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
             // A rover-base SD ambiguity contains a common receiver gauge.
             // It is not an integer-fix candidate by itself. MultiSD fixing
             // must first project the SD posterior to independent BSD/DD
-            // combinations; until that projection is available, keep this
-            // path float-only instead of silently applying invalid integer
-            // constraints to gauge-dependent states.
+            // combinations. Individual gauge-dependent states stay float;
+            // the MultiSD path below constrains only projected BSD edges.
             if (config_.use_multisd_ambiguities &&
                 !ambiguity.is_double_difference) {
                 return false;
@@ -3986,37 +4084,62 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
                     return false;
                 }
 
-                std::vector<FixedAmbiguityConstraint> lambda_constraints;
-                lambda_constraints.reserve(subset_size);
-                double lambda_residual_square_sum = 0.0;
-                for (int i = 0; i < n; ++i) {
-                    const int ambiguity_index = candidates[i].ambiguity_index;
-                    const auto& ambiguity = problem.ambiguity_states[ambiguity_index];
-                    const double fixed_cycles_d = std::round(fixed_ambiguities(i));
-                    const double residual_cycles = float_ambiguities(i) - fixed_cycles_d;
+                lambda_hypothesis_constraints.clear();
+                lambda_hypothesis_residual_square_sums.clear();
+                const int hypothesis_count =
+                    lambda_diagnostics.candidates.cols();
+                lambda_hypothesis_constraints.reserve(hypothesis_count);
+                lambda_hypothesis_residual_square_sums.reserve(hypothesis_count);
+                for (int hypothesis = 0;
+                     hypothesis < hypothesis_count;
+                     ++hypothesis) {
+                    std::vector<FixedAmbiguityConstraint> constraints;
+                    constraints.reserve(subset_size);
+                    double residual_square_sum = 0.0;
+                    for (int i = 0; i < n; ++i) {
+                        const int ambiguity_index =
+                            candidates[i].ambiguity_index;
+                        const auto& ambiguity =
+                            problem.ambiguity_states[ambiguity_index];
+                        const double fixed_cycles_d = std::round(
+                            lambda_diagnostics.candidates(i, hypothesis));
+                        const double residual_cycles =
+                            float_ambiguities(i) - fixed_cycles_d;
 
-                    FixedAmbiguityConstraint fixed;
-                    fixed.ambiguity_index = static_cast<std::size_t>(ambiguity_index);
-                    if (candidates[i].reference_ambiguity_index >= 0) {
-                        fixed.reference_ambiguity_index =
-                            static_cast<std::size_t>(
-                                candidates[i].reference_ambiguity_index);
+                        FixedAmbiguityConstraint fixed;
+                        fixed.ambiguity_index =
+                            static_cast<std::size_t>(ambiguity_index);
+                        if (candidates[i].reference_ambiguity_index >= 0) {
+                            fixed.reference_ambiguity_index =
+                                static_cast<std::size_t>(
+                                    candidates[i].reference_ambiguity_index);
+                        }
+                        fixed.fixed_cycles =
+                            static_cast<int>(fixed_cycles_d);
+                        fixed.fixed_ambiguity_m =
+                            fixed_cycles_d * ambiguity.wavelength_m;
+                        fixed.residual_cycles = residual_cycles;
+                        fixed.fixed_by_lambda = true;
+                        constraints.push_back(fixed);
+                        residual_square_sum +=
+                            residual_cycles * residual_cycles;
                     }
-                    fixed.fixed_cycles = static_cast<int>(fixed_cycles_d);
-                    fixed.fixed_ambiguity_m = fixed_cycles_d * ambiguity.wavelength_m;
-                    fixed.residual_cycles = residual_cycles;
-                    fixed.fixed_by_lambda = true;
-                    lambda_constraints.push_back(fixed);
-                    lambda_residual_square_sum += residual_cycles * residual_cycles;
+                    lambda_hypothesis_constraints.push_back(
+                        std::move(constraints));
+                    lambda_hypothesis_residual_square_sums.push_back(
+                        residual_square_sum);
                 }
 
-                if (static_cast<int>(lambda_constraints.size()) <
-                    min_fixed_ambiguities) {
+                if (lambda_hypothesis_constraints.empty() ||
+                    static_cast<int>(
+                        lambda_hypothesis_constraints.front().size()) <
+                        min_fixed_ambiguities) {
                     return false;
                 }
 
-                fixed_constraints = std::move(lambda_constraints);
-                fixed_residual_square_sum = lambda_residual_square_sum;
+                fixed_constraints = lambda_hypothesis_constraints.front();
+                fixed_residual_square_sum =
+                    lambda_hypothesis_residual_square_sums.front();
                 result.diagnostics.lambda_ambiguity_fix_used = true;
                 result.diagnostics.partial_lambda_ambiguity_fix_used =
                     subset_size < candidates.size();
@@ -4055,6 +4178,13 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
 
         if (static_cast<int>(fixed_constraints.size()) >=
             std::max(1, config_.min_fixed_ambiguities)) {
+            const bool run_disjoint_validation =
+                config_.use_multisd_ambiguities &&
+                config_.use_multisd_disjoint_validation;
+            OptimizationOutput float_optimization;
+            if (run_disjoint_validation) {
+                float_optimization = optimization;
+            }
             const int fixed_global_iteration_offset =
                 result.cost_trace_entries.empty()
                     ? total_iterations
@@ -4076,6 +4206,230 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
             result.diagnostics.fixed_ambiguity_residual_rms_cycles =
                 std::sqrt(fixed_residual_square_sum /
                           static_cast<double>(fixed_constraints.size()));
+
+            if (run_disjoint_validation) {
+                struct ValidationOutcome {
+                    bool evaluated = false;
+                    bool pass = false;
+                    std::size_t carrier_used = 0;
+                    std::size_t carrier_passed = 0;
+                    std::size_t pseudorange_used = 0;
+                    double maximum_integer_distance = 0.0;
+                    double ddpr_rms =
+                        std::numeric_limits<double>::infinity();
+                };
+                const std::size_t latest_epoch =
+                    static_cast<std::size_t>(num_epochs - 1);
+                const int required_holdout =
+                    std::max(1, config_.multisd_validation_holdout_satellites);
+                const double aperture =
+                    std::max(0.0,
+                             config_.multisd_validation_aperture_cycles);
+                const bool enough_satellites =
+                    static_cast<int>(result.diagnostics
+                                         .multisd_validation_holdout_satellites) >=
+                    required_holdout;
+                auto validate_hypothesis =
+                    [&](const OptimizationOutput& hypothesis)
+                        -> ValidationOutcome {
+                    ValidationOutcome outcome;
+                    const Vector3d fixed_position =
+                        hypothesis.state.segment<3>(
+                            epoch_state_col(latest_epoch));
+                    for (const auto& factor :
+                         problem.multisd_validation_carrier_factors) {
+                        if (factor.epoch_index != latest_epoch ||
+                            factor.ambiguity_index >=
+                                problem.ambiguity_states.size()) {
+                            continue;
+                        }
+                        const double wavelength =
+                            problem.ambiguity_states[factor.ambiguity_index]
+                                .wavelength_m;
+                        if (!(wavelength > 0.0)) {
+                            continue;
+                        }
+                        const DoubleDifferencePrediction prediction =
+                            doubleDifferencePredictionAt(
+                                fixed_position, factor.base_position_ecef,
+                                factor.rover_satellite_position_ecef,
+                                factor.rover_reference_position_ecef,
+                                factor.base_satellite_position_ecef,
+                                factor.base_reference_position_ecef);
+                        if (!prediction.valid) {
+                            continue;
+                        }
+                        const double ambiguity_cycles =
+                            (factor.observed_dd_carrier_m -
+                             prediction.geometry_m) /
+                            wavelength;
+                        if (!std::isfinite(ambiguity_cycles)) {
+                            continue;
+                        }
+                        const double integer_distance =
+                            std::abs(ambiguity_cycles -
+                                     std::round(ambiguity_cycles));
+                        outcome.maximum_integer_distance = std::max(
+                            outcome.maximum_integer_distance,
+                            integer_distance);
+                        if (integer_distance <= aperture) {
+                            ++outcome.carrier_passed;
+                        }
+                        ++outcome.carrier_used;
+                    }
+
+                    double ddpr_square_sum = 0.0;
+                    for (const auto& factor :
+                         problem.multisd_validation_pseudorange_factors) {
+                        if (factor.epoch_index != latest_epoch) {
+                            continue;
+                        }
+                        const DoubleDifferencePrediction prediction =
+                            doubleDifferencePredictionAt(
+                                fixed_position, factor.base_position_ecef,
+                                factor.rover_satellite_position_ecef,
+                                factor.rover_reference_position_ecef,
+                                factor.base_satellite_position_ecef,
+                                factor.base_reference_position_ecef);
+                        if (!prediction.valid) {
+                            continue;
+                        }
+                        const double residual =
+                            factor.observed_dd_pseudorange_m -
+                            prediction.geometry_m;
+                        if (!std::isfinite(residual)) {
+                            continue;
+                        }
+                        ddpr_square_sum += residual * residual;
+                        ++outcome.pseudorange_used;
+                    }
+                    if (outcome.pseudorange_used > 0) {
+                        outcome.ddpr_rms = std::sqrt(
+                            ddpr_square_sum /
+                            static_cast<double>(outcome.pseudorange_used));
+                    }
+                    const bool enough_rows =
+                        static_cast<int>(outcome.carrier_used) >=
+                            required_holdout &&
+                        static_cast<int>(outcome.pseudorange_used) >=
+                            required_holdout;
+                    outcome.evaluated = enough_satellites && enough_rows;
+                    const std::size_t required_carrier_passes =
+                        static_cast<std::size_t>(std::ceil(
+                            std::clamp(
+                                config_
+                                    .multisd_validation_min_carrier_fraction,
+                                0.0, 1.0) *
+                            static_cast<double>(outcome.carrier_used)));
+                    outcome.pass =
+                        outcome.evaluated &&
+                        outcome.carrier_passed >= required_carrier_passes &&
+                        std::isfinite(outcome.ddpr_rms) &&
+                        outcome.ddpr_rms <= std::max(
+                            0.0,
+                            config_.multisd_validation_max_ddpr_rms_m);
+                    return outcome;
+                };
+
+                const std::size_t hypothesis_count =
+                    lambda_hypothesis_constraints.empty()
+                        ? 1
+                        : lambda_hypothesis_constraints.size();
+                std::size_t passing_hypotheses = 0;
+                int selected_rank = -1;
+                OptimizationOutput selected_optimization;
+                ValidationOutcome selected_outcome;
+                ValidationOutcome first_outcome;
+                for (std::size_t rank = 0; rank < hypothesis_count; ++rank) {
+                    OptimizationOutput hypothesis;
+                    if (rank == 0) {
+                        hypothesis = optimization;
+                    } else {
+                        hypothesis = run_optimizer(
+                            float_optimization.state,
+                            lambda_hypothesis_constraints[rank],
+                            "fixed-hypothesis",
+                            fixed_global_iteration_offset);
+                        total_iterations += hypothesis.iterations;
+                        total_processing_ms += hypothesis.processing_ms;
+                    }
+                    const ValidationOutcome outcome =
+                        validate_hypothesis(hypothesis);
+                    FGOResult::MultiSdValidationHypothesis hypothesis_record;
+                    hypothesis_record.rank = static_cast<int>(rank);
+                    hypothesis_record.evaluated = outcome.evaluated;
+                    hypothesis_record.pass = outcome.pass;
+                    hypothesis_record.latest_position_ecef =
+                        hypothesis.state.segment<3>(
+                            epoch_state_col(latest_epoch));
+                    hypothesis_record.carrier_used = outcome.carrier_used;
+                    hypothesis_record.carrier_passed = outcome.carrier_passed;
+                    hypothesis_record.pseudorange_used =
+                        outcome.pseudorange_used;
+                    hypothesis_record.maximum_integer_distance_cycles =
+                        outcome.maximum_integer_distance;
+                    hypothesis_record.ddpr_rms_m = outcome.ddpr_rms;
+                    result.multisd_validation_hypotheses.push_back(
+                        hypothesis_record);
+                    if (rank == 0) {
+                        first_outcome = outcome;
+                    }
+                    if (outcome.pass) {
+                        ++passing_hypotheses;
+                        selected_rank = static_cast<int>(rank);
+                        selected_optimization = std::move(hypothesis);
+                        selected_outcome = outcome;
+                    }
+                }
+
+                const bool unique_pass = passing_hypotheses == 1;
+                const ValidationOutcome& reported_outcome =
+                    unique_pass ? selected_outcome : first_outcome;
+                result.diagnostics.multisd_validation_evaluated =
+                    reported_outcome.evaluated;
+                result.diagnostics.multisd_validation_pass = unique_pass;
+                result.diagnostics.multisd_validation_carrier_used =
+                    reported_outcome.carrier_used;
+                result.diagnostics.multisd_validation_carrier_passed =
+                    reported_outcome.carrier_passed;
+                result.diagnostics.multisd_validation_pseudorange_used =
+                    reported_outcome.pseudorange_used;
+                result.diagnostics.multisd_validation_hypotheses_evaluated =
+                    hypothesis_count;
+                result.diagnostics.multisd_validation_hypotheses_passed =
+                    passing_hypotheses;
+                result.diagnostics.multisd_validation_selected_rank =
+                    unique_pass ? selected_rank : -1;
+                result.diagnostics
+                    .multisd_validation_max_integer_distance_cycles =
+                    reported_outcome.maximum_integer_distance;
+                result.diagnostics.multisd_validation_ddpr_rms_m =
+                    reported_outcome.ddpr_rms;
+
+                if (unique_pass) {
+                    optimization = std::move(selected_optimization);
+                    if (!lambda_hypothesis_constraints.empty()) {
+                        fixed_constraints =
+                            lambda_hypothesis_constraints[
+                                static_cast<std::size_t>(selected_rank)];
+                        fixed_residual_square_sum =
+                            lambda_hypothesis_residual_square_sums[
+                                static_cast<std::size_t>(selected_rank)];
+                        result.diagnostics.fixed_ambiguity_residual_rms_cycles =
+                            std::sqrt(
+                                fixed_residual_square_sum /
+                                static_cast<double>(fixed_constraints.size()));
+                    }
+                } else {
+                    optimization = std::move(float_optimization);
+                    fixed_constraints.clear();
+                    result.diagnostics.fixed_solution = false;
+                    result.diagnostics.fixed_ambiguities = 0;
+                    result.diagnostics.lambda_ambiguity_fix_used = false;
+                    result.diagnostics.partial_lambda_ambiguity_fix_used = false;
+                    result.diagnostics.fixed_ambiguity_residual_rms_cycles = 0.0;
+                }
+            }
         } else {
             fixed_constraints.clear();
         }

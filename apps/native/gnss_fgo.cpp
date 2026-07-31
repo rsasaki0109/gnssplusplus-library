@@ -95,6 +95,12 @@ struct Options {
     int lambda_top_k_candidates = 2;
     double lambda_min_bootstrapped_success_rate = 0.0;
     double lambda_max_adop_cycles = 0.0;
+    bool use_multisd_disjoint_validation = false;
+    int multisd_validation_holdout_satellites = 4;
+    int multisd_validation_holdout_offset = 0;
+    double multisd_validation_aperture_cycles = 0.15;
+    double multisd_validation_min_carrier_fraction = 1.0;
+    double multisd_validation_max_ddpr_rms_m = 3.0;
     bool use_carrier_phase_factors = false;
     bool fix_ambiguities = false;
     bool fix_all_ambiguities = false;
@@ -188,6 +194,12 @@ void printUsage(const char* program_name) {
         << "  --lambda-top-k <n>            Bounded LAMBDA hypotheses, 2..32 (default: 2)\n"
         << "  --lambda-min-success <p>      Bootstrapped success-rate gate; 0 disables\n"
         << "  --lambda-max-adop <cycles>    ADOP gate in cycles; 0 disables\n"
+        << "  --multisd-disjoint-validation Reserve GNSS satellites for independent validation\n"
+        << "  --multisd-holdout-satellites <n> Holdout satellite count (default: 4)\n"
+        << "  --multisd-holdout-offset <n> Deterministic ranked-partition offset\n"
+        << "  --multisd-validation-aperture <cycles> Carrier integer aperture (default: 0.15)\n"
+        << "  --multisd-validation-min-carrier-fraction <f> Required holdout agreement (default: 1)\n"
+        << "  --multisd-validation-max-ddpr <m> DD code RMS ceiling (default: 3)\n"
         << "  --max-tdcp-gap <s>            Max adjacent epoch gap for TDCP (default: 2)\n"
         << "  --base-match-tolerance <s>    Max rover/base epoch gap for DD factors (default: 0.02)\n"
         << "  --base-interpolation-max-gap <s>\n"
@@ -541,6 +553,18 @@ Options parseArguments(int argc, char* argv[]) {
                 std::stod(argv[++i]);
         } else if (arg == "--lambda-max-adop" && i + 1 < argc) {
             options.lambda_max_adop_cycles = std::stod(argv[++i]);
+        } else if (arg == "--multisd-disjoint-validation") {
+            options.use_multisd_disjoint_validation = true;
+        } else if (arg == "--multisd-holdout-satellites" && i + 1 < argc) {
+            options.multisd_validation_holdout_satellites = std::stoi(argv[++i]);
+        } else if (arg == "--multisd-holdout-offset" && i + 1 < argc) {
+            options.multisd_validation_holdout_offset = std::stoi(argv[++i]);
+        } else if (arg == "--multisd-validation-aperture" && i + 1 < argc) {
+            options.multisd_validation_aperture_cycles = std::stod(argv[++i]);
+        } else if (arg == "--multisd-validation-min-carrier-fraction" && i + 1 < argc) {
+            options.multisd_validation_min_carrier_fraction = std::stod(argv[++i]);
+        } else if (arg == "--multisd-validation-max-ddpr" && i + 1 < argc) {
+            options.multisd_validation_max_ddpr_rms_m = std::stod(argv[++i]);
         } else if (arg == "--max-tdcp-gap" && i + 1 < argc) {
             options.max_tdcp_gap_s = std::stod(argv[++i]);
         } else if (arg == "--base-match-tolerance" && i + 1 < argc) {
@@ -751,6 +775,23 @@ Options parseArguments(int argc, char* argv[]) {
     if (options.lambda_max_adop_cycles < 0.0) {
         argumentError("--lambda-max-adop must be non-negative", argv[0]);
     }
+    if (options.multisd_validation_holdout_satellites < 1) {
+        argumentError("--multisd-holdout-satellites must be positive", argv[0]);
+    }
+    if (options.multisd_validation_holdout_offset < 0) {
+        argumentError("--multisd-holdout-offset must be non-negative", argv[0]);
+    }
+    if (options.multisd_validation_aperture_cycles < 0.0 ||
+        options.multisd_validation_aperture_cycles > 0.5) {
+        argumentError("--multisd-validation-aperture must be in [0, 0.5]", argv[0]);
+    }
+    if (options.multisd_validation_min_carrier_fraction < 0.0 ||
+        options.multisd_validation_min_carrier_fraction > 1.0) {
+        argumentError("--multisd-validation-min-carrier-fraction must be in [0, 1]", argv[0]);
+    }
+    if (options.multisd_validation_max_ddpr_rms_m < 0.0) {
+        argumentError("--multisd-validation-max-ddpr must be non-negative", argv[0]);
+    }
     if (options.max_tdcp_gap_s < 0.0) {
         argumentError("--max-tdcp-gap must be non-negative", argv[0]);
     }
@@ -829,6 +870,14 @@ std::string jsonEscape(const std::string& value) {
 
 const char* jsonBool(bool value) {
     return value ? "true" : "false";
+}
+
+void writeJsonNumber(std::ostream& output, double value) {
+    if (std::isfinite(value)) {
+        output << value;
+    } else {
+        output << "null";
+    }
 }
 
 struct SeedPosition {
@@ -1860,6 +1909,18 @@ void writeSummaryJson(const Options& options,
            << options.lambda_min_bootstrapped_success_rate << ",\n";
     output << "  \"lambda_max_adop_cycles\": "
            << options.lambda_max_adop_cycles << ",\n";
+    output << "  \"use_multisd_disjoint_validation\": "
+           << jsonBool(options.use_multisd_disjoint_validation) << ",\n";
+    output << "  \"multisd_validation_holdout_satellites\": "
+           << options.multisd_validation_holdout_satellites << ",\n";
+    output << "  \"multisd_validation_holdout_offset\": "
+           << options.multisd_validation_holdout_offset << ",\n";
+    output << "  \"multisd_validation_aperture_cycles\": "
+           << options.multisd_validation_aperture_cycles << ",\n";
+    output << "  \"multisd_validation_min_carrier_fraction\": "
+           << options.multisd_validation_min_carrier_fraction << ",\n";
+    output << "  \"multisd_validation_max_ddpr_rms_m\": "
+           << options.multisd_validation_max_ddpr_rms_m << ",\n";
     output << "  \"use_integer_constrained_reoptimization\": "
            << jsonBool(options.use_integer_constrained_reoptimization) << ",\n";
     output << "  \"integer_constrained_prior_sigma_cycles\": "
@@ -1984,10 +2045,64 @@ void writeSummaryJson(const Options& options,
            << diagnostics.lambda_ambiguity_ratio << ",\n";
     output << "  \"lambda_bootstrapped_success_rate\": "
            << diagnostics.lambda_bootstrapped_success_rate << ",\n";
-    output << "  \"lambda_adop_cycles\": "
-           << diagnostics.lambda_adop_cycles << ",\n";
+    output << "  \"lambda_adop_cycles\": ";
+    writeJsonNumber(output, diagnostics.lambda_adop_cycles);
+    output << ",\n";
     output << "  \"lambda_top_k_generated\": "
            << diagnostics.lambda_top_k_generated << ",\n";
+    output << "  \"multisd_validation_evaluated\": "
+           << jsonBool(diagnostics.multisd_validation_evaluated) << ",\n";
+    output << "  \"multisd_validation_pass\": "
+           << jsonBool(diagnostics.multisd_validation_pass) << ",\n";
+    output << "  \"multisd_validation_holdout_satellites\": "
+           << diagnostics.multisd_validation_holdout_satellites << ",\n";
+    output << "  \"multisd_validation_carrier_used\": "
+           << diagnostics.multisd_validation_carrier_used << ",\n";
+    output << "  \"multisd_validation_carrier_passed\": "
+           << diagnostics.multisd_validation_carrier_passed << ",\n";
+    output << "  \"multisd_validation_pseudorange_used\": "
+           << diagnostics.multisd_validation_pseudorange_used << ",\n";
+    output << "  \"multisd_validation_hypotheses_evaluated\": "
+           << diagnostics.multisd_validation_hypotheses_evaluated << ",\n";
+    output << "  \"multisd_validation_hypotheses_passed\": "
+           << diagnostics.multisd_validation_hypotheses_passed << ",\n";
+    output << "  \"multisd_validation_selected_rank\": "
+           << diagnostics.multisd_validation_selected_rank << ",\n";
+    output << "  \"multisd_validation_max_integer_distance_cycles\": ";
+    writeJsonNumber(
+        output,
+        diagnostics.multisd_validation_max_integer_distance_cycles);
+    output << ",\n";
+    output << "  \"multisd_validation_ddpr_rms_m\": ";
+    writeJsonNumber(output, diagnostics.multisd_validation_ddpr_rms_m);
+    output << ",\n";
+    output << "  \"multisd_validation_hypothesis_details\": [";
+    for (std::size_t i = 0;
+         i < result.multisd_validation_hypotheses.size();
+         ++i) {
+        const auto& hypothesis = result.multisd_validation_hypotheses[i];
+        if (i > 0) {
+            output << ',';
+        }
+        output << "{\"rank\":" << hypothesis.rank
+               << ",\"evaluated\":" << jsonBool(hypothesis.evaluated)
+               << ",\"pass\":" << jsonBool(hypothesis.pass)
+               << ",\"position_ecef\":["
+               << hypothesis.latest_position_ecef.x() << ','
+               << hypothesis.latest_position_ecef.y() << ','
+               << hypothesis.latest_position_ecef.z() << ']'
+               << ",\"carrier_used\":" << hypothesis.carrier_used
+               << ",\"carrier_passed\":" << hypothesis.carrier_passed
+               << ",\"pseudorange_used\":"
+               << hypothesis.pseudorange_used
+               << ",\"max_integer_distance_cycles\":";
+        writeJsonNumber(
+            output, hypothesis.maximum_integer_distance_cycles);
+        output << ",\"ddpr_rms_m\":";
+        writeJsonNumber(output, hypothesis.ddpr_rms_m);
+        output << '}';
+    }
+    output << "],\n";
     output << "  \"fixed_ambiguities\": " << diagnostics.fixed_ambiguities << ",\n";
     output << "  \"fixed_solution\": " << jsonBool(diagnostics.fixed_solution) << ",\n";
     output << "  \"tdcp_candidate_pairs\": " << diagnostics.tdcp_candidate_pairs << ",\n";
@@ -3413,6 +3528,18 @@ int main(int argc, char* argv[]) {
         config.lambda_min_bootstrapped_success_rate =
             options.lambda_min_bootstrapped_success_rate;
         config.lambda_max_adop_cycles = options.lambda_max_adop_cycles;
+        config.use_multisd_disjoint_validation =
+            options.use_multisd_disjoint_validation;
+        config.multisd_validation_holdout_satellites =
+            options.multisd_validation_holdout_satellites;
+        config.multisd_validation_holdout_offset =
+            options.multisd_validation_holdout_offset;
+        config.multisd_validation_aperture_cycles =
+            options.multisd_validation_aperture_cycles;
+        config.multisd_validation_min_carrier_fraction =
+            options.multisd_validation_min_carrier_fraction;
+        config.multisd_validation_max_ddpr_rms_m =
+            options.multisd_validation_max_ddpr_rms_m;
         config.use_epoch_lambda_fixed_output =
             options.use_epoch_lambda_fixed_output &&
             !options.use_multisd_ambiguities;
@@ -3639,6 +3766,22 @@ int main(int argc, char* argv[]) {
                       << "\n";
             std::cout << "LAMBDA ADOP (cycles): "
                       << result.diagnostics.lambda_adop_cycles << "\n";
+            std::cout << "MultiSD disjoint validation: "
+                      << (result.diagnostics.multisd_validation_pass ? "pass" : "fail")
+                      << " (evaluated="
+                      << (result.diagnostics.multisd_validation_evaluated ? "yes" : "no")
+                      << ", holdout="
+                      << result.diagnostics.multisd_validation_holdout_satellites
+                      << ", hypotheses="
+                      << result.diagnostics.multisd_validation_hypotheses_passed
+                      << "/"
+                      << result.diagnostics.multisd_validation_hypotheses_evaluated
+                      << ", selected_rank="
+                      << result.diagnostics.multisd_validation_selected_rank
+                      << ", max_integer_distance="
+                      << result.diagnostics.multisd_validation_max_integer_distance_cycles
+                      << " cycles, DDPR_RMS="
+                      << result.diagnostics.multisd_validation_ddpr_rms_m << " m)\n";
             std::cout << "Fixed ambiguities: "
                       << result.diagnostics.fixed_ambiguities << "\n";
             std::cout << "Fixed solution: "

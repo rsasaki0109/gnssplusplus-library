@@ -166,6 +166,19 @@ public:
         // Covariance-only integer quality gates. Zero disables each gate.
         double lambda_min_bootstrapped_success_rate = 0.0;
         double lambda_max_adop_cycles = 0.0;
+        // Reserve carrier/code observations from deterministic satellites for
+        // a disjoint post-fix check. Reserved observations are removed from
+        // the complete float/fixed window before optimization, so the
+        // validator cannot reuse evidence that generated the integer
+        // candidate. MultiSD/native only; default OFF until PPC calibration.
+        bool use_multisd_disjoint_validation = false;
+        int multisd_validation_holdout_satellites = 4;
+        int multisd_validation_holdout_offset = 0;
+        double multisd_validation_aperture_cycles = 0.15;
+        // Require all held-out carrier rows by default. The 3-of-4 PPC
+        // ablation accepted a 1.65 m wrong fix for all 100 Nagoya epochs.
+        double multisd_validation_min_carrier_fraction = 1.0;
+        double multisd_validation_max_ddpr_rms_m = 3.0;
         bool use_epoch_lambda_fixed_output = false;
         bool use_partial_lambda_ambiguity_fix = true;
         // Independently re-optimize the active fixed-lag graph with the
@@ -1688,6 +1701,12 @@ public:
         // AmbiguityState for an arc that was never solved for; the surplus
         // validator looks up wavelength from `signal` instead.
         std::vector<DoubleDifferenceCarrierFactor> excluded_double_difference_carrier_factors;
+        // Factors reserved before optimization for the MultiSD disjoint
+        // validator. They are never inserted into the candidate graph.
+        std::vector<DoubleDifferencePseudorangeFactor>
+            multisd_validation_pseudorange_factors;
+        std::vector<DoubleDifferenceCarrierFactor>
+            multisd_validation_carrier_factors;
         std::vector<AmbiguityBetweenFactor> ambiguity_between_factors;
         FGOProblemDiagnostics diagnostics;
     };
@@ -1855,6 +1874,19 @@ public:
         double lambda_bootstrapped_success_rate = 0.0;
         double lambda_adop_cycles = std::numeric_limits<double>::quiet_NaN();
         std::size_t lambda_top_k_generated = 0;
+        bool multisd_validation_evaluated = false;
+        bool multisd_validation_pass = false;
+        std::size_t multisd_validation_holdout_satellites = 0;
+        std::size_t multisd_validation_carrier_used = 0;
+        std::size_t multisd_validation_carrier_passed = 0;
+        std::size_t multisd_validation_pseudorange_used = 0;
+        std::size_t multisd_validation_hypotheses_evaluated = 0;
+        std::size_t multisd_validation_hypotheses_passed = 0;
+        int multisd_validation_selected_rank = -1;
+        double multisd_validation_max_integer_distance_cycles =
+            std::numeric_limits<double>::quiet_NaN();
+        double multisd_validation_ddpr_rms_m =
+            std::numeric_limits<double>::quiet_NaN();
     };
 
     struct AmbiguityEstimate {
@@ -2000,6 +2032,17 @@ public:
     };
 
     struct FGOResult {
+        struct MultiSdValidationHypothesis {
+            int rank = -1;
+            bool evaluated = false;
+            bool pass = false;
+            Vector3d latest_position_ecef = Vector3d::Zero();
+            std::size_t carrier_used = 0;
+            std::size_t carrier_passed = 0;
+            std::size_t pseudorange_used = 0;
+            double maximum_integer_distance_cycles = 0.0;
+            double ddpr_rms_m = std::numeric_limits<double>::infinity();
+        };
         Solution solution;
         FGODiagnostics diagnostics;
         std::vector<AmbiguityEstimate> ambiguity_estimates;
@@ -2010,6 +2053,8 @@ public:
         std::vector<LambdaDebugEntry> lambda_debug_entries;
         std::vector<CostTraceEntry> cost_trace_entries;
         std::vector<FGOEpochDiagnostics> epoch_diagnostics;
+        std::vector<MultiSdValidationHypothesis>
+            multisd_validation_hypotheses;
         // Milestone 2b (populated only by the GTSAM IMU-coupled path):
         // per-epoch estimated attitude as [roll, pitch, heading] in degrees
         // (body FLU -> nav ENU; heading is clockwise from North) and estimated
