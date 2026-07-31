@@ -120,6 +120,8 @@ struct SolveConfig {
     int multisd_fgo_shadow_holdout_satellites = 4;
     bool multisd_fgo_shadow_constellation_par = false;
     bool multisd_fgo_shadow_variance_ranked_par = false;
+    double multisd_fgo_shadow_candidate_ratio = 1.5;
+    int multisd_fgo_shadow_candidate_groups = 1;
     double rtk_update_outlier_threshold = 0.0;
     bool student_t_rtk_front_end = false;
     double ratio_threshold = 3.0;
@@ -1965,6 +1967,10 @@ void printAdvancedUsage(const char* program_name) {
         << "                             Full-band constellation pool PAR (default: off)\n"
         << "  --multisd-fgo-shadow-variance-ranked-par\n"
         << "                             Rank PAR candidates by float variance (default: off)\n"
+        << "  --multisd-fgo-shadow-candidate-ratio <ratio>\n"
+        << "                             Top-K generation floor before disjoint validation (default: 1.5)\n"
+        << "  --multisd-fgo-shadow-candidate-groups <n>\n"
+        << "                             Validator-aware PAR fallback groups, 1..32 (default: 1)\n"
         << "  --realtime-fix-integrity   Gate FIX output with bounded-latency residual checks\n"
         << "                             (default: off; maximum latency: 7 epochs)\n"
         << "  --integrity-base-gate      Also enable the frozen offline low-satellite/ratio\n"
@@ -2266,6 +2272,18 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         }
         if (arg == "--multisd-fgo-shadow-variance-ranked-par") {
             config.multisd_fgo_shadow_variance_ranked_par = true;
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-candidate-ratio" &&
+            i + 1 < argc) {
+            config.multisd_fgo_shadow_candidate_ratio =
+                std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-candidate-groups" &&
+            i + 1 < argc) {
+            config.multisd_fgo_shadow_candidate_groups =
+                std::stoi(argv[++i]);
             continue;
         }
         // Phase 2a CMC-aware reference selection flags: kept as STANDALONE
@@ -3483,6 +3501,18 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             "--multisd-fgo-shadow-holdout-satellites must be in [2, 16]",
             argv[0]);
     }
+    if (!std::isfinite(config.multisd_fgo_shadow_candidate_ratio) ||
+        config.multisd_fgo_shadow_candidate_ratio < 1.0) {
+        argumentError(
+            "--multisd-fgo-shadow-candidate-ratio must be >= 1",
+            argv[0]);
+    }
+    if (config.multisd_fgo_shadow_candidate_groups < 1 ||
+        config.multisd_fgo_shadow_candidate_groups > 32) {
+        argumentError(
+            "--multisd-fgo-shadow-candidate-groups must be in [1, 32]",
+            argv[0]);
+    }
 
     return config;
 }
@@ -3636,6 +3666,10 @@ libgnss::FGOProcessor::FGOConfig makeGnssOnlyMultiSdShadowConfig(
     config.multisd_validation_max_fixed_float_separation_m = 0.0;
     config.multisd_validation_max_seed_separation_m =
         solve_config.multisd_fgo_shadow_max_seed_separation_m;
+    config.multisd_lambda_candidate_ratio_threshold =
+        solve_config.multisd_fgo_shadow_candidate_ratio;
+    config.multisd_max_candidate_groups =
+        solve_config.multisd_fgo_shadow_candidate_groups;
     return config;
 }
 
@@ -3971,6 +4005,8 @@ int main(int argc, char* argv[]) {
             multisd_shadow_csv
                 << "epoch_index,gps_week,tow,window_epochs,rtk_status,"
                    "shadow_status,shadow_fixed,lambda_ratio,fixed_ambiguities,"
+                   "lambda_candidates,lambda_used_candidates,lambda_attempts,"
+                   "lambda_solved,partial_lambda_used,lambda_bsr,lambda_adop_cycles,"
                    "validation_evaluated,validation_pass,holdout_satellites,"
                    "hypotheses_passed,hypotheses_evaluated,selected_rank,"
                    "carrier_passed,carrier_used,max_integer_distance_cycles,"
@@ -4355,6 +4391,22 @@ int main(int argc, char* argv[]) {
                         << (shadow_latest
                                 ? shadow_latest->num_fixed_ambiguities
                                 : 0)
+                        << ',' << diagnostics.lambda_ambiguity_candidates
+                        << ',' << diagnostics.lambda_ambiguity_used_candidates
+                        << ',' << diagnostics.lambda_ambiguity_attempts
+                        << ','
+                        << (diagnostics.lambda_ambiguity_fix_solved ? 1 : 0)
+                        << ','
+                        << (diagnostics.partial_lambda_ambiguity_fix_used ? 1 : 0)
+                        << ',';
+                    writeOptionalCsvNumber(
+                        multisd_shadow_csv,
+                        diagnostics.lambda_bootstrapped_success_rate);
+                    multisd_shadow_csv << ',';
+                    writeOptionalCsvNumber(
+                        multisd_shadow_csv,
+                        diagnostics.lambda_adop_cycles);
+                    multisd_shadow_csv
                         << ','
                         << (diagnostics.multisd_validation_evaluated ? 1 : 0)
                         << ','

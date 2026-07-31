@@ -3834,6 +3834,7 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
     std::vector<std::vector<FixedAmbiguityConstraint>>
         lambda_hypothesis_constraints;
     std::vector<double> lambda_hypothesis_residual_square_sums;
+    std::vector<std::size_t> lambda_hypothesis_group_ends;
     const bool has_ambiguity_measurements =
         !problem.carrier_phase_factors.empty() ||
         !problem.double_difference_carrier_factors.empty();
@@ -3902,6 +3903,9 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
             if (!config_.use_lambda_ambiguity_fix) {
                 return false;
             }
+            lambda_hypothesis_constraints.clear();
+            lambda_hypothesis_residual_square_sums.clear();
+            lambda_hypothesis_group_ends.clear();
 
             Eigen::MatrixXd ambiguity_state_covariance =
                 Eigen::MatrixXd::Zero(ambiguity_count, ambiguity_count);
@@ -4215,10 +4219,18 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                         std::max(result.diagnostics.lambda_ambiguity_ratio,
                                  lambda_ratio);
                 }
+                const double candidate_ratio_threshold =
+                    config_.use_multisd_ambiguities &&
+                            config_.use_multisd_disjoint_validation &&
+                            config_.multisd_lambda_candidate_ratio_threshold > 0.0
+                        ? std::min(
+                              config_.lambda_ratio_threshold,
+                              config_.multisd_lambda_candidate_ratio_threshold)
+                        : config_.lambda_ratio_threshold;
                 if (!lambda_solved || fixed_ambiguities.size() != n ||
                     !std::isfinite(lambda_ratio) ||
-                    (config_.lambda_ratio_threshold > 0.0 &&
-                     lambda_ratio < config_.lambda_ratio_threshold) ||
+                    (candidate_ratio_threshold > 0.0 &&
+                     lambda_ratio < candidate_ratio_threshold) ||
                     (config_.lambda_min_bootstrapped_success_rate > 0.0 &&
                      lambda_diagnostics.bootstrapped_success_rate <
                          config_.lambda_min_bootstrapped_success_rate) ||
@@ -4228,12 +4240,14 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                     return false;
                 }
 
-                lambda_hypothesis_constraints.clear();
-                lambda_hypothesis_residual_square_sums.clear();
+                const std::size_t group_start =
+                    lambda_hypothesis_constraints.size();
                 const int hypothesis_count =
                     lambda_diagnostics.candidates.cols();
-                lambda_hypothesis_constraints.reserve(hypothesis_count);
-                lambda_hypothesis_residual_square_sums.reserve(hypothesis_count);
+                lambda_hypothesis_constraints.reserve(
+                    group_start + static_cast<std::size_t>(hypothesis_count));
+                lambda_hypothesis_residual_square_sums.reserve(
+                    group_start + static_cast<std::size_t>(hypothesis_count));
                 for (int hypothesis = 0;
                      hypothesis < hypothesis_count;
                      ++hypothesis) {
@@ -4274,16 +4288,21 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                         residual_square_sum);
                 }
 
-                if (lambda_hypothesis_constraints.empty() ||
+                if (lambda_hypothesis_constraints.size() == group_start ||
                     static_cast<int>(
-                        lambda_hypothesis_constraints.front().size()) <
+                        lambda_hypothesis_constraints[group_start].size()) <
                         min_fixed_ambiguities) {
                     return false;
                 }
 
-                fixed_constraints = lambda_hypothesis_constraints.front();
-                fixed_residual_square_sum =
-                    lambda_hypothesis_residual_square_sums.front();
+                lambda_hypothesis_group_ends.push_back(
+                    lambda_hypothesis_constraints.size());
+                if (fixed_constraints.empty()) {
+                    fixed_constraints =
+                        lambda_hypothesis_constraints[group_start];
+                    fixed_residual_square_sum =
+                        lambda_hypothesis_residual_square_sums[group_start];
+                }
                 result.diagnostics.lambda_ambiguity_fix_used = true;
                 result.diagnostics.partial_lambda_ambiguity_fix_used =
                     subset_size < result.diagnostics.lambda_ambiguity_candidates;
@@ -4294,6 +4313,14 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
 
             const std::size_t min_subset_size =
                 static_cast<std::size_t>(min_fixed_ambiguities);
+            const bool collect_validator_groups =
+                config_.use_multisd_ambiguities &&
+                config_.use_multisd_disjoint_validation &&
+                config_.multisd_max_candidate_groups > 1;
+            const std::size_t maximum_groups =
+                static_cast<std::size_t>(std::max(
+                    1, config_.multisd_max_candidate_groups));
+            bool built_any_group = false;
             if (config_.use_constellation_ranked_partial_ar) {
                 const auto all_candidates = candidates;
                 const auto allowed_in_stage = [](GNSSSystem system,
@@ -4356,7 +4383,12 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                          subset_size >= min_subset_size;
                          --subset_size) {
                         if (solve_candidate_subset(subset_size)) {
-                            return true;
+                            built_any_group = true;
+                            if (!collect_validator_groups ||
+                                lambda_hypothesis_group_ends.size() >=
+                                    maximum_groups) {
+                                return true;
+                            }
                         }
                         if (!config_.use_partial_lambda_ambiguity_fix ||
                             subset_size == min_subset_size) {
@@ -4375,7 +4407,12 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                      subset_size >= min_subset_size;
                      --subset_size) {
                     if (solve_candidate_subset(subset_size)) {
-                        return true;
+                        built_any_group = true;
+                        if (!collect_validator_groups ||
+                            lambda_hypothesis_group_ends.size() >=
+                                maximum_groups) {
+                            return true;
+                        }
                     }
                     if (!config_.use_partial_lambda_ambiguity_fix ||
                         subset_size == min_subset_size) {
@@ -4384,7 +4421,7 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                 }
             }
 
-            return false;
+            return built_any_group;
         };
 
         const bool can_attempt_lambda =
@@ -4592,81 +4629,119 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                         ? 1
                         : lambda_hypothesis_constraints.size();
                 std::size_t passing_hypotheses = 0;
+                std::size_t evaluated_hypotheses = 0;
                 int selected_rank = -1;
                 OptimizationOutput selected_optimization;
                 ValidationOutcome selected_outcome;
                 ValidationOutcome first_outcome;
-                std::vector<std::future<OptimizationOutput>>
-                    hypothesis_futures;
-                // CUDA uses a retained thread-local cuSOLVER workspace. Keep
-                // hypotheses on this thread so every rank reuses the same
-                // allocations/handle instead of creating one CUDA context
-                // workspace per std::async worker.
-                if (config_.parallelize_lambda_hypotheses &&
-                    !use_cuda_dense_normal &&
-                    hypothesis_count > 1) {
-                    hypothesis_futures.reserve(hypothesis_count - 1);
-                    for (std::size_t rank = 1;
-                         rank < hypothesis_count;
-                         ++rank) {
-                        hypothesis_futures.push_back(std::async(
-                            std::launch::async,
-                            run_optimizer,
-                            float_optimization.state,
-                            lambda_hypothesis_constraints[rank],
-                            "fixed-hypothesis",
-                            fixed_global_iteration_offset));
-                    }
+                std::vector<std::size_t> group_ends =
+                    lambda_hypothesis_group_ends;
+                if (group_ends.empty()) {
+                    group_ends.push_back(hypothesis_count);
                 }
-                for (std::size_t rank = 0; rank < hypothesis_count; ++rank) {
-                    OptimizationOutput hypothesis;
-                    if (rank == 0) {
-                        hypothesis = optimization;
-                    } else if (!hypothesis_futures.empty()) {
-                        hypothesis = hypothesis_futures[rank - 1].get();
-                    } else {
-                        hypothesis = run_optimizer(
-                            float_optimization.state,
-                            lambda_hypothesis_constraints[rank],
-                            "fixed-hypothesis",
-                            fixed_global_iteration_offset);
-                        total_iterations += hypothesis.iterations;
-                        total_processing_ms += hypothesis.processing_ms;
+                std::size_t group_start = 0;
+                for (const std::size_t group_end : group_ends) {
+                    if (group_end <= group_start ||
+                        group_end > hypothesis_count) {
+                        continue;
                     }
-                    const ValidationOutcome outcome =
-                        validate_hypothesis(hypothesis);
-                    FGOResult::MultiSdValidationHypothesis hypothesis_record;
-                    hypothesis_record.rank = static_cast<int>(rank);
-                    hypothesis_record.evaluated = outcome.evaluated;
-                    hypothesis_record.pass = outcome.pass;
-                    hypothesis_record.latest_position_ecef =
-                        hypothesis.state.segment<3>(
-                            epoch_state_col(latest_epoch));
-                    hypothesis_record.carrier_used = outcome.carrier_used;
-                    hypothesis_record.carrier_passed = outcome.carrier_passed;
-                    hypothesis_record.pseudorange_used =
-                        outcome.pseudorange_used;
-                    hypothesis_record.maximum_integer_distance_cycles =
-                        outcome.maximum_integer_distance;
-                    hypothesis_record.ddpr_rms_m = outcome.ddpr_rms;
-                    hypothesis_record.fixed_float_separation_m =
-                        outcome.fixed_float_separation;
-                    hypothesis_record.seed_separation_m =
-                        outcome.seed_separation;
-                    result.multisd_validation_hypotheses.push_back(
-                        hypothesis_record);
-                    if (rank == 0) {
-                        first_outcome = outcome;
+                    std::vector<std::future<OptimizationOutput>>
+                        hypothesis_futures;
+                    const std::size_t async_start =
+                        group_start == 0 ? 1 : group_start;
+                    // CUDA uses a retained thread-local cuSOLVER workspace.
+                    // Keep hypotheses on this thread in CUDA mode; CPU groups
+                    // retain the existing deterministic parallel batch.
+                    if (config_.parallelize_lambda_hypotheses &&
+                        !use_cuda_dense_normal &&
+                        group_end > async_start) {
+                        hypothesis_futures.reserve(group_end - async_start);
+                        for (std::size_t rank = async_start;
+                             rank < group_end; ++rank) {
+                            hypothesis_futures.push_back(std::async(
+                                std::launch::async,
+                                run_optimizer,
+                                float_optimization.state,
+                                lambda_hypothesis_constraints[rank],
+                                "fixed-hypothesis",
+                                fixed_global_iteration_offset));
+                        }
                     }
-                    if (outcome.pass) {
-                        ++passing_hypotheses;
-                        selected_rank = static_cast<int>(rank);
-                        selected_optimization = std::move(hypothesis);
-                        selected_outcome = outcome;
+                    std::size_t group_passes = 0;
+                    int group_selected_rank = -1;
+                    OptimizationOutput group_selected_optimization;
+                    ValidationOutcome group_selected_outcome;
+                    for (std::size_t rank = group_start;
+                         rank < group_end; ++rank) {
+                        OptimizationOutput hypothesis;
+                        if (rank == 0) {
+                            hypothesis = optimization;
+                        } else if (!hypothesis_futures.empty()) {
+                            hypothesis =
+                                hypothesis_futures[rank - async_start].get();
+                        } else {
+                            hypothesis = run_optimizer(
+                                float_optimization.state,
+                                lambda_hypothesis_constraints[rank],
+                                "fixed-hypothesis",
+                                fixed_global_iteration_offset);
+                            total_iterations += hypothesis.iterations;
+                            total_processing_ms += hypothesis.processing_ms;
+                        }
+                        const ValidationOutcome outcome =
+                            validate_hypothesis(hypothesis);
+                        FGOResult::MultiSdValidationHypothesis
+                            hypothesis_record;
+                        hypothesis_record.rank = static_cast<int>(rank);
+                        hypothesis_record.evaluated = outcome.evaluated;
+                        hypothesis_record.pass = outcome.pass;
+                        hypothesis_record.latest_position_ecef =
+                            hypothesis.state.segment<3>(
+                                epoch_state_col(latest_epoch));
+                        hypothesis_record.carrier_used = outcome.carrier_used;
+                        hypothesis_record.carrier_passed = outcome.carrier_passed;
+                        hypothesis_record.pseudorange_used =
+                            outcome.pseudorange_used;
+                        hypothesis_record.maximum_integer_distance_cycles =
+                            outcome.maximum_integer_distance;
+                        hypothesis_record.ddpr_rms_m = outcome.ddpr_rms;
+                        hypothesis_record.fixed_float_separation_m =
+                            outcome.fixed_float_separation;
+                        hypothesis_record.seed_separation_m =
+                            outcome.seed_separation;
+                        result.multisd_validation_hypotheses.push_back(
+                            hypothesis_record);
+                        ++evaluated_hypotheses;
+                        if (rank == 0) {
+                            first_outcome = outcome;
+                        }
+                        if (outcome.pass) {
+                            ++group_passes;
+                            group_selected_rank = static_cast<int>(rank);
+                            group_selected_optimization =
+                                std::move(hypothesis);
+                            group_selected_outcome = outcome;
+                        }
                     }
+                    passing_hypotheses = group_passes;
+                    if (group_passes == 1) {
+                        selected_rank = group_selected_rank;
+                        selected_optimization =
+                            std::move(group_selected_optimization);
+                        selected_outcome = group_selected_outcome;
+                        break;
+                    }
+                    // Multiple passing hypotheses in any group are an
+                    // integrity ambiguity. Fail closed instead of searching
+                    // for a later group that happens to look unique.
+                    if (group_passes > 1) {
+                        break;
+                    }
+                    group_start = group_end;
                 }
 
-                const bool unique_pass = passing_hypotheses == 1;
+                const bool unique_pass =
+                    passing_hypotheses == 1 && selected_rank >= 0;
                 const ValidationOutcome& reported_outcome =
                     unique_pass ? selected_outcome : first_outcome;
                 result.diagnostics.multisd_validation_evaluated =
@@ -4679,7 +4754,7 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                 result.diagnostics.multisd_validation_pseudorange_used =
                     reported_outcome.pseudorange_used;
                 result.diagnostics.multisd_validation_hypotheses_evaluated =
-                    hypothesis_count;
+                    evaluated_hypotheses;
                 result.diagnostics.multisd_validation_hypotheses_passed =
                     passing_hypotheses;
                 result.diagnostics.multisd_validation_selected_rank =
@@ -4708,6 +4783,14 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                             std::sqrt(
                                 fixed_residual_square_sum /
                                 static_cast<double>(fixed_constraints.size()));
+                        result.diagnostics.fixed_ambiguities =
+                            static_cast<int>(fixed_constraints.size());
+                        result.diagnostics.lambda_ambiguity_used_candidates =
+                            static_cast<int>(fixed_constraints.size());
+                        result.diagnostics.partial_lambda_ambiguity_fix_used =
+                            fixed_constraints.size() <
+                            static_cast<std::size_t>(result.diagnostics
+                                .lambda_ambiguity_candidates);
                     }
                 } else {
                     optimization = std::move(float_optimization);

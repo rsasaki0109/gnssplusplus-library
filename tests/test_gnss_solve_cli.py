@@ -81,6 +81,12 @@ class GnssSolveCliTest(unittest.TestCase):
         self.assertIn(
             "--multisd-fgo-shadow-variance-ranked-par", result.stdout
         )
+        self.assertIn(
+            "--multisd-fgo-shadow-candidate-ratio", result.stdout
+        )
+        self.assertIn(
+            "--multisd-fgo-shadow-candidate-groups", result.stdout
+        )
 
     def test_config_supplies_defaults_and_cli_always_overrides_them(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_solve_config_") as temp_dir:
@@ -123,6 +129,21 @@ class GnssSolveCliTest(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("unknown or incomplete argument: --this-option-does-not-exist",
                       result.stderr)
+
+    def test_multisd_candidate_controls_reject_unsafe_ranges(self) -> None:
+        ratio = self.run_solve(
+            "--data-dir", "missing",
+            "--multisd-fgo-shadow-candidate-ratio", "0.99"
+        )
+        groups = self.run_solve(
+            "--data-dir", "missing",
+            "--multisd-fgo-shadow-candidate-groups", "33"
+        )
+
+        self.assertEqual(ratio.returncode, 1)
+        self.assertIn("candidate-ratio must be >= 1", ratio.stderr)
+        self.assertEqual(groups.returncode, 1)
+        self.assertIn("candidate-groups must be in [1, 32]", groups.stderr)
 
 
 if __name__ == "__main__":

@@ -193,6 +193,17 @@ public:
         // Cross-estimator aperture against the latest GNSS-only position seed.
         // The seed must not contain truth or an external sensor. Zero disables.
         double multisd_validation_max_seed_separation_m = 0.0;
+        // Candidate-generation ratio floor used only when the complete
+        // disjoint MultiSD validator is enabled. Zero preserves
+        // lambda_ratio_threshold. A lower value does not grant FIX: every
+        // top-K hypothesis must still pass the excluded-observation validator
+        // and uniqueness checks.
+        double multisd_lambda_candidate_ratio_threshold = 0.0;
+        // Number of distinct PAR subset/pool candidate groups that may be
+        // offered to the disjoint validator. One preserves first-LAMBDA-group
+        // behavior. Groups are evaluated in order and later groups are tried
+        // only after an earlier group has zero passing hypotheses.
+        int multisd_max_candidate_groups = 1;
         bool use_epoch_lambda_fixed_output = false;
         bool use_partial_lambda_ambiguity_fix = true;
         // Independently re-optimize the active fixed-lag graph with the
