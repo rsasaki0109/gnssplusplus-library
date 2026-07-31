@@ -4417,13 +4417,24 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                                     epoch_amb_indices[candidate]].satellite);
                         }
                         for (const SatelliteId& drop_satellite : drop_satellites) {
+                            FGOProcessor::RatioImpactTrialTrace trial;
+                            trial.excluded_satellite = drop_satellite;
                             std::vector<int> pool;
                             pool.reserve(ratio_impact_order.size());
                             for (int candidate : ratio_impact_order) {
-                                if (problem.ambiguity_states[
-                                        epoch_amb_indices[candidate]].satellite !=
-                                    drop_satellite) {
+                                const auto& ambiguity = problem.ambiguity_states[
+                                    epoch_amb_indices[candidate]];
+                                if (ambiguity.satellite != drop_satellite) {
                                     pool.push_back(candidate);
+                                } else {
+                                    ++trial.excluded_ambiguities;
+                                    trial.excluded_max_variance_cycles2 = std::max(
+                                        trial.excluded_max_variance_cycles2,
+                                        q_amb(candidate, candidate));
+                                    trial.excluded_max_fractional_cycles = std::max(
+                                        trial.excluded_max_fractional_cycles,
+                                        std::abs(float_amb(candidate) -
+                                                 std::round(float_amb(candidate))));
                                 }
                             }
                             if (pool.size() < static_cast<std::size_t>(min_subset) ||
@@ -4432,6 +4443,10 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                             }
                             epoch_diagnostics[i].ratio_impact_evaluated = true;
                             ++epoch_diagnostics[i].ratio_impact_trials;
+                            const auto residual_it = per_sat_res.find(drop_satellite);
+                            if (residual_it != per_sat_res.end()) {
+                                trial.excluded_ddpr_residual_m = residual_it->second;
+                            }
                             const int monitor_n = static_cast<int>(pool.size());
                             Eigen::VectorXd monitor_float(monitor_n);
                             Eigen::MatrixXd monitor_q(monitor_n, monitor_n);
@@ -4448,24 +4463,55 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                             if (!lambdaSearch(monitor_float, monitor_q,
                                               monitor_fixed, monitor_ratio) ||
                                 !std::isfinite(monitor_ratio) ||
-                                monitor_fixed.size() != monitor_n ||
-                                monitor_ratio <=
-                                    epoch_diagnostics[i].ratio_impact_best_ratio) {
+                                monitor_fixed.size() != monitor_n) {
+                                epoch_diagnostics[i].ratio_impact_trial_trace.push_back(
+                                    std::move(trial));
                                 continue;
                             }
+                            trial.ratio = monitor_ratio;
+                            trial.fixed_ambiguities = monitor_n;
                             const Eigen::VectorXd delta =
                                 monitor_float - monitor_fixed;
                             const Eigen::LDLT<Eigen::MatrixXd> ldlt(monitor_q);
-                            if (ldlt.info() != Eigen::Success) continue;
+                            if (ldlt.info() != Eigen::Success) {
+                                epoch_diagnostics[i].ratio_impact_trial_trace.push_back(
+                                    std::move(trial));
+                                continue;
+                            }
                             const Eigen::VectorXd correction = ldlt.solve(delta);
-                            if (!correction.allFinite()) continue;
+                            if (!correction.allFinite()) {
+                                epoch_diagnostics[i].ratio_impact_trial_trace.push_back(
+                                    std::move(trial));
+                                continue;
+                            }
                             const Eigen::Vector3d position_delta =
                                 monitor_pos * correction;
-                            if (!position_delta.allFinite()) continue;
+                            if (!position_delta.allFinite()) {
+                                epoch_diagnostics[i].ratio_impact_trial_trace.push_back(
+                                    std::move(trial));
+                                continue;
+                            }
                             const Eigen::Vector3d candidate_position =
                                 Eigen::Vector3d(antennaOf(pose_i)) -
                                 position_delta;
-                            if (!candidate_position.allFinite()) continue;
+                            if (!candidate_position.allFinite()) {
+                                epoch_diagnostics[i].ratio_impact_trial_trace.push_back(
+                                    std::move(trial));
+                                continue;
+                            }
+                            trial.candidate_available = true;
+                            trial.candidate_position_ecef = candidate_position;
+                            trial.float_separation_m =
+                                (candidate_position - Eigen::Vector3d(
+                                     antennaOf(pose_i))).norm();
+                            trial.imu_separation_m =
+                                (candidate_position - Eigen::Vector3d(
+                                     antennaOf(pose_seed))).norm();
+                            epoch_diagnostics[i].ratio_impact_trial_trace.push_back(trial);
+                            if (monitor_ratio <=
+                                epoch_diagnostics[i].ratio_impact_best_ratio) {
+                                continue;
+                            }
                             epoch_diagnostics[i].ratio_impact_best_ratio =
                                 monitor_ratio;
                             epoch_diagnostics[i]
@@ -4475,12 +4521,10 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                                     candidate_position;
                             epoch_diagnostics[i]
                                 .ratio_impact_best_float_separation_m =
-                                    (candidate_position - Eigen::Vector3d(
-                                         antennaOf(pose_i))).norm();
+                                    trial.float_separation_m;
                             epoch_diagnostics[i]
                                 .ratio_impact_best_imu_separation_m =
-                                    (candidate_position - Eigen::Vector3d(
-                                         antennaOf(pose_seed))).norm();
+                                    trial.imu_separation_m;
                         }
                     }
                 } else {

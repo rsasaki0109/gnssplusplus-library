@@ -139,7 +139,10 @@ that remain ratio-rejected. It removes each target satellite in turn, reruns
 LAMBDA, and writes the best ratio, subset size, candidate ECEF position, and
 fixed/float and fixed/IMU separations as `ratio_impact_*`. The audit is
 diagnostic-only: it cannot change the selected subset, graph, hold state, or
-reported FIX/FLOAT status.
+reported FIX/FLOAT status. A normalized row-per-exclusion trace is also
+written beside the epoch CSV as `<dump>.ratio_impact.csv`; it includes the
+excluded satellite, its ambiguity variance/fractional-cycle/DDPR-residual
+proxies, and the resulting counterfactual candidate.
 
 #### Surplus-satellite rescue integrity
 
