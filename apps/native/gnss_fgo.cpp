@@ -2146,6 +2146,12 @@ void writeSummaryJson(const Options& options,
     output << "  \"initial_cost\": " << diagnostics.initial_cost << ",\n";
     output << "  \"final_cost\": " << diagnostics.final_cost << ",\n";
     output << "  \"processing_time_ms\": " << diagnostics.processing_time_ms << ",\n";
+    output << "  \"cuda_hypothesis_batch_attempts\": "
+           << diagnostics.cuda_hypothesis_batch_attempts << ",\n";
+    output << "  \"cuda_hypothesis_batch_successes\": "
+           << diagnostics.cuda_hypothesis_batch_successes << ",\n";
+    output << "  \"cuda_hypothesis_batch_rhs_columns\": "
+           << diagnostics.cuda_hypothesis_batch_rhs_columns << ",\n";
     output << "  \"epoch_lambda_processing_time_ms\": "
            << diagnostics.epoch_lambda_processing_time_ms << ",\n";
     output << "  \"epoch_lambda_setup_time_ms\": "

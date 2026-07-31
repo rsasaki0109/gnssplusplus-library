@@ -2910,6 +2910,7 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
     struct OptimizationOutput {
         Eigen::VectorXd state;
         Eigen::MatrixXd normal_matrix;
+        Eigen::VectorXd normal_rhs;
         Eigen::SparseMatrix<double> sparse_normal_matrix;
         std::shared_ptr<SparseNormalFactorization> sparse_factorization;
         std::shared_ptr<DenseNormalFactorization> dense_factorization;
@@ -2943,14 +2944,15 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
         [&](const Eigen::VectorXd& start_state,
             const std::vector<FixedAmbiguityConstraint>& fixed_constraints,
             const std::string& phase,
-            int global_iteration_offset)
+            int global_iteration_offset,
+            int iteration_limit)
             -> OptimizationOutput {
         OptimizationOutput output;
         output.state = start_state;
 
         const auto start_time = std::chrono::high_resolution_clock::now();
         double previous_cost = std::numeric_limits<double>::infinity();
-        for (int iter = 0; iter < config_.max_iterations; ++iter) {
+        for (int iter = 0; iter < iteration_limit; ++iter) {
             const int pr_rows = static_cast<int>(problem.pseudorange_factors.size());
             const int carrier_phase_rows =
                 static_cast<int>(problem.carrier_phase_factors.size());
@@ -3666,6 +3668,7 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                 output.final_cost = weighted_residual_square_sum;
                 if (!use_sparse_normal) {
                     output.normal_matrix = normal_matrix;
+                    output.normal_rhs = normal_rhs;
                 }
                 output.robust_pseudorange_factors = robust_pseudorange_count;
                 output.robust_carrier_phase_factors = robust_carrier_phase_count;
@@ -3826,7 +3829,8 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
         return output;
     };
 
-    OptimizationOutput optimization = run_optimizer(initial_state, {}, "float", 0);
+    OptimizationOutput optimization = run_optimizer(
+        initial_state, {}, "float", 0, config_.max_iterations);
     result.cost_trace_entries = optimization.cost_trace_entries;
     int total_iterations = optimization.iterations;
     double total_processing_ms = optimization.processing_ms;
@@ -4578,7 +4582,8 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                 run_optimizer(optimization.state,
                               fixed_constraints,
                               "fixed",
-                              fixed_global_iteration_offset);
+                              fixed_global_iteration_offset,
+                              config_.max_iterations);
             total_iterations += fixed_optimization.iterations;
             total_processing_ms += fixed_optimization.processing_ms;
             result.cost_trace_entries.insert(
@@ -4788,6 +4793,144 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                         hypothesis_futures;
                     const std::size_t async_start =
                         group_start == 0 ? 1 : group_start;
+                    std::vector<Eigen::VectorXd> cuda_batch_start_states(
+                        group_end - async_start);
+                    std::vector<bool> cuda_batch_start_valid(
+                        group_end - async_start, false);
+                    // Every top-K hypothesis in one PAR group constrains the
+                    // same ambiguity columns. At the common float state its
+                    // fixed-row normal matrix is therefore identical; only
+                    // the right-hand side changes. Use one cuSOLVER POTRF and
+                    // a multi-column POTRS to precondition all hypotheses,
+                    // then retain the ordinary nonlinear reoptimization and
+                    // independent validator as final authority.
+                    if (use_cuda_dense_normal &&
+                        group_end > async_start &&
+                        float_optimization.normal_matrix.rows() == state_size) {
+                        const auto& pattern =
+                            lambda_hypothesis_constraints[async_start];
+                        bool common_pattern = !pattern.empty();
+                        for (std::size_t rank = async_start + 1;
+                             common_pattern && rank < group_end; ++rank) {
+                            const auto& constraints =
+                                lambda_hypothesis_constraints[rank];
+                            if (constraints.size() != pattern.size()) {
+                                common_pattern = false;
+                                break;
+                            }
+                            for (std::size_t row = 0;
+                                 row < pattern.size(); ++row) {
+                                if (constraints[row].ambiguity_index !=
+                                        pattern[row].ambiguity_index ||
+                                    constraints[row].reference_ambiguity_index !=
+                                        pattern[row]
+                                            .reference_ambiguity_index) {
+                                    common_pattern = false;
+                                    break;
+                                }
+                            }
+                        }
+                        if (common_pattern) {
+                            Eigen::MatrixXd batch_normal =
+                                float_optimization.normal_matrix;
+                            const int batch_columns =
+                                static_cast<int>(group_end - async_start);
+                            Eigen::MatrixXd batch_rhs = Eigen::MatrixXd::Zero(
+                                state_size, batch_columns);
+                            if (float_optimization.normal_rhs.rows() ==
+                                state_size) {
+                                batch_rhs = float_optimization.normal_rhs.replicate(
+                                    1, batch_columns);
+                            }
+                            const double fixed_sigma = std::max(
+                                1e-5, config_.fixed_ambiguity_sigma_m);
+                            const double fixed_weight = 1.0 / fixed_sigma;
+                            const double fixed_weight_squared =
+                                fixed_weight * fixed_weight;
+                            for (const auto& fixed : pattern) {
+                                const int ambiguity_col =
+                                    base_state_size + static_cast<int>(
+                                        fixed.ambiguity_index);
+                                batch_normal(ambiguity_col, ambiguity_col) +=
+                                    fixed_weight_squared;
+                                if (fixed.reference_ambiguity_index <
+                                    problem.ambiguity_states.size()) {
+                                    const int reference_col =
+                                        base_state_size + static_cast<int>(
+                                            fixed.reference_ambiguity_index);
+                                    batch_normal(reference_col, reference_col) +=
+                                        fixed_weight_squared;
+                                    batch_normal(ambiguity_col, reference_col) -=
+                                        fixed_weight_squared;
+                                    batch_normal(reference_col, ambiguity_col) -=
+                                        fixed_weight_squared;
+                                }
+                            }
+                            for (std::size_t rank = async_start;
+                                 rank < group_end; ++rank) {
+                                const auto& constraints =
+                                    lambda_hypothesis_constraints[rank];
+                                const int rhs_col =
+                                    static_cast<int>(rank - async_start);
+                                for (const auto& fixed : constraints) {
+                                    const int ambiguity_col =
+                                        base_state_size + static_cast<int>(
+                                            fixed.ambiguity_index);
+                                    const bool use_difference =
+                                        fixed.reference_ambiguity_index <
+                                        problem.ambiguity_states.size();
+                                    const int reference_col = use_difference
+                                        ? base_state_size + static_cast<int>(
+                                              fixed.reference_ambiguity_index)
+                                        : -1;
+                                    const double current_ambiguity =
+                                        float_optimization.state(ambiguity_col) -
+                                        (use_difference
+                                             ? float_optimization.state(
+                                                   reference_col)
+                                             : 0.0);
+                                    const double weighted_rhs =
+                                        (fixed.fixed_ambiguity_m -
+                                         current_ambiguity) *
+                                        fixed_weight_squared;
+                                    batch_rhs(ambiguity_col, rhs_col) +=
+                                        weighted_rhs;
+                                    if (use_difference) {
+                                        batch_rhs(reference_col, rhs_col) -=
+                                            weighted_rhs;
+                                    }
+                                }
+                            }
+                            const double max_diagonal =
+                                batch_normal.diagonal().cwiseAbs().maxCoeff();
+                            batch_normal.diagonal().array() +=
+                                std::max(1e-12, max_diagonal * 1e-12);
+                            Eigen::MatrixXd batch_delta;
+                            result.diagnostics.cuda_hypothesis_batch_attempts += 1;
+                            result.diagnostics.cuda_hypothesis_batch_rhs_columns +=
+                                static_cast<std::size_t>(batch_rhs.cols());
+                            if (tryCudaDenseSolve(
+                                    batch_normal, batch_rhs, batch_delta,
+                                    &cuda_solve_stats) &&
+                                batch_delta.cols() == batch_rhs.cols()) {
+                                result.diagnostics.cuda_hypothesis_batch_successes += 1;
+                                for (int column = 0;
+                                     column < batch_delta.cols(); ++column) {
+                                    Eigen::VectorXd start_state =
+                                        float_optimization.state +
+                                        batch_delta.col(column);
+                                    if (start_state.allFinite()) {
+                                        cuda_batch_start_states[
+                                            static_cast<std::size_t>(column)] =
+                                            std::move(start_state);
+                                        cuda_batch_start_valid[
+                                            static_cast<std::size_t>(column)] =
+                                            true;
+                                    }
+                                }
+                            }
+                        }
+                    }
                     // CUDA uses a retained thread-local cuSOLVER workspace.
                     // Keep hypotheses on this thread in CUDA mode; CPU groups
                     // retain the existing deterministic parallel batch.
@@ -4803,7 +4946,8 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                                 float_optimization.state,
                                 lambda_hypothesis_constraints[rank],
                                 "fixed-hypothesis",
-                                fixed_global_iteration_offset));
+                                fixed_global_iteration_offset,
+                                config_.max_iterations));
                         }
                     }
                     std::size_t group_passes = 0;
@@ -4819,11 +4963,21 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                             hypothesis =
                                 hypothesis_futures[rank - async_start].get();
                         } else {
+                            const std::size_t batch_index =
+                                rank - async_start;
+                            const Eigen::VectorXd& hypothesis_start =
+                                batch_index < cuda_batch_start_valid.size() &&
+                                        cuda_batch_start_valid[batch_index]
+                                    ? cuda_batch_start_states[batch_index]
+                                    : float_optimization.state;
                             hypothesis = run_optimizer(
-                                float_optimization.state,
+                                hypothesis_start,
                                 lambda_hypothesis_constraints[rank],
                                 "fixed-hypothesis",
-                                fixed_global_iteration_offset);
+                                fixed_global_iteration_offset,
+                                cuda_batch_start_valid[batch_index]
+                                    ? std::max(1, config_.max_iterations - 1)
+                                    : config_.max_iterations);
                             total_iterations += hypothesis.iterations;
                             total_processing_ms += hypothesis.processing_ms;
                         }

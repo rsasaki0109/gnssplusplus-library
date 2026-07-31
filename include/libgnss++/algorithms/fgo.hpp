@@ -1906,6 +1906,11 @@ public:
         std::size_t cuda_dense_solve_successes = 0;
         std::size_t cuda_dense_solve_fallbacks = 0;
         double cuda_dense_solve_time_ms = 0.0;
+        /// Top-K groups submitted as one common-normal, multi-RHS CUDA solve.
+        std::size_t cuda_hypothesis_batch_attempts = 0;
+        std::size_t cuda_hypothesis_batch_successes = 0;
+        /// Total hypothesis RHS columns submitted across successful or failed batches.
+        std::size_t cuda_hypothesis_batch_rhs_columns = 0;
         double epoch_lambda_processing_time_ms = 0.0;
         double epoch_lambda_setup_time_ms = 0.0;
         double epoch_lambda_factorization_time_ms = 0.0;

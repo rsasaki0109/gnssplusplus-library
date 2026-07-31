@@ -4141,6 +4141,9 @@ int main(int argc, char* argv[]) {
                    "optimize_wall_ms,optimizer_cpu_ms,runtime_ms,"
                    "normal_state_size,cuda_selected,cuda_attempts,"
                    "cuda_successes,cuda_fallbacks,cuda_runtime_ms,"
+                   "cuda_hypothesis_batch_attempts,"
+                   "cuda_hypothesis_batch_successes,"
+                   "cuda_hypothesis_batch_rhs_columns,"
                    "fixed_float_separation_m,seed_separation_m\n";
         }
 
@@ -4587,6 +4590,9 @@ int main(int argc, char* argv[]) {
                         << ',' << diagnostics.cuda_dense_solve_successes
                         << ',' << diagnostics.cuda_dense_solve_fallbacks
                         << ',' << diagnostics.cuda_dense_solve_time_ms
+                        << ',' << diagnostics.cuda_hypothesis_batch_attempts
+                        << ',' << diagnostics.cuda_hypothesis_batch_successes
+                        << ',' << diagnostics.cuda_hypothesis_batch_rhs_columns
                         << ',';
                     writeOptionalCsvNumber(
                         multisd_shadow_csv,
