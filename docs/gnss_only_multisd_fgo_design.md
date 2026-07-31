@@ -195,3 +195,30 @@ cost is rebuilding and solving the common float graph each epoch, so GPU alone
 must not substitute for fixed-lag reuse/marginalization. Promotion still
 requires PPC run/time-block nested validation, injected fault tests, and the
 full latency distribution.
+
+### Covariance hot-path correction
+
+Profiling split each causal solve into graph construction, optimizer wall time,
+and accumulated optimizer CPU time. For the 10-epoch Tokyo sample, only about
+14 ms was graph construction and 8 ms was Gauss--Newton work; the dominant
+cost was two dense Jacobi-SVD full pseudo-inverses used to obtain ambiguity and
+output covariance. The optimizer had already factorized the same damped normal
+matrix with LDLT. Retaining that final factorization and solving the ambiguity
+columns as a multi-right-hand-side batch removes the duplicated decomposition
+without weakening any validator gate.
+
+After this change, FIX/FLOAT decisions, top-K validation outcomes, and emitted
+ECEF positions match the pre-change CSV values on all four development blocks.
+The causal wall-time samples are now:
+
+| PPC block | window | mean | p95 | max |
+|---|---:|---:|---:|---:|
+| Tokyo run1 0--30 | 10 | 22.6 ms | 36.6 ms | 44.2 ms |
+| Tokyo run1 0--30 | 25 | 45.2 ms | 79.1 ms | 118.9 ms |
+| Nagoya run2 0--30 | 10 | 16.3 ms | 20.8 ms | 20.9 ms |
+| Nagoya run2 500--530 | 10 | 19.6 ms | 27.1 ms | 33.5 ms |
+
+Thus the preliminary 25-epoch p95 is below 100 ms on this host even before a
+CUDA solve. This is still a 21-solve development sample, not the full latency
+contract. CUDA remains an optional scaling path for longer windows and larger
+hypothesis batches; CPU stays the reference and fallback.

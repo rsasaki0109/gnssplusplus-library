@@ -21,6 +21,7 @@
 #include <future>
 #include <limits>
 #include <map>
+#include <memory>
 #include <numeric>
 #include <set>
 #include <string>
@@ -2841,10 +2842,15 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
         return static_cast<std::size_t>(num_epochs) * 3U;
     };
 
+    using SparseNormalFactorization =
+        Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>>;
+    using DenseNormalFactorization = Eigen::LDLT<Eigen::MatrixXd>;
     struct OptimizationOutput {
         Eigen::VectorXd state;
         Eigen::MatrixXd normal_matrix;
         Eigen::SparseMatrix<double> sparse_normal_matrix;
+        std::shared_ptr<SparseNormalFactorization> sparse_factorization;
+        std::shared_ptr<DenseNormalFactorization> dense_factorization;
         int iterations = 0;
         bool converged = false;
         double final_cost = 0.0;
@@ -3628,6 +3634,7 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                             config_.relative_cost_convergence_threshold);
             };
             if (use_sparse_normal) {
+                output.sparse_factorization.reset();
                 Eigen::SparseMatrix<double> sparse_normal(state_size, state_size);
                 sparse_normal.setFromTriplets(
                     normal_triplets.begin(), normal_triplets.end());
@@ -3654,12 +3661,14 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                 }
                 double damping = std::max(1e-12, max_diagonal * 1e-12);
                 for (int attempt = 0; attempt < 6; ++attempt) {
-                    Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> ldlt;
-                    ldlt.setShift(damping);
-                    ldlt.compute(sparse_normal);
-                    if (ldlt.info() == Eigen::Success) {
-                        dx = ldlt.solve(normal_rhs);
-                        if (ldlt.info() == Eigen::Success && dx.allFinite()) {
+                    auto ldlt =
+                        std::make_shared<SparseNormalFactorization>();
+                    ldlt->setShift(damping);
+                    ldlt->compute(sparse_normal);
+                    if (ldlt->info() == Eigen::Success) {
+                        dx = ldlt->solve(normal_rhs);
+                        if (ldlt->info() == Eigen::Success && dx.allFinite()) {
+                            output.sparse_factorization = std::move(ldlt);
                             solved = true;
                             break;
                         }
@@ -3673,6 +3682,7 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                     current_sparse_normal = std::move(sparse_normal);
                 }
             } else {
+                output.dense_factorization.reset();
                 if (cost_converged()) {
                     store_current_linearization();
                     output.iterations = iter;
@@ -3687,10 +3697,13 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                 for (int attempt = 0; attempt < 6; ++attempt) {
                     Eigen::MatrixXd damped_normal = normal_matrix;
                     damped_normal.diagonal().array() += damping;
-                    Eigen::LDLT<Eigen::MatrixXd> ldlt(damped_normal);
-                    if (ldlt.info() == Eigen::Success) {
-                        dx = ldlt.solve(normal_rhs);
+                    auto ldlt =
+                        std::make_shared<DenseNormalFactorization>(
+                            damped_normal);
+                    if (ldlt->info() == Eigen::Success) {
+                        dx = ldlt->solve(normal_rhs);
                         if (dx.allFinite()) {
+                            output.dense_factorization = std::move(ldlt);
                             solved = true;
                             break;
                         }
@@ -3813,40 +3826,69 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
             Eigen::MatrixXd ambiguity_state_covariance =
                 Eigen::MatrixXd::Zero(ambiguity_count, ambiguity_count);
             if (optimization.normal_matrix.rows() == state_size) {
-                const Eigen::MatrixXd float_covariance =
-                    pseudoInverse(optimization.normal_matrix);
-                if (float_covariance.rows() != state_size) {
-                    return false;
-                }
-                ambiguity_state_covariance = float_covariance.block(
-                    base_state_size, base_state_size,
-                    ambiguity_count, ambiguity_count);
-            } else if (optimization.sparse_normal_matrix.rows() == state_size) {
-                Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> solver;
-                double max_diagonal = 0.0;
-                for (int i = 0; i < state_size; ++i) {
-                    max_diagonal = std::max(
-                        max_diagonal,
-                        std::abs(optimization.sparse_normal_matrix.coeff(i, i)));
-                }
-                solver.setShift(std::max(1e-12, max_diagonal * 1e-12));
-                solver.compute(optimization.sparse_normal_matrix);
-                if (solver.info() != Eigen::Success) {
-                    return false;
-                }
-                Eigen::VectorXd unit = Eigen::VectorXd::Zero(state_size);
-                for (int col = 0; col < ambiguity_count; ++col) {
-                    unit.setZero();
-                    unit(base_state_size + col) = 1.0;
-                    const Eigen::VectorXd covariance_col = solver.solve(unit);
-                    if (solver.info() != Eigen::Success ||
-                        !covariance_col.allFinite()) {
+                if (optimization.dense_factorization) {
+                    Eigen::MatrixXd ambiguity_rhs = Eigen::MatrixXd::Zero(
+                        state_size, ambiguity_count);
+                    ambiguity_rhs.block(base_state_size, 0,
+                                        ambiguity_count, ambiguity_count)
+                        .setIdentity();
+                    const Eigen::MatrixXd covariance_columns =
+                        optimization.dense_factorization->solve(ambiguity_rhs);
+                    if (optimization.dense_factorization->info() !=
+                            Eigen::Success ||
+                        !covariance_columns.allFinite()) {
                         return false;
                     }
-                    ambiguity_state_covariance.col(col) =
-                        covariance_col.segment(base_state_size,
-                                               ambiguity_count);
+                    ambiguity_state_covariance = covariance_columns.block(
+                        base_state_size, 0,
+                        ambiguity_count, ambiguity_count);
+                } else {
+                    const Eigen::MatrixXd float_covariance =
+                        pseudoInverse(optimization.normal_matrix);
+                    if (float_covariance.rows() != state_size) {
+                        return false;
+                    }
+                    ambiguity_state_covariance = float_covariance.block(
+                        base_state_size, base_state_size,
+                        ambiguity_count, ambiguity_count);
                 }
+            } else if (optimization.sparse_normal_matrix.rows() == state_size) {
+                auto solver = optimization.sparse_factorization;
+                if (!solver) {
+                    solver = std::make_shared<SparseNormalFactorization>();
+                    double max_diagonal = 0.0;
+                    for (int i = 0; i < state_size; ++i) {
+                        max_diagonal = std::max(
+                            max_diagonal,
+                            std::abs(
+                                optimization.sparse_normal_matrix.coeff(i, i)));
+                    }
+                    solver->setShift(
+                        std::max(1e-12, max_diagonal * 1e-12));
+                    solver->compute(optimization.sparse_normal_matrix);
+                    if (solver->info() != Eigen::Success) {
+                        return false;
+                    }
+                }
+                // Factor once and solve every requested ambiguity covariance
+                // column as a multi-RHS batch. The previous per-column solve
+                // repeated sparse triangular-solve setup and dominated the
+                // causal 10-epoch wall time. This is also the exact operation
+                // that a CUDA sparse/dense backend can later offload.
+                Eigen::MatrixXd ambiguity_rhs = Eigen::MatrixXd::Zero(
+                    state_size, ambiguity_count);
+                ambiguity_rhs.block(base_state_size, 0,
+                                    ambiguity_count, ambiguity_count)
+                    .setIdentity();
+                const Eigen::MatrixXd covariance_columns =
+                    solver->solve(ambiguity_rhs);
+                if (solver->info() != Eigen::Success ||
+                    !covariance_columns.allFinite()) {
+                    return false;
+                }
+                ambiguity_state_covariance = covariance_columns.block(
+                    base_state_size, 0,
+                    ambiguity_count, ambiguity_count);
             } else {
                 return false;
             }
@@ -4474,7 +4516,12 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
 
     Eigen::MatrixXd covariance;
     if (optimization.normal_matrix.rows() == state_size) {
-        covariance = pseudoInverse(optimization.normal_matrix);
+        if (optimization.dense_factorization) {
+            covariance = optimization.dense_factorization->solve(
+                Eigen::MatrixXd::Identity(state_size, state_size));
+        } else {
+            covariance = pseudoInverse(optimization.normal_matrix);
+        }
     }
 
     std::vector<Vector3d> epoch_output_positions(

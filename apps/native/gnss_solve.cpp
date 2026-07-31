@@ -3872,7 +3872,8 @@ int main(int argc, char* argv[]) {
                    "validation_evaluated,validation_pass,holdout_satellites,"
                    "hypotheses_passed,hypotheses_evaluated,selected_rank,"
                    "carrier_passed,carrier_used,max_integer_distance_cycles,"
-                   "ddpr_rms_m,x,y,z,rtk_position_delta_m,runtime_ms\n";
+                   "ddpr_rms_m,x,y,z,rtk_position_delta_m,build_runtime_ms,"
+                   "optimize_wall_ms,optimizer_cpu_ms,runtime_ms\n";
         }
 
         std::unique_ptr<IntegrityShadowTimeline> integrity_shadow;
@@ -4191,11 +4192,23 @@ int main(int argc, char* argv[]) {
                             multisd_shadow_base_window,
                             nav_data,
                             base_position);
+                    const auto shadow_optimize_start =
+                        std::chrono::steady_clock::now();
                     const auto shadow_result =
                         multisd_shadow_processor.optimizeProblem(shadow_problem);
+                    const auto shadow_end =
+                        std::chrono::steady_clock::now();
+                    const double shadow_build_runtime_ms =
+                        std::chrono::duration<double, std::milli>(
+                            shadow_optimize_start - shadow_start)
+                            .count();
+                    const double shadow_optimize_wall_ms =
+                        std::chrono::duration<double, std::milli>(
+                            shadow_end - shadow_optimize_start)
+                            .count();
                     const double shadow_runtime_ms =
                         std::chrono::duration<double, std::milli>(
-                            std::chrono::steady_clock::now() - shadow_start)
+                            shadow_end - shadow_start)
                             .count();
                     ++multisd_shadow_attempts;
                     multisd_shadow_total_runtime_ms += shadow_runtime_ms;
@@ -4279,7 +4292,11 @@ int main(int argc, char* argv[]) {
                     } else {
                         multisd_shadow_csv << ",,,";
                     }
-                    multisd_shadow_csv << ',' << shadow_runtime_ms << '\n';
+                    multisd_shadow_csv
+                        << ',' << shadow_build_runtime_ms
+                        << ',' << shadow_optimize_wall_ms
+                        << ',' << diagnostics.processing_time_ms
+                        << ',' << shadow_runtime_ms << '\n';
                 }
             }
             const libgnss::PositionSolution* last_output =
