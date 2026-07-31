@@ -838,6 +838,57 @@ TEST(FGOTest, DoubleDifferenceCarrierFactorsConstrainAmbiguityDifferences) {
     }
 }
 
+TEST(FGOTest, MultiSdLambdaFixesBsdDifferencesWithoutFixingSdGauge) {
+    FGOProcessor::FGOConfig config;
+    config.max_iterations = 12;
+    config.convergence_threshold_m = 1e-8;
+    config.use_motion_factors = false;
+    config.use_multisd_ambiguities = true;
+    config.fix_ambiguities = true;
+    config.use_lambda_ambiguity_fix = true;
+    config.lambda_top_k_candidates = 4;
+    config.lambda_ratio_threshold = 1.5;
+    config.min_fixed_ambiguities = 4;
+    config.double_difference_carrier_sigma_m = 0.01;
+    config.ambiguity_prior_sigma_m = 1000.0;
+    config.fixed_ambiguity_sigma_m = 1e-4;
+
+    FGOProcessor processor(config);
+    const auto result = processor.optimizeProblem(
+        makeSyntheticDoubleDifferenceProblem(true));
+
+    ASSERT_EQ(result.solution.size(), 2u);
+    EXPECT_TRUE(result.diagnostics.lambda_ambiguity_fix_solved);
+    EXPECT_TRUE(result.diagnostics.lambda_ambiguity_fix_used);
+    EXPECT_TRUE(result.diagnostics.fixed_solution);
+    EXPECT_EQ(result.diagnostics.lambda_ambiguity_candidates, 5u);
+    EXPECT_EQ(result.diagnostics.lambda_ambiguity_used_candidates, 5u);
+    EXPECT_EQ(result.diagnostics.lambda_top_k_generated, 4u);
+    EXPECT_GT(result.diagnostics.lambda_bootstrapped_success_rate, 0.0);
+    EXPECT_TRUE(std::isfinite(result.diagnostics.lambda_adop_cycles));
+    EXPECT_GT(result.diagnostics.lambda_adop_cycles, 0.0);
+    EXPECT_EQ(result.diagnostics.fixed_ambiguities, 5u);
+    EXPECT_EQ(result.solution.solutions[0].num_fixed_ambiguities, 5);
+    EXPECT_EQ(result.solution.solutions[0].status, SolutionStatus::FIXED);
+    EXPECT_LT(result.diagnostics.fixed_ambiguity_residual_rms_cycles, 1e-4);
+
+    // The accepted integers constrain N_sat-N_ref. No individual SD state
+    // is labelled fixed because its common gauge remains unobservable.
+    ASSERT_EQ(result.ambiguity_estimates.size(), 6u);
+    for (const auto& estimate : result.ambiguity_estimates) {
+        EXPECT_FALSE(estimate.is_fixed);
+    }
+    for (std::size_t sat = 1; sat < result.ambiguity_estimates.size(); ++sat) {
+        const double fixed_bsd_cycles =
+            result.ambiguity_estimates[sat].ambiguity_cycles -
+            result.ambiguity_estimates[0].ambiguity_cycles;
+        EXPECT_NEAR(fixed_bsd_cycles,
+                    static_cast<double>(trueAmbiguityCycles(sat) -
+                                        trueAmbiguityCycles(0)),
+                    1e-4);
+    }
+}
+
 TEST(FGOTest, DoubleDifferencePseudorangeFactorsRecoverSyntheticGeometry) {
     FGOProcessor::FGOConfig config;
     config.max_iterations = 12;
@@ -1507,6 +1558,85 @@ TEST(FGOTest, CmcAwareReferenceSelectionAvoidsExcludedReference) {
         }
         EXPECT_TRUE(found_epoch3_factor);
         EXPECT_EQ(problem.diagnostics.cmc_ref_avoided_count, 2u);
+    }
+}
+
+TEST(FGOTest, MultiSdAmbiguitySurvivesDdReferenceChange) {
+    const NavigationData nav = makeSyntheticGpsNavigation(3);
+    const Vector3d rover_position(1113194.0, -4841695.0, 3985350.0);
+    const Vector3d base_position =
+        rover_position + Vector3d(-320.0, 180.0, 45.0);
+
+    const std::vector<std::array<double, 3>> zero_bias =
+        {{0.0, 0.0, 0.0}};
+    const auto probe_rover = makeCmcObservationEpochsThreeSat(
+        nav, rover_position, zero_bias, 1.0);
+    const auto probe_base = makeCmcObservationEpochsThreeSat(
+        nav, base_position, zero_bias, 1.0);
+    FGOProcessor probe_processor(makeCmcTestConfig());
+    const auto probe_problem = probe_processor.buildDoubleDifferenceProblem(
+        probe_rover, probe_base, nav, base_position);
+    ASSERT_FALSE(probe_problem.double_difference_carrier_factors.empty());
+    const SatelliteId old_reference =
+        probe_problem.double_difference_carrier_factors.front()
+            .reference_satellite;
+
+    FGOProcessor::FGOConfig config = makeCmcTestConfig();
+    config.use_multisd_ambiguities = true;
+    config.cmc_aware_reference_selection = true;
+    config.code_minus_carrier_jump_threshold_m = 1000.0;
+    config.code_minus_carrier_level_threshold_m = 0.4;
+    config.code_minus_carrier_warmup_epochs = 3;
+
+    std::vector<std::array<double, 3>> base_bias(
+        4, std::array<double, 3>{0.0, 0.0, 0.0});
+    base_bias[3][static_cast<std::size_t>(old_reference.prn) - 1] = 1.0;
+    const std::vector<std::array<double, 3>> rover_bias(
+        4, std::array<double, 3>{0.0, 0.0, 0.0});
+    const auto rover_epochs = makeCmcObservationEpochsThreeSat(
+        nav, rover_position, rover_bias, 1.0);
+    const auto base_epochs = makeCmcObservationEpochsThreeSat(
+        nav, base_position, base_bias, 1.0);
+
+    FGOProcessor processor(config);
+    const auto problem = processor.buildDoubleDifferenceProblem(
+        rover_epochs, base_epochs, nav, base_position);
+
+    const FGOProcessor::DoubleDifferenceCarrierFactor* switched = nullptr;
+    for (const auto& factor : problem.double_difference_carrier_factors) {
+        EXPECT_TRUE(factor.use_ambiguity_difference);
+        EXPECT_LT(factor.ambiguity_index, problem.ambiguity_states.size());
+        EXPECT_LT(factor.reference_ambiguity_index,
+                  problem.ambiguity_states.size());
+        EXPECT_NE(factor.ambiguity_index, factor.reference_ambiguity_index);
+        if (factor.epoch_index == 3) {
+            switched = &factor;
+        }
+    }
+    ASSERT_NE(switched, nullptr);
+    EXPECT_FALSE(switched->reference_satellite == old_reference);
+
+    // The satellite that remains the target after the reference switch must
+    // point to the exact same SD ambiguity state used in the prior epoch.
+    // A DD-keyed graph would allocate a new state here solely because the
+    // reference changed.
+    bool found_prior_state = false;
+    for (const auto& factor : problem.double_difference_carrier_factors) {
+        if (factor.epoch_index != 2) {
+            continue;
+        }
+        if (factor.satellite == switched->satellite) {
+            EXPECT_EQ(factor.ambiguity_index, switched->ambiguity_index);
+            found_prior_state = true;
+        } else if (factor.reference_satellite == switched->satellite) {
+            EXPECT_EQ(factor.reference_ambiguity_index,
+                      switched->ambiguity_index);
+            found_prior_state = true;
+        }
+    }
+    EXPECT_TRUE(found_prior_state);
+    for (const auto& ambiguity : problem.ambiguity_states) {
+        EXPECT_FALSE(ambiguity.is_double_difference);
     }
 }
 

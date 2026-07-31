@@ -92,6 +92,9 @@ struct Options {
     double max_float_position_jump_m = 0.0;
     int min_fixed_ambiguities = 4;
     int max_lambda_ambiguities = 12;
+    int lambda_top_k_candidates = 2;
+    double lambda_min_bootstrapped_success_rate = 0.0;
+    double lambda_max_adop_cycles = 0.0;
     bool use_carrier_phase_factors = false;
     bool fix_ambiguities = false;
     bool fix_all_ambiguities = false;
@@ -110,6 +113,7 @@ struct Options {
     bool use_velocity_states = false;
     bool use_velocity_motion_factors = false;
     bool use_ambiguity_between_factors = false;
+    bool use_multisd_ambiguities = false;
     bool linearize_double_difference_factors_at_seed = false;
     bool dd_ambiguity_per_epoch = false;
     bool no_ambiguity_priors = false;
@@ -181,6 +185,9 @@ void printUsage(const char* program_name) {
         << "  --min-fixed-ambiguities <n>   Min accepted ambiguities before fixed pass (default: 4)\n"
         << "  --lambda-ratio-threshold <v>  LAMBDA ratio threshold (default: 3)\n"
         << "  --max-lambda-ambiguities <n>  Max ambiguity states passed to LAMBDA (default: 12)\n"
+        << "  --lambda-top-k <n>            Bounded LAMBDA hypotheses, 2..32 (default: 2)\n"
+        << "  --lambda-min-success <p>      Bootstrapped success-rate gate; 0 disables\n"
+        << "  --lambda-max-adop <cycles>    ADOP gate in cycles; 0 disables\n"
         << "  --max-tdcp-gap <s>            Max adjacent epoch gap for TDCP (default: 2)\n"
         << "  --base-match-tolerance <s>    Max rover/base epoch gap for DD factors (default: 0.02)\n"
         << "  --base-interpolation-max-gap <s>\n"
@@ -210,6 +217,7 @@ void printUsage(const char* program_name) {
         << "                                Keep optimized float positions in output\n"
         << "  --no-partial-lambda-ambiguity-fix\n"
         << "                                Disable partial LAMBDA retry with fewer candidates\n"
+        << "  --multisd-ambiguities         Use reference-independent SD states and BSD LAMBDA\n"
         << "  --integer-constrained-reoptimization\n"
         << "                                Re-optimize each accepted integer hypothesis and\n"
         << "                                reject it if the original active-graph cost worsens\n"
@@ -526,6 +534,13 @@ Options parseArguments(int argc, char* argv[]) {
             options.lambda_ratio_threshold = std::stod(argv[++i]);
         } else if (arg == "--max-lambda-ambiguities" && i + 1 < argc) {
             options.max_lambda_ambiguities = std::stoi(argv[++i]);
+        } else if (arg == "--lambda-top-k" && i + 1 < argc) {
+            options.lambda_top_k_candidates = std::stoi(argv[++i]);
+        } else if (arg == "--lambda-min-success" && i + 1 < argc) {
+            options.lambda_min_bootstrapped_success_rate =
+                std::stod(argv[++i]);
+        } else if (arg == "--lambda-max-adop" && i + 1 < argc) {
+            options.lambda_max_adop_cycles = std::stod(argv[++i]);
         } else if (arg == "--max-tdcp-gap" && i + 1 < argc) {
             options.max_tdcp_gap_s = std::stod(argv[++i]);
         } else if (arg == "--base-match-tolerance" && i + 1 < argc) {
@@ -579,6 +594,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.integer_constrained_max_iterations = std::stoi(argv[++i]);
         } else if (arg == "--no-partial-lambda-ambiguity-fix") {
             options.use_partial_lambda_ambiguity_fix = false;
+        } else if (arg == "--multisd-ambiguities") {
+            options.use_multisd_ambiguities = true;
         } else if (arg == "--no-pseudorange-factors") {
             options.no_pseudorange_factors = true;
         } else if (arg == "--no-dd-factors") {
@@ -722,6 +739,17 @@ Options parseArguments(int argc, char* argv[]) {
     }
     if (options.max_lambda_ambiguities < 0) {
         argumentError("--max-lambda-ambiguities must be non-negative", argv[0]);
+    }
+    if (options.lambda_top_k_candidates < 2 ||
+        options.lambda_top_k_candidates > 32) {
+        argumentError("--lambda-top-k must be in [2, 32]", argv[0]);
+    }
+    if (options.lambda_min_bootstrapped_success_rate < 0.0 ||
+        options.lambda_min_bootstrapped_success_rate > 1.0) {
+        argumentError("--lambda-min-success must be in [0, 1]", argv[0]);
+    }
+    if (options.lambda_max_adop_cycles < 0.0) {
+        argumentError("--lambda-max-adop must be non-negative", argv[0]);
     }
     if (options.max_tdcp_gap_s < 0.0) {
         argumentError("--max-tdcp-gap must be non-negative", argv[0]);
@@ -1824,6 +1852,14 @@ void writeSummaryJson(const Options& options,
            << ",\n";
     output << "  \"use_epoch_lambda_fixed_output\": "
            << jsonBool(options.use_epoch_lambda_fixed_output) << ",\n";
+    output << "  \"use_multisd_ambiguities\": "
+           << jsonBool(options.use_multisd_ambiguities) << ",\n";
+    output << "  \"lambda_top_k_candidates\": "
+           << options.lambda_top_k_candidates << ",\n";
+    output << "  \"lambda_min_bootstrapped_success_rate\": "
+           << options.lambda_min_bootstrapped_success_rate << ",\n";
+    output << "  \"lambda_max_adop_cycles\": "
+           << options.lambda_max_adop_cycles << ",\n";
     output << "  \"use_integer_constrained_reoptimization\": "
            << jsonBool(options.use_integer_constrained_reoptimization) << ",\n";
     output << "  \"integer_constrained_prior_sigma_cycles\": "
@@ -1917,6 +1953,9 @@ void writeSummaryJson(const Options& options,
            << diagnostics.double_difference_pseudorange_factors << ",\n";
     output << "  \"double_difference_carrier_factors\": "
            << diagnostics.double_difference_carrier_factors << ",\n";
+    output << "  \"multisd_carrier_factors\": "
+           << diagnostics.multisd_carrier_factors
+           << ",\n";
     output << "  \"ambiguity_states\": " << diagnostics.ambiguity_states << ",\n";
     output << "  \"ambiguity_fix_candidates\": " << diagnostics.ambiguity_fix_candidates << ",\n";
     output << "  \"lambda_ambiguity_candidates\": "
@@ -1943,6 +1982,12 @@ void writeSummaryJson(const Options& options,
            << jsonBool(diagnostics.partial_lambda_ambiguity_fix_used) << ",\n";
     output << "  \"lambda_ambiguity_ratio\": "
            << diagnostics.lambda_ambiguity_ratio << ",\n";
+    output << "  \"lambda_bootstrapped_success_rate\": "
+           << diagnostics.lambda_bootstrapped_success_rate << ",\n";
+    output << "  \"lambda_adop_cycles\": "
+           << diagnostics.lambda_adop_cycles << ",\n";
+    output << "  \"lambda_top_k_generated\": "
+           << diagnostics.lambda_top_k_generated << ",\n";
     output << "  \"fixed_ambiguities\": " << diagnostics.fixed_ambiguities << ",\n";
     output << "  \"fixed_solution\": " << jsonBool(diagnostics.fixed_solution) << ",\n";
     output << "  \"tdcp_candidate_pairs\": " << diagnostics.tdcp_candidate_pairs << ",\n";
@@ -3364,8 +3409,13 @@ int main(int argc, char* argv[]) {
         config.ambiguity_fix_max_fractional_cycles =
             options.ambiguity_fix_threshold_cycles;
         config.lambda_ratio_threshold = options.lambda_ratio_threshold;
+        config.lambda_top_k_candidates = options.lambda_top_k_candidates;
+        config.lambda_min_bootstrapped_success_rate =
+            options.lambda_min_bootstrapped_success_rate;
+        config.lambda_max_adop_cycles = options.lambda_max_adop_cycles;
         config.use_epoch_lambda_fixed_output =
-            options.use_epoch_lambda_fixed_output;
+            options.use_epoch_lambda_fixed_output &&
+            !options.use_multisd_ambiguities;
         config.use_integer_constrained_reoptimization =
             options.use_integer_constrained_reoptimization;
         config.integer_constrained_prior_sigma_cycles =
@@ -3411,6 +3461,7 @@ int main(int argc, char* argv[]) {
             options.use_velocity_motion_factors && options.use_velocity_states;
         config.use_ambiguity_between_factors =
             options.use_ambiguity_between_factors;
+        config.use_multisd_ambiguities = options.use_multisd_ambiguities;
         config.linearize_double_difference_factors_at_seed =
             options.linearize_double_difference_factors_at_seed;
         config.reset_double_difference_ambiguities_each_epoch =
@@ -3581,6 +3632,13 @@ int main(int argc, char* argv[]) {
                       << "\n";
             std::cout << "LAMBDA ratio: "
                       << result.diagnostics.lambda_ambiguity_ratio << "\n";
+            std::cout << "LAMBDA top-K generated: "
+                      << result.diagnostics.lambda_top_k_generated << "\n";
+            std::cout << "LAMBDA bootstrapped success rate: "
+                      << result.diagnostics.lambda_bootstrapped_success_rate
+                      << "\n";
+            std::cout << "LAMBDA ADOP (cycles): "
+                      << result.diagnostics.lambda_adop_cycles << "\n";
             std::cout << "Fixed ambiguities: "
                       << result.diagnostics.fixed_ambiguities << "\n";
             std::cout << "Fixed solution: "

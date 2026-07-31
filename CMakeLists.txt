@@ -14,6 +14,10 @@ if(MSVC OR (WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
     # (MSVC is false), but the toolchain still resolves <cmath>/<math.h>
     # to the MSVC STL headers, which gate M_PI on this same macro.
     add_compile_definitions(_USE_MATH_DEFINES NOMINMAX)
+    # Ninja does not inherit Visual Studio project's exception defaults.
+    # The library and GoogleTest both use C++ exceptions, so compiling
+    # without unwind semantics can crash the focused test shards at startup.
+    add_compile_options(/EHsc)
 endif()
 include(CTest)
 include(GNUInstallDirs)

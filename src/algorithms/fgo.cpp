@@ -494,6 +494,8 @@ double varerrDdSigma(bool is_pseudorange, double el_pair_rad, double dt_s,
 
 struct FixedAmbiguityConstraint {
     std::size_t ambiguity_index = 0;
+    std::size_t reference_ambiguity_index =
+        std::numeric_limits<std::size_t>::max();
     double fixed_ambiguity_m = 0.0;
     int fixed_cycles = 0;
     double residual_cycles = 0.0;
@@ -547,6 +549,21 @@ struct DoubleDifferenceSegmentKey {
     bool operator<(const DoubleDifferenceSegmentKey& other) const {
         return std::tie(satellite, reference_satellite, signal) <
                std::tie(other.satellite, other.reference_satellite, other.signal);
+    }
+};
+
+struct SingleDifferenceAmbiguityKey {
+    SatelliteId satellite;
+    SignalType signal = SignalType::GPS_L1CA;
+    std::size_t rover_ambiguity_index = 0;
+    std::size_t integrity_segment_index = 0;
+
+    bool operator<(const SingleDifferenceAmbiguityKey& other) const {
+        return std::tie(satellite, signal, rover_ambiguity_index,
+                        integrity_segment_index) <
+               std::tie(other.satellite, other.signal,
+                        other.rover_ambiguity_index,
+                        other.integrity_segment_index);
     }
 };
 
@@ -1573,6 +1590,10 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
     std::map<DoubleDifferenceAmbiguityKey, ActiveCarrierSegment>
         active_dd_segments;
     std::map<DoubleDifferenceSegmentKey, std::size_t> next_dd_segment_indices;
+    std::map<SingleDifferenceAmbiguityKey, ActiveCarrierSegment>
+        active_sd_segments;
+    std::map<CarrierKey, std::size_t> next_sd_segment_indices;
+    std::map<CarrierKey, std::size_t> sd_integrity_segment_indices;
     using DdFactorKey =
         std::tuple<std::size_t, SatelliteId, SatelliteId, SignalType>;
     std::map<SingleDifferenceReferenceKey, SatelliteId> sd_reference_by_group;
@@ -1777,6 +1798,9 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                     }
                 }
             }
+        }
+        for (const auto& key : cmc_jump_reset_this_epoch) {
+            ++sd_integrity_segment_indices[key];
         }
 
         if (rover_pseudorange_it != rover_pseudoranges_by_epoch.end()) {
@@ -2114,7 +2138,8 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
 
                 DoubleDifferenceCarrierFactor factor;
                 factor.epoch_index = epoch_index;
-                factor.use_ambiguity_difference = false;
+                factor.use_ambiguity_difference =
+                    config_.use_multisd_ambiguities;
                 factor.satellite = satellite->satellite;
                 factor.reference_satellite = reference->satellite;
                 factor.signal = satellite->signal;
@@ -2195,6 +2220,58 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                     // gap checks above already perform (multipath jump
                     // breaks the integer ambiguity).
                     start_new_segment = true;
+                }
+
+                if (config_.use_multisd_ambiguities) {
+                    auto get_or_create_sd_ambiguity =
+                        [&](const CarrierPhaseFactor& rover,
+                            const PreparedCarrierObservation& base)
+                            -> std::size_t {
+                        const SingleDifferenceAmbiguityKey key{
+                            rover.satellite, rover.signal,
+                            rover.ambiguity_index,
+                            sd_integrity_segment_indices[CarrierKey{
+                                rover.satellite, rover.signal}]};
+                        auto it = active_sd_segments.find(key);
+                        if (it != active_sd_segments.end()) {
+                            it->second.last_epoch_index = epoch_index;
+                            return it->second.ambiguity_index;
+                        }
+
+                        AmbiguityState ambiguity;
+                        ambiguity.satellite = rover.satellite;
+                        ambiguity.reference_satellite = SatelliteId{};
+                        ambiguity.signal = rover.signal;
+                        ambiguity.is_double_difference = false;
+                        ambiguity.segment_index =
+                            next_sd_segment_indices[CarrierKey{
+                                rover.satellite, rover.signal}]++;
+                        ambiguity.wavelength_m = rover.wavelength_m;
+                        // Carrier-minus-code removes the geometric range and
+                        // clock terms from the rover-base SD seed. The noisy
+                        // code only initializes the graph; carrier factors
+                        // determine the optimized ambiguity.
+                        ambiguity.initial_ambiguity_m =
+                            (rover.corrected_carrier_m -
+                             base.corrected_carrier_m) -
+                            (rover.corrected_pseudorange_m -
+                             base.corrected_pseudorange_m);
+                        const std::size_t index =
+                            problem.ambiguity_states.size();
+                        problem.ambiguity_states.push_back(ambiguity);
+                        active_sd_segments.emplace(
+                            key, ActiveCarrierSegment{index, epoch_index});
+                        return index;
+                    };
+
+                    factor.ambiguity_index = get_or_create_sd_ambiguity(
+                        *satellite, base_satellite);
+                    factor.reference_ambiguity_index =
+                        get_or_create_sd_ambiguity(*reference,
+                                                   base_reference);
+                    problem.double_difference_carrier_factors.push_back(
+                        factor);
+                    continue;
                 }
 
                 if (start_new_segment) {
@@ -2494,6 +2571,13 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
         problem.double_difference_pseudorange_factors.size();
     result.diagnostics.double_difference_carrier_factors =
         problem.double_difference_carrier_factors.size();
+    result.diagnostics.multisd_carrier_factors =
+        static_cast<std::size_t>(std::count_if(
+            problem.double_difference_carrier_factors.begin(),
+            problem.double_difference_carrier_factors.end(),
+            [](const DoubleDifferenceCarrierFactor& factor) {
+                return factor.use_ambiguity_difference;
+            }));
     result.diagnostics.ambiguity_between_factors =
         problem.ambiguity_between_factors.size();
     result.diagnostics.ambiguity_states = problem.ambiguity_states.size();
@@ -3353,11 +3437,25 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
                     }
                     const int ambiguity_col =
                         base_state_size + static_cast<int>(fixed.ambiguity_index);
+                    const bool use_difference =
+                        fixed.reference_ambiguity_index <
+                        problem.ambiguity_states.size();
+                    const int reference_col = use_difference
+                        ? base_state_size + static_cast<int>(
+                              fixed.reference_ambiguity_index)
+                        : -1;
+                    const double current_ambiguity =
+                        output.state(ambiguity_col) -
+                        (use_difference ? output.state(reference_col) : 0.0);
                     const double weighted_residual =
-                        (fixed.fixed_ambiguity_m - output.state(ambiguity_col)) *
+                        (fixed.fixed_ambiguity_m - current_ambiguity) *
                         fixed_weight;
-                    add_weighted_row({{ambiguity_col, fixed_weight}},
-                                     weighted_residual);
+                    std::vector<std::pair<int, double>> jacobian = {
+                        {ambiguity_col, fixed_weight}};
+                    if (use_difference) {
+                        jacobian.emplace_back(reference_col, -fixed_weight);
+                    }
+                    add_weighted_row(jacobian, weighted_residual);
                 }
             }
 
@@ -3440,7 +3538,9 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
                 if (cost_converged()) {
                     store_current_linearization();
                     if (config_.collect_lambda_debug ||
-                        config_.use_epoch_lambda_fixed_output) {
+                        config_.use_epoch_lambda_fixed_output ||
+                        (config_.fix_ambiguities &&
+                         config_.use_lambda_ambiguity_fix)) {
                         output.sparse_normal_matrix = std::move(sparse_normal);
                     }
                     output.iterations = iter;
@@ -3470,7 +3570,9 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
                     damping *= 10.0;
                 }
                 if (config_.collect_lambda_debug ||
-                    config_.use_epoch_lambda_fixed_output) {
+                    config_.use_epoch_lambda_fixed_output ||
+                    (config_.fix_ambiguities &&
+                     config_.use_lambda_ambiguity_fix)) {
                     current_sparse_normal = std::move(sparse_normal);
                 }
             } else {
@@ -3510,7 +3612,9 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
             store_current_linearization();
             if (use_sparse_normal &&
                 (config_.collect_lambda_debug ||
-                 config_.use_epoch_lambda_fixed_output)) {
+                 config_.use_epoch_lambda_fixed_output ||
+                 (config_.fix_ambiguities &&
+                  config_.use_lambda_ambiguity_fix))) {
                 output.sparse_normal_matrix = std::move(current_sparse_normal);
             }
             const bool update_converged =
@@ -3553,6 +3657,16 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
                             return ambiguity.is_double_difference;
                         });
         auto is_fix_candidate = [&](const AmbiguityState& ambiguity) -> bool {
+            // A rover-base SD ambiguity contains a common receiver gauge.
+            // It is not an integer-fix candidate by itself. MultiSD fixing
+            // must first project the SD posterior to independent BSD/DD
+            // combinations; until that projection is available, keep this
+            // path float-only instead of silently applying invalid integer
+            // constraints to gauge-dependent states.
+            if (config_.use_multisd_ambiguities &&
+                !ambiguity.is_double_difference) {
+                return false;
+            }
             if (config_.prefer_double_difference_ambiguity_fixing &&
                 has_double_difference_ambiguities) {
                 return ambiguity.is_double_difference;
@@ -3593,48 +3707,143 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
         };
 
         auto build_lambda_constraints = [&]() -> bool {
-            if (!config_.use_lambda_ambiguity_fix ||
-                optimization.normal_matrix.rows() != state_size) {
+            if (!config_.use_lambda_ambiguity_fix) {
                 return false;
             }
 
-            const Eigen::MatrixXd float_covariance =
-                pseudoInverse(optimization.normal_matrix);
-            if (float_covariance.rows() != state_size) {
+            Eigen::MatrixXd ambiguity_state_covariance =
+                Eigen::MatrixXd::Zero(ambiguity_count, ambiguity_count);
+            if (optimization.normal_matrix.rows() == state_size) {
+                const Eigen::MatrixXd float_covariance =
+                    pseudoInverse(optimization.normal_matrix);
+                if (float_covariance.rows() != state_size) {
+                    return false;
+                }
+                ambiguity_state_covariance = float_covariance.block(
+                    base_state_size, base_state_size,
+                    ambiguity_count, ambiguity_count);
+            } else if (optimization.sparse_normal_matrix.rows() == state_size) {
+                Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> solver;
+                double max_diagonal = 0.0;
+                for (int i = 0; i < state_size; ++i) {
+                    max_diagonal = std::max(
+                        max_diagonal,
+                        std::abs(optimization.sparse_normal_matrix.coeff(i, i)));
+                }
+                solver.setShift(std::max(1e-12, max_diagonal * 1e-12));
+                solver.compute(optimization.sparse_normal_matrix);
+                if (solver.info() != Eigen::Success) {
+                    return false;
+                }
+                Eigen::VectorXd unit = Eigen::VectorXd::Zero(state_size);
+                for (int col = 0; col < ambiguity_count; ++col) {
+                    unit.setZero();
+                    unit(base_state_size + col) = 1.0;
+                    const Eigen::VectorXd covariance_col = solver.solve(unit);
+                    if (solver.info() != Eigen::Success ||
+                        !covariance_col.allFinite()) {
+                        return false;
+                    }
+                    ambiguity_state_covariance.col(col) =
+                        covariance_col.segment(base_state_size,
+                                               ambiguity_count);
+                }
+            } else {
                 return false;
             }
+            ambiguity_state_covariance =
+                0.5 * (ambiguity_state_covariance +
+                       ambiguity_state_covariance.transpose());
 
             struct LambdaCandidate {
                 int ambiguity_index = 0;
+                int reference_ambiguity_index = -1;
                 double variance_cycles = 0.0;
                 double fractional_cycles = 0.0;
             };
 
             std::vector<LambdaCandidate> candidates;
             candidates.reserve(problem.ambiguity_states.size());
-            for (int i = 0; i < ambiguity_count; ++i) {
-                const auto& ambiguity = problem.ambiguity_states[i];
-                if (ambiguity.wavelength_m <= 0.0 || !is_fix_candidate(ambiguity)) {
-                    continue;
+            auto append_candidate = [&](int ambiguity_index,
+                                        int reference_ambiguity_index) {
+                const auto& ambiguity =
+                    problem.ambiguity_states[ambiguity_index];
+                if (ambiguity.wavelength_m <= 0.0) {
+                    return;
                 }
-
-                const int col = base_state_size + i;
-                const double variance_m2 = float_covariance(col, col);
+                const int col = base_state_size + ambiguity_index;
+                double ambiguity_m = optimization.state(col);
+                double variance_m2 = ambiguity_state_covariance(
+                    ambiguity_index, ambiguity_index);
+                if (reference_ambiguity_index >= 0) {
+                    const auto& reference =
+                        problem.ambiguity_states[reference_ambiguity_index];
+                    if (reference.wavelength_m <= 0.0 ||
+                        std::abs(reference.wavelength_m -
+                                 ambiguity.wavelength_m) > 1e-9) {
+                        return;
+                    }
+                    const int reference_col =
+                        base_state_size + reference_ambiguity_index;
+                    ambiguity_m -= optimization.state(reference_col);
+                    variance_m2 += ambiguity_state_covariance(
+                                       reference_ambiguity_index,
+                                       reference_ambiguity_index) -
+                                   2.0 * ambiguity_state_covariance(
+                                             ambiguity_index,
+                                             reference_ambiguity_index);
+                } else if (!is_fix_candidate(ambiguity)) {
+                    return;
+                }
                 const double variance_cycles =
-                    variance_m2 / (ambiguity.wavelength_m * ambiguity.wavelength_m);
+                    variance_m2 /
+                    (ambiguity.wavelength_m * ambiguity.wavelength_m);
                 const double ambiguity_cycles =
-                    optimization.state(col) / ambiguity.wavelength_m;
-                if (!std::isfinite(variance_cycles) || variance_cycles <= 0.0 ||
+                    ambiguity_m / ambiguity.wavelength_m;
+                if (!std::isfinite(variance_cycles) ||
+                    variance_cycles <= 0.0 ||
                     !std::isfinite(ambiguity_cycles)) {
-                    continue;
+                    return;
                 }
-
-                const double nearest_cycles = std::round(ambiguity_cycles);
                 LambdaCandidate candidate;
-                candidate.ambiguity_index = i;
+                candidate.ambiguity_index = ambiguity_index;
+                candidate.reference_ambiguity_index =
+                    reference_ambiguity_index;
                 candidate.variance_cycles = variance_cycles;
-                candidate.fractional_cycles = std::abs(ambiguity_cycles - nearest_cycles);
+                candidate.fractional_cycles = std::abs(
+                    ambiguity_cycles - std::round(ambiguity_cycles));
                 candidates.push_back(candidate);
+            };
+
+            if (config_.use_multisd_ambiguities) {
+                std::size_t latest_epoch = 0;
+                for (const auto& factor :
+                     problem.double_difference_carrier_factors) {
+                    latest_epoch = std::max(latest_epoch,
+                                            factor.epoch_index);
+                }
+                std::set<std::pair<std::size_t, std::size_t>> seen;
+                for (const auto& factor :
+                     problem.double_difference_carrier_factors) {
+                    if (factor.epoch_index != latest_epoch ||
+                        !factor.use_ambiguity_difference ||
+                        factor.ambiguity_index >=
+                            problem.ambiguity_states.size() ||
+                        factor.reference_ambiguity_index >=
+                            problem.ambiguity_states.size() ||
+                        !seen.emplace(factor.ambiguity_index,
+                                      factor.reference_ambiguity_index)
+                             .second) {
+                        continue;
+                    }
+                    append_candidate(
+                        static_cast<int>(factor.ambiguity_index),
+                        static_cast<int>(factor.reference_ambiguity_index));
+                }
+            } else {
+                for (int i = 0; i < ambiguity_count; ++i) {
+                    append_candidate(i, -1);
+                }
             }
 
             std::stable_sort(candidates.begin(),
@@ -3671,13 +3880,38 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
                     const int row_col = base_state_size + ambiguity_row;
                     float_ambiguities(row) =
                         optimization.state(row_col) / row_state.wavelength_m;
+                    if (candidates[row].reference_ambiguity_index >= 0) {
+                        const int reference_row_col =
+                            base_state_size +
+                            candidates[row].reference_ambiguity_index;
+                        float_ambiguities(row) -=
+                            optimization.state(reference_row_col) /
+                            row_state.wavelength_m;
+                    }
                     for (int col = 0; col < n; ++col) {
                         const int ambiguity_col = candidates[col].ambiguity_index;
                         const auto& col_state = problem.ambiguity_states[ambiguity_col];
-                        const int state_col = base_state_size + ambiguity_col;
-                        ambiguity_covariance(row, col) =
-                            float_covariance(row_col, state_col) /
-                            (row_state.wavelength_m * col_state.wavelength_m);
+                        double covariance_m2 = ambiguity_state_covariance(
+                            ambiguity_row, ambiguity_col);
+                        const int reference_row =
+                            candidates[row].reference_ambiguity_index;
+                        const int reference_col =
+                            candidates[col].reference_ambiguity_index;
+                        if (reference_row >= 0) {
+                            covariance_m2 -= ambiguity_state_covariance(
+                                reference_row, ambiguity_col);
+                        }
+                        if (reference_col >= 0) {
+                            covariance_m2 -= ambiguity_state_covariance(
+                                ambiguity_row, reference_col);
+                        }
+                        if (reference_row >= 0 && reference_col >= 0) {
+                            covariance_m2 += ambiguity_state_covariance(
+                                reference_row, reference_col);
+                        }
+                        ambiguity_covariance(row, col) = covariance_m2 /
+                            (row_state.wavelength_m *
+                             col_state.wavelength_m);
                     }
                 }
 
@@ -3691,11 +3925,46 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
                 Eigen::VectorXd fixed_ambiguities;
                 double lambda_ratio = 0.0;
                 ++result.diagnostics.lambda_ambiguity_attempts;
-                const bool lambda_solved =
-                    lambdaSearch(float_ambiguities,
-                                 ambiguity_covariance,
-                                 fixed_ambiguities,
-                                 lambda_ratio);
+                LambdaCandidateDiagnostics lambda_diagnostics;
+                const int top_k =
+                    std::clamp(config_.lambda_top_k_candidates, 2, 32);
+                const bool lambda_solved = lambdaSearchTopK(
+                    float_ambiguities, ambiguity_covariance, top_k,
+                    lambda_diagnostics);
+                if (lambda_solved &&
+                    lambda_diagnostics.candidates.cols() >= 2 &&
+                    lambda_diagnostics.squared_residuals.size() >= 2) {
+                    fixed_ambiguities =
+                        lambda_diagnostics.candidates.col(0);
+                    const double best =
+                        lambda_diagnostics.squared_residuals(0);
+                    const double second =
+                        lambda_diagnostics.squared_residuals(1);
+                    lambda_ratio = best > 0.0
+                        ? second / best
+                        : std::numeric_limits<double>::infinity();
+                    result.diagnostics.lambda_top_k_generated =
+                        std::max(result.diagnostics.lambda_top_k_generated,
+                                 static_cast<std::size_t>(
+                                     lambda_diagnostics.candidates.cols()));
+                    result.diagnostics.lambda_bootstrapped_success_rate =
+                        std::max(
+                            result.diagnostics
+                                .lambda_bootstrapped_success_rate,
+                            lambda_diagnostics
+                                .bootstrapped_success_rate);
+                }
+                double adop_cycles =
+                    std::numeric_limits<double>::quiet_NaN();
+                Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eigensolver(
+                    ambiguity_covariance);
+                if (eigensolver.info() == Eigen::Success &&
+                    (eigensolver.eigenvalues().array() > 0.0).all()) {
+                    adop_cycles = std::exp(
+                        eigensolver.eigenvalues().array().log().sum() /
+                        (2.0 * static_cast<double>(n)));
+                    result.diagnostics.lambda_adop_cycles = adop_cycles;
+                }
                 if (lambda_solved) {
                     result.diagnostics.lambda_ambiguity_fix_solved = true;
                 }
@@ -3704,9 +3973,16 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
                         std::max(result.diagnostics.lambda_ambiguity_ratio,
                                  lambda_ratio);
                 }
-                if (!lambda_solved || !std::isfinite(lambda_ratio) ||
+                if (!lambda_solved || fixed_ambiguities.size() != n ||
+                    !std::isfinite(lambda_ratio) ||
                     (config_.lambda_ratio_threshold > 0.0 &&
-                     lambda_ratio < config_.lambda_ratio_threshold)) {
+                     lambda_ratio < config_.lambda_ratio_threshold) ||
+                    (config_.lambda_min_bootstrapped_success_rate > 0.0 &&
+                     lambda_diagnostics.bootstrapped_success_rate <
+                         config_.lambda_min_bootstrapped_success_rate) ||
+                    (config_.lambda_max_adop_cycles > 0.0 &&
+                     (!std::isfinite(adop_cycles) ||
+                      adop_cycles > config_.lambda_max_adop_cycles))) {
                     return false;
                 }
 
@@ -3721,6 +3997,11 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
 
                     FixedAmbiguityConstraint fixed;
                     fixed.ambiguity_index = static_cast<std::size_t>(ambiguity_index);
+                    if (candidates[i].reference_ambiguity_index >= 0) {
+                        fixed.reference_ambiguity_index =
+                            static_cast<std::size_t>(
+                                candidates[i].reference_ambiguity_index);
+                    }
                     fixed.fixed_cycles = static_cast<int>(fixed_cycles_d);
                     fixed.fixed_ambiguity_m = fixed_cycles_d * ambiguity.wavelength_m;
                     fixed.residual_cycles = residual_cycles;
@@ -3763,7 +4044,8 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
 
         const bool can_attempt_lambda =
             config_.use_lambda_ambiguity_fix &&
-            optimization.normal_matrix.rows() == state_size;
+            (optimization.normal_matrix.rows() == state_size ||
+             optimization.sparse_normal_matrix.rows() == state_size);
         const bool lambda_constraints_built =
             can_attempt_lambda && build_lambda_constraints();
         if (!lambda_constraints_built &&
@@ -4293,7 +4575,9 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
             std::find_if(fixed_constraints.begin(),
                          fixed_constraints.end(),
                          [i](const FixedAmbiguityConstraint& fixed) {
-                             return fixed.ambiguity_index == i;
+                             return fixed.ambiguity_index == i &&
+                                    fixed.reference_ambiguity_index ==
+                                        std::numeric_limits<std::size_t>::max();
                          });
         if (fixed_it != fixed_constraints.end()) {
             estimate.is_fixed = true;

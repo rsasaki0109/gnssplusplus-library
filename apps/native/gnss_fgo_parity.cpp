@@ -79,6 +79,10 @@ struct Args {
     bool no_code_align = false;  // MF hygiene ablation: disable secondary-band code alignment
     bool dd_resid = false;       // per-signal DD residuals at the reference trajectory (no solve)
     bool partial_ar = false;     // MF-AR step 2: partial AR in the fixed-lag LAMBDA
+    bool multisd = false;        // reference-independent SD ambiguity graph
+    int lambda_top_k = 0;
+    double lambda_min_success = -1.0;
+    double lambda_max_adop = -1.0;
     bool integer_constrained_reoptimization = false;
     double integer_constrained_prior_sigma_cycles = -1.0;
     double integer_constrained_cost_tolerance = -1.0;
@@ -254,6 +258,22 @@ Args parseArgs(int argc, char** argv) {
         }
         if (a == "--integer-constrained-max-iterations" && i + 1 < argc) {
             args.integer_constrained_max_iterations = std::stoi(argv[++i]);
+            continue;
+        }
+        if (a == "--multisd") {
+            args.multisd = true;
+            continue;
+        }
+        if (a == "--lambda-top-k" && i + 1 < argc) {
+            args.lambda_top_k = std::stoi(argv[++i]);
+            continue;
+        }
+        if (a == "--lambda-min-success" && i + 1 < argc) {
+            args.lambda_min_success = std::stod(argv[++i]);
+            continue;
+        }
+        if (a == "--lambda-max-adop" && i + 1 < argc) {
+            args.lambda_max_adop = std::stod(argv[++i]);
             continue;
         }
         if (a == "--cp-hold-keep-imu-chain") {
@@ -768,6 +788,19 @@ libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
     if (args.partial_ar) {
         config.use_fixed_lag_partial_lambda = true;
     }
+    if (args.multisd) {
+        config.use_multisd_ambiguities = true;
+    }
+    if (args.lambda_top_k > 0) {
+        config.lambda_top_k_candidates = args.lambda_top_k;
+    }
+    if (args.lambda_min_success >= 0.0) {
+        config.lambda_min_bootstrapped_success_rate =
+            args.lambda_min_success;
+    }
+    if (args.lambda_max_adop >= 0.0) {
+        config.lambda_max_adop_cycles = args.lambda_max_adop;
+    }
     if (args.integer_constrained_reoptimization) {
         config.use_integer_constrained_reoptimization = true;
     }
@@ -1249,7 +1282,8 @@ libgnss::FGOProcessor::FGOResult run(const libgnss::FGOProcessor::FGOProblem& pr
     // output) so the fix comparison is apples-to-apples: the native backend's
     // per-epoch fixing and the GTSAM backend's per-epoch fixing both mark
     // epochs FIXED and snap positions to the fixed ambiguities.
-    config.use_epoch_lambda_fixed_output = use_lambda;
+    config.use_epoch_lambda_fixed_output =
+        use_lambda && !config.use_multisd_ambiguities;
     config.collect_lambda_debug = false;
     if (use_pose3) {
         // Milestone 2a (docs/gtsam_backend_design.md): key the GTSAM rover

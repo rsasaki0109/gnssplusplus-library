@@ -174,6 +174,36 @@ if(GTest_FOUND)
         Threads::Threads
     )
 
+    # Focused FGO shard: keeps MultiSD/reference-switch/LAMBDA development
+    # independent of the monolithic test executable and its application
+    # dependencies. This is intentionally the same source file so the shard
+    # and full CI suite cannot drift to different assertions.
+    add_executable(gnss_fgo_tests
+        test_fgo.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/solution.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/types.cpp
+    )
+
+    add_executable(gnss_fgo_multisd_smoke
+        fgo_multisd_smoke.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/solution.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/types.cpp
+    )
+    target_link_libraries(gnss_fgo_multisd_smoke
+        gnss_lib_noopt
+        Threads::Threads
+    )
+    target_compile_definitions(gnss_fgo_tests PRIVATE
+        GNSSPP_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+        GNSSPP_BINARY_DIR="${CMAKE_BINARY_DIR}"
+    )
+    target_link_libraries(gnss_fgo_tests
+        gnss_lib_noopt
+        GTest::GTest
+        GTest::Main
+        Threads::Threads
+    )
+
     # Add test to CTest
     add_test(NAME run_tests COMMAND gnss_run_tests)
     add_test(
@@ -191,6 +221,8 @@ if(GTest_FOUND)
                 --gtest_filter=*MadocaParity*:MadocaBridgeConfig.*
     )
     add_test(NAME integrity_tests COMMAND gnss_integrity_tests)
+    add_test(NAME fgo_tests COMMAND gnss_fgo_tests)
+    add_test(NAME fgo_multisd_smoke COMMAND gnss_fgo_multisd_smoke)
     add_test(
         NAME python_benchmark_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_benchmark_scripts.py

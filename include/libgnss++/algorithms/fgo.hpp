@@ -144,6 +144,14 @@ public:
         bool use_velocity_states = false;
         bool use_velocity_motion_factors = false;
         bool use_ambiguity_between_factors = false;
+        // Represent carrier ambiguities as reference-independent rover-base
+        // single differences keyed by (satellite, signal, rover carrier arc).
+        // DD carrier factors then connect two SD states as N_sat - N_ref.
+        // This preserves ambiguity continuity when the DD reference changes
+        // and is the state topology required by multi-epoch MultiSD AR.
+        // Default OFF until the BSD covariance projection and integer
+        // validator are enabled by the production RTK integration.
+        bool use_multisd_ambiguities = false;
         bool linearize_double_difference_factors_at_seed = false;
         bool reset_double_difference_ambiguities_each_epoch = false;
         bool use_inter_system_biases = true;
@@ -151,6 +159,13 @@ public:
         bool fix_ambiguities = false;
         bool prefer_double_difference_ambiguity_fixing = true;
         bool use_lambda_ambiguity_fix = true;
+        // Request a bounded multi-hypothesis LAMBDA search. Two preserves the
+        // legacy ratio-test behavior; larger values supply candidates for the
+        // causal/post-fit validator without rerunning decorrelation.
+        int lambda_top_k_candidates = 2;
+        // Covariance-only integer quality gates. Zero disables each gate.
+        double lambda_min_bootstrapped_success_rate = 0.0;
+        double lambda_max_adop_cycles = 0.0;
         bool use_epoch_lambda_fixed_output = false;
         bool use_partial_lambda_ambiguity_fix = true;
         // Independently re-optimize the active fixed-lag graph with the
@@ -1694,6 +1709,7 @@ public:
         std::size_t carrier_phase_factors = 0;
         std::size_t double_difference_pseudorange_factors = 0;
         std::size_t double_difference_carrier_factors = 0;
+        std::size_t multisd_carrier_factors = 0;
         std::size_t ambiguity_states = 0;
         std::size_t ambiguity_fix_candidates = 0;
         std::size_t lambda_ambiguity_candidates = 0;
@@ -1836,6 +1852,9 @@ public:
         double double_difference_carrier_residual_rms_m = 0.0;
         double fixed_ambiguity_residual_rms_cycles = 0.0;
         double lambda_ambiguity_ratio = 0.0;
+        double lambda_bootstrapped_success_rate = 0.0;
+        double lambda_adop_cycles = std::numeric_limits<double>::quiet_NaN();
+        std::size_t lambda_top_k_generated = 0;
     };
 
     struct AmbiguityEstimate {
