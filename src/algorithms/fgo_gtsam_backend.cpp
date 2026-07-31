@@ -3553,6 +3553,12 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                                         provisional_fixed_ant =
                                             Eigen::Vector3d(antennaOf(pose_i)) - pd;
                                         has_provisional_fixed_ant = true;
+                                        epoch_diagnostics[i].lambda_candidate_available = true;
+                                        epoch_diagnostics[i].lambda_candidate_position_ecef =
+                                            provisional_fixed_ant;
+                                        epoch_diagnostics[i]
+                                            .lambda_candidate_fixed_ambiguities = subset;
+                                        epoch_diagnostics[i].lambda_candidate_ratio = ratio;
                                         epoch_diagnostics[i].fixed_float_separation_m =
                                             (provisional_fixed_ant - Eigen::Vector3d(
                                                  antennaOf(pose_i))).norm();

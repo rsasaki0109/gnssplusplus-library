@@ -1966,6 +1966,13 @@ public:
         double ambiguity_variance_median_cycles2 = 0.0;
         double ambiguity_variance_max_cycles2 = 0.0;
         double imu_pose_correction_m = 0.0;
+        // Last position candidate produced by a successful LAMBDA search in
+        // this epoch, even when a later integrity/ratio decision leaves the
+        // epoch FLOAT. Diagnostic-only; never feeds the estimator.
+        bool lambda_candidate_available = false;
+        Vector3d lambda_candidate_position_ecef = Vector3d::Zero();
+        int lambda_candidate_fixed_ambiguities = 0;
+        double lambda_candidate_ratio = 0.0;
         bool ddpr_anchor_evaluated = false;
         bool ddpr_anchor_bootstrap_prior_applied = false;
         int ddpr_anchor_active_factors = 0;

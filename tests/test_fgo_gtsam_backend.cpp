@@ -2187,13 +2187,18 @@ TEST(FGOAmbiguityOutcomeTelemetryTest, HoldFallbackPreservesRatioRejection) {
     const auto result = processor.optimizeProblem(problem);
 
     ASSERT_EQ(result.epoch_diagnostics.size(), problem.epochs.size());
-    EXPECT_TRUE(std::any_of(
+    const auto rejected = std::find_if(
         result.epoch_diagnostics.begin(), result.epoch_diagnostics.end(),
         [](const FGOProcessor::FGOEpochDiagnostics& diagnostics) {
             return diagnostics.ar_outcome ==
                    FGOProcessor::AmbiguityResolutionOutcome::RatioRejected;
-        }))
+        });
+    ASSERT_NE(rejected, result.epoch_diagnostics.end())
         << "the held-ambiguity fallback must not overwrite a terminal ratio-test rejection";
+    EXPECT_TRUE(rejected->lambda_candidate_available);
+    EXPECT_GT(rejected->lambda_candidate_position_ecef.norm(), 1.0e6);
+    EXPECT_GT(rejected->lambda_candidate_fixed_ambiguities, 0);
+    EXPECT_TRUE(std::isfinite(rejected->lambda_candidate_ratio));
 }
 
 TEST(FGOAmbiguityOutcomeTelemetryTest, NoCarrierCandidatesRemainNoCandidates) {
