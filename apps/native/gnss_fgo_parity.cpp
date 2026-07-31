@@ -210,6 +210,7 @@ struct Args {
     bool low_count_ar = false;
     int low_count_ar_min = -1;        // >0: override low_count_min_candidates (default 4)
     double low_count_ar_ratio = -1.0; // >=0: override low_count_min_ratio (default 1.5); use --low-count-ratio 0 for "surplus alone"
+    bool src_shadow = false;    // opt-in SRC subset searches in attempt telemetry
     std::string dump_csv_path;  // debug: per-epoch CSV dump (tow/status/E-N-U err/position) for plotting
     // Opt-in FGOProblem cache (skips repeated RINEX parse + problem build
     // across validation runs on the SAME inputs/config). Default-off; when
@@ -234,6 +235,10 @@ Args parseArgs(int argc, char** argv) {
         }
         if (a == "--no-held-fix-label") {
             args.no_held_fix_label = true;
+            continue;
+        }
+        if (a == "--src-shadow") {
+            args.src_shadow = true;
             continue;
         }
         if (a == "--gici-par") {
@@ -686,8 +691,7 @@ libgnss::FGOProcessor::FGOConfig makeRealDataDdConfig() {
 // call, without duplicating this arg-to-config mapping logic.
 libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
     libgnss::FGOProcessor::FGOConfig config = makeRealDataDdConfig();
-    config.enable_src_shadow_telemetry =
-        !args.dump_csv_path.empty();
+    config.enable_src_shadow_telemetry = args.src_shadow;
     config.report_held_ambiguities_as_fixed = !args.no_held_fix_label;
     if (args.max_iters > 0) {
         config.max_iterations = args.max_iters;

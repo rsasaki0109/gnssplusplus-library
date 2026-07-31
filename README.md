@@ -152,7 +152,9 @@ propagated to a shadow ECEF position through the transformed
 position/ambiguity cross-covariance. It is not treated as a subset of original
 ambiguity indices and does not create integer constraints or alter the
 shipping solution. SRC shadow evaluation is default-off in the library and is
-enabled by this parity harness only when `--dump-csv` is requested.
+enabled in the parity harness with `--src-shadow`; use it together with
+`--dump-csv` to export the shadow columns. Ordinary CSV diagnostics therefore
+do not pay for the five extra subset searches per ambiguity attempt.
 
 #### Surplus-satellite rescue integrity
 
