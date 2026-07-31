@@ -178,6 +178,19 @@ int main() {
         return fail("missing SD ambiguity estimates");
     }
 
+    auto constellation_config = config;
+    constellation_config.use_constellation_ranked_partial_ar = true;
+    const auto constellation_result =
+        FGOProcessor(constellation_config).optimizeProblem(problem);
+    if (!constellation_result.diagnostics.fixed_solution ||
+        !constellation_result.diagnostics.multisd_validation_pass ||
+        constellation_result.solution.solutions.empty() ||
+        result.solution.solutions.empty() ||
+        (constellation_result.solution.solutions.back().position_ecef -
+         result.solution.solutions.back().position_ecef).norm() > 1e-9) {
+        return fail("constellation PAR changed the clean all-GPS solution");
+    }
+
     auto parallel_config = config;
     parallel_config.parallelize_lambda_hypotheses = true;
     const auto parallel_result =

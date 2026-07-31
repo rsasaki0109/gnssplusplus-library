@@ -75,6 +75,12 @@ class GnssSolveCliTest(unittest.TestCase):
         self.assertIn(
             "--multisd-fgo-shadow-holdout-satellites", result.stdout
         )
+        self.assertIn(
+            "--multisd-fgo-shadow-constellation-par", result.stdout
+        )
+        self.assertIn(
+            "--multisd-fgo-shadow-variance-ranked-par", result.stdout
+        )
 
     def test_config_supplies_defaults_and_cli_always_overrides_them(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_solve_config_") as temp_dir:

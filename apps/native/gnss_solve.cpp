@@ -118,6 +118,8 @@ struct SolveConfig {
     double multisd_fgo_shadow_min_carrier_fraction = 0.75;
     int multisd_fgo_shadow_min_fixed_ambiguities = 6;
     int multisd_fgo_shadow_holdout_satellites = 4;
+    bool multisd_fgo_shadow_constellation_par = false;
+    bool multisd_fgo_shadow_variance_ranked_par = false;
     double rtk_update_outlier_threshold = 0.0;
     bool student_t_rtk_front_end = false;
     double ratio_threshold = 3.0;
@@ -1959,6 +1961,10 @@ void printAdvancedUsage(const char* program_name) {
         << "                             MultiSD PAR dimension floor (default: 6)\n"
         << "  --multisd-fgo-shadow-holdout-satellites <n>\n"
         << "                             Fully disjoint satellites (default: 4)\n"
+        << "  --multisd-fgo-shadow-constellation-par\n"
+        << "                             Full-band constellation pool PAR (default: off)\n"
+        << "  --multisd-fgo-shadow-variance-ranked-par\n"
+        << "                             Rank PAR candidates by float variance (default: off)\n"
         << "  --realtime-fix-integrity   Gate FIX output with bounded-latency residual checks\n"
         << "                             (default: off; maximum latency: 7 epochs)\n"
         << "  --integrity-base-gate      Also enable the frozen offline low-satellite/ratio\n"
@@ -2252,6 +2258,14 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             i + 1 < argc) {
             config.multisd_fgo_shadow_holdout_satellites =
                 std::stoi(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-constellation-par") {
+            config.multisd_fgo_shadow_constellation_par = true;
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-variance-ranked-par") {
+            config.multisd_fgo_shadow_variance_ranked_par = true;
             continue;
         }
         // Phase 2a CMC-aware reference selection flags: kept as STANDALONE
@@ -3603,6 +3617,10 @@ libgnss::FGOProcessor::FGOConfig makeGnssOnlyMultiSdShadowConfig(
     config.max_lambda_ambiguities = 16;
     config.lambda_top_k_candidates = solve_config.multisd_fgo_shadow_top_k;
     config.parallelize_lambda_hypotheses = true;
+    config.use_constellation_ranked_partial_ar =
+        solve_config.multisd_fgo_shadow_constellation_par;
+    config.use_variance_ranked_partial_ar =
+        solve_config.multisd_fgo_shadow_variance_ranked_par;
     config.use_multisd_ambiguities = true;
     config.use_multisd_disjoint_validation = true;
     config.multisd_validation_holdout_satellites =

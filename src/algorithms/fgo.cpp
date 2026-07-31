@@ -4089,8 +4089,14 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
 
             std::stable_sort(candidates.begin(),
                              candidates.end(),
-                             [](const LambdaCandidate& lhs,
-                                const LambdaCandidate& rhs) {
+                             [&](const LambdaCandidate& lhs,
+                                 const LambdaCandidate& rhs) {
+                                 if (config_.use_variance_ranked_partial_ar &&
+                                     lhs.variance_cycles !=
+                                         rhs.variance_cycles) {
+                                     return lhs.variance_cycles <
+                                            rhs.variance_cycles;
+                                 }
                                  if (lhs.fractional_cycles == rhs.fractional_cycles) {
                                      return lhs.variance_cycles < rhs.variance_cycles;
                                  }
@@ -4099,11 +4105,6 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
 
             const int max_lambda_ambiguities =
                 std::max(0, config_.max_lambda_ambiguities);
-            if (max_lambda_ambiguities > 0 &&
-                static_cast<int>(candidates.size()) > max_lambda_ambiguities) {
-                candidates.resize(static_cast<std::size_t>(max_lambda_ambiguities));
-            }
-
             result.diagnostics.lambda_ambiguity_candidates = candidates.size();
             result.diagnostics.ambiguity_fix_candidates = candidates.size();
             const int min_fixed_ambiguities = std::max(1, config_.min_fixed_ambiguities);
@@ -4285,7 +4286,7 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                     lambda_hypothesis_residual_square_sums.front();
                 result.diagnostics.lambda_ambiguity_fix_used = true;
                 result.diagnostics.partial_lambda_ambiguity_fix_used =
-                    subset_size < candidates.size();
+                    subset_size < result.diagnostics.lambda_ambiguity_candidates;
                 result.diagnostics.lambda_ambiguity_used_candidates = subset_size;
                 result.diagnostics.lambda_ambiguity_ratio = lambda_ratio;
                 return true;
@@ -4293,15 +4294,93 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
 
             const std::size_t min_subset_size =
                 static_cast<std::size_t>(min_fixed_ambiguities);
-            for (std::size_t subset_size = candidates.size();
-                 subset_size >= min_subset_size;
-                 --subset_size) {
-                if (solve_candidate_subset(subset_size)) {
-                    return true;
+            if (config_.use_constellation_ranked_partial_ar) {
+                const auto all_candidates = candidates;
+                const auto allowed_in_stage = [](GNSSSystem system,
+                                                 int stage) {
+                    if (system == GNSSSystem::GPS ||
+                        system == GNSSSystem::QZSS) {
+                        return true;
+                    }
+                    if (system == GNSSSystem::Galileo) {
+                        return stage <= 2;
+                    }
+                    if (system == GNSSSystem::BeiDou) {
+                        return stage == 0 || stage == 1 || stage == 3;
+                    }
+                    if (system == GNSSSystem::GLONASS) {
+                        return stage == 0 || stage == 2 || stage == 4;
+                    }
+                    return stage == 0;
+                };
+                std::vector<std::vector<LambdaCandidate>> pools;
+                for (int stage = 0; stage < 6; ++stage) {
+                    std::vector<LambdaCandidate> pool;
+                    for (const auto& candidate : all_candidates) {
+                        const auto system = problem.ambiguity_states[
+                            candidate.ambiguity_index].satellite.system;
+                        if (allowed_in_stage(system, stage)) {
+                            pool.push_back(candidate);
+                        }
+                    }
+                    if (max_lambda_ambiguities > 0 &&
+                        pool.size() > static_cast<std::size_t>(
+                                          max_lambda_ambiguities)) {
+                        pool.resize(static_cast<std::size_t>(
+                            max_lambda_ambiguities));
+                    }
+                    const bool duplicate_pool = std::any_of(
+                        pools.begin(), pools.end(),
+                        [&](const std::vector<LambdaCandidate>& existing) {
+                            if (existing.size() != pool.size()) {
+                                return false;
+                            }
+                            for (std::size_t i = 0; i < pool.size(); ++i) {
+                                if (existing[i].ambiguity_index !=
+                                        pool[i].ambiguity_index ||
+                                    existing[i].reference_ambiguity_index !=
+                                        pool[i].reference_ambiguity_index) {
+                                    return false;
+                                }
+                            }
+                            return true;
+                        });
+                    if (pool.size() >= min_subset_size &&
+                        !duplicate_pool) {
+                        pools.push_back(std::move(pool));
+                    }
                 }
-                if (!config_.use_partial_lambda_ambiguity_fix ||
-                    subset_size == min_subset_size) {
-                    break;
+                for (const auto& pool : pools) {
+                    candidates = pool;
+                    for (std::size_t subset_size = candidates.size();
+                         subset_size >= min_subset_size;
+                         --subset_size) {
+                        if (solve_candidate_subset(subset_size)) {
+                            return true;
+                        }
+                        if (!config_.use_partial_lambda_ambiguity_fix ||
+                            subset_size == min_subset_size) {
+                            break;
+                        }
+                    }
+                }
+            } else {
+                if (max_lambda_ambiguities > 0 &&
+                    candidates.size() > static_cast<std::size_t>(
+                                            max_lambda_ambiguities)) {
+                    candidates.resize(static_cast<std::size_t>(
+                        max_lambda_ambiguities));
+                }
+                for (std::size_t subset_size = candidates.size();
+                     subset_size >= min_subset_size;
+                     --subset_size) {
+                    if (solve_candidate_subset(subset_size)) {
+                        return true;
+                    }
+                    if (!config_.use_partial_lambda_ambiguity_fix ||
+                        subset_size == min_subset_size) {
+                        break;
+                    }
                 }
             }
 

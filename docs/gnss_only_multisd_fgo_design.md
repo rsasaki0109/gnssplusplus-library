@@ -372,3 +372,21 @@ of subset/top-K low-rank updates with an unchanged CPU authority and exact
 decision parity. Promotion still requires run/time-block nested CV, injected
 NLOS/outage/cycle-slip/satellite-loss faults, false/FIX at most 0.1%, no
 greater-than-1-m false fixes, and p95 latency at most 100 ms.
+
+The first native constellation-PAR checkpoint keeps every observed frequency
+but evaluates separate GQEBR, GQEB, GQER, GQB, GQR, and GQ ambiguity pools.
+Each pool retains the native quality-ranked prefix shrink down to the minimum
+dimension; skipping that shrink reduced Nagoya run1 from 45 to 12 fixes and
+was rejected. The GTSAM backend's one-band-per-satellite preprocessing was
+also tested and produced the same 12-fix regression, so it is not transferred
+to the PPC MultiSD path. Frequency diversity is valuable in this dataset even
+when the bands share satellite geometry.
+
+With full-band pool-specific prefix PAR, the six 300-epoch route probes kept
+Tokyo unchanged at 552 correct / 0 false and increased Nagoya from 238 to 252
+correct / 0 false. All 14 added Nagoya candidates were below 0.106 m error;
+the maximum route runtime p95 was 57.6 ms. The feature is exposed only by the
+default-off `--multisd-fgo-shadow-constellation-par` research switch and is a
+nested-CV candidate, not a promoted production policy. Variance ranking is a
+separate default-off switch so model-driven and data-driven selection can be
+ablated without confounding the constellation pool experiment.
