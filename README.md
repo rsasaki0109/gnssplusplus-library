@@ -153,6 +153,18 @@ the Doppler result is not used alone because RTKLIB disables its analogous
 detector over receiver clock-jump sensitivity; requiring the clock-free GF
 event first lets the trace evaluate Doppler only as a band-isolation witness.
 
+Each provisional LAMBDA candidate also reports temporal integer-consensus
+fields.  They compare only ambiguity indices shared with the immediately
+preceding epoch, so an LLI/CMC/FDE arc change cannot count as continuity.
+`lambda_candidate_integer_overlap` and `_agreements` expose the raw counts;
+`_agreement_fraction` and `_consensus_streak` summarize consecutive epochs
+with at least four exactly matching integers.  This is a diagnostic analogue
+of the consecutive-fix evidence used before ambiguity holding in
+[RTKLIB](https://github.com/tomojitakasu/RTKLIB/blob/master/src/rtkpos.c), not
+an acceptance rule.  Tokyo run1 confirmed why: long-lived wrong integer basins
+also produce exact temporal agreement, so the fields never change FIX/FLOAT,
+hold, or graph state.
+
 `--ratio-impact-monitor` adds a counterfactual partial-AR audit for epochs
 that remain ratio-rejected. It removes each target satellite in turn, reruns
 LAMBDA, and writes the best ratio, subset size, candidate ECEF position, and
