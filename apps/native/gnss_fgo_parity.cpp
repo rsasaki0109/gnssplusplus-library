@@ -707,6 +707,8 @@ libgnss::FGOProcessor::FGOConfig makeRealDataDdConfig() {
 // call, without duplicating this arg-to-config mapping logic.
 libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
     libgnss::FGOProcessor::FGOConfig config = makeRealDataDdConfig();
+    // Reuse the existing diagnostic surface; do not add another CLI option.
+    config.monitor_geometry_free_cycle_slip = !args.dump_csv_path.empty();
     config.report_held_ambiguities_as_fixed = !args.no_held_fix_label;
     if (args.max_iters > 0) {
         config.max_iterations = args.max_iters;
@@ -1496,6 +1498,7 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
            "lambda_candidate_bsr_qscale16,lambda_candidate_ffrt_supported,"
            "lambda_candidate_ffrt_accepts_any,lambda_candidate_ffrt_min_ratio,"
            "lambda_candidate_ffrt_pass,"
+           "gf_slip_events,gf_slip_max_jump_m,gf_slip_tainted_ambiguities,"
            "ratio_impact_eval,ratio_impact_trials,ratio_impact_best_ratio,"
            "ratio_impact_best_nfixed,ratio_impact_x_ecef_m,"
            "ratio_impact_y_ecef_m,ratio_impact_z_ecef_m,"
@@ -1596,6 +1599,9 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
                 << ',' << (d.lambda_candidate_ffrt_accepts_any ? 1 : 0)
                 << ',' << d.lambda_candidate_ffrt_min_ratio
                 << ',' << (d.lambda_candidate_ffrt_pass ? 1 : 0)
+                << ',' << d.gf_slip_shadow_event_pairs
+                << ',' << d.gf_slip_shadow_max_jump_m
+                << ',' << d.gf_slip_shadow_tainted_ambiguities
                 << ',' << (d.ratio_impact_evaluated ? 1 : 0)
                 << ',' << d.ratio_impact_trials
                 << ',' << d.ratio_impact_best_ratio

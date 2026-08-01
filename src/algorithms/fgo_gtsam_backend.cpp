@@ -823,6 +823,10 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
     const auto start_time = std::chrono::high_resolution_clock::now();
 
     const std::size_t num_epochs = problem.epochs.size();
+    const auto gf_slip_shadow = config.monitor_geometry_free_cycle_slip
+        ? FGOProcessor::analyzeGeometryFreeSlipShadow(
+              problem, 0.05, config.max_tdcp_gap_s)
+        : std::vector<FGOProcessor::GeometryFreeSlipShadowEpoch>{};
     const Point3 lever_arm_body(config.pose3_lever_arm_body_m.x(),
                                 config.pose3_lever_arm_body_m.y(),
                                 config.pose3_lever_arm_body_m.z());
@@ -1972,6 +1976,14 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
             problem.epochs[i].fresh_spp_solution;
         epoch_diagnostics[i].spp_seed_position_ecef =
             problem.epochs[i].position_ecef;
+        if (i < gf_slip_shadow.size()) {
+            epoch_diagnostics[i].gf_slip_shadow_event_pairs =
+                gf_slip_shadow[i].event_pairs;
+            epoch_diagnostics[i].gf_slip_shadow_max_jump_m =
+                gf_slip_shadow[i].max_jump_m;
+            epoch_diagnostics[i].gf_slip_shadow_tainted_ambiguities =
+                gf_slip_shadow[i].tainted_ambiguities;
+        }
         epoch_diagnostics[i].ar_outcome = config.use_lambda_ambiguity_fix
             ? FGOProcessor::AmbiguityResolutionOutcome::SmootherFailure
             : FGOProcessor::AmbiguityResolutionOutcome::Disabled;
