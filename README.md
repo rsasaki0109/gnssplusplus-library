@@ -144,6 +144,15 @@ It ignores gaps and arcs already restarted by the existing LLI/CMC logic,
 then reports how many unchanged DD ambiguity arcs remain exposed after a
 new jump. It never restarts an arc or changes the factor graph.
 
+The same shadow also compares each rover/base single-difference phase change
+with trapezoid-integrated Doppler at the existing RTK detector's 0.20 m
+threshold. `doppler_slip_signals` reports per-signal innovations and
+`gf_doppler_isolated_pairs` counts GF events for which Doppler identifies
+exactly one of the two bands. This remains diagnostic-only. In particular,
+the Doppler result is not used alone because RTKLIB disables its analogous
+detector over receiver clock-jump sensitivity; requiring the clock-free GF
+event first lets the trace evaluate Doppler only as a band-isolation witness.
+
 `--ratio-impact-monitor` adds a counterfactual partial-AR audit for epochs
 that remain ratio-rejected. It removes each target satellite in turn, reruns
 LAMBDA, and writes the best ratio, subset size, candidate ECEF position, and

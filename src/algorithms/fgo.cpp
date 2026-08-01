@@ -762,6 +762,10 @@ std::map<CarrierKey, PreparedCarrierObservation> prepareCarrierObservationsForRe
                     (modeled_range_rate - satellite_clock_drift_mps);
                 carrier.has_doppler_residual =
                     std::isfinite(carrier.doppler_residual_mps);
+                model_debug.has_doppler_residual =
+                    carrier.has_doppler_residual;
+                model_debug.doppler_residual_mps =
+                    carrier.doppler_residual_mps;
             }
         }
         carrier.model_debug = model_debug;
@@ -1228,6 +1232,10 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                         (modeled_range_rate - satellite_clock_drift_mps);
                     carrier.has_doppler_residual =
                         std::isfinite(carrier.doppler_residual_mps);
+                    model_debug.has_doppler_residual =
+                        carrier.has_doppler_residual;
+                    model_debug.doppler_residual_mps =
+                        carrier.doppler_residual_mps;
                 }
             }
             carrier.model_debug = model_debug;
@@ -2476,6 +2484,8 @@ FGOProcessor::analyzeGeometryFreeSlipShadow(const FGOProblem& problem,
                                             double max_gap_s) {
     struct PhaseSample {
         double single_difference_phase_m = 0.0;
+        bool has_single_difference_doppler = false;
+        double single_difference_doppler_mps = 0.0;
         std::set<std::size_t> ambiguity_indices;
     };
     struct History {
@@ -2483,6 +2493,12 @@ FGOProcessor::analyzeGeometryFreeSlipShadow(const FGOProblem& problem,
         double geometry_free_m = 0.0;
         std::set<std::size_t> first_ambiguity_indices;
         std::set<std::size_t> second_ambiguity_indices;
+    };
+    struct DopplerHistory {
+        GNSSTime time;
+        double single_difference_phase_m = 0.0;
+        double single_difference_doppler_mps = 0.0;
+        std::set<std::size_t> ambiguity_indices;
     };
 
     using CarrierKey = std::pair<SatelliteId, SignalType>;
@@ -2494,23 +2510,37 @@ FGOProcessor::analyzeGeometryFreeSlipShadow(const FGOProblem& problem,
             continue;
         }
         auto& phases = phases_by_epoch[factor.epoch_index];
-        const auto add_phase = [&](const CarrierKey& key, double phase_m) {
+        const auto add_phase = [&](const CarrierKey& key, double phase_m,
+                                   const ObservationModelDebug& rover_model,
+                                   const ObservationModelDebug& base_model) {
             auto& sample = phases[key];
             sample.single_difference_phase_m = phase_m;
+            if (rover_model.has_doppler_residual &&
+                base_model.has_doppler_residual) {
+                sample.has_single_difference_doppler = true;
+                sample.single_difference_doppler_mps =
+                    rover_model.doppler_residual_mps -
+                    base_model.doppler_residual_mps;
+            }
             sample.ambiguity_indices.insert(factor.ambiguity_index);
         };
         add_phase({factor.satellite, factor.signal},
                   factor.rover_satellite_model.raw_carrier_m -
-                      factor.base_satellite_model.raw_carrier_m);
+                      factor.base_satellite_model.raw_carrier_m,
+                  factor.rover_satellite_model,
+                  factor.base_satellite_model);
         // A slip on the DD reference contaminates every target ambiguity in
         // that group, hence the same factor ambiguity is attached here too.
         add_phase({factor.reference_satellite, factor.signal},
                   factor.rover_reference_model.raw_carrier_m -
-                      factor.base_reference_model.raw_carrier_m);
+                      factor.base_reference_model.raw_carrier_m,
+                  factor.rover_reference_model,
+                  factor.base_reference_model);
     }
 
     std::vector<GeometryFreeSlipShadowEpoch> shadow(problem.epochs.size());
     std::map<PairKey, History> history;
+    std::map<CarrierKey, DopplerHistory> doppler_history;
     std::set<std::size_t> tainted_ambiguities;
     const double safe_threshold = std::max(0.0, threshold_m);
     const double safe_max_gap = std::max(0.0, max_gap_s);
@@ -2522,6 +2552,44 @@ FGOProcessor::analyzeGeometryFreeSlipShadow(const FGOProblem& problem,
             by_satellite[key.first].push_back({key.second, sample});
         }
         const GNSSTime time = problem.epochs[epoch_index].time;
+        std::set<CarrierKey> doppler_events;
+        for (const auto& [key, sample] : phases_by_epoch[epoch_index]) {
+            const auto previous = doppler_history.find(key);
+            if (sample.has_single_difference_doppler &&
+                previous != doppler_history.end()) {
+                const double dt = time - previous->second.time;
+                const bool same_arcs =
+                    previous->second.ambiguity_indices ==
+                    sample.ambiguity_indices;
+                if (same_arcs && dt > 0.0 &&
+                    (safe_max_gap <= 0.0 || dt <= safe_max_gap)) {
+                    const double predicted_delta_m =
+                        0.5 * (previous->second.single_difference_doppler_mps +
+                               sample.single_difference_doppler_mps) * dt;
+                    const double innovation_m = std::abs(
+                        sample.single_difference_phase_m -
+                        previous->second.single_difference_phase_m -
+                        predicted_delta_m);
+                    if (innovation_m > 0.20) {
+                        doppler_events.insert(key);
+                        shadow[epoch_index].doppler_max_innovation_m =
+                            std::max(
+                                shadow[epoch_index].doppler_max_innovation_m,
+                                innovation_m);
+                    }
+                }
+            }
+            if (sample.has_single_difference_doppler) {
+                doppler_history[key] = {
+                    time, sample.single_difference_phase_m,
+                    sample.single_difference_doppler_mps,
+                    sample.ambiguity_indices};
+            } else {
+                doppler_history.erase(key);
+            }
+        }
+        shadow[epoch_index].doppler_event_signals =
+            static_cast<int>(doppler_events.size());
         for (const auto& [satellite, samples] : by_satellite) {
             for (std::size_t first = 0; first < samples.size(); ++first) {
                 for (std::size_t second = first + 1; second < samples.size();
@@ -2555,6 +2623,15 @@ FGOProcessor::analyzeGeometryFreeSlipShadow(const FGOProblem& problem,
                                 tainted_ambiguities.insert(
                                     second_sample.ambiguity_indices.begin(),
                                     second_sample.ambiguity_indices.end());
+                                const int doppler_matches =
+                                    static_cast<int>(doppler_events.count(
+                                        {satellite, samples[first].first})) +
+                                    static_cast<int>(doppler_events.count(
+                                        {satellite, samples[second].first}));
+                                if (doppler_matches == 1) {
+                                    ++shadow[epoch_index]
+                                          .doppler_isolated_event_pairs;
+                                }
                             }
                         }
                     }

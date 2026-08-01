@@ -1499,6 +1499,8 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
            "lambda_candidate_ffrt_accepts_any,lambda_candidate_ffrt_min_ratio,"
            "lambda_candidate_ffrt_pass,"
            "gf_slip_events,gf_slip_max_jump_m,gf_slip_tainted_ambiguities,"
+           "doppler_slip_signals,doppler_slip_max_innovation_m,"
+           "gf_doppler_isolated_pairs,"
            "ratio_impact_eval,ratio_impact_trials,ratio_impact_best_ratio,"
            "ratio_impact_best_nfixed,ratio_impact_x_ecef_m,"
            "ratio_impact_y_ecef_m,ratio_impact_z_ecef_m,"
@@ -1602,6 +1604,9 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
                 << ',' << d.gf_slip_shadow_event_pairs
                 << ',' << d.gf_slip_shadow_max_jump_m
                 << ',' << d.gf_slip_shadow_tainted_ambiguities
+                << ',' << d.doppler_slip_shadow_event_signals
+                << ',' << d.doppler_slip_shadow_max_innovation_m
+                << ',' << d.gf_doppler_shadow_isolated_pairs
                 << ',' << (d.ratio_impact_evaluated ? 1 : 0)
                 << ',' << d.ratio_impact_trials
                 << ',' << d.ratio_impact_best_ratio
@@ -2114,7 +2119,7 @@ FileId statFile(const std::string& path) {
 // vector, new factor field, ...) -- an old cache then fails the magic/version
 // check in load() below and is rebuilt instead of misread.
 constexpr uint32_t kMagic = 0x50434647u;  // "PCFG" (problem-cache fgo)
-constexpr uint32_t kVersion = 7u;
+constexpr uint32_t kVersion = 8u;
 constexpr std::size_t kBuilderFingerprintBytes = 512u;
 
 struct Fingerprint {

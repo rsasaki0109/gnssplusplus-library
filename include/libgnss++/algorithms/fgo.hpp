@@ -1478,6 +1478,8 @@ public:
         double geometric_range_m = 0.0;
         double elevation_rad = 0.0;
         double azimuth_rad = 0.0;
+        bool has_doppler_residual = false;
+        double doppler_residual_mps = 0.0;
         // Raw rover-receiver SNR/CN0 [dB-Hz] for this observation (Observation::snr
         // at the point this model_debug was built). Added for the sat-badness
         // EWMA down-weighting port's elevation/SNR penalty terms (see
@@ -1718,6 +1720,9 @@ public:
         int event_pairs = 0;
         double max_jump_m = 0.0;
         int tainted_ambiguities = 0;
+        int doppler_event_signals = 0;
+        double doppler_max_innovation_m = 0.0;
+        int doppler_isolated_event_pairs = 0;
     };
 
     struct FGODiagnostics {
@@ -2043,6 +2048,9 @@ public:
         int gf_slip_shadow_event_pairs = 0;
         double gf_slip_shadow_max_jump_m = 0.0;
         int gf_slip_shadow_tainted_ambiguities = 0;
+        int doppler_slip_shadow_event_signals = 0;
+        double doppler_slip_shadow_max_innovation_m = 0.0;
+        int gf_doppler_shadow_isolated_pairs = 0;
         bool ratio_impact_evaluated = false;
         int ratio_impact_trials = 0;
         double ratio_impact_best_ratio = 0.0;

@@ -1183,6 +1183,51 @@ TEST(FGOTest, GeometryFreeSlipShadowTaintsExistingDdAmbiguityArc) {
     EXPECT_EQ(shadow[2].tainted_ambiguities, 2);
 }
 
+TEST(FGOTest, GeometryFreeSlipShadowUsesDopplerToIsolateSignal) {
+    FGOProcessor::FGOProblem problem;
+    for (int epoch = 0; epoch < 3; ++epoch) {
+        FGOProcessor::EpochSeed seed;
+        seed.time = GNSSTime(2300, 100000.0 + 0.2 * epoch);
+        problem.epochs.push_back(seed);
+
+        const auto add_factor = [&](SignalType signal,
+                                    std::size_t ambiguity_index,
+                                    double target_sd_phase_m,
+                                    double reference_sd_phase_m) {
+            FGOProcessor::DoubleDifferenceCarrierFactor factor;
+            factor.epoch_index = static_cast<std::size_t>(epoch);
+            factor.ambiguity_index = ambiguity_index;
+            factor.satellite = SatelliteId(GNSSSystem::GPS, 1);
+            factor.reference_satellite = SatelliteId(GNSSSystem::GPS, 2);
+            factor.signal = signal;
+            factor.rover_satellite_model.raw_carrier_m = target_sd_phase_m;
+            factor.base_satellite_model.raw_carrier_m = 0.0;
+            factor.rover_reference_model.raw_carrier_m = reference_sd_phase_m;
+            factor.base_reference_model.raw_carrier_m = 0.0;
+            factor.rover_satellite_model.has_doppler_residual = true;
+            factor.base_satellite_model.has_doppler_residual = true;
+            factor.rover_reference_model.has_doppler_residual = true;
+            factor.base_reference_model.has_doppler_residual = true;
+            problem.double_difference_carrier_factors.push_back(factor);
+        };
+
+        const double slip_m = epoch == 0 ? 0.0 : 0.40;
+        add_factor(SignalType::GPS_L1CA, 0, 10.0 + slip_m, 1.0);
+        add_factor(SignalType::GPS_L2C, 1, 8.0, 2.0);
+    }
+
+    const auto shadow =
+        FGOProcessor::analyzeGeometryFreeSlipShadow(problem, 0.05, 1.5);
+    ASSERT_EQ(shadow.size(), 3u);
+    EXPECT_EQ(shadow[0].doppler_event_signals, 0);
+    EXPECT_EQ(shadow[1].event_pairs, 1);
+    EXPECT_EQ(shadow[1].doppler_event_signals, 1);
+    EXPECT_NEAR(shadow[1].doppler_max_innovation_m, 0.40, 1e-12);
+    EXPECT_EQ(shadow[1].doppler_isolated_event_pairs, 1);
+    EXPECT_EQ(shadow[2].doppler_event_signals, 0);
+    EXPECT_EQ(shadow[2].doppler_isolated_event_pairs, 0);
+}
+
 TEST(FGOTest, CmcJumpForcesAmbiguityArcBreak) {
     const NavigationData nav = makeSyntheticGpsNavigation(2);
     const Vector3d rover_position(1113194.0, -4841695.0, 3985350.0);
