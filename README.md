@@ -203,6 +203,20 @@ epoch FIXED. Full Tokyo replays combined it with the anchor reprieve above:
 | Tokyo run2 | **6357 / 314** | **6357 / 314** | 0 / 3 |
 | Tokyo run3 | **9969 / 1002** | **9969 / 1002** | 0 / 4 |
 
+`--fix-demote-spp-model-reprieve` is a separate opt-in for the narrow case
+where the absolute DD-code residual is the only demotion reason. It keeps the
+FIXED label only for a fresh LAMBDA candidate with at least 10 fixed
+ambiguities, at most 2 cm separation from the IMU-predicted pose, and at most
+5 m separation from the current epoch's fresh standalone SPP/RAIM solution.
+A coasted or header-derived SPP seed fails closed. The 5 m threshold was
+frozen on Tokyo run1, validated unchanged on run2, and then applied once to
+held-out run3. Full implementation replays rescued 213/304/4 correct epochs
+and zero wrong epochs on runs 1/2/3 respectively; because most were stationary,
+the aggregate correct-FIX distance gain was 81.704 m (+0.242 pp), so this is
+a safe incremental guard rather than the complete FIX-rate target. Combined
+with the two preceding reprieves, correct-FIX distance is now approximately
+58.2153% (+1.1422 pp from 57.0731%); about 0.858 pp remains to the +2 pp goal.
+
 Across the three courses, distance-weighted correct FIX improved from
 57.0731% at the pre-reprieve baseline to **57.9735%**, while
 distance-weighted wrong FIX fell from 7.7043% to **7.0089%**. The policy is

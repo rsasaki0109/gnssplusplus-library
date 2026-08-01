@@ -1070,6 +1070,19 @@ public:
         double fix_demote_surplus_anchor_max_float_separation_m = 1.0;
         double fix_demote_surplus_anchor_max_postfit_ddcp_rms_m = 0.1;
         double fix_demote_surplus_anchor_max_gap_m = 8.0;
+        // Residual-only demotion reprieve backed by two witnesses that do
+        // not use the DD pseudorange residual which triggered the demotion:
+        // a strong LAMBDA/IMU model and this epoch's fresh standalone SPP
+        // solution. The reprieve is fail-closed and label-only. It never
+        // applies when distance, post-hold, relative-residual, or DDPR-anchor
+        // demotion also fires, when the LAMBDA candidate is stale/missing,
+        // or when the builder had to coast an older SPP seed. Defaults are
+        // frozen from Tokyo run1, validated unchanged on run2, then audited
+        // once on held-out run3 (521 correct / 0 wrong rescued epochs).
+        bool fix_demote_spp_model_reprieve = false;
+        int fix_demote_spp_model_min_fixed_ambiguities = 10;
+        double fix_demote_spp_model_max_imu_separation_m = 0.02;
+        double fix_demote_spp_model_max_agreement_m = 5.0;
 
         // --- Exception recovery (port of recovery.py's handle_solve_exception)
         // ---
@@ -1813,6 +1826,7 @@ public:
         std::size_t fix_plausibility_anchor_gross_gated = 0;  ///< anchor-gap evaluations skipped by the gross-offender gate (fix_demote_anchor_gross)
         std::size_t fix_plausibility_hold_skips = 0;  ///< fix-and-hold pinnings skipped on implausible epochs
         std::size_t fix_plausibility_surplus_reprieves = 0;  ///< demotions skipped because fix_demote_surplus_crosscheck's verdict passed
+        std::size_t fix_plausibility_spp_model_reprieves = 0;  ///< residual-only demotions skipped by fresh-SPP/model agreement
         // --- Exception recovery diagnostics (use_solve_exception_recovery) ---
         std::size_t solve_exception_recoveries = 0;   ///< loose-prior retries that succeeded
         std::size_t solve_exception_warm_resets = 0;  ///< full smoother re-creations
