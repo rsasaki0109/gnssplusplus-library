@@ -218,6 +218,12 @@ public:
         // Optional bootstrap-success aperture for validator fallback groups.
         // The first group retains the regular LAMBDA gate.
         double multisd_fallback_min_bootstrapped_success_rate = 0.0;
+        // Dimension/covariance-aware Integer Aperture gate for fallback PAR
+        // groups. Uses the published Hou et al. Pf_tol=0.001 FFRT table and
+        // a conservative covariance scale. It replaces the scalar fallback
+        // BSR floor when enabled; disjoint validation remains final authority.
+        bool use_multisd_fallback_integer_aperture = false;
+        double multisd_fallback_integer_aperture_covariance_scale = 16.0;
         bool use_epoch_lambda_fixed_output = false;
         bool use_partial_lambda_ambiguity_fix = true;
         // Independently re-optimize the active fixed-lag graph with the
@@ -559,6 +565,16 @@ public:
         bool reject_rover_carrier_loss_of_lock = false;
         bool reject_tdcp_code_phase_jump = true;
         double tdcp_code_phase_jump_threshold_m = 10.0;
+        // Opt-in GNSS-only cycle-slip repair for satellite-single-difference
+        // TDCP.  The builder compares the carrier residual delta with the
+        // trapezoidal integral of the matching SD Doppler residual, rounds
+        // only a bounded near-integer wavelength offset, and subtracts that
+        // offset before inserting the TDCP row.  Reference changes and
+        // ambiguous/non-integer offsets fail closed.  Default OFF keeps the
+        // established MultiSD route byte-identical.
+        bool use_single_difference_tdcp_integer_slip_repair = false;
+        int single_difference_tdcp_slip_repair_max_cycles = 32;
+        double single_difference_tdcp_slip_repair_tolerance_cycles = 0.20;
 
         bool use_ionosphere_model = true;
         bool use_troposphere_model = true;
@@ -826,6 +842,18 @@ public:
         // choice so the group is never dropped. Default OFF: bit-identical
         // to the pre-change baseline when false.
         bool cmc_aware_reference_selection = false;
+
+        // Windowed Code-Minus-Carrier (WCMC) DD-pseudorange conditioner.
+        // After the per-(satellite,signal) CMC warm-up, use the carrier-
+        // referenced change from its causal baseline as an estimate of the
+        // time-varying single-difference code bias.  The target-minus-
+        // reference estimate is removed from the DD code row only; carrier
+        // rows and ambiguity states are untouched.  Corrections outside the
+        // bounded aperture fail closed.  Default OFF preserves the existing
+        // graph exactly.
+        bool use_wcmc_pseudorange_conditioning = false;
+        double wcmc_min_correction_m = 0.5;
+        double wcmc_max_correction_m = 10.0;
 
         // --- Per-epoch quality gates (port of the inuex35 reference's
         // preprocess/gate.py + validation/postfit.py policy) ---
@@ -1567,6 +1595,8 @@ public:
         double delta_carrier_m = 0.0;
         double sigma_m = 0.003;
         double elevation_rad = 0.0;
+        int repaired_slip_cycles = 0;
+        bool repaired_cycle_slip = false;
     };
 
     struct AmbiguityState {
@@ -1665,9 +1695,18 @@ public:
         std::size_t tdcp_rejected_missing_previous = 0;
         std::size_t tdcp_rejected_loss_of_lock = 0;
         std::size_t tdcp_rejected_code_phase_jump = 0;
+        std::size_t single_difference_tdcp_rejected_reference_change = 0;
+        std::size_t single_difference_tdcp_slip_repair_candidates = 0;
+        std::size_t single_difference_tdcp_slip_repairs = 0;
+        std::size_t single_difference_tdcp_slip_repair_rejects = 0;
+        std::size_t multisd_integer_aperture_attempts = 0;
+        std::size_t multisd_integer_aperture_passes = 0;
+        std::size_t multisd_integer_aperture_rejects = 0;
         std::size_t code_minus_carrier_jump_resets = 0;       ///< CMC screening: arc breaks forced
         std::size_t code_minus_carrier_level_exclusions = 0;  ///< CMC screening: (sat,signal) epochs excluded
         std::size_t cmc_ref_avoided_count = 0;  ///< cmc_aware_reference_selection: references changed away from a CMC-excluded candidate
+        std::size_t wcmc_pseudorange_corrections = 0;
+        double wcmc_pseudorange_correction_square_sum_m2 = 0.0;
     };
 
     // --- Phase 2 milestone 2b: IMU preintegration inputs ---
@@ -1819,6 +1858,13 @@ public:
         std::size_t tdcp_rejected_missing_previous = 0;
         std::size_t tdcp_rejected_loss_of_lock = 0;
         std::size_t tdcp_rejected_code_phase_jump = 0;
+        std::size_t single_difference_tdcp_rejected_reference_change = 0;
+        std::size_t single_difference_tdcp_slip_repair_candidates = 0;
+        std::size_t single_difference_tdcp_slip_repairs = 0;
+        std::size_t single_difference_tdcp_slip_repair_rejects = 0;
+        std::size_t multisd_integer_aperture_attempts = 0;
+        std::size_t multisd_integer_aperture_passes = 0;
+        std::size_t multisd_integer_aperture_rejects = 0;
         std::size_t double_difference_matched_base_epochs = 0;
         std::size_t double_difference_interpolated_base_epochs = 0;
         std::size_t double_difference_candidate_pairs = 0;
@@ -1845,6 +1891,8 @@ public:
         std::size_t code_minus_carrier_jump_resets = 0;       ///< CMC screening: arc breaks forced
         std::size_t code_minus_carrier_level_exclusions = 0;  ///< CMC screening: (sat,signal) epochs excluded
         std::size_t cmc_ref_avoided_count = 0;  ///< cmc_aware_reference_selection: references changed away from a CMC-excluded candidate
+        std::size_t wcmc_pseudorange_corrections = 0;
+        double wcmc_pseudorange_correction_rms_m = 0.0;
         // --- CP-hold / sanity FSM diagnostics (use_cp_hold_recovery) ---
         std::size_t cp_hold_triggers = 0;         ///< times CP-hold was (re)engaged/extended
         std::size_t cp_hold_epochs_held = 0;      ///< cumulative epochs with carrier suppressed

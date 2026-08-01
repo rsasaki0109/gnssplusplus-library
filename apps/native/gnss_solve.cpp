@@ -130,6 +130,16 @@ struct SolveConfig {
     double multisd_fgo_shadow_min_bootstrapped_success_rate = 0.0;
     double multisd_fgo_shadow_max_adop_cycles = 0.0;
     double multisd_fgo_shadow_fallback_min_bootstrapped_success_rate = 0.0;
+    bool multisd_fgo_shadow_tdcp_slip_repair = false;
+    int multisd_fgo_shadow_tdcp_slip_repair_max_cycles = 32;
+    double multisd_fgo_shadow_tdcp_slip_repair_tolerance_cycles = 0.20;
+    bool multisd_fgo_shadow_wcmc = false;
+    int multisd_fgo_shadow_wcmc_warmup_epochs = 5;
+    double multisd_fgo_shadow_wcmc_baseline_alpha = 0.05;
+    double multisd_fgo_shadow_wcmc_min_correction_m = 0.5;
+    double multisd_fgo_shadow_wcmc_max_correction_m = 10.0;
+    bool multisd_fgo_shadow_fallback_integer_aperture = false;
+    double multisd_fgo_shadow_fallback_ia_covariance_scale = 16.0;
     double rtk_update_outlier_threshold = 0.0;
     bool student_t_rtk_front_end = false;
     double ratio_threshold = 3.0;
@@ -1995,6 +2005,26 @@ void printAdvancedUsage(const char* program_name) {
         << "                             Maximum ambiguity dilution of precision (default: 0/off)\n"
         << "  --multisd-fgo-shadow-fallback-min-bsr <0..1>\n"
         << "                             Minimum BSR for later validator groups only (default: 0)\n"
+        << "  --multisd-fgo-shadow-tdcp-slip-repair\n"
+        << "                             Repair bounded integer SD-TDCP slips using Doppler (default: off)\n"
+        << "  --multisd-fgo-shadow-tdcp-slip-repair-max-cycles <n>\n"
+        << "                             Maximum absolute repaired slip, 1..10000 (default: 32)\n"
+        << "  --multisd-fgo-shadow-tdcp-slip-repair-tolerance <cycles>\n"
+        << "                             Integer residual aperture in (0,0.5] (default: 0.20)\n"
+        << "  --multisd-fgo-shadow-wcmc\n"
+        << "                             Carrier-condition time-varying DD code bias (default: off)\n"
+        << "  --multisd-fgo-shadow-wcmc-warmup <epochs>\n"
+        << "                             Causal CMC baseline warm-up (default: 5)\n"
+        << "  --multisd-fgo-shadow-wcmc-alpha <0..1>\n"
+        << "                             CMC baseline EWMA update (default: 0.05)\n"
+        << "  --multisd-fgo-shadow-wcmc-min-correction <m>\n"
+        << "                             Minimum detected time-varying code bias (default: 0.5)\n"
+        << "  --multisd-fgo-shadow-wcmc-max-correction <m>\n"
+        << "                             Fail-closed absolute correction aperture (default: 10)\n"
+        << "  --multisd-fgo-shadow-fallback-integer-aperture\n"
+        << "                             Hou FFRT gate for fallback PAR groups (default: off)\n"
+        << "  --multisd-fgo-shadow-fallback-ia-covariance-scale <x>\n"
+        << "                             Conservative FFRT covariance scale (default: 16)\n"
         << "  --realtime-fix-integrity   Gate FIX output with bounded-latency residual checks\n"
         << "                             (default: off; maximum latency: 7 epochs)\n"
         << "  --integrity-base-gate      Also enable the frozen offline low-satellite/ratio\n"
@@ -2348,6 +2378,56 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         }
         if (arg == "--multisd-fgo-shadow-fallback-min-bsr" && i + 1 < argc) {
             config.multisd_fgo_shadow_fallback_min_bootstrapped_success_rate =
+                std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-tdcp-slip-repair") {
+            config.multisd_fgo_shadow_tdcp_slip_repair = true;
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-tdcp-slip-repair-max-cycles" &&
+            i + 1 < argc) {
+            config.multisd_fgo_shadow_tdcp_slip_repair_max_cycles =
+                std::stoi(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-tdcp-slip-repair-tolerance" &&
+            i + 1 < argc) {
+            config.multisd_fgo_shadow_tdcp_slip_repair_tolerance_cycles =
+                std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-wcmc") {
+            config.multisd_fgo_shadow_wcmc = true;
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-wcmc-warmup" && i + 1 < argc) {
+            config.multisd_fgo_shadow_wcmc_warmup_epochs = std::stoi(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-wcmc-alpha" && i + 1 < argc) {
+            config.multisd_fgo_shadow_wcmc_baseline_alpha = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-wcmc-min-correction" &&
+            i + 1 < argc) {
+            config.multisd_fgo_shadow_wcmc_min_correction_m =
+                std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-wcmc-max-correction" &&
+            i + 1 < argc) {
+            config.multisd_fgo_shadow_wcmc_max_correction_m =
+                std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-fallback-integer-aperture") {
+            config.multisd_fgo_shadow_fallback_integer_aperture = true;
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-fallback-ia-covariance-scale" &&
+            i + 1 < argc) {
+            config.multisd_fgo_shadow_fallback_ia_covariance_scale =
                 std::stod(argv[++i]);
             continue;
         }
@@ -3624,6 +3704,49 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             "--multisd-fgo-shadow-fallback-min-bsr must be in [0, 1]",
             argv[0]);
     }
+    if (config.multisd_fgo_shadow_tdcp_slip_repair_max_cycles < 1 ||
+        config.multisd_fgo_shadow_tdcp_slip_repair_max_cycles > 10000) {
+        argumentError(
+            "--multisd-fgo-shadow-tdcp-slip-repair-max-cycles must be in [1, 10000]",
+            argv[0]);
+    }
+    if (!std::isfinite(
+            config.multisd_fgo_shadow_tdcp_slip_repair_tolerance_cycles) ||
+        config.multisd_fgo_shadow_tdcp_slip_repair_tolerance_cycles <= 0.0 ||
+        config.multisd_fgo_shadow_tdcp_slip_repair_tolerance_cycles > 0.5) {
+        argumentError(
+            "--multisd-fgo-shadow-tdcp-slip-repair-tolerance must be in (0, 0.5]",
+            argv[0]);
+    }
+    if (config.multisd_fgo_shadow_wcmc_warmup_epochs < 1) {
+        argumentError("--multisd-fgo-shadow-wcmc-warmup must be >= 1", argv[0]);
+    }
+    if (!std::isfinite(config.multisd_fgo_shadow_wcmc_baseline_alpha) ||
+        config.multisd_fgo_shadow_wcmc_baseline_alpha < 0.0 ||
+        config.multisd_fgo_shadow_wcmc_baseline_alpha > 1.0) {
+        argumentError("--multisd-fgo-shadow-wcmc-alpha must be in [0, 1]",
+                      argv[0]);
+    }
+    if (!std::isfinite(config.multisd_fgo_shadow_wcmc_max_correction_m) ||
+        config.multisd_fgo_shadow_wcmc_max_correction_m <= 0.0) {
+        argumentError(
+            "--multisd-fgo-shadow-wcmc-max-correction must be > 0", argv[0]);
+    }
+    if (!std::isfinite(config.multisd_fgo_shadow_wcmc_min_correction_m) ||
+        config.multisd_fgo_shadow_wcmc_min_correction_m < 0.0 ||
+        config.multisd_fgo_shadow_wcmc_min_correction_m >
+            config.multisd_fgo_shadow_wcmc_max_correction_m) {
+        argumentError(
+            "--multisd-fgo-shadow-wcmc-min-correction must be in [0, max]",
+            argv[0]);
+    }
+    if (!std::isfinite(
+            config.multisd_fgo_shadow_fallback_ia_covariance_scale) ||
+        config.multisd_fgo_shadow_fallback_ia_covariance_scale <= 0.0) {
+        argumentError(
+            "--multisd-fgo-shadow-fallback-ia-covariance-scale must be > 0",
+            argv[0]);
+    }
 
     return config;
 }
@@ -3748,6 +3871,26 @@ libgnss::FGOProcessor::FGOConfig makeGnssOnlyMultiSdShadowConfig(
     config.use_double_difference_factors = true;
     config.use_single_difference_doppler_factors = true;
     config.use_single_difference_tdcp_factors = true;
+    config.use_single_difference_tdcp_integer_slip_repair =
+        solve_config.multisd_fgo_shadow_tdcp_slip_repair;
+    config.single_difference_tdcp_slip_repair_max_cycles =
+        solve_config.multisd_fgo_shadow_tdcp_slip_repair_max_cycles;
+    config.single_difference_tdcp_slip_repair_tolerance_cycles =
+        solve_config.multisd_fgo_shadow_tdcp_slip_repair_tolerance_cycles;
+    config.use_wcmc_pseudorange_conditioning =
+        solve_config.multisd_fgo_shadow_wcmc;
+    config.code_minus_carrier_warmup_epochs =
+        solve_config.multisd_fgo_shadow_wcmc_warmup_epochs;
+    config.code_minus_carrier_baseline_alpha =
+        solve_config.multisd_fgo_shadow_wcmc_baseline_alpha;
+    config.wcmc_max_correction_m =
+        solve_config.multisd_fgo_shadow_wcmc_max_correction_m;
+    config.wcmc_min_correction_m =
+        solve_config.multisd_fgo_shadow_wcmc_min_correction_m;
+    config.use_multisd_fallback_integer_aperture =
+        solve_config.multisd_fgo_shadow_fallback_integer_aperture;
+    config.multisd_fallback_integer_aperture_covariance_scale =
+        solve_config.multisd_fgo_shadow_fallback_ia_covariance_scale;
     config.use_velocity_states = true;
     config.use_velocity_motion_factors = true;
     config.fix_ambiguities = true;
@@ -4144,7 +4287,12 @@ int main(int argc, char* argv[]) {
                    "cuda_hypothesis_batch_attempts,"
                    "cuda_hypothesis_batch_successes,"
                    "cuda_hypothesis_batch_rhs_columns,"
-                   "fixed_float_separation_m,seed_separation_m\n";
+                   "fixed_float_separation_m,seed_separation_m,"
+                   "sd_tdcp_repair_candidates,sd_tdcp_repairs,"
+                   "sd_tdcp_repair_rejects,sd_tdcp_reference_change_rejects,"
+                   "wcmc_corrections,wcmc_correction_rms_m,"
+                   "integer_aperture_attempts,integer_aperture_passes,"
+                   "integer_aperture_rejects\n";
         }
 
         std::unique_ptr<IntegrityShadowTimeline> integrity_shadow;
@@ -4603,6 +4751,19 @@ int main(int argc, char* argv[]) {
                         multisd_shadow_csv,
                         diagnostics.multisd_validation_seed_separation_m);
                     multisd_shadow_csv
+                        << ','
+                        << diagnostics.single_difference_tdcp_slip_repair_candidates
+                        << ','
+                        << diagnostics.single_difference_tdcp_slip_repairs
+                        << ','
+                        << diagnostics.single_difference_tdcp_slip_repair_rejects
+                        << ','
+                        << diagnostics.single_difference_tdcp_rejected_reference_change
+                        << ',' << diagnostics.wcmc_pseudorange_corrections
+                        << ',' << diagnostics.wcmc_pseudorange_correction_rms_m
+                        << ',' << diagnostics.multisd_integer_aperture_attempts
+                        << ',' << diagnostics.multisd_integer_aperture_passes
+                        << ',' << diagnostics.multisd_integer_aperture_rejects
                         << '\n';
                 }
             }

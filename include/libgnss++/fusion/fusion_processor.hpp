@@ -167,6 +167,12 @@ public:
     void processGnssSolution(const PositionSolution& solution);
 
     struct TightlyCoupledDDResult {
+        // DD geometry is expressed in the live local navigation frame and
+        // shares the INS error state.  Defer it until the GNSS-velocity
+        // heading latch is both present and healthy; otherwise an accepted
+        // low-NIS update can still corrupt an unobservable yaw/position
+        // prefix.
+        bool deferred_until_heading_converged = false;
         dd_imu_bridge::UpdateResult update;
         dd_imu_bridge::PartialARResult partial_ar;
         dd_imu_bridge::SSEPartialARResult sse_partial_ar;
@@ -175,6 +181,7 @@ public:
     };
 
     /** Apply real DD code/carrier rows to the live INS state and ambiguities.
+     * Updates are fail-closed until isHeadingConverged() is true.
      * The optional position solution is used only for innovation-gated soft
      * recovery; a valid propagated nominal state is never hard-overwritten.
      */

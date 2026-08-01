@@ -2999,6 +2999,7 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
     int skipped_rover_epochs = 0;
     int derived_velocity_updates = 0;
     int tight_dd_epochs = 0;
+    int tight_dd_heading_deferred = 0;
     int tight_dd_accepted = 0;
     int tight_dd_rejected = 0;
     int tight_dd_carrier_fallbacks = 0;
@@ -3592,6 +3593,9 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
                     const auto dd_result = fusion_processor.processTightlyCoupledDD(
                         dd_rows, &pos_solution);
                     ++tight_dd_epochs;
+                    if (dd_result.deferred_until_heading_converged) {
+                        ++tight_dd_heading_deferred;
+                    }
                     tight_dd_rows += static_cast<int>(dd_rows.size());
                     if (std::isfinite(dd_result.update.nis_per_observation)) {
                         ++tight_dd_nis_samples;
@@ -3964,7 +3968,9 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
         if (options.tightly_coupled_dd_imu) {
             std::cout << "Tight DD/IMU epochs: " << tight_dd_epochs
                       << " (accepted=" << tight_dd_accepted
-                      << ", innovation_rejected=" << tight_dd_rejected << ")\n";
+                      << ", innovation_rejected=" << tight_dd_rejected
+                      << ", heading_deferred=" << tight_dd_heading_deferred
+                      << ")\n";
             std::cout << "Tight DD rows: " << tight_dd_rows << "\n";
             std::cout << "Carrier-to-code fallbacks: "
                       << tight_dd_carrier_fallbacks << "\n";

@@ -647,8 +647,12 @@ struct SingleDifferenceDefaultReferenceKey {
 
 struct SingleDifferenceCarrierResidual {
     std::size_t epoch_index = 0;
+    SatelliteId reference_satellite;
     double residual_m = 0.0;
     Vector3d los = Vector3d::Zero();
+    bool has_doppler_residual = false;
+    double doppler_residual_mps = 0.0;
+    double wavelength_m = 0.0;
 };
 
 std::map<CarrierKey, PreparedCarrierObservation> prepareCarrierObservationsForReceiver(
@@ -1671,6 +1675,8 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
     // FGOConfig::cmc_aware_reference_selection: count of DD reference
     // picks steered away from a CMC-level-excluded candidate this run.
     std::size_t cmc_ref_avoided_total = 0;
+    std::size_t wcmc_correction_total = 0;
+    double wcmc_correction_square_sum_m2 = 0.0;
 
     for (std::size_t epoch_index = 0; epoch_index < problem.epochs.size(); ++epoch_index) {
         // Reference: tc._update_epoch_dt(obs) runs unconditionally at the top
@@ -1784,7 +1790,10 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
         // CP loop's ambiguity-arc bookkeeping (jump forces a new arc).
         std::set<CarrierKey> cmc_level_exclude_this_epoch;
         std::set<CarrierKey> cmc_jump_reset_this_epoch;
-        if (config_.use_code_minus_carrier_screening &&
+        std::map<CarrierKey, double> wcmc_correction_this_epoch;
+        std::set<CarrierKey> wcmc_ready_this_epoch;
+        if ((config_.use_code_minus_carrier_screening ||
+             config_.use_wcmc_pseudorange_conditioning) &&
             rover_it != rover_carriers_by_epoch.end()) {
             for (const auto* rover_factor : rover_it->second) {
                 const CarrierKey key{rover_factor->satellite, rover_factor->signal};
@@ -1819,7 +1828,8 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                 CmcState& state = cmc_states[key];
                 if (rover_arc_restarted) {
                     state = CmcState{};
-                } else if (state.has_prev &&
+                } else if (config_.use_code_minus_carrier_screening &&
+                           state.has_prev &&
                            std::abs(cmc - state.prev_cmc_m) >
                                config_.code_minus_carrier_jump_threshold_m) {
                     cmc_jump_reset_this_epoch.insert(key);
@@ -1834,7 +1844,8 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
 
                 const double level_threshold =
                     config_.code_minus_carrier_level_threshold_m;
-                if (level_threshold > 0.0) {
+                if (level_threshold > 0.0 ||
+                    config_.use_wcmc_pseudorange_conditioning) {
                     if (!state.has_baseline) {
                         state.baseline_m = cmc;
                         state.warmup_count = 1;
@@ -1845,10 +1856,25 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                             (state.baseline_m * state.warmup_count + cmc) /
                             (state.warmup_count + 1);
                         ++state.warmup_count;
-                    } else if (std::abs(cmc - state.baseline_m) > level_threshold) {
+                    } else if (level_threshold > 0.0 &&
+                               std::abs(cmc - state.baseline_m) >
+                                   level_threshold) {
                         cmc_level_exclude_this_epoch.insert(key);
                         ++cmc_level_exclusion_total;
                     } else {
+                        const double correction_m = cmc - state.baseline_m;
+                        if (config_.use_wcmc_pseudorange_conditioning &&
+                            std::isfinite(correction_m) &&
+                            std::abs(correction_m) <=
+                                std::max(0.0,
+                                         config_.wcmc_max_correction_m)) {
+                            wcmc_ready_this_epoch.insert(key);
+                            if (std::abs(correction_m) >=
+                                std::max(0.0,
+                                         config_.wcmc_min_correction_m)) {
+                                wcmc_correction_this_epoch[key] = correction_m;
+                            }
+                        }
                         const double alpha = config_.code_minus_carrier_baseline_alpha;
                         state.baseline_m =
                             (1.0 - alpha) * state.baseline_m + alpha * cmc;
@@ -2052,6 +2078,36 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                      base_satellite.corrected_pseudorange_m) -
                     (reference->corrected_pseudorange_m -
                      base_reference.corrected_pseudorange_m);
+                if (config_.use_wcmc_pseudorange_conditioning) {
+                    const CarrierKey reference_key{reference->satellite,
+                                                   reference->signal};
+                    if (wcmc_ready_this_epoch.count(satellite_key) > 0 &&
+                        wcmc_ready_this_epoch.count(reference_key) > 0) {
+                        const auto satellite_correction_it =
+                            wcmc_correction_this_epoch.find(satellite_key);
+                        const auto reference_correction_it =
+                            wcmc_correction_this_epoch.find(reference_key);
+                        const double satellite_correction_m =
+                            satellite_correction_it ==
+                                    wcmc_correction_this_epoch.end()
+                                ? 0.0
+                                : satellite_correction_it->second;
+                        const double reference_correction_m =
+                            reference_correction_it ==
+                                    wcmc_correction_this_epoch.end()
+                                ? 0.0
+                                : reference_correction_it->second;
+                        const double dd_correction_m =
+                            satellite_correction_m - reference_correction_m;
+                        pseudorange_factor.observed_dd_pseudorange_m -=
+                            dd_correction_m;
+                        if (dd_correction_m != 0.0) {
+                            ++wcmc_correction_total;
+                            wcmc_correction_square_sum_m2 +=
+                                dd_correction_m * dd_correction_m;
+                        }
+                    }
+                }
                 const double pseudorange_band_scale =
                     signal_policy::isSecondarySignal(satellite->satellite.system,
                                                      satellite->signal)
@@ -2536,10 +2592,12 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                     }
                 }
 
+                const bool current_loss_of_lock =
+                    rover->loss_of_lock || reference->loss_of_lock;
                 if (rover->has_carrier_phase &&
                     reference->has_carrier_phase &&
-                    !rover->loss_of_lock &&
-                    !reference->loss_of_lock) {
+                    (!current_loss_of_lock ||
+                     config_.use_single_difference_tdcp_integer_slip_repair)) {
                     const double rover_carrier_residual =
                         rover->corrected_carrier_m -
                         rover->model_debug.geometric_range_m;
@@ -2551,16 +2609,105 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                     current_sd_carrier_residuals[carrier_key] =
                         SingleDifferenceCarrierResidual{
                             epoch_index,
+                            reference_satellite,
                             sd_carrier_residual,
                             sd_los,
+                            rover->has_doppler_residual &&
+                                reference->has_doppler_residual,
+                            rover->doppler_residual_mps -
+                                reference->doppler_residual_mps,
+                            rover->wavelength_m,
                         };
 
                     const auto previous_it =
                         previous_sd_carrier_residuals.find(carrier_key);
                     if (config_.use_single_difference_tdcp_factors &&
                         previous_it != previous_sd_carrier_residuals.end()) {
-                        const double tdcp =
+                        double tdcp =
                             sd_carrier_residual - previous_it->second.residual_m;
+                        int repaired_slip_cycles = 0;
+                        bool repaired_cycle_slip = false;
+
+                        if (config_
+                                .use_single_difference_tdcp_integer_slip_repair) {
+                            if (!(previous_it->second.reference_satellite ==
+                                  reference_satellite)) {
+                                ++problem.diagnostics
+                                      .single_difference_tdcp_rejected_reference_change;
+                                continue;
+                            }
+
+                            const double dt =
+                                problem.epochs[epoch_index].time -
+                                problem.epochs[previous_it->second.epoch_index].time;
+                            const double wavelength = rover->wavelength_m;
+                            const bool repair_observable =
+                                dt > 0.0 &&
+                                (config_.max_tdcp_gap_s <= 0.0 ||
+                                 dt <= config_.max_tdcp_gap_s) &&
+                                previous_it->second.has_doppler_residual &&
+                                rover->has_doppler_residual &&
+                                reference->has_doppler_residual &&
+                                std::isfinite(wavelength) && wavelength > 0.0;
+                            bool repair_accepted = false;
+                            if (repair_observable) {
+                                const double current_sd_doppler_mps =
+                                    rover->doppler_residual_mps -
+                                    reference->doppler_residual_mps;
+                                const double predicted_tdcp_m =
+                                    0.5 *
+                                    (previous_it->second.doppler_residual_mps +
+                                     current_sd_doppler_mps) *
+                                    dt;
+                                const double float_slip_cycles =
+                                    (tdcp - predicted_tdcp_m) / wavelength;
+                                const long long rounded_slip_cycles =
+                                    std::llround(float_slip_cycles);
+                                const double integer_residual_cycles =
+                                    std::abs(float_slip_cycles -
+                                             static_cast<double>(
+                                                 rounded_slip_cycles));
+                                const bool nonzero_candidate =
+                                    rounded_slip_cycles != 0;
+                                if (current_loss_of_lock) {
+                                    ++problem.diagnostics
+                                          .single_difference_tdcp_slip_repair_candidates;
+                                }
+                                // Doppler on its own is not a sufficiently
+                                // independent slip detector on a moving
+                                // low-cost receiver: range-rate/model errors
+                                // can sit close to an integer wavelength.
+                                // Use it only to estimate the integer amount
+                                // after the receiver LLI has declared an arc
+                                // break.
+                                if (current_loss_of_lock && nonzero_candidate &&
+                                    std::abs(rounded_slip_cycles) <=
+                                        std::max(
+                                            0,
+                                            config_
+                                                .single_difference_tdcp_slip_repair_max_cycles) &&
+                                    integer_residual_cycles <=
+                                        std::max(
+                                            0.0,
+                                            config_
+                                                .single_difference_tdcp_slip_repair_tolerance_cycles)) {
+                                    repaired_slip_cycles =
+                                        static_cast<int>(rounded_slip_cycles);
+                                    tdcp -= static_cast<double>(
+                                                repaired_slip_cycles) *
+                                            wavelength;
+                                    repaired_cycle_slip = true;
+                                    repair_accepted = true;
+                                    ++problem.diagnostics
+                                          .single_difference_tdcp_slip_repairs;
+                                }
+                            }
+                            if (current_loss_of_lock && !repair_accepted) {
+                                ++problem.diagnostics
+                                      .single_difference_tdcp_slip_repair_rejects;
+                                continue;
+                            }
+                        }
                         if (std::isfinite(tdcp) && tdcp != 0.0) {
                             SingleDifferenceTdcpFactor factor;
                             factor.previous_epoch_index =
@@ -2579,6 +2726,8 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                                          config_.single_difference_tdcp_sigma_m /
                                              std::sqrt(sin_el));
                             factor.elevation_rad = rover->elevation_rad;
+                            factor.repaired_slip_cycles = repaired_slip_cycles;
+                            factor.repaired_cycle_slip = repaired_cycle_slip;
                             problem.single_difference_tdcp_factors.push_back(factor);
                         }
                     }
@@ -2593,6 +2742,9 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
     problem.diagnostics.code_minus_carrier_level_exclusions =
         cmc_level_exclusion_total;
     problem.diagnostics.cmc_ref_avoided_count = cmc_ref_avoided_total;
+    problem.diagnostics.wcmc_pseudorange_corrections = wcmc_correction_total;
+    problem.diagnostics.wcmc_pseudorange_correction_square_sum_m2 =
+        wcmc_correction_square_sum_m2;
 
     return problem;
 }
@@ -2742,6 +2894,14 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
         problem.diagnostics.tdcp_rejected_loss_of_lock;
     result.diagnostics.tdcp_rejected_code_phase_jump =
         problem.diagnostics.tdcp_rejected_code_phase_jump;
+    result.diagnostics.single_difference_tdcp_rejected_reference_change =
+        problem.diagnostics.single_difference_tdcp_rejected_reference_change;
+    result.diagnostics.single_difference_tdcp_slip_repair_candidates =
+        problem.diagnostics.single_difference_tdcp_slip_repair_candidates;
+    result.diagnostics.single_difference_tdcp_slip_repairs =
+        problem.diagnostics.single_difference_tdcp_slip_repairs;
+    result.diagnostics.single_difference_tdcp_slip_repair_rejects =
+        problem.diagnostics.single_difference_tdcp_slip_repair_rejects;
     result.diagnostics.double_difference_matched_base_epochs =
         problem.diagnostics.double_difference_matched_base_epochs;
     result.diagnostics.double_difference_interpolated_base_epochs =
@@ -2758,6 +2918,14 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
         problem.diagnostics.code_minus_carrier_level_exclusions;
     result.diagnostics.cmc_ref_avoided_count =
         problem.diagnostics.cmc_ref_avoided_count;
+    result.diagnostics.wcmc_pseudorange_corrections =
+        problem.diagnostics.wcmc_pseudorange_corrections;
+    if (problem.diagnostics.wcmc_pseudorange_corrections > 0) {
+        result.diagnostics.wcmc_pseudorange_correction_rms_m = std::sqrt(
+            problem.diagnostics.wcmc_pseudorange_correction_square_sum_m2 /
+            static_cast<double>(
+                problem.diagnostics.wcmc_pseudorange_corrections));
+    }
 
     if (problem.epochs.empty() ||
         (problem.pseudorange_factors.empty() &&
@@ -4316,8 +4484,33 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                               config_.lambda_ratio_threshold,
                               config_.multisd_lambda_candidate_ratio_threshold)
                         : config_.lambda_ratio_threshold;
+                const bool is_fallback_group =
+                    !lambda_hypothesis_group_ends.empty();
+                bool integer_aperture_passed = true;
+                if (is_fallback_group &&
+                    config_.use_multisd_fallback_integer_aperture) {
+                    ++result.diagnostics.multisd_integer_aperture_attempts;
+                    const double scaled_bsr = bootstrappedSuccessRate(
+                        lambda_diagnostics.conditional_variances,
+                        config_
+                            .multisd_fallback_integer_aperture_covariance_scale);
+                    FixedFailureRateRatioThreshold aperture;
+                    integer_aperture_passed =
+                        fixedFailureRateRatioThreshold(
+                            n, scaled_bsr, 0.001, aperture) &&
+                        aperture.accepts_any_candidate &&
+                        std::isfinite(lambda_ratio) &&
+                        lambda_ratio >=
+                            aperture.minimum_second_to_best_ratio;
+                    if (integer_aperture_passed) {
+                        ++result.diagnostics.multisd_integer_aperture_passes;
+                    } else {
+                        ++result.diagnostics.multisd_integer_aperture_rejects;
+                    }
+                }
                 const double minimum_bootstrapped_success_rate =
-                    !lambda_hypothesis_group_ends.empty() &&
+                    is_fallback_group &&
+                            !config_.use_multisd_fallback_integer_aperture &&
                             config_
                                     .multisd_fallback_min_bootstrapped_success_rate >
                                 0.0
@@ -4330,6 +4523,7 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(
                     !std::isfinite(lambda_ratio) ||
                     (candidate_ratio_threshold > 0.0 &&
                      lambda_ratio < candidate_ratio_threshold) ||
+                    !integer_aperture_passed ||
                     (minimum_bootstrapped_success_rate > 0.0 &&
                      lambda_diagnostics.bootstrapped_success_rate <
                          minimum_bootstrapped_success_rate) ||

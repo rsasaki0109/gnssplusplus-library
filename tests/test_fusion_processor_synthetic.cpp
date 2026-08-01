@@ -131,8 +131,28 @@ TEST(FusionProcessorSyntheticTest, AppliesTightlyCoupledDDRowsToLiveINSState) {
     row.elevation_rad = 0.8;
     row.lock_count = 100;
 
+    const double unaligned_x = processor.state().nominal.position_enu.x();
+    const auto deferred = processor.processTightlyCoupledDD({row}, &anchor);
+    EXPECT_TRUE(deferred.deferred_until_heading_converged);
+    EXPECT_FALSE(deferred.update.ok);
+    EXPECT_DOUBLE_EQ(processor.state().nominal.position_enu.x(), unaligned_x);
+
+    // Three mutually consistent moving GNSS epochs satisfy the production
+    // heading-health gate before the DD row can touch the live INS state.
+    const Eigen::Vector3d east_velocity_enu(5.0, 0.0, 0.0);
+    anchor.has_velocity = true;
+    anchor.velocity_ecef =
+        processor.ecefToLocalEnuRotation().transpose() * east_velocity_enu;
+    anchor.velocity_covariance = 0.01 * Eigen::Matrix3d::Identity();
+    for (int i = 0; i < 3; ++i) {
+        anchor.time = time + (0.5 * i);
+        processor.processGnssSolution(anchor);
+    }
+    ASSERT_TRUE(processor.isHeadingConverged());
+
     const double before_x = processor.state().nominal.position_enu.x();
     const auto result = processor.processTightlyCoupledDD({row}, &anchor);
+    EXPECT_FALSE(result.deferred_until_heading_converged);
     EXPECT_TRUE(result.update.ok);
     EXPECT_EQ(result.update.observation_count, 2);
     EXPECT_GT(processor.state().nominal.position_enu.x(), before_x);
