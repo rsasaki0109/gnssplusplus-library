@@ -7,6 +7,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <iterator>
 #include <limits>
 #include <map>
 #include <memory>
@@ -25,7 +26,9 @@
 #include <libgnss++/algorithms/spp.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
+#include <libgnss++/fusion/fusion_initialization.hpp>
 #include <libgnss++/gnss.hpp>
+#include <libgnss++/io/imu.hpp>
 #include <libgnss++/io/rinex.hpp>
 #include <libgnss++/io/solution_writer.hpp>
 #include <libgnss++/models/troposphere.hpp>
@@ -109,6 +112,8 @@ struct SolveConfig {
     // GNSS-only causal MultiSD FGO shadow. The rolling window ends at the
     // current RTK epoch and never changes RTK output/filter state.
     std::string multisd_fgo_shadow_csv_path;
+    // Optional per-hypothesis JSONL for the discrete basin PF bridge.
+    std::string multisd_fgo_basin_jsonl_path;
     int multisd_fgo_shadow_window_epochs = 25;
     int multisd_fgo_shadow_min_epochs = 10;
     int multisd_fgo_shadow_holdout_offset = 2;
@@ -140,6 +145,17 @@ struct SolveConfig {
     double multisd_fgo_shadow_wcmc_max_correction_m = 10.0;
     bool multisd_fgo_shadow_fallback_integer_aperture = false;
     double multisd_fgo_shadow_fallback_ia_covariance_scale = 16.0;
+    // Optional tightly-coupled continuous IMU FGO run beside the existing
+    // Eigen MultiSD hypothesis generator. It is telemetry/proposal-only and
+    // never changes the RTK output or independent GNSS validation decision.
+    std::string multisd_fgo_imu_path;
+    Eigen::Vector3d multisd_fgo_imu_lever_arm_flu_m = Eigen::Vector3d::Zero();
+    double multisd_fgo_imu_fixed_lag_s = 5.0;
+    double multisd_fgo_imu_max_gap_s = 0.05;
+    std::string multisd_fgo_pf_feedback_path;
+    double multisd_fgo_pf_feedback_max_age_s = 1.0;
+    double multisd_fgo_pf_feedback_sigma_cycles = 0.05;
+    int multisd_fgo_pf_feedback_min_matches = 6;
     double rtk_update_outlier_threshold = 0.0;
     bool student_t_rtk_front_end = false;
     double ratio_threshold = 3.0;
@@ -1963,6 +1979,8 @@ void printAdvancedUsage(const char* program_name) {
         << "  --diagnostics-csv <file>   Write per-epoch RTK candidate diagnostics CSV (PPC pipeline format)\n"
         << "  --multisd-fgo-shadow-csv <file>\n"
         << "                             GNSS-only causal rolling-window MultiSD shadow telemetry\n"
+        << "  --multisd-fgo-basin-jsonl <file>\n"
+        << "                             Truth-free top-K basin identities, states, covariance, and evidence\n"
         << "  --multisd-fgo-shadow-window <epochs>\n"
         << "                             Rolling window ending at current epoch (default: 25)\n"
         << "  --multisd-fgo-shadow-min-epochs <epochs>\n"
@@ -2025,6 +2043,24 @@ void printAdvancedUsage(const char* program_name) {
         << "                             Hou FFRT gate for fallback PAR groups (default: off)\n"
         << "  --multisd-fgo-shadow-fallback-ia-covariance-scale <x>\n"
         << "                             Conservative FFRT covariance scale (default: 16)\n"
+        << "  --multisd-fgo-imu <imu.csv>\n"
+        << "                             Add opt-in GTSAM Pose3/velocity/bias IMU FGO telemetry\n"
+        << "                             beside the MultiSD basin generator (default: off)\n"
+        << "  --multisd-fgo-imu-lever-arm-flu <x> <y> <z>\n"
+        << "                             IMU-to-antenna lever arm in body FLU meters\n"
+        << "  --multisd-fgo-imu-fixed-lag <s>\n"
+        << "                             Incremental smoother lag (default: 5)\n"
+        << "  --multisd-fgo-imu-max-gap <s>\n"
+        << "                             Fail-closed IMU window coverage gap (default: 0.05)\n"
+        << "  --multisd-fgo-pf-feedback <csv>\n"
+        << "                             Causal validated PF ambiguity modes for the IMU FGO\n"
+        << "                             companion (default: off; proposal-only)\n"
+        << "  --multisd-fgo-pf-feedback-max-age <s>\n"
+        << "                             Maximum age of a strictly earlier PF mode (default: 1)\n"
+        << "  --multisd-fgo-pf-feedback-sigma <cycles>\n"
+        << "                             Soft ambiguity-prior sigma in [0.01,1] (default: 0.05)\n"
+        << "  --multisd-fgo-pf-feedback-min-matches <n>\n"
+        << "                             Minimum uniquely matched ambiguity arcs (default: 6)\n"
         << "  --realtime-fix-integrity   Gate FIX output with bounded-latency residual checks\n"
         << "                             (default: off; maximum latency: 7 epochs)\n"
         << "  --integrity-base-gate      Also enable the frozen offline low-satellite/ratio\n"
@@ -2274,6 +2310,10 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.multisd_fgo_shadow_csv_path = argv[++i];
             continue;
         }
+        if (arg == "--multisd-fgo-basin-jsonl" && i + 1 < argc) {
+            config.multisd_fgo_basin_jsonl_path = argv[++i];
+            continue;
+        }
         if (arg == "--multisd-fgo-shadow-window" && i + 1 < argc) {
             config.multisd_fgo_shadow_window_epochs = std::stoi(argv[++i]);
             continue;
@@ -2429,6 +2469,42 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             i + 1 < argc) {
             config.multisd_fgo_shadow_fallback_ia_covariance_scale =
                 std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-imu" && i + 1 < argc) {
+            config.multisd_fgo_imu_path = argv[++i];
+            continue;
+        }
+        if (arg == "--multisd-fgo-imu-lever-arm-flu" && i + 3 < argc) {
+            const double x = std::stod(argv[++i]);
+            const double y = std::stod(argv[++i]);
+            const double z = std::stod(argv[++i]);
+            config.multisd_fgo_imu_lever_arm_flu_m =
+                Eigen::Vector3d(x, y, z);
+            continue;
+        }
+        if (arg == "--multisd-fgo-imu-fixed-lag" && i + 1 < argc) {
+            config.multisd_fgo_imu_fixed_lag_s = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-imu-max-gap" && i + 1 < argc) {
+            config.multisd_fgo_imu_max_gap_s = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-pf-feedback" && i + 1 < argc) {
+            config.multisd_fgo_pf_feedback_path = argv[++i];
+            continue;
+        }
+        if (arg == "--multisd-fgo-pf-feedback-max-age" && i + 1 < argc) {
+            config.multisd_fgo_pf_feedback_max_age_s = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-pf-feedback-sigma" && i + 1 < argc) {
+            config.multisd_fgo_pf_feedback_sigma_cycles = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-pf-feedback-min-matches" && i + 1 < argc) {
+            config.multisd_fgo_pf_feedback_min_matches = std::stoi(argv[++i]);
             continue;
         }
         // Phase 2a CMC-aware reference selection flags: kept as STANDALONE
@@ -3747,6 +3823,50 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             "--multisd-fgo-shadow-fallback-ia-covariance-scale must be > 0",
             argv[0]);
     }
+    if (!config.multisd_fgo_imu_path.empty() &&
+        config.multisd_fgo_shadow_csv_path.empty()) {
+        argumentError("--multisd-fgo-imu requires --multisd-fgo-shadow-csv",
+                      argv[0]);
+    }
+    if (!config.multisd_fgo_imu_lever_arm_flu_m.allFinite()) {
+        argumentError(
+            "--multisd-fgo-imu-lever-arm-flu must contain finite values",
+            argv[0]);
+    }
+    if (!std::isfinite(config.multisd_fgo_imu_fixed_lag_s) ||
+        config.multisd_fgo_imu_fixed_lag_s <= 0.0) {
+        argumentError("--multisd-fgo-imu-fixed-lag must be > 0", argv[0]);
+    }
+    if (!std::isfinite(config.multisd_fgo_imu_max_gap_s) ||
+        config.multisd_fgo_imu_max_gap_s <= 0.0) {
+        argumentError("--multisd-fgo-imu-max-gap must be > 0", argv[0]);
+    }
+    if (!config.multisd_fgo_pf_feedback_path.empty() &&
+        config.multisd_fgo_imu_path.empty()) {
+        argumentError("--multisd-fgo-pf-feedback requires --multisd-fgo-imu",
+                      argv[0]);
+    }
+    if (!std::isfinite(config.multisd_fgo_pf_feedback_max_age_s) ||
+        config.multisd_fgo_pf_feedback_max_age_s <= 0.0) {
+        argumentError("--multisd-fgo-pf-feedback-max-age must be > 0", argv[0]);
+    }
+    if (!std::isfinite(config.multisd_fgo_pf_feedback_sigma_cycles) ||
+        config.multisd_fgo_pf_feedback_sigma_cycles < 0.01 ||
+        config.multisd_fgo_pf_feedback_sigma_cycles > 1.0) {
+        argumentError(
+            "--multisd-fgo-pf-feedback-sigma must be in [0.01,1]", argv[0]);
+    }
+    if (config.multisd_fgo_pf_feedback_min_matches < 1) {
+        argumentError("--multisd-fgo-pf-feedback-min-matches must be >= 1",
+                      argv[0]);
+    }
+#ifndef GNSSPP_HAS_GTSAM
+    if (!config.multisd_fgo_imu_path.empty()) {
+        argumentError(
+            "--multisd-fgo-imu requires a build with the GTSAM backend",
+            argv[0]);
+    }
+#endif
 
     return config;
 }
@@ -3942,6 +4062,489 @@ libgnss::FGOProcessor::FGOConfig makeGnssOnlyMultiSdShadowConfig(
         solve_config.multisd_fgo_shadow_fallback_min_bootstrapped_success_rate;
     return config;
 }
+
+libgnss::FGOProcessor::FGOConfig makeImuMultiSdShadowConfig(
+    const SolveConfig& solve_config) {
+    auto config = makeGnssOnlyMultiSdShadowConfig(solve_config);
+    config.backend = libgnss::FGOBackend::GTSAM;
+    // The Eigen solve remains the discrete top-K hypothesis authority. This
+    // companion solve estimates only the continuous trajectory/attitude/
+    // velocity/bias state and is exported as proposal telemetry.
+    config.fix_ambiguities = false;
+    config.use_lambda_ambiguity_fix = false;
+    config.use_epoch_lambda_fixed_output = false;
+    config.use_multisd_ambiguities = false;
+    config.use_multisd_disjoint_validation = false;
+    config.use_pose3_state = true;
+    config.pose3_lever_arm_body_m =
+        solve_config.multisd_fgo_imu_lever_arm_flu_m;
+    config.use_imu = true;
+    config.use_fixed_lag_smoother = true;
+    config.fixed_lag_smoother_lag_s =
+        solve_config.multisd_fgo_imu_fixed_lag_s;
+    return config;
+}
+
+struct MultiSdImuContext {
+    struct ContinuousState {
+        Eigen::Matrix3d attitude_body_to_nav = Eigen::Matrix3d::Identity();
+        Eigen::Vector3d velocity_nav_mps = Eigen::Vector3d::Zero();
+        Eigen::Vector3d accel_bias_mps2 = Eigen::Vector3d::Zero();
+        Eigen::Vector3d gyro_bias_radps = Eigen::Vector3d::Zero();
+    };
+
+    libgnss::ImuSeries full_series;
+    libgnss::NominalState leveled;
+    std::map<std::pair<int, double>, ContinuousState> state_cache;
+    Eigen::Vector3d nav_origin_ecef = Eigen::Vector3d::Zero();
+    double nav_origin_lat_rad = 0.0;
+    double nav_origin_lon_rad = 0.0;
+    bool nav_origin_latched = false;
+    bool last_warm_started = false;
+    std::size_t last_sample_count = 0;
+    double last_max_gap_s = std::numeric_limits<double>::quiet_NaN();
+    std::string last_fault_reason = "not_attempted";
+    bool valid = false;
+
+    static std::pair<int, double> timeKey(const libgnss::GNSSTime& time) {
+        return {time.week, roundedTowKey(time.tow)};
+    }
+
+    bool load(const std::string& path) {
+        const auto loaded = libgnss::loadImuCsv(path, full_series);
+        if (!loaded.ok || full_series.samples.size() < 250) {
+            std::cerr << "Error: failed to load MultiSD IMU input: " << path
+                      << " (" << loaded.error << ")\n";
+            return false;
+        }
+        // The six-route dynamic contract audit confirms that the PPC CSV
+        // signs already behave as body FLU despite the upstream README's FRD
+        // wording. Keep the transform explicit and identity here.
+        const libgnss::ImuAxisConvention ppc_axes;
+        for (auto& sample : full_series.samples) {
+            sample.accel_raw = ppc_axes.apply(sample.accel_raw);
+            sample.gyro_raw_radps = ppc_axes.apply(sample.gyro_raw_radps);
+        }
+        const std::vector<libgnss::ImuSample> stationary(
+            full_series.samples.begin(), full_series.samples.begin() + 250);
+        leveled = libgnss::fusion_initialization::alignStatic(
+            stationary, Eigen::Vector3d::Zero(), 9.80665);
+        valid = leveled.position_enu.allFinite() &&
+                leveled.velocity_enu.allFinite() &&
+                leveled.accel_bias.allFinite() &&
+                leveled.gyro_bias.allFinite();
+        return valid;
+    }
+
+    bool populate(libgnss::FGOProcessor::FGOProblem& problem,
+                  double maximum_gap_s) {
+        last_sample_count = 0;
+        last_max_gap_s = std::numeric_limits<double>::quiet_NaN();
+        last_fault_reason = "not_attempted";
+        last_warm_started = false;
+        if (!valid || problem.epochs.size() < 3) {
+            last_fault_reason = "invalid_context_or_window";
+            return false;
+        }
+        const auto& first_time = problem.epochs.front().time;
+        const auto& last_time = problem.epochs.back().time;
+        const auto begin = std::lower_bound(
+            full_series.samples.begin(), full_series.samples.end(), first_time,
+            [](const libgnss::ImuSample& sample, const libgnss::GNSSTime& time) {
+                return sample.time < time;
+            });
+        const auto end = std::upper_bound(
+            begin, full_series.samples.end(), last_time,
+            [](const libgnss::GNSSTime& time, const libgnss::ImuSample& sample) {
+                return time < sample.time;
+            });
+        last_sample_count = static_cast<std::size_t>(std::distance(begin, end));
+        if (last_sample_count < 2) {
+            last_fault_reason = "insufficient_samples";
+            return false;
+        }
+        double maximum_observed_gap_s = std::max(
+            std::abs(timeDiffSeconds(begin->time, first_time)),
+            std::abs(timeDiffSeconds(last_time, std::prev(end)->time)));
+        for (auto current = std::next(begin); current != end; ++current) {
+            const double gap_s = timeDiffSeconds(current->time,
+                                                 std::prev(current)->time);
+            if (gap_s <= 0.0) {
+                last_max_gap_s = gap_s;
+                last_fault_reason = "non_increasing_samples";
+                return false;
+            }
+            maximum_observed_gap_s = std::max(maximum_observed_gap_s, gap_s);
+        }
+        last_max_gap_s = maximum_observed_gap_s;
+        if (maximum_observed_gap_s > maximum_gap_s +
+                kExactTimeToleranceSeconds) {
+            last_fault_reason = "imu_coverage_gap";
+            return false;
+        }
+
+        auto& imu = problem.imu;
+        imu.samples_body_flu.assign(begin, end);
+        if (!nav_origin_latched) {
+            nav_origin_ecef = problem.epochs.front().position_ecef;
+            double height = 0.0;
+            libgnss::ecef2geodetic(
+                nav_origin_ecef, nav_origin_lat_rad,
+                nav_origin_lon_rad, height);
+            nav_origin_latched = true;
+        }
+        imu.nav_origin_ecef = nav_origin_ecef;
+        imu.nav_origin_lat_rad = nav_origin_lat_rad;
+        imu.nav_origin_lon_rad = nav_origin_lon_rad;
+
+        // Causal course initialization from several mutually consistent
+        // multi-second displacements in this rolling window. The yaw prior
+        // remains deliberately broad because course and vehicle heading can
+        // differ by 180 degrees while reversing.
+        libgnss::FusionState initial;
+        initial.nominal = leveled;
+        std::vector<Eigen::Vector3d> course_velocities;
+        const std::size_t lag = std::max<std::size_t>(
+            2, std::min<std::size_t>(10, problem.epochs.size() - 3));
+        for (std::size_t index = 0; index + lag < problem.epochs.size(); ++index) {
+            const std::size_t next = index + lag;
+            const double dt = problem.epochs[next].time -
+                              problem.epochs[index].time;
+            if (dt <= 0.0) continue;
+            const Eigen::Vector3d start_enu = libgnss::ecef2enu(
+                problem.epochs[index].position_ecef - nav_origin_ecef,
+                nav_origin_lat_rad, nav_origin_lon_rad);
+            const Eigen::Vector3d end_enu = libgnss::ecef2enu(
+                problem.epochs[next].position_ecef - nav_origin_ecef,
+                nav_origin_lat_rad, nav_origin_lon_rad);
+            const Eigen::Vector3d velocity = (end_enu - start_enu) / dt;
+            const double horizontal = std::hypot(velocity.x(), velocity.y());
+            if (horizontal >= 2.0 && horizontal <= 50.0 &&
+                std::abs(velocity.z()) <= 3.0) {
+                course_velocities.push_back(velocity);
+            }
+        }
+        Eigen::Vector3d mean_velocity = Eigen::Vector3d::Zero();
+        for (const auto& velocity : course_velocities) mean_velocity += velocity;
+        if (!course_velocities.empty()) {
+            mean_velocity /= static_cast<double>(course_velocities.size());
+        }
+        bool consistent_course = course_velocities.size() >= 3;
+        const double mean_horizontal =
+            std::hypot(mean_velocity.x(), mean_velocity.y());
+        for (const auto& velocity : course_velocities) {
+            const double horizontal = std::hypot(velocity.x(), velocity.y());
+            const double cosine =
+                (velocity.x() * mean_velocity.x() +
+                 velocity.y() * mean_velocity.y()) /
+                std::max(1.0e-9, horizontal * mean_horizontal);
+            consistent_course = consistent_course &&
+                cosine >= std::cos(20.0 * std::acos(-1.0) / 180.0);
+        }
+        const bool heading_seeded =
+            consistent_course &&
+            libgnss::fusion_initialization::tryAlignHeading(
+                initial, mean_velocity, 1.0, 90.0);
+        imu.init_attitude_body_to_nav =
+            initial.nominal.attitude_body_to_enu.toRotationMatrix();
+        imu.init_velocity_nav =
+            consistent_course ? mean_velocity : Eigen::Vector3d::Zero();
+        imu.init_accel_bias = leveled.accel_bias;
+        imu.init_gyro_bias = leveled.gyro_bias;
+        imu.init_attitude_sigma_roll_pitch_rad = 0.05;
+        imu.init_attitude_sigma_yaw_rad = heading_seeded ? 1.5 : 3.0;
+        imu.init_velocity_sigma_mps = 1.0;
+        imu.init_accel_bias_sigma = 0.1;
+        imu.init_gyro_bias_sigma = 0.01;
+        const auto cached = state_cache.find(timeKey(first_time));
+        if (cached != state_cache.end()) {
+            const auto& state = cached->second;
+            imu.init_attitude_body_to_nav = state.attitude_body_to_nav;
+            imu.init_velocity_nav = state.velocity_nav_mps;
+            imu.init_accel_bias = state.accel_bias_mps2;
+            imu.init_gyro_bias = state.gyro_bias_radps;
+            // Retain enough uncertainty to let the overlapping GNSS/IMU
+            // window relinearize instead of double-counting the prior solve.
+            imu.init_attitude_sigma_roll_pitch_rad = 0.03;
+            imu.init_attitude_sigma_yaw_rad = 0.25;
+            imu.init_velocity_sigma_mps = 0.5;
+            imu.init_accel_bias_sigma = 0.05;
+            imu.init_gyro_bias_sigma = 0.005;
+            last_warm_started = true;
+        }
+        imu.noise.accel_noise_sigma = 2.0e-2;
+        imu.noise.gyro_noise_sigma = 2.0e-3;
+        imu.noise.accel_bias_rw_sigma = 3.0e-3;
+        imu.noise.gyro_bias_rw_sigma = 3.0e-4;
+        imu.noise.integration_sigma = 1.0e-3;
+        imu.valid = true;
+        last_fault_reason = "ok";
+        return true;
+    }
+
+    void ingest(const libgnss::FGOProcessor::FGOProblem& problem,
+                const libgnss::FGOProcessor::FGOResult& result) {
+        const std::size_t count = std::min({
+            problem.epochs.size(),
+            result.solution.solutions.size(),
+            result.epoch_attitude_body_to_nav.size(),
+            result.epoch_velocity_nav_mps.size(),
+            result.epoch_accel_bias_mps2.size(),
+            result.epoch_gyro_bias_radps.size()});
+        for (std::size_t index = 0; index < count; ++index) {
+            const auto& solution = result.solution.solutions[index];
+            ContinuousState state;
+            state.attitude_body_to_nav =
+                result.epoch_attitude_body_to_nav[index];
+            state.velocity_nav_mps = result.epoch_velocity_nav_mps[index];
+            state.accel_bias_mps2 = result.epoch_accel_bias_mps2[index];
+            state.gyro_bias_radps = result.epoch_gyro_bias_radps[index];
+            if (solution.status == libgnss::SolutionStatus::NONE ||
+                !state.attitude_body_to_nav.allFinite() ||
+                !state.velocity_nav_mps.allFinite() ||
+                !state.accel_bias_mps2.allFinite() ||
+                !state.gyro_bias_radps.allFinite() ||
+                state.accel_bias_mps2.norm() > 5.0 ||
+                state.gyro_bias_radps.norm() > 1.0) {
+                continue;
+            }
+            state_cache[timeKey(problem.epochs[index].time)] = state;
+        }
+    }
+};
+
+struct MultiSdPfFeedbackContext {
+    struct Entry {
+        libgnss::SatelliteId satellite;
+        libgnss::SatelliteId reference_satellite;
+        libgnss::SignalType signal = libgnss::SignalType::GPS_L1CA;
+        std::size_t segment_index = 0;
+        std::size_t reference_segment_index = 0;
+        double wavelength_m = 0.0;
+        int fixed_cycles = 0;
+    };
+
+    struct Group {
+        libgnss::GNSSTime time;
+        std::size_t source_epoch_index = 0;
+        std::vector<Entry> entries;
+    };
+
+    std::vector<Group> groups;
+    bool last_available = false;
+    bool last_applied = false;
+    std::size_t last_rows = 0;
+    std::size_t last_matches = 0;
+    double last_age_s = std::numeric_limits<double>::quiet_NaN();
+    int last_source_week = 0;
+    double last_source_tow = std::numeric_limits<double>::quiet_NaN();
+    std::string last_reason = "not_attempted";
+
+    void resetTelemetry() {
+        last_available = false;
+        last_applied = false;
+        last_rows = 0;
+        last_matches = 0;
+        last_age_s = std::numeric_limits<double>::quiet_NaN();
+        last_source_week = 0;
+        last_source_tow = std::numeric_limits<double>::quiet_NaN();
+        last_reason = "not_attempted";
+    }
+
+    static std::optional<libgnss::SatelliteId> parseSatellite(
+        const std::string& text) {
+        if (text.size() < 2) return std::nullopt;
+        libgnss::GNSSSystem system = libgnss::GNSSSystem::UNKNOWN;
+        switch (text.front()) {
+            case 'G': system = libgnss::GNSSSystem::GPS; break;
+            case 'R': system = libgnss::GNSSSystem::GLONASS; break;
+            case 'E': system = libgnss::GNSSSystem::Galileo; break;
+            case 'C': system = libgnss::GNSSSystem::BeiDou; break;
+            case 'J': system = libgnss::GNSSSystem::QZSS; break;
+            case 'S': system = libgnss::GNSSSystem::SBAS; break;
+            case 'I': system = libgnss::GNSSSystem::NavIC; break;
+            default: return std::nullopt;
+        }
+        char* end = nullptr;
+        const long prn = std::strtol(text.c_str() + 1, &end, 10);
+        if (end == text.c_str() + 1 || *end != '\0' || prn < 1 || prn > 255) {
+            return std::nullopt;
+        }
+        return libgnss::SatelliteId(system, static_cast<std::uint8_t>(prn));
+    }
+
+    bool load(const std::string& path) {
+        groups.clear();
+        std::ifstream input(path);
+        if (!input.is_open()) return false;
+        std::string line;
+        if (!std::getline(input, line)) return false;
+        const auto header = parseCsvFields(line);
+        std::map<std::string, std::size_t> columns;
+        for (std::size_t i = 0; i < header.size(); ++i) columns[header[i]] = i;
+        for (const char* required : {
+                 "gps_week", "tow", "source_epoch_index", "satellite",
+                 "reference_satellite", "signal", "segment_index",
+                 "reference_segment_index", "wavelength_m", "fixed_cycles",
+                 "selected_native_holdout_pass", "schema"}) {
+            if (columns.find(required) == columns.end()) return false;
+        }
+        const auto field = [&](const std::vector<std::string>& row,
+                               const char* name) -> std::string {
+            const auto it = columns.find(name);
+            return it != columns.end() && it->second < row.size()
+                ? row[it->second]
+                : std::string{};
+        };
+        const auto exactInteger = [](const std::optional<double>& value,
+                                     double minimum,
+                                     double maximum) -> std::optional<long long> {
+            if (!value || *value < minimum || *value > maximum) {
+                return std::nullopt;
+            }
+            const double rounded = std::round(*value);
+            if (std::abs(*value - rounded) > 1.0e-9) return std::nullopt;
+            return static_cast<long long>(rounded);
+        };
+
+        std::set<std::string> group_identities;
+        while (std::getline(input, line)) {
+            if (line.empty()) continue;
+            const auto row = parseCsvFields(line);
+            const auto week = exactInteger(
+                parseFiniteDouble(field(row, "gps_week")), 0.0, 10000.0);
+            const auto tow = parseFiniteDouble(field(row, "tow"));
+            const auto source_epoch = exactInteger(
+                parseFiniteDouble(field(row, "source_epoch_index")),
+                0.0, static_cast<double>(std::numeric_limits<int>::max()));
+            const auto satellite = parseSatellite(field(row, "satellite"));
+            const auto reference = parseSatellite(field(row, "reference_satellite"));
+            const auto signal = exactInteger(
+                parseFiniteDouble(field(row, "signal")), 0.0, 255.0);
+            const auto segment = exactInteger(
+                parseFiniteDouble(field(row, "segment_index")),
+                0.0, static_cast<double>(std::numeric_limits<int>::max()));
+            const auto reference_segment = exactInteger(
+                parseFiniteDouble(field(row, "reference_segment_index")),
+                0.0, static_cast<double>(std::numeric_limits<int>::max()));
+            const auto wavelength = parseFiniteDouble(field(row, "wavelength_m"));
+            const auto fixed_cycles = exactInteger(
+                parseFiniteDouble(field(row, "fixed_cycles")),
+                static_cast<double>(std::numeric_limits<int>::min()),
+                static_cast<double>(std::numeric_limits<int>::max()));
+            const auto holdout = exactInteger(
+                parseFiniteDouble(field(row, "selected_native_holdout_pass")),
+                1.0, 1.0);
+            if (!week || !tow || *tow < 0.0 || *tow >= 604800.0 ||
+                !source_epoch || !satellite || !reference || !signal ||
+                !segment || !reference_segment || !wavelength ||
+                *wavelength <= 0.0 || !fixed_cycles || !holdout ||
+                field(row, "schema") != "gnss_gpu_pf_fgo_feedback_v1") {
+                groups.clear();
+                return false;
+            }
+
+            libgnss::GNSSTime time(static_cast<int>(*week), *tow);
+            if (!groups.empty()) {
+                const double dt = timeDiffSeconds(time, groups.back().time);
+                if (dt < -kExactTimeToleranceSeconds) {
+                    groups.clear();
+                    return false;
+                }
+                if (std::abs(dt) > kExactTimeToleranceSeconds) {
+                    groups.push_back(Group{time,
+                        static_cast<std::size_t>(*source_epoch), {}});
+                    group_identities.clear();
+                } else if (groups.back().source_epoch_index !=
+                           static_cast<std::size_t>(*source_epoch)) {
+                    groups.clear();
+                    return false;
+                }
+            } else {
+                groups.push_back(Group{time,
+                    static_cast<std::size_t>(*source_epoch), {}});
+            }
+            std::ostringstream identity;
+            identity << field(row, "satellite") << '/'
+                     << field(row, "reference_satellite") << '/'
+                     << *signal << '/' << *segment << '/'
+                     << *reference_segment;
+            if (!group_identities.insert(identity.str()).second) {
+                groups.clear();
+                return false;
+            }
+            groups.back().entries.push_back(Entry{
+                *satellite, *reference,
+                static_cast<libgnss::SignalType>(*signal),
+                static_cast<std::size_t>(*segment),
+                static_cast<std::size_t>(*reference_segment),
+                *wavelength, static_cast<int>(*fixed_cycles)});
+        }
+        return true;
+    }
+
+    bool populate(libgnss::FGOProcessor::FGOProblem& problem,
+                  const libgnss::GNSSTime& current_time,
+                  double max_age_s,
+                  double sigma_cycles,
+                  std::size_t min_matches) {
+        resetTelemetry();
+        problem.validated_ambiguity_priors.clear();
+        const Group* selected = nullptr;
+        for (const auto& group : groups) {
+            const double age = timeDiffSeconds(current_time, group.time);
+            if (age > kExactTimeToleranceSeconds) selected = &group;
+            if (age <= kExactTimeToleranceSeconds) break;
+        }
+        if (!selected) {
+            last_reason = "no_strictly_prior_group";
+            return false;
+        }
+        last_available = true;
+        last_rows = selected->entries.size();
+        last_age_s = timeDiffSeconds(current_time, selected->time);
+        last_source_week = selected->time.week;
+        last_source_tow = selected->time.tow;
+        if (last_age_s > max_age_s + kExactTimeToleranceSeconds) {
+            last_reason = "stale";
+            return false;
+        }
+
+        std::vector<libgnss::FGOProcessor::ValidatedAmbiguityPrior> priors;
+        std::set<std::size_t> used_indices;
+        for (const auto& entry : selected->entries) {
+            std::vector<std::size_t> matches;
+            for (std::size_t index = 0;
+                 index < problem.ambiguity_states.size(); ++index) {
+                const auto& ambiguity = problem.ambiguity_states[index];
+                if (ambiguity.satellite == entry.satellite &&
+                    ambiguity.reference_satellite == entry.reference_satellite &&
+                    ambiguity.signal == entry.signal &&
+                    ambiguity.segment_index == entry.segment_index &&
+                    std::abs(ambiguity.wavelength_m - entry.wavelength_m) <=
+                        std::max(1.0e-9, 1.0e-6 * entry.wavelength_m)) {
+                    matches.push_back(index);
+                }
+            }
+            if (matches.size() != 1 ||
+                !used_indices.insert(matches.front()).second) {
+                last_matches = priors.size();
+                last_reason = "identity_mismatch";
+                return false;
+            }
+            priors.push_back({matches.front(), entry.fixed_cycles, sigma_cycles});
+        }
+        last_matches = priors.size();
+        if (priors.size() < min_matches) {
+            last_reason = "insufficient_matches";
+            return false;
+        }
+        problem.validated_ambiguity_priors = std::move(priors);
+        last_applied = true;
+        last_reason = "applied";
+        return true;
+    }
+};
 
 void writeOptionalCsvNumber(std::ostream& output, double value) {
     if (std::isfinite(value)) {
@@ -4258,6 +4861,39 @@ int main(int argc, char* argv[]) {
 
         const libgnss::FGOProcessor multisd_shadow_processor(
             makeGnssOnlyMultiSdShadowConfig(config));
+        const libgnss::FGOProcessor multisd_imu_shadow_processor(
+            makeImuMultiSdShadowConfig(config));
+        std::optional<MultiSdImuContext> multisd_imu_context;
+        if (!config.multisd_fgo_imu_path.empty()) {
+            multisd_imu_context.emplace();
+            if (!multisd_imu_context->load(config.multisd_fgo_imu_path)) {
+                return 1;
+            }
+            std::cout << "Loaded MultiSD IMU FGO input: "
+                      << config.multisd_fgo_imu_path << " ("
+                      << multisd_imu_context->full_series.size()
+                      << " samples, lever FLU="
+                      << config.multisd_fgo_imu_lever_arm_flu_m.transpose()
+                      << ")\n";
+        }
+        std::optional<MultiSdPfFeedbackContext> multisd_pf_feedback_context;
+        if (!config.multisd_fgo_pf_feedback_path.empty()) {
+            multisd_pf_feedback_context.emplace();
+            if (!multisd_pf_feedback_context->load(
+                    config.multisd_fgo_pf_feedback_path)) {
+                std::cerr << "Error: invalid MultiSD PF feedback CSV: "
+                          << config.multisd_fgo_pf_feedback_path << '\n';
+                return 1;
+            }
+            std::size_t feedback_rows = 0;
+            for (const auto& group : multisd_pf_feedback_context->groups) {
+                feedback_rows += group.entries.size();
+            }
+            std::cout << "Loaded causal MultiSD PF feedback: "
+                      << config.multisd_fgo_pf_feedback_path << " ("
+                      << multisd_pf_feedback_context->groups.size()
+                      << " epochs, " << feedback_rows << " ambiguity modes)\n";
+        }
         std::vector<libgnss::ObservationData> multisd_shadow_rover_window;
         std::vector<libgnss::ObservationData> multisd_shadow_base_window;
         multisd_shadow_rover_window.reserve(
@@ -4292,7 +4928,51 @@ int main(int argc, char* argv[]) {
                    "sd_tdcp_repair_rejects,sd_tdcp_reference_change_rejects,"
                    "wcmc_corrections,wcmc_correction_rms_m,"
                    "integer_aperture_attempts,integer_aperture_passes,"
-                   "integer_aperture_rejects\n";
+                   "integer_aperture_rejects";
+            if (multisd_imu_context) {
+                multisd_shadow_csv
+                    << ",imu_fgo_available,imu_fgo_intervals,"
+                       "imu_fgo_runtime_ms,imu_fgo_solution_count,"
+                       "imu_fgo_last_status,imu_fgo_last_time_error_s,"
+                       "imu_fgo_converged,imu_fgo_recovery_epochs,"
+                       "imu_fgo_warm_started,"
+                       "imu_fgo_sample_count,imu_fgo_max_gap_s,"
+                       "imu_fgo_fault_reason,"
+                       "imu_fgo_pose_correction_m,"
+                       "imu_fgo_factor_nis,imu_fgo_factor_nis_per_dof,"
+                       "imu_fgo_accel_bias_step_mps2,"
+                       "imu_fgo_gyro_bias_step_radps,"
+                       "imu_fgo_bax,imu_fgo_bay,imu_fgo_baz,"
+                       "imu_fgo_bgx,imu_fgo_bgy,imu_fgo_bgz,"
+                       "imu_fgo_x,imu_fgo_y,imu_fgo_z,"
+                       "imu_fgo_basin_delta_m";
+                if (multisd_pf_feedback_context) {
+                    multisd_shadow_csv
+                        << ",pf_feedback_available,pf_feedback_applied,"
+                           "pf_feedback_rows,pf_feedback_matches,"
+                           "pf_feedback_age_s,pf_feedback_source_week,"
+                           "pf_feedback_source_tow,pf_feedback_reason,"
+                           "pf_feedback_backend_requested,"
+                           "pf_feedback_backend_applied,"
+                           "pf_feedback_backend_epochs";
+                }
+            }
+            multisd_shadow_csv << '\n';
+        }
+        std::ofstream multisd_basin_jsonl;
+        if (!config.multisd_fgo_basin_jsonl_path.empty()) {
+            if (!multisd_shadow_csv.is_open()) {
+                std::cerr
+                    << "Error: --multisd-fgo-basin-jsonl requires "
+                       "--multisd-fgo-shadow-csv\n";
+                return 1;
+            }
+            multisd_basin_jsonl.open(config.multisd_fgo_basin_jsonl_path);
+            if (!multisd_basin_jsonl.is_open()) {
+                std::cerr << "Error: failed to open MultiSD FGO basin JSONL: "
+                          << config.multisd_fgo_basin_jsonl_path << std::endl;
+                return 1;
+            }
         }
 
         std::unique_ptr<IntegrityShadowTimeline> integrity_shadow;
@@ -4480,6 +5160,9 @@ int main(int argc, char* argv[]) {
         std::size_t multisd_shadow_valid = 0;
         std::size_t multisd_shadow_fixed = 0;
         double multisd_shadow_total_runtime_ms = 0.0;
+        std::size_t multisd_imu_shadow_attempts = 0;
+        std::size_t multisd_imu_shadow_valid = 0;
+        double multisd_imu_shadow_total_runtime_ms = 0.0;
         libgnss::PositionSolution last_fixed_output;
         bool have_last_fixed_output = false;
         libgnss::PositionSolution last_guard_output;
@@ -4632,6 +5315,50 @@ int main(int argc, char* argv[]) {
                     ++multisd_shadow_attempts;
                     multisd_shadow_total_runtime_ms += shadow_runtime_ms;
 
+                    std::optional<libgnss::FGOProcessor::FGOResult>
+                        imu_shadow_result;
+                    double imu_shadow_runtime_ms = 0.0;
+                    if (multisd_imu_context) {
+                        if (multisd_pf_feedback_context) {
+                            multisd_pf_feedback_context->resetTelemetry();
+                        }
+                        const auto imu_start =
+                            std::chrono::steady_clock::now();
+                        auto imu_problem =
+                            multisd_imu_shadow_processor
+                                .buildDoubleDifferenceProblem(
+                                    multisd_shadow_rover_window,
+                                    multisd_shadow_base_window,
+                                    nav_data,
+                                    base_position);
+                        if (multisd_imu_context->populate(
+                                imu_problem,
+                                config.multisd_fgo_imu_max_gap_s)) {
+                            if (multisd_pf_feedback_context) {
+                                multisd_pf_feedback_context->populate(
+                                    imu_problem, rover_obs.time,
+                                    config.multisd_fgo_pf_feedback_max_age_s,
+                                    config.multisd_fgo_pf_feedback_sigma_cycles,
+                                    static_cast<std::size_t>(
+                                        config.multisd_fgo_pf_feedback_min_matches));
+                            }
+                            imu_shadow_result =
+                                multisd_imu_shadow_processor.optimizeProblem(
+                                    imu_problem);
+                            multisd_imu_context->ingest(
+                                imu_problem, *imu_shadow_result);
+                            ++multisd_imu_shadow_attempts;
+                        }
+                        const auto imu_end =
+                            std::chrono::steady_clock::now();
+                        imu_shadow_runtime_ms =
+                            std::chrono::duration<double, std::milli>(
+                                imu_end - imu_start)
+                                .count();
+                        multisd_imu_shadow_total_runtime_ms +=
+                            imu_shadow_runtime_ms;
+                    }
+
                     const libgnss::PositionSolution* shadow_latest = nullptr;
                     if (!shadow_result.solution.solutions.empty()) {
                         const auto& candidate =
@@ -4648,7 +5375,458 @@ int main(int argc, char* argv[]) {
                         }
                     }
 
+                    const libgnss::PositionSolution* imu_shadow_latest =
+                        nullptr;
+                    Eigen::Vector3d imu_shadow_attitude_rpy_deg =
+                        Eigen::Vector3d::Constant(
+                            std::numeric_limits<double>::quiet_NaN());
+                    Eigen::Vector3d imu_shadow_velocity_nav_mps =
+                        Eigen::Vector3d::Constant(
+                            std::numeric_limits<double>::quiet_NaN());
+                    Eigen::Vector3d imu_shadow_accel_bias_mps2 =
+                        Eigen::Vector3d::Constant(
+                            std::numeric_limits<double>::quiet_NaN());
+                    Eigen::Vector3d imu_shadow_gyro_bias_radps =
+                        Eigen::Vector3d::Constant(
+                            std::numeric_limits<double>::quiet_NaN());
+                    double imu_shadow_pose_correction_m =
+                        std::numeric_limits<double>::quiet_NaN();
+                    double imu_shadow_factor_nis =
+                        std::numeric_limits<double>::quiet_NaN();
+                    double imu_shadow_factor_nis_per_dof =
+                        std::numeric_limits<double>::quiet_NaN();
+                    double imu_shadow_accel_bias_step_mps2 =
+                        std::numeric_limits<double>::quiet_NaN();
+                    double imu_shadow_gyro_bias_step_radps =
+                        std::numeric_limits<double>::quiet_NaN();
+                    if (imu_shadow_result &&
+                        !imu_shadow_result->solution.solutions.empty()) {
+                        const std::size_t latest_index =
+                            imu_shadow_result->solution.solutions.size() - 1;
+                        const auto& candidate =
+                            imu_shadow_result->solution.solutions.back();
+                        if (std::abs(candidate.time - rover_obs.time) <=
+                            kExactTimeToleranceSeconds &&
+                            candidate.isValid()) {
+                            imu_shadow_latest = &candidate;
+                            ++multisd_imu_shadow_valid;
+                            if (latest_index <
+                                imu_shadow_result
+                                    ->epoch_attitude_rpy_deg.size()) {
+                                imu_shadow_attitude_rpy_deg =
+                                    imu_shadow_result
+                                        ->epoch_attitude_rpy_deg[latest_index];
+                            }
+                            if (latest_index <
+                                imu_shadow_result
+                                    ->epoch_velocity_nav_mps.size()) {
+                                imu_shadow_velocity_nav_mps =
+                                    imu_shadow_result
+                                        ->epoch_velocity_nav_mps[latest_index];
+                            }
+                            if (latest_index <
+                                imu_shadow_result
+                                    ->epoch_accel_bias_mps2.size()) {
+                                imu_shadow_accel_bias_mps2 =
+                                    imu_shadow_result
+                                        ->epoch_accel_bias_mps2[latest_index];
+                            }
+                            if (latest_index <
+                                 imu_shadow_result
+                                     ->epoch_gyro_bias_radps.size()) {
+                                imu_shadow_gyro_bias_radps =
+                                    imu_shadow_result
+                                         ->epoch_gyro_bias_radps[latest_index];
+                            }
+                            if (latest_index <
+                                imu_shadow_result->epoch_diagnostics.size()) {
+                                imu_shadow_pose_correction_m =
+                                    imu_shadow_result
+                                        ->epoch_diagnostics[latest_index]
+                                        .imu_pose_correction_m;
+                                imu_shadow_factor_nis =
+                                    imu_shadow_result
+                                        ->epoch_diagnostics[latest_index]
+                                        .imu_factor_nis;
+                                imu_shadow_factor_nis_per_dof =
+                                    imu_shadow_result
+                                        ->epoch_diagnostics[latest_index]
+                                        .imu_factor_nis_per_dof;
+                            }
+                            if (latest_index > 0 && latest_index <
+                                    imu_shadow_result
+                                        ->epoch_accel_bias_mps2.size()) {
+                                imu_shadow_accel_bias_step_mps2 =
+                                    (imu_shadow_result
+                                         ->epoch_accel_bias_mps2[latest_index] -
+                                     imu_shadow_result
+                                         ->epoch_accel_bias_mps2[latest_index - 1])
+                                        .norm();
+                            }
+                            if (latest_index > 0 && latest_index <
+                                    imu_shadow_result
+                                        ->epoch_gyro_bias_radps.size()) {
+                                imu_shadow_gyro_bias_step_radps =
+                                    (imu_shadow_result
+                                         ->epoch_gyro_bias_radps[latest_index] -
+                                     imu_shadow_result
+                                         ->epoch_gyro_bias_radps[latest_index - 1])
+                                        .norm();
+                            }
+                        }
+                    }
+
                     const auto& diagnostics = shadow_result.diagnostics;
+                    if (multisd_basin_jsonl.is_open()) {
+                        const auto write_json_number =
+                            [&](double value) {
+                                if (std::isfinite(value)) {
+                                    multisd_basin_jsonl
+                                        << std::setprecision(17) << value;
+                                } else {
+                                    multisd_basin_jsonl << "null";
+                                }
+                            };
+                        const auto write_imu_fgo_json =
+                            [&](const Eigen::Vector3d* basin_position) {
+                                if (!multisd_imu_context) return;
+                                const auto* imu_last =
+                                    imu_shadow_result &&
+                                            !imu_shadow_result->solution.solutions.empty()
+                                        ? &imu_shadow_result->solution.solutions.back()
+                                        : nullptr;
+                                multisd_basin_jsonl
+                                    << ",\"imu_fgo\":{\"enabled\":true"
+                                    << ",\"available\":"
+                                    << (imu_shadow_latest ? "true" : "false")
+                                    << ",\"runtime_ms\":";
+                                write_json_number(imu_shadow_runtime_ms);
+                                multisd_basin_jsonl << ",\"solution_count\":"
+                                    << (imu_shadow_result
+                                            ? imu_shadow_result->solution.solutions.size()
+                                            : 0)
+                                    << ",\"last_status\":"
+                                    << (imu_last
+                                            ? static_cast<int>(imu_last->status)
+                                            : static_cast<int>(libgnss::SolutionStatus::NONE))
+                                    << ",\"last_time_error_s\":";
+                                write_json_number(
+                                    imu_last
+                                        ? imu_last->time - rover_obs.time
+                                        : std::numeric_limits<double>::quiet_NaN());
+                                multisd_basin_jsonl << ",\"converged\":"
+                                    << (imu_shadow_result &&
+                                                imu_shadow_result->diagnostics.converged
+                                            ? "true"
+                                            : "false")
+                                    << ",\"recovery_epochs\":"
+                                    << (imu_shadow_result
+                                            ? imu_shadow_result->diagnostics
+                                                  .smoother_recovery_epochs
+                                            : 0)
+                                    << ",\"warm_started\":"
+                                    << (multisd_imu_context->last_warm_started
+                                            ? "true"
+                                            : "false");
+                                multisd_basin_jsonl
+                                    << ",\"sample_count\":"
+                                    << multisd_imu_context->last_sample_count
+                                    << ",\"max_gap_s\":";
+                                write_json_number(
+                                    multisd_imu_context->last_max_gap_s);
+                                multisd_basin_jsonl
+                                    << ",\"fault_reason\":\""
+                                    << multisd_imu_context->last_fault_reason
+                                    << "\"";
+                                multisd_basin_jsonl
+                                    << ",\"pose_correction_m\":";
+                                write_json_number(imu_shadow_pose_correction_m);
+                                multisd_basin_jsonl
+                                    << ",\"factor_nis\":";
+                                write_json_number(imu_shadow_factor_nis);
+                                multisd_basin_jsonl
+                                    << ",\"factor_nis_per_dof\":";
+                                write_json_number(
+                                    imu_shadow_factor_nis_per_dof);
+                                multisd_basin_jsonl
+                                    << ",\"accel_bias_step_mps2\":";
+                                write_json_number(
+                                    imu_shadow_accel_bias_step_mps2);
+                                multisd_basin_jsonl
+                                    << ",\"gyro_bias_step_radps\":";
+                                write_json_number(
+                                    imu_shadow_gyro_bias_step_radps);
+                                multisd_basin_jsonl << ",\"position_ecef\":[";
+                                for (int axis = 0; axis < 3; ++axis) {
+                                    if (axis > 0) multisd_basin_jsonl << ',';
+                                    write_json_number(
+                                        imu_shadow_latest
+                                            ? imu_shadow_latest
+                                                  ->position_ecef(axis)
+                                            : std::numeric_limits<double>
+                                                  ::quiet_NaN());
+                                }
+                                multisd_basin_jsonl
+                                    << "],\"velocity_nav_mps\":[";
+                                for (int axis = 0; axis < 3; ++axis) {
+                                    if (axis > 0) multisd_basin_jsonl << ',';
+                                    write_json_number(
+                                        imu_shadow_velocity_nav_mps(axis));
+                                }
+                                multisd_basin_jsonl
+                                    << "],\"attitude_rpy_deg\":[";
+                                for (int axis = 0; axis < 3; ++axis) {
+                                    if (axis > 0) multisd_basin_jsonl << ',';
+                                    write_json_number(
+                                        imu_shadow_attitude_rpy_deg(axis));
+                                }
+                                multisd_basin_jsonl
+                                    << "],\"accel_bias_mps2\":[";
+                                for (int axis = 0; axis < 3; ++axis) {
+                                    if (axis > 0) multisd_basin_jsonl << ',';
+                                    write_json_number(
+                                        imu_shadow_accel_bias_mps2(axis));
+                                }
+                                multisd_basin_jsonl
+                                    << "],\"gyro_bias_radps\":[";
+                                for (int axis = 0; axis < 3; ++axis) {
+                                    if (axis > 0) multisd_basin_jsonl << ',';
+                                    write_json_number(
+                                        imu_shadow_gyro_bias_radps(axis));
+                                }
+                                multisd_basin_jsonl
+                                    << "],\"basin_separation_m\":";
+                                write_json_number(
+                                    imu_shadow_latest && basin_position
+                                        ? (imu_shadow_latest->position_ecef -
+                                           *basin_position)
+                                              .norm()
+                                        : std::numeric_limits<double>
+                                              ::quiet_NaN());
+                                multisd_basin_jsonl << ",\"imu_intervals\":"
+                                    << (imu_shadow_result
+                                            ? imu_shadow_result->diagnostics
+                                                  .imu_intervals
+                                            : 0)
+                                    ;
+                                if (multisd_pf_feedback_context) {
+                                    const auto& feedback =
+                                        *multisd_pf_feedback_context;
+                                    multisd_basin_jsonl
+                                        << ",\"pf_feedback\":{\"available\":"
+                                        << (feedback.last_available ? "true" : "false")
+                                        << ",\"applied\":"
+                                        << (feedback.last_applied ? "true" : "false")
+                                        << ",\"rows\":" << feedback.last_rows
+                                        << ",\"matches\":" << feedback.last_matches
+                                        << ",\"age_s\":";
+                                    write_json_number(feedback.last_age_s);
+                                    multisd_basin_jsonl
+                                        << ",\"source_week\":"
+                                        << feedback.last_source_week
+                                        << ",\"source_tow\":";
+                                    write_json_number(feedback.last_source_tow);
+                                    multisd_basin_jsonl
+                                        << ",\"reason\":\""
+                                        << feedback.last_reason << "\""
+                                        << ",\"backend_requested\":"
+                                        << (imu_shadow_result
+                                                ? imu_shadow_result->diagnostics
+                                                      .external_pf_ambiguity_priors_requested
+                                                : 0)
+                                        << ",\"backend_applied\":"
+                                        << (imu_shadow_result
+                                                ? imu_shadow_result->diagnostics
+                                                      .external_pf_ambiguity_priors_applied
+                                                : 0)
+                                        << ",\"backend_epochs\":"
+                                        << (imu_shadow_result
+                                                ? imu_shadow_result->diagnostics
+                                                      .external_pf_ambiguity_prior_epochs
+                                                : 0)
+                                        << '}';
+                                }
+                                multisd_basin_jsonl << '}';
+                            };
+                        if (shadow_result.multisd_validation_hypotheses.empty()) {
+                            // Preserve the complete shadow time axis. A
+                            // consumer must observe and explicitly abstain on
+                            // a no-hypothesis epoch instead of silently
+                            // bridging across the gap.
+                            multisd_basin_jsonl
+                                << "{\"schema\":\"gnsspp_multisd_basin_v1\""
+                                << ",\"epoch_index\":"
+                                << processed_rover_epochs
+                                << ",\"gps_week\":" << rover_obs.time.week
+                                << ",\"tow\":";
+                            write_json_number(rover_obs.time.tow);
+                            multisd_basin_jsonl
+                                << ",\"rank\":-1,\"group_index\":-1"
+                                << ",\"group_rank\":-1"
+                                << ",\"evaluated\":false,\"pass\":false"
+                                << ",\"converged\":false"
+                                << ",\"reason\":\"no_hypothesis\"";
+                            write_imu_fgo_json(nullptr);
+                            multisd_basin_jsonl << "}\n";
+                        }
+                        for (const auto& hypothesis :
+                             shadow_result.multisd_validation_hypotheses) {
+                            multisd_basin_jsonl
+                                << "{\"schema\":\"gnsspp_multisd_basin_v1\""
+                                << ",\"epoch_index\":"
+                                << processed_rover_epochs
+                                << ",\"gps_week\":" << rover_obs.time.week
+                                << ",\"tow\":";
+                            write_json_number(rover_obs.time.tow);
+                            multisd_basin_jsonl
+                                << ",\"rank\":" << hypothesis.rank
+                                << ",\"group_index\":"
+                                << hypothesis.group_index
+                                << ",\"group_rank\":"
+                                << hypothesis.group_rank
+                                << ",\"evaluated\":"
+                                << (hypothesis.evaluated ? "true" : "false")
+                                << ",\"pass\":"
+                                << (hypothesis.pass ? "true" : "false")
+                                << ",\"converged\":"
+                                << (hypothesis.converged ? "true" : "false")
+                                << ",\"position_ecef\":[";
+                            for (int axis = 0; axis < 3; ++axis) {
+                                if (axis > 0) {
+                                    multisd_basin_jsonl << ',';
+                                }
+                                write_json_number(
+                                    hypothesis.latest_position_ecef(axis));
+                            }
+                            multisd_basin_jsonl
+                                << "],\"velocity_valid\":"
+                                << (hypothesis.latest_velocity_valid
+                                        ? "true"
+                                        : "false")
+                                << ",\"velocity_ecef_mps\":[";
+                            for (int axis = 0; axis < 3; ++axis) {
+                                if (axis > 0) {
+                                    multisd_basin_jsonl << ',';
+                                }
+                                write_json_number(
+                                    hypothesis.latest_velocity_ecef_mps(axis));
+                            }
+                            multisd_basin_jsonl
+                                << "],\"position_covariance_valid\":"
+                                << (hypothesis.shared_position_covariance_valid
+                                        ? "true"
+                                        : "false")
+                                << ",\"position_covariance_m2\":[";
+                            for (int row = 0; row < 3; ++row) {
+                                for (int col = 0; col < 3; ++col) {
+                                    if (row > 0 || col > 0) {
+                                        multisd_basin_jsonl << ',';
+                                    }
+                                    write_json_number(
+                                        hypothesis
+                                            .shared_position_covariance_m2(
+                                                row, col));
+                                }
+                            }
+                            multisd_basin_jsonl
+                                << "],\"relative_log_evidence\":";
+                            write_json_number(
+                                hypothesis.relative_log_evidence);
+                            multisd_basin_jsonl
+                                << ",\"incremental_log_likelihood\":";
+                            write_json_number(
+                                hypothesis.incremental_log_likelihood);
+                            multisd_basin_jsonl
+                                << ",\"incremental_likelihood_rows\":"
+                                << hypothesis.incremental_likelihood_rows;
+                            multisd_basin_jsonl
+                                << ",\"carrier_used\":"
+                                << hypothesis.carrier_used
+                                << ",\"carrier_passed\":"
+                                << hypothesis.carrier_passed
+                                << ",\"pseudorange_used\":"
+                                << hypothesis.pseudorange_used
+                                << ",\"maximum_integer_distance_cycles\":";
+                            write_json_number(
+                                hypothesis.maximum_integer_distance_cycles);
+                            multisd_basin_jsonl << ",\"ddpr_rms_m\":";
+                            write_json_number(hypothesis.ddpr_rms_m);
+                            multisd_basin_jsonl
+                                << ",\"fixed_float_separation_m\":";
+                            write_json_number(
+                                hypothesis.fixed_float_separation_m);
+                            multisd_basin_jsonl << ",\"seed_separation_m\":";
+                            write_json_number(hypothesis.seed_separation_m);
+                            multisd_basin_jsonl
+                                << ",\"optimized_cost\":";
+                            write_json_number(hypothesis.optimized_cost);
+                            multisd_basin_jsonl << ",\"fixed_integers\":[";
+                            for (std::size_t integer_index = 0;
+                                 integer_index <
+                                 hypothesis.fixed_integers.size();
+                                 ++integer_index) {
+                                const auto& integer =
+                                    hypothesis.fixed_integers[integer_index];
+                                if (integer_index > 0) {
+                                    multisd_basin_jsonl << ',';
+                                }
+                                multisd_basin_jsonl
+                                    << "{\"satellite\":\""
+                                    << integer.satellite
+                                    << "\",\"reference_satellite\":\""
+                                    << integer.reference_satellite
+                                    << "\",\"signal\":" << integer.signal
+                                    << ",\"segment_index\":"
+                                    << integer.segment_index
+                                    << ",\"reference_segment_index\":"
+                                    << integer.reference_segment_index
+                                    << ",\"wavelength_m\":";
+                                write_json_number(integer.wavelength_m);
+                                multisd_basin_jsonl
+                                    << ",\"fixed_cycles\":"
+                                    << integer.fixed_cycles << '}';
+                            }
+                            multisd_basin_jsonl
+                                << "],\"validation_residuals\":[";
+                            for (std::size_t residual_index = 0;
+                                 residual_index <
+                                 hypothesis.validation_residuals.size();
+                                 ++residual_index) {
+                                const auto& residual =
+                                    hypothesis.validation_residuals[
+                                        residual_index];
+                                if (residual_index > 0) {
+                                    multisd_basin_jsonl << ',';
+                                }
+                                multisd_basin_jsonl
+                                    << "{\"epoch_index\":"
+                                    << residual.epoch_index
+                                    << ",\"satellite\":\""
+                                    << residual.satellite
+                                    << "\",\"reference_satellite\":\""
+                                    << residual.reference_satellite
+                                    << "\",\"signal\":" << residual.signal
+                                    << ",\"kind\":\""
+                                    << (residual.carrier ? "carrier" : "ddpr")
+                                    << "\",\"residual\":";
+                                write_json_number(residual.residual);
+                                multisd_basin_jsonl << ",\"sigma_m\":";
+                                write_json_number(residual.sigma_m);
+                                multisd_basin_jsonl
+                                    << ",\"normalized_residual\":";
+                                write_json_number(
+                                    residual.normalized_residual);
+                                multisd_basin_jsonl << ",\"pass\":"
+                                                    << (residual.pass ? "true"
+                                                                      : "false")
+                                                    << '}';
+                            }
+                            multisd_basin_jsonl << ']';
+                            write_imu_fgo_json(
+                                &hypothesis.latest_position_ecef);
+                            multisd_basin_jsonl << "}\n";
+                        }
+                    }
                     multisd_shadow_csv
                         << processed_rover_epochs << ','
                         << rover_obs.time.week << ','
@@ -4763,8 +5941,135 @@ int main(int argc, char* argv[]) {
                         << ',' << diagnostics.wcmc_pseudorange_correction_rms_m
                         << ',' << diagnostics.multisd_integer_aperture_attempts
                         << ',' << diagnostics.multisd_integer_aperture_passes
-                        << ',' << diagnostics.multisd_integer_aperture_rejects
-                        << '\n';
+                        << ',' << diagnostics.multisd_integer_aperture_rejects;
+                    if (multisd_imu_context) {
+                        const auto* imu_last =
+                            imu_shadow_result &&
+                                    !imu_shadow_result->solution.solutions.empty()
+                                ? &imu_shadow_result->solution.solutions.back()
+                                : nullptr;
+                        multisd_shadow_csv
+                            << ',' << (imu_shadow_latest ? 1 : 0)
+                            << ','
+                            << (imu_shadow_result
+                                    ? imu_shadow_result->diagnostics.imu_intervals
+                                    : 0)
+                            << ',' << imu_shadow_runtime_ms
+                            << ','
+                            << (imu_shadow_result
+                                    ? imu_shadow_result->solution.solutions.size()
+                                    : 0)
+                            << ','
+                            << (imu_last
+                                    ? static_cast<int>(imu_last->status)
+                                    : static_cast<int>(libgnss::SolutionStatus::NONE))
+                            << ',';
+                        if (imu_last) {
+                            writeOptionalCsvNumber(
+                                multisd_shadow_csv,
+                                imu_last->time - rover_obs.time);
+                        }
+                        multisd_shadow_csv
+                            << ','
+                            << (imu_shadow_result &&
+                                        imu_shadow_result->diagnostics.converged
+                                    ? 1
+                                    : 0)
+                            << ','
+                            << (imu_shadow_result
+                                    ? imu_shadow_result->diagnostics
+                                          .smoother_recovery_epochs
+                                    : 0)
+                            << ','
+                            << (multisd_imu_context->last_warm_started ? 1 : 0)
+                            << ',' << multisd_imu_context->last_sample_count
+                            << ',';
+                        writeOptionalCsvNumber(
+                            multisd_shadow_csv,
+                            multisd_imu_context->last_max_gap_s);
+                        multisd_shadow_csv
+                            << ',' << multisd_imu_context->last_fault_reason
+                            << ',';
+                        writeOptionalCsvNumber(
+                            multisd_shadow_csv,
+                            imu_shadow_pose_correction_m);
+                        multisd_shadow_csv << ',';
+                        writeOptionalCsvNumber(
+                            multisd_shadow_csv,
+                            imu_shadow_factor_nis);
+                        multisd_shadow_csv << ',';
+                        writeOptionalCsvNumber(
+                            multisd_shadow_csv,
+                            imu_shadow_factor_nis_per_dof);
+                        multisd_shadow_csv << ',';
+                        writeOptionalCsvNumber(
+                            multisd_shadow_csv,
+                            imu_shadow_accel_bias_step_mps2);
+                        multisd_shadow_csv << ',';
+                        writeOptionalCsvNumber(
+                            multisd_shadow_csv,
+                            imu_shadow_gyro_bias_step_radps);
+                        multisd_shadow_csv << ',';
+                        for (int axis = 0; axis < 3; ++axis) {
+                            writeOptionalCsvNumber(
+                                multisd_shadow_csv,
+                                imu_shadow_accel_bias_mps2(axis));
+                            multisd_shadow_csv << ',';
+                        }
+                        for (int axis = 0; axis < 3; ++axis) {
+                            writeOptionalCsvNumber(
+                                multisd_shadow_csv,
+                                imu_shadow_gyro_bias_radps(axis));
+                            multisd_shadow_csv << ',';
+                        }
+                        if (imu_shadow_latest) {
+                            multisd_shadow_csv
+                                << imu_shadow_latest->position_ecef.x() << ','
+                                << imu_shadow_latest->position_ecef.y() << ','
+                                << imu_shadow_latest->position_ecef.z() << ',';
+                            if (shadow_latest) {
+                                writeOptionalCsvNumber(
+                                    multisd_shadow_csv,
+                                    (imu_shadow_latest->position_ecef -
+                                     shadow_latest->position_ecef)
+                                        .norm());
+                            }
+                        } else {
+                            multisd_shadow_csv << ",,,";
+                        }
+                        if (multisd_pf_feedback_context) {
+                            const auto& feedback = *multisd_pf_feedback_context;
+                            multisd_shadow_csv
+                                << ',' << (feedback.last_available ? 1 : 0)
+                                << ',' << (feedback.last_applied ? 1 : 0)
+                                << ',' << feedback.last_rows
+                                << ',' << feedback.last_matches << ',';
+                            writeOptionalCsvNumber(
+                                multisd_shadow_csv, feedback.last_age_s);
+                            multisd_shadow_csv
+                                << ',' << feedback.last_source_week << ',';
+                            writeOptionalCsvNumber(
+                                multisd_shadow_csv, feedback.last_source_tow);
+                            multisd_shadow_csv
+                                << ',' << feedback.last_reason
+                                << ','
+                                << (imu_shadow_result
+                                        ? imu_shadow_result->diagnostics
+                                              .external_pf_ambiguity_priors_requested
+                                        : 0)
+                                << ','
+                                << (imu_shadow_result
+                                        ? imu_shadow_result->diagnostics
+                                              .external_pf_ambiguity_priors_applied
+                                        : 0)
+                                << ','
+                                << (imu_shadow_result
+                                        ? imu_shadow_result->diagnostics
+                                              .external_pf_ambiguity_prior_epochs
+                                        : 0);
+                        }
+                    }
+                    multisd_shadow_csv << '\n';
                 }
             }
             const libgnss::PositionSolution* last_output =
@@ -5556,6 +6861,18 @@ int main(int argc, char* argv[]) {
             }
             std::cout << " csv=" << config.multisd_fgo_shadow_csv_path
                       << std::endl;
+            if (multisd_imu_context) {
+                std::cout << "  IMU FGO companion: attempts="
+                          << multisd_imu_shadow_attempts
+                          << " valid=" << multisd_imu_shadow_valid;
+                if (multisd_imu_shadow_attempts > 0) {
+                    std::cout << " mean_runtime_ms="
+                              << (multisd_imu_shadow_total_runtime_ms /
+                                  static_cast<double>(
+                                      multisd_imu_shadow_attempts));
+                }
+                std::cout << std::endl;
+            }
         }
         std::cout << "  output written: " << config.output_pos_path << std::endl;
         if (config.write_kml) {

@@ -174,6 +174,34 @@ int main() {
         !(result.diagnostics.lambda_adop_cycles > 0.0)) {
         return fail("invalid success-rate or ADOP diagnostics");
     }
+    if (result.multisd_validation_hypotheses.empty()) {
+        return fail("missing basin hypothesis details");
+    }
+    for (const auto& hypothesis : result.multisd_validation_hypotheses) {
+        if (hypothesis.group_index < 0 || hypothesis.group_rank < 0 ||
+            !std::isfinite(hypothesis.optimized_cost) ||
+            !std::isfinite(hypothesis.relative_log_evidence) ||
+            !std::isfinite(hypothesis.incremental_log_likelihood) ||
+            hypothesis.incremental_likelihood_rows == 0 ||
+            hypothesis.fixed_integers.empty() ||
+            hypothesis.validation_residuals.empty()) {
+            return fail("incomplete conditional basin evidence");
+        }
+        for (const auto& integer : hypothesis.fixed_integers) {
+            if (integer.satellite.empty()) {
+                return fail("incomplete fixed-integer basin identity");
+            }
+        }
+        for (const auto& residual : hypothesis.validation_residuals) {
+            if (residual.satellite.empty() ||
+                residual.reference_satellite.empty() ||
+                !std::isfinite(residual.residual) ||
+                !std::isfinite(residual.sigma_m) ||
+                !std::isfinite(residual.normalized_residual)) {
+                return fail("incomplete per-satellite validation residual");
+            }
+        }
+    }
     if (result.ambiguity_estimates.size() != satellites.size()) {
         return fail("missing SD ambiguity estimates");
     }
@@ -208,6 +236,20 @@ int main() {
         (parallel_result.solution.solutions.back().position_ecef -
          result.solution.solutions.back().position_ecef).norm() > 1e-9) {
         return fail("parallel top-K result differs from sequential result");
+    }
+    for (std::size_t index = 0;
+         index < result.multisd_validation_hypotheses.size();
+         ++index) {
+        const auto& sequential = result.multisd_validation_hypotheses[index];
+        const auto& parallel =
+            parallel_result.multisd_validation_hypotheses[index];
+        if (sequential.group_index != parallel.group_index ||
+            sequential.group_rank != parallel.group_rank ||
+            sequential.fixed_integers.size() != parallel.fixed_integers.size() ||
+            std::abs(sequential.relative_log_evidence -
+                     parallel.relative_log_evidence) > 1e-8) {
+            return fail("parallel conditional basin evidence differs");
+        }
     }
     for (const auto& estimate : result.ambiguity_estimates) {
         if (estimate.is_fixed) {

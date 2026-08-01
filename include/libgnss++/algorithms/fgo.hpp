@@ -1757,6 +1757,17 @@ public:
         ImuNoiseParams noise;
     };
 
+    // A causal, independently validated ambiguity-mode proposal supplied by
+    // an external PF.  The caller resolves the stable ambiguity identity to
+    // this problem's index.  Backends may use it only as a soft continuous
+    // prior; it must never directly label a solution FIXED or bypass GNSS
+    // ambiguity validation.
+    struct ValidatedAmbiguityPrior {
+        std::size_t ambiguity_index = std::numeric_limits<std::size_t>::max();
+        int fixed_cycles = 0;
+        double sigma_cycles = 0.05;
+    };
+
     struct FGOProblem {
         std::vector<EpochSeed> epochs;
         ImuInput imu;  ///< Milestone 2b IMU inputs (valid only when populated).
@@ -1766,6 +1777,7 @@ public:
         std::vector<SingleDifferenceDopplerFactor> single_difference_doppler_factors;
         std::vector<SingleDifferenceTdcpFactor> single_difference_tdcp_factors;
         std::vector<AmbiguityState> ambiguity_states;
+        std::vector<ValidatedAmbiguityPrior> validated_ambiguity_priors;
         std::vector<CarrierPhaseFactor> carrier_observations;
         std::vector<CarrierPhaseFactor> double_difference_pseudorange_observations;
         std::vector<CarrierPhaseFactor> double_difference_reference_observations;
@@ -1880,6 +1892,9 @@ public:
         std::size_t graph_factors = 0;
         std::size_t graph_values = 0;
         std::size_t imu_intervals = 0;  ///< 2b: CombinedImuFactors added between epochs
+        std::size_t external_pf_ambiguity_priors_requested = 0;
+        std::size_t external_pf_ambiguity_priors_applied = 0;
+        std::size_t external_pf_ambiguity_prior_epochs = 0;
         std::size_t smoother_max_window_vars = 0;  ///< 2c: peak in-window variable count
         std::size_t smoother_updates = 0;          ///< 2c: number of smoother.update() calls
         std::size_t smoother_recovery_epochs = 0;  ///< 2e: epochs re-anchored after an indeterminate update
@@ -2085,6 +2100,9 @@ public:
         double ambiguity_variance_median_cycles2 = 0.0;
         double ambiguity_variance_max_cycles2 = 0.0;
         double imu_pose_correction_m = 0.0;
+        double imu_factor_nis = std::numeric_limits<double>::quiet_NaN();
+        double imu_factor_nis_per_dof =
+            std::numeric_limits<double>::quiet_NaN();
         bool ddpr_anchor_evaluated = false;
         bool ddpr_anchor_bootstrap_prior_applied = false;
         int ddpr_anchor_active_factors = 0;
@@ -2143,11 +2161,44 @@ public:
     };
 
     struct FGOResult {
+        struct MultiSdFixedInteger {
+            std::size_t ambiguity_index = 0;
+            std::size_t reference_ambiguity_index =
+                std::numeric_limits<std::size_t>::max();
+            std::string satellite;
+            std::string reference_satellite;
+            int signal = 0;
+            std::size_t segment_index = 0;
+            std::size_t reference_segment_index = 0;
+            double wavelength_m = 0.0;
+            int fixed_cycles = 0;
+        };
+        struct MultiSdValidationResidual {
+            std::size_t epoch_index = 0;
+            std::string satellite;
+            std::string reference_satellite;
+            int signal = 0;
+            bool carrier = false;
+            /// Signed distance to the nearest integer, in cycles, for carrier
+            /// rows; DD pseudorange residual in metres for code rows.
+            double residual = std::numeric_limits<double>::quiet_NaN();
+            double sigma_m = std::numeric_limits<double>::quiet_NaN();
+            double normalized_residual =
+                std::numeric_limits<double>::quiet_NaN();
+            bool pass = false;
+        };
         struct MultiSdValidationHypothesis {
             int rank = -1;
+            int group_index = -1;
+            int group_rank = -1;
             bool evaluated = false;
             bool pass = false;
+            bool converged = false;
             Vector3d latest_position_ecef = Vector3d::Zero();
+            bool latest_velocity_valid = false;
+            Vector3d latest_velocity_ecef_mps = Vector3d::Zero();
+            bool shared_position_covariance_valid = false;
+            Matrix3d shared_position_covariance_m2 = Matrix3d::Zero();
             std::size_t carrier_used = 0;
             std::size_t carrier_passed = 0;
             std::size_t pseudorange_used = 0;
@@ -2157,6 +2208,18 @@ public:
                 std::numeric_limits<double>::infinity();
             double seed_separation_m =
                 std::numeric_limits<double>::infinity();
+            double optimized_cost = std::numeric_limits<double>::infinity();
+            /// Laplace score with constants common to this PAR group omitted.
+            /// It is comparable only among hypotheses with the same group_index.
+            double relative_log_evidence =
+                -std::numeric_limits<double>::infinity();
+            /// Latest-epoch disjoint rows only; safe for sequential PF updates
+            /// because rolling-window observations are not counted repeatedly.
+            double incremental_log_likelihood =
+                -std::numeric_limits<double>::infinity();
+            std::size_t incremental_likelihood_rows = 0;
+            std::vector<MultiSdFixedInteger> fixed_integers;
+            std::vector<MultiSdValidationResidual> validation_residuals;
         };
         Solution solution;
         FGODiagnostics diagnostics;
@@ -2176,6 +2239,12 @@ public:
         // velocity in the ENU nav frame [m/s].
         std::vector<Vector3d> epoch_attitude_rpy_deg;
         std::vector<Vector3d> epoch_velocity_nav_mps;
+        // Machine-readable continuous states for causal rolling-window
+        // warm starts.  Unlike RPY telemetry, the rotation matrix has no
+        // Euler-convention ambiguity; IMU biases remain in body FLU units.
+        std::vector<Matrix3d> epoch_attitude_body_to_nav;
+        std::vector<Vector3d> epoch_accel_bias_mps2;
+        std::vector<Vector3d> epoch_gyro_bias_radps;
     };
 
     FGOProcessor() = default;
