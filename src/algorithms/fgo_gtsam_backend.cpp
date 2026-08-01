@@ -1023,11 +1023,29 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
     std::vector<double> epoch_ratio(num_epochs, 0.0);
     std::vector<Vector3d> epoch_rpy_deg(num_epochs, Vector3d::Zero());
     std::vector<Vector3d> epoch_vel_nav(num_epochs, Vector3d::Zero());
+    std::vector<Matrix3d> epoch_attitude_body_to_nav(
+        num_epochs, Matrix3d::Identity());
+    std::vector<Vector3d> epoch_accel_bias(
+        num_epochs, Vector3d::Zero());
+    std::vector<Vector3d> epoch_gyro_bias(
+        num_epochs, Vector3d::Zero());
     std::vector<bool> epoch_solved(num_epochs, false);
     std::vector<FGOProcessor::FGOEpochDiagnostics> epoch_diagnostics(num_epochs);
     std::map<std::size_t, double> amb_float_cycles;
     std::map<std::size_t, int> amb_fixed_cycles;
     std::map<std::size_t, double> amb_fixed_residual;
+    std::map<std::size_t, FGOProcessor::ValidatedAmbiguityPrior>
+        external_pf_priors;
+    result.diagnostics.external_pf_ambiguity_priors_requested =
+        problem.validated_ambiguity_priors.size();
+    for (const auto& prior : problem.validated_ambiguity_priors) {
+        if (prior.ambiguity_index >= problem.ambiguity_states.size() ||
+            !std::isfinite(prior.sigma_cycles) ||
+            prior.sigma_cycles <= 0.0) {
+            continue;
+        }
+        external_pf_priors[prior.ambiguity_index] = prior;
+    }
 
     // 2e fix-and-hold: arcs whose DD ambiguity has been validated-fixed and
     // pinned in the graph at its integer (reset automatically when the arc ends
@@ -1036,6 +1054,11 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
     std::size_t held_epoch_count = 0;
 
     std::set<std::size_t> ambiguity_created;
+    // An external PF mode is one piece of evidence, not fresh evidence at
+    // every epoch where the same carrier arc appears.  Add at most one prior
+    // per builder ambiguity index in this solve to avoid silently shrinking
+    // sigma by repeated factor multiplication across the rolling window.
+    std::set<std::size_t> external_pf_prior_applied_indices;
     bool dummy_created = false;
     constexpr double kDummyPinSigmaCycles = 1e-3;
 
@@ -1984,6 +2007,7 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
         // --- Pose / velocity / bias seed for epoch i ---
         Pose3 pose_seed;
         gtsam::Vector3 vel_seed;
+        std::shared_ptr<gtsam::CombinedImuFactor> imu_factor_this_epoch;
         std::size_t win_begin = sample_cursor, win_end = sample_cursor;  // IMU window for ZUPT/NHC
         if (i == 0) {
             const Vector3d antenna_nav = navAntenna(problem.epochs[0].position_ecef);
@@ -2072,9 +2096,11 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                                          gtsam::noiseModel::Isotropic::Sigma(6, 0.01));
                     pim_discontinuity = false;
                 } else {
-                    new_factors.emplace_shared<gtsam::CombinedImuFactor>(
+                    imu_factor_this_epoch =
+                        std::make_shared<gtsam::CombinedImuFactor>(
                         positionKey(i - 1), velocityKey(i - 1), positionKey(i), velocityKey(i),
                         biasKey(i - 1), biasKey(i), pim);
+                    new_factors.push_back(imu_factor_this_epoch);
                 }
             } else {
                 // IMU dropout: hold pose at the DD antenna seed, loose continuity.
@@ -2245,6 +2271,7 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
 
         // --- DD carrier factors + ambiguity nodes at epoch i ---
         std::vector<std::size_t> epoch_amb_indices;
+        bool external_pf_prior_applied_this_epoch = false;
         for (const auto* fp : cp_by_epoch[i]) {
             const auto& factor = *fp;
             ++epoch_diagnostics[i].carrier_factors_available;
@@ -2303,6 +2330,24 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                             1, config.ambiguity_prior_sigma_m / ambiguity.wavelength_m));
                 }
             }
+            const auto external_prior =
+                external_pf_priors.find(factor.ambiguity_index);
+            if (external_prior != external_pf_priors.end() &&
+                external_pf_prior_applied_indices
+                    .insert(factor.ambiguity_index)
+                    .second) {
+                // A PF mode is proposal information only.  Keep this prior
+                // deliberately soft and do not add the symbol to
+                // pinned_ambiguities or set any FIXED output flag.
+                const double sigma_cycles = std::clamp(
+                    external_prior->second.sigma_cycles, 0.01, 1.0);
+                new_factors.addPrior(
+                    amb_key,
+                    static_cast<double>(external_prior->second.fixed_cycles),
+                    gtsam::noiseModel::Isotropic::Sigma(1, sigma_cycles));
+                ++result.diagnostics.external_pf_ambiguity_priors_applied;
+                external_pf_prior_applied_this_epoch = true;
+            }
             const gtsam::gnss::DoubleDifferenceData dd{
                 factor.rover_satellite_model.corrected_carrier_m,
                 factor.base_satellite_model.corrected_carrier_m,
@@ -2358,6 +2403,9 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
             // all currently observed ambiguity generations while leaving the
             // carrier/IMU chains active.
             live_ambiguity_indices.insert(factor.ambiguity_index);
+        }
+        if (external_pf_prior_applied_this_epoch) {
+            ++result.diagnostics.external_pf_ambiguity_prior_epochs;
         }
         if (dummy_created) ts[dummyAmbiguityKey()] = te;
 
@@ -2689,10 +2737,24 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
         // Re-read every still-in-window pose so each epoch's recorded estimate
         // is its most-smoothed value at the moment it exits the window.
         const gtsam::Values& lin = smoother.getLinearizationPoint();
+        if (imu_factor_this_epoch) {
+            try {
+                const double nis = 2.0 * imu_factor_this_epoch->error(lin);
+                if (std::isfinite(nis) && nis >= 0.0) {
+                    epoch_diagnostics[i].imu_factor_nis = nis;
+                    epoch_diagnostics[i].imu_factor_nis_per_dof =
+                        nis / static_cast<double>(imu_factor_this_epoch->dim());
+                }
+            } catch (const std::exception&) {
+                // Diagnostics are observational only and must never alter the
+                // estimator or recovery path.
+            }
+        }
         for (std::size_t j = i + 1; j-- > 0;) {
             if (!lin.exists(positionKey(j))) break;  // older keys already marginalized
             const Pose3 pj = smoother.calculateEstimate<Pose3>(positionKey(j));
             const gtsam::Vector3 vj = smoother.calculateEstimate<gtsam::Vector3>(velocityKey(j));
+            const auto bj = smoother.calculateEstimate<gtsam::imuBias::ConstantBias>(biasKey(j));
             epoch_float_position[j] = antennaOf(pj);
             const gtsam::Matrix3 R = pj.rotation().matrix();
             const Eigen::Vector3d fwd = R.col(0);
@@ -2704,6 +2766,9 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
             const double roll = std::atan2(left.z(), R.col(2).z()) * kRadToDeg;
             epoch_rpy_deg[j] = Vector3d(roll, pitch, heading);
             epoch_vel_nav[j] = Vector3d(vj);
+            epoch_attitude_body_to_nav[j] = Matrix3d(R);
+            epoch_accel_bias[j] = Vector3d(bj.accelerometer());
+            epoch_gyro_bias[j] = Vector3d(bj.gyroscope());
         }
 
         // --- Shared post-fit DDPR residual / GDOP computation (reference:
@@ -4847,6 +4912,9 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
     result.epoch_diagnostics = std::move(epoch_diagnostics);
     result.epoch_attitude_rpy_deg.resize(num_epochs);
     result.epoch_velocity_nav_mps.resize(num_epochs);
+    result.epoch_attitude_body_to_nav.resize(num_epochs);
+    result.epoch_accel_bias_mps2.resize(num_epochs);
+    result.epoch_gyro_bias_radps.resize(num_epochs);
     for (std::size_t i = 0; i < num_epochs; ++i) {
         PositionSolution solution;
         solution.time = problem.epochs[i].time;
@@ -4861,6 +4929,11 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
         if (!epoch_solved[i]) {
             solution.status = SolutionStatus::NONE;
         }
+        // PositionSolution::isValid() requires both a non-NONE status and at
+        // least four satellites.  The fixed-lag path already computes the
+        // independent per-epoch satellite count for integrity diagnostics;
+        // publish it on the solution as the batch/RTK interfaces expect.
+        solution.num_satellites = result.epoch_diagnostics[i].num_satellites;
         solution.num_frequencies = 1;
         solution.ratio = epoch_ratio[i];
         solution.num_fixed_ambiguities = epoch_fixed_count[i];
@@ -4870,6 +4943,9 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
         result.solution.addSolution(solution);
         result.epoch_attitude_rpy_deg[i] = epoch_rpy_deg[i];
         result.epoch_velocity_nav_mps[i] = epoch_vel_nav[i];
+        result.epoch_attitude_body_to_nav[i] = epoch_attitude_body_to_nav[i];
+        result.epoch_accel_bias_mps2[i] = epoch_accel_bias[i];
+        result.epoch_gyro_bias_radps[i] = epoch_gyro_bias[i];
     }
 
     const auto end_time = std::chrono::high_resolution_clock::now();
@@ -5680,6 +5756,9 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
     if (use_imu) {
         result.epoch_attitude_rpy_deg.resize(num_epochs);
         result.epoch_velocity_nav_mps.resize(num_epochs);
+        result.epoch_attitude_body_to_nav.resize(num_epochs);
+        result.epoch_accel_bias_mps2.resize(num_epochs);
+        result.epoch_gyro_bias_radps.resize(num_epochs);
         constexpr double kRadToDeg = 180.0 / 3.14159265358979323846;
         for (std::size_t i = 0; i < num_epochs; ++i) {
             const Rot3 R_body_to_nav = optimized.at<Pose3>(positionKey(i)).rotation();
@@ -5697,6 +5776,10 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
             result.epoch_attitude_rpy_deg[i] = Vector3d(roll, pitch, heading);
             result.epoch_velocity_nav_mps[i] =
                 Vector3d(optimized.at<gtsam::Vector3>(velocityKey(i)));
+            result.epoch_attitude_body_to_nav[i] = Matrix3d(R);
+            const auto bias = optimized.at<gtsam::imuBias::ConstantBias>(biasKey(i));
+            result.epoch_accel_bias_mps2[i] = Vector3d(bias.accelerometer());
+            result.epoch_gyro_bias_radps[i] = Vector3d(bias.gyroscope());
         }
     }
 

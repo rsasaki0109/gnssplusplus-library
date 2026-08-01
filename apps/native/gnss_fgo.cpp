@@ -2085,12 +2085,37 @@ void writeSummaryJson(const Options& options,
             output << ',';
         }
         output << "{\"rank\":" << hypothesis.rank
+               << ",\"group_index\":" << hypothesis.group_index
+               << ",\"group_rank\":" << hypothesis.group_rank
                << ",\"evaluated\":" << jsonBool(hypothesis.evaluated)
                << ",\"pass\":" << jsonBool(hypothesis.pass)
+               << ",\"converged\":" << jsonBool(hypothesis.converged)
                << ",\"position_ecef\":["
                << hypothesis.latest_position_ecef.x() << ','
                << hypothesis.latest_position_ecef.y() << ','
                << hypothesis.latest_position_ecef.z() << ']'
+               << ",\"velocity_valid\":"
+               << jsonBool(hypothesis.latest_velocity_valid)
+               << ",\"velocity_ecef_mps\":["
+               << hypothesis.latest_velocity_ecef_mps.x() << ','
+               << hypothesis.latest_velocity_ecef_mps.y() << ','
+               << hypothesis.latest_velocity_ecef_mps.z() << ']'
+               << ",\"position_covariance_valid\":"
+               << jsonBool(hypothesis.shared_position_covariance_valid)
+               << ",\"position_covariance_m2\":[";
+        for (int covariance_row = 0; covariance_row < 3; ++covariance_row) {
+            for (int covariance_col = 0; covariance_col < 3;
+                 ++covariance_col) {
+                if (covariance_row > 0 || covariance_col > 0) {
+                    output << ',';
+                }
+                writeJsonNumber(
+                    output,
+                    hypothesis.shared_position_covariance_m2(
+                        covariance_row, covariance_col));
+            }
+        }
+        output << ']'
                << ",\"carrier_used\":" << hypothesis.carrier_used
                << ",\"carrier_passed\":" << hypothesis.carrier_passed
                << ",\"pseudorange_used\":"
@@ -2100,6 +2125,38 @@ void writeSummaryJson(const Options& options,
             output, hypothesis.maximum_integer_distance_cycles);
         output << ",\"ddpr_rms_m\":";
         writeJsonNumber(output, hypothesis.ddpr_rms_m);
+        output << ",\"optimized_cost\":";
+        writeJsonNumber(output, hypothesis.optimized_cost);
+        output << ",\"relative_log_evidence\":";
+        writeJsonNumber(output, hypothesis.relative_log_evidence);
+        output << ",\"incremental_log_likelihood\":";
+        writeJsonNumber(output, hypothesis.incremental_log_likelihood);
+        output << ",\"incremental_likelihood_rows\":"
+               << hypothesis.incremental_likelihood_rows;
+        output << ",\"fixed_integers\":[";
+        for (std::size_t integer_index = 0;
+             integer_index < hypothesis.fixed_integers.size();
+             ++integer_index) {
+            const auto& integer = hypothesis.fixed_integers[integer_index];
+            if (integer_index > 0) {
+                output << ',';
+            }
+            output << "{\"ambiguity_index\":" << integer.ambiguity_index
+                   << ",\"reference_ambiguity_index\":"
+                   << integer.reference_ambiguity_index
+                   << ",\"satellite\":\"" << integer.satellite << '"'
+                   << ",\"reference_satellite\":\""
+                   << integer.reference_satellite << '"'
+                   << ",\"signal\":" << integer.signal
+                   << ",\"segment_index\":" << integer.segment_index
+                   << ",\"reference_segment_index\":"
+                   << integer.reference_segment_index
+                   << ",\"wavelength_m\":";
+            writeJsonNumber(output, integer.wavelength_m);
+            output
+                   << ",\"fixed_cycles\":" << integer.fixed_cycles << '}';
+        }
+        output << ']';
         output << '}';
     }
     output << "],\n";
