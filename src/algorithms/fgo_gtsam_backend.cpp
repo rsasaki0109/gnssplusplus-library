@@ -1316,6 +1316,10 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
     int ddpr_bootstrap_epochs_remaining =
         config.use_ddpr_anchor ? config.ddpr_anchor_bootstrap_epochs : 0;
     int continuous_unfix_streak = 0;
+    std::map<std::size_t, int> previous_lambda_candidate_cycles;
+    std::size_t previous_lambda_candidate_epoch =
+        std::numeric_limits<std::size_t>::max();
+    int lambda_candidate_integer_consensus_streak = 0;
 
     // Reference state.effective_cp_hold_epochs(): the configured CP-hold
     // length, suppressed to 0 while the DDPR-anchor bootstrap countdown is
@@ -3517,6 +3521,7 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                         order.begin(), order.begin() + attempt_n);
 
                     bool float_cycles_recorded = false;
+                    std::map<std::size_t, int> lambda_candidate_cycles_this_epoch;
                     for (std::size_t lambda_order_idx = 0;
                          lambda_order_idx < lambda_orders.size(); ++lambda_order_idx) {
                         order = lambda_orders[lambda_order_idx];
@@ -3688,6 +3693,8 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                                 fixed_cycles_by_index[epoch_amb_indices[order[r]]] =
                                     static_cast<int>(std::lround(fixed_amb(r)));
                             }
+                            lambda_candidate_cycles_this_epoch =
+                                fixed_cycles_by_index;
                             const auto ambiguityMeters = [&](std::size_t idx,
                                                              double* value_m) -> bool {
                                 if (!value_m || idx >= problem.ambiguity_states.size()) {
@@ -4478,6 +4485,55 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                             }
                         }
                         break;  // validated subset found
+                    }
+
+                    // Read-only temporal integer-consensus shadow. Compare
+                    // the final candidate attempted at adjacent epochs over
+                    // ambiguity indices shared by both candidates. Because
+                    // the index identifies a concrete DD arc, LLI/CMC/FDE
+                    // generation changes cannot masquerade as continuity.
+                    if (!lambda_candidate_cycles_this_epoch.empty()) {
+                        int overlap = 0;
+                        int agreements = 0;
+                        if (previous_lambda_candidate_epoch !=
+                                std::numeric_limits<std::size_t>::max() &&
+                            previous_lambda_candidate_epoch + 1 == i) {
+                            for (const auto& [ambiguity_index, fixed_integer] :
+                                 lambda_candidate_cycles_this_epoch) {
+                                const auto previous =
+                                    previous_lambda_candidate_cycles.find(
+                                        ambiguity_index);
+                                if (previous ==
+                                    previous_lambda_candidate_cycles.end()) {
+                                    continue;
+                                }
+                                ++overlap;
+                                if (previous->second == fixed_integer) {
+                                    ++agreements;
+                                }
+                            }
+                        }
+                        const bool consensus = overlap >= 4 && agreements == overlap;
+                        lambda_candidate_integer_consensus_streak =
+                            consensus
+                                ? lambda_candidate_integer_consensus_streak + 1
+                                : 1;
+                        epoch_diagnostics[i].lambda_candidate_integer_overlap =
+                            overlap;
+                        epoch_diagnostics[i].lambda_candidate_integer_agreements =
+                            agreements;
+                        epoch_diagnostics[i]
+                            .lambda_candidate_integer_agreement_fraction =
+                            overlap > 0
+                                ? static_cast<double>(agreements) /
+                                      static_cast<double>(overlap)
+                                : 0.0;
+                        epoch_diagnostics[i]
+                            .lambda_candidate_integer_consensus_streak =
+                            lambda_candidate_integer_consensus_streak;
+                        previous_lambda_candidate_cycles =
+                            std::move(lambda_candidate_cycles_this_epoch);
+                        previous_lambda_candidate_epoch = i;
                     }
 
                     // Monitor-only satellite-impact audit, modeled after

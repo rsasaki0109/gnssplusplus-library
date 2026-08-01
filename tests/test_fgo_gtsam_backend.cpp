@@ -2214,6 +2214,17 @@ TEST(FGOAmbiguityOutcomeTelemetryTest, HoldFallbackPreservesRatioRejection) {
               rejected->lambda_candidate_ffrt_accepts_any &&
                   rejected->lambda_candidate_ratio >
                       rejected->lambda_candidate_ffrt_min_ratio);
+    const auto consensus = std::find_if(
+        result.epoch_diagnostics.begin(), result.epoch_diagnostics.end(),
+        [](const FGOProcessor::FGOEpochDiagnostics& diagnostics) {
+            return diagnostics.lambda_candidate_integer_consensus_streak >= 2;
+        });
+    ASSERT_NE(consensus, result.epoch_diagnostics.end());
+    EXPECT_GE(consensus->lambda_candidate_integer_overlap, 4);
+    EXPECT_EQ(consensus->lambda_candidate_integer_agreements,
+              consensus->lambda_candidate_integer_overlap);
+    EXPECT_DOUBLE_EQ(consensus->lambda_candidate_integer_agreement_fraction,
+                     1.0);
 }
 
 TEST(FGOAmbiguityOutcomeTelemetryTest,

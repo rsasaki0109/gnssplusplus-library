@@ -2042,6 +2042,14 @@ public:
         bool lambda_candidate_ffrt_accepts_any = false;
         double lambda_candidate_ffrt_min_ratio = 0.0;
         bool lambda_candidate_ffrt_pass = false;
+        // Temporal-consensus shadow for the last LAMBDA candidate in this
+        // epoch. Ambiguity indices are stable only within an unchanged arc,
+        // so overlap automatically excludes restarted/referenced arcs. The
+        // shadow never changes acceptance, hold, or graph state.
+        int lambda_candidate_integer_overlap = 0;
+        int lambda_candidate_integer_agreements = 0;
+        double lambda_candidate_integer_agreement_fraction = 0.0;
+        int lambda_candidate_integer_consensus_streak = 0;
         // Diagnostic-only geometry-free cycle-slip shadow. It analyzes the
         // rover/base single-difference carrier phases already present in the
         // DD factors, but never changes ambiguity arcs or graph factors.

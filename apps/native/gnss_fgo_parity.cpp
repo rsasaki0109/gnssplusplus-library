@@ -1497,7 +1497,10 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
            "lambda_candidate_bsr_qscale4,lambda_candidate_bsr_qscale8,"
            "lambda_candidate_bsr_qscale16,lambda_candidate_ffrt_supported,"
            "lambda_candidate_ffrt_accepts_any,lambda_candidate_ffrt_min_ratio,"
-           "lambda_candidate_ffrt_pass,"
+           "lambda_candidate_ffrt_pass,lambda_candidate_integer_overlap,"
+           "lambda_candidate_integer_agreements,"
+           "lambda_candidate_integer_agreement_fraction,"
+           "lambda_candidate_integer_consensus_streak,"
            "gf_slip_events,gf_slip_max_jump_m,gf_slip_tainted_ambiguities,"
            "doppler_slip_signals,doppler_slip_max_innovation_m,"
            "gf_doppler_isolated_pairs,"
@@ -1601,6 +1604,10 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
                 << ',' << (d.lambda_candidate_ffrt_accepts_any ? 1 : 0)
                 << ',' << d.lambda_candidate_ffrt_min_ratio
                 << ',' << (d.lambda_candidate_ffrt_pass ? 1 : 0)
+                << ',' << d.lambda_candidate_integer_overlap
+                << ',' << d.lambda_candidate_integer_agreements
+                << ',' << d.lambda_candidate_integer_agreement_fraction
+                << ',' << d.lambda_candidate_integer_consensus_streak
                 << ',' << d.gf_slip_shadow_event_pairs
                 << ',' << d.gf_slip_shadow_max_jump_m
                 << ',' << d.gf_slip_shadow_tainted_ambiguities
