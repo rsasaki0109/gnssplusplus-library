@@ -4580,13 +4580,30 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
             const Point3 fix_ant =
                 epoch_has_fixed[i] ? Point3(epoch_fixed_position[i]) : antennaOf(pose_i);
             const double gap = (fix_ant - antennaOf(pose_seed)).norm();
-            bool demote = gap > config.fix_demote_distance_m;
+            const bool distance_demote = gap > config.fix_demote_distance_m;
+            const bool residual_demote =
+                config.fix_demote_res_m > 0.0 &&
+                ddpr_rms > config.fix_demote_res_m;
+            const bool posthold_demote =
+                config.fix_demote_posthold_epochs > 0 &&
+                static_cast<long long>(i) - last_held_epoch <=
+                    static_cast<long long>(config.fix_demote_posthold_epochs);
+            bool relative_residual_demote = false;
+            if (config.fix_demote_res_rel > 0.0 && recent_ddpr_rms.size() >= 20) {
+                std::vector<double> h(recent_ddpr_rms.begin(), recent_ddpr_rms.end());
+                std::nth_element(h.begin(), h.begin() + h.size() / 2, h.end());
+                const double med = h[h.size() / 2];
+                relative_residual_demote =
+                    ddpr_rms > config.cp_hold_main_residual_threshold_m &&
+                    ddpr_rms > config.fix_demote_res_rel * med;
+            }
+            bool demote = distance_demote;
             // Extreme-residual variant (fix_demote_res_m): an epoch whose own
             // post-fit DDPR RMS is in the tens of metres cannot be a
             // trustworthy fix regardless of what the IMU/anchor say (see the
             // knob's comment for the measured legit-vs-wrong-basin
             // separation). Label-only, this epoch only.
-            if (!demote && config.fix_demote_res_m > 0.0 && ddpr_rms > config.fix_demote_res_m) {
+            if (!demote && residual_demote) {
                 demote = true;
             }
             // Post-hold cooldown variant (fix_demote_posthold_epochs): a fix
@@ -4595,9 +4612,7 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
             // sub-second float history in exactly the conditions where the
             // ratio test is least trustworthy (see the knob's comment for
             // the measured 45.8 m case that no local witness catches).
-            if (!demote && config.fix_demote_posthold_epochs > 0 &&
-                static_cast<long long>(i) - last_held_epoch <=
-                    static_cast<long long>(config.fix_demote_posthold_epochs)) {
+            if (!demote && posthold_demote) {
                 demote = true;
             }
             // Relative-residual variant (fix_demote_res_rel): "suddenly much
@@ -4605,14 +4620,8 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
             // the absolute fix_demote_res_m cannot be (see the knob's
             // comment for the measured per-run separations). Previous-epoch
             // history only; absolute floor = the FSM trigger threshold.
-            if (!demote && config.fix_demote_res_rel > 0.0 && recent_ddpr_rms.size() >= 20) {
-                std::vector<double> h(recent_ddpr_rms.begin(), recent_ddpr_rms.end());
-                std::nth_element(h.begin(), h.begin() + h.size() / 2, h.end());
-                const double med = h[h.size() / 2];
-                if (ddpr_rms > config.cp_hold_main_residual_threshold_m &&
-                    ddpr_rms > config.fix_demote_res_rel * med) {
-                    demote = true;
-                }
+            if (!demote && relative_residual_demote) {
+                demote = true;
             }
             // Anchor-gap variant (fix_demote_use_ddpr_anchor): the IMU
             // prediction rides an already-converged wrong basin, but the
@@ -4631,6 +4640,7 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
             // signature. No-op (gate always open) when the knob is off.
             bool anchor_gross_gate_open = true;
             bool demotion_anchor_trusted = false;
+            bool anchor_demote = false;
             double demotion_anchor_gap_m =
                 std::numeric_limits<double>::infinity();
             if (config.fix_demote_use_ddpr_anchor && config.fix_demote_anchor_gross) {
@@ -4711,6 +4721,7 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                     if (config.fix_demote_use_ddpr_anchor &&
                         anchor_gap > config.fix_demote_anchor_distance_m) {
                         demote = true;
+                        anchor_demote = true;
                         ++result.diagnostics.fix_plausibility_anchor_demotions;
                     }
                 }
@@ -4742,6 +4753,34 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 anchor_reprieve_pass) {
                 demote = false;
                 ++result.diagnostics.fix_plausibility_surplus_reprieves;
+            }
+            // A large absolute DDPR residual can be common-mode code
+            // multipath even when the carrier integer hypothesis is strong.
+            // Reprieve only that isolated reason, and only when both the
+            // LAMBDA/IMU model and a fresh standalone-code SPP position agree
+            // with the fixed candidate. Any other simultaneous demotion
+            // reason, missing/stale SPP, or weak candidate fails closed.
+            const bool residual_only_demote =
+                residual_demote && !distance_demote && !posthold_demote &&
+                !relative_residual_demote && !anchor_demote;
+            const bool spp_model_reprieve =
+                demote && config.fix_demote_spp_model_reprieve &&
+                residual_only_demote &&
+                epoch_diagnostics[i].lambda_candidate_available &&
+                epoch_diagnostics[i].lambda_candidate_fixed_ambiguities >=
+                    config.fix_demote_spp_model_min_fixed_ambiguities &&
+                std::isfinite(
+                    epoch_diagnostics[i].fixed_imu_prediction_separation_m) &&
+                epoch_diagnostics[i].fixed_imu_prediction_separation_m <=
+                    config.fix_demote_spp_model_max_imu_separation_m &&
+                epoch_diagnostics[i].fresh_spp_solution &&
+                epoch_diagnostics[i].spp_seed_position_ecef.allFinite() &&
+                (Eigen::Vector3d(fix_ant) -
+                 epoch_diagnostics[i].spp_seed_position_ecef).norm() <=
+                    config.fix_demote_spp_model_max_agreement_m;
+            if (spp_model_reprieve) {
+                demote = false;
+                ++result.diagnostics.fix_plausibility_spp_model_reprieves;
             }
             if (demote) {
                 epoch_fixed[i] = false;

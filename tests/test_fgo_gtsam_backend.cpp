@@ -2698,6 +2698,63 @@ TEST(FGOFixDemoteTest, ExtremeResidualDemotesRegardlessOfImuAgreement) {
         << "clean epochs keep their FIXED label";
 }
 
+TEST(FGOFixDemoteTest, FreshSppAndStrongModelReprieveResidualOnlyDemotion) {
+    CpHoldTestOptions opt;
+    opt.satellites = lambdaCapableSatelliteGeometry();
+    opt.num_epochs = 25;
+    for (std::size_t e = 15; e <= 18; ++e) opt.pr_corrupt_epochs.insert(e);
+    opt.pr_baseline_bias_m = 0.0;
+    opt.pr_dominant_extra_bias_m = 40.0;
+    auto problem = makeCpHoldFixedLagProblem(opt);
+
+    FGOProcessor::FGOConfig config = makeFixDemoteBaseConfig();
+    config.use_epoch_quality_gates = true;
+    config.gate_gdop_max = 1e9;
+    config.gate_min_satellites = 0;
+    config.gate_ddpr_res_max_m = 1e9;
+    config.gate_per_sat_res_max_m = 1e9;
+    config.use_fix_plausibility_demotion = true;
+    config.fix_demote_distance_m = 1.0e9;
+    config.fix_demote_res_m = 5.0;
+    config.fix_demote_spp_model_reprieve = true;
+    // The compact synthetic fixture has fewer ambiguities than the frozen
+    // production floor. Keep every other gate realistic while lowering only
+    // this fixture-size requirement.
+    config.fix_demote_spp_model_min_fixed_ambiguities = 1;
+
+    // A coasted/header fallback must fail closed even when its stored
+    // position happens to agree with the fixed candidate.
+    FGOProcessor stale_processor(config);
+    const auto stale_result = stale_processor.optimizeProblem(problem);
+    ASSERT_NE(stale_result.solution.solutions[16].status,
+              SolutionStatus::FIXED);
+    EXPECT_EQ(stale_result.diagnostics.fix_plausibility_spp_model_reprieves,
+              0u);
+
+    for (auto& epoch : problem.epochs) epoch.fresh_spp_solution = true;
+    FGOProcessor fresh_processor(config);
+    const auto fresh_result = fresh_processor.optimizeProblem(problem);
+
+    EXPECT_GT(fresh_result.diagnostics.fix_plausibility_spp_model_reprieves,
+              0u);
+    EXPECT_EQ(fresh_result.solution.solutions[16].status,
+              SolutionStatus::FIXED)
+        << "a fresh SPP witness agreeing with a strong carrier candidate "
+           "must reprieve an isolated absolute-DDPR demotion";
+    EXPECT_EQ(fresh_result.diagnostics.fix_plausibility_demotions, 0u);
+
+    // Agreement cannot override another simultaneous demotion reason.
+    config.fix_demote_distance_m = 0.0;
+    FGOProcessor simultaneous_processor(config);
+    const auto simultaneous_result =
+        simultaneous_processor.optimizeProblem(problem);
+    EXPECT_NE(simultaneous_result.solution.solutions[16].status,
+              SolutionStatus::FIXED);
+    EXPECT_EQ(
+        simultaneous_result.diagnostics.fix_plausibility_spp_model_reprieves,
+        0u);
+}
+
 TEST(FGOFixDemoteTest, RelativeResidualDemotesExcursionButToleratesChronicNoise) {
     // fix_demote_res_rel semantics: (1) a residual EXCURSION over a quiet
     // ambient demotes; (2) the SAME absolute residual level, when it is the
