@@ -1478,7 +1478,9 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
            "vel_e_mps,vel_n_mps,vel_u_mps,"
            "ratio,ratio_threshold,nfixed,ar_outcome,ddpr_rms_m,sd_doppler_rms_mps,gdop,nsat,sd_doppler_n,"
            "amb_candidates,lambda_attempts,lambda_stage,amb_var_median,amb_var_max,"
-           "imu_pose_correction_m,lambda_candidate_valid,lambda_candidate_nfixed,"
+           "imu_pose_correction_m,spp_seed_fresh,spp_seed_x_ecef_m,"
+           "spp_seed_y_ecef_m,spp_seed_z_ecef_m,"
+           "lambda_candidate_valid,lambda_candidate_nfixed,"
            "lambda_candidate_ratio,lambda_candidate_x_ecef_m,"
            "lambda_candidate_y_ecef_m,lambda_candidate_z_ecef_m,"
            "ratio_impact_eval,ratio_impact_trials,ratio_impact_best_ratio,"
@@ -1562,6 +1564,10 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
                 << ',' << d.ambiguity_variance_median_cycles2
                 << ',' << d.ambiguity_variance_max_cycles2
                 << ',' << d.imu_pose_correction_m
+                << ',' << (d.fresh_spp_solution ? 1 : 0)
+                << ',' << d.spp_seed_position_ecef.x()
+                << ',' << d.spp_seed_position_ecef.y()
+                << ',' << d.spp_seed_position_ecef.z()
                 << ',' << (d.lambda_candidate_available ? 1 : 0)
                 << ',' << d.lambda_candidate_fixed_ambiguities
                 << ',' << d.lambda_candidate_ratio
@@ -2080,7 +2086,7 @@ FileId statFile(const std::string& path) {
 // vector, new factor field, ...) -- an old cache then fails the magic/version
 // check in load() below and is rebuilt instead of misread.
 constexpr uint32_t kMagic = 0x50434647u;  // "PCFG" (problem-cache fgo)
-constexpr uint32_t kVersion = 6u;
+constexpr uint32_t kVersion = 7u;
 constexpr std::size_t kBuilderFingerprintBytes = 512u;
 
 struct Fingerprint {

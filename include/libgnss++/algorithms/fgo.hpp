@@ -1446,6 +1446,9 @@ public:
         GNSSTime time;
         Vector3d position_ecef = Vector3d::Zero();
         double receiver_clock_bias_m = 0.0;
+        // True only when position_ecef came from a valid SPP solve at this
+        // epoch; false for last-valid/header fallbacks.
+        bool fresh_spp_solution = false;
     };
 
     struct ObservationModelDebug {
@@ -1988,6 +1991,11 @@ public:
         double ambiguity_variance_median_cycles2 = 0.0;
         double ambiguity_variance_max_cycles2 = 0.0;
         double imu_pose_correction_m = 0.0;
+        // Read-only copy of the builder's independent current-epoch SPP
+        // seed. This exposes an absolute-code witness for AR analysis while
+        // keeping all estimator and FIX/FLOAT decisions unchanged.
+        bool fresh_spp_solution = false;
+        Vector3d spp_seed_position_ecef = Vector3d::Zero();
         // Last position candidate produced by a successful LAMBDA search in
         // this epoch, even when a later integrity/ratio decision leaves the
         // epoch FLOAT. Diagnostic-only; never feeds the estimator.

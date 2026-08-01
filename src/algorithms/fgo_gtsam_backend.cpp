@@ -1968,6 +1968,10 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
             }
         }
         epoch_diagnostics[i].time = problem.epochs[i].time;
+        epoch_diagnostics[i].fresh_spp_solution =
+            problem.epochs[i].fresh_spp_solution;
+        epoch_diagnostics[i].spp_seed_position_ecef =
+            problem.epochs[i].position_ecef;
         epoch_diagnostics[i].ar_outcome = config.use_lambda_ambiguity_fix
             ? FGOProcessor::AmbiguityResolutionOutcome::SmootherFailure
             : FGOProcessor::AmbiguityResolutionOutcome::Disabled;

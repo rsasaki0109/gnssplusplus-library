@@ -144,6 +144,12 @@ written beside the epoch CSV as `<dump>.ratio_impact.csv`; it includes the
 excluded satellite, its ambiguity variance/fractional-cycle/DDPR-residual
 proxies, and the resulting counterfactual candidate.
 
+The epoch CSV also records whether its builder position came from a fresh
+current-epoch SPP solution (`spp_seed_fresh`) and that seed's ECEF position.
+These diagnostic-only fields allow integer candidates to be audited against
+an independent undifferenced-code/RAIM witness; they do not feed the graph or
+change FIX/FLOAT decisions.
+
 #### Surplus-satellite rescue integrity
 
 LAMBDA candidates that fall short of the ratio gate can be rescued by an

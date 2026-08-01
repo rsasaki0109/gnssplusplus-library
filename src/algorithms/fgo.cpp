@@ -1008,6 +1008,7 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
         if (spp_solution.isValid()) {
             seed.position_ecef = spp_solution.position_ecef;
             seed.receiver_clock_bias_m = spp_solution.receiver_clock_bias;
+            seed.fresh_spp_solution = true;
             last_valid_seed_position_ecef = seed.position_ecef;
             last_valid_seed_clock_bias_m = seed.receiver_clock_bias_m;
             have_last_valid_seed = true;
