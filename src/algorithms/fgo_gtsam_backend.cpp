@@ -3535,10 +3535,20 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                         ++epoch_diagnostics[i].lambda_attempts;
                         result.diagnostics.lambda_ambiguity_candidates +=
                             static_cast<std::size_t>(subset);
-                        if (!lambdaSearch(sub_float, sub_q, fixed_amb, ratio)) {
+                        LambdaCandidateDiagnostics lambda_diagnostics;
+                        if (!lambdaSearchTopK(
+                                sub_float, sub_q, 2, lambda_diagnostics)) {
                             if (!config.use_fixed_lag_partial_lambda) break;
                             continue;
                         }
+                        fixed_amb = lambda_diagnostics.candidates.col(0);
+                        const double best_residual =
+                            lambda_diagnostics.squared_residuals(0);
+                        const double second_residual =
+                            lambda_diagnostics.squared_residuals(1);
+                        ratio = best_residual > 0.0
+                                    ? second_residual / best_residual
+                                    : 0.0;
                         result.diagnostics.lambda_ambiguity_fix_solved = true;
                         epoch_diagnostics[i].ar_outcome =
                             FGOProcessor::AmbiguityResolutionOutcome::RatioRejected;
@@ -3565,6 +3575,55 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                                         epoch_diagnostics[i]
                                             .lambda_candidate_fixed_ambiguities = subset;
                                         epoch_diagnostics[i].lambda_candidate_ratio = ratio;
+                                        epoch_diagnostics[i].lambda_candidate_bsr =
+                                            lambda_diagnostics
+                                                .bootstrapped_success_rate;
+                                        epoch_diagnostics[i]
+                                            .lambda_candidate_bsr_qscale2 =
+                                            bootstrappedSuccessRate(
+                                                lambda_diagnostics
+                                                    .conditional_variances,
+                                                2.0);
+                                        epoch_diagnostics[i]
+                                            .lambda_candidate_bsr_qscale4 =
+                                            bootstrappedSuccessRate(
+                                                lambda_diagnostics
+                                                    .conditional_variances,
+                                                4.0);
+                                        epoch_diagnostics[i]
+                                            .lambda_candidate_bsr_qscale8 =
+                                            bootstrappedSuccessRate(
+                                                lambda_diagnostics
+                                                    .conditional_variances,
+                                                8.0);
+                                        epoch_diagnostics[i]
+                                            .lambda_candidate_bsr_qscale16 =
+                                            bootstrappedSuccessRate(
+                                                lambda_diagnostics
+                                                    .conditional_variances,
+                                                16.0);
+                                        FixedFailureRateRatioThreshold ffrt;
+                                        if (fixedFailureRateRatioThreshold(
+                                                subset,
+                                                lambda_diagnostics
+                                                    .bootstrapped_success_rate,
+                                                0.001, ffrt)) {
+                                            epoch_diagnostics[i]
+                                                .lambda_candidate_ffrt_table_supported =
+                                                true;
+                                            epoch_diagnostics[i]
+                                                .lambda_candidate_ffrt_accepts_any =
+                                                ffrt.accepts_any_candidate;
+                                            epoch_diagnostics[i]
+                                                .lambda_candidate_ffrt_min_ratio =
+                                                ffrt.minimum_second_to_best_ratio;
+                                            epoch_diagnostics[i]
+                                                .lambda_candidate_ffrt_pass =
+                                                ffrt.accepts_any_candidate &&
+                                                std::isfinite(ratio) &&
+                                                ratio > ffrt
+                                                            .minimum_second_to_best_ratio;
+                                        }
                                         epoch_diagnostics[i].fixed_float_separation_m =
                                             (provisional_fixed_ant - Eigen::Vector3d(
                                                  antennaOf(pose_i))).norm();

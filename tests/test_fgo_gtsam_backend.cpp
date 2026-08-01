@@ -2199,6 +2199,21 @@ TEST(FGOAmbiguityOutcomeTelemetryTest, HoldFallbackPreservesRatioRejection) {
     EXPECT_GT(rejected->lambda_candidate_position_ecef.norm(), 1.0e6);
     EXPECT_GT(rejected->lambda_candidate_fixed_ambiguities, 0);
     EXPECT_TRUE(std::isfinite(rejected->lambda_candidate_ratio));
+    EXPECT_GT(rejected->lambda_candidate_bsr, 0.0);
+    EXPECT_LE(rejected->lambda_candidate_bsr, 1.0);
+    EXPECT_LE(rejected->lambda_candidate_bsr_qscale2,
+              rejected->lambda_candidate_bsr);
+    EXPECT_LE(rejected->lambda_candidate_bsr_qscale4,
+              rejected->lambda_candidate_bsr_qscale2);
+    EXPECT_LE(rejected->lambda_candidate_bsr_qscale8,
+              rejected->lambda_candidate_bsr_qscale4);
+    EXPECT_LE(rejected->lambda_candidate_bsr_qscale16,
+              rejected->lambda_candidate_bsr_qscale8);
+    EXPECT_TRUE(rejected->lambda_candidate_ffrt_table_supported);
+    EXPECT_EQ(rejected->lambda_candidate_ffrt_pass,
+              rejected->lambda_candidate_ffrt_accepts_any &&
+                  rejected->lambda_candidate_ratio >
+                      rejected->lambda_candidate_ffrt_min_ratio);
 }
 
 TEST(FGOAmbiguityOutcomeTelemetryTest,
