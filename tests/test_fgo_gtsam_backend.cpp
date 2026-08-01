@@ -2462,6 +2462,7 @@ TEST(FGOFixDemoteTest, DefaultOffIsNoOp) {
     const auto problem = makeCpHoldFixedLagProblem(opt);
 
     FGOProcessor::FGOConfig config = makeFixDemoteBaseConfig();
+    EXPECT_DOUBLE_EQ(config.fix_demote_spp_model_max_agreement_m, 8.0);
     ASSERT_FALSE(config.use_fix_plausibility_demotion);
 
     FGOProcessor processor(config);
