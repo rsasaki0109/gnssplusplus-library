@@ -238,15 +238,16 @@ epoch FIXED. Full Tokyo replays combined it with the anchor reprieve above:
 where the absolute DD-code residual is the only demotion reason. It keeps the
 FIXED label only for a fresh LAMBDA candidate with at least 10 fixed
 ambiguities, at most 2 cm separation from the IMU-predicted pose, and at most
-5 m separation from the current epoch's fresh standalone SPP/RAIM solution.
-A coasted or header-derived SPP seed fails closed. The 5 m threshold was
-frozen on Tokyo run1, validated unchanged on run2, and then applied once to
-held-out run3. Full implementation replays rescued 213/304/4 correct epochs
-and zero wrong epochs on runs 1/2/3 respectively; because most were stationary,
-the aggregate correct-FIX distance gain was 81.704 m (+0.242 pp), so this is
-a safe incremental guard rather than the complete FIX-rate target. Combined
-with the two preceding reprieves, correct-FIX distance is now approximately
-58.2153% (+1.1422 pp from 57.0731%); about 0.858 pp remains to the +2 pp goal.
+8 m separation from the current epoch's fresh standalone SPP/RAIM solution.
+A coasted or header-derived SPP seed fails closed. The original 5 m gate was
+expanded to 8 m after a Tokyo run1 development audit, then validated unchanged
+on run2 and applied once to held-out run3. Full implementation replays rescued
+243/311/9 correct epochs and zero wrong epochs on runs 1/2/3 respectively;
+because most were stationary, the aggregate correct-FIX distance gain was
+102.776 m (+0.304 pp), so this is a safe incremental guard rather than the
+complete FIX-rate target. Combined with the two preceding reprieves,
+correct-FIX distance is now approximately 58.2776% (+1.2045 pp from 57.0731%);
+about 0.7955 pp remains to the +2 pp goal.
 
 The FGO epoch CSV also reports monitor-only LAMBDA covariance diagnostics for
 each provisional candidate: the bootstrapped success-rate lower bound, the

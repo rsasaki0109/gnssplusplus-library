@@ -1084,7 +1084,7 @@ public:
         bool fix_demote_spp_model_reprieve = false;
         int fix_demote_spp_model_min_fixed_ambiguities = 10;
         double fix_demote_spp_model_max_imu_separation_m = 0.02;
-        double fix_demote_spp_model_max_agreement_m = 5.0;
+        double fix_demote_spp_model_max_agreement_m = 8.0;
 
         // --- Exception recovery (port of recovery.py's handle_solve_exception)
         // ---
