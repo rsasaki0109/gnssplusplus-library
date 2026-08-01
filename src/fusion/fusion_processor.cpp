@@ -452,6 +452,10 @@ LooseCouplingProcessor::processTightlyCoupledDD(
     if (!initialized_ || !origin_set_ || observations.empty()) {
         return result;
     }
+    if (!isHeadingConverged()) {
+        result.deferred_until_heading_converged = true;
+        return result;
+    }
     if (!dd_imu_bridge_) {
         dd_imu_bridge::BridgeConfig bridge_config;
         bridge_config.commit_carrier_updates =

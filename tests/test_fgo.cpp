@@ -310,7 +310,9 @@ bool makeSyntheticGpsL1Observation(const NavigationData& nav,
                                    const GNSSTime& time,
                                    const Vector3d& receiver_position,
                                    double carrier_bias_m,
-                                   Observation& observation) {
+                                   Observation& observation,
+                                   double doppler_residual_mps =
+                                       std::numeric_limits<double>::quiet_NaN()) {
     double pseudorange = 22'000'000.0;
     Vector3d satellite_position = Vector3d::Zero();
     Vector3d satellite_velocity = Vector3d::Zero();
@@ -339,6 +341,23 @@ bool makeSyntheticGpsL1Observation(const NavigationData& nav,
     observation.snr = 45.0;
     observation.has_pseudorange = true;
     observation.has_carrier_phase = true;
+    if (std::isfinite(doppler_residual_mps)) {
+        const Vector3d delta = satellite_position - receiver_position;
+        const Vector3d ex = delta.normalized();
+        const double sagnac_rate =
+            constants::OMEGA_E / constants::SPEED_OF_LIGHT *
+            (satellite_velocity(1) * receiver_position(0) -
+             satellite_velocity(0) * receiver_position(1));
+        const double modeled_range_rate =
+            satellite_velocity.dot(ex) + sagnac_rate;
+        const double satellite_clock_drift_mps =
+            satellite_clock_drift * constants::SPEED_OF_LIGHT;
+        observation.doppler =
+            -(modeled_range_rate - satellite_clock_drift_mps +
+              doppler_residual_mps) /
+            constants::GPS_L1_WAVELENGTH;
+        observation.has_doppler = true;
+    }
     observation.valid = true;
     return true;
 }
@@ -364,7 +383,8 @@ std::vector<ObservationData> makeSyntheticDoubleDifferenceObservationEpochs(
                     epoch.time,
                     receiver_positions[epoch_index],
                     carrier_bias_m,
-                    observation)) {
+                    observation,
+                    carrier_epoch_slope_m * static_cast<double>(prn))) {
                 epoch.addObservation(observation);
             }
         }
@@ -731,6 +751,80 @@ TEST(FGOTest, BuiltSingleDifferenceTdcpFactorsUseCurrentEpochLos) {
     }
 
     EXPECT_GT(max_previous_current_los_delta, 1e-8);
+}
+
+TEST(FGOTest, SingleDifferenceTdcpIntegerSlipRepairUsesDopplerAndFailsClosed) {
+    const NavigationData nav = makeSyntheticGpsNavigation(4);
+    const std::array<Vector3d, 2> rover_positions = {
+        Vector3d(1113194.0, -4841695.0, 3985350.0),
+        Vector3d(1113214.0, -4841680.0, 3985342.0),
+    };
+    const std::array<Vector3d, 2> base_positions = {
+        rover_positions[0] + Vector3d(-320.0, 180.0, 45.0),
+        rover_positions[1] + Vector3d(-320.0, 180.0, 45.0),
+    };
+    auto rover_epochs =
+        makeSyntheticDoubleDifferenceObservationEpochs(nav, rover_positions, 0.04);
+    const auto base_epochs =
+        makeSyntheticDoubleDifferenceObservationEpochs(nav, base_positions, 0.02);
+
+    FGOProcessor::FGOConfig config;
+    config.use_spp_seed = false;
+    config.use_pseudorange_factors = false;
+    config.use_motion_factors = false;
+    config.use_tdcp_factors = false;
+    config.use_double_difference_factors = true;
+    config.use_single_difference_tdcp_factors = true;
+    config.use_single_difference_tdcp_integer_slip_repair = true;
+    config.use_ionosphere_model = false;
+    config.use_troposphere_model = false;
+    config.reject_tdcp_code_phase_jump = false;
+    config.min_elevation_deg = -90.0;
+    config.min_satellites_per_epoch = 2;
+
+    FGOProcessor processor(config);
+    const auto clean_problem = processor.buildDoubleDifferenceProblem(
+        rover_epochs, base_epochs, nav, base_positions[0]);
+    ASSERT_FALSE(clean_problem.single_difference_tdcp_factors.empty());
+    EXPECT_EQ(clean_problem.diagnostics.single_difference_tdcp_slip_repairs, 0u);
+    EXPECT_EQ(
+        clean_problem.diagnostics.single_difference_tdcp_slip_repair_candidates,
+        0u);
+
+    for (auto& observation : rover_epochs[1].observations) {
+        observation.carrier_phase +=
+            2.0 * static_cast<double>(observation.satellite.prn);
+        observation.lli |= 0x01U;
+    }
+    const auto repaired_problem = processor.buildDoubleDifferenceProblem(
+        rover_epochs, base_epochs, nav, base_positions[0]);
+
+    ASSERT_EQ(repaired_problem.single_difference_tdcp_factors.size(),
+              clean_problem.single_difference_tdcp_factors.size());
+    EXPECT_EQ(repaired_problem.diagnostics.single_difference_tdcp_slip_repairs,
+              repaired_problem.single_difference_tdcp_factors.size());
+    EXPECT_EQ(
+        repaired_problem.diagnostics.single_difference_tdcp_slip_repair_rejects,
+        0u);
+    for (std::size_t i = 0;
+         i < repaired_problem.single_difference_tdcp_factors.size(); ++i) {
+        const auto& repaired = repaired_problem.single_difference_tdcp_factors[i];
+        const auto& clean = clean_problem.single_difference_tdcp_factors[i];
+        EXPECT_TRUE(repaired.repaired_cycle_slip);
+        EXPECT_NE(repaired.repaired_slip_cycles, 0);
+        EXPECT_NEAR(repaired.delta_carrier_m, clean.delta_carrier_m, 1e-6);
+    }
+
+    auto missing_doppler_epochs = rover_epochs;
+    for (auto& observation : missing_doppler_epochs[1].observations) {
+        observation.has_doppler = false;
+    }
+    const auto rejected_problem = processor.buildDoubleDifferenceProblem(
+        missing_doppler_epochs, base_epochs, nav, base_positions[0]);
+    EXPECT_TRUE(rejected_problem.single_difference_tdcp_factors.empty());
+    EXPECT_GT(
+        rejected_problem.diagnostics.single_difference_tdcp_slip_repair_rejects,
+        0u);
 }
 
 TEST(FGOTest, RobustLossDownweightsPseudorangeOutlier) {
@@ -1275,6 +1369,66 @@ TEST(FGOTest, CmcScreeningDefaultOffIsNoOp) {
 
     EXPECT_EQ(problem.diagnostics.code_minus_carrier_jump_resets, 0u);
     EXPECT_EQ(problem.diagnostics.code_minus_carrier_level_exclusions, 0u);
+}
+
+TEST(FGOTest, WcmcConditionsTimeVaryingDdCodeBiasWithoutChangingCarrierArc) {
+    const NavigationData nav = makeSyntheticGpsNavigation(2);
+    const Vector3d rover_position(1113194.0, -4841695.0, 3985350.0);
+    const Vector3d base_position =
+        rover_position + Vector3d(-320.0, 180.0, 45.0);
+    const std::vector<std::array<double, 2>> zero_bias = {
+        {0.0, 0.0}, {0.0, 0.0},
+    };
+    const auto clean_rover =
+        makeCmcObservationEpochs(nav, rover_position, zero_bias, 1.0);
+    auto biased_rover = clean_rover;
+    const auto base_epochs =
+        makeCmcObservationEpochs(nav, base_position, zero_bias, 1.0);
+    // Epoch 0 establishes the causal CMC baseline. At epoch 1 add distinct
+    // satellite code biases while leaving carrier phase unchanged.
+    ASSERT_EQ(biased_rover[1].observations.size(), 2u);
+    biased_rover[1].observations[0].pseudorange += 2.0;
+    biased_rover[1].observations[1].pseudorange += 5.0;
+
+    FGOProcessor::FGOConfig clean_config = makeCmcTestConfig();
+    clean_config.use_code_minus_carrier_screening = false;
+    FGOProcessor clean_processor(clean_config);
+    const auto clean_problem = clean_processor.buildDoubleDifferenceProblem(
+        clean_rover, base_epochs, nav, base_position);
+    const auto unconditioned_problem = clean_processor.buildDoubleDifferenceProblem(
+        biased_rover, base_epochs, nav, base_position);
+
+    FGOProcessor::FGOConfig wcmc_config = clean_config;
+    wcmc_config.use_wcmc_pseudorange_conditioning = true;
+    wcmc_config.code_minus_carrier_warmup_epochs = 1;
+    wcmc_config.code_minus_carrier_baseline_alpha = 0.0;
+    wcmc_config.wcmc_max_correction_m = 10.0;
+    FGOProcessor wcmc_processor(wcmc_config);
+    const auto conditioned_problem = wcmc_processor.buildDoubleDifferenceProblem(
+        biased_rover, base_epochs, nav, base_position);
+
+    ASSERT_EQ(clean_problem.double_difference_pseudorange_factors.size(), 2u);
+    ASSERT_EQ(unconditioned_problem.double_difference_pseudorange_factors.size(),
+              2u);
+    ASSERT_EQ(conditioned_problem.double_difference_pseudorange_factors.size(),
+              2u);
+    const double clean_epoch1 =
+        clean_problem.double_difference_pseudorange_factors[1]
+            .observed_dd_pseudorange_m;
+    const double biased_epoch1 =
+        unconditioned_problem.double_difference_pseudorange_factors[1]
+            .observed_dd_pseudorange_m;
+    const double conditioned_epoch1 =
+        conditioned_problem.double_difference_pseudorange_factors[1]
+            .observed_dd_pseudorange_m;
+    EXPECT_GT(std::abs(biased_epoch1 - clean_epoch1), 2.9);
+    EXPECT_NEAR(conditioned_epoch1, clean_epoch1, 1e-3);
+    EXPECT_EQ(conditioned_problem.diagnostics.wcmc_pseudorange_corrections, 1u);
+    ASSERT_EQ(conditioned_problem.double_difference_carrier_factors.size(), 2u);
+    EXPECT_EQ(conditioned_problem.double_difference_carrier_factors[0]
+                  .ambiguity_index,
+              conditioned_problem.double_difference_carrier_factors[1]
+                  .ambiguity_index);
 }
 
 TEST(FGOTest, CmcLevelExclusionSkipsBothFactorsWithoutUpdatingBaseline) {
