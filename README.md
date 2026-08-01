@@ -134,6 +134,16 @@ normalized satellite/signal trace is written beside it as
 These fields only report decisions already made by the solver; enabling the
 CSV dump does not alter candidate selection or FIX/FLOAT decisions.
 
+The same dump also includes `gf_slip_events`, `gf_slip_max_jump_m`, and
+`gf_slip_tainted_ambiguities`. This geometry-free shadow follows the 0.05 m
+single-difference carrier jump used by
+[GICI-LIB](https://github.com/chichengcn/gici-open/blob/master/src/gnss/ambiguity_common.cpp)
+and the multi-frequency arc checks in
+[RTKLIB](https://github.com/tomojitakasu/RTKLIB/blob/master/src/rtkpos.c).
+It ignores gaps and arcs already restarted by the existing LLI/CMC logic,
+then reports how many unchanged DD ambiguity arcs remain exposed after a
+new jump. It never restarts an arc or changes the factor graph.
+
 `--ratio-impact-monitor` adds a counterfactual partial-AR audit for epochs
 that remain ratio-rejected. It removes each target satellite in turn, reruns
 LAMBDA, and writes the best ratio, subset size, candidate ECEF position, and

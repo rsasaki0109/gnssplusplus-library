@@ -2470,6 +2470,116 @@ FGOProcessor::FGOResult FGOProcessor::optimize(
     return optimizeProblem(buildPseudorangeProblem(epochs, nav));
 }
 
+std::vector<FGOProcessor::GeometryFreeSlipShadowEpoch>
+FGOProcessor::analyzeGeometryFreeSlipShadow(const FGOProblem& problem,
+                                            double threshold_m,
+                                            double max_gap_s) {
+    struct PhaseSample {
+        double single_difference_phase_m = 0.0;
+        std::set<std::size_t> ambiguity_indices;
+    };
+    struct History {
+        GNSSTime time;
+        double geometry_free_m = 0.0;
+        std::set<std::size_t> first_ambiguity_indices;
+        std::set<std::size_t> second_ambiguity_indices;
+    };
+
+    using CarrierKey = std::pair<SatelliteId, SignalType>;
+    using PairKey = std::tuple<SatelliteId, SignalType, SignalType>;
+    std::vector<std::map<CarrierKey, PhaseSample>> phases_by_epoch(
+        problem.epochs.size());
+    for (const auto& factor : problem.double_difference_carrier_factors) {
+        if (factor.epoch_index >= phases_by_epoch.size()) {
+            continue;
+        }
+        auto& phases = phases_by_epoch[factor.epoch_index];
+        const auto add_phase = [&](const CarrierKey& key, double phase_m) {
+            auto& sample = phases[key];
+            sample.single_difference_phase_m = phase_m;
+            sample.ambiguity_indices.insert(factor.ambiguity_index);
+        };
+        add_phase({factor.satellite, factor.signal},
+                  factor.rover_satellite_model.raw_carrier_m -
+                      factor.base_satellite_model.raw_carrier_m);
+        // A slip on the DD reference contaminates every target ambiguity in
+        // that group, hence the same factor ambiguity is attached here too.
+        add_phase({factor.reference_satellite, factor.signal},
+                  factor.rover_reference_model.raw_carrier_m -
+                      factor.base_reference_model.raw_carrier_m);
+    }
+
+    std::vector<GeometryFreeSlipShadowEpoch> shadow(problem.epochs.size());
+    std::map<PairKey, History> history;
+    std::set<std::size_t> tainted_ambiguities;
+    const double safe_threshold = std::max(0.0, threshold_m);
+    const double safe_max_gap = std::max(0.0, max_gap_s);
+    for (std::size_t epoch_index = 0; epoch_index < phases_by_epoch.size();
+         ++epoch_index) {
+        std::map<SatelliteId, std::vector<std::pair<SignalType, PhaseSample>>>
+            by_satellite;
+        for (const auto& [key, sample] : phases_by_epoch[epoch_index]) {
+            by_satellite[key.first].push_back({key.second, sample});
+        }
+        const GNSSTime time = problem.epochs[epoch_index].time;
+        for (const auto& [satellite, samples] : by_satellite) {
+            for (std::size_t first = 0; first < samples.size(); ++first) {
+                for (std::size_t second = first + 1; second < samples.size();
+                     ++second) {
+                    const auto& first_sample = samples[first].second;
+                    const auto& second_sample = samples[second].second;
+                    const double geometry_free =
+                        first_sample.single_difference_phase_m -
+                        second_sample.single_difference_phase_m;
+                    const PairKey key{satellite, samples[first].first,
+                                      samples[second].first};
+                    const auto previous = history.find(key);
+                    if (previous != history.end()) {
+                        const double dt = time - previous->second.time;
+                        const bool same_arcs =
+                            previous->second.first_ambiguity_indices ==
+                                first_sample.ambiguity_indices &&
+                            previous->second.second_ambiguity_indices ==
+                                second_sample.ambiguity_indices;
+                        if (same_arcs && dt > 0.0 &&
+                            (safe_max_gap <= 0.0 || dt <= safe_max_gap)) {
+                            const double jump = std::abs(
+                                geometry_free - previous->second.geometry_free_m);
+                            if (jump > safe_threshold) {
+                                ++shadow[epoch_index].event_pairs;
+                                shadow[epoch_index].max_jump_m = std::max(
+                                    shadow[epoch_index].max_jump_m, jump);
+                                tainted_ambiguities.insert(
+                                    first_sample.ambiguity_indices.begin(),
+                                    first_sample.ambiguity_indices.end());
+                                tainted_ambiguities.insert(
+                                    second_sample.ambiguity_indices.begin(),
+                                    second_sample.ambiguity_indices.end());
+                            }
+                        }
+                    }
+                    history[key] = {time, geometry_free,
+                                    first_sample.ambiguity_indices,
+                                    second_sample.ambiguity_indices};
+                }
+            }
+        }
+
+        std::set<std::size_t> tainted_present;
+        for (const auto& [key, sample] : phases_by_epoch[epoch_index]) {
+            (void)key;
+            for (const std::size_t ambiguity_index : sample.ambiguity_indices) {
+                if (tainted_ambiguities.count(ambiguity_index) != 0) {
+                    tainted_present.insert(ambiguity_index);
+                }
+            }
+        }
+        shadow[epoch_index].tainted_ambiguities =
+            static_cast<int>(tainted_present.size());
+    }
+    return shadow;
+}
+
 FGOProcessor::FGOResult FGOProcessor::optimize(
     const std::vector<ObservationData>& rover_epochs,
     const std::vector<ObservationData>& base_epochs,

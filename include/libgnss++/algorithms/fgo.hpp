@@ -384,6 +384,8 @@ public:
         // satellite in turn and record the best candidate. Never changes the
         // selected subset, FIX/FLOAT status, graph, or hold state.
         bool monitor_ratio_impact_partial_ar = false;
+        // Diagnostic-only geometry-free slip/arc-continuity shadow.
+        bool monitor_geometry_free_cycle_slip = false;
         // GICI-style PAR: prefer ambiguities with the smallest marginal
         // variance and do not attempt a subset whose least precise member
         // exceeds this standard deviation in cycles (<=0 disables the gate).
@@ -1712,6 +1714,12 @@ public:
         FGOProblemDiagnostics diagnostics;
     };
 
+    struct GeometryFreeSlipShadowEpoch {
+        int event_pairs = 0;
+        double max_jump_m = 0.0;
+        int tainted_ambiguities = 0;
+    };
+
     struct FGODiagnostics {
         int iterations = 0;
         bool converged = false;
@@ -2029,6 +2037,12 @@ public:
         bool lambda_candidate_ffrt_accepts_any = false;
         double lambda_candidate_ffrt_min_ratio = 0.0;
         bool lambda_candidate_ffrt_pass = false;
+        // Diagnostic-only geometry-free cycle-slip shadow. It analyzes the
+        // rover/base single-difference carrier phases already present in the
+        // DD factors, but never changes ambiguity arcs or graph factors.
+        int gf_slip_shadow_event_pairs = 0;
+        double gf_slip_shadow_max_jump_m = 0.0;
+        int gf_slip_shadow_tainted_ambiguities = 0;
         bool ratio_impact_evaluated = false;
         int ratio_impact_trials = 0;
         double ratio_impact_best_ratio = 0.0;
@@ -2131,6 +2145,11 @@ public:
 
     const FGOConfig& getConfig() const { return config_; }
     void setConfig(const FGOConfig& config) { config_ = config; }
+
+    static std::vector<GeometryFreeSlipShadowEpoch>
+    analyzeGeometryFreeSlipShadow(const FGOProblem& problem,
+                                  double threshold_m = 0.05,
+                                  double max_gap_s = 1.5);
 
     FGOProblem buildPseudorangeProblem(const std::vector<ObservationData>& epochs,
                                        const NavigationData& nav) const;
