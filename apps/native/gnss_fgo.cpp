@@ -92,6 +92,15 @@ struct Options {
     double max_float_position_jump_m = 0.0;
     int min_fixed_ambiguities = 4;
     int max_lambda_ambiguities = 12;
+    int lambda_top_k_candidates = 2;
+    double lambda_min_bootstrapped_success_rate = 0.0;
+    double lambda_max_adop_cycles = 0.0;
+    bool use_multisd_disjoint_validation = false;
+    int multisd_validation_holdout_satellites = 4;
+    int multisd_validation_holdout_offset = 0;
+    double multisd_validation_aperture_cycles = 0.15;
+    double multisd_validation_min_carrier_fraction = 1.0;
+    double multisd_validation_max_ddpr_rms_m = 3.0;
     bool use_carrier_phase_factors = false;
     bool fix_ambiguities = false;
     bool fix_all_ambiguities = false;
@@ -110,6 +119,7 @@ struct Options {
     bool use_velocity_states = false;
     bool use_velocity_motion_factors = false;
     bool use_ambiguity_between_factors = false;
+    bool use_multisd_ambiguities = false;
     bool linearize_double_difference_factors_at_seed = false;
     bool dd_ambiguity_per_epoch = false;
     bool no_ambiguity_priors = false;
@@ -181,6 +191,15 @@ void printUsage(const char* program_name) {
         << "  --min-fixed-ambiguities <n>   Min accepted ambiguities before fixed pass (default: 4)\n"
         << "  --lambda-ratio-threshold <v>  LAMBDA ratio threshold (default: 3)\n"
         << "  --max-lambda-ambiguities <n>  Max ambiguity states passed to LAMBDA (default: 12)\n"
+        << "  --lambda-top-k <n>            Bounded LAMBDA hypotheses, 2..32 (default: 2)\n"
+        << "  --lambda-min-success <p>      Bootstrapped success-rate gate; 0 disables\n"
+        << "  --lambda-max-adop <cycles>    ADOP gate in cycles; 0 disables\n"
+        << "  --multisd-disjoint-validation Reserve GNSS satellites for independent validation\n"
+        << "  --multisd-holdout-satellites <n> Holdout satellite count (default: 4)\n"
+        << "  --multisd-holdout-offset <n> Deterministic ranked-partition offset\n"
+        << "  --multisd-validation-aperture <cycles> Carrier integer aperture (default: 0.15)\n"
+        << "  --multisd-validation-min-carrier-fraction <f> Required holdout agreement (default: 1)\n"
+        << "  --multisd-validation-max-ddpr <m> DD code RMS ceiling (default: 3)\n"
         << "  --max-tdcp-gap <s>            Max adjacent epoch gap for TDCP (default: 2)\n"
         << "  --base-match-tolerance <s>    Max rover/base epoch gap for DD factors (default: 0.02)\n"
         << "  --base-interpolation-max-gap <s>\n"
@@ -210,6 +229,7 @@ void printUsage(const char* program_name) {
         << "                                Keep optimized float positions in output\n"
         << "  --no-partial-lambda-ambiguity-fix\n"
         << "                                Disable partial LAMBDA retry with fewer candidates\n"
+        << "  --multisd-ambiguities         Use reference-independent SD states and BSD LAMBDA\n"
         << "  --integer-constrained-reoptimization\n"
         << "                                Re-optimize each accepted integer hypothesis and\n"
         << "                                reject it if the original active-graph cost worsens\n"
@@ -526,6 +546,25 @@ Options parseArguments(int argc, char* argv[]) {
             options.lambda_ratio_threshold = std::stod(argv[++i]);
         } else if (arg == "--max-lambda-ambiguities" && i + 1 < argc) {
             options.max_lambda_ambiguities = std::stoi(argv[++i]);
+        } else if (arg == "--lambda-top-k" && i + 1 < argc) {
+            options.lambda_top_k_candidates = std::stoi(argv[++i]);
+        } else if (arg == "--lambda-min-success" && i + 1 < argc) {
+            options.lambda_min_bootstrapped_success_rate =
+                std::stod(argv[++i]);
+        } else if (arg == "--lambda-max-adop" && i + 1 < argc) {
+            options.lambda_max_adop_cycles = std::stod(argv[++i]);
+        } else if (arg == "--multisd-disjoint-validation") {
+            options.use_multisd_disjoint_validation = true;
+        } else if (arg == "--multisd-holdout-satellites" && i + 1 < argc) {
+            options.multisd_validation_holdout_satellites = std::stoi(argv[++i]);
+        } else if (arg == "--multisd-holdout-offset" && i + 1 < argc) {
+            options.multisd_validation_holdout_offset = std::stoi(argv[++i]);
+        } else if (arg == "--multisd-validation-aperture" && i + 1 < argc) {
+            options.multisd_validation_aperture_cycles = std::stod(argv[++i]);
+        } else if (arg == "--multisd-validation-min-carrier-fraction" && i + 1 < argc) {
+            options.multisd_validation_min_carrier_fraction = std::stod(argv[++i]);
+        } else if (arg == "--multisd-validation-max-ddpr" && i + 1 < argc) {
+            options.multisd_validation_max_ddpr_rms_m = std::stod(argv[++i]);
         } else if (arg == "--max-tdcp-gap" && i + 1 < argc) {
             options.max_tdcp_gap_s = std::stod(argv[++i]);
         } else if (arg == "--base-match-tolerance" && i + 1 < argc) {
@@ -579,6 +618,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.integer_constrained_max_iterations = std::stoi(argv[++i]);
         } else if (arg == "--no-partial-lambda-ambiguity-fix") {
             options.use_partial_lambda_ambiguity_fix = false;
+        } else if (arg == "--multisd-ambiguities") {
+            options.use_multisd_ambiguities = true;
         } else if (arg == "--no-pseudorange-factors") {
             options.no_pseudorange_factors = true;
         } else if (arg == "--no-dd-factors") {
@@ -723,6 +764,34 @@ Options parseArguments(int argc, char* argv[]) {
     if (options.max_lambda_ambiguities < 0) {
         argumentError("--max-lambda-ambiguities must be non-negative", argv[0]);
     }
+    if (options.lambda_top_k_candidates < 2 ||
+        options.lambda_top_k_candidates > 32) {
+        argumentError("--lambda-top-k must be in [2, 32]", argv[0]);
+    }
+    if (options.lambda_min_bootstrapped_success_rate < 0.0 ||
+        options.lambda_min_bootstrapped_success_rate > 1.0) {
+        argumentError("--lambda-min-success must be in [0, 1]", argv[0]);
+    }
+    if (options.lambda_max_adop_cycles < 0.0) {
+        argumentError("--lambda-max-adop must be non-negative", argv[0]);
+    }
+    if (options.multisd_validation_holdout_satellites < 1) {
+        argumentError("--multisd-holdout-satellites must be positive", argv[0]);
+    }
+    if (options.multisd_validation_holdout_offset < 0) {
+        argumentError("--multisd-holdout-offset must be non-negative", argv[0]);
+    }
+    if (options.multisd_validation_aperture_cycles < 0.0 ||
+        options.multisd_validation_aperture_cycles > 0.5) {
+        argumentError("--multisd-validation-aperture must be in [0, 0.5]", argv[0]);
+    }
+    if (options.multisd_validation_min_carrier_fraction < 0.0 ||
+        options.multisd_validation_min_carrier_fraction > 1.0) {
+        argumentError("--multisd-validation-min-carrier-fraction must be in [0, 1]", argv[0]);
+    }
+    if (options.multisd_validation_max_ddpr_rms_m < 0.0) {
+        argumentError("--multisd-validation-max-ddpr must be non-negative", argv[0]);
+    }
     if (options.max_tdcp_gap_s < 0.0) {
         argumentError("--max-tdcp-gap must be non-negative", argv[0]);
     }
@@ -801,6 +870,14 @@ std::string jsonEscape(const std::string& value) {
 
 const char* jsonBool(bool value) {
     return value ? "true" : "false";
+}
+
+void writeJsonNumber(std::ostream& output, double value) {
+    if (std::isfinite(value)) {
+        output << value;
+    } else {
+        output << "null";
+    }
 }
 
 struct SeedPosition {
@@ -1824,6 +1901,26 @@ void writeSummaryJson(const Options& options,
            << ",\n";
     output << "  \"use_epoch_lambda_fixed_output\": "
            << jsonBool(options.use_epoch_lambda_fixed_output) << ",\n";
+    output << "  \"use_multisd_ambiguities\": "
+           << jsonBool(options.use_multisd_ambiguities) << ",\n";
+    output << "  \"lambda_top_k_candidates\": "
+           << options.lambda_top_k_candidates << ",\n";
+    output << "  \"lambda_min_bootstrapped_success_rate\": "
+           << options.lambda_min_bootstrapped_success_rate << ",\n";
+    output << "  \"lambda_max_adop_cycles\": "
+           << options.lambda_max_adop_cycles << ",\n";
+    output << "  \"use_multisd_disjoint_validation\": "
+           << jsonBool(options.use_multisd_disjoint_validation) << ",\n";
+    output << "  \"multisd_validation_holdout_satellites\": "
+           << options.multisd_validation_holdout_satellites << ",\n";
+    output << "  \"multisd_validation_holdout_offset\": "
+           << options.multisd_validation_holdout_offset << ",\n";
+    output << "  \"multisd_validation_aperture_cycles\": "
+           << options.multisd_validation_aperture_cycles << ",\n";
+    output << "  \"multisd_validation_min_carrier_fraction\": "
+           << options.multisd_validation_min_carrier_fraction << ",\n";
+    output << "  \"multisd_validation_max_ddpr_rms_m\": "
+           << options.multisd_validation_max_ddpr_rms_m << ",\n";
     output << "  \"use_integer_constrained_reoptimization\": "
            << jsonBool(options.use_integer_constrained_reoptimization) << ",\n";
     output << "  \"integer_constrained_prior_sigma_cycles\": "
@@ -1917,6 +2014,9 @@ void writeSummaryJson(const Options& options,
            << diagnostics.double_difference_pseudorange_factors << ",\n";
     output << "  \"double_difference_carrier_factors\": "
            << diagnostics.double_difference_carrier_factors << ",\n";
+    output << "  \"multisd_carrier_factors\": "
+           << diagnostics.multisd_carrier_factors
+           << ",\n";
     output << "  \"ambiguity_states\": " << diagnostics.ambiguity_states << ",\n";
     output << "  \"ambiguity_fix_candidates\": " << diagnostics.ambiguity_fix_candidates << ",\n";
     output << "  \"lambda_ambiguity_candidates\": "
@@ -1943,6 +2043,66 @@ void writeSummaryJson(const Options& options,
            << jsonBool(diagnostics.partial_lambda_ambiguity_fix_used) << ",\n";
     output << "  \"lambda_ambiguity_ratio\": "
            << diagnostics.lambda_ambiguity_ratio << ",\n";
+    output << "  \"lambda_bootstrapped_success_rate\": "
+           << diagnostics.lambda_bootstrapped_success_rate << ",\n";
+    output << "  \"lambda_adop_cycles\": ";
+    writeJsonNumber(output, diagnostics.lambda_adop_cycles);
+    output << ",\n";
+    output << "  \"lambda_top_k_generated\": "
+           << diagnostics.lambda_top_k_generated << ",\n";
+    output << "  \"multisd_validation_evaluated\": "
+           << jsonBool(diagnostics.multisd_validation_evaluated) << ",\n";
+    output << "  \"multisd_validation_pass\": "
+           << jsonBool(diagnostics.multisd_validation_pass) << ",\n";
+    output << "  \"multisd_validation_holdout_satellites\": "
+           << diagnostics.multisd_validation_holdout_satellites << ",\n";
+    output << "  \"multisd_validation_carrier_used\": "
+           << diagnostics.multisd_validation_carrier_used << ",\n";
+    output << "  \"multisd_validation_carrier_passed\": "
+           << diagnostics.multisd_validation_carrier_passed << ",\n";
+    output << "  \"multisd_validation_pseudorange_used\": "
+           << diagnostics.multisd_validation_pseudorange_used << ",\n";
+    output << "  \"multisd_validation_hypotheses_evaluated\": "
+           << diagnostics.multisd_validation_hypotheses_evaluated << ",\n";
+    output << "  \"multisd_validation_hypotheses_passed\": "
+           << diagnostics.multisd_validation_hypotheses_passed << ",\n";
+    output << "  \"multisd_validation_selected_rank\": "
+           << diagnostics.multisd_validation_selected_rank << ",\n";
+    output << "  \"multisd_validation_max_integer_distance_cycles\": ";
+    writeJsonNumber(
+        output,
+        diagnostics.multisd_validation_max_integer_distance_cycles);
+    output << ",\n";
+    output << "  \"multisd_validation_ddpr_rms_m\": ";
+    writeJsonNumber(output, diagnostics.multisd_validation_ddpr_rms_m);
+    output << ",\n";
+    output << "  \"multisd_validation_hypothesis_details\": [";
+    for (std::size_t i = 0;
+         i < result.multisd_validation_hypotheses.size();
+         ++i) {
+        const auto& hypothesis = result.multisd_validation_hypotheses[i];
+        if (i > 0) {
+            output << ',';
+        }
+        output << "{\"rank\":" << hypothesis.rank
+               << ",\"evaluated\":" << jsonBool(hypothesis.evaluated)
+               << ",\"pass\":" << jsonBool(hypothesis.pass)
+               << ",\"position_ecef\":["
+               << hypothesis.latest_position_ecef.x() << ','
+               << hypothesis.latest_position_ecef.y() << ','
+               << hypothesis.latest_position_ecef.z() << ']'
+               << ",\"carrier_used\":" << hypothesis.carrier_used
+               << ",\"carrier_passed\":" << hypothesis.carrier_passed
+               << ",\"pseudorange_used\":"
+               << hypothesis.pseudorange_used
+               << ",\"max_integer_distance_cycles\":";
+        writeJsonNumber(
+            output, hypothesis.maximum_integer_distance_cycles);
+        output << ",\"ddpr_rms_m\":";
+        writeJsonNumber(output, hypothesis.ddpr_rms_m);
+        output << '}';
+    }
+    output << "],\n";
     output << "  \"fixed_ambiguities\": " << diagnostics.fixed_ambiguities << ",\n";
     output << "  \"fixed_solution\": " << jsonBool(diagnostics.fixed_solution) << ",\n";
     output << "  \"tdcp_candidate_pairs\": " << diagnostics.tdcp_candidate_pairs << ",\n";
@@ -1986,6 +2146,12 @@ void writeSummaryJson(const Options& options,
     output << "  \"initial_cost\": " << diagnostics.initial_cost << ",\n";
     output << "  \"final_cost\": " << diagnostics.final_cost << ",\n";
     output << "  \"processing_time_ms\": " << diagnostics.processing_time_ms << ",\n";
+    output << "  \"cuda_hypothesis_batch_attempts\": "
+           << diagnostics.cuda_hypothesis_batch_attempts << ",\n";
+    output << "  \"cuda_hypothesis_batch_successes\": "
+           << diagnostics.cuda_hypothesis_batch_successes << ",\n";
+    output << "  \"cuda_hypothesis_batch_rhs_columns\": "
+           << diagnostics.cuda_hypothesis_batch_rhs_columns << ",\n";
     output << "  \"epoch_lambda_processing_time_ms\": "
            << diagnostics.epoch_lambda_processing_time_ms << ",\n";
     output << "  \"epoch_lambda_setup_time_ms\": "
@@ -3364,8 +3530,25 @@ int main(int argc, char* argv[]) {
         config.ambiguity_fix_max_fractional_cycles =
             options.ambiguity_fix_threshold_cycles;
         config.lambda_ratio_threshold = options.lambda_ratio_threshold;
+        config.lambda_top_k_candidates = options.lambda_top_k_candidates;
+        config.lambda_min_bootstrapped_success_rate =
+            options.lambda_min_bootstrapped_success_rate;
+        config.lambda_max_adop_cycles = options.lambda_max_adop_cycles;
+        config.use_multisd_disjoint_validation =
+            options.use_multisd_disjoint_validation;
+        config.multisd_validation_holdout_satellites =
+            options.multisd_validation_holdout_satellites;
+        config.multisd_validation_holdout_offset =
+            options.multisd_validation_holdout_offset;
+        config.multisd_validation_aperture_cycles =
+            options.multisd_validation_aperture_cycles;
+        config.multisd_validation_min_carrier_fraction =
+            options.multisd_validation_min_carrier_fraction;
+        config.multisd_validation_max_ddpr_rms_m =
+            options.multisd_validation_max_ddpr_rms_m;
         config.use_epoch_lambda_fixed_output =
-            options.use_epoch_lambda_fixed_output;
+            options.use_epoch_lambda_fixed_output &&
+            !options.use_multisd_ambiguities;
         config.use_integer_constrained_reoptimization =
             options.use_integer_constrained_reoptimization;
         config.integer_constrained_prior_sigma_cycles =
@@ -3411,6 +3594,7 @@ int main(int argc, char* argv[]) {
             options.use_velocity_motion_factors && options.use_velocity_states;
         config.use_ambiguity_between_factors =
             options.use_ambiguity_between_factors;
+        config.use_multisd_ambiguities = options.use_multisd_ambiguities;
         config.linearize_double_difference_factors_at_seed =
             options.linearize_double_difference_factors_at_seed;
         config.reset_double_difference_ambiguities_each_epoch =
@@ -3581,6 +3765,29 @@ int main(int argc, char* argv[]) {
                       << "\n";
             std::cout << "LAMBDA ratio: "
                       << result.diagnostics.lambda_ambiguity_ratio << "\n";
+            std::cout << "LAMBDA top-K generated: "
+                      << result.diagnostics.lambda_top_k_generated << "\n";
+            std::cout << "LAMBDA bootstrapped success rate: "
+                      << result.diagnostics.lambda_bootstrapped_success_rate
+                      << "\n";
+            std::cout << "LAMBDA ADOP (cycles): "
+                      << result.diagnostics.lambda_adop_cycles << "\n";
+            std::cout << "MultiSD disjoint validation: "
+                      << (result.diagnostics.multisd_validation_pass ? "pass" : "fail")
+                      << " (evaluated="
+                      << (result.diagnostics.multisd_validation_evaluated ? "yes" : "no")
+                      << ", holdout="
+                      << result.diagnostics.multisd_validation_holdout_satellites
+                      << ", hypotheses="
+                      << result.diagnostics.multisd_validation_hypotheses_passed
+                      << "/"
+                      << result.diagnostics.multisd_validation_hypotheses_evaluated
+                      << ", selected_rank="
+                      << result.diagnostics.multisd_validation_selected_rank
+                      << ", max_integer_distance="
+                      << result.diagnostics.multisd_validation_max_integer_distance_cycles
+                      << " cycles, DDPR_RMS="
+                      << result.diagnostics.multisd_validation_ddpr_rms_m << " m)\n";
             std::cout << "Fixed ambiguities: "
                       << result.diagnostics.fixed_ambiguities << "\n";
             std::cout << "Fixed solution: "

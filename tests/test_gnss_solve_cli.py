@@ -48,6 +48,7 @@ class GnssSolveCliTest(unittest.TestCase):
         self.assertIn("--help-advanced", result.stdout)
         self.assertNotIn("--rtk-adaptive-noise-alpha-phase", result.stdout)
         self.assertNotIn("--fixed-bridge-burst-max-residual", result.stdout)
+        self.assertNotIn("--multisd-fgo-shadow-csv", result.stdout)
         self.assertLess(len(result.stdout), 5000)
 
     def test_advanced_help_retains_research_option_discoverability(self) -> None:
@@ -57,6 +58,53 @@ class GnssSolveCliTest(unittest.TestCase):
         self.assertIn("--config <path>", result.stdout)
         self.assertIn("--rtk-adaptive-noise-alpha-phase", result.stdout)
         self.assertIn("--fixed-bridge-burst-max-residual", result.stdout)
+        self.assertIn("--multisd-fgo-shadow-csv", result.stdout)
+        self.assertIn("--multisd-fgo-shadow-window", result.stdout)
+        self.assertIn(
+            "--multisd-fgo-shadow-max-seed-separation", result.stdout
+        )
+        self.assertIn(
+            "--multisd-fgo-shadow-validation-history", result.stdout
+        )
+        self.assertIn(
+            "--multisd-fgo-shadow-min-carrier-fraction", result.stdout
+        )
+        self.assertIn(
+            "--multisd-fgo-shadow-min-fixed-ambiguities", result.stdout
+        )
+        self.assertIn(
+            "--multisd-fgo-shadow-holdout-satellites", result.stdout
+        )
+        self.assertIn(
+            "--multisd-fgo-shadow-constellation-par", result.stdout
+        )
+        self.assertIn(
+            "--multisd-fgo-shadow-variance-ranked-par", result.stdout
+        )
+        self.assertIn(
+            "--multisd-fgo-shadow-interleave-constellation-par", result.stdout
+        )
+        self.assertIn(
+            "--multisd-fgo-shadow-quality-ranked-par", result.stdout
+        )
+        self.assertIn(
+            "--multisd-fgo-shadow-candidate-ratio", result.stdout
+        )
+        self.assertIn(
+            "--multisd-fgo-shadow-candidate-groups", result.stdout
+        )
+        self.assertIn(
+            "--multisd-fgo-shadow-fallback-consensus-groups", result.stdout
+        )
+        self.assertIn(
+            "--multisd-fgo-shadow-fallback-consensus-separation", result.stdout
+        )
+        self.assertIn(
+            "--multisd-fgo-shadow-fallback-max-seed-separation", result.stdout
+        )
+        self.assertIn("--multisd-fgo-shadow-min-bsr", result.stdout)
+        self.assertIn("--multisd-fgo-shadow-max-adop", result.stdout)
+        self.assertIn("--multisd-fgo-shadow-fallback-min-bsr", result.stdout)
 
     def test_config_supplies_defaults_and_cli_always_overrides_them(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_solve_config_") as temp_dir:
@@ -99,6 +147,47 @@ class GnssSolveCliTest(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("unknown or incomplete argument: --this-option-does-not-exist",
                       result.stderr)
+
+    def test_multisd_candidate_controls_reject_unsafe_ranges(self) -> None:
+        ratio = self.run_solve(
+            "--data-dir", "missing",
+            "--multisd-fgo-shadow-candidate-ratio", "0.99"
+        )
+        groups = self.run_solve(
+            "--data-dir", "missing",
+            "--multisd-fgo-shadow-candidate-groups", "33"
+        )
+        consensus = self.run_solve(
+            "--data-dir", "missing",
+            "--multisd-fgo-shadow-fallback-consensus-groups", "2"
+        )
+        bsr = self.run_solve(
+            "--data-dir", "missing",
+            "--multisd-fgo-shadow-min-bsr", "1.01"
+        )
+        adop = self.run_solve(
+            "--data-dir", "missing",
+            "--multisd-fgo-shadow-max-adop", "-0.01"
+        )
+        fallback_bsr = self.run_solve(
+            "--data-dir", "missing",
+            "--multisd-fgo-shadow-fallback-min-bsr", "1.01"
+        )
+
+        self.assertEqual(ratio.returncode, 1)
+        self.assertIn("candidate-ratio must be >= 1", ratio.stderr)
+        self.assertEqual(groups.returncode, 1)
+        self.assertIn("candidate-groups must be in [1, 32]", groups.stderr)
+        self.assertEqual(consensus.returncode, 1)
+        self.assertIn(
+            "fallback-consensus-separation must be > 0", consensus.stderr
+        )
+        self.assertEqual(bsr.returncode, 1)
+        self.assertIn("min-bsr must be in [0, 1]", bsr.stderr)
+        self.assertEqual(adop.returncode, 1)
+        self.assertIn("max-adop must be >= 0", adop.stderr)
+        self.assertEqual(fallback_bsr.returncode, 1)
+        self.assertIn("fallback-min-bsr must be in [0, 1]", fallback_bsr.stderr)
 
 
 if __name__ == "__main__":

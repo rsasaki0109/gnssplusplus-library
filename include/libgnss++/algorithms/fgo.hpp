@@ -144,6 +144,14 @@ public:
         bool use_velocity_states = false;
         bool use_velocity_motion_factors = false;
         bool use_ambiguity_between_factors = false;
+        // Represent carrier ambiguities as reference-independent rover-base
+        // single differences keyed by (satellite, signal, rover carrier arc).
+        // DD carrier factors then connect two SD states as N_sat - N_ref.
+        // This preserves ambiguity continuity when the DD reference changes
+        // and is the state topology required by multi-epoch MultiSD AR.
+        // Default OFF until the BSD covariance projection and integer
+        // validator are enabled by the production RTK integration.
+        bool use_multisd_ambiguities = false;
         bool linearize_double_difference_factors_at_seed = false;
         bool reset_double_difference_ambiguities_each_epoch = false;
         bool use_inter_system_biases = true;
@@ -151,6 +159,65 @@ public:
         bool fix_ambiguities = false;
         bool prefer_double_difference_ambiguity_fixing = true;
         bool use_lambda_ambiguity_fix = true;
+        // Request a bounded multi-hypothesis LAMBDA search. Two preserves the
+        // legacy ratio-test behavior; larger values supply candidates for the
+        // causal/post-fit validator without rerunning decorrelation.
+        int lambda_top_k_candidates = 2;
+        // Each top-K integer hypothesis is an independent fixed re-solve.
+        // Run those re-solves concurrently when explicitly enabled. This is
+        // the deterministic CPU fallback for the future GPU batch backend.
+        bool parallelize_lambda_hypotheses = false;
+        // Covariance-only integer quality gates. Zero disables each gate.
+        double lambda_min_bootstrapped_success_rate = 0.0;
+        double lambda_max_adop_cycles = 0.0;
+        // Reserve carrier/code observations from deterministic satellites for
+        // a disjoint post-fix check. Reserved observations are removed from
+        // the complete float/fixed window before optimization, so the
+        // validator cannot reuse evidence that generated the integer
+        // candidate. MultiSD/native only; default OFF until PPC calibration.
+        bool use_multisd_disjoint_validation = false;
+        int multisd_validation_holdout_satellites = 4;
+        int multisd_validation_holdout_offset = 0;
+        double multisd_validation_aperture_cycles = 0.15;
+        // Causal carrier validation span ending at the latest epoch. A value
+        // of one preserves the legacy latest-only check.
+        int multisd_validation_history_epochs = 1;
+        // Require all held-out carrier rows by default. The 3-of-4 PPC
+        // ablation accepted a 1.65 m wrong fix for all 100 Nagoya epochs.
+        double multisd_validation_min_carrier_fraction = 1.0;
+        double multisd_validation_max_ddpr_rms_m = 3.0;
+        // Solution-separation aperture between a constrained top-K hypothesis
+        // and the holdout-excluded float graph at the latest epoch. Zero
+        // disables it. This is truth-free and does not use the RTK seed.
+        double multisd_validation_max_fixed_float_separation_m = 0.0;
+        // Cross-estimator aperture against the latest GNSS-only position seed.
+        // The seed must not contain truth or an external sensor. Zero disables.
+        double multisd_validation_max_seed_separation_m = 0.0;
+        // Candidate-generation ratio floor used only when the complete
+        // disjoint MultiSD validator is enabled. Zero preserves
+        // lambda_ratio_threshold. A lower value does not grant FIX: every
+        // top-K hypothesis must still pass the excluded-observation validator
+        // and uniqueness checks.
+        double multisd_lambda_candidate_ratio_threshold = 0.0;
+        // Number of distinct PAR subset/pool candidate groups that may be
+        // offered to the disjoint validator. One preserves first-LAMBDA-group
+        // behavior. Groups are evaluated in order and later groups are tried
+        // only after an earlier group has zero passing hypotheses.
+        int multisd_max_candidate_groups = 1;
+        // Later PAR groups can require corroboration from multiple independently
+        // generated subsets. The first group retains the ordinary unique top-K
+        // decision. One preserves sequential fallback behavior.
+        int multisd_fallback_min_consensus_groups = 1;
+        // Maximum pairwise latest-position separation for later-group
+        // consensus. Required when the minimum consensus group count exceeds
+        // one. Zero disables consensus acceptance in that case.
+        double multisd_fallback_max_consensus_separation_m = 0.0;
+        // Additional GNSS-only seed aperture for later PAR groups. The first
+        // group retains the ordinary validator aperture. Zero disables.
+        double multisd_fallback_max_seed_separation_m = 0.0;
+        // Optional bootstrap-success aperture for validator fallback groups.
+        // The first group retains the regular LAMBDA gate.
+        double multisd_fallback_min_bootstrapped_success_rate = 0.0;
         bool use_epoch_lambda_fixed_output = false;
         bool use_partial_lambda_ambiguity_fix = true;
         // Independently re-optimize the active fixed-lag graph with the
@@ -375,6 +442,9 @@ public:
         // Try the PPC constellation partial-AR cascade as separate LAMBDA
         // pools: GQEBR -> GQEB -> GQER -> GQB -> GQR -> GQ.
         bool use_constellation_ranked_partial_ar = false;
+        // When collecting multiple validator groups, visit each constellation
+        // pool at the same PAR depth before shrinking one pool again.
+        bool interleave_constellation_partial_ar = false;
         // Remove ambiguity candidates implicated by a gross current-epoch
         // DD pseudorange residual before the PPC constellation cascade.
         bool use_residual_screened_partial_ar = false;
@@ -382,6 +452,10 @@ public:
         // variance and do not attempt a subset whose least precise member
         // exceeds this standard deviation in cycles (<=0 disables the gate).
         bool use_variance_ranked_partial_ar = false;
+        // Rank PAR candidates with an all-PPC composite of marginal float
+        // variance, distance to the nearest integer, and the windowed
+        // standardized DD carrier residual. Default off for compatibility.
+        bool use_quality_ranked_partial_ar = false;
         double partial_ar_max_std_cycles = 0.25;
         // GICI-style ambiguity reacquisition: when geometry is good and FDE
         // rejects less than the configured fraction, a long run of fresh-AR
@@ -1673,6 +1747,12 @@ public:
         // AmbiguityState for an arc that was never solved for; the surplus
         // validator looks up wavelength from `signal` instead.
         std::vector<DoubleDifferenceCarrierFactor> excluded_double_difference_carrier_factors;
+        // Factors reserved before optimization for the MultiSD disjoint
+        // validator. They are never inserted into the candidate graph.
+        std::vector<DoubleDifferencePseudorangeFactor>
+            multisd_validation_pseudorange_factors;
+        std::vector<DoubleDifferenceCarrierFactor>
+            multisd_validation_carrier_factors;
         std::vector<AmbiguityBetweenFactor> ambiguity_between_factors;
         FGOProblemDiagnostics diagnostics;
     };
@@ -1694,6 +1774,7 @@ public:
         std::size_t carrier_phase_factors = 0;
         std::size_t double_difference_pseudorange_factors = 0;
         std::size_t double_difference_carrier_factors = 0;
+        std::size_t multisd_carrier_factors = 0;
         std::size_t ambiguity_states = 0;
         std::size_t ambiguity_fix_candidates = 0;
         std::size_t lambda_ambiguity_candidates = 0;
@@ -1817,6 +1898,19 @@ public:
         double initial_cost = 0.0;
         double final_cost = 0.0;
         double processing_time_ms = 0.0;
+        /// Native dense normal-equation dimension used for CPU/GPU dispatch.
+        std::size_t dense_normal_state_size = 0;
+        /// True when this solve selected the optional cuSOLVER dense path.
+        bool cuda_dense_solver_selected = false;
+        std::size_t cuda_dense_solve_attempts = 0;
+        std::size_t cuda_dense_solve_successes = 0;
+        std::size_t cuda_dense_solve_fallbacks = 0;
+        double cuda_dense_solve_time_ms = 0.0;
+        /// Top-K groups submitted as one common-normal, multi-RHS CUDA solve.
+        std::size_t cuda_hypothesis_batch_attempts = 0;
+        std::size_t cuda_hypothesis_batch_successes = 0;
+        /// Total hypothesis RHS columns submitted across successful or failed batches.
+        std::size_t cuda_hypothesis_batch_rhs_columns = 0;
         double epoch_lambda_processing_time_ms = 0.0;
         double epoch_lambda_setup_time_ms = 0.0;
         double epoch_lambda_factorization_time_ms = 0.0;
@@ -1836,6 +1930,26 @@ public:
         double double_difference_carrier_residual_rms_m = 0.0;
         double fixed_ambiguity_residual_rms_cycles = 0.0;
         double lambda_ambiguity_ratio = 0.0;
+        double lambda_bootstrapped_success_rate = 0.0;
+        double lambda_adop_cycles = std::numeric_limits<double>::quiet_NaN();
+        std::size_t lambda_top_k_generated = 0;
+        bool multisd_validation_evaluated = false;
+        bool multisd_validation_pass = false;
+        std::size_t multisd_validation_holdout_satellites = 0;
+        std::size_t multisd_validation_carrier_used = 0;
+        std::size_t multisd_validation_carrier_passed = 0;
+        std::size_t multisd_validation_pseudorange_used = 0;
+        std::size_t multisd_validation_hypotheses_evaluated = 0;
+        std::size_t multisd_validation_hypotheses_passed = 0;
+        int multisd_validation_selected_rank = -1;
+        double multisd_validation_max_integer_distance_cycles =
+            std::numeric_limits<double>::quiet_NaN();
+        double multisd_validation_ddpr_rms_m =
+            std::numeric_limits<double>::quiet_NaN();
+        double multisd_validation_fixed_float_separation_m =
+            std::numeric_limits<double>::quiet_NaN();
+        double multisd_validation_seed_separation_m =
+            std::numeric_limits<double>::quiet_NaN();
     };
 
     struct AmbiguityEstimate {
@@ -1981,6 +2095,21 @@ public:
     };
 
     struct FGOResult {
+        struct MultiSdValidationHypothesis {
+            int rank = -1;
+            bool evaluated = false;
+            bool pass = false;
+            Vector3d latest_position_ecef = Vector3d::Zero();
+            std::size_t carrier_used = 0;
+            std::size_t carrier_passed = 0;
+            std::size_t pseudorange_used = 0;
+            double maximum_integer_distance_cycles = 0.0;
+            double ddpr_rms_m = std::numeric_limits<double>::infinity();
+            double fixed_float_separation_m =
+                std::numeric_limits<double>::infinity();
+            double seed_separation_m =
+                std::numeric_limits<double>::infinity();
+        };
         Solution solution;
         FGODiagnostics diagnostics;
         std::vector<AmbiguityEstimate> ambiguity_estimates;
@@ -1991,6 +2120,8 @@ public:
         std::vector<LambdaDebugEntry> lambda_debug_entries;
         std::vector<CostTraceEntry> cost_trace_entries;
         std::vector<FGOEpochDiagnostics> epoch_diagnostics;
+        std::vector<MultiSdValidationHypothesis>
+            multisd_validation_hypotheses;
         // Milestone 2b (populated only by the GTSAM IMU-coupled path):
         // per-epoch estimated attitude as [roll, pitch, heading] in degrees
         // (body FLU -> nav ENU; heading is clockwise from North) and estimated

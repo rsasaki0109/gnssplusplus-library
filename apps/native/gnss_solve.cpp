@@ -1,5 +1,6 @@
 #include <Eigen/Dense>
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <exception>
@@ -18,6 +19,7 @@
 #include <libgnss++/algorithms/integrity_consensus.hpp>
 #include <libgnss++/algorithms/nlos_weights.hpp>
 #include <libgnss++/algorithms/float_trust_policy.hpp>
+#include <libgnss++/algorithms/fgo.hpp>
 #include <libgnss++/algorithms/rtk.hpp>
 #include <libgnss++/algorithms/rtk_validation.hpp>
 #include <libgnss++/algorithms/spp.hpp>
@@ -104,6 +106,30 @@ struct SolveConfig {
     double doppler_float_seed_max_age_s = 6.0;
     std::string rover_seed_pos_path;
     std::string diagnostics_csv_path;
+    // GNSS-only causal MultiSD FGO shadow. The rolling window ends at the
+    // current RTK epoch and never changes RTK output/filter state.
+    std::string multisd_fgo_shadow_csv_path;
+    int multisd_fgo_shadow_window_epochs = 25;
+    int multisd_fgo_shadow_min_epochs = 10;
+    int multisd_fgo_shadow_holdout_offset = 2;
+    int multisd_fgo_shadow_top_k = 4;
+    double multisd_fgo_shadow_max_seed_separation_m = 0.5;
+    int multisd_fgo_shadow_validation_history_epochs = 3;
+    double multisd_fgo_shadow_min_carrier_fraction = 0.75;
+    int multisd_fgo_shadow_min_fixed_ambiguities = 6;
+    int multisd_fgo_shadow_holdout_satellites = 4;
+    bool multisd_fgo_shadow_constellation_par = false;
+    bool multisd_fgo_shadow_interleave_constellation_par = false;
+    bool multisd_fgo_shadow_variance_ranked_par = false;
+    bool multisd_fgo_shadow_quality_ranked_par = false;
+    double multisd_fgo_shadow_candidate_ratio = 1.5;
+    int multisd_fgo_shadow_candidate_groups = 1;
+    int multisd_fgo_shadow_fallback_consensus_groups = 1;
+    double multisd_fgo_shadow_fallback_consensus_separation_m = 0.0;
+    double multisd_fgo_shadow_fallback_max_seed_separation_m = 0.0;
+    double multisd_fgo_shadow_min_bootstrapped_success_rate = 0.0;
+    double multisd_fgo_shadow_max_adop_cycles = 0.0;
+    double multisd_fgo_shadow_fallback_min_bootstrapped_success_rate = 0.0;
     double rtk_update_outlier_threshold = 0.0;
     bool student_t_rtk_front_end = false;
     double ratio_threshold = 3.0;
@@ -1925,6 +1951,50 @@ void printAdvancedUsage(const char* program_name) {
         << "                             Maximum trusted-anchor age (default: 6)\n"
         << "  --rover-seed-pos <file>    Inject ECEF seed positions from .pos file per epoch\n"
         << "  --diagnostics-csv <file>   Write per-epoch RTK candidate diagnostics CSV (PPC pipeline format)\n"
+        << "  --multisd-fgo-shadow-csv <file>\n"
+        << "                             GNSS-only causal rolling-window MultiSD shadow telemetry\n"
+        << "  --multisd-fgo-shadow-window <epochs>\n"
+        << "                             Rolling window ending at current epoch (default: 25)\n"
+        << "  --multisd-fgo-shadow-min-epochs <epochs>\n"
+        << "                             Warm-up before shadow solve (default: 10)\n"
+        << "  --multisd-fgo-shadow-holdout-offset <n>\n"
+        << "                             Deterministic disjoint partition offset (default: 2)\n"
+        << "  --multisd-fgo-shadow-top-k <n>\n"
+        << "                             Bounded integer hypotheses, 2..32 (default: 4)\n"
+        << "  --multisd-fgo-shadow-max-seed-separation <m>\n"
+        << "                             GNSS-only RTK/FGO aperture; 0 disables (default: 0.5)\n"
+        << "  --multisd-fgo-shadow-validation-history <epochs>\n"
+        << "                             Causal held-out carrier span (default: 3)\n"
+        << "  --multisd-fgo-shadow-min-carrier-fraction <0..1>\n"
+        << "                             Required held-out rows (default: 0.75)\n"
+        << "  --multisd-fgo-shadow-min-fixed-ambiguities <n>\n"
+        << "                             MultiSD PAR dimension floor (default: 6)\n"
+        << "  --multisd-fgo-shadow-holdout-satellites <n>\n"
+        << "                             Fully disjoint satellites (default: 4)\n"
+        << "  --multisd-fgo-shadow-constellation-par\n"
+        << "                             Full-band constellation pool PAR (default: off)\n"
+        << "  --multisd-fgo-shadow-interleave-constellation-par\n"
+        << "                             Interleave validator groups across constellation pools (default: off)\n"
+        << "  --multisd-fgo-shadow-variance-ranked-par\n"
+        << "                             Rank PAR candidates by float variance (default: off)\n"
+        << "  --multisd-fgo-shadow-quality-ranked-par\n"
+        << "                             Rank PAR by PPC variance/integer-distance/carrier residual (default: off)\n"
+        << "  --multisd-fgo-shadow-candidate-ratio <ratio>\n"
+        << "                             Top-K generation floor before disjoint validation (default: 1.5)\n"
+        << "  --multisd-fgo-shadow-candidate-groups <n>\n"
+        << "                             Validator-aware PAR fallback groups, 1..32 (default: 1)\n"
+        << "  --multisd-fgo-shadow-fallback-consensus-groups <n>\n"
+        << "                             Later PAR subsets required to agree, 1..32 (default: 1)\n"
+        << "  --multisd-fgo-shadow-fallback-consensus-separation <m>\n"
+        << "                             Maximum pairwise fallback position split (default: 0)\n"
+        << "  --multisd-fgo-shadow-fallback-max-seed-separation <m>\n"
+        << "                             Additional later-group GNSS-seed aperture (default: 0)\n"
+        << "  --multisd-fgo-shadow-min-bsr <0..1>\n"
+        << "                             Minimum LAMBDA bootstrap success rate (default: 0)\n"
+        << "  --multisd-fgo-shadow-max-adop <cycles>\n"
+        << "                             Maximum ambiguity dilution of precision (default: 0/off)\n"
+        << "  --multisd-fgo-shadow-fallback-min-bsr <0..1>\n"
+        << "                             Minimum BSR for later validator groups only (default: 0)\n"
         << "  --realtime-fix-integrity   Gate FIX output with bounded-latency residual checks\n"
         << "                             (default: off; maximum latency: 7 epochs)\n"
         << "  --integrity-base-gate      Also enable the frozen offline low-satellite/ratio\n"
@@ -2169,6 +2239,117 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         if (arg == "-h" || arg == "--help") {
             printUsage(argv[0]);
             std::exit(0);
+        }
+        if (arg == "--multisd-fgo-shadow-csv" && i + 1 < argc) {
+            config.multisd_fgo_shadow_csv_path = argv[++i];
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-window" && i + 1 < argc) {
+            config.multisd_fgo_shadow_window_epochs = std::stoi(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-min-epochs" && i + 1 < argc) {
+            config.multisd_fgo_shadow_min_epochs = std::stoi(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-holdout-offset" && i + 1 < argc) {
+            config.multisd_fgo_shadow_holdout_offset = std::stoi(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-top-k" && i + 1 < argc) {
+            config.multisd_fgo_shadow_top_k = std::stoi(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-max-seed-separation" &&
+            i + 1 < argc) {
+            config.multisd_fgo_shadow_max_seed_separation_m =
+                std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-validation-history" &&
+            i + 1 < argc) {
+            config.multisd_fgo_shadow_validation_history_epochs =
+                std::stoi(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-min-carrier-fraction" &&
+            i + 1 < argc) {
+            config.multisd_fgo_shadow_min_carrier_fraction =
+                std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-min-fixed-ambiguities" &&
+            i + 1 < argc) {
+            config.multisd_fgo_shadow_min_fixed_ambiguities =
+                std::stoi(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-holdout-satellites" &&
+            i + 1 < argc) {
+            config.multisd_fgo_shadow_holdout_satellites =
+                std::stoi(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-constellation-par") {
+            config.multisd_fgo_shadow_constellation_par = true;
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-interleave-constellation-par") {
+            config.multisd_fgo_shadow_interleave_constellation_par = true;
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-variance-ranked-par") {
+            config.multisd_fgo_shadow_variance_ranked_par = true;
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-quality-ranked-par") {
+            config.multisd_fgo_shadow_quality_ranked_par = true;
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-candidate-ratio" &&
+            i + 1 < argc) {
+            config.multisd_fgo_shadow_candidate_ratio =
+                std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-candidate-groups" &&
+            i + 1 < argc) {
+            config.multisd_fgo_shadow_candidate_groups =
+                std::stoi(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-fallback-consensus-groups" &&
+            i + 1 < argc) {
+            config.multisd_fgo_shadow_fallback_consensus_groups =
+                std::stoi(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-fallback-consensus-separation" &&
+            i + 1 < argc) {
+            config.multisd_fgo_shadow_fallback_consensus_separation_m =
+                std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-fallback-max-seed-separation" &&
+            i + 1 < argc) {
+            config.multisd_fgo_shadow_fallback_max_seed_separation_m =
+                std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-min-bsr" && i + 1 < argc) {
+            config.multisd_fgo_shadow_min_bootstrapped_success_rate =
+                std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-max-adop" && i + 1 < argc) {
+            config.multisd_fgo_shadow_max_adop_cycles =
+                std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--multisd-fgo-shadow-fallback-min-bsr" && i + 1 < argc) {
+            config.multisd_fgo_shadow_fallback_min_bootstrapped_success_rate =
+                std::stod(argv[++i]);
+            continue;
         }
         // Phase 2a CMC-aware reference selection flags: kept as STANDALONE
         // ifs (each ending in `continue`) rather than joining the else-if
@@ -2448,74 +2629,126 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         }
         if (arg == "--data-dir" && i + 1 < argc) {
             config.data_dir = argv[++i];
-        } else if (arg == "--rover" && i + 1 < argc) {
+            continue;
+        }
+        if (arg == "--rover" && i + 1 < argc) {
             config.rover_obs_path = argv[++i];
-        } else if (arg == "--base" && i + 1 < argc) {
+            continue;
+        }
+        if (arg == "--base" && i + 1 < argc) {
             config.base_obs_path = argv[++i];
-        } else if (arg == "--nav" && i + 1 < argc) {
+            continue;
+        }
+        if (arg == "--nav" && i + 1 < argc) {
             config.nav_path = argv[++i];
-        } else if (arg == "--out" && i + 1 < argc) {
+            continue;
+        }
+        if (arg == "--out" && i + 1 < argc) {
             config.output_pos_path = argv[++i];
-        } else if (arg == "--kml" && i + 1 < argc) {
+            continue;
+        }
+        if (arg == "--kml" && i + 1 < argc) {
             config.output_kml_path = argv[++i];
             config.write_kml = true;
-        } else if (arg == "--no-kml") {
+            continue;
+        }
+        if (arg == "--no-kml") {
             config.write_kml = false;
-        } else if (arg == "--format" && i + 1 < argc) {
+            continue;
+        }
+        if (arg == "--format" && i + 1 < argc) {
             config.output_format = parseOutputFormat(argv[++i], argv[0]);
-        } else if (arg == "--mode" && i + 1 < argc) {
+            continue;
+        }
+        if (arg == "--mode" && i + 1 < argc) {
             config.mode = parseModeChoice(argv[++i], argv[0]);
-        } else if (arg == "--iono" && i + 1 < argc) {
+            continue;
+        }
+        if (arg == "--iono" && i + 1 < argc) {
             config.iono = parseIonoChoice(argv[++i], argv[0]);
-        } else if (arg == "--ratio" && i + 1 < argc) {
+            continue;
+        }
+        if (arg == "--ratio" && i + 1 < argc) {
             const std::string ratio_value = argv[++i];
             config.enable_satellite_count_ratio_threshold = ratio_value == "sat-count";
             config.ratio_threshold = config.enable_satellite_count_ratio_threshold
                 ? 3.0
                 : std::stod(ratio_value);
             config.ratio_threshold_set = true;
-        } else if (arg == "--preset" && i + 1 < argc) {
+            continue;
+        }
+        if (arg == "--preset" && i + 1 < argc) {
             config.preset = parseRTKTuningPreset(argv[++i], argv[0]);
-        } else if (arg == "--arfilter") {
+            continue;
+        }
+        if (arg == "--arfilter") {
             config.enable_ar_filter = true;
             config.has_ar_filter_override = true;
-        } else if (arg == "--no-arfilter") {
+            continue;
+        }
+        if (arg == "--no-arfilter") {
             config.enable_ar_filter = false;
             config.has_ar_filter_override = true;
-        } else if (arg == "--arfilter-margin" && i + 1 < argc) {
+            continue;
+        }
+        if (arg == "--arfilter-margin" && i + 1 < argc) {
             config.ar_filter_margin = std::stod(argv[++i]);
             config.ar_filter_margin_set = true;
-        } else if (arg == "--min-ar-sats" && i + 1 < argc) {
+            continue;
+        }
+        if (arg == "--min-ar-sats" && i + 1 < argc) {
             config.min_satellites_for_ar = std::stoi(argv[++i]);
             config.min_satellites_for_ar_set = true;
-        } else if (arg == "--min-subset-ar-pairs" && i + 1 < argc) {
+            continue;
+        }
+        if (arg == "--min-subset-ar-pairs" && i + 1 < argc) {
             config.min_subset_pairs_for_ar = std::stoi(argv[++i]);
-        } else if (arg == "--max-subset-ar-drop-steps" && i + 1 < argc) {
+            continue;
+        }
+        if (arg == "--max-subset-ar-drop-steps" && i + 1 < argc) {
             config.max_subset_drop_steps_for_ar = std::stoi(argv[++i]);
-        } else if (arg == "--min-subset-ar-sats" && i + 1 < argc) {
+            continue;
+        }
+        if (arg == "--min-subset-ar-sats" && i + 1 < argc) {
             config.min_subset_sats_for_ar = std::stoi(argv[++i]);
             config.min_subset_sats_for_ar_set = true;
-        } else if (arg == "--min-subset-ar-systems" && i + 1 < argc) {
+            continue;
+        }
+        if (arg == "--min-subset-ar-systems" && i + 1 < argc) {
             config.min_subset_systems_for_ar = std::stoi(argv[++i]);
             config.min_subset_systems_for_ar_set = true;
-        } else if (arg == "--min-subset-ar-freqs" && i + 1 < argc) {
+            continue;
+        }
+        if (arg == "--min-subset-ar-freqs" && i + 1 < argc) {
             config.min_subset_frequencies_for_ar = std::stoi(argv[++i]);
             config.min_subset_frequencies_for_ar_set = true;
-        } else if (arg == "--min-subset-ar-dual-freq-sats" && i + 1 < argc) {
+            continue;
+        }
+        if (arg == "--min-subset-ar-dual-freq-sats" && i + 1 < argc) {
             config.min_subset_dual_frequency_sats_for_ar = std::stoi(argv[++i]);
             config.min_subset_dual_frequency_sats_for_ar_set = true;
-        } else if (arg == "--min-full-ratio-for-subset-ar" && i + 1 < argc) {
+            continue;
+        }
+        if (arg == "--min-full-ratio-for-subset-ar" && i + 1 < argc) {
             config.min_full_ratio_for_subset_ar = std::stod(argv[++i]);
             config.min_full_ratio_for_subset_ar_set = true;
-        } else if (arg == "--min-hold-count" && i + 1 < argc) {
+            continue;
+        }
+        if (arg == "--min-hold-count" && i + 1 < argc) {
             config.min_hold_count = std::stoi(argv[++i]);
             config.min_hold_count_set = true;
-        } else if (arg == "--hold-ratio-threshold" && i + 1 < argc) {
+            continue;
+        }
+        if (arg == "--hold-ratio-threshold" && i + 1 < argc) {
             config.hold_ratio_threshold = std::stod(argv[++i]);
             config.hold_ratio_threshold_set = true;
-        } else if (arg == "--elevation-mask-deg" && i + 1 < argc) {
+            continue;
+        }
+        if (arg == "--elevation-mask-deg" && i + 1 < argc) {
             config.elevation_mask_deg = std::stod(argv[++i]);
-        } else if (arg == "--process-noise-position" && i + 1 < argc) {
+            continue;
+        }
+        if (arg == "--process-noise-position" && i + 1 < argc) {
             config.process_noise_position = std::stod(argv[++i]);
             config.process_noise_position_set = true;
         } else if (arg == "--process-noise-ambiguity" && i + 1 < argc) {
@@ -3282,6 +3515,115 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         config.doppler_float_seed_max_age_s <= 0.0) {
         argumentError("--doppler-float-seed-max-age must be > 0", argv[0]);
     }
+    if (config.multisd_fgo_shadow_window_epochs < 2) {
+        argumentError("--multisd-fgo-shadow-window must be >= 2", argv[0]);
+    }
+    if (config.multisd_fgo_shadow_min_epochs < 2 ||
+        config.multisd_fgo_shadow_min_epochs >
+            config.multisd_fgo_shadow_window_epochs) {
+        argumentError(
+            "--multisd-fgo-shadow-min-epochs must be in [2, window]",
+            argv[0]);
+    }
+    if (config.multisd_fgo_shadow_holdout_offset < 0) {
+        argumentError(
+            "--multisd-fgo-shadow-holdout-offset must be non-negative",
+            argv[0]);
+    }
+    if (config.multisd_fgo_shadow_top_k < 2 ||
+        config.multisd_fgo_shadow_top_k > 32) {
+        argumentError("--multisd-fgo-shadow-top-k must be in [2, 32]",
+                      argv[0]);
+    }
+    if (!std::isfinite(
+            config.multisd_fgo_shadow_max_seed_separation_m) ||
+        config.multisd_fgo_shadow_max_seed_separation_m < 0.0) {
+        argumentError(
+            "--multisd-fgo-shadow-max-seed-separation must be >= 0",
+            argv[0]);
+    }
+    if (config.multisd_fgo_shadow_validation_history_epochs < 1) {
+        argumentError(
+            "--multisd-fgo-shadow-validation-history must be >= 1",
+            argv[0]);
+    }
+    if (!std::isfinite(config.multisd_fgo_shadow_min_carrier_fraction) ||
+        config.multisd_fgo_shadow_min_carrier_fraction <= 0.0 ||
+        config.multisd_fgo_shadow_min_carrier_fraction > 1.0) {
+        argumentError(
+            "--multisd-fgo-shadow-min-carrier-fraction must be in (0, 1]",
+            argv[0]);
+    }
+    if (config.multisd_fgo_shadow_min_fixed_ambiguities < 2 ||
+        config.multisd_fgo_shadow_min_fixed_ambiguities > 16) {
+        argumentError(
+            "--multisd-fgo-shadow-min-fixed-ambiguities must be in [2, 16]",
+            argv[0]);
+    }
+    if (config.multisd_fgo_shadow_holdout_satellites < 2 ||
+        config.multisd_fgo_shadow_holdout_satellites > 16) {
+        argumentError(
+            "--multisd-fgo-shadow-holdout-satellites must be in [2, 16]",
+            argv[0]);
+    }
+    if (!std::isfinite(config.multisd_fgo_shadow_candidate_ratio) ||
+        config.multisd_fgo_shadow_candidate_ratio < 1.0) {
+        argumentError(
+            "--multisd-fgo-shadow-candidate-ratio must be >= 1",
+            argv[0]);
+    }
+    if (config.multisd_fgo_shadow_candidate_groups < 1 ||
+        config.multisd_fgo_shadow_candidate_groups > 32) {
+        argumentError(
+            "--multisd-fgo-shadow-candidate-groups must be in [1, 32]",
+            argv[0]);
+    }
+    if (config.multisd_fgo_shadow_fallback_consensus_groups < 1 ||
+        config.multisd_fgo_shadow_fallback_consensus_groups > 32) {
+        argumentError(
+            "--multisd-fgo-shadow-fallback-consensus-groups must be in [1, 32]",
+            argv[0]);
+    }
+    if (!std::isfinite(
+            config.multisd_fgo_shadow_fallback_consensus_separation_m) ||
+        config.multisd_fgo_shadow_fallback_consensus_separation_m < 0.0) {
+        argumentError(
+            "--multisd-fgo-shadow-fallback-consensus-separation must be >= 0",
+            argv[0]);
+    }
+    if (config.multisd_fgo_shadow_fallback_consensus_groups > 1 &&
+        config.multisd_fgo_shadow_fallback_consensus_separation_m <= 0.0) {
+        argumentError(
+            "--multisd-fgo-shadow-fallback-consensus-separation must be > 0 "
+            "when fallback consensus groups exceed 1",
+            argv[0]);
+    }
+    if (!std::isfinite(
+            config.multisd_fgo_shadow_fallback_max_seed_separation_m) ||
+        config.multisd_fgo_shadow_fallback_max_seed_separation_m < 0.0) {
+        argumentError(
+            "--multisd-fgo-shadow-fallback-max-seed-separation must be >= 0",
+            argv[0]);
+    }
+    if (!std::isfinite(
+            config.multisd_fgo_shadow_min_bootstrapped_success_rate) ||
+        config.multisd_fgo_shadow_min_bootstrapped_success_rate < 0.0 ||
+        config.multisd_fgo_shadow_min_bootstrapped_success_rate > 1.0) {
+        argumentError("--multisd-fgo-shadow-min-bsr must be in [0, 1]",
+                      argv[0]);
+    }
+    if (!std::isfinite(config.multisd_fgo_shadow_max_adop_cycles) ||
+        config.multisd_fgo_shadow_max_adop_cycles < 0.0) {
+        argumentError("--multisd-fgo-shadow-max-adop must be >= 0", argv[0]);
+    }
+    if (!std::isfinite(
+            config.multisd_fgo_shadow_fallback_min_bootstrapped_success_rate) ||
+        config.multisd_fgo_shadow_fallback_min_bootstrapped_success_rate < 0.0 ||
+        config.multisd_fgo_shadow_fallback_min_bootstrapped_success_rate > 1.0) {
+        argumentError(
+            "--multisd-fgo-shadow-fallback-min-bsr must be in [0, 1]",
+            argv[0]);
+    }
 
     return config;
 }
@@ -3378,6 +3720,90 @@ bool writeSolutions(const SolveConfig& config, const libgnss::Solution& solution
 
 double roundedTowKey(double tow) {
     return std::round(tow * 10.0) / 10.0;
+}
+
+libgnss::FGOProcessor::FGOConfig makeGnssOnlyMultiSdShadowConfig(
+    const SolveConfig& solve_config) {
+    libgnss::FGOProcessor::FGOConfig config;
+    config.backend = libgnss::FGOBackend::Eigen;
+    config.max_iterations = 12;
+    config.pseudorange_sigma_m = 4.0;
+    config.motion_sigma_m = 100.0;
+    config.clock_motion_sigma_m = 600.0;
+    config.tdcp_sigma_m = 0.05;
+    config.carrier_phase_sigma_m = 0.02;
+    config.double_difference_pseudorange_sigma_m = 1.0;
+    config.double_difference_carrier_sigma_m = 0.02;
+    config.ambiguity_prior_sigma_m = 2000.0;
+    config.fixed_ambiguity_sigma_m = 0.005;
+    config.pseudorange_huber_threshold_sigma = 3.0;
+    config.carrier_phase_huber_threshold_sigma = 3.0;
+    config.tdcp_huber_threshold_sigma = 3.0;
+    config.max_tdcp_gap_s = 1.5;
+    config.base_epoch_match_tolerance_s = 0.02;
+    config.base_interpolation_max_gap_s = 1.2;
+    config.tdcp_code_phase_jump_threshold_m = 6.0;
+    config.min_elevation_deg = 15.0;
+    config.use_spp_seed = false;
+    config.use_double_difference_factors = true;
+    config.use_single_difference_doppler_factors = true;
+    config.use_single_difference_tdcp_factors = true;
+    config.use_velocity_states = true;
+    config.use_velocity_motion_factors = true;
+    config.fix_ambiguities = true;
+    config.use_lambda_ambiguity_fix = true;
+    config.lambda_ratio_threshold = 1.5;
+    config.min_fixed_ambiguities =
+        solve_config.multisd_fgo_shadow_min_fixed_ambiguities;
+    config.max_lambda_ambiguities = 16;
+    config.lambda_top_k_candidates = solve_config.multisd_fgo_shadow_top_k;
+    config.parallelize_lambda_hypotheses = true;
+    config.use_constellation_ranked_partial_ar =
+        solve_config.multisd_fgo_shadow_constellation_par;
+    config.interleave_constellation_partial_ar =
+        solve_config.multisd_fgo_shadow_interleave_constellation_par;
+    config.use_variance_ranked_partial_ar =
+        solve_config.multisd_fgo_shadow_variance_ranked_par;
+    config.use_quality_ranked_partial_ar =
+        solve_config.multisd_fgo_shadow_quality_ranked_par;
+    config.use_multisd_ambiguities = true;
+    config.use_multisd_disjoint_validation = true;
+    config.multisd_validation_holdout_satellites =
+        solve_config.multisd_fgo_shadow_holdout_satellites;
+    config.multisd_validation_holdout_offset =
+        solve_config.multisd_fgo_shadow_holdout_offset;
+    config.multisd_validation_aperture_cycles = 0.15;
+    config.multisd_validation_history_epochs =
+        solve_config.multisd_fgo_shadow_validation_history_epochs;
+    config.multisd_validation_min_carrier_fraction =
+        solve_config.multisd_fgo_shadow_min_carrier_fraction;
+    config.multisd_validation_max_ddpr_rms_m = 3.0;
+    config.multisd_validation_max_fixed_float_separation_m = 0.0;
+    config.multisd_validation_max_seed_separation_m =
+        solve_config.multisd_fgo_shadow_max_seed_separation_m;
+    config.multisd_lambda_candidate_ratio_threshold =
+        solve_config.multisd_fgo_shadow_candidate_ratio;
+    config.multisd_max_candidate_groups =
+        solve_config.multisd_fgo_shadow_candidate_groups;
+    config.multisd_fallback_min_consensus_groups =
+        solve_config.multisd_fgo_shadow_fallback_consensus_groups;
+    config.multisd_fallback_max_consensus_separation_m =
+        solve_config.multisd_fgo_shadow_fallback_consensus_separation_m;
+    config.multisd_fallback_max_seed_separation_m =
+        solve_config.multisd_fgo_shadow_fallback_max_seed_separation_m;
+    config.lambda_min_bootstrapped_success_rate =
+        solve_config.multisd_fgo_shadow_min_bootstrapped_success_rate;
+    config.lambda_max_adop_cycles =
+        solve_config.multisd_fgo_shadow_max_adop_cycles;
+    config.multisd_fallback_min_bootstrapped_success_rate =
+        solve_config.multisd_fgo_shadow_fallback_min_bootstrapped_success_rate;
+    return config;
+}
+
+void writeOptionalCsvNumber(std::ostream& output, double value) {
+    if (std::isfinite(value)) {
+        output << value;
+    }
 }
 
 std::map<double, Eigen::Vector3d> loadSeedPositions(const std::string& path) {
@@ -3687,6 +4113,40 @@ int main(int argc, char* argv[]) {
             writeDiagnosticsHeader(diagnostics_csv);
         }
 
+        const libgnss::FGOProcessor multisd_shadow_processor(
+            makeGnssOnlyMultiSdShadowConfig(config));
+        std::vector<libgnss::ObservationData> multisd_shadow_rover_window;
+        std::vector<libgnss::ObservationData> multisd_shadow_base_window;
+        multisd_shadow_rover_window.reserve(
+            static_cast<std::size_t>(config.multisd_fgo_shadow_window_epochs));
+        multisd_shadow_base_window.reserve(
+            static_cast<std::size_t>(config.multisd_fgo_shadow_window_epochs));
+        std::ofstream multisd_shadow_csv;
+        if (!config.multisd_fgo_shadow_csv_path.empty()) {
+            multisd_shadow_csv.open(config.multisd_fgo_shadow_csv_path);
+            if (!multisd_shadow_csv.is_open()) {
+                std::cerr << "Error: failed to open MultiSD FGO shadow CSV: "
+                          << config.multisd_fgo_shadow_csv_path << std::endl;
+                return 1;
+            }
+            multisd_shadow_csv
+                << "epoch_index,gps_week,tow,window_epochs,rtk_status,"
+                   "shadow_status,shadow_fixed,lambda_ratio,fixed_ambiguities,"
+                   "lambda_candidates,lambda_used_candidates,lambda_attempts,"
+                   "lambda_solved,partial_lambda_used,lambda_bsr,lambda_adop_cycles,"
+                   "validation_evaluated,validation_pass,holdout_satellites,"
+                   "hypotheses_passed,hypotheses_evaluated,selected_rank,"
+                   "carrier_passed,carrier_used,max_integer_distance_cycles,"
+                   "ddpr_rms_m,x,y,z,rtk_position_delta_m,build_runtime_ms,"
+                   "optimize_wall_ms,optimizer_cpu_ms,runtime_ms,"
+                   "normal_state_size,cuda_selected,cuda_attempts,"
+                   "cuda_successes,cuda_fallbacks,cuda_runtime_ms,"
+                   "cuda_hypothesis_batch_attempts,"
+                   "cuda_hypothesis_batch_successes,"
+                   "cuda_hypothesis_batch_rhs_columns,"
+                   "fixed_float_separation_m,seed_separation_m\n";
+        }
+
         std::unique_ptr<IntegrityShadowTimeline> integrity_shadow;
         if (!config.integrity_shadow_csv_path.empty()) {
             IntegrityShadowTimeline::Config shadow_config;
@@ -3868,6 +4328,10 @@ int main(int argc, char* argv[]) {
         int availability_spp_fallback_epochs = 0;
         int availability_propagated_fallback_epochs = 0;
         int availability_postfilter_reinserted_epochs = 0;
+        std::size_t multisd_shadow_attempts = 0;
+        std::size_t multisd_shadow_valid = 0;
+        std::size_t multisd_shadow_fixed = 0;
+        double multisd_shadow_total_runtime_ms = 0.0;
         libgnss::PositionSolution last_fixed_output;
         bool have_last_fixed_output = false;
         libgnss::PositionSolution last_guard_output;
@@ -3960,6 +4424,188 @@ int main(int argc, char* argv[]) {
             }
 
             auto pos_solution = rtk_processor.processRTKEpoch(rover_obs, aligned_base_obs, nav_data);
+
+            // GNSS-only, strictly causal shadow: the window contains only
+            // observations at or before this RTK epoch, and only its latest
+            // solution is recorded. It has no authority over RTK output or
+            // state. RTK's current estimate is used solely as the geometry
+            // seed (never reference truth).
+            if (multisd_shadow_csv.is_open()) {
+                libgnss::ObservationData shadow_rover = rover_obs;
+                if (pos_solution.isValid() &&
+                    pos_solution.position_ecef.allFinite()) {
+                    shadow_rover.receiver_position =
+                        pos_solution.position_ecef;
+                    shadow_rover.receiver_clock_bias =
+                        pos_solution.receiver_clock_bias;
+                }
+                multisd_shadow_rover_window.push_back(
+                    std::move(shadow_rover));
+                multisd_shadow_base_window.push_back(aligned_base_obs);
+                const std::size_t maximum_window =
+                    static_cast<std::size_t>(
+                        config.multisd_fgo_shadow_window_epochs);
+                if (multisd_shadow_rover_window.size() > maximum_window) {
+                    multisd_shadow_rover_window.erase(
+                        multisd_shadow_rover_window.begin());
+                    multisd_shadow_base_window.erase(
+                        multisd_shadow_base_window.begin());
+                }
+
+                if (multisd_shadow_rover_window.size() >=
+                    static_cast<std::size_t>(
+                        config.multisd_fgo_shadow_min_epochs)) {
+                    const auto shadow_start =
+                        std::chrono::steady_clock::now();
+                    const auto shadow_problem =
+                        multisd_shadow_processor.buildDoubleDifferenceProblem(
+                            multisd_shadow_rover_window,
+                            multisd_shadow_base_window,
+                            nav_data,
+                            base_position);
+                    const auto shadow_optimize_start =
+                        std::chrono::steady_clock::now();
+                    const auto shadow_result =
+                        multisd_shadow_processor.optimizeProblem(shadow_problem);
+                    const auto shadow_end =
+                        std::chrono::steady_clock::now();
+                    const double shadow_build_runtime_ms =
+                        std::chrono::duration<double, std::milli>(
+                            shadow_optimize_start - shadow_start)
+                            .count();
+                    const double shadow_optimize_wall_ms =
+                        std::chrono::duration<double, std::milli>(
+                            shadow_end - shadow_optimize_start)
+                            .count();
+                    const double shadow_runtime_ms =
+                        std::chrono::duration<double, std::milli>(
+                            shadow_end - shadow_start)
+                            .count();
+                    ++multisd_shadow_attempts;
+                    multisd_shadow_total_runtime_ms += shadow_runtime_ms;
+
+                    const libgnss::PositionSolution* shadow_latest = nullptr;
+                    if (!shadow_result.solution.solutions.empty()) {
+                        const auto& candidate =
+                            shadow_result.solution.solutions.back();
+                        if (std::abs(candidate.time - rover_obs.time) <=
+                            kExactTimeToleranceSeconds) {
+                            shadow_latest = &candidate;
+                        }
+                    }
+                    if (shadow_latest && shadow_latest->isValid()) {
+                        ++multisd_shadow_valid;
+                        if (shadow_latest->isFixed()) {
+                            ++multisd_shadow_fixed;
+                        }
+                    }
+
+                    const auto& diagnostics = shadow_result.diagnostics;
+                    multisd_shadow_csv
+                        << processed_rover_epochs << ','
+                        << rover_obs.time.week << ','
+                        << std::setprecision(12) << rover_obs.time.tow << ','
+                        << multisd_shadow_rover_window.size() << ','
+                        << static_cast<int>(pos_solution.status) << ','
+                        << (shadow_latest
+                                ? static_cast<int>(shadow_latest->status)
+                                : static_cast<int>(libgnss::SolutionStatus::NONE))
+                        << ','
+                        << (shadow_latest && shadow_latest->isFixed() ? 1 : 0)
+                        << ',';
+                    writeOptionalCsvNumber(
+                        multisd_shadow_csv,
+                        shadow_latest ? shadow_latest->ratio
+                                      : diagnostics.lambda_ambiguity_ratio);
+                    multisd_shadow_csv << ','
+                        << (shadow_latest
+                                ? shadow_latest->num_fixed_ambiguities
+                                : 0)
+                        << ',' << diagnostics.lambda_ambiguity_candidates
+                        << ',' << diagnostics.lambda_ambiguity_used_candidates
+                        << ',' << diagnostics.lambda_ambiguity_attempts
+                        << ','
+                        << (diagnostics.lambda_ambiguity_fix_solved ? 1 : 0)
+                        << ','
+                        << (diagnostics.partial_lambda_ambiguity_fix_used ? 1 : 0)
+                        << ',';
+                    writeOptionalCsvNumber(
+                        multisd_shadow_csv,
+                        diagnostics.lambda_bootstrapped_success_rate);
+                    multisd_shadow_csv << ',';
+                    writeOptionalCsvNumber(
+                        multisd_shadow_csv,
+                        diagnostics.lambda_adop_cycles);
+                    multisd_shadow_csv
+                        << ','
+                        << (diagnostics.multisd_validation_evaluated ? 1 : 0)
+                        << ','
+                        << (diagnostics.multisd_validation_pass ? 1 : 0)
+                        << ','
+                        << diagnostics.multisd_validation_holdout_satellites
+                        << ','
+                        << diagnostics.multisd_validation_hypotheses_passed
+                        << ','
+                        << diagnostics.multisd_validation_hypotheses_evaluated
+                        << ','
+                        << diagnostics.multisd_validation_selected_rank
+                        << ','
+                        << diagnostics.multisd_validation_carrier_passed
+                        << ','
+                        << diagnostics.multisd_validation_carrier_used
+                        << ',';
+                    writeOptionalCsvNumber(
+                        multisd_shadow_csv,
+                        diagnostics
+                            .multisd_validation_max_integer_distance_cycles);
+                    multisd_shadow_csv << ',';
+                    writeOptionalCsvNumber(
+                        multisd_shadow_csv,
+                        diagnostics.multisd_validation_ddpr_rms_m);
+                    multisd_shadow_csv << ',';
+                    if (shadow_latest) {
+                        multisd_shadow_csv
+                            << std::setprecision(12)
+                            << shadow_latest->position_ecef.x() << ','
+                            << shadow_latest->position_ecef.y() << ','
+                            << shadow_latest->position_ecef.z() << ',';
+                        if (pos_solution.isValid()) {
+                            writeOptionalCsvNumber(
+                                multisd_shadow_csv,
+                                (shadow_latest->position_ecef -
+                                 pos_solution.position_ecef)
+                                    .norm());
+                        }
+                    } else {
+                        multisd_shadow_csv << ",,,";
+                    }
+                    multisd_shadow_csv
+                        << ',' << shadow_build_runtime_ms
+                        << ',' << shadow_optimize_wall_ms
+                        << ',' << diagnostics.processing_time_ms
+                        << ',' << shadow_runtime_ms
+                        << ',' << diagnostics.dense_normal_state_size
+                        << ',' << (diagnostics.cuda_dense_solver_selected ? 1 : 0)
+                        << ',' << diagnostics.cuda_dense_solve_attempts
+                        << ',' << diagnostics.cuda_dense_solve_successes
+                        << ',' << diagnostics.cuda_dense_solve_fallbacks
+                        << ',' << diagnostics.cuda_dense_solve_time_ms
+                        << ',' << diagnostics.cuda_hypothesis_batch_attempts
+                        << ',' << diagnostics.cuda_hypothesis_batch_successes
+                        << ',' << diagnostics.cuda_hypothesis_batch_rhs_columns
+                        << ',';
+                    writeOptionalCsvNumber(
+                        multisd_shadow_csv,
+                        diagnostics
+                            .multisd_validation_fixed_float_separation_m);
+                    multisd_shadow_csv << ',';
+                    writeOptionalCsvNumber(
+                        multisd_shadow_csv,
+                        diagnostics.multisd_validation_seed_separation_m);
+                    multisd_shadow_csv
+                        << '\n';
+                }
+            }
             const libgnss::PositionSolution* last_output =
                 have_last_guard_output ? &last_guard_output : nullptr;
             const bool have_last_output = last_output != nullptr;
@@ -4736,6 +5382,19 @@ int main(int argc, char* argv[]) {
                           << "% qualified as demotion authority)";
             }
             std::cout << std::endl;
+        }
+        if (multisd_shadow_csv.is_open()) {
+            std::cout << "  GNSS-only MultiSD shadow: attempts="
+                      << multisd_shadow_attempts
+                      << " valid=" << multisd_shadow_valid
+                      << " fixed=" << multisd_shadow_fixed;
+            if (multisd_shadow_attempts > 0) {
+                std::cout << " mean_runtime_ms="
+                          << (multisd_shadow_total_runtime_ms /
+                              static_cast<double>(multisd_shadow_attempts));
+            }
+            std::cout << " csv=" << config.multisd_fgo_shadow_csv_path
+                      << std::endl;
         }
         std::cout << "  output written: " << config.output_pos_path << std::endl;
         if (config.write_kml) {
