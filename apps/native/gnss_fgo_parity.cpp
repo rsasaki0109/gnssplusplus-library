@@ -1491,6 +1491,11 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
            "lambda_candidate_valid,lambda_candidate_nfixed,"
            "lambda_candidate_ratio,lambda_candidate_x_ecef_m,"
            "lambda_candidate_y_ecef_m,lambda_candidate_z_ecef_m,"
+           "lambda_candidate_bsr,lambda_candidate_bsr_qscale2,"
+           "lambda_candidate_bsr_qscale4,lambda_candidate_bsr_qscale8,"
+           "lambda_candidate_bsr_qscale16,lambda_candidate_ffrt_supported,"
+           "lambda_candidate_ffrt_accepts_any,lambda_candidate_ffrt_min_ratio,"
+           "lambda_candidate_ffrt_pass,"
            "ratio_impact_eval,ratio_impact_trials,ratio_impact_best_ratio,"
            "ratio_impact_best_nfixed,ratio_impact_x_ecef_m,"
            "ratio_impact_y_ecef_m,ratio_impact_z_ecef_m,"
@@ -1582,6 +1587,15 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
                 << ',' << d.lambda_candidate_position_ecef.x()
                 << ',' << d.lambda_candidate_position_ecef.y()
                 << ',' << d.lambda_candidate_position_ecef.z()
+                << ',' << d.lambda_candidate_bsr
+                << ',' << d.lambda_candidate_bsr_qscale2
+                << ',' << d.lambda_candidate_bsr_qscale4
+                << ',' << d.lambda_candidate_bsr_qscale8
+                << ',' << d.lambda_candidate_bsr_qscale16
+                << ',' << (d.lambda_candidate_ffrt_table_supported ? 1 : 0)
+                << ',' << (d.lambda_candidate_ffrt_accepts_any ? 1 : 0)
+                << ',' << d.lambda_candidate_ffrt_min_ratio
+                << ',' << (d.lambda_candidate_ffrt_pass ? 1 : 0)
                 << ',' << (d.ratio_impact_evaluated ? 1 : 0)
                 << ',' << d.ratio_impact_trials
                 << ',' << d.ratio_impact_best_ratio

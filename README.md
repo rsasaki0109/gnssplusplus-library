@@ -217,8 +217,17 @@ a safe incremental guard rather than the complete FIX-rate target. Combined
 with the two preceding reprieves, correct-FIX distance is now approximately
 58.2153% (+1.1422 pp from 57.0731%); about 0.858 pp remains to the +2 pp goal.
 
+The FGO epoch CSV also reports monitor-only LAMBDA covariance diagnostics for
+each provisional candidate: the bootstrapped success-rate lower bound, the
+same bound after 2/4/8/16x covariance inflation, and the fixed-failure-rate
+ratio threshold and verdict for `Pf_tol=0.001`. These values come from the
+same two-candidate search used by the existing ratio test, add no CLI option,
+and do not change candidate selection or FIX/FLOAT decisions. The FFRT
+coefficient table follows [Hou, Verhagen, and Wu (2016)](https://doi.org/10.3390/s16070945)
+and unsupported ambiguity dimensions fail closed in telemetry.
+
 Across the three courses, distance-weighted correct FIX improved from
-57.0731% at the pre-reprieve baseline to **57.9735%**, while
+57.0731% at the pre-reprieve baseline to approximately **58.2153%**, while
 distance-weighted wrong FIX fell from 7.7043% to **7.0089%**. The policy is
 opt-in and leaves the default library behavior unchanged.
 

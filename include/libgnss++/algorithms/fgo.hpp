@@ -2017,6 +2017,18 @@ public:
         Vector3d lambda_candidate_position_ecef = Vector3d::Zero();
         int lambda_candidate_fixed_ambiguities = 0;
         double lambda_candidate_ratio = 0.0;
+        // Covariance-only quality diagnostics from the same Top-K LAMBDA
+        // search that produced lambda_candidate_position_ecef. These fields
+        // are monitor-only and never participate in FIX/FLOAT decisions.
+        double lambda_candidate_bsr = 0.0;
+        double lambda_candidate_bsr_qscale2 = 0.0;
+        double lambda_candidate_bsr_qscale4 = 0.0;
+        double lambda_candidate_bsr_qscale8 = 0.0;
+        double lambda_candidate_bsr_qscale16 = 0.0;
+        bool lambda_candidate_ffrt_table_supported = false;
+        bool lambda_candidate_ffrt_accepts_any = false;
+        double lambda_candidate_ffrt_min_ratio = 0.0;
+        bool lambda_candidate_ffrt_pass = false;
         bool ratio_impact_evaluated = false;
         int ratio_impact_trials = 0;
         double ratio_impact_best_ratio = 0.0;
