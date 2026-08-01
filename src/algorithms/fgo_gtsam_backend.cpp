@@ -1983,6 +1983,12 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 gf_slip_shadow[i].max_jump_m;
             epoch_diagnostics[i].gf_slip_shadow_tainted_ambiguities =
                 gf_slip_shadow[i].tainted_ambiguities;
+            epoch_diagnostics[i].doppler_slip_shadow_event_signals =
+                gf_slip_shadow[i].doppler_event_signals;
+            epoch_diagnostics[i].doppler_slip_shadow_max_innovation_m =
+                gf_slip_shadow[i].doppler_max_innovation_m;
+            epoch_diagnostics[i].gf_doppler_shadow_isolated_pairs =
+                gf_slip_shadow[i].doppler_isolated_event_pairs;
         }
         epoch_diagnostics[i].ar_outcome = config.use_lambda_ambiguity_fix
             ? FGOProcessor::AmbiguityResolutionOutcome::SmootherFailure
