@@ -97,6 +97,7 @@ struct Args {
     bool residual_par = false;
     bool ratio_impact_monitor = false;
     bool gf_slip_reset = false;
+    bool conditional_mf_shadow = false;
     bool variance_par = false;
     bool gici_par = false;          // GICI-style strict PAR + continuous-unfix reacquisition profile
     bool anchor_gated_unfix_reset = false;
@@ -255,6 +256,10 @@ Args parseArgs(int argc, char** argv) {
         }
         if (a == "--gf-slip-reset") {
             args.gf_slip_reset = true;
+            continue;
+        }
+        if (a == "--conditional-mf-shadow") {
+            args.conditional_mf_shadow = true;
             continue;
         }
         if (a == "--integer-constrained-reoptimization") {
@@ -796,6 +801,9 @@ libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
     }
     if (args.partial_ar) {
         config.use_fixed_lag_partial_lambda = true;
+    }
+    if (args.conditional_mf_shadow) {
+        config.monitor_conditional_multiband_ar = true;
     }
     if (args.integer_constrained_reoptimization) {
         config.use_integer_constrained_reoptimization = true;
@@ -1510,6 +1518,13 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
            "gf_slip_events,gf_slip_max_jump_m,gf_slip_tainted_ambiguities,"
            "doppler_slip_signals,doppler_slip_max_innovation_m,"
            "gf_doppler_isolated_pairs,"
+           "conditional_mf_eval,conditional_mf_primary_n,conditional_mf_secondary_n,"
+           "conditional_mf_primary_ratio,conditional_mf_secondary_ratio,"
+           "conditional_mf_primary_bsr,conditional_mf_secondary_bsr,"
+           "conditional_mf_primary_pass,conditional_mf_secondary_pass,"
+           "conditional_mf_candidate_valid,conditional_mf_x_ecef_m,"
+           "conditional_mf_y_ecef_m,conditional_mf_z_ecef_m,"
+           "conditional_mf_float_sep_m,conditional_mf_imu_sep_m,"
            "ratio_impact_eval,ratio_impact_trials,ratio_impact_best_ratio,"
            "ratio_impact_best_nfixed,ratio_impact_x_ecef_m,"
            "ratio_impact_y_ecef_m,ratio_impact_z_ecef_m,"
@@ -1580,6 +1595,7 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
             << s.ratio;
         if (si < r.epoch_diagnostics.size()) {
             const auto& d = r.epoch_diagnostics[si];
+            const auto& conditional = d.conditional_multiband_ar_shadow;
             out << ',' << d.effective_ratio_threshold
                 << ',' << s.num_fixed_ambiguities
                 << ',' << static_cast<int>(d.ar_outcome)
@@ -1620,6 +1636,21 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
                 << ',' << d.doppler_slip_shadow_event_signals
                 << ',' << d.doppler_slip_shadow_max_innovation_m
                 << ',' << d.gf_doppler_shadow_isolated_pairs
+                << ',' << (conditional.evaluated ? 1 : 0)
+                << ',' << conditional.primary_ambiguities
+                << ',' << conditional.secondary_ambiguities
+                << ',' << conditional.primary_ratio
+                << ',' << conditional.secondary_ratio
+                << ',' << conditional.primary_bootstrapped_success_rate
+                << ',' << conditional.secondary_bootstrapped_success_rate
+                << ',' << (conditional.primary_ratio_passed ? 1 : 0)
+                << ',' << (conditional.secondary_ratio_passed ? 1 : 0)
+                << ',' << (conditional.candidate_available ? 1 : 0)
+                << ',' << conditional.candidate_position_ecef.x()
+                << ',' << conditional.candidate_position_ecef.y()
+                << ',' << conditional.candidate_position_ecef.z()
+                << ',' << conditional.float_separation_m
+                << ',' << conditional.imu_separation_m
                 << ',' << (d.ratio_impact_evaluated ? 1 : 0)
                 << ',' << d.ratio_impact_trials
                 << ',' << d.ratio_impact_best_ratio
@@ -2594,9 +2625,12 @@ int main(int argc, char** argv) {
                   << "  partial AR: " << (config.use_fixed_lag_partial_lambda ? "on" : "off")
                   << " (min_fraction=" << config.fixed_lag_partial_lambda_min_fraction
                   << ", min_fixed=" << config.min_fixed_ambiguities
-                  << ", max_std_cycles=" << config.partial_ar_max_std_cycles
-                  << ", ratio_impact_monitor="
-                  << (config.monitor_ratio_impact_partial_ar ? "on" : "off") << ")\n"
+                   << ", max_std_cycles=" << config.partial_ar_max_std_cycles
+                   << ", ratio_impact_monitor="
+                   << (config.monitor_ratio_impact_partial_ar ? "on" : "off")
+                   << ", conditional_mf_shadow="
+                   << (config.monitor_conditional_multiband_ar ? "on" : "off")
+                   << ")\n"
                   << "  IMU ratio aperture: " << (args.imu_ratio_aperture ? "on" : "off")
                   << " (accepted=" << fl.diagnostics.imu_aided_ratio_accepts
                   << ", rejected=" << fl.diagnostics.imu_aided_ratio_rejects

@@ -3370,6 +3370,164 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                         epoch_diagnostics[i].ambiguity_variance_max_cycles2 = vmax;
                     }
 
+                    // Diagnostic-only conditional multi-band AR shadow. Unlike the
+                    // historical one-band mode, this retains every band in
+                    // the eventual counterfactual integer vector.  The
+                    // primary stage must first pass the configured ratio;
+                    // the remaining bands are then resolved using the exact
+                    // Gaussian conditional mean/covariance given those
+                    // primary integers.  Nothing below mutates the graph,
+                    // ambiguity map, FIX label, ratio, or hold state.
+                    if (config.monitor_conditional_multiband_ar &&
+                        config.use_multi_frequency_double_difference && n > 1) {
+                        const std::vector<std::size_t> primary_indices =
+                            selectOneBandPerSatellite(epoch_amb_indices, problem);
+                        const std::set<std::size_t> primary_set(
+                            primary_indices.begin(), primary_indices.end());
+                        std::vector<int> primary_order;
+                        std::vector<int> secondary_order;
+                        for (int candidate = 0; candidate < n; ++candidate) {
+                            if (primary_set.count(epoch_amb_indices[candidate]) != 0) {
+                                primary_order.push_back(candidate);
+                            } else {
+                                secondary_order.push_back(candidate);
+                            }
+                        }
+                        auto& shadow = epoch_diagnostics[i];
+                        if (primary_order.size() >=
+                                static_cast<std::size_t>(min_candidates) &&
+                            !secondary_order.empty()) {
+                            const int np = static_cast<int>(primary_order.size());
+                            const int ns = static_cast<int>(secondary_order.size());
+                            auto& conditional =
+                                shadow.conditional_multiband_ar_shadow;
+                            conditional.evaluated = true;
+                            conditional.primary_ambiguities = np;
+                            conditional.secondary_ambiguities = ns;
+                            Eigen::VectorXd a_primary(np);
+                            Eigen::MatrixXd q_primary(np, np);
+                            for (int r = 0; r < np; ++r) {
+                                a_primary(r) = float_amb(primary_order[r]);
+                                for (int c = 0; c < np; ++c) {
+                                    q_primary(r, c) =
+                                        q_amb(primary_order[r], primary_order[c]);
+                                }
+                            }
+                            LambdaCandidateDiagnostics primary_diag;
+                            if (lambdaSearchTopK(
+                                    a_primary, q_primary, 2, primary_diag)) {
+                                const double primary_best =
+                                    primary_diag.squared_residuals(0);
+                                conditional.primary_ratio =
+                                    primary_best > 0.0
+                                        ? primary_diag.squared_residuals(1) /
+                                              primary_best
+                                        : 0.0;
+                                conditional.primary_bootstrapped_success_rate =
+                                    primary_diag.bootstrapped_success_rate;
+                                conditional.primary_ratio_passed =
+                                    std::isfinite(conditional.primary_ratio) &&
+                                    (config.lambda_ratio_threshold <= 0.0 ||
+                                     conditional.primary_ratio >
+                                         config.lambda_ratio_threshold);
+                                if (conditional.primary_ratio_passed) {
+                                    Eigen::VectorXd a_secondary(ns);
+                                    Eigen::MatrixXd q_secondary(ns, ns);
+                                    Eigen::MatrixXd q_secondary_primary(ns, np);
+                                    for (int r = 0; r < ns; ++r) {
+                                        a_secondary(r) = float_amb(secondary_order[r]);
+                                        for (int c = 0; c < ns; ++c) {
+                                            q_secondary(r, c) =
+                                                q_amb(secondary_order[r],
+                                                      secondary_order[c]);
+                                        }
+                                        for (int c = 0; c < np; ++c) {
+                                            q_secondary_primary(r, c) =
+                                                q_amb(secondary_order[r],
+                                                      primary_order[c]);
+                                        }
+                                    }
+                                    const Eigen::LDLT<Eigen::MatrixXd> primary_ldlt(
+                                        q_primary);
+                                    if (primary_ldlt.info() == Eigen::Success) {
+                                        const Eigen::VectorXd primary_fixed =
+                                            primary_diag.candidates.col(0);
+                                        const Eigen::VectorXd conditional_float =
+                                            a_secondary + q_secondary_primary *
+                                                primary_ldlt.solve(
+                                                    primary_fixed - a_primary);
+                                        Eigen::MatrixXd conditional_q =
+                                            q_secondary - q_secondary_primary *
+                                                primary_ldlt.solve(
+                                                    q_secondary_primary.transpose());
+                                        conditional_q = 0.5 *
+                                            (conditional_q + conditional_q.transpose());
+                                        for (int k = 0; k < ns; ++k) {
+                                            conditional_q(k, k) += std::max(
+                                                1e-12,
+                                                std::abs(conditional_q(k, k)) * 1e-9);
+                                        }
+                                        LambdaCandidateDiagnostics secondary_diag;
+                                        if (conditional_float.allFinite() &&
+                                            conditional_q.allFinite() &&
+                                            lambdaSearchTopK(conditional_float,
+                                                             conditional_q, 2,
+                                                             secondary_diag)) {
+                                            const double secondary_best =
+                                                secondary_diag.squared_residuals(0);
+                                            conditional.secondary_ratio =
+                                                secondary_best > 0.0
+                                                    ? secondary_diag.squared_residuals(1) /
+                                                          secondary_best
+                                                    : 0.0;
+                                            conditional.secondary_bootstrapped_success_rate =
+                                                secondary_diag.bootstrapped_success_rate;
+                                            conditional.secondary_ratio_passed =
+                                                std::isfinite(conditional.secondary_ratio) &&
+                                                (config.lambda_ratio_threshold <= 0.0 ||
+                                                 conditional.secondary_ratio >
+                                                     config.lambda_ratio_threshold);
+                                            if (conditional.secondary_ratio_passed) {
+                                                Eigen::VectorXd all_fixed = float_amb;
+                                                for (int r = 0; r < np; ++r) {
+                                                    all_fixed(primary_order[r]) =
+                                                        primary_diag.candidates(r, 0);
+                                                }
+                                                for (int r = 0; r < ns; ++r) {
+                                                    all_fixed(secondary_order[r]) =
+                                                        secondary_diag.candidates(r, 0);
+                                                }
+                                                const Eigen::LDLT<Eigen::MatrixXd> all_ldlt(
+                                                    q_amb);
+                                                if (all_ldlt.info() == Eigen::Success) {
+                                                    const Eigen::VectorXd correction =
+                                                        all_ldlt.solve(float_amb - all_fixed);
+                                                    const Eigen::Vector3d candidate =
+                                                        Eigen::Vector3d(antennaOf(pose_i)) -
+                                                        pos_amb * correction;
+                                                    if (correction.allFinite() &&
+                                                        candidate.allFinite()) {
+                                                        conditional.candidate_available = true;
+                                                        conditional.candidate_position_ecef =
+                                                            candidate;
+                                                        conditional.float_separation_m =
+                                                            (candidate - Eigen::Vector3d(
+                                                                         antennaOf(pose_i)))
+                                                                .norm();
+                                                        conditional.imu_separation_m =
+                                                            (candidate - Eigen::Vector3d(
+                                                                         antennaOf(pose_seed)))
+                                                                .norm();
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     // --- MF-AR step 2: partial AR (port of the Eigen path's
                     // use_partial_lambda_ambiguity_fix). Candidate order:
                     // identity (= the deterministic sat/ref/signal sort above)
