@@ -96,6 +96,7 @@ struct Args {
     bool constellation_par = false;
     bool residual_par = false;
     bool ratio_impact_monitor = false;
+    bool gf_slip_reset = false;
     bool variance_par = false;
     bool gici_par = false;          // GICI-style strict PAR + continuous-unfix reacquisition profile
     bool anchor_gated_unfix_reset = false;
@@ -250,6 +251,10 @@ Args parseArgs(int argc, char** argv) {
         }
         if (a == "--ratio-impact-monitor") {
             args.ratio_impact_monitor = true;
+            continue;
+        }
+        if (a == "--gf-slip-reset") {
+            args.gf_slip_reset = true;
             continue;
         }
         if (a == "--integer-constrained-reoptimization") {
@@ -709,6 +714,7 @@ libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
     libgnss::FGOProcessor::FGOConfig config = makeRealDataDdConfig();
     // Reuse the existing diagnostic surface; do not add another CLI option.
     config.monitor_geometry_free_cycle_slip = !args.dump_csv_path.empty();
+    config.use_geometry_free_cycle_slip_reset = args.gf_slip_reset;
     config.report_held_ambiguities_as_fixed = !args.no_held_fix_label;
     if (args.max_iters > 0) {
         config.max_iterations = args.max_iters;
@@ -2126,7 +2132,7 @@ FileId statFile(const std::string& path) {
 // vector, new factor field, ...) -- an old cache then fails the magic/version
 // check in load() below and is rebuilt instead of misread.
 constexpr uint32_t kMagic = 0x50434647u;  // "PCFG" (problem-cache fgo)
-constexpr uint32_t kVersion = 8u;
+constexpr uint32_t kVersion = 9u;
 constexpr std::size_t kBuilderFingerprintBytes = 512u;
 
 struct Fingerprint {
@@ -2188,6 +2194,8 @@ Fingerprint computeFingerprint(const Args& args, const libgnss::FGOProcessor::FG
     COPY_BUILD_FIELD(elevation_sigma_err_a_m);
     COPY_BUILD_FIELD(elevation_sigma_err_b_m);
     COPY_BUILD_FIELD(elevation_sigma_pseudorange_ratio);
+    COPY_BUILD_FIELD(geometry_free_cycle_slip_threshold_m);
+    COPY_BUILD_FIELD(geometry_free_cycle_slip_confirmation_s);
     COPY_BUILD_FIELD(max_tdcp_gap_s);
     COPY_BUILD_FIELD(min_elevation_deg);
     COPY_BUILD_FIELD(min_satellites_per_epoch);
@@ -2209,6 +2217,7 @@ Fingerprint computeFingerprint(const Args& args, const libgnss::FGOProcessor::FG
     COPY_BUILD_FIELD(use_double_difference_secondary_code_alignment);
     COPY_BUILD_FIELD(use_elevation_dependent_sigma);
     COPY_BUILD_FIELD(use_external_doppler_dr_validation);
+    COPY_BUILD_FIELD(use_geometry_free_cycle_slip_reset);
     COPY_BUILD_FIELD(use_ionosphere_model);
     COPY_BUILD_FIELD(use_multi_constellation);
     COPY_BUILD_FIELD(use_multi_frequency_double_difference);
@@ -2419,6 +2428,15 @@ int main(int argc, char** argv) {
               << ", cmc_ref=" << (args.cmc_ref ? "on" : "off")
               << ", ref_avoided=" << problem.diagnostics.cmc_ref_avoided_count
               << "\n";
+    std::cout << "  Geometry-free slip reset: "
+              << (args.gf_slip_reset ? "on" : "off")
+              << " (threshold="
+              << config.geometry_free_cycle_slip_threshold_m
+              << " m, confirmation="
+              << config.geometry_free_cycle_slip_confirmation_s
+              << " s, confirmed_resets="
+              << problem.diagnostics.geometry_free_cycle_slip_resets
+              << ")\n";
 
     // --- MF hygiene diagnostics: per-signal DD residuals at the reference
     // trajectory (no solver). PR residual mean exposes per-band code/DCB
@@ -2660,6 +2678,13 @@ int main(int argc, char** argv) {
                   << ", level_exclusions=" << fl.diagnostics.code_minus_carrier_level_exclusions
                   << ", cmc_ref=" << (args.cmc_ref ? "on" : "off")
                   << ", ref_avoided=" << fl.diagnostics.cmc_ref_avoided_count
+                  << ")\n"
+                  << "  Geometry-free slip reset: "
+                  << (args.gf_slip_reset ? "on" : "off")
+                  << " (confirmed_resets="
+                  << fl.diagnostics.geometry_free_cycle_slip_resets
+                  << ", gross_spp_demotions="
+                  << fl.diagnostics.geometry_free_fix_guard_demotions
                   << ")\n"
                   << "  CP-hold/sanity FSM: " << (args.cp_hold ? "on" : "off")
                   << " (triggers=" << fl.diagnostics.cp_hold_triggers

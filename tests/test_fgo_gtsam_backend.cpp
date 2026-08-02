@@ -2782,6 +2782,66 @@ TEST(FGOFixDemoteTest, FreshSppAndStrongModelReprieveResidualOnlyDemotion) {
         0u);
 }
 
+TEST(FGOFixDemoteTest, GeometryFreeLowRedundancyGrossSppGuardDemotesAndSkipsHold) {
+    constexpr std::size_t kBadEpoch = 1;
+    CpHoldTestOptions opt;
+    opt.satellites = lambdaCapableSatelliteGeometry();
+    opt.num_epochs = 25;
+    for (std::size_t e = 0; e <= 3; ++e) {
+        opt.pr_corrupt_epochs.insert(e);
+    }
+    opt.pr_baseline_bias_m = 0.0;
+    opt.pr_dominant_extra_bias_m = 80.0;
+    auto problem = makeCpHoldFixedLagProblem(opt);
+    // Keep the synthetic LAMBDA candidate accepted but non-trivial: a
+    // quarter-cycle offset on one arc avoids the noise-free fixture's
+    // unrealistically enormous ratio while retaining a clear integer winner.
+    for (auto& factor : problem.double_difference_carrier_factors) {
+        if (factor.ambiguity_index == 0) {
+            factor.observed_dd_carrier_m += 0.05;
+            factor.rover_satellite_model.corrected_carrier_m += 0.05;
+        }
+    }
+    for (std::size_t e = 0; e <= 3; ++e) {
+        problem.epochs[e].fresh_spp_solution = true;
+        problem.epochs[e].position_ecef += Vector3d(100.0, 0.0, 0.0);
+    }
+
+    FGOProcessor::FGOConfig off_config = makeFixDemoteBaseConfig();
+    off_config.use_fixed_lag_partial_lambda = true;
+    off_config.max_lambda_ambiguities = 6;
+    off_config.use_epoch_quality_gates = true;
+    off_config.gate_gdop_max = 1e9;
+    off_config.gate_min_satellites = 0;
+    off_config.gate_ddpr_res_max_m = 1e9;
+    off_config.gate_per_sat_res_max_m = 1e9;
+    off_config.use_fix_plausibility_demotion = true;
+    off_config.fix_demote_distance_m = 1e9;
+    off_config.fix_demote_res_m = 0.0;
+
+    const auto off_result = FGOProcessor(off_config).optimizeProblem(problem);
+    ASSERT_EQ(off_result.solution.solutions[kBadEpoch].status,
+              SolutionStatus::FIXED)
+        << "fixture sanity: without the GF guard the grossly SPP-disagreed "
+           "low-redundancy candidate must remain FIXED";
+    ASSERT_LE(off_result.epoch_diagnostics[kBadEpoch]
+                  .lambda_candidate_fixed_ambiguities,
+              6);
+    ASSERT_LE(off_result.epoch_diagnostics[kBadEpoch].lambda_candidate_ratio,
+              10.0);
+
+    FGOProcessor::FGOConfig on_config = off_config;
+    on_config.use_fix_plausibility_demotion = false;
+    on_config.use_geometry_free_cycle_slip_reset = true;
+    const auto on_result = FGOProcessor(on_config).optimizeProblem(problem);
+
+    EXPECT_NE(on_result.solution.solutions[kBadEpoch].status,
+              SolutionStatus::FIXED);
+    EXPECT_GT(on_result.diagnostics.fix_plausibility_demotions, 0u);
+    EXPECT_GT(on_result.diagnostics.geometry_free_fix_guard_demotions, 0u);
+    EXPECT_GT(on_result.diagnostics.fix_plausibility_hold_skips, 0u);
+}
+
 TEST(FGOFixDemoteTest, RelativeResidualDemotesExcursionButToleratesChronicNoise) {
     // fix_demote_res_rel semantics: (1) a residual EXCURSION over a quiet
     // ambient demotes; (2) the SAME absolute residual level, when it is the

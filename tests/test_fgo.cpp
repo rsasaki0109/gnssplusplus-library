@@ -466,6 +466,39 @@ std::vector<ObservationData> makeCmcObservationEpochs(
     return epochs;
 }
 
+std::vector<ObservationData> makeGeometryFreeObservationEpochs(
+    const NavigationData& nav,
+    const Vector3d& receiver_position,
+    const std::vector<double>& l1_bias_m,
+    const std::vector<double>& l2_bias_m) {
+    std::vector<ObservationData> epochs;
+    for (std::size_t epoch_index = 0; epoch_index < l1_bias_m.size();
+         ++epoch_index) {
+        ObservationData epoch(
+            GNSSTime(2300, 100100.0 + static_cast<double>(epoch_index)));
+        epoch.receiver_position = receiver_position;
+        for (uint8_t prn = 1; prn <= 2; ++prn) {
+            Observation l1;
+            if (!makeSyntheticGpsL1Observation(
+                    nav, SatelliteId(GNSSSystem::GPS, prn), epoch.time,
+                    receiver_position, l1_bias_m[epoch_index], l1)) {
+                continue;
+            }
+            l1.has_doppler = true;
+            l1.doppler = 0.0;
+            epoch.addObservation(l1);
+            Observation l2 = l1;
+            l2.signal = SignalType::GPS_L2C;
+            l2.carrier_phase =
+                (l2.pseudorange + l2_bias_m[epoch_index]) /
+                constants::GPS_L2_WAVELENGTH;
+            epoch.addObservation(l2);
+        }
+        epochs.push_back(epoch);
+    }
+    return epochs;
+}
+
 // Common config for CMC integration tests: minimal DD-only problem, all
 // satellites pass (no elevation/SNR gating gets in the way of a controlled
 // synthetic scenario), matching the style of
@@ -1226,6 +1259,96 @@ TEST(FGOTest, GeometryFreeSlipShadowUsesDopplerToIsolateSignal) {
     EXPECT_EQ(shadow[1].doppler_isolated_event_pairs, 1);
     EXPECT_EQ(shadow[2].doppler_event_signals, 0);
     EXPECT_EQ(shadow[2].doppler_isolated_event_pairs, 0);
+}
+
+TEST(FGOTest, GeometryFreeSlipResetBreaksBothBandsAfterConfirmation) {
+    const NavigationData nav = makeSyntheticGpsNavigation(2);
+    const Vector3d rover_position(1113194.0, -4841695.0, 3985350.0);
+    const Vector3d base_position =
+        rover_position + Vector3d(-320.0, 180.0, 45.0);
+    const std::vector<double> rover_l1 = {0.0, 0.0, 0.40, 0.40};
+    const std::vector<double> rover_l2 = {0.0, 0.0, 0.00, 0.00};
+    const std::vector<double> base_bias(4, 0.0);
+    const auto rover_epochs = makeGeometryFreeObservationEpochs(
+        nav, rover_position, rover_l1, rover_l2);
+    const auto base_epochs = makeGeometryFreeObservationEpochs(
+        nav, base_position, base_bias, base_bias);
+
+    FGOProcessor::FGOConfig config = makeCmcTestConfig();
+    config.use_code_minus_carrier_screening = false;
+    config.use_multi_frequency_double_difference = true;
+    config.use_geometry_free_cycle_slip_reset = true;
+    config.geometry_free_cycle_slip_threshold_m = 0.05;
+    const auto problem = FGOProcessor(config).buildDoubleDifferenceProblem(
+        rover_epochs, base_epochs, nav, base_position);
+
+    std::map<SignalType, std::map<std::size_t, std::size_t>> arcs;
+    for (const auto& factor : problem.double_difference_carrier_factors) {
+        arcs[factor.signal][factor.epoch_index] = factor.ambiguity_index;
+    }
+    ASSERT_EQ(arcs[SignalType::GPS_L1CA].size(), 4u);
+    ASSERT_EQ(arcs[SignalType::GPS_L2C].size(), 4u);
+    EXPECT_EQ(arcs[SignalType::GPS_L1CA].at(0),
+              arcs[SignalType::GPS_L1CA].at(1));
+    EXPECT_EQ(arcs[SignalType::GPS_L1CA].at(1),
+              arcs[SignalType::GPS_L1CA].at(2));
+    EXPECT_NE(arcs[SignalType::GPS_L1CA].at(2),
+              arcs[SignalType::GPS_L1CA].at(3));
+    EXPECT_EQ(arcs[SignalType::GPS_L2C].at(0),
+              arcs[SignalType::GPS_L2C].at(1));
+    EXPECT_EQ(arcs[SignalType::GPS_L2C].at(1),
+              arcs[SignalType::GPS_L2C].at(2));
+    EXPECT_NE(arcs[SignalType::GPS_L2C].at(2),
+              arcs[SignalType::GPS_L2C].at(3));
+    // The same controlled L1 jump is present on both satellites; one is the
+    // DD target and one the reference. Geometry-free detection cannot identify
+    // the changed band, so both bands for both satellites are conservatively
+    // reset one epoch after detection.
+    EXPECT_EQ(problem.diagnostics.geometry_free_cycle_slip_resets, 4u);
+
+    config.use_geometry_free_cycle_slip_reset = false;
+    const auto control = FGOProcessor(config).buildDoubleDifferenceProblem(
+        rover_epochs, base_epochs, nav, base_position);
+    std::map<SignalType, std::map<std::size_t, std::size_t>> control_arcs;
+    for (const auto& factor : control.double_difference_carrier_factors) {
+        control_arcs[factor.signal][factor.epoch_index] =
+            factor.ambiguity_index;
+    }
+    EXPECT_EQ(control_arcs[SignalType::GPS_L1CA].at(1),
+              control_arcs[SignalType::GPS_L1CA].at(2));
+    EXPECT_EQ(control_arcs[SignalType::GPS_L2C].at(1),
+              control_arcs[SignalType::GPS_L2C].at(2));
+    EXPECT_EQ(control.diagnostics.geometry_free_cycle_slip_resets, 0u);
+}
+
+TEST(FGOTest, GeometryFreeSlipResetDefersToReceiverArcBreak) {
+    const NavigationData nav = makeSyntheticGpsNavigation(2);
+    const Vector3d rover_position(1113194.0, -4841695.0, 3985350.0);
+    const Vector3d base_position =
+        rover_position + Vector3d(-320.0, 180.0, 45.0);
+    const std::vector<double> rover_l1 = {0.0, 0.0, 0.40, 0.40};
+    const std::vector<double> rover_l2 = {0.0, 0.0, 0.00, 0.00};
+    const std::vector<double> base_bias(4, 0.0);
+    auto rover_epochs = makeGeometryFreeObservationEpochs(
+        nav, rover_position, rover_l1, rover_l2);
+    const auto base_epochs = makeGeometryFreeObservationEpochs(
+        nav, base_position, base_bias, base_bias);
+    for (auto& observation : rover_epochs[3].observations) {
+        observation.lli = 1;
+        observation.loss_of_lock = true;
+    }
+
+    FGOProcessor::FGOConfig config = makeCmcTestConfig();
+    config.use_code_minus_carrier_screening = false;
+    config.use_multi_frequency_double_difference = true;
+    config.use_geometry_free_cycle_slip_reset = true;
+    const auto problem = FGOProcessor(config).buildDoubleDifferenceProblem(
+        rover_epochs, base_epochs, nav, base_position);
+
+    // The epoch-2 GF event was pending, but the epoch-3 receiver LLI already
+    // created new arcs. The debounce must cancel rather than count a second,
+    // redundant GF-driven reset.
+    EXPECT_EQ(problem.diagnostics.geometry_free_cycle_slip_resets, 0u);
 }
 
 TEST(FGOTest, CmcJumpForcesAmbiguityArcBreak) {

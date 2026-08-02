@@ -78,6 +78,11 @@ namespace {
 
 using gtsam::Point3;
 using gtsam::Pose3;
+
+constexpr int kGfGuardMaxFixedAmbiguities = 6;
+constexpr double kGfGuardMaxRatio = 10.0;
+constexpr double kGfGuardMinDdprRmsM = 10.0;
+constexpr double kGfGuardMaxSppSeparationM = 25.0;
 using gtsam::Rot3;
 using gtsam::Symbol;
 using SharedNoise = gtsam::SharedNoiseModel;
@@ -4433,6 +4438,36 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                             ++result.diagnostics.fix_plausibility_hold_skips;
                             return true;
                         };
+                        // A geometry-free arc reset deliberately discards
+                        // carrier history. During the resulting low-redundancy
+                        // reacquisition, do not pin an integer candidate when
+                        // all independent code evidence is grossly inconsistent:
+                        // poor DD-code fit plus a fresh standalone SPP solution
+                        // over 25 m away. The ratio ceiling keeps this guard on
+                        // the ambiguous near-threshold fringe; well-observed
+                        // high-ratio fixes are unaffected.
+                        const auto holdBlockedByGfGrossSpp = [&]() -> bool {
+                            if (!config.use_geometry_free_cycle_slip_reset ||
+                                subset > kGfGuardMaxFixedAmbiguities ||
+                                !std::isfinite(ratio) || ratio > kGfGuardMaxRatio ||
+                                !std::isfinite(ddpr_rms) ||
+                                ddpr_rms < kGfGuardMinDdprRmsM ||
+                                !epoch_diagnostics[i].fresh_spp_solution ||
+                                !epoch_diagnostics[i]
+                                     .spp_seed_position_ecef.allFinite()) {
+                                return false;
+                            }
+                            const Point3 fix_ant = epoch_has_fixed[i]
+                                                       ? Point3(epoch_fixed_position[i])
+                                                       : provisional_fixed_ant;
+                            if ((Eigen::Vector3d(fix_ant) -
+                                 epoch_diagnostics[i].spp_seed_position_ecef)
+                                    .norm() <= kGfGuardMaxSppSeparationM) {
+                                return false;
+                            }
+                            ++result.diagnostics.fix_plausibility_hold_skips;
+                            return true;
+                        };
                         const bool temporally_validated_partial_hold =
                             config.use_fixed_history_dr_validation &&
                             fixed_history_dr_evaluated && fixed_history_dr_pass;
@@ -4451,7 +4486,8 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                             ratio > config.ambiguity_hold_ratio_threshold &&
                             subset >= config.ambiguity_hold_min_fixed &&
                             !holdBlockedByPlausibility() &&
-                            !holdBlockedByImuAperture()) {
+                            !holdBlockedByImuAperture() &&
+                            !holdBlockedByGfGrossSpp()) {
                             gtsam::NonlinearFactorGraph hold_factors;
                             const auto hold_noise = gtsam::noiseModel::Isotropic::Sigma(
                                 1, config.ambiguity_hold_sigma_cycles);
@@ -4915,11 +4951,61 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 demote = false;
                 ++result.diagnostics.fix_plausibility_spp_model_reprieves;
             }
+            // Fail closed on the same gross code inconsistency used above to
+            // block new holds after a geometry-free arc reset. Apply this
+            // after all reprieves so correlated graph/IMU or surplus evidence
+            // cannot overrule a fresh independent SPP disagreement exceeding
+            // 25 m in the low-redundancy, poor-DDPR regime.
+            const bool gf_gross_spp_demote =
+                config.use_geometry_free_cycle_slip_reset &&
+                epoch_fixed_count[i] <= kGfGuardMaxFixedAmbiguities &&
+                std::isfinite(epoch_ratio[i]) &&
+                epoch_ratio[i] <= kGfGuardMaxRatio &&
+                std::isfinite(ddpr_rms) &&
+                ddpr_rms >= kGfGuardMinDdprRmsM &&
+                epoch_diagnostics[i].fresh_spp_solution &&
+                epoch_diagnostics[i].spp_seed_position_ecef.allFinite() &&
+                (Eigen::Vector3d(fix_ant) -
+                 epoch_diagnostics[i].spp_seed_position_ecef).norm() >
+                    kGfGuardMaxSppSeparationM;
+            if (gf_gross_spp_demote) {
+                demote = true;
+                ++result.diagnostics.geometry_free_fix_guard_demotions;
+            }
             if (demote) {
                 epoch_fixed[i] = false;
                 epoch_fixed_history_eligible[i] = false;
                 epoch_fixed_count[i] = 0;
                 epoch_has_fixed[i] = false;
+                ++result.diagnostics.fix_plausibility_demotions;
+            }
+        }
+
+        // The GF reset's integrity guard is intrinsic to that opt-in graph
+        // change. Keep it active even when the broader, independently
+        // configurable fix-plausibility demotion feature is disabled.
+        if (!config.use_fix_plausibility_demotion &&
+            config.use_geometry_free_cycle_slip_reset && epoch_fixed[i]) {
+            const Point3 fix_ant = epoch_has_fixed[i]
+                                       ? Point3(epoch_fixed_position[i])
+                                       : antennaOf(pose_i);
+            const bool gf_gross_spp_demote =
+                epoch_fixed_count[i] <= kGfGuardMaxFixedAmbiguities &&
+                std::isfinite(epoch_ratio[i]) &&
+                epoch_ratio[i] <= kGfGuardMaxRatio &&
+                std::isfinite(ddpr_rms) &&
+                ddpr_rms >= kGfGuardMinDdprRmsM &&
+                epoch_diagnostics[i].fresh_spp_solution &&
+                epoch_diagnostics[i].spp_seed_position_ecef.allFinite() &&
+                (Eigen::Vector3d(fix_ant) -
+                 epoch_diagnostics[i].spp_seed_position_ecef).norm() >
+                    kGfGuardMaxSppSeparationM;
+            if (gf_gross_spp_demote) {
+                epoch_fixed[i] = false;
+                epoch_fixed_history_eligible[i] = false;
+                epoch_fixed_count[i] = 0;
+                epoch_has_fixed[i] = false;
+                ++result.diagnostics.geometry_free_fix_guard_demotions;
                 ++result.diagnostics.fix_plausibility_demotions;
             }
         }
