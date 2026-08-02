@@ -577,6 +577,18 @@ struct SingleDifferenceCarrierResidual {
     Vector3d los = Vector3d::Zero();
 };
 
+struct GeometryFreeSlipState {
+    GNSSTime time;
+    double geometry_free_m = 0.0;
+    std::size_t first_rover_ambiguity_index = 0;
+    std::size_t second_rover_ambiguity_index = 0;
+};
+
+struct GeometryFreePendingReset {
+    GNSSTime time;
+    std::size_t rover_ambiguity_index = 0;
+};
+
 std::map<CarrierKey, PreparedCarrierObservation> prepareCarrierObservationsForReceiver(
     const ObservationData& epoch,
     const NavigationData& nav,
@@ -1598,6 +1610,13 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
     // reference documented on the config knob).
     std::map<CarrierKey, std::size_t> cmc_last_rover_ambiguity_index;
     std::size_t cmc_jump_reset_total = 0;
+    using GeometryFreePairKey =
+        std::tuple<SatelliteId, SignalType, SignalType>;
+    std::map<GeometryFreePairKey, GeometryFreeSlipState>
+        geometry_free_slip_states;
+    std::map<CarrierKey, GeometryFreePendingReset>
+        geometry_free_pending_resets;
+    std::size_t geometry_free_slip_reset_total = 0;
     std::size_t cmc_level_exclusion_total = 0;
     // FGOConfig::cmc_aware_reference_selection: count of DD reference
     // picks steered away from a CMC-level-excluded candidate this run.
@@ -1715,6 +1734,7 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
         // CP loop's ambiguity-arc bookkeeping (jump forces a new arc).
         std::set<CarrierKey> cmc_level_exclude_this_epoch;
         std::set<CarrierKey> cmc_jump_reset_this_epoch;
+        std::set<CarrierKey> geometry_free_reset_this_epoch;
         if (config_.use_code_minus_carrier_screening &&
             rover_it != rover_carriers_by_epoch.end()) {
             for (const auto* rover_factor : rover_it->second) {
@@ -1785,6 +1805,131 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                             (1.0 - alpha) * state.baseline_m + alpha * cmc;
                     }
                 }
+            }
+        }
+
+        if (config_.use_geometry_free_cycle_slip_reset &&
+            rover_it != rover_carriers_by_epoch.end()) {
+            using GeometryFreeSample =
+                std::pair<const CarrierPhaseFactor*,
+                          const PreparedCarrierObservation*>;
+            std::map<SatelliteId, std::map<SignalType, GeometryFreeSample>>
+                samples_by_satellite;
+            std::map<CarrierKey, GeometryFreeSample> samples_by_key;
+            for (const auto* rover_factor : rover_it->second) {
+                const CarrierKey key{rover_factor->satellite,
+                                     rover_factor->signal};
+                const auto base_it = base_carriers.find(key);
+                if (base_it != base_carriers.end()) {
+                    const GeometryFreeSample sample{rover_factor,
+                                                    &base_it->second};
+                    samples_by_satellite[rover_factor->satellite]
+                                        [rover_factor->signal] = sample;
+                    samples_by_key[key] = sample;
+                }
+            }
+            const double confirmation_s = std::max(
+                0.0, config_.geometry_free_cycle_slip_confirmation_s);
+            for (auto pending = geometry_free_pending_resets.begin();
+                 pending != geometry_free_pending_resets.end();) {
+                const auto sample = samples_by_key.find(pending->first);
+                if (sample == samples_by_key.end() ||
+                    sample->second.first->ambiguity_index !=
+                        pending->second.rover_ambiguity_index) {
+                    pending = geometry_free_pending_resets.erase(pending);
+                    continue;
+                }
+                const double age_s = problem.epochs[epoch_index].time -
+                                     pending->second.time;
+                if (age_s >= confirmation_s) {
+                    geometry_free_reset_this_epoch.insert(pending->first);
+                    ++geometry_free_slip_reset_total;
+                    pending = geometry_free_pending_resets.erase(pending);
+                    continue;
+                }
+                ++pending;
+            }
+            std::set<CarrierKey> slip_bands_this_epoch;
+            for (const auto& [satellite, samples_by_signal] :
+                 samples_by_satellite) {
+                std::vector<GeometryFreeSample> samples;
+                samples.reserve(samples_by_signal.size());
+                for (const auto& [signal, sample] : samples_by_signal) {
+                    (void)signal;
+                    samples.push_back(sample);
+                }
+                for (std::size_t first = 0; first < samples.size(); ++first) {
+                    for (std::size_t second = first + 1;
+                         second < samples.size(); ++second) {
+                        const auto* first_rover = samples[first].first;
+                        const auto* second_rover = samples[second].first;
+                        const auto* first_base = samples[first].second;
+                        const auto* second_base = samples[second].second;
+                        const double first_sd_phase_m =
+                            first_rover->model_debug.raw_carrier_m -
+                            first_base->model_debug.raw_carrier_m;
+                        const double second_sd_phase_m =
+                            second_rover->model_debug.raw_carrier_m -
+                            second_base->model_debug.raw_carrier_m;
+                        const double geometry_free_m =
+                            first_sd_phase_m - second_sd_phase_m;
+                        const GeometryFreePairKey pair_key{
+                            satellite, first_rover->signal,
+                            second_rover->signal};
+                        const auto previous =
+                            geometry_free_slip_states.find(pair_key);
+                        if (previous != geometry_free_slip_states.end()) {
+                            const double dt = problem.epochs[epoch_index].time -
+                                              previous->second.time;
+                            const bool same_rover_arcs =
+                                previous->second.first_rover_ambiguity_index ==
+                                    first_rover->ambiguity_index &&
+                                previous->second.second_rover_ambiguity_index ==
+                                    second_rover->ambiguity_index;
+                            if (same_rover_arcs && dt > 0.0 &&
+                                (max_segment_gap <= 0.0 ||
+                                 dt <= max_segment_gap) &&
+                                std::abs(geometry_free_m -
+                                         previous->second.geometry_free_m) >
+                                    std::max(
+                                        0.0,
+                                        config_.geometry_free_cycle_slip_threshold_m)) {
+                                const CarrierKey first_key{
+                                    satellite, first_rover->signal};
+                                const CarrierKey second_key{
+                                    satellite, second_rover->signal};
+                                slip_bands_this_epoch.insert(first_key);
+                                slip_bands_this_epoch.insert(second_key);
+                            }
+                        }
+                        geometry_free_slip_states[pair_key] = {
+                            problem.epochs[epoch_index].time,
+                            geometry_free_m,
+                            first_rover->ambiguity_index,
+                            second_rover->ambiguity_index};
+                    }
+                }
+            }
+            for (const auto& key : slip_bands_this_epoch) {
+                if (geometry_free_reset_this_epoch.count(key) != 0) {
+                    continue;
+                }
+                const auto sample = samples_by_key.find(key);
+                if (sample == samples_by_key.end()) {
+                    continue;
+                }
+                const auto pending = geometry_free_pending_resets.find(key);
+                if (pending != geometry_free_pending_resets.end()) {
+                    // A second discontinuity before confirmation is
+                    // ambiguous (often an isolated outlier returning to its
+                    // former level), so fail closed instead of restarting the
+                    // timer.
+                    geometry_free_pending_resets.erase(pending);
+                    continue;
+                }
+                geometry_free_pending_resets[key] = {
+                    problem.epochs[epoch_index].time,
+                    sample->second.first->ambiguity_index};
             }
         }
 
@@ -2205,6 +2350,12 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
                     // breaks the integer ambiguity).
                     start_new_segment = true;
                 }
+                if (geometry_free_reset_this_epoch.count(
+                        CarrierKey{satellite->satellite, satellite->signal}) > 0 ||
+                    geometry_free_reset_this_epoch.count(
+                        CarrierKey{reference->satellite, reference->signal}) > 0) {
+                    start_new_segment = true;
+                }
 
                 if (start_new_segment) {
                     AmbiguityState ambiguity;
@@ -2465,6 +2616,8 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
     }
 
     problem.diagnostics.code_minus_carrier_jump_resets = cmc_jump_reset_total;
+    problem.diagnostics.geometry_free_cycle_slip_resets =
+        geometry_free_slip_reset_total;
     problem.diagnostics.code_minus_carrier_level_exclusions =
         cmc_level_exclusion_total;
     problem.diagnostics.cmc_ref_avoided_count = cmc_ref_avoided_total;
@@ -2705,6 +2858,8 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
         problem.diagnostics.double_difference_rejected_no_reference;
     result.diagnostics.code_minus_carrier_jump_resets =
         problem.diagnostics.code_minus_carrier_jump_resets;
+    result.diagnostics.geometry_free_cycle_slip_resets =
+        problem.diagnostics.geometry_free_cycle_slip_resets;
     result.diagnostics.code_minus_carrier_level_exclusions =
         problem.diagnostics.code_minus_carrier_level_exclusions;
     result.diagnostics.cmc_ref_avoided_count =

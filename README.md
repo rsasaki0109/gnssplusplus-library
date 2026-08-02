@@ -85,29 +85,50 @@ versus [inuex35/tightly-coupled-gnss-imu-fgo](https://github.com/inuex35/tightly
 
 | Run | libgnss++ <50cm | Reference <50cm | libgnss++ fix | Reference fix | libgnss++ fixed RMS | Reference fixed RMS |
 |---|---:|---:|---:|---:|---:|---:|
-| Tokyo run1 | **57.0%** | 56.7% | **49.8%** | 49.5% | **0.662 m** | 0.815 m |
-| Tokyo run2 | **81.2%** | 69.9% | **72.7%** | 60.8% | **0.217 m** | 0.277 m |
-| Tokyo run3 | **73.0%** | 67.9% | **71.7%** | 59.4% | 0.257 m | **0.211 m** |
+| Tokyo run1 | 54.9% | **56.7%** | **53.8%** | 49.5% | 1.180 m | **0.815 m** |
+| Tokyo run2 | **85.7%** | 69.9% | **78.6%** | 60.8% | **0.109 m** | 0.277 m |
+| Tokyo run3 | **77.5%** | 67.9% | **69.3%** | 59.4% | **0.125 m** | 0.211 m |
 
 ![Tokyo run1 GNSS/IMU FGO](docs/gnss_imu_fgo_tokyo_run1.png)
 ![Tokyo run2 GNSS/IMU FGO](docs/gnss_imu_fgo_tokyo_run2.png)
 ![Tokyo run3 GNSS/IMU FGO](docs/gnss_imu_fgo_tokyo_run3.png)
 
-libgnss++ beats the reference on <50 cm fraction and fix-rate on all three
-runs, and on fixed-only RMS on two of three runs (run3's fixed RMS remains
-behind the reference, over the largest fixed population of the three: 10965
-epochs). Every feature is opt-in and the library is unchanged when built
-without GTSAM. Reproduce with `gnss_fgo_parity` (requires a GTSAM build) and
-the shipping preset:
+With the geometry-free reset below, libgnss++ exceeds the reference's raw FIX
+rate on all three runs, and its <50 cm fraction and fixed-only horizontal RMS
+on two of three. Raw FIX rate alone can hide wrong integer solutions, so the
+same clean full-length replays were also scored with the PPC official segment
+metric (0.11 s matching tolerance, 0.5 m correctness threshold):
+
+| Run | Correct FIX distance, baseline -> GF reset | Wrong FIX distance, baseline -> GF reset | Official score, baseline -> GF reset | GF guard demotions |
+|---|---:|---:|---:|---:|
+| Tokyo run1 | 25.656% -> **33.322%** | 23.765% -> **21.221%** | 30.823% -> **39.375%** | 14 |
+| Tokyo run2 | 60.304% -> **74.599%** | 12.573% -> **1.386%** | 65.264% -> **81.615%** | 0 |
+| Tokyo run3 | 59.175% -> **65.099%** | 7.918% -> **1.818%** | 64.081% -> **71.207%** | 17 |
+| Distance-weighted aggregate | 49.181% -> **57.409%** | 13.741% -> **7.650%** | 54.178% -> **63.692%** | 31 |
+
+Wrong FIX/FIX falls from 21.839% to 11.759% in the aggregate, while matched
+positioning distance is unchanged at 99.682%. Fixed-only horizontal
+RMS/P95 improves from 1.267/0.892 m to 1.180/0.877 m on run1, from
+0.225/0.600 m to 0.109/0.155 m on run2, and from 0.257/0.539 m to
+0.125/0.079 m on run3. Vertical absolute P95 also improves on every run
+(1.478 -> 1.463 m, 0.878 -> 0.141 m, and 1.152 -> 0.253 m). Cached-input
+solver wall times on the validation host were 463.5, 584.6, and 844.9 s;
+these are workload reports, not controlled microbenchmarks.
+
+Every new behavior is opt-in and non-GTSAM builds are unchanged. Reproduce
+with `gnss_fgo_parity` (requires a GTSAM build) and the evaluated preset:
 
 ```
 --imu <run>/imu.csv --fixed-lag 5 --multi-freq --partial-ar --hold \
---elev-mask 25 --snr-mask 30 --imu-preset-tactical --cmc --cmc-level 0.75 \
---cp-hold --cp-hold-res 2.0 --exc-recovery --ddpr-anchor --fde --varerr \
---fix-demote --fix-demote-dist 5 --fix-demote-res 25 --fix-demote-posthold 5 \
---imu-ratio-relaxed 1.5 --surplus-validation --surplus-validation-min-n 3 \
+--elev-mask 25 --snr-mask 30 --cmc --cmc-level 0.75 --cp-hold \
+--exc-recovery --ddpr-anchor --fde --varerr --fix-demote \
+--fix-demote-res 25 --fix-demote-posthold 5 \
+--fix-demote-surplus-crosscheck --fix-demote-surplus-anchor-reprieve \
+--fix-demote-spp-model-reprieve --surplus-validation \
+--surplus-validation-min-n 3 \
 --surplus-validation-aperture-lt1 0.15 --surplus-validation-aperture-1to2 0.3 \
---surplus-validation-aperture-gt2 0.45
+--surplus-validation-aperture-gt2 0.45 --anchor-gated-unfix-reset \
+--imu-ratio-relaxed 1.5 --gf-slip-reset
 ```
 
 With `--dump-csv <path>`, the epoch table includes the ambiguity-candidate
@@ -142,7 +163,19 @@ and the multi-frequency arc checks in
 [RTKLIB](https://github.com/tomojitakasu/RTKLIB/blob/master/src/rtkpos.c).
 It ignores gaps and arcs already restarted by the existing LLI/CMC logic,
 then reports how many unchanged DD ambiguity arcs remain exposed after a
-new jump. It never restarts an arc or changes the factor graph.
+new jump. Without `--gf-slip-reset` it never restarts an arc or changes the
+factor graph.
+
+`--gf-slip-reset` turns the shadow into a conservative arc-integrity action.
+A detected jump is held for 1.0 s and cancelled if a receiver-side LLI, gap,
+or dropout naturally replaces the arc first. If the same arc survives,
+both bands' DD ambiguities are restarted: the geometry-free combination proves
+that one integer changed but cannot safely identify which one. During the
+resulting low-redundancy reacquisition, a FIX is neither held nor reported when
+all independent code checks agree it is grossly implausible (at most six fixed
+ambiguities, ratio at most 10, DDPR RMS at least 10 m, and a fresh SPP position
+more than 25 m away). This guard is intrinsic to the GF reset even when the
+broader `--fix-demote` feature is disabled.
 
 The same shadow also compares each rover/base single-difference phase change
 with trapezoid-integrated Doppler at the existing RTK detector's 0.20 m

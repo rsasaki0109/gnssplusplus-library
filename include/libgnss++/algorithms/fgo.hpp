@@ -386,6 +386,18 @@ public:
         bool monitor_ratio_impact_partial_ar = false;
         // Diagnostic-only geometry-free slip/arc-continuity shadow.
         bool monitor_geometry_free_cycle_slip = false;
+        // When a rover/base single-difference geometry-free combination jumps
+        // while the underlying rover arcs remain continuous, break both bands'
+        // DD arcs after the confirmation interval below. Resetting both bands
+        // is conservative because the geometry-free combination cannot identify
+        // which integer changed. This is opt-in because it changes the graph;
+        // the monitor above remains diagnostic-only.
+        bool use_geometry_free_cycle_slip_reset = false;
+        double geometry_free_cycle_slip_threshold_m = 0.05;
+        // Debounce the inferred slip so an imminent receiver-side LLI, gap, or
+        // dropout arc break can supersede it. The reset fires only if the same
+        // receiver arc is still alive after this interval.
+        double geometry_free_cycle_slip_confirmation_s = 1.0;
         // GICI-style PAR: prefer ambiguities with the smallest marginal
         // variance and do not attempt a subset whose least precise member
         // exceeds this standard deviation in cycles (<=0 disables the gate).
@@ -1631,6 +1643,7 @@ public:
         std::size_t tdcp_rejected_loss_of_lock = 0;
         std::size_t tdcp_rejected_code_phase_jump = 0;
         std::size_t code_minus_carrier_jump_resets = 0;       ///< CMC screening: arc breaks forced
+        std::size_t geometry_free_cycle_slip_resets = 0;      ///< confirmed geometry-free band resets
         std::size_t code_minus_carrier_level_exclusions = 0;  ///< CMC screening: (sat,signal) epochs excluded
         std::size_t cmc_ref_avoided_count = 0;  ///< cmc_aware_reference_selection: references changed away from a CMC-excluded candidate
     };
@@ -1810,6 +1823,7 @@ public:
         std::size_t ambiguity_hold_arcs = 0;    ///< 2e: distinct arcs pinned at their integer
         std::size_t quality_gated_epochs = 0;   ///< epochs where the quality gates suppressed fixing
         std::size_t code_minus_carrier_jump_resets = 0;       ///< CMC screening: arc breaks forced
+        std::size_t geometry_free_cycle_slip_resets = 0;      ///< confirmed geometry-free band resets
         std::size_t code_minus_carrier_level_exclusions = 0;  ///< CMC screening: (sat,signal) epochs excluded
         std::size_t cmc_ref_avoided_count = 0;  ///< cmc_aware_reference_selection: references changed away from a CMC-excluded candidate
         // --- CP-hold / sanity FSM diagnostics (use_cp_hold_recovery) ---
@@ -1833,8 +1847,9 @@ public:
         std::size_t ambiguity_generation_bumps_stale_pin = 0;
         // --- Stale-pin invalidation diagnostics (use_stale_pin_invalidation) ---
         std::size_t stale_pin_invalidations = 0;  ///< pinned arcs released per-arc at a trigger epoch
-        // --- Fix plausibility demotion diagnostics (use_fix_plausibility_demotion) ---
-        std::size_t fix_plausibility_demotions = 0;  ///< FIXED epochs demoted to FLOAT (IMU gap or anchor gap)
+        // --- Fix plausibility demotion diagnostics ---
+        std::size_t fix_plausibility_demotions = 0;  ///< FIXED epochs demoted to FLOAT by general or intrinsic GF integrity guards
+        std::size_t geometry_free_fix_guard_demotions = 0;  ///< low-redundancy GF-reset fixes rejected by gross SPP disagreement
         std::size_t fix_plausibility_anchor_demotions = 0;  ///< of which via the DDPR-LS anchor gap
         std::size_t fix_plausibility_anchor_gross_gated = 0;  ///< anchor-gap evaluations skipped by the gross-offender gate (fix_demote_anchor_gross)
         std::size_t fix_plausibility_hold_skips = 0;  ///< fix-and-hold pinnings skipped on implausible epochs
