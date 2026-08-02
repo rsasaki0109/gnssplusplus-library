@@ -98,6 +98,7 @@ struct Args {
     bool ratio_impact_monitor = false;
     bool gf_slip_reset = false;
     bool conditional_mf_shadow = false;
+    bool multiepoch_ar_shadow = false;
     bool variance_par = false;
     bool gici_par = false;          // GICI-style strict PAR + continuous-unfix reacquisition profile
     bool anchor_gated_unfix_reset = false;
@@ -260,6 +261,10 @@ Args parseArgs(int argc, char** argv) {
         }
         if (a == "--conditional-mf-shadow") {
             args.conditional_mf_shadow = true;
+            continue;
+        }
+        if (a == "--multiepoch-ar-shadow") {
+            args.multiepoch_ar_shadow = true;
             continue;
         }
         if (a == "--integer-constrained-reoptimization") {
@@ -804,6 +809,9 @@ libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
     }
     if (args.conditional_mf_shadow) {
         config.monitor_conditional_multiband_ar = true;
+    }
+    if (args.multiepoch_ar_shadow) {
+        config.monitor_multiepoch_ar = true;
     }
     if (args.integer_constrained_reoptimization) {
         config.use_integer_constrained_reoptimization = true;
@@ -1515,6 +1523,12 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
            "lambda_candidate_integer_agreements,"
            "lambda_candidate_integer_agreement_fraction,"
            "lambda_candidate_integer_consensus_streak,"
+           "multiepoch_ar_eval,multiepoch_ar_n,multiepoch_ar_support_epochs,"
+           "multiepoch_ar_ratio,multiepoch_ar_bsr,multiepoch_ar_history_agree,"
+           "multiepoch_ar_ratio_pass,multiepoch_ar_candidate_valid,"
+           "multiepoch_ar_x_ecef_m,multiepoch_ar_y_ecef_m,"
+           "multiepoch_ar_z_ecef_m,multiepoch_ar_float_sep_m,"
+           "multiepoch_ar_imu_sep_m,"
            "gf_slip_events,gf_slip_max_jump_m,gf_slip_tainted_ambiguities,"
            "doppler_slip_signals,doppler_slip_max_innovation_m,"
            "gf_doppler_isolated_pairs,"
@@ -1596,6 +1610,7 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
         if (si < r.epoch_diagnostics.size()) {
             const auto& d = r.epoch_diagnostics[si];
             const auto& conditional = d.conditional_multiband_ar_shadow;
+            const auto& multiepoch = d.multiepoch_ar_shadow;
             out << ',' << d.effective_ratio_threshold
                 << ',' << s.num_fixed_ambiguities
                 << ',' << static_cast<int>(d.ar_outcome)
@@ -1630,6 +1645,19 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
                 << ',' << d.lambda_candidate_integer_agreements
                 << ',' << d.lambda_candidate_integer_agreement_fraction
                 << ',' << d.lambda_candidate_integer_consensus_streak
+                << ',' << (multiepoch.evaluated ? 1 : 0)
+                << ',' << multiepoch.persistent_ambiguities
+                << ',' << multiepoch.minimum_support_epochs
+                << ',' << multiepoch.ratio
+                << ',' << multiepoch.bootstrapped_success_rate
+                << ',' << (multiepoch.history_integers_agree ? 1 : 0)
+                << ',' << (multiepoch.ratio_passed ? 1 : 0)
+                << ',' << (multiepoch.candidate_available ? 1 : 0)
+                << ',' << multiepoch.candidate_position_ecef.x()
+                << ',' << multiepoch.candidate_position_ecef.y()
+                << ',' << multiepoch.candidate_position_ecef.z()
+                << ',' << multiepoch.float_separation_m
+                << ',' << multiepoch.imu_separation_m
                 << ',' << d.gf_slip_shadow_event_pairs
                 << ',' << d.gf_slip_shadow_max_jump_m
                 << ',' << d.gf_slip_shadow_tainted_ambiguities
@@ -2630,6 +2658,8 @@ int main(int argc, char** argv) {
                    << (config.monitor_ratio_impact_partial_ar ? "on" : "off")
                    << ", conditional_mf_shadow="
                    << (config.monitor_conditional_multiband_ar ? "on" : "off")
+                   << ", multiepoch_ar_shadow="
+                   << (config.monitor_multiepoch_ar ? "on" : "off")
                    << ")\n"
                   << "  IMU ratio aperture: " << (args.imu_ratio_aperture ? "on" : "off")
                   << " (accepted=" << fl.diagnostics.imu_aided_ratio_accepts

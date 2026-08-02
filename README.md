@@ -304,6 +304,15 @@ Historical full-run candidate auditing found that ratio/BSR passage alone was
 not a safe promotion rule, so activation remains deliberately unavailable.
 See the [multi-band AR audit](docs/fgo_multiband_ar_fix_rate_audit.md).
 
+`--multiepoch-ar-shadow` adds an independent temporal partial-AR experiment.
+Only integer candidates that remain identical for at least three consecutive
+epochs on the same uninterrupted DD ambiguity arc enter a reduced LAMBDA
+search (minimum four ambiguities). The CSV reports the persistent subset size,
+history depth, ratio, bootstrapped success rate, history agreement, candidate
+position, and float/IMU separations as `multiepoch_ar_*`. It never changes the
+graph, hold state, solution, ratio, or FIX/FLOAT label. See the
+[multi-epoch AR audit](docs/fgo_multiepoch_ar_fix_rate_audit.md).
+
 Across the three courses, distance-weighted correct FIX improved from
 57.0731% at the pre-reprieve baseline to approximately **58.2153%**, while
 distance-weighted wrong FIX fell from 7.7043% to **7.0089%**. The policy is
