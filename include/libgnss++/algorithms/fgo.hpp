@@ -389,6 +389,13 @@ public:
         // ambiguity distribution on those integers. Never changes estimator
         // state or the exported FIX/FLOAT decision.
         bool monitor_conditional_multiband_ar = false;
+        // Diagnostic-only multi-epoch AR shadow. Ambiguity integers must be
+        // identical on the same uninterrupted DD arc for the configured
+        // number of consecutive epochs before they enter a fresh, reduced
+        // LAMBDA search. Never changes graph state or FIX/FLOAT output.
+        bool monitor_multiepoch_ar = false;
+        int multiepoch_ar_min_consensus_epochs = 3;
+        int multiepoch_ar_min_ambiguities = 4;
         // Diagnostic-only geometry-free slip/arc-continuity shadow.
         bool monitor_geometry_free_cycle_slip = false;
         // When a rover/base single-difference geometry-free combination jumps
@@ -2039,6 +2046,22 @@ public:
         double imu_separation_m = 0.0;
     };
 
+    /// Counterfactual LAMBDA result using only ambiguity arcs whose integer
+    /// candidate has persisted across multiple consecutive epochs.
+    struct MultiEpochArShadow {
+        bool evaluated = false;
+        int persistent_ambiguities = 0;
+        int minimum_support_epochs = 0;
+        double ratio = 0.0;
+        double bootstrapped_success_rate = 0.0;
+        bool history_integers_agree = false;
+        bool ratio_passed = false;
+        bool candidate_available = false;
+        Vector3d candidate_position_ecef = Vector3d::Zero();
+        double float_separation_m = 0.0;
+        double imu_separation_m = 0.0;
+    };
+
     /// Per-epoch fixed-lag integrity state.  These values expose why an epoch
     /// did or did not fix, rather than only reporting the final FIX/FLOAT label.
     struct FGOEpochDiagnostics {
@@ -2098,6 +2121,7 @@ public:
         double doppler_slip_shadow_max_innovation_m = 0.0;
         int gf_doppler_shadow_isolated_pairs = 0;
         ConditionalMultibandArShadow conditional_multiband_ar_shadow;
+        MultiEpochArShadow multiepoch_ar_shadow;
         bool ratio_impact_evaluated = false;
         int ratio_impact_trials = 0;
         double ratio_impact_best_ratio = 0.0;

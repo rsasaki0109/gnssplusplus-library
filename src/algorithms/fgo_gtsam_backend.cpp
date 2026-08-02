@@ -1325,6 +1325,12 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
     std::size_t previous_lambda_candidate_epoch =
         std::numeric_limits<std::size_t>::max();
     int lambda_candidate_integer_consensus_streak = 0;
+    struct MultiEpochIntegerHistory {
+        int integer = 0;
+        int consecutive_epochs = 0;
+        std::size_t last_epoch = std::numeric_limits<std::size_t>::max();
+    };
+    std::map<std::size_t, MultiEpochIntegerHistory> multiepoch_integer_history;
 
     // Reference state.effective_cp_hold_epochs(): the configured CP-hold
     // length, suppressed to 0 while the DDPR-anchor bootstrap countdown is
@@ -4679,6 +4685,140 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                             }
                         }
                         break;  // validated subset found
+                    }
+
+                    // Multi-epoch AR shadow. Select only uninterrupted DD
+                    // arcs whose integer candidate has persisted for the
+                    // configured number of epochs, then run LAMBDA again on
+                    // their current joint marginal. This is deliberately
+                    // read-only: it cannot add factors, hold ambiguities, or
+                    // alter epoch_fixed/epoch_ratio.
+                    if (config.monitor_multiepoch_ar &&
+                        !lambda_candidate_cycles_this_epoch.empty()) {
+                        std::vector<int> persistent_order;
+                        int minimum_support = std::numeric_limits<int>::max();
+                        for (int candidate = 0; candidate < n; ++candidate) {
+                            const std::size_t ambiguity_index =
+                                epoch_amb_indices[candidate];
+                            const auto current =
+                                lambda_candidate_cycles_this_epoch.find(
+                                    ambiguity_index);
+                            if (current ==
+                                lambda_candidate_cycles_this_epoch.end()) {
+                                continue;
+                            }
+                            const auto history = multiepoch_integer_history.find(
+                                ambiguity_index);
+                            if (history == multiepoch_integer_history.end() ||
+                                history->second.last_epoch + 1 != i ||
+                                history->second.integer != current->second) {
+                                continue;
+                            }
+                            const int support =
+                                history->second.consecutive_epochs + 1;
+                            if (support >=
+                                std::max(2,
+                                    config.multiepoch_ar_min_consensus_epochs)) {
+                                persistent_order.push_back(candidate);
+                                minimum_support = std::min(minimum_support, support);
+                            }
+                        }
+
+                        auto& shadow = epoch_diagnostics[i].multiepoch_ar_shadow;
+                        shadow.persistent_ambiguities =
+                            static_cast<int>(persistent_order.size());
+                        shadow.minimum_support_epochs =
+                            minimum_support == std::numeric_limits<int>::max()
+                                ? 0
+                                : minimum_support;
+                        if (shadow.persistent_ambiguities >=
+                            std::max(1, config.multiepoch_ar_min_ambiguities)) {
+                            shadow.evaluated = true;
+                            const int np = shadow.persistent_ambiguities;
+                            Eigen::VectorXd persistent_float(np);
+                            Eigen::MatrixXd persistent_q(np, np);
+                            Eigen::MatrixXd persistent_pos(3, np);
+                            for (int r = 0; r < np; ++r) {
+                                persistent_float(r) = float_amb(persistent_order[r]);
+                                persistent_pos.col(r) = pos_amb.col(persistent_order[r]);
+                                for (int c = 0; c < np; ++c) {
+                                    persistent_q(r, c) =
+                                        q_amb(persistent_order[r],
+                                              persistent_order[c]);
+                                }
+                            }
+                            LambdaCandidateDiagnostics persistent_diagnostics;
+                            if (lambdaSearchTopK(persistent_float, persistent_q, 2,
+                                                 persistent_diagnostics)) {
+                                const double best =
+                                    persistent_diagnostics.squared_residuals(0);
+                                shadow.ratio = best > 0.0
+                                    ? persistent_diagnostics.squared_residuals(1) /
+                                          best
+                                    : 0.0;
+                                shadow.bootstrapped_success_rate =
+                                    persistent_diagnostics.bootstrapped_success_rate;
+                                shadow.ratio_passed = std::isfinite(shadow.ratio) &&
+                                    (config.lambda_ratio_threshold <= 0.0 ||
+                                     shadow.ratio > config.lambda_ratio_threshold);
+                                shadow.history_integers_agree = true;
+                                for (int r = 0; r < np; ++r) {
+                                    const std::size_t ambiguity_index =
+                                        epoch_amb_indices[persistent_order[r]];
+                                    const int resolved = static_cast<int>(std::lround(
+                                        persistent_diagnostics.candidates(r, 0)));
+                                    if (resolved !=
+                                        lambda_candidate_cycles_this_epoch.at(
+                                            ambiguity_index)) {
+                                        shadow.history_integers_agree = false;
+                                        break;
+                                    }
+                                }
+                                const Eigen::LDLT<Eigen::MatrixXd> ldlt(persistent_q);
+                                if (ldlt.info() == Eigen::Success) {
+                                    const Eigen::VectorXd correction = ldlt.solve(
+                                        persistent_float -
+                                        persistent_diagnostics.candidates.col(0));
+                                    const Eigen::Vector3d position_delta =
+                                        persistent_pos * correction;
+                                    if (correction.allFinite() &&
+                                        position_delta.allFinite()) {
+                                        shadow.candidate_position_ecef =
+                                            Eigen::Vector3d(antennaOf(pose_i)) -
+                                            position_delta;
+                                        shadow.candidate_available = true;
+                                        shadow.float_separation_m =
+                                            position_delta.norm();
+                                        shadow.imu_separation_m =
+                                            (shadow.candidate_position_ecef -
+                                             Eigen::Vector3d(antennaOf(pose_seed)))
+                                                .norm();
+                                    }
+                                }
+                            }
+                        }
+
+                        for (const auto& [ambiguity_index, fixed_integer] :
+                             lambda_candidate_cycles_this_epoch) {
+                            auto& history =
+                                multiepoch_integer_history[ambiguity_index];
+                            if (history.last_epoch + 1 == i &&
+                                history.integer == fixed_integer) {
+                                ++history.consecutive_epochs;
+                            } else {
+                                history.consecutive_epochs = 1;
+                            }
+                            history.integer = fixed_integer;
+                            history.last_epoch = i;
+                        }
+                        for (auto it = multiepoch_integer_history.begin();
+                             it != multiepoch_integer_history.end();) {
+                            if (it->second.last_epoch + 1 < i) {
+                                it = multiepoch_integer_history.erase(it);
+                            } else {
+                                ++it;
+                            }
+                        }
                     }
 
                     // Read-only temporal integer-consensus shadow. Compare

@@ -2282,6 +2282,54 @@ TEST(FGOAmbiguityOutcomeTelemetryTest,
 }
 
 TEST(FGOAmbiguityOutcomeTelemetryTest,
+     MultiEpochArMonitorIsDiagnosticOnlyAndBuildsPersistentSubset) {
+    CpHoldTestOptions opt;
+    opt.satellites = lambdaCapableSatelliteGeometry();
+    opt.num_epochs = 12;
+    const auto problem = makeCpHoldFixedLagProblem(opt);
+
+    FGOProcessor::FGOConfig config = makeStalePinBaseConfig();
+    config.lambda_ratio_threshold = 1.0e200;
+    config.ambiguity_hold_ratio_threshold = 1.0e200;
+    config.use_cp_hold_recovery = false;
+
+    FGOProcessor baseline_processor(config);
+    const auto baseline = baseline_processor.optimizeProblem(problem);
+
+    config.monitor_multiepoch_ar = true;
+    config.multiepoch_ar_min_consensus_epochs = 3;
+    config.multiepoch_ar_min_ambiguities = 4;
+    FGOProcessor shadow_processor(config);
+    const auto shadow = shadow_processor.optimizeProblem(problem);
+
+    ASSERT_EQ(shadow.solution.solutions.size(), baseline.solution.solutions.size());
+    for (std::size_t i = 0; i < shadow.solution.solutions.size(); ++i) {
+        EXPECT_EQ(shadow.solution.solutions[i].status,
+                  baseline.solution.solutions[i].status);
+        EXPECT_DOUBLE_EQ(shadow.solution.solutions[i].ratio,
+                         baseline.solution.solutions[i].ratio);
+        EXPECT_TRUE(shadow.solution.solutions[i].position_ecef.isApprox(
+            baseline.solution.solutions[i].position_ecef, 0.0));
+    }
+
+    const auto monitored = std::find_if(
+        shadow.epoch_diagnostics.begin(), shadow.epoch_diagnostics.end(),
+        [](const FGOProcessor::FGOEpochDiagnostics& diagnostics) {
+            return diagnostics.multiepoch_ar_shadow.evaluated &&
+                   diagnostics.multiepoch_ar_shadow.candidate_available;
+        });
+    ASSERT_NE(monitored, shadow.epoch_diagnostics.end());
+    const auto& multi = monitored->multiepoch_ar_shadow;
+    EXPECT_GE(multi.persistent_ambiguities, 4);
+    EXPECT_GE(multi.minimum_support_epochs, 3);
+    EXPECT_GT(multi.ratio, 0.0);
+    EXPECT_GT(multi.bootstrapped_success_rate, 0.0);
+    EXPECT_LE(multi.bootstrapped_success_rate, 1.0);
+    EXPECT_TRUE(multi.history_integers_agree);
+    EXPECT_GT(multi.candidate_position_ecef.norm(), 1.0e6);
+}
+
+TEST(FGOAmbiguityOutcomeTelemetryTest,
      ConditionalMultibandMonitorIsDiagnosticOnlyAndBuildsTwoStageCandidate) {
     CpHoldTestOptions opt;
     opt.satellites = lambdaCapableSatelliteGeometry();
