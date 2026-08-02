@@ -291,6 +291,19 @@ and do not change candidate selection or FIX/FLOAT decisions. The FFRT
 coefficient table follows [Hou, Verhagen, and Wu (2016)](https://doi.org/10.3390/s16070945)
 and unsupported ambiguity dimensions fail closed in telemetry.
 
+`--conditional-mf-shadow` adds a separate, diagnostic-only multi-frequency AR
+experiment. It resolves one primary band per satellite, conditions the
+remaining float ambiguities and covariance on those primary integers, then
+runs a second LAMBDA search. The CSV records both stage ratios, bootstrapped
+success rates, ambiguity counts, and the counterfactual position. The shadow
+does not promote FLOAT epochs, add integer priors, alter holding, or change the
+reported position. A current-preset Tokyo run1 500-epoch A/B replay produced
+499 correct FIX and zero wrong FIX in both arms, with identical status,
+position, ratio, and AR-outcome rows; the shadow produced 197 candidates.
+Historical full-run candidate auditing found that ratio/BSR passage alone was
+not a safe promotion rule, so activation remains deliberately unavailable.
+See the [multi-band AR audit](docs/fgo_multiband_ar_fix_rate_audit.md).
+
 Across the three courses, distance-weighted correct FIX improved from
 57.0731% at the pre-reprieve baseline to approximately **58.2153%**, while
 distance-weighted wrong FIX fell from 7.7043% to **7.0089%**. The policy is

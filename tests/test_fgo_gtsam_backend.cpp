@@ -2281,6 +2281,85 @@ TEST(FGOAmbiguityOutcomeTelemetryTest,
     EXPECT_GT(available_trial->candidate_position_ecef.norm(), 1.0e6);
 }
 
+TEST(FGOAmbiguityOutcomeTelemetryTest,
+     ConditionalMultibandMonitorIsDiagnosticOnlyAndBuildsTwoStageCandidate) {
+    CpHoldTestOptions opt;
+    opt.satellites = lambdaCapableSatelliteGeometry();
+    opt.num_epochs = 12;
+    auto problem = makeCpHoldFixedLagProblem(opt);
+
+    // Add a clean L2 ambiguity/factor for every existing L1 satellite.  The
+    // two bands share geometry but carry distinct integer cycles, matching
+    // the raw multi-frequency DD state representation used by production.
+    const std::size_t primary_count = problem.ambiguity_states.size();
+    for (std::size_t idx = 0; idx < primary_count; ++idx) {
+        auto secondary = problem.ambiguity_states[idx];
+        secondary.signal = SignalType::GPS_L2C;
+        secondary.wavelength_m = constants::GPS_L2_WAVELENGTH;
+        const int sat_offset = static_cast<int>(secondary.satellite.prn) - 1;
+        secondary.initial_ambiguity_m =
+            static_cast<double>(200 + sat_offset) * secondary.wavelength_m;
+        problem.ambiguity_states.push_back(secondary);
+    }
+    const auto primary_factors = problem.double_difference_carrier_factors;
+    for (const auto& primary : primary_factors) {
+        auto secondary = primary;
+        const int sat_offset = static_cast<int>(secondary.satellite.prn) - 1;
+        const double primary_ambiguity_m =
+            static_cast<double>(100 + sat_offset) * constants::GPS_L1_WAVELENGTH;
+        const double secondary_ambiguity_m =
+            static_cast<double>(200 + sat_offset) * constants::GPS_L2_WAVELENGTH;
+        const double ambiguity_delta_m =
+            secondary_ambiguity_m - primary_ambiguity_m;
+        secondary.ambiguity_index += primary_count;
+        secondary.signal = SignalType::GPS_L2C;
+        secondary.rover_satellite_model.corrected_carrier_m +=
+            ambiguity_delta_m;
+        secondary.observed_dd_carrier_m += ambiguity_delta_m;
+        problem.double_difference_carrier_factors.push_back(secondary);
+    }
+
+    FGOProcessor::FGOConfig config = makeStalePinBaseConfig();
+    config.lambda_ratio_threshold = 1.0;
+    config.ambiguity_hold_ratio_threshold = 1.0e200;
+    config.use_cp_hold_recovery = false;
+    config.use_multi_frequency_double_difference = true;
+
+    FGOProcessor baseline_processor(config);
+    const auto baseline = baseline_processor.optimizeProblem(problem);
+
+    config.monitor_conditional_multiband_ar = true;
+    FGOProcessor processor(config);
+    const auto result = processor.optimizeProblem(problem);
+
+    ASSERT_EQ(result.solution.solutions.size(), baseline.solution.solutions.size());
+    for (std::size_t i = 0; i < result.solution.solutions.size(); ++i) {
+        EXPECT_EQ(result.solution.solutions[i].status,
+                  baseline.solution.solutions[i].status);
+        EXPECT_TRUE(result.solution.solutions[i].position_ecef.isApprox(
+            baseline.solution.solutions[i].position_ecef, 0.0));
+    }
+    const auto monitored = std::find_if(
+        result.epoch_diagnostics.begin(), result.epoch_diagnostics.end(),
+        [](const FGOProcessor::FGOEpochDiagnostics& diagnostics) {
+            return diagnostics.conditional_multiband_ar_shadow
+                       .candidate_position_ecef.norm() > 1.0e6;
+        });
+    ASSERT_NE(monitored, result.epoch_diagnostics.end());
+    const auto& conditional = monitored->conditional_multiband_ar_shadow;
+    EXPECT_TRUE(conditional.evaluated);
+    EXPECT_EQ(conditional.primary_ambiguities,
+              static_cast<int>(primary_count));
+    EXPECT_EQ(conditional.secondary_ambiguities,
+              static_cast<int>(primary_count));
+    EXPECT_TRUE(conditional.primary_ratio_passed);
+    EXPECT_TRUE(conditional.secondary_ratio_passed);
+    EXPECT_TRUE(conditional.candidate_available);
+    EXPECT_GT(conditional.primary_bootstrapped_success_rate, 0.0);
+    EXPECT_GT(conditional.secondary_bootstrapped_success_rate, 0.0);
+    EXPECT_GT(conditional.candidate_position_ecef.norm(), 1.0e6);
+}
+
 TEST(FGOAmbiguityOutcomeTelemetryTest, NoCarrierCandidatesRemainNoCandidates) {
     CpHoldTestOptions opt;
     opt.satellites = lambdaCapableSatelliteGeometry();

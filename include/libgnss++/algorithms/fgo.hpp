@@ -384,6 +384,11 @@ public:
         // satellite in turn and record the best candidate. Never changes the
         // selected subset, FIX/FLOAT status, graph, or hold state.
         bool monitor_ratio_impact_partial_ar = false;
+        // Diagnostic-only two-stage multi-frequency ambiguity resolution.
+        // Resolve one primary band per satellite, then condition the remaining
+        // ambiguity distribution on those integers. Never changes estimator
+        // state or the exported FIX/FLOAT decision.
+        bool monitor_conditional_multiband_ar = false;
         // Diagnostic-only geometry-free slip/arc-continuity shadow.
         bool monitor_geometry_free_cycle_slip = false;
         // When a rover/base single-difference geometry-free combination jumps
@@ -2016,6 +2021,24 @@ public:
         double imu_separation_m = 0.0;
     };
 
+    /// Counterfactual two-stage multi-frequency AR result. Populated only by
+    /// monitor_conditional_multiband_ar and never consumed by the estimator.
+    struct ConditionalMultibandArShadow {
+        bool evaluated = false;
+        int primary_ambiguities = 0;
+        int secondary_ambiguities = 0;
+        double primary_ratio = 0.0;
+        double secondary_ratio = 0.0;
+        double primary_bootstrapped_success_rate = 0.0;
+        double secondary_bootstrapped_success_rate = 0.0;
+        bool primary_ratio_passed = false;
+        bool secondary_ratio_passed = false;
+        bool candidate_available = false;
+        Vector3d candidate_position_ecef = Vector3d::Zero();
+        double float_separation_m = 0.0;
+        double imu_separation_m = 0.0;
+    };
+
     /// Per-epoch fixed-lag integrity state.  These values expose why an epoch
     /// did or did not fix, rather than only reporting the final FIX/FLOAT label.
     struct FGOEpochDiagnostics {
@@ -2074,6 +2097,7 @@ public:
         int doppler_slip_shadow_event_signals = 0;
         double doppler_slip_shadow_max_innovation_m = 0.0;
         int gf_doppler_shadow_isolated_pairs = 0;
+        ConditionalMultibandArShadow conditional_multiband_ar_shadow;
         bool ratio_impact_evaluated = false;
         int ratio_impact_trials = 0;
         double ratio_impact_best_ratio = 0.0;
