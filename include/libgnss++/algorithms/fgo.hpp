@@ -2060,6 +2060,13 @@ public:
         Vector3d candidate_position_ecef = Vector3d::Zero();
         double float_separation_m = 0.0;
         double imu_separation_m = 0.0;
+        // Held-out carrier witness: rows whose ambiguity is not part of the
+        // persistent LAMBDA subset are checked at the candidate position.
+        // A missing independent pool leaves evaluated=false (fail closed).
+        bool surplus_validation_evaluated = false;
+        bool surplus_validation_pass = false;
+        int surplus_validation_fallback_level = -1;
+        int surplus_validation_surplus_used = 0;
     };
 
     /// Per-epoch fixed-lag integrity state.  These values expose why an epoch

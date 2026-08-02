@@ -4793,6 +4793,50 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                                             (shadow.candidate_position_ecef -
                                              Eigen::Vector3d(antennaOf(pose_seed)))
                                                 .norm();
+
+                                        // Validate the persistent integer
+                                        // hypothesis with carrier rows that
+                                        // did not participate in this reduced
+                                        // LAMBDA search. This reuses the
+                                        // established alternate-reference
+                                        // surplus test, but supplies exactly
+                                        // the multi-epoch subset so every
+                                        // deciding row is held out from the
+                                        // candidate covariance and integers.
+                                        std::map<std::size_t, int>
+                                            persistent_cycles_by_index;
+                                        for (int r = 0; r < np; ++r) {
+                                            const std::size_t ambiguity_index =
+                                                epoch_amb_indices[
+                                                    persistent_order[r]];
+                                            persistent_cycles_by_index[
+                                                ambiguity_index] =
+                                                static_cast<int>(std::lround(
+                                                    persistent_diagnostics
+                                                        .candidates(r, 0)));
+                                        }
+                                        std::vector<const FGOProcessor::
+                                            DoubleDifferenceCarrierFactor*>
+                                            surplus_pool = cp_by_epoch[i];
+                                        surplus_pool.insert(
+                                            surplus_pool.end(),
+                                            cp_excluded_by_epoch[i].begin(),
+                                            cp_excluded_by_epoch[i].end());
+                                        const SurplusValidationOutcome
+                                            surplus_diag =
+                                                evaluateSurplusSatelliteValidation(
+                                                    surplus_pool,
+                                                    persistent_cycles_by_index,
+                                                    shadow.candidate_position_ecef,
+                                                    config);
+                                        shadow.surplus_validation_evaluated =
+                                            surplus_diag.evaluated;
+                                        shadow.surplus_validation_pass =
+                                            surplus_diag.pass;
+                                        shadow.surplus_validation_fallback_level =
+                                            surplus_diag.fallback_level;
+                                        shadow.surplus_validation_surplus_used =
+                                            surplus_diag.surplus_used;
                                     }
                                 }
                             }

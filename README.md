@@ -309,8 +309,14 @@ Only integer candidates that remain identical for at least three consecutive
 epochs on the same uninterrupted DD ambiguity arc enter a reduced LAMBDA
 search (minimum four ambiguities). The CSV reports the persistent subset size,
 history depth, ratio, bootstrapped success rate, history agreement, candidate
-position, and float/IMU separations as `multiepoch_ar_*`. It never changes the
-graph, hold state, solution, ratio, or FIX/FLOAT label. See the
+position, and float/IMU separations as `multiepoch_ar_*`. It also tests each
+candidate against carrier rows whose ambiguities were not used by the reduced
+search. `multiepoch_ar_surplus_eval`, `_pass`, `_level`, and `_used` expose
+that held-out alternate-reference witness; lack of a sufficiently independent
+pool produces no verdict. It never changes the graph, hold state, solution,
+ratio, or FIX/FLOAT label. A Tokyo run1 gate selected from this witness failed
+on run2 (3 correct and 15 wrong candidate epochs), so it remains monitor-only.
+See the
 [multi-epoch AR audit](docs/fgo_multiepoch_ar_fix_rate_audit.md).
 
 Across the three courses, distance-weighted correct FIX improved from
