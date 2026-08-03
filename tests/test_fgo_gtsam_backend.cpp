@@ -2350,6 +2350,10 @@ TEST(FGOAmbiguityOutcomeTelemetryTest,
     EXPECT_GE(multi.surplus_validation_fallback_level, 0);
     EXPECT_LE(multi.surplus_validation_fallback_level, 5);
     EXPECT_GT(multi.surplus_validation_surplus_used, 0);
+    EXPECT_TRUE(multi.graph_cost_evaluated);
+    EXPECT_GT(multi.graph_cost_factor_count, 0);
+    EXPECT_TRUE(std::isfinite(multi.graph_cost_before));
+    EXPECT_TRUE(std::isfinite(multi.graph_cost_after));
 }
 
 TEST(FGOAmbiguityOutcomeTelemetryTest,

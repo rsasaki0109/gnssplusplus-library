@@ -158,3 +158,60 @@ Decision: retain the held-out verdict as diagnostic evidence, but do not add a
 multi-epoch rescue switch or change the shipping FIX rate. Independent carrier
 rows can share the same urban multipath basin and are not, by themselves, a
 safe integer-aperture witness.
+
+## Constrained graph-cost follow-up
+
+The next follow-up reuses the estimator's existing GICI-style
+integer-constrained reoptimization as a read-only witness for multi-epoch
+FLOAT candidates. A shared helper copies the active fixed-lag factors and
+current values, adds tight ambiguity priors for the persistent integer
+hypothesis, performs the configured LM refinement (one iteration in this
+audit), and then
+evaluates both solutions on the original graph with the integer priors removed.
+The optimized values are discarded. The CSV adds:
+
+- `multiepoch_ar_graph_cost_eval` and `_pass`;
+- `multiepoch_ar_graph_cost_factors`;
+- `multiepoch_ar_graph_cost_before`, `_after`, and `_delta`.
+
+The strict pass condition is the existing absolute rule, `after <= before +
+1e-6`. For cross-epoch thresholding, the audit also divides delta by active
+factor count so changes in fixed-lag graph size do not directly become the
+gate. Candidate correctness remains truth-only offline evidence and is never
+an estimator input.
+
+A current-build Tokyo run1 development grid used only deployable telemetry.
+Graph cost alone was not safe: among FLOAT candidates its strict pass retained
+71 correct and 34 wrong candidates. The best non-empty zero-wrong development
+rule required:
+
+- held-out carrier validation pass;
+- candidate/IMU-prediction separation at most 0.05 m; and
+- graph-cost delta per active factor at most zero.
+
+The rule was frozen after run1. It passed run2 without adjustment, which
+unlocked the previously unused run3 holdout. Run3 then produced one accepted
+wrong candidate at TOW 179614.8 with 1.97 m 3D error, so activation failed.
+
+| FLOAT graph-cost population | Run1 correct / wrong | Run2 correct / wrong | Run3 correct / wrong |
+|---|---:|---:|---:|
+| All evaluated candidates | 205 / 644 | 79 / 226 | 27 / 174 |
+| Strict graph-cost pass | 71 / 34 | 42 / 23 | 3 / 41 |
+| Frozen combined gate | **36 / 0** | **1 / 0** | **0 / 1** |
+
+The shadow remained non-interfering in a current-build 500-epoch A/B replay:
+all 500 rows matched exactly in status, ECEF position, ratio, fixed ambiguity
+count, and AR outcome. The shadow evaluated 497 graph hypotheses (493 strict
+passes and four failures). Runtime increased from 114.634 s to 128.623 s in
+that short replay. Full diagnostic replays are substantially more expensive:
+run2 took 1338.44 s and run3 took 3563.02 s because each candidate launches a
+batch refinement. The feature remains default-off.
+
+Decision: retain constrained graph cost as diagnostic telemetry, but do not
+promote multi-epoch FLOAT candidates or change the shipping fix rate. The
+held-out run3 failure demonstrates that temporal agreement, alternate carrier
+rows, IMU proximity, and a non-worsening prior-free graph cost can still share
+the same biased urban measurement basin. Any next activation attempt needs a
+genuinely different observation model; TDCP is still blocked until receiver
+clock-jump/slip handling removes the observed approximately 299,793 m raw
+jumps.
