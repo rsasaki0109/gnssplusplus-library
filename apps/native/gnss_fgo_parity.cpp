@@ -63,6 +63,7 @@ struct Args {
     bool single_freq = false;    // multi-freq control: force L1/E1/B1-only DD (single-frequency baseline)
     bool multi_freq = false;     // force multi-frequency DD on (library default is now OFF)
     bool sd_doppler = false;     // add single-difference Doppler velocity factors
+    bool clock_resilient_temporal_shadow = false;  // diagnostic-only receiver-clock-free TDCP
     bool postfit_gate = false;
     bool adaptive_ratio = false;
     int postfit_min_n = -1;
@@ -241,6 +242,10 @@ Args parseArgs(int argc, char** argv) {
         }
         if (a == "--no-held-fix-label") {
             args.no_held_fix_label = true;
+            continue;
+        }
+        if (a == "--clock-resilient-temporal-shadow") {
+            args.clock_resilient_temporal_shadow = true;
             continue;
         }
         if (a == "--gici-par") {
@@ -724,6 +729,8 @@ libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
     libgnss::FGOProcessor::FGOConfig config = makeRealDataDdConfig();
     // Reuse the existing diagnostic surface; do not add another CLI option.
     config.monitor_geometry_free_cycle_slip = !args.dump_csv_path.empty();
+    config.monitor_clock_resilient_temporal_carrier =
+        args.clock_resilient_temporal_shadow;
     config.use_geometry_free_cycle_slip_reset = args.gf_slip_reset;
     config.report_held_ambiguities_as_fixed = !args.no_held_fix_label;
     if (args.max_iters > 0) {
@@ -1508,7 +1515,7 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
            "x_ecef_m,y_ecef_m,z_ecef_m,position_covariance_trace_m2,"
            "ref_e_pos_m,ref_n_pos_m,ref_u_pos_m,"
            "vel_e_mps,vel_n_mps,vel_u_mps,"
-           "ratio,ratio_threshold,nfixed,ar_outcome,ddpr_rms_m,sd_doppler_rms_mps,gdop,nsat,sd_doppler_n,"
+           "ratio,ratio_threshold,nfixed,ar_outcome,ddpr_rms_m,sd_doppler_rms_mps,clock_resilient_tdcp_n,clock_resilient_tdcp_rms_m,clock_resilient_tdcp_max_abs_m,gdop,nsat,sd_doppler_n,"
            "amb_candidates,lambda_attempts,lambda_stage,amb_var_median,amb_var_max,"
            "imu_pose_correction_m,spp_seed_fresh,spp_seed_x_ecef_m,"
            "spp_seed_y_ecef_m,spp_seed_z_ecef_m,"
@@ -1620,6 +1627,9 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
                 << ',' << s.num_fixed_ambiguities
                 << ',' << static_cast<int>(d.ar_outcome)
                 << ',' << d.ddpr_rms_m << ',' << d.sd_doppler_rms_mps
+                << ',' << d.clock_resilient_tdcp_factors
+                << ',' << d.clock_resilient_tdcp_rms_m
+                << ',' << d.clock_resilient_tdcp_max_abs_m
                 << ',' << d.gdop << ',' << d.num_satellites
                 << ',' << d.sd_doppler_factors
                 << ',' << d.ambiguity_candidates << ',' << d.lambda_attempts
@@ -2676,6 +2686,8 @@ int main(int argc, char** argv) {
                    << (config.monitor_conditional_multiband_ar ? "on" : "off")
                    << ", multiepoch_ar_shadow="
                    << (config.monitor_multiepoch_ar ? "on" : "off")
+                   << ", clock_resilient_temporal_shadow="
+                   << (config.monitor_clock_resilient_temporal_carrier ? "on" : "off")
                    << ")\n"
                   << "  IMU ratio aperture: " << (args.imu_ratio_aperture ? "on" : "off")
                   << " (accepted=" << fl.diagnostics.imu_aided_ratio_accepts

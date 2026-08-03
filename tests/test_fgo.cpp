@@ -766,6 +766,111 @@ TEST(FGOTest, BuiltSingleDifferenceTdcpFactorsUseCurrentEpochLos) {
     EXPECT_GT(max_previous_current_los_delta, 1e-8);
 }
 
+TEST(FGOTest, ClockResilientTemporalCarrierShadowCancelsCommonClockJump) {
+    const NavigationData nav = makeSyntheticGpsNavigation(4);
+    const std::array<Vector3d, 2> rover_positions = {
+        Vector3d(1113194.0, -4841695.0, 3985350.0),
+        Vector3d(1113214.0, -4841680.0, 3985342.0),
+    };
+    const std::array<Vector3d, 2> base_positions = {
+        rover_positions[0] + Vector3d(-320.0, 180.0, 45.0),
+        rover_positions[1] + Vector3d(-320.0, 180.0, 45.0),
+    };
+    const auto rover_epochs =
+        makeSyntheticDoubleDifferenceObservationEpochs(nav, rover_positions, 0.04);
+    const auto base_epochs =
+        makeSyntheticDoubleDifferenceObservationEpochs(nav, base_positions, 0.02);
+
+    FGOProcessor::FGOConfig config;
+    config.use_spp_seed = false;
+    config.use_pseudorange_factors = false;
+    config.use_motion_factors = false;
+    config.use_tdcp_factors = false;
+    config.use_double_difference_factors = true;
+    config.use_ionosphere_model = false;
+    config.use_troposphere_model = false;
+    config.min_elevation_deg = -90.0;
+    config.min_satellites_per_epoch = 2;
+
+    FGOProcessor processor(config);
+    const auto problem = processor.buildDoubleDifferenceProblem(
+        rover_epochs, base_epochs, nav, base_positions[0]);
+    const auto baseline =
+        FGOProcessor::buildClockResilientTemporalCarrierShadow(problem);
+    ASSERT_FALSE(baseline.empty());
+
+    auto jumped_problem = problem;
+    constexpr double clock_jump_m = constants::SPEED_OF_LIGHT * 0.001;
+    for (auto& observation : jumped_problem.carrier_observations) {
+        if (observation.epoch_index == 1) {
+            observation.corrected_carrier_m += clock_jump_m;
+        }
+    }
+    const auto jumped =
+        FGOProcessor::buildClockResilientTemporalCarrierShadow(jumped_problem);
+    ASSERT_EQ(jumped.size(), baseline.size());
+
+    using ObservationKey = std::tuple<std::size_t, SatelliteId, SignalType>;
+    std::map<ObservationKey, const FGOProcessor::CarrierPhaseFactor*> observations;
+    for (const auto& observation :
+         problem.double_difference_pseudorange_observations) {
+        observations[{observation.epoch_index, observation.satellite,
+                      observation.signal}] = &observation;
+    }
+
+    double max_previous_current_los_delta = 0.0;
+    for (std::size_t i = 0; i < baseline.size(); ++i) {
+        const auto& factor = baseline[i];
+        const auto& jumped_factor = jumped[i];
+        EXPECT_EQ(jumped_factor.satellite, factor.satellite);
+        EXPECT_EQ(jumped_factor.reference_satellite,
+                  factor.reference_satellite);
+        EXPECT_EQ(jumped_factor.signal, factor.signal);
+        EXPECT_NEAR(jumped_factor.delta_carrier_m, factor.delta_carrier_m,
+                    1e-9);
+
+        const auto previous_satellite = observations.at(
+            {factor.previous_epoch_index, factor.satellite, factor.signal});
+        const auto previous_reference = observations.at(
+            {factor.previous_epoch_index, factor.reference_satellite,
+             factor.signal});
+        const auto current_satellite = observations.at(
+            {factor.current_epoch_index, factor.satellite, factor.signal});
+        const auto current_reference = observations.at(
+            {factor.current_epoch_index, factor.reference_satellite,
+             factor.signal});
+        const Vector3d previous_los =
+            previous_satellite->los - previous_reference->los;
+        const Vector3d current_los =
+            current_satellite->los - current_reference->los;
+        EXPECT_LT((factor.previous_los - previous_los).norm(), 1e-12);
+        EXPECT_LT((factor.los - current_los).norm(), 1e-12);
+        max_previous_current_los_delta = std::max(
+            max_previous_current_los_delta,
+            (factor.previous_los - factor.los).norm());
+    }
+    EXPECT_GT(max_previous_current_los_delta, 1e-8);
+
+    auto switched_reference_problem = problem;
+    std::set<std::pair<SatelliteId, SignalType>> initial_references;
+    for (const auto& factor : baseline) {
+        initial_references.insert(
+            {factor.reference_satellite, factor.signal});
+    }
+    for (auto& observation : switched_reference_problem.carrier_observations) {
+        if (observation.epoch_index == 1 &&
+            initial_references.count(
+                {observation.satellite, observation.signal}) != 0) {
+            observation.has_carrier_phase = false;
+        }
+    }
+    const auto after_reference_switch =
+        FGOProcessor::buildClockResilientTemporalCarrierShadow(
+            switched_reference_problem);
+    EXPECT_TRUE(after_reference_switch.empty())
+        << "a new reference must start a fresh temporal arc";
+}
+
 TEST(FGOTest, RobustLossDownweightsPseudorangeOutlier) {
     FGOProcessor::FGOProblem problem = makeSyntheticProblem();
     for (auto& factor : problem.pseudorange_factors) {

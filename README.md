@@ -136,7 +136,15 @@ funnel (`amb_after_hold`, `amb_final`, and `amb_excl_*`) and the last
 successfully searched LAMBDA position candidate (`lambda_candidate_*`), even
 when the ratio or a later integrity decision leaves the epoch FLOAT. A
 normalized satellite/signal trace is written beside it as
-`<path>.ar_candidates.csv`. Its `disposition` values are:
+`<path>.ar_candidates.csv`.
+
+`--clock-resilient-temporal-shadow` additionally audits receiver-clock-free
+satellite-single-difference temporal carrier residuals. It is monitor-only and
+does not add graph factors or change FIX/FLOAT decisions. The formulation,
+research basis, and three-run Tokyo validation are documented in
+[`docs/fgo_clock_resilient_temporal_shadow.md`](docs/fgo_clock_resilient_temporal_shadow.md).
+
+The normalized trace's `disposition` values are:
 
 | Value | Meaning |
 |---:|---|

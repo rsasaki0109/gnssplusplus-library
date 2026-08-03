@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstdio>
 #include <limits>
+#include <map>
 #include <set>
 #include <vector>
 
@@ -532,6 +533,75 @@ TEST(FGOAmbiguityCandidateTelemetryTest, ReportsDisabledCandidateFunnel) {
                     AmbiguityResolutionDisabled);
         }
     }
+}
+
+TEST(FGOClockResilientTemporalCarrierShadowTest,
+     ReportsResidualsWithoutChangingFixedLagSolution) {
+    CpHoldTestOptions opt;
+    opt.num_epochs = 3;
+    auto problem = makeCpHoldFixedLagProblem(opt);
+
+    using ObservationKey = std::pair<std::size_t, SatelliteId>;
+    std::map<ObservationKey, FGOProcessor::CarrierPhaseFactor> observations;
+    for (const auto& factor : problem.double_difference_carrier_factors) {
+        const auto add_observation =
+            [&](const SatelliteId satellite, const Vector3d& satellite_position,
+                const FGOProcessor::ObservationModelDebug& model) {
+                FGOProcessor::CarrierPhaseFactor observation;
+                observation.epoch_index = factor.epoch_index;
+                observation.satellite = satellite;
+                observation.signal = factor.signal;
+                observation.satellite_position_ecef = satellite_position;
+                observation.corrected_carrier_m = model.corrected_carrier_m;
+                observation.has_carrier_phase = true;
+                observation.loss_of_lock = false;
+                const Vector3d range_vector =
+                    satellite_position -
+                    problem.epochs[factor.epoch_index].position_ecef;
+                observation.los = range_vector.normalized();
+                observation.elevation_rad = factor.elevation_rad;
+                observation.model_debug.geometric_range_m =
+                    range_vector.norm();
+                observations[{factor.epoch_index, satellite}] = observation;
+            };
+        add_observation(factor.satellite,
+                        factor.rover_satellite_position_ecef,
+                        factor.rover_satellite_model);
+        add_observation(factor.reference_satellite,
+                        factor.rover_reference_position_ecef,
+                        factor.rover_reference_model);
+    }
+    for (const auto& [key, observation] : observations) {
+        (void)key;
+        problem.carrier_observations.push_back(observation);
+    }
+
+    FGOProcessor::FGOConfig off_config = makeCpHoldBaseConfig();
+    FGOProcessor off_processor(off_config);
+    const auto off_result = off_processor.optimizeProblem(problem);
+
+    FGOProcessor::FGOConfig on_config = off_config;
+    on_config.monitor_clock_resilient_temporal_carrier = true;
+    FGOProcessor on_processor(on_config);
+    const auto on_result = on_processor.optimizeProblem(problem);
+
+    ASSERT_EQ(off_result.solution.solutions.size(),
+              on_result.solution.solutions.size());
+    ASSERT_EQ(on_result.epoch_diagnostics.size(), problem.epochs.size());
+    int total_shadow_factors = 0;
+    for (std::size_t i = 0; i < on_result.solution.solutions.size(); ++i) {
+        EXPECT_TRUE(off_result.solution.solutions[i].position_ecef.isApprox(
+            on_result.solution.solutions[i].position_ecef, 0.0));
+        EXPECT_EQ(off_result.solution.solutions[i].status,
+                  on_result.solution.solutions[i].status);
+        total_shadow_factors +=
+            on_result.epoch_diagnostics[i].clock_resilient_tdcp_factors;
+        EXPECT_TRUE(std::isfinite(
+            on_result.epoch_diagnostics[i].clock_resilient_tdcp_rms_m));
+        EXPECT_TRUE(std::isfinite(
+            on_result.epoch_diagnostics[i].clock_resilient_tdcp_max_abs_m));
+    }
+    EXPECT_GT(total_shadow_factors, 0);
 }
 
 TEST(FGOAmbiguityCandidateTelemetryTest,

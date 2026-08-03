@@ -884,6 +884,13 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
         ? FGOProcessor::analyzeGeometryFreeSlipShadow(
               problem, 0.05, config.max_tdcp_gap_s)
         : std::vector<FGOProcessor::GeometryFreeSlipShadowEpoch>{};
+    // Materialize this diagnostic stream once; it is never added to new_factors.
+    const auto clock_resilient_tdcp_shadow =
+        config.monitor_clock_resilient_temporal_carrier
+            ? FGOProcessor::buildClockResilientTemporalCarrierShadow(
+                  problem, config.single_difference_tdcp_sigma_m,
+                  config.max_tdcp_gap_s)
+            : std::vector<FGOProcessor::SingleDifferenceTdcpFactor>{};
     const Point3 lever_arm_body(config.pose3_lever_arm_body_m.x(),
                                 config.pose3_lever_arm_body_m.y(),
                                 config.pose3_lever_arm_body_m.z());
@@ -5847,6 +5854,41 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
     // consensus gate; a correct fix would recompute (or cache) the marginal
     // for each epoch's FINAL window-exit pose, which is a larger, separately
     // scoped change.
+    if (!clock_resilient_tdcp_shadow.empty()) {
+        std::vector<double> sum_sq(num_epochs, 0.0);
+        for (const auto& factor : clock_resilient_tdcp_shadow) {
+            if (factor.previous_epoch_index >= num_epochs ||
+                factor.current_epoch_index >= num_epochs) {
+                continue;
+            }
+            const Vector3d previous_delta =
+                epoch_float_position[factor.previous_epoch_index] -
+                problem.epochs[factor.previous_epoch_index].position_ecef;
+            const Vector3d current_delta =
+                epoch_float_position[factor.current_epoch_index] -
+                problem.epochs[factor.current_epoch_index].position_ecef;
+            const double predicted = factor.los.dot(current_delta) -
+                                     factor.previous_los.dot(previous_delta);
+            const double residual = factor.delta_carrier_m - predicted;
+            if (!std::isfinite(residual)) {
+                continue;
+            }
+            auto& diagnostics = epoch_diagnostics[factor.current_epoch_index];
+            ++diagnostics.clock_resilient_tdcp_factors;
+            sum_sq[factor.current_epoch_index] += residual * residual;
+            diagnostics.clock_resilient_tdcp_max_abs_m =
+                std::max(diagnostics.clock_resilient_tdcp_max_abs_m,
+                         std::abs(residual));
+        }
+        for (std::size_t i = 0; i < num_epochs; ++i) {
+            const int count = epoch_diagnostics[i].clock_resilient_tdcp_factors;
+            if (count > 0) {
+                epoch_diagnostics[i].clock_resilient_tdcp_rms_m =
+                    std::sqrt(sum_sq[i] / static_cast<double>(count));
+            }
+        }
+    }
+
     const bool have_amb = !problem.ambiguity_states.empty();
     result.epoch_diagnostics = std::move(epoch_diagnostics);
     result.epoch_attitude_rpy_deg.resize(num_epochs);
