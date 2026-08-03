@@ -379,6 +379,58 @@ inline gtsam::Key dummyAmbiguityKey() { return Symbol('z', 0); }
 inline gtsam::Key velocityKey(std::size_t epoch) { return Symbol('v', epoch); }
 inline gtsam::Key biasKey(std::size_t epoch) { return Symbol('b', epoch); }
 
+struct IntegerConstrainedGraphCostOutcome {
+    bool evaluated = false;
+    bool pass = false;
+    int base_factor_count = 0;
+    double base_cost_before = 0.0;
+    double base_cost_after = 0.0;
+    std::optional<Pose3> optimized_pose;
+};
+
+IntegerConstrainedGraphCostOutcome evaluateIntegerConstrainedGraphCost(
+    const gtsam::NonlinearFactorGraph& active_factors,
+    const gtsam::Values& initial_values,
+    const std::vector<std::pair<gtsam::Key, double>>& integer_constraints,
+    std::optional<gtsam::Key> current_position_key,
+    const FGOProcessor::FGOConfig& config) {
+    IntegerConstrainedGraphCostOutcome outcome;
+    gtsam::NonlinearFactorGraph base_graph;
+    for (const auto& factor : active_factors) {
+        if (factor) base_graph.push_back(factor);
+    }
+    outcome.base_factor_count = static_cast<int>(base_graph.size());
+    if (base_graph.empty()) return outcome;
+
+    gtsam::NonlinearFactorGraph constrained_graph = base_graph;
+    const auto integer_noise = gtsam::noiseModel::Isotropic::Sigma(
+        1, std::max(1e-9, config.integer_constrained_prior_sigma_cycles));
+    int constraints_added = 0;
+    for (const auto& [key, integer_cycles] : integer_constraints) {
+        if (!initial_values.exists(key)) continue;
+        constrained_graph.addPrior(key, integer_cycles, integer_noise);
+        ++constraints_added;
+    }
+    if (constraints_added == 0) return outcome;
+
+    outcome.evaluated = true;
+    outcome.base_cost_before = base_graph.error(initial_values);
+    gtsam::LevenbergMarquardtParams params;
+    params.setMaxIterations(std::max(1, config.integer_constrained_max_iterations));
+    params.setVerbosityLM("SILENT");
+    const gtsam::Values optimized_values = gtsam::LevenbergMarquardtOptimizer(
+        constrained_graph, initial_values, params).optimize();
+    outcome.base_cost_after = base_graph.error(optimized_values);
+    outcome.pass = std::isfinite(outcome.base_cost_before) &&
+        std::isfinite(outcome.base_cost_after) &&
+        outcome.base_cost_after <= outcome.base_cost_before +
+            std::max(0.0, config.integer_constrained_cost_abs_tolerance);
+    if (current_position_key && optimized_values.exists(*current_position_key)) {
+        outcome.optimized_pose = optimized_values.at<Pose3>(*current_position_key);
+    }
+    return outcome;
+}
+
 // ENU-from-ECEF rotation whose columns are the East/North/Up basis vectors
 // expressed in ECEF, i.e. ecef_vec = R_ecef_enu * enu_vec. Matches
 // core/coordinates.hpp enu2ecef(). Used to build the ecef_T_nav Pose3 that
@@ -4386,59 +4438,33 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                             epoch_diagnostics[i]
                                 .integer_constrained_reoptimization_evaluated = true;
                             try {
-                                gtsam::NonlinearFactorGraph base_graph;
                                 const auto& active_factors =
                                     smoother.getISAM2().getFactorsUnsafe();
-                                for (const auto& factor : active_factors) {
-                                    if (factor) base_graph.push_back(factor);
-                                }
-                                gtsam::Values initial_values = smoother.calculateEstimate();
-                                const double base_cost_before =
-                                    base_graph.error(initial_values);
-
-                                gtsam::NonlinearFactorGraph constrained_graph = base_graph;
-                                const auto integer_noise =
-                                    gtsam::noiseModel::Isotropic::Sigma(
-                                        1,
-                                        std::max(1e-9,
-                                            config.integer_constrained_prior_sigma_cycles));
+                                const gtsam::Values initial_values =
+                                    smoother.calculateEstimate();
+                                std::vector<std::pair<gtsam::Key, double>>
+                                    integer_constraints;
+                                integer_constraints.reserve(subset);
                                 for (int r = 0; r < subset; ++r) {
                                     const std::size_t idx = epoch_amb_indices[order[r]];
-                                    const gtsam::Key key =
-                                        ambiguityKey(ambSymbolId(idx));
-                                    if (!initial_values.exists(key)) continue;
-                                    constrained_graph.addPrior(
-                                        key,
-                                        static_cast<double>(std::lround(fixed_amb(r))),
-                                        integer_noise);
+                                    integer_constraints.emplace_back(
+                                        ambiguityKey(ambSymbolId(idx)),
+                                        static_cast<double>(std::lround(fixed_amb(r))));
                                 }
-                                gtsam::LevenbergMarquardtParams params;
-                                params.setMaxIterations(std::max(
-                                    1, config.integer_constrained_max_iterations));
-                                params.setVerbosityLM("SILENT");
-                                const gtsam::Values optimized_values =
-                                    gtsam::LevenbergMarquardtOptimizer(
-                                        constrained_graph, initial_values, params).optimize();
-                                const double base_cost_after =
-                                    base_graph.error(optimized_values);
+                                const IntegerConstrainedGraphCostOutcome cost =
+                                    evaluateIntegerConstrainedGraphCost(
+                                        active_factors, initial_values,
+                                        integer_constraints, positionKey(i), config);
                                 epoch_diagnostics[i]
                                     .integer_constrained_base_cost_before =
-                                        base_cost_before;
+                                        cost.base_cost_before;
                                 epoch_diagnostics[i]
                                     .integer_constrained_base_cost_after =
-                                        base_cost_after;
-                                integer_constrained_pass =
-                                    std::isfinite(base_cost_before) &&
-                                    std::isfinite(base_cost_after) &&
-                                    base_cost_after <= base_cost_before +
-                                        std::max(0.0,
-                                            config.integer_constrained_cost_abs_tolerance);
-                                if (integer_constrained_pass &&
-                                    optimized_values.exists(positionKey(i))) {
-                                    const Pose3 optimized_pose =
-                                        optimized_values.at<Pose3>(positionKey(i));
+                                        cost.base_cost_after;
+                                integer_constrained_pass = cost.evaluated && cost.pass;
+                                if (integer_constrained_pass && cost.optimized_pose) {
                                     provisional_fixed_ant =
-                                        Eigen::Vector3d(antennaOf(optimized_pose));
+                                        Eigen::Vector3d(antennaOf(*cost.optimized_pose));
                                     has_provisional_fixed_ant =
                                         provisional_fixed_ant.allFinite();
                                 }
@@ -4814,6 +4840,49 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                                                 static_cast<int>(std::lround(
                                                     persistent_diagnostics
                                                         .candidates(r, 0)));
+                                        }
+                                        // Score the persistent hypothesis
+                                        // against the complete active graph,
+                                        // including historical factors in the
+                                        // fixed-lag window. This is deliberately
+                                        // read-only: unlike the normal accepted
+                                        // FIX path, its optimized Values are not
+                                        // consumed by the estimator.
+                                        try {
+                                            std::vector<std::pair<gtsam::Key, double>>
+                                                integer_constraints;
+                                            integer_constraints.reserve(
+                                                persistent_cycles_by_index.size());
+                                            for (const auto& [ambiguity_index,
+                                                              integer_cycles] :
+                                                 persistent_cycles_by_index) {
+                                                integer_constraints.emplace_back(
+                                                    ambiguityKey(ambSymbolId(
+                                                        ambiguity_index)),
+                                                    static_cast<double>(integer_cycles));
+                                            }
+                                            const auto& active_factors =
+                                                smoother.getISAM2().getFactorsUnsafe();
+                                            const gtsam::Values initial_values =
+                                                smoother.calculateEstimate();
+                                            const IntegerConstrainedGraphCostOutcome
+                                                graph_cost =
+                                                    evaluateIntegerConstrainedGraphCost(
+                                                        active_factors, initial_values,
+                                                        integer_constraints,
+                                                        std::nullopt, config);
+                                            shadow.graph_cost_evaluated =
+                                                graph_cost.evaluated;
+                                            shadow.graph_cost_pass = graph_cost.pass;
+                                            shadow.graph_cost_factor_count =
+                                                graph_cost.base_factor_count;
+                                            shadow.graph_cost_before =
+                                                graph_cost.base_cost_before;
+                                            shadow.graph_cost_after =
+                                                graph_cost.base_cost_after;
+                                        } catch (const std::exception&) {
+                                            // A failed diagnostic must never
+                                            // alter the estimator or candidate.
                                         }
                                         std::vector<const FGOProcessor::
                                             DoubleDifferenceCarrierFactor*>

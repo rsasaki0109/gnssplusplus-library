@@ -2067,6 +2067,15 @@ public:
         bool surplus_validation_pass = false;
         int surplus_validation_fallback_level = -1;
         int surplus_validation_surplus_used = 0;
+        // GICI-style constrained graph-cost witness. The active fixed-lag
+        // graph is independently batch-refined with this candidate imposed
+        // as tight ambiguity priors, then scored using the original graph
+        // without those priors. Diagnostic-only; never updates the smoother.
+        bool graph_cost_evaluated = false;
+        bool graph_cost_pass = false;
+        int graph_cost_factor_count = 0;
+        double graph_cost_before = 0.0;
+        double graph_cost_after = 0.0;
     };
 
     /// Per-epoch fixed-lag integrity state.  These values expose why an epoch
