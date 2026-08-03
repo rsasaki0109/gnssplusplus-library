@@ -2286,7 +2286,24 @@ TEST(FGOAmbiguityOutcomeTelemetryTest,
     CpHoldTestOptions opt;
     opt.satellites = lambdaCapableSatelliteGeometry();
     opt.num_epochs = 12;
-    const auto problem = makeCpHoldFixedLagProblem(opt);
+    auto problem = makeCpHoldFixedLagProblem(opt);
+    // Move one complete satellite arc outside the searchable ambiguity set.
+    // It remains observable only through the build-time-excluded carrier
+    // collection, which exercises the held-out verdict without duplicating a
+    // satellite in both the fixed and surplus pools.
+    const std::size_t heldout_index = problem.ambiguity_states.size() - 1;
+    for (auto it = problem.double_difference_carrier_factors.begin();
+         it != problem.double_difference_carrier_factors.end();) {
+        if (it->ambiguity_index != heldout_index) {
+            ++it;
+            continue;
+        }
+        auto excluded = *it;
+        excluded.ambiguity_index = std::numeric_limits<std::size_t>::max();
+        problem.excluded_double_difference_carrier_factors.push_back(excluded);
+        it = problem.double_difference_carrier_factors.erase(it);
+    }
+    problem.ambiguity_states.pop_back();
 
     FGOProcessor::FGOConfig config = makeStalePinBaseConfig();
     config.lambda_ratio_threshold = 1.0e200;
@@ -2299,6 +2316,7 @@ TEST(FGOAmbiguityOutcomeTelemetryTest,
     config.monitor_multiepoch_ar = true;
     config.multiepoch_ar_min_consensus_epochs = 3;
     config.multiepoch_ar_min_ambiguities = 4;
+    config.surplus_validation_min_surplus_satellites = 1;
     FGOProcessor shadow_processor(config);
     const auto shadow = shadow_processor.optimizeProblem(problem);
 
@@ -2327,6 +2345,11 @@ TEST(FGOAmbiguityOutcomeTelemetryTest,
     EXPECT_LE(multi.bootstrapped_success_rate, 1.0);
     EXPECT_TRUE(multi.history_integers_agree);
     EXPECT_GT(multi.candidate_position_ecef.norm(), 1.0e6);
+    EXPECT_TRUE(multi.surplus_validation_evaluated);
+    EXPECT_TRUE(multi.surplus_validation_pass);
+    EXPECT_GE(multi.surplus_validation_fallback_level, 0);
+    EXPECT_LE(multi.surplus_validation_fallback_level, 5);
+    EXPECT_GT(multi.surplus_validation_surplus_used, 0);
 }
 
 TEST(FGOAmbiguityOutcomeTelemetryTest,

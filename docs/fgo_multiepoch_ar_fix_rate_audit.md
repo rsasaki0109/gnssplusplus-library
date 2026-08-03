@@ -108,3 +108,53 @@ should add an independent observation-domain witness, such as the constrained
 graph range-cost check used by GICI-LIB or a held-out carrier residual that was
 not part of the LAMBDA marginal. Any future gate must again be selected without
 run3 truth and then validated on a held-out course.
+
+## Held-out carrier witness follow-up
+
+The follow-up implements the second experiment without changing estimator
+output. For each multi-epoch candidate, it passes only the ambiguities in the
+persistent subset to the existing surplus-satellite validator. Carrier rows
+outside that subset are therefore re-differenced against an alternate
+reference and evaluated at the candidate position without contributing an
+integer or covariance entry to the reduced LAMBDA search. The CSV fields are:
+
+- `multiepoch_ar_surplus_eval`: an independent pool was large enough to decide;
+- `multiepoch_ar_surplus_pass`: every required held-out check passed;
+- `multiepoch_ar_surplus_level`: constellation fallback, 0 for the strongest
+  GQEBR pool through 5 for GQ;
+- `multiepoch_ar_surplus_used`: number of held-out satellites in the deciding
+  pool.
+
+This follows the fixed-hypothesis validation direction used by
+[GICI-LIB](https://github.com/chichengcn/gici-open/blob/master/src/gnss/ambiguity_resolution.cpp),
+which rejects a constrained update when range cost increases, and
+[RTKLIB](https://github.com/tomojitakasu/RTKLIB/blob/master/src/rtkpos.c),
+which recomputes and validates fixed-solution post-fit residuals. The important
+difference is explicit sample splitting: the new verdict uses carrier rows
+whose ambiguity was not fixed by the multi-epoch search.
+
+The shipping preset was replayed over all of Tokyo runs 1 and 2. Correct and
+wrong below classify counterfactual FLOAT candidates by 3D error at or below,
+or above, 0.5 m. The shadow continued to leave status, ECEF position, ratio,
+fixed ambiguity count, and AR outcome unchanged.
+
+| FLOAT candidate filter | Run1 correct / wrong | Run2 correct / wrong |
+|---|---:|---:|
+| All multi-epoch candidates | 293 / 1,024 | 114 / 164 |
+| Held-out verdict available | 264 / 856 | 102 / 144 |
+| Held-out verdict passed | 118 / 230 | 34 / 33 |
+| Strongest GQEBR pool passed | 100 / 184 | 25 / 27 |
+| Run1-selected gate | **45 / 0** | **3 / 15** |
+
+The run1-selected gate required the strongest GQEBR pool, ratio above 50, and
+candidate/IMU-prediction separation at most 0.1 m. It looked safe in development
+but failed immediately on run2, where 15 of 18 accepted candidates were wrong
+and the maximum candidate error was 1.755 m. An exploratory run1+2 grid adding
+fresh-SPP separation found no non-empty zero-wrong rule. Run3 remains an
+unconsumed holdout for this follow-up because the candidate already failed its
+validation course.
+
+Decision: retain the held-out verdict as diagnostic evidence, but do not add a
+multi-epoch rescue switch or change the shipping FIX rate. Independent carrier
+rows can share the same urban multipath basin and are not, by themselves, a
+safe integer-aperture witness.

@@ -1528,7 +1528,9 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
            "multiepoch_ar_ratio_pass,multiepoch_ar_candidate_valid,"
            "multiepoch_ar_x_ecef_m,multiepoch_ar_y_ecef_m,"
            "multiepoch_ar_z_ecef_m,multiepoch_ar_float_sep_m,"
-           "multiepoch_ar_imu_sep_m,"
+           "multiepoch_ar_imu_sep_m,multiepoch_ar_surplus_eval,"
+           "multiepoch_ar_surplus_pass,multiepoch_ar_surplus_level,"
+           "multiepoch_ar_surplus_used,"
            "gf_slip_events,gf_slip_max_jump_m,gf_slip_tainted_ambiguities,"
            "doppler_slip_signals,doppler_slip_max_innovation_m,"
            "gf_doppler_isolated_pairs,"
@@ -1658,6 +1660,10 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
                 << ',' << multiepoch.candidate_position_ecef.z()
                 << ',' << multiepoch.float_separation_m
                 << ',' << multiepoch.imu_separation_m
+                << ',' << (multiepoch.surplus_validation_evaluated ? 1 : 0)
+                << ',' << (multiepoch.surplus_validation_pass ? 1 : 0)
+                << ',' << multiepoch.surplus_validation_fallback_level
+                << ',' << multiepoch.surplus_validation_surplus_used
                 << ',' << d.gf_slip_shadow_event_pairs
                 << ',' << d.gf_slip_shadow_max_jump_m
                 << ',' << d.gf_slip_shadow_tainted_ambiguities
