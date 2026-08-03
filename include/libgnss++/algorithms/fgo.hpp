@@ -398,6 +398,14 @@ public:
         int multiepoch_ar_min_ambiguities = 4;
         // Diagnostic-only geometry-free slip/arc-continuity shadow.
         bool monitor_geometry_free_cycle_slip = false;
+        // Diagnostic-only, receiver-clock-free temporal carrier shadow.
+        // It forms satellite single differences against a causal reference,
+        // resets continuity whenever that reference changes, and time-
+        // differences only consecutive observations.  Unlike the legacy
+        // Taroz-parity SD-TDCP path, it uses the actual previous/current LOS
+        // vectors.  The shadow is never inserted into either optimizer and
+        // cannot change the exported solution or FIX/FLOAT decision.
+        bool monitor_clock_resilient_temporal_carrier = false;
         // When a rover/base single-difference geometry-free combination jumps
         // while the underlying rover arcs remain continuous, break both bands'
         // DD arcs after the confirmation interval below. Resetting both bands
@@ -2086,6 +2094,9 @@ public:
             AmbiguityResolutionOutcome::NotAttempted;
         double ddpr_rms_m = 0.0;
         double sd_doppler_rms_mps = 0.0;
+        int clock_resilient_tdcp_factors = 0;
+        double clock_resilient_tdcp_rms_m = 0.0;
+        double clock_resilient_tdcp_max_abs_m = 0.0;
         double gdop = 0.0;
         int num_satellites = 0;
         int sd_doppler_factors = 0;
@@ -2245,6 +2256,11 @@ public:
     analyzeGeometryFreeSlipShadow(const FGOProblem& problem,
                                   double threshold_m = 0.05,
                                   double max_gap_s = 1.5);
+
+    static std::vector<SingleDifferenceTdcpFactor>
+    buildClockResilientTemporalCarrierShadow(const FGOProblem& problem,
+                                             double sigma_m = 0.003,
+                                             double max_gap_s = 1.5);
 
     FGOProblem buildPseudorangeProblem(const std::vector<ObservationData>& epochs,
                                        const NavigationData& nav) const;

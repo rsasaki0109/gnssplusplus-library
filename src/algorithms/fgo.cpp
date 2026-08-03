@@ -2810,6 +2810,136 @@ FGOProcessor::analyzeGeometryFreeSlipShadow(const FGOProblem& problem,
     return shadow;
 }
 
+std::vector<FGOProcessor::SingleDifferenceTdcpFactor>
+FGOProcessor::buildClockResilientTemporalCarrierShadow(
+    const FGOProblem& problem, double sigma_m, double max_gap_s) {
+    using GroupKey = std::pair<GNSSSystem, SignalType>;
+    using ObservationKey = std::pair<SatelliteId, SignalType>;
+    using HistoryKey = std::tuple<SatelliteId, SatelliteId, SignalType>;
+
+    struct HistorySample {
+        std::size_t epoch_index = 0;
+        double residual_m = 0.0;
+        Vector3d los = Vector3d::Zero();
+    };
+
+    const auto& observations = problem.carrier_observations.empty()
+        ? problem.double_difference_pseudorange_observations
+        : problem.carrier_observations;
+    std::vector<std::map<ObservationKey, const CarrierPhaseFactor*>> by_epoch(
+        problem.epochs.size());
+    for (const auto& observation : observations) {
+        if (observation.epoch_index >= by_epoch.size() ||
+            !observation.has_carrier_phase || observation.loss_of_lock ||
+            !std::isfinite(observation.corrected_carrier_m) ||
+            !std::isfinite(observation.model_debug.geometric_range_m) ||
+            !observation.los.allFinite()) {
+            continue;
+        }
+        by_epoch[observation.epoch_index]
+                [{observation.satellite, observation.signal}] = &observation;
+    }
+
+    std::vector<SingleDifferenceTdcpFactor> factors;
+    std::map<GroupKey, SatelliteId> causal_references;
+    std::map<HistoryKey, HistorySample> previous;
+    const double safe_sigma = std::max(1e-4, sigma_m);
+    const double safe_max_gap = std::max(0.0, max_gap_s);
+
+    for (std::size_t epoch_index = 0; epoch_index < by_epoch.size();
+         ++epoch_index) {
+        std::map<GroupKey, std::vector<const CarrierPhaseFactor*>> groups;
+        for (const auto& [key, observation] : by_epoch[epoch_index]) {
+            (void)key;
+            groups[{observation->satellite.system, observation->signal}]
+                .push_back(observation);
+        }
+
+        std::map<HistoryKey, HistorySample> current;
+        for (const auto& [group_key, group] : groups) {
+            if (group.size() < 2) {
+                causal_references.erase(group_key);
+                continue;
+            }
+
+            const CarrierPhaseFactor* reference = nullptr;
+            const auto prior_reference = causal_references.find(group_key);
+            if (prior_reference != causal_references.end()) {
+                for (const auto* candidate : group) {
+                    if (candidate->satellite == prior_reference->second) {
+                        reference = candidate;
+                        break;
+                    }
+                }
+            }
+            if (reference == nullptr) {
+                reference = *std::max_element(
+                    group.begin(), group.end(),
+                    [](const auto* lhs, const auto* rhs) {
+                        if (lhs->elevation_rad != rhs->elevation_rad) {
+                            return lhs->elevation_rad < rhs->elevation_rad;
+                        }
+                        return rhs->satellite < lhs->satellite;
+                    });
+            }
+            causal_references[group_key] = reference->satellite;
+
+            const double reference_residual =
+                reference->corrected_carrier_m -
+                reference->model_debug.geometric_range_m;
+            for (const auto* observation : group) {
+                if (observation->satellite == reference->satellite) {
+                    continue;
+                }
+                const double residual =
+                    observation->corrected_carrier_m -
+                    observation->model_debug.geometric_range_m -
+                    reference_residual;
+                const Vector3d los = observation->los - reference->los;
+                const HistoryKey history_key{observation->satellite,
+                                             reference->satellite,
+                                             observation->signal};
+                current[history_key] = {epoch_index, residual, los};
+
+                const auto prior = previous.find(history_key);
+                if (prior == previous.end()) {
+                    continue;
+                }
+                const double dt = problem.epochs[epoch_index].time -
+                                  problem.epochs[prior->second.epoch_index].time;
+                if (prior->second.epoch_index + 1 != epoch_index || dt <= 0.0 ||
+                    (safe_max_gap > 0.0 && dt > safe_max_gap)) {
+                    continue;
+                }
+
+                const double delta = residual - prior->second.residual_m;
+                if (!std::isfinite(delta)) {
+                    continue;
+                }
+                SingleDifferenceTdcpFactor factor;
+                factor.previous_epoch_index = prior->second.epoch_index;
+                factor.current_epoch_index = epoch_index;
+                factor.satellite = observation->satellite;
+                factor.reference_satellite = reference->satellite;
+                factor.signal = observation->signal;
+                factor.previous_los = prior->second.los;
+                factor.los = los;
+                factor.delta_carrier_m = delta;
+                const double sin_el = std::max(
+                    0.1, std::sin(std::min(observation->elevation_rad,
+                                           reference->elevation_rad)));
+                factor.sigma_m = safe_sigma / std::sqrt(sin_el);
+                factor.elevation_rad =
+                    std::min(observation->elevation_rad,
+                             reference->elevation_rad);
+                factors.push_back(factor);
+            }
+        }
+        previous = std::move(current);
+    }
+    return factors;
+}
+
 FGOProcessor::FGOResult FGOProcessor::optimize(
     const std::vector<ObservationData>& rover_epochs,
     const std::vector<ObservationData>& base_epochs,
