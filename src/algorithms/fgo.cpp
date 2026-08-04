@@ -3388,6 +3388,136 @@ FGOProcessor::analyzePredictedDdprQualityShadow(
     return result;
 }
 
+std::vector<FGOProcessor::PredictedDdprBiasStateDiagnostics>
+FGOProcessor::analyzePredictedDdprBiasStateShadow(
+    const std::vector<PredictedDdprQualityFactorDiagnostics>& quality_rows,
+    double process_noise_m_sqrt_s,
+    double initial_sigma_m,
+    double min_measurement_sigma_m,
+    double robust_update_sigma,
+    int min_prior_updates) {
+    using Key = std::tuple<SatelliteId, SatelliteId, SignalType>;
+    struct State {
+        double mean_m = 0.0;
+        double variance_m2 = 0.0;
+        int updates = 0;
+        std::size_t last_epoch_index = 0;
+        bool initialized = false;
+    };
+
+    const double q = std::max(0.0, process_noise_m_sqrt_s);
+    const double initial_sigma = std::max(1e-6, initial_sigma_m);
+    const double min_measurement_sigma =
+        std::max(1e-6, min_measurement_sigma_m);
+    const double clip_sigma = std::max(0.0, robust_update_sigma);
+    const int burn_in = std::max(0, min_prior_updates);
+    std::map<Key, State> states;
+    std::vector<PredictedDdprBiasStateDiagnostics> result;
+    result.reserve(quality_rows.size());
+
+    for (const auto& row : quality_rows) {
+        PredictedDdprBiasStateDiagnostics diagnostic;
+        diagnostic.previous_epoch_index = row.previous_epoch_index;
+        diagnostic.current_epoch_index = row.current_epoch_index;
+        diagnostic.satellite = row.satellite;
+        diagnostic.reference_satellite = row.reference_satellite;
+        diagnostic.signal = row.signal;
+        diagnostic.dt_s = row.dt_s;
+        diagnostic.pair_age_epochs = row.pair_age_epochs;
+        diagnostic.raw_residual_m =
+            row.current_predicted_ddpr_residual_m;
+
+        const Key key{row.satellite, row.reference_satellite, row.signal};
+        auto& state = states[key];
+        const bool continuous = state.initialized &&
+                                state.last_epoch_index ==
+                                    row.previous_epoch_index &&
+                                row.current_epoch_index ==
+                                    row.previous_epoch_index + 1 &&
+                                std::isfinite(row.dt_s) && row.dt_s > 0.0;
+        if (!continuous) {
+            state = State{};
+            state.variance_m2 = initial_sigma * initial_sigma;
+            diagnostic.continuity_reset = true;
+        } else {
+            state.variance_m2 += q * q * row.dt_s;
+        }
+
+        diagnostic.prior_updates = state.updates;
+        diagnostic.prior_bias_m = state.mean_m;
+        diagnostic.prior_sigma_m =
+            std::sqrt(std::max(0.0, state.variance_m2));
+        diagnostic.corrected_residual_m =
+            diagnostic.raw_residual_m - diagnostic.prior_bias_m;
+        diagnostic.prediction_usable =
+            continuous && state.updates >= burn_in &&
+            row.imu_geometry_evaluated &&
+            std::isfinite(diagnostic.raw_residual_m);
+
+        // The quality monitor propagates the two adjacent DDPR sigmas with
+        // hypot(). Divide by sqrt(2) to obtain an equal-row approximation;
+        // the floor deliberately prevents an overconfident shadow state.
+        const double approximated_row_sigma =
+            row.imu_innovation_sigma_m / std::sqrt(2.0);
+        diagnostic.measurement_sigma_m = std::max(
+            min_measurement_sigma,
+            std::isfinite(approximated_row_sigma)
+                ? approximated_row_sigma
+                : min_measurement_sigma);
+
+        const bool update_valid =
+            row.imu_geometry_evaluated &&
+            std::isfinite(diagnostic.raw_residual_m) &&
+            std::isfinite(state.mean_m) &&
+            std::isfinite(state.variance_m2);
+        if (update_valid) {
+            const double measurement_variance =
+                diagnostic.measurement_sigma_m *
+                diagnostic.measurement_sigma_m;
+            const double innovation_m =
+                diagnostic.raw_residual_m - state.mean_m;
+            diagnostic.innovation_sigma_m = std::sqrt(std::max(
+                1e-12, state.variance_m2 + measurement_variance));
+            diagnostic.normalized_innovation =
+                std::abs(innovation_m) / diagnostic.innovation_sigma_m;
+            diagnostic.applied_innovation_m = innovation_m;
+            if (clip_sigma > 0.0) {
+                const double limit =
+                    clip_sigma * diagnostic.innovation_sigma_m;
+                if (std::abs(diagnostic.applied_innovation_m) > limit) {
+                    diagnostic.applied_innovation_m =
+                        std::copysign(limit,
+                                      diagnostic.applied_innovation_m);
+                    diagnostic.update_clipped = true;
+                }
+            }
+            const double kalman_gain =
+                state.variance_m2 /
+                (state.variance_m2 + measurement_variance);
+            state.mean_m +=
+                kalman_gain * diagnostic.applied_innovation_m;
+            state.variance_m2 =
+                std::max(0.0, (1.0 - kalman_gain) * state.variance_m2);
+            ++state.updates;
+            state.last_epoch_index = row.current_epoch_index;
+            state.initialized = true;
+            diagnostic.update_applied = true;
+        } else {
+            // Invalid geometry breaks the causal chain. A later valid row
+            // starts from the configured prior instead of stale state.
+            states.erase(key);
+        }
+
+        if (diagnostic.update_applied) {
+            diagnostic.posterior_bias_m = state.mean_m;
+            diagnostic.posterior_sigma_m =
+                std::sqrt(std::max(0.0, state.variance_m2));
+        }
+        result.push_back(diagnostic);
+    }
+    return result;
+}
+
 FGOProcessor::FGOResult FGOProcessor::optimize(
     const std::vector<ObservationData>& rover_epochs,
     const std::vector<ObservationData>& base_epochs,

@@ -410,6 +410,16 @@ public:
         // compares measured DDPR changes with DD Doppler and the causal
         // pre-solve IMU pose prediction; no result is consumed by the graph.
         bool monitor_predicted_ddpr_quality = false;
+        // Diagnostic-only causal random-walk model of persistent DD
+        // pseudorange bias. It consumes the monitor above internally but is
+        // independent of its output switch. No result is consumed by the
+        // graph, ambiguity resolver, or exported solution.
+        bool monitor_predicted_ddpr_bias_state = false;
+        double predicted_ddpr_bias_process_noise_m_sqrt_s = 0.25;
+        double predicted_ddpr_bias_initial_sigma_m = 5.0;
+        double predicted_ddpr_bias_min_measurement_sigma_m = 0.5;
+        double predicted_ddpr_bias_robust_update_sigma = 3.0;
+        int predicted_ddpr_bias_min_prior_updates = 2;
         // When a rover/base single-difference geometry-free combination jumps
         // while the underlying rover arcs remain continuous, break both bands'
         // DD arcs after the confirmation interval below. Resetting both bands
@@ -1842,6 +1852,34 @@ public:
             PredictedDdprQualityAction::Unavailable;
     };
 
+    /// Causal, diagnostic-only scalar bias prediction for one DD pseudorange
+    /// pair. `prior_bias_m` is formed solely from earlier rows. The current
+    /// residual is assimilated only after this diagnostic has been formed.
+    struct PredictedDdprBiasStateDiagnostics {
+        std::size_t previous_epoch_index = 0;
+        std::size_t current_epoch_index = 0;
+        SatelliteId satellite;
+        SatelliteId reference_satellite;
+        SignalType signal = SignalType::GPS_L1CA;
+        double dt_s = 0.0;
+        int pair_age_epochs = 0;
+        int prior_updates = 0;
+        bool continuity_reset = false;
+        bool prediction_usable = false;
+        bool update_applied = false;
+        bool update_clipped = false;
+        double raw_residual_m = 0.0;
+        double prior_bias_m = 0.0;
+        double prior_sigma_m = 0.0;
+        double corrected_residual_m = 0.0;
+        double measurement_sigma_m = 0.0;
+        double innovation_sigma_m = 0.0;
+        double normalized_innovation = 0.0;
+        double applied_innovation_m = 0.0;
+        double posterior_bias_m = 0.0;
+        double posterior_sigma_m = 0.0;
+    };
+
     struct FGODiagnostics {
         int iterations = 0;
         bool converged = false;
@@ -2329,6 +2367,8 @@ public:
             temporal_carrier_shadow_factors;
         std::vector<PredictedDdprQualityFactorDiagnostics>
             predicted_ddpr_quality_factors;
+        std::vector<PredictedDdprBiasStateDiagnostics>
+            predicted_ddpr_bias_state_factors;
         // Milestone 2b (populated only by the GTSAM IMU-coupled path):
         // per-epoch estimated attitude as [roll, pitch, heading] in degrees
         // (body FLU -> nav ENU; heading is clockwise from North) and estimated
@@ -2379,6 +2419,17 @@ public:
         double doppler_sigma_mps = 0.2,
         double normalized_outlier_threshold = 5.0,
         double max_gap_s = 1.5);
+
+    /// Predict persistent pair-specific DD pseudorange bias from prior causal
+    /// predicted-DDPR residual rows. The current row never predicts itself.
+    static std::vector<PredictedDdprBiasStateDiagnostics>
+    analyzePredictedDdprBiasStateShadow(
+        const std::vector<PredictedDdprQualityFactorDiagnostics>& quality_rows,
+        double process_noise_m_sqrt_s = 0.25,
+        double initial_sigma_m = 5.0,
+        double min_measurement_sigma_m = 0.5,
+        double robust_update_sigma = 3.0,
+        int min_prior_updates = 2);
 
     FGOProblem buildPseudorangeProblem(const std::vector<ObservationData>& epochs,
                                        const NavigationData& nav) const;

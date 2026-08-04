@@ -996,6 +996,76 @@ TEST(FGOTest, PredictedDdprQualityShadowIsClockSafeAndFailClosed) {
     EXPECT_TRUE(switched.empty());
 }
 
+TEST(FGOTest, PredictedDdprBiasStateShadowPredictsPersistentBiasCausally) {
+    const auto make_row = [](std::size_t previous_epoch,
+                             double residual_m) {
+        FGOProcessor::PredictedDdprQualityFactorDiagnostics row;
+        row.previous_epoch_index = previous_epoch;
+        row.current_epoch_index = previous_epoch + 1;
+        row.satellite = SatelliteId(GNSSSystem::GPS, 5);
+        row.reference_satellite = SatelliteId(GNSSSystem::GPS, 11);
+        row.signal = SignalType::GPS_L1CA;
+        row.dt_s = 1.0;
+        row.pair_age_epochs = static_cast<int>(previous_epoch + 2);
+        row.imu_geometry_evaluated = true;
+        row.current_predicted_ddpr_residual_m = residual_m;
+        row.imu_innovation_sigma_m = std::sqrt(0.5);
+        return row;
+    };
+    const std::vector<FGOProcessor::PredictedDdprQualityFactorDiagnostics>
+        rows = {make_row(0, 10.0), make_row(1, 10.0),
+                make_row(2, 10.0), make_row(3, 10.0)};
+
+    const auto diagnostics =
+        FGOProcessor::analyzePredictedDdprBiasStateShadow(rows);
+    ASSERT_EQ(diagnostics.size(), rows.size());
+    EXPECT_TRUE(diagnostics[0].continuity_reset);
+    EXPECT_FALSE(diagnostics[0].prediction_usable);
+    EXPECT_FALSE(diagnostics[1].prediction_usable);
+    ASSERT_TRUE(diagnostics[2].prediction_usable);
+    EXPECT_EQ(diagnostics[2].prior_updates, 2);
+    EXPECT_NEAR(diagnostics[2].prior_bias_m, 10.0, 0.2);
+    EXPECT_LT(std::abs(diagnostics[2].corrected_residual_m), 0.2);
+    EXPECT_GT(std::abs(diagnostics[2].raw_residual_m), 9.0);
+}
+
+TEST(FGOTest, PredictedDdprBiasStateShadowBoundsImpulseAndResetsOnGap) {
+    const auto make_row = [](std::size_t previous_epoch,
+                             double residual_m) {
+        FGOProcessor::PredictedDdprQualityFactorDiagnostics row;
+        row.previous_epoch_index = previous_epoch;
+        row.current_epoch_index = previous_epoch + 1;
+        row.satellite = SatelliteId(GNSSSystem::GPS, 5);
+        row.reference_satellite = SatelliteId(GNSSSystem::GPS, 11);
+        row.signal = SignalType::GPS_L1CA;
+        row.dt_s = 1.0;
+        row.pair_age_epochs = 2;
+        row.imu_geometry_evaluated = true;
+        row.current_predicted_ddpr_residual_m = residual_m;
+        row.imu_innovation_sigma_m = std::sqrt(0.5);
+        return row;
+    };
+    const std::vector<FGOProcessor::PredictedDdprQualityFactorDiagnostics>
+        rows = {make_row(0, 10.0), make_row(1, 10.0),
+                make_row(2, 40.0), make_row(3, 10.0),
+                make_row(5, -8.0)};
+
+    const auto diagnostics =
+        FGOProcessor::analyzePredictedDdprBiasStateShadow(rows);
+    ASSERT_EQ(diagnostics.size(), rows.size());
+    ASSERT_TRUE(diagnostics[2].prediction_usable);
+    EXPECT_NEAR(diagnostics[2].prior_bias_m, 10.0, 0.2)
+        << "the current impulse must not leak into its own prediction";
+    EXPECT_TRUE(diagnostics[2].update_clipped);
+    ASSERT_TRUE(diagnostics[3].prediction_usable);
+    EXPECT_LT(std::abs(diagnostics[3].prior_bias_m - 10.0), 1.0)
+        << "one impulse must not become a persistent 40 m bias";
+    EXPECT_TRUE(diagnostics[4].continuity_reset);
+    EXPECT_FALSE(diagnostics[4].prediction_usable);
+    EXPECT_EQ(diagnostics[4].prior_updates, 0);
+    EXPECT_NEAR(diagnostics[4].prior_bias_m, 0.0, 1e-12);
+}
+
 TEST(FGOTest, RobustLossDownweightsPseudorangeOutlier) {
     FGOProcessor::FGOProblem problem = makeSyntheticProblem();
     for (auto& factor : problem.pseudorange_factors) {

@@ -729,6 +729,7 @@ TEST(FGOPredictedDdprQualityShadowTest,
 
     FGOProcessor::FGOConfig on_config = off_config;
     on_config.monitor_predicted_ddpr_quality = true;
+    on_config.monitor_predicted_ddpr_bias_state = true;
     const auto on_result = FGOProcessor(on_config).optimizeProblem(problem);
 
     ASSERT_EQ(off_result.solution.solutions.size(),
@@ -738,6 +739,10 @@ TEST(FGOPredictedDdprQualityShadowTest,
             on_result.solution.solutions[i].position_ecef, 0.0));
         EXPECT_EQ(off_result.solution.solutions[i].status,
                   on_result.solution.solutions[i].status);
+        EXPECT_EQ(off_result.solution.solutions[i].ratio,
+                  on_result.solution.solutions[i].ratio);
+        EXPECT_EQ(off_result.solution.solutions[i].num_fixed_ambiguities,
+                  on_result.solution.solutions[i].num_fixed_ambiguities);
     }
     ASSERT_FALSE(on_result.predicted_ddpr_quality_factors.empty());
     bool saw_imu_geometry = false;
@@ -752,6 +757,16 @@ TEST(FGOPredictedDdprQualityShadowTest,
         }
     }
     EXPECT_TRUE(saw_imu_geometry);
+    ASSERT_FALSE(on_result.predicted_ddpr_bias_state_factors.empty());
+    EXPECT_EQ(on_result.predicted_ddpr_bias_state_factors.size(),
+              on_result.predicted_ddpr_quality_factors.size());
+    for (const auto& row :
+         on_result.predicted_ddpr_bias_state_factors) {
+        EXPECT_TRUE(row.update_applied);
+        EXPECT_TRUE(std::isfinite(row.prior_bias_m));
+        EXPECT_TRUE(std::isfinite(row.posterior_bias_m));
+        EXPECT_GT(row.measurement_sigma_m, 0.0);
+    }
 }
 
 TEST(FGOAmbiguityCandidateTelemetryTest,

@@ -5869,12 +5869,25 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 epoch_diagnostics, &gf_slip_shadow,
                 &fde_rejected_ambiguities_by_epoch);
     }
-    if (config.monitor_predicted_ddpr_quality) {
-        result.predicted_ddpr_quality_factors = FGOProcessor::
-            analyzePredictedDdprQualityShadow(
-                problem, epoch_float_position, epoch_predicted_position,
-                config.single_difference_doppler_sigma_mps, 5.0,
-                config.max_tdcp_gap_s);
+    if (config.monitor_predicted_ddpr_quality ||
+        config.monitor_predicted_ddpr_bias_state) {
+        auto quality_rows = FGOProcessor::analyzePredictedDdprQualityShadow(
+            problem, epoch_float_position, epoch_predicted_position,
+            config.single_difference_doppler_sigma_mps, 5.0,
+            config.max_tdcp_gap_s);
+        if (config.monitor_predicted_ddpr_bias_state) {
+            result.predicted_ddpr_bias_state_factors =
+                FGOProcessor::analyzePredictedDdprBiasStateShadow(
+                    quality_rows,
+                    config.predicted_ddpr_bias_process_noise_m_sqrt_s,
+                    config.predicted_ddpr_bias_initial_sigma_m,
+                    config.predicted_ddpr_bias_min_measurement_sigma_m,
+                    config.predicted_ddpr_bias_robust_update_sigma,
+                    config.predicted_ddpr_bias_min_prior_updates);
+        }
+        if (config.monitor_predicted_ddpr_quality) {
+            result.predicted_ddpr_quality_factors = std::move(quality_rows);
+        }
     }
     const bool have_amb = !problem.ambiguity_states.empty();
     result.epoch_diagnostics = std::move(epoch_diagnostics);
