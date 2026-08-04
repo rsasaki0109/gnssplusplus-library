@@ -101,6 +101,7 @@ struct Args {
     bool constellation_par = false;
     bool residual_par = false;
     bool ratio_impact_monitor = false;
+    bool disjoint_ar_shadow = false;
     bool gf_slip_reset = false;
     bool conditional_mf_shadow = false;
     bool multiepoch_ar_shadow = false;
@@ -280,6 +281,10 @@ Args parseArgs(int argc, char** argv) {
         }
         if (a == "--ratio-impact-monitor") {
             args.ratio_impact_monitor = true;
+            continue;
+        }
+        if (a == "--disjoint-ar-shadow") {
+            args.disjoint_ar_shadow = true;
             continue;
         }
         if (a == "--gf-slip-reset") {
@@ -842,6 +847,9 @@ libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
     }
     if (args.conditional_mf_shadow) {
         config.monitor_conditional_multiband_ar = true;
+    }
+    if (args.disjoint_ar_shadow) {
+        config.monitor_disjoint_constellation_ar = true;
     }
     if (args.multiepoch_ar_shadow) {
         config.monitor_multiepoch_ar = true;
@@ -1581,6 +1589,17 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
            "ratio_impact_best_nfixed,ratio_impact_x_ecef_m,"
            "ratio_impact_y_ecef_m,ratio_impact_z_ecef_m,"
            "ratio_impact_float_sep_m,ratio_impact_imu_sep_m,"
+           "disjoint_ar_eval,disjoint_ar_a_system_mask,"
+           "disjoint_ar_b_system_mask,disjoint_ar_a_n,disjoint_ar_b_n,"
+           "disjoint_ar_a_ratio,disjoint_ar_b_ratio,"
+           "disjoint_ar_a_bsr,disjoint_ar_b_bsr,"
+           "disjoint_ar_a_ratio_pass,disjoint_ar_b_ratio_pass,"
+           "disjoint_ar_a_candidate_valid,disjoint_ar_b_candidate_valid,"
+           "disjoint_ar_a_x_ecef_m,disjoint_ar_a_y_ecef_m,"
+           "disjoint_ar_a_z_ecef_m,disjoint_ar_b_x_ecef_m,"
+           "disjoint_ar_b_y_ecef_m,disjoint_ar_b_z_ecef_m,"
+           "disjoint_ar_ab_sep_m,disjoint_ar_a_primary_sep_m,"
+           "disjoint_ar_b_primary_sep_m,"
            "ddpr_anchor_eval,ddpr_anchor_n,ddpr_anchor_res_m,"
            "ddpr_anchor_x_ecef_m,ddpr_anchor_y_ecef_m,ddpr_anchor_z_ecef_m,"
            "ddpr_anchor_h_err_m,ddpr_anchor_u_err_m,ddpr_anchor_prior,"
@@ -1649,6 +1668,7 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
             const auto& d = r.epoch_diagnostics[si];
             const auto& conditional = d.conditional_multiband_ar_shadow;
             const auto& multiepoch = d.multiepoch_ar_shadow;
+            const auto& disjoint = d.disjoint_constellation_ar_shadow;
             out << ',' << d.effective_ratio_threshold
                 << ',' << s.num_fixed_ambiguities
                 << ',' << static_cast<int>(d.ar_outcome)
@@ -1742,7 +1762,29 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
                 << ',' << d.ratio_impact_best_position_ecef.y()
                 << ',' << d.ratio_impact_best_position_ecef.z()
                 << ',' << d.ratio_impact_best_float_separation_m
-                << ',' << d.ratio_impact_best_imu_separation_m;
+                << ',' << d.ratio_impact_best_imu_separation_m
+                << ',' << (disjoint.evaluated ? 1 : 0)
+                << ',' << disjoint.partition_a_system_mask
+                << ',' << disjoint.partition_b_system_mask
+                << ',' << disjoint.partition_a_ambiguities
+                << ',' << disjoint.partition_b_ambiguities
+                << ',' << disjoint.partition_a_ratio
+                << ',' << disjoint.partition_b_ratio
+                << ',' << disjoint.partition_a_bootstrapped_success_rate
+                << ',' << disjoint.partition_b_bootstrapped_success_rate
+                << ',' << (disjoint.partition_a_ratio_passed ? 1 : 0)
+                << ',' << (disjoint.partition_b_ratio_passed ? 1 : 0)
+                << ',' << (disjoint.partition_a_candidate_available ? 1 : 0)
+                << ',' << (disjoint.partition_b_candidate_available ? 1 : 0)
+                << ',' << disjoint.partition_a_position_ecef.x()
+                << ',' << disjoint.partition_a_position_ecef.y()
+                << ',' << disjoint.partition_a_position_ecef.z()
+                << ',' << disjoint.partition_b_position_ecef.x()
+                << ',' << disjoint.partition_b_position_ecef.y()
+                << ',' << disjoint.partition_b_position_ecef.z()
+                << ',' << disjoint.partition_separation_m
+                << ',' << disjoint.partition_a_primary_separation_m
+                << ',' << disjoint.partition_b_primary_separation_m;
             double anchor_horiz = -1.0;
             double anchor_up = -1.0;
             if (d.ddpr_anchor_evaluated && d.ddpr_anchor_position_ecef.norm() > 1e6) {
@@ -1962,6 +2004,61 @@ void dumpTemporalCarrierFactorCsv(
             << (row.carrier_hold_witness ? 1 : 0) << ','
             << (row.carrier_fde_witness ? 1 : 0) << ',' << classification
             << '\n';
+    }
+}
+
+void dumpDisjointArShadowCsv(
+    const libgnss::FGOProcessor::FGOResult& result,
+    const std::string& epoch_csv_path) {
+    const std::string path = epoch_csv_path + ".disjoint_ar_shadow.csv";
+    std::ofstream out(path);
+    if (!out) {
+        std::cerr << "Error: cannot open disjoint AR shadow output file "
+                  << path << "\n";
+        return;
+    }
+    out << std::fixed << std::setprecision(6);
+    out << "tow,evaluated,primary_candidate_available,primary_ratio,"
+           "primary_x_ecef_m,primary_y_ecef_m,primary_z_ecef_m,"
+           "partition_a_system_mask,partition_b_system_mask,"
+           "partition_a_ambiguities,partition_b_ambiguities,"
+           "partition_a_ratio,partition_b_ratio,partition_a_bsr,partition_b_bsr,"
+           "partition_a_ratio_passed,partition_b_ratio_passed,"
+           "partition_a_candidate_available,partition_b_candidate_available,"
+           "partition_a_x_ecef_m,partition_a_y_ecef_m,partition_a_z_ecef_m,"
+           "partition_b_x_ecef_m,partition_b_y_ecef_m,partition_b_z_ecef_m,"
+           "partition_separation_m,partition_a_primary_separation_m,"
+           "partition_b_primary_separation_m\n";
+    for (const auto& epoch : result.epoch_diagnostics) {
+        const auto& shadow = epoch.disjoint_constellation_ar_shadow;
+        out << epoch.time.tow << ','
+            << (shadow.evaluated ? 1 : 0) << ','
+            << (epoch.lambda_candidate_available ? 1 : 0) << ','
+            << epoch.lambda_candidate_ratio << ','
+            << epoch.lambda_candidate_position_ecef.x() << ','
+            << epoch.lambda_candidate_position_ecef.y() << ','
+            << epoch.lambda_candidate_position_ecef.z() << ','
+            << shadow.partition_a_system_mask << ','
+            << shadow.partition_b_system_mask << ','
+            << shadow.partition_a_ambiguities << ','
+            << shadow.partition_b_ambiguities << ','
+            << shadow.partition_a_ratio << ','
+            << shadow.partition_b_ratio << ','
+            << shadow.partition_a_bootstrapped_success_rate << ','
+            << shadow.partition_b_bootstrapped_success_rate << ','
+            << (shadow.partition_a_ratio_passed ? 1 : 0) << ','
+            << (shadow.partition_b_ratio_passed ? 1 : 0) << ','
+            << (shadow.partition_a_candidate_available ? 1 : 0) << ','
+            << (shadow.partition_b_candidate_available ? 1 : 0) << ','
+            << shadow.partition_a_position_ecef.x() << ','
+            << shadow.partition_a_position_ecef.y() << ','
+            << shadow.partition_a_position_ecef.z() << ','
+            << shadow.partition_b_position_ecef.x() << ','
+            << shadow.partition_b_position_ecef.y() << ','
+            << shadow.partition_b_position_ecef.z() << ','
+            << shadow.partition_separation_m << ','
+            << shadow.partition_a_primary_separation_m << ','
+            << shadow.partition_b_primary_separation_m << '\n';
     }
 }
 
@@ -3093,6 +3190,9 @@ int main(int argc, char** argv) {
         const HorizError he = horizontalErrorVsRef(fl, ref_rows);
         if (!args.dump_csv_path.empty()) {
             dumpEpochCsv(fl, ref_rows, args.dump_csv_path);
+            if (args.disjoint_ar_shadow) {
+                dumpDisjointArShadowCsv(fl, args.dump_csv_path);
+            }
             if (args.clock_resilient_temporal_shadow) {
                 dumpTemporalCarrierFactorCsv(fl, args.dump_csv_path);
             }
@@ -3125,6 +3225,8 @@ int main(int argc, char** argv) {
                    << ", max_std_cycles=" << config.partial_ar_max_std_cycles
                    << ", ratio_impact_monitor="
                    << (config.monitor_ratio_impact_partial_ar ? "on" : "off")
+                   << ", disjoint_ar_shadow="
+                   << (config.monitor_disjoint_constellation_ar ? "on" : "off")
                    << ", conditional_mf_shadow="
                    << (config.monitor_conditional_multiband_ar ? "on" : "off")
                    << ", multiepoch_ar_shadow="

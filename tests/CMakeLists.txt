@@ -37,6 +37,7 @@ if(GTest_FOUND)
           test_fix_failure_budget.cpp
     test_inertial_fix_evidence.cpp
     test_disjoint_satellite_fix_evidence.cpp
+        test_disjoint_constellation_partition.cpp
         test_causal_ambiguity_arc.cpp
         test_nlos_weights.cpp
         test_float_trust_policy.cpp

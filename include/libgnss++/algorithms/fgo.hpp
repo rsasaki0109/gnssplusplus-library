@@ -7,6 +7,7 @@
 #include <libgnss++/io/imu.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <map>
 #include <set>
@@ -384,6 +385,14 @@ public:
         // satellite in turn and record the best candidate. Never changes the
         // selected subset, FIX/FLOAT status, graph, or hold state.
         bool monitor_ratio_impact_partial_ar = false;
+        // Diagnostic-only ambiguity solution-separation audit. Eligible DD
+        // ambiguities are grouped by constellation, whole constellation
+        // groups are balanced into two satellite-disjoint partitions, and
+        // each partition runs an independent reduced LAMBDA search. The
+        // shared float graph still correlates both partitions, so this is
+        // evidence telemetry rather than an acceptance authority.
+        bool monitor_disjoint_constellation_ar = false;
+        int disjoint_constellation_ar_min_ambiguities = 4;
         // Diagnostic-only two-stage multi-frequency ambiguity resolution.
         // Resolve one primary band per satellite, then condition the remaining
         // ambiguity distribution on those integers. Never changes estimator
@@ -2158,6 +2167,30 @@ public:
         double imu_separation_m = 0.0;
     };
 
+    /// Two constellation-disjoint reduced LAMBDA candidates. Populated only
+    /// by monitor_disjoint_constellation_ar and never consumed by the
+    /// estimator.
+    struct DisjointConstellationArShadow {
+        bool evaluated = false;
+        std::uint64_t partition_a_system_mask = 0;
+        std::uint64_t partition_b_system_mask = 0;
+        int partition_a_ambiguities = 0;
+        int partition_b_ambiguities = 0;
+        double partition_a_ratio = 0.0;
+        double partition_b_ratio = 0.0;
+        double partition_a_bootstrapped_success_rate = 0.0;
+        double partition_b_bootstrapped_success_rate = 0.0;
+        bool partition_a_ratio_passed = false;
+        bool partition_b_ratio_passed = false;
+        bool partition_a_candidate_available = false;
+        bool partition_b_candidate_available = false;
+        Vector3d partition_a_position_ecef = Vector3d::Zero();
+        Vector3d partition_b_position_ecef = Vector3d::Zero();
+        double partition_separation_m = 0.0;
+        double partition_a_primary_separation_m = 0.0;
+        double partition_b_primary_separation_m = 0.0;
+    };
+
     /// Counterfactual two-stage multi-frequency AR result. Populated only by
     /// monitor_conditional_multiband_ar and never consumed by the estimator.
     struct ConditionalMultibandArShadow {
@@ -2282,6 +2315,7 @@ public:
         double ratio_impact_best_float_separation_m = 0.0;
         double ratio_impact_best_imu_separation_m = 0.0;
         std::vector<RatioImpactTrialTrace> ratio_impact_trial_trace;
+        DisjointConstellationArShadow disjoint_constellation_ar_shadow;
         bool ddpr_anchor_evaluated = false;
         bool ddpr_anchor_bootstrap_prior_applied = false;
         int ddpr_anchor_active_factors = 0;
