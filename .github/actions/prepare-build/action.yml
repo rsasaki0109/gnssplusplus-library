@@ -50,6 +50,8 @@ runs:
       with:
         path: ${{ runner.os == 'Linux' && '~/.cache/ccache' || '~/Library/Caches/ccache' }}
         key: ${{ runner.os }}-ccache-${{ hashFiles('CMakeLists.txt', 'src/**', 'include/**') }}
+        restore-keys: |
+          ${{ runner.os }}-ccache-
 
     - name: Install dependencies (Ubuntu)
       if: ${{ startsWith(inputs.os-name, 'ubuntu') }}
