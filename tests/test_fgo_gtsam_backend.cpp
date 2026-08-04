@@ -718,6 +718,42 @@ TEST(FGOClockResilientTemporalCarrierShadowTest,
         }));
 }
 
+TEST(FGOPredictedDdprQualityShadowTest,
+     ReportsCausalRowsWithoutChangingFixedLagSolution) {
+    CpHoldTestOptions opt;
+    opt.num_epochs = 3;
+    const auto problem = makeCpHoldFixedLagProblem(opt);
+
+    FGOProcessor::FGOConfig off_config = makeCpHoldBaseConfig();
+    const auto off_result = FGOProcessor(off_config).optimizeProblem(problem);
+
+    FGOProcessor::FGOConfig on_config = off_config;
+    on_config.monitor_predicted_ddpr_quality = true;
+    const auto on_result = FGOProcessor(on_config).optimizeProblem(problem);
+
+    ASSERT_EQ(off_result.solution.solutions.size(),
+              on_result.solution.solutions.size());
+    for (std::size_t i = 0; i < off_result.solution.solutions.size(); ++i) {
+        EXPECT_TRUE(off_result.solution.solutions[i].position_ecef.isApprox(
+            on_result.solution.solutions[i].position_ecef, 0.0));
+        EXPECT_EQ(off_result.solution.solutions[i].status,
+                  on_result.solution.solutions[i].status);
+    }
+    ASSERT_FALSE(on_result.predicted_ddpr_quality_factors.empty());
+    bool saw_imu_geometry = false;
+    for (const auto& row : on_result.predicted_ddpr_quality_factors) {
+        EXPECT_GE(row.pair_age_epochs, 2);
+        EXPECT_GT(row.dt_s, 0.0);
+        EXPECT_TRUE(std::isfinite(row.measured_ddpr_change_m));
+        if (row.imu_geometry_evaluated) {
+            saw_imu_geometry = true;
+            EXPECT_GT(row.imu_innovation_sigma_m, 0.0);
+            EXPECT_TRUE(std::isfinite(row.normalized_imu_innovation));
+        }
+    }
+    EXPECT_TRUE(saw_imu_geometry);
+}
+
 TEST(FGOAmbiguityCandidateTelemetryTest,
      ReportsFinalCandidatesAtInsufficientCountDecision) {
     CpHoldTestOptions opt;

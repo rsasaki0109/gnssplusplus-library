@@ -3202,6 +3202,192 @@ FGOProcessor::classifyClockResilientTemporalCarrierShadow(
     return classified_factors;
 }
 
+std::vector<FGOProcessor::PredictedDdprQualityFactorDiagnostics>
+FGOProcessor::analyzePredictedDdprQualityShadow(
+    const FGOProblem& problem,
+    const std::vector<Vector3d>& previous_solution_positions_ecef,
+    const std::vector<Vector3d>& predicted_positions_ecef,
+    double doppler_sigma_mps,
+    double normalized_outlier_threshold,
+    double max_gap_s) {
+    using Key = std::tuple<SatelliteId, SatelliteId, SignalType>;
+    struct History {
+        const DoubleDifferencePseudorangeFactor* factor = nullptr;
+        std::size_t epoch_index = 0;
+        double dd_doppler_mps = 0.0;
+        bool has_dd_doppler = false;
+        int pair_age_epochs = 0;
+    };
+
+    const auto finite_position = [](const Vector3d& position) {
+        return position.allFinite() && position.norm() > 0.0;
+    };
+    const auto dd_range = [](const DoubleDifferencePseudorangeFactor& factor,
+                             const Vector3d& rover_position_ecef) {
+        const double rover_target =
+            (factor.rover_satellite_position_ecef - rover_position_ecef).norm();
+        const double rover_reference =
+            (factor.rover_reference_position_ecef - rover_position_ecef).norm();
+        const double base_target =
+            (factor.base_satellite_position_ecef - factor.base_position_ecef)
+                .norm();
+        const double base_reference =
+            (factor.base_reference_position_ecef - factor.base_position_ecef)
+                .norm();
+        return (rover_target - base_target) -
+               (rover_reference - base_reference);
+    };
+    const auto dd_doppler = [](const DoubleDifferencePseudorangeFactor& factor,
+                               double& value) {
+        const auto& rt = factor.rover_satellite_model;
+        const auto& rr = factor.rover_reference_model;
+        const auto& bt = factor.base_satellite_model;
+        const auto& br = factor.base_reference_model;
+        if (!rt.has_doppler_residual || !rr.has_doppler_residual ||
+            !bt.has_doppler_residual || !br.has_doppler_residual) {
+            return false;
+        }
+        value = (rt.doppler_residual_mps - bt.doppler_residual_mps) -
+                (rr.doppler_residual_mps - br.doppler_residual_mps);
+        return std::isfinite(value);
+    };
+
+    const std::size_t num_epochs = problem.epochs.size();
+    std::vector<std::vector<const DoubleDifferencePseudorangeFactor*>>
+        factors_by_epoch(num_epochs);
+    for (const auto& factor : problem.double_difference_pseudorange_factors) {
+        if (factor.epoch_index < num_epochs) {
+            factors_by_epoch[factor.epoch_index].push_back(&factor);
+        }
+    }
+
+    const double safe_doppler_sigma = std::max(1e-6, doppler_sigma_mps);
+    const double safe_threshold = std::max(0.0, normalized_outlier_threshold);
+    const double safe_max_gap = std::max(0.0, max_gap_s);
+    std::map<Key, History> history;
+    std::vector<PredictedDdprQualityFactorDiagnostics> result;
+    result.reserve(problem.double_difference_pseudorange_factors.size());
+    for (std::size_t epoch_index = 0; epoch_index < num_epochs; ++epoch_index) {
+        std::map<Key, History> current;
+        for (const auto* factor : factors_by_epoch[epoch_index]) {
+            const Key key{factor->satellite, factor->reference_satellite,
+                          factor->signal};
+            double current_dd_doppler = 0.0;
+            const bool current_has_doppler =
+                dd_doppler(*factor, current_dd_doppler);
+            History current_history{factor, epoch_index, current_dd_doppler,
+                                    current_has_doppler, 1};
+            const auto prior = history.find(key);
+            if (prior == history.end()) {
+                current[key] = current_history;
+                continue;
+            }
+
+            const std::size_t previous_epoch_index = prior->second.epoch_index;
+            const double dt = problem.epochs[epoch_index].time -
+                              problem.epochs[previous_epoch_index].time;
+            if (previous_epoch_index + 1 != epoch_index || dt <= 0.0 ||
+                (safe_max_gap > 0.0 && dt > safe_max_gap)) {
+                current[key] = current_history;
+                continue;
+            }
+
+            current_history.pair_age_epochs = prior->second.pair_age_epochs + 1;
+            current[key] = current_history;
+            PredictedDdprQualityFactorDiagnostics diagnostic;
+            diagnostic.previous_epoch_index = previous_epoch_index;
+            diagnostic.current_epoch_index = epoch_index;
+            diagnostic.satellite = factor->satellite;
+            diagnostic.reference_satellite = factor->reference_satellite;
+            diagnostic.signal = factor->signal;
+            diagnostic.dt_s = dt;
+            diagnostic.pair_age_epochs = current_history.pair_age_epochs;
+            diagnostic.measured_ddpr_change_m =
+                factor->observed_dd_pseudorange_m -
+                prior->second.factor->observed_dd_pseudorange_m;
+            diagnostic.elevation_rad = std::min(
+                factor->rover_satellite_model.elevation_rad,
+                factor->rover_reference_model.elevation_rad);
+            diagnostic.target_snr_dbhz =
+                factor->rover_satellite_model.snr_dbhz;
+            diagnostic.reference_snr_dbhz =
+                factor->rover_reference_model.snr_dbhz;
+
+            if (current_has_doppler && prior->second.has_dd_doppler) {
+                diagnostic.doppler_evaluated = true;
+                diagnostic.doppler_predicted_change_m =
+                    0.5 * (prior->second.dd_doppler_mps +
+                           current_dd_doppler) *
+                    dt;
+                diagnostic.doppler_innovation_m =
+                    diagnostic.measured_ddpr_change_m -
+                    diagnostic.doppler_predicted_change_m;
+                const double measured_sigma = std::hypot(
+                    prior->second.factor->sigma_m, factor->sigma_m);
+                // Four receiver/satellite Doppler terms form each DD. The
+                // trapezoidal difference uses two epochs, yielding
+                // sqrt(2)*dt*sigma for equal independent link sigmas.
+                const double integrated_doppler_sigma =
+                    std::sqrt(2.0) * dt * safe_doppler_sigma;
+                diagnostic.doppler_innovation_sigma_m =
+                    std::hypot(measured_sigma, integrated_doppler_sigma);
+                diagnostic.normalized_doppler_innovation =
+                    std::abs(diagnostic.doppler_innovation_m) /
+                    diagnostic.doppler_innovation_sigma_m;
+            }
+
+            if (previous_epoch_index <
+                    previous_solution_positions_ecef.size() &&
+                epoch_index < predicted_positions_ecef.size() &&
+                finite_position(previous_solution_positions_ecef[
+                    previous_epoch_index]) &&
+                finite_position(predicted_positions_ecef[epoch_index])) {
+                diagnostic.imu_geometry_evaluated = true;
+                diagnostic.imu_predicted_change_m =
+                    dd_range(*factor, predicted_positions_ecef[epoch_index]) -
+                    dd_range(*prior->second.factor,
+                             previous_solution_positions_ecef[
+                                 previous_epoch_index]);
+                diagnostic.previous_predicted_ddpr_residual_m =
+                    prior->second.factor->observed_dd_pseudorange_m -
+                    dd_range(*prior->second.factor,
+                             previous_solution_positions_ecef[
+                                 previous_epoch_index]);
+                diagnostic.current_predicted_ddpr_residual_m =
+                    factor->observed_dd_pseudorange_m -
+                    dd_range(*factor,
+                             predicted_positions_ecef[epoch_index]);
+                diagnostic.imu_innovation_m =
+                    diagnostic.measured_ddpr_change_m -
+                    diagnostic.imu_predicted_change_m;
+                diagnostic.imu_innovation_sigma_m = std::hypot(
+                    prior->second.factor->sigma_m, factor->sigma_m);
+                diagnostic.normalized_imu_innovation =
+                    std::abs(diagnostic.imu_innovation_m) /
+                    std::max(1e-6, diagnostic.imu_innovation_sigma_m);
+            }
+
+            if (!diagnostic.doppler_evaluated &&
+                !diagnostic.imu_geometry_evaluated) {
+                diagnostic.proposed_action =
+                    PredictedDdprQualityAction::Unavailable;
+            } else {
+                diagnostic.proposed_action = PredictedDdprQualityAction::Keep;
+                if (diagnostic.doppler_evaluated &&
+                    diagnostic.imu_geometry_evaluated &&
+                    diagnostic.normalized_doppler_innovation > safe_threshold &&
+                    diagnostic.normalized_imu_innovation > safe_threshold) {
+                    diagnostic.proposed_action =
+                        PredictedDdprQualityAction::Downweight;
+                }
+            }
+            result.push_back(diagnostic);
+        }
+        history = std::move(current);
+    }
+    return result;
+}
+
 FGOProcessor::FGOResult FGOProcessor::optimize(
     const std::vector<ObservationData>& rover_epochs,
     const std::vector<ObservationData>& base_epochs,

@@ -74,8 +74,8 @@ The monitor exports, per DD row:
 - measured DDPR change;
 - Doppler- and IMU-predicted change;
 - signed innovation and propagated sigma for each witness;
-- elevation, rover/reference SNR, existing sigma, CMC/GF/FDE state;
-- a causal robust center/scale estimate; and
+- the previous/current DDPR residual against the causal predicted geometry;
+- elevation and rover/reference SNR; and
 - proposed action (`keep`, `downweight`, or `unavailable`).
 
 No graph factor, covariance, ambiguity set, hold state, reported position, or
@@ -157,6 +157,64 @@ fails, retain telemetry and reject activation.
    default-off switch and run the staged A/B protocol.
 6. Promote nothing unless every full-run gate passes; otherwise record the
    negative result and move to a different observation model.
+
+## Development checkpoint
+
+The default-off monitor passed Gate 0 on both the first 500 epochs and the
+full 11,905-epoch run1: status, ECEF position, ratio, fixed ambiguity count,
+and AR outcome were byte-for-byte identical to the preserved baseline CSV.
+The focused clock-cancellation, fail-closed, and fixed-lag non-interference
+tests also pass.
+
+The original rule requiring both normalized temporal innovations to exceed a
+common threshold did not meet the full-run development target.  At 0.2 sigma
+it captured 50.973% of gross truth-labelled rows but flagged 12.531% of clean
+rows; at 0.3 sigma the rates were 40.675% and 5.634%.  This rule is rejected.
+
+The causal absolute residual against the one-step IMU-predicted geometry is a
+substantially stronger development score.  Freezing the rule
+`abs(current predicted DDPR residual) > 1.5 m` on run1 captures 85.522% of
+14,498 gross rows while flagging 2.848% of 153,347 clean rows.  The 30,023
+rows between 1 m and 4 m are an explicit ambiguity band and are excluded from
+Gate 1 scoring.  This 1.5 m threshold is now frozen for the run2 validation;
+it must not be adjusted using run2 or run3.
+
+With that rule unchanged, run2 passes Gate 1: it captures 5,705 of 5,894
+gross rows (96.793%) and flags 477 of 166,600 clean rows (0.286%).  The
+monitor remains non-interfering across all 9,147 run2 epochs, with exact
+agreement in status, ECEF position, ratio, fixed ambiguity count, and AR
+outcome.  This unlocks the bounded-downweight experiment on run1.  Run3
+remains sealed until the activation rule, inflation scale, and all other
+parameters have been frozen.
+
+The bounded activation sweep on the first 500 run1 epochs rejected 3x and 5x
+because each introduced one wrong FIX.  The 2x variant introduced no wrong
+FIX but exchanged one previously correct FIX epoch for another and therefore
+failed the strict per-epoch no-loss gate.  The 1.5x and 1.75x variants changed
+no FIX/FLOAT labels.  The 1.25x variant was the only improving safe candidate:
+one additional correct FIX, no lost correct FIX, no wrong FIX, and no NONE or
+non-finite epoch.  Consequently 1.25x is the sole candidate advanced to the
+full-run1 activation A/B; the stronger multipliers are permanently rejected.
+
+The full-run1 A/B rejects that remaining 1.25x candidate.  It increased
+correct-FIX distance by 148.467 m (+1.439 percentage points) and improved the
+official 50 cm distance by 144.574 m (+1.401 pp), but it also increased
+wrong-FIX distance by 189.135 m (+1.833 pp) and lost 619 previously correct
+FIX epochs.  This violates the zero-wrong-FIX-increase stop condition even
+though the net correct-FIX count increased.  Therefore the activation switch
+was removed, run2/run3 activation was not run, and only the non-interfering
+telemetry is retained.  The run3 observation-quality labels remain sealed;
+no activation result was inspected there.
+
+As the next independent observation-model check, the existing receiver-clock-
+drift-free single-difference Doppler velocity factors were evaluated on the
+same run1 500-epoch development slice at 0.5 m/s (the less aggressive setting
+favoured by the earlier RTK study).  They added 18,356 Doppler rows but changed
+no FIX/FLOAT decision: both baseline and candidate had 499 correct FIX and
+zero wrong FIX.  Meanwhile fixed horizontal RMS regressed from 0.0422 m to
+0.0539 m (about 28%).  With no correct-FIX gain and a clear accuracy
+regression, this model was not advanced to a full run.  The temporary harness
+sigma override was removed as well.
 
 ## Stop conditions
 

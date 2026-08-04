@@ -1079,6 +1079,8 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
 
     // Per-epoch outputs.
     std::vector<Point3> epoch_float_position(num_epochs, Point3(0, 0, 0));
+    std::vector<Vector3d> epoch_predicted_position(
+        num_epochs, Vector3d::Zero());
     std::vector<Point3> epoch_fixed_position(num_epochs, Point3(0, 0, 0));
     std::vector<bool> epoch_has_fixed(num_epochs, false);
     std::vector<bool> epoch_fixed(num_epochs, false);
@@ -2213,6 +2215,7 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                     gtsam::noiseModel::Isotropic::Sigma(6, 1.0));
             }
         }
+        epoch_predicted_position[i] = antennaOf(pose_seed);
         new_values.insert(positionKey(i), pose_seed);
         new_values.insert(velocityKey(i), vel_seed);
         new_values.insert(biasKey(i), prev_bias);
@@ -5865,6 +5868,13 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 problem, clock_resilient_tdcp_shadow, epoch_float_position,
                 epoch_diagnostics, &gf_slip_shadow,
                 &fde_rejected_ambiguities_by_epoch);
+    }
+    if (config.monitor_predicted_ddpr_quality) {
+        result.predicted_ddpr_quality_factors = FGOProcessor::
+            analyzePredictedDdprQualityShadow(
+                problem, epoch_float_position, epoch_predicted_position,
+                config.single_difference_doppler_sigma_mps, 5.0,
+                config.max_tdcp_gap_s);
     }
     const bool have_amb = !problem.ambiguity_states.empty();
     result.epoch_diagnostics = std::move(epoch_diagnostics);

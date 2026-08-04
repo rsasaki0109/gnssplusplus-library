@@ -149,6 +149,23 @@ recomputes the trace at the reference trajectory without rerunning the solver.
 The formulation, research basis, and Tokyo validation are documented in
 [`docs/fgo_clock_resilient_temporal_shadow.md`](docs/fgo_clock_resilient_temporal_shadow.md).
 
+`--predicted-ddpr-quality-shadow` audits each temporally continuous DD
+pseudorange pair against two causal witnesses: trapezoid-integrated
+double-difference Doppler and the one-step IMU-predicted geometry.  The two
+tests remain receiver-clock-free because rover and base clock terms cancel in
+the satellite double difference.  This option is monitor-only: it neither
+changes factor weights nor participates in ambiguity resolution.  With
+`--dump-csv <path>`, its per-factor trace is written to
+`<path>.predicted_ddpr_quality.csv`.
+
+For offline threshold development, combine it with
+`--clock-resilient-shadow-truth-replay --ref reference.csv`.  The resulting
+DDPR sidecar adds the previous and current truth-position DDPR residuals, so a
+causal runtime score can be joined to an independently labelled observation.
+Thresholds must be selected on the development run and then held fixed for
+validation/holdout runs; see
+[`docs/fgo_fix_rate_observation_quality_plan.md`](docs/fgo_fix_rate_observation_quality_plan.md).
+
 The normalized trace's `disposition` values are:
 
 | Value | Meaning |
