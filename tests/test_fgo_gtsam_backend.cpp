@@ -602,6 +602,156 @@ TEST(FGOClockResilientTemporalCarrierShadowTest,
             on_result.epoch_diagnostics[i].clock_resilient_tdcp_max_abs_m));
     }
     EXPECT_GT(total_shadow_factors, 0);
+    ASSERT_EQ(on_result.temporal_carrier_shadow_factors.size(),
+              static_cast<std::size_t>(total_shadow_factors));
+    std::vector<Vector3d> replay_positions;
+    replay_positions.reserve(on_result.solution.solutions.size());
+    for (const auto& solution : on_result.solution.solutions) {
+        replay_positions.push_back(solution.position_ecef);
+    }
+    auto replay_epoch_diagnostics = on_result.epoch_diagnostics;
+    for (auto& diagnostics : replay_epoch_diagnostics) {
+        diagnostics.clock_resilient_tdcp_factors = 0;
+        diagnostics.clock_resilient_tdcp_rms_m = 0.0;
+        diagnostics.clock_resilient_tdcp_max_abs_m = 0.0;
+        diagnostics.clock_resilient_tdcp_clean = 0;
+        diagnostics.clock_resilient_tdcp_witnessed_outliers = 0;
+        diagnostics.clock_resilient_tdcp_unexplained_outliers = 0;
+    }
+    const auto replay_shadow =
+        FGOProcessor::buildClockResilientTemporalCarrierShadow(problem);
+    const auto replay_geometry_free =
+        FGOProcessor::analyzeGeometryFreeSlipShadow(problem);
+    const auto replay_rows =
+        FGOProcessor::classifyClockResilientTemporalCarrierShadow(
+            problem, replay_shadow, replay_positions,
+            replay_epoch_diagnostics, &replay_geometry_free);
+    ASSERT_EQ(replay_rows.size(),
+              on_result.temporal_carrier_shadow_factors.size());
+    for (std::size_t i = 0; i < replay_rows.size(); ++i) {
+        EXPECT_DOUBLE_EQ(replay_rows[i].residual_m,
+                         on_result.temporal_carrier_shadow_factors[i].residual_m);
+        EXPECT_DOUBLE_EQ(
+            replay_rows[i].normalized_doppler_innovation,
+            on_result.temporal_carrier_shadow_factors[i]
+                .normalized_doppler_innovation);
+        EXPECT_EQ(replay_rows[i].classification,
+                  on_result.temporal_carrier_shadow_factors[i].classification);
+    }
+    int classified_total = 0;
+    for (const auto& epoch : on_result.epoch_diagnostics) {
+        classified_total += epoch.clock_resilient_tdcp_clean;
+        classified_total += epoch.clock_resilient_tdcp_witnessed_outliers;
+        classified_total += epoch.clock_resilient_tdcp_unexplained_outliers;
+    }
+    EXPECT_EQ(classified_total, total_shadow_factors);
+    for (const auto& row : on_result.temporal_carrier_shadow_factors) {
+        EXPECT_TRUE(std::isfinite(row.residual_m));
+        EXPECT_TRUE(std::isfinite(row.normalized_residual));
+        EXPECT_GE(row.factor.arc_length_epochs, 2);
+        if (row.doppler_evaluated) {
+            EXPECT_GT(row.doppler_innovation_sigma_m, 0.0);
+            EXPECT_TRUE(std::isfinite(row.normalized_doppler_innovation));
+        }
+        if (row.doppler_calibration_evaluated) {
+            EXPECT_GT(row.doppler_calibrated_scale_m, 0.0);
+            EXPECT_TRUE(std::isfinite(row.doppler_bias_m));
+            EXPECT_TRUE(std::isfinite(row.doppler_centered_innovation_m));
+            EXPECT_TRUE(std::isfinite(row.doppler_calibrated_score));
+        }
+    }
+
+    auto outlier_problem = problem;
+    const auto shadow =
+        FGOProcessor::buildClockResilientTemporalCarrierShadow(outlier_problem);
+    ASSERT_FALSE(shadow.empty());
+    const auto& injected = shadow.back();
+    bool injected_outlier = false;
+    for (auto& observation : outlier_problem.carrier_observations) {
+        if (observation.epoch_index == injected.current_epoch_index &&
+            observation.satellite == injected.satellite &&
+            observation.signal == injected.signal) {
+            observation.corrected_carrier_m += 1.0;
+            injected_outlier = true;
+            break;
+        }
+    }
+    ASSERT_TRUE(injected_outlier);
+    const auto outlier_result = on_processor.optimizeProblem(outlier_problem);
+    EXPECT_TRUE(std::any_of(
+        outlier_result.temporal_carrier_shadow_factors.begin(),
+        outlier_result.temporal_carrier_shadow_factors.end(),
+        [](const auto& row) {
+            return row.classification == FGOProcessor::
+                TemporalCarrierShadowClassification::UnexplainedOutlier;
+        }));
+
+    auto witnessed_problem = outlier_problem;
+    for (const std::size_t epoch_index :
+         {injected.previous_epoch_index, injected.current_epoch_index}) {
+        FGOProcessor::SingleDifferenceDopplerFactor doppler;
+        doppler.epoch_index = epoch_index;
+        doppler.satellite = injected.satellite;
+        doppler.reference_satellite = injected.reference_satellite;
+        doppler.signal = injected.signal;
+        doppler.residual_mps = 0.0;
+        doppler.sigma_mps = 0.2;
+        witnessed_problem.single_difference_doppler_factors.push_back(doppler);
+    }
+    const auto modeled_doppler_result =
+        on_processor.optimizeProblem(witnessed_problem);
+    EXPECT_TRUE(std::any_of(
+        modeled_doppler_result.temporal_carrier_shadow_factors.begin(),
+        modeled_doppler_result.temporal_carrier_shadow_factors.end(),
+        [&](const auto& row) {
+            return row.factor.current_epoch_index ==
+                       injected.current_epoch_index &&
+                row.factor.satellite == injected.satellite &&
+                row.factor.reference_satellite == injected.reference_satellite &&
+                row.factor.signal == injected.signal && row.doppler_evaluated &&
+                row.doppler_outlier &&
+                row.normalized_doppler_innovation > 5.0 &&
+                !row.doppler_calibration_evaluated &&
+                !row.doppler_calibrated_outlier &&
+                row.classification == FGOProcessor::
+                    TemporalCarrierShadowClassification::UnexplainedOutlier;
+        }));
+}
+
+TEST(FGOPredictedDdprQualityShadowTest,
+     ReportsCausalRowsWithoutChangingFixedLagSolution) {
+    CpHoldTestOptions opt;
+    opt.num_epochs = 3;
+    const auto problem = makeCpHoldFixedLagProblem(opt);
+
+    FGOProcessor::FGOConfig off_config = makeCpHoldBaseConfig();
+    const auto off_result = FGOProcessor(off_config).optimizeProblem(problem);
+
+    FGOProcessor::FGOConfig on_config = off_config;
+    on_config.monitor_predicted_ddpr_quality = true;
+    const auto on_result = FGOProcessor(on_config).optimizeProblem(problem);
+
+    ASSERT_EQ(off_result.solution.solutions.size(),
+              on_result.solution.solutions.size());
+    for (std::size_t i = 0; i < off_result.solution.solutions.size(); ++i) {
+        EXPECT_TRUE(off_result.solution.solutions[i].position_ecef.isApprox(
+            on_result.solution.solutions[i].position_ecef, 0.0));
+        EXPECT_EQ(off_result.solution.solutions[i].status,
+                  on_result.solution.solutions[i].status);
+    }
+    ASSERT_FALSE(on_result.predicted_ddpr_quality_factors.empty());
+    bool saw_imu_geometry = false;
+    for (const auto& row : on_result.predicted_ddpr_quality_factors) {
+        EXPECT_GE(row.pair_age_epochs, 2);
+        EXPECT_GT(row.dt_s, 0.0);
+        EXPECT_TRUE(std::isfinite(row.measured_ddpr_change_m));
+        if (row.imu_geometry_evaluated) {
+            saw_imu_geometry = true;
+            EXPECT_GT(row.imu_innovation_sigma_m, 0.0);
+            EXPECT_TRUE(std::isfinite(row.normalized_imu_innovation));
+        }
+    }
+    EXPECT_TRUE(saw_imu_geometry);
 }
 
 TEST(FGOAmbiguityCandidateTelemetryTest,

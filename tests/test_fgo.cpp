@@ -845,6 +845,11 @@ TEST(FGOTest, ClockResilientTemporalCarrierShadowCancelsCommonClockJump) {
             current_satellite->los - current_reference->los;
         EXPECT_LT((factor.previous_los - previous_los).norm(), 1e-12);
         EXPECT_LT((factor.los - current_los).norm(), 1e-12);
+        EXPECT_EQ(factor.target_ambiguity_index,
+                  current_satellite->ambiguity_index);
+        EXPECT_EQ(factor.reference_ambiguity_index,
+                  current_reference->ambiguity_index);
+        EXPECT_EQ(factor.arc_length_epochs, 2);
         max_previous_current_los_delta = std::max(
             max_previous_current_los_delta,
             (factor.previous_los - factor.los).norm());
@@ -869,6 +874,126 @@ TEST(FGOTest, ClockResilientTemporalCarrierShadowCancelsCommonClockJump) {
             switched_reference_problem);
     EXPECT_TRUE(after_reference_switch.empty())
         << "a new reference must start a fresh temporal arc";
+}
+
+TEST(FGOTest, PredictedDdprQualityShadowIsClockSafeAndFailClosed) {
+    FGOProcessor::FGOProblem problem;
+    problem.epochs.resize(2);
+    problem.epochs[0].time = GNSSTime(2300, 100000.0);
+    problem.epochs[1].time = GNSSTime(2300, 100001.0);
+
+    const Vector3d rover0(1113194.0, -4841695.0, 3985350.0);
+    const Vector3d rover1 = rover0 + Vector3d(12.0, 4.0, -1.0);
+    const Vector3d base = rover0 + Vector3d(-320.0, 180.0, 45.0);
+    const Vector3d target_satellite(15600000.0, 7540000.0, 20140000.0);
+    const Vector3d reference_satellite(-18760000.0, 2750000.0,
+                                        18610000.0);
+    const auto dd_range = [&](const Vector3d& rover) {
+        return ((target_satellite - rover).norm() -
+                (target_satellite - base).norm()) -
+               ((reference_satellite - rover).norm() -
+                (reference_satellite - base).norm());
+    };
+    const double geometry0 = dd_range(rover0);
+    const double geometry1 = dd_range(rover1);
+    const double dd_rate = geometry1 - geometry0;
+
+    const auto make_factor = [&](std::size_t epoch, double geometry,
+                                 double rover_clock_m,
+                                 double base_clock_m) {
+        FGOProcessor::DoubleDifferencePseudorangeFactor factor;
+        factor.epoch_index = epoch;
+        factor.satellite = SatelliteId(GNSSSystem::GPS, 5);
+        factor.reference_satellite = SatelliteId(GNSSSystem::GPS, 11);
+        factor.signal = SignalType::GPS_L1CA;
+        factor.rover_satellite_position_ecef = target_satellite;
+        factor.rover_reference_position_ecef = reference_satellite;
+        factor.base_satellite_position_ecef = target_satellite;
+        factor.base_reference_position_ecef = reference_satellite;
+        factor.base_position_ecef = base;
+        const double rover_target = (target_satellite -
+            (epoch == 0 ? rover0 : rover1)).norm();
+        const double rover_reference = (reference_satellite -
+            (epoch == 0 ? rover0 : rover1)).norm();
+        const double base_target = (target_satellite - base).norm();
+        const double base_reference = (reference_satellite - base).norm();
+        factor.observed_dd_pseudorange_m =
+            ((rover_target + rover_clock_m) -
+             (base_target + base_clock_m)) -
+            ((rover_reference + rover_clock_m) -
+             (base_reference + base_clock_m));
+        EXPECT_NEAR(factor.observed_dd_pseudorange_m, geometry, 1e-8);
+        factor.sigma_m = 0.5;
+        factor.rover_satellite_model.has_doppler_residual = true;
+        factor.rover_reference_model.has_doppler_residual = true;
+        factor.base_satellite_model.has_doppler_residual = true;
+        factor.base_reference_model.has_doppler_residual = true;
+        factor.rover_satellite_model.doppler_residual_mps = dd_rate;
+        factor.rover_satellite_model.elevation_rad = 0.8;
+        factor.rover_reference_model.elevation_rad = 0.9;
+        factor.rover_satellite_model.snr_dbhz = 42.0;
+        factor.rover_reference_model.snr_dbhz = 44.0;
+        return factor;
+    };
+    problem.double_difference_pseudorange_factors.push_back(
+        make_factor(0, geometry0, 25.0, -10.0));
+    // A roughly one-millisecond common rover clock jump cancels in the DD.
+    problem.double_difference_pseudorange_factors.push_back(
+        make_factor(1, geometry1, 299817.458, -10.0));
+
+    const std::vector<Vector3d> solved = {rover0, rover1};
+    const std::vector<Vector3d> predicted = {rover0, rover1};
+    const auto clean = FGOProcessor::analyzePredictedDdprQualityShadow(
+        problem, solved, predicted, 0.2, 5.0, 1.5);
+    ASSERT_EQ(clean.size(), 1u);
+    EXPECT_TRUE(clean[0].doppler_evaluated);
+    EXPECT_TRUE(clean[0].imu_geometry_evaluated);
+    EXPECT_NEAR(clean[0].doppler_innovation_m, 0.0, 1e-8);
+    EXPECT_NEAR(clean[0].imu_innovation_m, 0.0, 1e-8);
+    EXPECT_NEAR(clean[0].previous_predicted_ddpr_residual_m, 0.0, 1e-8);
+    EXPECT_NEAR(clean[0].current_predicted_ddpr_residual_m, 0.0, 1e-8);
+    EXPECT_EQ(clean[0].pair_age_epochs, 2);
+    EXPECT_EQ(clean[0].proposed_action,
+              FGOProcessor::PredictedDdprQualityAction::Keep);
+
+    auto outlier_problem = problem;
+    outlier_problem.double_difference_pseudorange_factors[1]
+        .observed_dd_pseudorange_m += 20.0;
+    const auto outlier = FGOProcessor::analyzePredictedDdprQualityShadow(
+        outlier_problem, solved, predicted, 0.2, 5.0, 1.5);
+    ASSERT_EQ(outlier.size(), 1u);
+    EXPECT_GT(outlier[0].normalized_doppler_innovation, 5.0);
+    EXPECT_GT(outlier[0].normalized_imu_innovation, 5.0);
+    EXPECT_NEAR(outlier[0].current_predicted_ddpr_residual_m, 20.0, 1e-8);
+    EXPECT_EQ(outlier[0].proposed_action,
+              FGOProcessor::PredictedDdprQualityAction::Downweight);
+
+    auto unavailable_problem = problem;
+    for (auto& factor :
+         unavailable_problem.double_difference_pseudorange_factors) {
+        factor.rover_satellite_model.has_doppler_residual = false;
+        factor.rover_reference_model.has_doppler_residual = false;
+        factor.base_satellite_model.has_doppler_residual = false;
+        factor.base_reference_model.has_doppler_residual = false;
+    }
+    const std::vector<Vector3d> unavailable_positions(2, Vector3d::Zero());
+    const auto unavailable =
+        FGOProcessor::analyzePredictedDdprQualityShadow(
+            unavailable_problem, unavailable_positions,
+            unavailable_positions);
+    ASSERT_EQ(unavailable.size(), 1u);
+    EXPECT_FALSE(unavailable[0].doppler_evaluated);
+    EXPECT_FALSE(unavailable[0].imu_geometry_evaluated);
+    EXPECT_EQ(unavailable[0].proposed_action,
+              FGOProcessor::PredictedDdprQualityAction::Unavailable);
+
+    auto switched_reference_problem = problem;
+    switched_reference_problem.double_difference_pseudorange_factors[1]
+        .reference_satellite = SatelliteId(GNSSSystem::GPS, 12);
+    const auto switched =
+        FGOProcessor::analyzePredictedDdprQualityShadow(
+            switched_reference_problem, solved, predicted);
+    EXPECT_TRUE(switched.empty());
 }
 
 TEST(FGOTest, RobustLossDownweightsPseudorangeOutlier) {

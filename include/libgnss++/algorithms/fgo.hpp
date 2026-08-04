@@ -406,6 +406,10 @@ public:
         // vectors.  The shadow is never inserted into either optimizer and
         // cannot change the exported solution or FIX/FLOAT decision.
         bool monitor_clock_resilient_temporal_carrier = false;
+        // Diagnostic-only temporal DD pseudorange quality monitor. It
+        // compares measured DDPR changes with DD Doppler and the causal
+        // pre-solve IMU pose prediction; no result is consumed by the graph.
+        bool monitor_predicted_ddpr_quality = false;
         // When a rover/base single-difference geometry-free combination jumps
         // while the underlying rover arcs remain continuous, break both bands'
         // DD arcs after the confirmation interval below. Resetting both bands
@@ -1564,6 +1568,15 @@ public:
         double delta_carrier_m = 0.0;
         double sigma_m = 0.003;
         double elevation_rad = 0.0;
+        std::size_t target_ambiguity_index = 0;
+        std::size_t reference_ambiguity_index = 0;
+        int arc_length_epochs = 0;
+        double dt_s = 0.0;
+        bool has_doppler_witness = false;
+        double previous_sd_doppler_mps = 0.0;
+        double current_sd_doppler_mps = 0.0;
+        double previous_sd_doppler_sigma_mps = 0.0;
+        double current_sd_doppler_sigma_mps = 0.0;
     };
 
     struct AmbiguityState {
@@ -1756,6 +1769,77 @@ public:
         int doppler_event_signals = 0;
         double doppler_max_innovation_m = 0.0;
         int doppler_isolated_event_pairs = 0;
+        std::set<std::pair<SatelliteId, SignalType>> event_satellite_signals;
+    };
+
+    enum class TemporalCarrierShadowClassification {
+        Clean = 0,
+        WitnessedOutlier = 1,
+        UnexplainedOutlier = 2,
+    };
+
+    /// Diagnostic-only classification of one receiver-clock-free temporal
+    /// carrier difference.  None of these fields has estimator authority.
+    struct TemporalCarrierShadowFactorDiagnostics {
+        SingleDifferenceTdcpFactor factor;
+        double residual_m = 0.0;
+        double normalized_residual = 0.0;
+        bool residual_outlier = false;
+        bool doppler_evaluated = false;
+        double doppler_innovation_signed_m = 0.0;
+        double doppler_innovation_m = 0.0;
+        double doppler_innovation_sigma_m = 0.0;
+        double normalized_doppler_innovation = 0.0;
+        bool doppler_outlier = false;
+        bool doppler_calibration_evaluated = false;
+        double doppler_bias_m = 0.0;
+        double doppler_calibrated_scale_m = 0.0;
+        double doppler_centered_innovation_m = 0.0;
+        double doppler_calibrated_score = 0.0;
+        bool doppler_calibrated_outlier = false;
+        bool geometry_free_witness = false;
+        bool carrier_hold_witness = false;
+        bool carrier_fde_witness = false;
+        TemporalCarrierShadowClassification classification =
+            TemporalCarrierShadowClassification::Clean;
+    };
+
+    enum class PredictedDdprQualityAction {
+        Unavailable = 0,
+        Keep = 1,
+        Downweight = 2,
+    };
+
+    /// Causal, diagnostic-only temporal quality check for one DD pseudorange
+    /// row. The previous position is the already-solved prior epoch and the
+    /// current position is the pre-solve IMU prediction. No field has
+    /// estimator authority.
+    struct PredictedDdprQualityFactorDiagnostics {
+        std::size_t previous_epoch_index = 0;
+        std::size_t current_epoch_index = 0;
+        SatelliteId satellite;
+        SatelliteId reference_satellite;
+        SignalType signal = SignalType::GPS_L1CA;
+        double dt_s = 0.0;
+        int pair_age_epochs = 0;
+        double measured_ddpr_change_m = 0.0;
+        bool doppler_evaluated = false;
+        double doppler_predicted_change_m = 0.0;
+        double doppler_innovation_m = 0.0;
+        double doppler_innovation_sigma_m = 0.0;
+        double normalized_doppler_innovation = 0.0;
+        bool imu_geometry_evaluated = false;
+        double imu_predicted_change_m = 0.0;
+        double previous_predicted_ddpr_residual_m = 0.0;
+        double current_predicted_ddpr_residual_m = 0.0;
+        double imu_innovation_m = 0.0;
+        double imu_innovation_sigma_m = 0.0;
+        double normalized_imu_innovation = 0.0;
+        double elevation_rad = 0.0;
+        double target_snr_dbhz = 0.0;
+        double reference_snr_dbhz = 0.0;
+        PredictedDdprQualityAction proposed_action =
+            PredictedDdprQualityAction::Unavailable;
     };
 
     struct FGODiagnostics {
@@ -2097,6 +2181,9 @@ public:
         int clock_resilient_tdcp_factors = 0;
         double clock_resilient_tdcp_rms_m = 0.0;
         double clock_resilient_tdcp_max_abs_m = 0.0;
+        int clock_resilient_tdcp_clean = 0;
+        int clock_resilient_tdcp_witnessed_outliers = 0;
+        int clock_resilient_tdcp_unexplained_outliers = 0;
         double gdop = 0.0;
         int num_satellites = 0;
         int sd_doppler_factors = 0;
@@ -2238,6 +2325,10 @@ public:
         std::vector<LambdaDebugEntry> lambda_debug_entries;
         std::vector<CostTraceEntry> cost_trace_entries;
         std::vector<FGOEpochDiagnostics> epoch_diagnostics;
+        std::vector<TemporalCarrierShadowFactorDiagnostics>
+            temporal_carrier_shadow_factors;
+        std::vector<PredictedDdprQualityFactorDiagnostics>
+            predicted_ddpr_quality_factors;
         // Milestone 2b (populated only by the GTSAM IMU-coupled path):
         // per-epoch estimated attitude as [roll, pitch, heading] in degrees
         // (body FLU -> nav ENU; heading is clockwise from North) and estimated
@@ -2261,6 +2352,33 @@ public:
     buildClockResilientTemporalCarrierShadow(const FGOProblem& problem,
                                              double sigma_m = 0.003,
                                              double max_gap_s = 1.5);
+
+    /// Evaluate and classify a pre-built temporal-carrier shadow against a
+    /// supplied per-epoch ECEF trajectory. This routine is solver-independent
+    /// so a frozen solution CSV can replay diagnostics without rerunning GTSAM.
+    static std::vector<TemporalCarrierShadowFactorDiagnostics>
+    classifyClockResilientTemporalCarrierShadow(
+        const FGOProblem& problem,
+        const std::vector<SingleDifferenceTdcpFactor>& factors,
+        const std::vector<Vector3d>& epoch_positions_ecef,
+        std::vector<FGOEpochDiagnostics>& epoch_diagnostics,
+        const std::vector<GeometryFreeSlipShadowEpoch>* geometry_free_shadow =
+            nullptr,
+        const std::vector<std::set<std::size_t>>*
+            fde_rejected_ambiguities_by_epoch = nullptr);
+
+    /// Compare temporal DD pseudorange changes with receiver-clock-free DD
+    /// Doppler and a one-step predicted antenna trajectory. `previous_*`
+    /// supplies the causal solved pose at k-1; `predicted_*` supplies the
+    /// pre-solve pose prediction at k. The result is monitor-only.
+    static std::vector<PredictedDdprQualityFactorDiagnostics>
+    analyzePredictedDdprQualityShadow(
+        const FGOProblem& problem,
+        const std::vector<Vector3d>& previous_solution_positions_ecef,
+        const std::vector<Vector3d>& predicted_positions_ecef,
+        double doppler_sigma_mps = 0.2,
+        double normalized_outlier_threshold = 5.0,
+        double max_gap_s = 1.5);
 
     FGOProblem buildPseudorangeProblem(const std::vector<ObservationData>& epochs,
                                        const NavigationData& nav) const;
