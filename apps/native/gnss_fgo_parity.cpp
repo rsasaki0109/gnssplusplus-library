@@ -65,6 +65,7 @@ struct Args {
     bool sd_doppler = false;     // add single-difference Doppler velocity factors
     bool clock_resilient_temporal_shadow = false;  // diagnostic-only receiver-clock-free TDCP
     bool predicted_ddpr_quality_shadow = false;  // diagnostic-only causal DDPR quality
+    bool predicted_ddpr_bias_state_shadow = false;  // causal persistent DDPR bias monitor
     std::string temporal_shadow_replay_csv;  // classify against frozen ECEF positions; skip solve
     bool temporal_shadow_truth_replay = false;  // classify against reference.csv; skip solve
     bool postfit_gate = false;
@@ -263,6 +264,10 @@ Args parseArgs(int argc, char** argv) {
         }
         if (a == "--predicted-ddpr-quality-shadow") {
             args.predicted_ddpr_quality_shadow = true;
+            continue;
+        }
+        if (a == "--predicted-ddpr-bias-state-shadow") {
+            args.predicted_ddpr_bias_state_shadow = true;
             continue;
         }
         if (a == "--gici-par") {
@@ -750,6 +755,8 @@ libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
         args.clock_resilient_temporal_shadow;
     config.monitor_predicted_ddpr_quality =
         args.predicted_ddpr_quality_shadow;
+    config.monitor_predicted_ddpr_bias_state =
+        args.predicted_ddpr_bias_state_shadow;
     config.use_geometry_free_cycle_slip_reset = args.gf_slip_reset;
     config.report_held_ambiguities_as_fixed = !args.no_held_fix_label;
     if (args.max_iters > 0) {
@@ -2013,6 +2020,47 @@ void dumpPredictedDdprQualityCsv(
     }
 }
 
+void dumpPredictedDdprBiasStateCsv(
+    const libgnss::FGOProcessor::FGOResult& result,
+    const std::string& epoch_csv_path) {
+    const std::string path =
+        epoch_csv_path + ".predicted_ddpr_bias_state.csv";
+    std::ofstream out(path);
+    if (!out) {
+        std::cerr << "Error: cannot open predicted DDPR bias-state output file "
+                  << path << "\n";
+        return;
+    }
+    out << std::fixed << std::setprecision(6);
+    out << "tow,previous_epoch,current_epoch,target,reference,signal,dt_s,"
+           "pair_age_epochs,prior_updates,continuity_reset,prediction_usable,"
+           "update_applied,update_clipped,raw_residual_m,prior_bias_m,"
+           "prior_sigma_m,corrected_residual_m,measurement_sigma_m,"
+           "innovation_sigma_m,normalized_innovation,applied_innovation_m,"
+           "posterior_bias_m,posterior_sigma_m\n";
+    for (const auto& row : result.predicted_ddpr_bias_state_factors) {
+        double tow = 0.0;
+        if (row.current_epoch_index < result.solution.solutions.size()) {
+            tow = result.solution.solutions[row.current_epoch_index].time.tow;
+        }
+        out << tow << ',' << row.previous_epoch_index << ','
+            << row.current_epoch_index << ',' << row.satellite.toString()
+            << ',' << row.reference_satellite.toString() << ','
+            << static_cast<int>(row.signal) << ',' << row.dt_s << ','
+            << row.pair_age_epochs << ',' << row.prior_updates << ','
+            << (row.continuity_reset ? 1 : 0) << ','
+            << (row.prediction_usable ? 1 : 0) << ','
+            << (row.update_applied ? 1 : 0) << ','
+            << (row.update_clipped ? 1 : 0) << ','
+            << row.raw_residual_m << ',' << row.prior_bias_m << ','
+            << row.prior_sigma_m << ',' << row.corrected_residual_m << ','
+            << row.measurement_sigma_m << ',' << row.innovation_sigma_m << ','
+            << row.normalized_innovation << ',' << row.applied_innovation_m
+            << ',' << row.posterior_bias_m << ',' << row.posterior_sigma_m
+            << '\n';
+    }
+}
+
 struct TemporalShadowReplayInput {
     std::vector<libgnss::Vector3d> positions_ecef;
     std::vector<bool> carrier_hold_active;
@@ -2837,12 +2885,28 @@ int main(int argc, char** argv) {
                 classifyClockResilientTemporalCarrierShadow(
                     problem, shadow, replay.positions_ecef,
                     epoch_diagnostics, &geometry_free);
-        if (args.predicted_ddpr_quality_shadow) {
-            replay_result.predicted_ddpr_quality_factors =
+        if (args.predicted_ddpr_quality_shadow ||
+            args.predicted_ddpr_bias_state_shadow) {
+            auto quality_rows =
                 libgnss::FGOProcessor::analyzePredictedDdprQualityShadow(
                     problem, replay.positions_ecef, replay.positions_ecef,
                     config.single_difference_doppler_sigma_mps, 5.0,
                     config.max_tdcp_gap_s);
+            if (args.predicted_ddpr_bias_state_shadow) {
+                replay_result.predicted_ddpr_bias_state_factors =
+                    libgnss::FGOProcessor::
+                        analyzePredictedDdprBiasStateShadow(
+                            quality_rows,
+                            config.predicted_ddpr_bias_process_noise_m_sqrt_s,
+                            config.predicted_ddpr_bias_initial_sigma_m,
+                            config.predicted_ddpr_bias_min_measurement_sigma_m,
+                            config.predicted_ddpr_bias_robust_update_sigma,
+                            config.predicted_ddpr_bias_min_prior_updates);
+            }
+            if (args.predicted_ddpr_quality_shadow) {
+                replay_result.predicted_ddpr_quality_factors =
+                    std::move(quality_rows);
+            }
         }
         replay_result.epoch_diagnostics = std::move(epoch_diagnostics);
         for (std::size_t i = 0; i < problem.epochs.size(); ++i) {
@@ -2854,6 +2918,10 @@ int main(int argc, char** argv) {
         dumpTemporalCarrierFactorCsv(replay_result, args.dump_csv_path);
         if (args.predicted_ddpr_quality_shadow) {
             dumpPredictedDdprQualityCsv(replay_result, args.dump_csv_path);
+        }
+        if (args.predicted_ddpr_bias_state_shadow) {
+            dumpPredictedDdprBiasStateCsv(replay_result,
+                                          args.dump_csv_path);
         }
 
         std::size_t clean = 0;
@@ -3031,6 +3099,9 @@ int main(int argc, char** argv) {
             if (args.predicted_ddpr_quality_shadow) {
                 dumpPredictedDdprQualityCsv(fl, args.dump_csv_path);
             }
+            if (args.predicted_ddpr_bias_state_shadow) {
+                dumpPredictedDdprBiasStateCsv(fl, args.dump_csv_path);
+            }
         }
 
         std::cout << "\n=== (a4) MILESTONE 2c: IncrementalFixedLagSmoother (full-scale) ===\n"
@@ -3062,6 +3133,8 @@ int main(int argc, char** argv) {
                    << (config.monitor_clock_resilient_temporal_carrier ? "on" : "off")
                    << ", predicted_ddpr_quality_shadow="
                    << (config.monitor_predicted_ddpr_quality ? "on" : "off")
+                   << ", predicted_ddpr_bias_state_shadow="
+                   << (config.monitor_predicted_ddpr_bias_state ? "on" : "off")
                    << ")\n"
                   << "  IMU ratio aperture: " << (args.imu_ratio_aperture ? "on" : "off")
                   << " (accepted=" << fl.diagnostics.imu_aided_ratio_accepts

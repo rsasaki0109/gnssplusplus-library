@@ -166,6 +166,16 @@ Thresholds must be selected on the development run and then held fixed for
 validation/holdout runs; see
 [`docs/fgo_fix_rate_observation_quality_plan.md`](docs/fgo_fix_rate_observation_quality_plan.md).
 
+`--predicted-ddpr-bias-state-shadow` separately tests whether those causal
+predicted-geometry residuals contain a persistent pair-specific bias.  A
+bounded scalar random walk uses only earlier rows to predict the current row;
+the current residual is assimilated after its diagnostic is emitted.  The
+option remains solver-independent and can be enabled without retaining the
+quality CSV.  With `--dump-csv <path>`, it writes
+`<path>.predicted_ddpr_bias_state.csv`.  Its causal burn-in, reset rules,
+research rationale, and staged activation gates are documented in
+[`docs/fgo_ddpr_bias_state_shadow_plan.md`](docs/fgo_ddpr_bias_state_shadow_plan.md).
+
 The normalized trace's `disposition` values are:
 
 | Value | Meaning |
