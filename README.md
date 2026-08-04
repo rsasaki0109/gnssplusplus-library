@@ -140,8 +140,13 @@ normalized satellite/signal trace is written beside it as
 
 `--clock-resilient-temporal-shadow` additionally audits receiver-clock-free
 satellite-single-difference temporal carrier residuals. It is monitor-only and
-does not add graph factors or change FIX/FLOAT decisions. The formulation,
-research basis, and three-run Tokyo validation are documented in
+does not add graph factors or change FIX/FLOAT decisions. With `--dump-csv`, a
+per-factor classification trace is written to
+`<path>.clock_resilient_tdcp_factors.csv` in addition to the epoch counters.
+For large holdouts,
+`--clock-resilient-shadow-truth-replay --ref reference.csv --dump-csv <path>`
+recomputes the trace at the reference trajectory without rerunning the solver.
+The formulation, research basis, and Tokyo validation are documented in
 [`docs/fgo_clock_resilient_temporal_shadow.md`](docs/fgo_clock_resilient_temporal_shadow.md).
 
 The normalized trace's `disposition` values are:

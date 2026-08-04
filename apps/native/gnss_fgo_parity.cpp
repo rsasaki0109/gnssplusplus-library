@@ -64,6 +64,8 @@ struct Args {
     bool multi_freq = false;     // force multi-frequency DD on (library default is now OFF)
     bool sd_doppler = false;     // add single-difference Doppler velocity factors
     bool clock_resilient_temporal_shadow = false;  // diagnostic-only receiver-clock-free TDCP
+    std::string temporal_shadow_replay_csv;  // classify against frozen ECEF positions; skip solve
+    bool temporal_shadow_truth_replay = false;  // classify against reference.csv; skip solve
     bool postfit_gate = false;
     bool adaptive_ratio = false;
     int postfit_min_n = -1;
@@ -245,6 +247,16 @@ Args parseArgs(int argc, char** argv) {
             continue;
         }
         if (a == "--clock-resilient-temporal-shadow") {
+            args.clock_resilient_temporal_shadow = true;
+            continue;
+        }
+        if (a == "--clock-resilient-shadow-replay" && i + 1 < argc) {
+            args.temporal_shadow_replay_csv = argv[++i];
+            args.clock_resilient_temporal_shadow = true;
+            continue;
+        }
+        if (a == "--clock-resilient-shadow-truth-replay") {
+            args.temporal_shadow_truth_replay = true;
             args.clock_resilient_temporal_shadow = true;
             continue;
         }
@@ -1515,7 +1527,7 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
            "x_ecef_m,y_ecef_m,z_ecef_m,position_covariance_trace_m2,"
            "ref_e_pos_m,ref_n_pos_m,ref_u_pos_m,"
            "vel_e_mps,vel_n_mps,vel_u_mps,"
-           "ratio,ratio_threshold,nfixed,ar_outcome,ddpr_rms_m,sd_doppler_rms_mps,clock_resilient_tdcp_n,clock_resilient_tdcp_rms_m,clock_resilient_tdcp_max_abs_m,gdop,nsat,sd_doppler_n,"
+           "ratio,ratio_threshold,nfixed,ar_outcome,ddpr_rms_m,sd_doppler_rms_mps,clock_resilient_tdcp_n,clock_resilient_tdcp_rms_m,clock_resilient_tdcp_max_abs_m,clock_resilient_tdcp_clean,clock_resilient_tdcp_witnessed_outliers,clock_resilient_tdcp_unexplained_outliers,gdop,nsat,sd_doppler_n,"
            "amb_candidates,lambda_attempts,lambda_stage,amb_var_median,amb_var_max,"
            "imu_pose_correction_m,spp_seed_fresh,spp_seed_x_ecef_m,"
            "spp_seed_y_ecef_m,spp_seed_z_ecef_m,"
@@ -1630,6 +1642,9 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
                 << ',' << d.clock_resilient_tdcp_factors
                 << ',' << d.clock_resilient_tdcp_rms_m
                 << ',' << d.clock_resilient_tdcp_max_abs_m
+                << ',' << d.clock_resilient_tdcp_clean
+                << ',' << d.clock_resilient_tdcp_witnessed_outliers
+                << ',' << d.clock_resilient_tdcp_unexplained_outliers
                 << ',' << d.gdop << ',' << d.num_satellites
                 << ',' << d.sd_doppler_factors
                 << ',' << d.ambiguity_candidates << ',' << d.lambda_attempts
@@ -1870,6 +1885,203 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
                        << trial.imu_separation_m << '\n';
         }
     }
+}
+
+void dumpTemporalCarrierFactorCsv(
+    const libgnss::FGOProcessor::FGOResult& result,
+    const std::string& epoch_csv_path) {
+    const std::string path =
+        epoch_csv_path + ".clock_resilient_tdcp_factors.csv";
+    std::ofstream out(path);
+    if (!out) {
+        std::cerr << "Error: cannot open temporal carrier factor output file "
+                  << path << "\n";
+        return;
+    }
+    out << std::fixed << std::setprecision(6);
+    out << "tow,previous_epoch,current_epoch,target,reference,signal,"
+           "arc_length_epochs,delta_carrier_m,sigma_m,elevation_rad,"
+           "residual_m,normalized_residual,residual_outlier,"
+           "doppler_evaluated,doppler_innovation_signed_m,"
+           "doppler_innovation_m,"
+           "doppler_innovation_sigma_m,normalized_doppler_innovation,"
+           "doppler_outlier,doppler_calibration_evaluated,doppler_bias_m,"
+           "doppler_calibrated_scale_m,doppler_centered_innovation_m,"
+           "doppler_calibrated_score,doppler_calibrated_outlier,"
+           "geometry_free_witness,carrier_hold_witness,carrier_fde_witness,"
+           "classification\n";
+    for (const auto& row : result.temporal_carrier_shadow_factors) {
+        const auto& factor = row.factor;
+        double tow = 0.0;
+        if (factor.current_epoch_index < result.solution.solutions.size()) {
+            tow = result.solution.solutions[factor.current_epoch_index].time.tow;
+        }
+        const char* classification = "clean";
+        if (row.classification == libgnss::FGOProcessor::
+                TemporalCarrierShadowClassification::WitnessedOutlier) {
+            classification = "witnessed_outlier";
+        } else if (row.classification == libgnss::FGOProcessor::
+                       TemporalCarrierShadowClassification::UnexplainedOutlier) {
+            classification = "unexplained_outlier";
+        }
+        out << tow << ',' << factor.previous_epoch_index << ','
+            << factor.current_epoch_index << ',' << factor.satellite.toString()
+            << ',' << factor.reference_satellite.toString() << ','
+            << static_cast<int>(factor.signal) << ','
+            << factor.arc_length_epochs << ',' << factor.delta_carrier_m << ','
+            << factor.sigma_m << ',' << factor.elevation_rad << ','
+            << row.residual_m << ',' << row.normalized_residual << ','
+            << (row.residual_outlier ? 1 : 0) << ','
+            << (row.doppler_evaluated ? 1 : 0) << ','
+            << row.doppler_innovation_signed_m << ','
+            << row.doppler_innovation_m << ','
+            << row.doppler_innovation_sigma_m << ','
+            << row.normalized_doppler_innovation << ','
+            << (row.doppler_outlier ? 1 : 0) << ','
+            << (row.doppler_calibration_evaluated ? 1 : 0) << ','
+            << row.doppler_bias_m << ','
+            << row.doppler_calibrated_scale_m << ','
+            << row.doppler_centered_innovation_m << ','
+            << row.doppler_calibrated_score << ','
+            << (row.doppler_calibrated_outlier ? 1 : 0) << ','
+            << (row.geometry_free_witness ? 1 : 0) << ','
+            << (row.carrier_hold_witness ? 1 : 0) << ','
+            << (row.carrier_fde_witness ? 1 : 0) << ',' << classification
+            << '\n';
+    }
+}
+
+struct TemporalShadowReplayInput {
+    std::vector<libgnss::Vector3d> positions_ecef;
+    std::vector<bool> carrier_hold_active;
+};
+
+bool loadTemporalShadowReplayCsv(
+    const std::string& path,
+    const libgnss::FGOProcessor::FGOProblem& problem,
+    TemporalShadowReplayInput& replay) {
+    std::ifstream input(path);
+    if (!input) {
+        std::cerr << "Error: cannot open temporal-shadow replay CSV " << path
+                  << "\n";
+        return false;
+    }
+    const auto split = [](const std::string& line) {
+        std::vector<std::string> fields;
+        std::stringstream stream(line);
+        std::string field;
+        while (std::getline(stream, field, ',')) {
+            fields.push_back(field);
+        }
+        return fields;
+    };
+
+    std::string line;
+    if (!std::getline(input, line)) {
+        std::cerr << "Error: temporal-shadow replay CSV is empty: " << path
+                  << "\n";
+        return false;
+    }
+    const auto header = split(line);
+    std::map<std::string, std::size_t> columns;
+    for (std::size_t i = 0; i < header.size(); ++i) {
+        columns[header[i]] = i;
+    }
+    for (const char* required :
+         {"tow", "x_ecef_m", "y_ecef_m", "z_ecef_m"}) {
+        if (columns.count(required) == 0) {
+            std::cerr << "Error: temporal-shadow replay CSV lacks column "
+                      << required << "\n";
+            return false;
+        }
+    }
+    const auto tow_column = columns["tow"];
+    const auto x_column = columns["x_ecef_m"];
+    const auto y_column = columns["y_ecef_m"];
+    const auto z_column = columns["z_ecef_m"];
+    const auto hold_column = columns.find("cp_hold");
+
+    replay.positions_ecef.clear();
+    replay.carrier_hold_active.clear();
+    replay.positions_ecef.reserve(problem.epochs.size());
+    replay.carrier_hold_active.reserve(problem.epochs.size());
+    std::size_t row = 0;
+    while (std::getline(input, line) && row < problem.epochs.size()) {
+        if (line.empty()) {
+            continue;
+        }
+        const auto fields = split(line);
+        const std::size_t required_max =
+            std::max({tow_column, x_column, y_column, z_column});
+        if (fields.size() <= required_max) {
+            std::cerr << "Error: malformed temporal-shadow replay row "
+                      << (row + 2) << "\n";
+            return false;
+        }
+        try {
+            const double tow = std::stod(fields[tow_column]);
+            if (std::abs(tow - problem.epochs[row].time.tow) > 1e-3) {
+                std::cerr << "Error: temporal-shadow replay TOW mismatch at row "
+                          << (row + 2) << " (csv=" << tow << ", problem="
+                          << problem.epochs[row].time.tow << ")\n";
+                return false;
+            }
+            replay.positions_ecef.emplace_back(std::stod(fields[x_column]),
+                                               std::stod(fields[y_column]),
+                                               std::stod(fields[z_column]));
+            bool hold = false;
+            if (hold_column != columns.end() &&
+                hold_column->second < fields.size()) {
+                hold = std::stoi(fields[hold_column->second]) != 0;
+            }
+            replay.carrier_hold_active.push_back(hold);
+        } catch (const std::exception& error) {
+            std::cerr << "Error: invalid temporal-shadow replay row "
+                      << (row + 2) << ": " << error.what() << "\n";
+            return false;
+        }
+        ++row;
+    }
+    if (row != problem.epochs.size()) {
+        std::cerr << "Error: temporal-shadow replay row count " << row
+                  << " does not match problem epochs " << problem.epochs.size()
+                  << "\n";
+        return false;
+    }
+    return true;
+}
+
+bool loadTemporalShadowTruthReplay(
+    const std::string& path,
+    const libgnss::FGOProcessor::FGOProblem& problem,
+    TemporalShadowReplayInput& replay) {
+    const auto reference = loadReference(path);
+    if (reference.empty()) {
+        std::cerr << "Error: cannot load temporal-shadow truth replay from "
+                  << path << "\n";
+        return false;
+    }
+    replay.positions_ecef.clear();
+    replay.carrier_hold_active.clear();
+    replay.positions_ecef.reserve(problem.epochs.size());
+    replay.carrier_hold_active.assign(problem.epochs.size(), false);
+    std::size_t reference_index = 0;
+    for (std::size_t i = 0; i < problem.epochs.size(); ++i) {
+        const auto& time = problem.epochs[i].time;
+        while (reference_index + 1 < reference.size() &&
+               std::abs(reference[reference_index + 1].time - time) <
+                   std::abs(reference[reference_index].time - time)) {
+            ++reference_index;
+        }
+        const double age_s = std::abs(reference[reference_index].time - time);
+        if (age_s > 0.11) {
+            std::cerr << "Error: no reference position within 0.11 s at epoch "
+                      << i << " (nearest age=" << age_s << " s)\n";
+            return false;
+        }
+        replay.positions_ecef.push_back(reference[reference_index].ecef);
+    }
+    return true;
 }
 
 // Populate problem.imu from an imu.csv + the already-built FGOProblem epochs.
@@ -2523,6 +2735,88 @@ int main(int argc, char** argv) {
               << problem.diagnostics.geometry_free_cycle_slip_resets
               << ")\n";
 
+    if (!args.temporal_shadow_replay_csv.empty() ||
+        args.temporal_shadow_truth_replay) {
+        if (args.dump_csv_path.empty()) {
+            std::cerr << "Error: temporal-shadow replay requires --dump-csv "
+                         "<output-prefix>\n";
+            return 2;
+        }
+        TemporalShadowReplayInput replay;
+        const bool loaded = args.temporal_shadow_truth_replay
+            ? (!args.ref_path.empty() &&
+               loadTemporalShadowTruthReplay(args.ref_path, problem, replay))
+            : loadTemporalShadowReplayCsv(args.temporal_shadow_replay_csv,
+                                          problem, replay);
+        if (!loaded) {
+            if (args.temporal_shadow_truth_replay && args.ref_path.empty()) {
+                std::cerr << "Error: --clock-resilient-shadow-truth-replay "
+                             "requires --ref reference.csv\n";
+            }
+            return 1;
+        }
+        auto shadow =
+            libgnss::FGOProcessor::buildClockResilientTemporalCarrierShadow(
+                problem, config.single_difference_tdcp_sigma_m,
+                config.max_tdcp_gap_s);
+        auto geometry_free =
+            libgnss::FGOProcessor::analyzeGeometryFreeSlipShadow(
+                problem, 0.05, config.max_tdcp_gap_s);
+        std::vector<libgnss::FGOProcessor::FGOEpochDiagnostics>
+            epoch_diagnostics(problem.epochs.size());
+        for (std::size_t i = 0; i < epoch_diagnostics.size(); ++i) {
+            epoch_diagnostics[i].carrier_hold_active =
+                replay.carrier_hold_active[i];
+        }
+
+        libgnss::FGOProcessor::FGOResult replay_result;
+        replay_result.temporal_carrier_shadow_factors =
+            libgnss::FGOProcessor::
+                classifyClockResilientTemporalCarrierShadow(
+                    problem, shadow, replay.positions_ecef,
+                    epoch_diagnostics, &geometry_free);
+        replay_result.epoch_diagnostics = std::move(epoch_diagnostics);
+        for (std::size_t i = 0; i < problem.epochs.size(); ++i) {
+            libgnss::PositionSolution solution;
+            solution.time = problem.epochs[i].time;
+            solution.position_ecef = replay.positions_ecef[i];
+            replay_result.solution.addSolution(solution);
+        }
+        dumpTemporalCarrierFactorCsv(replay_result, args.dump_csv_path);
+
+        std::size_t clean = 0;
+        std::size_t witnessed = 0;
+        std::size_t unexplained = 0;
+        for (const auto& row :
+             replay_result.temporal_carrier_shadow_factors) {
+            switch (row.classification) {
+                case libgnss::FGOProcessor::
+                    TemporalCarrierShadowClassification::Clean:
+                    ++clean;
+                    break;
+                case libgnss::FGOProcessor::
+                    TemporalCarrierShadowClassification::WitnessedOutlier:
+                    ++witnessed;
+                    break;
+                case libgnss::FGOProcessor::
+                    TemporalCarrierShadowClassification::UnexplainedOutlier:
+                    ++unexplained;
+                    break;
+            }
+        }
+        std::cout << "Temporal-shadow replay: factors="
+                  << replay_result.temporal_carrier_shadow_factors.size()
+                  << " clean=" << clean << " witnessed_outliers="
+                  << witnessed << " unexplained_outliers=" << unexplained
+                  << "\n  source="
+                  << (args.temporal_shadow_truth_replay
+                          ? args.ref_path
+                          : args.temporal_shadow_replay_csv)
+                  << "\n  output=" << args.dump_csv_path
+                  << ".clock_resilient_tdcp_factors.csv\n";
+        return 0;
+    }
+
     // --- MF hygiene diagnostics: per-signal DD residuals at the reference
     // trajectory (no solver). PR residual mean exposes per-band code/DCB
     // bias; per-arc carrier residual fractional-cycle offset exposes phase
@@ -2659,6 +2953,9 @@ int main(int argc, char** argv) {
         const HorizError he = horizontalErrorVsRef(fl, ref_rows);
         if (!args.dump_csv_path.empty()) {
             dumpEpochCsv(fl, ref_rows, args.dump_csv_path);
+            if (args.clock_resilient_temporal_shadow) {
+                dumpTemporalCarrierFactorCsv(fl, args.dump_csv_path);
+            }
         }
 
         std::cout << "\n=== (a4) MILESTONE 2c: IncrementalFixedLagSmoother (full-scale) ===\n"

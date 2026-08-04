@@ -845,6 +845,11 @@ TEST(FGOTest, ClockResilientTemporalCarrierShadowCancelsCommonClockJump) {
             current_satellite->los - current_reference->los;
         EXPECT_LT((factor.previous_los - previous_los).norm(), 1e-12);
         EXPECT_LT((factor.los - current_los).norm(), 1e-12);
+        EXPECT_EQ(factor.target_ambiguity_index,
+                  current_satellite->ambiguity_index);
+        EXPECT_EQ(factor.reference_ambiguity_index,
+                  current_reference->ambiguity_index);
+        EXPECT_EQ(factor.arc_length_epochs, 2);
         max_previous_current_los_delta = std::max(
             max_previous_current_los_delta,
             (factor.previous_los - factor.los).norm());

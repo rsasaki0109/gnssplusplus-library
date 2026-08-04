@@ -880,7 +880,9 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
     const auto start_time = std::chrono::high_resolution_clock::now();
 
     const std::size_t num_epochs = problem.epochs.size();
-    const auto gf_slip_shadow = config.monitor_geometry_free_cycle_slip
+    const auto gf_slip_shadow =
+        (config.monitor_geometry_free_cycle_slip ||
+         config.monitor_clock_resilient_temporal_carrier)
         ? FGOProcessor::analyzeGeometryFreeSlipShadow(
               problem, 0.05, config.max_tdcp_gap_s)
         : std::vector<FGOProcessor::GeometryFreeSlipShadowEpoch>{};
@@ -1090,6 +1092,8 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
     std::vector<Vector3d> epoch_vel_nav(num_epochs, Vector3d::Zero());
     std::vector<bool> epoch_solved(num_epochs, false);
     std::vector<FGOProcessor::FGOEpochDiagnostics> epoch_diagnostics(num_epochs);
+    std::vector<std::set<std::size_t>> fde_rejected_ambiguities_by_epoch(
+        num_epochs);
     std::map<std::size_t, double> amb_float_cycles;
     std::map<std::size_t, int> amb_fixed_cycles;
     std::map<std::size_t, double> amb_fixed_residual;
@@ -3213,6 +3217,7 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
             std::set<std::size_t> fde_rejected_amb;
             const std::size_t fde_removed =
                 runFde(i, fde_local_indices, fde_new_indices, &fde_rejected_amb);
+            fde_rejected_ambiguities_by_epoch[i] = fde_rejected_amb;
             const std::size_t pr_rejected =
                 result.diagnostics.fde_pseudorange_rejections -
                 pr_rejections_before;
@@ -5855,40 +5860,12 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
     // for each epoch's FINAL window-exit pose, which is a larger, separately
     // scoped change.
     if (!clock_resilient_tdcp_shadow.empty()) {
-        std::vector<double> sum_sq(num_epochs, 0.0);
-        for (const auto& factor : clock_resilient_tdcp_shadow) {
-            if (factor.previous_epoch_index >= num_epochs ||
-                factor.current_epoch_index >= num_epochs) {
-                continue;
-            }
-            const Vector3d previous_delta =
-                epoch_float_position[factor.previous_epoch_index] -
-                problem.epochs[factor.previous_epoch_index].position_ecef;
-            const Vector3d current_delta =
-                epoch_float_position[factor.current_epoch_index] -
-                problem.epochs[factor.current_epoch_index].position_ecef;
-            const double predicted = factor.los.dot(current_delta) -
-                                     factor.previous_los.dot(previous_delta);
-            const double residual = factor.delta_carrier_m - predicted;
-            if (!std::isfinite(residual)) {
-                continue;
-            }
-            auto& diagnostics = epoch_diagnostics[factor.current_epoch_index];
-            ++diagnostics.clock_resilient_tdcp_factors;
-            sum_sq[factor.current_epoch_index] += residual * residual;
-            diagnostics.clock_resilient_tdcp_max_abs_m =
-                std::max(diagnostics.clock_resilient_tdcp_max_abs_m,
-                         std::abs(residual));
-        }
-        for (std::size_t i = 0; i < num_epochs; ++i) {
-            const int count = epoch_diagnostics[i].clock_resilient_tdcp_factors;
-            if (count > 0) {
-                epoch_diagnostics[i].clock_resilient_tdcp_rms_m =
-                    std::sqrt(sum_sq[i] / static_cast<double>(count));
-            }
-        }
+        result.temporal_carrier_shadow_factors = FGOProcessor::
+            classifyClockResilientTemporalCarrierShadow(
+                problem, clock_resilient_tdcp_shadow, epoch_float_position,
+                epoch_diagnostics, &gf_slip_shadow,
+                &fde_rejected_ambiguities_by_epoch);
     }
-
     const bool have_amb = !problem.ambiguity_states.empty();
     result.epoch_diagnostics = std::move(epoch_diagnostics);
     result.epoch_attitude_rpy_deg.resize(num_epochs);
