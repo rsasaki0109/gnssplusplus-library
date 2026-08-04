@@ -260,6 +260,18 @@ The full run1 audit retained 44.28% of wrong-candidate detection at the frozen
 5% correct-candidate harm limit, below the precommitted 50% continuation gate;
 activation and run2/run3 evaluation were therefore not attempted.
 
+The epoch CSV also appends the builder's existing `clock_jump` flag, signed
+common GPS pseudorange change, and matched-satellite support. Together with
+the normalized ambiguity-candidate sidecar, these fields support the offline
+wrong-FIX onset audit in
+[`scripts/analyze_fgo_arc_lifecycle.py`](scripts/analyze_fgo_arc_lifecycle.py).
+The audit derives causal reference changes, ambiguity-index churn/age, slip
+events, generation bumps, and FDE exclusions without changing the estimator;
+its frozen gates and research basis are documented in
+[`docs/fgo_arc_lifecycle_wrong_fix_audit.md`](docs/fgo_arc_lifecycle_wrong_fix_audit.md).
+Tokyo run1 contained only one clock jump and no lifecycle category met the
+frozen selectivity gate; no lifecycle-based FIX veto or reset was added.
+
 The epoch CSV also records whether its builder position came from a fresh
 current-epoch SPP solution (`spp_seed_fresh`) and that seed's ECEF position.
 These diagnostic-only fields allow integer candidates to be audited against

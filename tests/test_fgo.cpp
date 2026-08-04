@@ -876,6 +876,52 @@ TEST(FGOTest, ClockResilientTemporalCarrierShadowCancelsCommonClockJump) {
         << "a new reference must start a fresh temporal arc";
 }
 
+TEST(FGOTest, ReportsSignedCommonGpsPseudorangeDeltaForClockAudit) {
+    const NavigationData nav = makeSyntheticGpsNavigation(4);
+    const std::array<Vector3d, 2> rover_positions = {
+        Vector3d(1113194.0, -4841695.0, 3985350.0),
+        Vector3d(1113194.0, -4841695.0, 3985350.0),
+    };
+    const std::array<Vector3d, 2> base_positions = {
+        rover_positions[0] + Vector3d(-320.0, 180.0, 45.0),
+        rover_positions[1] + Vector3d(-320.0, 180.0, 45.0),
+    };
+    const auto rover_epochs =
+        makeSyntheticDoubleDifferenceObservationEpochs(nav, rover_positions, 0.04);
+    const auto base_epochs =
+        makeSyntheticDoubleDifferenceObservationEpochs(nav, base_positions, 0.02);
+
+    FGOProcessor::FGOConfig config;
+    config.use_spp_seed = false;
+    config.use_pseudorange_factors = true;
+    config.use_double_difference_factors = true;
+    config.use_ionosphere_model = false;
+    config.use_troposphere_model = false;
+    config.min_elevation_deg = -90.0;
+    config.min_satellites_per_epoch = 2;
+
+    constexpr double jump_m = constants::SPEED_OF_LIGHT * 0.001;
+    const auto build_with_jump = [&](double jump) {
+        auto jumped = rover_epochs;
+        for (auto& observation : jumped[1].observations) {
+            observation.pseudorange += jump;
+        }
+        return FGOProcessor(config).buildDoubleDifferenceProblem(
+            jumped, base_epochs, nav, base_positions[0]);
+    };
+
+    const auto positive = build_with_jump(jump_m);
+    ASSERT_EQ(positive.gps_common_pseudorange_delta_m.size(), 2u);
+    ASSERT_EQ(positive.gps_common_pseudorange_delta_satellites.size(), 2u);
+    EXPECT_GT(positive.gps_common_pseudorange_delta_m[1], 1e5);
+    EXPECT_GE(positive.gps_common_pseudorange_delta_satellites[1], 2);
+
+    const auto negative = build_with_jump(-jump_m);
+    ASSERT_EQ(negative.gps_common_pseudorange_delta_m.size(), 2u);
+    EXPECT_LT(negative.gps_common_pseudorange_delta_m[1], -1e5);
+    EXPECT_GE(negative.gps_common_pseudorange_delta_satellites[1], 2);
+}
+
 TEST(FGOTest, PredictedDdprQualityShadowIsClockSafeAndFailClosed) {
     FGOProcessor::FGOProblem problem;
     problem.epochs.resize(2);

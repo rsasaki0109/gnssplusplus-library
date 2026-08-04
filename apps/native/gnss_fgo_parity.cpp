@@ -1528,6 +1528,7 @@ HorizError horizontalErrorVsRef(const libgnss::FGOProcessor::FGOResult& r,
 // demotions -- i.e. exactly the label horizontalErrorVsRef() buckets on.
 void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
                   const std::vector<RefRow>& ref,
+                  const libgnss::FGOProcessor::FGOProblem& problem,
                   const std::string& path) {
     if (ref.empty()) {
         std::cerr << "Warning: --dump-csv requires --ref reference.csv; skipping dump.\n";
@@ -1614,7 +1615,9 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
            "low_count_attempted,low_count_used,"
            "integer_reopt_eval,integer_reopt_pass,integer_reopt_base_cost_before,"
            "integer_reopt_base_cost_after,integer_reopt_base_cost_delta,"
-           "dr_bypass_eval,dr_bypass_horiz_err_m,dr_bypass_applied\n";
+           "dr_bypass_eval,dr_bypass_horiz_err_m,dr_bypass_applied,"
+           "clock_jump,clock_common_delta_m,"
+           "clock_common_delta_satellites\n";
     std::size_t ri = 0;
     for (std::size_t si = 0; si < r.solution.solutions.size(); ++si) {
         const auto& s = r.solution.solutions[si];
@@ -1868,6 +1871,14 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
                 << ',' << dr_bypass_horiz
                 << ',' << (d.dr_bypass_applied ? 1 : 0);
         }
+        out << ',' << (si < problem.clock_jumps.size() &&
+                       problem.clock_jumps[si] ? 1 : 0)
+            << ',' << (si < problem.gps_common_pseudorange_delta_m.size()
+                           ? problem.gps_common_pseudorange_delta_m[si]
+                           : 0.0)
+            << ',' << (si < problem.gps_common_pseudorange_delta_satellites.size()
+                           ? problem.gps_common_pseudorange_delta_satellites[si]
+                           : 0);
         out << '\n';
     }
 
@@ -2577,6 +2588,8 @@ bool readBoolVec(std::istream& is, std::vector<bool>& v) {
 void writeProblem(std::ostream& os, const libgnss::FGOProcessor::FGOProblem& p) {
     writeVec(os, p.epochs);
     writeBoolVec(os, p.clock_jumps);
+    writeVec(os, p.gps_common_pseudorange_delta_m);
+    writeVec(os, p.gps_common_pseudorange_delta_satellites);
     writeVec(os, p.pseudorange_factors);
     writeVec(os, p.tdcp_factors);
     writeVec(os, p.single_difference_doppler_factors);
@@ -2596,6 +2609,8 @@ void writeProblem(std::ostream& os, const libgnss::FGOProcessor::FGOProblem& p) 
 bool readProblem(std::istream& is, libgnss::FGOProcessor::FGOProblem& p) {
     return readVec(is, p.epochs) &&
            readBoolVec(is, p.clock_jumps) &&
+           readVec(is, p.gps_common_pseudorange_delta_m) &&
+           readVec(is, p.gps_common_pseudorange_delta_satellites) &&
            readVec(is, p.pseudorange_factors) &&
            readVec(is, p.tdcp_factors) &&
            readVec(is, p.single_difference_doppler_factors) &&
@@ -2636,7 +2651,7 @@ FileId statFile(const std::string& path) {
 // vector, new factor field, ...) -- an old cache then fails the magic/version
 // check in load() below and is rebuilt instead of misread.
 constexpr uint32_t kMagic = 0x50434647u;  // "PCFG" (problem-cache fgo)
-constexpr uint32_t kVersion = 9u;
+constexpr uint32_t kVersion = 10u;
 constexpr std::size_t kBuilderFingerprintBytes = 512u;
 
 struct Fingerprint {
@@ -3189,7 +3204,7 @@ int main(int argc, char** argv) {
         const std::size_t ne = fl.solution.solutions.size();
         const HorizError he = horizontalErrorVsRef(fl, ref_rows);
         if (!args.dump_csv_path.empty()) {
-            dumpEpochCsv(fl, ref_rows, args.dump_csv_path);
+            dumpEpochCsv(fl, ref_rows, problem, args.dump_csv_path);
             if (args.disjoint_ar_shadow) {
                 dumpDisjointArShadowCsv(fl, args.dump_csv_path);
             }

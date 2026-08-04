@@ -1295,7 +1295,12 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                 gps_pseudorange_delta_sum /
                 static_cast<double>(gps_pseudorange_delta_count);
             clock_jump = mean_delta > 1e5;
+            problem.gps_common_pseudorange_delta_m.push_back(mean_delta);
+        } else {
+            problem.gps_common_pseudorange_delta_m.push_back(0.0);
         }
+        problem.gps_common_pseudorange_delta_satellites.push_back(
+            static_cast<int>(gps_pseudorange_delta_count));
         problem.clock_jumps.push_back(clock_jump);
         previous_gps_pseudorange_by_satellite =
             std::move(gps_pseudorange_by_satellite);
