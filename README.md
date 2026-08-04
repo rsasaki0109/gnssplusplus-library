@@ -248,6 +248,18 @@ written beside the epoch CSV as `<dump>.ratio_impact.csv`; it includes the
 excluded satellite, its ambiguity variance/fractional-cycle/DDPR-residual
 proxies, and the resulting counterfactual candidate.
 
+`--disjoint-ar-shadow` balances whole constellation groups into two
+satellite-disjoint ambiguity partitions, runs a reduced top-two LAMBDA search
+for each partition, and records their candidate-position solution separation.
+It is monitor-only and writes `<dump>.disjoint_ar_shadow.csv`; neither
+partition can change the graph, ambiguity hold, or FIX/FLOAT output. The
+research basis, shared-float-state limitation, and staged promotion gates are
+documented in
+[`docs/fgo_disjoint_ar_shadow_plan.md`](docs/fgo_disjoint_ar_shadow_plan.md).
+The full run1 audit retained 44.28% of wrong-candidate detection at the frozen
+5% correct-candidate harm limit, below the precommitted 50% continuation gate;
+activation and run2/run3 evaluation were therefore not attempted.
+
 The epoch CSV also records whether its builder position came from a fresh
 current-epoch SPP solution (`spp_seed_fresh`) and that seed's ECEF position.
 These diagnostic-only fields allow integer candidates to be audited against

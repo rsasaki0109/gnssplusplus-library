@@ -24,6 +24,7 @@
 // node (seeded with libgnss's lumped value, in cycles) and ambTarget <- a
 // single shared dummy node pinned to 0 with a tight prior.
 
+#include <libgnss++/algorithms/disjoint_constellation_partition.hpp>
 #include <libgnss++/algorithms/fgo.hpp>
 #include <libgnss++/algorithms/lambda.hpp>
 #include <libgnss++/core/constants.hpp>
@@ -4726,6 +4727,136 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                             }
                         }
                         break;  // validated subset found
+                    }
+
+                    // Constellation-disjoint ambiguity solution-separation
+                    // shadow. Whole constellation groups stay together so
+                    // no target/reference satellite can occur in both
+                    // reduced LAMBDA searches. Both subproblems still come
+                    // from the shared float graph, so their agreement is
+                    // telemetry only and never authorizes a FIX.
+                    if (config.monitor_disjoint_constellation_ar) {
+                        std::vector<disjoint_constellation_partition::Candidate>
+                            partition_candidates;
+                        partition_candidates.reserve(static_cast<std::size_t>(n));
+                        for (int candidate = 0; candidate < n; ++candidate) {
+                            const std::size_t ambiguity_index =
+                                epoch_amb_indices[candidate];
+                            if (ambiguity_index >= problem.ambiguity_states.size()) {
+                                continue;
+                            }
+                            partition_candidates.push_back({
+                                static_cast<int>(problem.ambiguity_states[ambiguity_index]
+                                                     .satellite.system),
+                                candidate});
+                        }
+                        const auto partitioned =
+                            disjoint_constellation_partition::partition(
+                                partition_candidates);
+                        auto& shadow = epoch_diagnostics[i]
+                                           .disjoint_constellation_ar_shadow;
+                        shadow.partition_a_system_mask =
+                            partitioned.partition_a_system_mask;
+                        shadow.partition_b_system_mask =
+                            partitioned.partition_b_system_mask;
+                        shadow.partition_a_ambiguities =
+                            static_cast<int>(partitioned.partition_a.size());
+                        shadow.partition_b_ambiguities =
+                            static_cast<int>(partitioned.partition_b.size());
+                        const int minimum_partition = std::max(
+                            1, config.disjoint_constellation_ar_min_ambiguities);
+                        if (partitioned.available(minimum_partition)) {
+                            shadow.evaluated = true;
+                            const Eigen::Vector3d float_antenna = Eigen::Vector3d(
+                                antennaOf(lambda_linearization_point.at<Pose3>(
+                                    positionKey(i))));
+                            const auto solvePartition =
+                                [&](const std::vector<int>& indexes,
+                                    double& ratio,
+                                    double& bootstrapped_success_rate,
+                                    bool& ratio_passed,
+                                    bool& candidate_available,
+                                    Vector3d& candidate_position) {
+                                    const int count =
+                                        static_cast<int>(indexes.size());
+                                    Eigen::VectorXd partition_float(count);
+                                    Eigen::MatrixXd partition_q(count, count);
+                                    Eigen::MatrixXd partition_pos(3, count);
+                                    for (int row = 0; row < count; ++row) {
+                                        partition_float(row) = float_amb(indexes[row]);
+                                        partition_pos.col(row) = pos_amb.col(indexes[row]);
+                                        for (int column = 0; column < count; ++column) {
+                                            partition_q(row, column) =
+                                                q_amb(indexes[row], indexes[column]);
+                                        }
+                                    }
+                                    LambdaCandidateDiagnostics diagnostics;
+                                    if (!lambdaSearchTopK(partition_float, partition_q,
+                                                          2, diagnostics)) {
+                                        return;
+                                    }
+                                    const double best =
+                                        diagnostics.squared_residuals(0);
+                                    ratio = best > 0.0
+                                        ? diagnostics.squared_residuals(1) / best
+                                        : 0.0;
+                                    bootstrapped_success_rate =
+                                        diagnostics.bootstrapped_success_rate;
+                                    ratio_passed = std::isfinite(ratio) &&
+                                        (config.lambda_ratio_threshold <= 0.0 ||
+                                         ratio > config.lambda_ratio_threshold);
+                                    const Eigen::LDLT<Eigen::MatrixXd> ldlt(
+                                        partition_q);
+                                    if (ldlt.info() != Eigen::Success) return;
+                                    const Eigen::VectorXd correction = ldlt.solve(
+                                        partition_float -
+                                        diagnostics.candidates.col(0));
+                                    const Eigen::Vector3d position_delta =
+                                        partition_pos * correction;
+                                    if (!correction.allFinite() ||
+                                        !position_delta.allFinite()) {
+                                        return;
+                                    }
+                                    candidate_position =
+                                        float_antenna - position_delta;
+                                    candidate_available =
+                                        candidate_position.allFinite();
+                                };
+                            solvePartition(
+                                partitioned.partition_a,
+                                shadow.partition_a_ratio,
+                                shadow.partition_a_bootstrapped_success_rate,
+                                shadow.partition_a_ratio_passed,
+                                shadow.partition_a_candidate_available,
+                                shadow.partition_a_position_ecef);
+                            solvePartition(
+                                partitioned.partition_b,
+                                shadow.partition_b_ratio,
+                                shadow.partition_b_bootstrapped_success_rate,
+                                shadow.partition_b_ratio_passed,
+                                shadow.partition_b_candidate_available,
+                                shadow.partition_b_position_ecef);
+                            if (shadow.partition_a_candidate_available &&
+                                shadow.partition_b_candidate_available) {
+                                shadow.partition_separation_m =
+                                    (shadow.partition_a_position_ecef -
+                                     shadow.partition_b_position_ecef)
+                                        .norm();
+                                if (epoch_diagnostics[i]
+                                        .lambda_candidate_available) {
+                                    shadow.partition_a_primary_separation_m =
+                                        (shadow.partition_a_position_ecef -
+                                         epoch_diagnostics[i]
+                                             .lambda_candidate_position_ecef)
+                                            .norm();
+                                    shadow.partition_b_primary_separation_m =
+                                        (shadow.partition_b_position_ecef -
+                                         epoch_diagnostics[i]
+                                             .lambda_candidate_position_ecef)
+                                            .norm();
+                                }
+                            }
+                        }
                     }
 
                     // Multi-epoch AR shadow. Select only uninterrupted DD

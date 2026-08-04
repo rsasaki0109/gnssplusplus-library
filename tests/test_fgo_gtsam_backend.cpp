@@ -535,6 +535,65 @@ TEST(FGOAmbiguityCandidateTelemetryTest, ReportsDisabledCandidateFunnel) {
     }
 }
 
+TEST(FGODisjointConstellationArShadowTest,
+     ProducesTwoCandidatesWithoutChangingFixedLagSolution) {
+    CpHoldTestOptions opt;
+    opt.num_epochs = 3;
+    opt.satellites = gtsamParitySatelliteGeometry();
+    opt.satellites.push_back(Vector3d(-21500000.0, 9000000.0, 11000000.0));
+    opt.satellites.push_back(Vector3d(9000000.0, 22000000.0, -12000000.0));
+    opt.satellites.push_back(Vector3d(-8000000.0, -21000000.0, -14000000.0));
+    auto problem = makeCpHoldFixedLagProblem(opt);
+
+    for (std::size_t index = 4; index < problem.ambiguity_states.size(); ++index) {
+        auto& ambiguity = problem.ambiguity_states[index];
+        ambiguity.satellite = SatelliteId(
+            GNSSSystem::Galileo, ambiguity.satellite.prn);
+        ambiguity.reference_satellite = SatelliteId(GNSSSystem::Galileo, 1);
+    }
+    for (auto& factor : problem.double_difference_carrier_factors) {
+        if (factor.ambiguity_index < 4) continue;
+        factor.satellite = SatelliteId(GNSSSystem::Galileo, factor.satellite.prn);
+        factor.reference_satellite = SatelliteId(GNSSSystem::Galileo, 1);
+    }
+
+    FGOProcessor::FGOConfig base_config = makeCpHoldBaseConfig();
+    base_config.use_carrier_phase_factors = true;
+    base_config.use_lambda_ambiguity_fix = true;
+    base_config.min_fixed_ambiguities = 4;
+    const auto baseline = FGOProcessor(base_config).optimizeProblem(problem);
+
+    auto shadow_config = base_config;
+    shadow_config.monitor_disjoint_constellation_ar = true;
+    shadow_config.disjoint_constellation_ar_min_ambiguities = 4;
+    const auto shadow = FGOProcessor(shadow_config).optimizeProblem(problem);
+
+    ASSERT_EQ(baseline.solution.solutions.size(), shadow.solution.solutions.size());
+    ASSERT_EQ(shadow.epoch_diagnostics.size(), problem.epochs.size());
+    for (std::size_t epoch = 0; epoch < shadow.solution.solutions.size(); ++epoch) {
+        EXPECT_EQ(baseline.solution.solutions[epoch].status,
+                  shadow.solution.solutions[epoch].status);
+        EXPECT_DOUBLE_EQ(baseline.solution.solutions[epoch].ratio,
+                         shadow.solution.solutions[epoch].ratio);
+        EXPECT_EQ(baseline.solution.solutions[epoch].num_fixed_ambiguities,
+                  shadow.solution.solutions[epoch].num_fixed_ambiguities);
+        EXPECT_TRUE(baseline.solution.solutions[epoch].position_ecef.isApprox(
+            shadow.solution.solutions[epoch].position_ecef, 0.0));
+
+        const auto& diagnostic =
+            shadow.epoch_diagnostics[epoch].disjoint_constellation_ar_shadow;
+        EXPECT_TRUE(diagnostic.evaluated);
+        EXPECT_EQ(diagnostic.partition_a_ambiguities, 4);
+        EXPECT_EQ(diagnostic.partition_b_ambiguities, 4);
+        EXPECT_EQ(diagnostic.partition_a_system_mask &
+                      diagnostic.partition_b_system_mask,
+                  0u);
+        EXPECT_TRUE(diagnostic.partition_a_candidate_available);
+        EXPECT_TRUE(diagnostic.partition_b_candidate_available);
+        EXPECT_TRUE(std::isfinite(diagnostic.partition_separation_m));
+    }
+}
+
 TEST(FGOClockResilientTemporalCarrierShadowTest,
      ReportsResidualsWithoutChangingFixedLagSolution) {
     CpHoldTestOptions opt;
