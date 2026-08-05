@@ -148,7 +148,7 @@ Only one signed common clock jump occurred in the complete run: a positive
 negative event exceeded 100 km, and the single positive event preceded no
 wrong-FIX onset.  Reference changes and young arcs have high coverage because
 they are also routine during correct operation.  Ambiguity churn is the most
-discriminative category, but its 8.441% correct-FIX exposure exceeds the
+discriminative category, but its 8.330% correct-FIX exposure exceeds the
 precommitted 5% maximum.  Generation bumps and FDE exclusions meet the
 correct-exposure limit but miss both the 20% onset-coverage and four-times
 risk requirements.

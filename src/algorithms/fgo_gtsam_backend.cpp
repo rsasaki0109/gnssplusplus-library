@@ -2755,7 +2755,8 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
         // Independent SD-Doppler velocity LS and DR propagation.  No FGO
         // state enters this estimator.  A single robust re-fit removes rows
         // beyond 4 sigma so one Doppler outlier cannot dominate the track.
-        if (config.use_external_doppler_dr_validation) {
+        if (config.monitor_external_doppler_dr ||
+            config.use_external_doppler_dr_validation) {
             std::vector<const FGOProcessor::SingleDifferenceDopplerFactor*> active_doppler =
                 doppler_by_epoch[i];
             Vector3d doppler_velocity = Vector3d::Zero();
@@ -4157,6 +4158,70 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                                 ++result.diagnostics.surplus_validation_separation_rejects;
                             }
                         }
+                        // Monitor every provisional candidate against the
+                        // Doppler-only dead-reckoning track before any ratio
+                        // decision. The track contains no FGO state between
+                        // its high-confidence reset epochs, and monitor mode
+                        // never contributes to an acceptance decision.
+                        epoch_diagnostics[i].external_dr_evaluated = false;
+                        epoch_diagnostics[i].external_dr_accepted = false;
+                        epoch_diagnostics[i].external_dr_rejected = false;
+                        bool external_dr_available = false;
+                        bool external_dr_candidate_pass = false;
+                        double external_dr_separation_m = 0.0;
+                        double external_dr_mahalanobis2 = 0.0;
+                        if ((config.monitor_external_doppler_dr ||
+                             config.use_external_doppler_dr_validation) &&
+                            external_dr_position_valid &&
+                            has_provisional_fixed_ant &&
+                            has_provisional_fixed_cov &&
+                            (!config.monitor_external_doppler_dr ||
+                             external_dr_age_epochs > 0) &&
+                            external_dr_age_epochs <=
+                                config.external_doppler_dr_max_age_epochs) {
+                            Eigen::Matrix3d combined_cov =
+                                external_dr_position_cov + provisional_fixed_cov;
+                            combined_cov =
+                                0.5 * (combined_cov + combined_cov.transpose());
+                            const Eigen::LDLT<Eigen::Matrix3d> cov_ldlt(combined_cov);
+                            if (cov_ldlt.info() == Eigen::Success &&
+                                cov_ldlt.vectorD().allFinite() &&
+                                (cov_ldlt.vectorD().array() > 0.0).all()) {
+                                const Eigen::Vector3d delta =
+                                    provisional_fixed_ant - external_dr_position_ecef;
+                                const double mahalanobis2 =
+                                    delta.dot(cov_ldlt.solve(delta));
+                                external_dr_available = std::isfinite(mahalanobis2);
+                                external_dr_candidate_pass =
+                                    external_dr_available &&
+                                    mahalanobis2 <=
+                                        config.external_doppler_dr_chi2_threshold;
+                                external_dr_separation_m = delta.norm();
+                                external_dr_mahalanobis2 = mahalanobis2;
+                                if (config.monitor_external_doppler_dr) {
+                                    epoch_diagnostics[i].external_dr_evaluated =
+                                        external_dr_available;
+                                    epoch_diagnostics[i].external_dr_separation_m =
+                                        external_dr_separation_m;
+                                    epoch_diagnostics[i].external_dr_mahalanobis2 =
+                                        external_dr_mahalanobis2;
+                                    epoch_diagnostics[i].external_dr_accepted =
+                                        external_dr_candidate_pass;
+                                    epoch_diagnostics[i].external_dr_rejected =
+                                        external_dr_available &&
+                                        !external_dr_candidate_pass;
+                                }
+                                if (external_dr_available &&
+                                    config.monitor_external_doppler_dr) {
+                                    if (external_dr_candidate_pass) {
+                                        ++result.diagnostics.external_doppler_dr_accepts;
+                                    } else {
+                                        ++result.diagnostics.external_doppler_dr_rejects;
+                                    }
+                                }
+                            }
+                        }
+
                         // Integrity-aided aperture: the conventional
                         // fixed-vs-float separation is correlated because
                         // both hypotheses come from this graph.  A candidate
@@ -4338,40 +4403,23 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                             adaptive_only_pass || integrity_candidate;
                         if (relaxed_fix_path &&
                             config.use_external_doppler_dr_validation) {
-                            const bool available =
-                                external_dr_position_valid && has_provisional_fixed_ant &&
-                                has_provisional_fixed_cov &&
-                                external_dr_age_epochs <=
-                                    config.external_doppler_dr_max_age_epochs;
-                            if (available) {
-                                Eigen::Matrix3d combined_cov =
-                                    external_dr_position_cov + provisional_fixed_cov;
-                                combined_cov = 0.5 * (combined_cov + combined_cov.transpose());
-                                const Eigen::LDLT<Eigen::Matrix3d> cov_ldlt(combined_cov);
-                                if (cov_ldlt.info() == Eigen::Success &&
-                                    cov_ldlt.vectorD().allFinite() &&
-                                    (cov_ldlt.vectorD().array() > 0.0).all()) {
-                                    const Eigen::Vector3d delta =
-                                        provisional_fixed_ant - external_dr_position_ecef;
-                                    const double mahalanobis2 =
-                                        delta.dot(cov_ldlt.solve(delta));
+                            if (external_dr_available) {
+                                external_dr_pass = external_dr_candidate_pass;
+                                if (!config.monitor_external_doppler_dr) {
                                     epoch_diagnostics[i].external_dr_evaluated = true;
-                                    epoch_diagnostics[i].external_dr_separation_m = delta.norm();
-                                    epoch_diagnostics[i].external_dr_mahalanobis2 = mahalanobis2;
-                                    external_dr_pass = std::isfinite(mahalanobis2) &&
-                                        mahalanobis2 <=
-                                            config.external_doppler_dr_chi2_threshold;
-                                    if (external_dr_pass) {
+                                    epoch_diagnostics[i].external_dr_separation_m =
+                                        external_dr_separation_m;
+                                    epoch_diagnostics[i].external_dr_mahalanobis2 =
+                                        external_dr_mahalanobis2;
+                                    epoch_diagnostics[i].external_dr_accepted =
+                                        external_dr_candidate_pass;
+                                    epoch_diagnostics[i].external_dr_rejected =
+                                        !external_dr_candidate_pass;
+                                    if (external_dr_candidate_pass) {
                                         ++result.diagnostics.external_doppler_dr_accepts;
-                                        epoch_diagnostics[i].external_dr_accepted = true;
                                     } else {
                                         ++result.diagnostics.external_doppler_dr_rejects;
-                                        epoch_diagnostics[i].external_dr_rejected = true;
                                     }
-                                } else if ((adaptive_only_pass || integrity_candidate) &&
-                                           config.external_doppler_dr_require_for_relaxed_fix) {
-                                    external_dr_pass = false;
-                                    ++result.diagnostics.external_doppler_dr_unavailable;
                                 }
                             } else if ((adaptive_only_pass || integrity_candidate) &&
                                        config.external_doppler_dr_require_for_relaxed_fix) {
@@ -4577,7 +4625,8 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                             epoch_fixed_position[i] = Point3(provisional_fixed_ant);
                             epoch_has_fixed[i] = true;
                         }
-                        if (config.use_external_doppler_dr_validation &&
+                        if ((config.monitor_external_doppler_dr ||
+                             config.use_external_doppler_dr_validation) &&
                             has_provisional_fixed_ant && has_provisional_fixed_cov &&
                             external_dr_velocity_valid &&
                             ratio >= config.external_doppler_dr_reset_min_ratio) {

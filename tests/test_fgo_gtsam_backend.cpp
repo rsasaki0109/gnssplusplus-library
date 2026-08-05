@@ -2921,6 +2921,58 @@ TEST(FGOFixDemoteTest, DefaultOffIsNoOp) {
     EXPECT_EQ(result.solution.solutions.size(), problem.epochs.size());
 }
 
+TEST(FGOExternalDopplerDrShadowTest, MonitorDoesNotChangeSolutionAuthority) {
+    CpHoldTestOptions opt;
+    opt.satellites = lambdaCapableSatelliteGeometry();
+    opt.num_epochs = 12;
+    auto problem = makeCpHoldFixedLagProblem(opt);
+
+    const std::array<Vector3d, 4> line_of_sight = {
+        Vector3d::UnitX(), Vector3d::UnitY(), Vector3d::UnitZ(),
+        Vector3d(1.0, 1.0, 1.0).normalized(),
+    };
+    for (std::size_t epoch = 0; epoch < problem.epochs.size(); ++epoch) {
+        for (std::size_t row = 0; row < line_of_sight.size(); ++row) {
+            FGOProcessor::SingleDifferenceDopplerFactor factor;
+            factor.epoch_index = epoch;
+            factor.satellite = SatelliteId(
+                GNSSSystem::GPS, static_cast<uint8_t>(row + 2));
+            factor.reference_satellite = SatelliteId(GNSSSystem::GPS, 1);
+            factor.signal = SignalType::GPS_L1CA;
+            factor.los = line_of_sight[row];
+            factor.residual_mps = 0.0;
+            factor.sigma_mps = 0.1;
+            factor.elevation_rad = 0.7;
+            problem.single_difference_doppler_factors.push_back(factor);
+        }
+    }
+
+    FGOProcessor::FGOConfig off_config = makeFixDemoteBaseConfig();
+    const auto off_result = FGOProcessor(off_config).optimizeProblem(problem);
+
+    FGOProcessor::FGOConfig shadow_config = off_config;
+    shadow_config.monitor_external_doppler_dr = true;
+    shadow_config.external_doppler_dr_reset_min_ratio = 1.5;
+    const auto shadow_result =
+        FGOProcessor(shadow_config).optimizeProblem(problem);
+
+    ASSERT_EQ(off_result.solution.solutions.size(),
+              shadow_result.solution.solutions.size());
+    for (std::size_t i = 0; i < off_result.solution.solutions.size(); ++i) {
+        EXPECT_TRUE(off_result.solution.solutions[i].position_ecef.isApprox(
+            shadow_result.solution.solutions[i].position_ecef, 0.0));
+        EXPECT_EQ(off_result.solution.solutions[i].status,
+                  shadow_result.solution.solutions[i].status);
+    }
+    EXPECT_GT(shadow_result.diagnostics.external_doppler_dr_accepts +
+                  shadow_result.diagnostics.external_doppler_dr_rejects,
+              0u);
+    EXPECT_TRUE(std::any_of(
+        shadow_result.epoch_diagnostics.begin(),
+        shadow_result.epoch_diagnostics.end(),
+        [](const auto& epoch) { return epoch.external_dr_evaluated; }));
+}
+
 TEST(FGOFixDemoteTest, DemotesImplausibleFixedEpochToFloat) {
     const Vector3d true_position(1113194.0, -4841695.0, 3985350.0);
     constexpr std::size_t kBadEpoch = 15;

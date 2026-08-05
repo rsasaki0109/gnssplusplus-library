@@ -131,6 +131,13 @@ with `gnss_fgo_parity` (requires a GTSAM build) and the evaluated preset:
 --imu-ratio-relaxed 1.5 --gf-slip-reset
 ```
 
+A separate default-off Doppler-only dead-reckoning witness was evaluated as a
+possible FLOAT-to-FIX promotion guard.  It failed the pre-registered Tokyo
+run1 zero-wrong gate: 112 correct and 112 wrong FLOAT candidates were
+accepted.  It therefore remains monitor-only; run2/run3 were not used for
+threshold selection and no runtime activation or FIX-rate gain is claimed.
+See the [external Doppler-DR witness audit](docs/fgo_external_doppler_dr_witness_audit.md).
+
 With `--dump-csv <path>`, the epoch table includes the ambiguity-candidate
 funnel (`amb_after_hold`, `amb_final`, and `amb_excl_*`) and the last
 successfully searched LAMBDA position candidate (`lambda_candidate_*`), even

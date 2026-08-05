@@ -357,6 +357,9 @@ public:
         // Independent solution-separation track: propagate the last
         // high-confidence FIX using an SD-Doppler-only velocity LS solution,
         // then test the next integer candidate with a 3-D Mahalanobis chi2.
+        // monitor_external_doppler_dr evaluates every provisional LAMBDA
+        // candidate but cannot relax a ratio gate or add Doppler graph factors.
+        bool monitor_external_doppler_dr = false;
         bool use_external_doppler_dr_validation = false;
         bool external_doppler_dr_require_for_relaxed_fix = true;
         // A statistically validated relaxed-ratio solution may label the

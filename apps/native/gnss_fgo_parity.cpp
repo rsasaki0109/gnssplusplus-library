@@ -70,6 +70,7 @@ struct Args {
     bool temporal_shadow_truth_replay = false;  // classify against reference.csv; skip solve
     bool postfit_gate = false;
     bool adaptive_ratio = false;
+    bool external_dr_shadow = false;
     int postfit_min_n = -1;
     double postfit_rms = -1.0;
     double postfit_max_norm = -1.0;
@@ -420,6 +421,10 @@ Args parseArgs(int argc, char** argv) {
         }
         if (a == "--external-dr") {
             args.external_dr = true;
+            continue;
+        }
+        if (a == "--external-dr-shadow") {
+            args.external_dr_shadow = true;
             continue;
         }
         if (a == "--external-dr-max-age" && i + 1 < argc) {
@@ -807,6 +812,12 @@ libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
     }
     if (args.external_dr) {
         config.use_external_doppler_dr_validation = true;
+    }
+    if (args.external_dr_shadow) {
+        config.monitor_external_doppler_dr = true;
+        if (args.external_dr_reset_ratio < 0.0) {
+            config.external_doppler_dr_reset_min_ratio = 20.0;
+        }
     }
     if (args.external_dr_max_age > 0) {
         config.external_doppler_dr_max_age_epochs = args.external_dr_max_age;
@@ -2735,6 +2746,7 @@ Fingerprint computeFingerprint(const Args& args, const libgnss::FGOProcessor::FG
     COPY_BUILD_FIELD(use_double_difference_factors);
     COPY_BUILD_FIELD(use_double_difference_secondary_code_alignment);
     COPY_BUILD_FIELD(use_elevation_dependent_sigma);
+    COPY_BUILD_FIELD(monitor_external_doppler_dr);
     COPY_BUILD_FIELD(use_external_doppler_dr_validation);
     COPY_BUILD_FIELD(use_geometry_free_cycle_slip_reset);
     COPY_BUILD_FIELD(use_ionosphere_model);
@@ -3293,6 +3305,8 @@ int main(int argc, char** argv) {
                   << ", low:" << config.adaptive_ratio_nsat_low << ")\n"
                   << "  external Doppler-DR SSE: "
                   << (config.use_external_doppler_dr_validation ? "on" : "off")
+                  << ", shadow="
+                  << (config.monitor_external_doppler_dr ? "on" : "off")
                   << " (accepted=" << fl.diagnostics.external_doppler_dr_accepts
                   << ", rejected=" << fl.diagnostics.external_doppler_dr_rejects
                   << ", unavailable=" << fl.diagnostics.external_doppler_dr_unavailable

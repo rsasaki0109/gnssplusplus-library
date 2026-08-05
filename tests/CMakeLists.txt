@@ -200,6 +200,10 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_fgo_arc_lifecycle_audit.py
     )
     add_test(
+        NAME python_fgo_external_dr_witness_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_fgo_external_dr_witness.py
+    )
+    add_test(
         NAME python_ppc_integrity_policy_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_ppc_integrity_policy_ci.py
     )
@@ -458,6 +462,7 @@ if(GTest_FOUND)
         run_tests
         clas_outage_legacy_kill_switch
         python_fgo_arc_lifecycle_audit_tests
+        python_fgo_external_dr_witness_tests
         python_ppc_integrity_policy_tests
         python_ppc_goal_completion_audit_tests
         python_artifact_manifest_contract_validator_tests
