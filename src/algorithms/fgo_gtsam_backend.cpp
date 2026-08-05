@@ -758,10 +758,9 @@ class SingleDifferenceDopplerVelocityFactor
 };
 
 // Stationarity stats over an IMU sample sub-range [begin, end), mirroring the
-// Stage-1 ESKF LooseCouplingProcessor::detectStationary(): std of the norm of
-// (accel - accel_bias) and (gyro - gyro_bias), plus the median of the gyro
-// deviation norm. Bias-referenced against the Stage-1 init bias (not a running
-// estimate), exactly as inuex35's compute_zupt_stats recommends.
+// Vector-deviation RMS plus the median bias-referenced gyro norm, matching
+// inuex35's compute_zupt_stats. The older std-of-norms formulation could hide
+// directional vibration whose magnitude stayed nearly constant.
 struct ImuWindowStats {
     int n = 0;
     double accel_std = 0.0;
@@ -779,34 +778,31 @@ inline ImuWindowStats imuWindowStats(const std::vector<ImuSample>& samples, std:
     if (n == 0) {
         return s;
     }
-    std::vector<double> accel_devs, gyro_devs;
-    accel_devs.reserve(n);
-    gyro_devs.reserve(n);
+    Vector3d accel_mean = Vector3d::Zero();
+    Vector3d gyro_mean = Vector3d::Zero();
+    std::vector<double> gyro_residual_norms;
+    gyro_residual_norms.reserve(n);
     double gyro_z_sum = 0.0;
     for (std::size_t k = begin; k < end; ++k) {
-        accel_devs.push_back((samples[k].accel_raw - accel_bias).norm());
-        gyro_devs.push_back((samples[k].gyro_raw_radps - gyro_bias).norm());
+        accel_mean += samples[k].accel_raw;
+        gyro_mean += samples[k].gyro_raw_radps;
+        gyro_residual_norms.push_back(
+            (samples[k].gyro_raw_radps - gyro_bias).norm());
         gyro_z_sum += samples[k].gyro_raw_radps.z() - gyro_bias.z();
     }
-    auto mean = [](const std::vector<double>& v) {
-        double m = 0.0;
-        for (double x : v) m += x;
-        return m / static_cast<double>(v.size());
-    };
-    auto stddev = [&](const std::vector<double>& v) {
-        const double m = mean(v);
-        double s2 = 0.0;
-        for (double x : v) {
-            const double d = x - m;
-            s2 += d * d;
-        }
-        return std::sqrt(s2 / static_cast<double>(v.size()));
-    };
-    std::vector<double> g = gyro_devs;
-    std::sort(g.begin(), g.end());
-    s.accel_std = stddev(accel_devs);
-    s.gyro_std = stddev(gyro_devs);
-    s.gyro_median = g[g.size() / 2];
+    accel_mean /= static_cast<double>(n);
+    gyro_mean /= static_cast<double>(n);
+    double accel_variance = 0.0;
+    double gyro_variance = 0.0;
+    for (std::size_t k = begin; k < end; ++k) {
+        accel_variance += (samples[k].accel_raw - accel_mean).squaredNorm();
+        gyro_variance +=
+            (samples[k].gyro_raw_radps - gyro_mean).squaredNorm();
+    }
+    std::sort(gyro_residual_norms.begin(), gyro_residual_norms.end());
+    s.accel_std = std::sqrt(accel_variance / static_cast<double>(n));
+    s.gyro_std = std::sqrt(gyro_variance / static_cast<double>(n));
+    s.gyro_median = gyro_residual_norms[gyro_residual_norms.size() / 2];
     s.yaw_rate_abs = std::abs(gyro_z_sum / static_cast<double>(n));
     return s;
 }
@@ -2592,19 +2588,29 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
 
         // --- Milestone 2d: NHC + ZUPT pseudo-measurements (gated per epoch) ---
         const ImuWindowStats wstats =
-            (config.use_nhc || config.use_zupt)
+            (config.monitor_motion_constraints || config.use_nhc ||
+             config.use_zupt)
                 ? imuWindowStats(imu_samples, win_begin, win_end, problem.imu.init_accel_bias,
                                  problem.imu.init_gyro_bias)
                 : ImuWindowStats{};
         const double seed_speed = vel_seed.norm();
-        const bool stationary =
-            config.use_zupt && wstats.n >= config.zupt_min_samples &&
+        const bool zupt_candidate =
+            wstats.n >= config.zupt_min_samples &&
             wstats.accel_std <= config.zupt_max_accel_std &&
             wstats.gyro_std <= config.zupt_max_gyro_std &&
             wstats.gyro_median <= config.zupt_max_gyro_median &&
             // Velocity gate: reject false ZUPT during constant-velocity motion
             // (quiet accelerometer but non-zero speed).
             (config.zupt_max_speed_mps <= 0.0 || seed_speed <= config.zupt_max_speed_mps);
+        const bool stationary = config.use_zupt && zupt_candidate;
+        auto& motion_diag = epoch_diagnostics[i];
+        motion_diag.motion_constraint_imu_samples = wstats.n;
+        motion_diag.motion_constraint_accel_std_mps2 = wstats.accel_std;
+        motion_diag.motion_constraint_gyro_std_radps = wstats.gyro_std;
+        motion_diag.motion_constraint_gyro_median_radps = wstats.gyro_median;
+        motion_diag.motion_constraint_yaw_rate_radps = wstats.yaw_rate_abs;
+        motion_diag.motion_constraint_seed_speed_mps = seed_speed;
+        motion_diag.zupt_candidate = zupt_candidate;
         if (stationary && config.zupt_sigma_mps > 0.0) {
             // ZUPT: pin Vel(i) ~ 0 (mirrors inuex35 _add_zero_velocity_prior).
             const gtsam::Vector3 zero_velocity = gtsam::Vector3::Zero();
@@ -2612,20 +2618,26 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 velocityKey(i), zero_velocity,
                 gtsam::noiseModel::Isotropic::Sigma(3, config.zupt_sigma_mps));
             ++result.diagnostics.zupt_epochs;
+            motion_diag.zupt_applied = true;
         }
+        const double horizontal_seed_speed = std::hypot(vel_seed.x(), vel_seed.y());
+        const bool nhc_candidate =
+            (!config.use_zupt || !zupt_candidate) &&
+            horizontal_seed_speed >= config.nhc_min_speed_mps &&
+            wstats.yaw_rate_abs <= config.nhc_max_yaw_rate_radps;
+        motion_diag.nhc_candidate = nhc_candidate;
         if (config.use_nhc && !stationary) {
             // NHC: apply only to moving, non-turning epochs so it never fights
             // legitimate lateral motion (mirrors nhc.py's speed gate + a
             // yaw-rate gate for turns). Speed comes from the seed velocity.
-            const double speed = std::hypot(vel_seed.x(), vel_seed.y());
-            if (speed >= config.nhc_min_speed_mps &&
-                wstats.yaw_rate_abs <= config.nhc_max_yaw_rate_radps) {
+            if (nhc_candidate) {
                 gtsam::Vector2 nhc_sigmas(config.nhc_sigma_lateral_mps,
                                           config.nhc_sigma_vertical_mps);
                 new_factors.emplace_shared<NonHolonomicFactor>(
                     positionKey(i), velocityKey(i),
                     gtsam::noiseModel::Diagonal::Sigmas(nhc_sigmas));
                 ++result.diagnostics.nhc_epochs;
+                motion_diag.nhc_applied = true;
             }
         }
 

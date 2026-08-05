@@ -2973,6 +2973,82 @@ TEST(FGOExternalDopplerDrShadowTest, MonitorDoesNotChangeSolutionAuthority) {
         [](const auto& epoch) { return epoch.external_dr_evaluated; }));
 }
 
+TEST(FGOMotionConstraintShadowTest,
+     DirectionalVibrationIsVisibleAndMonitorDoesNotChangeSolution) {
+    CpHoldTestOptions opt;
+    opt.num_epochs = 3;
+    auto problem = makeCpHoldFixedLagProblem(opt);
+    const double g = problem.imu.noise.gravity_mps2;
+    for (std::size_t i = 0; i < problem.imu.samples_body_flu.size(); ++i) {
+        problem.imu.samples_body_flu[i].accel_raw =
+            i % 2 == 0 ? Vector3d(g, 0.0, 0.0) : Vector3d(0.0, 0.0, g);
+        problem.imu.samples_body_flu[i].gyro_raw_radps =
+            i % 2 == 0 ? Vector3d(0.1, 0.0, 0.0)
+                       : Vector3d(0.0, 0.1, 0.0);
+    }
+
+    FGOProcessor::FGOConfig off_config = makeCpHoldBaseConfig();
+    const auto off_result = FGOProcessor(off_config).optimizeProblem(problem);
+
+    FGOProcessor::FGOConfig shadow_config = off_config;
+    shadow_config.monitor_motion_constraints = true;
+    const auto shadow_result =
+        FGOProcessor(shadow_config).optimizeProblem(problem);
+
+    ASSERT_EQ(off_result.solution.solutions.size(),
+              shadow_result.solution.solutions.size());
+    ASSERT_EQ(shadow_result.epoch_diagnostics.size(), problem.epochs.size());
+    for (std::size_t i = 0; i < off_result.solution.solutions.size(); ++i) {
+        EXPECT_TRUE(off_result.solution.solutions[i].position_ecef.isApprox(
+            shadow_result.solution.solutions[i].position_ecef, 0.0));
+        EXPECT_EQ(off_result.solution.solutions[i].status,
+                  shadow_result.solution.solutions[i].status);
+    }
+    EXPECT_GT(shadow_result.epoch_diagnostics.front()
+                  .motion_constraint_accel_std_mps2,
+              5.0);
+    EXPECT_GT(shadow_result.epoch_diagnostics.front()
+                  .motion_constraint_gyro_std_radps,
+              0.05);
+    EXPECT_FALSE(shadow_result.epoch_diagnostics.front().zupt_candidate);
+}
+
+TEST(FGOMotionConstraintGateTest, AppliesStationaryZuptAndRejectsTurningNhc) {
+    CpHoldTestOptions opt;
+    opt.num_epochs = 3;
+    const auto stationary_problem = makeCpHoldFixedLagProblem(opt);
+
+    FGOProcessor::FGOConfig zupt_config = makeCpHoldBaseConfig();
+    zupt_config.use_zupt = true;
+    const auto zupt_result =
+        FGOProcessor(zupt_config).optimizeProblem(stationary_problem);
+    EXPECT_GT(zupt_result.diagnostics.zupt_epochs, 0u);
+    EXPECT_TRUE(std::any_of(
+        zupt_result.epoch_diagnostics.begin(),
+        zupt_result.epoch_diagnostics.end(),
+        [](const auto& epoch) { return epoch.zupt_applied; }));
+
+    auto straight_problem = stationary_problem;
+    straight_problem.imu.init_velocity_nav = Vector3d(3.0, 0.0, 0.0);
+    FGOProcessor::FGOConfig nhc_config = makeCpHoldBaseConfig();
+    nhc_config.use_nhc = true;
+    const auto straight_result =
+        FGOProcessor(nhc_config).optimizeProblem(straight_problem);
+    EXPECT_GT(straight_result.diagnostics.nhc_epochs, 0u);
+
+    auto turning_problem = straight_problem;
+    for (auto& sample : turning_problem.imu.samples_body_flu) {
+        sample.gyro_raw_radps.z() += 0.5;
+    }
+    const auto turning_result =
+        FGOProcessor(nhc_config).optimizeProblem(turning_problem);
+    EXPECT_EQ(turning_result.diagnostics.nhc_epochs, 0u);
+    EXPECT_TRUE(std::none_of(
+        turning_result.epoch_diagnostics.begin(),
+        turning_result.epoch_diagnostics.end(),
+        [](const auto& epoch) { return epoch.nhc_applied; }));
+}
+
 TEST(FGOFixDemoteTest, DemotesImplausibleFixedEpochToFloat) {
     const Vector3d true_position(1113194.0, -4841695.0, 3985350.0);
     constexpr std::size_t kBadEpoch = 15;
