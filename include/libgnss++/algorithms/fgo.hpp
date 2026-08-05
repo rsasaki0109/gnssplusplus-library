@@ -1752,6 +1752,11 @@ public:
         std::vector<EpochSeed> epochs;
         ImuInput imu;  ///< Milestone 2b IMU inputs (valid only when populated).
         std::vector<bool> clock_jumps;
+        // Diagnostic copy of the signed common GPS pseudorange change used by
+        // the legacy positive-only clock_jumps detector, plus its support.
+        // Neither field is consumed by an optimizer.
+        std::vector<double> gps_common_pseudorange_delta_m;
+        std::vector<int> gps_common_pseudorange_delta_satellites;
         std::vector<PseudorangeFactor> pseudorange_factors;
         std::vector<TimeDifferencedCarrierFactor> tdcp_factors;
         std::vector<SingleDifferenceDopplerFactor> single_difference_doppler_factors;
