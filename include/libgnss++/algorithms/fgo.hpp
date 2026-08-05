@@ -688,6 +688,7 @@ public:
         // [v_body.y, v_body.z] = [ (R^T v_nav).y, (R^T v_nav).z ]. Gated to
         // moving, non-turning epochs so it never fights legitimate lateral
         // motion.
+        bool monitor_motion_constraints = false;
         bool use_nhc = false;
         double nhc_min_speed_mps = 2.0;          ///< only apply NHC above this speed
         double nhc_max_yaw_rate_radps = 0.20;    ///< skip NHC when |yaw rate| exceeds this (turn)
@@ -2358,6 +2359,18 @@ public:
         bool external_dr_evaluated = false;
         bool external_dr_accepted = false;
         bool external_dr_rejected = false;
+        // Monitor-only NHC/ZUPT gate inputs and decisions. These values are
+        // computed before the current epoch is optimized and never feed AR.
+        int motion_constraint_imu_samples = 0;
+        double motion_constraint_accel_std_mps2 = 0.0;
+        double motion_constraint_gyro_std_radps = 0.0;
+        double motion_constraint_gyro_median_radps = 0.0;
+        double motion_constraint_yaw_rate_radps = 0.0;
+        double motion_constraint_seed_speed_mps = 0.0;
+        bool zupt_candidate = false;
+        bool zupt_applied = false;
+        bool nhc_candidate = false;
+        bool nhc_applied = false;
         bool carrier_hold_active = false;
         bool imu_aperture_accepted = false;
         bool imu_aperture_rejected = false;

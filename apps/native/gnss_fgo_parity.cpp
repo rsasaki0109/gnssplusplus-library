@@ -55,6 +55,7 @@ struct Args {
     bool fixed_lag_qr = false;   // rank-tolerant iSAM2 elimination
     bool use_nhc = false;        // milestone 2d
     bool use_zupt = false;       // milestone 2d
+    bool motion_constraint_shadow = false;
     bool use_hold = false;       // milestone 2e: fix-and-hold
     bool no_held_fix_label = false;  // keep hold priors; require fresh AR for FIX output
     double elev_mask_deg = -1.0; // milestone 2e: >0 overrides preset elevation mask
@@ -244,6 +245,10 @@ Args parseArgs(int argc, char** argv) {
         }
         if (a == "--fixed-lag-qr") {
             args.fixed_lag_qr = true;
+            continue;
+        }
+        if (a == "--motion-constraint-shadow") {
+            args.motion_constraint_shadow = true;
             continue;
         }
         if (a == "--no-held-fix-label") {
@@ -767,6 +772,7 @@ libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
         args.predicted_ddpr_quality_shadow;
     config.monitor_predicted_ddpr_bias_state =
         args.predicted_ddpr_bias_state_shadow;
+    config.monitor_motion_constraints = args.motion_constraint_shadow;
     config.use_geometry_free_cycle_slip_reset = args.gf_slip_reset;
     config.report_held_ambiguities_as_fixed = !args.no_held_fix_label;
     if (args.max_iters > 0) {
@@ -1615,7 +1621,7 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
            "ddpr_anchor_eval,ddpr_anchor_n,ddpr_anchor_res_m,"
            "ddpr_anchor_x_ecef_m,ddpr_anchor_y_ecef_m,ddpr_anchor_z_ecef_m,"
            "ddpr_anchor_h_err_m,ddpr_anchor_u_err_m,ddpr_anchor_prior,"
-           "fixed_float_sep_m,fixed_imu_pred_sep_m,fixed_postfit_ddcp_rms_m,fixed_postfit_ddcp_max_norm,fixed_postfit_ddcp_chi2_dof,fixed_postfit_ddcp_n,external_dr_sep_m,external_dr_mahal2,external_dr_age,external_doppler_valid,external_doppler_vel_e_mps,external_doppler_vel_n_mps,external_doppler_vel_u_mps,external_dr_eval,external_dr_accept,external_dr_reject,cp_hold,"
+           "fixed_float_sep_m,fixed_imu_pred_sep_m,fixed_postfit_ddcp_rms_m,fixed_postfit_ddcp_max_norm,fixed_postfit_ddcp_chi2_dof,fixed_postfit_ddcp_n,external_dr_sep_m,external_dr_mahal2,external_dr_age,external_doppler_valid,external_doppler_vel_e_mps,external_doppler_vel_n_mps,external_doppler_vel_u_mps,external_dr_eval,external_dr_accept,external_dr_reject,motion_imu_n,motion_accel_std_mps2,motion_gyro_std_radps,motion_gyro_median_radps,motion_yaw_rate_radps,motion_seed_speed_mps,zupt_candidate,zupt_applied,nhc_candidate,nhc_applied,cp_hold,"
            "imu_aperture_accept,imu_aperture_reject,cp_available,cp_added,"
            "cp_suppressed_hold,amb_after_hold,amb_final,amb_excl_build,"
            "amb_excl_hold,amb_excl_one_band,amb_excl_constellation,"
@@ -1837,6 +1843,16 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
                 << ',' << (d.external_dr_evaluated ? 1 : 0)
                 << ',' << (d.external_dr_accepted ? 1 : 0)
                 << ',' << (d.external_dr_rejected ? 1 : 0)
+                << ',' << d.motion_constraint_imu_samples
+                << ',' << d.motion_constraint_accel_std_mps2
+                << ',' << d.motion_constraint_gyro_std_radps
+                << ',' << d.motion_constraint_gyro_median_radps
+                << ',' << d.motion_constraint_yaw_rate_radps
+                << ',' << d.motion_constraint_seed_speed_mps
+                << ',' << (d.zupt_candidate ? 1 : 0)
+                << ',' << (d.zupt_applied ? 1 : 0)
+                << ',' << (d.nhc_candidate ? 1 : 0)
+                << ',' << (d.nhc_applied ? 1 : 0)
                 << ',' << (d.carrier_hold_active ? 1 : 0)
                 << ',' << (d.imu_aperture_accepted ? 1 : 0)
                 << ',' << (d.imu_aperture_rejected ? 1 : 0)
@@ -3316,7 +3332,8 @@ int main(int argc, char** argv) {
                   << "  NHC/ZUPT: nhc=" << (args.use_nhc ? "on" : "off")
                   << " (applied " << fl.diagnostics.nhc_epochs << " epochs), zupt="
                   << (args.use_zupt ? "on" : "off") << " (applied " << fl.diagnostics.zupt_epochs
-                  << " epochs)\n"
+                  << " epochs), shadow="
+                  << (args.motion_constraint_shadow ? "on" : "off") << "\n"
                   << "  quality-gates: " << (args.gates ? "on" : "off")
                   << " (fixing suppressed on " << fl.diagnostics.quality_gated_epochs
                   << " epochs)\n"
