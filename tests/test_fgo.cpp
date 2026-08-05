@@ -766,6 +766,49 @@ TEST(FGOTest, BuiltSingleDifferenceTdcpFactorsUseCurrentEpochLos) {
     EXPECT_GT(max_previous_current_los_delta, 1e-8);
 }
 
+TEST(FGOTest, ExternalDopplerDrMonitorMaterializesShadowFactorsOnly) {
+    const NavigationData nav = makeSyntheticGpsNavigation(4);
+    const std::array<Vector3d, 2> rover_positions = {
+        Vector3d(1113194.0, -4841695.0, 3985350.0),
+        Vector3d(1113194.0, -4841695.0, 3985350.0),
+    };
+    const std::array<Vector3d, 2> base_positions = {
+        rover_positions[0] + Vector3d(-320.0, 180.0, 45.0),
+        rover_positions[1] + Vector3d(-320.0, 180.0, 45.0),
+    };
+    auto rover_epochs =
+        makeSyntheticDoubleDifferenceObservationEpochs(nav, rover_positions, 0.0);
+    auto base_epochs =
+        makeSyntheticDoubleDifferenceObservationEpochs(nav, base_positions, 0.0);
+    for (auto* epochs : {&rover_epochs, &base_epochs}) {
+        for (auto& epoch : *epochs) {
+            for (auto& observation : epoch.observations) {
+                observation.has_doppler = true;
+                observation.doppler = 0.0;
+            }
+        }
+    }
+
+    FGOProcessor::FGOConfig config;
+    config.use_spp_seed = false;
+    config.use_pseudorange_factors = false;
+    config.use_motion_factors = false;
+    config.use_tdcp_factors = false;
+    config.use_double_difference_factors = true;
+    config.use_single_difference_doppler_factors = false;
+    config.monitor_external_doppler_dr = true;
+    config.use_ionosphere_model = false;
+    config.use_troposphere_model = false;
+    config.min_elevation_deg = -90.0;
+    config.min_satellites_per_epoch = 2;
+
+    const auto problem = FGOProcessor(config).buildDoubleDifferenceProblem(
+        rover_epochs, base_epochs, nav, base_positions[0]);
+
+    EXPECT_FALSE(problem.single_difference_doppler_factors.empty());
+    EXPECT_FALSE(config.use_single_difference_doppler_factors);
+}
+
 TEST(FGOTest, ClockResilientTemporalCarrierShadowCancelsCommonClockJump) {
     const NavigationData nav = makeSyntheticGpsNavigation(4);
     const std::array<Vector3d, 2> rover_positions = {
