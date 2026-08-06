@@ -1526,7 +1526,8 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
     const bool use_ambiguity_generation_overlay =
         config.use_cp_hold_recovery ||
         config.use_continuous_unfix_ambiguity_reset ||
-        config.use_fde;
+        config.use_fde ||
+        config.use_selective_arc_restart;
     std::map<std::size_t, int> amb_generation;
     std::map<std::pair<std::size_t, int>, std::size_t> amb_symbol_id;
     // Epoch at which each pinned symbol's hold prior was created (keyed by
@@ -1571,6 +1572,26 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
     int cp_hold_counter = 0;         ///< remaining epochs with carrier suppressed (reference _recov_cp_hold)
     int cp_hold_release_streak = 0;  ///< consecutive clean epochs while held (reference _recov_cp_release_streak)
     std::set<SatelliteId> selective_cp_hold_bad_sats;
+    // --- Active selective arc restart (use_selective_arc_restart) ---
+    // Ambiguity indices armed by the epoch-i causal Doppler/IMU/post-fit
+    // quarantine agreement and applied to epoch i+1's carrier factor build,
+    // mirroring the selective_cp_hold arm/apply one-epoch delay. Only the
+    // implicated PAIR's ambiguity index is armed (the DD differencing cannot
+    // identify which endpoint is faulty, so both endpoints' trace rows point
+    // at this same arc); arcs sharing an armed reference are NOT touched.
+    // Cleared every epoch.
+    std::set<std::size_t> selective_arc_restart_armed_ambiguities;
+    // Last epoch at which each ambiguity index's generation was bumped by this
+    // mechanism, for the selective_arc_restart_min_epochs_since_bump thrash
+    // guard (only the selective-arc-restart path writes here).
+    std::map<std::size_t, std::size_t> selective_arc_restart_last_bump_epoch;
+    // Causal DD pseudorange pair history for the active quarantine detector:
+    // (satellite, reference, signal) -> previous epoch's factor. Keyed by the
+    // same triple as analyzePredictedDdprQualityShadow so the Doppler/IMU
+    // innovations are computed over consecutive epochs of the SAME pair.
+    using ArcRestartPairKey = std::tuple<SatelliteId, SatelliteId, SignalType>;
+    std::map<ArcRestartPairKey, const FGOProcessor::DoubleDifferencePseudorangeFactor*>
+        selective_arc_restart_prev_pair;
     // Consecutive bad epochs (reference _ddpr_bad_count). Double-valued (not
     // int) so use_cp_hold_leaky_persist's fractional decay (e.g. 0.25/0.5)
     // never loses precision; every write in the default (non-leaky) path
@@ -2619,6 +2640,51 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 pinned_ambiguities.erase(old_sid);
                 live_ambiguity_indices.erase(idx);
                 continue;
+            }
+            // Active selective arc restart: if this DD carrier arc was armed
+            // at the previous epoch (the implicated pair's ambiguity index),
+            // restart ONLY that ambiguity generation (fresh symbol) here,
+            // preserving the DDPR factors and every clean carrier arc. The
+            // armed set was populated causally at epoch i-1 and is cleared
+            // every epoch.
+            if (config.use_selective_arc_restart &&
+                selective_arc_restart_armed_ambiguities.count(
+                    factor.ambiguity_index) > 0) {
+                const std::size_t idx = factor.ambiguity_index;
+                const auto lb = selective_arc_restart_last_bump_epoch.find(idx);
+                const bool thrash_ok =
+                    lb == selective_arc_restart_last_bump_epoch.end() ||
+                    (i - lb->second) >= static_cast<std::size_t>(
+                                           config.selective_arc_restart_min_epochs_since_bump);
+                const bool cap_ok =
+                    epoch_diagnostics[i].selective_arc_restart_applied_arcs <
+                    config.selective_arc_restart_max_arcs_per_epoch;
+                if (thrash_ok && cap_ok) {
+                    const std::size_t old_sid = ambSymbolId(idx);
+                    ++amb_generation[idx];
+                    selective_arc_restart_last_bump_epoch[idx] = i;
+                    pinned_ambiguities.erase(old_sid);
+                    ++result.diagnostics.ambiguity_generation_bumps;
+                    ++epoch_diagnostics[i].selective_arc_restart_applied_arcs;
+                    ++result.diagnostics.selective_arc_restart_applied_arcs;
+                    // Mark the corresponding detection-time trace rows applied
+                    // (target and reference roles for this ambiguity index).
+                    if (i > 0) {
+                        auto& prev_trace = epoch_diagnostics[i - 1].selective_arc_restart_trace;
+                        for (auto& row : prev_trace) {
+                            if (row.ambiguity_index == idx) row.applied = true;
+                        }
+                    }
+                    for (auto& row : result.selective_arc_restart_trace) {
+                        if (row.ambiguity_index == idx) row.applied = true;
+                    }
+                } else if (!thrash_ok) {
+                    ++epoch_diagnostics[i].selective_arc_restart_skipped_thrash;
+                    ++result.diagnostics.selective_arc_restart_skipped_thrash;
+                } else {
+                    ++epoch_diagnostics[i].selective_arc_restart_skipped_cap;
+                    ++result.diagnostics.selective_arc_restart_skipped_cap;
+                }
             }
             const auto& ambiguity = problem.ambiguity_states[factor.ambiguity_index];
             const std::size_t sym_idx = ambSymbolId(factor.ambiguity_index);
@@ -6366,6 +6432,239 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
             last_ddpr_rms_epoch = static_cast<long long>(i);
         }
         runDdprGncCounterfactual();
+
+        // --- Active selective arc-restart detection (use_selective_arc_restart
+        // / monitor_selective_arc_restart_candidates). Runs LAST so the causal
+        // Doppler/IMU innovations use the final float solution and this epoch's
+        // post-fit attribution. Arms satellites for the NEXT epoch's carrier
+        // factor build (one-epoch delay, mirroring selective_cp_hold). ---
+        if (config.use_selective_arc_restart ||
+            config.monitor_selective_arc_restart_candidates) {
+            selective_arc_restart_armed_ambiguities.clear();
+            auto& diagnostics = epoch_diagnostics[i];
+            diagnostics.selective_arc_restart_armed = false;
+            diagnostics.selective_arc_restart_monitor_only =
+                !config.use_selective_arc_restart;
+
+            const auto finite_position = [](const Vector3d& p) {
+                return p.allFinite() && p.norm() > 0.0;
+            };
+            const auto dd_range = [](const FGOProcessor::DoubleDifferencePseudorangeFactor& f,
+                                     const Vector3d& rover_position_ecef) {
+                const double rover_target =
+                    (f.rover_satellite_position_ecef - rover_position_ecef).norm();
+                const double rover_reference =
+                    (f.rover_reference_position_ecef - rover_position_ecef).norm();
+                const double base_target =
+                    (f.base_satellite_position_ecef - f.base_position_ecef).norm();
+                const double base_reference =
+                    (f.base_reference_position_ecef - f.base_position_ecef).norm();
+                return (rover_target - base_target) -
+                       (rover_reference - base_reference);
+            };
+            const auto dd_doppler = [](const FGOProcessor::DoubleDifferencePseudorangeFactor& f,
+                                       double& value) {
+                const auto& rt = f.rover_satellite_model;
+                const auto& rr = f.rover_reference_model;
+                const auto& bt = f.base_satellite_model;
+                const auto& br = f.base_reference_model;
+                if (!rt.has_doppler_residual || !rr.has_doppler_residual ||
+                    !bt.has_doppler_residual || !br.has_doppler_residual) {
+                    return false;
+                }
+                value = (rt.doppler_residual_mps - bt.doppler_residual_mps) -
+                        (rr.doppler_residual_mps - br.doppler_residual_mps);
+                return std::isfinite(value);
+            };
+
+            const double threshold = std::max(
+                0.0, config.satellite_quarantine_normalized_threshold);
+            const double safe_doppler_sigma = std::max(
+                1e-6, config.single_difference_doppler_sigma_mps);
+            const double gross_floor = config.cp_hold_fast_worst_satellite_min_m;
+            const double median_ratio = config.cp_hold_multipath_median_ratio;
+            const bool skip_fixed =
+                epoch_fixed[i] && epoch_ratio[i] >= config.selective_arc_restart_skip_fixed_ratio;
+
+            // Post-fit gross attribution median over the epoch's satellites.
+            std::vector<double> ordered_res;
+            ordered_res.reserve(per_sat_res.size());
+            for (const auto& [sat, residual] : per_sat_res) {
+                (void)sat;
+                ordered_res.push_back(residual);
+            }
+            std::sort(ordered_res.begin(), ordered_res.end());
+            const double epoch_median = ordered_res.empty()
+                                            ? 0.0
+                                            : ordered_res[ordered_res.size() / 2];
+
+            if (!skip_fixed && i > 0) {
+                std::map<ArcRestartPairKey, double> measured_change;
+                std::map<ArcRestartPairKey, double> doppler_innovation_norm;
+                std::map<ArcRestartPairKey, double> imu_innovation_norm;
+                for (const auto* factor : pr_by_epoch[i]) {
+                    const ArcRestartPairKey key{factor->satellite,
+                                                factor->reference_satellite,
+                                                factor->signal};
+                    const auto prev = selective_arc_restart_prev_pair.find(key);
+                    if (prev == selective_arc_restart_prev_pair.end()) continue;
+                    const auto* p = prev->second;
+                    const bool consecutive =
+                        p->epoch_index + 1 == i &&
+                        (problem.epochs[i].time - problem.epochs[i - 1].time) > 0.0;
+                    if (!consecutive) continue;
+                    measured_change[key] =
+                        factor->observed_dd_pseudorange_m - p->observed_dd_pseudorange_m;
+
+                    double cur_dd_doppler = 0.0, prev_dd_doppler = 0.0;
+                    const bool has_cur = dd_doppler(*factor, cur_dd_doppler);
+                    const bool has_prev = dd_doppler(*p, prev_dd_doppler);
+                    if (has_cur && has_prev) {
+                        const double predicted = 0.5 * (prev_dd_doppler + cur_dd_doppler) *
+                                                 (problem.epochs[i].time - problem.epochs[i - 1].time);
+                        const double innovation = measured_change[key] - predicted;
+                        const double sigma = std::hypot(
+                            std::sqrt(2.0) *
+                                (problem.epochs[i].time - problem.epochs[i - 1].time) *
+                                safe_doppler_sigma,
+                            std::hypot(p->sigma_m, factor->sigma_m));
+                        doppler_innovation_norm[key] =
+                            sigma > 0.0 ? std::abs(innovation) / sigma : 0.0;
+                    }
+                    if (i - 1 < epoch_float_position.size() &&
+                        finite_position(epoch_float_position[i - 1]) &&
+                        finite_position(epoch_predicted_position[i])) {
+                        const double predicted =
+                            dd_range(*factor, epoch_predicted_position[i]) -
+                            dd_range(*p, epoch_float_position[i - 1]);
+                        const double innovation = measured_change[key] - predicted;
+                        const double sigma = std::hypot(p->sigma_m, factor->sigma_m);
+                        imu_innovation_norm[key] =
+                            sigma > 0.0 ? std::abs(innovation) / sigma : 0.0;
+                    }
+                }
+
+                for (const auto* factor : pr_by_epoch[i]) {
+                    const ArcRestartPairKey key{factor->satellite,
+                                                factor->reference_satellite,
+                                                factor->signal};
+                    const auto dp = doppler_innovation_norm.find(key);
+                    const auto im = imu_innovation_norm.find(key);
+                    const bool doppler_outlier =
+                        dp != doppler_innovation_norm.end() && dp->second > threshold;
+                    const bool imu_outlier =
+                        im != imu_innovation_norm.end() && im->second > threshold;
+                    const bool innovations_agree =
+                        config.selective_arc_restart_require_both_innovations
+                            ? doppler_outlier && imu_outlier
+                            : doppler_outlier || imu_outlier;
+                    if (!innovations_agree) continue;
+
+                    // A DD pair cannot identify which endpoint is faulty, so
+                    // the pair is attributed to BOTH its target and reference
+                    // satellite. Require BOTH endpoints' post-fit attribution
+                    // to be gross, matching the witness's per-satellite rule.
+                    bool all_endpoints_gross = true;
+                    for (const SatelliteId satellite :
+                         {factor->satellite, factor->reference_satellite}) {
+                        const auto rit = per_sat_res.find(satellite);
+                        if (rit == per_sat_res.end()) {
+                            all_endpoints_gross = false;
+                            continue;
+                        }
+                        const bool absolute_gross = rit->second > gross_floor;
+                        const bool relative_gross =
+                            epoch_median <= 1e-9 ||
+                            rit->second > median_ratio * epoch_median;
+                        if (!absolute_gross || !relative_gross) {
+                            all_endpoints_gross = false;
+                        }
+                    }
+                    if (!all_endpoints_gross) continue;
+
+                    // A candidate pair is identified (Doppler + IMU + both
+                    // endpoints gross). Record it even when no live carrier arc
+                    // exists to restart -- that is a legitimate "detected but
+                    // not armable" outcome, not silence.
+                    ++diagnostics.selective_arc_restart_candidate_satellites;
+                    ++result.diagnostics.selective_arc_restart_candidate_satellites;
+                    std::size_t first_armed = std::numeric_limits<std::size_t>::max();
+                    for (const SatelliteId satellite :
+                         {factor->satellite, factor->reference_satellite}) {
+                        const auto rit = per_sat_res.find(satellite);
+                        for (const auto* cf : cp_by_epoch[i]) {
+                            if (cf->satellite == satellite ||
+                                cf->reference_satellite == satellite) {
+                                first_armed =
+                                    std::min(first_armed, cf->ambiguity_index);
+                            }
+                        }
+                        FGOProcessor::SelectiveArcRestartTrace trace;
+                        trace.detection_epoch = i;
+                        trace.satellite = satellite;
+                        trace.is_reference =
+                            satellite == factor->reference_satellite;
+                        trace.ambiguity_index = first_armed;
+                        trace.detected = true;
+                        trace.postfit_residual_m =
+                            rit != per_sat_res.end() ? rit->second : 0.0;
+                        trace.epoch_median_postfit_residual_m = epoch_median;
+                        trace.normalized_doppler_innovation =
+                            dp != doppler_innovation_norm.end() ? dp->second : 0.0;
+                        trace.normalized_imu_innovation =
+                            im != imu_innovation_norm.end() ? im->second : 0.0;
+                        diagnostics.selective_arc_restart_trace.push_back(trace);
+                        result.selective_arc_restart_trace.push_back(trace);
+                    }
+
+                    // Arm the ambiguity indices of every live DD carrier arc
+                    // that touches a candidate endpoint (as target or
+                    // reference). The PR pair itself may reference a
+                    // satellite that has no carrier arc in the graph this
+                    // epoch, so the armed set is the union over the carrier
+                    // factors actually present -- exactly the arcs a restart
+                    // could affect. If no carrier arc exists, the pair is
+                    // reported but nothing is armed (nothing to restart).
+                    bool armed_any = false;
+                    for (const SatelliteId satellite :
+                         {factor->satellite, factor->reference_satellite}) {
+                        for (const auto* cf : cp_by_epoch[i]) {
+                            if (cf->satellite == satellite ||
+                                cf->reference_satellite == satellite) {
+                                if (selective_arc_restart_armed_ambiguities.insert(
+                                        cf->ambiguity_index).second) {
+                                    ++diagnostics.selective_arc_restart_candidate_pairs;
+                                    ++result.diagnostics
+                                          .selective_arc_restart_candidate_pairs;
+                                }
+                                armed_any = true;
+                            }
+                        }
+                    }
+                    if (!armed_any) {
+                        ++result.diagnostics
+                              .selective_arc_restart_skipped_no_arc;
+                    }
+                }
+            }
+            if (!skip_fixed &&
+                diagnostics.selective_arc_restart_candidate_satellites > 0) {
+                diagnostics.selective_arc_restart_armed = true;
+                ++result.diagnostics.selective_arc_restart_detection_epochs;
+            } else if (skip_fixed) {
+                ++result.diagnostics.selective_arc_restart_skipped_fixed;
+                diagnostics.selective_arc_restart_skipped_fixed = 1;
+            }
+
+            // Maintain the causal pair history for the NEXT epoch.
+            std::map<ArcRestartPairKey, const FGOProcessor::DoubleDifferencePseudorangeFactor*>
+                next_prev_pair;
+            for (const auto* factor : pr_by_epoch[i]) {
+                next_prev_pair[{factor->satellite, factor->reference_satellite,
+                                factor->signal}] = factor;
+            }
+            selective_arc_restart_prev_pair = std::move(next_prev_pair);
+        }
     }
     // Later warm resets can retroactively refresh positions still inside the
     // lag window. Recompute candidate separation against the final reported

@@ -70,6 +70,8 @@ struct Args {
     bool ddpr_gnc_shadow = false;  // fixed weights + copied-graph GNC counterfactual
     bool candidate_integrity_shadow = false;  // monitor-only multi-witness FIX check
     bool satellite_quarantine_shadow = false;  // monitor-only two-stage satellite witness
+    bool selective_arc_restart = false;  // active selective carrier-arc restart
+    bool selective_arc_restart_monitor = false;  // monitor-only would-restart report
     std::string temporal_shadow_replay_csv;  // classify against frozen ECEF positions; skip solve
     bool temporal_shadow_truth_replay = false;  // classify against reference.csv; skip solve
     bool postfit_gate = false;
@@ -290,6 +292,14 @@ Args parseArgs(int argc, char** argv) {
         }
         if (a == "--satellite-quarantine-shadow") {
             args.satellite_quarantine_shadow = true;
+            continue;
+        }
+        if (a == "--selective-arc-restart") {
+            args.selective_arc_restart = true;
+            continue;
+        }
+        if (a == "--selective-arc-restart-monitor") {
+            args.selective_arc_restart_monitor = true;
             continue;
         }
         if (a == "--gici-par") {
@@ -793,6 +803,9 @@ libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
         args.candidate_integrity_shadow;
     config.monitor_satellite_quarantine_witness =
         args.satellite_quarantine_shadow;
+    config.use_selective_arc_restart = args.selective_arc_restart;
+    config.monitor_selective_arc_restart_candidates =
+        args.selective_arc_restart_monitor;
     config.monitor_motion_constraints = args.motion_constraint_shadow;
     config.use_geometry_free_cycle_slip_reset = args.gf_slip_reset;
     config.report_held_ambiguities_as_fixed = !args.no_held_fix_label;
@@ -1646,7 +1659,7 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
            "ddpr_anchor_eval,ddpr_anchor_n,ddpr_anchor_res_m,"
            "ddpr_anchor_x_ecef_m,ddpr_anchor_y_ecef_m,ddpr_anchor_z_ecef_m,"
            "ddpr_anchor_h_err_m,ddpr_anchor_u_err_m,ddpr_anchor_prior,"
-           "fixed_float_sep_m,fixed_imu_pred_sep_m,fixed_postfit_ddcp_rms_m,fixed_postfit_ddcp_max_norm,fixed_postfit_ddcp_chi2_dof,fixed_postfit_ddcp_n,external_dr_sep_m,external_dr_mahal2,external_dr_age,external_doppler_valid,external_doppler_vel_e_mps,external_doppler_vel_n_mps,external_doppler_vel_u_mps,external_dr_eval,external_dr_accept,external_dr_reject,candidate_witness_eval,candidate_anchor_available,candidate_anchor_n,candidate_anchor_rms_m,candidate_anchor_sep_m,candidate_anchor_pass,candidate_imu_pass,candidate_doppler_available,candidate_doppler_pass,candidate_carrier_pass,candidate_witness_pass,motion_imu_n,motion_accel_std_mps2,motion_gyro_std_radps,motion_gyro_median_radps,motion_yaw_rate_radps,motion_seed_speed_mps,zupt_candidate,zupt_applied,nhc_candidate,nhc_applied,cp_hold,"
+           "fixed_float_sep_m,fixed_imu_pred_sep_m,fixed_postfit_ddcp_rms_m,fixed_postfit_ddcp_max_norm,fixed_postfit_ddcp_chi2_dof,fixed_postfit_ddcp_n,external_dr_sep_m,external_dr_mahal2,external_dr_age,external_doppler_valid,external_doppler_vel_e_mps,external_doppler_vel_n_mps,external_doppler_vel_u_mps,external_dr_eval,external_dr_accept,external_dr_reject,candidate_witness_eval,candidate_anchor_available,candidate_anchor_n,candidate_anchor_rms_m,candidate_anchor_sep_m,candidate_anchor_pass,candidate_imu_pass,candidate_doppler_available,candidate_doppler_pass,candidate_carrier_pass,candidate_witness_pass,selective_arc_restart_armed,selective_arc_restart_monitor_only,selective_arc_restart_candidate_sats,selective_arc_restart_candidate_pairs,selective_arc_restart_applied_arcs,selective_arc_restart_skipped_fixed,selective_arc_restart_skipped_thrash,selective_arc_restart_skipped_cap,motion_imu_n,motion_accel_std_mps2,motion_gyro_std_radps,motion_gyro_median_radps,motion_yaw_rate_radps,motion_seed_speed_mps,zupt_candidate,zupt_applied,nhc_candidate,nhc_applied,cp_hold,"
            "imu_aperture_accept,imu_aperture_reject,cp_available,cp_added,"
            "cp_suppressed_hold,amb_after_hold,amb_final,amb_excl_build,"
            "amb_excl_hold,amb_excl_one_band,amb_excl_constellation,"
@@ -1917,6 +1930,14 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
                 << ',' << (d.nhc_candidate ? 1 : 0)
                 << ',' << (d.nhc_applied ? 1 : 0)
                 << ',' << (d.carrier_hold_active ? 1 : 0)
+                << ',' << (d.selective_arc_restart_armed ? 1 : 0)
+                << ',' << (d.selective_arc_restart_monitor_only ? 1 : 0)
+                << ',' << d.selective_arc_restart_candidate_satellites
+                << ',' << d.selective_arc_restart_candidate_pairs
+                << ',' << d.selective_arc_restart_applied_arcs
+                << ',' << d.selective_arc_restart_skipped_fixed
+                << ',' << d.selective_arc_restart_skipped_thrash
+                << ',' << d.selective_arc_restart_skipped_cap
                 << ',' << (d.imu_aperture_accepted ? 1 : 0)
                 << ',' << (d.imu_aperture_rejected ? 1 : 0)
                 << ',' << d.carrier_factors_available
@@ -2320,6 +2341,41 @@ void dumpSatelliteQuarantineCsv(
             << (row.imu_outlier ? 1 : 0) << ','
             << row.temporal_support_pairs << ','
             << (row.quarantine_candidate ? 1 : 0) << '\n';
+    }
+}
+
+void dumpSelectiveArcRestartCsv(
+    const libgnss::FGOProcessor::FGOResult& result,
+    const std::string& epoch_csv_path) {
+    const std::string path = epoch_csv_path + ".selective_arc_restart.csv";
+    std::ofstream out(path);
+    if (!out) {
+        std::cerr << "Error: cannot open selective arc-restart output file "
+                  << path << "\n";
+        return;
+    }
+    out << std::fixed << std::setprecision(6);
+    out << "tow,detection_epoch,satellite,system,prn,is_reference,"
+           "ambiguity_index,detected,applied,postfit_residual_m,"
+           "epoch_median_postfit_residual_m,normalized_doppler_innovation,"
+           "normalized_imu_innovation\n";
+    for (const auto& row : result.selective_arc_restart_trace) {
+        double tow = 0.0;
+        if (row.detection_epoch < result.solution.solutions.size()) {
+            tow = result.solution.solutions[row.detection_epoch].time.tow;
+        }
+        out << tow << ',' << row.detection_epoch << ','
+            << row.satellite.toString() << ','
+            << static_cast<int>(row.satellite.system) << ','
+            << static_cast<int>(row.satellite.prn) << ','
+            << (row.is_reference ? 1 : 0) << ','
+            << row.ambiguity_index << ','
+            << (row.detected ? 1 : 0) << ','
+            << (row.applied ? 1 : 0) << ','
+            << row.postfit_residual_m << ','
+            << row.epoch_median_postfit_residual_m << ','
+            << row.normalized_doppler_innovation << ','
+            << row.normalized_imu_innovation << '\n';
     }
 }
 
@@ -3376,6 +3432,9 @@ int main(int argc, char** argv) {
             if (args.satellite_quarantine_shadow) {
                 dumpSatelliteQuarantineCsv(fl, args.dump_csv_path);
             }
+            if (args.selective_arc_restart || args.selective_arc_restart_monitor) {
+                dumpSelectiveArcRestartCsv(fl, args.dump_csv_path);
+            }
         }
 
         std::cout << "\n=== (a4) MILESTONE 2c: IncrementalFixedLagSmoother (full-scale) ===\n"
@@ -3429,6 +3488,24 @@ int main(int argc, char** argv) {
                    << fl.diagnostics.satellite_quarantine_witness_satellites
                    << ", candidates="
                    << fl.diagnostics.satellite_quarantine_candidates << ')'
+                   << ", selective_arc_restart="
+                   << (config.use_selective_arc_restart ? "on" : "off")
+                   << " (monitor="
+                   << (config.monitor_selective_arc_restart_candidates ? "on" : "off")
+                   << ", detection_epochs="
+                   << fl.diagnostics.selective_arc_restart_detection_epochs
+                   << ", candidates="
+                   << fl.diagnostics.selective_arc_restart_candidate_satellites
+                   << ", applied="
+                   << fl.diagnostics.selective_arc_restart_applied_arcs
+                   << ", skipped_fixed="
+                   << fl.diagnostics.selective_arc_restart_skipped_fixed
+                   << ", skipped_thrash="
+                   << fl.diagnostics.selective_arc_restart_skipped_thrash
+                   << ", skipped_cap="
+                   << fl.diagnostics.selective_arc_restart_skipped_cap
+                   << ", skipped_no_arc="
+                   << fl.diagnostics.selective_arc_restart_skipped_no_arc << ')'
                    << ")\n"
                   << "  IMU ratio aperture: " << (args.imu_ratio_aperture ? "on" : "off")
                   << " (accepted=" << fl.diagnostics.imu_aided_ratio_accepts

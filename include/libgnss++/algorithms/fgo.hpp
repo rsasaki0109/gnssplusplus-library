@@ -449,6 +449,25 @@ public:
         // and current per-satellite post-fit DDPR attribution.
         bool monitor_satellite_quarantine_witness = false;
         double satellite_quarantine_normalized_threshold = 5.0;
+        // Active selective carrier-arc restart (default OFF, bit-identical
+        // when off). At a quarantine-candidate epoch i (Doppler innovation,
+        // IMU-geometry innovation, and post-fit gross DDPR attribution all
+        // agree on the same DD pair), the implicated carrier ambiguity arcs
+        // for BOTH endpoints are generation-bumped at epoch i+1 via the
+        // existing amb_generation overlay. DDPR factors and clean carrier
+        // arcs are preserved; CP-hold, LAMBDA, and FIX/FLOAT rules are
+        // unchanged. A rollback gate stops the mechanism if any correct FIX
+        // epoch is lost or any wrong FIX appears in the OFF/ON comparison.
+        bool use_selective_arc_restart = false;
+        bool selective_arc_restart_require_both_innovations = true;
+        int selective_arc_restart_max_arcs_per_epoch = 4;
+        double selective_arc_restart_skip_fixed_ratio = 2.0;
+        // A fresh generation may only be minted after this many epochs since
+        // the ambiguity index's previous generation, preventing thrash.
+        int selective_arc_restart_min_epochs_since_bump = 5;
+        // Monitor-only counterpart of the active flag: reports which
+        // satellites/pairs WOULD be restarted without bumping any generation.
+        bool monitor_selective_arc_restart_candidates = false;
         // Diagnostic-only causal random-walk model of persistent DD
         // pseudorange bias. It consumes the monitor above internally but is
         // independent of its output switch. No result is consumed by the
@@ -2021,6 +2040,14 @@ public:
         std::size_t candidate_integrity_witness_passes = 0;
         std::size_t satellite_quarantine_witness_satellites = 0;
         std::size_t satellite_quarantine_candidates = 0;
+        std::size_t selective_arc_restart_detection_epochs = 0;
+        std::size_t selective_arc_restart_candidate_satellites = 0;
+        std::size_t selective_arc_restart_candidate_pairs = 0;
+        std::size_t selective_arc_restart_applied_arcs = 0;
+        std::size_t selective_arc_restart_skipped_fixed = 0;
+        std::size_t selective_arc_restart_skipped_thrash = 0;
+        std::size_t selective_arc_restart_skipped_cap = 0;
+        std::size_t selective_arc_restart_skipped_no_arc = 0;
         std::size_t graph_factors = 0;
         std::size_t graph_values = 0;
         std::size_t imu_intervals = 0;  ///< 2b: CombinedImuFactors added between epochs
@@ -2312,6 +2339,22 @@ public:
         double weight = 1.0;
     };
 
+    /// One selective arc-restart candidate/action row. Populated only when
+    /// use_selective_arc_restart (active) or
+    /// monitor_selective_arc_restart_candidates (monitor-only) is enabled.
+    struct SelectiveArcRestartTrace {
+        std::size_t detection_epoch = 0;
+        SatelliteId satellite;
+        bool is_reference = false;
+        std::size_t ambiguity_index = 0;
+        bool detected = false;
+        bool applied = false;
+        double postfit_residual_m = 0.0;
+        double epoch_median_postfit_residual_m = 0.0;
+        double normalized_doppler_innovation = 0.0;
+        double normalized_imu_innovation = 0.0;
+    };
+
     /// Per-epoch fixed-lag integrity state.  These values expose why an epoch
     /// did or did not fix, rather than only reporting the final FIX/FLOAT label.
     struct FGOEpochDiagnostics {
@@ -2503,6 +2546,16 @@ public:
         int ambiguity_generation_bumps_reset = 0;
         int ambiguity_generation_bumps_warm_reset = 0;
         int ambiguity_generation_bumps_stale_pin = 0;
+        // --- Active selective arc restart (use_selective_arc_restart) ---
+        bool selective_arc_restart_armed = false;
+        int selective_arc_restart_candidate_satellites = 0;
+        int selective_arc_restart_candidate_pairs = 0;
+        int selective_arc_restart_applied_arcs = 0;
+        int selective_arc_restart_skipped_fixed = 0;
+        int selective_arc_restart_skipped_thrash = 0;
+        int selective_arc_restart_skipped_cap = 0;
+        bool selective_arc_restart_monitor_only = false;
+        std::vector<SelectiveArcRestartTrace> selective_arc_restart_trace;
     };
 
     struct FGOResult {
@@ -2524,6 +2577,7 @@ public:
             predicted_ddpr_bias_state_factors;
         std::vector<SatelliteQuarantineWitnessDiagnostics>
             satellite_quarantine_witnesses;
+        std::vector<SelectiveArcRestartTrace> selective_arc_restart_trace;
         // Milestone 2b (populated only by the GTSAM IMU-coupled path):
         // per-epoch estimated attitude as [roll, pitch, heading] in degrees
         // (body FLU -> nav ENU; heading is clockwise from North) and estimated
