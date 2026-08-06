@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <libgnss++/algorithms/fgo.hpp>
+#include <libgnss++/algorithms/fgo_ddpr_gnc.hpp>
 #include <libgnss++/core/constants.hpp>
 
 #include <array>
@@ -9,6 +10,43 @@
 #include <vector>
 
 using namespace libgnss;
+
+TEST(FgoDdprGncTest, GraduatesToRobustWeightsAndSuppressesGrossOutlier) {
+    const std::vector<fgo_ddpr_gnc::Residual> residuals = {
+        {0.25, 1.0}, {0.5, 1.0}, {1.0, 1.0}, {20.0, 1.0}};
+
+    const auto result = fgo_ddpr_gnc::evaluate(residuals);
+
+    ASSERT_TRUE(result.evaluated);
+    ASSERT_EQ(result.weights.size(), residuals.size());
+    EXPECT_GT(result.stages, 1);
+    EXPECT_DOUBLE_EQ(result.final_mu, 1.0);
+    EXPECT_GT(result.weights[0], result.weights[1]);
+    EXPECT_GT(result.weights[1], result.weights[2]);
+    EXPECT_GT(result.weights[2], result.weights[3]);
+    EXPECT_LT(result.weights[3], 0.02);
+    EXPECT_NEAR(result.weights.back(),
+                4.0 / (4.0 + 400.0), 1e-12);
+    EXPECT_EQ(result.downweighted_factors, 1u);
+    EXPECT_LT(result.effective_factor_count,
+              static_cast<double>(residuals.size()));
+}
+
+TEST(FgoDdprGncTest, FailsClosedForInvalidSigmaOrSchedule) {
+    EXPECT_FALSE(fgo_ddpr_gnc::evaluate({{1.0, 0.0}}).evaluated);
+
+    fgo_ddpr_gnc::Config invalid;
+    invalid.graduation_divisor = 1.0;
+    EXPECT_FALSE(fgo_ddpr_gnc::evaluate({{1.0, 1.0}}, invalid).evaluated);
+}
+
+TEST(FgoDdprGncTest, DefaultScheduleReachesFinalKernelForUrbanScaleResidual) {
+    const auto result = fgo_ddpr_gnc::evaluate({{166.8, 1.0}});
+
+    ASSERT_TRUE(result.evaluated);
+    EXPECT_DOUBLE_EQ(result.final_mu, 1.0);
+    EXPECT_LT(result.stages, 32);
+}
 
 namespace {
 
@@ -807,6 +845,50 @@ TEST(FGOTest, ExternalDopplerDrMonitorMaterializesShadowFactorsOnly) {
 
     EXPECT_FALSE(problem.single_difference_doppler_factors.empty());
     EXPECT_FALSE(config.use_single_difference_doppler_factors);
+}
+
+TEST(FGOTest, CandidateIntegrityMonitorMaterializesShadowFactorsOnly) {
+    const NavigationData nav = makeSyntheticGpsNavigation(4);
+    const std::array<Vector3d, 2> rover_positions = {
+        Vector3d(1113194.0, -4841695.0, 3985350.0),
+        Vector3d(1113194.0, -4841695.0, 3985350.0),
+    };
+    const std::array<Vector3d, 2> base_positions = {
+        rover_positions[0] + Vector3d(-320.0, 180.0, 45.0),
+        rover_positions[1] + Vector3d(-320.0, 180.0, 45.0),
+    };
+    auto rover_epochs =
+        makeSyntheticDoubleDifferenceObservationEpochs(nav, rover_positions, 0.0);
+    auto base_epochs =
+        makeSyntheticDoubleDifferenceObservationEpochs(nav, base_positions, 0.0);
+    for (auto* epochs : {&rover_epochs, &base_epochs}) {
+        for (auto& epoch : *epochs) {
+            for (auto& observation : epoch.observations) {
+                observation.has_doppler = true;
+                observation.doppler = 0.0;
+            }
+        }
+    }
+
+    FGOProcessor::FGOConfig config;
+    config.use_spp_seed = false;
+    config.use_pseudorange_factors = false;
+    config.use_motion_factors = false;
+    config.use_tdcp_factors = false;
+    config.use_double_difference_factors = true;
+    config.use_single_difference_doppler_factors = false;
+    config.monitor_candidate_integrity_witness = true;
+    config.use_ionosphere_model = false;
+    config.use_troposphere_model = false;
+    config.min_elevation_deg = -90.0;
+    config.min_satellites_per_epoch = 2;
+
+    const auto problem = FGOProcessor(config).buildDoubleDifferenceProblem(
+        rover_epochs, base_epochs, nav, base_positions[0]);
+
+    EXPECT_FALSE(problem.single_difference_doppler_factors.empty());
+    EXPECT_FALSE(config.use_single_difference_doppler_factors);
+    EXPECT_FALSE(config.monitor_external_doppler_dr);
 }
 
 TEST(FGOTest, ClockResilientTemporalCarrierShadowCancelsCommonClockJump) {

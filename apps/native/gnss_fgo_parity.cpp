@@ -67,6 +67,9 @@ struct Args {
     bool clock_resilient_temporal_shadow = false;  // diagnostic-only receiver-clock-free TDCP
     bool predicted_ddpr_quality_shadow = false;  // diagnostic-only causal DDPR quality
     bool predicted_ddpr_bias_state_shadow = false;  // causal persistent DDPR bias monitor
+    bool ddpr_gnc_shadow = false;  // fixed weights + copied-graph GNC counterfactual
+    bool candidate_integrity_shadow = false;  // monitor-only multi-witness FIX check
+    bool satellite_quarantine_shadow = false;  // monitor-only two-stage satellite witness
     std::string temporal_shadow_replay_csv;  // classify against frozen ECEF positions; skip solve
     bool temporal_shadow_truth_replay = false;  // classify against reference.csv; skip solve
     bool postfit_gate = false;
@@ -275,6 +278,18 @@ Args parseArgs(int argc, char** argv) {
         }
         if (a == "--predicted-ddpr-bias-state-shadow") {
             args.predicted_ddpr_bias_state_shadow = true;
+            continue;
+        }
+        if (a == "--ddpr-gnc-shadow") {
+            args.ddpr_gnc_shadow = true;
+            continue;
+        }
+        if (a == "--candidate-integrity-shadow") {
+            args.candidate_integrity_shadow = true;
+            continue;
+        }
+        if (a == "--satellite-quarantine-shadow") {
+            args.satellite_quarantine_shadow = true;
             continue;
         }
         if (a == "--gici-par") {
@@ -772,6 +787,12 @@ libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
         args.predicted_ddpr_quality_shadow;
     config.monitor_predicted_ddpr_bias_state =
         args.predicted_ddpr_bias_state_shadow;
+    config.monitor_ddpr_gnc = args.ddpr_gnc_shadow;
+    config.monitor_ddpr_gnc_counterfactual = args.ddpr_gnc_shadow;
+    config.monitor_candidate_integrity_witness =
+        args.candidate_integrity_shadow;
+    config.monitor_satellite_quarantine_witness =
+        args.satellite_quarantine_shadow;
     config.monitor_motion_constraints = args.motion_constraint_shadow;
     config.use_geometry_free_cycle_slip_reset = args.gf_slip_reset;
     config.report_held_ambiguities_as_fixed = !args.no_held_fix_label;
@@ -824,6 +845,10 @@ libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
         if (args.external_dr_reset_ratio < 0.0) {
             config.external_doppler_dr_reset_min_ratio = 20.0;
         }
+    }
+    if (args.candidate_integrity_shadow &&
+        args.external_dr_reset_ratio < 0.0) {
+        config.external_doppler_dr_reset_min_ratio = 20.0;
     }
     if (args.external_dr_max_age > 0) {
         config.external_doppler_dr_max_age_epochs = args.external_dr_max_age;
@@ -1567,7 +1592,7 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
            "x_ecef_m,y_ecef_m,z_ecef_m,position_covariance_trace_m2,"
            "ref_e_pos_m,ref_n_pos_m,ref_u_pos_m,"
            "vel_e_mps,vel_n_mps,vel_u_mps,"
-           "ratio,ratio_threshold,nfixed,ar_outcome,ddpr_rms_m,sd_doppler_rms_mps,clock_resilient_tdcp_n,clock_resilient_tdcp_rms_m,clock_resilient_tdcp_max_abs_m,clock_resilient_tdcp_clean,clock_resilient_tdcp_witnessed_outliers,clock_resilient_tdcp_unexplained_outliers,gdop,nsat,sd_doppler_n,"
+           "ratio,ratio_threshold,nfixed,ar_outcome,ddpr_rms_m,ddpr_gnc_eval,ddpr_gnc_n,ddpr_gnc_stages,ddpr_gnc_initial_mu,ddpr_gnc_final_mu,ddpr_gnc_min_weight,ddpr_gnc_mean_weight,ddpr_gnc_effective_n,ddpr_gnc_downweighted_n,ddpr_gnc_weighted_rms_m,ddpr_gnc_cf_eval,ddpr_gnc_cf_success,ddpr_gnc_cf_n,ddpr_gnc_cf_stages,ddpr_gnc_cf_cost_before,ddpr_gnc_cf_cost_after,ddpr_gnc_cf_ddpr_rms_before_m,ddpr_gnc_cf_ddpr_rms_after_m,ddpr_gnc_cf_x_ecef_m,ddpr_gnc_cf_y_ecef_m,ddpr_gnc_cf_z_ecef_m,ddpr_gnc_cf_float_separation_m,ddpr_gnc_cf_lambda_eval,ddpr_gnc_cf_lambda_n,ddpr_gnc_cf_lambda_ratio,ddpr_gnc_cf_lambda_ratio_pass,sd_doppler_rms_mps,clock_resilient_tdcp_n,clock_resilient_tdcp_rms_m,clock_resilient_tdcp_max_abs_m,clock_resilient_tdcp_clean,clock_resilient_tdcp_witnessed_outliers,clock_resilient_tdcp_unexplained_outliers,gdop,nsat,sd_doppler_n,"
            "amb_candidates,lambda_attempts,lambda_stage,amb_var_median,amb_var_max,"
            "imu_pose_correction_m,spp_seed_fresh,spp_seed_x_ecef_m,"
            "spp_seed_y_ecef_m,spp_seed_z_ecef_m,"
@@ -1621,7 +1646,7 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
            "ddpr_anchor_eval,ddpr_anchor_n,ddpr_anchor_res_m,"
            "ddpr_anchor_x_ecef_m,ddpr_anchor_y_ecef_m,ddpr_anchor_z_ecef_m,"
            "ddpr_anchor_h_err_m,ddpr_anchor_u_err_m,ddpr_anchor_prior,"
-           "fixed_float_sep_m,fixed_imu_pred_sep_m,fixed_postfit_ddcp_rms_m,fixed_postfit_ddcp_max_norm,fixed_postfit_ddcp_chi2_dof,fixed_postfit_ddcp_n,external_dr_sep_m,external_dr_mahal2,external_dr_age,external_doppler_valid,external_doppler_vel_e_mps,external_doppler_vel_n_mps,external_doppler_vel_u_mps,external_dr_eval,external_dr_accept,external_dr_reject,motion_imu_n,motion_accel_std_mps2,motion_gyro_std_radps,motion_gyro_median_radps,motion_yaw_rate_radps,motion_seed_speed_mps,zupt_candidate,zupt_applied,nhc_candidate,nhc_applied,cp_hold,"
+           "fixed_float_sep_m,fixed_imu_pred_sep_m,fixed_postfit_ddcp_rms_m,fixed_postfit_ddcp_max_norm,fixed_postfit_ddcp_chi2_dof,fixed_postfit_ddcp_n,external_dr_sep_m,external_dr_mahal2,external_dr_age,external_doppler_valid,external_doppler_vel_e_mps,external_doppler_vel_n_mps,external_doppler_vel_u_mps,external_dr_eval,external_dr_accept,external_dr_reject,candidate_witness_eval,candidate_anchor_available,candidate_anchor_n,candidate_anchor_rms_m,candidate_anchor_sep_m,candidate_anchor_pass,candidate_imu_pass,candidate_doppler_available,candidate_doppler_pass,candidate_carrier_pass,candidate_witness_pass,motion_imu_n,motion_accel_std_mps2,motion_gyro_std_radps,motion_gyro_median_radps,motion_yaw_rate_radps,motion_seed_speed_mps,zupt_candidate,zupt_applied,nhc_candidate,nhc_applied,cp_hold,"
            "imu_aperture_accept,imu_aperture_reject,cp_available,cp_added,"
            "cp_suppressed_hold,amb_after_hold,amb_final,amb_excl_build,"
            "amb_excl_hold,amb_excl_one_band,amb_excl_constellation,"
@@ -1692,7 +1717,34 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
             out << ',' << d.effective_ratio_threshold
                 << ',' << s.num_fixed_ambiguities
                 << ',' << static_cast<int>(d.ar_outcome)
-                << ',' << d.ddpr_rms_m << ',' << d.sd_doppler_rms_mps
+                << ',' << d.ddpr_rms_m
+                << ',' << (d.ddpr_gnc_evaluated ? 1 : 0)
+                << ',' << d.ddpr_gnc_factor_count
+                << ',' << d.ddpr_gnc_stages
+                << ',' << d.ddpr_gnc_initial_mu
+                << ',' << d.ddpr_gnc_final_mu
+                << ',' << d.ddpr_gnc_min_weight
+                << ',' << d.ddpr_gnc_mean_weight
+                << ',' << d.ddpr_gnc_effective_factor_count
+                << ',' << d.ddpr_gnc_downweighted_factors
+                << ',' << d.ddpr_gnc_weighted_rms_m
+                << ',' << (d.ddpr_gnc_counterfactual_evaluated ? 1 : 0)
+                << ',' << (d.ddpr_gnc_counterfactual_succeeded ? 1 : 0)
+                << ',' << d.ddpr_gnc_counterfactual_factor_count
+                << ',' << d.ddpr_gnc_counterfactual_stages
+                << ',' << d.ddpr_gnc_counterfactual_cost_before
+                << ',' << d.ddpr_gnc_counterfactual_cost_after
+                << ',' << d.ddpr_gnc_counterfactual_ddpr_rms_before_m
+                << ',' << d.ddpr_gnc_counterfactual_ddpr_rms_after_m
+                << ',' << d.ddpr_gnc_counterfactual_position_ecef.x()
+                << ',' << d.ddpr_gnc_counterfactual_position_ecef.y()
+                << ',' << d.ddpr_gnc_counterfactual_position_ecef.z()
+                << ',' << d.ddpr_gnc_counterfactual_float_separation_m
+                << ',' << (d.ddpr_gnc_counterfactual_lambda_evaluated ? 1 : 0)
+                << ',' << d.ddpr_gnc_counterfactual_lambda_ambiguities
+                << ',' << d.ddpr_gnc_counterfactual_lambda_ratio
+                << ',' << (d.ddpr_gnc_counterfactual_lambda_ratio_pass ? 1 : 0)
+                << ',' << d.sd_doppler_rms_mps
                 << ',' << d.clock_resilient_tdcp_factors
                 << ',' << d.clock_resilient_tdcp_rms_m
                 << ',' << d.clock_resilient_tdcp_max_abs_m
@@ -1843,6 +1895,17 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
                 << ',' << (d.external_dr_evaluated ? 1 : 0)
                 << ',' << (d.external_dr_accepted ? 1 : 0)
                 << ',' << (d.external_dr_rejected ? 1 : 0)
+                << ',' << (d.candidate_integrity_witness_evaluated ? 1 : 0)
+                << ',' << (d.candidate_integrity_anchor_available ? 1 : 0)
+                << ',' << d.candidate_integrity_anchor_factors
+                << ',' << d.candidate_integrity_anchor_rms_m
+                << ',' << d.candidate_integrity_anchor_separation_m
+                << ',' << (d.candidate_integrity_anchor_pass ? 1 : 0)
+                << ',' << (d.candidate_integrity_imu_pass ? 1 : 0)
+                << ',' << (d.candidate_integrity_doppler_available ? 1 : 0)
+                << ',' << (d.candidate_integrity_doppler_pass ? 1 : 0)
+                << ',' << (d.candidate_integrity_carrier_pass ? 1 : 0)
+                << ',' << (d.candidate_integrity_composite_pass ? 1 : 0)
                 << ',' << d.motion_constraint_imu_samples
                 << ',' << d.motion_constraint_accel_std_mps2
                 << ',' << d.motion_constraint_gyro_std_radps
@@ -1907,6 +1970,34 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
                            ? problem.gps_common_pseudorange_delta_satellites[si]
                            : 0);
         out << '\n';
+    }
+
+    const std::string gnc_trace_path = path + ".ddpr_gnc.csv";
+    std::ofstream gnc_trace_out(gnc_trace_path);
+    if (gnc_trace_out) {
+        gnc_trace_out << "tow,satellite,reference_satellite,system,prn,"
+                         "reference_system,reference_prn,signal,residual_m,"
+                         "sigma_m,normalized_residual,weight\n";
+        gnc_trace_out << std::fixed;
+        gnc_trace_out.precision(9);
+        for (const auto& epoch : r.epoch_diagnostics) {
+            for (const auto& trace : epoch.ddpr_gnc_factor_trace) {
+                gnc_trace_out << epoch.time.tow << ','
+                              << trace.satellite.toString() << ','
+                              << trace.reference_satellite.toString() << ','
+                              << static_cast<int>(trace.satellite.system) << ','
+                              << static_cast<int>(trace.satellite.prn) << ','
+                              << static_cast<int>(trace.reference_satellite.system) << ','
+                              << static_cast<int>(trace.reference_satellite.prn) << ','
+                              << static_cast<int>(trace.signal) << ','
+                              << trace.residual_m << ',' << trace.sigma_m << ','
+                              << trace.normalized_residual << ',' << trace.weight
+                              << '\n';
+            }
+        }
+    } else {
+        std::cerr << "Warning: cannot open DDPR GNC trace output file "
+                  << gnc_trace_path << "\n";
     }
 
     // Normalized companion table: the epoch CSV above answers "how many",
@@ -2193,6 +2284,42 @@ void dumpPredictedDdprBiasStateCsv(
             << row.normalized_innovation << ',' << row.applied_innovation_m
             << ',' << row.posterior_bias_m << ',' << row.posterior_sigma_m
             << '\n';
+    }
+}
+
+void dumpSatelliteQuarantineCsv(
+    const libgnss::FGOProcessor::FGOResult& result,
+    const std::string& epoch_csv_path) {
+    const std::string path = epoch_csv_path + ".satellite_quarantine.csv";
+    std::ofstream out(path);
+    if (!out) {
+        std::cerr << "Error: cannot open satellite quarantine output file "
+                  << path << "\n";
+        return;
+    }
+    out << std::fixed << std::setprecision(6);
+    out << "tow,epoch,satellite,system,prn,postfit_ddpr_residual_m,"
+           "epoch_median_postfit_ddpr_residual_m,postfit_gross,"
+           "doppler_evaluated,doppler_outlier,imu_evaluated,imu_outlier,"
+           "temporal_support_pairs,quarantine_candidate\n";
+    for (const auto& row : result.satellite_quarantine_witnesses) {
+        double tow = 0.0;
+        if (row.epoch_index < result.solution.solutions.size()) {
+            tow = result.solution.solutions[row.epoch_index].time.tow;
+        }
+        out << tow << ',' << row.epoch_index << ','
+            << row.satellite.toString() << ','
+            << static_cast<int>(row.satellite.system) << ','
+            << static_cast<int>(row.satellite.prn) << ','
+            << row.postfit_ddpr_residual_m << ','
+            << row.epoch_median_postfit_ddpr_residual_m << ','
+            << (row.postfit_gross ? 1 : 0) << ','
+            << (row.doppler_evaluated ? 1 : 0) << ','
+            << (row.doppler_outlier ? 1 : 0) << ','
+            << (row.imu_evaluated ? 1 : 0) << ','
+            << (row.imu_outlier ? 1 : 0) << ','
+            << row.temporal_support_pairs << ','
+            << (row.quarantine_candidate ? 1 : 0) << '\n';
     }
 }
 
@@ -2763,6 +2890,7 @@ Fingerprint computeFingerprint(const Args& args, const libgnss::FGOProcessor::FG
     COPY_BUILD_FIELD(use_double_difference_secondary_code_alignment);
     COPY_BUILD_FIELD(use_elevation_dependent_sigma);
     COPY_BUILD_FIELD(monitor_external_doppler_dr);
+    COPY_BUILD_FIELD(monitor_candidate_integrity_witness);
     COPY_BUILD_FIELD(use_external_doppler_dr_validation);
     COPY_BUILD_FIELD(use_geometry_free_cycle_slip_reset);
     COPY_BUILD_FIELD(use_ionosphere_model);
@@ -3245,6 +3373,9 @@ int main(int argc, char** argv) {
             if (args.predicted_ddpr_bias_state_shadow) {
                 dumpPredictedDdprBiasStateCsv(fl, args.dump_csv_path);
             }
+            if (args.satellite_quarantine_shadow) {
+                dumpSatelliteQuarantineCsv(fl, args.dump_csv_path);
+            }
         }
 
         std::cout << "\n=== (a4) MILESTONE 2c: IncrementalFixedLagSmoother (full-scale) ===\n"
@@ -3280,6 +3411,24 @@ int main(int argc, char** argv) {
                    << (config.monitor_predicted_ddpr_quality ? "on" : "off")
                    << ", predicted_ddpr_bias_state_shadow="
                    << (config.monitor_predicted_ddpr_bias_state ? "on" : "off")
+                   << ", ddpr_gnc_shadow="
+                   << (config.monitor_ddpr_gnc ? "on" : "off")
+                   << " (counterfactual_attempts="
+                   << fl.diagnostics.ddpr_gnc_counterfactual_attempts
+                   << ", successes="
+                   << fl.diagnostics.ddpr_gnc_counterfactual_successes << ')'
+                   << ", candidate_integrity_shadow="
+                   << (config.monitor_candidate_integrity_witness ? "on" : "off")
+                   << " (evaluated="
+                   << fl.diagnostics.candidate_integrity_witness_evaluated
+                   << ", passed="
+                   << fl.diagnostics.candidate_integrity_witness_passes << ')'
+                   << ", satellite_quarantine_shadow="
+                   << (config.monitor_satellite_quarantine_witness ? "on" : "off")
+                   << " (satellites="
+                   << fl.diagnostics.satellite_quarantine_witness_satellites
+                   << ", candidates="
+                   << fl.diagnostics.satellite_quarantine_candidates << ')'
                    << ")\n"
                   << "  IMU ratio aperture: " << (args.imu_ratio_aperture ? "on" : "off")
                   << " (accepted=" << fl.diagnostics.imu_aided_ratio_accepts
@@ -3374,6 +3523,8 @@ int main(int argc, char** argv) {
                   << fl.diagnostics.geometry_free_fix_guard_demotions
                   << ")\n"
                   << "  CP-hold/sanity FSM: " << (args.cp_hold ? "on" : "off")
+                  << ", float_recovery="
+                  << (config.use_cp_hold_float_recovery ? "on" : "off")
                   << " (triggers=" << fl.diagnostics.cp_hold_triggers
                   << ", epochs_held=" << fl.diagnostics.cp_hold_epochs_held
                   << ", anchor_releases=" << fl.diagnostics.cp_hold_anchor_releases

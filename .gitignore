@@ -3,6 +3,8 @@ build/
 build_local/
 build-codex/
 build-madoca-parity/
+build-ffrt-msvc/
+build-no-gtsam-msvc/
 bin/
 *.a
 *.o

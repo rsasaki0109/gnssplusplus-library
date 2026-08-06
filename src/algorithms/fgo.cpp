@@ -2487,6 +2487,7 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
     if (config_.use_single_difference_doppler_factors ||
         config_.monitor_external_doppler_dr ||
         config_.use_external_doppler_dr_validation ||
+        config_.monitor_candidate_integrity_witness ||
         config_.use_single_difference_tdcp_factors) {
         std::map<CarrierKey, SingleDifferenceCarrierResidual>
             previous_sd_carrier_residuals;
@@ -2547,7 +2548,8 @@ FGOProcessor::FGOProblem FGOProcessor::buildDoubleDifferenceProblem(
 
                 if ((config_.use_single_difference_doppler_factors ||
                      config_.monitor_external_doppler_dr ||
-                     config_.use_external_doppler_dr_validation) &&
+                     config_.use_external_doppler_dr_validation ||
+                     config_.monitor_candidate_integrity_witness) &&
                     rover->has_doppler_residual &&
                     reference->has_doppler_residual) {
                     SingleDifferenceDopplerFactor factor;
