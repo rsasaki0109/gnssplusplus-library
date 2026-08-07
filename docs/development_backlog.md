@@ -1,38 +1,36 @@
-# Development backlog (2026-08-07)
+# Development backlog (2026-08-08)
 
-Status after the FGO quarantine/arc-restart audit thread (PR #437) and the
-design-slice FLOAT root-cause analysis (`docs/fgo_design_slice_float_root_cause.md`).
-All items below are open; none has sealed-run2/run3 entitlement yet.
+Status after PR #437 (FGO quarantine/arc-restart audits), PR #438
+(adaptive-R phase-only/per-system alpha + low-count AR surplus-quality
+relaxation), and the adaptive-R real-data validation
+(`docs/fgo_adaptive_r_validation.md`). Sealed run2/run3 have no entitlement
+yet.
 
-## 1. Adaptive-R phase-only variant / per-system alpha (navi776 thread)
+## 1. Adaptive-R phase-only variant / per-system alpha (navi776 thread) — DONE
 
 Ref: `docs/navi776_techniques.md` line 87-88 ("phase-only adaptation,
 per-system alpha" listed as not pursued).
 
-- Base: `--rtk-adaptive-noise` (+ `--rtk-adaptive-noise-max-baseline 1000`)
-  is implemented and documented. It adapts the measurement variance at the
-  SD unit with a shared alpha (phase 0.9, code 0.5).
-- Open: a phase-only variant (adapt carrier variance only, leave code
-  fixed) and/or per-system alpha (GPS vs GAL vs BDS vs QZSS weights).
-- Gates: default-OFF, OFF bit-identical (md5), full 3-city A/B (tokyo
-  run1/run3 + nagoya run1) with the usual bars (fix +/-0.5 pp, p95 no
-  regression, wall <= +5%). One retune per phase.
-- Precondition: a fresh run1-only plan before any activation work.
+- Implemented in PR #438: `--rtk-adaptive-noise-phase-only` and
+  `--rtk-adaptive-noise-per-system-alpha`, both default OFF and
+  bit-identical when off.
+- Real-data validation (PR #439, `docs/fgo_adaptive_r_validation.md`):
+  first-500-epoch Tokyo run1 A/B shows adaptive-on rmsH 0.0508->0.0471 m,
+  phase-only tracking OFF (0.0507 m, confirming the code term is the main
+  driver), and per-system marginally best (0.0469 m). The design-slice
+  window is FLOAT-dominated and not an adaptive-R evaluation window.
+- Open (future): full run1 A/B for fix-rate impact; no preset promotion
+  without a fresh run1-only plan and the usual 3-city bars.
 
-## 2. Float-ambiguity quality improvement (design-slice thread)
+## 2. Low-count AR surplus-quality relaxation — DESIGN-SLICE PASSED
 
-Ref: `docs/fgo_design_slice_float_root_cause.md` conclusion.
-
-- The Tokyo run1 5000--5499 slice has 167 FLOAT epochs; 166 sit 50--500 m
-  from truth and 45 fail AR because CMC level exclusion drops the eligible
-  ambiguity count below the floor of 6.
-- All four tested recoveries (arc-restart, low-count AR, surplus-gate
-  relaxation, CMC-level relaxation) produced km-scale wrong FIX, proving the
-  safety mechanisms are correct.
-- Open: improve the quality of the float ambiguity estimate itself so the
-  CMC-excluded / held epochs carry a correct float solution before AR. This
-  is a distinct research thread from threshold relaxation; no activation
-  without a fresh run1-only plan and a wrong-FIX gate.
+- Implemented in PR #438: `--low-count-relax-surplus-quality` (default OFF).
+  Corrects the prior falsification that scored against `ref_e_pos_m`.
+- Design slice (Tokyo run1 5000--5499): FIX 333->335 (+2 at 0.021/0.032 m),
+  zero wrong FIX, FIXED RMS unchanged. The +12.1% wall comes from the
+  low-count attempts.
+- **In progress**: full run1 A/B to establish the activation bar and the
+  run2/run3 pathway.
 
 ## 3. PPC submission pipeline (user-decision item)
 
