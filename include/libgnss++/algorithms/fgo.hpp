@@ -595,6 +595,17 @@ public:
         // addition to) the mandatory surplus-pass requirement above. <=0
         // disables this extra floor (a surplus pass alone then suffices).
         double low_count_min_ratio = 1.5;
+        // Relax the surplus-quality floors for low-count epochs. The
+        // mandatory surplus_rescue_quality_pass requires nsat >= 10 and
+        // >= 4 post-fit DDCP factors, which a sparse epoch can never meet by
+        // construction -- so use_low_count_ambiguity_resolution can only
+        // accept epochs that were never actually below-floor. When this knob
+        // is on, a low-count attempt is exempt from the nsat>=10 and
+        // ddcp>=4 arms (keeping the ddpr_rms <= 5 m, DDCP RMS <= 0.05 m, and
+        // fallback-level==0 floors, plus the mandatory surplus pass). Default
+        // OFF; when off the established floors are unchanged and the behavior
+        // is byte-identical.
+        bool low_count_relax_surplus_quality = false;
         double max_tdcp_gap_s = 2.0;
         double base_epoch_match_tolerance_s = 0.02;
         double base_interpolation_max_gap_s = 1.2;

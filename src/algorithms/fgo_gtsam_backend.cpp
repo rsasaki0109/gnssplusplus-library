@@ -4546,11 +4546,27 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                         constexpr int kSurplusRescueMinSatellites = 10;
                         constexpr double kSurplusRescueMaxDdprRmsM = 5.0;
                         constexpr double kSurplusRescueMaxPostfitDdcpRmsM = 0.05;
+                        // navi.776 low-count follow-up: a sparse epoch cannot
+                        // meet the nsat>=10 / ddcp>=4 floors by construction,
+                        // so when the user opts in, a low-count attempt is
+                        // exempt from exactly those two arms. The ddpr_rms,
+                        // DDCP RMS, and fallback-level==0 floors (and the
+                        // mandatory surplus pass) are retained.
+                        const bool low_count_relaxed_quality =
+                            is_low_count_attempt &&
+                            config.low_count_relax_surplus_quality &&
+                            nsat >= 4;
+                        const bool low_count_relaxed_ddcp =
+                            is_low_count_attempt &&
+                            config.low_count_relax_surplus_quality &&
+                            epoch_diagnostics[i].fixed_postfit_ddcp_factors >= 2;
                         const bool surplus_rescue_quality_pass =
-                            nsat >= kSurplusRescueMinSatellites &&
+                            (nsat >= kSurplusRescueMinSatellites ||
+                             low_count_relaxed_quality) &&
                             std::isfinite(ddpr_rms) &&
                             ddpr_rms <= kSurplusRescueMaxDdprRmsM &&
-                            epoch_diagnostics[i].fixed_postfit_ddcp_factors >= 4 &&
+                            (epoch_diagnostics[i].fixed_postfit_ddcp_factors >= 4 ||
+                             low_count_relaxed_ddcp) &&
                             std::isfinite(
                                 epoch_diagnostics[i].fixed_postfit_ddcp_rms_m) &&
                             epoch_diagnostics[i].fixed_postfit_ddcp_rms_m <=
