@@ -161,3 +161,69 @@ active experiment needs a candidate rule that also fires on epochs whose
 implicated satellites actually carry a DD carrier arc, or an additional
 temporal-consistency witness with higher recall.
 
+## Post-hoc slice analysis (design-slice candidates)
+
+A separate read of the OFF replay's epoch CSV was made to find FLOAT epochs
+that DO carry carrier arcs yet still fail to fix, and to test whether an
+arc-restart rule could plausibly recover them:
+
+| Category | Count |
+|---|---:|
+| FLOAT epochs with carrier factors added | 47 / 167 |
+| FLOAT epochs with ddpr_rms > 5 m | 90 / 167 |
+| FLOAT, carrier added, LAMBDA-insufficient (ar_outcome=5) | 45 |
+| ... of those with ddpr_rms > 5 m | 8 (slice epochs 360--367) |
+
+The 45 LAMBDA-insufficient epochs all had `lambda_attempts == 0`: their
+eligible ambiguity count (3--5) never reached the per-epoch LAMBDA floor, so
+AR was not even attempted. The candidate trace shows the cause: those epochs
+are dominated by **build-time-excluded** carrier rows (E10->E09, J03->J04,
+C13->C14 are excluded at almost every epoch; G20->G11 drops out from
+TOW 188538.2 onward; E36->E09 flickers in and out). Excluded rows have no
+ambiguity index in the graph, so an ambiguity-generation restart cannot
+restore them -- there is no arc to restart. This is exactly the
+`use_low_count_ambiguity_resolution` (default-off) responsibility: lower the
+candidate-count floor and let LAMBDA run on the surviving candidates, gated
+by surplus validation and a ratio floor.
+
+Conclusion for the next experiment: **arc-restart and low-count AR address
+disjoint failure modes.** An arc-restart that fires on the quarantine rule
+cannot help the design-slice FLOATs because (a) the witness fires on
+CP-hold-only epochs whose implicated satellites have no carrier arcs, and (b)
+the carrier-bearing FLOAT epochs fail for build-time exclusions, not stale
+arcs. A more promising next experiment targets the 45 low-count FLOAT epochs
+directly: evaluate `use_low_count_ambiguity_resolution` on the frozen
+design-slice profile (it is currently off), with the existing surplus +
+ratio gates as the safety net, and count correct-FIX recoveries. That is a
+threshold-free, already-implemented path that does not need a new candidate
+rule.
+
+## Low-count AR evaluation (design slice)
+
+`--low-count-ar` was run on the frozen design-slice profile (default
+min_candidates=4, then 3, and ratio 0) and produced **zero accepted fixes** in
+every configuration:
+
+| Configuration | attempts | accepted |
+|---|---:|---:|
+| min_candidates=4, min_ratio=1.5 | 20 | 0 |
+| min_candidates=3, min_ratio=1.5 | 48 | 0 |
+| min_candidates=3, min_ratio=0 (surplus alone) | 48 | 0 |
+
+With min_candidates=3 the 48 epochs that were previously LAMBDA-insufficient
+each ran one LAMBDA search (`lambda_attempts` 0 -> 1 across slice epochs
+330--443, matching the 45 ar_outcome=5 epochs plus a few neighbours), yet
+`surplus-validation` rejected every candidate and no epoch changed status
+(333 FIX / 167 FLOAT identical to OFF).
+
+This closes the "candidate-count floor" hypothesis: the design-slice FLOATs
+do not fail because LAMBDA never runs; they fail because their surviving
+candidates do not pass the surplus/ratio acceptance gates. That is a
+candidate-QUALITY problem, not a candidate-COUNT or arc-continuity problem.
+Arc-restart cannot help (the arcs exist and are already eligible), and
+low-count AR cannot help (the integer hypotheses are rejected by the gates).
+Any future experiment that wants more correct FIX on this slice must improve
+the quality of the surviving LAMBDA candidates (e.g. better float-ambiguity
+conditioning or a different integer candidate), which is a distinct problem
+from the quarantine/arc-restart thread and is out of scope for this plan.
+
