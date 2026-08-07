@@ -137,6 +137,47 @@ TEST_F(RTKSmokeTest, ProducesValidSolutionsOnBundledKinematicData) {
     EXPECT_GE(summary.first_valid_solution.num_satellites, 5);
 }
 
+TEST_F(RTKSmokeTest, PhaseOnlyAndPerSystemKnobsAreBitIdenticalWhenAdaptationOff) {
+    RTKProcessor::RTKConfig base = [] {
+        RTKProcessor::RTKConfig cfg;
+        cfg.position_mode = RTKProcessor::RTKConfig::PositionMode::KINEMATIC;
+        cfg.ar_mode = RTKProcessor::RTKConfig::AmbiguityResolutionMode::CONTINUOUS;
+        cfg.min_satellites_for_ar = 5;
+        cfg.ratio_threshold = 3.0;
+        return cfg;
+    }();
+    EXPECT_FALSE(base.enable_adaptive_measurement_noise);
+
+    const auto baseline = runEpochs(10, base);
+
+    RTKProcessor::RTKConfig phase_only = base;
+    phase_only.adaptive_noise_phase_only = true;
+    const auto phase_only_result = runEpochs(10, phase_only);
+
+    RTKProcessor::RTKConfig per_system = base;
+    per_system.adaptive_noise_per_system_alpha = true;
+    per_system.adaptive_noise_alpha_phase_bds = 0.1;
+    per_system.adaptive_noise_alpha_code_galileo = 0.1;
+    const auto per_system_result = runEpochs(10, per_system);
+
+    EXPECT_EQ(baseline.epochs_processed, phase_only_result.epochs_processed);
+    EXPECT_EQ(baseline.valid_solutions, phase_only_result.valid_solutions);
+    EXPECT_EQ(baseline.fixed_solutions, phase_only_result.fixed_solutions);
+    EXPECT_EQ(baseline.epochs_processed, per_system_result.epochs_processed);
+    EXPECT_EQ(baseline.valid_solutions, per_system_result.valid_solutions);
+    EXPECT_EQ(baseline.fixed_solutions, per_system_result.fixed_solutions);
+    if (baseline.first_valid_solution.isValid() &&
+        phase_only_result.first_valid_solution.isValid()) {
+        EXPECT_TRUE(baseline.first_valid_solution.position_ecef.isApprox(
+            phase_only_result.first_valid_solution.position_ecef, 0.0));
+    }
+    if (baseline.first_valid_solution.isValid() &&
+        per_system_result.first_valid_solution.isValid()) {
+        EXPECT_TRUE(baseline.first_valid_solution.position_ecef.isApprox(
+            per_system_result.first_valid_solution.position_ecef, 0.0));
+    }
+}
+
 TEST_F(RTKSmokeTest, AchievesEarlyFixedSolutionOnBundledKinematicData) {
     const auto summary = runEpochs(20);
 

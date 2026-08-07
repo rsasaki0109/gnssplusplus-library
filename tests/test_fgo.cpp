@@ -2334,3 +2334,13 @@ TEST(FGOTest, ElevationDependentSigmaMatchesPortedVarerrFormula) {
     ASSERT_GT(cp_sigma_at_epoch0, 0.0);
     EXPECT_NEAR(pr_sigma_at_epoch0 / cp_sigma_at_epoch0, 100.0, 1.0);
 }
+
+TEST(FGOTest, LowCountRelaxSurplusQualityIsDefaultOffAndIndependent) {
+    const FGOProcessor::FGOConfig config;
+    EXPECT_FALSE(config.use_low_count_ambiguity_resolution);
+    EXPECT_FALSE(config.low_count_relax_surplus_quality);
+    EXPECT_EQ(config.low_count_min_candidates, 4);
+    // The relaxation is inert unless the low-count path is also enabled.
+    EXPECT_FALSE(config.low_count_relax_surplus_quality &&
+                 !config.use_low_count_ambiguity_resolution);
+}

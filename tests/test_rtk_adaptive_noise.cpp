@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <libgnss++/algorithms/rtk.hpp>
 #include <libgnss++/algorithms/rtk_adaptive_noise.hpp>
 
 #include <Eigen/Dense>
@@ -137,6 +138,16 @@ TEST(AdaptiveNoiseTrackerTest, ClearRemovesEverything) {
     tracker.update(2, MeasurementKind::CODE, 0.5, 0.0, 0.0, 1.0, 0.0, config);
     tracker.clear();
     EXPECT_EQ(tracker.size(), 0u);
+}
+
+TEST(AdaptiveNoiseConfigTest, PhaseOnlyAndPerSystemAreDefaultOff) {
+    const RTKProcessor::RTKConfig config;
+    EXPECT_FALSE(config.adaptive_noise_phase_only);
+    EXPECT_FALSE(config.adaptive_noise_per_system_alpha);
+    // The per-system table carries explicit non-default values, proving the
+    // knob is a real switch and not a silent pass-through.
+    EXPECT_DOUBLE_EQ(config.adaptive_noise_alpha_phase_bds, 0.8);
+    EXPECT_DOUBLE_EQ(config.adaptive_noise_alpha_code_galileo, 0.45);
 }
 
 TEST(AdaptiveNoiseTrackerTest, IgnoresNonFiniteAndNonPositiveInputs) {
