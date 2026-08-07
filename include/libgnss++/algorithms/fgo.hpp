@@ -166,6 +166,25 @@ public:
         double integer_constrained_cost_abs_tolerance = 1e-6;
         int integer_constrained_max_iterations = 1;
         bool use_robust_loss = true;
+        // Diagnostic-only graduated non-convexity (GNC) analysis of the
+        // fixed-lag DD pseudorange residuals. It computes a coarse-to-fine
+        // Geman--McClure weight schedule after each epoch solve, but never
+        // replaces graph factors, re-optimizes, or changes FIX/FLOAT state.
+        // Implemented by the GTSAM backend; default OFF.
+        bool monitor_ddpr_gnc = false;
+        double ddpr_gnc_shape = 2.0;
+        double ddpr_gnc_graduation_divisor = 1.4;
+        int ddpr_gnc_max_stages = 32;
+        double ddpr_gnc_downweighted_threshold = 0.5;
+        // Counterfactual-only alternating GNC/LM solve on a copy of the
+        // active fixed-lag graph. DDPR factors receive graduated
+        // Geman--McClure weights; every other factor is unchanged. The
+        // candidate is recorded for FLOAT epochs and is never fed back to
+        // the live smoother or ambiguity-resolution state. Default OFF.
+        bool monitor_ddpr_gnc_counterfactual = false;
+        int ddpr_gnc_counterfactual_max_stages = 8;
+        int ddpr_gnc_counterfactual_iterations_per_stage = 1;
+        double ddpr_gnc_counterfactual_min_weight = 1e-3;
         double motion_sigma_m = 50.0;
         double clock_motion_sigma_m = 300.0;
         double velocity_prior_sigma_mps = 100.0;
@@ -360,6 +379,10 @@ public:
         // monitor_external_doppler_dr evaluates every provisional LAMBDA
         // candidate but cannot relax a ratio gate or add Doppler graph factors.
         bool monitor_external_doppler_dr = false;
+        // Monitor-only conjunction for provisional LAMBDA candidates:
+        // trusted DDPR-LS anchor, IMU prediction, Doppler-only DR, and DDCP
+        // post-fit consistency. Never changes an ambiguity decision.
+        bool monitor_candidate_integrity_witness = false;
         bool use_external_doppler_dr_validation = false;
         bool external_doppler_dr_require_for_relaxed_fix = true;
         // A statistically validated relaxed-ratio solution may label the
@@ -422,6 +445,29 @@ public:
         // compares measured DDPR changes with DD Doppler and the causal
         // pre-solve IMU pose prediction; no result is consumed by the graph.
         bool monitor_predicted_ddpr_quality = false;
+        // Monitor-only agreement between the causal Doppler/IMU DDPR check
+        // and current per-satellite post-fit DDPR attribution.
+        bool monitor_satellite_quarantine_witness = false;
+        double satellite_quarantine_normalized_threshold = 5.0;
+        // Active selective carrier-arc restart (default OFF, bit-identical
+        // when off). At a quarantine-candidate epoch i (Doppler innovation,
+        // IMU-geometry innovation, and post-fit gross DDPR attribution all
+        // agree on the same DD pair), the implicated carrier ambiguity arcs
+        // for BOTH endpoints are generation-bumped at epoch i+1 via the
+        // existing amb_generation overlay. DDPR factors and clean carrier
+        // arcs are preserved; CP-hold, LAMBDA, and FIX/FLOAT rules are
+        // unchanged. A rollback gate stops the mechanism if any correct FIX
+        // epoch is lost or any wrong FIX appears in the OFF/ON comparison.
+        bool use_selective_arc_restart = false;
+        bool selective_arc_restart_require_both_innovations = true;
+        int selective_arc_restart_max_arcs_per_epoch = 4;
+        double selective_arc_restart_skip_fixed_ratio = 2.0;
+        // A fresh generation may only be minted after this many epochs since
+        // the ambiguity index's previous generation, preventing thrash.
+        int selective_arc_restart_min_epochs_since_bump = 5;
+        // Monitor-only counterpart of the active flag: reports which
+        // satellites/pairs WOULD be restarted without bumping any generation.
+        bool monitor_selective_arc_restart_candidates = false;
         // Diagnostic-only causal random-walk model of persistent DD
         // pseudorange bias. It consumes the monitor above internally but is
         // independent of its output switch. No result is consumed by the
@@ -1898,6 +1944,20 @@ public:
         double posterior_sigma_m = 0.0;
     };
 
+    struct SatelliteQuarantineWitnessDiagnostics {
+        std::size_t epoch_index = 0;
+        SatelliteId satellite;
+        double postfit_ddpr_residual_m = 0.0;
+        double epoch_median_postfit_ddpr_residual_m = 0.0;
+        bool postfit_gross = false;
+        bool doppler_evaluated = false;
+        bool doppler_outlier = false;
+        bool imu_evaluated = false;
+        bool imu_outlier = false;
+        int temporal_support_pairs = 0;
+        bool quarantine_candidate = false;
+    };
+
     struct FGODiagnostics {
         int iterations = 0;
         bool converged = false;
@@ -1971,6 +2031,23 @@ public:
         std::size_t robust_double_difference_pseudorange_factors = 0;
         std::size_t robust_double_difference_carrier_factors = 0;
         std::size_t robust_tdcp_factors = 0;
+        std::size_t ddpr_gnc_evaluated_epochs = 0;
+        std::size_t ddpr_gnc_factors = 0;
+        std::size_t ddpr_gnc_downweighted_factors = 0;
+        std::size_t ddpr_gnc_counterfactual_attempts = 0;
+        std::size_t ddpr_gnc_counterfactual_successes = 0;
+        std::size_t candidate_integrity_witness_evaluated = 0;
+        std::size_t candidate_integrity_witness_passes = 0;
+        std::size_t satellite_quarantine_witness_satellites = 0;
+        std::size_t satellite_quarantine_candidates = 0;
+        std::size_t selective_arc_restart_detection_epochs = 0;
+        std::size_t selective_arc_restart_candidate_satellites = 0;
+        std::size_t selective_arc_restart_candidate_pairs = 0;
+        std::size_t selective_arc_restart_applied_arcs = 0;
+        std::size_t selective_arc_restart_skipped_fixed = 0;
+        std::size_t selective_arc_restart_skipped_thrash = 0;
+        std::size_t selective_arc_restart_skipped_cap = 0;
+        std::size_t selective_arc_restart_skipped_no_arc = 0;
         std::size_t graph_factors = 0;
         std::size_t graph_values = 0;
         std::size_t imu_intervals = 0;  ///< 2b: CombinedImuFactors added between epochs
@@ -2250,6 +2327,34 @@ public:
         double graph_cost_after = 0.0;
     };
 
+    /// One diagnostic-only DDPR GNC weight at the current epoch's optimized
+    /// pose. These rows are never consumed by the estimator.
+    struct DdprGncFactorTrace {
+        SatelliteId satellite;
+        SatelliteId reference_satellite;
+        SignalType signal = SignalType::GPS_L1CA;
+        double residual_m = 0.0;
+        double sigma_m = 0.0;
+        double normalized_residual = 0.0;
+        double weight = 1.0;
+    };
+
+    /// One selective arc-restart candidate/action row. Populated only when
+    /// use_selective_arc_restart (active) or
+    /// monitor_selective_arc_restart_candidates (monitor-only) is enabled.
+    struct SelectiveArcRestartTrace {
+        std::size_t detection_epoch = 0;
+        SatelliteId satellite;
+        bool is_reference = false;
+        std::size_t ambiguity_index = 0;
+        bool detected = false;
+        bool applied = false;
+        double postfit_residual_m = 0.0;
+        double epoch_median_postfit_residual_m = 0.0;
+        double normalized_doppler_innovation = 0.0;
+        double normalized_imu_innovation = 0.0;
+    };
+
     /// Per-epoch fixed-lag integrity state.  These values expose why an epoch
     /// did or did not fix, rather than only reporting the final FIX/FLOAT label.
     struct FGOEpochDiagnostics {
@@ -2257,6 +2362,42 @@ public:
         AmbiguityResolutionOutcome ar_outcome =
             AmbiguityResolutionOutcome::NotAttempted;
         double ddpr_rms_m = 0.0;
+        bool ddpr_gnc_evaluated = false;
+        int ddpr_gnc_factor_count = 0;
+        int ddpr_gnc_stages = 0;
+        double ddpr_gnc_initial_mu = 0.0;
+        double ddpr_gnc_final_mu = 0.0;
+        double ddpr_gnc_min_weight = 1.0;
+        double ddpr_gnc_mean_weight = 1.0;
+        double ddpr_gnc_effective_factor_count = 0.0;
+        int ddpr_gnc_downweighted_factors = 0;
+        double ddpr_gnc_weighted_rms_m = 0.0;
+        std::vector<DdprGncFactorTrace> ddpr_gnc_factor_trace;
+        bool ddpr_gnc_counterfactual_evaluated = false;
+        bool ddpr_gnc_counterfactual_succeeded = false;
+        int ddpr_gnc_counterfactual_factor_count = 0;
+        int ddpr_gnc_counterfactual_stages = 0;
+        double ddpr_gnc_counterfactual_cost_before = 0.0;
+        double ddpr_gnc_counterfactual_cost_after = 0.0;
+        double ddpr_gnc_counterfactual_ddpr_rms_before_m = 0.0;
+        double ddpr_gnc_counterfactual_ddpr_rms_after_m = 0.0;
+        Vector3d ddpr_gnc_counterfactual_position_ecef = Vector3d::Zero();
+        double ddpr_gnc_counterfactual_float_separation_m = 0.0;
+        bool ddpr_gnc_counterfactual_lambda_evaluated = false;
+        int ddpr_gnc_counterfactual_lambda_ambiguities = 0;
+        double ddpr_gnc_counterfactual_lambda_ratio = 0.0;
+        bool ddpr_gnc_counterfactual_lambda_ratio_pass = false;
+        bool candidate_integrity_witness_evaluated = false;
+        bool candidate_integrity_anchor_available = false;
+        int candidate_integrity_anchor_factors = 0;
+        double candidate_integrity_anchor_rms_m = 0.0;
+        double candidate_integrity_anchor_separation_m = 0.0;
+        bool candidate_integrity_anchor_pass = false;
+        bool candidate_integrity_imu_pass = false;
+        bool candidate_integrity_doppler_available = false;
+        bool candidate_integrity_doppler_pass = false;
+        bool candidate_integrity_carrier_pass = false;
+        bool candidate_integrity_composite_pass = false;
         double sd_doppler_rms_mps = 0.0;
         int clock_resilient_tdcp_factors = 0;
         double clock_resilient_tdcp_rms_m = 0.0;
@@ -2405,6 +2546,16 @@ public:
         int ambiguity_generation_bumps_reset = 0;
         int ambiguity_generation_bumps_warm_reset = 0;
         int ambiguity_generation_bumps_stale_pin = 0;
+        // --- Active selective arc restart (use_selective_arc_restart) ---
+        bool selective_arc_restart_armed = false;
+        int selective_arc_restart_candidate_satellites = 0;
+        int selective_arc_restart_candidate_pairs = 0;
+        int selective_arc_restart_applied_arcs = 0;
+        int selective_arc_restart_skipped_fixed = 0;
+        int selective_arc_restart_skipped_thrash = 0;
+        int selective_arc_restart_skipped_cap = 0;
+        bool selective_arc_restart_monitor_only = false;
+        std::vector<SelectiveArcRestartTrace> selective_arc_restart_trace;
     };
 
     struct FGOResult {
@@ -2424,6 +2575,9 @@ public:
             predicted_ddpr_quality_factors;
         std::vector<PredictedDdprBiasStateDiagnostics>
             predicted_ddpr_bias_state_factors;
+        std::vector<SatelliteQuarantineWitnessDiagnostics>
+            satellite_quarantine_witnesses;
+        std::vector<SelectiveArcRestartTrace> selective_arc_restart_trace;
         // Milestone 2b (populated only by the GTSAM IMU-coupled path):
         // per-epoch estimated attitude as [roll, pitch, heading] in degrees
         // (body FLU -> nav ENU; heading is clockwise from North) and estimated

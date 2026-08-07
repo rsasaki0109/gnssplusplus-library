@@ -26,6 +26,7 @@
 
 #include <libgnss++/algorithms/disjoint_constellation_partition.hpp>
 #include <libgnss++/algorithms/fgo.hpp>
+#include <libgnss++/algorithms/fgo_ddpr_gnc.hpp>
 #include <libgnss++/algorithms/lambda.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
@@ -428,6 +429,222 @@ IntegerConstrainedGraphCostOutcome evaluateIntegerConstrainedGraphCost(
             std::max(0.0, config.integer_constrained_cost_abs_tolerance);
     if (current_position_key && optimized_values.exists(*current_position_key)) {
         outcome.optimized_pose = optimized_values.at<Pose3>(*current_position_key);
+    }
+    return outcome;
+}
+
+struct DdprGncCounterfactualOutcome {
+    bool evaluated = false;
+    bool succeeded = false;
+    int factor_count = 0;
+    int stages = 0;
+    double base_cost_before = 0.0;
+    double base_cost_after = 0.0;
+    double ddpr_rms_before_m = 0.0;
+    double ddpr_rms_after_m = 0.0;
+    bool lambda_evaluated = false;
+    int lambda_ambiguities = 0;
+    double lambda_ratio = 0.0;
+    bool lambda_ratio_pass = false;
+    std::optional<Pose3> optimized_pose;
+};
+
+double scalarNoiseSigma(const gtsam::SharedNoiseModel& model) {
+    if (!model) return 0.0;
+    gtsam::SharedNoiseModel gaussian_model = model;
+    if (const auto robust =
+            std::dynamic_pointer_cast<gtsam::noiseModel::Robust>(model)) {
+        gaussian_model = robust->noise();
+    }
+    const auto diagonal =
+        std::dynamic_pointer_cast<gtsam::noiseModel::Diagonal>(gaussian_model);
+    if (!diagonal || diagonal->dim() != 1) return 0.0;
+    const gtsam::Vector sigmas = diagonal->sigmas();
+    return sigmas.size() == 1 && std::isfinite(sigmas(0)) && sigmas(0) > 0.0
+        ? sigmas(0)
+        : 0.0;
+}
+
+DdprGncCounterfactualOutcome evaluateDdprGncCounterfactual(
+    const gtsam::NonlinearFactorGraph& active_factors,
+    const gtsam::Values& initial_values,
+    std::optional<gtsam::Key> current_position_key,
+    const std::vector<gtsam::Key>& current_ambiguity_keys,
+    const FGOProcessor::FGOConfig& config) {
+    DdprGncCounterfactualOutcome outcome;
+    if (config.ddpr_gnc_counterfactual_max_stages <= 0 ||
+        config.ddpr_gnc_counterfactual_iterations_per_stage <= 0 ||
+        !std::isfinite(config.ddpr_gnc_shape) || config.ddpr_gnc_shape <= 0.0 ||
+        !std::isfinite(config.ddpr_gnc_counterfactual_min_weight) ||
+        config.ddpr_gnc_counterfactual_min_weight <= 0.0 ||
+        config.ddpr_gnc_counterfactual_min_weight > 1.0) {
+        return outcome;
+    }
+
+    try {
+        gtsam::NonlinearFactorGraph base_graph;
+        std::vector<std::size_t> ddpr_indices;
+        std::vector<double> ddpr_sigmas;
+        for (const auto& factor : active_factors) {
+            if (!factor) continue;
+            const std::size_t graph_index = base_graph.size();
+            base_graph.push_back(factor);
+            if (dynamic_cast<const gtsam::DoubleDifferencePseudorangeFactorArm*>(
+                    factor.get()) == nullptr) {
+                continue;
+            }
+            const auto noise_factor =
+                std::dynamic_pointer_cast<gtsam::NoiseModelFactor>(factor);
+            const double sigma = noise_factor
+                ? scalarNoiseSigma(noise_factor->noiseModel())
+                : 0.0;
+            if (sigma <= 0.0) return outcome;
+            ddpr_indices.push_back(graph_index);
+            ddpr_sigmas.push_back(sigma);
+        }
+        if (base_graph.empty() || ddpr_indices.empty()) return outcome;
+
+        auto residualsAt = [&](const gtsam::Values& values,
+                               std::vector<double>* residuals,
+                               double* rms) -> bool {
+            residuals->clear();
+            residuals->reserve(ddpr_indices.size());
+            double sum_sq = 0.0;
+            for (const std::size_t index : ddpr_indices) {
+                const auto& factor = base_graph[index];
+                const auto* ddpr = dynamic_cast<
+                    const gtsam::DoubleDifferencePseudorangeFactorArm*>(factor.get());
+                if (!ddpr || factor->keys().empty() ||
+                    !values.exists(factor->keys().front())) {
+                    return false;
+                }
+                const Pose3 pose = values.at<Pose3>(factor->keys().front());
+                const double residual = ddpr->evaluateError(pose)(0);
+                if (!std::isfinite(residual)) return false;
+                residuals->push_back(residual);
+                sum_sq += residual * residual;
+            }
+            *rms = std::sqrt(sum_sq / static_cast<double>(residuals->size()));
+            return true;
+        };
+
+        std::vector<double> residuals;
+        if (!residualsAt(initial_values, &residuals, &outcome.ddpr_rms_before_m)) {
+            return outcome;
+        }
+        outcome.evaluated = true;
+        outcome.factor_count = static_cast<int>(ddpr_indices.size());
+        outcome.base_cost_before = base_graph.error(initial_values);
+
+        const double shape_sq = config.ddpr_gnc_shape * config.ddpr_gnc_shape;
+        double max_normalized_sq = 0.0;
+        for (std::size_t i = 0; i < residuals.size(); ++i) {
+            const double normalized = residuals[i] / ddpr_sigmas[i];
+            max_normalized_sq = std::max(max_normalized_sq,
+                                         normalized * normalized);
+        }
+        const double initial_mu = std::max(1.0, max_normalized_sq / shape_sq);
+        const int requested_stages = config.ddpr_gnc_counterfactual_max_stages;
+        const int stages = initial_mu <= 1.0 ? 1 : std::max(2, requested_stages);
+        gtsam::Values candidate_values = initial_values;
+        gtsam::NonlinearFactorGraph final_weighted_graph = base_graph;
+
+        for (int stage = 0; stage < stages; ++stage) {
+            if (!residualsAt(candidate_values, &residuals,
+                             &outcome.ddpr_rms_after_m)) {
+                return outcome;
+            }
+            const double progress = stages == 1
+                ? 1.0
+                : static_cast<double>(stage) / static_cast<double>(stages - 1);
+            const double mu = std::exp((1.0 - progress) * std::log(initial_mu));
+            const double scale = mu * shape_sq;
+            gtsam::NonlinearFactorGraph weighted_graph = base_graph;
+            for (std::size_t i = 0; i < ddpr_indices.size(); ++i) {
+                const double normalized = residuals[i] / ddpr_sigmas[i];
+                const double normalized_sq = normalized * normalized;
+                const double weight = std::max(
+                    config.ddpr_gnc_counterfactual_min_weight,
+                    scale / (scale + normalized_sq));
+                const auto noise_factor = std::dynamic_pointer_cast<
+                    gtsam::NoiseModelFactor>(base_graph[ddpr_indices[i]]);
+                if (!noise_factor) return outcome;
+                const auto weighted_noise = gtsam::noiseModel::Isotropic::Sigma(
+                    1, ddpr_sigmas[i] / std::sqrt(weight));
+                weighted_graph[ddpr_indices[i]] =
+                    noise_factor->cloneWithNewNoiseModel(weighted_noise);
+            }
+            gtsam::LevenbergMarquardtParams params;
+            params.setMaxIterations(
+                config.ddpr_gnc_counterfactual_iterations_per_stage);
+            params.setVerbosityLM("SILENT");
+            candidate_values = gtsam::LevenbergMarquardtOptimizer(
+                weighted_graph, candidate_values, params).optimize();
+            final_weighted_graph = std::move(weighted_graph);
+            ++outcome.stages;
+        }
+
+        if (!residualsAt(candidate_values, &residuals,
+                         &outcome.ddpr_rms_after_m)) {
+            return outcome;
+        }
+        outcome.base_cost_after = base_graph.error(candidate_values);
+        outcome.succeeded = std::isfinite(outcome.base_cost_before) &&
+            std::isfinite(outcome.base_cost_after) &&
+            std::isfinite(outcome.ddpr_rms_after_m);
+        if (outcome.succeeded && current_position_key &&
+            candidate_values.exists(*current_position_key)) {
+            outcome.optimized_pose =
+                candidate_values.at<Pose3>(*current_position_key);
+        }
+        if (outcome.succeeded && !current_ambiguity_keys.empty()) {
+            try {
+                gtsam::KeyVector lambda_keys;
+                for (const gtsam::Key key : current_ambiguity_keys) {
+                    if (candidate_values.exists(key)) lambda_keys.push_back(key);
+                }
+                const int n = static_cast<int>(lambda_keys.size());
+                if (n > 0) {
+                    const gtsam::Marginals marginals(final_weighted_graph,
+                                                     candidate_values);
+                    const gtsam::JointMarginal joint =
+                        marginals.jointMarginalCovariance(lambda_keys);
+                    Eigen::VectorXd float_ambiguities(n);
+                    Eigen::MatrixXd covariance(n, n);
+                    for (int row = 0; row < n; ++row) {
+                        float_ambiguities(row) =
+                            candidate_values.at<double>(lambda_keys[row]);
+                        for (int col = 0; col < n; ++col) {
+                            covariance(row, col) =
+                                joint(lambda_keys[row], lambda_keys[col])(0, 0);
+                        }
+                    }
+                    LambdaCandidateDiagnostics lambda;
+                    if (float_ambiguities.allFinite() && covariance.allFinite() &&
+                        lambdaSearchTopK(float_ambiguities, covariance, 2, lambda) &&
+                        lambda.squared_residuals.size() >= 2) {
+                        const double best = lambda.squared_residuals(0);
+                        const double second = lambda.squared_residuals(1);
+                        outcome.lambda_evaluated = std::isfinite(best) &&
+                            std::isfinite(second) && best > 0.0;
+                        outcome.lambda_ambiguities = n;
+                        outcome.lambda_ratio = outcome.lambda_evaluated
+                            ? second / best
+                            : 0.0;
+                        outcome.lambda_ratio_pass = outcome.lambda_evaluated &&
+                            n >= 6 && outcome.lambda_ratio >=
+                                config.lambda_ratio_threshold;
+                    }
+                }
+            } catch (const std::exception&) {
+                // Candidate positioning remains valid if its batch marginal
+                // is rank-deficient; the LAMBDA counterfactual simply has no
+                // verdict for this epoch.
+            }
+        }
+    } catch (const std::exception&) {
+        // Counterfactual diagnostics must fail closed and never affect the
+        // live incremental solution.
     }
     return outcome;
 }
@@ -1091,6 +1308,11 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
     std::vector<Vector3d> epoch_vel_nav(num_epochs, Vector3d::Zero());
     std::vector<bool> epoch_solved(num_epochs, false);
     std::vector<FGOProcessor::FGOEpochDiagnostics> epoch_diagnostics(num_epochs);
+    std::vector<std::map<SatelliteId, double>>
+        satellite_quarantine_postfit_residuals;
+    if (config.monitor_satellite_quarantine_witness) {
+        satellite_quarantine_postfit_residuals.resize(num_epochs);
+    }
     std::vector<std::set<std::size_t>> fde_rejected_ambiguities_by_epoch(
         num_epochs);
     std::map<std::size_t, double> amb_float_cycles;
@@ -1304,7 +1526,8 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
     const bool use_ambiguity_generation_overlay =
         config.use_cp_hold_recovery ||
         config.use_continuous_unfix_ambiguity_reset ||
-        config.use_fde;
+        config.use_fde ||
+        config.use_selective_arc_restart;
     std::map<std::size_t, int> amb_generation;
     std::map<std::pair<std::size_t, int>, std::size_t> amb_symbol_id;
     // Epoch at which each pinned symbol's hold prior was created (keyed by
@@ -1349,6 +1572,26 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
     int cp_hold_counter = 0;         ///< remaining epochs with carrier suppressed (reference _recov_cp_hold)
     int cp_hold_release_streak = 0;  ///< consecutive clean epochs while held (reference _recov_cp_release_streak)
     std::set<SatelliteId> selective_cp_hold_bad_sats;
+    // --- Active selective arc restart (use_selective_arc_restart) ---
+    // Ambiguity indices armed by the epoch-i causal Doppler/IMU/post-fit
+    // quarantine agreement and applied to epoch i+1's carrier factor build,
+    // mirroring the selective_cp_hold arm/apply one-epoch delay. Only the
+    // implicated PAIR's ambiguity index is armed (the DD differencing cannot
+    // identify which endpoint is faulty, so both endpoints' trace rows point
+    // at this same arc); arcs sharing an armed reference are NOT touched.
+    // Cleared every epoch.
+    std::set<std::size_t> selective_arc_restart_armed_ambiguities;
+    // Last epoch at which each ambiguity index's generation was bumped by this
+    // mechanism, for the selective_arc_restart_min_epochs_since_bump thrash
+    // guard (only the selective-arc-restart path writes here).
+    std::map<std::size_t, std::size_t> selective_arc_restart_last_bump_epoch;
+    // Causal DD pseudorange pair history for the active quarantine detector:
+    // (satellite, reference, signal) -> previous epoch's factor. Keyed by the
+    // same triple as analyzePredictedDdprQualityShadow so the Doppler/IMU
+    // innovations are computed over consecutive epochs of the SAME pair.
+    using ArcRestartPairKey = std::tuple<SatelliteId, SatelliteId, SignalType>;
+    std::map<ArcRestartPairKey, const FGOProcessor::DoubleDifferencePseudorangeFactor*>
+        selective_arc_restart_prev_pair;
     // Consecutive bad epochs (reference _ddpr_bad_count). Double-valued (not
     // int) so use_cp_hold_leaky_persist's fractional decay (e.g. 0.25/0.5)
     // never loses precision; every write in the default (non-leaky) path
@@ -2398,6 +2641,51 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 live_ambiguity_indices.erase(idx);
                 continue;
             }
+            // Active selective arc restart: if this DD carrier arc was armed
+            // at the previous epoch (the implicated pair's ambiguity index),
+            // restart ONLY that ambiguity generation (fresh symbol) here,
+            // preserving the DDPR factors and every clean carrier arc. The
+            // armed set was populated causally at epoch i-1 and is cleared
+            // every epoch.
+            if (config.use_selective_arc_restart &&
+                selective_arc_restart_armed_ambiguities.count(
+                    factor.ambiguity_index) > 0) {
+                const std::size_t idx = factor.ambiguity_index;
+                const auto lb = selective_arc_restart_last_bump_epoch.find(idx);
+                const bool thrash_ok =
+                    lb == selective_arc_restart_last_bump_epoch.end() ||
+                    (i - lb->second) >= static_cast<std::size_t>(
+                                           config.selective_arc_restart_min_epochs_since_bump);
+                const bool cap_ok =
+                    epoch_diagnostics[i].selective_arc_restart_applied_arcs <
+                    config.selective_arc_restart_max_arcs_per_epoch;
+                if (thrash_ok && cap_ok) {
+                    const std::size_t old_sid = ambSymbolId(idx);
+                    ++amb_generation[idx];
+                    selective_arc_restart_last_bump_epoch[idx] = i;
+                    pinned_ambiguities.erase(old_sid);
+                    ++result.diagnostics.ambiguity_generation_bumps;
+                    ++epoch_diagnostics[i].selective_arc_restart_applied_arcs;
+                    ++result.diagnostics.selective_arc_restart_applied_arcs;
+                    // Mark the corresponding detection-time trace rows applied
+                    // (target and reference roles for this ambiguity index).
+                    if (i > 0) {
+                        auto& prev_trace = epoch_diagnostics[i - 1].selective_arc_restart_trace;
+                        for (auto& row : prev_trace) {
+                            if (row.ambiguity_index == idx) row.applied = true;
+                        }
+                    }
+                    for (auto& row : result.selective_arc_restart_trace) {
+                        if (row.ambiguity_index == idx) row.applied = true;
+                    }
+                } else if (!thrash_ok) {
+                    ++epoch_diagnostics[i].selective_arc_restart_skipped_thrash;
+                    ++result.diagnostics.selective_arc_restart_skipped_thrash;
+                } else {
+                    ++epoch_diagnostics[i].selective_arc_restart_skipped_cap;
+                    ++result.diagnostics.selective_arc_restart_skipped_cap;
+                }
+            }
             const auto& ambiguity = problem.ambiguity_states[factor.ambiguity_index];
             const std::size_t sym_idx = ambSymbolId(factor.ambiguity_index);
             if (!dummy_created) {
@@ -2764,11 +3052,73 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
         Pose3 pose_i = smoother.calculateEstimate<Pose3>(positionKey(i));
         gtsam::Vector3 vel_i = smoother.calculateEstimate<gtsam::Vector3>(velocityKey(i));
 
+        // Run only after this epoch's final integrity decision. The helper
+        // optimizes copied Values and cloned DDPR factors, so this lambda can
+        // only populate diagnostics; it cannot alter iSAM2 or FIX/FLOAT.
+        auto runDdprGncCounterfactual = [&]() {
+            auto& diagnostic = epoch_diagnostics[i];
+            if (!config.monitor_ddpr_gnc_counterfactual || epoch_fixed[i] ||
+                diagnostic.ddpr_gnc_counterfactual_evaluated) {
+                return;
+            }
+            ++result.diagnostics.ddpr_gnc_counterfactual_attempts;
+            try {
+                const DdprGncCounterfactualOutcome counterfactual =
+                    evaluateDdprGncCounterfactual(
+                        smoother.getISAM2().getFactorsUnsafe(),
+                        smoother.calculateEstimate(), positionKey(i),
+                        [&]() {
+                            std::vector<gtsam::Key> keys;
+                            keys.reserve(epoch_amb_indices.size());
+                            for (const std::size_t index : epoch_amb_indices) {
+                                keys.push_back(ambiguityKey(ambSymbolId(index)));
+                            }
+                            return keys;
+                        }(),
+                        config);
+                diagnostic.ddpr_gnc_counterfactual_evaluated =
+                    counterfactual.evaluated;
+                diagnostic.ddpr_gnc_counterfactual_succeeded =
+                    counterfactual.succeeded;
+                diagnostic.ddpr_gnc_counterfactual_factor_count =
+                    counterfactual.factor_count;
+                diagnostic.ddpr_gnc_counterfactual_stages = counterfactual.stages;
+                diagnostic.ddpr_gnc_counterfactual_cost_before =
+                    counterfactual.base_cost_before;
+                diagnostic.ddpr_gnc_counterfactual_cost_after =
+                    counterfactual.base_cost_after;
+                diagnostic.ddpr_gnc_counterfactual_ddpr_rms_before_m =
+                    counterfactual.ddpr_rms_before_m;
+                diagnostic.ddpr_gnc_counterfactual_ddpr_rms_after_m =
+                    counterfactual.ddpr_rms_after_m;
+                diagnostic.ddpr_gnc_counterfactual_lambda_evaluated =
+                    counterfactual.lambda_evaluated;
+                diagnostic.ddpr_gnc_counterfactual_lambda_ambiguities =
+                    counterfactual.lambda_ambiguities;
+                diagnostic.ddpr_gnc_counterfactual_lambda_ratio =
+                    counterfactual.lambda_ratio;
+                diagnostic.ddpr_gnc_counterfactual_lambda_ratio_pass =
+                    counterfactual.lambda_ratio_pass;
+                if (counterfactual.succeeded && counterfactual.optimized_pose) {
+                    const Point3 candidate_ant =
+                        antennaOf(*counterfactual.optimized_pose);
+                    diagnostic.ddpr_gnc_counterfactual_position_ecef =
+                        Vector3d(candidate_ant);
+                    diagnostic.ddpr_gnc_counterfactual_float_separation_m =
+                        (Vector3d(candidate_ant) - epoch_float_position[i]).norm();
+                    ++result.diagnostics.ddpr_gnc_counterfactual_successes;
+                }
+            } catch (const std::exception&) {
+                // Shadow diagnostics are deliberately fail-closed.
+            }
+        };
+
         // Independent SD-Doppler velocity LS and DR propagation.  No FGO
         // state enters this estimator.  A single robust re-fit removes rows
         // beyond 4 sigma so one Doppler outlier cannot dominate the track.
         if (config.monitor_external_doppler_dr ||
-            config.use_external_doppler_dr_validation) {
+            config.use_external_doppler_dr_validation ||
+            config.monitor_candidate_integrity_witness) {
             std::vector<const FGOProcessor::SingleDifferenceDopplerFactor*> active_doppler =
                 doppler_by_epoch[i];
             Vector3d doppler_velocity = Vector3d::Zero();
@@ -2899,6 +3249,7 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
         double gdop = std::numeric_limits<double>::infinity();
         double ddpr_rms = 0.0;
         std::map<SatelliteId, double> per_sat_res;
+        std::vector<fgo_ddpr_gnc::Residual> gnc_residuals;
         // Per-(ref, target, signal) residual rows, only collected when the
         // sat-badness pair term is actually active (fgo.hpp deviation 5) --
         // feeds update_pair_quality below.
@@ -2948,6 +3299,9 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                     ((fp->rover_reference_position_ecef - ant).norm() -
                      (fp->base_reference_position_ecef - fp->base_position_ecef).norm());
                 const double res = std::abs(fp->observed_dd_pseudorange_m - geom);
+                if (config.monitor_ddpr_gnc) {
+                    gnc_residuals.push_back({res, fp->sigma_m});
+                }
                 res_sq_sum += res * res;
                 ++res_n;
                 double& worst = per_sat_res[fp->satellite];
@@ -2962,14 +3316,59 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
             ddpr_rms = res_n > 0 ? std::sqrt(res_sq_sum / static_cast<double>(res_n)) : 0.0;
         }
         epoch_diagnostics[i].ddpr_rms_m = ddpr_rms;
+        if (config.monitor_satellite_quarantine_witness) {
+            satellite_quarantine_postfit_residuals[i] = per_sat_res;
+        }
+        if (config.monitor_ddpr_gnc) {
+            fgo_ddpr_gnc::Config gnc_config;
+            gnc_config.shape = config.ddpr_gnc_shape;
+            gnc_config.graduation_divisor = config.ddpr_gnc_graduation_divisor;
+            gnc_config.max_stages = config.ddpr_gnc_max_stages;
+            gnc_config.downweighted_threshold =
+                config.ddpr_gnc_downweighted_threshold;
+            const auto gnc = fgo_ddpr_gnc::evaluate(gnc_residuals, gnc_config);
+            auto& diagnostics = epoch_diagnostics[i];
+            diagnostics.ddpr_gnc_evaluated = gnc.evaluated;
+            diagnostics.ddpr_gnc_factor_count =
+                static_cast<int>(gnc_residuals.size());
+            diagnostics.ddpr_gnc_stages = gnc.stages;
+            diagnostics.ddpr_gnc_initial_mu = gnc.initial_mu;
+            diagnostics.ddpr_gnc_final_mu = gnc.final_mu;
+            diagnostics.ddpr_gnc_min_weight = gnc.min_weight;
+            diagnostics.ddpr_gnc_mean_weight = gnc.mean_weight;
+            diagnostics.ddpr_gnc_effective_factor_count =
+                gnc.effective_factor_count;
+            diagnostics.ddpr_gnc_downweighted_factors =
+                static_cast<int>(gnc.downweighted_factors);
+            diagnostics.ddpr_gnc_weighted_rms_m = gnc.weighted_rms_m;
+            if (gnc.evaluated && gnc.weights.size() == pr_by_epoch[i].size()) {
+                diagnostics.ddpr_gnc_factor_trace.reserve(gnc.weights.size());
+                for (std::size_t row = 0; row < gnc.weights.size(); ++row) {
+                    const auto* factor = pr_by_epoch[i][row];
+                    FGOProcessor::DdprGncFactorTrace trace;
+                    trace.satellite = factor->satellite;
+                    trace.reference_satellite = factor->reference_satellite;
+                    trace.signal = factor->signal;
+                    trace.residual_m = gnc_residuals[row].residual_m;
+                    trace.sigma_m = gnc_residuals[row].sigma_m;
+                    trace.normalized_residual =
+                        trace.residual_m / trace.sigma_m;
+                    trace.weight = gnc.weights[row];
+                    diagnostics.ddpr_gnc_factor_trace.push_back(trace);
+                }
+            }
+            if (gnc.evaluated) {
+                ++result.diagnostics.ddpr_gnc_evaluated_epochs;
+                result.diagnostics.ddpr_gnc_factors += gnc_residuals.size();
+                result.diagnostics.ddpr_gnc_downweighted_factors +=
+                    gnc.downweighted_factors;
+            }
+        }
         epoch_diagnostics[i].gdop = gdop;
         epoch_diagnostics[i].num_satellites = nsat;
         bool validation_anchor_attempted = false;
         DdprAnchorResult validation_anchor;
-        const auto anchorValidationAgrees = [&](const Eigen::Vector3d& candidate) {
-            if (!config.use_ddpr_anchor_aided_validation || !config.use_ddpr_anchor) {
-                return false;
-            }
+        const auto ensureValidationAnchor = [&]() {
             if (!validation_anchor_attempted) {
                 validation_anchor_attempted = true;
                 ++result.diagnostics.ddpr_anchor_solves;
@@ -2980,10 +3379,15 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                     ++result.diagnostics.ddpr_anchor_successes;
                 }
             }
-            const bool trusted =
-                validation_anchor.ok &&
+            return validation_anchor.ok &&
                 validation_anchor.n_active >= config.ddpr_anchor_min_factors &&
                 validation_anchor.res_rms <= config.ddpr_anchor_max_residual_m;
+        };
+        const auto anchorValidationAgrees = [&](const Eigen::Vector3d& candidate) {
+            if (!config.use_ddpr_anchor_aided_validation || !config.use_ddpr_anchor) {
+                return false;
+            }
+            const bool trusted = ensureValidationAnchor();
             const bool agrees =
                 trusted &&
                 (candidate - Eigen::Vector3d(antennaOf(validation_anchor.pose))).norm() <=
@@ -4183,11 +4587,14 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                         double external_dr_separation_m = 0.0;
                         double external_dr_mahalanobis2 = 0.0;
                         if ((config.monitor_external_doppler_dr ||
-                             config.use_external_doppler_dr_validation) &&
+                             config.use_external_doppler_dr_validation ||
+                             config.monitor_candidate_integrity_witness) &&
                             external_dr_position_valid &&
                             has_provisional_fixed_ant &&
                             has_provisional_fixed_cov &&
                             (!config.monitor_external_doppler_dr ||
+                             external_dr_age_epochs > 0) &&
+                            (!config.monitor_candidate_integrity_witness ||
                              external_dr_age_epochs > 0) &&
                             external_dr_age_epochs <=
                                 config.external_doppler_dr_max_age_epochs) {
@@ -4232,6 +4639,50 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                                     }
                                 }
                             }
+                        }
+
+                        if (config.monitor_candidate_integrity_witness &&
+                            has_provisional_fixed_ant && std::isfinite(ratio) &&
+                            ratio > config.imu_aided_relaxed_ratio_threshold) {
+                            auto& witness = epoch_diagnostics[i];
+                            const bool anchor_available = ensureValidationAnchor();
+                            const double anchor_separation = anchor_available
+                                ? (provisional_fixed_ant - Eigen::Vector3d(
+                                      antennaOf(validation_anchor.pose))).norm()
+                                : 0.0;
+                            const bool anchor_pass = anchor_available &&
+                                anchor_separation <=
+                                    config.ddpr_anchor_validation_max_separation_m;
+                            const bool imu_pass =
+                                witness.fixed_imu_prediction_separation_m <=
+                                    config.imu_aided_max_prediction_separation_m;
+                            constexpr double kCandidateCarrierMaxRmsM = 0.05;
+                            const bool carrier_pass =
+                                witness.fixed_postfit_ddcp_factors >= 4 &&
+                                std::isfinite(witness.fixed_postfit_ddcp_rms_m) &&
+                                witness.fixed_postfit_ddcp_rms_m <=
+                                    kCandidateCarrierMaxRmsM;
+                            witness.candidate_integrity_anchor_available =
+                                anchor_available;
+                            witness.candidate_integrity_anchor_factors =
+                                validation_anchor.n_active;
+                            witness.candidate_integrity_anchor_rms_m =
+                                validation_anchor.res_rms;
+                            witness.candidate_integrity_anchor_separation_m =
+                                anchor_separation;
+                            witness.candidate_integrity_anchor_pass = anchor_pass;
+                            witness.candidate_integrity_imu_pass = imu_pass;
+                            witness.candidate_integrity_doppler_available =
+                                external_dr_available;
+                            witness.candidate_integrity_doppler_pass =
+                                external_dr_candidate_pass;
+                            witness.candidate_integrity_carrier_pass = carrier_pass;
+                            witness.candidate_integrity_witness_evaluated =
+                                anchor_available && external_dr_available;
+                            witness.candidate_integrity_composite_pass =
+                                witness.candidate_integrity_witness_evaluated &&
+                                anchor_pass && imu_pass &&
+                                external_dr_candidate_pass && carrier_pass;
                         }
 
                         // Integrity-aided aperture: the conventional
@@ -4638,7 +5089,8 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                             epoch_has_fixed[i] = true;
                         }
                         if ((config.monitor_external_doppler_dr ||
-                             config.use_external_doppler_dr_validation) &&
+                             config.use_external_doppler_dr_validation ||
+                             config.monitor_candidate_integrity_witness) &&
                             has_provisional_fixed_ant && has_provisional_fixed_cov &&
                             external_dr_velocity_valid &&
                             ratio >= config.external_doppler_dr_reset_min_ratio) {
@@ -5762,6 +6214,7 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 }
                 last_ddpr_rms = ddpr_rms;
                 last_ddpr_rms_epoch = static_cast<long long>(i);
+                runDdprGncCounterfactual();
                 continue;
             }
             if (ddpr_rms > config.cp_hold_main_residual_threshold_m) {
@@ -5978,6 +6431,250 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
             last_ddpr_rms = ddpr_rms;
             last_ddpr_rms_epoch = static_cast<long long>(i);
         }
+        runDdprGncCounterfactual();
+
+        // --- Active selective arc-restart detection (use_selective_arc_restart
+        // / monitor_selective_arc_restart_candidates). Runs LAST so the causal
+        // Doppler/IMU innovations use the final float solution and this epoch's
+        // post-fit attribution. Arms satellites for the NEXT epoch's carrier
+        // factor build (one-epoch delay, mirroring selective_cp_hold). ---
+        if (config.use_selective_arc_restart ||
+            config.monitor_selective_arc_restart_candidates) {
+            selective_arc_restart_armed_ambiguities.clear();
+            auto& diagnostics = epoch_diagnostics[i];
+            diagnostics.selective_arc_restart_armed = false;
+            diagnostics.selective_arc_restart_monitor_only =
+                !config.use_selective_arc_restart;
+
+            const auto finite_position = [](const Vector3d& p) {
+                return p.allFinite() && p.norm() > 0.0;
+            };
+            const auto dd_range = [](const FGOProcessor::DoubleDifferencePseudorangeFactor& f,
+                                     const Vector3d& rover_position_ecef) {
+                const double rover_target =
+                    (f.rover_satellite_position_ecef - rover_position_ecef).norm();
+                const double rover_reference =
+                    (f.rover_reference_position_ecef - rover_position_ecef).norm();
+                const double base_target =
+                    (f.base_satellite_position_ecef - f.base_position_ecef).norm();
+                const double base_reference =
+                    (f.base_reference_position_ecef - f.base_position_ecef).norm();
+                return (rover_target - base_target) -
+                       (rover_reference - base_reference);
+            };
+            const auto dd_doppler = [](const FGOProcessor::DoubleDifferencePseudorangeFactor& f,
+                                       double& value) {
+                const auto& rt = f.rover_satellite_model;
+                const auto& rr = f.rover_reference_model;
+                const auto& bt = f.base_satellite_model;
+                const auto& br = f.base_reference_model;
+                if (!rt.has_doppler_residual || !rr.has_doppler_residual ||
+                    !bt.has_doppler_residual || !br.has_doppler_residual) {
+                    return false;
+                }
+                value = (rt.doppler_residual_mps - bt.doppler_residual_mps) -
+                        (rr.doppler_residual_mps - br.doppler_residual_mps);
+                return std::isfinite(value);
+            };
+
+            const double threshold = std::max(
+                0.0, config.satellite_quarantine_normalized_threshold);
+            const double safe_doppler_sigma = std::max(
+                1e-6, config.single_difference_doppler_sigma_mps);
+            const double gross_floor = config.cp_hold_fast_worst_satellite_min_m;
+            const double median_ratio = config.cp_hold_multipath_median_ratio;
+            const bool skip_fixed =
+                epoch_fixed[i] && epoch_ratio[i] >= config.selective_arc_restart_skip_fixed_ratio;
+
+            // Post-fit gross attribution median over the epoch's satellites.
+            std::vector<double> ordered_res;
+            ordered_res.reserve(per_sat_res.size());
+            for (const auto& [sat, residual] : per_sat_res) {
+                (void)sat;
+                ordered_res.push_back(residual);
+            }
+            std::sort(ordered_res.begin(), ordered_res.end());
+            const double epoch_median = ordered_res.empty()
+                                            ? 0.0
+                                            : ordered_res[ordered_res.size() / 2];
+
+            if (!skip_fixed && i > 0) {
+                std::map<ArcRestartPairKey, double> measured_change;
+                std::map<ArcRestartPairKey, double> doppler_innovation_norm;
+                std::map<ArcRestartPairKey, double> imu_innovation_norm;
+                for (const auto* factor : pr_by_epoch[i]) {
+                    const ArcRestartPairKey key{factor->satellite,
+                                                factor->reference_satellite,
+                                                factor->signal};
+                    const auto prev = selective_arc_restart_prev_pair.find(key);
+                    if (prev == selective_arc_restart_prev_pair.end()) continue;
+                    const auto* p = prev->second;
+                    const bool consecutive =
+                        p->epoch_index + 1 == i &&
+                        (problem.epochs[i].time - problem.epochs[i - 1].time) > 0.0;
+                    if (!consecutive) continue;
+                    measured_change[key] =
+                        factor->observed_dd_pseudorange_m - p->observed_dd_pseudorange_m;
+
+                    double cur_dd_doppler = 0.0, prev_dd_doppler = 0.0;
+                    const bool has_cur = dd_doppler(*factor, cur_dd_doppler);
+                    const bool has_prev = dd_doppler(*p, prev_dd_doppler);
+                    if (has_cur && has_prev) {
+                        const double predicted = 0.5 * (prev_dd_doppler + cur_dd_doppler) *
+                                                 (problem.epochs[i].time - problem.epochs[i - 1].time);
+                        const double innovation = measured_change[key] - predicted;
+                        const double sigma = std::hypot(
+                            std::sqrt(2.0) *
+                                (problem.epochs[i].time - problem.epochs[i - 1].time) *
+                                safe_doppler_sigma,
+                            std::hypot(p->sigma_m, factor->sigma_m));
+                        doppler_innovation_norm[key] =
+                            sigma > 0.0 ? std::abs(innovation) / sigma : 0.0;
+                    }
+                    if (i - 1 < epoch_float_position.size() &&
+                        finite_position(epoch_float_position[i - 1]) &&
+                        finite_position(epoch_predicted_position[i])) {
+                        const double predicted =
+                            dd_range(*factor, epoch_predicted_position[i]) -
+                            dd_range(*p, epoch_float_position[i - 1]);
+                        const double innovation = measured_change[key] - predicted;
+                        const double sigma = std::hypot(p->sigma_m, factor->sigma_m);
+                        imu_innovation_norm[key] =
+                            sigma > 0.0 ? std::abs(innovation) / sigma : 0.0;
+                    }
+                }
+
+                for (const auto* factor : pr_by_epoch[i]) {
+                    const ArcRestartPairKey key{factor->satellite,
+                                                factor->reference_satellite,
+                                                factor->signal};
+                    const auto dp = doppler_innovation_norm.find(key);
+                    const auto im = imu_innovation_norm.find(key);
+                    const bool doppler_outlier =
+                        dp != doppler_innovation_norm.end() && dp->second > threshold;
+                    const bool imu_outlier =
+                        im != imu_innovation_norm.end() && im->second > threshold;
+                    const bool innovations_agree =
+                        config.selective_arc_restart_require_both_innovations
+                            ? doppler_outlier && imu_outlier
+                            : doppler_outlier || imu_outlier;
+                    if (!innovations_agree) continue;
+
+                    // A DD pair cannot identify which endpoint is faulty, so
+                    // the pair is attributed to BOTH its target and reference
+                    // satellite. Require BOTH endpoints' post-fit attribution
+                    // to be gross, matching the witness's per-satellite rule.
+                    bool all_endpoints_gross = true;
+                    for (const SatelliteId satellite :
+                         {factor->satellite, factor->reference_satellite}) {
+                        const auto rit = per_sat_res.find(satellite);
+                        if (rit == per_sat_res.end()) {
+                            all_endpoints_gross = false;
+                            continue;
+                        }
+                        const bool absolute_gross = rit->second > gross_floor;
+                        const bool relative_gross =
+                            epoch_median <= 1e-9 ||
+                            rit->second > median_ratio * epoch_median;
+                        if (!absolute_gross || !relative_gross) {
+                            all_endpoints_gross = false;
+                        }
+                    }
+                    if (!all_endpoints_gross) continue;
+
+                    // A candidate pair is identified (Doppler + IMU + both
+                    // endpoints gross). Record it even when no live carrier arc
+                    // exists to restart -- that is a legitimate "detected but
+                    // not armable" outcome, not silence.
+                    ++diagnostics.selective_arc_restart_candidate_satellites;
+                    ++result.diagnostics.selective_arc_restart_candidate_satellites;
+                    std::size_t first_armed = std::numeric_limits<std::size_t>::max();
+                    for (const SatelliteId satellite :
+                         {factor->satellite, factor->reference_satellite}) {
+                        const auto rit = per_sat_res.find(satellite);
+                        for (const auto* cf : cp_by_epoch[i]) {
+                            if (cf->satellite == satellite ||
+                                cf->reference_satellite == satellite) {
+                                first_armed =
+                                    std::min(first_armed, cf->ambiguity_index);
+                            }
+                        }
+                        FGOProcessor::SelectiveArcRestartTrace trace;
+                        trace.detection_epoch = i;
+                        trace.satellite = satellite;
+                        trace.is_reference =
+                            satellite == factor->reference_satellite;
+                        trace.ambiguity_index = first_armed;
+                        trace.detected = true;
+                        trace.postfit_residual_m =
+                            rit != per_sat_res.end() ? rit->second : 0.0;
+                        trace.epoch_median_postfit_residual_m = epoch_median;
+                        trace.normalized_doppler_innovation =
+                            dp != doppler_innovation_norm.end() ? dp->second : 0.0;
+                        trace.normalized_imu_innovation =
+                            im != imu_innovation_norm.end() ? im->second : 0.0;
+                        diagnostics.selective_arc_restart_trace.push_back(trace);
+                        result.selective_arc_restart_trace.push_back(trace);
+                    }
+
+                    // Arm the ambiguity indices of every live DD carrier arc
+                    // that touches a candidate endpoint (as target or
+                    // reference). The PR pair itself may reference a
+                    // satellite that has no carrier arc in the graph this
+                    // epoch, so the armed set is the union over the carrier
+                    // factors actually present -- exactly the arcs a restart
+                    // could affect. If no carrier arc exists, the pair is
+                    // reported but nothing is armed (nothing to restart).
+                    bool armed_any = false;
+                    for (const SatelliteId satellite :
+                         {factor->satellite, factor->reference_satellite}) {
+                        for (const auto* cf : cp_by_epoch[i]) {
+                            if (cf->satellite == satellite ||
+                                cf->reference_satellite == satellite) {
+                                if (selective_arc_restart_armed_ambiguities.insert(
+                                        cf->ambiguity_index).second) {
+                                    ++diagnostics.selective_arc_restart_candidate_pairs;
+                                    ++result.diagnostics
+                                          .selective_arc_restart_candidate_pairs;
+                                }
+                                armed_any = true;
+                            }
+                        }
+                    }
+                    if (!armed_any) {
+                        ++result.diagnostics
+                              .selective_arc_restart_skipped_no_arc;
+                    }
+                }
+            }
+            if (!skip_fixed &&
+                diagnostics.selective_arc_restart_candidate_satellites > 0) {
+                diagnostics.selective_arc_restart_armed = true;
+                ++result.diagnostics.selective_arc_restart_detection_epochs;
+            } else if (skip_fixed) {
+                ++result.diagnostics.selective_arc_restart_skipped_fixed;
+                diagnostics.selective_arc_restart_skipped_fixed = 1;
+            }
+
+            // Maintain the causal pair history for the NEXT epoch.
+            std::map<ArcRestartPairKey, const FGOProcessor::DoubleDifferencePseudorangeFactor*>
+                next_prev_pair;
+            for (const auto* factor : pr_by_epoch[i]) {
+                next_prev_pair[{factor->satellite, factor->reference_satellite,
+                                factor->signal}] = factor;
+            }
+            selective_arc_restart_prev_pair = std::move(next_prev_pair);
+        }
+    }
+    // Later warm resets can retroactively refresh positions still inside the
+    // lag window. Recompute candidate separation against the final reported
+    // FLOAT trajectory so the exported metric matches the solution CSV.
+    for (std::size_t i = 0; i < num_epochs; ++i) {
+        auto& diagnostic = epoch_diagnostics[i];
+        if (!diagnostic.ddpr_gnc_counterfactual_succeeded) continue;
+        diagnostic.ddpr_gnc_counterfactual_float_separation_m =
+            (diagnostic.ddpr_gnc_counterfactual_position_ecef -
+             Vector3d(epoch_float_position[i])).norm();
     }
     result.diagnostics.partial_lambda_ambiguity_fix_used = held_epoch_count > 0;
     result.diagnostics.ambiguity_hold_epochs = held_epoch_count;
@@ -5988,6 +6685,14 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
     result.diagnostics.iterations = static_cast<int>(result.diagnostics.smoother_updates);
     result.diagnostics.imu_intervals = num_epochs > 0 ? num_epochs - 1 : 0;
     result.diagnostics.lambda_ambiguity_ratio = best_ratio;
+    for (const auto& diagnostic : epoch_diagnostics) {
+        if (diagnostic.candidate_integrity_witness_evaluated) {
+            ++result.diagnostics.candidate_integrity_witness_evaluated;
+        }
+        if (diagnostic.candidate_integrity_composite_pass) {
+            ++result.diagnostics.candidate_integrity_witness_passes;
+        }
+    }
     {
         double weighted_sum_sq = 0.0;
         std::size_t count = 0;
@@ -6062,11 +6767,91 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                 &fde_rejected_ambiguities_by_epoch);
     }
     if (config.monitor_predicted_ddpr_quality ||
-        config.monitor_predicted_ddpr_bias_state) {
+        config.monitor_predicted_ddpr_bias_state ||
+        config.monitor_satellite_quarantine_witness) {
+        const double quality_threshold =
+            config.monitor_satellite_quarantine_witness
+                ? config.satellite_quarantine_normalized_threshold
+                : 5.0;
         auto quality_rows = FGOProcessor::analyzePredictedDdprQualityShadow(
             problem, epoch_float_position, epoch_predicted_position,
-            config.single_difference_doppler_sigma_mps, 5.0,
+            config.single_difference_doppler_sigma_mps, quality_threshold,
             config.max_tdcp_gap_s);
+        if (config.monitor_satellite_quarantine_witness) {
+            struct TemporalEvidence {
+                bool doppler_evaluated = false;
+                bool doppler_outlier = false;
+                bool imu_evaluated = false;
+                bool imu_outlier = false;
+                int support_pairs = 0;
+            };
+            std::vector<std::map<SatelliteId, TemporalEvidence>> evidence(
+                num_epochs);
+            for (const auto& row : quality_rows) {
+                if (row.current_epoch_index >= num_epochs) continue;
+                const bool doppler_outlier = row.doppler_evaluated &&
+                    row.normalized_doppler_innovation > quality_threshold;
+                const bool imu_outlier = row.imu_geometry_evaluated &&
+                    row.normalized_imu_innovation > quality_threshold;
+                for (const SatelliteId satellite :
+                     {row.satellite, row.reference_satellite}) {
+                    auto& item = evidence[row.current_epoch_index][satellite];
+                    item.doppler_evaluated |= row.doppler_evaluated;
+                    item.doppler_outlier |= doppler_outlier;
+                    item.imu_evaluated |= row.imu_geometry_evaluated;
+                    item.imu_outlier |= imu_outlier;
+                    if (doppler_outlier && imu_outlier) {
+                        ++item.support_pairs;
+                    }
+                }
+            }
+            for (std::size_t epoch_index = 0; epoch_index < num_epochs;
+                 ++epoch_index) {
+                const auto& residuals =
+                    satellite_quarantine_postfit_residuals[epoch_index];
+                if (residuals.empty()) continue;
+                std::vector<double> ordered;
+                ordered.reserve(residuals.size());
+                for (const auto& [satellite, residual] : residuals) {
+                    (void)satellite;
+                    ordered.push_back(residual);
+                }
+                std::sort(ordered.begin(), ordered.end());
+                const double median = ordered[ordered.size() / 2];
+                for (const auto& [satellite, residual] : residuals) {
+                    FGOProcessor::SatelliteQuarantineWitnessDiagnostics row;
+                    row.epoch_index = epoch_index;
+                    row.satellite = satellite;
+                    row.postfit_ddpr_residual_m = residual;
+                    row.epoch_median_postfit_ddpr_residual_m = median;
+                    row.postfit_gross =
+                        residual > config.cp_hold_fast_worst_satellite_min_m &&
+                        (median <= 1e-9 ||
+                         residual >
+                             config.cp_hold_multipath_median_ratio * median);
+                    const auto temporal = evidence[epoch_index].find(satellite);
+                    if (temporal != evidence[epoch_index].end()) {
+                        row.doppler_evaluated =
+                            temporal->second.doppler_evaluated;
+                        row.doppler_outlier =
+                            temporal->second.doppler_outlier;
+                        row.imu_evaluated = temporal->second.imu_evaluated;
+                        row.imu_outlier = temporal->second.imu_outlier;
+                        row.temporal_support_pairs =
+                            temporal->second.support_pairs;
+                    }
+                    row.quarantine_candidate =
+                        row.postfit_gross && row.temporal_support_pairs > 0;
+                    ++result.diagnostics
+                          .satellite_quarantine_witness_satellites;
+                    if (row.quarantine_candidate) {
+                        ++result.diagnostics
+                              .satellite_quarantine_candidates;
+                    }
+                    result.satellite_quarantine_witnesses.push_back(row);
+                }
+            }
+        }
         if (config.monitor_predicted_ddpr_bias_state) {
             result.predicted_ddpr_bias_state_factors =
                 FGOProcessor::analyzePredictedDdprBiasStateShadow(
