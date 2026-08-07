@@ -4383,13 +4383,16 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
                 const double sat_phase_model_variance = sat_phase_variance;
                 const double sat_code_model_variance = sat_code_variance;
                 if (adaptive_noise_active) {
-                    const auto adaptive_config = adaptiveNoiseConfig();
+                    const auto adaptive_config =
+                        adaptiveNoiseConfig(sd.satellite);
                     sat_phase_variance = adaptive_noise_tracker_.adaptedVariance(
                         adaptive_key, rtk_measurement::MeasurementKind::PHASE,
                         sat_phase_model_variance, adaptive_config);
-                    sat_code_variance = adaptive_noise_tracker_.adaptedVariance(
-                        adaptive_key, rtk_measurement::MeasurementKind::CODE,
-                        sat_code_model_variance, adaptive_config);
+                    if (!rtk_config_.adaptive_noise_phase_only) {
+                        sat_code_variance = adaptive_noise_tracker_.adaptedVariance(
+                            adaptive_key, rtk_measurement::MeasurementKind::CODE,
+                            sat_code_model_variance, adaptive_config);
+                    }
                 }
                 const int sat_iono_idx = estimate_iono ? II(sat) : -1;
                 const double sat_iono_scale =
@@ -4508,7 +4511,7 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
                     if (adaptive_noise_active) {
                         sat_doppler_variance = adaptive_noise_tracker_.adaptedVariance(
                             adaptive_key, rtk_measurement::MeasurementKind::DOPPLER,
-                            sat_doppler_model_variance, adaptiveNoiseConfig());
+                            sat_doppler_model_variance, adaptiveNoiseConfig(sd.satellite));
                     }
                     doppler_row.satellite_variance = sat_doppler_variance;
                     doppler_row.adaptive_key = adaptive_key;
@@ -4598,7 +4601,6 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
                     result.row_innovations.size()) {
                 return;
             }
-            const auto adaptive_config = adaptiveNoiseConfig();
             const double tow = current_epoch_time_.tow;
             int row_index = 0;
             for (const auto& block : update_blocks) {
@@ -4607,15 +4609,29 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
                     const bool suppressed =
                         update_system.design_matrix.row(row_index).isZero(0.0);
                     if (row.adaptive_key >= 0 && !suppressed) {
-                        adaptive_noise_tracker_.update(
-                            row.adaptive_key,
-                            block.kind,
-                            result.row_innovations(row_index),
-                            result.row_hph_diagonal(row_index),
-                            row.reference_variance,
-                            row.adaptive_model_variance,
-                            tow,
-                            adaptive_config);
+                        // phase-only mode never learns code rows: the code
+                        // variance stays at its model value, so feeding it
+                        // would build stale code memory that a later
+                        // phase-only epoch cannot use. The innovation index
+                        // still advances for every row regardless.
+                        const bool code_row =
+                            block.kind == rtk_measurement::MeasurementKind::CODE;
+                        if (!(rtk_config_.adaptive_noise_phase_only && code_row)) {
+                            // adaptive_key = freq*MAXSAT + satelliteSlot(sat);
+                            // recover the satellite so per-system alpha
+                            // applies during the update too.
+                            const SatelliteId row_satellite =
+                                satelliteFromSlot(row.adaptive_key % MAXSAT);
+                            adaptive_noise_tracker_.update(
+                                row.adaptive_key,
+                                block.kind,
+                                result.row_innovations(row_index),
+                                result.row_hph_diagonal(row_index),
+                                row.reference_variance,
+                                row.adaptive_model_variance,
+                                tow,
+                                adaptiveNoiseConfig(row_satellite));
+                        }
                     }
                     ++row_index;
                 }

@@ -133,6 +133,32 @@ public:
         double adaptive_noise_min_variance_scale = 0.25;
         double adaptive_noise_max_variance_scale = 25.0;
         double adaptive_noise_reset_gap_s = 5.0;    // outage prune horizon
+        /// navi.776 A follow-up: adapt the carrier variance only and leave
+        /// the code variance at its model value. Code residuals on urban
+        /// multipath are far noisier than carrier, so adapting them can pull
+        /// R toward the code noise floor and erode the carrier-dominant DD
+        /// weight; phase-only keeps the carrier term adapted while the code
+        /// stays on varerr*SNR*NLOS. Off by default; bit-identical when off.
+        bool adaptive_noise_phase_only = false;
+        /// navi.776 A follow-up: use per-system smoothing constants. The
+        /// paper's shared alpha is tuned on a GPS-heavy city dataset; BDS/GAL
+        /// arcs have different code/phase noise and multipath spectra, so a
+        /// single alpha can under- or over-smooth them. When enabled, the
+        /// effective phase/code alpha for a satellite is the per-system value
+        /// for its GNSSSystem (falling back to the shared defaults for any
+        /// system without an explicit entry). Off by default; bit-identical
+        /// when off.
+        bool adaptive_noise_per_system_alpha = false;
+        double adaptive_noise_alpha_phase_gps = 0.9;
+        double adaptive_noise_alpha_phase_galileo = 0.85;
+        double adaptive_noise_alpha_phase_bds = 0.8;
+        double adaptive_noise_alpha_phase_qzss = 0.9;
+        double adaptive_noise_alpha_phase_glonass = 0.85;
+        double adaptive_noise_alpha_code_gps = 0.5;
+        double adaptive_noise_alpha_code_galileo = 0.45;
+        double adaptive_noise_alpha_code_bds = 0.4;
+        double adaptive_noise_alpha_code_qzss = 0.5;
+        double adaptive_noise_alpha_code_glonass = 0.45;
         /// Baseline-length gate: adaptation active only while the float
         /// baseline is at or below this many meters (0 = no gate). Gate A
         /// showed the innovation stream on a 9.4 km baseline carries real
@@ -1625,6 +1651,31 @@ private:
         return systemSlotBase(sat.system) + (prn - 1);
     }
 
+    /// Inverse of satelliteSlot(): recover the satellite for a slot index
+    /// (0..MAXSAT-1). Used to re-derive the per-system adaptive-noise config
+    /// from a row's adaptive_key during the update pass.
+    static SatelliteId satelliteFromSlot(int slot) {
+        if (slot < 0) slot = 0;
+        if (slot >= MAXSAT) slot = MAXSAT - 1;
+        if (slot < SATS_PER_SYSTEM) {
+            return SatelliteId(GNSSSystem::GPS, static_cast<uint8_t>(slot + 1));
+        }
+        if (slot < 2 * SATS_PER_SYSTEM) {
+            return SatelliteId(GNSSSystem::GLONASS,
+                               static_cast<uint8_t>(slot - SATS_PER_SYSTEM + 1));
+        }
+        if (slot < 3 * SATS_PER_SYSTEM) {
+            return SatelliteId(GNSSSystem::Galileo,
+                               static_cast<uint8_t>(slot - 2 * SATS_PER_SYSTEM + 1));
+        }
+        if (slot < 4 * SATS_PER_SYSTEM) {
+            return SatelliteId(GNSSSystem::BeiDou,
+                               static_cast<uint8_t>(slot - 3 * SATS_PER_SYSTEM + 1));
+        }
+        return SatelliteId(GNSSSystem::QZSS,
+                           static_cast<uint8_t>(slot - 4 * SATS_PER_SYSTEM + 1));
+    }
+
     static int IL(int freq) {
         return BASE_STATES + freq;
     }
@@ -1883,6 +1934,41 @@ private:
         config.min_variance_scale = rtk_config_.adaptive_noise_min_variance_scale;
         config.max_variance_scale = rtk_config_.adaptive_noise_max_variance_scale;
         config.reset_gap_s = rtk_config_.adaptive_noise_reset_gap_s;
+        return config;
+    }
+    /// Per-system alpha variant: same clamps, but the phase/code smoothing
+    /// constants come from the satellite's GNSSSystem when
+    /// adaptive_noise_per_system_alpha is on. Falls back to the shared
+    /// defaults for any system without an explicit entry (and when the knob
+    /// is off, which keeps this bit-identical to the default).
+    rtk_adaptive_noise::AdaptiveNoiseConfig adaptiveNoiseConfig(
+        const SatelliteId& satellite) const {
+        rtk_adaptive_noise::AdaptiveNoiseConfig config = adaptiveNoiseConfig();
+        if (!rtk_config_.adaptive_noise_per_system_alpha) return config;
+        switch (satellite.system) {
+            case GNSSSystem::GPS:
+                config.alpha_phase = rtk_config_.adaptive_noise_alpha_phase_gps;
+                config.alpha_code = rtk_config_.adaptive_noise_alpha_code_gps;
+                break;
+            case GNSSSystem::Galileo:
+                config.alpha_phase = rtk_config_.adaptive_noise_alpha_phase_galileo;
+                config.alpha_code = rtk_config_.adaptive_noise_alpha_code_galileo;
+                break;
+            case GNSSSystem::BeiDou:
+                config.alpha_phase = rtk_config_.adaptive_noise_alpha_phase_bds;
+                config.alpha_code = rtk_config_.adaptive_noise_alpha_code_bds;
+                break;
+            case GNSSSystem::QZSS:
+                config.alpha_phase = rtk_config_.adaptive_noise_alpha_phase_qzss;
+                config.alpha_code = rtk_config_.adaptive_noise_alpha_code_qzss;
+                break;
+            case GNSSSystem::GLONASS:
+                config.alpha_phase = rtk_config_.adaptive_noise_alpha_phase_glonass;
+                config.alpha_code = rtk_config_.adaptive_noise_alpha_code_glonass;
+                break;
+            default:
+                break;
+        }
         return config;
     }
 
