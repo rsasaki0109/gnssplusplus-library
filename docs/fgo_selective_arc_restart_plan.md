@@ -227,3 +227,38 @@ the quality of the surviving LAMBDA candidates (e.g. better float-ambiguity
 conditioning or a different integer candidate), which is a distinct problem
 from the quarantine/arc-restart thread and is out of scope for this plan.
 
+## Structural root cause: `surplus_rescue_quality_pass` nsat floor
+
+A per-epoch probe of the min_candidates=3 replay isolates the exact gate that
+rejects the well-observed low-count FLOATs:
+
+| slice epoch | nsat | ddpr_rms | DDCP post-fit RMS | LAMBDA ratio | FFRT pass | outcome |
+|---|---:|---:|---:|---:|---:|---|
+| 335 | 6 | 1.130 m | 0.007 m | 8.85e6 | 1 | LowCountRejected |
+| 336 | 6 | 1.155 m | 0.009 m | 8.94e6 | 1 | LowCountRejected |
+| 337 | 5 | 1.176 m | 0.008 m | 6.01e5 | 1 | LowCountRejected |
+| 338 | 5 | 1.177 m | 0.008 m | 6.17e5 | 1 | LowCountRejected |
+
+These epochs have a correct, unambiguous LAMBDA candidate (ratio in the
+millions, FFRT pass) and a clean carrier post-fit (DDCP ~8 mm) -- there is no
+evidence of a wrong integer. They are still rejected because `low_count_pass`
+requires `surplus_rescue_quality_pass`, whose `nsat >= 10` floor
+(`kSurplusRescueMinSatellites`) cannot be met by a low-count epoch by
+construction (5--6 satellites observed, 3--5 eligible arcs).
+
+This is a structural contradiction between the low-count rescue's purpose
+(fewer-than-floor candidates) and its mandatory surplus quality gate
+(10-satellite minimum). The gate exists to block sparse-geometry wrong-but-
+internally-consistent fixes, so it is not obviously wrong; but it means
+`use_low_count_ambiguity_resolution` can only ever accept epochs that were
+never actually below-floor. Disabling surplus validation entirely and
+dropping `--surplus-validation-min-n` to 1 changed nothing (FIX stayed 333),
+confirming that the rejection is the `nsat >= 10` + DDCP/fallback quality
+floor, not the surplus count itself.
+
+A future experiment could evaluate a low-count rescue whose quality gate
+scales with the observed geometry (e.g. an nsat-relative or ratio-aperture
+substitute), but that is a threshold change to a wrong-FIX safety net and
+must follow a fresh run1-only plan with a wrong-FIX gate -- it is out of
+scope for the quarantine/arc-restart thread documented here.
+
