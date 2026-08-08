@@ -19,8 +19,12 @@ per-system alpha" listed as not pursued).
   phase-only tracking OFF (0.0507 m, confirming the code term is the main
   driver), and per-system marginally best (0.0469 m). The design-slice
   window is FLOAT-dominated and not an adaptive-R evaluation window.
-- Open (future): full run1 A/B for fix-rate impact; no preset promotion
-  without a fresh run1-only plan and the usual 3-city bars.
+- Full run1 A/B (2026-08-08): fix 9085->9130 (+45) but <50cm 8644->8583
+  (-61). adaptive-on adds 100 correct FIX and drops 55 correct FIX to FLOAT
+  (status 4->3 at ~same position). Fix-count up but fix continuity and
+  <50cm down, so **no default preset promotion** on this evidence.
+- Open (future): full 3-city A/B and the usual bars if activation is ever
+  desired; no preset promotion without a fresh run1-only plan.
 
 ## 2. Low-count AR surplus-quality relaxation — DESIGN-SLICE PASSED
 

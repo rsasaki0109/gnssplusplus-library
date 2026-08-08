@@ -67,3 +67,31 @@ data:
 The design slice is the wrong window to judge adaptive-R; a full run1 A/B
 would be needed to score fix-rate impact, and is left as future work
 (sealed run2/run3 untouched).
+
+## Full run1 A/B (Tokyo run1, 11845 scored epochs)
+
+Four full-run configurations scored against `reference.csv` ECEF:
+
+| Config | fix | rmsH | maxH | <50cm |
+|---|---:|---:|---:|---:|
+| OFF | 9085 | 16.09 m | 215.5 m | 8644 |
+| adaptive-on | 9130 | 16.09 m | 215.5 m | 8583 |
+| phase-only | 9127 | 16.09 m | 215.5 m | 8582 |
+| per-system | 9134 | 16.09 m | 215.5 m | 8583 |
+
+Fix rate improves (9085 -> 9130-9134, +45-49) and rmsH/maxH are unchanged,
+but the <50 cm count falls (8644 -> 8582-8583, -61). Epoch-by-epoch for
+adaptive-on: 100 FLOAT->FIXED (all < 0.5 m) and 55 FIXED->FLOAT (all were
+< 0.5 m; their ON position is within ~0.1 m of the OFF fix). So the net +45
+FIX is real, but adaptive-R also drops 55 correct FIX to FLOAT (status 4 ->
+3 at nearly the same position), which is why the <50 cm tally shrinks.
+
+Interpretation: adaptive-R raises the fix count but at the cost of fix
+continuity -- epochs whose adapted variance lowers the LAMBDA ratio lose
+their FIXED label while their position is essentially unchanged. For a
+competition metric that rewards <50 cm epochs, the -61 <50 cm is a
+regression, so **adaptive-R is not promoted to a default preset** on this
+evidence. phase-only tracks adaptive-on closely (9127 FIX) and per-system is
+marginally best (9134), consistent with the first-500 result. The knobs
+remain default-OFF; full 3-city A/B and the usual bars would be needed
+before any activation, and sealed run2/run3 are untouched.
