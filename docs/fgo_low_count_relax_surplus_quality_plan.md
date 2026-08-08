@@ -56,6 +56,36 @@ attempts (48 in the slice), not the relaxation itself. The formal
 activation bar for the combined low-count path (wall <= +10%) is not met on
 this slice, so the pair is reported but not made a default preset.
 
+## Full run1 result: falsified
+
+The frozen full Tokyo run1 (11905 epochs) A/B with the same profile OFF vs
+`--low-count-ar --low-count-min 3 --low-count-relax-surplus-quality`:
+
+| Metric | OFF | ON |
+|---|---:|---:|
+| FIX | 6409 | 6423 |
+| FLOAT | 5496 | 5482 |
+| fix-rate | 53.83% | 53.95% |
+| FIXED RMS | 1.18061 m | 1.17963 m |
+| wrong FIX > 0.5 m 3-D | 971 | **976 (+5)** |
+| wall | 2002 s | 1898 s |
+
+The low-count path ran 799 attempts and accepted 34, adding 14 FIXED epochs.
+Of those 14, 9 are within 0.5 m and 5 exceed it; the ON run adds **5 wrong
+FIX** relative to OFF (e.g. slice-epoch 3006: `low_count_used=1`, horizontal
+error 1.22 m, nsat 12 -- admitted because the relaxation exempts
+`nsat>=10`/`ddcp>=4`). Two non-low-count epochs (8336, 8753/8754) also move
+FLOAT->FIXED above 0.9 m via the cascaded graph effect.
+
+This **fails the zero-additional-wrong-FIX activation gate**. The design
+slice (5000--5499, epochs 335--336) was a favorable window; on the full run
+the `nsat>=10` / `ddcp>=4` floors are doing real wrong-FIX-prevention work
+that the relaxation removes. The knob is therefore **not activated** and no
+sealed run2/run3 holdout is spent. A future safe version would need the
+relaxation to also require an independent witness (e.g. the DDPR-LS anchor or
+a Doppler-DR pass) that the design-slice epochs happened to have but the
+full-run wrong fixes do not.
+
 ## Gate 0
 
 - default-off bit-identical (all 915 tests green; when the knob is off the
