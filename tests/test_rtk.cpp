@@ -30,7 +30,7 @@ TEST(RTKConfigDefaultsTest, LowCountRescueIsDisabled) {
 
 // ============================================================================
 // Helper: RTKLIB reference solution (lat/lon in degrees, height in meters)
-// Parsed from output/rtklib_rtk_result.pos
+// Parsed from the bundled RTKLIB reference fixture.
 // ============================================================================
 struct RTKLIBEpoch {
     int week;
@@ -114,7 +114,7 @@ static std::vector<RTKLIBEpoch> parseRTKLIBPos(const std::string& filename) {
 class RTKRealDataTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        if (!sourcePathExists("output/rtklib_rtk_result.pos") ||
+        if (!sourcePathExists("test_data/rtk/rtklib_rtk_result.pos") ||
             !sourcePathExists("data/rover.obs") ||
             !sourcePathExists("data/base.obs") ||
             !sourcePathExists("data/navigation.nav")) {
@@ -122,7 +122,8 @@ protected:
         }
 
         // Load RTKLIB reference
-        rtklib_epochs_ = parseRTKLIBPos(sourcePath("output/rtklib_rtk_result.pos"));
+        rtklib_epochs_ = parseRTKLIBPos(
+            sourcePath("test_data/rtk/rtklib_rtk_result.pos"));
         ASSERT_GT(rtklib_epochs_.size(), 0u) << "Failed to load RTKLIB reference";
 
         // Build ECEF reference positions indexed by TOW

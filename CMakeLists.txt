@@ -128,38 +128,9 @@ set(GNSS_SOURCES
     src/iers/sub_daily_eop.cpp
 )
 
-# List source files for the no-optimization library
-set(GNSS_SOURCES_NO_OPTIMIZATION
-    src/algorithms/rtk_ar_selection.cpp
-    src/algorithms/rtk_ar_evaluation.cpp
-    src/algorithms/nlos_weights.cpp
-    src/algorithms/float_trust_policy.cpp
-    src/algorithms/rtk_adaptive_noise.cpp
-    src/algorithms/rtk_measurement.cpp
-    src/algorithms/rtk_selection.cpp
-    src/algorithms/rtk_cmc_reference.cpp
-    src/algorithms/rtk_cp_pr_gate.cpp
-    src/algorithms/rtk_ddpr_anchor.cpp
-    src/algorithms/rtk_update.cpp
-    src/algorithms/rtk_ins_time_update.cpp
-    src/algorithms/rtk_tdcp_diagnostics.cpp
-    src/algorithms/rtk_validation.cpp
-    src/algorithms/integrity_consensus.cpp
-    src/algorithms/fgo_ddpr_gnc.cpp
-    src/algorithms/fgo.cpp
-    src/algorithms/ppp_env_overrides.cpp
-    src/algorithms/rtk.cpp
-    src/algorithms/spp.cpp
-    src/algorithms/spp_velocity.cpp
-    src/algorithms/lambda.cpp
-    src/core/navigation.cpp
-    src/core/observation.cpp
-)
-
-# Production RTK applications must not inherit the historical -O0 workaround
-# used by the monolithic FGO/test support archive.  Keep FGO in
-# gnss_lib_noopt, while compiling the online RTK/SPP/LAMBDA path as its own
-# optimized archive so the documented per-epoch runtime budget is meaningful.
+# RTK/SPP/LAMBDA sources are shared by the no-optimization support archive and
+# the optimized runtime archive. Keep this list canonical so the two targets
+# cannot silently drift apart when a solver source is added or removed.
 set(GNSS_RTK_RUNTIME_SOURCES
     src/algorithms/rtk_ar_selection.cpp
     src/algorithms/rtk_ar_evaluation.cpp
@@ -184,6 +155,19 @@ set(GNSS_RTK_RUNTIME_SOURCES
     src/core/observation.cpp
 )
 
+# List source files for the no-optimization library. The FGO-only sources stay
+# here because tests and the FGO applications intentionally use this archive.
+set(GNSS_SOURCES_NO_OPTIMIZATION
+    ${GNSS_RTK_RUNTIME_SOURCES}
+    src/algorithms/fgo_ddpr_gnc.cpp
+    src/algorithms/fgo.cpp
+    src/algorithms/ppp_env_overrides.cpp
+)
+
+# Production RTK applications must not inherit the historical -O0 workaround
+# used by the monolithic FGO/test support archive.  Keep FGO in
+# gnss_lib_noopt, while compiling the online RTK/SPP/LAMBDA path as its own
+# optimized archive so the documented per-epoch runtime budget is meaningful.
 # Create the main library
 add_library(gnss_lib STATIC ${GNSS_SOURCES})
 target_include_directories(gnss_lib PUBLIC
