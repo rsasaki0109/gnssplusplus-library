@@ -56,7 +56,7 @@ attempts (48 in the slice), not the relaxation itself. The formal
 activation bar for the combined low-count path (wall <= +10%) is not met on
 this slice, so the pair is reported but not made a default preset.
 
-## Full run1 result: falsified
+## Full run1 result: falsified (corrected)
 
 The frozen full Tokyo run1 (11905 epochs) A/B with the same profile OFF vs
 `--low-count-ar --low-count-min 3 --low-count-relax-surplus-quality`:
@@ -85,6 +85,41 @@ sealed run2/run3 holdout is spent. A future safe version would need the
 relaxation to also require an independent witness (e.g. the DDPR-LS anchor or
 a Doppler-DR pass) that the design-slice epochs happened to have but the
 full-run wrong fixes do not.
+
+## Corrective A/B: the +5 wrong FIX is from low-count AR itself, not the relaxation
+
+A full-run1 control with `--low-count-ar --low-count-min 3` **without**
+`--low-count-relax-surplus-quality` gives the same wrong-FIX count:
+
+| Configuration | FIX | wrong FIX > 0.5 m | accepted |
+|---|---:|---:|---:|
+| OFF | 6409 | 971 | - |
+| `--low-count-ar` (no relax) | 6415 | **976** | 3 |
+| `--low-count-ar` + relax | 6423 | 976 | 34 |
+| `--low-count-ar` + relax + separation witness | 6422 | **975** | 33 |
+
+The wrong FIX delta over OFF is +5 in the **no-relax** control too, so
+`low_count_relax_surplus_quality` does not add wrong FIX by itself; the
+`use_low_count_ambiguity_resolution` path is the wrong-FIX source. The four
+non-low-count wrong fixes (8336, 8710, 8753, 8754, all `low_count_used=0`,
+already FLOAT > 0.5 m in OFF) appear identically in the no-relax control, so
+they are a low-count-AR graph-side effect, not the relaxation.
+
+A separation witness was implemented and evaluated: a low-count fix must
+additionally satisfy `fixed_float_separation_m <= 0.1` and
+`fixed_imu_prediction_separation_m <= 0.1`
+(`--low-count-require-separation-witness`, default OFF). Every correct
+low-count fix in full run1 has both separations <= 0.059 m; the one
+low-count wrong fix (e3006) has 0.549 / 0.488 m, so the witness rejects it,
+dropping the low-count wrong FIX to +4 over OFF (975). The remaining +4 are
+`low_count_used=0` epochs the witness cannot gate.
+
+Conclusion (corrected): the surplus-quality relaxation is not the wrong-FIX
+culprit; `--low-count-ar` itself needs the separation witness (or another
+independent gate) before any activation, and even then the +4
+`low_count_used=0` wrong FIX from the graph-side effect must be understood.
+Neither the relaxation nor the witness is activated as a default; sealed
+run2/run3 remain untouched.
 
 ## Gate 0
 

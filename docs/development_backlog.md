@@ -26,15 +26,23 @@ per-system alpha" listed as not pursued).
 - Open (future): full 3-city A/B and the usual bars if activation is ever
   desired; no preset promotion without a fresh run1-only plan.
 
-## 2. Low-count AR surplus-quality relaxation — DESIGN-SLICE PASSED
+## 2. Low-count AR surplus-quality relaxation — NOT ACTIVATED (root cause corrected)
 
 - Implemented in PR #438: `--low-count-relax-surplus-quality` (default OFF).
   Corrects the prior falsification that scored against `ref_e_pos_m`.
 - Design slice (Tokyo run1 5000--5499): FIX 333->335 (+2 at 0.021/0.032 m),
-  zero wrong FIX, FIXED RMS unchanged. The +12.1% wall comes from the
-  low-count attempts.
-- **In progress**: full run1 A/B to establish the activation bar and the
-  run2/run3 pathway.
+  zero wrong FIX, FIXED RMS unchanged.
+- Full run1 (2026-08-08): FIX 6409->6423 but wrong FIX>0.5m 971->976.
+  Corrective control (relax OFF) shows `--low-count-ar` alone gives the same
+  976 -- the +5 wrong FIX is from the low-count path itself, NOT the
+  relaxation. A separation witness
+  (`--low-count-require-separation-witness`, default OFF; float/IMU
+  separation <= 0.1 m) rejects the one low-count wrong fix (e3006) and drops
+  the delta to +4, but the remaining +4 are `low_count_used=0` graph-side
+  effects it cannot gate.
+- Conclusion: neither the relaxation nor the witness is activated; the
+  low-count AR path itself needs an independent gate before any activation.
+  Sealed run2/run3 untouched.
 
 ## 3. PPC submission pipeline (user-decision item)
 
