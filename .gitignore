@@ -1,25 +1,7 @@
 # Build artifacts
 build/
-build_local/
-build-codex/
-build-madoca-parity/
-build-ffrt-msvc/
-build-no-gtsam-msvc/
-build-fgo-msvc/
-build-fgo-o1/
-build-fgo-o2/
-build-fgo-o2avx/
-build-fuse-current/
-build-gtsam-dep/
-build-gtsam-install/
-build-gtsam-msvc/
-build-gtsam-o1-install/
-build-gtsam-o1/
-build-madoca-m2-verify/
-build-madoca-m2-vs/
-build-madoca-ninja/
-build-wsl-madoca-make/
-build-wsl-madoca/
+build-*/
+build_*/
 bin/
 *.a
 *.o
@@ -32,16 +14,13 @@ ros2/log/
 data/
 
 # Output
-output/
+output/*
+!output/.gitkeep
 
 # Temporary files
 *.log
 *.txt
 !CMakeLists.txt
-lambda_debug.txt
-lambda2.txt
-lambda3.txt
-rtklib_diag.txt
 test_rinex_read
 test_rinex_read.cpp
 

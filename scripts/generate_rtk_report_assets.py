@@ -131,11 +131,13 @@ def plot_timeseries(lib: dict[str, np.ndarray], rtk: dict[str, np.ndarray], path
 
 def main() -> None:
     lib = read_libgnsspp(OUTPUT_DIR / "rtk_solution.pos")
-    rtk = read_rtklib(OUTPUT_DIR / "rtklib_rtk_result.pos")
+    rtk = read_rtklib(ROOT / "test_data" / "rtk" / "rtklib_rtk_result.pos")
     if len(lib["tow"]) == 0:
         raise SystemExit("LibGNSS++ output is empty; run the RTK example before generating assets.")
     if len(rtk["tow"]) == 0:
-        raise SystemExit("RTKLIB output is empty; provide output/rtklib_rtk_result.pos first.")
+        raise SystemExit(
+            "RTKLIB fixture is empty; provide test_data/rtk/rtklib_rtk_result.pos first."
+        )
     plot_xy(lib, rtk, OUTPUT_DIR / "rtk_xy_comparison.png")
     plot_timeseries(lib, rtk, OUTPUT_DIR / "rtk_timeseries_comparison.png")
 
