@@ -236,6 +236,9 @@ Choose the entrypoint that matches your job:
 - [Dataset gallery](docs/dataset_gallery.md): current public dataset lanes and
   the adapter contract for adding more.
 
+For repository orientation, see [application structure](apps/README.md),
+[script layout](scripts/README.md), and [standalone tools](tools/README.md).
+
 Build:
 
 ```bash
