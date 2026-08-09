@@ -606,6 +606,18 @@ public:
         // OFF; when off the established floors are unchanged and the behavior
         // is byte-identical.
         bool low_count_relax_surplus_quality = false;
+        // Independent-separation witness for low-count fixes. A full-run1 A/B
+        // showed that relaxing the surplus-quality floors admits one wrong
+        // fix (float/IMU separation 0.49-0.55 m) while every correct
+        // low-count fix has float and IMU prediction separation <= 0.059 m.
+        // When this knob is on, a low-count fix additionally requires
+        // fixed_float_separation_m <= low_count_max_float_separation_m AND
+        // fixed_imu_prediction_separation_m <=
+        // low_count_max_imu_prediction_separation_m. Default OFF (bit-identical
+        // when off); recommended to combine with low_count_relax_surplus_quality.
+        bool low_count_require_separation_witness = false;
+        double low_count_max_float_separation_m = 0.1;
+        double low_count_max_imu_prediction_separation_m = 0.1;
         double max_tdcp_gap_s = 2.0;
         double base_epoch_match_tolerance_s = 0.02;
         double base_interpolation_max_gap_s = 1.2;

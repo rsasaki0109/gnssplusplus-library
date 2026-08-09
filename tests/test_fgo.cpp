@@ -2339,8 +2339,13 @@ TEST(FGOTest, LowCountRelaxSurplusQualityIsDefaultOffAndIndependent) {
     const FGOProcessor::FGOConfig config;
     EXPECT_FALSE(config.use_low_count_ambiguity_resolution);
     EXPECT_FALSE(config.low_count_relax_surplus_quality);
+    EXPECT_FALSE(config.low_count_require_separation_witness);
     EXPECT_EQ(config.low_count_min_candidates, 4);
-    // The relaxation is inert unless the low-count path is also enabled.
+    EXPECT_DOUBLE_EQ(config.low_count_max_float_separation_m, 0.1);
+    EXPECT_DOUBLE_EQ(config.low_count_max_imu_prediction_separation_m, 0.1);
+    // The relaxation and witness are inert unless the low-count path is on.
     EXPECT_FALSE(config.low_count_relax_surplus_quality &&
+                 !config.use_low_count_ambiguity_resolution);
+    EXPECT_FALSE(config.low_count_require_separation_witness &&
                  !config.use_low_count_ambiguity_resolution);
 }
