@@ -53,13 +53,19 @@ Ref: `HANDOFF_TO_CODEX.md` section 3c.
   `gnss_fuse --rtk-pos-out`. A submission flow over the fused stream needs
   separate design and is a user-judgement item. Not started.
 
-## 4. Phase 3 TC main line (M0--M5) reflection
+## 4. Phase 3 TC main line (M0--M5) — DONE
 
-Ref: `docs/tight_coupling.md`.
+Ref: `docs/tight_coupling.md`, `docs/navi776_techniques.md`.
 
-- The navi776 combined configuration's improvements (adaptive noise + SD
-  Doppler rows, `--navi776-tc`) have not been folded into the Phase 3 TC
-  main line. Open for planning; no run entitlement.
+- M0--M5 are implemented and evaluated in `docs/tight_coupling.md` (all
+  default-off; M1/M3/M4 mixed-negative, M2/M5 gate-only).
+- `--navi776-tc` already enables M3 closed loop + M4 velocity + SD Doppler
+  + shared-alpha adaptive noise, with a five-run sign-off (tokyo1 fix
+  79.77%). The prior "not folded into TC main line" note is outdated.
+- A full-run1 A/B (`docs/fgo_navi776_tc_adaptr_combo.md`) shows combining the
+  new adaptive-R knobs with the TC preset is worse: + phase-only 55.06% fix,
+  + per-system 77.90% (vs 79.77% shared alpha). The TC main line keeps the
+  shared-alpha adaptive noise; the new knobs are not folded in.
 
 ## 5. Workspace hygiene (done 2026-08-07)
 
