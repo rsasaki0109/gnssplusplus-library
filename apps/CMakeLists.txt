@@ -197,6 +197,11 @@ install(PROGRAMS
     DESTINATION tools
 )
 
+install(FILES
+    ${CMAKE_SOURCE_DIR}/tools/rtk_geometry.py
+    DESTINATION tools
+)
+
 install(PROGRAMS
     ${CMAKE_SOURCE_DIR}/scripts/convert_rtklib_pos.py
     ${CMAKE_SOURCE_DIR}/scripts/generate_architecture_diagram.py
