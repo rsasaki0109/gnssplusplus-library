@@ -4966,7 +4966,16 @@ static FGOProcessor::FGOResult optimizeProblemFixedLag(
                             (config.low_count_min_ratio <= 0.0 ||
                              ratio > config.low_count_min_ratio) &&
                             surplus_evaluated && surplus_pass &&
-                            surplus_rescue_quality_pass;
+                            surplus_rescue_quality_pass &&
+                            (!config.low_count_require_separation_witness ||
+                             (std::isfinite(
+                                  epoch_diagnostics[i].fixed_float_separation_m) &&
+                              epoch_diagnostics[i].fixed_float_separation_m <=
+                                  config.low_count_max_float_separation_m &&
+                              std::isfinite(
+                                  epoch_diagnostics[i].fixed_imu_prediction_separation_m) &&
+                              epoch_diagnostics[i].fixed_imu_prediction_separation_m <=
+                                  config.low_count_max_imu_prediction_separation_m));
                         const bool fixed_decision_pass = std::isfinite(ratio) &&
                             (is_low_count_attempt
                                  ? low_count_pass

@@ -231,6 +231,9 @@ struct Args {
     int low_count_ar_min = -1;        // >0: override low_count_min_candidates (default 4)
     double low_count_ar_ratio = -1.0; // >=0: override low_count_min_ratio (default 1.5); use --low-count-ratio 0 for "surplus alone"
     bool low_count_relax_surplus_quality = false;  // exempt low-count from nsat>=10/ddcp>=4 arms
+    bool low_count_require_separation_witness = false;  // require float/IMU separation for low-count fix
+    double low_count_max_float_sep_m = 0.1;
+    double low_count_max_imu_pred_sep_m = 0.1;
     std::string dump_csv_path;  // debug: per-epoch CSV dump (tow/status/E-N-U err/position) for plotting
     // Opt-in FGOProblem cache (skips repeated RINEX parse + problem build
     // across validation runs on the SAME inputs/config). Default-off; when
@@ -448,6 +451,18 @@ Args parseArgs(int argc, char** argv) {
         }
         if (a == "--low-count-relax-surplus-quality") {
             args.low_count_relax_surplus_quality = true;
+            continue;
+        }
+        if (a == "--low-count-require-separation-witness") {
+            args.low_count_require_separation_witness = true;
+            continue;
+        }
+        if (a == "--low-count-max-float-sep" && i + 1 < argc) {
+            args.low_count_max_float_sep_m = std::stod(argv[++i]);
+            continue;
+        }
+        if (a == "--low-count-max-imu-pred-sep" && i + 1 < argc) {
+            args.low_count_max_imu_pred_sep_m = std::stod(argv[++i]);
             continue;
         }
         if (a == "--adaptive-ratio") {
@@ -1038,6 +1053,11 @@ libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
     }
     if (args.low_count_relax_surplus_quality) {
         config.low_count_relax_surplus_quality = true;
+    }
+    if (args.low_count_require_separation_witness) {
+        config.low_count_require_separation_witness = true;
+        config.low_count_max_float_separation_m = args.low_count_max_float_sep_m;
+        config.low_count_max_imu_prediction_separation_m = args.low_count_max_imu_pred_sep_m;
     }
     if (args.no_gal_ar) {
         config.exclude_galileo_ambiguity_fixing = true;
