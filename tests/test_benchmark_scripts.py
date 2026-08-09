@@ -5583,7 +5583,7 @@ class CIScopeDetectionTest(unittest.TestCase):
         payload = ci_scope.classify_changed_paths(
             [
                 "docs/guide.md",
-                "notes/2026-04-11_ci.md",
+                "docs/archive/2026-04-11_ci.md",
                 "README.md",
                 "scripts/generate_architecture_diagram.py",
             ]
@@ -5593,8 +5593,8 @@ class CIScopeDetectionTest(unittest.TestCase):
             payload["changed_paths"],
             [
                 "README.md",
+                "docs/archive/2026-04-11_ci.md",
                 "docs/guide.md",
-                "notes/2026-04-11_ci.md",
                 "scripts/generate_architecture_diagram.py",
             ],
         )

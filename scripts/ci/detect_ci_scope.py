@@ -20,7 +20,6 @@ DOCS_ONLY_EXACT_PATHS = {
 }
 DOCS_ONLY_PREFIXES = (
     "docs/",
-    "notes/",
 )
 
 

@@ -143,12 +143,12 @@ figure can be traced back to a `.pos`, `.json`, and command line.
 
 ## Experiment lane
 
-PPP-AR and CLAS policy sweeps live under `experiments/ppp_ar/` and use shared
+PPP-AR and CLAS policy sweeps live under `scripts/experiments/ppp_ar/` and use shared
 TOML inputs:
 
 ```bash
-python3 experiments/ppp_ar/run_experiments.py \
-  --config experiments/ppp_ar/input.example.toml
+python3 scripts/experiments/ppp_ar/run_experiments.py \
+  --config scripts/experiments/ppp_ar/input.example.toml
 ```
 
 Use the experiment lane when comparing strategy arms. Promote only the winning

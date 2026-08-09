@@ -119,7 +119,7 @@ baseline versus safe-shadow p50/p95/p99 ECEF error was
 1.171/3.480/27.031 m versus 1.123/3.480/30.447 m; 301 epochs used the
 carrier-to-code fallback, partial AR and soft resets were both zero. This is
 near-neutral safety evidence, not adoption evidence; use
-`experiments/run_tight_dd_imu_ablation.py` for the full-six and blocked-span
+`scripts/experiments/run_tight_dd_imu_ablation.py` for the full-six and blocked-span
 comparison.
 
 The complementary RTK-hosted tightly-coupled path is specified in

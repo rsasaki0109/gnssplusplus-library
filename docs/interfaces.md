@@ -109,14 +109,14 @@ It shows:
 ## Experiment Interface
 
 `PPP-AR` experiments now use a minimal shared interface under
-`experiments/ppp_ar/`.
+`scripts/experiments/ppp_ar/`.
 
 The current experiment surface is:
 
-- `experiments/ppp_ar/strategies.toml`
-- `experiments/ppp_ar/input.example.toml`
-- `experiments/ppp_ar/suite.example.toml`
-- `experiments/ppp_ar/run_experiments.py`
+- `scripts/experiments/ppp_ar/strategies.toml`
+- `scripts/experiments/ppp_ar/input.example.toml`
+- `scripts/experiments/ppp_ar/suite.example.toml`
+- `scripts/experiments/ppp_ar/run_experiments.py`
 
 The current CLAS PPP experiment family includes:
 
