@@ -11,6 +11,7 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT_DIR / "scripts"))
+sys.path.insert(0, str(ROOT_DIR / "scripts" / "analysis"))
 
 import analyze_ppc_wrong_fix_residuals as wrong_fix  # noqa: E402
 import build_ppc_wrong_fix_event_ledger as event_ledger  # noqa: E402

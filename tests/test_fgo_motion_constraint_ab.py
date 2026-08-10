@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 
-SCRIPT = Path(__file__).parents[1] / "scripts" / "analyze_fgo_motion_constraint_ab.py"
+SCRIPT = Path(__file__).parents[1] / "scripts" / "analysis" / "analyze_fgo_motion_constraint_ab.py"
 SPEC = importlib.util.spec_from_file_location("motion_ab", SCRIPT)
 assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC)

@@ -219,13 +219,17 @@ install(PROGRAMS
     ${CMAKE_SOURCE_DIR}/scripts/dump_taroz_pos_vel_pdc_debug.m
     ${CMAKE_SOURCE_DIR}/scripts/dump_taroz_pos_vel_ambiguity_pdc_debug.m
     ${CMAKE_SOURCE_DIR}/scripts/dump_taroz_pd_debug.m
-    ${CMAKE_SOURCE_DIR}/scripts/analyze_ppc_dual_profile_selector_matrix.py
     ${CMAKE_SOURCE_DIR}/scripts/apply_ppc_dual_profile_selector.py
-    ${CMAKE_SOURCE_DIR}/scripts/analyze_ppc_profile_segment_delta.py
-    ${CMAKE_SOURCE_DIR}/scripts/analyze_ppc_residual_reset_sweep.py
-    ${CMAKE_SOURCE_DIR}/scripts/analyze_ppc_segment_selector_sweep.py
     ${CMAKE_SOURCE_DIR}/scripts/update_ppc_coverage_readme.py
     DESTINATION scripts
+)
+
+install(PROGRAMS
+    ${CMAKE_SOURCE_DIR}/scripts/analysis/analyze_ppc_dual_profile_selector_matrix.py
+    ${CMAKE_SOURCE_DIR}/scripts/analysis/analyze_ppc_profile_segment_delta.py
+    ${CMAKE_SOURCE_DIR}/scripts/analysis/analyze_ppc_residual_reset_sweep.py
+    ${CMAKE_SOURCE_DIR}/scripts/analysis/analyze_ppc_segment_selector_sweep.py
+    DESTINATION scripts/analysis
 )
 
 install(FILES

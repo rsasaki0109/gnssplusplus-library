@@ -95,7 +95,7 @@ struct ImuCsvLoadResult {
 /**
  * @brief Load a PPC-Dataset-style imu.csv file via header-name matching.
  *
- * Direct C++ port of scripts/analyze_ppc_imu_coverage.py's
+ * Direct C++ port of scripts/analysis/analyze_ppc_imu_coverage.py's
  * normalize_header()/field_lookup()/find_column() candidate-list matching:
  * header names are stripped of whitespace/case/punctuation before matching
  * against a fixed candidate list per logical field (time, week, accel XYZ,

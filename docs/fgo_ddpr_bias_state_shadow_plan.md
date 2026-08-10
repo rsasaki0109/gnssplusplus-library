@@ -137,7 +137,7 @@ After producing a runtime bias sidecar and a truth-replay quality sidecar,
 score the frozen gates with:
 
 ```bash
-python scripts/analyze_ddpr_bias_state_shadow.py \
+python scripts/analysis/analyze_ddpr_bias_state_shadow.py \
   --bias-csv <runtime.csv.predicted_ddpr_bias_state.csv> \
   --truth-quality-csv <truth.csv.predicted_ddpr_quality.csv> \
   --json <gate1-summary.json>

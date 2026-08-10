@@ -71,7 +71,7 @@ single-difference Doppler rows are materialized for the private DR estimator
 but are not inserted into the graph.
 
 ```powershell
-python scripts/analyze_fgo_external_dr_witness.py `
+python scripts/analysis/analyze_fgo_external_dr_witness.py `
   --epoch-csv build-ffrt-msvc/validation/tokyo1_external_dr_shadow.csv `
   --json build-ffrt-msvc/validation/tokyo1_external_dr_shadow.json `
   --markdown build-ffrt-msvc/validation/tokyo1_external_dr_shadow.md

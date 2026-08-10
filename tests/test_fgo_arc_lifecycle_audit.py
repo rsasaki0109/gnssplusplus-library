@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 
-SCRIPT = Path(__file__).parents[1] / "scripts" / "analyze_fgo_arc_lifecycle.py"
+SCRIPT = Path(__file__).parents[1] / "scripts" / "analysis" / "analyze_fgo_arc_lifecycle.py"
 SPEC = importlib.util.spec_from_file_location("arc_lifecycle", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 AUDIT = importlib.util.module_from_spec(SPEC)

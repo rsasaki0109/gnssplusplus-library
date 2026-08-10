@@ -55,7 +55,7 @@ audit.
 
 ## Causal features
 
-For each truth-matched epoch, `scripts/analyze_fgo_arc_lifecycle.py` derives:
+For each truth-matched epoch, `scripts/analysis/analyze_fgo_arc_lifecycle.py` derives:
 
 - `clock_jump`: absolute signed common GPS pseudorange change above 100 km
   with at least one matched satellite (falling back to the legacy boolean for
@@ -109,7 +109,7 @@ slice.  Only a frozen implementation may advance to run2 and sealed run3.
 Run a normal parity replay with `--ref` and `--dump-csv`, then score it:
 
 ```text
-python scripts/analyze_fgo_arc_lifecycle.py \
+python scripts/analysis/analyze_fgo_arc_lifecycle.py \
   --epoch-csv <run.csv> \
   --json <audit.json> \
   --markdown <audit.md>

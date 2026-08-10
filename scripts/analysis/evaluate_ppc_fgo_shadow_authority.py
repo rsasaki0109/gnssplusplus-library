@@ -18,10 +18,11 @@ from typing import Any
 import numpy as np
 
 
-ROOT_DIR = Path(__file__).resolve().parents[1]
-SCRIPTS_DIR = Path(__file__).resolve().parent
+ROOT_DIR = Path(__file__).resolve().parents[2]
+SCRIPTS_DIR = ROOT_DIR / "scripts"
+ANALYSIS_DIR = SCRIPTS_DIR / "analysis"
 COMMANDS_DIR = ROOT_DIR / "apps" / "commands"
-for command_path in (SCRIPTS_DIR, COMMANDS_DIR, COMMANDS_DIR / "benchmarks"):
+for command_path in (SCRIPTS_DIR, ANALYSIS_DIR, COMMANDS_DIR, COMMANDS_DIR / "benchmarks"):
     if str(command_path) not in sys.path:
         sys.path.insert(0, str(command_path))
 

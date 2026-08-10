@@ -117,7 +117,7 @@ authority-neutral telemetry, deterministic tests, and the reproducible
 offline A/B scorer.  The machine-readable result is generated with:
 
 ```powershell
-python scripts/analyze_fgo_motion_constraint_ab.py `
+python scripts/analysis/analyze_fgo_motion_constraint_ab.py `
   --baseline build-ffrt-msvc/validation/tokyo1_motion_e5000_n500_baseline.csv `
   --baseline-runtime-s 21.1719 `
   --variant nhc=build-ffrt-msvc/validation/tokyo1_motion_e5000_n500_nhc.csv `

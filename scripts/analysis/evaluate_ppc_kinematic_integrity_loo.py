@@ -14,10 +14,12 @@ from typing import Any
 import numpy as np
 
 
-ROOT_DIR = Path(__file__).resolve().parents[1]
-SCRIPTS_DIR = Path(__file__).resolve().parent
-if str(SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS_DIR))
+ROOT_DIR = Path(__file__).resolve().parents[2]
+SCRIPTS_DIR = ROOT_DIR / "scripts"
+ANALYSIS_DIR = SCRIPTS_DIR / "analysis"
+for script_dir in (SCRIPTS_DIR, ANALYSIS_DIR):
+    if str(script_dir) not in sys.path:
+        sys.path.insert(0, str(script_dir))
 
 import analyze_ppc_wrong_fix_residuals as analysis  # noqa: E402
 import apply_ppc_status_demotion as demotion  # noqa: E402

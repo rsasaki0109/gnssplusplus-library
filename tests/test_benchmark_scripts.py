@@ -22,6 +22,7 @@ import numpy as np
 ROOT_DIR = Path(__file__).resolve().parents[1]
 COMMANDS_DIR = ROOT_DIR / "apps" / "commands"
 SCRIPTS_DIR = ROOT_DIR / "scripts"
+ANALYSIS_DIR = SCRIPTS_DIR / "analysis"
 CI_SCRIPTS_DIR = SCRIPTS_DIR / "ci"
 
 for command_group in (
@@ -31,6 +32,7 @@ for command_group in (
     sys.path.insert(0, str(COMMANDS_DIR / command_group))
 sys.path.insert(0, str(COMMANDS_DIR))
 sys.path.insert(0, str(SCRIPTS_DIR))
+sys.path.insert(0, str(ANALYSIS_DIR))
 sys.path.insert(0, str(CI_SCRIPTS_DIR))
 
 import gnss_odaiba_benchmark as benchmark  # noqa: E402

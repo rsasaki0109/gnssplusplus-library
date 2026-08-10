@@ -132,7 +132,7 @@ validated before writing. Each run must carry the KPI fields used by CI, docs,
 Python, and web artifact readers, including `positioning_rate_pct`,
 `fix_rate_pct`, `ppc_official_score_pct`, `p95_h_m`, `solver_wall_time_s`,
 `realtime_factor`, and `effective_epoch_rate_hz`.
-Use `scripts/analyze_ppc_coverage_quality.py` with the PPC solution, RTKLIB
+Use `scripts/analysis/analyze_ppc_coverage_quality.py` with the PPC solution, RTKLIB
 solution, and `reference.csv` when a coverage run improves Positioning rate but
 regresses P95 horizontal error; the report separates FIXED/FLOAT/SPP quality and
 bad continuous drift segments. The segment CSV also records adjacent FIX-anchor
