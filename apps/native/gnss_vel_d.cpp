@@ -22,7 +22,12 @@
 #include <tuple>
 #include <vector>
 
+#include "observable_robust_loss.hpp"
+
 namespace {
+
+using libgnss_apps::robustHuberLoss;
+using libgnss_apps::robustHuberWeight;
 
 constexpr double kPi = 3.141592653589793238462643383279502884;
 constexpr double kDegreesToRadians = kPi / 180.0;
@@ -469,22 +474,6 @@ void writeCsvDouble(std::ostream& output, double value) {
     } else {
         output << "NaN";
     }
-}
-
-double robustHuberLoss(double whitened_error, double threshold) {
-    const double abs_error = std::abs(whitened_error);
-    if (abs_error <= threshold) {
-        return 0.5 * whitened_error * whitened_error;
-    }
-    return threshold * (abs_error - 0.5 * threshold);
-}
-
-double robustHuberWeight(double whitened_error, double threshold) {
-    const double abs_error = std::abs(whitened_error);
-    if (abs_error <= threshold || abs_error <= 0.0) {
-        return 1.0;
-    }
-    return threshold / abs_error;
 }
 
 int velocityColumn(std::size_t epoch_index, int component) {
