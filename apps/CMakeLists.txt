@@ -117,67 +117,54 @@ install(PROGRAMS
     RENAME gnss
 )
 
+file(GLOB GNSS_PYTHON_COMMAND_FILES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/commands/*/*.py"
+)
+
+set(GNSS_PYTHON_COMMAND_PROGRAMS)
+set(GNSS_PYTHON_COMMAND_INSTALL_KEYS)
+list(SORT GNSS_PYTHON_COMMAND_FILES)
+foreach(GNSS_PYTHON_COMMAND_FILE IN LISTS GNSS_PYTHON_COMMAND_FILES)
+    get_filename_component(GNSS_PYTHON_COMMAND_CATEGORY_DIR
+        "${GNSS_PYTHON_COMMAND_FILE}" DIRECTORY)
+    get_filename_component(GNSS_PYTHON_COMMAND_CATEGORY_NAME
+        "${GNSS_PYTHON_COMMAND_CATEGORY_DIR}" NAME)
+    if(GNSS_PYTHON_COMMAND_CATEGORY_NAME STREQUAL "support")
+        continue()
+    endif()
+
+    get_filename_component(GNSS_PYTHON_COMMAND_BASENAME
+        "${GNSS_PYTHON_COMMAND_FILE}" NAME)
+    string(TOLOWER "${GNSS_PYTHON_COMMAND_BASENAME}"
+        GNSS_PYTHON_COMMAND_INSTALL_KEY)
+    list(FIND GNSS_PYTHON_COMMAND_INSTALL_KEYS
+        "${GNSS_PYTHON_COMMAND_INSTALL_KEY}"
+        GNSS_PYTHON_COMMAND_DUPLICATE_INDEX)
+    if(NOT GNSS_PYTHON_COMMAND_DUPLICATE_INDEX EQUAL -1)
+        list(GET GNSS_PYTHON_COMMAND_PROGRAMS
+            ${GNSS_PYTHON_COMMAND_DUPLICATE_INDEX}
+            GNSS_PYTHON_COMMAND_PREVIOUS)
+        get_filename_component(GNSS_PYTHON_COMMAND_PREVIOUS_BASENAME
+            "${GNSS_PYTHON_COMMAND_PREVIOUS}" NAME)
+        message(FATAL_ERROR
+            "Python command install basename collision (case-insensitive): "
+            "${GNSS_PYTHON_COMMAND_PREVIOUS_BASENAME} "
+            "(${GNSS_PYTHON_COMMAND_PREVIOUS}) and "
+            "${GNSS_PYTHON_COMMAND_BASENAME} (${GNSS_PYTHON_COMMAND_FILE})")
+    endif()
+    list(APPEND GNSS_PYTHON_COMMAND_INSTALL_KEYS
+        "${GNSS_PYTHON_COMMAND_INSTALL_KEY}")
+    list(APPEND GNSS_PYTHON_COMMAND_PROGRAMS "${GNSS_PYTHON_COMMAND_FILE}")
+endforeach()
+list(SORT GNSS_PYTHON_COMMAND_PROGRAMS)
+
+file(GLOB GNSS_PYTHON_SUPPORT_FILES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/commands/support/*.py"
+)
+list(SORT GNSS_PYTHON_SUPPORT_FILES)
+
 install(PROGRAMS
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/diagnostics/gnss_doctor.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/diagnostics/gnss_robotics_smoke.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/diagnostics/gnss_ros2_doctor.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/diagnostics/gnss_ros2_bag_doctor.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/diagnostics/gnss_field_report.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/receivers/gnss_rcv.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/visualization/gnss_web.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/diagnostics/gnss_mode_compare.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/benchmarks/gnss_ppc_taroz_amb_pdc_smoke.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/benchmarks/gnss_taroz_p_dogfood.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/benchmarks/gnss_taroz_pd_dogfood.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/benchmarks/gnss_taroz_pc_dogfood.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/benchmarks/gnss_taroz_observable_dogfood.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/benchmarks/gnss_taroz_pos_vel_amb_pdc_dogfood.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/benchmarks/gnss_taroz_oracle_suite.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/positioning/gnss_live_signoff.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/positioning/gnss_moving_base_signoff.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/positioning/gnss_scorpion_moving_base_signoff.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/positioning/gnss_moving_base_prepare.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/visualization/gnss_moving_base_plot.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/products/gnss_fetch_products.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/visualization/gnss_artifact_manifest.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/products/gnss_ionex_info.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/products/gnss_dcb_info.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/visualization/gnss_visibility_plot.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/benchmarks/gnss_odaiba_benchmark.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/benchmarks/gnss_odaiba_scan.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/positioning/gnss_short_baseline_signoff.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/positioning/gnss_rtk_kinematic_signoff.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/positioning/gnss_ppp_static_signoff.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/positioning/gnss_ppp_kinematic_signoff.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/benchmarks/gnss_ppp_iers_solid_tide_bench.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/benchmarks/gnss_ppp_iers_pole_tide_bench.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/benchmarks/gnss_ppp_iers_atm_tidal_loading_bench.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/benchmarks/gnss_ppp_iers_atm_tidal_loading_multisite_bench.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/benchmarks/gnss_ppp_iers_pole_tide_multisite_bench.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/benchmarks/gnss_ppp_iers_truth_bench.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/benchmarks/gnss_ppp_iers_truth_multisite_bench.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/benchmarks/gnss_ppp_iers_sub_daily_eop_bench.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/benchmarks/gnss_ppp_iers_sub_daily_eop_multisite_bench.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/benchmarks/gnss_ppp_iers_ocean_loading_bench.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/products/gnss_vmf_atl.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/positioning/gnss_ppp_products_signoff.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/benchmarks/gnss_ppc_demo.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/benchmarks/gnss_ppc_commercial.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/benchmarks/gnss_ppc_metrics.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/benchmarks/gnss_ppc_rtk_signoff.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/benchmarks/gnss_public_rtk_benchmarks.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/benchmarks/gnss_smartloc_adapter.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/benchmarks/gnss_smartloc_signoff.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/positioning/gnss_clas_ppp.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/receivers/gnss_nmea_info.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/receivers/gnss_novatel_info.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/receivers/gnss_sbp_info.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/receivers/gnss_sbf_info.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/receivers/gnss_trimble_info.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/receivers/gnss_skytraq_info.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/receivers/gnss_binex_info.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/receivers/gnss_qzss_l6_info.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/receivers/gnss_qzss_l6_bias.py
+    ${GNSS_PYTHON_COMMAND_PROGRAMS}
     ${CMAKE_CURRENT_SOURCE_DIR}/compat/gnss_pos2kml
     DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
@@ -188,10 +175,7 @@ install(FILES
 )
 
 install(FILES
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/support/__init__.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/support/gnss_input_source.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/support/gnss_runtime.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/commands/support/gnss_toml_config.py
+    ${GNSS_PYTHON_SUPPORT_FILES}
     DESTINATION ${CMAKE_INSTALL_BINDIR}/support
 )
 

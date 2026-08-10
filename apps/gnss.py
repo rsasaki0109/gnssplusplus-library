@@ -15,67 +15,51 @@ APPS_DIR = os.path.dirname(os.path.abspath(__file__))
 EXE_SUFFIX = ".exe" if os.name == "nt" else ""
 BUILD_CONFIGS = ("Release", "RelWithDebInfo", "Debug", "MinSizeRel")
 
-PYTHON_COMMAND_GROUPS = {
-    "diagnostics": {
-        "gnss_dd_residuals.py", "gnss_doctor.py", "gnss_field_report.py",
-        "gnss_mode_compare.py", "gnss_robotics_smoke.py",
-        "gnss_ros2_bag_doctor.py", "gnss_ros2_doctor.py",
-    },
-    "receivers": {
-        "gnss_binex_info.py", "gnss_nmea_info.py", "gnss_novatel_info.py",
-        "gnss_qzss_l6_info.py", "gnss_rcv.py", "gnss_sbf_info.py",
-        "gnss_sbp_info.py", "gnss_skytraq_info.py", "gnss_trimble_info.py",
-    },
-    "products": {
-        "gnss_dcb_info.py", "gnss_fetch_products.py", "gnss_ionex_info.py",
-        "gnss_vmf_atl.py",
-    },
-    "positioning": {
-        "gnss_clas_ppp.py", "gnss_live_signoff.py",
-        "gnss_moving_base_prepare.py", "gnss_moving_base_signoff.py",
-        "gnss_ppp_kinematic_signoff.py", "gnss_ppp_products_signoff.py",
-        "gnss_ppp_static_signoff.py", "gnss_rtk_kinematic_signoff.py",
-        "gnss_scorpion_moving_base_signoff.py", "gnss_short_baseline_signoff.py",
-    },
-    "visualization": {
-        "gnss_artifact_manifest.py", "gnss_moving_base_plot.py",
-        "gnss_visibility_plot.py", "gnss_web.py",
-    },
-    "benchmarks": {
-        "gnss_odaiba_benchmark.py", "gnss_odaiba_scan.py",
-        "gnss_ppc_commercial.py", "gnss_ppc_coverage_matrix.py",
-        "gnss_ppc_demo.py", "gnss_ppc_metrics.py", "gnss_ppc_rtk_signoff.py",
-        "gnss_ppc_spp_compare.py", "gnss_ppc_spp_jump_sweep.py",
-        "gnss_ppc_spp_policy_report.py", "gnss_ppc_spp_policy_suite.py",
-        "gnss_ppc_taroz_amb_pdc_smoke.py",
-        "gnss_ppp_iers_atm_tidal_loading_bench.py",
-        "gnss_ppp_iers_atm_tidal_loading_multisite_bench.py",
-        "gnss_ppp_iers_ocean_loading_bench.py",
-        "gnss_ppp_iers_pole_tide_bench.py",
-        "gnss_ppp_iers_pole_tide_multisite_bench.py",
-        "gnss_ppp_iers_solid_tide_bench.py",
-        "gnss_ppp_iers_sub_daily_eop_bench.py",
-        "gnss_ppp_iers_sub_daily_eop_multisite_bench.py",
-        "gnss_ppp_iers_truth_bench.py", "gnss_ppp_iers_truth_multisite_bench.py",
-        "gnss_public_rtk_benchmarks.py", "gnss_smartloc_adapter.py",
-        "gnss_smartloc_signoff.py", "gnss_taroz_observable_dogfood.py",
-        "gnss_taroz_oracle_suite.py", "gnss_taroz_p_dogfood.py",
-        "gnss_taroz_pc_dogfood.py", "gnss_taroz_pd_dogfood.py",
-        "gnss_taroz_pos_vel_amb_pdc_dogfood.py",
-    },
-}
-PYTHON_COMMAND_GROUP = {
-    filename: group
-    for group, filenames in PYTHON_COMMAND_GROUPS.items()
-    for filename in filenames
-}
+PYTHON_COMMANDS_DIR = os.path.join(APPS_DIR, "commands")
+
+
+def _discover_python_command_sources() -> tuple[dict[str, str], tuple[str, ...]]:
+    source_paths = sorted(glob.glob(os.path.join(PYTHON_COMMANDS_DIR, "*", "*.py")))
+    sources: dict[str, str] = {}
+    install_sources: dict[str, tuple[str, str]] = {}
+    source_dirs: list[str] = []
+    for source_path in source_paths:
+        category_dir = os.path.dirname(source_path)
+        if os.path.basename(category_dir) == "support":
+            continue
+        if category_dir not in source_dirs:
+            source_dirs.append(category_dir)
+
+        filename = os.path.basename(source_path)
+        install_key = filename.casefold()
+        previous_source = install_sources.get(install_key)
+        if previous_source is not None:
+            previous_filename, previous_path = previous_source
+            raise RuntimeError(
+                "duplicate Python command basenames would collide case-insensitively "
+                f"when installed flat: {previous_filename!r} ({previous_path}) and "
+                f"{filename!r} ({source_path})"
+            )
+        install_sources[install_key] = (filename, source_path)
+        sources[filename] = source_path
+    return sources, tuple(source_dirs)
+
+
+PYTHON_COMMAND_DISCOVERY_ERROR: str | None = None
+try:
+    PYTHON_COMMAND_SOURCES, PYTHON_COMMAND_SOURCE_DIRS = (
+        _discover_python_command_sources()
+    )
+except RuntimeError as exc:
+    PYTHON_COMMAND_SOURCES = {}
+    PYTHON_COMMAND_SOURCE_DIRS = ()
+    PYTHON_COMMAND_DISCOVERY_ERROR = str(exc)
 
 
 def python_target(filename: str) -> str:
     """Resolve a grouped source command or its flat installed counterpart."""
-    group = PYTHON_COMMAND_GROUP[filename]
-    source_target = os.path.join(APPS_DIR, "commands", group, filename)
-    if os.path.isfile(source_target):
+    source_target = PYTHON_COMMAND_SOURCES.get(filename)
+    if source_target is not None:
         return source_target
     return os.path.join(APPS_DIR, filename)
 
@@ -996,11 +980,7 @@ def find_binary(target_name: str) -> str | None:
 def run_python(target: str, command_name: str, args: list[str]) -> int:
     env = os.environ.copy()
     env["GNSS_CLI_NAME"] = f"gnss {command_name}"
-    source_import_dirs = [
-        os.path.join(APPS_DIR, "commands", group)
-        for group in PYTHON_COMMAND_GROUPS
-    ]
-    source_import_dirs.append(os.path.join(APPS_DIR, "commands"))
+    source_import_dirs = [*PYTHON_COMMAND_SOURCE_DIRS, PYTHON_COMMANDS_DIR]
     existing_pythonpath = env.get("PYTHONPATH")
     if existing_pythonpath:
         source_import_dirs.append(existing_pythonpath)
@@ -1055,6 +1035,10 @@ def dispatch_command(command_name: str, args: list[str]) -> int:
 
 
 def main() -> int:
+    if PYTHON_COMMAND_DISCOVERY_ERROR is not None:
+        print(f"Error: {PYTHON_COMMAND_DISCOVERY_ERROR}", file=sys.stderr)
+        return 1
+
     if len(sys.argv) < 2:
         print(usage())
         return 1

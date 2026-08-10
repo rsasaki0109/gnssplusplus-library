@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import re
 import subprocess
@@ -11,6 +12,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -436,6 +438,97 @@ class CliUxTest(unittest.TestCase):
                 failures.append(f"{command}: python target escapes repo root: {target}")
 
         self.assertEqual(failures, [])
+
+    def test_python_command_discovery_is_sorted_and_unique(self) -> None:
+        dispatcher = self.dispatcher_module()
+        commands_root = ROOT_DIR / "apps" / "commands"
+        source_paths = sorted(commands_root.glob("*/*.py"))
+        expected_sources = [
+            source.resolve()
+            for source in source_paths
+            if source.parent.name != "support"
+        ]
+        expected_basenames = [source.name for source in expected_sources]
+        expected_category_dirs = sorted(
+            {source.parent.resolve() for source in expected_sources}
+        )
+        discovered_sources = [
+            Path(source).resolve()
+            for source in dispatcher.PYTHON_COMMAND_SOURCES.values()
+        ]
+
+        self.assertEqual(discovered_sources, expected_sources)
+        self.assertEqual(list(dispatcher.PYTHON_COMMAND_SOURCES), expected_basenames)
+        self.assertEqual(
+            len(expected_basenames),
+            len({basename.casefold() for basename in expected_basenames}),
+        )
+        self.assertEqual(
+            [source.parent for source in discovered_sources],
+            [source.parent for source in expected_sources],
+        )
+        self.assertEqual(
+            [Path(path).resolve() for path in dispatcher.PYTHON_COMMAND_SOURCE_DIRS],
+            expected_category_dirs,
+        )
+
+    def test_registered_grouped_python_commands_resolve_to_discovered_sources(self) -> None:
+        dispatcher = self.dispatcher_module()
+        failures: list[str] = []
+
+        for command, metadata in dispatcher.COMMANDS.items():
+            if metadata.get("kind") != "python":
+                continue
+            target = metadata["target"]
+            filename = Path(target).name
+            source = dispatcher.PYTHON_COMMAND_SOURCES.get(filename)
+            if source is None:
+                continue
+            if Path(target).resolve() != Path(source).resolve():
+                failures.append(f"{command}: unexpected target {target}")
+
+        self.assertEqual(failures, [])
+
+    def test_python_target_uses_discovered_source_or_flat_fallback(self) -> None:
+        dispatcher = self.dispatcher_module()
+        discovered_filename = "gnss_doctor.py"
+        fallback_filename = "gnss_not_discovered.py"
+
+        self.assertEqual(
+            dispatcher.python_target(discovered_filename),
+            dispatcher.PYTHON_COMMAND_SOURCES[discovered_filename],
+        )
+        self.assertEqual(
+            dispatcher.python_target(fallback_filename),
+            str(ROOT_DIR / "apps" / fallback_filename),
+        )
+
+    def test_case_insensitive_collision_reports_concise_startup_error(self) -> None:
+        fake_sources = [
+            str(ROOT_DIR / "apps" / "commands" / "alpha" / "foo.py"),
+            str(ROOT_DIR / "apps" / "commands" / "beta" / "FOO.py"),
+        ]
+        with mock.patch("glob.glob", return_value=fake_sources):
+            dispatcher = self.dispatcher_module()
+
+        discovery_error = dispatcher.PYTHON_COMMAND_DISCOVERY_ERROR
+        self.assertIsNotNone(discovery_error)
+        self.assertIn("case-insensitively", discovery_error)
+        self.assertIn("'foo.py'", discovery_error)
+        self.assertIn("'FOO.py'", discovery_error)
+        self.assertEqual(dispatcher.PYTHON_COMMAND_SOURCES, {})
+        self.assertEqual(dispatcher.PYTHON_COMMAND_SOURCE_DIRS, ())
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with mock.patch.object(dispatcher.sys, "argv", ["gnss", "--help"]), \
+                mock.patch.object(dispatcher.sys, "stdout", stdout), \
+                mock.patch.object(dispatcher.sys, "stderr", stderr):
+            returncode = dispatcher.main()
+
+        self.assertEqual(returncode, 1)
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertEqual(stderr.getvalue(), f"Error: {discovery_error}\n")
 
     def test_markdown_gnss_examples_use_registered_dispatcher_commands(self) -> None:
         markdown_files = [ROOT_DIR / "README.md", *sorted((ROOT_DIR / "docs").rglob("*.md"))]
