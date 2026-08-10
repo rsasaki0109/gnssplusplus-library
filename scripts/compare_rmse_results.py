@@ -6,8 +6,15 @@ Compare RMSE results between synthetic and real RTKLIB data
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
-from analyze_rmse import parse_pos_file, calculate_rmse_statistics
 import os
+from pathlib import Path
+import sys
+
+ANALYSIS_DIR = Path(__file__).resolve().parent / "analysis"
+if str(ANALYSIS_DIR) not in sys.path:
+    sys.path.insert(0, str(ANALYSIS_DIR))
+
+from analyze_rmse import parse_pos_file, calculate_rmse_statistics
 
 def compare_datasets():
     """Compare RMSE between synthetic and real RTKLIB data"""

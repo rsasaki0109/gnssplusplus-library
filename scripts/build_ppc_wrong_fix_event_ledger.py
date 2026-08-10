@@ -13,7 +13,12 @@ from dataclasses import dataclass
 import json
 import math
 from pathlib import Path
+import sys
 from typing import Any, Iterable
+
+ANALYSIS_DIR = Path(__file__).resolve().parent / "analysis"
+if str(ANALYSIS_DIR) not in sys.path:
+    sys.path.insert(0, str(ANALYSIS_DIR))
 
 import analyze_ppc_wrong_fix_residuals as audit
 

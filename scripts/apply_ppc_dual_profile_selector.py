@@ -13,9 +13,11 @@ import sys
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = Path(__file__).resolve().parent
+ANALYSIS_DIR = SCRIPTS_DIR / "analysis"
 APPS_DIR = ROOT_DIR / "apps" / "commands" / "benchmarks"
-if str(SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS_DIR))
+for script_dir in (SCRIPTS_DIR, ANALYSIS_DIR):
+    if str(script_dir) not in sys.path:
+        sys.path.insert(0, str(script_dir))
 if str(APPS_DIR) not in sys.path:
     sys.path.insert(0, str(APPS_DIR))
 

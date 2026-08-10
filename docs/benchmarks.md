@@ -148,7 +148,7 @@ The full machine-readable reports are
 `ppc_tokyo_run1_coverage_bad_segments.csv`; the bad-segment CSV includes
 status counts, adjacent FIX-anchor gap/speed, solution path length, and
 FIX-anchor bridge residuals for continued FLOAT-tail design.
-Use `scripts/analyze_ppc_coverage_quality.py --official-segments-csv` to emit
+Use `scripts/analysis/analyze_ppc_coverage_quality.py --official-segments-csv` to emit
 the full per-reference-distance official score ledger.
 
 | Status | Epochs | P50 H | P95 H | 3D <= 50 cm / reference | P95H exceedance share |
@@ -220,7 +220,7 @@ run1 gain, so simply delaying resets eventually converges back toward the
 baseline. The best measured residual gate still trails the plain reset10
 baseline (**58.90%**) because positioning loss outweighs the p95 cleanup. Keep
 it opt-in while the next selector adds motion/continuity context.
-`scripts/analyze_ppc_residual_reset_sweep.py` compares those full-run summaries
+`scripts/analysis/analyze_ppc_residual_reset_sweep.py` compares those full-run summaries
 and computes selector upper bounds. On reset10 plus streak `3`/`5`/`8`, the
 global profile winner is still baseline (**58.90%**), a city selector reaches
 **58.97%** by applying streak `8` only to Tokyo, and a per-run oracle reaches
@@ -228,11 +228,11 @@ global profile winner is still baseline (**58.90%**), a city selector reaches
 baseline elsewhere. That is only **35.6 m** of official scored-distance upside,
 so the next target is a segment-level trigger rather than another whole-run
 threshold.
-`scripts/analyze_ppc_profile_segment_delta.py` now compares a baseline `.pos`
+`scripts/analysis/analyze_ppc_profile_segment_delta.py` now compares a baseline `.pos`
 and one or more candidate `.pos` files against the same PPC `reference.csv` and
 emits official-score gain/loss segments, score/status transitions, and residual
 diagnostics. Use it before turning a whole-run candidate into a selector.
-`scripts/analyze_ppc_segment_selector_sweep.py` then consumes those segment CSVs
+`scripts/analysis/analyze_ppc_segment_selector_sweep.py` then consumes those segment CSVs
 and ranks observable candidate-selection rules by net official-distance gain,
 gain retention, loss exposure, and run-by-run behavior.
 The opt-in `--min-float-prefit-trusted-jump` gate starts that selector path:
@@ -262,11 +262,11 @@ six probes, weighted official score becomes **59.55%** versus **58.90%** for
 reset10 (**+301.5 m**, **+0.65 pp**) and **58.02%** for candidate-all.
 Positioning remains positive on every run, averaging **+0.33 pp** versus
 reset10, while Fix averages **+1.69 pp**. The matrix aggregation and scorecard
-come from `scripts/analyze_ppc_dual_profile_selector_matrix.py`.
+come from `scripts/analysis/analyze_ppc_dual_profile_selector_matrix.py`.
 
 ![PPC dual-profile selector scorecard](ppc_jump0p5_dual_selector_scorecard.png)
 
-`scripts/analyze_ppc_segment_selector_leave_one_run_out.py` retrains the
+`scripts/analysis/analyze_ppc_segment_selector_leave_one_run_out.py` retrains the
 segment selector with each run held out once. With the same three-condition
 sweep settings, holdout aggregate remains positive (**+26.8 m**) and beats
 candidate-all by **+434.6 m**, with **5 / 6** non-negative holdout runs. The
@@ -518,7 +518,7 @@ python3 apps/gnss.py ppc-coverage-matrix \
   --summary-json output/ppc_coverage_matrix_floatreset10/summary.json \
   --markdown-output output/ppc_coverage_matrix_floatreset10/table.md
 
-python3 scripts/analyze_ppc_residual_reset_sweep.py \
+python3 scripts/analysis/analyze_ppc_residual_reset_sweep.py \
   --baseline-summary-json output/ppc_coverage_matrix_floatreset10/summary.json \
   --candidate streak3=output/ppc_coverage_matrix_floatreset10_prefit_streak3_6_30/ppc_coverage_matrix_summary.json \
   --candidate streak5=output/ppc_coverage_matrix_floatreset10_prefit_streak5_6_30/ppc_coverage_matrix_summary.json \
@@ -526,7 +526,7 @@ python3 scripts/analyze_ppc_residual_reset_sweep.py \
   --summary-json output/ppc_residual_reset_sweep_selector.json \
   --markdown-output output/ppc_residual_reset_sweep_selector.md
 
-python3 scripts/analyze_ppc_profile_segment_delta.py \
+python3 scripts/analysis/analyze_ppc_profile_segment_delta.py \
   --reference-csv /datasets/PPC-Dataset/tokyo/run1/reference.csv \
   --baseline-pos output/ppc_coverage_matrix_floatreset10/tokyo_run1.pos \
   --candidate jump0p5=output/ppc_tokyo_run1_rtk_prefit_s5_jump0p5_matrixprofile.pos \
@@ -534,7 +534,7 @@ python3 scripts/analyze_ppc_profile_segment_delta.py \
   --markdown-output output/ppc_tokyo_run1_jump0p5_segment_delta.md \
   --segments-csv output/ppc_tokyo_run1_jump0p5_segment_delta.csv
 
-python3 scripts/analyze_ppc_segment_selector_sweep.py \
+python3 scripts/analysis/analyze_ppc_segment_selector_sweep.py \
   --segment-csv tokyo_run1=output/ppc_tokyo_run1_jump0p5_segment_delta.csv \
   --segment-csv tokyo_run2=output/ppc_tokyo_run2_jump0p5_segment_delta.csv \
   --segment-csv tokyo_run3=output/ppc_tokyo_run3_jump0p5_segment_delta.csv \
@@ -557,7 +557,7 @@ python3 scripts/apply_ppc_dual_profile_selector.py \
   --summary-json output/ppc_tokyo_run1_jump0p5_dual_selector_6run_refined_summary.json \
   --segments-csv output/ppc_tokyo_run1_jump0p5_dual_selector_6run_refined_segments.csv
 
-python3 scripts/analyze_ppc_dual_profile_selector_matrix.py \
+python3 scripts/analysis/analyze_ppc_dual_profile_selector_matrix.py \
   --run tokyo_run1=output/ppc_tokyo_run1_jump0p5_dual_selector_6run_refined_summary.json \
   --run tokyo_run2=output/ppc_tokyo_run2_jump0p5_dual_selector_6run_refined_summary.json \
   --run tokyo_run3=output/ppc_tokyo_run3_jump0p5_dual_selector_6run_refined_summary.json \
@@ -646,12 +646,12 @@ alongside the matrix JSON.
 
 #### Multi-candidate selector scorecard
 
-`scripts/analyze_ppc_multi_candidate_selector_matrix.py` reads the matrix
+`scripts/analysis/analyze_ppc_multi_candidate_selector_matrix.py` reads the matrix
 summary JSON produced above and emits a per-run markdown table and a scorecard
 PNG using the same dark-card style as the dual-profile analyzer.
 
 ```bash
-python3 scripts/analyze_ppc_multi_candidate_selector_matrix.py \
+python3 scripts/analysis/analyze_ppc_multi_candidate_selector_matrix.py \
   --summary-json output/ppc_multi_selector_matrix.json \
   --markdown-output output/ppc_multi_selector_matrix_scorecard.md \
   --scorecard docs/ppc_multi_candidate_scorecard.png

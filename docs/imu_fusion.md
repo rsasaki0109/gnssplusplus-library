@@ -41,7 +41,7 @@ Key flags: `--lever-arm x,y,z` (IMU→antenna, body FLU), `--zupt`/`--no-zupt`
 ## IMU input
 
 `imu.csv` is parsed by header name (whitespace/case/punctuation-insensitive),
-matching the convention of `scripts/analyze_ppc_imu_coverage.py`:
+matching the convention of `scripts/analysis/analyze_ppc_imu_coverage.py`:
 GPS TOW + week, accel in m/s², angular rate in deg/s (converted to rad/s at
 load). Body-axis convention is explicit (`ImuAxisConvention`), defaulting to
 FLU/Z-up, which is what the PPC-Dataset IMU actually logs (verified: stationary

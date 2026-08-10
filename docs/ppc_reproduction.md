@@ -392,7 +392,7 @@ MPLBACKEND=Agg python3 scripts/plot_ppc_status_trajectories.py \
 ```
 
 Regenerate the wrong-FIX severity and leave-one-run-out audit with
-`scripts/analyze_ppc_wrong_fix_residuals.py`. Pass the previous `min_sat9` and
+`scripts/analysis/analyze_ppc_wrong_fix_residuals.py`. Pass the previous `min_sat9` and
 `integrity_gate` and `wrong_basin_escape` directories and the new
 `consensus_escape` directory as `--profile`, plus the six pre-gate selected POS
 paths as `--loo-pos`; the
@@ -468,7 +468,7 @@ python3 scripts/apply_ppc_status_demotion.py \
 Audit runtime/reference separation and per-run harm with:
 
 ```bash
-python3 scripts/evaluate_ppc_residual_integrity_policy.py \
+python3 scripts/analysis/evaluate_ppc_residual_integrity_policy.py \
   --dataset-root data/PPC-Dataset \
   --input-dir output/ppc_kf_fgo_online_consensus_fresh_kinematic_holdout \
   --summary-json output/ppc_residual_integrity_fixed_policy_audit.json \
@@ -505,7 +505,7 @@ After solving Odaiba and Shinjuku with the same `low-cost` RTK preset, audit
 both full-run outputs without changing the frozen runtime thresholds:
 
 ```bash
-python3 scripts/evaluate_ppc_residual_integrity_policy.py \
+python3 scripts/analysis/evaluate_ppc_residual_integrity_policy.py \
   --run urban_odaiba=output/urbannav_odaiba_full.pos,/datasets/UrbanNav-TK-20181219/Odaiba/reference.csv \
   --run urban_shinjuku=output/urbannav_shinjuku_full.pos,/datasets/UrbanNav-TK-20181219/Shinjuku/reference.csv \
   --match-tolerance-s 0.25 \
