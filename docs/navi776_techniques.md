@@ -336,7 +336,7 @@ fixed-anchor bridge can be applied with the same configuration to OFF and
 ON:
 
 ```text
-python scripts/bridge_pos_fixed_anchors.py \
+python scripts/experiments/ppc/bridge_pos_fixed_anchors.py \
   --max-anchor-gap-s 30 --anchor-max-post-rms-m 0 \
   --anchor-max-nis-per-observation 0 --replace-nonfixed \
   --no-fill-missing --interpolation hermite-horizontal ...

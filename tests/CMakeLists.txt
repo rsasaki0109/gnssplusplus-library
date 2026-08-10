@@ -209,7 +209,7 @@ if(GTest_FOUND)
     )
     add_test(
         NAME python_ppc_goal_completion_audit_tests
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/verify_ppc_goal_completion.py --check-only
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/experiments/ppc/verify_ppc_goal_completion.py --check-only
     )
     add_test(
         NAME python_cli_tests

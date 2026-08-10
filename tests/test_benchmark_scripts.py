@@ -24,6 +24,7 @@ COMMANDS_DIR = ROOT_DIR / "apps" / "commands"
 SCRIPTS_DIR = ROOT_DIR / "scripts"
 ANALYSIS_DIR = SCRIPTS_DIR / "analysis"
 CI_SCRIPTS_DIR = SCRIPTS_DIR / "ci"
+PPC_EXPERIMENTS_DIR = SCRIPTS_DIR / "experiments" / "ppc"
 
 for command_group in (
     "benchmarks", "positioning", "products", "receivers",
@@ -34,6 +35,7 @@ sys.path.insert(0, str(COMMANDS_DIR))
 sys.path.insert(0, str(SCRIPTS_DIR))
 sys.path.insert(0, str(ANALYSIS_DIR))
 sys.path.insert(0, str(CI_SCRIPTS_DIR))
+sys.path.insert(0, str(PPC_EXPERIMENTS_DIR))
 
 import gnss_odaiba_benchmark as benchmark  # noqa: E402
 import gnss_clas_ppp as clas_ppp  # noqa: E402
@@ -7903,7 +7905,7 @@ class PPCMultiCandidateSelectorTest(unittest.TestCase):
 
     def test_cli_help_runs_without_test_suite_import_paths(self) -> None:
         completed = subprocess.run(
-            [sys.executable, str(SCRIPTS_DIR / "apply_ppc_multi_candidate_selector.py"), "--help"],
+            [sys.executable, str(PPC_EXPERIMENTS_DIR / "apply_ppc_multi_candidate_selector.py"), "--help"],
             cwd=ROOT_DIR,
             capture_output=True,
             text=True,

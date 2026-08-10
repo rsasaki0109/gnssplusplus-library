@@ -36,7 +36,7 @@ coverage matrix records `solver_wall_time_s`, `realtime_factor`, and
 post-run diagnostics only; they are used to reject risky runtime gates, not to
 choose live output.
 
-Use `scripts/run_ppc_realtime_guard_sweep.py` to compare deployable guard
+Use `scripts/experiments/ppc/run_ppc_realtime_guard_sweep.py` to compare deployable guard
 profiles with those runtime gates. The built-in profiles keep the coverage
 baseline, a fixed-update residual/NIS guard, and a non-FIX reset profile in one
 report so candidate gates can be rejected before any smoother work is revisited.
@@ -256,7 +256,7 @@ rule requires candidate status FIXED, candidate baseline `940.785..9053.95 m`,
 and `candidate_num_satellites >= 8`. It keeps **317.0 m** of gain, exposes
 **15.5 m** of loss, reduces Tokyo run2's damage from **-377.2 m** to **+2.0 m**,
 and keeps every run non-negative.
-Applying the rule with `scripts/apply_ppc_dual_profile_selector.py` writes real
+Applying the rule with `scripts/experiments/ppc/apply_ppc_dual_profile_selector.py` writes real
 selected `.pos` outputs and reuses the normal PPC metrics path. Across those
 six probes, weighted official score becomes **59.55%** versus **58.90%** for
 reset10 (**+301.5 m**, **+0.65 pp**) and **58.02%** for candidate-all.
@@ -288,7 +288,7 @@ that picks only the segments where the gate actually helps:
 In words: keep the gated candidate only where the reset10 baseline was
 struggling (low or unresolved AR ratio) and the gated candidate achieved a
 FIXED solution with at least 16 DD observations. Applying this rule with
-`scripts/apply_ppc_dual_profile_selector.py` (rank 1 of the robust-objective
+`scripts/experiments/ppc/apply_ppc_dual_profile_selector.py` (rank 1 of the robust-objective
 sweep) gives:
 
 - **60.553%** weighted PPC official score
@@ -336,7 +336,7 @@ the loose threshold. A fast robust sweep (`--max-numeric-conditions 1`,
 `status_transition == FLOAT->FIXED AND candidate_rtk_update_normalized_innovation_squared_per_observation <= 2.0675` (nis30, +560 m)
 
 The **NIS5 rank 1 rule** wins on every run. Applied with
-`scripts/apply_ppc_dual_profile_selector.py` against the reset10 baseline:
+`scripts/experiments/ppc/apply_ppc_dual_profile_selector.py` against the reset10 baseline:
 
 - **63.258%** weighted PPC official score
 - **+4.360 pp / +2019.8 m** versus the reset10 baseline (**58.898%**)
@@ -366,7 +366,7 @@ Applying a second dual-profile selector on top of the NIS5 hybrid — this
 time using reset10 as the reset10-equivalent baseline, but the NIS5 hybrid
 output from stage 1 as the selector input and a tighter NIS candidate as
 the "other side" — finds additional gain segments that stage 1 missed.
-Iterating five times with `scripts/apply_ppc_dual_profile_selector.py` and
+Iterating five times with `scripts/experiments/ppc/apply_ppc_dual_profile_selector.py` and
 five different candidate profiles produces a strictly monotonic
 progression:
 
@@ -400,7 +400,7 @@ replacing weaker FLOAT/FIX segments with higher-confidence candidates.
 Further CV-bridge and IMU-axis variants add only ~+0.02 pp so are omitted.
 
 The chain is deployable: each stage is a deterministic single-rule apply
-using `scripts/apply_ppc_dual_profile_selector.py` with the rank 1 rule
+using `scripts/experiments/ppc/apply_ppc_dual_profile_selector.py` with the rank 1 rule
 from a per-stage fast selector sweep. The rule expressions above are the
 canonical rules used for the numbers in this table. Each stage requires
 one extra matrix run at a different `--max-update-nis-per-obs` threshold,
@@ -505,7 +505,7 @@ python3 apps/gnss.py ppc-coverage-matrix \
   --require-official-score-delta-min 0 \
   --require-p95-h-delta-max 0
 
-python3 scripts/update_ppc_coverage_readme.py \
+python3 scripts/experiments/ppc/update_ppc_coverage_readme.py \
   --summary-json output/ppc_coverage_matrix/summary.json \
   --check
 
@@ -548,7 +548,7 @@ python3 scripts/analysis/analyze_ppc_segment_selector_sweep.py \
   --summary-json output/ppc_jump0p5_segment_selector_sweep_6run_refined.json \
   --markdown-output output/ppc_jump0p5_segment_selector_sweep_6run_refined.md
 
-python3 scripts/apply_ppc_dual_profile_selector.py \
+python3 scripts/experiments/ppc/apply_ppc_dual_profile_selector.py \
   --reference-csv /datasets/PPC-Dataset/tokyo/run1/reference.csv \
   --baseline-pos output/ppc_coverage_matrix_floatreset10/tokyo_run1.pos \
   --candidate-pos output/ppc_tokyo_run1_rtk_prefit_s5_jump0p5_matrixprofile.pos \
@@ -580,7 +580,7 @@ python3 apps/gnss.py ppc-coverage-matrix \
   --summary-json output/ppc_coverage_matrix_tail_hres6/summary.json \
   --markdown-output output/ppc_coverage_matrix_tail_hres6/table.md
 
-python3 scripts/generate_ppc_tail_cleanup_scorecard.py \
+python3 scripts/experiments/ppc/generate_ppc_tail_cleanup_scorecard.py \
   --baseline-summary-json output/ppc_coverage_matrix/summary.json \
   --cleanup-summary-json output/ppc_coverage_matrix_tail_hres6/summary.json \
   --output docs/ppc_tail_cleanup_scorecard.png
@@ -620,12 +620,12 @@ fixed-ambiguity epochs appear.
 
 ### Multi-candidate selector matrix (6-run)
 
-`scripts/run_ppc_multi_candidate_selector_matrix.py` drives
+`scripts/experiments/ppc/run_ppc_multi_candidate_selector_matrix.py` drives
 `apply_ppc_multi_candidate_selector.py` across all six PPC runs and aggregates
 per-run summary JSONs into a weighted matrix table.
 
 ```bash
-python3 scripts/run_ppc_multi_candidate_selector_matrix.py \
+python3 scripts/experiments/ppc/run_ppc_multi_candidate_selector_matrix.py \
   --dataset-root /datasets/PPC-Dataset \
   --baseline-pos-template output/ppc_coverage_matrix_floatreset10/{key}.pos \
   --candidate nis5=output/ppc_coverage_matrix_nis_5_v2/{key}.pos \
@@ -667,13 +667,13 @@ PNG generated by `analyze_ppc_multi_candidate_selector_matrix.py --scorecard doc
 
 #### Ratio-gating selector Pareto sweep
 
-`scripts/run_ppc_ratio_gating_selector_sweep.py` repeats the matrix driver for
+`scripts/experiments/ppc/run_ppc_ratio_gating_selector_sweep.py` repeats the matrix driver for
 multiple ratio-gating rule sets and writes a compact Pareto table.  Use
 `THRESHOLD=none` for status-only FIXED gating, or per-candidate thresholds when
 jump-tolerant and default-like candidates need different gates.
 
 ```bash
-python3 scripts/run_ppc_ratio_gating_selector_sweep.py \
+python3 scripts/experiments/ppc/run_ppc_ratio_gating_selector_sweep.py \
   --dataset-root /datasets/PPC-Dataset \
   --baseline-pos-template output/ppc_default/{key}.pos \
   --candidate jump7p5=output/ppc_jump7p5/{key}.pos \
