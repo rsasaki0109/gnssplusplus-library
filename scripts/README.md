@@ -8,6 +8,7 @@ Git; source code and small deterministic fixtures belong in the repository.
 
 - `ci/`: CI wrappers, optional gates, artifact validation, and release matrices.
 - `analysis/`: focused row-level diff, summary, and parity analysis tools.
+- `experiments/`: reproducible experiment drivers and their small example inputs.
 - `analyze_*.py`: read-only analysis of existing solver or experiment output.
 - `evaluate_*.py`: policy, integrity, or holdout evaluation.
 - `generate_*.py`: figures, scorecards, reports, and machine-readable artifacts.

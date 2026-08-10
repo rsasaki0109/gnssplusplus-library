@@ -45,7 +45,6 @@ __pycache__/
 .idea/
 *.swp
 PLAN.md
-notes/
 CLAUDE.md
 
 # External reference checkouts (e.g. MADOCALIB oracle)

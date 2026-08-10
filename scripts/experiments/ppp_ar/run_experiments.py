@@ -21,9 +21,9 @@ except ModuleNotFoundError:  # pragma: no cover - Python < 3.11 compatibility.
     import tomli as tomllib
 
 
-ROOT_DIR = Path(__file__).resolve().parents[2]
+ROOT_DIR = Path(__file__).resolve().parents[3]
 APPS_DIR = ROOT_DIR / "apps"
-DEFAULT_STRATEGIES_TOML = ROOT_DIR / "experiments" / "ppp_ar" / "strategies.toml"
+DEFAULT_STRATEGIES_TOML = ROOT_DIR / "scripts" / "experiments" / "ppp_ar" / "strategies.toml"
 DEFAULT_RESULTS_JSON = ROOT_DIR / "output" / "ppp_ar_experiments" / "results.json"
 
 

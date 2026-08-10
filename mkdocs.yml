@@ -6,6 +6,7 @@ repo_name: rsasaki0109/gnssplusplus-library
 docs_dir: docs
 exclude_docs: |
   HANDOFF_PPC_CLAS_CODEX.md
+  archive/
 theme:
   name: material
   features:
