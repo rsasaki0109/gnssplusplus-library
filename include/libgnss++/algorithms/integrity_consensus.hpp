@@ -190,7 +190,7 @@ public:
         int residual_spike_max_satellites = 14;
 
         // Frozen offline "base" low-satellite/ratio confidence gate, ported
-        // field-for-field from scripts/apply_ppc_status_demotion.py's
+        // field-for-field from scripts/experiments/ppc/apply_ppc_status_demotion.py's
         // should_demote()/should_exonerate() with the audited defaults
         // (--min-satellites 8 --low-satellite-ceiling 11
         // --low-satellite-max-ratio 15 --exonerate-min-satellites 11

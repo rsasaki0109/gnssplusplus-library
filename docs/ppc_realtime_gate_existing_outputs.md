@@ -100,7 +100,7 @@ FIX substantially on that run, but the full six-run aggregate still loses
 The fixed-update reject gates above feed back into ambiguity reacquisition. A
 gentler deployable pattern is to keep the solver trajectory untouched, but
 demote only the emitted status from FIXED to FLOAT when real-time diagnostics
-flag a risky fixed epoch. `scripts/apply_ppc_status_demotion.py` reproduces that
+flag a risky fixed epoch. `scripts/experiments/ppc/apply_ppc_status_demotion.py` reproduces that
 POS-only status demotion without using reference truth.
 
 On the baseline `sigma_0p001` six-run output, `--max-ratio 6

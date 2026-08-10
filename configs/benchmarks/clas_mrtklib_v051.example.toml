@@ -1,6 +1,6 @@
 # Canonical local profiles for the MRTKLIB v0.5.1 CLAS literal-port work.
 # Run with:
-#   python3 scripts/run_clas_mrtklib_v051.py <profile> --print-command
+#   python3 scripts/experiments/ppc/run_clas_mrtklib_v051.py <profile> --print-command
 # Copy this file before changing local paths or epoch limits; the checked-in
 # example records the fixtures used for parity and safety decisions.
 

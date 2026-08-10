@@ -209,9 +209,6 @@ install(PROGRAMS
     ${CMAKE_SOURCE_DIR}/scripts/generate_feature_overview_card.py
     ${CMAKE_SOURCE_DIR}/scripts/generate_odaiba_scorecard.py
     ${CMAKE_SOURCE_DIR}/scripts/generate_odaiba_social_card.py
-    ${CMAKE_SOURCE_DIR}/scripts/generate_ppc_rtk_scorecard.py
-    ${CMAKE_SOURCE_DIR}/scripts/generate_ppc_tail_cleanup_scorecard.py
-    ${CMAKE_SOURCE_DIR}/scripts/generate_ppc_rtk_trajectory.py
     ${CMAKE_SOURCE_DIR}/scripts/dump_taroz_p_debug.m
     ${CMAKE_SOURCE_DIR}/scripts/dump_taroz_d_debug.m
     ${CMAKE_SOURCE_DIR}/scripts/dump_taroz_pos_pdc_debug.m
@@ -219,9 +216,21 @@ install(PROGRAMS
     ${CMAKE_SOURCE_DIR}/scripts/dump_taroz_pos_vel_pdc_debug.m
     ${CMAKE_SOURCE_DIR}/scripts/dump_taroz_pos_vel_ambiguity_pdc_debug.m
     ${CMAKE_SOURCE_DIR}/scripts/dump_taroz_pd_debug.m
-    ${CMAKE_SOURCE_DIR}/scripts/apply_ppc_dual_profile_selector.py
-    ${CMAKE_SOURCE_DIR}/scripts/update_ppc_coverage_readme.py
     DESTINATION scripts
+)
+
+install(PROGRAMS
+    ${CMAKE_SOURCE_DIR}/scripts/experiments/ppc/apply_ppc_dual_profile_selector.py
+    ${CMAKE_SOURCE_DIR}/scripts/experiments/ppc/generate_ppc_rtk_scorecard.py
+    ${CMAKE_SOURCE_DIR}/scripts/experiments/ppc/generate_ppc_rtk_trajectory.py
+    ${CMAKE_SOURCE_DIR}/scripts/experiments/ppc/generate_ppc_tail_cleanup_scorecard.py
+    ${CMAKE_SOURCE_DIR}/scripts/experiments/ppc/update_ppc_coverage_readme.py
+    DESTINATION scripts/experiments/ppc
+)
+
+install(FILES
+    ${CMAKE_SOURCE_DIR}/scripts/experiments/ppc/_paths.py
+    DESTINATION scripts/experiments/ppc
 )
 
 install(PROGRAMS
