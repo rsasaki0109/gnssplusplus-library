@@ -183,6 +183,11 @@ install(PROGRAMS
 )
 
 install(FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/commands/visualization/gnss_web.html
+    DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+install(FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/commands/support/__init__.py
     ${CMAKE_CURRENT_SOURCE_DIR}/commands/support/gnss_runtime.py
     ${CMAKE_CURRENT_SOURCE_DIR}/commands/support/gnss_toml_config.py

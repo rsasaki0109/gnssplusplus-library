@@ -29,6 +29,7 @@ test_rinex_read.cpp
 !docs/*.png
 *.html
 !site-pages/**/*.html
+!apps/commands/visualization/gnss_web.html
 *.kml
 *.pos
 site/
