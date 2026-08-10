@@ -189,6 +189,7 @@ install(FILES
 
 install(FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/commands/support/__init__.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/commands/support/gnss_input_source.py
     ${CMAKE_CURRENT_SOURCE_DIR}/commands/support/gnss_runtime.py
     ${CMAKE_CURRENT_SOURCE_DIR}/commands/support/gnss_toml_config.py
     DESTINATION ${CMAKE_INSTALL_BINDIR}/support

@@ -100,6 +100,7 @@ class PackagingSmokeTest(unittest.TestCase):
                 prefix / "bin" / "gnss_web.py",
                 prefix / "bin" / "gnss_web.html",
                 prefix / "bin" / "support" / "__init__.py",
+                prefix / "bin" / "support" / "gnss_input_source.py",
                 prefix / "bin" / "support" / "gnss_runtime.py",
                 prefix / "bin" / "support" / "gnss_toml_config.py",
                 prefix / "bin" / "gnss_live_signoff.py",
@@ -114,6 +115,8 @@ class PackagingSmokeTest(unittest.TestCase):
                 prefix / "bin" / "gnss_ppc_demo.py",
                 prefix / "bin" / "gnss_ppc_rtk_signoff.py",
                 prefix / "bin" / "gnss_clas_ppp.py",
+                prefix / "bin" / "gnss_nmea_info.py",
+                prefix / "bin" / "gnss_novatel_info.py",
                 prefix / "bin" / "gnss_sbp_info.py",
                 prefix / "bin" / "gnss_sbf_info.py",
                 prefix / "bin" / "gnss_trimble_info.py",
@@ -198,6 +201,25 @@ class PackagingSmokeTest(unittest.TestCase):
                 installed_web_hash.stdout.strip(),
                 hashlib.sha256((prefix / "bin" / "gnss_web.html").read_bytes()).hexdigest(),
             )
+
+            for command in (
+                "nmea-info",
+                "novatel-info",
+                "sbp-info",
+                "sbf-info",
+                "trimble-info",
+                "skytraq-info",
+                "binex-info",
+            ):
+                receiver_help = subprocess.run(
+                    [str(prefix / "bin" / "gnss"), command, "--help"],
+                    check=True,
+                    cwd=ROOT_DIR,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertIn("--input", receiver_help.stdout)
 
             if repo_data_exists(
                 "data/short_baseline/TSK200JPN_R_20240010000_01D_30S_MO.rnx",
