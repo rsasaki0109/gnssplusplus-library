@@ -3,9 +3,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -96,6 +98,7 @@ class PackagingSmokeTest(unittest.TestCase):
                 prefix / "bin" / "gnss_dcb_info.py",
                 prefix / "bin" / "gnss_rcv.py",
                 prefix / "bin" / "gnss_web.py",
+                prefix / "bin" / "gnss_web.html",
                 prefix / "bin" / "support" / "__init__.py",
                 prefix / "bin" / "support" / "gnss_runtime.py",
                 prefix / "bin" / "support" / "gnss_toml_config.py",
@@ -168,6 +171,33 @@ class PackagingSmokeTest(unittest.TestCase):
 
             env = dict(os.environ)
             env["PATH"] = str(prefix / "bin") + os.pathsep + env.get("PATH", "")
+
+            installed_web_hash = subprocess.run(
+                [
+                    sys.executable,
+                    "-c",
+                    (
+                        "import hashlib, importlib.util, pathlib, sys; "
+                        "path = pathlib.Path(sys.argv[1]); "
+                        "sys.path.insert(0, str(path.parent)); "
+                        "spec = importlib.util.spec_from_file_location('installed_gnss_web', path); "
+                        "module = importlib.util.module_from_spec(spec); "
+                        "assert spec.loader is not None; "
+                        "spec.loader.exec_module(module); "
+                        "print(hashlib.sha256(module.render_html().encode('utf-8')).hexdigest())"
+                    ),
+                    str(prefix / "bin" / "gnss_web.py"),
+                ],
+                check=True,
+                cwd=ROOT_DIR,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(
+                installed_web_hash.stdout.strip(),
+                hashlib.sha256((prefix / "bin" / "gnss_web.html").read_bytes()).hexdigest(),
+            )
 
             if repo_data_exists(
                 "data/short_baseline/TSK200JPN_R_20240010000_01D_30S_MO.rnx",
