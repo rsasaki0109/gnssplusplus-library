@@ -775,6 +775,81 @@ class ObservableNativeCliContractsTest(unittest.TestCase):
                             numerics["initial_cost"],
                         )
 
+    def test_success_seed_formats_and_interpolation_are_stable(self) -> None:
+        cases = (
+            (
+                "rtklib",
+                "2022/03/10 00:00:00.000 0.0 90.0 0.0\n"
+                "2022/03/10 00:00:01.000 0.0 90.0 0.0\n",
+                (RECEIVER_Y_M, RECEIVER_Y_M),
+                0,
+            ),
+            (
+                "interpolated",
+                "2200 345599 0 6378134 0\n"
+                "2200 345602 0 6378143 0\n",
+                (RECEIVER_Y_M, RECEIVER_Y_M + 3.0),
+                2,
+            ),
+        )
+        with tempfile.TemporaryDirectory(prefix="gnss_observable_seed_") as temp_dir:
+            temp_path = Path(temp_dir)
+            observation_path, navigation_path, seed_path = self.write_success_fixture(
+                temp_path
+            )
+
+            for case_name, seed_text, expected_y_m, interpolated_epochs in cases:
+                seed_path.write_text(seed_text, encoding="ascii")
+                for variant in VARIANTS:
+                    output_path = (
+                        temp_path / f"{case_name}-{variant.binary_name}.csv"
+                    )
+                    summary_path = (
+                        temp_path / f"{case_name}-{variant.binary_name}.json"
+                    )
+                    with self.subTest(
+                        case=case_name,
+                        binary=variant.binary_name,
+                    ):
+                        result = self.run_cli(
+                            variant,
+                            "--obs",
+                            str(observation_path),
+                            "--nav",
+                            str(navigation_path),
+                            "--seed-pos",
+                            str(seed_path),
+                            "--out-csv",
+                            str(output_path),
+                            "--summary-json",
+                            str(summary_path),
+                            "--debug-problem-only",
+                            "--quiet",
+                        )
+
+                        self.assertEqual(result.returncode, 0, msg=result.stderr)
+                        self.assertEqual(result.stdout, "")
+                        self.assertEqual(result.stderr, "")
+
+                        summary = json.loads(
+                            summary_path.read_text(encoding="utf-8")
+                        )
+                        self.assertEqual(summary["optimized_epochs"], 2)
+                        self.assertEqual(summary["seed_matched_epochs"], 2)
+                        self.assertEqual(
+                            summary["seed_interpolated_epochs"],
+                            interpolated_epochs,
+                        )
+
+                        with output_path.open(
+                            newline="", encoding="utf-8"
+                        ) as stream:
+                            output_rows = list(csv.DictReader(stream))
+                        self.assertEqual(len(output_rows), 2)
+                        for row, expected in zip(output_rows, expected_y_m):
+                            self.assert_contract_float(row["spp_y_m"], expected)
+                            self.assert_contract_float(row["fgo_y_m"], expected)
+
     def test_runtime_input_failure_does_not_create_outputs(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_observable_cli_") as temp_dir:
             temp_path = Path(temp_dir)
