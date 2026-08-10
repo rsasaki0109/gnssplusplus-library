@@ -6,14 +6,9 @@ from __future__ import annotations
 import argparse
 import binascii
 import os
-import sys
 from dataclasses import dataclass
 
-try:
-    from support.gnss_input_source import InputSource
-except ModuleNotFoundError:
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from support.gnss_input_source import InputSource
+from support.gnss_input_source import InputSource
 
 
 BINEX_SYNC_BIG_ENDIAN_REGULAR = 0xE2

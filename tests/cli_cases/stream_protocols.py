@@ -1,8 +1,81 @@
 """CLI regression cases for the StreamProtocolCases domain."""
 
+import ast
+
 from ._support import *  # noqa: F401,F403
 
+
+def _sys_path_access_lines(source: str, *, filename: str = "<string>") -> list[int]:
+    tree = ast.parse(source, filename=filename)
+    nodes = tuple(ast.walk(tree))
+    sys_names = {
+        imported.asname or imported.name
+        for node in nodes
+        if isinstance(node, ast.Import)
+        for imported in node.names
+        if imported.name == "sys"
+    }
+    return sorted(
+        {
+            node.lineno
+            for node in nodes
+            if (
+                isinstance(node, ast.Attribute)
+                and node.attr == "path"
+                and isinstance(node.value, ast.Name)
+                and node.value.id in sys_names
+            )
+            or (
+                isinstance(node, ast.ImportFrom)
+                and node.module == "sys"
+                and any(imported.name == "path" for imported in node.names)
+            )
+        }
+    )
+
+
 class StreamProtocolCases:
+    def test_sys_path_access_detector_covers_aliases_and_targets(self) -> None:
+        cases = (
+            ("module alias", "import sys as s\ns.path.insert(0, 'support')\n", [2]),
+            ("from-import alias", "from sys import path as p\np.append('support')\n", [1]),
+            ("assigned path alias", "import sys\np = sys.path\np.append('support')\n", [2]),
+            ("recursive targets", "import sys\nx, sys.path = values\ndel (y, sys.path)\n", [2, 3]),
+            (
+                "non-path sys attributes",
+                (
+                    "import sys as s\n"
+                    "data = s.stdin.read()\n"
+                    "s.stderr.write(data)\n"
+                    "command = [s.executable]\n"
+                ),
+                [],
+            ),
+        )
+
+        for name, source, expected_lines in cases:
+            with self.subTest(name=name):
+                self.assertEqual(_sys_path_access_lines(source), expected_lines)
+
+    def test_receiver_commands_do_not_access_sys_path(self) -> None:
+        receiver_dir = ROOT_DIR / "apps" / "commands" / "receivers"
+        accesses: list[str] = []
+
+        for source_path in sorted(receiver_dir.glob("*.py")):
+            lines = _sys_path_access_lines(
+                source_path.read_text(encoding="utf-8"),
+                filename=str(source_path),
+            )
+            accesses.extend(
+                f"{source_path.relative_to(ROOT_DIR)}:{line}" for line in lines
+            )
+
+        self.assertEqual(
+            accesses,
+            [],
+            "Receiver command sources must not access sys.path: " + ", ".join(accesses),
+        )
+
     def test_stream_relays_rtcm_frames(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_stream_test_") as temp_dir:
             temp_root = Path(temp_dir)
