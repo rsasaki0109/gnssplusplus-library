@@ -9,8 +9,11 @@ from dataclasses import dataclass
 from pathlib import Path
 import sys
 
-if os.name != "nt":
-    import termios
+try:
+    from support.gnss_input_source import InputSource, NMEA_SERIAL_BAUDS
+except ModuleNotFoundError:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from support.gnss_input_source import InputSource, NMEA_SERIAL_BAUDS
 
 
 @dataclass
@@ -74,75 +77,6 @@ def parse_args() -> argparse.Namespace:
         help="Suppress per-sentence printing and show only the summary.",
     )
     return parser.parse_args()
-
-
-def parse_serial_path(path: str) -> tuple[str, int]:
-    default_baud = 9600
-    if path.startswith("serial://"):
-        raw = path[len("serial://"):]
-    else:
-        raw = path
-    if "?baud=" in raw:
-        device, baud_text = raw.split("?baud=", 1)
-        return device, int(baud_text)
-    return raw, default_baud
-
-
-def configure_serial(fd: int, baud: int) -> None:
-    if os.name == "nt":
-        raise RuntimeError("serial input is not supported on this platform")
-    baud_map = {
-        4800: termios.B4800,
-        9600: termios.B9600,
-        19200: termios.B19200,
-        38400: termios.B38400,
-        57600: termios.B57600,
-        115200: termios.B115200,
-    }
-    if baud not in baud_map:
-        raise ValueError(f"unsupported serial baud rate: {baud}")
-    attrs = termios.tcgetattr(fd)
-    attrs[0] = 0
-    attrs[1] = 0
-    attrs[2] = termios.CLOCAL | termios.CREAD | termios.CS8
-    attrs[3] = 0
-    attrs[4] = baud_map[baud]
-    attrs[5] = baud_map[baud]
-    attrs[6][termios.VMIN] = 1
-    attrs[6][termios.VTIME] = 0
-    termios.tcsetattr(fd, termios.TCSANOW, attrs)
-
-
-class InputSource:
-    def __init__(self, path: str) -> None:
-        self.path = path
-        self.handle = None
-        self.fd: int | None = None
-
-    def open(self) -> bool:
-        if self.path.startswith("serial://") or self.path.startswith("/dev/tty"):
-            device, baud = parse_serial_path(self.path)
-            fd = os.open(device, os.O_RDONLY | os.O_NOCTTY)
-            configure_serial(fd, baud)
-            self.fd = fd
-            return True
-        self.handle = open(self.path, "rb")
-        return True
-
-    def close(self) -> None:
-        if self.handle is not None:
-            self.handle.close()
-            self.handle = None
-        if self.fd is not None:
-            os.close(self.fd)
-            self.fd = None
-
-    def read(self, size: int = 4096) -> bytes:
-        if self.handle is not None:
-            return self.handle.read(size)
-        if self.fd is not None:
-            return os.read(self.fd, size)
-        return b""
 
 
 def nmea_checksum(payload: str) -> int:
@@ -237,7 +171,12 @@ def main() -> int:
     if args.limit == 0:
         raise SystemExit("--limit must be positive or -1")
 
-    source = InputSource(args.input)
+    source = InputSource(
+        args.input,
+        default_baud=9600,
+        allowed_bauds=NMEA_SERIAL_BAUDS,
+        eio_as_eof=False,
+    )
     if not source.open():
         raise SystemExit(f"failed to open input: {args.input}")
 
