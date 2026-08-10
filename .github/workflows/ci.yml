@@ -23,7 +23,7 @@ jobs:
       run_heavy: ${{ steps.scope.outputs.run_heavy }}
       changed_paths_json: ${{ steps.scope.outputs.changed_paths_json }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         fetch-depth: 0
 
@@ -60,10 +60,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v7
       with:
         python-version: "3.12"
 
@@ -85,7 +85,7 @@ jobs:
             compiler: gcc
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Prepare build
       uses: ./.github/actions/prepare-build
@@ -103,7 +103,7 @@ jobs:
 
     - name: Upload CTest diagnostics
       if: failure()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: ctest-diagnostics-${{ matrix.os }}-${{ matrix.compiler }}
         path: |
@@ -180,7 +180,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Prepare build
       uses: ./.github/actions/prepare-build
@@ -198,7 +198,7 @@ jobs:
 
     - name: Upload CTest diagnostics
       if: failure()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: ctest-diagnostics-ubuntu-extended
         path: |
@@ -215,7 +215,7 @@ jobs:
 
     - name: Upload dashboard artifacts
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: dashboard-artifacts-ubuntu
         path: |
@@ -231,13 +231,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      uses: docker/setup-buildx-action@v4
 
     - name: Build Docker image
-      uses: docker/build-push-action@v6
+      uses: docker/build-push-action@v7
       with:
         context: .
         file: ./Dockerfile
@@ -258,7 +258,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Prepare build
       uses: ./.github/actions/prepare-build
@@ -272,7 +272,7 @@ jobs:
 
     - name: Upload CTest diagnostics
       if: failure()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: ctest-diagnostics-ubuntu-optional
         path: |
@@ -291,7 +291,7 @@ jobs:
 
     - name: Upload RTK sign-off artifacts
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: rtk-signoffs-ubuntu
         path: |
@@ -344,7 +344,7 @@ jobs:
 
     - name: Upload CLAS A4b native self-diff artifacts
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: clas-a4b-native-selfdiff-ubuntu
         path: |
@@ -379,7 +379,7 @@ jobs:
 
     - name: Upload CLASLIB OSR ZD export artifacts
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: claslib-osr-zd-export-ubuntu
         path: |
@@ -439,7 +439,7 @@ jobs:
 
     - name: Upload CLAS ZD component diff artifacts
       if: always() && hashFiles('output/ci_optional_clas_zd_component_summary.json') != ''
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: clas-zd-component-diff-ubuntu
         path: |
@@ -464,7 +464,7 @@ jobs:
 
     - name: Upload MADOCA materialization diff artifacts
       if: always() && hashFiles('output/ci_optional_madoca_materialization_summary.json') != ''
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: madoca-materialization-diff-ubuntu
         path: |
@@ -491,7 +491,7 @@ jobs:
 
     - name: Upload MADOCA materialization native self-diff artifacts
       if: always() && hashFiles('output/ci_madoca_materialization_selfdiff_summary.json') != ''
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: madoca-materialization-selfdiff-ubuntu
         path: |
@@ -522,7 +522,7 @@ jobs:
 
     - name: Upload MADOCA residual-component diff artifacts
       if: always() && hashFiles('output/ci_optional_madoca_residual_component_summary.json') != ''
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: madoca-residual-component-diff-ubuntu
         path: |
@@ -536,7 +536,7 @@ jobs:
 
     - name: Upload PPP products comparison artifacts
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: ppp-products-ubuntu
         path: |
@@ -560,10 +560,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Checkout MADOCALIB
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
       with:
         repository: QZSS-Strategy-Office/madocalib
         ref: 0089f7dc97e8e2ba283a40be2edf4b73a140df6c
@@ -575,7 +575,7 @@ jobs:
         sudo apt-get install -y libeigen3-dev libgtest-dev cmake build-essential python3-dev pybind11-dev ccache
 
     - name: Restore MADOCA ccache
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: ~/.cache/ccache
         key: Linux-madoca-ccache-${{ hashFiles('CMakeLists.txt', 'src/**', 'include/**', 'tests/test_madoca_parity.cpp') }}
@@ -805,7 +805,7 @@ jobs:
 
     - name: Upload MADOCA release matrix
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: madoca-release-matrix
         path: |
@@ -815,7 +815,7 @@ jobs:
 
     - name: Upload MADOCA PPP-AR baseline
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: madoca-pppar-baseline
         path: |
@@ -837,7 +837,7 @@ jobs:
 
     - name: Upload MadocaParity diagnostics
       if: failure()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: madoca-parity-diagnostics
         path: |
@@ -867,7 +867,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Install dependencies
       run: |
