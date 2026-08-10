@@ -8,21 +8,21 @@ import csv
 import os
 from pathlib import Path
 import subprocess
-import sys
 import tempfile
 import time
 
-from support.gnss_runtime import resolve_gnss_command
-
-
-from support.gnss_runtime import application_root
+from support.gnss_runtime import application_root, load_python_module, resolve_gnss_command
 
 ROOT_DIR = application_root(__file__)
-SCRIPTS_DIR = ROOT_DIR / "scripts"
-if str(SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS_DIR))
-
-from generate_driving_comparison import match_to_reference, read_libgnss_pos, read_reference_csv, read_rtklib_pos, summarize
+driving_comparison = load_python_module(
+    "gnssplusplus_generate_driving_comparison",
+    ROOT_DIR / "scripts" / "generate_driving_comparison.py",
+)
+match_to_reference = driving_comparison.match_to_reference
+read_libgnss_pos = driving_comparison.read_libgnss_pos
+read_reference_csv = driving_comparison.read_reference_csv
+read_rtklib_pos = driving_comparison.read_rtklib_pos
+summarize = driving_comparison.summarize
 
 
 def parse_args() -> argparse.Namespace:

@@ -11,22 +11,19 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import signal
-import sys
 import threading
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from support.gnss_toml_config import parse_args_with_toml
 
-from support.gnss_runtime import application_root
+from support.gnss_runtime import application_root, load_python_module
 
 ROOT_DIR = application_root(__file__)
-SCRIPTS_DIR = ROOT_DIR / "scripts"
-
-if str(SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS_DIR))
-
-import generate_driving_comparison as driving_comparison  # noqa: E402
+driving_comparison = load_python_module(
+    "gnssplusplus_generate_driving_comparison",
+    ROOT_DIR / "scripts" / "generate_driving_comparison.py",
+)
 
 
 STATUS_COLORS = {
