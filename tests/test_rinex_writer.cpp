@@ -30,6 +30,21 @@ std::string rinexObsField(const std::string& value,
     return field;
 }
 
+std::string rinex4GpsLnavBody() {
+    // RINEX 4.02 Table A12-compatible GPS LNAV body.  The data-record
+    // header is deliberately kept separate so tests exercise the new
+    // dispatch boundary rather than a RINEX 3-style first-line heuristic.
+    return R"(G04 2019 03 14 04 00 00 1.330170780420e-04 7.275957614183e-12 0.000000000000e+00
+     9.800000000000e+01-1.718750000000e+00 4.639836124941e-09 2.148941747752e+00
+    -1.881271600723e-07 3.355251392350e-04 8.245930075645e-06 5.153800453186e+03
+     3.600000000000e+05-1.676380634308e-08 5.171400020311e-01 1.490116119385e-08
+     9.601921900531e-01 2.187187500000e+02-1.736906885738e+00-8.044977962767e-09
+    -2.932264997750e-10 1.000000000000e+00 2.044000000000e+03 0.000000000000e+00
+     4.000000000000e+00 6.300000000000e+01-8.847564458847e-09 8.660000000000e+02
+     3.553500000000e+05 4.000000000000e+00
+)";
+}
+
 Ephemeris makeGpsEphemeris() {
     Ephemeris eph;
     eph.satellite = SatelliteId(GNSSSystem::GPS, 3);
@@ -186,6 +201,108 @@ TEST(RINEXReaderTest, ParsesTimeOfFirstObsHeader) {
 
     EXPECT_EQ(header.first_obs.week, 2328);
     EXPECT_NEAR(header.first_obs.tow, 357255.5, 1e-9);
+
+    reader.close();
+    std::filesystem::remove(temp_path);
+}
+
+TEST(RINEXReaderTest, DetectsRinex4AndDoesNotUseRinex3EpochColumns) {
+    const auto temp_path =
+        std::filesystem::temp_directory_path() / "libgnss_rinex4_observation_dispatch.obs";
+    std::filesystem::remove(temp_path);
+
+    {
+        std::ofstream file(temp_path);
+        ASSERT_TRUE(file.is_open());
+        file << rinexHeaderLine(
+            "     4.02           OBSERVATION DATA    M",
+            "RINEX VERSION / TYPE");
+        file << rinexHeaderLine(
+            "G    4 C1C L1C C2W L2W",
+            "SYS / # / OBS TYPES");
+        file << rinexHeaderLine("", "END OF HEADER");
+        // The extra second digits intentionally shift the RINEX 3 fixed
+        // columns.  Phase 1 must reject this explicitly until token-based
+        // RINEX 4 observation parsing is implemented.
+        file << "> 2024 08 03 09 51 20.1234567890123  0  1\n";
+        file << "G04" << rinexObsField("22011162.552")
+             << rinexObsField("115669443.467")
+             << rinexObsField("22022262.423")
+             << rinexObsField("120222443.467") << "\n";
+    }
+
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(temp_path.string()));
+    io::RINEXReader::RINEXHeader header;
+    ASSERT_TRUE(reader.readHeader(header));
+    EXPECT_DOUBLE_EQ(header.version, 4.02);
+    EXPECT_TRUE(reader.isRinex4());
+
+    ObservationData epoch;
+    testing::internal::CaptureStderr();
+    EXPECT_FALSE(reader.readObservationEpoch(epoch));
+    const std::string diagnostic = testing::internal::GetCapturedStderr();
+    EXPECT_NE(diagnostic.find("RINEX 4 observation epochs are not supported yet"),
+              std::string::npos);
+
+    reader.close();
+    std::filesystem::remove(temp_path);
+}
+
+TEST(RINEXReaderTest, DispatchesRinex4LnavAndSkipsUnsupportedRecordBoundary) {
+    const auto temp_path =
+        std::filesystem::temp_directory_path() / "libgnss_rinex4_navigation_dispatch.nav";
+    std::filesystem::remove(temp_path);
+
+    {
+        std::ofstream file(temp_path);
+        ASSERT_TRUE(file.is_open());
+        file << rinexHeaderLine(
+            "     4.02           NAVIGATION DATA     M",
+            "RINEX VERSION / TYPE");
+        file << rinexHeaderLine("", "END OF HEADER");
+        file << "> STO R FDMA\n";
+        file << "this system record is intentionally unsupported\n";
+        file << "> EPH I05 LNAV\n";
+        file << "this syntactically valid but unsupported EPH is skipped\n";
+        file << "> EPH G04 LNAV\n";
+        file << rinex4GpsLnavBody();
+        std::string bds_d1_body = rinex4GpsLnavBody();
+        bds_d1_body.replace(0, 3, "C01");
+        file << "> EPH C01 D1\n";
+        file << bds_d1_body;
+        file << "> EPH G04 CNAV\n";
+        file << "this EPH message type is deliberately unsupported\n";
+    }
+
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(temp_path.string()));
+    io::RINEXReader::RINEXHeader header;
+    ASSERT_TRUE(reader.readHeader(header));
+    EXPECT_TRUE(reader.isRinex4());
+
+    NavigationData nav_data;
+    testing::internal::CaptureStderr();
+    ASSERT_TRUE(reader.readNavigationData(nav_data));
+    const std::string diagnostic = testing::internal::GetCapturedStderr();
+    EXPECT_NE(diagnostic.find("Skipping unsupported RINEX 4 navigation record type: STO"),
+              std::string::npos);
+    EXPECT_NE(diagnostic.find("Skipping unsupported RINEX 4 EPH I05 LNAV"),
+              std::string::npos);
+    EXPECT_NE(diagnostic.find("Skipping unsupported RINEX 4 EPH G04 CNAV"),
+              std::string::npos);
+
+    const auto it = nav_data.ephemeris_data.find(SatelliteId(GNSSSystem::GPS, 4));
+    ASSERT_NE(it, nav_data.ephemeris_data.end());
+    ASSERT_EQ(it->second.size(), 1U);
+    EXPECT_EQ(it->second.front().satellite, SatelliteId(GNSSSystem::GPS, 4));
+    EXPECT_EQ(it->second.front().week, 2044);
+    EXPECT_NEAR(it->second.front().toes, 360000.0, 1e-6);
+
+    const auto bds_it = nav_data.ephemeris_data.find(
+        SatelliteId(GNSSSystem::BeiDou, 1));
+    ASSERT_NE(bds_it, nav_data.ephemeris_data.end());
+    ASSERT_EQ(bds_it->second.size(), 1U);
 
     reader.close();
     std::filesystem::remove(temp_path);

@@ -1,4 +1,5 @@
 #include <libgnss++/io/rinex.hpp>
+#include <libgnss++/io/rinex4.hpp>
 #include <libgnss++/algorithms/ppp_env_overrides.hpp>
 #include <libgnss++/core/signal_policy.hpp>
 #include <algorithm>
@@ -7,6 +8,7 @@
 #include <iomanip>
 #include <iostream>
 #include <cmath>
+#include <cctype>
 #include <set>
 
 namespace libgnss {
@@ -405,6 +407,7 @@ RINEXReader::RINEXReader()
 bool RINEXReader::open(const std::string& filename) {
     file_.open(filename);
     current_line_ = 0;
+    header_read_ = false;
     return file_.is_open();
 }
 
@@ -431,6 +434,7 @@ bool RINEXReader::readHeader(RINEXHeader& header) {
     }
     
     header_ = header;
+    header_read_ = true;
     return true;
 }
 
@@ -485,11 +489,28 @@ bool RINEXReader::readObservationEpoch(ObservationData& obs_data) {
                     continue;
                 }
             }
-        } else if (header_.version >= 3.0) {
+        } else if (isRinex4()) {
+            // RINEX 4 epoch records allow more precise seconds and an
+            // optional receiver-clock field.  The fixed-column RINEX 3
+            // parser below is intentionally not used here: accepting a
+            // shifted flag/count field would silently misread every
+            // satellite row.  Token-based RINEX 4 observation parsing is a
+            // separate follow-up slice.
+            if (!line.empty() && line[0] == '>') {
+                std::cerr << "RINEX 4 observation epochs are not supported yet; "
+                             "use a RINEX 3-compatible input or preprocess the file"
+                          << std::endl;
+                return false;
+            }
+        } else if (header_.version >= 3.0 && header_.version < 4.0) {
             // RINEX 3.x format starts with '>'
-            if (line[0] == '>') {
+            if (!line.empty() && line[0] == '>') {
                 return parseObservationEpochV3(line, obs_data);
             }
+        } else {
+            std::cerr << "Unsupported RINEX version for observation data: "
+                      << header_.version << std::endl;
+            return false;
         }
     }
 
@@ -516,82 +537,95 @@ bool RINEXReader::readNavigationData(NavigationData& nav_data) {
 
     // Skip header if not already done, but parse version info and iono params
     std::string line;
-    bool header_found = false;
-    while (readLine(line)) {
-        if (line.find("END OF HEADER") != std::string::npos) {
-            header_found = true;
-            break;
-        }
-        // Parse header lines to get version info
-        if (line.length() >= 60) {
-            std::string label = line.substr(60);
-            if (label.find("RINEX VERSION") != std::string::npos) {
-                header_.version = std::stod(line.substr(0, 9));
+    bool header_found = header_read_;
+    if (!header_read_) {
+        while (readLine(line)) {
+            if (line.find("END OF HEADER") != std::string::npos) {
+                header_found = true;
+                break;
             }
-            // Parse Klobuchar ionosphere parameters (RINEX 2: ION ALPHA / ION BETA)
-            else if (label.find("ION ALPHA") != std::string::npos) {
-                // Format: 4 values in D-format, 12 chars each starting at col 2
-                auto parseDval = [](const std::string& s) -> double {
-                    std::string v = s;
-                    v.erase(0, v.find_first_not_of(' '));
-                    v.erase(v.find_last_not_of(' ') + 1);
-                    if (v.empty()) return 0.0;
-                    auto dp = v.find('D'); if (dp != std::string::npos) v[dp] = 'E';
-                    dp = v.find('d'); if (dp != std::string::npos) v[dp] = 'E';
-                    try { return std::stod(v); } catch (...) { return 0.0; }
-                };
-                nav_data.ionosphere_model.alpha[0] = parseDval(line.substr(2, 12));
-                nav_data.ionosphere_model.alpha[1] = parseDval(line.substr(14, 12));
-                nav_data.ionosphere_model.alpha[2] = parseDval(line.substr(26, 12));
-                nav_data.ionosphere_model.alpha[3] = parseDval(line.substr(38, 12));
-                nav_data.ionosphere_model.valid = true;
-            }
-            else if (label.find("ION BETA") != std::string::npos) {
-                auto parseDval = [](const std::string& s) -> double {
-                    std::string v = s;
-                    v.erase(0, v.find_first_not_of(' '));
-                    v.erase(v.find_last_not_of(' ') + 1);
-                    if (v.empty()) return 0.0;
-                    auto dp = v.find('D'); if (dp != std::string::npos) v[dp] = 'E';
-                    dp = v.find('d'); if (dp != std::string::npos) v[dp] = 'E';
-                    try { return std::stod(v); } catch (...) { return 0.0; }
-                };
-                nav_data.ionosphere_model.beta[0] = parseDval(line.substr(2, 12));
-                nav_data.ionosphere_model.beta[1] = parseDval(line.substr(14, 12));
-                nav_data.ionosphere_model.beta[2] = parseDval(line.substr(26, 12));
-                nav_data.ionosphere_model.beta[3] = parseDval(line.substr(38, 12));
-            }
-            // Parse IONOSPHERIC CORR (RINEX 3: GPSA / GPSB)
-            else if (label.find("IONOSPHERIC CORR") != std::string::npos) {
-                auto parseDval = [](const std::string& s) -> double {
-                    std::string v = s;
-                    v.erase(0, v.find_first_not_of(' '));
-                    v.erase(v.find_last_not_of(' ') + 1);
-                    if (v.empty()) return 0.0;
-                    auto dp = v.find('D'); if (dp != std::string::npos) v[dp] = 'E';
-                    dp = v.find('d'); if (dp != std::string::npos) v[dp] = 'E';
-                    try { return std::stod(v); } catch (...) { return 0.0; }
-                };
-                std::string corr_type = line.substr(0, 4);
-                corr_type.erase(corr_type.find_last_not_of(' ') + 1);
-                if (corr_type == "GPSA") {
-                    nav_data.ionosphere_model.alpha[0] = parseDval(line.substr(5, 12));
-                    nav_data.ionosphere_model.alpha[1] = parseDval(line.substr(17, 12));
-                    nav_data.ionosphere_model.alpha[2] = parseDval(line.substr(29, 12));
-                    nav_data.ionosphere_model.alpha[3] = parseDval(line.substr(41, 12));
+            // Parse header lines to get version info
+            if (line.length() >= 60) {
+                std::string label = line.substr(60);
+                if (label.find("RINEX VERSION") != std::string::npos) {
+                    header_.version = std::stod(line.substr(0, 9));
+                }
+                // Parse Klobuchar ionosphere parameters (RINEX 2: ION ALPHA / ION BETA)
+                else if (label.find("ION ALPHA") != std::string::npos) {
+                    // Format: 4 values in D-format, 12 chars each starting at col 2
+                    auto parseDval = [](const std::string& s) -> double {
+                        std::string v = s;
+                        v.erase(0, v.find_first_not_of(' '));
+                        v.erase(v.find_last_not_of(' ') + 1);
+                        if (v.empty()) return 0.0;
+                        auto dp = v.find('D'); if (dp != std::string::npos) v[dp] = 'E';
+                        dp = v.find('d'); if (dp != std::string::npos) v[dp] = 'E';
+                        try { return std::stod(v); } catch (...) { return 0.0; }
+                    };
+                    nav_data.ionosphere_model.alpha[0] = parseDval(line.substr(2, 12));
+                    nav_data.ionosphere_model.alpha[1] = parseDval(line.substr(14, 12));
+                    nav_data.ionosphere_model.alpha[2] = parseDval(line.substr(26, 12));
+                    nav_data.ionosphere_model.alpha[3] = parseDval(line.substr(38, 12));
                     nav_data.ionosphere_model.valid = true;
-                } else if (corr_type == "GPSB") {
-                    nav_data.ionosphere_model.beta[0] = parseDval(line.substr(5, 12));
-                    nav_data.ionosphere_model.beta[1] = parseDval(line.substr(17, 12));
-                    nav_data.ionosphere_model.beta[2] = parseDval(line.substr(29, 12));
-                    nav_data.ionosphere_model.beta[3] = parseDval(line.substr(41, 12));
+                }
+                else if (label.find("ION BETA") != std::string::npos) {
+                    auto parseDval = [](const std::string& s) -> double {
+                        std::string v = s;
+                        v.erase(0, v.find_first_not_of(' '));
+                        v.erase(v.find_last_not_of(' ') + 1);
+                        if (v.empty()) return 0.0;
+                        auto dp = v.find('D'); if (dp != std::string::npos) v[dp] = 'E';
+                        dp = v.find('d'); if (dp != std::string::npos) v[dp] = 'E';
+                        try { return std::stod(v); } catch (...) { return 0.0; }
+                    };
+                    nav_data.ionosphere_model.beta[0] = parseDval(line.substr(2, 12));
+                    nav_data.ionosphere_model.beta[1] = parseDval(line.substr(14, 12));
+                    nav_data.ionosphere_model.beta[2] = parseDval(line.substr(26, 12));
+                    nav_data.ionosphere_model.beta[3] = parseDval(line.substr(38, 12));
+                }
+                // Parse IONOSPHERIC CORR (RINEX 3: GPSA / GPSB)
+                else if (label.find("IONOSPHERIC CORR") != std::string::npos) {
+                    auto parseDval = [](const std::string& s) -> double {
+                        std::string v = s;
+                        v.erase(0, v.find_first_not_of(' '));
+                        v.erase(v.find_last_not_of(' ') + 1);
+                        if (v.empty()) return 0.0;
+                        auto dp = v.find('D'); if (dp != std::string::npos) v[dp] = 'E';
+                        dp = v.find('d'); if (dp != std::string::npos) v[dp] = 'E';
+                        try { return std::stod(v); } catch (...) { return 0.0; }
+                    };
+                    std::string corr_type = line.substr(0, 4);
+                    corr_type.erase(corr_type.find_last_not_of(' ') + 1);
+                    if (corr_type == "GPSA") {
+                        nav_data.ionosphere_model.alpha[0] = parseDval(line.substr(5, 12));
+                        nav_data.ionosphere_model.alpha[1] = parseDval(line.substr(17, 12));
+                        nav_data.ionosphere_model.alpha[2] = parseDval(line.substr(29, 12));
+                        nav_data.ionosphere_model.alpha[3] = parseDval(line.substr(41, 12));
+                        nav_data.ionosphere_model.valid = true;
+                    } else if (corr_type == "GPSB") {
+                        nav_data.ionosphere_model.beta[0] = parseDval(line.substr(5, 12));
+                        nav_data.ionosphere_model.beta[1] = parseDval(line.substr(17, 12));
+                        nav_data.ionosphere_model.beta[2] = parseDval(line.substr(29, 12));
+                        nav_data.ionosphere_model.beta[3] = parseDval(line.substr(41, 12));
+                    }
                 }
             }
         }
+        header_read_ = true;
     }
 
     if (!header_found) {
         // Header already processed, rewind might not work, so just continue
+    }
+
+    if (isRinex4()) {
+        return readRinex4NavigationData(nav_data);
+    }
+
+    if (header_.version >= 5.0) {
+        std::cerr << "Unsupported RINEX version for navigation data: "
+                  << header_.version << std::endl;
+        return false;
     }
 
     std::vector<std::string> eph_lines;
@@ -602,7 +636,7 @@ bool RINEXReader::readNavigationData(NavigationData& nav_data) {
     int skip_lines_remaining = 0;
 
     // Detect RINEX version for navigation file format differences
-    bool is_rinex3 = (header_.version >= 3.0);
+    bool is_rinex3 = (header_.version >= 3.0 && header_.version < 4.0);
 
     try {
         while (readLine(line)) {
@@ -710,6 +744,98 @@ bool RINEXReader::readNavigationData(NavigationData& nav_data) {
         throw;
     }
 
+    return !nav_data.isEmpty();
+}
+
+bool RINEXReader::readRinex4NavigationData(NavigationData& nav_data) {
+    // RINEX 4 makes the navigation record boundary explicit.  Keep the
+    // complete body between two '>' headers so unsupported STO/EOP/ION (or
+    // unsupported EPH message types) can be skipped without feeding their
+    // fields to the legacy ephemeris parser.
+    std::string line;
+    rinex4::NavigationRecordHeader active_header;
+    std::vector<std::string> body;
+    bool have_active_record = false;
+    bool active_record_supported = false;
+
+    const auto finish_record = [&]() {
+        if (!have_active_record || !active_record_supported) {
+            body.clear();
+            return;
+        }
+
+        Ephemeris eph;
+        if (!parseNavigationMessage(body, eph)) {
+            std::cerr << "Skipping RINEX 4 EPH " << active_header.source << ' '
+                      << active_header.message_type
+                      << ": incompatible or malformed navigation body"
+                      << std::endl;
+            body.clear();
+            return;
+        }
+
+        const SatelliteId expected_satellite(
+            systemFromRinexChar(active_header.system), active_header.prn);
+        if (eph.satellite != expected_satellite) {
+            std::cerr << "Skipping RINEX 4 EPH " << active_header.source
+                      << ": body satellite does not match record header"
+                      << std::endl;
+            body.clear();
+            return;
+        }
+
+        nav_data.addEphemeris(eph);
+        body.clear();
+    };
+
+    while (readLine(line)) {
+        const size_t first_non_space = line.find_first_not_of(" \t");
+        const bool is_record_header =
+            first_non_space != std::string::npos && line[first_non_space] == '>';
+        if (is_record_header) {
+            finish_record();
+            have_active_record = false;
+            active_record_supported = false;
+            active_header = rinex4::NavigationRecordHeader();
+
+            if (!rinex4::parseNavigationRecordHeader(line, active_header)) {
+                std::cerr << "Skipping malformed RINEX 4 navigation record header: "
+                          << line << std::endl;
+                have_active_record = true;
+                continue;
+            }
+
+            have_active_record = true;
+            if (active_header.record_type != "EPH") {
+                std::cerr << "Skipping unsupported RINEX 4 navigation record type: "
+                          << active_header.record_type << std::endl;
+                continue;
+            }
+
+            active_record_supported = rinex4::supportsEphemerisMessage(
+                active_header.system, active_header.message_type);
+            if (!active_record_supported) {
+                std::cerr << "Skipping unsupported RINEX 4 EPH "
+                          << active_header.source << ' '
+                          << active_header.message_type << std::endl;
+            }
+            continue;
+        }
+
+        if (!have_active_record) {
+            if (line.find_first_not_of(" \t\r\n") != std::string::npos) {
+                std::cerr << "Skipping RINEX 4 navigation data before a record header"
+                          << std::endl;
+            }
+            continue;
+        }
+
+        if (active_record_supported && !line.empty()) {
+            body.push_back(line);
+        }
+    }
+
+    finish_record();
     return !nav_data.isEmpty();
 }
 

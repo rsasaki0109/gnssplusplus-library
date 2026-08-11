@@ -140,6 +140,17 @@ public:
      * @brief Get RINEX version
      */
     double getVersion() const { return header_.version; }
+
+    /**
+     * @brief Check whether the current file uses the RINEX 4 data-record
+     * syntax.
+     *
+     * RINEX 4 observation records are not interchangeable with the fixed
+     * column RINEX 3 epoch parser, and RINEX 4 navigation records have an
+     * explicit data-record header.  Keep this boundary visible to callers
+     * instead of treating every version at or above 3 as RINEX 3.
+     */
+    bool isRinex4() const { return header_.version >= 4.0 && header_.version < 5.0; }
     
     /**
      * @brief Check if file is open
@@ -155,6 +166,7 @@ private:
     std::ifstream file_;
     RINEXHeader header_;
     int current_line_ = 0;
+    bool header_read_ = false;
     bool qzss_prefer_l1l_ = false;
     bool qzss_prefer_l5_secondary_ = false;
     bool preserve_additional_frequency_bands_ = false;
@@ -185,6 +197,11 @@ private:
      * @brief Parse navigation message
      */
     bool parseNavigationMessage(const std::vector<std::string>& lines, Ephemeris& eph);
+
+    /**
+     * @brief Read RINEX 4 navigation data records after the file header.
+     */
+    bool readRinex4NavigationData(NavigationData& nav_data);
     
     /**
      * @brief Parse time string
