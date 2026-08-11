@@ -22,6 +22,11 @@ markdown_extensions:
       permalink: true
 nav:
   - Home: index.md
+  - Use cases:
+      - Overview: use_cases.md
+      - RTKLIB migration: use_cases/rtklib_migration.md
+      - ROS2 receiver and bag replay: use_cases/ros2.md
+      - QZSS L6, CLAS, and MADOCA: use_cases/qzss_l6.md
   - Robotics Quick Start: robotics_quickstart.md
   - Research Quick Start: research_quickstart.md
   - Self-contained Offline Demo: self_contained_demo.md

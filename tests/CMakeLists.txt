@@ -432,6 +432,10 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_docs_site.py
     )
     add_test(
+        NAME python_use_case_guide_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_use_case_guides.py
+    )
+    add_test(
         NAME python_experiment_runner_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_experiment_runner.py
     )
@@ -515,6 +519,7 @@ if(GTest_FOUND)
         python_gnss_solve_cli_tests
         python_observable_native_cli_contract_tests
         python_search_imu_time_offset_tests
+        python_use_case_guide_tests
         python_release_contract_tests
         python_community_health_tests
     )

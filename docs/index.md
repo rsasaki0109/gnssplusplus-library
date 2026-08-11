@@ -8,6 +8,7 @@ checked benchmark artifacts.
 
 ## Start here
 
+- [Use cases](use_cases.md)
 - [Robotics quick start](robotics_quickstart.md)
 - [Research quick start](research_quickstart.md)
 - [Self-contained offline demo](self_contained_demo.md)
