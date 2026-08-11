@@ -4,6 +4,10 @@ This runbook covers the tag-driven v0.2.0 release. Release automation is
 intentionally started only by an annotated `vMAJOR.MINOR.PATCH` tag pushed to
 the repository.
 
+For human-reviewed post-release outreach and reproducible, owner-only growth
+measurement, use the [growth launch runbook](growth_launch_runbook.md). It does
+not automate posting or change repository publication state.
+
 ## Before tagging
 
 1. Merge the validated release change into `develop` and confirm the merge
