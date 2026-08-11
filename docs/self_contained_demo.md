@@ -1,15 +1,34 @@
 # Self-contained offline demo
 
-The demo is the shortest way to verify a fresh checkout can run a positioning
-pipeline without a dataset download, network service, or credentials. After
-the normal native build, run one command from the repository root:
+The demo is the shortest way to verify the published runtime can run a
+positioning pipeline without a dataset download, network service, or
+credentials.
+
+## Public image (no build)
+
+Pull the public image once, then run the tracked demo with only an output mount:
 
 ```bash
-python3 apps/gnss.py demo
+docker pull ghcr.io/rsasaki0109/gnssplusplus-library:develop
+mkdir -p output
+docker run --rm \
+  -v "$PWD/output:/workspace/output" \
+  ghcr.io/rsasaki0109/gnssplusplus-library:develop \
+  demo --output-dir /workspace/output/self-contained-demo
 ```
 
-The command runs the built `gnss_ppp` executable against the three tracked
-files in `demo/fixtures/` and writes:
+The image contains the same tracked, project-authored synthetic PPP fixture as
+the source checkout. A successful run has eight processed and eight valid PPP
+solutions and writes the `.pos`, KML, and JSON artifacts listed below. The run
+itself is offline after the image is present; the synthetic fixture validates
+CLI/build/artifact plumbing, not field accuracy, real-world satellite geometry,
+or RTK fix performance.
+
+## Artifacts
+
+Both the public image and native command run the built `gnss_ppp` executable
+against the three tracked files in `demo/fixtures/` (or the installed prefix)
+and write:
 
 ```text
 output/self-contained-demo/demo_solution.pos
@@ -38,7 +57,7 @@ NTRIP, HTTP, or any other network/credential source. A missing binary is
 reported with the build command rather than silently falling back to a fake
 solution.
 
-## Docker
+## Local Docker image
 
 Build the existing runtime image, then run the same command with the output
 directory mounted for easy inspection:

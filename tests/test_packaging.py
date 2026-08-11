@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -15,6 +16,11 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 BUILD_DIR = Path(os.environ.get("GNSSPP_BINARY_DIR", ROOT_DIR / "build"))
+PUBLIC_IMAGE = "ghcr.io/rsasaki0109/gnssplusplus-library:develop"
+PUBLIC_DEMO_COMMAND = re.compile(
+    re.escape(PUBLIC_IMAGE)
+    + r"\s+demo\s+--output-dir\s+/workspace/output/self-contained-demo"
+)
 
 # Platform-dependent artifact names (MSVC: gnss_spp.exe / gnss_lib.lib,
 # GNU: gnss_spp / libgnss_lib.a).
@@ -68,6 +74,33 @@ class PackagingSmokeTest(unittest.TestCase):
         self.assertIn("ghcr.io/rsasaki0109/gnssplusplus-library", docker_workflow_text)
         self.assertIn("docker/build-push-action", docker_workflow_text)
 
+    def test_public_demo_docs_keep_image_tag_and_fixture_caveat(self) -> None:
+        documents = {
+            "README.md": (ROOT_DIR / "README.md").read_text(encoding="utf-8"),
+            "docs/quickstart.md": (
+                ROOT_DIR / "docs" / "quickstart.md"
+            ).read_text(encoding="utf-8"),
+            "docs/self_contained_demo.md": (
+                ROOT_DIR / "docs" / "self_contained_demo.md"
+            ).read_text(encoding="utf-8"),
+        }
+        for name, text in documents.items():
+            normalized = re.sub(r"\\\s*\n\s*", " ", text)
+            with self.subTest(document=name):
+                self.assertRegex(normalized, PUBLIC_DEMO_COMMAND)
+                self.assertIn(PUBLIC_IMAGE, normalized)
+
+        readme_text = documents["README.md"]
+        quickstart_text = documents["docs/quickstart.md"]
+        demo_text = documents["docs/self_contained_demo.md"]
+        self.assertIn("tracked, project-authored synthetic PPP fixture", readme_text)
+        self.assertIn("not field accuracy", readme_text)
+        self.assertRegex(readme_text, r"find_package\(libgnsspp CONFIG REQUIRED\)")
+        self.assertIn("libgnsspp::gnss_lib", readme_text)
+        self.assertIn("Larger sample datasets are not embedded", quickstart_text)
+        self.assertIn("synthetic PPP fixture", quickstart_text)
+        self.assertIn("not field accuracy", demo_text)
+
     def test_cmake_install_exports_expected_layout(self) -> None:
         self.assertTrue(BUILD_DIR.exists(), "build directory must exist before packaging test")
 
@@ -75,6 +108,65 @@ class PackagingSmokeTest(unittest.TestCase):
             prefix = Path(temp_dir) / "prefix"
             subprocess.run(
                 ["cmake", "--install", str(BUILD_DIR), "--prefix", str(prefix)],
+                check=True,
+                cwd=ROOT_DIR,
+            )
+
+            consumer_dir = Path(temp_dir) / "consumer"
+            consumer_dir.mkdir()
+            (consumer_dir / "CMakeLists.txt").write_text(
+                "\n".join(
+                    [
+                        "cmake_minimum_required(VERSION 3.14)",
+                        "project(libgnsspp_consumer_smoke LANGUAGES CXX)",
+                        "set(CMAKE_CXX_STANDARD 20)",
+                        "set(CMAKE_CXX_STANDARD_REQUIRED ON)",
+                        "find_package(libgnsspp CONFIG REQUIRED)",
+                        "add_executable(consumer main.cpp)",
+                        "target_link_libraries(consumer PRIVATE libgnsspp::gnss_lib)",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (consumer_dir / "main.cpp").write_text(
+                "\n".join(
+                    [
+                        "#include <libgnss++/core/types.hpp>",
+                        "",
+                        "int main() {",
+                        "    libgnss::SatelliteId satellite(libgnss::GNSSSystem::GPS, 1);",
+                        "    return satellite.toString().empty() ? 1 : 0;",
+                        "}",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            consumer_build = consumer_dir / "build"
+            subprocess.run(
+                [
+                    "cmake",
+                    "-S",
+                    str(consumer_dir),
+                    "-B",
+                    str(consumer_build),
+                    "-DCMAKE_BUILD_TYPE=Release",
+                    f"-DCMAKE_PREFIX_PATH={prefix}",
+                ],
+                check=True,
+                cwd=ROOT_DIR,
+            )
+            subprocess.run(
+                [
+                    "cmake",
+                    "--build",
+                    str(consumer_build),
+                    "--config",
+                    "Release",
+                    "--parallel",
+                    "2",
+                ],
                 check=True,
                 cwd=ROOT_DIR,
             )

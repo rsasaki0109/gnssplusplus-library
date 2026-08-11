@@ -16,6 +16,62 @@ handling without an external RTKLIB runtime.
 
 ![Feature overview](docs/libgnsspp_feature_overview.png)
 
+## Try it
+
+The fastest first run uses the published runtime image; no local build is
+needed:
+
+```bash
+mkdir -p output
+docker run --rm \
+  -v "$PWD/output:/workspace/output" \
+  ghcr.io/rsasaki0109/gnssplusplus-library:develop \
+  demo --output-dir /workspace/output/self-contained-demo
+```
+
+The command runs the tracked, project-authored synthetic PPP fixture entirely
+offline after the image is available. It should report 8 processed and 8 valid
+PPP solutions and write `demo_solution.pos`, `demo_solution.kml`, and
+`demo_summary.json` under `output/self-contained-demo/`. This validates
+CLI/build/artifact plumbing, not field accuracy, real-world satellite
+geometry, or RTK fix performance. See the [full demo guide](docs/self_contained_demo.md)
+for provenance and native-build instructions.
+
+Prefer a native source checkout? Build the PPP executable and run the same
+tracked demo:
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --target gnss_ppp --parallel 2
+python3 apps/gnss.py demo
+```
+
+## Use the C++20 library
+
+The install exports a standard CMake package and the `libgnsspp::gnss_lib`
+target for downstream C++20 applications:
+
+```cmake
+cmake_minimum_required(VERSION 3.14)
+project(my_gnss_app LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+find_package(libgnsspp CONFIG REQUIRED)
+add_executable(my_gnss_app main.cpp)
+target_link_libraries(my_gnss_app PRIVATE libgnsspp::gnss_lib)
+```
+
+Build the complete exported library set before installing it:
+`cmake --build build --parallel 2`, followed by
+`cmake --install build --prefix <prefix>`. Configure the consumer with
+`-DCMAKE_PREFIX_PATH=<prefix>`. Start with the
+[simple SPP example](examples/simple_spp.cpp), the
+[RTK positioning example](examples/rtk_positioning.cpp), the
+[public API header](include/libgnss++/gnss.hpp), and the
+[interface notes](docs/interfaces.md).
+
 ## Results And Validation Status
 
 | Area | Public comparison | Evidence / status |
