@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-project(gnss_lib VERSION 0.1.0 LANGUAGES C CXX)
+project(gnss_lib VERSION 0.2.0 LANGUAGES C CXX)
 
 set(GNSSPP_CXX_STANDARD 20 CACHE STRING
     "C++ standard (use 17 with legacy Eigen 3.3 toolchains that reject C++20 rewritten comparisons)")
@@ -415,6 +415,14 @@ set(CPACK_RESOURCE_FILE_LICENSE ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE)
 set(CPACK_GENERATOR "TGZ;DEB")
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "libgnss++ maintainers")
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
+# The installed command surface includes Python-based diagnostics and demo
+# tooling, while the exported static CMake targets expose Eigen headers to
+# downstream consumers. Keep those runtime/development requirements explicit
+# in the Debian package metadata; shlibdeps adds the platform C/C++ runtime
+# dependencies discovered from the installed ELF executables.
+set(CPACK_DEBIAN_PACKAGE_DEPENDS
+    "libeigen3-dev, python3, python3-numpy, python3-matplotlib")
+set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
 include(CPack)
 
 # Visibility library (fisheye camera, satellite LOS/NLOS)

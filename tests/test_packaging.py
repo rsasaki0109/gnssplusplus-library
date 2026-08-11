@@ -16,7 +16,7 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 BUILD_DIR = Path(os.environ.get("GNSSPP_BINARY_DIR", ROOT_DIR / "build"))
-PUBLIC_IMAGE = "ghcr.io/rsasaki0109/gnssplusplus-library:develop"
+PUBLIC_IMAGE = "ghcr.io/rsasaki0109/gnssplusplus-library:v0.2.0"
 PUBLIC_DEMO_COMMAND = re.compile(
     re.escape(PUBLIC_IMAGE)
     + r"\s+demo\s+--output-dir\s+/workspace/output/self-contained-demo"
@@ -67,7 +67,7 @@ class PackagingSmokeTest(unittest.TestCase):
 
         compose_text = compose_file.read_text(encoding="utf-8")
         self.assertIn("gnss-web", compose_text)
-        self.assertIn("ghcr.io/rsasaki0109/gnssplusplus-library:develop", compose_text)
+        self.assertIn(PUBLIC_IMAGE, compose_text)
         self.assertIn("8085:8085", compose_text)
 
         docker_workflow_text = docker_workflow.read_text(encoding="utf-8")

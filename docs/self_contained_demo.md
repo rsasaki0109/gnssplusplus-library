@@ -9,11 +9,11 @@ credentials.
 Pull the public image once, then run the tracked demo with only an output mount:
 
 ```bash
-docker pull ghcr.io/rsasaki0109/gnssplusplus-library:develop
+docker pull ghcr.io/rsasaki0109/gnssplusplus-library:v0.2.0
 mkdir -p output
 docker run --rm \
   -v "$PWD/output:/workspace/output" \
-  ghcr.io/rsasaki0109/gnssplusplus-library:develop \
+  ghcr.io/rsasaki0109/gnssplusplus-library:v0.2.0 \
   demo --output-dir /workspace/output/self-contained-demo
 ```
 
