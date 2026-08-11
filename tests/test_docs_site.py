@@ -9,6 +9,7 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 ARCHITECTURE_PNG = ROOT_DIR / "docs" / "libgnsspp_architecture.png"
+SITE_URL = "https://rsasaki0109.github.io/gnssplusplus-library/"
 
 
 class DocsSiteTest(unittest.TestCase):
@@ -40,6 +41,17 @@ class DocsSiteTest(unittest.TestCase):
                 cwd=ROOT_DIR,
                 check=True,
             )
+            index_html = (site_dir / "index.html").read_text(encoding="utf-8")
+            sitemap_xml = (site_dir / "sitemap.xml").read_text(encoding="utf-8")
+            self.assertIn(f'<link rel="canonical" href="{SITE_URL}">', index_html)
+            sitemap_urls = [
+                line.strip()[len("<loc>") : -len("</loc>")]
+                for line in sitemap_xml.splitlines()
+                if line.strip().startswith("<loc>") and line.strip().endswith("</loc>")
+            ]
+            self.assertTrue(sitemap_urls)
+            self.assertIn(SITE_URL, sitemap_urls)
+            self.assertTrue(all(url.startswith(SITE_URL) for url in sitemap_urls))
             self.assertTrue((site_dir / "index.html").exists())
             self.assertTrue((site_dir / "architecture" / "index.html").exists() or (site_dir / "architecture.html").exists())
             self.assertTrue((site_dir / "libgnsspp_architecture.png").exists())
