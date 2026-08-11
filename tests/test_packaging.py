@@ -81,6 +81,7 @@ class PackagingSmokeTest(unittest.TestCase):
 
             expected_paths = [
                 prefix / "bin" / "gnss",
+                prefix / "bin" / "gnss_pos2kml",
                 prefix / "bin" / "gnss_doctor.py",
                 prefix / "bin" / "gnss_robotics_smoke.py",
                 prefix / "bin" / "gnss_ros2_doctor.py",
@@ -143,6 +144,26 @@ class PackagingSmokeTest(unittest.TestCase):
                 prefix / "configs" / "signoff" / "live_signoff.example.toml",
                 prefix / "configs" / "signoff" / "ppc_rtk_signoff.example.toml",
             ]
+            commands_root = ROOT_DIR / "apps" / "commands"
+            command_sources = [
+                source
+                for category_dir in sorted(commands_root.iterdir())
+                if category_dir.is_dir() and category_dir.name != "support"
+                for source in sorted(category_dir.glob("*.py"))
+            ]
+            support_sources = sorted((commands_root / "support").glob("*.py"))
+            command_basenames = [source.name for source in command_sources]
+            self.assertEqual(
+                len(command_basenames),
+                len({basename.casefold() for basename in command_basenames}),
+            )
+            expected_paths.extend(
+                prefix / "bin" / source.name for source in command_sources
+            )
+            expected_paths.extend(
+                prefix / "bin" / "support" / source.name
+                for source in support_sources
+            )
             ros2_binary = next((path for path in BUILD_DIR.rglob("gnss_solution_node") if path.is_file()), None)
             if ros2_binary is not None:
                 expected_paths.append(prefix / "bin" / "gnss_solution_node")
@@ -220,6 +241,23 @@ class PackagingSmokeTest(unittest.TestCase):
                     text=True,
                 )
                 self.assertIn("--input", receiver_help.stdout)
+
+            for command in (
+                "ppc-coverage-matrix",
+                "ppc-spp-jump-sweep",
+                "ppc-spp-compare",
+                "ppc-spp-policy-report",
+                "ppc-spp-policy-suite",
+            ):
+                ppc_help = subprocess.run(
+                    [str(prefix / "bin" / "gnss"), command, "--help"],
+                    check=True,
+                    cwd=ROOT_DIR,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertIn("usage:", ppc_help.stdout.lower())
 
             if repo_data_exists(
                 "data/short_baseline/TSK200JPN_R_20240010000_01D_30S_MO.rnx",
