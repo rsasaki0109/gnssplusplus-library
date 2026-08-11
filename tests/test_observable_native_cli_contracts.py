@@ -24,6 +24,7 @@ class CliVariant:
     output_columns: str
     has_tdcp: bool = False
     has_velocity: bool = False
+    factor_debug_description: str = "per-factor"
 
 
 VARIANTS = (
@@ -37,6 +38,53 @@ VARIANTS = (
         has_velocity=True,
     ),
 )
+GNSS_VEL_D_VARIANT = CliVariant(
+    "gnss_vel_d",
+    "velocity",
+    has_velocity=True,
+    factor_debug_description="per-Doppler-factor",
+)
+
+GNSS_VEL_D_OUTPUT_COLUMNS = (
+    "epoch,gps_week,gps_tow,spp_x_m,spp_y_m,spp_z_m,"
+    "fgo_vx_mps,fgo_vy_mps,fgo_vz_mps,fgo_clock_drift_mps"
+).split(",")
+GNSS_VEL_D_FACTOR_COLUMNS = (
+    "epoch_index,gps_week,gps_tow,satellite,signal,snr_dbhz,"
+    "elevation_deg,sigma_d_mps,res_d_mps,measured_range_rate_mps,"
+    "modeled_range_rate_mps,satellite_clock_drift_mps,final_residual_mps,"
+    "los_x,los_y,los_z"
+).split(",")
+GNSS_VEL_D_GRAPH_COLUMNS = (
+    "n,nsat,graph_factors,graph_values,initial_cost,final_cost,"
+    "optimizer_error,iterations,valid_velocity_epochs"
+).split(",")
+GNSS_VEL_D_FIRST_FACTOR_NUMERICS = {
+    "snr_dbhz": 45.0,
+    "elevation_deg": 51.61724761403688,
+    "sigma_d_mps": 0.2258942059348,
+    "res_d_mps": -199.88024226507372,
+    "measured_range_rate_mps": 190.29367279836487,
+    "modeled_range_rate_mps": 390.1723116935738,
+    "satellite_clock_drift_mps": -0.001603369864782,
+    "final_residual_mps": 199.88024226507372,
+    "los_x": -0.135530405959753,
+    "los_y": -0.783880404473286,
+    "los_z": -0.605939782934891,
+}
+GNSS_VEL_D_TIE_FIRST_FACTOR_NUMERICS = {
+    "snr_dbhz": 45.0,
+    "elevation_deg": 51.610338264779955,
+    "sigma_d_mps": 0.225904996244638,
+    "res_d_mps": -199.755442000548612,
+    "measured_range_rate_mps": 190.483966471163228,
+    "modeled_range_rate_mps": 390.237805120032817,
+    "satellite_clock_drift_mps": -0.001603351679038,
+    "final_residual_mps": 199.755442000548612,
+    "los_x": -0.135474399562499,
+    "los_y": -0.783805522460264,
+    "los_z": -0.606049164692084,
+}
 
 PRESETS = {
     "gnss_pos_pd": "taroz-pos-pd",
@@ -141,6 +189,20 @@ VELOCITY_TUNING_OPTIONS = (
 )
 TDCP_TUNING_OPTION = ("--tdcp-sigma-zenith", "1")
 INTEGER_LIMIT_OPTIONS = ("--skip-epochs", "--max-epochs", "--max-iterations")
+GNSS_VEL_D_TUNING_OPTIONS = (
+    ("--skip-epochs", "0"),
+    ("--max-epochs", "0"),
+    ("--max-iterations", "0"),
+    ("--seed-match-tolerance", "0"),
+    ("--seed-interpolation-max-gap", "0"),
+    ("--min-snr", "0"),
+    ("--min-elevation", "0"),
+    ("--doppler-sigma-zenith", "1"),
+    ("--velocity-prior-sigma", "1"),
+    ("--clock-drift-prior-sigma", "1"),
+    ("--clock-drift-between-sigma", "1"),
+    ("--huber-threshold", "1"),
+)
 
 
 class ObservableNativeCliContractsTest(unittest.TestCase):
@@ -154,7 +216,7 @@ class ObservableNativeCliContractsTest(unittest.TestCase):
             os.environ.get("GNSSPP_BINARY_DIR", ROOT_DIR / "build")
         ).resolve()
         cls.executables: dict[str, Path] = {}
-        for variant in VARIANTS:
+        for variant in (*VARIANTS, GNSS_VEL_D_VARIANT):
             executable_name = (
                 f"{variant.binary_name}.exe" if os.name == "nt"
                 else variant.binary_name
@@ -378,7 +440,8 @@ class ObservableNativeCliContractsTest(unittest.TestCase):
             "Options:",
             "  --out-csv PATH                 "
             f"Write per-epoch {variant.output_columns} CSV.",
-            "  --factor-debug-csv PATH        Write per-factor debug CSV.",
+            "  --factor-debug-csv PATH        "
+            f"Write {variant.factor_debug_description} debug CSV.",
             "  --graph-csv PATH               Write taroz-like graph detail CSV.",
             "  --summary-json PATH            Write JSON summary.",
             "  --max-epochs N                 Limit processed epochs; 0 means all.",
@@ -585,6 +648,95 @@ class ObservableNativeCliContractsTest(unittest.TestCase):
                         (*required, option, value),
                         f"unknown argument: {option}",
                     )
+
+    def test_gnss_vel_d_common_cli_contracts_are_stable(self) -> None:
+        variant = GNSS_VEL_D_VARIANT
+        for option in ("--help", "-h"):
+            with self.subTest(option=option):
+                self.assert_usage_error(variant, (option,), "help requested")
+
+        required_cases = (
+            ((), "--obs is required"),
+            (("--obs", "rover.obs"), "--nav is required"),
+            (
+                ("--obs", "rover.obs", "--nav", "base.nav"),
+                "--seed-pos is required",
+            ),
+        )
+        for options, message in required_cases:
+            with self.subTest(message=message):
+                self.assert_usage_error(variant, options, message)
+
+        diagnostic_cases = (
+            (("--unknown",), "unknown argument: --unknown"),
+            (("--obs",), "missing value for --obs"),
+            (
+                ("--max-iterations", "not-an-integer"),
+                "invalid integer for --max-iterations: not-an-integer",
+            ),
+            (
+                ("--huber-threshold", "not-a-number"),
+                "invalid number for --huber-threshold: not-a-number",
+            ),
+        )
+        for options, message in diagnostic_cases:
+            with self.subTest(message=message):
+                self.assert_usage_error(variant, options, message)
+
+        required = (
+            "--obs",
+            "missing.obs",
+            "--nav",
+            "missing.nav",
+            "--seed-pos",
+            "missing.pos",
+        )
+        for option in INTEGER_LIMIT_OPTIONS:
+            with self.subTest(option=option):
+                self.assert_usage_error(
+                    variant,
+                    (*required, option, "-1"),
+                    "epoch and iteration limits must be non-negative",
+                )
+        for option, value in (
+            ("--seed-match-tolerance", "-1"),
+            ("--huber-threshold", "0"),
+            ("--velocity-prior-sigma", "0"),
+        ):
+            with self.subTest(option=option):
+                self.assert_usage_error(
+                    variant,
+                    (*required, option, value),
+                    "sigma, threshold, and tolerance values must be positive",
+                )
+
+        unsupported_cases = (
+            ("--pseudorange-sigma-zenith", "1"),
+            ("--position-prior-sigma", "1"),
+            ("--tdcp-sigma-zenith", "1"),
+        )
+        for option, value in unsupported_cases:
+            with self.subTest(option=option):
+                self.assert_usage_error(
+                    variant,
+                    (*required, option, value),
+                    f"unknown argument: {option}",
+                )
+
+        with tempfile.TemporaryDirectory(prefix="gnss_vel_d_cli_") as temp_dir:
+            missing_observation = Path(temp_dir) / "missing.obs"
+            flattened = tuple(
+                value
+                for option_and_value in GNSS_VEL_D_TUNING_OPTIONS
+                for value in option_and_value
+            )
+            self.assert_missing_observation_error(
+                variant,
+                missing_observation,
+                *flattened,
+                "--debug-problem-only",
+                "--quiet",
+            )
 
     def test_debug_success_outputs_and_factor_numerics_are_stable(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_observable_success_") as temp_dir:
@@ -849,6 +1001,231 @@ class ObservableNativeCliContractsTest(unittest.TestCase):
                         for row, expected in zip(output_rows, expected_y_m):
                             self.assert_contract_float(row["spp_y_m"], expected)
                             self.assert_contract_float(row["fgo_y_m"], expected)
+
+    def test_gnss_vel_d_success_seed_formats_and_outputs_are_stable(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_vel_d_success_") as temp_dir:
+            temp_path = Path(temp_dir)
+            observation_path, navigation_path, seed_path = self.write_success_fixture(
+                temp_path
+            )
+            ascending_observation_text = observation_path.read_text(encoding="ascii")
+            observation_lines = ascending_observation_text.splitlines(keepends=True)
+            epoch_starts = [
+                index
+                for index, line in enumerate(observation_lines)
+                if line.startswith("> ")
+            ]
+            self.assertEqual(len(epoch_starts), 2)
+            tie_observation_text = "".join(
+                observation_lines[: epoch_starts[0]]
+                + observation_lines[epoch_starts[1] :]
+                + observation_lines[epoch_starts[0] : epoch_starts[1]]
+            )
+            cases = (
+                (
+                    "native",
+                    ascending_observation_text,
+                    f"2200 345600 0 {RECEIVER_Y_M:.0f} 0\n"
+                    f"2200 345601 0 {RECEIVER_Y_M:.0f} 0\n",
+                    (RECEIVER_Y_M, RECEIVER_Y_M),
+                    (345_600.0, 345_601.0),
+                    0,
+                    (),
+                    2181.527446857329,
+                    199.81773966295376,
+                ),
+                (
+                    "rtklib",
+                    ascending_observation_text,
+                    "2022/03/10 00:00:00.000 0.0 90.0 0.0\n"
+                    "2022/03/10 00:00:01.000 0.0 90.0 0.0\n",
+                    (RECEIVER_Y_M, RECEIVER_Y_M),
+                    (345_600.0, 345_601.0),
+                    0,
+                    (),
+                    2181.527446857329,
+                    199.81773966295376,
+                ),
+                (
+                    "interpolated",
+                    ascending_observation_text,
+                    "2200 345599 0 6378134 0\n"
+                    "2200 345602 0 6378143 0\n",
+                    (RECEIVER_Y_M, RECEIVER_Y_M + 3.0),
+                    (345_600.0, 345_601.0),
+                    2,
+                    (),
+                    2181.5286348135287,
+                    199.8178518761263,
+                ),
+                (
+                    "tie",
+                    tie_observation_text,
+                    "2200 345599.5 0 6378130 0\n"
+                    "2200 345600.5 0 6378140 0\n",
+                    (6378140.0, 6378130.0),
+                    (345_601.0, 345_600.0),
+                    0,
+                    ("--seed-match-tolerance", "0.51"),
+                    2181.525863184672744,
+                    199.817589916674621,
+                ),
+            )
+
+            for (
+                case_name,
+                observation_text,
+                seed_text,
+                expected_y_m,
+                expected_tows,
+                interpolated_epochs,
+                extra_options,
+                expected_cost,
+                expected_residual_rms,
+            ) in cases:
+                observation_path.write_text(observation_text, encoding="ascii")
+                seed_path.write_text(seed_text, encoding="ascii")
+                output_path = temp_path / f"gnss_vel_d-{case_name}.csv"
+                factor_path = temp_path / f"gnss_vel_d-{case_name}.factors.csv"
+                graph_path = temp_path / f"gnss_vel_d-{case_name}.graph.csv"
+                summary_path = temp_path / f"gnss_vel_d-{case_name}.json"
+
+                with self.subTest(case=case_name):
+                    result = self.run_cli(
+                        GNSS_VEL_D_VARIANT,
+                        "--obs",
+                        str(observation_path),
+                        "--nav",
+                        str(navigation_path),
+                        "--seed-pos",
+                        str(seed_path),
+                        "--out-csv",
+                        str(output_path),
+                        "--factor-debug-csv",
+                        str(factor_path),
+                        "--graph-csv",
+                        str(graph_path),
+                        "--summary-json",
+                        str(summary_path),
+                        "--debug-problem-only",
+                        "--quiet",
+                        *extra_options,
+                    )
+
+                    self.assertEqual(result.returncode, 0, msg=result.stderr)
+                    self.assertEqual(result.stdout, "")
+                    self.assertEqual(result.stderr, "")
+
+                    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+                    expected_summary = {
+                        "preset": "taroz-d",
+                        "backend": "eigen",
+                        "debug_problem_only": True,
+                        "optimized_epochs": 2,
+                        "valid_velocity_epochs": 2,
+                        "seed_matched_epochs": 2,
+                        "seed_interpolated_epochs": interpolated_epochs,
+                        "nsat": 1,
+                        "doppler_factors": 2,
+                        "velocity_prior_factors": 2,
+                        "clock_drift_prior_factors": 2,
+                        "clock_drift_between_factors": 1,
+                        "graph_factors": 7,
+                        "graph_values": 4,
+                        "min_snr_dbhz": 35.0,
+                        "min_elevation_deg": 15.0,
+                        "doppler_sigma_zenith_mps": 0.2,
+                        "velocity_prior_sigma_mps": 1000.0,
+                        "clock_drift_prior_sigma_mps": 1000.0,
+                        "clock_drift_between_sigma_mps": 0.1,
+                        "huber_threshold_sigma": 1.234,
+                        "iterations": 0,
+                        "converged": False,
+                        "initial_cost": expected_cost,
+                        "final_cost": expected_cost,
+                        "residual_rms_mps": expected_residual_rms,
+                    }
+                    self.assertEqual(set(summary), set(expected_summary))
+                    float_keys = {
+                        "min_snr_dbhz",
+                        "min_elevation_deg",
+                        "doppler_sigma_zenith_mps",
+                        "velocity_prior_sigma_mps",
+                        "clock_drift_prior_sigma_mps",
+                        "clock_drift_between_sigma_mps",
+                        "huber_threshold_sigma",
+                        "initial_cost",
+                        "final_cost",
+                        "residual_rms_mps",
+                    }
+                    for key, expected in expected_summary.items():
+                        if key in float_keys:
+                            self.assert_contract_float(summary[key], float(expected))
+                        else:
+                            self.assertEqual(summary[key], expected, msg=key)
+
+                    with output_path.open(newline="", encoding="utf-8") as stream:
+                        output_reader = csv.DictReader(stream)
+                        output_rows = list(output_reader)
+                    self.assertEqual(output_reader.fieldnames, GNSS_VEL_D_OUTPUT_COLUMNS)
+                    self.assertEqual(len(output_rows), 2)
+                    for index, (row, expected_y, expected_tow) in enumerate(
+                        zip(output_rows, expected_y_m, expected_tows)
+                    ):
+                        self.assertEqual(row["epoch"], str(index + 1))
+                        self.assertEqual(row["gps_week"], "2200")
+                        self.assert_contract_float(row["gps_tow"], expected_tow)
+                        self.assert_contract_float(row["spp_x_m"], 0.0)
+                        self.assert_contract_float(row["spp_y_m"], expected_y)
+                        self.assert_contract_float(row["spp_z_m"], 0.0)
+                        for column in (
+                            "fgo_vx_mps",
+                            "fgo_vy_mps",
+                            "fgo_vz_mps",
+                            "fgo_clock_drift_mps",
+                        ):
+                            self.assert_contract_float(row[column], 0.0)
+
+                    with factor_path.open(newline="", encoding="utf-8") as stream:
+                        factor_reader = csv.DictReader(stream)
+                        factor_rows = list(factor_reader)
+                    self.assertEqual(factor_reader.fieldnames, GNSS_VEL_D_FACTOR_COLUMNS)
+                    self.assertEqual(len(factor_rows), 2)
+                    first_factor = factor_rows[0]
+                    self.assertEqual(first_factor["epoch_index"], "0")
+                    self.assertEqual(first_factor["gps_week"], "2200")
+                    self.assert_contract_float(first_factor["gps_tow"], expected_tows[0])
+                    self.assertEqual(first_factor["satellite"], "G03")
+                    self.assertEqual(first_factor["signal"], "GPS_L1CA")
+                    self.assertEqual(factor_rows[1]["epoch_index"], "1")
+                    self.assert_contract_float(
+                        factor_rows[1]["gps_tow"], expected_tows[1]
+                    )
+                    factor_numerics = (
+                        GNSS_VEL_D_TIE_FIRST_FACTOR_NUMERICS
+                        if case_name == "tie"
+                        else GNSS_VEL_D_FIRST_FACTOR_NUMERICS
+                    )
+                    for key, expected in factor_numerics.items():
+                        self.assert_contract_float(first_factor[key], expected)
+
+                    with graph_path.open(newline="", encoding="utf-8") as stream:
+                        graph_reader = csv.DictReader(stream)
+                        graph_rows = list(graph_reader)
+                    self.assertEqual(graph_reader.fieldnames, GNSS_VEL_D_GRAPH_COLUMNS)
+                    self.assertEqual(len(graph_rows), 1)
+                    graph_row = graph_rows[0]
+                    for key, expected in (
+                        ("n", 2),
+                        ("nsat", 1),
+                        ("graph_factors", 7),
+                        ("graph_values", 4),
+                        ("iterations", 0),
+                        ("valid_velocity_epochs", 2),
+                    ):
+                        self.assertEqual(graph_row[key], str(expected))
+                    for key in ("initial_cost", "final_cost", "optimizer_error"):
+                        self.assert_contract_float(graph_row[key], expected_cost)
 
     def test_runtime_input_failure_does_not_create_outputs(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_observable_cli_") as temp_dir:
