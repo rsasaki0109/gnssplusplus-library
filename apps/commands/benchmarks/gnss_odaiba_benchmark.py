@@ -13,17 +13,17 @@ import subprocess
 import sys
 import tempfile
 
-from support.gnss_runtime import resolve_gnss_command
+from support.gnss_runtime import load_python_module, resolve_gnss_command
 
 
 from support.gnss_runtime import application_root
 
 ROOT_DIR = application_root(__file__)
 DEFAULT_RTKLIB = "/tmp/RTKLIB/app/rnx2rtkp/gcc/rnx2rtkp"
-
-sys.path.insert(0, str(ROOT_DIR / "scripts"))
-
-import generate_driving_comparison as driving_comparison  # noqa: E402
+driving_comparison = load_python_module(
+    "gnssplusplus_generate_driving_comparison",
+    ROOT_DIR / "scripts" / "generate_driving_comparison.py",
+)
 
 
 def parse_args() -> argparse.Namespace:

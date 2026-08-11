@@ -3,12 +3,20 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
+from datetime import date
 from pathlib import Path
 import shutil
 import subprocess
 import sys
-from datetime import date
+import threading
+from types import ModuleType
+
+
+_MODULE_MISSING = object()
+_MODULE_LOAD_LOCK = threading.RLock()
+_MODULES_LOADING: set[str] = set()
 
 
 def application_root(script_file: str) -> Path:
@@ -17,6 +25,65 @@ def application_root(script_file: str) -> Path:
     if script_path.parent.parent.name == "commands":
         return script_path.parents[3]
     return script_path.parent.parent
+
+
+def _module_origin(module: ModuleType) -> Path | None:
+    origin = getattr(module, "__file__", None)
+    if origin is None:
+        origin = getattr(getattr(module, "__spec__", None), "origin", None)
+    if not isinstance(origin, (str, Path)):
+        return None
+    try:
+        return Path(origin).resolve()
+    except (OSError, RuntimeError, ValueError):
+        return None
+
+
+def load_python_module(module_name: str, module_path: Path) -> ModuleType:
+    """Load a Python file by path without changing the process import path."""
+    if not isinstance(module_name, str) or not module_name:
+        raise ValueError("module_name must be a non-empty string")
+
+    try:
+        resolved_path = Path(module_path).expanduser().resolve()
+    except (OSError, RuntimeError) as exc:
+        raise ImportError(f"Cannot resolve Python module path: {module_path}") from exc
+
+    with _MODULE_LOAD_LOCK:
+        existing = sys.modules.get(module_name, _MODULE_MISSING)
+        if existing is not _MODULE_MISSING:
+            existing_path = _module_origin(existing) if isinstance(existing, ModuleType) else None
+            if isinstance(existing, ModuleType) and existing_path == resolved_path:
+                if module_name in _MODULES_LOADING:
+                    raise ImportError(f"Python module {module_name!r} is still initializing")
+                return existing
+            origin = str(existing_path) if existing_path is not None else "<unknown file>"
+            raise ImportError(
+                f"Module name collision: {module_name!r} is already loaded from {origin}; "
+                f"cannot load {resolved_path}"
+            )
+
+        if not resolved_path.exists():
+            raise FileNotFoundError(f"Python module file does not exist: {resolved_path}")
+        if not resolved_path.is_file():
+            raise ImportError(f"Python module path is not a file: {resolved_path}")
+
+        spec = importlib.util.spec_from_file_location(module_name, resolved_path)
+        if spec is None or spec.loader is None or not hasattr(spec.loader, "exec_module"):
+            raise ImportError(f"No usable Python loader for {resolved_path}")
+
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        _MODULES_LOADING.add(module_name)
+        try:
+            spec.loader.exec_module(module)
+        except BaseException:
+            if sys.modules.get(module_name) is module:
+                del sys.modules[module_name]
+            raise
+        finally:
+            _MODULES_LOADING.discard(module_name)
+        return module
 
 
 def resolve_gnss_command(root_dir: Path) -> list[str]:
