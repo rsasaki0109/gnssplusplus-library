@@ -38,4 +38,38 @@ bool parseNavigationRecordHeader(const std::string& line,
  */
 bool supportsEphemerisMessage(char system, const std::string& message_type);
 
+/**
+ * @brief Parsed metadata from a RINEX 4 observation epoch record.
+ */
+struct ObservationEpochHeader {
+    int year = 0;
+    int month = 0;
+    int day = 0;
+    int hour = 0;
+    int minute = 0;
+    double second = 0.0;
+    int flag = 0;
+    int record_count = 0;
+    double receiver_clock_offset = 0.0;
+    bool has_receiver_clock_offset = false;
+    int extra_second_digits = 0;
+    bool has_date = false;
+};
+
+/**
+ * @brief Parse a RINEX 4 observation epoch/event record.
+ *
+ * The required calendar, seconds, flag, and count fields are read as tokens
+ * so the optional picosecond extension cannot shift the flag or count.  The
+ * optional clock estimate and extension are then checked at their fixed
+ * Table A3 locations.
+ */
+bool parseObservationEpochHeader(const std::string& line,
+                                 ObservationEpochHeader& epoch);
+
+/**
+ * @brief Return true only for CompactRINEX filename suffixes.
+ */
+bool isCompactRinexPath(const std::string& filename);
+
 }  // namespace libgnss::io::rinex4

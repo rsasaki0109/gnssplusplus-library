@@ -1,9 +1,9 @@
 # RINEX 4.02 Plan
 
-This plan scopes the RINEX 4 work before implementation.  The intent for
-iter1 is to record the parser state, isolate the RINEX 4 surface area, and add
-only a compile-time skeleton.  Functional parsing changes should start in
-iter2.
+This plan scoped the RINEX 4 work before implementation.  The original iter1
+intent was to record parser state, isolate the RINEX 4 surface area, and add a
+compile-time skeleton; the completed Phase 1 and Phase 2 slices now add the
+documented reader behavior incrementally.
 
 ## Reference Sources
 
@@ -171,6 +171,17 @@ Phase 2, observation support:
 - Add CRINEX policy tests that verify `.crx`/`.crx.gz` is rejected with a clear
   message or preprocessed through an external converter.
 
+**DONE in the Phase 2 observation slice.**  RINEX 4 epoch metadata is parsed
+token-wise, including the Table A3 receiver-clock and optional five-digit
+picosecond extension fields.  GPS and QZSS rows reuse the RINEX 3 selection
+policy, continuation headers are covered, and event/cycle-slip records are
+consumed before scanning for the next normal epoch.  Event records do not
+produce `ObservationData` epochs, while a valid flag 0/1 epoch with zero
+satellites is returned as an intentionally empty epoch; malformed or
+truncated normal records fail instead of returning partial data.  Native
+CRINEX decompression remains out of scope and matching suffixes are rejected
+explicitly.
+
 Phase 3, `EPH` navigation support (PARTIAL after Phase 1 safe dispatch):
 
 - Parse RINEX 4 `EPH` data record headers. **DONE in the Phase 1 slice.**
@@ -203,40 +214,47 @@ Phase 6, writer support:
 
 ## End-State Acceptance Gates
 
-These gates cover the complete roadmap, not just the current safe-dispatch
-slice. The RINEX 4 observation-row gate is intentionally deferred to Phase 2.
+These are end-state gates for the complete roadmap, not just the current
+safe-dispatch and observation slices.  The reader gates completed by Phases 1
+and 2 are marked by the corresponding status sections below.
 
 - Existing RINEX 2/3 tests continue to pass.
 - RINEX 4 observation fixture parses header, epoch time, satellite count, and
-  at least GPS/QZSS observation rows.
+  at least GPS/QZSS observation rows. **MET by Phase 2.**
 - RINEX 4 navigation fixture with `> EPH G.. LNAV` parses at parity with the
   equivalent RINEX 3 record.
 - Unsupported RINEX 4 records fail or skip deterministically with diagnostics.
 - CRINEX input policy is explicit and tested.
 
-## Safe-Dispatch Slice Non-Goals
+## Safe-Dispatch and Observation Slice Non-Goals
 
-- No full RINEX 4 observation parser behavior changes beyond the Phase 1
-  detection/rejection boundary.
+- No complete RINEX 4 observation model: event metadata is intentionally not
+  retained in `ObservationData`, and cycle-slip records are consumed rather
+  than exposed.
 - No native CRINEX decompressor.
 - No NavIC or GLONASS CDMA message implementation.
 - No writer behavior changes.
 
 ## Phase 1 Implementation Status: DONE
 
-The safe-dispatch slice is implemented in the reader while the Phase 2
-observation parser remains intentionally out of scope:
+The safe-dispatch slice is implemented in the reader:
 
 - `RINEXReader::isRinex4()` identifies versions 4.00 through 4.99 explicitly;
   RINEX 2 and 3 continue through their existing paths.
-- RINEX 4 observation epochs are detected and rejected with a diagnostic
-  rather than being passed to the fixed-column RINEX 3 parser.
+- RINEX 4 observation epochs are dispatched to the dedicated Phase 2 parser;
+  RINEX 2 and 3 continue through their existing paths.
 - RINEX 4 navigation data-record headers are parsed in `rinex4.hpp/cpp`.
   Compatible GPS/QZSS LNAV, GLONASS FDMA, Galileo FNAV/INAV, and BeiDou D1/D2
   EPH bodies reuse the existing ephemeris parser.
 - STO/EOP/ION records and unsupported EPH message types are skipped at the
   next `>` record boundary with diagnostics, preventing silent body misparse.
 
-Token-based RINEX 4 observation epochs, receiver-clock offsets, expanded
-second precision, and new navigation message models remain Phase 2 and later
-work as specified above.
+## Phase 2 Implementation Status: DONE
+
+The observation slice now handles token-based RINEX 4 epoch fields, fixed
+Table A3 receiver-clock offsets, optional extra second digits, GPS/QZSS
+observation rows, continuation headers, deterministic event/cycle-slip
+skipping (with zero-satellite normal epochs preserved), strict truncation
+checks, and explicit CRINEX suffix rejection.
+Event metadata retention, richer cycle-slip data models, and all new
+navigation message models remain deferred as listed above.

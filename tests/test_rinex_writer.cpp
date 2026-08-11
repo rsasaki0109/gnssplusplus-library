@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <libgnss++/io/rinex.hpp>
+#include <libgnss++/io/rinex4.hpp>
 
 #include <filesystem>
 #include <fstream>
@@ -206,7 +207,7 @@ TEST(RINEXReaderTest, ParsesTimeOfFirstObsHeader) {
     std::filesystem::remove(temp_path);
 }
 
-TEST(RINEXReaderTest, DetectsRinex4AndDoesNotUseRinex3EpochColumns) {
+TEST(RINEXReaderTest, ParsesRinex4EpochPrecisionClockAndGpsQzssRows) {
     const auto temp_path =
         std::filesystem::temp_directory_path() / "libgnss_rinex4_observation_dispatch.obs";
     std::filesystem::remove(temp_path);
@@ -221,14 +222,18 @@ TEST(RINEXReaderTest, DetectsRinex4AndDoesNotUseRinex3EpochColumns) {
             "G    4 C1C L1C C2W L2W",
             "SYS / # / OBS TYPES");
         file << rinexHeaderLine("", "END OF HEADER");
-        // The extra second digits intentionally shift the RINEX 3 fixed
-        // columns.  Phase 1 must reject this explicitly until token-based
-        // RINEX 4 observation parsing is implemented.
-        file << "> 2024 08 03 09 51 20.1234567890123  0  1\n";
+        std::string epoch = "> 2024 08 03 09 51 20.1234567  0  2";
+        epoch.append(41 - epoch.size(), ' ');
+        epoch += "-0.123456789012 12345\n";
+        file << epoch;
         file << "G04" << rinexObsField("22011162.552")
              << rinexObsField("115669443.467")
              << rinexObsField("22022262.423")
              << rinexObsField("120222443.467") << "\n";
+        file << "J01" << rinexObsField("22011163.552")
+             << rinexObsField("115669444.467")
+             << rinexObsField("22022263.423")
+             << rinexObsField("120222444.467") << "\n";
     }
 
     io::RINEXReader reader;
@@ -239,14 +244,207 @@ TEST(RINEXReaderTest, DetectsRinex4AndDoesNotUseRinex3EpochColumns) {
     EXPECT_TRUE(reader.isRinex4());
 
     ObservationData epoch;
-    testing::internal::CaptureStderr();
-    EXPECT_FALSE(reader.readObservationEpoch(epoch));
-    const std::string diagnostic = testing::internal::GetCapturedStderr();
-    EXPECT_NE(diagnostic.find("RINEX 4 observation epochs are not supported yet"),
-              std::string::npos);
+    ASSERT_TRUE(reader.readObservationEpoch(epoch));
+    EXPECT_NEAR(epoch.receiver_clock_bias, -0.123456789012, 1e-15);
+    EXPECT_EQ(epoch.time.week, 2325);
+    EXPECT_NEAR(epoch.time.tow, 553880.1234567123, 1e-9);
+    ASSERT_EQ(epoch.observations.size(), 4U);
+    EXPECT_EQ(epoch.observations[0].satellite, SatelliteId(GNSSSystem::GPS, 4));
+    EXPECT_EQ(epoch.observations[2].satellite, SatelliteId(GNSSSystem::QZSS, 1));
+    const auto* gps_l1 = epoch.getObservation(
+        SatelliteId(GNSSSystem::GPS, 4), SignalType::GPS_L1CA);
+    ASSERT_NE(gps_l1, nullptr);
+    EXPECT_TRUE(gps_l1->has_pseudorange);
 
     reader.close();
     std::filesystem::remove(temp_path);
+}
+
+TEST(RINEXReaderTest, AccumulatesRinex4ObservationTypeContinuation) {
+    const auto temp_path =
+        std::filesystem::temp_directory_path() / "libgnss_rinex4_obs_types_continuation.obs";
+    std::filesystem::remove(temp_path);
+    {
+        std::ofstream file(temp_path);
+        ASSERT_TRUE(file.is_open());
+        file << rinexHeaderLine(
+            "     4.02           OBSERVATION DATA    M", "RINEX VERSION / TYPE");
+        file << rinexHeaderLine(
+            "G   14 C1C L1C C2W L2W C5Q L5Q D5Q S5Q C1L L1L D1L S1L C2L",
+            "SYS / # / OBS TYPES");
+        file << rinexHeaderLine("       S2L", "SYS / # / OBS TYPES");
+        file << rinexHeaderLine("", "END OF HEADER");
+        file << "> 2024 08 03 09 51 20.0000000  0  2\n";
+        const std::vector<std::string> values = {
+            "22011162.552", "115669443.467", "22022262.423", "120222443.467",
+            "22033362.552", "115669543.467", "22044462.423", "120222543.467",
+            "22055562.552", "115669643.467", "22066662.423", "120222643.467",
+            "22077762.552", "115669743.467"};
+        std::string gps_row = "G04";
+        std::string qzss_row = "J01";
+        for (const auto& value : values) {
+            gps_row += rinexObsField(value);
+            qzss_row += rinexObsField(value);
+        }
+        file << gps_row << "\n" << qzss_row << "\n";
+    }
+
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(temp_path.string()));
+    io::RINEXReader::RINEXHeader header;
+    ASSERT_TRUE(reader.readHeader(header));
+    ASSERT_EQ(header.system_obs_types['G'].size(), 14U);
+    EXPECT_EQ(header.system_obs_types['G'].back(), "S2L");
+    EXPECT_EQ(header.observation_types.size(), 14U);
+    ObservationData epoch;
+    ASSERT_TRUE(reader.readObservationEpoch(epoch));
+    ASSERT_EQ(epoch.observations.size(), 4U);
+    EXPECT_EQ(epoch.observations[0].satellite, SatelliteId(GNSSSystem::GPS, 4));
+    EXPECT_EQ(epoch.observations[2].satellite, SatelliteId(GNSSSystem::QZSS, 1));
+    reader.close();
+    std::filesystem::remove(temp_path);
+}
+
+TEST(RINEXReaderTest, SkipsRinex4EventAndCycleSlipRecordsBeforeNextEpoch) {
+    const auto temp_path =
+        std::filesystem::temp_directory_path() / "libgnss_rinex4_events.obs";
+    std::filesystem::remove(temp_path);
+    {
+        std::ofstream file(temp_path);
+        ASSERT_TRUE(file.is_open());
+        file << rinexHeaderLine(
+            "     4.02           OBSERVATION DATA    M", "RINEX VERSION / TYPE");
+        file << rinexHeaderLine("G    4 C1C L1C C2W L2W", "SYS / # / OBS TYPES");
+        file << rinexHeaderLine("", "END OF HEADER");
+        file << "> 2024 08 03 09 51 20.0000000  0  0\n";
+        file << ">                              2 1\n";
+        file << rinexHeaderLine("event comment", "COMMENT");
+        file << ">                              6 1\n";
+        file << "G04" << rinexObsField("99999999.000")
+             << rinexObsField("1.000") << rinexObsField("2.000")
+             << rinexObsField("3.000") << "\n";
+        file << "> 2024 08 03 09 51 21.0000000  0  1\n";
+        file << "G04" << rinexObsField("22011162.552")
+             << rinexObsField("115669443.467")
+             << rinexObsField("22022262.423")
+             << rinexObsField("120222443.467") << "\n";
+    }
+
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(temp_path.string()));
+    io::RINEXReader::RINEXHeader header;
+    ASSERT_TRUE(reader.readHeader(header));
+    ObservationData empty_epoch;
+    ASSERT_TRUE(reader.readObservationEpoch(empty_epoch));
+    EXPECT_TRUE(empty_epoch.isEmpty());
+    ObservationData epoch;
+    ASSERT_TRUE(reader.readObservationEpoch(epoch));
+    EXPECT_EQ(epoch.time.week, 2325);
+    EXPECT_NEAR(epoch.time.tow, 553881.0, 1e-9);
+    ASSERT_EQ(epoch.observations.size(), 2U);
+    EXPECT_EQ(epoch.observations.front().satellite, SatelliteId(GNSSSystem::GPS, 4));
+    reader.close();
+    std::filesystem::remove(temp_path);
+}
+
+TEST(RINEXReaderTest, FeedsRinex4HeaderEventRecordsIntoHeaderParser) {
+    const auto temp_path =
+        std::filesystem::temp_directory_path() / "libgnss_rinex4_header_event.obs";
+    std::filesystem::remove(temp_path);
+    {
+        std::ofstream file(temp_path);
+        ASSERT_TRUE(file.is_open());
+        file << rinexHeaderLine(
+            "     4.02           OBSERVATION DATA    M", "RINEX VERSION / TYPE");
+        file << rinexHeaderLine("G    4 C1C L1C C2W L2W", "SYS / # / OBS TYPES");
+        file << rinexHeaderLine("", "END OF HEADER");
+        file << ">                              4 1\n";
+        file << rinexHeaderLine("G    4 C1C L1C C5Q L5Q", "SYS / # / OBS TYPES");
+        file << "> 2024 08 03 09 51 22.0000000  0  1\n";
+        file << "G04" << rinexObsField("22011162.552")
+             << rinexObsField("115669443.467")
+             << rinexObsField("22022262.423")
+             << rinexObsField("120222443.467") << "\n";
+    }
+
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(temp_path.string()));
+    io::RINEXReader::RINEXHeader header;
+    ASSERT_TRUE(reader.readHeader(header));
+    ObservationData epoch;
+    ASSERT_TRUE(reader.readObservationEpoch(epoch));
+    ASSERT_EQ(epoch.observations.size(), 2U);
+    reader.close();
+    std::filesystem::remove(temp_path);
+}
+
+TEST(RINEXReaderTest, RejectsTruncatedRinex4ObservationEpoch) {
+    const auto temp_path =
+        std::filesystem::temp_directory_path() / "libgnss_rinex4_truncated.obs";
+    std::filesystem::remove(temp_path);
+    {
+        std::ofstream file(temp_path);
+        ASSERT_TRUE(file.is_open());
+        file << rinexHeaderLine(
+            "     4.02           OBSERVATION DATA    M", "RINEX VERSION / TYPE");
+        file << rinexHeaderLine("G    4 C1C L1C C2W L2W", "SYS / # / OBS TYPES");
+        file << rinexHeaderLine("", "END OF HEADER");
+        file << "> 2024 08 03 09 51 23.0000000  0  2\n";
+        file << "G04" << rinexObsField("22011162.552")
+             << rinexObsField("115669443.467")
+             << rinexObsField("22022262.423")
+             << rinexObsField("120222443.467") << "\n";
+    }
+
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(temp_path.string()));
+    io::RINEXReader::RINEXHeader header;
+    ASSERT_TRUE(reader.readHeader(header));
+    ObservationData epoch;
+    EXPECT_FALSE(reader.readObservationEpoch(epoch));
+    EXPECT_TRUE(epoch.isEmpty());
+    reader.close();
+    std::filesystem::remove(temp_path);
+}
+
+TEST(RINEXReaderTest, RejectsMalformedRinex4EpochTokenWidthsAndCounts) {
+    io::rinex4::ObservationEpochHeader epoch;
+    EXPECT_FALSE(io::rinex4::parseObservationEpochHeader(
+        "> 0001 08 03 09 51 23.0000000  0  1", epoch));
+    EXPECT_FALSE(io::rinex4::parseObservationEpochHeader(
+        "> 2024 8 03 09 51 23.0000000  0  1", epoch));
+    EXPECT_FALSE(io::rinex4::parseObservationEpochHeader(
+        "> 2024 08 03 09 51 23.0000000  0  1000", epoch));
+    EXPECT_FALSE(io::rinex4::parseObservationEpochHeader(
+        ">                              2 1000", epoch));
+}
+
+TEST(RINEXReaderTest, RejectsCompactRinexSuffixesButNotSimilarNames) {
+    const auto base = std::filesystem::temp_directory_path();
+    const auto crx = base / "libgnss_rinex4_policy.CRX";
+    const auto crx_gz = base / "libgnss_rinex4_policy.CRX.GZ";
+    const auto similar = base / "libgnss_rinex4_policy.crx.tmp";
+    std::filesystem::remove(crx);
+    std::filesystem::remove(crx_gz);
+    std::filesystem::remove(similar);
+    {
+        std::ofstream(crx) << "not decoded\n";
+        std::ofstream(crx_gz) << "not decoded\n";
+        std::ofstream(similar) << "not compact\n";
+    }
+
+    io::RINEXReader reader;
+    testing::internal::CaptureStderr();
+    EXPECT_FALSE(reader.open(crx.string()));
+    EXPECT_FALSE(reader.open(crx_gz.string()));
+    const std::string diagnostic = testing::internal::GetCapturedStderr();
+    EXPECT_NE(diagnostic.find("CompactRINEX input is not supported natively"),
+              std::string::npos);
+    EXPECT_TRUE(reader.open(similar.string()));
+    reader.close();
+    std::filesystem::remove(crx);
+    std::filesystem::remove(crx_gz);
+    std::filesystem::remove(similar);
 }
 
 TEST(RINEXReaderTest, DispatchesRinex4LnavAndSkipsUnsupportedRecordBoundary) {

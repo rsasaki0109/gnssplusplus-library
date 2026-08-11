@@ -13,7 +13,7 @@ namespace io {
 /**
  * @brief RINEX file reader/writer
  * 
- * Supports RINEX 2.x and 3.x formats for observation and navigation files
+ * Supports RINEX 2.x/3.x and the scoped RINEX 4 observation/navigation reader
  */
 class RINEXReader {
 public:
@@ -50,7 +50,7 @@ public:
         Vector3d approximate_position;
         Vector3d antenna_delta;
         std::vector<std::string> observation_types;
-        // RINEX 3: per-system observation types (key = system char, e.g. "G", "R", "E")
+        // RINEX 3/4: per-system observation types (key = system char, e.g. "G", "R", "E")
         std::map<char, std::vector<std::string>> system_obs_types;
         std::map<SatelliteId, int> glonass_frequency_channels;
         double interval = 0.0;
@@ -170,8 +170,9 @@ private:
     bool qzss_prefer_l1l_ = false;
     bool qzss_prefer_l5_secondary_ = false;
     bool preserve_additional_frequency_bands_ = false;
+    bool last_rinex4_epoch_was_event_ = false;
 
-    // State for parsing RINEX 3 "SYS / # / OBS TYPES" records that span
+    // State for parsing RINEX 3/4 "SYS / # / OBS TYPES" records that span
     // continuation lines (systems with more than 13 observation types, e.g.
     // GPS=22 or QZSS=24). Tracks the system whose type list is still being
     // filled so that continuation lines (blank system column) append correctly.
@@ -192,6 +193,27 @@ private:
      * @brief Parse observation epoch (RINEX 3.x)
      */
     bool parseObservationEpochV3(const std::string& line, ObservationData& obs_data);
+
+    /**
+     * @brief Parse a RINEX 4 observation/event epoch.
+     */
+    bool parseObservationEpochV4(const std::string& line, ObservationData& obs_data);
+
+    /**
+     * @brief Parse one satellite record using the shared RINEX 3/4 selection
+     * policy.  Strict mode is used for RINEX 4 so truncated rows cannot be
+     * reported as a partial successful epoch.
+     */
+    bool parseObservationSatelliteRecord(const std::string& sat_line,
+                                         ObservationData& obs_data,
+                                         bool strict);
+
+    /**
+     * @brief Read and parse the declared satellite records.
+     */
+    bool parseObservationRows(int num_sats,
+                              ObservationData& obs_data,
+                              bool strict);
     
     /**
      * @brief Parse navigation message
