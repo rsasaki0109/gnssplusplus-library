@@ -10,14 +10,34 @@ python3 apps/gnss.py doctor
 
 ## Docker
 
+For the no-build self-contained demo, use the published image and mount only
+the output directory:
+
+```bash
+docker pull ghcr.io/rsasaki0109/gnssplusplus-library:develop
+mkdir -p output
+docker run --rm \
+  -v "$PWD/output:/workspace/output" \
+  ghcr.io/rsasaki0109/gnssplusplus-library:develop \
+  demo --output-dir /workspace/output/self-contained-demo
+```
+
+The demo uses the tracked synthetic PPP fixture and should produce 8 processed
+and 8 valid solutions plus `.pos`, KML, and JSON artifacts. It is an offline
+plumbing check, not a field-accuracy or RTK-fix benchmark. For other commands,
+build a local image explicitly:
+
 ```bash
 docker build -t libgnsspp:latest .
-docker pull ghcr.io/rsasaki0109/gnssplusplus-library:develop
 docker run --rm -it -v "$PWD:/workspace" libgnsspp:latest --help
 docker compose up gnss-web
 ```
 
-The container installs the `gnss` dispatcher and Python helpers under `/opt/libgnsspp`. Sample datasets are not embedded, so mount your source tree or your own dataset directory into `/workspace`.
+The container installs the `gnss` dispatcher and Python helpers under
+`/opt/libgnsspp`, along with the tracked demo fixture under
+`/opt/libgnsspp/share/libgnsspp/demo`. Larger sample datasets are not embedded;
+mount your source tree or your own dataset directory into `/workspace` for
+dataset-dependent commands.
 
 ## First solutions
 
