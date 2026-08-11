@@ -9,6 +9,31 @@
 namespace libgnss {
 
 /**
+ * @brief Broadcast navigation message provenance used by RINEX 4 records.
+ *
+ * Existing RINEX 2/3, RTCM, and UBX construction paths leave this at
+ * Unknown. The value is metadata only; it does not alter ephemeris
+ * selection policy.
+ */
+enum class NavigationMessageType {
+    Unknown,
+    LNAV,
+    FDMA,
+    FNAV,
+    INAV,
+    D1,
+    D2,
+    SBAS,
+    CNAV,
+    CNV1,
+    CNV2,
+    CNV3,
+    L1NV,
+    L1OC,
+    L3OC,
+};
+
+/**
  * @brief Satellite ephemeris data
  */
 struct Ephemeris {
@@ -65,6 +90,7 @@ struct Ephemeris {
     uint16_t iodc;          ///< Issue of data clock
     uint16_t iode;          ///< Issue of data ephemeris
     int data_source_code = 0;  ///< RINEX nav "data sources" word (Galileo: bit0 I/NAV E1-B, bit1 F/NAV E5a, bit2 I/NAV E5b, bit8 clock E5a/F-NAV, bit9 clock E5b/I-NAV)
+    NavigationMessageType navigation_message_type = NavigationMessageType::Unknown;
 
     bool valid = false;     ///< Ephemeris validity flag
     

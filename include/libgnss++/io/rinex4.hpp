@@ -1,5 +1,6 @@
 #pragma once
 
+#include <libgnss++/core/navigation.hpp>
 #include <string>
 
 namespace libgnss::io::rinex4 {
@@ -21,6 +22,7 @@ struct NavigationRecordHeader {
     std::string subtype;
     char system = '\0';
     int prn = 0;
+    NavigationMessageType navigation_message_type = NavigationMessageType::Unknown;
 };
 
 /**
@@ -37,6 +39,21 @@ bool parseNavigationRecordHeader(const std::string& line,
  * @brief Check whether an EPH message can reuse the existing body parser.
  */
 bool supportsEphemerisMessage(char system, const std::string& message_type);
+
+/**
+ * @brief Convert a RINEX 4 navigation message token to typed provenance.
+ */
+NavigationMessageType navigationMessageTypeFromRinexToken(const std::string& token);
+
+/**
+ * @brief Return the canonical RINEX token for typed navigation provenance.
+ */
+const char* navigationMessageTypeName(NavigationMessageType type);
+
+/**
+ * @brief Check whether a typed EPH message can reuse the existing body parser.
+ */
+bool supportsEphemerisMessage(char system, NavigationMessageType type);
 
 /**
  * @brief Parsed metadata from a RINEX 4 observation epoch record.

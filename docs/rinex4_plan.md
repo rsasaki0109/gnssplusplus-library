@@ -182,15 +182,16 @@ truncated normal records fail instead of returning partial data.  Native
 CRINEX decompression remains out of scope and matching suffixes are rejected
 explicitly.
 
-Phase 3, `EPH` navigation support (PARTIAL after Phase 1 safe dispatch):
+Phase 3, `EPH` navigation metadata and compatible-body support (DONE):
 
-- Parse RINEX 4 `EPH` data record headers. **DONE in the Phase 1 slice.**
+- Parse RINEX 4 `EPH` data record headers and preserve typed message
+  provenance on `Ephemeris`. **DONE in the Phase 3 slice.**
 - Reuse current GPS/Galileo/BeiDou/QZSS/GLONASS FDMA bodies where compatible.
-  **PARTIAL in the Phase 1 slice; message metadata and new-message models
-  remain future work.**
-- Add explicit skip/error handling for unsupported `L1NV`, `L1OC`, and `L3OC`
-  before implementing them.
-- Preserve message type metadata for Galileo `FNAV` vs `INAV`.
+  **DONE for the compatible message types; global ephemeris selection is
+  unchanged.**
+- Reject nonblank EPH subtypes and trailing header tokens, skip unsupported
+  EPH bodies at the next `>` boundary, and validate Galileo FNAV/INAV clock
+  source bits. **DONE in the Phase 3 slice.**
 
 Phase 4, system data records:
 
@@ -202,6 +203,8 @@ Phase 4, system data records:
 
 Phase 5, new navigation messages:
 
+- Implement GPS/QZSS CNAV/CNV2, BeiDou CNV1/CNV2/CNV3, and SBAS navigation
+  body models.
 - Implement NavIC L1 `L1NV` parsing.
 - Implement GLONASS `L1OC` and `L3OC` parsing.
 - Add conformance fixtures from public RINEX 4.02 files before enabling these

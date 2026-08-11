@@ -25,10 +25,25 @@ bool parseNavigationRecordHeader(const std::string& line,
         marker != ">") {
         return false;
     }
-    fields >> record.subtype;
+    record.subtype.clear();
+    std::string trailing_token;
+    if (fields >> record.subtype) {
+        // RINEX 4.02 Table 22 does not define EPH subtypes yet. A nonblank
+        // token is therefore not valid EPH metadata, and any further token
+        // is malformed for every record type.
+        if (record.record_type == "EPH" || (fields >> trailing_token)) {
+            return false;
+        }
+    }
 
     if (record.record_type.size() != 3 || record.source.empty() ||
         record.message_type.empty()) {
+        return false;
+    }
+    if (std::any_of(record.message_type.begin(), record.message_type.end(),
+                    [](unsigned char c) {
+                        return std::isalpha(c) && !std::isupper(c);
+                    })) {
         return false;
     }
 
@@ -48,10 +63,56 @@ bool parseNavigationRecordHeader(const std::string& line,
             return false;
         }
     }
+    record.navigation_message_type =
+        navigationMessageTypeFromRinexToken(record.message_type);
     return true;
 }
 
 bool supportsEphemerisMessage(char system, const std::string& message_type) {
+    return supportsEphemerisMessage(
+        system, navigationMessageTypeFromRinexToken(message_type));
+}
+
+NavigationMessageType navigationMessageTypeFromRinexToken(const std::string& token) {
+    if (token == "LNAV") return NavigationMessageType::LNAV;
+    if (token == "FDMA") return NavigationMessageType::FDMA;
+    if (token == "FNAV") return NavigationMessageType::FNAV;
+    if (token == "INAV") return NavigationMessageType::INAV;
+    if (token == "D1") return NavigationMessageType::D1;
+    if (token == "D2") return NavigationMessageType::D2;
+    if (token == "SBAS") return NavigationMessageType::SBAS;
+    if (token == "CNAV") return NavigationMessageType::CNAV;
+    if (token == "CNV1") return NavigationMessageType::CNV1;
+    if (token == "CNV2") return NavigationMessageType::CNV2;
+    if (token == "CNV3") return NavigationMessageType::CNV3;
+    if (token == "L1NV") return NavigationMessageType::L1NV;
+    if (token == "L1OC") return NavigationMessageType::L1OC;
+    if (token == "L3OC") return NavigationMessageType::L3OC;
+    return NavigationMessageType::Unknown;
+}
+
+const char* navigationMessageTypeName(NavigationMessageType type) {
+    switch (type) {
+        case NavigationMessageType::LNAV: return "LNAV";
+        case NavigationMessageType::FDMA: return "FDMA";
+        case NavigationMessageType::FNAV: return "FNAV";
+        case NavigationMessageType::INAV: return "INAV";
+        case NavigationMessageType::D1: return "D1";
+        case NavigationMessageType::D2: return "D2";
+        case NavigationMessageType::SBAS: return "SBAS";
+        case NavigationMessageType::CNAV: return "CNAV";
+        case NavigationMessageType::CNV1: return "CNV1";
+        case NavigationMessageType::CNV2: return "CNV2";
+        case NavigationMessageType::CNV3: return "CNV3";
+        case NavigationMessageType::L1NV: return "L1NV";
+        case NavigationMessageType::L1OC: return "L1OC";
+        case NavigationMessageType::L3OC: return "L3OC";
+        case NavigationMessageType::Unknown: return "UNKNOWN";
+    }
+    return "UNKNOWN";
+}
+
+bool supportsEphemerisMessage(char system, NavigationMessageType type) {
     // These are the RINEX 4 records whose body layout is compatible with the
     // existing RINEX 2/3 parser.  New signal-specific records (CNAV/CNVx,
     // NavIC L1NV, and GLONASS CDMA L1OC/L3OC) must not be passed to it: doing
@@ -59,13 +120,15 @@ bool supportsEphemerisMessage(char system, const std::string& message_type) {
     switch (system) {
         case 'G':
         case 'J':
-            return message_type == "LNAV";
+            return type == NavigationMessageType::LNAV;
         case 'R':
-            return message_type == "FDMA";
+            return type == NavigationMessageType::FDMA;
         case 'E':
-            return message_type == "FNAV" || message_type == "INAV";
+            return type == NavigationMessageType::FNAV ||
+                   type == NavigationMessageType::INAV;
         case 'C':
-            return message_type == "D1" || message_type == "D2";
+            return type == NavigationMessageType::D1 ||
+                   type == NavigationMessageType::D2;
         default:
             return false;
     }
