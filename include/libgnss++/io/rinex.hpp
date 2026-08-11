@@ -6,6 +6,7 @@
 #include <memory>
 #include "../core/observation.hpp"
 #include "../core/navigation.hpp"
+#include "rinex4.hpp"
 
 namespace libgnss {
 namespace io {
@@ -162,6 +163,16 @@ public:
      */
     int getCurrentLine() const { return current_line_; }
 
+    /**
+     * @brief Get the RINEX 4 STO/EOP/ION records parsed from this file.
+     *
+     * The sidecar retains the originating system-time fields and is kept
+     * separate from NavigationData's broadcast ephemeris containers.
+     */
+    const rinex4::SystemData& rinex4SystemData() const {
+        return rinex4_system_data_;
+    }
+
 private:
     std::ifstream file_;
     RINEXHeader header_;
@@ -171,6 +182,7 @@ private:
     bool qzss_prefer_l5_secondary_ = false;
     bool preserve_additional_frequency_bands_ = false;
     bool last_rinex4_epoch_was_event_ = false;
+    rinex4::SystemData rinex4_system_data_;
 
     // State for parsing RINEX 3/4 "SYS / # / OBS TYPES" records that span
     // continuation lines (systems with more than 13 observation types, e.g.

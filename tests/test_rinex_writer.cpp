@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iomanip>
 #include <sstream>
+#include <vector>
 
 using namespace libgnss;
 
@@ -61,6 +62,65 @@ std::string rinex4GalileoBody(int data_source_code) {
     const std::string source_field = source_stream.str();
     body.replace(line_start + 23, source_field.size(), source_field);
     return body;
+}
+
+std::string rinex4SystemNumber(double value) {
+    std::ostringstream stream;
+    stream << std::scientific << std::setprecision(12) << std::setw(19)
+           << value;
+    return stream.str();
+}
+
+std::string rinex4SystemDate(int year, int month, int day,
+                             int hour, int minute, int second) {
+    std::ostringstream stream;
+    stream << "    " << std::setfill('0') << std::setw(4) << year << ' '
+           << std::setw(2) << month << ' ' << std::setw(2) << day << ' '
+           << std::setw(2) << hour << ' ' << std::setw(2) << minute << ' '
+           << std::setw(2) << second;
+    return stream.str();
+}
+
+std::string rinex4SystemDateNumbers(const std::vector<double>& values) {
+    std::string line = rinex4SystemDate(2024, 2, 3, 4, 5, 6);
+    line += ' ';
+    for (const double value : values) {
+        line += rinex4SystemNumber(value);
+    }
+    return line;
+}
+
+std::string rinex4SystemNumbers(const std::vector<double>& values) {
+    std::string line = "    ";
+    for (const double value : values) {
+        line += rinex4SystemNumber(value);
+    }
+    return line;
+}
+
+std::string rinex4StoEpochLine(const std::string& correction_type,
+                               const std::string& sbas_id = {},
+                               const std::string& utc_id = {}) {
+    std::string line = rinex4SystemDate(2024, 2, 3, 4, 5, 6);
+    line += ' ';
+    line += correction_type;
+    line.resize(24 + 18, ' ');
+    line += ' ';
+    line += sbas_id;
+    line.resize(24 + 2 * 19 - 1, ' ');
+    line += ' ';
+    line += utc_id;
+    line.resize(24 + 3 * 19 - 1, ' ');
+    return line;
+}
+
+std::string rinex4EopBodyLine1(bool malformed_spare) {
+    std::string line = "    ";
+    line += malformed_spare ? std::string(19, 'X') : std::string(19, ' ');
+    line += rinex4SystemNumber(0.4);
+    line += rinex4SystemNumber(0.5);
+    line += rinex4SystemNumber(0.6);
+    return line;
 }
 
 Ephemeris makeGpsEphemeris() {
@@ -527,8 +587,9 @@ TEST(RINEXReaderTest, DispatchesRinex4LnavAndSkipsUnsupportedRecordBoundary) {
     testing::internal::CaptureStderr();
     ASSERT_TRUE(reader.readNavigationData(nav_data));
     const std::string diagnostic = testing::internal::GetCapturedStderr();
-    EXPECT_NE(diagnostic.find("Skipping unsupported RINEX 4 navigation record type: STO"),
+    EXPECT_NE(diagnostic.find("Skipping malformed RINEX 4 STO body"),
               std::string::npos);
+    EXPECT_TRUE(reader.rinex4SystemData().system_time_offsets.empty());
     EXPECT_NE(diagnostic.find("Skipping unsupported RINEX 4 EPH I05 LNAV"),
               std::string::npos);
     EXPECT_NE(diagnostic.find("Skipping unsupported RINEX 4 EPH I05 L1NV"),
@@ -604,6 +665,326 @@ TEST(RINEXReaderTest, PreservesRinex4GalileoMessageProvenanceAndRejectsContradic
     }
     EXPECT_TRUE(found_fnav);
     EXPECT_TRUE(found_inav);
+    reader.close();
+    std::filesystem::remove(temp_path);
+}
+
+TEST(RINEXReaderTest, ParsesRinex4SystemRecordsAndSkipsInvalidBoundaries) {
+    const auto temp_path =
+        std::filesystem::temp_directory_path() / "libgnss_rinex4_system_records.nav";
+    std::filesystem::remove(temp_path);
+    {
+        std::ofstream file(temp_path);
+        ASSERT_TRUE(file.is_open());
+        file << rinexHeaderLine(
+            "     4.02           NAVIGATION DATA     M",
+            "RINEX VERSION / TYPE");
+        file << rinexHeaderLine("", "END OF HEADER");
+
+        file << "> STO G24 CNVX\n";
+        file << rinex4StoEpochLine("GPUT", "", "UTC(USNO)") << '\n';
+        file << rinex4SystemNumbers({253224.0, 9.0e-10, -1.0e-14, 0.0}) << '\n';
+
+        file << "> STO G24 CNVX BAD\n";
+        file << rinex4StoEpochLine("GPUT", "", "UTC(USNO)") << '\n';
+        file << rinex4SystemNumbers({1.0, 2.0, 3.0, 4.0}) << '\n';
+
+        file << "> EOP G24 CNVX\n";
+        file << rinex4SystemDateNumbers({0.2, -0.0002, 0.0}) << '\n';
+        file << rinex4EopBodyLine1(false) << '\n';
+        file << rinex4SystemNumbers({253248.0, -0.17, -0.00007, 0.0}) << '\n';
+
+        file << "> EOP G24 CNVX\n";
+        file << rinex4SystemDateNumbers({0.2, -0.0002, 0.0}) << '\n';
+        file << rinex4EopBodyLine1(true) << '\n';
+        file << rinex4SystemNumbers({253248.0, -0.17, -0.00007, 0.0}) << '\n';
+
+        file << "> ION J01 CNVX WIDE\n";
+        file << rinex4SystemDateNumbers({1.0, 2.0, 3.0}) << '\n';
+        file << rinex4SystemNumbers({4.0, 5.0, 6.0, 7.0}) << '\n';
+        file << rinex4SystemNumbers({8.0}) << '\n';
+
+        file << "> ION J01 CNVX BAD\n";
+        file << rinex4SystemDateNumbers({1.0, 2.0, 3.0}) << '\n';
+        file << rinex4SystemNumbers({4.0, 5.0, 6.0, 7.0}) << '\n';
+        file << rinex4SystemNumbers({8.0}) << '\n';
+
+        file << "> ION E13 IFNV\n";
+        file << rinex4SystemDateNumbers({54.5, 0.35, 0.013}) << '\n';
+        file << rinex4SystemNumbers({0.0}) << '\n';
+
+        file << "> ION C03 CNVX\n";
+        file << rinex4SystemDateNumbers({1.0, 2.0, 3.0}) << '\n';
+        file << rinex4SystemNumbers({4.0, 5.0, 6.0, 7.0}) << '\n';
+        file << rinex4SystemNumbers({8.0, 9.0}) << '\n';
+
+        file << "> ION C03 D1D2\n";
+        file << rinex4SystemDateNumbers({10.0, 11.0, 12.0}) << '\n';
+        file << rinex4SystemNumbers({13.0, 14.0, 15.0, 16.0}) << '\n';
+        file << rinex4SystemNumbers({17.0}) << '\n';
+
+        file << "> ION I10 L1NV KLOB\n";
+        file << rinex4SystemDateNumbers({1.0}) << '\n';
+        file << rinex4SystemNumbers({2.0, 3.0, 4.0, 5.0}) << '\n';
+        file << rinex4SystemNumbers({6.0, 7.0, 8.0, 9.0}) << '\n';
+        file << rinex4SystemNumbers({10.0, 11.0, 12.0, 13.0}) << '\n';
+
+        file << "> ION I10 L1NV NEQN\n";
+        file << rinex4SystemDateNumbers({2.0}) << '\n';
+        for (int line = 0; line < 6; ++line) {
+            file << rinex4SystemNumbers({1.0 + line, 2.0 + line,
+                                          3.0 + line, 0.0}) << '\n';
+        }
+
+        file << "> ION R26 LXOC\n";
+        file << rinex4SystemDateNumbers({1.0, 2.0, 3.0}) << '\n';
+
+        file << "> ION G14 CNVX\n";
+        file << rinex4SystemDateNumbers({21.0, 22.0, 23.0}) << '\n';
+        file << rinex4SystemNumbers({24.0, 25.0, 26.0, 27.0}) << '\n';
+        file << rinex4SystemNumbers({28.0}) << '\n';
+
+        file << "> EPH G04 LNAV\n";
+        file << rinex4GpsLnavBody();
+    }
+
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(temp_path.string()));
+    io::RINEXReader::RINEXHeader header;
+    ASSERT_TRUE(reader.readHeader(header));
+    NavigationData nav_data;
+    testing::internal::CaptureStderr();
+    ASSERT_TRUE(reader.readNavigationData(nav_data));
+    const std::string diagnostic = testing::internal::GetCapturedStderr();
+    EXPECT_NE(diagnostic.find("Skipping malformed RINEX 4 EOP body"),
+              std::string::npos);
+    EXPECT_NE(diagnostic.find("Skipping malformed or unsupported RINEX 4 ION body"),
+              std::string::npos);
+
+    const auto& system_data = reader.rinex4SystemData();
+    ASSERT_EQ(system_data.system_time_offsets.size(), 1U);
+    EXPECT_EQ(system_data.system_time_offsets.front().correction_type, "GPUT");
+    EXPECT_EQ(system_data.system_time_offsets.front().utc_id, "UTC(USNO)");
+    EXPECT_NEAR(system_data.system_time_offsets.front().transmission_time,
+                253224.0, 1e-9);
+
+    ASSERT_EQ(system_data.earth_orientation_parameters.size(), 1U);
+    EXPECT_NEAR(system_data.earth_orientation_parameters.front().x_p, 0.2, 1e-12);
+    EXPECT_NEAR(system_data.earth_orientation_parameters.front().delta_ut1,
+                -0.17, 1e-12);
+
+    ASSERT_EQ(system_data.ionosphere_records.size(), 8U);
+    EXPECT_TRUE(std::holds_alternative<io::rinex4::KlobucharIonosphere>(
+        system_data.ionosphere_records[0].payload));
+    EXPECT_TRUE(std::holds_alternative<io::rinex4::NequickGIonosphere>(
+        system_data.ionosphere_records[1].payload));
+    EXPECT_TRUE(std::holds_alternative<io::rinex4::BdgimIonosphere>(
+        system_data.ionosphere_records[2].payload));
+    EXPECT_TRUE(std::holds_alternative<io::rinex4::NavicKlobucharIonosphere>(
+        system_data.ionosphere_records[4].payload));
+    EXPECT_TRUE(std::holds_alternative<io::rinex4::NavicNequickNIonosphere>(
+        system_data.ionosphere_records[5].payload));
+    EXPECT_TRUE(std::holds_alternative<io::rinex4::GlonassCdmaIonosphere>(
+        system_data.ionosphere_records[6].payload));
+    EXPECT_TRUE(std::holds_alternative<io::rinex4::KlobucharIonosphere>(
+        system_data.ionosphere_records[3].payload));
+    const auto& qzss_klob = std::get<io::rinex4::KlobucharIonosphere>(
+        system_data.ionosphere_records[0].payload);
+    EXPECT_DOUBLE_EQ(qzss_klob.alpha[0], 1.0);
+    EXPECT_DOUBLE_EQ(qzss_klob.beta[3], 8.0);
+    EXPECT_EQ(std::get<io::rinex4::NequickGIonosphere>(
+                  system_data.ionosphere_records[1].payload).ai[0],
+              54.5);
+    EXPECT_DOUBLE_EQ(std::get<io::rinex4::BdgimIonosphere>(
+                         system_data.ionosphere_records[2].payload).alpha[8],
+                     9.0);
+    EXPECT_DOUBLE_EQ(std::get<io::rinex4::KlobucharIonosphere>(
+                         system_data.ionosphere_records[3].payload).alpha[0],
+                     10.0);
+    EXPECT_DOUBLE_EQ(std::get<io::rinex4::NavicKlobucharIonosphere>(
+                         system_data.ionosphere_records[4].payload).issue_of_data,
+                     1.0);
+    EXPECT_EQ(std::get<io::rinex4::NavicNequickNIonosphere>(
+                  system_data.ionosphere_records[5].payload).disturbance_flags[0],
+              0);
+    EXPECT_DOUBLE_EQ(std::get<io::rinex4::GlonassCdmaIonosphere>(
+                         system_data.ionosphere_records[6].payload).c_f10_7,
+                     2.0);
+    EXPECT_TRUE(std::holds_alternative<io::rinex4::KlobucharIonosphere>(
+        system_data.ionosphere_records[7].payload));
+    EXPECT_DOUBLE_EQ(std::get<io::rinex4::KlobucharIonosphere>(
+                         system_data.ionosphere_records[7].payload).alpha[0],
+                     21.0);
+
+    const auto eph_it = nav_data.ephemeris_data.find(
+        SatelliteId(GNSSSystem::GPS, 4));
+    ASSERT_NE(eph_it, nav_data.ephemeris_data.end());
+    ASSERT_EQ(eph_it->second.size(), 1U);
+    reader.close();
+    std::filesystem::remove(temp_path);
+}
+
+TEST(RINEXReaderTest, SystemRecordParsersAreTransactionalAndStrict) {
+    io::rinex4::NavigationRecordHeader sto_header;
+    ASSERT_TRUE(io::rinex4::parseNavigationRecordHeader(
+        "> STO G24 CNVX", sto_header));
+    io::rinex4::SystemTimeOffsetRecord sto;
+    sto.a0 = 42.0;
+    const std::vector<std::string> malformed_sto = {
+        rinex4StoEpochLine("GPUT", "", "UTC(USNO)"),
+        rinex4SystemNumbers({1.0, 2.0, 3.0})};
+    EXPECT_FALSE(io::rinex4::parseSystemTimeOffsetRecord(
+        sto_header, malformed_sto, sto));
+    EXPECT_DOUBLE_EQ(sto.a0, 42.0);
+
+    std::string malformed_prefix_sto = rinex4SystemNumbers({1.0, 2.0, 3.0, 4.0});
+    malformed_prefix_sto[0] = 'X';
+    EXPECT_FALSE(io::rinex4::parseSystemTimeOffsetRecord(
+        sto_header,
+        {rinex4StoEpochLine("GPUT", "", "UTC(USNO)"), malformed_prefix_sto},
+        sto));
+
+    const std::vector<std::string> gps_code_for_glonass = {
+        rinex4StoEpochLine("GPUT", "", "UTC(USNO)"),
+        rinex4SystemNumbers({1.0, 2.0, 3.0, 4.0})};
+    io::rinex4::NavigationRecordHeader glonass_sto_header;
+    ASSERT_TRUE(io::rinex4::parseNavigationRecordHeader(
+        "> STO R FDMA", glonass_sto_header));
+    EXPECT_FALSE(io::rinex4::parseSystemTimeOffsetRecord(
+        glonass_sto_header, gps_code_for_glonass, sto));
+    const std::vector<std::string> valid_glonass_sto = {
+        rinex4StoEpochLine("GLUT", "", "UTC(SU)"),
+        rinex4SystemNumbers({1.0, 2.0, 3.0, 4.0})};
+    EXPECT_TRUE(io::rinex4::parseSystemTimeOffsetRecord(
+        glonass_sto_header, valid_glonass_sto, sto));
+
+    io::rinex4::NavigationRecordHeader sbas_sto_header;
+    ASSERT_TRUE(io::rinex4::parseNavigationRecordHeader(
+        "> STO S SBAS", sbas_sto_header));
+    const std::vector<std::string> sbas_sto_with_glonass_utc = {
+        rinex4StoEpochLine("SBUT", "GAGAN", "UTC(SU)"),
+        rinex4SystemNumbers({1.0, 2.0, 3.0, 4.0})};
+    EXPECT_FALSE(io::rinex4::parseSystemTimeOffsetRecord(
+        sbas_sto_header, sbas_sto_with_glonass_utc, sto));
+    const std::vector<std::string> valid_sbas_sto = {
+        rinex4StoEpochLine("SBUT", "GAGAN", "UTC(NICT)"),
+        rinex4SystemNumbers({1.0, 2.0, 3.0, 4.0})};
+    EXPECT_TRUE(io::rinex4::parseSystemTimeOffsetRecord(
+        sbas_sto_header, valid_sbas_sto, sto));
+
+    io::rinex4::NavigationRecordHeader legacy_sto_header;
+    ASSERT_TRUE(io::rinex4::parseNavigationRecordHeader(
+        "> STO E LEG", legacy_sto_header));
+    std::string short_legacy_sto = rinex4StoEpochLine("GAGP");
+    short_legacy_sto.erase(short_legacy_sto.find_last_not_of(' ') + 1);
+    EXPECT_TRUE(io::rinex4::parseSystemTimeOffsetRecord(
+        legacy_sto_header,
+        {short_legacy_sto, rinex4SystemNumbers({1.0, 2.0, 3.0, 4.0})},
+        sto));
+
+    io::rinex4::EarthOrientationRecord eop;
+    io::rinex4::NavigationRecordHeader eop_gps_lnav_header;
+    ASSERT_TRUE(io::rinex4::parseNavigationRecordHeader(
+        "> EOP G24 LNAV", eop_gps_lnav_header));
+    EXPECT_FALSE(io::rinex4::parseEarthOrientationRecord(
+        eop_gps_lnav_header,
+        {rinex4SystemDateNumbers({1.0, 2.0, 3.0}),
+         rinex4EopBodyLine1(false), rinex4SystemNumbers({4.0, 5.0, 6.0, 7.0})},
+        eop));
+
+    io::rinex4::NavigationRecordHeader eop_navic_lnav_header;
+    ASSERT_TRUE(io::rinex4::parseNavigationRecordHeader(
+        "> EOP I10 LNAV", eop_navic_lnav_header));
+    EXPECT_TRUE(io::rinex4::parseEarthOrientationRecord(
+        eop_navic_lnav_header,
+        {rinex4SystemDateNumbers({1.0, 2.0, 3.0}),
+         rinex4EopBodyLine1(false), rinex4SystemNumbers({4.0, 5.0, 6.0, 7.0})},
+        eop));
+
+    io::rinex4::NavigationRecordHeader eop_header;
+    ASSERT_TRUE(io::rinex4::parseNavigationRecordHeader(
+        "> EOP G24 CNVX", eop_header));
+    eop.x_p = 17.0;
+    const std::vector<std::string> malformed_eop = {
+        rinex4SystemDateNumbers({1.0, 2.0, 3.0}),
+        rinex4EopBodyLine1(true),
+        rinex4SystemNumbers({4.0, 5.0, 6.0, 7.0})};
+    EXPECT_FALSE(io::rinex4::parseEarthOrientationRecord(
+        eop_header, malformed_eop, eop));
+    EXPECT_DOUBLE_EQ(eop.x_p, 17.0);
+
+    io::rinex4::NavigationRecordHeader ion_header;
+    ASSERT_TRUE(io::rinex4::parseNavigationRecordHeader(
+        "> ION J01 CNVX WIDE", ion_header));
+    const std::vector<std::string> malformed_ion = {
+        rinex4SystemDateNumbers({1.0, 2.0, 3.0}),
+        rinex4SystemNumbers({4.0, 5.0, 6.0, 7.0}),
+        "    malformed"};
+    io::rinex4::IonosphereRecord ion;
+    EXPECT_FALSE(io::rinex4::parseIonosphereRecord(
+        ion_header, malformed_ion, ion));
+
+    io::rinex4::NavigationRecordHeader invalid_flags_header;
+    ASSERT_TRUE(io::rinex4::parseNavigationRecordHeader(
+        "> ION E13 IFNV", invalid_flags_header));
+    EXPECT_FALSE(io::rinex4::parseIonosphereRecord(
+        invalid_flags_header,
+        {rinex4SystemDateNumbers({1.0, 2.0, 3.0}),
+         rinex4SystemNumbers({32.0})},
+        ion));
+    EXPECT_FALSE(io::rinex4::parseIonosphereRecord(
+        invalid_flags_header,
+        {rinex4SystemDateNumbers({1.0, 2.0, 3.0}),
+         rinex4SystemNumbers({1.5})},
+        ion));
+
+    io::rinex4::NavigationRecordHeader invalid_idf_header;
+    ASSERT_TRUE(io::rinex4::parseNavigationRecordHeader(
+        "> ION I10 L1NV NEQN", invalid_idf_header));
+    std::vector<std::string> invalid_idf_body = {
+        rinex4SystemDateNumbers({1.0})};
+    for (int line = 0; line < 6; ++line) {
+        invalid_idf_body.push_back(rinex4SystemNumbers(
+            {1.0 + line, 2.0 + line, 3.0 + line,
+             line == 0 ? 1.5 : 0.0}));
+    }
+    EXPECT_FALSE(io::rinex4::parseIonosphereRecord(
+        invalid_idf_header, invalid_idf_body, ion));
+
+    std::vector<std::string> high_idf_body = {
+        rinex4SystemDateNumbers({1.0})};
+    for (int line = 0; line < 6; ++line) {
+        high_idf_body.push_back(rinex4SystemNumbers(
+            {1.0 + line, 2.0 + line, 3.0 + line,
+             line == 0 ? 32.0 : 0.0}));
+    }
+    EXPECT_TRUE(io::rinex4::parseIonosphereRecord(
+        invalid_idf_header, high_idf_body, ion));
+}
+
+TEST(RINEXReaderTest, SystemRecordOnlyNavigationFileReturnsSuccess) {
+    const auto temp_path =
+        std::filesystem::temp_directory_path() / "libgnss_rinex4_system_only.nav";
+    std::filesystem::remove(temp_path);
+    {
+        std::ofstream file(temp_path);
+        ASSERT_TRUE(file.is_open());
+        file << rinexHeaderLine(
+            "     4.02           NAVIGATION DATA     M",
+            "RINEX VERSION / TYPE");
+        file << rinexHeaderLine("", "END OF HEADER");
+        file << "> STO G24 CNVX\n";
+        file << rinex4StoEpochLine("GPUT", "", "UTC(USNO)") << '\n';
+        file << rinex4SystemNumbers({1.0, 2.0, 3.0, 4.0}) << '\n';
+    }
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(temp_path.string()));
+    io::RINEXReader::RINEXHeader header;
+    ASSERT_TRUE(reader.readHeader(header));
+    NavigationData nav_data;
+    ASSERT_TRUE(reader.readNavigationData(nav_data));
+    EXPECT_TRUE(nav_data.ephemeris_data.empty());
+    ASSERT_EQ(reader.rinex4SystemData().system_time_offsets.size(), 1U);
     reader.close();
     std::filesystem::remove(temp_path);
 }
