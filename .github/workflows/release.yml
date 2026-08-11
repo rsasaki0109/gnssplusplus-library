@@ -92,6 +92,7 @@ jobs:
           '
 
     - name: Check package contents and generate checksums
+      id: package_assets
       shell: bash
       run: |
         set -euo pipefail
@@ -102,6 +103,11 @@ jobs:
         test "${#deb[@]}" -eq 1
         [[ "$(basename "${tgz[0]}")" == *"${version}"* ]]
         [[ "$(basename "${deb[0]}")" == *"${version}"* ]]
+        test -f "${tgz[0]}"
+        test ! -L "${tgz[0]}"
+        test -f "${deb[0]}"
+        test ! -L "${deb[0]}"
+        checksums="dist/SHA256SUMS"
 
         # Consume the complete listing before grep exits so pipefail cannot
         # turn a successful content match into a SIGPIPE failure.
@@ -115,6 +121,17 @@ jobs:
           sha256sum "$(basename "${tgz[0]}")" "$(basename "${deb[0]}")" > SHA256SUMS
           sha256sum -c SHA256SUMS
         )
+        test -f "${checksums}"
+        test ! -L "${checksums}"
+
+        # Export only the three validated regular files. CPack may leave
+        # staging directories under dist/, which must never become release
+        # upload arguments.
+        {
+          printf 'tgz=%s\n' "${tgz[0]}"
+          printf 'deb=%s\n' "${deb[0]}"
+          printf 'checksums=%s\n' "${checksums}"
+        } >> "${GITHUB_OUTPUT}"
 
     - name: Preserve release assets as a workflow artifact
       uses: actions/upload-artifact@v7
@@ -128,6 +145,9 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
         RELEASE_TAG: ${{ github.ref_name }}
+        TGZ_ASSET: ${{ steps.package_assets.outputs.tgz }}
+        DEB_ASSET: ${{ steps.package_assets.outputs.deb }}
+        CHECKSUMS_ASSET: ${{ steps.package_assets.outputs.checksums }}
       run: |
         set -euo pipefail
         notes_file="docs/releases/${RELEASE_TAG}.md"
@@ -150,6 +170,9 @@ jobs:
 
         # Upload separately even after creation so retries repair a partial
         # release and replace stale assets deterministically.
-        gh release upload "${RELEASE_TAG}" dist/* \
+        gh release upload "${RELEASE_TAG}" \
+          "${TGZ_ASSET}" \
+          "${DEB_ASSET}" \
+          "${CHECKSUMS_ASSET}" \
           --repo "${GITHUB_REPOSITORY}" \
           --clobber

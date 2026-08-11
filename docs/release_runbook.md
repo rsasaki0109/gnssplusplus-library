@@ -36,6 +36,8 @@ workflow never creates a Git tag.
 
 - Confirm the workflow artifact contains exactly one TGZ, one DEB, and
   `SHA256SUMS`; verify the checksums locally with `sha256sum -c SHA256SUMS`.
+- The GitHub Release upload is limited to those three validated regular files;
+  CPack staging directories under `dist/` are not release assets.
 - The DEB declares Eigen development headers and the Python runtime,
   NumPy, and Matplotlib dependencies, and the workflow installs it in a
   fresh Ubuntu 24.04 amd64 container before running the offline demo.

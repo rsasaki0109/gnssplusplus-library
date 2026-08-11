@@ -106,6 +106,26 @@ class ReleaseWorkflowContractTest(unittest.TestCase):
         self.assertIn("--clobber", self.release_workflow)
         self.assertNotIn("git tag", self.release_workflow)
 
+    def test_release_upload_is_limited_to_three_validated_regular_files(self) -> None:
+        self.assertIn("id: package_assets", self.release_workflow)
+        self.assertIn('test -f "${tgz[0]}"', self.release_workflow)
+        self.assertIn('test ! -L "${tgz[0]}"', self.release_workflow)
+        self.assertIn('test -f "${deb[0]}"', self.release_workflow)
+        self.assertIn('test ! -L "${deb[0]}"', self.release_workflow)
+        self.assertIn("test -f \"${checksums}\"", self.release_workflow)
+        self.assertIn("test ! -L \"${checksums}\"", self.release_workflow)
+        self.assertIn("printf 'tgz=%s\\n' \"${tgz[0]}\"", self.release_workflow)
+        self.assertIn("printf 'deb=%s\\n' \"${deb[0]}\"", self.release_workflow)
+        self.assertIn("printf 'checksums=%s\\n' \"${checksums}\"", self.release_workflow)
+        self.assertIn("TGZ_ASSET: ${{ steps.package_assets.outputs.tgz }}", self.release_workflow)
+        self.assertIn("DEB_ASSET: ${{ steps.package_assets.outputs.deb }}", self.release_workflow)
+        self.assertIn("CHECKSUMS_ASSET: ${{ steps.package_assets.outputs.checksums }}", self.release_workflow)
+        self.assertIn('"${TGZ_ASSET}"', self.release_workflow)
+        self.assertIn('"${DEB_ASSET}"', self.release_workflow)
+        self.assertIn('"${CHECKSUMS_ASSET}"', self.release_workflow)
+        self.assertNotIn("gh release upload \"${RELEASE_TAG}\" dist/*", self.release_workflow)
+        self.assertNotIn("gh release upload \"${RELEASE_TAG}\" dist/", self.release_workflow)
+
     def test_release_uses_only_the_contents_write_permission(self) -> None:
         self.assertIn("permissions:\n  contents: write", self.release_workflow)
         self.assertNotIn("packages:", self.release_workflow)
