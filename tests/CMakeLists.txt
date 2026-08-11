@@ -131,6 +131,10 @@ if(GTest_FOUND)
         gnss_fgo
         gnss_fuse
         gnss_live
+        gnss_pos_pd
+        gnss_pos_pdc
+        gnss_pos_vel_pd
+        gnss_pos_vel_pdc
         gnss_ppp
         gnss_replay
         gnss_rinex_info
@@ -435,8 +439,14 @@ if(GTest_FOUND)
         NAME python_gnss_solve_cli_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_gnss_solve_cli.py
     )
+    add_test(
+        NAME python_observable_native_cli_contract_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_observable_native_cli_contracts.py
+    )
     set_tests_properties(
-        python_gnss_fuse_cli_tests python_gnss_solve_cli_tests
+        python_gnss_fuse_cli_tests
+        python_gnss_solve_cli_tests
+        python_observable_native_cli_contract_tests
         PROPERTIES ENVIRONMENT "GNSSPP_BINARY_DIR=${CMAKE_BINARY_DIR}"
     )
     set_tests_properties(
@@ -495,6 +505,7 @@ if(GTest_FOUND)
         python_experiment_runner_tests
         python_gnss_fuse_cli_tests
         python_gnss_solve_cli_tests
+        python_observable_native_cli_contract_tests
         python_search_imu_time_offset_tests
     )
     set(GNSSPP_EXTENDED_TESTS
