@@ -124,16 +124,17 @@ const char* navigationMessageTypeName(NavigationMessageType type) {
 }
 
 bool supportsEphemerisMessage(char system, NavigationMessageType type) {
-    // These are the RINEX 4 records whose body layout is compatible with the
-    // existing RINEX 2/3 parser.  New signal-specific records (CNAV/CNVx,
-    // NavIC L1NV, and GLONASS CDMA L1OC/L3OC) must not be passed to it: doing
-    // so would turn their fields into a plausible but incorrect ephemeris.
+    // Existing RINEX 2/3 parser compatibility is explicit. GLONASS CDMA
+    // records have their own strict body parser below and are therefore also
+    // enabled here without entering the legacy FDMA path.
     switch (system) {
         case 'G':
         case 'J':
             return type == NavigationMessageType::LNAV;
         case 'R':
-            return type == NavigationMessageType::FDMA;
+            return type == NavigationMessageType::FDMA ||
+                   type == NavigationMessageType::L1OC ||
+                   type == NavigationMessageType::L3OC;
         case 'E':
             return type == NavigationMessageType::FNAV ||
                    type == NavigationMessageType::INAV;
@@ -337,6 +338,94 @@ bool parseContinuationNumbers(const std::string& line,
     return parseFixedNumbers(line, field_start, count, values);
 }
 
+bool validCdmaContinuationLine(const std::string& line) {
+    return line.size() == 80 && line.compare(0, 4, "    ") == 0;
+}
+
+bool parseCdmaField(const std::string& line,
+                    size_t index,
+                    double& value) {
+    if (index >= 4 || line.size() > 80 || line.size() < 4 + (index + 1) * 19 ||
+        line.compare(0, 4, "    ") != 0) {
+        return false;
+    }
+    return parseFloatingField(line.substr(4 + index * 19, 19), value);
+}
+
+bool parseOptionalCdmaField(const std::string& line,
+                            size_t index,
+                            std::optional<double>& value) {
+    if (index >= 4 || line.size() > 80 || line.size() < 4 + 3 * 19 ||
+        line.compare(0, 4, "    ") != 0) {
+        return false;
+    }
+    const size_t field_start = 4 + index * 19;
+    if (line.size() <= field_start) {
+        value.reset();
+        return true;
+    }
+    if (line.size() < field_start + 19) {
+        value.reset();
+        return trim(line.substr(field_start)).empty();
+    }
+    const std::string field = line.substr(field_start, 19);
+    if (trim(field).empty()) {
+        value.reset();
+        return true;
+    }
+    double parsed = 0.0;
+    if (!parseFloatingField(field, parsed)) {
+        return false;
+    }
+    value = parsed;
+    return true;
+}
+
+bool parseCdmaInteger(double value, int minimum, int maximum, int& result) {
+    if (!std::isfinite(value) || std::floor(value) != value ||
+        value < static_cast<double>(minimum) ||
+        value > static_cast<double>(maximum)) {
+        return false;
+    }
+    result = static_cast<int>(value);
+    return true;
+}
+
+bool parseCdmaNonnegativeInteger(double value, int& result) {
+    return parseCdmaInteger(value, 0, std::numeric_limits<int>::max(), result);
+}
+
+bool parseCdmaNonnegativeFinite(double value, double& result) {
+    if (!std::isfinite(value) || value < 0.0) {
+        return false;
+    }
+    result = value;
+    return true;
+}
+
+bool parseCdmaEpochPrefix(const std::string& line,
+                          const std::string& source,
+                          CalendarTime& time) {
+    if (line.size() != 80 || source.size() != 3 ||
+        line.compare(0, 3, source) != 0 || line[3] != ' ' ||
+        line[8] != ' ' || line[11] != ' ' || line[14] != ' ' ||
+        line[17] != ' ' || line[20] != ' ') {
+        return false;
+    }
+    CalendarTime parsed;
+    if (!parseDateField(line.substr(4, 4), 4, parsed.year) ||
+        !parseDateField(line.substr(9, 2), 2, parsed.month) ||
+        !parseDateField(line.substr(12, 2), 2, parsed.day) ||
+        !parseDateField(line.substr(15, 2), 2, parsed.hour) ||
+        !parseDateField(line.substr(18, 2), 2, parsed.minute) ||
+        !parseDateField(line.substr(21, 2), 2, parsed.second) ||
+        !validCalendar(parsed)) {
+        return false;
+    }
+    time = parsed;
+    return true;
+}
+
 bool parseA18Fields(const std::string& line,
                     size_t field_start,
                     size_t count,
@@ -523,6 +612,124 @@ bool validIonosphereHeader(const NavigationRecordHeader& header) {
 }
 
 }  // namespace
+
+bool parseGlonassCdmaEphemerisRecord(
+    const NavigationRecordHeader& header,
+    const std::vector<std::string>& body,
+    GlonassCdmaEphemerisRecord& record) {
+    if (header.record_type != "EPH" || header.system != 'R' ||
+        (header.message_type != "L1OC" && header.message_type != "L3OC") ||
+        !header.subtype.empty() || header.source.size() != 3 ||
+        body.size() != 9) {
+        return false;
+    }
+
+    GlonassCdmaEphemerisRecord parsed;
+    parsed.header = header;
+    if (!parseCdmaEpochPrefix(body[0], header.source, parsed.toc)) {
+        return false;
+    }
+    std::vector<double> clock;
+    if (!parseFixedNumbers(body[0], 23, 3, clock)) {
+        return false;
+    }
+    parsed.minus_tau_n = clock[0];
+    parsed.gamma_n = clock[1];
+    parsed.beta = clock[2];
+
+    std::vector<double> values;
+    if (!validCdmaContinuationLine(body[1]) ||
+        !parseFixedNumbers(body[1], 4, 4, values) ||
+        !parseCdmaInteger(values[3], 0, 1, parsed.signal_health)) {
+        return false;
+    }
+    parsed.position_km[0] = values[0];
+    parsed.velocity_km_per_s[0] = values[1];
+    parsed.acceleration_km_per_s2[0] = values[2];
+
+    if (!validCdmaContinuationLine(body[2]) ||
+        !parseFixedNumbers(body[2], 4, 4, values) ||
+        !parseCdmaInteger(values[3], 0, 1, parsed.data_validity)) {
+        return false;
+    }
+    parsed.position_km[1] = values[0];
+    parsed.velocity_km_per_s[1] = values[1];
+    parsed.acceleration_km_per_s2[1] = values[2];
+
+    double z_position = 0.0;
+    double z_velocity = 0.0;
+    double z_acceleration = 0.0;
+    if (!parseCdmaField(body[3], 0, z_position) ||
+        !parseCdmaField(body[3], 1, z_velocity) ||
+        !parseCdmaField(body[3], 2, z_acceleration)) {
+        return false;
+    }
+    parsed.position_km[2] = z_position;
+    parsed.velocity_km_per_s[2] = z_velocity;
+    parsed.acceleration_km_per_s2[2] = z_acceleration;
+    if (parsed.header.message_type == "L1OC") {
+        if (!parseOptionalCdmaField(body[3], 3, parsed.tgd_l2ocp)) {
+            return false;
+        }
+    } else if (!parseOptionalCdmaField(body[3], 3, parsed.isc_l3ocp)) {
+        return false;
+    }
+
+    if (!validCdmaContinuationLine(body[4]) ||
+        !parseFixedNumbers(body[4], 4, 4, values) ||
+        !parseCdmaNonnegativeInteger(values[0], parsed.satellite_type) ||
+        !parseCdmaInteger(values[1], 0, 15, parsed.source_flags) ||
+        !parseCdmaNonnegativeFinite(values[2], parsed.aode) ||
+        !parseCdmaNonnegativeFinite(values[3], parsed.aodc)) {
+        return false;
+    }
+
+    if (!validCdmaContinuationLine(body[5]) ||
+        !parseFixedNumbers(body[5], 4, 4, values) ||
+        !parseCdmaInteger(values[0], 0, 1, parsed.attitude_flag) ||
+        values[1] < 0.0 || values[1] >= 86400.0) {
+        return false;
+    }
+    parsed.tin = values[1];
+    parsed.tau1 = values[2];
+    parsed.tau2 = values[3];
+
+    if (!validCdmaContinuationLine(body[6]) ||
+        !parseFixedNumbers(body[6], 4, 4, values) ||
+        !parseCdmaInteger(values[1], 0, 1, parsed.sign_flag)) {
+        return false;
+    }
+    parsed.yaw_angle = values[0];
+    parsed.angular_rate = values[2];
+    parsed.angular_acceleration = values[3];
+
+    if (!validCdmaContinuationLine(body[7]) ||
+        !parseFixedNumbers(body[7], 4, 4, values)) {
+        return false;
+    }
+    parsed.max_angular_rate = values[0];
+    parsed.phase_center_m[0] = values[1];
+    parsed.phase_center_m[1] = values[2];
+    parsed.phase_center_m[2] = values[3];
+
+    double urai_orbit = 0.0;
+    double urai_clock = 0.0;
+    double transmission_time = 0.0;
+    if (!validCdmaContinuationLine(body[8]) ||
+        !parseCdmaField(body[8], 0, urai_orbit) ||
+        !parseCdmaField(body[8], 1, urai_clock) ||
+        !trim(body[8].substr(4 + 2 * 19, 19)).empty() ||
+        !parseCdmaField(body[8], 3, transmission_time) ||
+        !parseCdmaNonnegativeInteger(urai_orbit, parsed.urai_orbit) ||
+        !parseCdmaNonnegativeInteger(urai_clock, parsed.urai_clock) ||
+        transmission_time < 0.0 || transmission_time >= 604800.0) {
+        return false;
+    }
+    parsed.transmission_time_utc_week = transmission_time;
+
+    record = std::move(parsed);
+    return true;
+}
 
 bool parseSystemTimeOffsetRecord(const NavigationRecordHeader& header,
                                  const std::vector<std::string>& body,

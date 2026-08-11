@@ -816,6 +816,96 @@ bool RINEXReader::readRinex4NavigationData(NavigationData& nav_data) {
             return;
         }
 
+        if (active_header.system == 'R' &&
+            (active_header.message_type == "L1OC" ||
+             active_header.message_type == "L3OC")) {
+            rinex4::GlonassCdmaEphemerisRecord record;
+            if (!rinex4::parseGlonassCdmaEphemerisRecord(
+                    active_header, body, record)) {
+                std::cerr << "Skipping malformed RINEX 4 GLONASS "
+                          << active_header.message_type << " body for "
+                          << active_header.source << std::endl;
+                body.clear();
+                return;
+            }
+
+            Ephemeris eph;
+            std::ostringstream epoch_text;
+            epoch_text << record.toc.year << ' ' << record.toc.month << ' '
+                       << record.toc.day << ' ' << record.toc.hour << ' '
+                       << record.toc.minute << ' ' << record.toc.second;
+            const GNSSTime toc_utc = parseTime(epoch_text.str(), header_.version);
+            const GNSSTime toc_gpst = utcToGpst(
+                toc_utc, record.toc.year, record.toc.month, record.toc.day);
+
+            GNSSTime tof_utc = normalizeWeekTow(
+                toc_utc.week, record.transmission_time_utc_week);
+            const double week_delta = tof_utc.tow - toc_utc.tow;
+            if (week_delta < -302400.0) {
+                ++tof_utc.week;
+            } else if (week_delta > 302400.0) {
+                --tof_utc.week;
+            }
+            const GNSSTime tof_gpst = utcToGpst(
+                tof_utc, record.toc.year, record.toc.month, record.toc.day);
+
+            eph.satellite = SatelliteId(GNSSSystem::GLONASS, active_header.prn);
+            eph.toc = toc_gpst;
+            eph.toe = toc_gpst;
+            eph.tof = tof_gpst;
+            eph.toes = toc_gpst.tow;
+            eph.week = static_cast<uint16_t>(toc_gpst.week);
+            // A16/A17 transmit -TauN; Ephemeris stores the actual TauN and
+            // computeGlonassState() applies the broadcast leading minus sign.
+            eph.glonass_taun = -record.minus_tau_n;
+            eph.glonass_gamn = record.gamma_n;
+            eph.glonass_position = Vector3d(
+                record.position_km[0] * 1e3,
+                record.position_km[1] * 1e3,
+                record.position_km[2] * 1e3);
+            eph.glonass_velocity = Vector3d(
+                record.velocity_km_per_s[0] * 1e3,
+                record.velocity_km_per_s[1] * 1e3,
+                record.velocity_km_per_s[2] * 1e3);
+            eph.glonass_acceleration = Vector3d(
+                record.acceleration_km_per_s2[0] * 1e3,
+                record.acceleration_km_per_s2[1] * 1e3,
+                record.acceleration_km_per_s2[2] * 1e3);
+            eph.health = static_cast<uint8_t>(record.signal_health);
+            eph.valid = record.signal_health == 0 && record.data_validity == 0;
+            eph.navigation_message_type = active_header.navigation_message_type;
+
+            GlonassCdmaNavigationData cdma;
+            cdma.beta = record.beta;
+            cdma.data_validity = record.data_validity;
+            cdma.satellite_type = record.satellite_type;
+            cdma.source_flags = record.source_flags;
+            cdma.aode = record.aode;
+            cdma.aodc = record.aodc;
+            cdma.attitude_flag = record.attitude_flag;
+            cdma.sign_flag = record.sign_flag;
+            cdma.urai_orbit = record.urai_orbit;
+            cdma.urai_clock = record.urai_clock;
+            cdma.tin = record.tin;
+            cdma.tau1 = record.tau1;
+            cdma.tau2 = record.tau2;
+            cdma.yaw_angle = record.yaw_angle;
+            cdma.angular_rate = record.angular_rate;
+            cdma.angular_acceleration = record.angular_acceleration;
+            cdma.max_angular_rate = record.max_angular_rate;
+            cdma.pc_x = record.phase_center_m[0];
+            cdma.pc_y = record.phase_center_m[1];
+            cdma.pc_z = record.phase_center_m[2];
+            cdma.transmission_time_utc_week = record.transmission_time_utc_week;
+            cdma.tgd_l2ocp = record.tgd_l2ocp;
+            cdma.isc_l3ocp = record.isc_l3ocp;
+            eph.glonass_cdma_data = std::move(cdma);
+
+            nav_data.addEphemeris(eph);
+            body.clear();
+            return;
+        }
+
         Ephemeris eph;
         if (!parseNavigationMessage(body, eph)) {
             std::cerr << "Skipping RINEX 4 EPH " << active_header.source << ' '
