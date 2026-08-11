@@ -25,13 +25,20 @@
 #include <tuple>
 #include <vector>
 
+#include "observable_measurement_helpers.hpp"
 #include "observable_seed_positions.hpp"
 
 namespace {
 
 using libgnss_apps::SeedPosition;
+using libgnss_apps::clockGroup;
 using libgnss_apps::findSeedPosition;
+using libgnss_apps::groupDelayCorrectionMeters;
+using libgnss_apps::isHealthyForPositioning;
+using libgnss_apps::isPrimaryPdSignal;
 using libgnss_apps::readSeedPositions;
+using libgnss_apps::sagnacRangeCorrection;
+using libgnss_apps::signalName;
 
 constexpr double kPi = 3.141592653589793238462643383279502884;
 constexpr double kDegreesToRadians = kPi / 180.0;
@@ -318,88 +325,6 @@ Options parseArguments(int argc, char* argv[]) {
         usageError("sigma, threshold, and tolerance values must be positive", argv[0]);
     }
     return options;
-}
-
-bool isPrimaryPdSignal(libgnss::SignalType signal) {
-    switch (signal) {
-        case libgnss::SignalType::GPS_L1CA:
-        case libgnss::SignalType::GLO_L1CA:
-        case libgnss::SignalType::GAL_E1:
-        case libgnss::SignalType::BDS_B1I:
-        case libgnss::SignalType::BDS_B1C:
-        case libgnss::SignalType::QZS_L1CA:
-            return true;
-        default:
-            return false;
-    }
-}
-
-std::string signalName(libgnss::SignalType signal) {
-    switch (signal) {
-        case libgnss::SignalType::GPS_L1CA: return "GPS_L1CA";
-        case libgnss::SignalType::GLO_L1CA: return "GLO_L1CA";
-        case libgnss::SignalType::GAL_E1: return "GAL_E1";
-        case libgnss::SignalType::BDS_B1I: return "BDS_B1I";
-        case libgnss::SignalType::BDS_B1C: return "BDS_B1C";
-        case libgnss::SignalType::QZS_L1CA: return "QZS_L1CA";
-        default: return "UNKNOWN";
-    }
-}
-
-bool isHealthyForPositioning(const libgnss::Observation& observation,
-                             const libgnss::Ephemeris& eph) {
-    int sv_health = static_cast<int>(eph.health);
-    if (observation.satellite.system == libgnss::GNSSSystem::QZSS) {
-        sv_health &= 0xFE;
-    }
-    return sv_health == 0;
-}
-
-std::size_t clockGroup(libgnss::GNSSSystem system) {
-    switch (system) {
-        case libgnss::GNSSSystem::GPS:
-            return 0U;
-        case libgnss::GNSSSystem::GLONASS:
-            return 1U;
-        case libgnss::GNSSSystem::Galileo:
-            return 2U;
-        case libgnss::GNSSSystem::QZSS:
-            return 3U;
-        case libgnss::GNSSSystem::BeiDou:
-            return 4U;
-        default:
-            return 0U;
-    }
-}
-
-double groupDelayCorrectionMeters(const libgnss::Observation& observation,
-                                  const libgnss::Ephemeris& eph) {
-    switch (observation.satellite.system) {
-        case libgnss::GNSSSystem::GPS:
-        case libgnss::GNSSSystem::QZSS:
-        case libgnss::GNSSSystem::Galileo:
-            return eph.tgd * libgnss::constants::SPEED_OF_LIGHT;
-        case libgnss::GNSSSystem::BeiDou:
-            switch (observation.signal) {
-                case libgnss::SignalType::BDS_B1I:
-                case libgnss::SignalType::BDS_B1C:
-                    return eph.tgd * libgnss::constants::SPEED_OF_LIGHT;
-                case libgnss::SignalType::BDS_B2I:
-                case libgnss::SignalType::BDS_B2A:
-                    return eph.tgd_secondary * libgnss::constants::SPEED_OF_LIGHT;
-                default:
-                    return 0.0;
-            }
-        default:
-            return 0.0;
-    }
-}
-
-double sagnacRangeCorrection(const libgnss::Vector3d& satellite_position,
-                             const libgnss::Vector3d& receiver_position) {
-    return libgnss::constants::OMEGA_E / libgnss::constants::SPEED_OF_LIGHT *
-           (satellite_position(0) * receiver_position(1) -
-            satellite_position(1) * receiver_position(0));
 }
 
 void writeCsvDouble(std::ostream& output, double value) {
