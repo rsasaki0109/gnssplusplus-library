@@ -11,6 +11,8 @@ checked benchmark artifacts.
 - [Robotics quick start](robotics_quickstart.md)
 - [Research quick start](research_quickstart.md)
 - [Self-contained offline demo](self_contained_demo.md)
+- [v0.2.0 release highlights](releases/v0.2.0.md)
+- [Maintainer release runbook](release_runbook.md)
 - [Dataset gallery](dataset_gallery.md)
 - [Architecture notes](architecture.md)
 - [Quick start](quickstart.md)
