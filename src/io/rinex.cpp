@@ -791,6 +791,33 @@ bool RINEXReader::readRinex4NavigationData(NavigationData& nav_data) {
             return;
         }
 
+        if (active_header.system == 'E') {
+            const bool inav_e1b_source = (eph.data_source_code & (1 << 0)) != 0;
+            const bool fnav_e5a_source = (eph.data_source_code & (1 << 1)) != 0;
+            const bool inav_e5b_source = (eph.data_source_code & (1 << 2)) != 0;
+            const bool fnav_clock_source = (eph.data_source_code & (1 << 8)) != 0;
+            const bool inav_clock_source = (eph.data_source_code & (1 << 9)) != 0;
+            const bool header_is_fnav =
+                active_header.navigation_message_type == NavigationMessageType::FNAV;
+            const bool header_is_inav =
+                active_header.navigation_message_type == NavigationMessageType::INAV;
+            const bool source_matches_header =
+                (header_is_fnav && fnav_e5a_source && fnav_clock_source &&
+                 !inav_e1b_source && !inav_e5b_source && !inav_clock_source) ||
+                (header_is_inav && (inav_e1b_source || inav_e5b_source) &&
+                 inav_clock_source && !fnav_e5a_source && !fnav_clock_source);
+            if (!source_matches_header) {
+                std::cerr << "Skipping RINEX 4 Galileo EPH " << active_header.source
+                          << ' ' << active_header.message_type
+                          << ": body data-source clock bit contradicts header"
+                          << std::endl;
+                body.clear();
+                return;
+            }
+        }
+
+        eph.navigation_message_type = active_header.navigation_message_type;
+
         nav_data.addEphemeris(eph);
         body.clear();
     };
@@ -820,7 +847,7 @@ bool RINEXReader::readRinex4NavigationData(NavigationData& nav_data) {
             }
 
             active_record_supported = rinex4::supportsEphemerisMessage(
-                active_header.system, active_header.message_type);
+                active_header.system, active_header.navigation_message_type);
             if (!active_record_supported) {
                 std::cerr << "Skipping unsupported RINEX 4 EPH "
                           << active_header.source << ' '

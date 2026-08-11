@@ -4,6 +4,8 @@
 
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
+#include <sstream>
 
 using namespace libgnss;
 
@@ -44,6 +46,21 @@ std::string rinex4GpsLnavBody() {
      4.000000000000e+00 6.300000000000e+01-8.847564458847e-09 8.660000000000e+02
      3.553500000000e+05 4.000000000000e+00
 )";
+}
+
+std::string rinex4GalileoBody(int data_source_code) {
+    std::string body = rinex4GpsLnavBody();
+    body.replace(0, 3, "E04");
+    size_t line_start = 0;
+    for (int line = 0; line < 5; ++line) {
+        line_start = body.find('\n', line_start) + 1;
+    }
+    std::ostringstream source_stream;
+    source_stream << ' ' << std::scientific << std::setprecision(12)
+                  << static_cast<double>(data_source_code);
+    const std::string source_field = source_stream.str();
+    body.replace(line_start + 23, source_field.size(), source_field);
+    return body;
 }
 
 Ephemeris makeGpsEphemeris() {
@@ -447,6 +464,27 @@ TEST(RINEXReaderTest, RejectsCompactRinexSuffixesButNotSimilarNames) {
     std::filesystem::remove(similar);
 }
 
+TEST(RINEXReaderTest, ParsesRinex4NavigationMessageTypesAndRejectsExtraMetadata) {
+    io::rinex4::NavigationRecordHeader header;
+    ASSERT_TRUE(io::rinex4::parseNavigationRecordHeader(
+        "> EPH E04 FNAV", header));
+    EXPECT_EQ(header.navigation_message_type, NavigationMessageType::FNAV);
+    EXPECT_STREQ(io::rinex4::navigationMessageTypeName(
+                     header.navigation_message_type), "FNAV");
+    EXPECT_EQ(io::rinex4::navigationMessageTypeFromRinexToken("inav"),
+              NavigationMessageType::Unknown);
+    EXPECT_FALSE(io::rinex4::parseNavigationRecordHeader(
+        "> EPH E04 inav", header));
+    EXPECT_FALSE(io::rinex4::parseNavigationRecordHeader(
+        "> EPH E04 FNAV SUBTYPE", header));
+    EXPECT_FALSE(io::rinex4::parseNavigationRecordHeader(
+        "> EPH E04 FNAV EXTRA", header));
+    EXPECT_TRUE(io::rinex4::parseNavigationRecordHeader(
+        "> STO R FDMA TEST", header));
+    EXPECT_FALSE(io::rinex4::parseNavigationRecordHeader(
+        "> STO R FDMA TEST EXTRA", header));
+}
+
 TEST(RINEXReaderTest, DispatchesRinex4LnavAndSkipsUnsupportedRecordBoundary) {
     const auto temp_path =
         std::filesystem::temp_directory_path() / "libgnss_rinex4_navigation_dispatch.nav";
@@ -463,6 +501,12 @@ TEST(RINEXReaderTest, DispatchesRinex4LnavAndSkipsUnsupportedRecordBoundary) {
         file << "this system record is intentionally unsupported\n";
         file << "> EPH I05 LNAV\n";
         file << "this syntactically valid but unsupported EPH is skipped\n";
+        file << "> EPH I05 L1NV\n";
+        file << "this NavIC L1NV body is intentionally unsupported\n";
+        file << "> EPH R01 L1OC\n";
+        file << "this GLONASS L1OC body is intentionally unsupported\n";
+        file << "> EPH R01 L3OC\n";
+        file << "this GLONASS L3OC body is intentionally unsupported\n";
         file << "> EPH G04 LNAV\n";
         file << rinex4GpsLnavBody();
         std::string bds_d1_body = rinex4GpsLnavBody();
@@ -487,6 +531,12 @@ TEST(RINEXReaderTest, DispatchesRinex4LnavAndSkipsUnsupportedRecordBoundary) {
               std::string::npos);
     EXPECT_NE(diagnostic.find("Skipping unsupported RINEX 4 EPH I05 LNAV"),
               std::string::npos);
+    EXPECT_NE(diagnostic.find("Skipping unsupported RINEX 4 EPH I05 L1NV"),
+              std::string::npos);
+    EXPECT_NE(diagnostic.find("Skipping unsupported RINEX 4 EPH R01 L1OC"),
+              std::string::npos);
+    EXPECT_NE(diagnostic.find("Skipping unsupported RINEX 4 EPH R01 L3OC"),
+              std::string::npos);
     EXPECT_NE(diagnostic.find("Skipping unsupported RINEX 4 EPH G04 CNAV"),
               std::string::npos);
 
@@ -494,6 +544,8 @@ TEST(RINEXReaderTest, DispatchesRinex4LnavAndSkipsUnsupportedRecordBoundary) {
     ASSERT_NE(it, nav_data.ephemeris_data.end());
     ASSERT_EQ(it->second.size(), 1U);
     EXPECT_EQ(it->second.front().satellite, SatelliteId(GNSSSystem::GPS, 4));
+    EXPECT_EQ(it->second.front().navigation_message_type,
+              NavigationMessageType::LNAV);
     EXPECT_EQ(it->second.front().week, 2044);
     EXPECT_NEAR(it->second.front().toes, 360000.0, 1e-6);
 
@@ -501,7 +553,57 @@ TEST(RINEXReaderTest, DispatchesRinex4LnavAndSkipsUnsupportedRecordBoundary) {
         SatelliteId(GNSSSystem::BeiDou, 1));
     ASSERT_NE(bds_it, nav_data.ephemeris_data.end());
     ASSERT_EQ(bds_it->second.size(), 1U);
+    EXPECT_EQ(bds_it->second.front().navigation_message_type,
+              NavigationMessageType::D1);
 
+    reader.close();
+    std::filesystem::remove(temp_path);
+}
+
+TEST(RINEXReaderTest, PreservesRinex4GalileoMessageProvenanceAndRejectsContradiction) {
+    const auto temp_path =
+        std::filesystem::temp_directory_path() / "libgnss_rinex4_galileo_metadata.nav";
+    std::filesystem::remove(temp_path);
+    {
+        std::ofstream file(temp_path);
+        ASSERT_TRUE(file.is_open());
+        file << rinexHeaderLine(
+            "     4.02           NAVIGATION DATA     M",
+            "RINEX VERSION / TYPE");
+        file << rinexHeaderLine("", "END OF HEADER");
+        file << "> EPH E04 FNAV\n";
+        file << rinex4GalileoBody((1 << 8) + (1 << 1));
+        file << "> EPH E04 FNAV\n";
+        file << rinex4GalileoBody((1 << 9) | 1);
+        file << "> EPH E04 INAV\n";
+        file << rinex4GalileoBody((1 << 9) | 1);
+    }
+
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(temp_path.string()));
+    io::RINEXReader::RINEXHeader header;
+    ASSERT_TRUE(reader.readHeader(header));
+    NavigationData nav_data;
+    testing::internal::CaptureStderr();
+    ASSERT_TRUE(reader.readNavigationData(nav_data));
+    const std::string diagnostic = testing::internal::GetCapturedStderr();
+    EXPECT_NE(diagnostic.find("body data-source clock bit contradicts header"),
+              std::string::npos);
+
+    const auto it = nav_data.ephemeris_data.find(
+        SatelliteId(GNSSSystem::Galileo, 4));
+    ASSERT_NE(it, nav_data.ephemeris_data.end());
+    ASSERT_EQ(it->second.size(), 2U);
+    bool found_fnav = false;
+    bool found_inav = false;
+    for (const auto& eph : it->second) {
+        found_fnav = found_fnav ||
+                     eph.navigation_message_type == NavigationMessageType::FNAV;
+        found_inav = found_inav ||
+                     eph.navigation_message_type == NavigationMessageType::INAV;
+    }
+    EXPECT_TRUE(found_fnav);
+    EXPECT_TRUE(found_inav);
     reader.close();
     std::filesystem::remove(temp_path);
 }
@@ -547,6 +649,7 @@ TEST(RINEXWriterTest, WritesGpsNavigationMessageReadableByReader) {
     EXPECT_NEAR(actual.omega_dot, expected.omega_dot, 1e-18);
     EXPECT_NEAR(actual.tgd, expected.tgd, 1e-18);
     EXPECT_EQ(actual.iodc, expected.iodc);
+    EXPECT_EQ(actual.navigation_message_type, NavigationMessageType::Unknown);
 
     reader.close();
     std::filesystem::remove(temp_path);
