@@ -64,6 +64,50 @@ std::string rinex4GalileoBody(int data_source_code) {
     return body;
 }
 
+std::vector<std::string> rinex4GlonassCdmaBody(bool blank_delay = false) {
+    std::vector<std::string> body = {
+        "R26 2024 02 03 00 15 00-1.605716170161e-05 1.652011860642e-12-2.081668171172e-17",
+        "     1.812154053020e+04-2.071979139000e+00 5.729816621169e-10 1.000000000000e+00",
+        "    -2.325615360260e+03 1.285475494340e+00-1.047737896442e-09 1.000000000000e+00",
+        "     1.781341854668e+04 2.280306640081e+00-9.458744898438e-10 0.000000000000e+00",
+        "     2.000000000000e+00 1.000000000000e+01 7.500000000000e-01 7.500000000000e-01",
+        "     0.000000000000e+00 0.000000000000e+00 0.000000000000e+00 0.000000000000e+00",
+        "     0.000000000000e+00 0.000000000000e+00 0.000000000000e+00 0.000000000000e+00",
+        "     0.000000000000e+00 0.000000000000e+00 0.000000000000e+00 0.000000000000e+00",
+        "     1.500000000000e+01 5.000000000000e+00                    5.184000000000e+05",
+    };
+    if (blank_delay) {
+        body[3].resize(61);
+    }
+    return body;
+}
+
+void writeRinex4GlonassCdmaBody(std::ofstream& file,
+                                bool blank_delay = false) {
+    for (const auto& line : rinex4GlonassCdmaBody(blank_delay)) {
+        file << line << '\n';
+    }
+}
+
+std::vector<std::string> rinex4GlonassFdmaBody() {
+    std::istringstream stream(rinex4GpsLnavBody());
+    std::vector<std::string> body;
+    std::string line;
+    for (int i = 0; i < 4 && std::getline(stream, line); ++i) {
+        if (i == 0) {
+            line.replace(0, 3, "R26");
+        }
+        body.push_back(line);
+    }
+    return body;
+}
+
+void writeRinex4GlonassFdmaBody(std::ofstream& file) {
+    for (const auto& line : rinex4GlonassFdmaBody()) {
+        file << line << '\n';
+    }
+}
+
 std::string rinex4SystemNumber(double value) {
     std::ostringstream stream;
     stream << std::scientific << std::setprecision(12) << std::setw(19)
@@ -594,9 +638,9 @@ TEST(RINEXReaderTest, DispatchesRinex4LnavAndSkipsUnsupportedRecordBoundary) {
               std::string::npos);
     EXPECT_NE(diagnostic.find("Skipping unsupported RINEX 4 EPH I05 L1NV"),
               std::string::npos);
-    EXPECT_NE(diagnostic.find("Skipping unsupported RINEX 4 EPH R01 L1OC"),
+    EXPECT_NE(diagnostic.find("Skipping malformed RINEX 4 GLONASS L1OC body"),
               std::string::npos);
-    EXPECT_NE(diagnostic.find("Skipping unsupported RINEX 4 EPH R01 L3OC"),
+    EXPECT_NE(diagnostic.find("Skipping malformed RINEX 4 GLONASS L3OC body"),
               std::string::npos);
     EXPECT_NE(diagnostic.find("Skipping unsupported RINEX 4 EPH G04 CNAV"),
               std::string::npos);
@@ -619,6 +663,162 @@ TEST(RINEXReaderTest, DispatchesRinex4LnavAndSkipsUnsupportedRecordBoundary) {
 
     reader.close();
     std::filesystem::remove(temp_path);
+}
+
+TEST(RINEXReaderTest, ParsesRinex4GlonassCdmaAndRecoversAtBoundaries) {
+    const auto temp_path =
+        std::filesystem::temp_directory_path() / "libgnss_rinex4_glonass_cdma.nav";
+    std::filesystem::remove(temp_path);
+    {
+        std::ofstream file(temp_path);
+        ASSERT_TRUE(file.is_open());
+        file << rinexHeaderLine(
+            "     4.02           NAVIGATION DATA     M",
+            "RINEX VERSION / TYPE");
+        file << rinexHeaderLine("", "END OF HEADER");
+
+        file << "> EPH R26 L1OC\n";
+        writeRinex4GlonassCdmaBody(file);
+
+        file << "> EPH R26 FDMA\n";
+        writeRinex4GlonassFdmaBody(file);
+
+        file << "> EPH R26 L1OC\n";
+        const auto truncated = rinex4GlonassCdmaBody();
+        for (size_t i = 0; i + 1 < truncated.size(); ++i) {
+            file << truncated[i] << '\n';
+        }
+
+        file << "> EPH R26 L3OC\n";
+        writeRinex4GlonassCdmaBody(file, true);
+
+        file << "> EPH R26 L3OC\n";
+        auto bad_spare = rinex4GlonassCdmaBody();
+        bad_spare[8].replace(42, 19, std::string(19, 'X'));
+        for (const auto& line : bad_spare) {
+            file << line << '\n';
+        }
+
+        file << "> EPH G04 LNAV\n";
+        file << rinex4GpsLnavBody();
+    }
+
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(temp_path.string()));
+    io::RINEXReader::RINEXHeader header;
+    ASSERT_TRUE(reader.readHeader(header));
+    NavigationData nav_data;
+    testing::internal::CaptureStderr();
+    ASSERT_TRUE(reader.readNavigationData(nav_data));
+    const std::string diagnostic = testing::internal::GetCapturedStderr();
+    EXPECT_NE(diagnostic.find("Skipping malformed RINEX 4 GLONASS L1OC body"),
+              std::string::npos);
+    EXPECT_NE(diagnostic.find("Skipping malformed RINEX 4 GLONASS L3OC body"),
+              std::string::npos);
+
+    const auto glonass_it = nav_data.ephemeris_data.find(
+        SatelliteId(GNSSSystem::GLONASS, 26));
+    ASSERT_NE(glonass_it, nav_data.ephemeris_data.end());
+    ASSERT_EQ(glonass_it->second.size(), 3U);
+    const Ephemeris* l1oc = nullptr;
+    const Ephemeris* l3oc = nullptr;
+    const Ephemeris* fdma = nullptr;
+    for (const auto& eph : glonass_it->second) {
+        if (eph.navigation_message_type == NavigationMessageType::L1OC) {
+            l1oc = &eph;
+        } else if (eph.navigation_message_type == NavigationMessageType::L3OC) {
+            l3oc = &eph;
+        } else if (eph.navigation_message_type == NavigationMessageType::FDMA) {
+            fdma = &eph;
+        }
+    }
+    ASSERT_NE(l1oc, nullptr);
+    ASSERT_NE(l3oc, nullptr);
+    ASSERT_NE(fdma, nullptr);
+    EXPECT_FALSE(fdma->glonass_cdma_data.has_value());
+    ASSERT_TRUE(l1oc->glonass_cdma_data.has_value());
+    ASSERT_TRUE(l3oc->glonass_cdma_data.has_value());
+    EXPECT_NEAR(l1oc->glonass_taun, 1.605716170161e-05, 1e-18);
+    EXPECT_NEAR(l1oc->glonass_position.x(), 1.812154053020e+07, 1e-6);
+    EXPECT_NEAR(l1oc->glonass_velocity.y(), 1.285475494340e+03, 1e-9);
+    EXPECT_EQ(l1oc->health, 1);
+    EXPECT_FALSE(l1oc->valid);
+    EXPECT_EQ(l1oc->glonass_cdma_data->source_flags, 10);
+    EXPECT_DOUBLE_EQ(l1oc->glonass_cdma_data->aode, 0.75);
+    EXPECT_DOUBLE_EQ(l1oc->glonass_cdma_data->aodc, 0.75);
+    ASSERT_TRUE(l1oc->glonass_cdma_data->tgd_l2ocp.has_value());
+    EXPECT_DOUBLE_EQ(*l1oc->glonass_cdma_data->tgd_l2ocp, 0.0);
+    EXPECT_FALSE(l3oc->glonass_cdma_data->isc_l3ocp.has_value());
+    EXPECT_DOUBLE_EQ(l3oc->glonass_cdma_data->transmission_time_utc_week,
+                     518400.0);
+    EXPECT_EQ(l1oc->toc.week, l1oc->tof.week);
+    EXPECT_NEAR(l1oc->tof.tow - l1oc->toc.tow, -900.0, 1e-6);
+
+    const auto gps_it = nav_data.ephemeris_data.find(
+        SatelliteId(GNSSSystem::GPS, 4));
+    ASSERT_NE(gps_it, nav_data.ephemeris_data.end());
+    ASSERT_EQ(gps_it->second.size(), 1U);
+    reader.close();
+    std::filesystem::remove(temp_path);
+}
+
+TEST(RINEXReaderTest, GlonassCdmaParserIsTransactionalAndStrict) {
+    io::rinex4::NavigationRecordHeader header;
+    ASSERT_TRUE(io::rinex4::parseNavigationRecordHeader(
+        "> EPH R26 L1OC", header));
+
+    const auto valid = rinex4GlonassCdmaBody();
+    io::rinex4::GlonassCdmaEphemerisRecord parsed;
+    ASSERT_TRUE(io::rinex4::parseGlonassCdmaEphemerisRecord(
+        header, valid, parsed));
+    EXPECT_EQ(parsed.source_flags, 10);
+    EXPECT_DOUBLE_EQ(parsed.aode, 0.75);
+    EXPECT_DOUBLE_EQ(parsed.aodc, 0.75);
+
+    parsed.minus_tau_n = 42.0;
+    auto truncated = valid;
+    truncated.pop_back();
+    EXPECT_FALSE(io::rinex4::parseGlonassCdmaEphemerisRecord(
+        header, truncated, parsed));
+    EXPECT_DOUBLE_EQ(parsed.minus_tau_n, 42.0);
+
+    auto bad_spare = valid;
+    bad_spare[8].replace(42, 19, std::string(19, 'X'));
+    EXPECT_FALSE(io::rinex4::parseGlonassCdmaEphemerisRecord(
+        header, bad_spare, parsed));
+    EXPECT_DOUBLE_EQ(parsed.minus_tau_n, 42.0);
+
+    auto bad_integer = valid;
+    bad_integer[1].replace(61, 19, rinex4SystemNumber(2.0));
+    EXPECT_FALSE(io::rinex4::parseGlonassCdmaEphemerisRecord(
+        header, bad_integer, parsed));
+    EXPECT_DOUBLE_EQ(parsed.minus_tau_n, 42.0);
+
+    auto bad_prefix = valid;
+    bad_prefix[1][0] = 'X';
+    EXPECT_FALSE(io::rinex4::parseGlonassCdmaEphemerisRecord(
+        header, bad_prefix, parsed));
+    EXPECT_DOUBLE_EQ(parsed.minus_tau_n, 42.0);
+
+    auto bad_numeric = valid;
+    bad_numeric[1].replace(4, 19, std::string(16, ' ') + "NaN");
+    EXPECT_FALSE(io::rinex4::parseGlonassCdmaEphemerisRecord(
+        header, bad_numeric, parsed));
+    EXPECT_DOUBLE_EQ(parsed.minus_tau_n, 42.0);
+
+    auto extra_body = valid;
+    extra_body.push_back(valid.back());
+    EXPECT_FALSE(io::rinex4::parseGlonassCdmaEphemerisRecord(
+        header, extra_body, parsed));
+    EXPECT_DOUBLE_EQ(parsed.minus_tau_n, 42.0);
+
+    auto shortened_optional = rinex4GlonassCdmaBody(true);
+    io::rinex4::NavigationRecordHeader l3_header;
+    ASSERT_TRUE(io::rinex4::parseNavigationRecordHeader(
+        "> EPH R26 L3OC", l3_header));
+    ASSERT_TRUE(io::rinex4::parseGlonassCdmaEphemerisRecord(
+        l3_header, shortened_optional, parsed));
+    EXPECT_FALSE(parsed.isc_l3ocp.has_value());
 }
 
 TEST(RINEXReaderTest, PreservesRinex4GalileoMessageProvenanceAndRejectsContradiction) {

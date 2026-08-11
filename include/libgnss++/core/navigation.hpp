@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <vector>
 #include <map>
 #include <memory>
@@ -31,6 +32,39 @@ enum class NavigationMessageType {
     L1NV,
     L1OC,
     L3OC,
+};
+
+/**
+ * @brief RINEX 4 GLONASS CDMA-specific broadcast fields.
+ *
+ * The common state-vector and clock values remain in Ephemeris.  These
+ * optional fields preserve the A16/A17 values that have no legacy FDMA
+ * counterpart without changing ephemeris selection policy.
+ */
+struct GlonassCdmaNavigationData {
+    double beta = 0.0;  ///< Broadcast clock acceleration term.
+    int data_validity = 0;  ///< 0 valid, 1 invalid, from A16/A17.
+    int satellite_type = 0;  ///< Satellite type (M), decimal integer field.
+    int source_flags = 0;  ///< RT/RE source flags, decimal 4-bit value (0..15).
+    double aode = 0.0;  ///< Age of data ephemeris (EE), days.
+    double aodc = 0.0;  ///< Age of data clock (ET), days.
+    int attitude_flag = 0;  ///< P2 attitude flag.
+    int sign_flag = 0;  ///< Yaw sign flag (sn).
+    int urai_orbit = 0;  ///< FE orbit accuracy index.
+    int urai_clock = 0;  ///< FT clock accuracy index.
+    double tin = 0.0;  ///< Reference time of attitude data, UTC(SU) seconds of day.
+    double tau1 = 0.0;  ///< Attitude time constant Tau1 (seconds).
+    double tau2 = 0.0;  ///< Attitude time constant Tau2 (seconds).
+    double yaw_angle = 0.0;  ///< Initial yaw angle psi_in (radians).
+    double angular_rate = 0.0;  ///< Initial angular rate omega_in (rad/s).
+    double angular_acceleration = 0.0;  ///< Initial angular acceleration (rad/s2).
+    double max_angular_rate = 0.0;  ///< Maximum angular rate (rad/s).
+    double pc_x = 0.0;  ///< X phase-center offset in manufacturer coordinates (m).
+    double pc_y = 0.0;  ///< Y phase-center offset in manufacturer coordinates (m).
+    double pc_z = 0.0;  ///< Z phase-center offset in manufacturer coordinates (m).
+    double transmission_time_utc_week = 0.0;  ///< Raw t_tm before UTC→GPST conversion.
+    std::optional<double> tgd_l2ocp;  ///< L1OC A16 TGD_L2OCp; blank is preserved.
+    std::optional<double> isc_l3ocp;  ///< L3OC A17 ISC_L3OCp; blank is preserved.
 };
 
 /**
@@ -91,6 +125,7 @@ struct Ephemeris {
     uint16_t iode;          ///< Issue of data ephemeris
     int data_source_code = 0;  ///< RINEX nav "data sources" word (Galileo: bit0 I/NAV E1-B, bit1 F/NAV E5a, bit2 I/NAV E5b, bit8 clock E5a/F-NAV, bit9 clock E5b/I-NAV)
     NavigationMessageType navigation_message_type = NavigationMessageType::Unknown;
+    std::optional<GlonassCdmaNavigationData> glonass_cdma_data;
 
     bool valid = false;     ///< Ephemeris validity flag
     

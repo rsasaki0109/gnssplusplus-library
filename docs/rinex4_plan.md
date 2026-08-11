@@ -211,9 +211,22 @@ Phase 5, new navigation messages:
 - Implement GPS/QZSS CNAV/CNV2, BeiDou CNV1/CNV2/CNV3, and SBAS navigation
   body models.
 - Implement NavIC L1 `L1NV` parsing.
-- Implement GLONASS `L1OC` and `L3OC` parsing.
 - Add conformance fixtures from public RINEX 4.02 files before enabling these
   records in production flows.
+
+Phase 5a, GLONASS CDMA navigation (DONE):
+
+- Parse `> EPH R.. L1OC/L3OC` A16/A17 bodies with a strict, transactional
+  nine-line parser, including required integer/range checks and the required
+  19-character blank spare field (A19 format).
+- Preserve the typed message provenance and optional CDMA payload on
+  `Ephemeris`; map the broadcast state vector from km to metres and convert
+  UTC `toc`/`t_tm` to GPST with nearest-week handling.
+- Keep the existing GLONASS FDMA path and ephemeris selection policy unchanged;
+  malformed CDMA records recover at the next explicit `>` boundary.
+
+The remaining Phase 5 work is GPS/QZSS CNAV/CNV2, BeiDou CNV1/CNV2/CNV3, SBAS,
+and NavIC `L1NV` body models.  Those records remain deliberately unsupported.
 
 Phase 6, writer support:
 
@@ -241,7 +254,8 @@ and 2 are marked by the corresponding status sections below.
   retained in `ObservationData`, and cycle-slip records are consumed rather
   than exposed.
 - No native CRINEX decompressor.
-- No NavIC or GLONASS CDMA EPH message implementation.
+- No GPS/QZSS CNAV/CNV2, BeiDou CNV1/CNV2/CNV3, SBAS, or NavIC L1NV EPH body
+  implementation; GLONASS CDMA L1OC/L3OC is covered by Phase 5a.
 - No writer behavior changes.
 - No conversion of system-record epochs into a common GPS time scale or
   application of the parsed system data to navigation selection.
@@ -256,7 +270,8 @@ The safe-dispatch slice is implemented in the reader:
   RINEX 2 and 3 continue through their existing paths.
 - RINEX 4 navigation data-record headers are parsed in `rinex4.hpp/cpp`.
   Compatible GPS/QZSS LNAV, GLONASS FDMA, Galileo FNAV/INAV, and BeiDou D1/D2
-  EPH bodies reuse the existing ephemeris parser.
+  EPH bodies reuse the existing ephemeris parser; GLONASS CDMA L1OC/L3OC uses
+  the dedicated Phase 5a parser.
 - STO/EOP/ION records and unsupported EPH message types are skipped at the
   next `>` record boundary with diagnostics, preventing silent body misparse.
 
@@ -267,8 +282,8 @@ Table A3 receiver-clock offsets, optional extra second digits, GPS/QZSS
 observation rows, continuation headers, deterministic event/cycle-slip
 skipping (with zero-satellite normal epochs preserved), strict truncation
 checks, and explicit CRINEX suffix rejection.
-Event metadata retention, richer cycle-slip data models, and all new EPH
-navigation message models remain deferred as listed above.
+Event metadata retention, richer cycle-slip data models, and the remaining new
+EPH navigation message models remain deferred as listed above.
 
 ## Phase 4 Implementation Status: DONE
 

@@ -2,6 +2,7 @@
 
 #include <libgnss++/core/navigation.hpp>
 #include <array>
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -73,6 +74,53 @@ struct CalendarTime {
     int minute = 0;
     int second = 0;
 };
+
+/**
+ * @brief Strictly parsed RINEX 4 A16/A17 GLONASS CDMA body.
+ *
+ * Epoch and transmission time remain in the originating UTC scale here;
+ * RINEXReader converts them with the existing leap-second policy before
+ * storing the resulting Ephemeris.
+ */
+struct GlonassCdmaEphemerisRecord {
+    NavigationRecordHeader header;
+    CalendarTime toc;
+    double minus_tau_n = 0.0;  ///< First clock field is -TauN in A16/A17.
+    double gamma_n = 0.0;
+    double beta = 0.0;
+    std::array<double, 3> position_km{};  ///< A16/A17 X,Y,Z positions (km).
+    std::array<double, 3> velocity_km_per_s{};  ///< X,Y,Z velocities (km/s).
+    std::array<double, 3> acceleration_km_per_s2{};  ///< X,Y,Z accelerations (km/s2).
+    int signal_health = 0;  ///< 0 healthy, 1 unhealthy.
+    int data_validity = 0;  ///< 0 valid, 1 invalid.
+    std::optional<double> tgd_l2ocp;  ///< L1OC delay; blank is absent.
+    std::optional<double> isc_l3ocp;  ///< L3OC inter-signal correction; blank is absent.
+    int satellite_type = 0;  ///< Satellite type M.
+    int source_flags = 0;  ///< Four-bit RE/RT source flag value.
+    double aode = 0.0;  ///< Age of ephemeris data EE (days).
+    double aodc = 0.0;  ///< Age of clock data ET (days).
+    int attitude_flag = 0;  ///< 0 nominal yaw steering, 1 rate-limited manoeuvre.
+    double tin = 0.0;  ///< Attitude reference time (UTC(SU) seconds of day).
+    double tau1 = 0.0;  ///< Attitude time constant Tau1 (seconds).
+    double tau2 = 0.0;  ///< Attitude time constant Tau2 (seconds).
+    double yaw_angle = 0.0;  ///< Initial yaw angle (radians).
+    int sign_flag = 0;  ///< Yaw sign flag.
+    double angular_rate = 0.0;  ///< Initial angular rate (rad/s).
+    double angular_acceleration = 0.0;  ///< Initial angular acceleration (rad/s2).
+    double max_angular_rate = 0.0;  ///< Maximum angular rate (rad/s).
+    std::array<double, 3> phase_center_m{};  ///< A16/A17 X,Y,Z offsets (m).
+    int urai_orbit = 0;  ///< Orbit URAI index FE.
+    int urai_clock = 0;  ///< Clock URAI index FT.
+    double transmission_time_utc_week = 0.0;  ///< UTC week seconds t_tm.
+};
+
+/**
+ * @brief Parse one complete RINEX 4 A16/A17 GLONASS CDMA body transactionally.
+ */
+bool parseGlonassCdmaEphemerisRecord(
+    const NavigationRecordHeader& header,
+    const std::vector<std::string>& body,
+    GlonassCdmaEphemerisRecord& record);
 
 struct SystemTimeOffsetRecord {
     NavigationRecordHeader header;
