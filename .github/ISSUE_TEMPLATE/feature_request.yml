@@ -1,0 +1,50 @@
+name: Feature request
+description: Propose one focused improvement with a concrete user outcome.
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Keep one user-visible value per request. Do not include credentials,
+        private datasets, or vulnerability details here; use SECURITY.md for
+        private security reporting.
+  - type: textarea
+    id: user_problem
+    attributes:
+      label: User problem
+      description: Who is blocked, and what are they trying to do today?
+      placeholder: "As a ..., I need ... because ..."
+    validations:
+      required: true
+  - type: textarea
+    id: smallest_value
+    attributes:
+      label: Smallest useful outcome
+      description: What is the minimum behavior or artifact that would help?
+      placeholder: "A command, option, report field, parser path, or doc change that ..."
+    validations:
+      required: true
+  - type: textarea
+    id: proposed_shape
+    attributes:
+      label: Proposed shape
+      description: Give an example command, API, config, or documentation flow if useful.
+    validations:
+      required: false
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List concrete checks or artifacts that would show the request is complete.
+      placeholder: "Focused test passes; command emits ...; docs example works ..."
+    validations:
+      required: true
+  - type: textarea
+    id: data_needs
+    attributes:
+      label: Data and credential needs
+      description: State required datasets, network access, credentials, and safe skip behavior. Write None when no special inputs are needed.
+      placeholder: "None, or GNSSPP_DATA_ROOT=...; CI can skip clearly when absent."
+    validations:
+      required: true

@@ -412,6 +412,10 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_release_contracts.py
     )
     add_test(
+        NAME python_community_health_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_community_health.py
+    )
+    add_test(
         NAME python_bindings_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_python_bindings.py
     )
@@ -512,6 +516,7 @@ if(GTest_FOUND)
         python_observable_native_cli_contract_tests
         python_search_imu_time_offset_tests
         python_release_contract_tests
+        python_community_health_tests
     )
     set(GNSSPP_EXTENDED_TESTS
         python_packaging_tests

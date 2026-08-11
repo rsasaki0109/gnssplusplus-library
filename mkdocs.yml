@@ -27,6 +27,7 @@ nav:
   - Self-contained Offline Demo: self_contained_demo.md
   - v0.2.0 Release Highlights: releases/v0.2.0.md
   - Maintainer Release Runbook: release_runbook.md
+  - Community Onboarding: community.md
   - Dataset Gallery: dataset_gallery.md
   - Architecture: architecture.md
   - Quick Start: quickstart.md

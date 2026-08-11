@@ -1,5 +1,12 @@
 # Contributing
 
+## 15-minute first contribution
+
+New to the project? Start with the [community onboarding guide](docs/community.md)
+to choose a docs-only, Python tool/test, or C++ lane and run its smallest
+validation command. It also links the structured question, bug, and feature
+forms plus private security reporting.
+
 ## Branch And PR Workflow
 
 - Do not push new feature work directly to `develop`.

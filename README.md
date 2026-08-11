@@ -381,6 +381,7 @@ docker run --rm -it -p 8085:8085 -v "$PWD:/workspace" \
 - [Interfaces](docs/interfaces.md)
 - [Architecture](docs/architecture.md)
 - [Reference analyses](docs/references/index.md)
+- [Community onboarding](docs/community.md)
 - [Contributing](CONTRIBUTING.md)
 
 ## Install
