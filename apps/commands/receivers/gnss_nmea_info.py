@@ -6,14 +6,8 @@ from __future__ import annotations
 import argparse
 import os
 from dataclasses import dataclass
-from pathlib import Path
-import sys
 
-try:
-    from support.gnss_input_source import InputSource, NMEA_SERIAL_BAUDS
-except ModuleNotFoundError:
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from support.gnss_input_source import InputSource, NMEA_SERIAL_BAUDS
+from support.gnss_input_source import InputSource, NMEA_SERIAL_BAUDS
 
 
 @dataclass

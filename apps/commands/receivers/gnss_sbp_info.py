@@ -7,14 +7,9 @@ import argparse
 import binascii
 import os
 import struct
-import sys
 from dataclasses import dataclass
 
-try:
-    from support.gnss_input_source import InputSource
-except ModuleNotFoundError:
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from support.gnss_input_source import InputSource
+from support.gnss_input_source import InputSource
 
 
 SBP_PREAMBLE = 0x55

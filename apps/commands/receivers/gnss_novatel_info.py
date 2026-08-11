@@ -8,14 +8,9 @@ import binascii
 import os
 from dataclasses import dataclass
 import struct
-import sys
 import zlib
 
-try:
-    from support.gnss_input_source import InputSource
-except ModuleNotFoundError:
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from support.gnss_input_source import InputSource
+from support.gnss_input_source import InputSource
 
 
 @dataclass
