@@ -264,3 +264,13 @@ install(FILES
     ${CMAKE_SOURCE_DIR}/test_data/iers/tskb_vmf.atl
     DESTINATION test_data/iers
 )
+
+# Keep the first-run demo's tiny, project-authored inputs available to the
+# installed CLI and Docker runtime without shipping the source-tree layout.
+install(FILES
+    ${CMAKE_SOURCE_DIR}/demo/fixtures/README.md
+    ${CMAKE_SOURCE_DIR}/demo/fixtures/synthetic_ppp.obs
+    ${CMAKE_SOURCE_DIR}/demo/fixtures/synthetic_ppp.sp3
+    ${CMAKE_SOURCE_DIR}/demo/fixtures/synthetic_ppp.clk
+    DESTINATION share/libgnsspp/demo
+)

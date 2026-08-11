@@ -233,6 +233,8 @@ Choose the entrypoint that matches your job:
   inspection, ROS2 receiver launch, and rosbag capture.
 - [Research quick start](docs/research_quickstart.md): repeatable sign-off
   runs, profile comparisons, Python inspection, and artifact layout.
+- [Self-contained offline demo](docs/self_contained_demo.md): one tracked
+  fixture, one command, and `.pos`/KML/JSON artifacts without a download.
 - [Dataset gallery](docs/dataset_gallery.md): current public dataset lanes and
   the adapter contract for adding more.
 
@@ -245,6 +247,7 @@ Build:
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 python3 apps/gnss.py doctor
+python3 apps/gnss.py demo
 python3 apps/gnss.py ros2-doctor --device /dev/ttyUSB0
 python3 apps/gnss.py ros2-bag-doctor --bag /path/to/rosbag --summary-json output/ros2_bag_doctor_summary.json
 python3 apps/gnss.py field-report --out output/field_report.md

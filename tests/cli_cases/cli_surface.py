@@ -1,8 +1,85 @@
 """CLI regression cases for the CLISurfaceCases domain."""
 
+import importlib.util
+from unittest import mock
+
 from ._support import *  # noqa: F401,F403
 
+
 class CLISurfaceCases:
+    def test_demo_resolves_windows_multiconfig_binary_layouts(self) -> None:
+        command_path = ROOT_DIR / "apps" / "commands" / "diagnostics" / "gnss_demo.py"
+        spec = importlib.util.spec_from_file_location("gnss_demo_resolution_test", command_path)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        demo_module = importlib.util.module_from_spec(spec)
+
+        commands_dir = ROOT_DIR / "apps" / "commands"
+        sys.path.insert(0, str(commands_dir))
+        try:
+            spec.loader.exec_module(demo_module)
+        finally:
+            sys.path.remove(str(commands_dir))
+
+        layouts = (
+            ("apps", "{config}"),
+            ("{config}", "apps"),
+            ("{config}",),
+        )
+        for config in demo_module.BUILD_CONFIGS:
+            for layout in layouts:
+                with self.subTest(config=config, layout=layout), tempfile.TemporaryDirectory(
+                    prefix="gnss_demo_binary_resolution_"
+                ) as temp_dir:
+                    root_dir = Path(temp_dir)
+                    binary_path = root_dir / "build"
+                    for component in layout:
+                        binary_path /= component.format(config=config)
+                    binary_path /= "gnss_ppp.exe"
+                    binary_path.parent.mkdir(parents=True)
+                    binary_path.touch()
+                    fake_os = mock.Mock()
+                    fake_os.name = "nt"
+
+                    with (
+                        mock.patch.object(demo_module, "ROOT_DIR", root_dir),
+                        mock.patch.object(demo_module, "os", fake_os),
+                        mock.patch.object(demo_module.shutil, "which", return_value=None),
+                    ):
+                        self.assertEqual(
+                            demo_module.find_ppp_binary(), binary_path.resolve()
+                        )
+
+    def test_self_contained_demo_emits_position_kml_and_json_contract(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_self_contained_demo_") as temp_dir:
+            output_dir = Path(temp_dir) / "demo-output"
+            result = self.run_gnss("demo", "--output-dir", str(output_dir))
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("Self-contained offline demo complete:", result.stdout)
+            position_path = output_dir / "demo_solution.pos"
+            kml_path = output_dir / "demo_solution.kml"
+            summary_path = output_dir / "demo_summary.json"
+            for path in (position_path, kml_path, summary_path):
+                self.assertTrue(path.is_file(), f"missing demo artifact: {path}")
+                self.assertGreater(path.stat().st_size, 0)
+
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["demo"]["schema_version"], "self-contained-demo.v1")
+            self.assertTrue(payload["demo"]["offline"])
+            self.assertTrue(payload["demo"]["synthetic_fixture"])
+            self.assertEqual(payload["processed_epochs"], 8)
+            self.assertEqual(payload["valid_solutions"], 8)
+            position_epochs = [
+                line
+                for line in position_path.read_text(encoding="ascii").splitlines()
+                if line.strip() and not line.lstrip().startswith("%")
+            ]
+            self.assertEqual(len(position_epochs), 8)
+            kml_text = kml_path.read_text(encoding="utf-8")
+            self.assertIn("<coordinates>", kml_text)
+            self.assertIn("</coordinates>", kml_text)
+
     def test_odaiba_benchmark_help_is_available(self) -> None:
         result = self.run_gnss("odaiba-benchmark", "--help")
         self.assertEqual(result.returncode, 0, msg=result.stderr)

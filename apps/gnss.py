@@ -77,6 +77,11 @@ COMMANDS = {
         "target": python_target("gnss_doctor.py"),
         "summary": "Check local setup, built tools, datasets, docs, Docker, and ROS2 readiness.",
     },
+    "demo": {
+        "kind": "python",
+        "target": python_target("gnss_demo.py"),
+        "summary": "Run the tracked offline PPP demo and emit a .pos, KML, and JSON summary.",
+    },
     "robotics-smoke": {
         "kind": "python",
         "target": python_target("gnss_robotics_smoke.py"),
@@ -600,6 +605,7 @@ def usage() -> str:
             "  python3 apps/gnss.py commands --json",
             "  python3 apps/gnss.py help doctor",
             "  python3 apps/gnss.py doctor",
+            "  python3 apps/gnss.py demo",
             "  python3 apps/gnss.py robotics-smoke --profile realtime",
             "  python3 apps/gnss.py ros2-doctor --device /dev/ttyUSB0",
             "  python3 apps/gnss.py solve --data-dir data/driving --out output/rtk_solution.pos",

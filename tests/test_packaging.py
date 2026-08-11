@@ -143,6 +143,10 @@ class PackagingSmokeTest(unittest.TestCase):
                 prefix / "configs" / "signoff" / "moving_base_signoff.example.toml",
                 prefix / "configs" / "signoff" / "live_signoff.example.toml",
                 prefix / "configs" / "signoff" / "ppc_rtk_signoff.example.toml",
+                prefix / "share" / "libgnsspp" / "demo" / "README.md",
+                prefix / "share" / "libgnsspp" / "demo" / "synthetic_ppp.obs",
+                prefix / "share" / "libgnsspp" / "demo" / "synthetic_ppp.sp3",
+                prefix / "share" / "libgnsspp" / "demo" / "synthetic_ppp.clk",
             ]
             commands_root = ROOT_DIR / "apps" / "commands"
             command_sources = [
@@ -195,6 +199,30 @@ class PackagingSmokeTest(unittest.TestCase):
 
             env = dict(os.environ)
             env["PATH"] = str(prefix / "bin") + os.pathsep + env.get("PATH", "")
+
+            installed_demo_output = Path(temp_dir) / "installed-demo-output"
+            installed_demo = subprocess.run(
+                [
+                    str(prefix / "bin" / "gnss"),
+                    "demo",
+                    "--output-dir",
+                    str(installed_demo_output),
+                ],
+                check=True,
+                cwd=ROOT_DIR,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertIn("Self-contained offline demo complete:", installed_demo.stdout)
+            for artifact_name in (
+                "demo_solution.pos",
+                "demo_solution.kml",
+                "demo_summary.json",
+            ):
+                artifact = installed_demo_output / artifact_name
+                self.assertTrue(artifact.is_file(), f"installed demo missing {artifact}")
+                self.assertGreater(artifact.stat().st_size, 0)
 
             installed_web_hash = subprocess.run(
                 [

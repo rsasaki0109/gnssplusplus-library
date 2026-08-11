@@ -99,6 +99,7 @@ class CliUxTest(unittest.TestCase):
         self.assertIn("Examples:", result.stdout)
         for command in (
             "doctor",
+            "demo",
             "solve",
             "ppp",
             "clas-ppp",
@@ -125,6 +126,7 @@ class CliUxTest(unittest.TestCase):
     def test_representative_subcommand_help_uses_dispatcher_names(self) -> None:
         expectations = {
             "doctor": ("usage: gnss doctor", "--strict"),
+            "demo": ("usage: gnss demo", "--output-dir"),
             "qzss-l6-info": (
                 "usage: gnss qzss-l6-info",
                 "--compact-bias-row-materialization",
@@ -149,6 +151,7 @@ class CliUxTest(unittest.TestCase):
         expectations = {
             "commands": ("Usage: gnss commands", "--json", "--query"),
             "doctor": ("usage: gnss doctor", "--strict"),
+            "demo": ("usage: gnss demo", "--output-dir"),
             "qzss-l6-info": (
                 "usage: gnss qzss-l6-info",
                 "--compact-bias-row-materialization",
