@@ -406,6 +406,7 @@ RINEXReader::RINEXReader()
     : qzss_prefer_l1l_(PPPEnvOverrides::fromEnvironment().qzss_prefer_l1l) {}
 
 bool RINEXReader::open(const std::string& filename) {
+    rinex4_system_data_.clear();
     if (rinex4::isCompactRinexPath(filename)) {
         std::cerr << "CompactRINEX input is not supported natively (.crx/.crx.gz): "
                   << filename << std::endl;
@@ -755,6 +756,8 @@ bool RINEXReader::readNavigationData(NavigationData& nav_data) {
 }
 
 bool RINEXReader::readRinex4NavigationData(NavigationData& nav_data) {
+    rinex4_system_data_.clear();
+
     // RINEX 4 makes the navigation record boundary explicit.  Keep the
     // complete body between two '>' headers so unsupported STO/EOP/ION (or
     // unsupported EPH message types) can be skipped without feeding their
@@ -767,6 +770,48 @@ bool RINEXReader::readRinex4NavigationData(NavigationData& nav_data) {
 
     const auto finish_record = [&]() {
         if (!have_active_record || !active_record_supported) {
+            body.clear();
+            return;
+        }
+
+        if (active_header.record_type == "STO") {
+            rinex4::SystemTimeOffsetRecord record;
+            if (!rinex4::parseSystemTimeOffsetRecord(active_header, body, record)) {
+                std::cerr << "Skipping malformed RINEX 4 STO body for "
+                          << active_header.source << ' '
+                          << active_header.message_type << std::endl;
+            } else {
+                rinex4_system_data_.system_time_offsets.push_back(std::move(record));
+            }
+            body.clear();
+            return;
+        }
+        if (active_header.record_type == "EOP") {
+            rinex4::EarthOrientationRecord record;
+            if (!rinex4::parseEarthOrientationRecord(active_header, body, record)) {
+                std::cerr << "Skipping malformed RINEX 4 EOP body for "
+                          << active_header.source << ' '
+                          << active_header.message_type << std::endl;
+            } else {
+                rinex4_system_data_.earth_orientation_parameters.push_back(
+                    std::move(record));
+            }
+            body.clear();
+            return;
+        }
+        if (active_header.record_type == "ION") {
+            rinex4::IonosphereRecord record;
+            if (!rinex4::parseIonosphereRecord(active_header, body, record)) {
+                std::cerr << "Skipping malformed or unsupported RINEX 4 ION body for "
+                          << active_header.source << ' '
+                          << active_header.message_type;
+                if (!active_header.subtype.empty()) {
+                    std::cerr << ' ' << active_header.subtype;
+                }
+                std::cerr << std::endl;
+            } else {
+                rinex4_system_data_.ionosphere_records.push_back(std::move(record));
+            }
             body.clear();
             return;
         }
@@ -841,8 +886,14 @@ bool RINEXReader::readRinex4NavigationData(NavigationData& nav_data) {
 
             have_active_record = true;
             if (active_header.record_type != "EPH") {
-                std::cerr << "Skipping unsupported RINEX 4 navigation record type: "
-                          << active_header.record_type << std::endl;
+                if (active_header.record_type == "STO" ||
+                    active_header.record_type == "EOP" ||
+                    active_header.record_type == "ION") {
+                    active_record_supported = true;
+                } else {
+                    std::cerr << "Skipping unsupported RINEX 4 navigation record type: "
+                              << active_header.record_type << std::endl;
+                }
                 continue;
             }
 
@@ -870,7 +921,7 @@ bool RINEXReader::readRinex4NavigationData(NavigationData& nav_data) {
     }
 
     finish_record();
-    return !nav_data.isEmpty();
+    return !nav_data.isEmpty() || !rinex4_system_data_.empty();
 }
 
 bool RINEXReader::parseHeaderLine(const std::string& line, RINEXHeader& header) {

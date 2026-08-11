@@ -193,13 +193,18 @@ Phase 3, `EPH` navigation metadata and compatible-body support (DONE):
   EPH bodies at the next `>` boundary, and validate Galileo FNAV/INAV clock
   source bits. **DONE in the Phase 3 slice.**
 
-Phase 4, system data records:
+Phase 4, system data records (DONE):
 
-- Add internal containers for `STO`, `EOP`, and `ION`.
-- Start with ION because QZSS/NavIC ION subtypes matter for MADOCA/RINEX 4
-  convergence.
-- Decide whether these containers live in `NavigationData` or a RINEX-specific
-  sidecar.
+- Add internal containers for `STO`, `EOP`, and `ION`. **DONE in the Phase 4
+  slice** as a RINEX-specific `RINEXReader` sidecar, leaving the existing
+  `NavigationData` selection and legacy ionosphere model unchanged.
+- Parse the Table A33/A34 `STO`/`EOP` records and the A35--A40 Klobuchar,
+  NeQuick-G, BDGIM, NavIC KLOB/NEQN, and GLONASS CDMA ION models with strict
+  fixed-field validation. **DONE in the Phase 4 slice.**
+- Reject unsupported message/type/subtype combinations and malformed bodies
+  transactionally while preserving the next `>` boundary. The `LEG` STO
+  spelling is retained only for the explicit RINEX 4.02 Table A41 example;
+  Table 21 remains the normative message-type matrix.
 
 Phase 5, new navigation messages:
 
@@ -226,17 +231,20 @@ and 2 are marked by the corresponding status sections below.
   at least GPS/QZSS observation rows. **MET by Phase 2.**
 - RINEX 4 navigation fixture with `> EPH G.. LNAV` parses at parity with the
   equivalent RINEX 3 record.
-- Unsupported RINEX 4 records fail or skip deterministically with diagnostics.
+- Supported RINEX 4 `STO`/`EOP`/`ION` records are retained in the reader
+  sidecar; unsupported records fail or skip deterministically with diagnostics.
 - CRINEX input policy is explicit and tested.
 
-## Safe-Dispatch and Observation Slice Non-Goals
+## Safe-Dispatch, Observation, and System-Record Slice Non-Goals
 
 - No complete RINEX 4 observation model: event metadata is intentionally not
   retained in `ObservationData`, and cycle-slip records are consumed rather
   than exposed.
 - No native CRINEX decompressor.
-- No NavIC or GLONASS CDMA message implementation.
+- No NavIC or GLONASS CDMA EPH message implementation.
 - No writer behavior changes.
+- No conversion of system-record epochs into a common GPS time scale or
+  application of the parsed system data to navigation selection.
 
 ## Phase 1 Implementation Status: DONE
 
@@ -259,5 +267,15 @@ Table A3 receiver-clock offsets, optional extra second digits, GPS/QZSS
 observation rows, continuation headers, deterministic event/cycle-slip
 skipping (with zero-satellite normal epochs preserved), strict truncation
 checks, and explicit CRINEX suffix rejection.
-Event metadata retention, richer cycle-slip data models, and all new
+Event metadata retention, richer cycle-slip data models, and all new EPH
 navigation message models remain deferred as listed above.
+
+## Phase 4 Implementation Status: DONE
+
+RINEX 4 `STO`, `EOP`, and `ION` records are parsed into the
+`RINEXReader::rinex4SystemData()` sidecar.  The implementation covers the
+Table A33/A34 fixed records and the A35--A40 ION payload models, validates
+system/message/subtype combinations and numeric/date fields, and appends only
+complete records.  Unsupported or malformed records are diagnosed and
+discarded at the next explicit `>` boundary without changing RINEX 2/3 or
+legacy `NavigationData` behavior.
