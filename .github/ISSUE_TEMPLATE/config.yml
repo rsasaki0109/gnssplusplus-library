@@ -1,5 +1,11 @@
-blank_issues_enabled: true
+blank_issues_enabled: false
 contact_links:
-  - name: Validation and sign-off docs
-    url: https://github.com/rsasaki0109/gnssplusplus-library/blob/develop/docs/validation.md
-    about: Use this to choose the smallest relevant sign-off before opening a slice.
+  - name: Support and questions
+    url: https://github.com/rsasaki0109/gnssplusplus-library/issues/new?template=question.yml
+    about: Search the docs first, then use the structured question form for help.
+  - name: Documentation and quick starts
+    url: https://rsasaki0109.github.io/gnssplusplus-library/
+    about: Read the published quick starts, interfaces, and validation notes.
+  - name: Private security report
+    url: https://github.com/rsasaki0109/gnssplusplus-library/security/advisories/new
+    about: Report a suspected vulnerability privately; do not publish details in an issue.

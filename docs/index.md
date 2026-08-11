@@ -13,6 +13,7 @@ checked benchmark artifacts.
 - [Self-contained offline demo](self_contained_demo.md)
 - [v0.2.0 release highlights](releases/v0.2.0.md)
 - [Maintainer release runbook](release_runbook.md)
+- [Community onboarding](community.md)
 - [Dataset gallery](dataset_gallery.md)
 - [Architecture notes](architecture.md)
 - [Quick start](quickstart.md)

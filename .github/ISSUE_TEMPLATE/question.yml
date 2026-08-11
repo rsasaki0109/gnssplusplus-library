@@ -1,0 +1,48 @@
+name: Question
+description: Ask for usage or documentation help with enough context to reproduce the question.
+title: "[question] "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search the quick starts and existing issues first. Never post
+        credentials, private datasets, or suspected vulnerability details.
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What are you trying to accomplish with libgnss++?
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Which version or commit, operating system, command, and input format are involved?
+      placeholder: "v0.2.0; Ubuntu 24.04; gnss ppp; RINEX 3 ..."
+    validations:
+      required: true
+  - type: textarea
+    id: tried
+    attributes:
+      label: What you tried
+      description: Include the smallest command, relevant output, and documentation or issue pages you searched.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result or remaining question
+      description: What did you expect, and what remains unclear?
+    validations:
+      required: true
+  - type: textarea
+    id: data_needs
+    attributes:
+      label: Data and credential needs
+      description: State whether a public fixture is enough or whether local data is required. Do not attach private data.
+      placeholder: "Public synthetic fixture is enough, or describe the redacted input shape."
+    validations:
+      required: true

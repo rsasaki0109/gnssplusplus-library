@@ -1,7 +1,7 @@
 name: Development slice
 description: Plan one scoped implementation, analysis, or sign-off slice.
 title: "[slice] "
-labels: ["needs-triage"]
+labels: ["help wanted"]
 body:
   - type: dropdown
     id: slice_type
