@@ -196,6 +196,13 @@ jobs:
     - name: Run extended tests
       run: bash scripts/ci/run_extended_tests.sh
 
+    - name: Run self-contained offline demo
+      run: |
+        python3 apps/gnss.py demo --output-dir output/ci-self-contained-demo
+        test -s output/ci-self-contained-demo/demo_solution.pos
+        test -s output/ci-self-contained-demo/demo_solution.kml
+        test -s output/ci-self-contained-demo/demo_summary.json
+
     - name: Upload CTest diagnostics
       if: failure()
       uses: actions/upload-artifact@v7
@@ -250,6 +257,12 @@ jobs:
         python3 scripts/ci/validate_cli_json_contract.py --cli docker run --rm libgnsspp-ci
         docker run --rm libgnsspp-ci help web >/dev/null
         docker run --rm libgnsspp-ci web --help >/dev/null
+        docker run --rm \
+          -v "$PWD/output:/workspace/output" \
+          libgnsspp-ci demo --output-dir /workspace/output/ci-docker-self-contained-demo
+        test -s output/ci-docker-self-contained-demo/demo_solution.pos
+        test -s output/ci-docker-self-contained-demo/demo_solution.kml
+        test -s output/ci-docker-self-contained-demo/demo_summary.json
         docker compose -f compose.yaml config >/dev/null
 
   linux-optional-signoffs:
