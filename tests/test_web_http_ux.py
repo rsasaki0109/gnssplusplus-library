@@ -363,6 +363,9 @@ class WebHttpUxTest(unittest.TestCase):
                 self.assertIn("text/html", content_type)
                 self.assertIn("libgnss++ local web UI", html)
                 self.assertIn("/api/overview", html)
+                self.assertIn("Live PPP view", html)
+                self.assertIn("live-pause-btn", html)
+                self.assertIn("live-export-btn", html)
 
                 status, content_type, health = fetch_json(f"{base_url}/api/health")
                 self.assertEqual(status, 200)
@@ -391,6 +394,27 @@ class WebHttpUxTest(unittest.TestCase):
                 status, _, escaped_path = fetch_json(f"{base_url}/artifact?path=../outside.txt")
                 self.assertEqual(status, 400)
                 self.assertEqual(escaped_path["error"], "artifact path escapes artifact root")
+
+                live_pos = output / "live.pos"
+                live_pos.write_text(
+                    "% LibGNSS++ Position Solution\n"
+                    "% Format: pos\n"
+                    "2324 100.0 0 0 0 35.0 139.0 10.0 6 9 1.0 0 1\n"
+                    "2324 101.0 0 0 0 35.1 139.1 10.1 5 8 1.2 0 1\n",
+                    encoding="utf-8",
+                )
+                status, _, live_all = fetch_json(f"{base_url}/api/live-pos?path=output/live.pos&after=0")
+                self.assertEqual(status, 200)
+                self.assertTrue(live_all["available"])
+                self.assertEqual(len(live_all["points"]), 2)
+                self.assertEqual(live_all["last_tow"], 101.0)
+
+                status, _, live_incremental = fetch_json(
+                    f"{base_url}/api/live-pos?path=output/live.pos&after=101.0"
+                )
+                self.assertEqual(status, 200)
+                self.assertEqual(live_incremental["points"], [])
+                self.assertEqual(live_incremental["last_tow"], 101.0)
             finally:
                 server.shutdown()
                 server.server_close()

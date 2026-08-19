@@ -123,6 +123,12 @@
       color: #0f7a43;
       border-color: rgba(46, 204, 113, 0.28);
     }
+    .live-btn-active {
+      background: rgba(46, 204, 113, 0.14);
+      border: 1px solid rgba(46, 204, 113, 0.35);
+      color: #0f7a43;
+      border-radius: 4px;
+    }
     .badge.partial, .badge.partial-metadata, .badge.warn {
       background: rgba(243, 156, 18, 0.16);
       color: #9a5f00;
@@ -510,12 +516,15 @@
         <h2>⚡ Live PPP view</h2>
         <span class="tiny">Updates every second while <code>gnss_ppp --live-output</code> is running</span>
       </div>
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
-        <label for="live-pos-path" style="font-size:13px;white-space:nowrap;">.pos file path (relative to root):</label>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+        <label for="live-pos-path" style="font-size:13px;white-space:nowrap;">.pos path:</label>
         <input id="live-pos-path" type="text" placeholder="output/solution.pos"
-               style="flex:1;padding:4px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px;">
-        <button onclick="livePoints=[];liveLastTow=0;drawLivePoints();"
-                style="padding:4px 10px;font-size:13px;cursor:pointer;">Reset</button>
+               style="flex:1;min-width:220px;padding:4px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px;">
+        <button id="live-pause-btn" type="button" style="padding:4px 10px;font-size:13px;cursor:pointer;">Pause</button>
+        <button id="live-follow-btn" type="button" class="live-btn-active" style="padding:4px 10px;font-size:13px;cursor:pointer;">Follow ON</button>
+        <button id="live-focus-btn" type="button" style="padding:4px 10px;font-size:13px;cursor:pointer;">Focus latest</button>
+        <button id="live-export-btn" type="button" style="padding:4px 10px;font-size:13px;cursor:pointer;">Export CSV</button>
+        <button id="live-reset-btn" type="button" style="padding:4px 10px;font-size:13px;cursor:pointer;">Reset</button>
       </div>
       <canvas id="live-ppp-canvas" width="900" height="340"
               style="width:100%;border:1px solid #eee;border-radius:6px;background:#fafafa;"></canvas>
@@ -1616,68 +1625,222 @@
 
     // ── Live PPP view ────────────────────────────────────────────────────────
     const liveCanvas = document.getElementById("live-ppp-canvas");
+    const livePauseBtn = document.getElementById("live-pause-btn");
+    const liveFollowBtn = document.getElementById("live-follow-btn");
+    const liveFocusBtn = document.getElementById("live-focus-btn");
+    const liveExportBtn = document.getElementById("live-export-btn");
+    const liveResetBtn = document.getElementById("live-reset-btn");
+    const liveStatusEl = document.getElementById("live-status");
+    const LIVE_FOLLOW_WINDOW = 250;
+    const LIVE_FOCUS_WINDOW = 80;
     let liveLastTow = 0;
     let livePoints = [];
+    let livePaused = false;
+    let liveFollow = true;
+    let liveFocusOnce = false;
+    let livePollErrors = 0;
+
+    function liveViewPoints() {
+      if (!liveFollow || livePoints.length <= LIVE_FOLLOW_WINDOW) {
+        return livePoints;
+      }
+      return livePoints.slice(-LIVE_FOLLOW_WINDOW);
+    }
+
+    function projectLivePoints(points, W, H, pad) {
+      const lats = points.map((p) => p.lat);
+      const lons = points.map((p) => p.lon);
+      let minLat = Math.min(...lats);
+      let maxLat = Math.max(...lats);
+      let minLon = Math.min(...lons);
+      let maxLon = Math.max(...lons);
+      if (liveFocusOnce && points.length > 0) {
+        const last = points[points.length - 1];
+        const latPad = Math.max((maxLat - minLat) * 0.15, 0.00005);
+        const lonPad = Math.max((maxLon - minLon) * 0.15, 0.00005);
+        minLat = last.lat - latPad;
+        maxLat = last.lat + latPad;
+        minLon = last.lon - lonPad;
+        maxLon = last.lon + lonPad;
+        liveFocusOnce = false;
+      }
+      const spanLat = Math.max(maxLat - minLat, 1e-6);
+      const spanLon = Math.max(maxLon - minLon, 1e-6);
+      const scale = Math.min((W - 2 * pad) / spanLon, (H - 2 * pad) / spanLat);
+      const usedW = spanLon * scale;
+      const usedH = spanLat * scale;
+      const offsetX = pad + (W - 2 * pad - usedW) / 2;
+      const offsetY = pad + (H - 2 * pad - usedH) / 2;
+      return {
+        minLat,
+        minLon,
+        scale,
+        offsetX,
+        offsetY,
+        toXY(p) {
+          return {
+            x: offsetX + (p.lon - minLon) * scale,
+            y: offsetY + (maxLat - p.lat) * scale,
+          };
+        },
+      };
+    }
+
+    function updateLiveStatus(extra = "") {
+      if (!liveStatusEl) return;
+      const fixed = livePoints.filter((p) => p.status.includes("FIXED")).length;
+      const fixPct = livePoints.length ? (100 * fixed / livePoints.length).toFixed(1) : "0.0";
+      const mode = livePaused ? "paused" : (liveFollow ? "follow" : "full view");
+      const suffix = extra ? `  ${extra}` : "";
+      liveStatusEl.textContent =
+        `${livePoints.length} epochs  fix ${fixPct}%  last TOW ${liveLastTow.toFixed(1)}  mode ${mode}${suffix}`;
+    }
 
     function drawLivePoints() {
       if (!liveCanvas) return;
       const ctx = liveCanvas.getContext("2d");
-      const W = liveCanvas.width, H = liveCanvas.height;
+      const W = liveCanvas.width;
+      const H = liveCanvas.height;
+      const pad = 24;
       ctx.clearRect(0, 0, W, H);
       if (livePoints.length === 0) {
-        ctx.fillStyle = "#888"; ctx.font = "13px sans-serif";
+        ctx.fillStyle = "#888";
+        ctx.font = "13px sans-serif";
         ctx.fillText("Waiting for gnss_ppp --live-output data…", 12, H / 2);
         return;
       }
-      // Simple lat/lon to canvas mapping
-      const lats = livePoints.map(p => p.lat), lons = livePoints.map(p => p.lon);
-      const minLat = Math.min(...lats), maxLat = Math.max(...lats);
-      const minLon = Math.min(...lons), maxLon = Math.max(...lons);
-      const pad = 20;
-      const scaleX = (W - 2 * pad) / (maxLon - minLon || 1e-6);
-      const scaleY = (H - 2 * pad) / (maxLat - minLat || 1e-6);
-      for (const p of livePoints) {
-        const x = pad + (p.lon - minLon) * scaleX;
-        const y = H - pad - (p.lat - minLat) * scaleY;
+      const visible = liveViewPoints();
+      const proj = projectLivePoints(visible, W, H, pad);
+      if (visible.length > 1) {
+        ctx.beginPath();
+        const first = proj.toXY(visible[0]);
+        ctx.moveTo(first.x, first.y);
+        for (let i = 1; i < visible.length; i += 1) {
+          const pt = proj.toXY(visible[i]);
+          ctx.lineTo(pt.x, pt.y);
+        }
+        ctx.strokeStyle = "rgba(120,120,120,0.35)";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+      for (const p of visible) {
+        const { x, y } = proj.toXY(p);
         ctx.beginPath();
         ctx.arc(x, y, 3, 0, 2 * Math.PI);
         ctx.fillStyle = p.color;
         ctx.fill();
       }
-      // Latest point
-      const last = livePoints[livePoints.length - 1];
-      const lx = pad + (last.lon - minLon) * scaleX;
-      const ly = H - pad - (last.lat - minLat) * scaleY;
-      ctx.beginPath(); ctx.arc(lx, ly, 6, 0, 2 * Math.PI);
-      ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.stroke();
-      // Stats
-      const fixed = livePoints.filter(p => p.status.includes("FIXED")).length;
-      ctx.fillStyle = "#333"; ctx.font = "12px sans-serif";
-      ctx.fillText(`${livePoints.length} epochs  fix: ${(100*fixed/livePoints.length).toFixed(1)}%  TOW: ${last.tow}`, 8, 16);
+      const last = visible[visible.length - 1];
+      const lastPt = proj.toXY(last);
+      ctx.beginPath();
+      ctx.arc(lastPt.x, lastPt.y, 7, 0, 2 * Math.PI);
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(lastPt.x, lastPt.y, 7, 0, 2 * Math.PI);
+      ctx.strokeStyle = "#222";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      const fixed = livePoints.filter((p) => p.status.includes("FIXED")).length;
+      ctx.fillStyle = "#333";
+      ctx.font = "12px sans-serif";
+      ctx.fillText(
+        `${livePoints.length} epochs  fix ${(100 * fixed / livePoints.length).toFixed(1)}%  TOW ${last.tow}`,
+        8,
+        16,
+      );
+      updateLiveStatus();
+    }
+
+    function resetLiveView() {
+      livePoints = [];
+      liveLastTow = 0;
+      livePollErrors = 0;
+      drawLivePoints();
+    }
+
+    function exportLiveCsv() {
+      if (livePoints.length === 0) {
+        updateLiveStatus("nothing to export");
+        return;
+      }
+      const header = "tow,lat,lon,height,status,satellites\n";
+      const rows = livePoints.map((p) =>
+        [p.tow, p.lat, p.lon, p.height ?? "", p.status, p.satellites ?? ""].join(","),
+      );
+      const blob = new Blob([header + rows.join("\n") + "\n"], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `live_ppp_${Math.round(liveLastTow)}.csv`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      updateLiveStatus("csv exported");
     }
 
     async function pollLive() {
+      if (livePaused) return;
       const posInput = document.getElementById("live-pos-path");
       if (!posInput) return;
       const posPath = posInput.value.trim();
       if (!posPath) return;
       try {
-        const data = await fetchJson(`/api/live-pos?path=${encodeURIComponent(posPath)}&after=${liveLastTow}`);
+        const data = await fetchJson(
+          `/api/live-pos?path=${encodeURIComponent(posPath)}&after=${liveLastTow}`,
+        );
+        livePollErrors = 0;
         if (data.points && data.points.length > 0) {
           livePoints = livePoints.concat(data.points);
           liveLastTow = data.last_tow;
           drawLivePoints();
-          document.getElementById("live-status").textContent =
-            `${livePoints.length} epochs, last TOW ${liveLastTow.toFixed(1)}`;
         }
-      } catch (e) { /* ignore transient errors */ }
+      } catch (e) {
+        livePollErrors += 1;
+        if (livePollErrors === 1 || livePollErrors % 10 === 0) {
+          updateLiveStatus(`poll error: ${String(e)}`);
+        }
+      }
+    }
+
+    if (livePauseBtn) {
+      livePauseBtn.addEventListener("click", () => {
+        livePaused = !livePaused;
+        livePauseBtn.textContent = livePaused ? "Resume" : "Pause";
+        updateLiveStatus();
+      });
+    }
+    if (liveFollowBtn) {
+      liveFollowBtn.addEventListener("click", () => {
+        liveFollow = !liveFollow;
+        liveFollowBtn.textContent = liveFollow ? "Follow ON" : "Follow OFF";
+        liveFollowBtn.classList.toggle("live-btn-active", liveFollow);
+        drawLivePoints();
+      });
+    }
+    if (liveFocusBtn) {
+      liveFocusBtn.addEventListener("click", () => {
+        if (livePoints.length === 0) return;
+        liveFollow = true;
+        liveFollowBtn.textContent = "Follow ON";
+        liveFollowBtn.classList.add("live-btn-active");
+        livePoints = livePoints.slice(-LIVE_FOCUS_WINDOW);
+        liveFocusOnce = true;
+        drawLivePoints();
+        updateLiveStatus("focused on latest window");
+      });
+    }
+    if (liveExportBtn) {
+      liveExportBtn.addEventListener("click", exportLiveCsv);
+    }
+    if (liveResetBtn) {
+      liveResetBtn.addEventListener("click", resetLiveView);
     }
 
     init().catch((error) => {
       document.body.innerHTML = `<main><pre class="status-pre">${String(error)}</pre></main>`;
     });
 
-    // Start live polling after page load
     window.addEventListener("load", () => {
       drawLivePoints();
       setInterval(pollLive, 1000);
