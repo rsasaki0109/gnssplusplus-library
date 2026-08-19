@@ -141,6 +141,8 @@ bool supportsEphemerisMessage(char system, NavigationMessageType type) {
         case 'C':
             return type == NavigationMessageType::D1 ||
                    type == NavigationMessageType::D2;
+        case 'S':
+            return type == NavigationMessageType::SBAS;
         default:
             return false;
     }
@@ -616,8 +618,7 @@ bool validIonosphereHeader(const NavigationRecordHeader& header) {
 bool parseGlonassCdmaEphemerisRecord(
     const NavigationRecordHeader& header,
     const std::vector<std::string>& body,
-    GlonassCdmaEphemerisRecord& record) {
-    if (header.record_type != "EPH" || header.system != 'R' ||
+    GlonassCdmaEphemerisRecord& record) {    if (header.record_type != "EPH" || header.system != 'R' ||
         (header.message_type != "L1OC" && header.message_type != "L3OC") ||
         !header.subtype.empty() || header.source.size() != 3 ||
         body.size() != 9) {
@@ -726,6 +727,68 @@ bool parseGlonassCdmaEphemerisRecord(
         return false;
     }
     parsed.transmission_time_utc_week = transmission_time;
+
+    record = std::move(parsed);
+    return true;
+}
+
+bool parseSbasEphemerisRecord(
+    const NavigationRecordHeader& header,
+    const std::vector<std::string>& body,
+    SbasEphemerisRecord& record) {
+    if (header.record_type != "EPH" || header.system != 'S' ||
+        header.message_type != "SBAS" || !header.subtype.empty() ||
+        header.source.size() != 3 || body.size() != 4) {
+        return false;
+    }
+
+    SbasEphemerisRecord parsed;
+    parsed.header = header;
+    // SBAS EPH body shares the fixed-width three-character source + calendar
+    // prefix layout used by GLONASS CDMA records.  The SBAS epoch field is one
+    // character wider (the seconds column is followed by a field separator),
+    // so the clock/time-of-frame fields begin at column 25 and the final field
+    // ends exactly at the 80-character line boundary.
+    if (!parseCdmaEpochPrefix(body[0], header.source, parsed.toc)) {
+        return false;
+    }
+
+    std::vector<double> clock(3, 0.0);
+    if (!parseFloatingField(body[0].substr(24, 19), clock[0]) ||
+        !parseFloatingField(body[0].substr(43, 19), clock[1]) ||
+        !parseFloatingField(body[0].substr(62, 19), clock[2])) {
+        return false;
+    }
+    parsed.clock_bias_s = clock[0];            // af0
+    parsed.clock_drift_s_per_s = clock[1];     // af1
+    parsed.time_of_frame = clock[2];           // tof (GPS seconds of week)
+
+    std::vector<double> values;
+    if (!validCdmaContinuationLine(body[1]) ||
+        !parseFixedNumbers(body[1], 4, 4, values) ||
+        !parseCdmaNonnegativeInteger(values[3], parsed.health)) {
+        return false;
+    }
+    parsed.x_position_km = values[0];
+    parsed.x_velocity_m_per_s = values[1];
+    parsed.x_acceleration_m_per_s2 = values[2];
+
+    if (!validCdmaContinuationLine(body[2]) ||
+        !parseFixedNumbers(body[2], 4, 4, values) ||
+        !parseCdmaNonnegativeInteger(values[3], parsed.accuracy_index)) {
+        return false;
+    }
+    parsed.y_position_km = values[0];
+    parsed.y_velocity_m_per_s = values[1];
+    parsed.y_acceleration_m_per_s2 = values[2];
+
+    if (!validCdmaContinuationLine(body[3]) ||
+        !parseFixedNumbers(body[3], 4, 4, values)) {
+        return false;
+    }
+    parsed.z_position_km = values[0];
+    parsed.z_velocity_m_per_s = values[1];
+    parsed.z_acceleration_m_per_s2 = values[2];
 
     record = std::move(parsed);
     return true;

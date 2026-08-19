@@ -906,6 +906,62 @@ bool RINEXReader::readRinex4NavigationData(NavigationData& nav_data) {
             return;
         }
 
+        if (active_header.system == 'S' &&
+            active_header.message_type == "SBAS") {
+            rinex4::SbasEphemerisRecord record;
+            if (!rinex4::parseSbasEphemerisRecord(
+                    active_header, body, record)) {
+                std::cerr << "Skipping malformed RINEX 4 SBAS body for "
+                          << active_header.source << std::endl;
+                body.clear();
+                return;
+            }
+
+            Ephemeris eph;
+            std::ostringstream epoch_text;
+            epoch_text << record.toc.year << ' ' << record.toc.month << ' '
+                       << record.toc.day << ' ' << record.toc.hour << ' '
+                       << record.toc.minute << ' ' << record.toc.second;
+            const GNSSTime toc_utc = parseTime(epoch_text.str(), header_.version);
+            const GNSSTime toc_gpst = utcToGpst(
+                toc_utc, record.toc.year, record.toc.month, record.toc.day);
+
+            // RINEX writes SBAS GEO satellites with the on-file PRN offset by
+            // 100 from the broadcast SBAS PRN (S21 -> PRN 121), matching
+            // RTKLIB satid2no()'s case 'S' (+100).
+            const uint8_t sbas_prn =
+                static_cast<uint8_t>(active_header.prn + 100);
+            eph.satellite = SatelliteId(GNSSSystem::SBAS, sbas_prn);
+            eph.toc = toc_gpst;
+            eph.toe = toc_gpst;
+            eph.tof = toc_gpst;
+            eph.toes = toc_gpst.tow;
+            eph.week = static_cast<uint16_t>(toc_gpst.week);
+            eph.glonass_position = Vector3d(
+                record.x_position_km * 1e3,
+                record.y_position_km * 1e3,
+                record.z_position_km * 1e3);
+            eph.glonass_velocity = Vector3d(
+                record.x_velocity_m_per_s,
+                record.y_velocity_m_per_s,
+                record.z_velocity_m_per_s);
+            eph.glonass_acceleration = Vector3d(
+                record.x_acceleration_m_per_s2,
+                record.y_acceleration_m_per_s2,
+                record.z_acceleration_m_per_s2);
+            eph.af0 = record.clock_bias_s;
+            eph.af1 = record.clock_drift_s_per_s;
+            eph.sv_health = static_cast<double>(record.health);
+            eph.health = static_cast<uint8_t>(record.health);
+            eph.sv_accuracy = static_cast<double>(record.accuracy_index);
+            eph.valid = record.health == 0;
+            eph.navigation_message_type = active_header.navigation_message_type;
+
+            nav_data.addEphemeris(eph);
+            body.clear();
+            return;
+        }
+
         Ephemeris eph;
         if (!parseNavigationMessage(body, eph)) {
             std::cerr << "Skipping RINEX 4 EPH " << active_header.source << ' '

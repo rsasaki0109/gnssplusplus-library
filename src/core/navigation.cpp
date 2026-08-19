@@ -983,6 +983,29 @@ bool computeGlonassState(const Ephemeris& eph,
     return true;
 }
 
+bool computeSbasState(const Ephemeris& eph,
+                      const GNSSTime& time,
+                      Vector3d& pos,
+                      Vector3d& vel,
+                      double& clock_bias,
+                      double& clock_drift) {
+    if (!eph.valid) {
+        return false;
+    }
+
+    // SBAS GEO ephemerides are propagated as a polynomial in the ECEF frame
+    // (RTKLIB seph2pos): position and clock are evaluated at the time offset
+    // from the reference epoch, matching the broadcast element set.
+    const double t = time - eph.toe;
+    pos = eph.glonass_position +
+          eph.glonass_velocity * t +
+          eph.glonass_acceleration * (t * t / 2.0);
+    vel = eph.glonass_velocity + eph.glonass_acceleration * t;
+    clock_bias = eph.af0 + eph.af1 * t;
+    clock_drift = eph.af1;
+    return true;
+}
+
 void ecefToGeodetic(const Vector3d& ecef, double& lat, double& lon, double& h) {
     lon = std::atan2(ecef(1), ecef(0));
     const double p = std::sqrt(ecef(0) * ecef(0) + ecef(1) * ecef(1));
@@ -1010,6 +1033,9 @@ bool Ephemeris::calculateSatelliteState(const GNSSTime& time,
                                        bool use_mrtklib_galileo_mu) const {
     if (satellite.system == GNSSSystem::GLONASS) {
         return computeGlonassState(*this, time, pos, vel, clock_bias, clock_drift);
+    }
+    if (satellite.system == GNSSSystem::SBAS) {
+        return computeSbasState(*this, time, pos, vel, clock_bias, clock_drift);
     }
 
     if (!computeBroadcastState(*this, time, pos, clock_bias, clock_drift,
@@ -1041,6 +1067,10 @@ bool Ephemeris::isValid(const GNSSTime& time) const {
     if (!valid) return false;
     if (satellite.system == GNSSSystem::GLONASS) {
         return std::abs(time - toe) <= 1800.0;
+    }
+    if (satellite.system == GNSSSystem::SBAS) {
+        // RTKLIB seleph uses MAXDTOE (7200 s) for SBAS GEO ephemerides.
+        return std::abs(time - toe) <= 7200.0;
     }
     double age = std::abs(time - toe);
     return age <= 14400.0; // 4 hours (RTKLIB MAXDTOE=7200 but relaxed for sparse nav data)

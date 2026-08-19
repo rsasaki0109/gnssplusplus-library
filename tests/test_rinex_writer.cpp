@@ -89,6 +89,26 @@ void writeRinex4GlonassCdmaBody(std::ofstream& file,
     }
 }
 
+std::vector<std::string> rinex4SbasBody() {
+    // A real SBAS GEO element set (WAAS PRN 121, on-file "S21") using the
+    // RINEX 3.04/4.02 body layout: a three-character source + fixed-width
+    // calendar prefix, three clock/time-of-frame fields, then three
+    // continuation lines of four fields (x/y/z position, velocity,
+    // acceleration, and health/accuracy).
+    return {
+        "S21 2025 04 01 00 02 24 0.000000000000e+00 0.000000000000e+00 1.729520000000e+05",
+        "     4.200468400000e+04 0.000000000000e+00 0.000000000000e+00 6.300000000000e+01",
+        "    -3.674932960000e+03 0.000000000000e+00 0.000000000000e+00 3.276700000000e+04",
+        "     0.000000000000e+00 0.000000000000e+00 0.000000000000e+00 1.760000000000e+02",
+    };
+}
+
+void writeSbasBody(std::ofstream& file) {
+    for (const auto& line : rinex4SbasBody()) {
+        file << line << '\n';
+    }
+}
+
 std::vector<std::string> rinex4GlonassFdmaBody() {
     std::istringstream stream(rinex4GpsLnavBody());
     std::vector<std::string> body;
@@ -819,6 +839,108 @@ TEST(RINEXReaderTest, GlonassCdmaParserIsTransactionalAndStrict) {
     ASSERT_TRUE(io::rinex4::parseGlonassCdmaEphemerisRecord(
         l3_header, shortened_optional, parsed));
     EXPECT_FALSE(parsed.isc_l3ocp.has_value());
+}
+
+TEST(RINEXReaderTest, ParsesSbasEphemerisRecordTransactionally) {
+    io::rinex4::NavigationRecordHeader header;
+    ASSERT_TRUE(io::rinex4::parseNavigationRecordHeader(
+        "> EPH S21 SBAS", header));
+    EXPECT_EQ(header.system, 'S');
+    EXPECT_EQ(header.prn, 21);
+    EXPECT_EQ(header.navigation_message_type, NavigationMessageType::SBAS);
+
+    const auto valid = rinex4SbasBody();
+    io::rinex4::SbasEphemerisRecord parsed;
+    ASSERT_TRUE(io::rinex4::parseSbasEphemerisRecord(header, valid, parsed));
+    EXPECT_EQ(parsed.toc.year, 2025);
+    EXPECT_EQ(parsed.toc.month, 4);
+    EXPECT_EQ(parsed.toc.day, 1);
+    EXPECT_DOUBLE_EQ(parsed.clock_bias_s, 0.0);
+    EXPECT_DOUBLE_EQ(parsed.clock_drift_s_per_s, 0.0);
+    EXPECT_DOUBLE_EQ(parsed.time_of_frame, 1.729520000000e+05);
+    EXPECT_DOUBLE_EQ(parsed.x_position_km, 4.200468400000e+04);
+    EXPECT_DOUBLE_EQ(parsed.y_position_km, -3.674932960000e+03);
+    EXPECT_DOUBLE_EQ(parsed.z_position_km, 0.0);
+    EXPECT_DOUBLE_EQ(parsed.x_velocity_m_per_s, 0.0);
+    EXPECT_DOUBLE_EQ(parsed.y_velocity_m_per_s, 0.0);
+    EXPECT_DOUBLE_EQ(parsed.z_velocity_m_per_s, 0.0);
+    EXPECT_DOUBLE_EQ(parsed.x_acceleration_m_per_s2, 0.0);
+    EXPECT_DOUBLE_EQ(parsed.y_acceleration_m_per_s2, 0.0);
+    EXPECT_DOUBLE_EQ(parsed.z_acceleration_m_per_s2, 0.0);
+    EXPECT_EQ(parsed.health, 63);
+    EXPECT_EQ(parsed.accuracy_index, 32767);
+
+    // Transactional: a truncated or malformed body must not modify the record.
+    parsed.clock_bias_s = 42.0;
+    auto truncated = valid;
+    truncated.pop_back();
+    EXPECT_FALSE(io::rinex4::parseSbasEphemerisRecord(
+        header, truncated, parsed));
+    EXPECT_DOUBLE_EQ(parsed.clock_bias_s, 42.0);
+
+    auto extra = valid;
+    extra.push_back(valid.back());
+    EXPECT_FALSE(io::rinex4::parseSbasEphemerisRecord(header, extra, parsed));
+    EXPECT_DOUBLE_EQ(parsed.clock_bias_s, 42.0);
+
+    auto bad_numeric = valid;
+    bad_numeric[1].replace(4, 19, std::string(16, ' ') + "NaN");
+    EXPECT_FALSE(io::rinex4::parseSbasEphemerisRecord(
+        header, bad_numeric, parsed));
+    EXPECT_DOUBLE_EQ(parsed.clock_bias_s, 42.0);
+
+    auto bad_prefix = valid;
+    bad_prefix[0][0] = 'X';
+    EXPECT_FALSE(io::rinex4::parseSbasEphemerisRecord(
+        header, bad_prefix, parsed));
+    EXPECT_DOUBLE_EQ(parsed.clock_bias_s, 42.0);
+}
+
+TEST(RINEXReaderTest, ReadsRinex4SbasEphemerisIntoNavigationData) {
+    const auto temp_path =
+        std::filesystem::temp_directory_path() / "libgnss_rinex4_sbas.nav";
+    std::filesystem::remove(temp_path);
+    {
+        std::ofstream file(temp_path);
+        ASSERT_TRUE(file.is_open());
+        file << rinexHeaderLine(
+            "     4.02           NAVIGATION DATA     M",
+            "RINEX VERSION / TYPE");
+        file << rinexHeaderLine("", "END OF HEADER");
+        file << "> EPH S21 SBAS\n";
+        writeSbasBody(file);
+        file << "> EPH S21 SBAS\n";
+        auto bad = rinex4SbasBody();
+        bad[1].replace(4, 19, std::string(19, 'X'));
+        for (const auto& line : bad) {
+            file << line << '\n';
+        }
+    }
+
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(temp_path.string()));
+    io::RINEXReader::RINEXHeader header;
+    ASSERT_TRUE(reader.readHeader(header));
+    NavigationData nav;
+    ASSERT_TRUE(reader.readNavigationData(nav));
+
+    // The malformed record is skipped; the valid one stores an SBAS ephemeris
+    // with the broadcast PRN offset applied (S21 -> PRN 121).
+    const SatelliteId expected(GNSSSystem::SBAS, 121);
+    const auto it = nav.ephemeris_data.find(expected);
+    ASSERT_NE(it, nav.ephemeris_data.end());
+    ASSERT_EQ(it->second.size(), 1U);
+    EXPECT_DOUBLE_EQ(it->second.front().glonass_position(0), 4.200468400000e+07);
+    EXPECT_DOUBLE_EQ(it->second.front().glonass_position(1), -3.674932960000e+06);
+    EXPECT_DOUBLE_EQ(it->second.front().glonass_position(2), 0.0);
+    // The sampled record carries health=63 (unhealthy), so it is stored but
+    // not flagged valid, matching the broadcast element set.
+    EXPECT_FALSE(it->second.front().valid);
+    EXPECT_EQ(it->second.front().navigation_message_type,
+              NavigationMessageType::SBAS);
+
+    reader.close();
+    std::filesystem::remove(temp_path);
 }
 
 TEST(RINEXReaderTest, PreservesRinex4GalileoMessageProvenanceAndRejectsContradiction) {

@@ -115,12 +115,49 @@ struct GlonassCdmaEphemerisRecord {
 };
 
 /**
- * @brief Parse one complete RINEX 4 A16/A17 GLONASS CDMA body transactionally.
+ * @brief Parse a complete RINEX 4 A16/A17 GLONASS CDMA body transactionally.
  */
 bool parseGlonassCdmaEphemerisRecord(
     const NavigationRecordHeader& header,
     const std::vector<std::string>& body,
     GlonassCdmaEphemerisRecord& record);
+
+/**
+ * @brief Strictly parsed RINEX 4 SBAS (GEO) ephemeris body.
+ *
+ * SBAS broadcasts a GEO element set rather than Keplerian orbital elements.
+ * The position/velocity/acceleration fields are in the ECEF frame; RINEXReader
+ * converts them into the Ephemeris struct used by satellite-state propagation.
+ * The body reuses the fixed-width three-character source + calendar prefix
+ * used by GLONASS CDMA; the header PRN is the on-file PRN (S21 means PRN 121)
+ * and must be offset by +100 when building the SatelliteId.
+ */
+struct SbasEphemerisRecord {
+    NavigationRecordHeader header;
+    CalendarTime toc;
+    double x_position_km = 0.0;   ///< X position (km).
+    double y_position_km = 0.0;   ///< Y position (km).
+    double z_position_km = 0.0;   ///< Z position (km).
+    double x_velocity_m_per_s = 0.0;  ///< X velocity (m/s).
+    double y_velocity_m_per_s = 0.0;  ///< Y velocity (m/s).
+    double z_velocity_m_per_s = 0.0;  ///< Z velocity (m/s).
+    double x_acceleration_m_per_s2 = 0.0;  ///< X acceleration (m/s^2).
+    double y_acceleration_m_per_s2 = 0.0;  ///< Y acceleration (m/s^2).
+    double z_acceleration_m_per_s2 = 0.0;  ///< Z acceleration (m/s^2).
+    double clock_bias_s = 0.0;   ///< af0 clock bias (s).
+    double clock_drift_s_per_s = 0.0;  ///< af1 clock drift (s/s).
+    double time_of_frame = 0.0;  ///< Time of frame (GPS seconds of week).
+    int health = 0;              ///< Satellite health flag.
+    int accuracy_index = 0;      ///< Broadcast accuracy index.
+};
+
+/**
+ * @brief Parse a complete RINEX 4 SBAS ephemeris body transactionally.
+ */
+bool parseSbasEphemerisRecord(
+    const NavigationRecordHeader& header,
+    const std::vector<std::string>& body,
+    SbasEphemerisRecord& record);
 
 struct SystemTimeOffsetRecord {
     NavigationRecordHeader header;
