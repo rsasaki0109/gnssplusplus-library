@@ -1380,7 +1380,10 @@ WlnlFixAttempt tryDirectStateDdFix(
     const EligibleAmbiguities& eligible_ambiguities,
     bool debug_enabled,
     const std::map<SatelliteId, double>* satellite_elevations_rad,
-    const std::set<SatelliteId>& excluded_real_satellites) {
+    const std::set<SatelliteId>& excluded_real_satellites,
+    double post_reset_ratio_floor = 0.0,
+    bool within_post_reset_settle_window = false,
+    bool post_reset_recent_maxdiff = false) {
     WlnlFixAttempt attempt;
     if (satellite_elevations_rad == nullptr) {
         return attempt;
@@ -1469,6 +1472,36 @@ WlnlFixAttempt tryDirectStateDdFix(
         }
         return attempt;
     }
+    // Measurement-only GNSS_PPP_CLAS_POST_RESET_RATIO_FLOOR: an elevated
+    // ratio floor for candidates within a 1.0 s settle window after a CLAS
+    // kinematic full-state reset (FLOATCNT wipe or MAXDIFFP/HOLDCONT-DBG-
+    // RESET teardown; the caller computes within_post_reset_settle_window
+    // from clas_last_full_state_reset_time_) that also contain a maxdiff-only
+    // seed rejection. Mark the accepted attempt for publication quarantine
+    // instead of returning early: n2 measurement showed that removing the
+    // candidate's internal state/hold effects also destroys a later
+    // productive block. Default post_reset_ratio_floor <= 0.0 leaves this
+    // branch unreachable (bit-identical).
+    //
+    // Refinement measured across every n2 floor candidate: the original
+    // unconditional floor killed the productive
+    // 556459.8-556523.0 hold-continuation block
+    // wholesale. The destructive 556406.4 seed, unlike productive prompt
+    // re-fixes at 555856.6 and 556459.8, follows maxdiff-only seed rejections
+    // inside the same post-reset window. Gate only that measured hazard
+    // signature; ratio and ambiguity count do not separate the cases.
+    if (post_reset_ratio_floor > 0.0 && within_post_reset_settle_window &&
+        post_reset_recent_maxdiff &&
+        attempt.state_lambda_ratio < post_reset_ratio_floor) {
+        attempt.post_reset_ratio_floor_failed = true;
+        if (debug_enabled) {
+            std::cerr << "[CLAS-POST-RESET-FLOOR] quarantine nb="
+                      << attempt.state_dd_count
+                      << " ratio=" << attempt.state_lambda_ratio
+                      << " floor=" << post_reset_ratio_floor
+                      << " recent_maxdiff=" << post_reset_recent_maxdiff << "\n";
+        }
+    }
 
     attempt.hold_constraints.reserve(rows.size());
     for (const auto& row : rows) {
@@ -1522,7 +1555,10 @@ WlnlFixAttempt resolveWlnlFix(
     const EligibleAmbiguities& eligible_ambiguities,
     const WlnlNlInfoProvider& provider,
     bool debug_enabled,
-    const std::map<SatelliteId, double>* satellite_elevations_rad) {
+    const std::map<SatelliteId, double>* satellite_elevations_rad,
+    double post_reset_ratio_floor,
+    bool within_post_reset_settle_window,
+    bool post_reset_recent_maxdiff) {
     // MRTKLIB literal-port track: with float parity on the dynamics path the
     // fix comes from the direct ddmat-style state-DD system (no WL/NL
     // cascade prerequisite), wrapped in the same partial-AR exclusion loop.
@@ -1558,7 +1594,8 @@ WlnlFixAttempt resolveWlnlFix(
             return tryDirectStateDdFix(
                 config, filter_state, constraint_covariance, ambiguity_states,
                 eligible_ambiguities, debug_enabled, satellite_elevations_rad,
-                excluded);
+                excluded, post_reset_ratio_floor,
+                within_post_reset_settle_window, post_reset_recent_maxdiff);
         };
         WlnlFixAttempt best_attempt = try_direct({});
         if (best_attempt.fixed ||
@@ -1615,7 +1652,10 @@ WlnlFixAttempt resolveWlnlFix(
     const EligibleAmbiguities& eligible_ambiguities,
     const WlnlNlInfoProvider& provider,
     bool debug_enabled,
-    const std::map<SatelliteId, double>* satellite_elevations_rad) {
+    const std::map<SatelliteId, double>* satellite_elevations_rad,
+    double post_reset_ratio_floor,
+    bool within_post_reset_settle_window,
+    bool post_reset_recent_maxdiff) {
     return resolveWlnlFix(
         config,
         filter_state,
@@ -1624,7 +1664,10 @@ WlnlFixAttempt resolveWlnlFix(
         eligible_ambiguities,
         provider,
         debug_enabled,
-        satellite_elevations_rad);
+        satellite_elevations_rad,
+        post_reset_ratio_floor,
+        within_post_reset_settle_window,
+        post_reset_recent_maxdiff);
 }
 
 std::vector<FixedNlObservation> buildFixedNlObservations(

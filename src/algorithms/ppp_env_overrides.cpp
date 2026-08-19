@@ -58,6 +58,19 @@ double envDoubleOr(const char* name, double fallback) {
     return value != nullptr ? std::atof(value) : fallback;
 }
 
+int envIntOr(const char* name, int fallback) {
+    const char* value = envValue(name);
+    if (value == nullptr) {
+        return fallback;
+    }
+    char* end = nullptr;
+    const long parsed = std::strtol(value, &end, 10);
+    if (end == value) {
+        return fallback;
+    }
+    return static_cast<int>(parsed);
+}
+
 std::string envStringOrEmpty(const char* name) {
     const char* value = envValue(name);
     return value != nullptr ? std::string(value) : std::string();
@@ -275,6 +288,12 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
         overrides.clas_code_row_qzss;
     overrides.clas_phase_row_dump =
         envExactOne("GNSS_PPP_CLAS_PHASE_ROW_DUMP");
+    overrides.clas_post_reset_ratio_floor =
+        envDoubleOr("GNSS_PPP_CLAS_POST_RESET_RATIO_FLOOR", 0.0);
+    overrides.clas_post_reset_quarantine_max_nfix =
+        envIntOr("GNSS_PPP_CLAS_POST_RESET_QUARANTINE_MAX_NFIX", 0);
+    overrides.clas_hold_cont_min_track =
+        envIntOr("GNSS_PPP_CLAS_HOLD_CONT_MIN_TRACK", -1);
     const std::string clas_nl_datum_fix =
         envStringOrEmpty("GNSS_PPP_CLAS_NL_DATUM_FIX");
     if (clas_nl_datum_fix.empty()) {
