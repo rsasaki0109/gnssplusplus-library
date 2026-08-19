@@ -194,6 +194,32 @@ class PythonBindingsSmokeTest(unittest.TestCase):
             )
         )
 
+    def test_solve_ppp_file_accepts_new_kwargs(self) -> None:
+        """solve_ppp_file should accept the extended keyword arguments without error."""
+        solution = libgnsspp.solve_ppp_file(
+            str(ROOT_DIR / "data" / "rover_static.obs"),
+            str(ROOT_DIR / "data" / "navigation_static.nav"),
+            max_epochs=3,
+            kinematic_mode=False,
+            enable_ar=False,
+            estimate_troposphere=True,
+            estimate_ionosphere=False,
+        )
+        self.assertGreaterEqual(solution.size(), 1)
+
+    def test_solve_clas_kinematic_file_is_importable(self) -> None:
+        """solve_clas_kinematic_file must be importable and callable with correct signature."""
+        import inspect
+        sig = inspect.signature(libgnsspp.solve_clas_kinematic_file)
+        required = {
+            name
+            for name, param in sig.parameters.items()
+            if param.default is inspect.Parameter.empty
+        }
+        self.assertIn("obs_path", required)
+        self.assertIn("nav_path", required)
+        self.assertIn("ssr_path", required)
+
     def test_solve_rtk_file_returns_short_baseline_solution_records(self) -> None:
         solution = libgnsspp.solve_rtk_file(
             str(ROOT_DIR / "data" / "short_baseline" / "TSK200JPN_R_20240010000_01D_30S_MO.rnx"),
