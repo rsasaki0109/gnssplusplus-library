@@ -47,6 +47,7 @@ struct Options {
     std::string summary_json_path;
     std::string kml_path;
     std::string geojson_path;
+    bool live_output = false;
     int max_epochs = 0;
     int convergence_min_epochs = 20;
     std::string convergence_policy = "legacy-3d";
@@ -136,6 +137,7 @@ void printUsage(const char* program_name) {
         << "  --out <solution.pos>     Output position file (required)\n"
         << "  --summary-json <summary.json>\n"
         << "                          Optional machine-readable run summary\n"
+        << "  --live-output            Write one .pos line per epoch (enables gnss web live view)\n"
         << "  --kml <solution.kml>     Optional KML output (fix=green, float=yellow)\n"
         << "  --geojson <solution.geojson>\n"
         << "                          Optional GeoJSON output with status/sat/pdop properties\n"
@@ -320,6 +322,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.kml_path = argv[++i];
         } else if (arg == "--geojson" && i + 1 < argc) {
             options.geojson_path = argv[++i];
+        } else if (arg == "--live-output") {
+            options.live_output = true;
         } else if (arg == "--max-epochs" && i + 1 < argc) {
             options.max_epochs = std::stoi(argv[++i]);
         } else if (arg == "--convergence-min-epochs" && i + 1 < argc) {
@@ -1291,6 +1295,17 @@ int main(int argc, char* argv[]) {
         libgnss::Solution solutions;
         libgnss::ObservationData observation_data;
         int processed_epochs = 0;
+
+        std::ofstream live_stream;
+        if (options.live_output && !options.out_path.empty()) {
+            live_stream.open(options.out_path, std::ios::out | std::ios::trunc);
+            if (!live_stream.is_open()) {
+                std::cerr << "Error: failed to open live output file: "
+                          << options.out_path << "\n";
+                return 1;
+            }
+            libgnss::Solution::writeHeader(live_stream);
+        }
         int valid_solutions = 0;
         int ppp_float_solutions = 0;
         int ppp_fixed_solutions = 0;
@@ -1367,6 +1382,9 @@ int main(int argc, char* argv[]) {
             processed_epochs++;
             if (solution.isValid()) {
                 solutions.addSolution(solution);
+                if (live_stream.is_open()) {
+                    libgnss::Solution::appendSolutionLine(live_stream, solution);
+                }
                 valid_solutions++;
                 if (solution.status == libgnss::SolutionStatus::PPP_FLOAT) {
                     ppp_float_solutions++;
@@ -1383,7 +1401,9 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
-        if (!solutions.writeToFile(options.out_path)) {
+        if (live_stream.is_open()) {
+            live_stream.close();
+        } else if (!solutions.writeToFile(options.out_path)) {
             std::cerr << "Error: failed to write solution file: " << options.out_path << "\n";
             return 1;
         }

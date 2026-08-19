@@ -504,6 +504,28 @@
         <tbody></tbody>
       </table>
     </section>
+
+    <section class="card" style="margin-top: 18px;">
+      <div class="section-title">
+        <h2>⚡ Live PPP view</h2>
+        <span class="tiny">Updates every second while <code>gnss_ppp --live-output</code> is running</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+        <label for="live-pos-path" style="font-size:13px;white-space:nowrap;">.pos file path (relative to root):</label>
+        <input id="live-pos-path" type="text" placeholder="output/solution.pos"
+               style="flex:1;padding:4px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px;">
+        <button onclick="livePoints=[];liveLastTow=0;drawLivePoints();"
+                style="padding:4px 10px;font-size:13px;cursor:pointer;">Reset</button>
+      </div>
+      <canvas id="live-ppp-canvas" width="900" height="340"
+              style="width:100%;border:1px solid #eee;border-radius:6px;background:#fafafa;"></canvas>
+      <div id="live-status" style="font-size:12px;color:#888;margin-top:6px;">
+        Enter a .pos path above and start <code>gnss_ppp --live-output</code>.
+        Legend: <span style="color:#2ecc71">■</span> Fixed &nbsp;
+                <span style="color:#f39c12">■</span> Float &nbsp;
+                <span style="color:#e74c3c">■</span> SPP
+      </div>
+    </section>
   </main>
   <script>
     const STATUS_COLORS = {"FIXED":"#2ecc71","FLOAT":"#f39c12","DGPS":"#3498db","SPP":"#e74c3c"};
@@ -1592,8 +1614,73 @@
       setInterval(refreshStatus, 2000);
     }
 
+    // ── Live PPP view ────────────────────────────────────────────────────────
+    const liveCanvas = document.getElementById("live-ppp-canvas");
+    let liveLastTow = 0;
+    let livePoints = [];
+
+    function drawLivePoints() {
+      if (!liveCanvas) return;
+      const ctx = liveCanvas.getContext("2d");
+      const W = liveCanvas.width, H = liveCanvas.height;
+      ctx.clearRect(0, 0, W, H);
+      if (livePoints.length === 0) {
+        ctx.fillStyle = "#888"; ctx.font = "13px sans-serif";
+        ctx.fillText("Waiting for gnss_ppp --live-output data…", 12, H / 2);
+        return;
+      }
+      // Simple lat/lon to canvas mapping
+      const lats = livePoints.map(p => p.lat), lons = livePoints.map(p => p.lon);
+      const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+      const minLon = Math.min(...lons), maxLon = Math.max(...lons);
+      const pad = 20;
+      const scaleX = (W - 2 * pad) / (maxLon - minLon || 1e-6);
+      const scaleY = (H - 2 * pad) / (maxLat - minLat || 1e-6);
+      for (const p of livePoints) {
+        const x = pad + (p.lon - minLon) * scaleX;
+        const y = H - pad - (p.lat - minLat) * scaleY;
+        ctx.beginPath();
+        ctx.arc(x, y, 3, 0, 2 * Math.PI);
+        ctx.fillStyle = p.color;
+        ctx.fill();
+      }
+      // Latest point
+      const last = livePoints[livePoints.length - 1];
+      const lx = pad + (last.lon - minLon) * scaleX;
+      const ly = H - pad - (last.lat - minLat) * scaleY;
+      ctx.beginPath(); ctx.arc(lx, ly, 6, 0, 2 * Math.PI);
+      ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.stroke();
+      // Stats
+      const fixed = livePoints.filter(p => p.status.includes("FIXED")).length;
+      ctx.fillStyle = "#333"; ctx.font = "12px sans-serif";
+      ctx.fillText(`${livePoints.length} epochs  fix: ${(100*fixed/livePoints.length).toFixed(1)}%  TOW: ${last.tow}`, 8, 16);
+    }
+
+    async function pollLive() {
+      const posInput = document.getElementById("live-pos-path");
+      if (!posInput) return;
+      const posPath = posInput.value.trim();
+      if (!posPath) return;
+      try {
+        const data = await fetchJson(`/api/live-pos?path=${encodeURIComponent(posPath)}&after=${liveLastTow}`);
+        if (data.points && data.points.length > 0) {
+          livePoints = livePoints.concat(data.points);
+          liveLastTow = data.last_tow;
+          drawLivePoints();
+          document.getElementById("live-status").textContent =
+            `${livePoints.length} epochs, last TOW ${liveLastTow.toFixed(1)}`;
+        }
+      } catch (e) { /* ignore transient errors */ }
+    }
+
     init().catch((error) => {
       document.body.innerHTML = `<main><pre class="status-pre">${String(error)}</pre></main>`;
+    });
+
+    // Start live polling after page load
+    window.addEventListener("load", () => {
+      drawLivePoints();
+      setInterval(pollLive, 1000);
     });
   </script>
 </body>
