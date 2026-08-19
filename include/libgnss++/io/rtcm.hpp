@@ -292,9 +292,17 @@ public:
      */
     RTCMProcessor::RTCMStats getStats() const;
 
+    bool isNtripSource() const { return ntrip_client_ != nullptr; }
+    void setAutoReconnect(bool enabled, int delay_ms = 2000);
+    int reconnectCount() const;
+    bool isConnected() const;
+    std::string lastError() const;
+    const std::string& source() const { return source_; }
+
 private:
     RTCMProcessor processor_;
     bool is_open_ = false;
+    std::string source_;
     std::vector<uint8_t> buffer_;
     size_t buffer_pos_ = 0;
     NTRIPClient* ntrip_client_ = nullptr;

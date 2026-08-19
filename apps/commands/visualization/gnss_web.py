@@ -1011,6 +1011,28 @@ def make_handler(args: argparse.Namespace):
                         pass
                     self._write_json({"available": True, "points": points, "last_tow": last_tow})
                     return
+                if parsed.path == "/api/stream-stats":
+                    stats_arg = query.get("path", [""])[0]
+                    if not stats_arg:
+                        self._write_json({"error": "missing stream stats path"}, HTTPStatus.BAD_REQUEST)
+                        return
+                    try:
+                        stats_path = resolve_under_root(root_dir, stats_arg)
+                    except ValueError:
+                        self._write_json({"error": "stream stats path escapes artifact root"}, HTTPStatus.BAD_REQUEST)
+                        return
+                    if not stats_path.exists():
+                        self._write_json({"available": False, "error": "stats file not found"})
+                        return
+                    try:
+                        payload = json.loads(stats_path.read_text(encoding="utf-8"))
+                    except (OSError, json.JSONDecodeError) as exc:
+                        self._write_json({"available": False, "error": str(exc)})
+                        return
+                    payload["available"] = True
+                    payload["path"] = relative_display(stats_path, root_dir)
+                    self._write_json(payload)
+                    return
                 if parsed.path == "/api/moving-base-matches":
                     csv_arg = query.get("path", [""])[0]
                     if not csv_arg:

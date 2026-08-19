@@ -2,12 +2,14 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <string>
 
 #ifndef _WIN32
@@ -74,6 +76,9 @@ void printUsage(const char* argv0) {
         << "Options:\n"
         << "  --output <file|serial://...|tcp://host:port> Relay decoded RTCM frames to a binary file, serial sink, or TCP sink\n"
         << "  --limit <count>           Stop after this many messages (0 = until EOF)\n"
+        << "  --reconnect               Auto-reconnect NTRIP streams after disconnect\n"
+        << "  --reconnect-delay-ms <ms> Delay before NTRIP reconnect (default: 2000)\n"
+        << "  --stats-json <path>       Write stream stats JSON for gnss web dashboard\n"
         << "  --decode-observations     Print decoded observation epoch summaries\n"
         << "  --decode-navigation       Print decoded navigation message summaries\n"
         << "  --quiet                   Suppress per-message type lines\n"
@@ -332,15 +337,91 @@ struct RelaySink {
     }
 };
 
+std::string jsonEscape(const std::string& value) {
+    std::string escaped;
+    escaped.reserve(value.size());
+    for (char ch : value) {
+        switch (ch) {
+            case '\\':
+                escaped += "\\\\";
+                break;
+            case '"':
+                escaped += "\\\"";
+                break;
+            case '\n':
+                escaped += "\\n";
+                break;
+            case '\r':
+                escaped += "\\r";
+                break;
+            default:
+                escaped += ch;
+                break;
+        }
+    }
+    return escaped;
+}
+
+void writeStreamStatsJson(const std::string& path,
+                          const libgnss::io::RTCMReader& reader,
+                          size_t message_count,
+                          const libgnss::io::RTCMMessage* last_message) {
+    const auto stats = reader.getStats();
+    std::ostringstream out;
+    out << std::fixed << std::setprecision(3);
+    out << "{\n";
+    out << "  \"source\": \"" << jsonEscape(reader.source()) << "\",\n";
+    out << "  \"connected\": " << (reader.isConnected() ? "true" : "false") << ",\n";
+    out << "  \"reconnect_count\": " << reader.reconnectCount() << ",\n";
+    out << "  \"messages_total\": " << message_count << ",\n";
+    out << "  \"valid_messages\": " << stats.valid_messages << ",\n";
+    out << "  \"crc_errors\": " << stats.crc_errors << ",\n";
+    out << "  \"decode_errors\": " << stats.decode_errors << ",\n";
+    if (last_message != nullptr) {
+        out << "  \"last_message_type\": "
+            << static_cast<uint16_t>(last_message->type) << ",\n";
+        out << "  \"last_message_name\": \""
+            << jsonEscape(libgnss::io::rtcm_utils::getMessageTypeName(last_message->type))
+            << "\",\n";
+    } else {
+        out << "  \"last_message_type\": null,\n";
+        out << "  \"last_message_name\": null,\n";
+    }
+    out << "  \"message_counts\": {\n";
+    bool first = true;
+    for (const auto& entry : stats.message_counts) {
+        if (!first) {
+            out << ",\n";
+        }
+        first = false;
+        out << "    \"" << static_cast<uint16_t>(entry.first) << "\": " << entry.second;
+    }
+    out << "\n  },\n";
+    const auto now = std::chrono::system_clock::now();
+    const auto epoch_seconds =
+        std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
+    out << "  \"updated_at_epoch_s\": " << epoch_seconds << "\n";
+    out << "}\n";
+
+    std::filesystem::create_directories(std::filesystem::path(path).parent_path());
+    std::ofstream file(path, std::ios::trunc);
+    if (file) {
+        file << out.str();
+    }
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
     std::string input_path;
     std::string output_path;
+    std::string stats_json_path;
     size_t limit = 0;
     bool decode_observations = false;
     bool decode_navigation = false;
     bool quiet = false;
+    bool reconnect = false;
+    int reconnect_delay_ms = 2000;
 
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
@@ -350,6 +431,12 @@ int main(int argc, char** argv) {
             output_path = argv[++i];
         } else if (arg == "--limit" && i + 1 < argc) {
             limit = static_cast<size_t>(std::stoull(argv[++i]));
+        } else if (arg == "--reconnect") {
+            reconnect = true;
+        } else if (arg == "--reconnect-delay-ms" && i + 1 < argc) {
+            reconnect_delay_ms = std::stoi(argv[++i]);
+        } else if (arg == "--stats-json" && i + 1 < argc) {
+            stats_json_path = argv[++i];
         } else if (arg == "--decode-observations") {
             decode_observations = true;
         } else if (arg == "--decode-navigation") {
@@ -377,6 +464,9 @@ int main(int argc, char** argv) {
         std::cerr << "Error: failed to open RTCM source: " << input_path << "\n";
         return 1;
     }
+    if (reconnect) {
+        reader.setAutoReconnect(true, reconnect_delay_ms);
+    }
 
     RelaySink output_sink;
     if (!output_path.empty()) {
@@ -389,8 +479,37 @@ int main(int argc, char** argv) {
     libgnss::io::RTCMProcessor processor;
     size_t message_count = 0;
     libgnss::io::RTCMMessage message;
-    while ((limit == 0 || message_count < limit) && reader.readMessage(message)) {
+    libgnss::io::RTCMMessage last_message;
+    bool has_last_message = false;
+    while (limit == 0 || message_count < limit) {
+        if (!reader.readMessage(message)) {
+            if (reconnect && reader.isNtripSource() && (limit == 0 || message_count < limit)) {
+                if (!quiet) {
+                    std::cerr << "[gnss_stream] waiting for NTRIP data"
+                              << " reconnect_count=" << reader.reconnectCount();
+                    const std::string error = reader.lastError();
+                    if (!error.empty()) {
+                        std::cerr << " last_error=" << error;
+                    }
+                    std::cerr << "\n";
+                }
+                if (!stats_json_path.empty()) {
+                    writeStreamStatsJson(stats_json_path, reader, message_count, nullptr);
+                }
+                continue;
+            }
+            break;
+        }
         ++message_count;
+        last_message = message;
+        has_last_message = true;
+        if (!stats_json_path.empty()) {
+            writeStreamStatsJson(
+                stats_json_path,
+                reader,
+                message_count,
+                has_last_message ? &last_message : nullptr);
+        }
         if (output_sink.isOpen() && !output_sink.write(message)) {
             std::cerr << "Error: failed to relay RTCM frame to output sink\n";
             output_sink.close();
@@ -424,12 +543,20 @@ int main(int argc, char** argv) {
     }
 
     output_sink.close();
+    if (!stats_json_path.empty()) {
+        writeStreamStatsJson(
+            stats_json_path,
+            reader,
+            message_count,
+            has_last_message ? &last_message : nullptr);
+    }
     reader.close();
 
     const auto stats = reader.getStats();
     std::cout << "summary: messages=" << message_count
               << " valid=" << stats.valid_messages
               << " crc_errors=" << stats.crc_errors
-              << " decode_errors=" << stats.decode_errors << "\n";
+              << " decode_errors=" << stats.decode_errors
+              << " reconnect_count=" << reader.reconnectCount() << "\n";
     return 0;
 }

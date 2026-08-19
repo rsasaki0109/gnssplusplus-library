@@ -513,6 +513,28 @@
 
     <section class="card" style="margin-top: 18px;">
       <div class="section-title">
+        <h2>📡 NTRIP / RTCM stream</h2>
+        <span class="tiny">Reads JSON from <code>gnss stream --stats-json</code></span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+        <label for="stream-stats-path" style="font-size:13px;white-space:nowrap;">stats JSON path:</label>
+        <input id="stream-stats-path" type="text" placeholder="output/ntrip_stats.json"
+               style="flex:1;min-width:220px;padding:4px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px;">
+        <button id="stream-stats-refresh-btn" type="button" style="padding:4px 10px;font-size:13px;cursor:pointer;">Refresh</button>
+      </div>
+      <div id="stream-stats-summary" style="font-size:13px;color:#444;margin-bottom:8px;">
+        Start <code>gnss stream --input ntrip://... --reconnect --stats-json output/ntrip_stats.json</code>.
+      </div>
+      <table id="stream-stats-table" style="width:100%;font-size:12px;">
+        <thead>
+          <tr><th align="left">RTCM type</th><th align="left">Name</th><th align="right">Count</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="card" style="margin-top: 18px;">
+      <div class="section-title">
         <h2>⚡ Live PPP view</h2>
         <span class="tiny">Updates every second while <code>gnss_ppp --live-output</code> is running</span>
       </div>
@@ -1623,6 +1645,53 @@
       setInterval(refreshStatus, 2000);
     }
 
+    // ── NTRIP / RTCM stream stats ───────────────────────────────────────────
+    const streamStatsPathInput = document.getElementById("stream-stats-path");
+    const streamStatsSummary = document.getElementById("stream-stats-summary");
+    const streamStatsTableBody = document.querySelector("#stream-stats-table tbody");
+    const streamStatsRefreshBtn = document.getElementById("stream-stats-refresh-btn");
+
+    function renderStreamStats(data) {
+      if (!streamStatsSummary || !streamStatsTableBody) return;
+      if (!data || !data.available) {
+        streamStatsSummary.textContent = data?.error || "stats file not available";
+        streamStatsTableBody.innerHTML = "";
+        return;
+      }
+      const connected = data.connected ? "connected" : "disconnected";
+      const lastName = data.last_message_name || "—";
+      streamStatsSummary.textContent =
+        `${connected}  messages=${data.messages_total || 0}` +
+        `  reconnect=${data.reconnect_count || 0}` +
+        `  last=${lastName}` +
+        (data.source ? `  source=${data.source}` : "");
+      const counts = data.message_counts || {};
+      const rows = Object.entries(counts)
+        .sort((a, b) => Number(b[1]) - Number(a[1]))
+        .map(([typeId, count]) => {
+          const name = `type ${typeId}`;
+          return `<tr><td>${typeId}</td><td>${name}</td><td align="right">${count}</td></tr>`;
+        });
+      streamStatsTableBody.innerHTML = rows.join("") ||
+        `<tr><td colspan="3">No RTCM messages yet</td></tr>`;
+    }
+
+    async function refreshStreamStats() {
+      if (!streamStatsPathInput) return;
+      const statsPath = streamStatsPathInput.value.trim();
+      if (!statsPath) return;
+      try {
+        const data = await fetchJson(`/api/stream-stats?path=${encodeURIComponent(statsPath)}`);
+        renderStreamStats(data);
+      } catch (error) {
+        renderStreamStats({ available: false, error: String(error) });
+      }
+    }
+
+    if (streamStatsRefreshBtn) {
+      streamStatsRefreshBtn.addEventListener("click", refreshStreamStats);
+    }
+
     // ── Live PPP view ────────────────────────────────────────────────────────
     const liveCanvas = document.getElementById("live-ppp-canvas");
     const livePauseBtn = document.getElementById("live-pause-btn");
@@ -1844,6 +1913,8 @@
     window.addEventListener("load", () => {
       drawLivePoints();
       setInterval(pollLive, 1000);
+      refreshStreamStats();
+      setInterval(refreshStreamStats, 2000);
     });
   </script>
 </body>

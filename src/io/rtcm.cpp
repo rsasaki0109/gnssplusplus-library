@@ -3386,6 +3386,7 @@ RTCMReader::~RTCMReader() {
 
 bool RTCMReader::open(const std::string& source) {
     close();
+    source_ = source;
     if (source.rfind("ntrip://", 0) == 0 || source.rfind("http://", 0) == 0 ||
         source.rfind("https://", 0) == 0) {
         return readFromNetwork(source);
@@ -3580,6 +3581,24 @@ RTCMProcessor::RTCMStats RTCMReader::getStats() const {
         return ntrip_client_->getStats();
     }
     return processor_.getStats();
+}
+
+void RTCMReader::setAutoReconnect(bool enabled, int delay_ms) {
+    if (ntrip_client_) {
+        ntrip_client_->setAutoReconnect(enabled, delay_ms);
+    }
+}
+
+int RTCMReader::reconnectCount() const {
+    return ntrip_client_ ? ntrip_client_->reconnectCount() : 0;
+}
+
+bool RTCMReader::isConnected() const {
+    return ntrip_client_ ? ntrip_client_->isConnected() : is_open_;
+}
+
+std::string RTCMReader::lastError() const {
+    return ntrip_client_ ? ntrip_client_->getLastError() : std::string();
 }
 
 // rtcm_utils implementation

@@ -415,6 +415,29 @@ class WebHttpUxTest(unittest.TestCase):
                 self.assertEqual(status, 200)
                 self.assertEqual(live_incremental["points"], [])
                 self.assertEqual(live_incremental["last_tow"], 101.0)
+
+                stream_stats = output / "stream_stats.json"
+                stream_stats.write_text(
+                    json.dumps(
+                        {
+                            "source": "ntrip://caster/MOUNT1",
+                            "connected": True,
+                            "reconnect_count": 2,
+                            "messages_total": 5,
+                            "last_message_type": 1005,
+                            "last_message_name": "Stationary RTK reference station ARP",
+                            "message_counts": {"1005": 5},
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                status, _, stats_payload = fetch_json(
+                    f"{base_url}/api/stream-stats?path=output/stream_stats.json"
+                )
+                self.assertEqual(status, 200)
+                self.assertTrue(stats_payload["available"])
+                self.assertEqual(stats_payload["reconnect_count"], 2)
+                self.assertEqual(stats_payload["message_counts"]["1005"], 5)
             finally:
                 server.shutdown()
                 server.server_close()
