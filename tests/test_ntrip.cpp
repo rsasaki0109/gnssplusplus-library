@@ -219,6 +219,16 @@ TEST(NTRIPClientTest, RejectsIncompleteCasterUrl) {
     EXPECT_FALSE(io::NTRIPClient::parseURL("ntrip://:badport/MOUNT", info));
 }
 
+TEST(NTRIPClientTest, AutoReconnectDefaultsAreDisabled) {
+    io::NTRIPClient client;
+    EXPECT_FALSE(client.autoReconnectEnabled());
+    EXPECT_EQ(client.reconnectDelayMs(), 2000);
+    EXPECT_EQ(client.reconnectCount(), 0);
+    client.setAutoReconnect(true, 500);
+    EXPECT_TRUE(client.autoReconnectEnabled());
+    EXPECT_EQ(client.reconnectDelayMs(), 500);
+}
+
 #ifndef _WIN32
 TEST(NTRIPClientTest, ConnectsAndReadsRtcmMessage) {
     static constexpr char kOkHeader[] = "ICY 200 OK\r\nNtrip-Version: Ntrip/2.0\r\n\r\n";

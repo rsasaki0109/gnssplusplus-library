@@ -32,12 +32,18 @@ public:
                  const std::string& password = "");
     void disconnect();
 
+    void setAutoReconnect(bool enabled, int delay_ms = 2000);
+    bool autoReconnectEnabled() const { return auto_reconnect_; }
+    int reconnectDelayMs() const { return reconnect_delay_ms_; }
+    int reconnectCount() const { return reconnect_count_; }
+
     bool isConnected() const { return socket_fd_ >= 0; }
     bool readMessage(RTCMMessage& message, int timeout_ms = 1000);
     bool readMessages(std::vector<RTCMMessage>& messages, int timeout_ms = 1000);
 
     RTCMProcessor::RTCMStats getStats() const { return processor_.getStats(); }
     std::string getLastError() const { return last_error_; }
+    const NTRIPStreamInfo& connectionInfo() const { return connection_info_; }
 
     static bool parseURL(const std::string& url, NTRIPStreamInfo& info);
 
@@ -47,6 +53,11 @@ private:
     std::vector<uint8_t> buffer_;
     std::deque<RTCMMessage> pending_messages_;
     std::string last_error_;
+    NTRIPStreamInfo connection_info_;
+    bool has_connection_info_ = false;
+    bool auto_reconnect_ = false;
+    int reconnect_delay_ms_ = 2000;
+    int reconnect_count_ = 0;
 
     static std::string base64Encode(const std::string& input);
 
@@ -54,6 +65,7 @@ private:
     bool readResponseHeader();
     bool receiveIntoBuffer(int timeout_ms);
     size_t consumeBufferedMessages(std::vector<RTCMMessage>& messages);
+    bool tryReconnect();
 };
 
 }  // namespace io

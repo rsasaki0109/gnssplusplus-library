@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <chrono>
 #include <cstring>
 #include <iterator>
+#include <thread>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -63,6 +65,27 @@ std::string trimSlashes(std::string value) {
 
 NTRIPClient::~NTRIPClient() {
     disconnect();
+}
+
+void NTRIPClient::setAutoReconnect(bool enabled, int delay_ms) {
+    auto_reconnect_ = enabled;
+    reconnect_delay_ms_ = std::max(0, delay_ms);
+}
+
+bool NTRIPClient::tryReconnect() {
+    if (!has_connection_info_) {
+        last_error_ = "no stored NTRIP connection info";
+        return false;
+    }
+    ++reconnect_count_;
+    if (reconnect_delay_ms_ > 0) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(reconnect_delay_ms_));
+    }
+    return connect(connection_info_.host,
+                   connection_info_.port,
+                   connection_info_.mountpoint,
+                   connection_info_.username,
+                   connection_info_.password);
 }
 
 bool NTRIPClient::parseURL(const std::string& url, NTRIPStreamInfo& info) {
@@ -183,6 +206,8 @@ bool NTRIPClient::connect(const std::string& host,
         return false;
     }
 
+    connection_info_ = info;
+    has_connection_info_ = true;
     last_error_.clear();
     return true;
 }
@@ -236,12 +261,24 @@ bool NTRIPClient::readMessages(std::vector<RTCMMessage>& messages, int timeout_m
         return true;
     }
 
-    if (!isConnected() || !receiveIntoBuffer(timeout_ms)) {
-        return false;
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        if (!isConnected()) {
+            if (!auto_reconnect_ || !tryReconnect()) {
+                return false;
+            }
+        }
+
+        if (receiveIntoBuffer(timeout_ms)) {
+            consumeBufferedMessages(messages);
+            return !messages.empty();
+        }
+
+        if (isConnected()) {
+            return false;
+        }
     }
 
-    consumeBufferedMessages(messages);
-    return !messages.empty();
+    return false;
 }
 
 std::string NTRIPClient::base64Encode(const std::string& input) {
