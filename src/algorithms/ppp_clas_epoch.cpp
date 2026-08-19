@@ -2135,7 +2135,14 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
 
     if (ambiguity_resolution.accepted &&
         last_clas_post_reset_floor_failed_) {
-        clas_post_reset_fix_quarantine_ = true;
+        const int max_nfix =
+            env_overrides_.clas_post_reset_quarantine_max_nfix;
+        const bool nfix_within_limit =
+            max_nfix <= 0 ||
+            last_fixed_ambiguities_ <= max_nfix;
+        if (nfix_within_limit) {
+            clas_post_reset_fix_quarantine_ = true;
+        }
     }
     const bool clas_post_reset_quarantined_fix_this_epoch =
         ambiguity_resolution.accepted &&

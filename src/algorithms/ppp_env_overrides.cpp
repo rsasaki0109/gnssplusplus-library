@@ -290,6 +290,8 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
         envExactOne("GNSS_PPP_CLAS_PHASE_ROW_DUMP");
     overrides.clas_post_reset_ratio_floor =
         envDoubleOr("GNSS_PPP_CLAS_POST_RESET_RATIO_FLOOR", 0.0);
+    overrides.clas_post_reset_quarantine_max_nfix =
+        envIntOr("GNSS_PPP_CLAS_POST_RESET_QUARANTINE_MAX_NFIX", 0);
     overrides.clas_hold_cont_min_track =
         envIntOr("GNSS_PPP_CLAS_HOLD_CONT_MIN_TRACK", -1);
     const std::string clas_nl_datum_fix =
