@@ -302,15 +302,16 @@ struct PPPEnvOverrides {
     // hold series is quarantined from FIX publication until the next
     // full-state reset; these administrative FLOAT outputs do not advance
     // FLOATCNT. Default 0.0 disables the feature (bit-identical); any value
-    // > 0 activates it.
-    double clas_post_reset_ratio_floor = 0.0;
+    // > 0 activates it. Default 5.0 (validated across 6 PPC runs).
+    double clas_post_reset_ratio_floor = 5.0;
     // GNSS_PPP_CLAS_POST_RESET_QUARANTINE_MAX_NFIX: when > 0 and
     // GNSS_PPP_CLAS_POST_RESET_RATIO_FLOOR is active, restricts the
     // quarantine trigger to seeds whose fixed-ambiguity count (nfix) is at
     // most this value. Seeds with nfix above the limit pass through the
-    // quarantine gate unconditionally. Default 0 (unrestricted — every
-    // qualifying seed is quarantined regardless of nfix).
-    int clas_post_reset_quarantine_max_nfix = 0;
+    // quarantine gate unconditionally. Default 7 (separates the nagoya_run2
+    // cold-start burst at nfix=7 from good mature-hold clusters at nfix>=13,
+    // validated across 6 PPC runs with zero new >3m errors).
+    int clas_post_reset_quarantine_max_nfix = 7;
     // GNSS_PPP_CLAS_HOLD_CONT_MIN_TRACK: measurement-only override for the
     // CLAS kinematic maxdiff-only hold-continuation carve-out's minimum
     // track-record age gate (kClasHoldContinuationMinTrackRecordFixes at its
