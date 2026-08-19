@@ -17,6 +17,8 @@
 #include <libgnss++/io/madoca_l6.hpp>
 #include <libgnss++/io/rinex.hpp>
 
+#include "cli_toml_config.hpp"
+
 #ifndef GNSSPP_MADOCALIB_ORACLE_CLI
 #define GNSSPP_MADOCALIB_ORACLE_CLI 0
 #endif
@@ -44,6 +46,7 @@ struct Options {
     std::string out_path;
     std::string summary_json_path;
     std::string kml_path;
+    std::string geojson_path;
     int max_epochs = 0;
     int convergence_min_epochs = 20;
     std::string convergence_policy = "legacy-3d";
@@ -99,6 +102,7 @@ void printUsage(const char* program_name) {
     std::cout
         << "Usage: " << program_name << " --obs <rover.obs> [options]\n"
         << "Options:\n"
+        << "  --config <settings.toml>  Optional TOML config file (CLI args override file)\n"
         << "  --nav <nav.rnx>           Optional broadcast navigation file\n"
         << "  --sp3 <orbit.sp3>        Precise orbit file\n"
         << "  --clk <clock.clk>        Precise clock file\n"
@@ -132,7 +136,9 @@ void printUsage(const char* program_name) {
         << "  --out <solution.pos>     Output position file (required)\n"
         << "  --summary-json <summary.json>\n"
         << "                          Optional machine-readable run summary\n"
-        << "  --kml <solution.kml>     Optional KML output\n"
+        << "  --kml <solution.kml>     Optional KML output (fix=green, float=yellow)\n"
+        << "  --geojson <solution.geojson>\n"
+        << "                          Optional GeoJSON output with status/sat/pdop properties\n"
         << "  --max-epochs <count>     Limit processed epochs (default: all)\n"
         << "  --convergence-min-epochs <count>\n"
         << "                          Minimum epochs before PPP convergence/AR checks (default: 20)\n"
@@ -312,6 +318,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.summary_json_path = argv[++i];
         } else if (arg == "--kml" && i + 1 < argc) {
             options.kml_path = argv[++i];
+        } else if (arg == "--geojson" && i + 1 < argc) {
+            options.geojson_path = argv[++i];
         } else if (arg == "--max-epochs" && i + 1 < argc) {
             options.max_epochs = std::stoi(argv[++i]);
         } else if (arg == "--convergence-min-epochs" && i + 1 < argc) {
@@ -760,6 +768,39 @@ parseClasSubtype12ValueConstructionPolicy(const std::string& value) {
 
 int main(int argc, char* argv[]) {
     try {
+        const libgnss_apps::TomlCliSchema schema{
+            "gnss_ppp",
+            {
+                {"--clas-osr", ""},
+                {"--enable-ar", ""},
+                {"--emit-epoch-time", ""},
+                {"--estimate-ionosphere", ""},
+                {"--estimate-troposphere", ""},
+                {"--kinematic", ""},
+                {"--no-ionosphere-free", ""},
+                {"--use-dynamics-model", ""},
+                {"--quiet", ""},
+            },
+            {
+                {"--estimate-troposphere", "--no-estimate-troposphere"},
+                {"--enable-ar", "--no-ar"},
+                {"--kinematic", "--no-kinematic"},
+            },
+            {
+                {"--madoca-l6", libgnss_apps::TomlArrayStyle::SEPARATE_ARGUMENTS},
+                {"--madoca-l6d", libgnss_apps::TomlArrayStyle::SEPARATE_ARGUMENTS},
+            },
+        };
+        std::vector<std::string> expanded_arguments =
+            libgnss_apps::expandTomlConfigArguments(argc, argv, schema);
+        std::vector<char*> expanded_argv;
+        expanded_argv.reserve(expanded_arguments.size());
+        for (auto& argument : expanded_arguments) {
+            expanded_argv.push_back(argument.data());
+        }
+        argc = static_cast<int>(expanded_argv.size());
+        argv = expanded_argv.data();
+
         const Options options = parseArguments(argc, argv);
 
 #if GNSSPP_MADOCALIB_ORACLE_CLI
@@ -1348,6 +1389,10 @@ int main(int argc, char* argv[]) {
         }
         if (!options.kml_path.empty() && !solutions.writeKML(options.kml_path)) {
             std::cerr << "Error: failed to write KML file: " << options.kml_path << "\n";
+            return 1;
+        }
+        if (!options.geojson_path.empty() && !solutions.writeGeoJSON(options.geojson_path)) {
+            std::cerr << "Error: failed to write GeoJSON file: " << options.geojson_path << "\n";
             return 1;
         }
 

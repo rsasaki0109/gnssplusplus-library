@@ -70,7 +70,9 @@ add_executable(gnss_solve
 )
 target_link_libraries(gnss_solve PRIVATE gnss_lib gnss_rtk_runtime Threads::Threads)
 
-add_executable(gnss_ppp ${GNSS_NATIVE_DIR}/gnss_ppp.cpp)
+add_executable(gnss_ppp
+    ${GNSS_NATIVE_DIR}/gnss_ppp.cpp
+    ${GNSS_NATIVE_DIR}/cli_toml_config.cpp)
 target_link_libraries(gnss_ppp PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
 
 if(MADOCALIB_PARITY_LINK)

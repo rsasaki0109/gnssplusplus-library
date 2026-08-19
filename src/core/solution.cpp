@@ -407,36 +407,104 @@ bool Solution::writeToFile(const std::string& filename, const std::string& forma
     return true;
 }
 
+namespace {
+
+bool isFixedStatus(SolutionStatus s) {
+    return s == SolutionStatus::FIXED || s == SolutionStatus::PPP_FIXED;
+}
+bool isFloatStatus(SolutionStatus s) {
+    return s == SolutionStatus::FLOAT || s == SolutionStatus::PPP_FLOAT;
+}
+
+void writeKmlLineString(std::ofstream& file,
+                        const std::string& name,
+                        const std::string& color_abgr,
+                        const std::vector<const PositionSolution*>& pts) {
+    if (pts.empty()) return;
+    file << "<Placemark><name>" << name << "</name>\n"
+         << "<Style><LineStyle><color>" << color_abgr
+         << "</color><width>3</width></LineStyle></Style>\n"
+         << "<LineString><tessellate>1</tessellate><coordinates>\n";
+    file << std::fixed << std::setprecision(8);
+    for (const auto* sol : pts) {
+        file << sol->position_geodetic.longitude * 180.0 / M_PI << ","
+             << sol->position_geodetic.latitude  * 180.0 / M_PI << ","
+             << sol->position_geodetic.height << "\n";
+    }
+    file << "</coordinates></LineString></Placemark>\n";
+}
+
+}  // namespace
+
 bool Solution::writeKML(const std::string& filename) const {
     std::ofstream file(filename);
     if (!file.is_open()) {
         return false;
     }
-    
-    file << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
-    file << "<kml xmlns=\"http://www.opengis.net/kml/2.2\">\n";
-    file << "<Document>\n";
-    file << "<name>LibGNSS++ Solution</name>\n";
-    file << "<Placemark>\n";
-    file << "<name>GNSS Track</name>\n";
-    file << "<LineString>\n";
-    file << "<coordinates>\n";
-    
+
+    std::vector<const PositionSolution*> fixed_pts, float_pts, other_pts;
     for (const auto& sol : solutions) {
-        if (sol.isValid()) {
-            file << std::fixed << std::setprecision(8);
-            file << sol.position_geodetic.longitude * 180.0/M_PI << ",";
-            file << sol.position_geodetic.latitude * 180.0/M_PI << ",";
-            file << sol.position_geodetic.height << "\n";
-        }
+        if (!sol.isValid()) continue;
+        if (isFixedStatus(sol.status))      fixed_pts.push_back(&sol);
+        else if (isFloatStatus(sol.status)) float_pts.push_back(&sol);
+        else                                other_pts.push_back(&sol);
     }
-    
-    file << "</coordinates>\n";
-    file << "</LineString>\n";
-    file << "</Placemark>\n";
-    file << "</Document>\n";
-    file << "</kml>\n";
-    
+
+    file << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+         << "<kml xmlns=\"http://www.opengis.net/kml/2.2\">\n"
+         << "<Document><name>LibGNSS++ Solution</name>\n";
+
+    // KML color: aabbggrr (alpha, blue, green, red)
+    writeKmlLineString(file, "Fixed",  "ff00ff00", fixed_pts);  // green
+    writeKmlLineString(file, "Float",  "ff00ffff", float_pts);  // yellow
+    writeKmlLineString(file, "Other",  "ffaaaaaa", other_pts);  // grey
+
+    file << "</Document></kml>\n";
+    return true;
+}
+
+bool Solution::writeGeoJSON(const std::string& filename) const {
+    std::ofstream file(filename);
+    if (!file.is_open()) {
+        return false;
+    }
+
+    auto statusStr = [](SolutionStatus s) -> std::string {
+        switch (s) {
+            case SolutionStatus::PPP_FIXED:  return "ppp_fixed";
+            case SolutionStatus::PPP_FLOAT:  return "ppp_float";
+            case SolutionStatus::FIXED:      return "fixed";
+            case SolutionStatus::FLOAT:      return "float";
+            case SolutionStatus::SPP:        return "spp";
+            case SolutionStatus::DGPS:       return "dgps";
+            case SolutionStatus::PROPAGATED: return "propagated";
+            default:                         return "none";
+        }
+    };
+
+    file << std::fixed << std::setprecision(8);
+    file << "{\"type\":\"FeatureCollection\",\"features\":[\n";
+
+    bool first = true;
+    for (const auto& sol : solutions) {
+        if (!sol.isValid()) continue;
+        const double lon = sol.position_geodetic.longitude * 180.0 / M_PI;
+        const double lat = sol.position_geodetic.latitude  * 180.0 / M_PI;
+        const double alt = sol.position_geodetic.height;
+        if (!first) file << ",\n";
+        first = false;
+        file << "{\"type\":\"Feature\","
+             << "\"geometry\":{\"type\":\"Point\","
+             << "\"coordinates\":[" << lon << "," << lat << "," << alt << "]},"
+             << "\"properties\":{"
+             << "\"status\":\"" << statusStr(sol.status) << "\","
+             << "\"num_satellites\":" << sol.num_satellites << ","
+             << "\"pdop\":" << std::setprecision(2) << sol.pdop
+             << "}}";
+        file << std::setprecision(8);
+    }
+
+    file << "\n]}\n";
     return true;
 }
 
