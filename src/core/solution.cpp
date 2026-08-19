@@ -378,32 +378,41 @@ Solution::SolutionStatistics Solution::calculateStatistics(const Vector3d& refer
     return stats;
 }
 
+void Solution::writeHeader(std::ostream& out) {
+    out << "% LibGNSS++ Position Solution\n"
+        << "% Format: pos\n"
+        << "% Columns: GPS_Week GPS_TOW X(m) Y(m) Z(m) Lat(deg) Lon(deg) Height(m)"
+           " Status Satellites PDOP Ratio FixedAmbiguities Iterations\n";
+}
+
+void Solution::appendSolutionLine(std::ostream& out, const PositionSolution& sol) {
+    out << std::fixed << std::setprecision(6)
+        << sol.time.week << " " << sol.time.tow << " "
+        << sol.position_ecef(0) << " "
+        << sol.position_ecef(1) << " "
+        << sol.position_ecef(2) << " "
+        << sol.position_geodetic.latitude  * 180.0 / M_PI << " "
+        << sol.position_geodetic.longitude * 180.0 / M_PI << " "
+        << sol.position_geodetic.height << " "
+        << static_cast<int>(sol.status) << " "
+        << sol.num_satellites << " "
+        << sol.pdop << " "
+        << sol.ratio << " "
+        << sol.num_fixed_ambiguities << " "
+        << sol.iterations << "\n";
+    out.flush();
+}
+
 bool Solution::writeToFile(const std::string& filename, const std::string& format) const {
     std::ofstream file(filename);
     if (!file.is_open()) {
         return false;
     }
-    
-    // Write header
-    file << "% LibGNSS++ Position Solution\n";
-    file << "% Format: " << format << "\n";
-    file << "% Columns: GPS_Week GPS_TOW X(m) Y(m) Z(m) Lat(deg) Lon(deg) Height(m) Status Satellites PDOP Ratio FixedAmbiguities Iterations\n";
-    
+    (void)format;
+    writeHeader(file);
     for (const auto& sol : solutions) {
-        file << std::fixed << std::setprecision(6);
-        file << sol.time.week << " " << sol.time.tow << " ";
-        file << sol.position_ecef(0) << " " << sol.position_ecef(1) << " " << sol.position_ecef(2) << " ";
-        file << sol.position_geodetic.latitude * 180.0/M_PI << " ";
-        file << sol.position_geodetic.longitude * 180.0/M_PI << " ";
-        file << sol.position_geodetic.height << " ";
-        file << static_cast<int>(sol.status) << " ";
-        file << sol.num_satellites << " ";
-        file << sol.pdop << " ";
-        file << sol.ratio << " ";
-        file << sol.num_fixed_ambiguities << " ";
-        file << sol.iterations << "\n";
+        appendSolutionLine(file, sol);
     }
-    
     return true;
 }
 

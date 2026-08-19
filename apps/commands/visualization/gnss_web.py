@@ -964,6 +964,53 @@ def make_handler(args: argparse.Namespace):
                         }
                     )
                     return
+                if parsed.path == "/api/live-pos":
+                    # Stream incremental updates from a live gnss_ppp --live-output file.
+                    # Query params: path=<relative .pos path>, after=<GPS TOW float, default 0>
+                    pos_arg = query.get("path", [""])[0]
+                    after_tow = float(query.get("after", ["0"])[0])
+                    if not pos_arg:
+                        self._write_json({"error": "missing pos path"}, HTTPStatus.BAD_REQUEST)
+                        return
+                    try:
+                        pos_path = resolve_under_root(root_dir, pos_arg)
+                    except ValueError:
+                        self._write_json({"error": "pos path escapes artifact root"}, HTTPStatus.BAD_REQUEST)
+                        return
+                    if not pos_path.exists():
+                        self._write_json({"available": False, "points": [], "last_tow": after_tow})
+                        return
+                    STATUS_INT = {1: "SPP", 2: "DGPS", 3: "FLOAT", 4: "FIXED", 5: "PPP_FLOAT", 6: "PPP_FIXED", 7: "PROPAGATED"}
+                    STATUS_COLOR = {"PPP_FIXED": "#2ecc71", "FIXED": "#2ecc71", "PPP_FLOAT": "#f39c12", "FLOAT": "#f39c12"}
+                    points: list[dict] = []
+                    last_tow = after_tow
+                    try:
+                        with pos_path.open() as fh:
+                            for line in fh:
+                                if line.startswith("%"):
+                                    continue
+                                parts = line.split()
+                                if len(parts) < 10:
+                                    continue
+                                tow = float(parts[1])
+                                if tow <= after_tow:
+                                    continue
+                                status_int = int(parts[8])
+                                status = STATUS_INT.get(status_int, "UNKNOWN")
+                                points.append({
+                                    "tow": round(tow, 3),
+                                    "lat": float(parts[5]),
+                                    "lon": float(parts[6]),
+                                    "height": float(parts[7]),
+                                    "status": status,
+                                    "color": STATUS_COLOR.get(status, "#e74c3c"),
+                                    "satellites": int(parts[9]),
+                                })
+                                last_tow = tow
+                    except OSError:
+                        pass
+                    self._write_json({"available": True, "points": points, "last_tow": last_tow})
+                    return
                 if parsed.path == "/api/moving-base-matches":
                     csv_arg = query.get("path", [""])[0]
                     if not csv_arg:

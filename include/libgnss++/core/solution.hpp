@@ -233,6 +233,20 @@ public:
     bool writeKML(const std::string& filename) const;
 
     /**
+     * @brief Append a single solution epoch to an already-open output stream.
+     *
+     * Used by the live / streaming output path to flush one line per epoch
+     * rather than writing the whole file at the end.  The stream must already
+     * contain the pos-format header written by writeHeader().
+     */
+    static void appendSolutionLine(std::ostream& out, const PositionSolution& sol);
+
+    /**
+     * @brief Write the pos-format file header to a stream.
+     */
+    static void writeHeader(std::ostream& out);
+
+    /**
      * @brief Write solutions in GeoJSON format for visualization.
      *
      * Emits a FeatureCollection with one LineString per status group
