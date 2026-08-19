@@ -1,0 +1,8 @@
+# gnss_ppp configuration for standard static PPP
+# Usage: gnss_ppp --config conf/ppp_static.toml --obs rover.obs --sp3 orbit.sp3 --clk clock.clk --out out.pos
+
+[gnss_ppp]
+
+estimate-troposphere = true
+enable-ar = true
+ar-ratio-threshold = 3.0

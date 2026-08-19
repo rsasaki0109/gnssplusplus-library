@@ -224,9 +224,23 @@ public:
     bool writeNMEA(const std::string& filename) const;
     
     /**
-     * @brief Write solutions in KML format for visualization
+     * @brief Write solutions in KML format for visualization.
+     *
+     * Outputs separate placemarks for PPP_FIXED/FIXED (green), PPP_FLOAT/FLOAT
+     * (yellow), and all other valid epochs (grey), making fix/float status
+     * immediately visible in Google Earth and similar tools.
      */
     bool writeKML(const std::string& filename) const;
+
+    /**
+     * @brief Write solutions in GeoJSON format for visualization.
+     *
+     * Emits a FeatureCollection with one LineString per status group
+     * (fixed/float/other) and individual Point features carrying fix status,
+     * satellite count, and PDOP as properties. Compatible with QGIS, Mapbox,
+     * Leaflet, and any GeoJSON-aware tool.
+     */
+    bool writeGeoJSON(const std::string& filename) const;
     
     /**
      * @brief Load solutions from file

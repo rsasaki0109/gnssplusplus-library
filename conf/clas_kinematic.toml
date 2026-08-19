@@ -1,0 +1,36 @@
+# gnss_ppp configuration for CLAS PPP-RTK kinematic positioning
+# Usage: gnss_ppp --config conf/clas_kinematic.toml --obs rover.obs --out out.pos
+#
+# Command-line arguments always override values in this file.
+
+[gnss_ppp]
+
+# Input
+# obs = "data/rover.obs"       # set via --obs on the command line
+# nav = "data/base.nav"        # set via --nav on the command line
+# ssr = "data/ssr_expanded.csv"
+
+# Output
+# out = "output/solution.pos"  # set via --out on the command line
+# kml = "output/solution.kml"
+# geojson = "output/solution.geojson"
+
+# Positioning mode
+kinematic = true
+use-dynamics-model = true
+clas-osr = true
+
+# Ambiguity resolution
+enable-ar = true
+ar-method = "wlnl"
+ar-ratio-threshold = 3.0
+
+# Atmosphere
+estimate-troposphere = true
+estimate-ionosphere = true
+no-ionosphere-free = true
+
+# Parity environment (equivalent to GNSS_PPP_CLAS_* env vars)
+# These are passed as CLI flags; set them here to avoid repeating long env prefixes.
+# The GNSS_PPP_CLAS_* env variables still work and take precedence.
+emit-epoch-time = true

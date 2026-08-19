@@ -44,11 +44,25 @@ COPY --from=builder /opt/libgnsspp /opt/libgnsspp
 ENV PATH=/opt/libgnsspp/bin:${PATH}
 ENV PYTHONPATH=/opt/libgnsspp/lib/python3/site-packages
 
+COPY --from=builder /src/conf /opt/libgnsspp/conf
+
 WORKDIR /workspace
 EXPOSE 8085
 
+# Smoke-test: CLI and Python binding must both load successfully.
 RUN gnss --help >/dev/null \
+ && gnss ppp --help >/dev/null \
  && python3 -c "import libgnsspp" >/dev/null
 
+# Default entrypoint: run the unified gnss CLI.
+# One-liner examples (mount data with -v):
+#
+#   docker run --rm -v "$PWD/data:/data" -v "$PWD/out:/out" libgnsspp \
+#     ppp --config /opt/libgnsspp/conf/clas_kinematic.toml \
+#         --obs /data/rover.obs --nav /data/base.nav \
+#         --ssr /data/ssr_expanded.csv \
+#         --out /out/solution.pos --geojson /out/solution.geojson
+#
+#   docker run --rm libgnsspp ppp --help
 ENTRYPOINT ["gnss"]
 CMD ["--help"]
