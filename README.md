@@ -14,15 +14,77 @@ handling without an external RTKLIB runtime.
 - Products: `SP3`, `CLK`, `IONEX`, `DCB`
 - Extras: benchmarks, web dashboard, Python bindings, Docker, ROS 2 playback
 
+[Choose a use case](docs/use_cases.md): [RTKLIB migration](docs/use_cases/rtklib_migration.md),
+[ROS2 receiver/bag replay](docs/use_cases/ros2.md), or [QZSS L6 / CLAS / MADOCA](docs/use_cases/qzss_l6.md).
+
 ![Feature overview](docs/libgnsspp_feature_overview.png)
+
+## Try it
+
+The fastest first run uses the published runtime image; no local build is
+needed:
+
+```bash
+mkdir -p output
+docker run --rm \
+  -v "$PWD/output:/workspace/output" \
+  ghcr.io/rsasaki0109/gnssplusplus-library:v0.2.0 \
+  demo --output-dir /workspace/output/self-contained-demo
+```
+
+The command runs the tracked, project-authored synthetic PPP fixture entirely
+offline after the image is available. It should report 8 processed and 8 valid
+PPP solutions and write `demo_solution.pos`, `demo_solution.kml`, and
+`demo_summary.json` under `output/self-contained-demo/`. This validates
+CLI/build/artifact plumbing, not field accuracy, real-world satellite
+geometry, or RTK fix performance. See the [full demo guide](docs/self_contained_demo.md)
+for provenance and native-build instructions.
+
+Prefer a native source checkout? Build the PPP executable and run the same
+tracked demo:
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --target gnss_ppp --parallel 2
+python3 apps/gnss.py demo
+```
+
+## Use the C++20 library
+
+The install exports a standard CMake package and the `libgnsspp::gnss_lib`
+target for downstream C++20 applications:
+
+```cmake
+cmake_minimum_required(VERSION 3.14)
+project(my_gnss_app LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+find_package(libgnsspp CONFIG REQUIRED)
+add_executable(my_gnss_app main.cpp)
+target_link_libraries(my_gnss_app PRIVATE libgnsspp::gnss_lib)
+```
+
+Build the complete exported library set before installing it:
+`cmake --build build --parallel 2`, followed by
+`cmake --install build --prefix <prefix>`. Configure the consumer with
+`-DCMAKE_PREFIX_PATH=<prefix>`. Start with the
+[simple SPP example](examples/simple_spp.cpp), the
+[RTK positioning example](examples/rtk_positioning.cpp), the
+[public API header](include/libgnss++/gnss.hpp), and the
+[interface notes](docs/interfaces.md).
+
+See the [v0.2.0 release highlights](docs/releases/v0.2.0.md) and
+[maintainer release runbook](docs/release_runbook.md) for distribution details.
 
 ## Results And Validation Status
 
 | Area | Public comparison | Evidence / status |
 |---|---|---|
 | RTK | PPC Tokyo/Nagoya vs RTKLIB `demo5` | +17.0 pp positioning, +28.1 pp official score, -11.96 m P95 H delta |
-| GNSS/IMU FGO | PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | Higher <50 cm fraction (avg +5.3 pp) and fix-rate (avg +7.9 pp) on all 3 runs; fixed-only RMS also wins 2 of 3 runs |
-| CLAS PPP | Six PPC Tokyo/Nagoya runs vs MRTKLIB CLAS | 23.645% aggregate FIX, 0.593 m FIX RMS2D, 36.510 m all-solution RMS2D, and 0 FIX epochs above 3 m across 58,258 scored epochs |
+| GNSS/IMU FGO | PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | Higher <50 cm fraction (avg +5.6 pp) and fix-rate (avg +8.2 pp) on all 3 runs; fixed-only RMS also wins 2 of 3 runs |
+| CLAS PPP | Six PPC Tokyo/Nagoya runs vs MRTKLIB CLAS | 24.851% aggregate FIX, 0.377 m FIX RMS2D (lower than MRTKLIB on all six runs), 36.523 m all-solution RMS2D across 58,259 scored epochs; 19 FIX epochs (0.03%) exceed 3 m, all in one pre-existing 4 s Nagoya 2 burst |
 | Urban RTK | UrbanNav Tokyo Odaiba vs RTKLIB `demo5` | More fixes, lower Hp95/Vp95; `--preset odaiba` closes Hmed |
 | SPP | PPC SPP adaptive robust + policy gate | No P95 regression with <=1 pp positioning drop |
 
@@ -50,195 +112,117 @@ and the PPC score target from the [Turing tight-coupling slides](https://www.den
 
 ![PPC public targets](docs/ppc_public_targets.png)
 
-The XY view below shows where each selected solution is FIXED or FLOAT. Green
-points are correct FIX epochs, red crosses are FIX epochs with 3D error above
-0.5 m, orange points are FLOAT, and the light-gray line is the reference
-trajectory.
-
-Before the final confidence gate, a truth-free wrong-basin escape replaces 35
-Nagoya 2 FIX positions with its independent TC-FGO candidate and emits them as
-FLOAT only when baseline prefit RMS exceeds 8 m and at least 45 observations
-were suppressed. Nagoya 2 FIX errors above 10 m fall from 36 to 4 and those
-above 5 m from 42 to 10, while its P95 horizontal error improves from 19.092 m
-to 18.144 m.
-
-Nagoya 3 now uses a causal, truth-free KF/FGO consensus state machine. The FGO
-shadow never replaces the KF position: it only quarantines a FIX label while
-the estimators disagree, and recovery requires consecutive agreement. A
-runtime-only provisional-recovery gate retains five healthy FIX epochs without
-promoting the joint anchor early. This removes 16 wrong FIX labels and 15
-errors above 10 m without losing a correct FIX epoch.
-
-The final confidence layer demotes FIX to FLOAT when fewer than 8 satellites
-are used, or when at most 11 satellites are used and the AR ratio is at most
-15. Strong same-epoch telemetry may exonerate the boundary case only with at
-least 11 satellites, prefit RMS at most 0.5 m, and NIS/observation at most 0.2.
-A causal kinematic guard then quarantines the current and next two epochs after
-a jump above 12 m with acceleration above 200 m/s2. A bounded plateau extension
-continues quarantine for at most eight epochs while jumps stay below 0.1 m. A
-secondary trigger requires a jump above 5 m, acceleration above 100 m/s2,
-prefit RMS above 5 m, ratio at most 10, at least 10 suppressed outliers, and at
-most 13 satellites. It changes no positions and reads no reference truth.
-
-Tokyo 3 additionally replays two overlapping, independently initialized
-GNSS/IMU FGO shadow windows through the consensus state machine. FIX is
-quarantined after sustained KF/FGO separation above 5 m when the shadow has
-GDOP at most 4, DDPR RMS at most 40 m, and at least 8 satellites. The FGO
-position is never substituted. Soft primary telemetry cannot start an
-unrecoverable quarantine while the independent estimator is unavailable; hard
-primary suspects remain fail-closed. The two-window replay removes 142 wrong
-FIX labels at a cost of five correct FIX labels and finishes in NORMAL state.
-
-The final staged residual guard adds at most seven epochs (1.4 seconds at
-5 Hz) of output latency. It confirms eight consecutive FIX epochs only when
-prefit RMS exceeds 40 m, ratio is at most 15, at least 12 observations are
-suppressed, and suppressed observations comprise at least half of `RTKObs`.
-A separate single-epoch gate requires prefit RMS at least 40 m and at most 14
-satellites. These rules consume emitted RTK telemetry only and change status,
-not position. They remove 57 wrong FIX labels at a cost of ten correct FIX
-labels on PPC.
-
-The official score reaches **78.845491%**. Across six runs, aggregate wrong FIX
-falls from 869 to **574**, wrong FIX above 5 m from 96 to **42**, and wrong FIX
-above 10 m from 59 to **5**. Correct FIX/reference remains above its 66.230%
-floor and Tokyo 1 remains above its public FIX target. In six-fold leave-one-run-out selection,
-five folds select the production 12 m / 3-epoch primary policy and the remaining
-fold selects a 5-epoch hold. All extension folds select an eight-epoch maximum
-plateau age; the secondary thresholds vary and provide held-out catches only on
-two runs, so that component remains exploratory. See the
-[kinematic integrity LOO report](docs/ppc_kinematic_integrity_loo.md). This is
-a run-level robustness check, not an external-dataset generalization claim. The full severity audit is
-in [PPC FIX integrity audit](docs/ppc_fix_integrity_audit.md). The
-[wrong-FIX event ledger](docs/ppc_wrong_fix_event_ledger.md) groups all 574
-residual wrong-FIX epochs into 188 contiguous events and records truth-free
-runtime fingerprints for root-cause and regression work.
-The [Nagoya 3 root-cause report](docs/ppc_nagoya3_wrong_fix_root_cause.md)
-shows that the largest event is an overconfident float-KF basin followed by
-integer certification, rather than an inherited hold-FIX failure.
-The [online consensus design](docs/ppc_online_consensus_design.md) specifies the
-truth-free KF/FGO quarantine and recovery state machine that follows from it.
-The frozen staged policy was also replayed on full UrbanNav Odaiba/Shinjuku
-Trimble rover solutions. It demoted 22 of 49 FIX errors above 2 m, harmed zero
-correct FIX epochs, and consumed no reference truth at runtime; see the
-[external integrity audit](docs/ppc_residual_integrity_external_audit.md).
-The machine-readable requirement audit is tracked in
-[PPC goal completion audit](docs/ppc_goal_completion_audit.md).
+The audited runtime profile uses candidate telemetry only; reference truth is
+used after output generation for scoring. It reaches an official score of
+**78.845491%** while reducing aggregate wrong FIX from 869 to **574**, errors
+above 5 m from 96 to **42**, and errors above 10 m from 59 to **5**.
 
 ![PPC selected XY trajectories by FIX status](docs/ppc_kf_fgo_fix_status_xy.png)
 
 `gici-open` was reproduced from commit
 `e7666110a88d22e08aad24345a253564af9b8024` on its `forppc2024` branch and
-evaluated from exported NMEA with the same six references and metric code.
-The six-run libgnss++ FIX macro is **+16.613 pp** above that reproduction, and
-its macro Wrong FIX/FIX is **1.025 pp lower**.
-The GPL-3.0 program remains an external executable: no GICI source is copied,
-linked, or distributed here, so libgnss++ remains MIT.
+evaluated with the same six references and metric code. The libgnss++ FIX macro
+is **+16.613 pp** higher and Wrong FIX/FIX is **1.025 pp** lower. These are
+in-sample benchmark results, not a held-out generalization claim.
 
-The position selectors use candidate status/ratio/satellite/residual telemetry
-and candidate-to-current separation only. They preserve the baseline epoch
-grid and telemetry; the wrong-basin and consensus escapes intentionally
-replace position and status for their selected epochs. The final
-satellite-count/ratio confidence gate changes only
-the emitted status, from FIX to FLOAT; the online consensus and kinematic
-guards likewise retain the primary position. Reference truth is used only after
-output generation for scoring. Thresholds were tuned on this public benchmark,
-so these results are an in-sample benchmark rather than a held-out
-generalization claim. Definitions, commands, paths, and the machine-readable
-audit are in [PPC reproduction commands](docs/ppc_reproduction.md) and
-[`docs/ppc_kf_fgo_goal_metrics.json`](docs/ppc_kf_fgo_goal_metrics.json).
-
-### PPC RTK vs RTKLIB demo5
-
-These are public PPC Tokyo/Nagoya moving-RTK replays using the same
-rover/base/nav observations for libgnss++ and RTKLIB `demo5`.
-
-<!-- PPC_COVERAGE_MATRIX:START -->
-| Run | gnssplusplus Positioning | RTKLIB Positioning | Delta | gnssplusplus Fix | RTKLIB Fix | PPC official score | RTKLIB official score | Official delta | P95 H delta |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Tokyo run1 | **90.0%** | 66.3% | **+23.7 pp** | **54.4%** | 30.5% | **34.9%** | 0.0% | **+34.9 pp** | +3.39 m |
-| Tokyo run2 | **95.3%** | 84.3% | **+11.0 pp** | **64.1%** | 27.6% | **69.0%** | 16.9% | **+52.1 pp** | -18.51 m |
-| Tokyo run3 | **95.7%** | 93.1% | **+2.5 pp** | **63.0%** | 40.5% | **60.6%** | 35.6% | **+25.0 pp** | -0.24 m |
-| Nagoya run1 | **88.8%** | 65.8% | **+23.0 pp** | **64.5%** | 33.8% | **49.5%** | 22.4% | **+27.1 pp** | -23.78 m |
-| Nagoya run2 | **85.6%** | 69.8% | **+15.8 pp** | **51.4%** | 18.8% | **20.9%** | 11.0% | **+9.9 pp** | -27.24 m |
-| Nagoya run3 | **93.8%** | 67.7% | **+26.1 pp** | **27.1%** | 13.9% | **27.4%** | 7.6% | **+19.7 pp** | -5.37 m |
-
-Across these six public runs, the coverage profile averages **+17.0 pp**
-Positioning-rate lead, **+28.1 pp** PPC official-score lead, and
-**-11.96 m** P95 horizontal-error delta versus RTKLIB `demo5`.
-<!-- PPC_COVERAGE_MATRIX:END -->
-
-![PPC RTK coverage scorecard](docs/ppc_rtk_demo5_scorecard.png)
+See the [goal audit](docs/ppc_goal_completion_audit.md),
+[FIX integrity audit](docs/ppc_fix_integrity_audit.md),
+[kinematic integrity LOO report](docs/ppc_kinematic_integrity_loo.md), and
+[external residual-integrity holdout](docs/ppc_residual_integrity_external_audit.md).
+The [Nagoya 3 root-cause analysis](docs/ppc_nagoya3_wrong_fix_root_cause.md)
+documents the catastrophic float-KF wrong basin. See the
+[reproduction commands](docs/ppc_reproduction.md) for the gate design,
+external replay, event ledger, machine-readable metrics, and licensing details.
 
 ### GNSS/IMU Tightly-Coupled FGO vs tightly-coupled-gnss-imu-fgo
 
-GTSAM-based fixed-lag factor-graph backend (`FGOBackend::GTSAM`) with
-tightly-coupled IMU, multi-frequency DD RTK, per-epoch partial LAMBDA,
-fix-and-hold, and an urban-robustness stack (CMC multipath screening,
-CP-hold recovery, DDPR-anchored resets, FDE, elevation-dependent sigma).
-Public PPC Tokyo moving-RTK replays with the dataset's tactical-grade IMU,
-versus [inuex35/tightly-coupled-gnss-imu-fgo](https://github.com/inuex35/tightly-coupled-gnss-imu-fgo)
-(Python + GTSAM) on the same rover/base/IMU data:
+GTSAM fixed-lag factor-graph backend (tightly-coupled IMU, multi-frequency DD
+RTK, partial LAMBDA, fix-and-hold, CMC screening, CP-hold recovery,
+DDPR-anchored resets, FDE, varerr, surplus-satellite validation) on public PPC
+Tokyo replays, versus
+[inuex35/tightly-coupled-gnss-imu-fgo](https://github.com/inuex35/tightly-coupled-gnss-imu-fgo)
+on the same rover/base/IMU data:
 
 | Run | libgnss++ <50cm | Reference <50cm | libgnss++ fix | Reference fix | libgnss++ fixed RMS | Reference fixed RMS |
 |---|---:|---:|---:|---:|---:|---:|
-| Tokyo run1 | **56.9%** | 56.7% | **50.0%** | 49.5% | **0.655 m** | 0.815 m |
-| Tokyo run2 | **80.6%** | 69.9% | **71.5%** | 60.8% | **0.261 m** | 0.277 m |
-| Tokyo run3 | **72.8%** | 67.9% | **71.8%** | 59.4% | 0.272 m | **0.211 m** |
+| Tokyo run1 | 54.9% | **56.7%** | **53.8%** | 49.5% | 1.180 m | **0.815 m** |
+| Tokyo run2 | **85.7%** | 69.9% | **78.6%** | 60.8% | **0.109 m** | 0.277 m |
+| Tokyo run3 | **77.5%** | 67.9% | **69.3%** | 59.4% | **0.125 m** | 0.211 m |
 
 ![Tokyo run1 GNSS/IMU FGO](docs/gnss_imu_fgo_tokyo_run1.png)
 ![Tokyo run2 GNSS/IMU FGO](docs/gnss_imu_fgo_tokyo_run2.png)
 ![Tokyo run3 GNSS/IMU FGO](docs/gnss_imu_fgo_tokyo_run3.png)
 
-libgnss++ beats the reference on <50 cm fraction and fix-rate on all three
-runs, and on fixed-only RMS on two of three runs (run3's fixed RMS remains
-behind the reference, over the largest fixed population of the three: 10973
-epochs). Every feature is opt-in and the library is unchanged when built
-without GTSAM. Reproduce with `gnss_fgo_parity` (requires a GTSAM build) and
-the shipping preset:
+With the geometry-free reset, libgnss++ exceeds the reference on raw FIX rate
+(all runs) and on <50 cm / fixed RMS (two of three), and improves the PPC
+official score:
+
+| Run | Correct FIX, baseline -> GF reset | Wrong FIX, baseline -> GF reset | Official score, baseline -> GF reset | GF guard demotions |
+|---|---:|---:|---:|---:|
+| Tokyo run1 | 25.656% -> **33.322%** | 23.765% -> **21.221%** | 30.823% -> **39.375%** | 14 |
+| Tokyo run2 | 60.304% -> **74.599%** | 12.573% -> **1.386%** | 65.264% -> **81.615%** | 0 |
+| Tokyo run3 | 59.175% -> **65.099%** | 7.918% -> **1.818%** | 64.081% -> **71.207%** | 17 |
+| Aggregate | 49.181% -> **57.409%** | 13.741% -> **7.650%** | 54.178% -> **63.692%** | 31 |
+
+Wrong FIX/FIX falls 21.839% -> 11.759%; matched distance is unchanged (99.682%);
+fixed-only RMS/P95 and vertical P95 improve on all runs. Wall times were
+463.5/584.6/844.9 s.
+
+Every new behavior is opt-in; non-GTSAM builds are unchanged. Reproduce with
+`gnss_fgo_parity` (GTSAM build) and this preset:
 
 ```
 --imu <run>/imu.csv --fixed-lag 5 --multi-freq --partial-ar --hold \
---elev-mask 25 --snr-mask 30 --imu-preset-tactical --cmc --cmc-level 0.75 \
---cp-hold --cp-hold-res 2.0 --exc-recovery --ddpr-anchor --fde --varerr \
---fix-demote --fix-demote-dist 5 --fix-demote-res 25 --fix-demote-posthold 5
-```
-
-#### Surplus-satellite rescue (opt-in)
-
-LAMBDA candidates that fall short of the ratio gate can be rescued by an
-independent integrity test: DD carrier observations that were excluded from
-the fix (FDE quarantine, CMC exclusion, partial-AR drops) are re-differenced
-against an alternate reference satellite at the candidate fixed position and
-checked against a PDOP-scaled nearest-integer aperture, with a
-GQEBR→GQEB→GQER→GQE→GQB→GQ constellation fallback. Counterfactual auditing of
-the demotion guard on the same runs also moved `--fix-demote-res` from 25 to
-40 for this configuration (25 demoted mostly sub-0.5 m fixes on run1/run3
-while run2's genuine wrong-basin cluster sits far above 40). Tokyo PPC
-full-run results with the fixed-lag-QR configuration:
-
-```
---imu <run>/imu.csv --fixed-lag 1 --fixed-lag-qr --hold \
---imu-ratio-aperture --fixed-history-dr --cmc --cmc-level 0.75 \
---fde --fde-cp-quarantine --varerr --integ-cov 1e-6 \
---fix-demote --fix-demote-dist 5 --fix-demote-res 40 --fix-demote-posthold 5 \
---multi-freq --partial-ar --elev-mask 25 --snr-mask 30 \
---imu-preset-tactical --exc-recovery --ddpr-anchor \
---surplus-validation --surplus-validation-min-n 3 \
+--elev-mask 25 --snr-mask 30 --cmc --cmc-level 0.75 --cp-hold \
+--exc-recovery --ddpr-anchor --fde --varerr --fix-demote \
+--fix-demote-res 25 --fix-demote-posthold 5 \
+--fix-demote-surplus-crosscheck --fix-demote-surplus-anchor-reprieve \
+--fix-demote-spp-model-reprieve --surplus-validation \
+--surplus-validation-min-n 3 \
 --surplus-validation-aperture-lt1 0.15 --surplus-validation-aperture-1to2 0.3 \
---surplus-validation-aperture-gt2 0.45
+--surplus-validation-aperture-gt2 0.45 --anchor-gated-unfix-reset \
+--imu-ratio-relaxed 1.5 --gf-slip-reset
 ```
 
-| Run | Fix-rate | Fixed-only RMS | Rescue contribution |
-|---|---:|---:|---:|
-| tokyo/run1 | 67.23% | 0.797 m | +2.99 pp, RMS improved |
-| tokyo/run2 | 77.71% | 0.742 m | RMS 6.07 m → 0.74 m with res 40 |
-| tokyo/run3 | 75.14% | 1.054 m | RMS 1.96 m → 1.05 m, >5 m fixes 38 → 13 |
+A default-off Doppler-only DR witness failed the run1 zero-wrong gate (112
+correct / 112 wrong), so it stays monitor-only. See the
+[external Doppler-DR witness audit](docs/fgo_external_doppler_dr_witness_audit.md).
 
-The rescued-only population on run1 has 0.565 m RMS (n=693). The companion
-`--surplus-validation-veto` mode (re-testing established fixes) is implemented
-but counterfactually false-alarm dominated — leave it off. For repeated runs
-on identical inputs, `--problem-cache <file>` caches the parsed observations
-and built DD problem (~2× faster validation loops with an /O2 build).
+`--dump-csv` writes the ambiguity-candidate funnel (`amb_*`), the last LAMBDA
+candidate (`lambda_candidate_*`), and a satellite trace
+(`<path>.ar_candidates.csv`); its `disposition` codes (0-10) label each row's
+funnel exit. The same dump adds default-off, monitor-only diagnostics --
+receiver-clock-free temporal carrier, causal DD-PR Doppler/IMU and pair-bias,
+geometry-free slip (`--gf-slip-reset` restarts both bands and guards
+low-redundancy FIX), integer consensus, counterfactual partial-AR
+(`--ratio-impact-monitor`), disjoint-partition AR, fresh-SPP (`spp_seed_fresh`),
+and FFRT covariance -- each documented under `docs/`.
+
+#### Surplus-satellite rescue integrity
+
+Ratio-rejected candidates can be rescued by an independent surplus-satellite
+test (excluded DD carrier rows re-differenced against an alternate reference,
+PDOP-scaled nearest-integer aperture, GQEBR->GQ fallback; requires >=10 sats,
+DD-code RMS <=5 m, carrier RMS <=0.05 m). The fixed-lag-5 preset replayed over
+all three Tokyo runs ("Correct"/"wrong" = FIXED 3D error < / >= 0.5 m):
+
+| Run | Correct FIX | Wrong FIX | Fixed horizontal RMS | All epochs 3D <50 cm |
+|---|---:|---:|---:|---:|
+| Tokyo run1 | 4759 -> **4955** | 1088 -> **978** | 0.6866 -> **0.6616 m** | 5722 -> **5932** |
+| Tokyo run2 | 6336 -> **6339** | **314 -> 314** | 0.21668 -> **0.21663 m** | **7130 -> 7130** |
+| Tokyo run3 | 9961 -> **9963** | **1002 -> 1002** | 0.25744 -> **0.25742 m** | **10407 -> 10407** |
+
+Three opt-in, fail-closed guards add only correct fixes:
+`--fix-demote-surplus-anchor-reprieve` (surplus + >=12 sats + DD-code anchor
+within 8 m), `--anchor-gated-unfix-reset` (reacquisition only after a
+current-epoch anchor agrees with the IMU prediction and differs from the
+antenna by >=1 m), and `--fix-demote-spp-model-reprieve` (fresh candidate,
+<=2 cm IMU separation, <=8 m SPP separation). Full replays added correct fixes
+with zero wrong; correct-FIX distance reached ~58.28% (+1.2 pp).
+`--surplus-validation-veto` is false-alarm dominated - leave it off;
+`--problem-cache` speeds repeated validation. Counterfactual fixed-lag-QR
+auditing moved `--fix-demote-res` to 40 (tokyo fix 67.23/77.71/75.14%, fixed
+RMS 0.797/0.742/1.054 m).
 
 ### Moving CLAS PPP vs MRTKLIB
 
@@ -249,34 +233,50 @@ and defines TTFF as the first run of at least 30 consecutive FIX epochs.
 
 MRTKLIB columns are the published v0.4.2 results from the
 [CLAS benchmark article](https://zenn.dev/hatognss/articles/7a54dd82606faf).
-The native results below are the complete-run outputs after the float-recovery
-fix landed in #345; each run has 100% interval coverage and at least 99.92%
-epoch coverage.
+The native results below are the complete-run outputs after the
+hold-continuation carve-out landed in #349 and the outage-counter parity
+fix landed in #351; each run has 100% interval coverage and at least
+99.92% epoch coverage.
 
 | Run | libgnss++ FIX | MRTKLIB FIX | FIX RMS2D* | MRTKLIB RMS2D† | All RMS2D* | FLOAT RMS2D* | SINGLE RMS2D* | max FIX* | >3 m FIX* |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Tokyo 1 | **9.702%** | 4.900% | 0.453 m | 0.747 m | 41.713 m | 16.619 m | 80.050 m | 1.533 m | **0** |
-| Tokyo 2 | 19.219% | **21.700%** | 0.387 m | 0.514 m | 25.922 m | 17.896 m | 45.343 m | 1.036 m | **0** |
-| Tokyo 3 | **37.387%** | 7.400% | 0.327 m | 0.801 m | 35.286 m | 19.727 m | 88.586 m | 2.826 m | **0** |
-| Nagoya 1 | **36.605%** | 17.000% | 0.888 m | 1.105 m | 57.257 m | 8.064 m | 119.220 m | 1.501 m | **0** |
-| Nagoya 2 | 23.117% | **23.400%** | 0.783 m | 1.119 m | 25.841 m | 16.480 m | 40.344 m | 2.486 m | **0** |
-| Nagoya 3 | 4.865% | **6.300%** | 0.959 m | 0.318 m | 13.554 m | 13.795 m | 14.040 m | 1.494 m | **0** |
-| **Six-run aggregate** | **23.645%** | — | **0.593 m** | — | **36.510 m** | **16.777 m** | **70.316 m** | **2.826 m** | **0** |
+| Tokyo 1 | **10.704%** | 4.900% | **0.352 m** | 0.747 m | 41.862 m | 16.800 m | 80.343 m | 1.961 m | 0 |
+| Tokyo 2 | 21.507% | **21.700%** | **0.322 m** | 0.514 m | 25.882 m | 18.287 m | 45.148 m | 1.013 m | 0 |
+| Tokyo 3 | **37.951%** | 7.400% | **0.192 m** | 0.801 m | 35.276 m | 19.531 m | 88.519 m | 2.986 m | 0 |
+| Nagoya 1 | **36.737%** | 17.000% | **0.450 m** | 1.105 m | 57.163 m | 7.948 m | 119.111 m | 1.043 m | 0 |
+| Nagoya 2 | **23.959%** | 23.400% | **0.625 m** | 1.119 m | 25.829 m | 16.230 m | 40.405 m | 3.200 m | 19 |
+| Nagoya 3 | **8.776%** | 6.300% | **0.304 m** | 0.318 m | 13.724 m | 14.360 m | 14.380 m | 0.587 m | 0 |
+| **Six-run aggregate** | **24.851%** | — | **0.377 m** | — | **36.523 m** | **16.843 m** | **70.337 m** | **3.200 m** | **19** |
 
-\* libgnss++ precision uses PPC vehicle truth transformed to the antenna phase
-center. † The published MRTKLIB precision uses the unmodified PPC reference,
-so cross-solver precision columns are contextual rather than reference-identical.
+\* libgnss++ precision uses the raw PPC reference point (already
+antenna-positioned; no lever-arm transform is applied — an earlier revision
+of this table double-applied a vehicle→antenna lever arm on top of an
+already-antenna-positioned reference, inflating FIX RMS2D by ~0.3–0.9 m and
+incidentally masking the Nagoya 2 tail below the 3 m line). † The published
+MRTKLIB precision uses the same raw PPC reference, so the FIX RMS2D and p68
+columns are directly comparable, not merely contextual — libgnss++ FIX
+RMS2D is now lower than MRTKLIB's on all six runs (bolded above).
 
 ![PPC six-run moving CLAS metric comparison](docs/ppc_clas_full_comparison.png)
 
-Across 58,258 scored epochs, native CLAS produced 13,775 FIX epochs. A finite
+Across 58,259 scored epochs, native CLAS produced 14,478 FIX epochs. A finite
 SPP candidate rejected by the chi-square/redundancy validation still remains
 excluded from ordinary filter admission, cold starts, and AR. For catastrophic
 FLOAT/SPP disagreement above 250 m only, it can continue the counted MRTKLIB
 `maxdiffp` recovery path. On Tokyo 2 this moves the bad-seed recovery from TOW
 177750.0 to 177747.4 (311.6 m to 5.4 m), 0.8 s before the MRTKLIB recovery at
-177748.2. The six-run all-solution RMS2D is 36.510 m; FLOAT and SINGLE RMS2D are
-16.777 m and 70.316 m respectively.
+177748.2. The six-run all-solution RMS2D is 36.523 m; FLOAT and SINGLE RMS2D are
+16.843 m and 70.337 m respectively.
+
+Of the 14,478 FIX epochs, 19 (0.03%) exceed 3 m horizontal error; all 19 fall
+in a single contiguous 4-second burst on Nagoya 2 (TOW 556406.4–556410.4,
+errors 3.17–3.20 m, max 3.200 m), inside the known seed-geometry `maxdiffp`
+reset zone. The identical 19 epochs, at matching TOWs and errors, are present
+in the pre-#349 baseline run, so this is a pre-existing wrong-fix tail, not a
+regression from the hold-continuation carve-out or the #351 outage-counter
+parity fix — it was previously invisible because the lever-arm
+double-correction happened to shift it under the 3 m line (old Nagoya 2 max
+was 2.486 m). The other five runs still have zero FIX epochs above 3 m.
 
 | Complete trajectories | Horizontal error and FIX epochs |
 |---|---|
@@ -295,8 +295,13 @@ Choose the entrypoint that matches your job:
   inspection, ROS2 receiver launch, and rosbag capture.
 - [Research quick start](docs/research_quickstart.md): repeatable sign-off
   runs, profile comparisons, Python inspection, and artifact layout.
+- [Self-contained offline demo](docs/self_contained_demo.md): one tracked
+  fixture, one command, and `.pos`/KML/JSON artifacts without a download.
 - [Dataset gallery](docs/dataset_gallery.md): current public dataset lanes and
   the adapter contract for adding more.
+
+For repository orientation, see [application structure](apps/README.md),
+[script layout](scripts/README.md), and [standalone tools](tools/README.md).
 
 Build:
 
@@ -304,6 +309,7 @@ Build:
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 python3 apps/gnss.py doctor
+python3 apps/gnss.py demo
 python3 apps/gnss.py ros2-doctor --device /dev/ttyUSB0
 python3 apps/gnss.py ros2-bag-doctor --bag /path/to/rosbag --summary-json output/ros2_bag_doctor_summary.json
 python3 apps/gnss.py field-report --out output/field_report.md
@@ -378,6 +384,7 @@ docker run --rm -it -p 8085:8085 -v "$PWD:/workspace" \
 - [Interfaces](docs/interfaces.md)
 - [Architecture](docs/architecture.md)
 - [Reference analyses](docs/references/index.md)
+- [Community onboarding](docs/community.md)
 - [Contributing](CONTRIBUTING.md)
 
 ## Install

@@ -77,7 +77,7 @@ selected cluster position is its coordinate-wise ECEF median. Primary status,
 epoch grid, and telemetry are preserved.
 
 The offline Python replay implements the same decision boundary in
-`scripts/apply_ppc_fgo_position_consensus.py`. The library-side
+`scripts/experiments/ppc/apply_ppc_fgo_position_consensus.py`. The library-side
 `MultiShadowPositionConsensus` exposes it without a GTSAM dependency. Tokyo 1
 replay replaced 37 positions for 34 wrong-to-correct and 2 correct-to-wrong
 changes. The thresholds were then frozen; an unseen Tokyo 2 replay replaced

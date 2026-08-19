@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
-EXPERIMENTS_DIR = ROOT_DIR / "experiments" / "ppp_ar"
+EXPERIMENTS_DIR = ROOT_DIR / "scripts" / "experiments" / "ppp_ar"
 sys.path.insert(0, str(EXPERIMENTS_DIR))
 
 import run_experiments as experiments  # noqa: E402
@@ -452,12 +452,12 @@ class PPPArExperimentsTest(unittest.TestCase):
 
         markdown = experiments.render_markdown(
             suite,
-            Path("experiments/ppp_ar/strategies.toml"),
+            Path("scripts/experiments/ppp_ar/strategies.toml"),
             case_payloads,
             suite_summary,
         )
 
-        self.assertIn("experiments/ppp_ar/strategies.toml", markdown)
+        self.assertIn("scripts/experiments/ppp_ar/strategies.toml", markdown)
 
     def test_evaluate_promotion_readiness_marks_solver_arm_as_candidate(self) -> None:
         results = [

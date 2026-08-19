@@ -61,7 +61,8 @@ not accept relative `kinematic`, while the CLI option does.
 
 ## Coverage Matrix
 
-Use this for the README RTKLIB `demo5` comparison table:
+Use this for the RTKLIB `demo5` comparison table in
+[`docs/benchmarks.md`](benchmarks.md#ppc-coverage-profile):
 
 ```bash
 python3 apps/gnss.py ppc-coverage-matrix \
@@ -71,7 +72,7 @@ python3 apps/gnss.py ppc-coverage-matrix \
   --summary-json output/ppc_coverage_matrix/summary.json \
   --markdown-output output/ppc_coverage_matrix/table.md
 
-python3 scripts/update_ppc_coverage_readme.py \
+python3 scripts/experiments/ppc/update_ppc_coverage_readme.py \
   --summary-json output/ppc_coverage_matrix/summary.json
 ```
 
@@ -83,14 +84,14 @@ corrections, expands the dense SSR input, and runs `gnss_ppp`; allow substantial
 disk space and runtime for the six full histories.
 
 ```bash
-python3 scripts/generate_ppc_clas_scorecard.py \
+python3 scripts/experiments/ppc/generate_ppc_clas_scorecard.py \
   --dataset-root data/PPC-Dataset \
   --work-dir output/ppc_clas_full \
   --l6-cache output/ppc_clas_full/l6_cache \
   --configs parity \
   --report output/ppc_clas_full/scorecard.md
 
-python3 scripts/generate_ppc_clas_full_comparison.py \
+python3 scripts/experiments/ppc/generate_ppc_clas_full_comparison.py \
   --dataset-root data/PPC-Dataset \
   --results-dir output/ppc_clas_full \
   --metrics docs/ppc_clas_full_metrics.json \
@@ -120,7 +121,7 @@ selected trajectory and an independently generated tightly-coupled RTK
 trajectory:
 
 ```bash
-python3 scripts/select_pos_candidate_quality.py \
+python3 scripts/experiments/ppc/select_pos_candidate_quality.py \
   --baseline-pos output/tokyo1_selected_quality_rtkbaseline_tier2_truthfree.pos \
   --candidate-pos output/tc_m3_full_t1_on/rtk.pos \
   --output-pos output/tokyo1_selected_quality_tcm3_tier3_truthfree.pos \
@@ -141,7 +142,7 @@ when the baseline prefit RMS exceeds 8 m and at least 45 observations were
 suppressed. The selector accepts no reference path:
 
 ```bash
-python3 scripts/select_pos_candidate_quality.py \
+python3 scripts/experiments/ppc/select_pos_candidate_quality.py \
   --baseline-pos output/nagoya2_selected_quality_rtkbaseline_tier2_truthfree.pos \
   --candidate-pos output/probe_fuse_nagoya2_full_tc_m4.pos \
   --output-pos output/nagoya2_wrong_basin_fgo_escape_truthfree.pos \
@@ -160,7 +161,7 @@ This selects 35 epochs. Apply the final truth-free confidence gate to all six
 selected paths after applying the Nagoya 3 consensus escape:
 
 ```bash
-python3 scripts/select_pos_candidate_quality.py \
+python3 scripts/experiments/ppc/select_pos_candidate_quality.py \
   --baseline-pos output/nagoya3_selected_quality_rtkbaseline_truthfree.pos \
   --candidate-pos output/goal_kf_nagoya3_r2_min8_rescue29_8_cmcref/solution.pos \
   --output-pos output/nagoya3_consensus_escape_truthfree.pos \
@@ -181,7 +182,7 @@ candidate AR ratio is at its acceptance boundary. Apply the final confidence
 gate, then score the resulting outputs with the common metric implementation:
 
 ```bash
-python3 scripts/apply_ppc_status_demotion.py \
+python3 scripts/experiments/ppc/apply_ppc_status_demotion.py \
   --pos tokyo_run1=output/tokyo1_selected_quality_tcm3_tier3_truthfree.pos \
   --pos tokyo_run2=output/tokyo2_selected_quality_rtkbaseline_tier2_truthfree.pos \
   --pos tokyo_run3=output/tokyo3_selected_quality_rtkbaseline_tier2_truthfree.pos \
@@ -193,7 +194,7 @@ python3 scripts/apply_ppc_status_demotion.py \
   --low-satellite-ceiling 11 \
   --low-satellite-max-ratio 15
 
-python3 scripts/summarize_fgo_ppc_matrix.py \
+python3 scripts/experiments/ppc/summarize_fgo_ppc_matrix.py \
   --dataset-root data/PPC-Dataset \
   --pos tokyo/run1=output/ppc_kf_fgo_consensus_escape/tokyo_run1.pos \
   --pos tokyo/run2=output/ppc_kf_fgo_consensus_escape/tokyo_run2.pos \
@@ -227,7 +228,7 @@ position substitution above with a causal KF/FGO status-only replay. It never
 reads a reference trajectory and never replaces the primary position:
 
 ```bash
-python3 scripts/apply_ppc_integrity_consensus.py \
+python3 scripts/experiments/ppc/apply_ppc_integrity_consensus.py \
   --primary-pos output/nagoya3_selected_quality_rtkbaseline_truthfree.pos \
   --shadow-csv output/fgo_partial_noreset_ddpranchor_nagoya3_first2100_ecef.csv \
   --shadow-csv output/fgo_partial_noreset_ddpranchor_nagoya3_start2000_3000_ecef.csv \
@@ -242,7 +243,7 @@ Apply the satellite gate, its strong-telemetry exoneration, and the staged
 causal kinematic quarantine in one pass:
 
 ```bash
-python3 scripts/apply_ppc_status_demotion.py \
+python3 scripts/experiments/ppc/apply_ppc_status_demotion.py \
   --pos tokyo_run1=output/tokyo1_selected_quality_tcm3_tier3_truthfree.pos \
   --pos tokyo_run2=output/tokyo2_selected_quality_rtkbaseline_tier2_truthfree.pos \
   --pos tokyo_run3=output/tokyo3_selected_quality_rtkbaseline_tier2_truthfree.pos \
@@ -311,7 +312,7 @@ the FGO solve receives rover/base/nav/IMU data only. Replay both absolute-ECEF
 shadows through the truth-free status-only manager:
 
 ```bash
-python3 scripts/apply_ppc_integrity_consensus.py \
+python3 scripts/experiments/ppc/apply_ppc_integrity_consensus.py \
   --primary-pos output/ppc_kf_fgo_online_consensus_kinematic_advanced/tokyo_run3.pos \
   --shadow-csv output/fgo_shipping_tokyo3_start10950_400_ecef.csv \
   --shadow-csv output/fgo_shipping_tokyo3_start11150_400_ecef.csv \
@@ -355,7 +356,7 @@ Regenerate the machine-readable audit and both README figures from the scored
 artifacts:
 
 ```bash
-MPLBACKEND=Agg python3 scripts/generate_ppc_goal_scorecard.py \
+MPLBACKEND=Agg python3 scripts/experiments/ppc/generate_ppc_goal_scorecard.py \
   --lib-matrix output/kf_fgo_staged_integrity_full_matrix.json \
   --gici-matrix output/gici_reproduction_ppc_matrix.json \
   --nagoya1-public-summary output/goal_kf_current_r2_min8_rate20_rescue29_8/summary.json \
@@ -382,7 +383,7 @@ MPLBACKEND=Agg python3 scripts/generate_ppc_goal_scorecard.py \
   --online-consensus-summary output/tokyo3_advanced_online_consensus_fgo_a5_gdop4_two_window_summary.json \
   --staged-integrity-audit docs/ppc_residual_integrity_external_audit.json
 
-MPLBACKEND=Agg python3 scripts/plot_ppc_status_trajectories.py \
+MPLBACKEND=Agg python3 scripts/experiments/ppc/plot_ppc_status_trajectories.py \
   --dataset-root data/PPC-Dataset \
   --metrics-json docs/ppc_kf_fgo_goal_metrics.json \
   --output docs/ppc_kf_fgo_fix_status_xy.png \
@@ -391,7 +392,7 @@ MPLBACKEND=Agg python3 scripts/plot_ppc_status_trajectories.py \
 ```
 
 Regenerate the wrong-FIX severity and leave-one-run-out audit with
-`scripts/analyze_ppc_wrong_fix_residuals.py`. Pass the previous `min_sat9` and
+`scripts/analysis/analyze_ppc_wrong_fix_residuals.py`. Pass the previous `min_sat9` and
 `integrity_gate` and `wrong_basin_escape` directories and the new
 `consensus_escape` directory as `--profile`, plus the six pre-gate selected POS
 paths as `--loo-pos`; the
@@ -404,7 +405,7 @@ and selects by >5 m wrong FIX, total wrong FIX, then retained FIX count.
 Build the contiguous wrong-FIX event ledger from the final six POS files with:
 
 ```bash
-python3 scripts/build_ppc_wrong_fix_event_ledger.py \
+python3 scripts/experiments/ppc/build_ppc_wrong_fix_event_ledger.py \
   --dataset-root data/PPC-Dataset \
   --pos tokyo_run1=output/ppc_kf_fgo_staged_integrity_full/tokyo_run1.pos \
   --pos tokyo_run2=output/ppc_kf_fgo_staged_integrity_full/tokyo_run2.pos \
@@ -445,7 +446,7 @@ emitted status and RTK telemetry; the eight-epoch prefix requires at most seven
 epochs (1.4 seconds at 5 Hz) of output buffering:
 
 ```bash
-python3 scripts/apply_ppc_status_demotion.py \
+python3 scripts/experiments/ppc/apply_ppc_status_demotion.py \
   --input-dir output/ppc_kf_fgo_online_consensus_fresh_kinematic_holdout \
   --output-dir output/ppc_kf_fgo_staged_integrity_full \
   --min-satellites 8 \
@@ -467,7 +468,7 @@ python3 scripts/apply_ppc_status_demotion.py \
 Audit runtime/reference separation and per-run harm with:
 
 ```bash
-python3 scripts/evaluate_ppc_residual_integrity_policy.py \
+python3 scripts/analysis/evaluate_ppc_residual_integrity_policy.py \
   --dataset-root data/PPC-Dataset \
   --input-dir output/ppc_kf_fgo_online_consensus_fresh_kinematic_holdout \
   --summary-json output/ppc_residual_integrity_fixed_policy_audit.json \
@@ -504,7 +505,7 @@ After solving Odaiba and Shinjuku with the same `low-cost` RTK preset, audit
 both full-run outputs without changing the frozen runtime thresholds:
 
 ```bash
-python3 scripts/evaluate_ppc_residual_integrity_policy.py \
+python3 scripts/analysis/evaluate_ppc_residual_integrity_policy.py \
   --run urban_odaiba=output/urbannav_odaiba_full.pos,/datasets/UrbanNav-TK-20181219/Odaiba/reference.csv \
   --run urban_shinjuku=output/urbannav_shinjuku_full.pos,/datasets/UrbanNav-TK-20181219/Shinjuku/reference.csv \
   --match-tolerance-s 0.25 \
@@ -549,7 +550,7 @@ Verify the complete metric, artifact, external-validation, CI, and license
 contract with:
 
 ```bash
-python3 scripts/verify_ppc_goal_completion.py \
+python3 scripts/experiments/ppc/verify_ppc_goal_completion.py \
   --summary-json docs/ppc_goal_completion_audit.json \
   --markdown-output docs/ppc_goal_completion_audit.md
 ```

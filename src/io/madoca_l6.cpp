@@ -754,18 +754,10 @@ bool madocaTimeLess(const MadocaGtime& lhs, const MadocaGtime& rhs) {
     return lhs.sec < rhs.sec;
 }
 
-MadocaGtime latestComponentTime(const MadocaSsrCorrection& c, bool include_bias_times) {
+MadocaGtime latestComponentTime(const MadocaSsrCorrection& c) {
     MadocaGtime latest = c.t0[0];
     if (latest.time == 0 || madocaTimeLess(latest, c.t0[1])) {
         latest = c.t0[1];
-    }
-    if (include_bias_times) {
-        for (int index : {3, 4, 5}) {
-            if (c.t0[index].time != 0 &&
-                (latest.time == 0 || madocaTimeLess(latest, c.t0[index]))) {
-                latest = c.t0[index];
-            }
-        }
     }
     return latest;
 }
@@ -775,8 +767,7 @@ bool useMadocaBiasIdentityKey(libgnss::GNSSSystem system,
 
 bool buildMadocaSsrCorrection(int sat, const MadocaSsrCorrection& c,
                               const PPPEnvOverrides& env_overrides,
-                              libgnss::SSROrbitClockCorrection& out,
-                              bool include_bias_times = false) {
+                              libgnss::SSROrbitClockCorrection& out) {
     const bool has_orbit = c.t0[0].time != 0;  // t0[eph]
     const bool has_clock = c.t0[1].time != 0;  // t0[clk]
     if (!has_orbit && !has_clock) {
@@ -808,7 +799,7 @@ bool buildMadocaSsrCorrection(int sat, const MadocaSsrCorrection& c,
     out = libgnss::SSROrbitClockCorrection{};
     out.satellite = libgnss::SatelliteId(gsys, static_cast<std::uint8_t>(prn));
 
-    const MadocaGtime t0 = latestComponentTime(c, include_bias_times);
+    const MadocaGtime t0 = latestComponentTime(c);
     int week = 0;
     const double tow = time2gpst(t0, &week);
     out.time = libgnss::GNSSTime(week, tow);
@@ -1047,64 +1038,6 @@ int decodeMadocaL6eFilesToProducts(const std::vector<std::string>& files,
     return added;
 }
 
-int decodeMadocaL6eFilesToProductsReplay(const std::vector<std::string>& files,
-                                         int gps_week,
-                                         libgnss::SSRProducts& products) {
-    products.setOrbitCorrectionsAreRac(true);
-    double ref_ep[6];
-    referenceEpochForWeek(gps_week, ref_ep);
-
-    constexpr int kN = MadocaL6eDecoder::kMaxSat;
-    std::vector<libgnss::SSROrbitClockCorrection> corrections;
-    int added = 0;
-    for (const std::string& file : files) {
-        std::ifstream in(file, std::ios::binary);
-        if (!in) {
-            continue;
-        }
-
-        MadocaL6eDecoder decoder;
-        decoder.setReferenceEpoch(ref_ep);
-        std::vector<std::array<std::int64_t, 6>> last_t0(kN + 1);
-        for (auto& sat_t0 : last_t0) {
-            sat_t0.fill(-1);
-        }
-
-        char raw = 0;
-        while (in.get(raw)) {
-            if (decoder.inputByte(static_cast<std::uint8_t>(raw)) != 10) {
-                continue;
-            }
-            for (int sat = 1; sat <= kN; ++sat) {
-                const MadocaSsrCorrection& c = decoder.correction(sat);
-                bool changed = false;
-                bool has_any_component = false;
-                for (int index = 0; index < 6; ++index) {
-                    const std::int64_t t0 = c.t0[index].time;
-                    has_any_component = has_any_component || t0 != 0;
-                    if (t0 != last_t0[sat][index]) {
-                        changed = true;
-                    }
-                }
-                if (!has_any_component || !changed) {
-                    continue;
-                }
-                for (int index = 0; index < 6; ++index) {
-                    last_t0[sat][index] = c.t0[index].time;
-                }
-                libgnss::SSROrbitClockCorrection corr;
-                if (buildMadocaSsrCorrection(
-                        sat, c, decoder.envOverrides(), corr, true)) {
-                    corrections.push_back(corr);
-                    ++added;
-                }
-            }
-        }
-    }
-    products.addCorrections(corrections);
-    return added;
-}
-
 int writeMadocaMaterializationCsv(const libgnss::SSRProducts& products,
                                   std::ostream& output) {
     output
@@ -1157,14 +1090,9 @@ int writeMadocaMaterializationCsv(const libgnss::SSRProducts& products,
 
 int writeMadocaL6eMaterializationCsv(const std::vector<std::string>& files,
                                      int gps_week,
-                                     const std::string& output_path,
-                                     bool replay_mode) {
+                                     const std::string& output_path) {
     libgnss::SSRProducts products;
-    if (replay_mode) {
-        decodeMadocaL6eFilesToProductsReplay(files, gps_week, products);
-    } else {
-        decodeMadocaL6eFilesToProducts(files, gps_week, products);
-    }
+    decodeMadocaL6eFilesToProducts(files, gps_week, products);
 
     std::ofstream output(output_path);
     if (!output.is_open()) {

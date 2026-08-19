@@ -664,7 +664,7 @@ bool PPPProcessor::hasEnoughCoherentSsrObservations(const ObservationData& obs,
             nullptr,
             &status,
             false);
-        if (env_overrides_.madoca_galileo_gate &&
+        if (env_overrides_.madoca_early_window &&
             observation.satellite.system == GNSSSystem::Galileo &&
             !nav.hasMadocaGalileoEphemeris(
                 observation.satellite, obs.time, status.orbit_iode)) {
@@ -821,8 +821,24 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
             shadow_satellites.push_back(observation.satellite);
         }
     }
-    last_madoca_l6d_shadow_status_ =
+    const MadocaL6dShadowStatus previous_l6d_status =
+        last_madoca_l6d_shadow_status_;
+    MadocaL6dShadowStatus inspected_l6d_status =
         inspectMadocaL6dShadow(shadow_satellites, time);
+    // Correction application can run again after the prefit measurement
+    // update. Preserve the constraint telemetry captured while forming that
+    // update instead of replacing it with the second shadow inspection.
+    inspected_l6d_status.constraint_enabled =
+        previous_l6d_status.constraint_enabled;
+    inspected_l6d_status.constraint_skipped_position_covariance =
+        previous_l6d_status.constraint_skipped_position_covariance;
+    inspected_l6d_status.constraint_rows =
+        previous_l6d_status.constraint_rows;
+    inspected_l6d_status.constraint_horizontal_position_std_m =
+        previous_l6d_status.constraint_horizontal_position_std_m;
+    inspected_l6d_status.constraint_vertical_position_std_m =
+        previous_l6d_status.constraint_vertical_position_std_m;
+    last_madoca_l6d_shadow_status_ = inspected_l6d_status;
 
     // Pre-fetch epoch-wide atmosphere tokens from any satellite that has them.
     // CLAS atmosphere corrections are network-wide, not per-satellite, so we
@@ -932,7 +948,7 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                 observation.valid = false;
                 continue;
             }
-            if (env_overrides_.madoca_galileo_gate &&
+            if (env_overrides_.madoca_early_window &&
                 require_coherent_ssr_ &&
                 observation.satellite.system == GNSSSystem::Galileo &&
                 !nav.hasMadocaGalileoEphemeris(
@@ -978,6 +994,55 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                         ssr_orbit_iode)) {
                     observation.valid = false;
                     continue;
+                }
+                // satpos_ssr() recomputes the broadcast clock relativity term
+                // from the state-vector dot product after ephpos() forms its
+                // 1 ms forward-difference velocity. The usual eccentric-
+                // anomaly expression differs by centimetres once harmonic
+                // orbit terms are included, which is enough to alter the
+                // tightly weighted MADOCA carrier update and N1 candidates.
+                const Ephemeris* ssr_eph =
+                    nav.getEphemeris(
+                        observation.satellite, emission_time, ssr_orbit_iode);
+                const bool madocalib_ssr_clock_system =
+                    observation.satellite.system == GNSSSystem::GPS ||
+                    observation.satellite.system == GNSSSystem::Galileo ||
+                    observation.satellite.system == GNSSSystem::QZSS ||
+                    observation.satellite.system == GNSSSystem::BeiDou;
+                if (require_coherent_ssr_ && madocalib_ssr_clock_system) {
+                    if (ssr_eph == nullptr) {
+                        observation.valid = false;
+                        continue;
+                    }
+                    constexpr double kRtklibVelocityStepSeconds = 1.0e-3;
+                    Vector3d forward_position = Vector3d::Zero();
+                    Vector3d ignored_velocity = Vector3d::Zero();
+                    double ignored_clock_bias = 0.0;
+                    double ignored_clock_drift = 0.0;
+                    if (!ssr_eph->calculateSatelliteState(
+                            emission_time + kRtklibVelocityStepSeconds,
+                            forward_position,
+                            ignored_velocity,
+                            ignored_clock_bias,
+                            ignored_clock_drift)) {
+                        observation.valid = false;
+                        continue;
+                    }
+                    const Vector3d rtklib_velocity =
+                        (forward_position - sat_position) /
+                        kRtklibVelocityStepSeconds;
+                    const double tc = emission_time - ssr_eph->toc;
+                    const double polynomial_clock =
+                        ssr_eph->af0 + ssr_eph->af1 * tc +
+                        ssr_eph->af2 * tc * tc;
+                    sat_clock_bias =
+                        algorithms::ppp_correction_contract::
+                            madocalibSsrBroadcastClock(
+                                polynomial_clock,
+                                sat_position.dot(rtklib_velocity),
+                                constants::SPEED_OF_LIGHT);
+                    sat_clock_drift =
+                        ssr_eph->af1 + 2.0 * ssr_eph->af2 * tc;
                 }
             }
         }
@@ -1194,8 +1259,12 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                             extra.phase_bias_m = pb;
                         }
                     }
-                    // Re-derive the ionosphere seed from bias-corrected codes.
-                    if (observation.has_l2 && observation.pseudorange_l1 != 0.0 &&
+                    // MADOCALIB's udbias_ppp() intentionally combines
+                    // corrected L/P with an ionosphere seed from raw P1/P2.
+                    if (algorithms::ppp_correction_contract::
+                            rederiveIonosphereSeedAfterSsrBias(
+                                require_coherent_ssr_) &&
+                        observation.has_l2 && observation.pseudorange_l1 != 0.0 &&
                         observation.freq_l1 > 0.0 && observation.freq_l2 > 0.0) {
                         const double ratio = observation.freq_l1 / observation.freq_l2;
                         const double denom = 1.0 - ratio * ratio;
@@ -1493,6 +1562,13 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
             deferred_variance_pr += kMadocalibEstimatedTropVarianceM2;
             deferred_variance_cp += kMadocalibEstimatedTropVarianceM2;
         }
+        const bool madoca_per_frequency =
+            require_coherent_ssr_ &&
+            !ppp_config_.use_ionosphere_free &&
+            ppp_config_.estimate_ionosphere;
+        deferred_variance_pr += ppp_internal::madocaGlonassCodeIfbVariance(
+            madoca_per_frequency,
+            observation.satellite.system);
         observation.variance_pr = safeVariance(observation.variance_pr + deferred_variance_pr, 1e-6);
         observation.variance_cp = safeVariance(observation.variance_cp + deferred_variance_cp, 1e-8);
         // Optional diagnostic scaling after the RTKLIB code/phase ratio. The
@@ -1521,7 +1597,10 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
         // position shift bit-identical (corrections stay 0).
         observation.rx_ant_corr_l1_m = 0.0;
         observation.rx_ant_corr_l2_m = 0.0;
-        if (env_overrides_.pf_rx_antenna && receiver_antex_loaded_ &&
+        const bool coherent_madoca_receiver_antenna =
+            require_coherent_ssr_ && ssr_products_loaded_;
+        if ((env_overrides_.pf_rx_antenna || coherent_madoca_receiver_antenna) &&
+            receiver_antex_loaded_ &&
             !ppp_config_.use_ionosphere_free && ppp_config_.estimate_ionosphere &&
             !ppp_config_.use_clas_osr_filter && geometry.distance > 0.0 &&
             !ppp_config_.receiver_antenna_type.empty()) {
@@ -1705,7 +1784,13 @@ Vector3d PPPProcessor::calculateSolidEarthTides(const Vector3d& position,
         return Vector3d::Zero();
     }
 
-    if (ppp_config_.use_iers_solid_tide) {
+    const bool madoca_per_frequency =
+        require_coherent_ssr_ && ssr_products_loaded_ &&
+        !ppp_config_.use_ionosphere_free &&
+        ppp_config_.estimate_ionosphere &&
+        !ppp_config_.use_clas_osr_filter;
+    if (algorithms::ppp_correction_contract::useIersSolidEarthTide(
+            madoca_per_frequency, ppp_config_.use_iers_solid_tide)) {
         // IERS Conventions 2010 §7.1.1 (Dehant) Step-1 + Step-2 model
         // via the libgnss::iers wrapper. Sun and Moon are supplied in
         // ICRS — see the FRAME NOTE in libgnss++/iers/tides.hpp for

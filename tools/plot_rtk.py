@@ -13,44 +13,7 @@ import sys
 import os
 import numpy as np
 from datetime import datetime
-import math
-
-
-# ---------------------------------------------------------------------------
-# 座標変換ユーティリティ
-# ---------------------------------------------------------------------------
-
-def geodetic_to_ecef(lat_deg, lon_deg, h):
-    """WGS84 geodetic -> ECEF (m)"""
-    a = 6378137.0
-    f = 1.0 / 298.257223563
-    e2 = 2 * f - f * f
-    lat = math.radians(lat_deg)
-    lon = math.radians(lon_deg)
-    sin_lat = math.sin(lat)
-    cos_lat = math.cos(lat)
-    sin_lon = math.sin(lon)
-    cos_lon = math.cos(lon)
-    N = a / math.sqrt(1.0 - e2 * sin_lat * sin_lat)
-    x = (N + h) * cos_lat * cos_lon
-    y = (N + h) * cos_lat * sin_lon
-    z = (N * (1.0 - e2) + h) * sin_lat
-    return x, y, z
-
-
-def ecef_to_enu(dx, dy, dz, lat_deg, lon_deg):
-    """ECEF差分 -> ENU"""
-    lat = math.radians(lat_deg)
-    lon = math.radians(lon_deg)
-    sin_lat = math.sin(lat)
-    cos_lat = math.cos(lat)
-    sin_lon = math.sin(lon)
-    cos_lon = math.cos(lon)
-    e = -sin_lon * dx + cos_lon * dy
-    n = -sin_lat * cos_lon * dx - sin_lat * sin_lon * dy + cos_lat * dz
-    u = cos_lat * cos_lon * dx + cos_lat * sin_lon * dy + sin_lat * dz
-    return e, n, u
-
+from rtk_geometry import ecef_to_enu, geodetic_to_ecef
 
 # ---------------------------------------------------------------------------
 # ファイル読み込み

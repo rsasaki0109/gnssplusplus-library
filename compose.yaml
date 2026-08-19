@@ -1,6 +1,6 @@
 services:
   gnss-web:
-    image: ${LIBGNSSPP_IMAGE:-ghcr.io/rsasaki0109/gnssplusplus-library:develop}
+    image: ${LIBGNSSPP_IMAGE:-ghcr.io/rsasaki0109/gnssplusplus-library:v0.2.0}
     build:
       context: .
       target: runtime

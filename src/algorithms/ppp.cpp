@@ -725,6 +725,11 @@ PositionSolution PPPProcessor::processEpochStandard(
 
     has_last_processed_time_ = true;
     last_processed_time_ = obs.time;
+    if (solution.isValid() && solution.position_covariance.allFinite()) {
+        previous_solution_position_covariance_ =
+            solution.position_covariance;
+        has_previous_solution_position_covariance_ = true;
+    }
 
     return finalizeSolution(solution);
 }
@@ -799,6 +804,8 @@ void PPPProcessor::reset() {
     last_applied_ionex_m_ = 0.0;
     last_applied_dcb_m_ = 0.0;
     last_madoca_l6d_shadow_status_ = {};
+    previous_solution_position_covariance_.setZero();
+    has_previous_solution_position_covariance_ = false;
 
     std::lock_guard<std::mutex> lock(stats_mutex_);
     total_epochs_processed_ = 0;
@@ -989,8 +996,8 @@ double calculatePhaseWindup(const Vector3d& receiver_pos,
     e_y_sat /= y_norm;
     const Vector3d e_x_sat = e_y_sat.cross(e_z_sat);
 
-    // Receiver local north-east-up (north, east, up are standard PPP/RTKLIB):
-    //   x_rcv → North, y_rcv → East, z_rcv → Up.
+    // Receiver local north-west-up, matching RTKLIB/MADOCALIB model_phw():
+    //   x_rcv → North, y_rcv → West, z_rcv → Up.
     double latitude_rad = 0.0;
     double longitude_rad = 0.0;
     double height_m = 0.0;
@@ -1001,8 +1008,8 @@ double calculatePhaseWindup(const Vector3d& receiver_pos,
     const double cos_lon = std::cos(longitude_rad);
     // North (X): -sin(lat) cos(lon), -sin(lat) sin(lon), cos(lat)
     const Vector3d e_x_rcv(-sin_lat * cos_lon, -sin_lat * sin_lon, cos_lat);
-    // East  (Y): -sin(lon),                cos(lon),           0
-    const Vector3d e_y_rcv(-sin_lon, cos_lon, 0.0);
+    // West  (Y): sin(lon),                -cos(lon),           0
+    const Vector3d e_y_rcv(sin_lon, -cos_lon, 0.0);
 
     // Effective dipole vectors (Wu et al. 1993, eq. 7)
     const Vector3d d_sat = e_x_sat - e_sr * (e_sr.dot(e_x_sat))

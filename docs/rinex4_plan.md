@@ -1,9 +1,9 @@
 # RINEX 4.02 Plan
 
-This plan scopes the RINEX 4 work before implementation.  The intent for
-iter1 is to record the parser state, isolate the RINEX 4 surface area, and add
-only a compile-time skeleton.  Functional parsing changes should start in
-iter2.
+This plan scoped the RINEX 4 work before implementation.  The original iter1
+intent was to record parser state, isolate the RINEX 4 surface area, and add a
+compile-time skeleton; the completed Phase 1 and Phase 2 slices now add the
+documented reader behavior incrementally.
 
 ## Reference Sources
 
@@ -171,47 +171,126 @@ Phase 2, observation support:
 - Add CRINEX policy tests that verify `.crx`/`.crx.gz` is rejected with a clear
   message or preprocessed through an external converter.
 
-Phase 3, `EPH` navigation support:
+**DONE in the Phase 2 observation slice.**  RINEX 4 epoch metadata is parsed
+token-wise, including the Table A3 receiver-clock and optional five-digit
+picosecond extension fields.  GPS and QZSS rows reuse the RINEX 3 selection
+policy, continuation headers are covered, and event/cycle-slip records are
+consumed before scanning for the next normal epoch.  Event records do not
+produce `ObservationData` epochs, while a valid flag 0/1 epoch with zero
+satellites is returned as an intentionally empty epoch; malformed or
+truncated normal records fail instead of returning partial data.  Native
+CRINEX decompression remains out of scope and matching suffixes are rejected
+explicitly.
 
-- Parse RINEX 4 `EPH` data record headers.
+Phase 3, `EPH` navigation metadata and compatible-body support (DONE):
+
+- Parse RINEX 4 `EPH` data record headers and preserve typed message
+  provenance on `Ephemeris`. **DONE in the Phase 3 slice.**
 - Reuse current GPS/Galileo/BeiDou/QZSS/GLONASS FDMA bodies where compatible.
-- Add explicit skip/error handling for unsupported `L1NV`, `L1OC`, and `L3OC`
-  before implementing them.
-- Preserve message type metadata for Galileo `FNAV` vs `INAV`.
+  **DONE for the compatible message types; global ephemeris selection is
+  unchanged.**
+- Reject nonblank EPH subtypes and trailing header tokens, skip unsupported
+  EPH bodies at the next `>` boundary, and validate Galileo FNAV/INAV clock
+  source bits. **DONE in the Phase 3 slice.**
 
-Phase 4, system data records:
+Phase 4, system data records (DONE):
 
-- Add internal containers for `STO`, `EOP`, and `ION`.
-- Start with ION because QZSS/NavIC ION subtypes matter for MADOCA/RINEX 4
-  convergence.
-- Decide whether these containers live in `NavigationData` or a RINEX-specific
-  sidecar.
+- Add internal containers for `STO`, `EOP`, and `ION`. **DONE in the Phase 4
+  slice** as a RINEX-specific `RINEXReader` sidecar, leaving the existing
+  `NavigationData` selection and legacy ionosphere model unchanged.
+- Parse the Table A33/A34 `STO`/`EOP` records and the A35--A40 Klobuchar,
+  NeQuick-G, BDGIM, NavIC KLOB/NEQN, and GLONASS CDMA ION models with strict
+  fixed-field validation. **DONE in the Phase 4 slice.**
+- Reject unsupported message/type/subtype combinations and malformed bodies
+  transactionally while preserving the next `>` boundary. The `LEG` STO
+  spelling is retained only for the explicit RINEX 4.02 Table A41 example;
+  Table 21 remains the normative message-type matrix.
 
 Phase 5, new navigation messages:
 
+- Implement GPS/QZSS CNAV/CNV2, BeiDou CNV1/CNV2/CNV3, and SBAS navigation
+  body models.
 - Implement NavIC L1 `L1NV` parsing.
-- Implement GLONASS `L1OC` and `L3OC` parsing.
 - Add conformance fixtures from public RINEX 4.02 files before enabling these
   records in production flows.
+
+Phase 5a, GLONASS CDMA navigation (DONE):
+
+- Parse `> EPH R.. L1OC/L3OC` A16/A17 bodies with a strict, transactional
+  nine-line parser, including required integer/range checks and the required
+  19-character blank spare field (A19 format).
+- Preserve the typed message provenance and optional CDMA payload on
+  `Ephemeris`; map the broadcast state vector from km to metres and convert
+  UTC `toc`/`t_tm` to GPST with nearest-week handling.
+- Keep the existing GLONASS FDMA path and ephemeris selection policy unchanged;
+  malformed CDMA records recover at the next explicit `>` boundary.
+
+The remaining Phase 5 work is GPS/QZSS CNAV/CNV2, BeiDou CNV1/CNV2/CNV3, SBAS,
+and NavIC `L1NV` body models.  Those records remain deliberately unsupported.
 
 Phase 6, writer support:
 
 - Emit RINEX 4 navigation data record headers.
 - Add writer round-trip tests only after reader behavior is stable.
 
-## Acceptance Gates
+## End-State Acceptance Gates
+
+These are end-state gates for the complete roadmap, not just the current
+safe-dispatch and observation slices.  The reader gates completed by Phases 1
+and 2 are marked by the corresponding status sections below.
 
 - Existing RINEX 2/3 tests continue to pass.
 - RINEX 4 observation fixture parses header, epoch time, satellite count, and
-  at least GPS/QZSS observation rows.
+  at least GPS/QZSS observation rows. **MET by Phase 2.**
 - RINEX 4 navigation fixture with `> EPH G.. LNAV` parses at parity with the
   equivalent RINEX 3 record.
-- Unsupported RINEX 4 records fail or skip deterministically with diagnostics.
+- Supported RINEX 4 `STO`/`EOP`/`ION` records are retained in the reader
+  sidecar; unsupported records fail or skip deterministically with diagnostics.
 - CRINEX input policy is explicit and tested.
 
-## Non-Goals For Iter1
+## Safe-Dispatch, Observation, and System-Record Slice Non-Goals
 
-- No RINEX 4 parser behavior changes.
+- No complete RINEX 4 observation model: event metadata is intentionally not
+  retained in `ObservationData`, and cycle-slip records are consumed rather
+  than exposed.
 - No native CRINEX decompressor.
-- No NavIC or GLONASS CDMA message implementation.
+- No GPS/QZSS CNAV/CNV2, BeiDou CNV1/CNV2/CNV3, SBAS, or NavIC L1NV EPH body
+  implementation; GLONASS CDMA L1OC/L3OC is covered by Phase 5a.
 - No writer behavior changes.
+- No conversion of system-record epochs into a common GPS time scale or
+  application of the parsed system data to navigation selection.
+
+## Phase 1 Implementation Status: DONE
+
+The safe-dispatch slice is implemented in the reader:
+
+- `RINEXReader::isRinex4()` identifies versions 4.00 through 4.99 explicitly;
+  RINEX 2 and 3 continue through their existing paths.
+- RINEX 4 observation epochs are dispatched to the dedicated Phase 2 parser;
+  RINEX 2 and 3 continue through their existing paths.
+- RINEX 4 navigation data-record headers are parsed in `rinex4.hpp/cpp`.
+  Compatible GPS/QZSS LNAV, GLONASS FDMA, Galileo FNAV/INAV, and BeiDou D1/D2
+  EPH bodies reuse the existing ephemeris parser; GLONASS CDMA L1OC/L3OC uses
+  the dedicated Phase 5a parser.
+- STO/EOP/ION records and unsupported EPH message types are skipped at the
+  next `>` record boundary with diagnostics, preventing silent body misparse.
+
+## Phase 2 Implementation Status: DONE
+
+The observation slice now handles token-based RINEX 4 epoch fields, fixed
+Table A3 receiver-clock offsets, optional extra second digits, GPS/QZSS
+observation rows, continuation headers, deterministic event/cycle-slip
+skipping (with zero-satellite normal epochs preserved), strict truncation
+checks, and explicit CRINEX suffix rejection.
+Event metadata retention, richer cycle-slip data models, and the remaining new
+EPH navigation message models remain deferred as listed above.
+
+## Phase 4 Implementation Status: DONE
+
+RINEX 4 `STO`, `EOP`, and `ION` records are parsed into the
+`RINEXReader::rinex4SystemData()` sidecar.  The implementation covers the
+Table A33/A34 fixed records and the A35--A40 ION payload models, validates
+system/message/subtype combinations and numeric/date fields, and appends only
+complete records.  Unsupported or malformed records are diagnosed and
+discarded at the next explicit `>` boundary without changing RINEX 2/3 or
+legacy `NavigationData` behavior.

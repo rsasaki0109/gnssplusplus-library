@@ -8,8 +8,11 @@ import numpy as np
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = ROOT_DIR / "scripts"
+ANALYSIS_DIR = SCRIPTS_DIR / "analysis"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
+if str(ANALYSIS_DIR) not in sys.path:
+    sys.path.insert(0, str(ANALYSIS_DIR))
 
 import evaluate_ppc_kinematic_integrity_loo as loo  # noqa: E402
 

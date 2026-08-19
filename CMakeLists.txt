@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-project(gnss_lib VERSION 0.1.0 LANGUAGES C CXX)
+project(gnss_lib VERSION 0.2.0 LANGUAGES C CXX)
 
 set(GNSSPP_CXX_STANDARD 20 CACHE STRING
     "C++ standard (use 17 with legacy Eigen 3.3 toolchains that reject C++20 rewritten comparisons)")
@@ -61,6 +61,10 @@ else()
     message(STATUS "CHOLMOD disabled; using Eigen sparse covariance solver")
 endif()
 option(MADOCALIB_PARITY_LINK "Link external MADOCALIB C sources for opt-in parity oracle tests" OFF)
+option(
+    MADOCALIB_PARITY_ORACLE
+    "Enable the full MADOCALIB C++ oracle wrapper (disable for bridge-only parity runs)"
+    ON)
 set(MADOCALIB_ROOT_DIR
     ""
     CACHE PATH "Path to the MADOCALIB checkout root")
@@ -124,12 +128,15 @@ set(GNSS_SOURCES
     src/iers/sub_daily_eop.cpp
 )
 
-# List source files for the no-optimization library
-set(GNSS_SOURCES_NO_OPTIMIZATION
+# RTK/SPP/LAMBDA sources are shared by the no-optimization support archive and
+# the optimized runtime archive. Keep this list canonical so the two targets
+# cannot silently drift apart when a solver source is added or removed.
+set(GNSS_RTK_RUNTIME_SOURCES
     src/algorithms/rtk_ar_selection.cpp
     src/algorithms/rtk_ar_evaluation.cpp
     src/algorithms/nlos_weights.cpp
     src/algorithms/float_trust_policy.cpp
+    src/algorithms/rtk_adaptive_noise.cpp
     src/algorithms/rtk_measurement.cpp
     src/algorithms/rtk_selection.cpp
     src/algorithms/rtk_cmc_reference.cpp
@@ -140,8 +147,6 @@ set(GNSS_SOURCES_NO_OPTIMIZATION
     src/algorithms/rtk_tdcp_diagnostics.cpp
     src/algorithms/rtk_validation.cpp
     src/algorithms/integrity_consensus.cpp
-    src/algorithms/fgo.cpp
-    src/algorithms/ppp_env_overrides.cpp
     src/algorithms/rtk.cpp
     src/algorithms/spp.cpp
     src/algorithms/spp_velocity.cpp
@@ -150,6 +155,19 @@ set(GNSS_SOURCES_NO_OPTIMIZATION
     src/core/observation.cpp
 )
 
+# List source files for the no-optimization library. The FGO-only sources stay
+# here because tests and the FGO applications intentionally use this archive.
+set(GNSS_SOURCES_NO_OPTIMIZATION
+    ${GNSS_RTK_RUNTIME_SOURCES}
+    src/algorithms/fgo_ddpr_gnc.cpp
+    src/algorithms/fgo.cpp
+    src/algorithms/ppp_env_overrides.cpp
+)
+
+# Production RTK applications must not inherit the historical -O0 workaround
+# used by the monolithic FGO/test support archive.  Keep FGO in
+# gnss_lib_noopt, while compiling the online RTK/SPP/LAMBDA path as its own
+# optimized archive so the documented per-epoch runtime budget is meaningful.
 # Create the main library
 add_library(gnss_lib STATIC ${GNSS_SOURCES})
 target_include_directories(gnss_lib PUBLIC
@@ -211,6 +229,12 @@ if(MADOCALIB_PARITY_LINK)
     )
     target_link_libraries(madocalib PUBLIC Threads::Threads)
     if(WIN32)
+        # The Visual Studio generator defines WIN32 implicitly, but Ninja with
+        # MSVC does not. MADOCALIB uses this spelling (rather than _WIN32) to
+        # select its Win32 headers and synchronization implementation. The
+        # native oracle wrapper includes the same upstream header.
+        target_compile_definitions(madocalib PRIVATE WIN32)
+        target_compile_definitions(gnss_lib PRIVATE WIN32)
         # rtkcmn.c tickget() calls timeGetTime.
         target_link_libraries(madocalib PUBLIC winmm)
     else()
@@ -225,7 +249,6 @@ if(MADOCALIB_PARITY_LINK)
     target_compile_definitions(gnss_lib
         PUBLIC
             GNSSPP_HAS_MADOCALIB_BRIDGE=1
-            GNSSPP_HAS_MADOCALIB_ORACLE=1
         PRIVATE
             TRACE
             ENAGLO
@@ -237,8 +260,21 @@ if(MADOCALIB_PARITY_LINK)
             NEXOBS=5
             "GNSSPP_MADOCALIB_ROOT=\"${MADOCALIB_ROOT_DIR}\""
     )
+    if(MADOCALIB_PARITY_ORACLE)
+        target_compile_definitions(gnss_lib PUBLIC GNSSPP_HAS_MADOCALIB_ORACLE=1)
+    else()
+        target_compile_definitions(gnss_lib PUBLIC GNSSPP_HAS_MADOCALIB_ORACLE=0)
+    endif()
     target_compile_definitions(gnss_lib PRIVATE GNSSPP_HAS_MADOCALIB_TIDE=1)
     target_link_libraries(gnss_lib PUBLIC madocalib)
+    if(MSVC)
+        # Optimizing the C oracle wrapper can make cl.exe consume more than
+        # 20 GiB even though the wrapper is not runtime-hot. Keep Windows
+        # parity builds locally repeatable without changing solver code.
+        set_source_files_properties(
+            src/algorithms/madocalib_oracle.cpp
+            PROPERTIES COMPILE_OPTIONS "/Od")
+    endif()
 else()
     target_compile_definitions(gnss_lib
         PUBLIC
@@ -265,6 +301,18 @@ if(CHOLMOD_INCLUDE_DIR AND CHOLMOD_LIBRARY)
     target_compile_definitions(gnss_lib_noopt PRIVATE GNSSPP_HAS_CHOLMOD=1)
     target_link_libraries(gnss_lib_noopt PRIVATE ${CHOLMOD_LIBRARY})
 endif()
+
+add_library(gnss_rtk_runtime STATIC ${GNSS_RTK_RUNTIME_SOURCES})
+target_include_directories(gnss_rtk_runtime PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+target_link_libraries(gnss_rtk_runtime PUBLIC Eigen3::Eigen)
+if(MSVC)
+    target_compile_options(gnss_rtk_runtime PRIVATE /O2)
+else()
+    target_compile_options(gnss_rtk_runtime PRIVATE -O2)
+endif()
 if(GTSAM_FOUND)
     # fgo.cpp (FGOProcessor::optimizeProblem) lives in gnss_lib_noopt, so the
     # GTSAM backend TU and the gtsam link dependency must live here too, not
@@ -288,7 +336,12 @@ if(GTSAM_FOUND)
     endif()
 endif()
 
-set(GNSS_INSTALL_TARGETS gnss_lib gnss_lib_noopt sofa ginan_iers2010)
+set(GNSS_INSTALL_TARGETS
+    gnss_lib
+    gnss_lib_noopt
+    gnss_rtk_runtime
+    sofa
+    ginan_iers2010)
 if(MADOCALIB_PARITY_LINK)
     list(APPEND GNSS_INSTALL_TARGETS madocalib)
 endif()
@@ -362,6 +415,14 @@ set(CPACK_RESOURCE_FILE_LICENSE ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE)
 set(CPACK_GENERATOR "TGZ;DEB")
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "libgnss++ maintainers")
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
+# The installed command surface includes Python-based diagnostics and demo
+# tooling, while the exported static CMake targets expose Eigen headers to
+# downstream consumers. Keep those runtime/development requirements explicit
+# in the Debian package metadata; shlibdeps adds the platform C/C++ runtime
+# dependencies discovered from the installed ELF executables.
+set(CPACK_DEBIAN_PACKAGE_DEPENDS
+    "libeigen3-dev, python3, python3-numpy, python3-matplotlib")
+set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
 include(CPack)
 
 # Visibility library (fisheye camera, satellite LOS/NLOS)

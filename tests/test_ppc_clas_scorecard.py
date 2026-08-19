@@ -110,12 +110,22 @@ class PpcClasLeverArmTest(unittest.TestCase):
         self.assertEqual(markdown.count("| Tokyo "), 3)
         self.assertEqual(markdown.count("| Nagoya "), 3)
         self.assertIn("100.000% / 99.900%", markdown)
-        self.assertIn("vehicle truth transformed to the antenna phase center", markdown)
-        self.assertIn("unmodified PPC reference point", markdown)
+        self.assertIn("raw PPC reference point", markdown)
+        self.assertIn("directly comparable", markdown)
         self.assertIn(">3 m FIX", markdown)
         self.assertIn("FLOAT RMS2D", markdown)
         self.assertIn("SINGLE RMS2D", markdown)
         self.assertIn("—", markdown)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output = Path(temp_dir) / "table.md"
+            full_comparison.write_markdown_table(
+                runs, aggregate, output, apply_lever_arm=True
+            )
+            markdown = output.read_text(encoding="utf-8")
+
+        self.assertIn("vehicle truth transformed to the antenna phase center", markdown)
+        self.assertIn("unmodified PPC reference point", markdown)
         rows = [line for line in markdown.splitlines() if line.startswith("|")]
         expected_columns = rows[0].count("|")
         self.assertTrue(all(line.count("|") == expected_columns for line in rows))

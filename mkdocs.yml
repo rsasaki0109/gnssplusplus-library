@@ -1,9 +1,12 @@
 site_name: libgnss++
 site_description: Modern C++ GNSS/RTK/PPP/CLAS toolkit
-site_url: https://rsasaki0109.github.io/gnssplusplus-library/docs/
+site_url: https://rsasaki0109.github.io/gnssplusplus-library/
 repo_url: https://github.com/rsasaki0109/gnssplusplus-library
 repo_name: rsasaki0109/gnssplusplus-library
 docs_dir: docs
+exclude_docs: |
+  HANDOFF_PPC_CLAS_CODEX.md
+  archive/
 theme:
   name: material
   features:
@@ -19,8 +22,17 @@ markdown_extensions:
       permalink: true
 nav:
   - Home: index.md
+  - Use cases:
+      - Overview: use_cases.md
+      - RTKLIB migration: use_cases/rtklib_migration.md
+      - ROS2 receiver and bag replay: use_cases/ros2.md
+      - QZSS L6, CLAS, and MADOCA: use_cases/qzss_l6.md
   - Robotics Quick Start: robotics_quickstart.md
   - Research Quick Start: research_quickstart.md
+  - Self-contained Offline Demo: self_contained_demo.md
+  - v0.2.0 Release Highlights: releases/v0.2.0.md
+  - Maintainer Release Runbook: release_runbook.md
+  - Community Onboarding: community.md
   - Dataset Gallery: dataset_gallery.md
   - Architecture: architecture.md
   - Quick Start: quickstart.md
@@ -33,6 +45,60 @@ nav:
   - Decisions: decisions.md
   - IERS Integration Plan: iers-integration-plan.md
   - MADOCALIB Native Migration: madocalib_native_migration.md
+  - System Design:
+      - IMU Fusion: imu_fusion.md
+      - Tight Coupling: tight_coupling.md
+      - RINEX 4 Plan: rinex4_plan.md
+      - CLAS Port Architecture: clas_port_architecture.md
+      - Development Backlog: development_backlog.md
+  - CLAS and Parity:
+      - CLAS Brush-up Baseline: clas_brushup_baseline.md
+      - Validated Datasets: clas_validated_datasets.md
+      - CLAS DD Filter A1: clas_dd_filter_a1.md
+      - CLAS DD Filter A2: clas_dd_filter_a2.md
+      - CLAS DD Filter A3: clas_dd_filter_a3.md
+      - CLAS DD Filter A4: clas_dd_filter_a4.md
+      - CLAS DD Filter A5: clas_dd_filter_a5.md
+      - CLAS DD Filter Audit: clas_dd_filter_audit.md
+      - CLASLIB Near Equivalence: claslib_near_equivalence_plan.md
+      - CLASLIB Parity Default Decision: claslib_parity_default_decision.md
+      - CLASLIB Parity P0 Baseline: claslib_parity_p0_baseline.md
+  - FGO Research:
+      - Adaptive-R Validation: fgo_adaptive_r_validation.md
+      - Arc Lifecycle Wrong-Fix Audit: fgo_arc_lifecycle_wrong_fix_audit.md
+      - Candidate Funnel Recovery: fgo_candidate_funnel_recovery_plan.md
+      - Candidate Integrity Witness: fgo_candidate_integrity_witness_plan.md
+      - Clock-Resilient Temporal Shadow: fgo_clock_resilient_temporal_shadow.md
+      - DDPR Bias-State Shadow: fgo_ddpr_bias_state_shadow_plan.md
+      - DDPR GNC Shadow: fgo_ddpr_gnc_shadow_plan.md
+      - Design-Slice Float Root Cause: fgo_design_slice_float_root_cause.md
+      - Disjoint AR Shadow: fgo_disjoint_ar_shadow_plan.md
+      - External Doppler/DR Witness: fgo_external_doppler_dr_witness_audit.md
+      - Fix-Rate Observation Quality: fgo_fix_rate_observation_quality_plan.md
+      - Low-Count AR Recovery: fgo_low_count_ar_recovery_plan.md
+      - Low-Count Relaxation: fgo_low_count_relax_surplus_quality_plan.md
+      - Multiband AR Fix-Rate Audit: fgo_multiband_ar_fix_rate_audit.md
+      - Multiepoch AR Fix-Rate Audit: fgo_multiepoch_ar_fix_rate_audit.md
+      - Navi776 Adaptive-R Combination: fgo_navi776_tc_adaptr_combo.md
+      - NHC/ZUPT Fix-Rate Audit: fgo_nhc_zupt_fix_rate_audit.md
+      - Satellite Quarantine Shadow: fgo_satellite_quarantine_shadow_plan.md
+      - Selective Arc Restart: fgo_selective_arc_restart_plan.md
+  - PPC Audits:
+      - CLAS Full Table: ppc_clas_full_table.md
+      - CLAS Validation: ppc_clas_validation.md
+      - Fix Integrity Audit: ppc_fix_integrity_audit.md
+      - Goal Completion Audit: ppc_goal_completion_audit.md
+      - Kinematic Integrity LOO: ppc_kinematic_integrity_loo.md
+      - Nagoya 3 Wrong-Fix Root Cause: ppc_nagoya3_wrong_fix_root_cause.md
+      - Online Consensus Design: ppc_online_consensus_design.md
+      - Existing Realtime Gate Outputs: ppc_realtime_gate_existing_outputs.md
+      - Residual Integrity External Audit: ppc_residual_integrity_external_audit.md
+      - Smoother Oracle Report: ppc_smoother_oracle_report.md
+      - Wrong-Fix Event Ledger: ppc_wrong_fix_event_ledger.md
+      - Wrong-Fix Residual Analysis: ppc_wrong_fix_residual_analysis.md
+  - Research Notes:
+      - MADOCALIB Port Plan: madoca_port_plan.md
+      - Navi776 Techniques: navi776_techniques.md
   - References:
       - Overview: references/index.md
       - MADOCALIB Gap: references/madocalib-gap.md
@@ -43,5 +109,6 @@ nav:
       - PocketSDR Notes: references/pocketsdr-notes.md
       - SignalSim Notes: references/signalsim-notes.md
       - GSILIB Notes: references/gsilib-notes.md
+      - SPP Accuracy Improvement: references/spp-accuracy-improvement.md
       - Roadmap: references/roadmap.md
   - Contributing: contributing.md

@@ -1,9 +1,11 @@
 # MADOCA Port Plan
 
-> **Active plan:** [MADOCALIB Native Migration Ledger](madocalib_native_migration.md)
-> is the current issue-#148 capability table, frozen oracle contract, milestone
-> plan, and acceptance gate.  This document retains the detailed migration
-> history and earlier design analysis.
+> **Completed migration:** [MADOCALIB Native Migration Ledger](madocalib_native_migration.md)
+> is the final issue-#148 capability table, frozen oracle contract, milestone
+> evidence, and release gate.  This document retains the detailed migration
+> history and earlier design analysis.  Future triple/quad-frequency solver
+> expansion is tracked separately in
+> [issue #387](https://github.com/rsasaki0109/gnssplusplus-library/issues/387).
 
 This plan scopes a MADOCA foundation pass.  The goal is to capture what should
 be ported from MADOCALIB, what should be shared with the existing CLAS work,
@@ -11,8 +13,8 @@ and how to build oracle parity without dragging reference code into production.
 
 > The sections from "Reference Inputs" onward are the original foundation plan
 > (through the iter4 MADOCALIB bridge baseline, 2026-06-10).  They are kept as
-> reference.  For the current state of native parity and the next architecture
-> step, read "Status (2026-06-13)" immediately below first.
+> reference.  The dated status immediately below is a historical snapshot; use
+> the migration ledger for the completed 2026-07-30 state.
 
 ## Status (2026-06-13) — Native Parity Achieved, AR/Filter Architecture Is The Wall
 
@@ -34,22 +36,22 @@ post-fit commit-on-success gate (#146/#147) was promoted to the default
 second station (ALIC, neutral) with 1 h/6 h staying byte-exact.  The interim
 #145 boundary guard was retired (commit-on-success subsumes it; guard on/off was
 byte-identical under commit); the #144 spike guard (100 m) is kept as the
-opt-out-path safety net.  GLONASS
-phase, QZSS L5, SSR-replay, bias-identity, and pair-selection hypotheses were
-each measured.  QZSS L5 was later promoted for M2 three-frequency row parity;
-the remaining preview-only knobs stay default-off.
+opt-out-path safety net.  GLONASS phase, QZSS L5, SSR-replay, bias-identity,
+and pair-selection hypotheses were each measured.  QZSS L5 was later promoted
+for M2 three-frequency row parity.  The rejected SSR-replay selector and
+implementation were removed in M6 rather than retained as a default-off
+production path.
 The repro harness and per-slice history live in the memory note
 `madoca-ppp-frontier` and in issue #148.
 
-GLONASS phase was re-diagnosed and closed as a parity lever: the per-satellite
-~1.5 m residual is not an unabsorbed constant but a covariance-collapse plus
-within-pass-varying (elevation-arched) phase error — the float ambiguity
-variance collapses to ~0.03 within ~38 epochs and can no longer track the drift,
-and GLONASS code carries large FDMA inter-frequency biases too.  MADOCA SSR
-provides no GLONASS phase-bias product, so default GLONASS-phase-off is correct
-(matches MADOCALIB excluding GLO from the precise phase/AR solution).
+The original GLONASS-phase diagnosis below was invalidated in M2g.  Its
+metre-scale residual used stale pre-update receiver geometry in the postfit
+shadow.  Corrected geometry shows 2.4--5.2 mm demeaned RMS and 1.6--3.4 cm
+spans, and MADOCALIB does admit GLONASS L1/L2 phase in the float filter.
+GLONASS phase is therefore default-on for coherent MADOCA; it remains excluded
+from integer ambiguity candidates, matching `gen_sat_sd()`.
 
-Generate the evidence with `GNSS_PPP_MADOCA_GLONASS_PHASE=1` and
+Generate the default-on evidence with
 `GNSS_PPP_MADOCA_POSTFIT_SHADOW=<csv>`, then run
 `scripts/analysis/madoca_glonass_phase_audit.py <csv> --json-out <json>`.
 The `madoca_glonass_phase_audit.v1` report records per-satellite raw and
@@ -57,8 +59,10 @@ demeaned RMS, residual span, duration, and residual/elevation correlation.
 The shadow CSV header includes the signal-family, RINEX-code, and RTKLIB-code
 columns emitted by each data row so these residual fields remain aligned.
 
-Open MADOCA levers (measured, none yet a default win): PPP-AR parity
-(`exec_pppar` window); QZSS atmosphere row-set.
+The formerly open PPP-AR and QZSS-atmosphere levers were resolved or bounded by
+the M2--M5 acceptance gates.  Their intermediate measurements below remain
+historical evidence, while the versioned release matrix is the current
+regression contract.
 
 Correction-materialization snapshot: use
 `gnss ppp --madoca-l6 <file> --madoca-materialization-dump <csv>` to record the
@@ -519,13 +523,15 @@ Future oracle modules, test-only and opt-in:
 The first whole-run oracle path is an opt-in static-link delegate:
 
 - Configure with `-DMADOCALIB_PARITY_LINK=ON`.
-- Run `gnss_ppp --madocalib-bridge` to delegate the whole run to MADOCALIB
-  `postpos()`.
+- Build and run the non-installed
+  `gnss_madocalib_oracle --madocalib-bridge` tool to delegate the whole run to
+  MADOCALIB `postpos()`.
 - Pass MADOCA L6E files with repeated `--madocalib-l6 <file>` arguments.
 - Pass L6D ionosphere files with repeated `--madocalib-mdciono <file>`
   arguments when using the ionosphere scenario.
-- The default build does not link MADOCALIB and rejects `--madocalib-bridge`
-  before producing output.
+- The normal `gnss_ppp` command never exposes the oracle arguments, including
+  in a linked parity build.  The default build does not link MADOCALIB or
+  create `gnss_madocalib_oracle`.
 
 The public sample-data smoke case uses the `exec_ppp.bat` MIZU scenario with
 the two L6E channels from the `is-qzss-mdc-004` tree:
@@ -533,7 +539,7 @@ the two L6E channels from the `is-qzss-mdc-004` tree:
 ```sh
 ROOT=${MADOCALIB_ROOT}
 
-./build_iter4_madocalib/apps/gnss_ppp \
+./build_iter4_madocalib/apps/gnss_madocalib_oracle \
   --madocalib-bridge \
   --obs "$ROOT/sample_data/data/rinex/MIZU00JPN_R_20250910000_01D_30S_MO.rnx" \
   --nav "$ROOT/sample_data/data/rinex/BRDM00DLR_S_20250910000_01D_MN.rnx" \
@@ -747,8 +753,8 @@ Deferred large slices:
 - PPP-AR parity against MADOCALIB sample windows.
 - L6D ionosphere integration into PPP.
 - Triple/quad-frequency PPP-AR behavior.
-- First-class production MADOCALIB bridge behavior beyond the opt-in oracle
-  path.
+- Keep the linked MADOCALIB bridge confined to the non-installed oracle tool
+  and labeled parity CI; it is intentionally not a production workflow.
 
 ## MADOCALIB License Notes
 

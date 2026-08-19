@@ -6,14 +6,23 @@
 #include "../core/solution.hpp"
 #include "nlos_weights.hpp"
 #include "float_trust_policy.hpp"
+#include "rtk_adaptive_noise.hpp"
+#include "rtk_float_stabilizer.hpp"
 #include "rtk_cmc_reference.hpp"
+#include "fixed_quality_gate.hpp"
+#include "inertial_fix_evidence.hpp"
+#include "causal_ambiguity_arc.hpp"
 #include "rtk_measurement.hpp"
 #include "rtk_selection.hpp"
 #include "rtk_slip_detection.hpp"
+#include "rtk_update.hpp"
 #include "rtk_validation.hpp"
+#include "safe_float_continuity.hpp"
+#include "safe_fix_state_machine.hpp"
 #include "spp.hpp"
 #include <libgnss++/fusion/dd_imu_bridge.hpp>
 #include <Eigen/Dense>
+#include <deque>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -108,6 +117,79 @@ public:
         double snr_reference_dbhz = 45.0;         // No inflation at or above this SNR
         double snr_max_variance_scale = 25.0;     // Clamp low-SNR variance inflation
         double snr_min_baseline_m = 0.0;          // Optional baseline-length floor for SNR weighting
+
+        /// Innovation-based adaptive measurement variance (Motooka 2026,
+        /// NAVIGATION navi.776): per-satellite EWMA of v^2 - HPH' - ref_var
+        /// replaces the model satellite_variance fed into the DD covariance,
+        /// clamped to [min,max]*model so varerr/SNR/NLOS trends stay the
+        /// backbone. Off by default; bit-identical when off. Note the SNR
+        /// inflation above and this adaptation both react to degraded
+        /// signals; when tuning, prefer lowering
+        /// adaptive_noise_max_variance_scale over stacking both.
+        bool enable_adaptive_measurement_noise = false;
+        double adaptive_noise_alpha_phase = 0.9;    // paper: slow, stability
+        double adaptive_noise_alpha_code = 0.5;     // paper: fast adaptation
+        double adaptive_noise_alpha_doppler = 0.5;  // consumed once Doppler rows exist
+        double adaptive_noise_min_variance_scale = 0.25;
+        double adaptive_noise_max_variance_scale = 25.0;
+        double adaptive_noise_reset_gap_s = 5.0;    // outage prune horizon
+        /// navi.776 A follow-up: adapt the carrier variance only and leave
+        /// the code variance at its model value. Code residuals on urban
+        /// multipath are far noisier than carrier, so adapting them can pull
+        /// R toward the code noise floor and erode the carrier-dominant DD
+        /// weight; phase-only keeps the carrier term adapted while the code
+        /// stays on varerr*SNR*NLOS. Off by default; bit-identical when off.
+        bool adaptive_noise_phase_only = false;
+        /// navi.776 A follow-up: use per-system smoothing constants. The
+        /// paper's shared alpha is tuned on a GPS-heavy city dataset; BDS/GAL
+        /// arcs have different code/phase noise and multipath spectra, so a
+        /// single alpha can under- or over-smooth them. When enabled, the
+        /// effective phase/code alpha for a satellite is the per-system value
+        /// for its GNSSSystem (falling back to the shared defaults for any
+        /// system without an explicit entry). Off by default; bit-identical
+        /// when off.
+        bool adaptive_noise_per_system_alpha = false;
+        double adaptive_noise_alpha_phase_gps = 0.9;
+        double adaptive_noise_alpha_phase_galileo = 0.85;
+        double adaptive_noise_alpha_phase_bds = 0.8;
+        double adaptive_noise_alpha_phase_qzss = 0.9;
+        double adaptive_noise_alpha_phase_glonass = 0.85;
+        double adaptive_noise_alpha_code_gps = 0.5;
+        double adaptive_noise_alpha_code_galileo = 0.45;
+        double adaptive_noise_alpha_code_bds = 0.4;
+        double adaptive_noise_alpha_code_qzss = 0.5;
+        double adaptive_noise_alpha_code_glonass = 0.45;
+        /// Baseline-length gate: adaptation active only while the float
+        /// baseline is at or below this many meters (0 = no gate). Gate A
+        /// showed the innovation stream on a 9.4 km baseline carries real
+        /// DD ionosphere error that the tracker absorbs into R, collapsing
+        /// the fix rate -- the mirror image of snr_min_baseline_m.
+        double adaptive_noise_max_baseline_m = 0.0;
+
+        /// navi.776 B: rover-only between-satellite SD Doppler measurement
+        /// rows. Receiver clock drift cancels in the between-satellite
+        /// difference; rows touch only the M4 velocity tail states (which
+        /// must exist: requires enable_velocity_states) and are skipped
+        /// until the first INS position/velocity time update initializes
+        /// the velocity covariance. Never participates in AR, slip, or
+        /// lock counting. Off by default; bit-identical when off.
+        bool enable_doppler_measurement_rows = false;
+        /// Reuse the Kalman update's LU factorization for diagnostic NIS and
+        /// HPH row statistics. This preserves the state-update operation
+        /// order while avoiding a separate innovation LDLT. It is used only
+        /// when both update/fixed NIS gates are disabled.
+        bool reuse_kalman_factorization_for_nis = false;
+        /// Apply phase/code and Doppler blocks as two sequential Kalman
+        /// updates. Their measurement covariance is block diagonal; this
+        /// reduces the cubic measurement-space solve cost.
+        bool sequential_doppler_update = false;
+        double doppler_row_sigma_mps = 0.2;  // FGO SD-Doppler sigma parity
+        double doppler_row_outlier_threshold_mps = 1.0;
+        /// Baseline-length gate mirroring adaptive_noise_max_baseline_m:
+        /// Doppler rows are built only while the prior float baseline is at
+        /// or below this many meters (0 = no gate). Gate B showed the rows
+        /// regress accuracy on the 9.4 km nagoya baseline.
+        double doppler_row_max_baseline_m = 0.0;
 
         // Quality control
         bool enable_cycle_slip_detection = true;
@@ -275,6 +357,10 @@ public:
         /// squared divided by active observations exceeds this threshold.
         /// 0 (default) disables the update gate.
         double max_update_nis_per_observation = 0.0;
+        /// Optional heavy-tailed measurement front end. It only inflates
+        /// measurement covariance before the float update and has no direct
+        /// integer/FIX authority.
+        rtk_update::StudentTFrontEndConfig student_t_front_end;
 
         /// Reject only FIXED ambiguity candidates when the preceding RTK DD
         /// update NIS divided by active observations exceeds this threshold.
@@ -359,6 +445,100 @@ public:
 
         /// Max pairs to drop progressively in BSR-guided decimation.
         int bsr_guided_max_drop_steps = 6;
+
+        /// Number of MLAMBDA integer candidates recorded by the full-set
+        /// shadow diagnostic. 0 (default) disables the extra search and is
+        /// output-identical to the pre-WP174 solver. The shadow result never
+        /// changes a FIX decision or filter state.
+        int lambda_candidate_shadow_count = 0;
+
+        /// Optional success-rate-criterion partial-AR shadow. A threshold of
+        /// 0 (default) disables it. Positive values select the largest trailing
+        /// decorrelated subset meeting the covariance-only success rate. This
+        /// diagnostic never changes a FIX decision or filter state.
+        double lambda_src_par_shadow_success_rate = 0.0;
+        double lambda_src_par_shadow_covariance_scale = 1.0;
+
+        /// Shadow-only satellite-group sequential PAR. A positive value drops
+        /// at most this many worst-ranked satellites (all frequency legs
+        /// together), stopping at the first subset that passes covariance-
+        /// scaled FFRT. 0 (default) is output-identical to the legacy path.
+        int lambda_satellite_par_shadow_max_drop_steps = 0;
+        double lambda_satellite_par_shadow_covariance_scale = 16.0;
+        bool lambda_satellite_par_shadow_quality_diverse = false;
+        bool lambda_satellite_par_persistent_subset = false;
+        bool lambda_satellite_par_only_after_full_ffrt_failure = false;
+
+        /// Shadow-only two-stage L1/L5 ambiguity diagnostic. L5 observations
+        /// are collected without adding L5 states or measurements to the
+        /// production filter. Wide-lane and subsequent L1 narrow-lane
+        /// searches must each pass covariance-scale-16 FFRT. The result never
+        /// changes a FIX decision, filter state, or PositionSolution.
+        bool lambda_l1_l5_wlnl_shadow = false;
+        bool lambda_l1_l2_wlnl_shadow = false;
+        bool lambda_l2_l5_wlnl_shadow = false;
+        double lambda_l1_l5_wlnl_shadow_covariance_scale = 16.0;
+        bool lambda_l1_l5_wlnl_causal_arc_smoothing = false;
+        causal_ambiguity_arc::Config
+            lambda_l1_l5_wlnl_causal_arc_config;
+        bool lambda_causal_arc_readiness_shadow = false;
+        causal_ambiguity_arc::Config
+            lambda_causal_arc_readiness_config;
+        double lambda_causal_arc_readiness_covariance_scale = 16.0;
+        bool lambda_causal_arc_smoothed_search = false;
+        int lambda_causal_arc_smoothed_max_pairs = 0;
+
+        /// Runtime shadow-only FIX/hold/revoke state machine. Disabled by
+        /// default and never changes PositionSolution or filter state.
+        safe_fix::Config safe_fix_shadow_state_machine;
+        /// Separate causal certificate for the closest-pair consensus of
+        /// primary and two disjoint-satellite validators. Default-off.
+        safe_fix::Config disjoint_consensus_state_machine;
+        safe_fix::Config causal_arc_consensus_state_machine;
+        bool causal_arc_consensus_promotion = false;
+        safe_fix::Config satellite_par_consensus_state_machine;
+        bool satellite_par_consensus_promotion = false;
+        safe_fix::Config src_par_consensus_state_machine;
+        bool src_par_consensus_promotion = false;
+        safe_fix::Config inertial_referenced_consensus_state_machine;
+        bool inertial_referenced_consensus_promotion = false;
+        safe_fix::Config multifrequency_consensus_state_machine;
+        bool multifrequency_consensus_promotion = false;
+        bool disjoint_consensus_use_selected_pair_ratio = false;
+        fixed_quality_gate::Config library_fixed_quality_gate;
+        int safe_fix_shadow_covariance_scale = 16;
+        int safe_fix_shadow_minimum_pairs = 16;
+        double safe_fix_shadow_maximum_second_position_delta_m = 0.05;
+        double safe_fix_shadow_maximum_nis_per_observation = 3.0;
+        double safe_fix_shadow_maximum_prefit_residual_rms_m = 50.0;
+        // Optional causal INS solution-separation source.  Evidence is
+        // supplied before processRTKEpoch(), must be propagated to the
+        // current epoch without that epoch's GNSS position update, and is
+        // accepted only when it descends from a prior independently-budgeted
+        // FIX anchor.
+        double inertial_fix_evidence_max_time_error_s = 0.05;
+        double inertial_fix_evidence_covariance_scale = 16.0;
+        // chi-square(3 dof, 0.999) / 3 = 5.422. The absolute bound is only
+        // a gross-corruption guard; statistical acceptance is governed by
+        // the covariance-normalized threshold.
+        double inertial_fix_evidence_max_nis_per_dimension = 5.422;
+        double inertial_fix_evidence_max_position_delta_m = 2.0;
+        double inertial_fix_evidence_failure_probability = 0.001;
+        // Optional pair of independently propagated RTK solutions built
+        // from disjoint GNSS-system partitions. Both partitions must pass
+        // their own FFRT and agree with each other and the primary
+        // declaration-time candidate.
+        double disjoint_satellite_fix_max_partition_separation_m = 0.25;
+        double disjoint_satellite_fix_max_primary_separation_m = 0.25;
+        double disjoint_satellite_fix_covariance_scale = 16.0;
+        double disjoint_satellite_fix_max_nis_per_dimension = 5.422;
+        double disjoint_satellite_fix_max_statistical_separation_m = 2.0;
+        double disjoint_satellite_fix_failure_probability = 0.001;
+
+        /// Optional FLOAT-only continuity for short observation outages.
+        /// Disabled by default, never declares FIX, and fails closed without
+        /// a finite trusted anchor and recent bounded Doppler velocity.
+        safe_float_continuity::Config safe_float_continuity;
 
         /// WP7: NLOS/multipath measurement-weighting sigma-inflation mapping.
         /// OFF (default) preserves pre-WP7 behavior bit-for-bit — the lookup
@@ -486,6 +666,10 @@ public:
         /// Existing position/hardware-bias/iono/ambiguity indices therefore
         /// never move. Requires an external position/velocity time update.
         bool enable_velocity_states = false;
+        /// Causal FLOAT output stabilization for the validated short-baseline
+        /// Doppler/adaptive-noise combination. It never feeds the predicted
+        /// position back into the float filter or ambiguity state.
+        bool enable_fixed_anchor_float_stabilization = false;
 
         /// M5 measurement-neutral single-difference TDCP-vs-Doppler
         /// diagnostics. No filter row or state mutation is performed.
@@ -694,6 +878,322 @@ public:
 
         bool full_lambda_solved = false;
         double full_ratio = std::numeric_limits<double>::quiet_NaN();
+        bool lambda_shadow_attempted = false;
+        bool lambda_shadow_solved = false;
+        double lambda_shadow_runtime_ms =
+            std::numeric_limits<double>::quiet_NaN();
+        int lambda_shadow_candidate_count = 0;
+        double lambda_shadow_bsr = std::numeric_limits<double>::quiet_NaN();
+        double lambda_shadow_bsr_qscale2 =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_shadow_bsr_qscale4 =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_shadow_bsr_qscale8 =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_shadow_bsr_qscale16 =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_shadow_best_cost = std::numeric_limits<double>::quiet_NaN();
+        double lambda_shadow_second_cost = std::numeric_limits<double>::quiet_NaN();
+        double lambda_shadow_best_mass = std::numeric_limits<double>::quiet_NaN();
+        double lambda_shadow_effective_candidates =
+            std::numeric_limits<double>::quiet_NaN();
+        int lambda_shadow_best_second_disagreements = 0;
+        bool lambda_shadow_ffrt_table_supported = false;
+        bool lambda_shadow_ffrt_accepts_any = false;
+        bool lambda_shadow_ffrt_passed = false;
+        double lambda_shadow_ffrt_min_ratio =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_shadow_best_ecef_x =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_shadow_best_ecef_y =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_shadow_best_ecef_z =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_shadow_best_correction_x =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_shadow_best_correction_y =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_shadow_best_correction_z =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_shadow_second_ecef_x =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_shadow_second_ecef_y =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_shadow_second_ecef_z =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_shadow_second_correction_x =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_shadow_second_correction_y =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_shadow_second_correction_z =
+            std::numeric_limits<double>::quiet_NaN();
+        Eigen::Matrix<double, 8, 1> lambda_shadow_candidate_costs =
+            Eigen::Matrix<double, 8, 1>::Constant(
+                std::numeric_limits<double>::quiet_NaN());
+        Eigen::Matrix<double, 3, 8> lambda_shadow_candidate_ecef_m =
+            Eigen::Matrix<double, 3, 8>::Constant(
+                std::numeric_limits<double>::quiet_NaN());
+        double lambda_shadow_second_position_delta_m =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_shadow_position_spread_max_m =
+            std::numeric_limits<double>::quiet_NaN();
+        bool lambda_src_par_shadow_attempted = false;
+        bool lambda_src_par_shadow_solved = false;
+        int lambda_src_par_shadow_subset_size = 0;
+        double lambda_src_par_shadow_bsr =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_src_par_shadow_ratio =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_src_par_shadow_ffrt_min_ratio =
+            std::numeric_limits<double>::quiet_NaN();
+        bool lambda_src_par_shadow_ffrt_passed = false;
+        double lambda_src_par_shadow_best_ecef_x =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_src_par_shadow_best_ecef_y =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_src_par_shadow_best_ecef_z =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_src_par_shadow_best_correction_x =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_src_par_shadow_best_correction_y =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_src_par_shadow_best_correction_z =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_src_par_shadow_second_position_delta_m =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_src_par_shadow_runtime_ms =
+            std::numeric_limits<double>::quiet_NaN();
+        bool lambda_satellite_par_shadow_attempted = false;
+        int lambda_satellite_par_shadow_subsets_evaluated = 0;
+        bool lambda_satellite_par_shadow_solved = false;
+        int lambda_satellite_par_shadow_subset_size = 0;
+        int lambda_satellite_par_shadow_dropped_satellites = 0;
+        double lambda_satellite_par_shadow_bsr =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_satellite_par_shadow_ratio =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_satellite_par_shadow_ffrt_min_ratio =
+            std::numeric_limits<double>::quiet_NaN();
+        bool lambda_satellite_par_shadow_ffrt_passed = false;
+        double lambda_satellite_par_shadow_best_ecef_x =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_satellite_par_shadow_best_ecef_y =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_satellite_par_shadow_best_ecef_z =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_satellite_par_shadow_best_correction_x =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_satellite_par_shadow_best_correction_y =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_satellite_par_shadow_best_correction_z =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_satellite_par_shadow_second_position_delta_m =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_satellite_par_shadow_runtime_ms =
+            std::numeric_limits<double>::quiet_NaN();
+        bool lambda_satellite_par_persistent_subset_attempted = false;
+        bool lambda_satellite_par_persistent_subset_used = false;
+        bool lambda_l1_l5_wlnl_shadow_attempted = false;
+        int lambda_l1_l5_wlnl_shadow_pair_count = 0;
+        double lambda_l1_l5_wlnl_shadow_wl_bsr =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_l1_l5_wlnl_shadow_wl_ratio =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_l1_l5_wlnl_shadow_wl_ffrt_min_ratio =
+            std::numeric_limits<double>::quiet_NaN();
+        bool lambda_l1_l5_wlnl_shadow_wl_ffrt_passed = false;
+        int lambda_l1_l5_wlnl_shadow_mw_disagreements = 0;
+        int lambda_l1_l5_wlnl_shadow_raw_mw_disagreements = 0;
+        int lambda_l1_l5_wlnl_shadow_causal_arc_ready_pairs = 0;
+        int lambda_l1_l5_wlnl_shadow_causal_arc_resets = 0;
+        double lambda_l1_l5_wlnl_shadow_nl_bsr =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_l1_l5_wlnl_shadow_nl_ratio =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_l1_l5_wlnl_shadow_nl_ffrt_min_ratio =
+            std::numeric_limits<double>::quiet_NaN();
+        bool lambda_l1_l5_wlnl_shadow_nl_ffrt_passed = false;
+        double lambda_l1_l5_wlnl_shadow_best_ecef_x =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_l1_l5_wlnl_shadow_best_ecef_y =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_l1_l5_wlnl_shadow_best_ecef_z =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_l1_l5_wlnl_shadow_runtime_ms =
+            std::numeric_limits<double>::quiet_NaN();
+        int lambda_l1_l5_wlnl_shadow_candidate_pair_count = 0;
+        bool lambda_l1_l2_wlnl_shadow_attempted = false;
+        int lambda_l1_l2_wlnl_shadow_pair_count = 0;
+        double lambda_l1_l2_wlnl_shadow_wl_bsr =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_l1_l2_wlnl_shadow_wl_ratio =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_l1_l2_wlnl_shadow_wl_ffrt_min_ratio =
+            std::numeric_limits<double>::quiet_NaN();
+        bool lambda_l1_l2_wlnl_shadow_wl_ffrt_passed = false;
+        int lambda_l1_l2_wlnl_shadow_mw_disagreements = 0;
+        int lambda_l1_l2_wlnl_shadow_raw_mw_disagreements = 0;
+        int lambda_l1_l2_wlnl_shadow_causal_arc_ready_pairs = 0;
+        int lambda_l1_l2_wlnl_shadow_causal_arc_resets = 0;
+        double lambda_l1_l2_wlnl_shadow_nl_bsr =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_l1_l2_wlnl_shadow_nl_ratio =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_l1_l2_wlnl_shadow_nl_ffrt_min_ratio =
+            std::numeric_limits<double>::quiet_NaN();
+        bool lambda_l1_l2_wlnl_shadow_nl_ffrt_passed = false;
+        double lambda_l1_l2_wlnl_shadow_best_ecef_x =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_l1_l2_wlnl_shadow_best_ecef_y =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_l1_l2_wlnl_shadow_best_ecef_z =
+            std::numeric_limits<double>::quiet_NaN();
+        int lambda_l1_l2_wlnl_shadow_candidate_pair_count = 0;
+        bool lambda_l2_l5_wlnl_shadow_attempted = false;
+        int lambda_l2_l5_wlnl_shadow_pair_count = 0;
+        double lambda_l2_l5_wlnl_shadow_wl_bsr =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_l2_l5_wlnl_shadow_wl_ratio =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_l2_l5_wlnl_shadow_wl_ffrt_min_ratio =
+            std::numeric_limits<double>::quiet_NaN();
+        bool lambda_l2_l5_wlnl_shadow_wl_ffrt_passed = false;
+        int lambda_l2_l5_wlnl_shadow_mw_disagreements = 0;
+        int lambda_l2_l5_wlnl_shadow_raw_mw_disagreements = 0;
+        int lambda_l2_l5_wlnl_shadow_causal_arc_ready_pairs = 0;
+        int lambda_l2_l5_wlnl_shadow_causal_arc_resets = 0;
+        double lambda_l2_l5_wlnl_shadow_nl_bsr =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_l2_l5_wlnl_shadow_nl_ratio =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_l2_l5_wlnl_shadow_nl_ffrt_min_ratio =
+            std::numeric_limits<double>::quiet_NaN();
+        bool lambda_l2_l5_wlnl_shadow_nl_ffrt_passed = false;
+        double lambda_l2_l5_wlnl_shadow_best_ecef_x =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_l2_l5_wlnl_shadow_best_ecef_y =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_l2_l5_wlnl_shadow_best_ecef_z =
+            std::numeric_limits<double>::quiet_NaN();
+        int lambda_l2_l5_wlnl_shadow_candidate_pair_count = 0;
+        bool lambda_causal_arc_readiness_attempted = false;
+        int lambda_causal_arc_ready_pairs = 0;
+        int lambda_causal_arc_resets = 0;
+        int lambda_causal_arc_total_pairs = 0;
+        int lambda_causal_arc_subset_pair_count = 0;
+        bool lambda_causal_arc_subset_solved = false;
+        double lambda_causal_arc_subset_ratio =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_causal_arc_subset_bsr =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_causal_arc_subset_variance_min =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_causal_arc_subset_variance_max =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_causal_arc_subset_ffrt_min_ratio =
+            std::numeric_limits<double>::quiet_NaN();
+        bool lambda_causal_arc_subset_ffrt_passed = false;
+        double lambda_causal_arc_subset_best_ecef_x =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_causal_arc_subset_best_ecef_y =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_causal_arc_subset_best_ecef_z =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_causal_arc_subset_second_position_delta_m =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_causal_arc_subset_partition_a_separation_m =
+            std::numeric_limits<double>::quiet_NaN();
+        double lambda_causal_arc_subset_partition_b_separation_m =
+            std::numeric_limits<double>::quiet_NaN();
+        bool safe_fix_shadow_enabled = false;
+        int safe_fix_shadow_state = 0;
+        bool safe_fix_shadow_declared_fixed = false;
+        bool safe_fix_shadow_candidate_accepted = false;
+        bool safe_fix_shadow_held = false;
+        bool safe_fix_shadow_revoked = false;
+        bool safe_fix_shadow_strong_acquisition = false;
+        bool safe_fix_shadow_change_point_acquisition = false;
+        int safe_fix_shadow_acquisition_streak = 0;
+        int safe_fix_shadow_hold_epochs = 0;
+        bool disjoint_consensus_declared_fixed = false;
+        int disjoint_consensus_state = 0;
+        int disjoint_consensus_acquisition_streak = 0;
+        int disjoint_consensus_selected_pair = 0;
+        double disjoint_consensus_selected_pair_min_ratio =
+            std::numeric_limits<double>::quiet_NaN();
+        bool causal_arc_consensus_declared_fixed = false;
+        int causal_arc_consensus_state = 0;
+        int causal_arc_consensus_acquisition_streak = 0;
+        bool causal_arc_disjoint_evidence_passed = false;
+        bool satellite_par_disjoint_evidence_passed = false;
+        bool satellite_par_consensus_declared_fixed = false;
+        int satellite_par_consensus_state = 0;
+        int satellite_par_consensus_acquisition_streak = 0;
+        bool src_par_disjoint_evidence_passed = false;
+        double src_par_partition_a_separation_m =
+            std::numeric_limits<double>::quiet_NaN();
+        double src_par_partition_b_separation_m =
+            std::numeric_limits<double>::quiet_NaN();
+        bool src_par_consensus_declared_fixed = false;
+        int src_par_consensus_state = 0;
+        int src_par_consensus_acquisition_streak = 0;
+        bool inertial_referenced_consensus_declared_fixed = false;
+        int inertial_referenced_consensus_state = 0;
+        int inertial_referenced_consensus_acquisition_streak = 0;
+        double inertial_referenced_correction_x =
+            std::numeric_limits<double>::quiet_NaN();
+        double inertial_referenced_correction_y =
+            std::numeric_limits<double>::quiet_NaN();
+        double inertial_referenced_correction_z =
+            std::numeric_limits<double>::quiet_NaN();
+        bool multifrequency_disjoint_evidence_passed = false;
+        bool multifrequency_consensus_declared_fixed = false;
+        int multifrequency_consensus_state = 0;
+        int multifrequency_consensus_acquisition_streak = 0;
+        bool l1_l2_multifrequency_disjoint_evidence_passed = false;
+        bool l1_l2_multifrequency_consensus_declared_fixed = false;
+        int l1_l2_multifrequency_consensus_state = 0;
+        int l1_l2_multifrequency_consensus_acquisition_streak = 0;
+        double safe_fix_shadow_independent_consensus_delta_m =
+            std::numeric_limits<double>::quiet_NaN();
+        int safe_fix_shadow_independent_source_families = 0;
+        double safe_fix_shadow_joint_failure_probability = 1.0;
+        bool safe_fix_shadow_failure_budget_passed = false;
+        bool inertial_fix_evidence_available = false;
+        bool inertial_fix_evidence_healthy_anchor = false;
+        bool inertial_fix_evidence_passed = false;
+        double inertial_fix_evidence_time_error_s =
+            std::numeric_limits<double>::quiet_NaN();
+        double inertial_fix_evidence_position_delta_m =
+            std::numeric_limits<double>::quiet_NaN();
+        double inertial_fix_evidence_nis_per_dimension =
+            std::numeric_limits<double>::quiet_NaN();
+        bool disjoint_satellite_fix_evidence_available = false;
+        bool disjoint_satellite_fix_inputs_verified = false;
+        bool disjoint_satellite_fix_partition_a_ffrt_passed = false;
+        bool disjoint_satellite_fix_partition_b_ffrt_passed = false;
+        bool disjoint_satellite_fix_evidence_passed = false;
+        double disjoint_satellite_fix_partition_separation_m =
+            std::numeric_limits<double>::quiet_NaN();
+        double disjoint_satellite_fix_partition_a_primary_separation_m =
+            std::numeric_limits<double>::quiet_NaN();
+        double disjoint_satellite_fix_partition_b_primary_separation_m =
+            std::numeric_limits<double>::quiet_NaN();
+        bool disjoint_satellite_fix_hard_separation_passed = false;
+        bool disjoint_satellite_fix_statistical_separation_passed = false;
+        double disjoint_satellite_fix_partition_nis_per_dimension =
+            std::numeric_limits<double>::quiet_NaN();
+        double disjoint_satellite_fix_partition_a_primary_nis_per_dimension =
+            std::numeric_limits<double>::quiet_NaN();
+        double disjoint_satellite_fix_partition_b_primary_nis_per_dimension =
+            std::numeric_limits<double>::quiet_NaN();
+        bool safe_float_continuity_attempted = false;
+        bool safe_float_continuity_used = false;
+        bool safe_float_continuity_solver_gap_anchor = false;
+        double safe_float_continuity_anchor_age_s =
+            std::numeric_limits<double>::quiet_NaN();
+        double safe_float_continuity_velocity_age_s =
+            std::numeric_limits<double>::quiet_NaN();
         bool selected_fixed = false;
         double selected_ratio = std::numeric_limits<double>::quiet_NaN();
         int selected_pair_count = 0;
@@ -758,6 +1258,30 @@ public:
         int tdcp_rejected_invalid = 0;
         double tdcp_residual_rms_m = std::numeric_limits<double>::quiet_NaN();
         double tdcp_residual_max_abs_m = std::numeric_limits<double>::quiet_NaN();
+        bool library_fixed_quality_gate_enabled = false;
+        int library_fixed_quality_gate_original_status = 0;
+        double library_fixed_quality_gate_original_ecef_x =
+            std::numeric_limits<double>::quiet_NaN();
+        double library_fixed_quality_gate_original_ecef_y =
+            std::numeric_limits<double>::quiet_NaN();
+        double library_fixed_quality_gate_original_ecef_z =
+            std::numeric_limits<double>::quiet_NaN();
+        double library_fixed_quality_gate_original_ratio =
+            std::numeric_limits<double>::quiet_NaN();
+        bool library_fixed_quality_gate_passed = false;
+        bool library_fixed_quality_gate_safe_shadow_branch = false;
+        bool library_fixed_quality_gate_covariance_branch = false;
+        bool library_fixed_quality_gate_strong_innovation_branch = false;
+        bool library_fixed_quality_gate_promoted = false;
+        bool library_fixed_quality_gate_disjoint_consensus_promoted = false;
+        bool library_fixed_quality_gate_causal_arc_promoted = false;
+        bool library_fixed_quality_gate_satellite_par_promoted = false;
+        bool library_fixed_quality_gate_src_par_promoted = false;
+        bool library_fixed_quality_gate_inertial_referenced_promoted =
+            false;
+        bool library_fixed_quality_gate_multifrequency_promoted = false;
+        bool library_fixed_quality_gate_raw_partition_conflict = false;
+        bool library_fixed_quality_gate_demoted = false;
         std::string reject_reason;
         ARSkipReason ar_skip_reason{ARSkipReason::NONE};
 
@@ -773,11 +1297,30 @@ public:
             std::numeric_limits<double>::quiet_NaN();
         double float_update_nis_per_observation = std::numeric_limits<double>::quiet_NaN();
         int float_update_suppressed_outliers = 0;
+        int float_update_student_t_downweighted_rows = 0;
+        double float_update_student_t_minimum_weight =
+            std::numeric_limits<double>::quiet_NaN();
+        double float_update_student_t_mean_weight =
+            std::numeric_limits<double>::quiet_NaN();
         // Trace (sum of diagonal) of the float filter's 3x3 ECEF position
         // covariance block, sampled just after this epoch's measurement
         // update -- a direct, model-based answer to "is the float position
         // covariance collapsing (overconfident)".
         double float_position_covariance_trace_m2 = std::numeric_limits<double>::quiet_NaN();
+        // Innovation-based adaptive measurement noise telemetry (navi.776).
+        // Entries tracked after this epoch's update, and the mean
+        // adapted/model variance ratio per measurement kind (1.0 = tracker
+        // agrees with the model / nothing tracked).
+        int adaptive_noise_tracked_entries = 0;
+        double adaptive_noise_mean_phase_scale = std::numeric_limits<double>::quiet_NaN();
+        double adaptive_noise_mean_code_scale = std::numeric_limits<double>::quiet_NaN();
+        // navi.776 B: SD Doppler measurement rows in this epoch's float
+        // update and their prefit residual RMS (m/s domain).
+        int float_update_doppler_observation_count = 0;
+        double doppler_row_residual_rms_mps = std::numeric_limits<double>::quiet_NaN();
+        // navi.776 C: |post - pre| of the position states across this
+        // epoch's measurement update (m).
+        double position_correction_norm_m = std::numeric_limits<double>::quiet_NaN();
     };
 
     RTKProcessor();
@@ -794,6 +1337,56 @@ public:
     PositionSolution processRTKEpoch(const ObservationData& rover_obs,
                                    const ObservationData& base_obs,
                                    const NavigationData& nav);
+
+    struct ExternalInertialFixEvidence {
+        bool available = false;
+        bool healthy_independent_anchor = false;
+        GNSSTime time;
+        Vector3d position_ecef = Vector3d::Zero();
+        Matrix3d position_covariance_ecef = Matrix3d::Zero();
+    };
+
+    struct ExternalDisjointSatelliteFixEvidence {
+        bool available = false;
+        bool inputs_verified_disjoint = false;
+        bool partition_a_ffrt_passed = false;
+        bool partition_b_ffrt_passed = false;
+        double partition_a_ratio =
+            std::numeric_limits<double>::quiet_NaN();
+        double partition_b_ratio =
+            std::numeric_limits<double>::quiet_NaN();
+        Vector3d partition_a_candidate_ecef =
+            Vector3d::Constant(
+                std::numeric_limits<double>::quiet_NaN());
+        Vector3d partition_b_candidate_ecef =
+            Vector3d::Constant(
+                std::numeric_limits<double>::quiet_NaN());
+        Matrix3d partition_a_covariance_ecef =
+            Matrix3d::Constant(
+                std::numeric_limits<double>::quiet_NaN());
+        Matrix3d partition_b_covariance_ecef =
+            Matrix3d::Constant(
+                std::numeric_limits<double>::quiet_NaN());
+    };
+
+    /// Install a one-epoch, pre-GNSS-update INS prediction. It is consumed by
+    /// the next processRTKEpoch() call and then cleared.
+    void setExternalInertialFixEvidence(
+        const ExternalInertialFixEvidence& evidence) {
+        external_inertial_fix_evidence_ = evidence;
+    }
+
+    /// Install one-epoch candidates from RTK processors whose input
+    /// satellite sets were verified disjoint by the caller.
+    void setExternalDisjointSatelliteFixEvidence(
+        const ExternalDisjointSatelliteFixEvidence& evidence) {
+        external_disjoint_satellite_fix_evidence_ = evidence;
+    }
+
+    /// Apply the default-off FIX quality policy to the exported solution.
+    /// With the independent-budget option enabled, the same policy is also
+    /// enforced before ambiguity/hold state is committed.
+    void applyLibraryFixedQualityGate(PositionSolution& solution);
 
     /**
      * @brief Doppler observation sigma (1-sigma, m/s at zenith) used by the
@@ -899,6 +1492,27 @@ public:
                 ins_time_update_applied_last_epoch_};
     }
 
+    /// navi.776 C: Kalman position-correction statistics for the offline
+    /// GNSS-IMU time-offset search. Accumulates |post - pre| of the position
+    /// states across the measurement update, but ONLY on epochs whose prior
+    /// came from the INS time update -- on SPP-reseed epochs the correction
+    /// measures SPP error, not time-offset-induced INS prediction error.
+    /// J(dt) = mean_square_m2 is the paper's search objective.
+    struct PositionCorrectionStats {
+        std::size_t count = 0;
+        double mean_square_m2 = 0.0;
+    };
+    PositionCorrectionStats getPositionCorrectionStats() const {
+        PositionCorrectionStats stats;
+        stats.count = position_correction_count_;
+        stats.mean_square_m2 =
+            position_correction_count_ > 0
+                ? position_correction_sum_sq_m2_ /
+                      static_cast<double>(position_correction_count_)
+                : 0.0;
+        return stats;
+    }
+
     /// Return RTK's current FLOAT posterior antenna position/covariance. The
     /// ambiguity-fixed candidate is intentionally not used as the INS anchor.
     bool getFloatPosteriorPosition(Vector3d& position_ecef,
@@ -930,6 +1544,19 @@ private:
     RTKConfig rtk_config_;
     SPPProcessor spp_processor_;
     EpochDebugTelemetry debug_telemetry_;
+    safe_fix::StateMachine safe_fix_shadow_state_machine_;
+    safe_fix::StateMachine disjoint_consensus_state_machine_;
+    safe_fix::StateMachine causal_arc_consensus_state_machine_;
+    safe_fix::StateMachine satellite_par_consensus_state_machine_;
+    safe_fix::StateMachine src_par_consensus_state_machine_;
+    safe_fix::StateMachine inertial_referenced_consensus_state_machine_;
+    safe_fix::StateMachine multifrequency_consensus_state_machine_;
+    safe_fix::StateMachine l1_l2_multifrequency_consensus_state_machine_;
+    std::set<SatelliteId> satellite_par_persistent_satellites_;
+    bool independent_failure_budget_evaluated_this_epoch_ = false;
+    ExternalInertialFixEvidence external_inertial_fix_evidence_;
+    ExternalDisjointSatelliteFixEvidence
+        external_disjoint_satellite_fix_evidence_;
     double doppler_velocity_sigma_mps_ = 0.5;
     Vector3d last_doppler_velocity_ecef_ = Vector3d::Zero();
     GNSSTime last_doppler_velocity_time_;
@@ -950,6 +1577,8 @@ private:
     PositionSolution processRTKEpochInternal(const ObservationData& rover_obs,
                                              const ObservationData& base_obs,
                                              const NavigationData& nav);
+    void updateIndependentFailureBudgetTelemetry();
+    void updateSafeFixShadowStateMachine(const GNSSTime& time);
 
     Vector3d base_position_;
     bool base_position_known_ = false;
@@ -971,6 +1600,10 @@ private:
     Matrix3d external_velocity_initial_covariance_ecef_ = Matrix3d::Zero();
     bool has_external_velocity_time_update_ = false;
     std::size_t ins_time_update_applied_count_ = 0;
+    // navi.776 C: position-correction accumulators (see
+    // getPositionCorrectionStats).
+    std::size_t position_correction_count_ = 0;
+    double position_correction_sum_sq_m2_ = 0.0;
     std::size_t ins_time_update_rejected_count_ = 0;
     bool ins_time_update_applied_last_epoch_ = false;
     int consecutive_cp_pr_gate_rejections_ = 0;
@@ -1016,6 +1649,31 @@ private:
         if (prn < 1) prn = 1;
         if (prn > SATS_PER_SYSTEM) prn = SATS_PER_SYSTEM;
         return systemSlotBase(sat.system) + (prn - 1);
+    }
+
+    /// Inverse of satelliteSlot(): recover the satellite for a slot index
+    /// (0..MAXSAT-1). Used to re-derive the per-system adaptive-noise config
+    /// from a row's adaptive_key during the update pass.
+    static SatelliteId satelliteFromSlot(int slot) {
+        if (slot < 0) slot = 0;
+        if (slot >= MAXSAT) slot = MAXSAT - 1;
+        if (slot < SATS_PER_SYSTEM) {
+            return SatelliteId(GNSSSystem::GPS, static_cast<uint8_t>(slot + 1));
+        }
+        if (slot < 2 * SATS_PER_SYSTEM) {
+            return SatelliteId(GNSSSystem::GLONASS,
+                               static_cast<uint8_t>(slot - SATS_PER_SYSTEM + 1));
+        }
+        if (slot < 3 * SATS_PER_SYSTEM) {
+            return SatelliteId(GNSSSystem::Galileo,
+                               static_cast<uint8_t>(slot - 2 * SATS_PER_SYSTEM + 1));
+        }
+        if (slot < 4 * SATS_PER_SYSTEM) {
+            return SatelliteId(GNSSSystem::BeiDou,
+                               static_cast<uint8_t>(slot - 3 * SATS_PER_SYSTEM + 1));
+        }
+        return SatelliteId(GNSSSystem::QZSS,
+                           static_cast<uint8_t>(slot - 4 * SATS_PER_SYSTEM + 1));
     }
 
     static int IL(int freq) {
@@ -1119,6 +1777,9 @@ private:
     // Epoch tracking
     GNSSTime last_epoch_time_;
     bool has_last_epoch_ = false;
+    bool fixed_anchor_float_stabilizer_armed_ = false;
+    std::deque<rtk_float_stabilizer::FixedAnchor>
+        fixed_anchor_float_history_;
     GNSSTime last_trusted_time_;
     bool has_last_trusted_time_ = false;
     // WP9: the trusted position/time recorded just *before* the current
@@ -1212,6 +1873,13 @@ private:
         double elevation = 0.0;       // elevation from rover position
         double base_elevation = 0.0;   // elevation from base position
         bool has_ephemeris = false;
+        // navi.776 B: satellite velocity / clock drift at the rover-side
+        // transmit time, for SD Doppler measurement rows. Populated from
+        // the same calculateSatelliteState call that yields sat_pos, so
+        // filling them is behavior-neutral.
+        Vector3d sat_vel = Vector3d::Zero();      // ECEF m/s
+        double sat_clock_drift = 0.0;             // s/s
+        bool has_sat_velocity = false;
     };
 
     // WP7: current epoch's time (tow), used to look up the NLOS weight
@@ -1230,6 +1898,11 @@ private:
     std::map<SatelliteId, double> code_phase_history_l1_m_;
     std::map<SatelliteId, double> code_phase_history_l2_m_;
     std::map<SatelliteId, double> code_phase_history_l5_m_;  // Phase 18 Step 5
+    std::set<SatelliteId> current_epoch_slips_l1_;
+    std::set<SatelliteId> current_epoch_slips_l2_;
+    std::set<SatelliteId> current_epoch_slips_l5_;
+    causal_ambiguity_arc::Bank l1_l5_mw_arc_bank_;
+    causal_ambiguity_arc::Bank ambiguity_arc_bank_;
 
     struct TdcpHistory {
         double phase_m = 0.0;
@@ -1238,6 +1911,66 @@ private:
     std::map<SatelliteId, TdcpHistory> tdcp_history_l1_;
     std::map<SatelliteId, TdcpHistory> tdcp_history_l2_;
     std::map<SatelliteId, TdcpHistory> tdcp_history_l5_;
+
+    // navi.776 A2: innovation-based adaptive measurement variance state.
+    // Only populated/consulted when enable_adaptive_measurement_noise is on;
+    // keyed freq * MAXSAT + satelliteSlot(sat) per MeasurementKind.
+    rtk_adaptive_noise::AdaptiveNoiseTracker adaptive_noise_tracker_;
+    // True when adaptation applies this epoch: knob on AND the float
+    // baseline is within the optional adaptive_noise_max_baseline_m gate.
+    bool adaptiveNoiseActiveThisEpoch() const {
+        if (!rtk_config_.enable_adaptive_measurement_noise) return false;
+        const double max_baseline = rtk_config_.adaptive_noise_max_baseline_m;
+        if (!std::isfinite(max_baseline) || max_baseline <= 0.0) return true;
+        if (filter_state_.state.size() < 3) return true;
+        const double baseline_m = filter_state_.state.head<3>().norm();
+        return !std::isfinite(baseline_m) || baseline_m <= max_baseline;
+    }
+    rtk_adaptive_noise::AdaptiveNoiseConfig adaptiveNoiseConfig() const {
+        rtk_adaptive_noise::AdaptiveNoiseConfig config;
+        config.alpha_phase = rtk_config_.adaptive_noise_alpha_phase;
+        config.alpha_code = rtk_config_.adaptive_noise_alpha_code;
+        config.alpha_doppler = rtk_config_.adaptive_noise_alpha_doppler;
+        config.min_variance_scale = rtk_config_.adaptive_noise_min_variance_scale;
+        config.max_variance_scale = rtk_config_.adaptive_noise_max_variance_scale;
+        config.reset_gap_s = rtk_config_.adaptive_noise_reset_gap_s;
+        return config;
+    }
+    /// Per-system alpha variant: same clamps, but the phase/code smoothing
+    /// constants come from the satellite's GNSSSystem when
+    /// adaptive_noise_per_system_alpha is on. Falls back to the shared
+    /// defaults for any system without an explicit entry (and when the knob
+    /// is off, which keeps this bit-identical to the default).
+    rtk_adaptive_noise::AdaptiveNoiseConfig adaptiveNoiseConfig(
+        const SatelliteId& satellite) const {
+        rtk_adaptive_noise::AdaptiveNoiseConfig config = adaptiveNoiseConfig();
+        if (!rtk_config_.adaptive_noise_per_system_alpha) return config;
+        switch (satellite.system) {
+            case GNSSSystem::GPS:
+                config.alpha_phase = rtk_config_.adaptive_noise_alpha_phase_gps;
+                config.alpha_code = rtk_config_.adaptive_noise_alpha_code_gps;
+                break;
+            case GNSSSystem::Galileo:
+                config.alpha_phase = rtk_config_.adaptive_noise_alpha_phase_galileo;
+                config.alpha_code = rtk_config_.adaptive_noise_alpha_code_galileo;
+                break;
+            case GNSSSystem::BeiDou:
+                config.alpha_phase = rtk_config_.adaptive_noise_alpha_phase_bds;
+                config.alpha_code = rtk_config_.adaptive_noise_alpha_code_bds;
+                break;
+            case GNSSSystem::QZSS:
+                config.alpha_phase = rtk_config_.adaptive_noise_alpha_phase_qzss;
+                config.alpha_code = rtk_config_.adaptive_noise_alpha_code_qzss;
+                break;
+            case GNSSSystem::GLONASS:
+                config.alpha_phase = rtk_config_.adaptive_noise_alpha_phase_glonass;
+                config.alpha_code = rtk_config_.adaptive_noise_alpha_code_glonass;
+                break;
+            default:
+                break;
+        }
+        return config;
+    }
 
     // Phase 2a: CMC-aware DD reference-satellite selection state (only
     // populated/consulted when rtk_config_.cmc_aware_reference_selection is
@@ -1338,7 +2071,8 @@ private:
         bool saved_has_last_trusted,
         const GNSSTime& saved_last_trusted_time,
         bool saved_has_last_trusted_time);
-    void recordFixedEpoch();
+    void recordFixedEpoch(const PositionSolution& solution);
+    void stabilizeFloatOutput(PositionSolution& solution) const;
     void recordFloatEpoch(const ObservationData& rover_obs, const NavigationData& nav);
     void recordFallbackEpoch(const ObservationData& rover_obs, const NavigationData& nav);
 
@@ -1364,6 +2098,7 @@ private:
                                     SolutionStatus status,
                                     int num_satellites);
     void rememberSolution(const PositionSolution& solution);
+    PositionSolution makeSafeFloatContinuity(const GNSSTime& time);
 
     void updateStatistics(SolutionStatus status) const;
 

@@ -1,5 +1,6 @@
 #include "ppp_internal.hpp"
 
+#include <libgnss++/algorithms/ppp_correction_contract.hpp>
 #include <libgnss++/algorithms/ppp_multifrequency.hpp>
 
 #include <libgnss++/algorithms/ppp_utils.hpp>
@@ -373,8 +374,14 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
         use_broadcast_rtklib_model ? ppp_config_.initial_clock_variance : 1e8;
     filter_state_.covariance(filter_state_.glo_clock_index, filter_state_.glo_clock_index) =
         use_broadcast_rtklib_model ? ppp_config_.initial_clock_variance : 1e8;
+    const bool madoca_per_frequency =
+        require_coherent_ssr_ && !ppp_config_.use_ionosphere_free &&
+        ppp_config_.estimate_ionosphere;
     filter_state_.covariance(filter_state_.trop_index, filter_state_.trop_index) =
-        use_broadcast_rtklib_model ? ppp_config_.initial_troposphere_variance : 25.0;
+        ppp_internal::initialTroposphereVariance(
+            madoca_per_frequency,
+            use_broadcast_rtklib_model,
+            ppp_config_.initial_troposphere_variance);
     // Per-system receiver clocks use the same epoch prior as GPS by default.
     const double system_clock_initial_variance =
         use_broadcast_rtklib_model ? ppp_config_.initial_clock_variance : 1e8;
@@ -391,20 +398,13 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
         filter_state_.covariance(
             filter_state_.bds2_clock_index, filter_state_.bds2_clock_index) =
             system_clock_initial_variance;
-    // Initialize per-satellite ionosphere states. GNSS_PPP_INIT_IONO_VAR (>0)
-    // overrides the per-satellite initial ionosphere covariance. The est-stec
-    // KF has a rank-deficient gauge in (iono, N1, N2, cdtr) -- a uniform shift
-    // (iono+Δ, λN+Δ, cdtr−Δ) leaves the phase observations invariant -- so
-    // when the constellation membership shifts (e.g. orbit-fix dropping a sat
-    // missing its SSR orbit correction) the null-space anchor moves and the
-    // filter settles to a different common-mode iono level. A tight prior pins
-    // this gauge: on the MADOCA est-stec parity workload, var=1 lets a
-    // low-latitude station (ALIC) stack cleanly with the orbit-fix lever for
-    // bridge-parity float, while the default (100) is correct at mid-latitude
-    // (MIZU); the right value is station-dependent, so this is opt-in.
-    const double iono_init_var = env_overrides_.init_iono_var > 0.0
-                                     ? env_overrides_.init_iono_var
-                                     : ppp_config_.initial_ionosphere_variance;
+    // Initialize per-satellite ionosphere states. Coherent MADOCA uses the
+    // frozen oracle's 60 m STEC sigma; GNSS_PPP_INIT_IONO_VAR (>0) remains an
+    // explicit diagnostic override.
+    const double iono_init_var = initialIonosphereVariance(
+        madoca_per_frequency,
+        env_overrides_.init_iono_var,
+        ppp_config_.initial_ionosphere_variance);
     if (ppp_config_.estimate_ionosphere) {
         for (const auto& [sat, idx] : filter_state_.ionosphere_indices) {
             filter_state_.state(idx) = 0.0;  // Initial iono delay = 0 (will be constrained by STEC)
@@ -502,29 +502,42 @@ void PPPProcessor::predictState(double dt, const PositionSolution* seed_solution
     if (use_broadcast_rtklib_model && seed_solution != nullptr && seed_solution->isValid()) {
         if (ppp_config_.reset_clock_to_spp_each_epoch || useLowDynamicsBroadcastSeedAssist()) {
             const double gps_clock_before_reset = filter_state_.state(filter_state_.clock_index);
-            const auto reinitializeSystemClock = [&](int index) {
+            const bool madoca_per_frequency_clock_reset =
+                require_coherent_ssr_ && ssr_products_loaded_ &&
+                !ppp_config_.use_ionosphere_free && ppp_config_.estimate_ionosphere;
+            const auto& spp_system_biases = spp_processor_.getSystemBiases();
+            const auto reinitializeSystemClock =
+                [&](int index, GNSSSystem system, bool reset_to_gps_clock) {
                 if (index < 0) {
                     return;
                 }
                 const double inter_system_offset =
                     filter_state_.state(index) - gps_clock_before_reset;
+                const auto spp_bias_it = spp_system_biases.find(system);
+                const double reset_offset =
+                    madoca_per_frequency_clock_reset &&
+                            spp_bias_it != spp_system_biases.end()
+                        ? spp_bias_it->second
+                        : (reset_to_gps_clock ? 0.0 : inter_system_offset);
                 reinitializeScalarState(
                     index,
-                    seed_solution->receiver_clock_bias + inter_system_offset,
+                    seed_solution->receiver_clock_bias + reset_offset,
                     ppp_config_.initial_clock_variance);
             };
             reinitializeScalarState(
                 filter_state_.clock_index,
                 seed_solution->receiver_clock_bias,
                 ppp_config_.initial_clock_variance);
-            reinitializeScalarState(
-                filter_state_.glo_clock_index,
-                seed_solution->receiver_clock_bias,
-                ppp_config_.initial_clock_variance);
-            reinitializeSystemClock(filter_state_.gal_clock_index);
-            reinitializeSystemClock(filter_state_.qzs_clock_index);
-            reinitializeSystemClock(filter_state_.bds_clock_index);
-            reinitializeSystemClock(filter_state_.bds2_clock_index);
+            reinitializeSystemClock(
+                filter_state_.glo_clock_index, GNSSSystem::GLONASS, true);
+            reinitializeSystemClock(
+                filter_state_.gal_clock_index, GNSSSystem::Galileo, false);
+            reinitializeSystemClock(
+                filter_state_.qzs_clock_index, GNSSSystem::QZSS, false);
+            reinitializeSystemClock(
+                filter_state_.bds_clock_index, GNSSSystem::BeiDou, false);
+            reinitializeSystemClock(
+                filter_state_.bds2_clock_index, GNSSSystem::BeiDou, false);
         }
         if (ppp_config_.kinematic_mode &&
             !ppp_config_.low_dynamics_mode &&
@@ -569,10 +582,18 @@ void PPPProcessor::updateMadocaPerFrequencyIonospherePrediction(
             ambiguity.has_last_carrier_ionosphere = false;
             continue;
         }
+        const auto windup_it = windup_cache_.find(observation.satellite);
+        const double windup_cycles =
+            windup_it != windup_cache_.end() && std::isfinite(windup_it->second)
+                ? windup_it->second
+                : 0.0;
         const double carrier_ionosphere =
-            ppp_internal::madocaCarrierIonosphereMeters(
+            ppp_internal::madocaCarrierIonosphereMetersExcludingWindup(
                 observation.carrier_phase_l1,
                 observation.carrier_phase_l2,
+                observation.wavelength_l1,
+                observation.wavelength_l2,
+                windup_cycles,
                 observation.freq_l1,
                 observation.freq_l2);
         if (!std::isfinite(carrier_ionosphere)) {
@@ -732,7 +753,9 @@ bool PPPProcessor::updateFilter(const ObservationData& obs,
     bool have_cached_postfit_eq = false;
     const auto getPostfitEquation = [&]() -> const MeasurementEquation& {
         if (!have_cached_postfit_eq) {
-            cached_postfit_eq = formMeasurementEquations(if_obs, nav, obs.time, false);
+            cached_postfit_eq =
+                formMeasurementEquations(
+                    if_obs, nav, obs.time, false, false);
             have_cached_postfit_eq = true;
         }
         return cached_postfit_eq;
@@ -748,7 +771,25 @@ bool PPPProcessor::updateFilter(const ObservationData& obs,
         (ppp_config_.apply_static_anchor_blend || madoca_static_anchor_blend) &&
         !(precise_products_loaded_ && !ppp_config_.estimate_troposphere);
     if (madoca_postfit_shadow) {
-        const MeasurementEquation& postfit_eq = getPostfitEquation();
+        // applyPreciseCorrections() materializes each antenna phase-centre
+        // position at the epoch prior.  Recenter that corrected geometry on
+        // the accepted filter position for the diagnostic shadow; otherwise
+        // its nominal "postfit" residuals still use the SPP seed and show a
+        // metre-level, geometry-shaped false drift.
+        auto shadow_observations = if_obs;
+        const Vector3d prior_position =
+            pre_update_state.state.segment(pre_update_state.pos_index, 3);
+        const Vector3d updated_position =
+            filter_state_.state.segment(filter_state_.pos_index, 3);
+        for (auto& observation : shadow_observations) {
+            observation.receiver_position = recenterPostfitReceiverPosition(
+                observation.receiver_position,
+                prior_position,
+                updated_position);
+        }
+        const MeasurementEquation postfit_eq =
+            formMeasurementEquations(
+                shadow_observations, nav, obs.time, false, false);
         const MadocaPostfitEpochStats postfit_stats =
             computeMadocaPostfitEpochStats(postfit_eq);
         writeMadocaPostfitShadow(
@@ -833,7 +874,6 @@ void PPPProcessor::detectCycleSlips(const ObservationData& obs, const Navigation
         return;
     }
 
-    constexpr double kMinimumGeometryFreeSlipThresholdMeters = 0.5;
     constexpr double kMinimumMwSlipThresholdMeters = 10.0;
     // Enable combination (GF/MW) slip detection in SSR mode even for static,
     // because MW averaging is needed for Wide-Lane AR. CLAS kinematic OSR uses
@@ -920,6 +960,13 @@ void PPPProcessor::detectCycleSlips(const ObservationData& obs, const Navigation
         double gf_m = 0.0;
         double mw_m = 0.0;
         double mw_lambda_wl = 0.0;
+        std::map<SignalType, double> previous_geometry_free_by_signal_m;
+        std::map<SignalType, double> geometry_free_by_signal_m;
+        std::set<SignalType> madoca_gf_slipped_signals;
+        const bool madoca_per_frequency =
+            require_coherent_ssr_ && ssr_products_loaded_ &&
+            !ppp_config_.use_ionosphere_free &&
+            ppp_config_.estimate_ionosphere;
 
         const Observation* secondary =
             use_combination_slip_detection ?
@@ -936,11 +983,15 @@ void PPPProcessor::detectCycleSlips(const ObservationData& obs, const Navigation
             if (lambda1 > 0.0 && lambda2 > 0.0) {
                 gf_m = primary->carrier_phase * lambda1 - secondary->carrier_phase * lambda2;
                 have_gf = std::isfinite(gf_m);
-                if (have_gf &&
+                const double gf_slip_threshold =
+                    ppp_internal::geometryFreeSlipThresholdMeters(
+                        madoca_per_frequency,
+                        ppp_config_.cycle_slip_threshold);
+                if (!madoca_per_frequency &&
+                    have_gf &&
                     ambiguity.has_last_geometry_free &&
                     std::abs(gf_m - ambiguity.last_geometry_free_m) >
-                        std::max(ppp_config_.cycle_slip_threshold,
-                                 kMinimumGeometryFreeSlipThresholdMeters)) {
+                        gf_slip_threshold) {
                     gf_slip = true;
                 }
             }
@@ -970,6 +1021,60 @@ void PPPProcessor::detectCycleSlips(const ObservationData& obs, const Navigation
                 }
             }
 
+        }
+
+        if (madoca_per_frequency) {
+            const Ephemeris* eph = nav.getEphemeris(satellite, obs.time);
+            const double lambda1 =
+                eph != nullptr ? signalWavelengthMeters(primary->signal, eph)
+                               : signalWavelengthMeters(*primary);
+            if (lambda1 > 0.0) {
+                const auto previous_primary =
+                    ambiguity.frequency_lifecycle.find(primary->signal);
+                for (const auto signal : secondary_candidates) {
+                    const Observation* frequency_observation =
+                        findCarrierObservationForSignals(
+                            obs, satellite, std::vector<SignalType>{signal});
+                    if (frequency_observation == nullptr ||
+                        frequency_observation == primary) {
+                        continue;
+                    }
+                    const double wavelength =
+                        eph != nullptr
+                            ? signalWavelengthMeters(
+                                  frequency_observation->signal, eph)
+                            : signalWavelengthMeters(*frequency_observation);
+                    if (!(wavelength > 0.0)) {
+                        continue;
+                    }
+                    const double value_m =
+                        primary->carrier_phase * lambda1 -
+                        frequency_observation->carrier_phase * wavelength;
+                    if (std::isfinite(value_m)) {
+                        geometry_free_by_signal_m[frequency_observation->signal] =
+                            value_m;
+                    }
+                    const auto previous_frequency =
+                        ambiguity.frequency_lifecycle.find(
+                            frequency_observation->signal);
+                    if (previous_primary != ambiguity.frequency_lifecycle.end() &&
+                        previous_primary->second.has_last_phase &&
+                        previous_frequency != ambiguity.frequency_lifecycle.end() &&
+                        previous_frequency->second.has_last_phase) {
+                        previous_geometry_free_by_signal_m[
+                            frequency_observation->signal] =
+                            previous_primary->second.last_phase * lambda1 -
+                            previous_frequency->second.last_phase * wavelength;
+                    }
+                }
+            }
+            madoca_gf_slipped_signals =
+                ppp_internal::geometryFreeSlippedSignals(
+                previous_geometry_free_by_signal_m,
+                geometry_free_by_signal_m,
+                ppp_internal::geometryFreeSlipThresholdMeters(
+                    true, ppp_config_.cycle_slip_threshold));
+            gf_slip = !madoca_gf_slipped_signals.empty();
         }
 
         if (lli_slip || gf_slip || mw_slip || discnt_slip) {
@@ -1006,7 +1111,14 @@ void PPPProcessor::detectCycleSlips(const ObservationData& obs, const Navigation
                 }
                 std::cerr << "\n";
             }
-            resetAmbiguity(satellite, primary->signal);
+            if (madoca_per_frequency && gf_slip &&
+                !lli_slip && !mw_slip && !discnt_slip) {
+                resetMadocaAmbiguityFrequencies(
+                    satellite, primary->signal,
+                    madoca_gf_slipped_signals);
+            } else {
+                resetAmbiguity(satellite, primary->signal);
+            }
         }
 
         auto& updated_ambiguity = ambiguity_states_[satellite];
@@ -1219,8 +1331,18 @@ int PPPProcessor::getOrCreateAmbiguityState(const IonosphereFreeObs& observation
     const auto existing = filter_state_.ambiguity_indices.find(observation.satellite);
     if (existing != filter_state_.ambiguity_indices.end()) {
         auto& ambiguity = ambiguity_states_[observation.satellite];
-        if (ambiguity.needs_reinitialization) {
+        const bool has_frequency_resets =
+            pending_ambiguity_frequency_resets_.find(observation.satellite) !=
+            pending_ambiguity_frequency_resets_.end();
+        if ((has_frequency_resets &&
+             ambiguityFrequencyNeedsReset(
+                 observation.satellite, observation.primary_signal)) ||
+            (!has_frequency_resets && ambiguity.needs_reinitialization)) {
             initializeAmbiguityState(observation, existing->second);
+            if (has_frequency_resets) {
+                completeAmbiguityFrequencyReset(
+                    observation.satellite, observation.primary_signal);
+            }
         }
         return existing->second;
     }
@@ -1255,13 +1377,27 @@ void PPPProcessor::initializeAmbiguityState(const IonosphereFreeObs& observation
             observation.modeled_trop_delay_m);
     auto& ambiguity = ambiguity_states_[observation.satellite];
     if (!ppp_config_.use_ionosphere_free && ppp_config_.estimate_ionosphere) {
+        const bool madoca_per_frequency =
+            require_coherent_ssr_ && ssr_products_loaded_ &&
+            !ppp_config_.use_clas_osr_filter;
+        const auto windup_it = windup_cache_.find(observation.satellite);
+        const double windup_cycles =
+            windup_it != windup_cache_.end() && std::isfinite(windup_it->second)
+                ? windup_it->second
+                : 0.0;
+        const double seed_windup_m =
+            algorithms::ppp_correction_contract::excludePhaseWindupFromAmbiguitySeed(
+                madoca_per_frequency)
+                ? windup_cycles * observation.wavelength_l1
+                : 0.0;
         // Per-frequency L1 ambiguity in meters, seeded geometry-free consistent
         // with the ionosphere state: bias_1 = L1 - P1 + 2*ion*(f1/f1)^2.
         // (f1/f1)^2 = 1; this removes the +/-iono on code/phase so the residual
         // is the integer-recoverable phase bias lambda1*N1.
         const double ion = observation.has_iono_init ? observation.iono_init_m : 0.0;
         filter_state_.state(state_index) =
-            observation.carrier_phase_l1 - observation.pseudorange_l1 + 2.0 * ion;
+            observation.carrier_phase_l1 + seed_windup_m -
+            observation.pseudorange_l1 + 2.0 * ion;
         filter_state_.covariance(state_index, state_index) =
             ppp_config_.initial_ambiguity_variance;
         ambiguity.wavelength_l1 = observation.wavelength_l1;
@@ -1292,14 +1428,37 @@ int PPPProcessor::getOrCreateIonosphereState(const IonosphereFreeObs& observatio
         filter_state_.total_states, filter_state_.total_states);
     filter_state_.covariance.row(new_index).setZero();
     filter_state_.covariance.col(new_index).setZero();
-    filter_state_.state(new_index) =
+    const bool madoca_per_frequency =
+        require_coherent_ssr_ && ssr_products_loaded_ &&
+        !ppp_config_.use_ionosphere_free &&
+        ppp_config_.estimate_ionosphere &&
+        !ppp_config_.use_clas_osr_filter;
+    double initial_ionosphere_m =
         observation.has_iono_init ? observation.iono_init_m : 0.0;
+    if (observation.has_iono_init && madoca_per_frequency) {
+        // MADOCALIB initializes the STEC state from corr_meas() P1/P2 after
+        // receiver-antenna and SSR code-bias corrections. Its ambiguity seeds
+        // retain the separately captured raw-code ionosphere value, so only
+        // rederive the state value here.
+        const double gps_l1_ionosphere_m =
+            ppp_internal::madocaCorrectedCodeIonosphereStateMeters(
+                observation.iono_init_m,
+                observation.pseudorange_l1,
+                observation.pseudorange_l2,
+                observation.freq_l1,
+                observation.has_l2 ? observation.freq_l2 : 0.0);
+        if (std::isfinite(gps_l1_ionosphere_m)) {
+            initial_ionosphere_m = gps_l1_ionosphere_m;
+        }
+    }
+    filter_state_.state(new_index) = initial_ionosphere_m;
     // Mirror the GNSS_PPP_INIT_IONO_VAR override at the lazy-create site so a
     // satellite appearing mid-run lands in the same anchored gauge.
     filter_state_.covariance(new_index, new_index) =
-        env_overrides_.init_iono_var > 0.0
-            ? env_overrides_.init_iono_var
-            : ppp_config_.initial_ionosphere_variance;
+        initialIonosphereVariance(
+            madoca_per_frequency,
+            env_overrides_.init_iono_var,
+            ppp_config_.initial_ionosphere_variance);
     filter_state_.ionosphere_indices[observation.satellite] = new_index;
     return new_index;
 }
@@ -1311,7 +1470,15 @@ int PPPProcessor::getOrCreateAmbiguityStateL2(const IonosphereFreeObs& observati
     int index = -1;
     if (existing != filter_state_.ambiguity_l2_indices.end()) {
         index = existing->second;
-        if (!ambiguity.needs_reinitialization) {
+        const bool has_frequency_resets =
+            pending_ambiguity_frequency_resets_.find(observation.satellite) !=
+            pending_ambiguity_frequency_resets_.end();
+        const bool reset_l2 =
+            has_frequency_resets
+                ? ambiguityFrequencyNeedsReset(
+                      observation.satellite, observation.secondary_signal)
+                : ambiguity.needs_reinitialization;
+        if (!reset_l2) {
             return index;
         }
     } else {
@@ -1328,12 +1495,27 @@ int PPPProcessor::getOrCreateAmbiguityStateL2(const IonosphereFreeObs& observati
     const double ion = observation.has_iono_init ? observation.iono_init_m : 0.0;
     const double ratio =
         observation.freq_l2 > 0.0 ? (observation.freq_l1 / observation.freq_l2) : 0.0;
-    filter_state_.state(index) = observation.carrier_phase_l2 -
+    const bool madoca_per_frequency =
+        require_coherent_ssr_ && ssr_products_loaded_ &&
+        !ppp_config_.use_clas_osr_filter;
+    const auto windup_it = windup_cache_.find(observation.satellite);
+    const double windup_cycles =
+        windup_it != windup_cache_.end() && std::isfinite(windup_it->second)
+            ? windup_it->second
+            : 0.0;
+    const double seed_windup_m =
+        algorithms::ppp_correction_contract::excludePhaseWindupFromAmbiguitySeed(
+            madoca_per_frequency)
+            ? windup_cycles * observation.wavelength_l2
+            : 0.0;
+    filter_state_.state(index) = observation.carrier_phase_l2 + seed_windup_m -
                                  observation.pseudorange_l2 +
                                  2.0 * ion * ratio * ratio;
     filter_state_.covariance(index, index) = ppp_config_.initial_ambiguity_variance;
     ambiguity.wavelength_l2 = observation.wavelength_l2;
     ambiguity.float_value_l2 = filter_state_.state(index);
+    completeAmbiguityFrequencyReset(
+        observation.satellite, observation.secondary_signal);
     return index;
 }
 
@@ -1366,17 +1548,38 @@ int PPPProcessor::getOrCreateAdditionalAmbiguityState(
     const auto existing = filter_state_.additional_ambiguity_indices.find(key);
     auto& lifecycle =
         ambiguity_states_[observation.satellite].frequency_lifecycle[frequency.signal];
+    const bool madoca_per_frequency =
+        require_coherent_ssr_ && ssr_products_loaded_ &&
+        !ppp_config_.use_clas_osr_filter;
+    const auto windup_it = windup_cache_.find(observation.satellite);
+    const double windup_cycles =
+        windup_it != windup_cache_.end() && std::isfinite(windup_it->second)
+            ? windup_it->second
+            : 0.0;
+    const double seed_windup_m =
+        algorithms::ppp_correction_contract::excludePhaseWindupFromAmbiguitySeed(
+            madoca_per_frequency)
+            ? windup_cycles * frequency.wavelength
+            : 0.0;
     if (existing != filter_state_.additional_ambiguity_indices.end()) {
-        if (lifecycle.state_index != existing->second) {
+        const bool reset_frequency =
+            ambiguityFrequencyNeedsReset(
+                observation.satellite, frequency.signal);
+        if (lifecycle.state_index != existing->second || reset_frequency) {
             const double ion = observation.has_iono_init ? observation.iono_init_m : 0.0;
             filter_state_.state(existing->second) =
                 algorithms::ppp_multifrequency::ambiguitySeedMeters(
-                    frequency.carrier_phase, frequency.pseudorange, ion,
+                    frequency.carrier_phase + seed_windup_m,
+                    frequency.pseudorange, ion,
                     observation.freq_l1, frequency.frequency);
             filter_state_.covariance.row(existing->second).setZero();
             filter_state_.covariance.col(existing->second).setZero();
             filter_state_.covariance(existing->second, existing->second) =
                 60.0 * 60.0;
+            if (reset_frequency) {
+                completeAmbiguityFrequencyReset(
+                    observation.satellite, frequency.signal);
+            }
         }
         lifecycle.float_value_m = filter_state_.state(existing->second);
         lifecycle.wavelength_m = frequency.wavelength;
@@ -1392,7 +1595,8 @@ int PPPProcessor::getOrCreateAdditionalAmbiguityState(
     const double ion = observation.has_iono_init ? observation.iono_init_m : 0.0;
     filter_state_.state(index) =
         algorithms::ppp_multifrequency::ambiguitySeedMeters(
-            frequency.carrier_phase, frequency.pseudorange, ion,
+            frequency.carrier_phase + seed_windup_m,
+            frequency.pseudorange, ion,
             observation.freq_l1, frequency.frequency);
     filter_state_.covariance(index, index) =
         60.0 * 60.0;
@@ -1586,8 +1790,62 @@ void PPPProcessor::updateAmbiguityStates(const ObservationData& obs) {
     }
 }
 
+bool PPPProcessor::ambiguityFrequencyNeedsReset(
+    const SatelliteId& satellite, SignalType signal) const {
+    const auto pending =
+        pending_ambiguity_frequency_resets_.find(satellite);
+    return pending != pending_ambiguity_frequency_resets_.end() &&
+           pending->second.find(signal) != pending->second.end();
+}
+
+void PPPProcessor::completeAmbiguityFrequencyReset(
+    const SatelliteId& satellite, SignalType signal) {
+    const auto pending =
+        pending_ambiguity_frequency_resets_.find(satellite);
+    if (pending == pending_ambiguity_frequency_resets_.end()) {
+        return;
+    }
+    pending->second.erase(signal);
+    auto ambiguity = ambiguity_states_.find(satellite);
+    if (pending->second.empty()) {
+        pending_ambiguity_frequency_resets_.erase(pending);
+        if (ambiguity != ambiguity_states_.end()) {
+            ambiguity->second.needs_reinitialization = false;
+        }
+    } else if (ambiguity != ambiguity_states_.end()) {
+        ambiguity->second.needs_reinitialization = true;
+    }
+}
+
+void PPPProcessor::resetMadocaAmbiguityFrequencies(
+    const SatelliteId& satellite,
+    SignalType primary_signal,
+    const std::set<SignalType>& slipped_nonprimary_signals) {
+    auto& pending = pending_ambiguity_frequency_resets_[satellite];
+    pending.insert(primary_signal);
+    pending.insert(
+        slipped_nonprimary_signals.begin(),
+        slipped_nonprimary_signals.end());
+
+    auto& ambiguity = ambiguity_states_[satellite];
+    ambiguity.needs_reinitialization = true;
+    ambiguity.is_fixed = false;
+    ambiguity.lock_count = 0;
+    ambiguity.quality_indicator = 0.0;
+    ambiguity.fractional_bias_cycles = 0.0;
+    ambiguity.fractional_bias_samples = 0;
+    ambiguity.wl_is_fixed = false;
+    ambiguity.nl_is_fixed = false;
+    ppp_internal::clearCarrierIonospherePredictionHistory(ambiguity);
+    ambiguity.frequency_lifecycle.erase(primary_signal);
+    for (const auto signal : slipped_nonprimary_signals) {
+        ambiguity.frequency_lifecycle.erase(signal);
+    }
+}
+
 void PPPProcessor::resetAmbiguity(const SatelliteId& satellite, SignalType signal) {
     (void)signal;
+    pending_ambiguity_frequency_resets_.erase(satellite);
     auto& ambiguity = ambiguity_states_[satellite];
     ambiguity = PPPAmbiguityInfo{};
     ambiguity.needs_reinitialization = true;

@@ -1904,10 +1904,14 @@ void writeSummaryJson(const Options& options,
     output << "  \"float_rate_percent\": " << float_rate_percent << ",\n";
     output << "  \"pseudorange_factors\": " << diagnostics.pseudorange_factors << ",\n";
     output << "  \"tdcp_factors\": " << diagnostics.tdcp_factors << ",\n";
+    output << "  \"tdcp_factors_inserted\": "
+           << diagnostics.tdcp_factors_inserted << ",\n";
     output << "  \"single_difference_doppler_factors\": "
            << diagnostics.single_difference_doppler_factors << ",\n";
     output << "  \"single_difference_tdcp_factors\": "
            << diagnostics.single_difference_tdcp_factors << ",\n";
+    output << "  \"single_difference_tdcp_factors_inserted\": "
+           << diagnostics.single_difference_tdcp_factors_inserted << ",\n";
     output << "  \"carrier_phase_factors\": " << diagnostics.carrier_phase_factors << ",\n";
     output << "  \"double_difference_pseudorange_factors\": "
            << diagnostics.double_difference_pseudorange_factors << ",\n";
@@ -1921,6 +1925,10 @@ void writeSummaryJson(const Options& options,
            << diagnostics.lambda_ambiguity_used_candidates << ",\n";
     output << "  \"lambda_ambiguity_attempts\": "
            << diagnostics.lambda_ambiguity_attempts << ",\n";
+    output << "  \"lambda_stale_candidates_filtered\": "
+           << diagnostics.lambda_stale_candidates_filtered << ",\n";
+    output << "  \"lambda_joint_marginal_failures\": "
+           << diagnostics.lambda_joint_marginal_failures << ",\n";
     output << "  \"integer_constrained_reoptimization_attempts\": "
            << diagnostics.integer_constrained_reoptimization_attempts << ",\n";
     output << "  \"integer_constrained_reoptimization_accepts\": "
@@ -3531,11 +3539,16 @@ int main(int argc, char* argv[]) {
                       << formatPercent(float_rate) << "\n";
             std::cout << "Pseudorange factors: " << result.diagnostics.pseudorange_factors << "\n";
             std::cout << "TDCP factors: " << result.diagnostics.tdcp_factors << "\n";
+            std::cout << "TDCP factors inserted: "
+                      << result.diagnostics.tdcp_factors_inserted << "\n";
             std::cout << "SD Doppler factors: "
                       << result.diagnostics.single_difference_doppler_factors
                       << "\n";
             std::cout << "SD TDCP factors: "
                       << result.diagnostics.single_difference_tdcp_factors
+                      << "\n";
+            std::cout << "SD TDCP factors inserted: "
+                      << result.diagnostics.single_difference_tdcp_factors_inserted
                       << "\n";
             std::cout << "Carrier phase factors: "
                       << result.diagnostics.carrier_phase_factors << "\n";
@@ -3553,6 +3566,10 @@ int main(int argc, char* argv[]) {
                       << result.diagnostics.lambda_ambiguity_used_candidates << "\n";
             std::cout << "LAMBDA attempts: "
                       << result.diagnostics.lambda_ambiguity_attempts << "\n";
+            std::cout << "LAMBDA stale candidates filtered: "
+                      << result.diagnostics.lambda_stale_candidates_filtered << "\n";
+            std::cout << "LAMBDA joint marginal failures: "
+                      << result.diagnostics.lambda_joint_marginal_failures << "\n";
             std::cout << "LAMBDA solved: "
                       << (result.diagnostics.lambda_ambiguity_fix_solved ? "yes" : "no")
                       << "\n";

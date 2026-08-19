@@ -13,7 +13,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_DIR = ROOT / "output"
 LIB_FILE = OUTPUT_DIR / "rtk_solution.pos"
-RTKLIB_FILE = OUTPUT_DIR / "rtklib_rtk_result.pos"
+RTKLIB_FILE = ROOT / "test_data" / "rtk" / "rtklib_rtk_result.pos"
 OUT_FIG = OUTPUT_DIR / "rtk_comparison.png"
 
 

@@ -103,6 +103,110 @@ TEST(PPPFilterIterations, MadocaPerFrequencyCommitsOneUpdatePerEpoch) {
     EXPECT_EQ(ppp_internal::filterIterationCount(false, false, 8), 8);
 }
 
+TEST(PPPMadocaL6dConstraints, RemovesIndependentConstellationBiases) {
+    const std::vector<ppp_internal::MadocaIonoConstraintInput> inputs = {
+        {SatelliteId(GNSSSystem::GPS, 1), 10, 1.0, 3.0, 0.2, 30.0},
+        {SatelliteId(GNSSSystem::GPS, 2), 11, 2.0, 5.0, 0.3, 30.0},
+        {SatelliteId(GNSSSystem::Galileo, 1), 12, 4.0, 10.0, 0.4, 30.0},
+        {SatelliteId(GNSSSystem::BeiDou, 1), 13, 6.0, 8.0, 0.5, 30.0},
+    };
+
+    const auto rows =
+        ppp_internal::buildMadocaIonoConstraintRows(inputs, 2.0, 3.0);
+
+    ASSERT_EQ(rows.size(), 3U);
+    EXPECT_EQ(rows[0].satellite, SatelliteId(GNSSSystem::GPS, 1));
+    EXPECT_EQ(rows[0].state_index, 10);
+    EXPECT_DOUBLE_EQ(rows[0].system_bias_m, 2.5);
+    EXPECT_DOUBLE_EQ(rows[0].target_m, 0.5);
+    EXPECT_DOUBLE_EQ(rows[0].residual_m, -0.5);
+    EXPECT_DOUBLE_EQ(rows[0].variance_m2, 0.04);
+    EXPECT_DOUBLE_EQ(rows[1].system_bias_m, 2.5);
+    EXPECT_DOUBLE_EQ(rows[1].target_m, 2.5);
+    EXPECT_DOUBLE_EQ(rows[1].residual_m, 0.5);
+    EXPECT_DOUBLE_EQ(rows[1].variance_m2, 0.09);
+    EXPECT_DOUBLE_EQ(rows[2].system_bias_m, 6.0);
+    EXPECT_DOUBLE_EQ(rows[2].target_m, 4.0);
+    EXPECT_DOUBLE_EQ(rows[2].residual_m, 0.0);
+    EXPECT_DOUBLE_EQ(rows[2].variance_m2, 0.16);
+}
+
+TEST(PPPMadocaL6dConstraints, MatchesAgeStdAndPositionAdmissionBoundaries) {
+    const auto gps = SatelliteId(GNSSSystem::GPS, 1);
+    const std::vector<ppp_internal::MadocaIonoConstraintInput> inputs = {
+        {gps, 10, 1.0, 3.0, 1.0, 300.0},
+        {SatelliteId(GNSSSystem::GPS, 2), 11, 2.0, 5.0, 0.2, 300.001},
+        {SatelliteId(GNSSSystem::GPS, 3), 12, 3.0, 6.0, 1.001, 30.0},
+        {SatelliteId(GNSSSystem::GPS, 4), -1, 4.0, 7.0, 0.2, 30.0},
+        {SatelliteId(GNSSSystem::GPS, 5), 14, 5.0, 8.0, 0.0, 30.0},
+    };
+
+    const auto boundary_rows =
+        ppp_internal::buildMadocaIonoConstraintRows(inputs, 2.0, 3.0);
+    ASSERT_EQ(boundary_rows.size(), 2U);
+    EXPECT_EQ(boundary_rows.front().satellite, gps);
+    EXPECT_DOUBLE_EQ(boundary_rows.front().system_bias_m, 2.5);
+    EXPECT_DOUBLE_EQ(boundary_rows.front().variance_m2, 1.0);
+    EXPECT_EQ(
+        boundary_rows[1].satellite,
+        SatelliteId(GNSSSystem::GPS, 5));
+    EXPECT_DOUBLE_EQ(boundary_rows[1].system_bias_m, 2.5);
+    EXPECT_DOUBLE_EQ(boundary_rows[1].variance_m2, 0.0);
+
+    EXPECT_TRUE(ppp_internal::buildMadocaIonoConstraintRows(
+        inputs, 1.999, 2.999).empty());
+    EXPECT_EQ(
+        ppp_internal::buildMadocaIonoConstraintRows(
+            inputs, 0.0, 2.999).size(),
+        2U);
+    EXPECT_EQ(
+        ppp_internal::buildMadocaIonoConstraintRows(
+            inputs, 1.999, 0.0).size(),
+        2U);
+}
+
+TEST(PPPCycleSlips, MadocaPerFrequencyUsesMadocalibGeometryFreeThreshold) {
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::geometryFreeSlipThresholdMeters(true, 0.05),
+        0.15);
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::geometryFreeSlipThresholdMeters(true, 0.2),
+        0.2);
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::geometryFreeSlipThresholdMeters(false, 0.05),
+        0.5);
+}
+
+TEST(PPPCycleSlips, MadocaChecksEveryNonPrimaryFrequency) {
+    const std::map<SignalType, double> previous{
+        {SignalType::GPS_L2P, 12.840},
+        {SignalType::GPS_L5, 7.984},
+    };
+    const std::map<SignalType, double> current{
+        {SignalType::GPS_L2P, 12.984},
+        {SignalType::GPS_L5, 8.159},
+    };
+
+    EXPECT_EQ(
+        ppp_internal::geometryFreeSlippedSignals(previous, current, 0.15),
+        std::set<SignalType>{SignalType::GPS_L5});
+    EXPECT_TRUE(ppp_internal::geometryFreeSlippedSignals(
+        {{SignalType::GPS_L2P, previous.at(SignalType::GPS_L2P)}},
+        {{SignalType::GPS_L2P, current.at(SignalType::GPS_L2P)}},
+        0.15).empty());
+}
+
+TEST(PPPCycleSlips, MadocaResetInvalidatesCarrierIonosphereDeltaHistory) {
+    ppp_shared::PPPAmbiguityInfo ambiguity;
+    ambiguity.last_carrier_ionosphere_m = 19.7377;
+    ambiguity.has_last_carrier_ionosphere = true;
+
+    ppp_internal::clearCarrierIonospherePredictionHistory(ambiguity);
+
+    EXPECT_FALSE(ambiguity.has_last_carrier_ionosphere);
+    EXPECT_DOUBLE_EQ(ambiguity.last_carrier_ionosphere_m, 19.7377);
+}
+
 TEST(PPPArAdmission, CoherentSsrDoesNotAddALockCountGate) {
     EXPECT_EQ(ppp_internal::perFrequencyArMinLockCount(true, true, 20), 0);
     EXPECT_EQ(ppp_internal::perFrequencyArMinLockCount(false, true, 20), 10);
@@ -120,6 +224,30 @@ TEST(PPPMeasurementVariance, MadocaPerFrequencyDoesNotDeweightQzssL5) {
         false, SignalType::GPS_L1CA, SignalType::GPS_L2C));
 }
 
+TEST(PPPArAdmission, MatureGalileoMwCanSupportWideLaneAdmission) {
+    EXPECT_TRUE(ppp_internal::madocaGalileoMwSupportsWideLaneAdmission(
+        GNSSSystem::Galileo, -7.142, 81, 81));
+    EXPECT_FALSE(ppp_internal::madocaGalileoMwSupportsWideLaneAdmission(
+        GNSSSystem::Galileo, -7.142, 59, 81));
+    EXPECT_FALSE(ppp_internal::madocaGalileoMwSupportsWideLaneAdmission(
+        GNSSSystem::Galileo, -7.250, 81, 81));
+    EXPECT_FALSE(ppp_internal::madocaGalileoMwSupportsWideLaneAdmission(
+        GNSSSystem::BeiDou, -161.865, 81, 81));
+}
+
+TEST(PPPArAdmission, HighAgreementMadocaRatioHasOnePercentTolerance) {
+    EXPECT_TRUE(ppp_internal::madocaHighAgreementRatioAccepted(
+        true, 1.19231, 1.2, 0.933));
+    EXPECT_FALSE(ppp_internal::madocaHighAgreementRatioAccepted(
+        true, 1.187, 1.2, 0.933));
+    EXPECT_FALSE(ppp_internal::madocaHighAgreementRatioAccepted(
+        true, 1.19231, 1.2, 0.90));
+    EXPECT_FALSE(ppp_internal::madocaHighAgreementRatioAccepted(
+        false, 1.19231, 1.2, 0.933));
+    EXPECT_TRUE(ppp_internal::madocaHighAgreementRatioAccepted(
+        false, 1.2, 1.2, 0.0));
+}
+
 TEST(PPPArTrialState, PerFrequencyAttemptsAreAlwaysEphemeral) {
     using ARMethod = PPPProcessor::PPPConfig::ARMethod;
     EXPECT_TRUE(ppp_internal::alwaysRestoreArTrialState(ARMethod::DD_PER_FREQ));
@@ -127,13 +255,72 @@ TEST(PPPArTrialState, PerFrequencyAttemptsAreAlwaysEphemeral) {
     EXPECT_FALSE(ppp_internal::alwaysRestoreArTrialState(ARMethod::DD_WLNL));
 }
 
+TEST(PPPPostfitGeometry, RecentersMaterializedReceiverPositionOnAcceptedState) {
+    const Vector3d corrected_position(3875000.0, 332500.0, 5029000.0);
+    const Vector3d prior_position(3874998.0, 332501.5, 5028996.0);
+    const Vector3d updated_position(3875000.5, 332499.0, 5029001.0);
+
+    const Vector3d recentered =
+        ppp_internal::recenterPostfitReceiverPosition(
+            corrected_position, prior_position, updated_position);
+
+    EXPECT_TRUE(recentered.isApprox(
+        corrected_position + updated_position - prior_position, 1e-12));
+}
+
+TEST(PPPPostfitGeometry, PreservesUnsetReceiverPosition) {
+    const Vector3d unset_position = Vector3d::Zero();
+    const Vector3d recentered =
+        ppp_internal::recenterPostfitReceiverPosition(
+            unset_position,
+            Vector3d(1.0, 2.0, 3.0),
+            Vector3d(4.0, 5.0, 6.0));
+
+    EXPECT_TRUE(recentered.isZero());
+}
+
+TEST(PPPMeasurementVariance, MadocaPerFrequencyAddsGlonassCodeIfb) {
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::madocaGlonassCodeIfbVariance(
+            true, GNSSSystem::GLONASS),
+        0.36);
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::madocaGlonassCodeIfbVariance(
+            false, GNSSSystem::GLONASS),
+        0.0);
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::madocaGlonassCodeIfbVariance(
+            true, GNSSSystem::GPS),
+        0.0);
+}
+
 TEST(PPPIonospherePrediction, MatchesMadocalibCarrierDeltaAndElevationNoise) {
     constexpr double f1 = 1575.42e6;
     constexpr double f2 = 1227.60e6;
-    const double denominator = 1.0 - (f1 / f2) * (f1 / f2);
+    const double denominator =
+        std::pow(constants::GPS_L1_FREQ / f1, 2) -
+        std::pow(constants::GPS_L1_FREQ / f2, 2);
     EXPECT_NEAR(
         ppp_internal::madocaCarrierIonosphereMeters(12.4, 12.1, f1, f2),
         -0.3 / denominator,
+        1e-12);
+    constexpr double bds_b1i = 1561.098e6;
+    constexpr double bds_b3i = 1268.52e6;
+    const double bds_primary_scale =
+        std::pow(constants::GPS_L1_FREQ / bds_b1i, 2);
+    const double bds_secondary_scale =
+        std::pow(constants::GPS_L1_FREQ / bds_b3i, 2);
+    EXPECT_NEAR(ppp_internal::madocaIonosphereScale(bds_b1i),
+                bds_primary_scale, 1e-15);
+    EXPECT_NEAR(
+        ppp_internal::madocaIonosphereStateFromPrimaryMeters(
+            4.25, bds_b1i),
+        4.25 / bds_primary_scale,
+        1e-12);
+    EXPECT_NEAR(
+        ppp_internal::madocaCarrierIonosphereMeters(
+            12.4, 12.1, bds_b1i, bds_b3i),
+        -0.3 / (bds_primary_scale - bds_secondary_scale),
         1e-12);
     EXPECT_NEAR(
         ppp_internal::madocaIonosphereProcessVariance(1e-4, M_PI / 6.0, 30.0),
@@ -145,8 +332,88 @@ TEST(PPPIonospherePrediction, MatchesMadocalibCarrierDeltaAndElevationNoise) {
         1e-12);
 }
 
+TEST(PPPIonospherePrediction, ExcludesPhaseWindupFromCarrierDelta) {
+    constexpr double f1 = 1575.42e6;
+    constexpr double f2 = 1227.60e6;
+    constexpr double windup_cycles = 0.37;
+    const double wavelength_l1 = constants::SPEED_OF_LIGHT / f1;
+    const double wavelength_l2 = constants::SPEED_OF_LIGHT / f2;
+    constexpr double raw_phase_l1 = 12.4;
+    constexpr double raw_phase_l2 = 12.1;
+    const double corrected_phase_l1 =
+        raw_phase_l1 - windup_cycles * wavelength_l1;
+    const double corrected_phase_l2 =
+        raw_phase_l2 - windup_cycles * wavelength_l2;
+
+    EXPECT_NEAR(
+        ppp_internal::madocaCarrierIonosphereMetersExcludingWindup(
+            corrected_phase_l1,
+            corrected_phase_l2,
+            wavelength_l1,
+            wavelength_l2,
+            windup_cycles,
+            f1,
+            f2),
+        ppp_internal::madocaCarrierIonosphereMeters(
+            raw_phase_l1, raw_phase_l2, f1, f2),
+        1e-12);
+}
+
+TEST(PPPIonospherePrediction, SeedsStateFromCorrectedCodesWithoutChangingRawFallback) {
+    constexpr double f1 = 1575.42e6;
+    constexpr double f2 = 1227.60e6;
+    constexpr double corrected_p1 = 24000000.0;
+    constexpr double corrected_p2 = 24000005.0;
+    const double expected_primary =
+        (corrected_p1 - corrected_p2) / (1.0 - std::pow(f1 / f2, 2));
+    EXPECT_NEAR(
+        ppp_internal::madocaCorrectedCodeIonosphereStateMeters(
+            7.5, corrected_p1, corrected_p2, f1, f2),
+        expected_primary,
+        1e-12);
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::madocaCorrectedCodeIonosphereStateMeters(
+            7.5, corrected_p1, corrected_p2, f1, 0.0),
+        7.5);
+}
+
+TEST(PPPStateInitialization, MadocaPerFrequencyUsesMadocalibZtdPrior) {
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::initialTroposphereVariance(true, true, 0.36),
+        0.12 * 0.12);
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::initialTroposphereVariance(false, true, 0.36),
+        0.36);
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::initialTroposphereVariance(false, false, 0.36),
+        25.0);
+}
+
+TEST(PPPStateInitialization, MadocaPerFrequencyUsesMadocalibStecPrior) {
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::initialIonosphereVariance(true, 0.0, 100.0),
+        60.0 * 60.0);
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::initialIonosphereVariance(false, 0.0, 100.0),
+        100.0);
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::initialIonosphereVariance(true, 25.0, 100.0),
+        25.0);
+}
+
 TEST(PPPEnvOverridesTest, MadocaQzssL5DefaultsToThreeFrequencyParity) {
     EXPECT_TRUE(PPPEnvOverrides::fromEnvironment().madoca_qzss_l5);
+}
+
+TEST(PPPEnvOverridesTest, MadocaGlonassPhaseDefaultsToParityRows) {
+    EXPECT_TRUE(PPPEnvOverrides::fromEnvironment().madoca_glonass_phase);
+}
+
+TEST(PPPEnvOverridesTest, MadocaPromotedPathRetainsReleaseCycleOptOuts) {
+    const PPPEnvOverrides overrides = PPPEnvOverrides::fromEnvironment();
+    EXPECT_TRUE(overrides.madoca_early_window);
+    EXPECT_TRUE(overrides.madoca_postfit_commit);
+    EXPECT_TRUE(overrides.madoca_spike_guard);
 }
 
 TEST(NavigationSsrIodeSelection, DoesNotFallBackWhenGpsIodeIsUnavailable) {
@@ -1292,6 +1559,8 @@ TEST(PPPTest, CalculatePhaseWindupResolvesAmbiguityAgainstPriorAccumulator) {
     const double w0 = calculatePhaseWindup(receiver, satellite, sun, 0.0);
     EXPECT_TRUE(std::isfinite(w0));
     EXPECT_LE(std::abs(w0), 0.5);
+    // RTKLIB/MADOCALIB model_phw() uses receiver North/West dipoles.
+    EXPECT_NEAR(w0, 0.16090686844133648, 1e-12);
 
     // Same geometry, accumulator advanced by 5 cycles → output must track it
     // within half a cycle (the function rounds to the nearest integer of
@@ -2501,6 +2770,32 @@ TEST(PPPMultifrequencyTest, PreservesMadocalibBeiDouExactBiasIdentity) {
     EXPECT_EQ(identity::madocaBiasIdentityIdForObservation(
                   GNSSSystem::BeiDou, SignalType::BDS_B1I, "C2I", true),
               static_cast<std::uint8_t>(parity::kCodeL2I));
+}
+
+TEST(PPPMultifrequencyTest, UsesMadocalibHeaderFrequencySlotWithoutFallback) {
+    namespace identity = algorithms::ppp_bias_identity;
+    ObservationData epoch;
+    const SatelliteId satellite(GNSSSystem::GPS, 27);
+
+    Observation fallback;
+    fallback.satellite = satellite;
+    fallback.signal = SignalType::GPS_L2C;
+    fallback.pseudorange_observation_type = "C2L";
+    fallback.carrier_phase_observation_type = "L2L";
+
+    Observation exact = fallback;
+    exact.pseudorange_observation_type = "C2W";
+    exact.carrier_phase_observation_type = "L2W";
+    epoch.setRinexFrequencySlot(GNSSSystem::GPS, 1, "2W");
+    epoch.addRinexTrackingObservation("2W", exact);
+
+    EXPECT_EQ(
+        identity::madocaFrequencySlotObservation(epoch, satellite, 1, &fallback),
+        epoch.getRinexTrackingObservation(satellite, "2W"));
+    EXPECT_EQ(
+        identity::madocaFrequencySlotObservation(
+            epoch, SatelliteId(GNSSSystem::GPS, 31), 1, &fallback),
+        nullptr);
 }
 
 TEST(PPPMultifrequencyTest, SeparatesMadocalibBeiDouGenerationsForDoubleDifferences) {

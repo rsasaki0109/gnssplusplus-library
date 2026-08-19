@@ -1,6 +1,6 @@
 # libgnss++ Docs
 
-Native non-GUI GNSS stack in modern C++17 with built-in `SPP`, `RTK`, `PPP`,
+Native non-GUI GNSS stack in modern C++20 with built-in `SPP`, `RTK`, `PPP`,
 `CLAS/MADOCA`, `RTCM`, `UBX`, and direct `QZSS L6` handling.
 
 This site is the short entrypoint for architecture notes, usage guides, and
@@ -8,8 +8,13 @@ checked benchmark artifacts.
 
 ## Start here
 
+- [Use cases](use_cases.md)
 - [Robotics quick start](robotics_quickstart.md)
 - [Research quick start](research_quickstart.md)
+- [Self-contained offline demo](self_contained_demo.md)
+- [v0.2.0 release highlights](releases/v0.2.0.md)
+- [Maintainer release runbook](release_runbook.md)
+- [Community onboarding](community.md)
 - [Dataset gallery](dataset_gallery.md)
 - [Architecture notes](architecture.md)
 - [Quick start](quickstart.md)

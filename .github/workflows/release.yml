@@ -1,0 +1,178 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+    - name: Check out the release tag
+      uses: actions/checkout@v7
+      with:
+        # Check out the immutable event commit. The identity gate below
+        # proves that the triggering ref is its annotated release tag.
+        ref: ${{ github.sha }}
+        fetch-depth: 0
+
+    - name: Verify annotated tag and event commit identity
+      shell: bash
+      run: |
+        set -euo pipefail
+        tag_ref="refs/tags/${GITHUB_REF_NAME}"
+        test "${GITHUB_REF}" = "${tag_ref}"
+        git show-ref --verify --quiet "${tag_ref}"
+        test "$(git cat-file -t "${tag_ref}")" = "tag"
+        test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+        test "$(git rev-parse "${tag_ref}^{}")" = "${GITHUB_SHA}"
+
+    - name: Install release dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install --yes --no-install-recommends \
+          build-essential \
+          cmake \
+          dpkg-dev \
+          libeigen3-dev \
+          pybind11-dev \
+          python3 \
+          python3-dev \
+          python3-matplotlib \
+          python3-numpy
+
+    - name: Validate tag and project version
+      run: python3 scripts/release/validate_version.py --tag "${GITHUB_REF_NAME}" --cmake-file CMakeLists.txt
+
+    - name: Configure release build
+      run: |
+        cmake -S . -B build \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DBUILD_TESTING=OFF \
+          -DGNSSPP_BUILD_PYTHON_BINDINGS=ON
+
+    - name: Build release
+      run: cmake --build build --parallel 2
+
+    - name: Build TGZ and DEB packages
+      run: |
+        set -euo pipefail
+        rm -rf dist
+        mkdir -p dist
+        cpack --config build/CPackConfig.cmake -G TGZ -B dist
+        cpack --config build/CPackConfig.cmake -G DEB -B dist
+
+    - name: Smoke-install DEB in Ubuntu 24.04 and run the demo
+      shell: bash
+      run: |
+        set -euo pipefail
+        docker run --rm --platform linux/amd64 \
+          -v "${PWD}/dist:/dist:ro" \
+          ubuntu:24.04 \
+          bash -euxo pipefail -c '
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update
+            deb="$(find /dist -maxdepth 1 -type f -name "*.deb" -print -quit)"
+            test -n "${deb}"
+            apt-get install --yes --no-install-recommends "${deb}"
+            demo_dir="$(mktemp -d)"
+            gnss demo --output-dir "${demo_dir}"
+            test -s "${demo_dir}/demo_solution.pos"
+            test -s "${demo_dir}/demo_solution.kml"
+            test -s "${demo_dir}/demo_summary.json"
+          '
+
+    - name: Check package contents and generate checksums
+      id: package_assets
+      shell: bash
+      run: |
+        set -euo pipefail
+        version="${GITHUB_REF_NAME#v}"
+        mapfile -t tgz < <(find dist -maxdepth 1 -type f -name '*.tar.gz' -print | sort)
+        mapfile -t deb < <(find dist -maxdepth 1 -type f -name '*.deb' -print | sort)
+        test "${#tgz[@]}" -eq 1
+        test "${#deb[@]}" -eq 1
+        [[ "$(basename "${tgz[0]}")" == *"${version}"* ]]
+        [[ "$(basename "${deb[0]}")" == *"${version}"* ]]
+        test -f "${tgz[0]}"
+        test ! -L "${tgz[0]}"
+        test -f "${deb[0]}"
+        test ! -L "${deb[0]}"
+        checksums="dist/SHA256SUMS"
+
+        # Consume the complete listing before grep exits so pipefail cannot
+        # turn a successful content match into a SIGPIPE failure.
+        tar -tzf "${tgz[0]}" | grep -F -- 'share/libgnsspp/demo/synthetic_ppp.obs' >/dev/null
+        tar -tzf "${tgz[0]}" | grep -E -- '/bin/gnss$' >/dev/null
+        dpkg-deb --contents "${deb[0]}" | grep -F -- 'share/libgnsspp/demo/synthetic_ppp.obs' >/dev/null
+        dpkg-deb --contents "${deb[0]}" | grep -E -- '/bin/gnss$' >/dev/null
+
+        (
+          cd dist
+          sha256sum "$(basename "${tgz[0]}")" "$(basename "${deb[0]}")" > SHA256SUMS
+          sha256sum -c SHA256SUMS
+        )
+        test -f "${checksums}"
+        test ! -L "${checksums}"
+
+        # Export only the three validated regular files. CPack may leave
+        # staging directories under dist/, which must never become release
+        # upload arguments.
+        {
+          printf 'tgz=%s\n' "${tgz[0]}"
+          printf 'deb=%s\n' "${deb[0]}"
+          printf 'checksums=%s\n' "${checksums}"
+        } >> "${GITHUB_OUTPUT}"
+
+    - name: Preserve release assets as a workflow artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: libgnsspp-${{ github.ref_name }}-dist
+        path: dist/
+        if-no-files-found: error
+        retention-days: 30
+
+    - name: Create or update the GitHub Release
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RELEASE_TAG: ${{ github.ref_name }}
+        TGZ_ASSET: ${{ steps.package_assets.outputs.tgz }}
+        DEB_ASSET: ${{ steps.package_assets.outputs.deb }}
+        CHECKSUMS_ASSET: ${{ steps.package_assets.outputs.checksums }}
+      run: |
+        set -euo pipefail
+        notes_file="docs/releases/${RELEASE_TAG}.md"
+        if ! gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+          release_args=(
+            --generate-notes
+            --repo "${GITHUB_REPOSITORY}"
+            --title "libgnss++ ${RELEASE_TAG}"
+          )
+          if [[ -f "${notes_file}" ]]; then
+            # gh combines this maintainer-authored preface with its generated
+            # release notes when both --notes-file and --generate-notes are
+            # supplied.
+            release_args+=(--notes-file "${notes_file}")
+          fi
+          # --verify-tag is intentional: gh must never create a tag as a side
+          # effect of this release workflow.
+          gh release create "${RELEASE_TAG}" --verify-tag "${release_args[@]}"
+        fi
+
+        # Upload separately even after creation so retries repair a partial
+        # release and replace stale assets deterministically.
+        gh release upload "${RELEASE_TAG}" \
+          "${TGZ_ASSET}" \
+          "${DEB_ASSET}" \
+          "${CHECKSUMS_ASSET}" \
+          --repo "${GITHUB_REPOSITORY}" \
+          --clobber

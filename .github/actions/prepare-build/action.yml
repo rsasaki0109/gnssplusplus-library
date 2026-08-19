@@ -30,7 +30,7 @@ runs:
   using: composite
   steps:
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v7
       with:
         python-version: ${{ inputs.python-version }}
         cache: pip
@@ -40,16 +40,18 @@ runs:
 
     - name: Restore Playwright browser cache
       if: ${{ startsWith(inputs.os-name, 'ubuntu') && inputs.install-playwright == 'true' }}
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: ~/.cache/ms-playwright
         key: playwright-${{ inputs.os-name }}-chromium-${{ hashFiles('.github/actions/prepare-build/action.yml') }}
 
     - name: Restore ccache
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: ${{ runner.os == 'Linux' && '~/.cache/ccache' || '~/Library/Caches/ccache' }}
         key: ${{ runner.os }}-ccache-${{ hashFiles('CMakeLists.txt', 'src/**', 'include/**') }}
+        restore-keys: |
+          ${{ runner.os }}-ccache-
 
     - name: Install dependencies (Ubuntu)
       if: ${{ startsWith(inputs.os-name, 'ubuntu') }}
@@ -126,4 +128,9 @@ runs:
 
     - name: Build
       shell: bash
-      run: cmake --build build --config "${{ inputs.build-type }}" --parallel
+      run: |
+        if [[ "${{ inputs.os-name }}" == ubuntu* && "${{ inputs.compiler }}" == "gcc" ]]; then
+          cmake --build build --config "${{ inputs.build-type }}" --parallel 2
+        else
+          cmake --build build --config "${{ inputs.build-type }}" --parallel
+        fi

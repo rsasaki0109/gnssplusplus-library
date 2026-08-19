@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <filesystem>
 #include <fstream>
 #include <map>
 #include <memory>
@@ -109,6 +110,50 @@ TEST(MadocaBridgeConfig, AvailabilityMatchesBuildFlag) {
     EXPECT_EQ(libgnss::external::madocalib::runPostpos({}, &error_message), -1);
     EXPECT_NE(error_message.find("MADOCALIB bridge is not linked"), std::string::npos);
 #endif
+}
+
+TEST(MadocaBridgeConfig, CondensesHourlyFilesByL6Stream) {
+    namespace bridge = libgnss::external::madocalib;
+    const std::filesystem::path root =
+        std::filesystem::path("archive") / "2025" / "091";
+    const std::vector<std::string> inputs = {
+        (root / "2025091A.200.l6").string(),
+        (root / "2025091A.201.l6").string(),
+        (root / "2025091B.200.l6").string(),
+        (root / "2025091B.201.l6").string(),
+    };
+
+    const std::vector<std::string> condensed =
+        bridge::detail::condenseHourlyL6Inputs(inputs, true);
+
+    ASSERT_EQ(condensed.size(), 2u);
+    EXPECT_EQ(condensed[0],
+              (std::filesystem::path("archive") / "%Y" / "%n" /
+               "%Y%n%HU.200.l6").string());
+    EXPECT_EQ(condensed[1],
+              (std::filesystem::path("archive") / "%Y" / "%n" /
+               "%Y%n%HU.201.l6").string());
+
+    const std::vector<std::string> l6e_inputs = {
+        (root / "2025091A.204.l6").string(),
+        (root / "2025091B.204.l6").string(),
+    };
+    EXPECT_EQ(bridge::detail::condenseHourlyL6Inputs(l6e_inputs, false),
+              std::vector<std::string>({
+                  (std::filesystem::path("archive") / "%Y" / "%n" /
+                   "%Y%n%HU.204.l6").string(),
+              }));
+}
+
+TEST(MadocaBridgeConfig, PreservesSingleAndNonmatchingL6Inputs) {
+    namespace bridge = libgnss::external::madocalib;
+    const std::vector<std::string> inputs = {
+        "2025091A.200.l6",
+        "2025091A.204.l6",
+        "custom-ionosphere.l6",
+    };
+
+    EXPECT_EQ(bridge::detail::condenseHourlyL6Inputs(inputs, true), inputs);
 }
 
 TEST(MadocaBridgeConfig, TideOracleIsAlsoOptIn) {
@@ -585,6 +630,49 @@ TEST_F(MadocaParity, L6dFileSnapshotsMatchOracleApplicationSequence) {
     ASSERT_NE(latest, nullptr);
     EXPECT_EQ(latest->correction.rid, native_snapshots.back().correction.rid);
     EXPECT_EQ(latest->correction.anum, native_snapshots.back().correction.anum);
+}
+
+TEST_F(MadocaParity, L6dSecondaryChannelSnapshotsUseMessageTime) {
+    const std::string root = libgnss::external::madocalib::defaultRootDir();
+    if (root.empty()) {
+        GTEST_SKIP() << "MADOCALIB root unavailable";
+    }
+    const std::string l6_path =
+        root + "/sample_data/data/l6/2025/091/2025091A.201.l6";
+    if (!std::filesystem::is_regular_file(l6_path)) {
+        GTEST_SKIP() << "L6D PRN-201 sample missing: " << l6_path;
+    }
+
+    const double ref_ep[6] = {2025.0, 4.0, 1.0, 0.0, 0.0, 0.0};
+    const double receiver_ecef[3] = {
+        -3857167.6484, 3108694.9138, 4004041.6876,
+    };
+    std::vector<libgnss::io::MadocaIonoSnapshot> snapshots;
+    std::string error;
+    ASSERT_TRUE(libgnss::io::decodeMadocaL6dFileToSnapshots(
+        l6_path, ref_ep, receiver_ecef, snapshots, &error)) << error;
+    ASSERT_FALSE(snapshots.empty());
+
+    int correction_times_checked = 0;
+    int corrections_at_message_time = 0;
+    for (const auto& snapshot : snapshots) {
+        for (const auto& correction_time : snapshot.correction.t0) {
+            if (correction_time.time == 0) {
+                continue;
+            }
+            const double age_s =
+                static_cast<double>(
+                    snapshot.decode_time.time - correction_time.time) +
+                snapshot.decode_time.sec - correction_time.sec;
+            EXPECT_GE(age_s, 0.0);
+            if (age_s == 0.0) {
+                ++corrections_at_message_time;
+            }
+            ++correction_times_checked;
+        }
+    }
+    EXPECT_GT(correction_times_checked, 0);
+    EXPECT_GT(corrections_at_message_time, 0);
 }
 
 TEST_F(MadocaParity, L6eSnapshotConvertsToSsrProducts) {

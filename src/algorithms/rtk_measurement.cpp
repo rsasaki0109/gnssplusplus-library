@@ -44,12 +44,14 @@ MeasurementSystem assembleMeasurementSystem(const std::vector<MeasurementBlock>&
     MeasurementSystem system;
     system.design_matrix = Eigen::MatrixXd::Zero(observation_count, n_states);
     system.residuals = Eigen::VectorXd::Zero(observation_count);
+    system.row_kinds.reserve(observation_count);
     system.covariance = buildDoubleDifferenceCovariance(
         block_sizes, ref_variances, sat_variances, observation_count);
 
     int row_index = 0;
     for (const auto& block : blocks) {
         for (const auto& row : block.rows) {
+            system.row_kinds.push_back(block.kind);
             system.residuals(row_index) = row.residual;
             system.design_matrix(row_index, 0) = row.baseline_coefficients(0);
             system.design_matrix(row_index, 1) = row.baseline_coefficients(1);
@@ -77,6 +79,8 @@ MeasurementDiagnostics summarizeMeasurementBlocks(const std::vector<MeasurementB
             diagnostics.phase_observation_count += block_observations;
         } else if (block.kind == MeasurementKind::CODE) {
             diagnostics.code_observation_count += block_observations;
+        } else if (block.kind == MeasurementKind::DOPPLER) {
+            diagnostics.doppler_observation_count += block_observations;
         }
         for (const auto& row : block.rows) {
             sum_sq += row.residual * row.residual;
@@ -136,10 +140,17 @@ AmbiguityTransform buildAmbiguityTransform(const Eigen::VectorXd& state,
 
 int suppressOutlierRows(Eigen::VectorXd& residuals,
                         Eigen::MatrixXd& design_matrix,
-                        double threshold) {
+                        double threshold,
+                        const std::vector<double>& per_row_thresholds) {
+    const bool use_per_row =
+        static_cast<int>(per_row_thresholds.size()) == residuals.size();
     int suppressed = 0;
     for (int row = 0; row < residuals.size(); ++row) {
-        if (std::abs(residuals(row)) > threshold) {
+        double row_threshold = threshold;
+        if (use_per_row && per_row_thresholds[static_cast<size_t>(row)] > 0.0) {
+            row_threshold = per_row_thresholds[static_cast<size_t>(row)];
+        }
+        if (std::abs(residuals(row)) > row_threshold) {
             residuals(row) = 0.0;
             design_matrix.row(row).setZero();
             ++suppressed;

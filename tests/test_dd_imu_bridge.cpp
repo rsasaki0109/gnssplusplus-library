@@ -104,6 +104,88 @@ TEST(DDIMUBridge, ShadowCarrierNeverCommitsEvenWhenJointGatePasses) {
     EXPECT_NEAR(bridge.state().augmented_covariance(0, 15), 0.0, 1e-12);
 }
 
+TEST(DDIMUBridge, SSEPartialARUsesShadowPosteriorWithoutHoldingIntegers) {
+    BridgeConfig config;
+    config.commit_carrier_updates = false;
+    config.partial_ar_min_ambiguities = 3;
+    config.sse_min_fixed_ambiguities = 3;
+    config.partial_ar_min_lock_count = 100;
+    config.lambda_ratio_threshold = 2.0;
+    DDIMUBridge bridge(initialState(), config);
+    std::vector<DDObservation> observations{
+        carrier(1, Eigen::RowVector3d::UnitX(), 10.01, 400),
+        carrier(2, Eigen::RowVector3d::UnitY(), -3.01, 400),
+        carrier(3, Eigen::RowVector3d::UnitZ(), 6.01, 400)};
+    for (auto& observation : observations) {
+        observation.code_residual_m = 0.0;
+        observation.code_variance_m2 = 1e-8;
+        observation.carrier_variance_m2 = 1e-6;
+    }
+
+    const auto update = bridge.update(observations);
+    ASSERT_TRUE(update.ok);
+    EXPECT_FALSE(update.carrier_update_accepted);
+    const auto result =
+        bridge.evaluateSSEPartialAmbiguities(observations);
+    EXPECT_TRUE(result.available);
+    EXPECT_TRUE(result.passed);
+    EXPECT_EQ(result.fixed_count, 3);
+    EXPECT_GE(result.ratio, result.ffrt_minimum_ratio);
+    EXPECT_GT(result.bootstrapped_success_rate, 0.8);
+    for (const auto& ambiguity : bridge.state().ambiguities) {
+        EXPECT_FALSE(ambiguity.held);
+    }
+}
+
+TEST(DDIMUBridge, SSEPartialARFailsClosedWhenSeparationLimitRejects) {
+    BridgeConfig config;
+    config.commit_carrier_updates = false;
+    config.partial_ar_min_ambiguities = 3;
+    config.sse_min_fixed_ambiguities = 3;
+    config.partial_ar_min_lock_count = 100;
+    config.lambda_ratio_threshold = 2.0;
+    config.sse_max_statistic_per_dof = -1.0;
+    DDIMUBridge bridge(initialState(), config);
+    std::vector<DDObservation> observations{
+        carrier(1, Eigen::RowVector3d::UnitX(), 10.01, 400),
+        carrier(2, Eigen::RowVector3d::UnitY(), -3.01, 400),
+        carrier(3, Eigen::RowVector3d::UnitZ(), 6.01, 400)};
+    for (auto& observation : observations) {
+        observation.code_residual_m = 0.0;
+        observation.code_variance_m2 = 1e-8;
+        observation.carrier_variance_m2 = 1e-6;
+    }
+
+    ASSERT_TRUE(bridge.update(observations).ok);
+    const auto result =
+        bridge.evaluateSSEPartialAmbiguities(observations);
+    EXPECT_TRUE(result.available);
+    EXPECT_FALSE(result.passed);
+    EXPECT_GT(result.subsets_evaluated, 0);
+}
+
+TEST(DDIMUBridge, SSEPartialARDefaultRejectsSmallSubsets) {
+    BridgeConfig config;
+    config.commit_carrier_updates = false;
+    config.partial_ar_min_lock_count = 100;
+    DDIMUBridge bridge(initialState(), config);
+    std::vector<DDObservation> observations{
+        carrier(1, Eigen::RowVector3d::UnitX(), 10.01, 400),
+        carrier(2, Eigen::RowVector3d::UnitY(), -3.01, 400),
+        carrier(3, Eigen::RowVector3d::UnitZ(), 6.01, 400)};
+    for (auto& observation : observations) {
+        observation.code_residual_m = 0.0;
+        observation.code_variance_m2 = 0.01;
+    }
+
+    ASSERT_TRUE(bridge.update(observations).ok);
+    const auto result =
+        bridge.evaluateSSEPartialAmbiguities(observations);
+    EXPECT_TRUE(result.available);
+    EXPECT_FALSE(result.passed);
+    EXPECT_EQ(result.subsets_evaluated, 0);
+}
+
 TEST(DDIMUBridge, SlipRetiresOldAmbiguityAndCreatesFreshGeneration) {
     DDIMUBridge bridge(initialState());
     auto observation = carrier(7, Eigen::RowVector3d::UnitX(), 4.0);

@@ -3,9 +3,12 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
+import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,6 +16,11 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 BUILD_DIR = Path(os.environ.get("GNSSPP_BINARY_DIR", ROOT_DIR / "build"))
+PUBLIC_IMAGE = "ghcr.io/rsasaki0109/gnssplusplus-library:v0.2.0"
+PUBLIC_DEMO_COMMAND = re.compile(
+    re.escape(PUBLIC_IMAGE)
+    + r"\s+demo\s+--output-dir\s+/workspace/output/self-contained-demo"
+)
 
 # Platform-dependent artifact names (MSVC: gnss_spp.exe / gnss_lib.lib,
 # GNU: gnss_spp / libgnss_lib.a).
@@ -59,12 +67,39 @@ class PackagingSmokeTest(unittest.TestCase):
 
         compose_text = compose_file.read_text(encoding="utf-8")
         self.assertIn("gnss-web", compose_text)
-        self.assertIn("ghcr.io/rsasaki0109/gnssplusplus-library:develop", compose_text)
+        self.assertIn(PUBLIC_IMAGE, compose_text)
         self.assertIn("8085:8085", compose_text)
 
         docker_workflow_text = docker_workflow.read_text(encoding="utf-8")
         self.assertIn("ghcr.io/rsasaki0109/gnssplusplus-library", docker_workflow_text)
         self.assertIn("docker/build-push-action", docker_workflow_text)
+
+    def test_public_demo_docs_keep_image_tag_and_fixture_caveat(self) -> None:
+        documents = {
+            "README.md": (ROOT_DIR / "README.md").read_text(encoding="utf-8"),
+            "docs/quickstart.md": (
+                ROOT_DIR / "docs" / "quickstart.md"
+            ).read_text(encoding="utf-8"),
+            "docs/self_contained_demo.md": (
+                ROOT_DIR / "docs" / "self_contained_demo.md"
+            ).read_text(encoding="utf-8"),
+        }
+        for name, text in documents.items():
+            normalized = re.sub(r"\\\s*\n\s*", " ", text)
+            with self.subTest(document=name):
+                self.assertRegex(normalized, PUBLIC_DEMO_COMMAND)
+                self.assertIn(PUBLIC_IMAGE, normalized)
+
+        readme_text = documents["README.md"]
+        quickstart_text = documents["docs/quickstart.md"]
+        demo_text = documents["docs/self_contained_demo.md"]
+        self.assertIn("tracked, project-authored synthetic PPP fixture", readme_text)
+        self.assertIn("not field accuracy", readme_text)
+        self.assertRegex(readme_text, r"find_package\(libgnsspp CONFIG REQUIRED\)")
+        self.assertIn("libgnsspp::gnss_lib", readme_text)
+        self.assertIn("Larger sample datasets are not embedded", quickstart_text)
+        self.assertIn("synthetic PPP fixture", quickstart_text)
+        self.assertIn("not field accuracy", demo_text)
 
     def test_cmake_install_exports_expected_layout(self) -> None:
         self.assertTrue(BUILD_DIR.exists(), "build directory must exist before packaging test")
@@ -77,8 +112,68 @@ class PackagingSmokeTest(unittest.TestCase):
                 cwd=ROOT_DIR,
             )
 
+            consumer_dir = Path(temp_dir) / "consumer"
+            consumer_dir.mkdir()
+            (consumer_dir / "CMakeLists.txt").write_text(
+                "\n".join(
+                    [
+                        "cmake_minimum_required(VERSION 3.14)",
+                        "project(libgnsspp_consumer_smoke LANGUAGES CXX)",
+                        "set(CMAKE_CXX_STANDARD 20)",
+                        "set(CMAKE_CXX_STANDARD_REQUIRED ON)",
+                        "find_package(libgnsspp CONFIG REQUIRED)",
+                        "add_executable(consumer main.cpp)",
+                        "target_link_libraries(consumer PRIVATE libgnsspp::gnss_lib)",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (consumer_dir / "main.cpp").write_text(
+                "\n".join(
+                    [
+                        "#include <libgnss++/core/types.hpp>",
+                        "",
+                        "int main() {",
+                        "    libgnss::SatelliteId satellite(libgnss::GNSSSystem::GPS, 1);",
+                        "    return satellite.toString().empty() ? 1 : 0;",
+                        "}",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            consumer_build = consumer_dir / "build"
+            subprocess.run(
+                [
+                    "cmake",
+                    "-S",
+                    str(consumer_dir),
+                    "-B",
+                    str(consumer_build),
+                    "-DCMAKE_BUILD_TYPE=Release",
+                    f"-DCMAKE_PREFIX_PATH={prefix}",
+                ],
+                check=True,
+                cwd=ROOT_DIR,
+            )
+            subprocess.run(
+                [
+                    "cmake",
+                    "--build",
+                    str(consumer_build),
+                    "--config",
+                    "Release",
+                    "--parallel",
+                    "2",
+                ],
+                check=True,
+                cwd=ROOT_DIR,
+            )
+
             expected_paths = [
                 prefix / "bin" / "gnss",
+                prefix / "bin" / "gnss_pos2kml",
                 prefix / "bin" / "gnss_doctor.py",
                 prefix / "bin" / "gnss_robotics_smoke.py",
                 prefix / "bin" / "gnss_ros2_doctor.py",
@@ -96,7 +191,9 @@ class PackagingSmokeTest(unittest.TestCase):
                 prefix / "bin" / "gnss_dcb_info.py",
                 prefix / "bin" / "gnss_rcv.py",
                 prefix / "bin" / "gnss_web.py",
+                prefix / "bin" / "gnss_web.html",
                 prefix / "bin" / "support" / "__init__.py",
+                prefix / "bin" / "support" / "gnss_input_source.py",
                 prefix / "bin" / "support" / "gnss_runtime.py",
                 prefix / "bin" / "support" / "gnss_toml_config.py",
                 prefix / "bin" / "gnss_live_signoff.py",
@@ -111,6 +208,8 @@ class PackagingSmokeTest(unittest.TestCase):
                 prefix / "bin" / "gnss_ppc_demo.py",
                 prefix / "bin" / "gnss_ppc_rtk_signoff.py",
                 prefix / "bin" / "gnss_clas_ppp.py",
+                prefix / "bin" / "gnss_nmea_info.py",
+                prefix / "bin" / "gnss_novatel_info.py",
                 prefix / "bin" / "gnss_sbp_info.py",
                 prefix / "bin" / "gnss_sbf_info.py",
                 prefix / "bin" / "gnss_trimble_info.py",
@@ -128,13 +227,39 @@ class PackagingSmokeTest(unittest.TestCase):
                 prefix / "scripts" / "generate_feature_overview_card.py",
                 prefix / "scripts" / "generate_odaiba_social_card.py",
                 prefix / "configs" / "README.md",
+                prefix / "configs" / "examples" / "fuse.example.toml",
                 prefix / "configs" / "examples" / "live.example.conf",
+                prefix / "configs" / "examples" / "solve.example.toml",
                 prefix / "configs" / "examples" / "web.example.toml",
                 prefix / "configs" / "signoff" / "ppp_products_ppc.example.toml",
                 prefix / "configs" / "signoff" / "moving_base_signoff.example.toml",
                 prefix / "configs" / "signoff" / "live_signoff.example.toml",
                 prefix / "configs" / "signoff" / "ppc_rtk_signoff.example.toml",
+                prefix / "share" / "libgnsspp" / "demo" / "README.md",
+                prefix / "share" / "libgnsspp" / "demo" / "synthetic_ppp.obs",
+                prefix / "share" / "libgnsspp" / "demo" / "synthetic_ppp.sp3",
+                prefix / "share" / "libgnsspp" / "demo" / "synthetic_ppp.clk",
             ]
+            commands_root = ROOT_DIR / "apps" / "commands"
+            command_sources = [
+                source
+                for category_dir in sorted(commands_root.iterdir())
+                if category_dir.is_dir() and category_dir.name != "support"
+                for source in sorted(category_dir.glob("*.py"))
+            ]
+            support_sources = sorted((commands_root / "support").glob("*.py"))
+            command_basenames = [source.name for source in command_sources]
+            self.assertEqual(
+                len(command_basenames),
+                len({basename.casefold() for basename in command_basenames}),
+            )
+            expected_paths.extend(
+                prefix / "bin" / source.name for source in command_sources
+            )
+            expected_paths.extend(
+                prefix / "bin" / "support" / source.name
+                for source in support_sources
+            )
             ros2_binary = next((path for path in BUILD_DIR.rglob("gnss_solution_node") if path.is_file()), None)
             if ros2_binary is not None:
                 expected_paths.append(prefix / "bin" / "gnss_solution_node")
@@ -166,6 +291,93 @@ class PackagingSmokeTest(unittest.TestCase):
 
             env = dict(os.environ)
             env["PATH"] = str(prefix / "bin") + os.pathsep + env.get("PATH", "")
+
+            installed_demo_output = Path(temp_dir) / "installed-demo-output"
+            installed_demo = subprocess.run(
+                [
+                    str(prefix / "bin" / "gnss"),
+                    "demo",
+                    "--output-dir",
+                    str(installed_demo_output),
+                ],
+                check=True,
+                cwd=ROOT_DIR,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertIn("Self-contained offline demo complete:", installed_demo.stdout)
+            for artifact_name in (
+                "demo_solution.pos",
+                "demo_solution.kml",
+                "demo_summary.json",
+            ):
+                artifact = installed_demo_output / artifact_name
+                self.assertTrue(artifact.is_file(), f"installed demo missing {artifact}")
+                self.assertGreater(artifact.stat().st_size, 0)
+
+            installed_web_hash = subprocess.run(
+                [
+                    sys.executable,
+                    "-c",
+                    (
+                        "import hashlib, importlib.util, pathlib, sys; "
+                        "path = pathlib.Path(sys.argv[1]); "
+                        "sys.path.insert(0, str(path.parent)); "
+                        "spec = importlib.util.spec_from_file_location('installed_gnss_web', path); "
+                        "module = importlib.util.module_from_spec(spec); "
+                        "assert spec.loader is not None; "
+                        "spec.loader.exec_module(module); "
+                        "print(hashlib.sha256(module.render_html().encode('utf-8')).hexdigest())"
+                    ),
+                    str(prefix / "bin" / "gnss_web.py"),
+                ],
+                check=True,
+                cwd=ROOT_DIR,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(
+                installed_web_hash.stdout.strip(),
+                hashlib.sha256((prefix / "bin" / "gnss_web.html").read_bytes()).hexdigest(),
+            )
+
+            for command in (
+                "nmea-info",
+                "novatel-info",
+                "sbp-info",
+                "sbf-info",
+                "trimble-info",
+                "skytraq-info",
+                "binex-info",
+            ):
+                receiver_help = subprocess.run(
+                    [str(prefix / "bin" / "gnss"), command, "--help"],
+                    check=True,
+                    cwd=ROOT_DIR,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertIn("--input", receiver_help.stdout)
+
+            for command in (
+                "ppc-coverage-matrix",
+                "ppc-spp-jump-sweep",
+                "ppc-spp-compare",
+                "ppc-spp-policy-report",
+                "ppc-spp-policy-suite",
+            ):
+                ppc_help = subprocess.run(
+                    [str(prefix / "bin" / "gnss"), command, "--help"],
+                    check=True,
+                    cwd=ROOT_DIR,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertIn("usage:", ppc_help.stdout.lower())
 
             if repo_data_exists(
                 "data/short_baseline/TSK200JPN_R_20240010000_01D_30S_MO.rnx",

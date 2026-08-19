@@ -1,7 +1,7 @@
 name: Bug report
 description: Report a reproducible regression or unexpected solver/tool behavior.
 title: "[bug] "
-labels: ["bug", "needs-triage"]
+labels: ["bug"]
 body:
   - type: textarea
     id: observed

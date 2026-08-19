@@ -309,7 +309,7 @@ TEST(RealtimeFixIntegrityGateTest, MissingIndependentDoesNotLatchSoftSuspect) {
     }
 }
 
-// --- Base confidence gate (ported from scripts/apply_ppc_status_demotion.py
+// --- Base confidence gate (ported from scripts/experiments/ppc/apply_ppc_status_demotion.py
 // should_demote()/should_exonerate() with the frozen audited defaults). ---
 
 libgnss::PositionSolution base_confidence_solution(

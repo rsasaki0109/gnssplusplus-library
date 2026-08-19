@@ -2,6 +2,7 @@
 
 #include <libgnss++/algorithms/ppp_clas.hpp>
 #include <libgnss++/algorithms/ppp_clas_dd.hpp>
+#include <libgnss++/algorithms/ppp_env_overrides.hpp>
 #include <libgnss++/algorithms/ppp_osr.hpp>
 #include <libgnss++/algorithms/lambda.hpp>
 #include <libgnss++/core/constants.hpp>
@@ -738,7 +739,7 @@ TEST(PPPClasTest, MrtklibGpsGeometryFreeDoesNotFallbackFromL2wToL2l) {
         ambiguity_states[osr.satellite].last_geometry_free_m, 10.0);
 }
 
-TEST(PPPClasTest, MrtklibOutageCounterResetsBeforeSecondUnacceptedEpoch) {
+TEST(PPPClasTest, MrtklibUsableObservationsClearOutageCounterBeforeOverflow) {
     ObservationData obs;
     obs.time = GNSSTime(2324, 177000.0);
 
@@ -791,25 +792,23 @@ TEST(PPPClasTest, MrtklibOutageCounterResetsBeforeSecondUnacceptedEpoch) {
         obs, {osr}, config, 0.2, filter_state, ambiguity_states, dispersion,
         repair, reset_fn, 3600.0, false);
     EXPECT_EQ(first.per_sat_outage_resets, 0);
-    EXPECT_EQ(ambiguity_states[osr.satellite].outage_count, 1);
-    EXPECT_EQ(ambiguity_states[l2_ambiguity].outage_count, 1);
+    EXPECT_EQ(ambiguity_states[osr.satellite].outage_count, 0);
+    EXPECT_EQ(ambiguity_states[l2_ambiguity].outage_count, 0);
 
     obs.time = GNSSTime(2324, 177000.2);
     const auto second = ppp_clas::detectClasCycleSlips(
         obs, {osr}, config, 0.2, filter_state, ambiguity_states, dispersion,
         repair, reset_fn, 3600.0, false);
-    EXPECT_EQ(second.per_sat_outage_resets, 1);
-    EXPECT_EQ(reset_calls, 2);
-    EXPECT_EQ(ambiguity_states[osr.satellite].lock_count, -5);
-    EXPECT_EQ(ambiguity_states[l2_ambiguity].lock_count, -5);
-    EXPECT_EQ(ambiguity_states[osr.satellite].outage_count, 2);
-    EXPECT_EQ(ambiguity_states[l2_ambiguity].outage_count, 2);
-    EXPECT_DOUBLE_EQ(filter_state.state(0), 1e-6);
-    EXPECT_DOUBLE_EQ(filter_state.covariance(0, 0), 0.01 * 0.01);
+    EXPECT_EQ(second.per_sat_outage_resets, 0);
+    EXPECT_EQ(reset_calls, 0);
+    EXPECT_EQ(ambiguity_states[osr.satellite].lock_count, 0);
+    EXPECT_EQ(ambiguity_states[l2_ambiguity].lock_count, 0);
+    EXPECT_EQ(ambiguity_states[osr.satellite].outage_count, 0);
+    EXPECT_EQ(ambiguity_states[l2_ambiguity].outage_count, 0);
+    EXPECT_DOUBLE_EQ(filter_state.state(0), 3.0);
+    EXPECT_DOUBLE_EQ(filter_state.covariance(0, 0), 2.0);
     EXPECT_DOUBLE_EQ(
-        filter_state.adaptive_ionosphere_process_noise[osr.satellite], 0.0);
-    // MRTKLIB udbias_ppp() resets ambiguity/lock on an outage, but only its
-    // LLI/GF/Doppler/code detectors set ssat.slip for compensatedisp().
+        filter_state.adaptive_ionosphere_process_noise[osr.satellite], 1.0);
     EXPECT_FALSE(dispersion[osr.satellite].slip[0]);
     EXPECT_FALSE(dispersion[osr.satellite].slip[1]);
 
@@ -822,8 +821,8 @@ TEST(PPPClasTest, MrtklibOutageCounterResetsBeforeSecondUnacceptedEpoch) {
         [](const SatelliteId&) { return -1; });
     EXPECT_EQ(ambiguity_states[osr.satellite].outage_count, 0);
     EXPECT_EQ(ambiguity_states[l2_ambiguity].outage_count, 0);
-    EXPECT_EQ(ambiguity_states[osr.satellite].lock_count, -4);
-    EXPECT_EQ(ambiguity_states[l2_ambiguity].lock_count, -4);
+    EXPECT_EQ(ambiguity_states[osr.satellite].lock_count, 1);
+    EXPECT_EQ(ambiguity_states[l2_ambiguity].lock_count, 1);
 }
 
 TEST(PPPClasTest, MrtklibOutageIgnoresFilterExcludedQzssL2AndGalileo) {
@@ -883,7 +882,7 @@ TEST(PPPClasTest, MrtklibOutageIgnoresFilterExcludedQzssL2AndGalileo) {
         GNSSSystem::Galileo, SignalType::GAL_E1, SignalType::GAL_E5A);
 }
 
-TEST(PPPClasTest, MrtklibReturningL1OnlySatelliteResetsStaleL1Ambiguity) {
+TEST(PPPClasTest, MrtklibReturningL1OnlySatelliteClearsObservedOutageCounter) {
     ObservationData obs;
     obs.time = GNSSTime(2324, 177091.4);
     OSRCorrection osr;
@@ -922,13 +921,13 @@ TEST(PPPClasTest, MrtklibReturningL1OnlySatelliteResetsStaleL1Ambiguity) {
             ++resets;
         },
         3600.0, false);
-    EXPECT_EQ(stats.per_sat_outage_resets, 1);
-    EXPECT_EQ(resets, 1);
-    EXPECT_EQ(ambiguities[osr.satellite].outage_count, 2);
-    EXPECT_EQ(ambiguities[osr.satellite].lock_count, -5);
+    EXPECT_EQ(stats.per_sat_outage_resets, 0);
+    EXPECT_EQ(resets, 0);
+    EXPECT_EQ(ambiguities[osr.satellite].outage_count, 0);
+    EXPECT_EQ(ambiguities[osr.satellite].lock_count, 0);
 }
 
-TEST(PPPClasTest, MrtklibReturningCompletePairLliResetsBothLocks) {
+TEST(PPPClasTest, MrtklibReturningCompletePairLliResetsLocksAfterOutageClear) {
     ObservationData obs;
     obs.time = GNSSTime(2324, 177090.8);
     OSRCorrection osr;
@@ -977,15 +976,60 @@ TEST(PPPClasTest, MrtklibReturningCompletePairLliResetsBothLocks) {
         obs, {osr}, config, 0.2, state, ambiguities, dispersion, repair,
         [&](const SatelliteId&, SignalType) { ++resets; }, 3600.0, false);
 
-    EXPECT_EQ(stats.per_sat_outage_resets, 1);
+    EXPECT_EQ(stats.per_sat_outage_resets, 0);
     EXPECT_EQ(stats.lli_count, 1);
     EXPECT_EQ(resets, 2);
     EXPECT_EQ(ambiguities[osr.satellite].lock_count, -5);
     EXPECT_EQ(ambiguities[l2_ambiguity].lock_count, -5);
-    EXPECT_EQ(ambiguities[osr.satellite].outage_count, 1);
-    EXPECT_EQ(ambiguities[l2_ambiguity].outage_count, 2);
+    EXPECT_EQ(ambiguities[osr.satellite].outage_count, 0);
+    EXPECT_EQ(ambiguities[l2_ambiguity].outage_count, 0);
     EXPECT_TRUE(dispersion[osr.satellite].slip[0]);
     EXPECT_TRUE(dispersion[osr.satellite].slip[1]);
+}
+
+TEST(PPPClasTest, MrtklibOutageResetKillSwitchRestoresLegacyOverflow) {
+    if (PPPEnvOverrides::fromEnvironment().clas_outage_reset_parity) {
+        GTEST_SKIP() << "Covered by the dedicated kill-switch CTest process";
+    }
+    ASSERT_FALSE(pppEnvOverrides().clas_outage_reset_parity);
+
+    ObservationData obs;
+    obs.time = GNSSTime(2324, 177091.4);
+    OSRCorrection osr;
+    osr.valid = true;
+    osr.satellite = SatelliteId(GNSSSystem::GPS, 11);
+    osr.num_frequencies = 1;
+    osr.frequencies[0] = 1575.42e6;
+    osr.wavelengths[0] = constants::SPEED_OF_LIGHT / osr.frequencies[0];
+    Observation l1;
+    l1.satellite = osr.satellite;
+    l1.signal = SignalType::GPS_L1CA;
+    l1.valid = l1.has_carrier_phase = l1.has_pseudorange = true;
+    l1.carrier_phase = 1000.0;
+    l1.pseudorange = 2.0e7;
+    obs.observations = {l1};
+    obs.setRinexFrequencySlot(GNSSSystem::GPS, 0, "1C");
+    obs.addRinexTrackingObservation("1C", l1);
+
+    ppp_shared::PPPConfig config;
+    config.kinematic_mode = config.enable_cycle_slip_detection = true;
+    config.clas_mrtklib_float_parity = config.use_clas_osr_filter = true;
+    config.use_dynamics_model = true;
+    std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo> ambiguities;
+    ambiguities[osr.satellite].outage_count = 1;
+    ppp_shared::PPPState state;
+    std::map<SatelliteId, CLASDispersionCompensationInfo> dispersion;
+    std::map<SatelliteId, CLASPhaseBiasRepairInfo> repair;
+    int resets = 0;
+
+    const auto stats = ppp_clas::detectClasCycleSlips(
+        obs, {osr}, config, 0.2, state, ambiguities, dispersion, repair,
+        [&](const SatelliteId&, SignalType) { ++resets; }, 3600.0, false);
+
+    EXPECT_EQ(stats.per_sat_outage_resets, 1);
+    EXPECT_EQ(resets, 1);
+    EXPECT_EQ(ambiguities[osr.satellite].outage_count, 2);
+    EXPECT_EQ(ambiguities[osr.satellite].lock_count, -5);
 }
 
 TEST(PPPClasTest, MrtklibL1OnlyLliResetsBeforeOutageOverflow) {

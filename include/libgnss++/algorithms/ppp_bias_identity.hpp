@@ -1,12 +1,28 @@
 #pragma once
 
 #include <libgnss++/algorithms/madoca_parity.hpp>
+#include <libgnss++/core/observation.hpp>
 #include <libgnss++/core/signals.hpp>
 
 #include <cstdint>
 #include <string_view>
 
 namespace libgnss::algorithms::ppp_bias_identity {
+
+inline const Observation* madocaFrequencySlotObservation(
+    const ObservationData& observations,
+    const SatelliteId& satellite,
+    int frequency_index,
+    const Observation* fallback) {
+    const std::string* slot = observations.getRinexFrequencySlot(
+        satellite.system, frequency_index);
+    if (slot == nullptr) {
+        return fallback;
+    }
+    // RTKLIB leaves a header-assigned normal-frequency slot empty when the
+    // selected tracking code is absent; it does not substitute another code.
+    return observations.getRinexTrackingObservation(satellite, *slot);
+}
 
 struct ObservationCodeMapEntry {
     std::string_view observation_type;

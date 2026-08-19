@@ -55,6 +55,7 @@ struct Args {
     bool fixed_lag_qr = false;   // rank-tolerant iSAM2 elimination
     bool use_nhc = false;        // milestone 2d
     bool use_zupt = false;       // milestone 2d
+    bool motion_constraint_shadow = false;
     bool use_hold = false;       // milestone 2e: fix-and-hold
     bool no_held_fix_label = false;  // keep hold priors; require fresh AR for FIX output
     double elev_mask_deg = -1.0; // milestone 2e: >0 overrides preset elevation mask
@@ -63,8 +64,19 @@ struct Args {
     bool single_freq = false;    // multi-freq control: force L1/E1/B1-only DD (single-frequency baseline)
     bool multi_freq = false;     // force multi-frequency DD on (library default is now OFF)
     bool sd_doppler = false;     // add single-difference Doppler velocity factors
+    bool clock_resilient_temporal_shadow = false;  // diagnostic-only receiver-clock-free TDCP
+    bool predicted_ddpr_quality_shadow = false;  // diagnostic-only causal DDPR quality
+    bool predicted_ddpr_bias_state_shadow = false;  // causal persistent DDPR bias monitor
+    bool ddpr_gnc_shadow = false;  // fixed weights + copied-graph GNC counterfactual
+    bool candidate_integrity_shadow = false;  // monitor-only multi-witness FIX check
+    bool satellite_quarantine_shadow = false;  // monitor-only two-stage satellite witness
+    bool selective_arc_restart = false;  // active selective carrier-arc restart
+    bool selective_arc_restart_monitor = false;  // monitor-only would-restart report
+    std::string temporal_shadow_replay_csv;  // classify against frozen ECEF positions; skip solve
+    bool temporal_shadow_truth_replay = false;  // classify against reference.csv; skip solve
     bool postfit_gate = false;
     bool adaptive_ratio = false;
+    bool external_dr_shadow = false;
     int postfit_min_n = -1;
     double postfit_rms = -1.0;
     double postfit_max_norm = -1.0;
@@ -95,8 +107,14 @@ struct Args {
     bool anchor_aided_validation = false;
     bool constellation_par = false;
     bool residual_par = false;
+    bool ratio_impact_monitor = false;
+    bool disjoint_ar_shadow = false;
+    bool gf_slip_reset = false;
+    bool conditional_mf_shadow = false;
+    bool multiepoch_ar_shadow = false;
     bool variance_par = false;
     bool gici_par = false;          // GICI-style strict PAR + continuous-unfix reacquisition profile
+    bool anchor_gated_unfix_reset = false;
     double par_max_std = -1.0;
     double hold_ratio = 0.0;       // >0: override ambiguity_hold_ratio_threshold
     int hold_min = 0;              // >0: override ambiguity_hold_min_fixed
@@ -191,6 +209,8 @@ struct Args {
     double fix_demote_anchor_gross_ratio = -1.0;  // >=0: override fix_demote_anchor_gross_ratio (default 10.0)
     double fix_demote_anchor_gross_abs = -1.0;    // >=0: override fix_demote_anchor_gross_abs_m (default 20.0)
     bool fix_demote_surplus_crosscheck = false;   // enable fix_demote_surplus_crosscheck (needs --fix-demote + --surplus-validation)
+    bool fix_demote_surplus_anchor_reprieve = false;  // fail-closed surplus + independent DDPR anchor preset
+    bool fix_demote_spp_model_reprieve = false;  // residual-only reprieve: strong LAMBDA/IMU + fresh SPP agreement
     bool surplus_overrides_dr = false;   // "c2" lever: enable surplus_validation_overrides_history_dr (needs --fixed-history-dr + --surplus-validation)
     int surplus_overrides_dr_min_used = 0;  // >0: override surplus_validation_overrides_history_dr_min_surplus_used (default 0 = no extra floor)
     int surplus_overrides_dr_max_consec = 0;  // >0: override surplus_validation_overrides_history_dr_max_consecutive (default 0 = no cap)
@@ -210,6 +230,10 @@ struct Args {
     bool low_count_ar = false;
     int low_count_ar_min = -1;        // >0: override low_count_min_candidates (default 4)
     double low_count_ar_ratio = -1.0; // >=0: override low_count_min_ratio (default 1.5); use --low-count-ratio 0 for "surplus alone"
+    bool low_count_relax_surplus_quality = false;  // exempt low-count from nsat>=10/ddcp>=4 arms
+    bool low_count_require_separation_witness = false;  // require float/IMU separation for low-count fix
+    double low_count_max_float_sep_m = 0.1;
+    double low_count_max_imu_pred_sep_m = 0.1;
     std::string dump_csv_path;  // debug: per-epoch CSV dump (tow/status/E-N-U err/position) for plotting
     // Opt-in FGOProblem cache (skips repeated RINEX parse + problem build
     // across validation runs on the SAME inputs/config). Default-off; when
@@ -232,12 +256,82 @@ Args parseArgs(int argc, char** argv) {
             args.fixed_lag_qr = true;
             continue;
         }
+        if (a == "--motion-constraint-shadow") {
+            args.motion_constraint_shadow = true;
+            continue;
+        }
         if (a == "--no-held-fix-label") {
             args.no_held_fix_label = true;
             continue;
         }
+        if (a == "--clock-resilient-temporal-shadow") {
+            args.clock_resilient_temporal_shadow = true;
+            continue;
+        }
+        if (a == "--clock-resilient-shadow-replay" && i + 1 < argc) {
+            args.temporal_shadow_replay_csv = argv[++i];
+            args.clock_resilient_temporal_shadow = true;
+            continue;
+        }
+        if (a == "--clock-resilient-shadow-truth-replay") {
+            args.temporal_shadow_truth_replay = true;
+            args.clock_resilient_temporal_shadow = true;
+            continue;
+        }
+        if (a == "--predicted-ddpr-quality-shadow") {
+            args.predicted_ddpr_quality_shadow = true;
+            continue;
+        }
+        if (a == "--predicted-ddpr-bias-state-shadow") {
+            args.predicted_ddpr_bias_state_shadow = true;
+            continue;
+        }
+        if (a == "--ddpr-gnc-shadow") {
+            args.ddpr_gnc_shadow = true;
+            continue;
+        }
+        if (a == "--candidate-integrity-shadow") {
+            args.candidate_integrity_shadow = true;
+            continue;
+        }
+        if (a == "--satellite-quarantine-shadow") {
+            args.satellite_quarantine_shadow = true;
+            continue;
+        }
+        if (a == "--selective-arc-restart") {
+            args.selective_arc_restart = true;
+            continue;
+        }
+        if (a == "--selective-arc-restart-monitor") {
+            args.selective_arc_restart_monitor = true;
+            continue;
+        }
         if (a == "--gici-par") {
             args.gici_par = true;
+            continue;
+        }
+        if (a == "--anchor-gated-unfix-reset") {
+            args.anchor_gated_unfix_reset = true;
+            continue;
+        }
+        if (a == "--ratio-impact-monitor") {
+            args.ratio_impact_monitor = true;
+            continue;
+        }
+        if (a == "--disjoint-ar-shadow") {
+            args.disjoint_ar_shadow = true;
+            continue;
+        }
+        if (a == "--gf-slip-reset") {
+            args.gf_slip_reset = true;
+            continue;
+        }
+        if (a == "--conditional-mf-shadow") {
+            args.conditional_mf_shadow = true;
+            continue;
+        }
+        if (a == "--multiepoch-ar-shadow") {
+            args.multiepoch_ar_shadow = true;
             continue;
         }
         if (a == "--integer-constrained-reoptimization") {
@@ -318,6 +412,15 @@ Args parseArgs(int argc, char** argv) {
             args.fix_demote_surplus_crosscheck = true;
             continue;
         }
+        if (a == "--fix-demote-surplus-anchor-reprieve") {
+            args.fix_demote_surplus_crosscheck = true;
+            args.fix_demote_surplus_anchor_reprieve = true;
+            continue;
+        }
+        if (a == "--fix-demote-spp-model-reprieve") {
+            args.fix_demote_spp_model_reprieve = true;
+            continue;
+        }
         if (a == "--cmc-ref") {
             args.cmc_ref = true;
             continue;
@@ -346,12 +449,32 @@ Args parseArgs(int argc, char** argv) {
             args.low_count_ar_ratio = std::stod(argv[++i]);
             continue;
         }
+        if (a == "--low-count-relax-surplus-quality") {
+            args.low_count_relax_surplus_quality = true;
+            continue;
+        }
+        if (a == "--low-count-require-separation-witness") {
+            args.low_count_require_separation_witness = true;
+            continue;
+        }
+        if (a == "--low-count-max-float-sep" && i + 1 < argc) {
+            args.low_count_max_float_sep_m = std::stod(argv[++i]);
+            continue;
+        }
+        if (a == "--low-count-max-imu-pred-sep" && i + 1 < argc) {
+            args.low_count_max_imu_pred_sep_m = std::stod(argv[++i]);
+            continue;
+        }
         if (a == "--adaptive-ratio") {
             args.adaptive_ratio = true;
             continue;
         }
         if (a == "--external-dr") {
             args.external_dr = true;
+            continue;
+        }
+        if (a == "--external-dr-shadow") {
+            args.external_dr_shadow = true;
             continue;
         }
         if (a == "--external-dr-max-age" && i + 1 < argc) {
@@ -686,6 +809,25 @@ libgnss::FGOProcessor::FGOConfig makeRealDataDdConfig() {
 // call, without duplicating this arg-to-config mapping logic.
 libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
     libgnss::FGOProcessor::FGOConfig config = makeRealDataDdConfig();
+    // Reuse the existing diagnostic surface; do not add another CLI option.
+    config.monitor_geometry_free_cycle_slip = !args.dump_csv_path.empty();
+    config.monitor_clock_resilient_temporal_carrier =
+        args.clock_resilient_temporal_shadow;
+    config.monitor_predicted_ddpr_quality =
+        args.predicted_ddpr_quality_shadow;
+    config.monitor_predicted_ddpr_bias_state =
+        args.predicted_ddpr_bias_state_shadow;
+    config.monitor_ddpr_gnc = args.ddpr_gnc_shadow;
+    config.monitor_ddpr_gnc_counterfactual = args.ddpr_gnc_shadow;
+    config.monitor_candidate_integrity_witness =
+        args.candidate_integrity_shadow;
+    config.monitor_satellite_quarantine_witness =
+        args.satellite_quarantine_shadow;
+    config.use_selective_arc_restart = args.selective_arc_restart;
+    config.monitor_selective_arc_restart_candidates =
+        args.selective_arc_restart_monitor;
+    config.monitor_motion_constraints = args.motion_constraint_shadow;
+    config.use_geometry_free_cycle_slip_reset = args.gf_slip_reset;
     config.report_held_ambiguities_as_fixed = !args.no_held_fix_label;
     if (args.max_iters > 0) {
         config.max_iterations = args.max_iters;
@@ -731,6 +873,16 @@ libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
     if (args.external_dr) {
         config.use_external_doppler_dr_validation = true;
     }
+    if (args.external_dr_shadow) {
+        config.monitor_external_doppler_dr = true;
+        if (args.external_dr_reset_ratio < 0.0) {
+            config.external_doppler_dr_reset_min_ratio = 20.0;
+        }
+    }
+    if (args.candidate_integrity_shadow &&
+        args.external_dr_reset_ratio < 0.0) {
+        config.external_doppler_dr_reset_min_ratio = 20.0;
+    }
     if (args.external_dr_max_age > 0) {
         config.external_doppler_dr_max_age_epochs = args.external_dr_max_age;
     }
@@ -767,6 +919,15 @@ libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
     }
     if (args.partial_ar) {
         config.use_fixed_lag_partial_lambda = true;
+    }
+    if (args.conditional_mf_shadow) {
+        config.monitor_conditional_multiband_ar = true;
+    }
+    if (args.disjoint_ar_shadow) {
+        config.monitor_disjoint_constellation_ar = true;
+    }
+    if (args.multiepoch_ar_shadow) {
+        config.monitor_multiepoch_ar = true;
     }
     if (args.integer_constrained_reoptimization) {
         config.use_integer_constrained_reoptimization = true;
@@ -824,6 +985,12 @@ libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
     }
     if (args.fix_demote_surplus_crosscheck) {
         config.fix_demote_surplus_crosscheck = true;
+    }
+    if (args.fix_demote_surplus_anchor_reprieve) {
+        config.fix_demote_surplus_anchor_reprieve = true;
+    }
+    if (args.fix_demote_spp_model_reprieve) {
+        config.fix_demote_spp_model_reprieve = true;
     }
     if (args.leaky_persist) {
         config.use_cp_hold_leaky_persist = true;
@@ -884,6 +1051,14 @@ libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
     if (args.low_count_ar_ratio >= 0.0) {
         config.low_count_min_ratio = args.low_count_ar_ratio;
     }
+    if (args.low_count_relax_surplus_quality) {
+        config.low_count_relax_surplus_quality = true;
+    }
+    if (args.low_count_require_separation_witness) {
+        config.low_count_require_separation_witness = true;
+        config.low_count_max_float_separation_m = args.low_count_max_float_sep_m;
+        config.low_count_max_imu_prediction_separation_m = args.low_count_max_imu_pred_sep_m;
+    }
     if (args.no_gal_ar) {
         config.exclude_galileo_ambiguity_fixing = true;
     }
@@ -931,6 +1106,9 @@ libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
     if (args.residual_par) {
         config.use_residual_screened_partial_ar = true;
     }
+    if (args.ratio_impact_monitor) {
+        config.monitor_ratio_impact_partial_ar = true;
+    }
     if (args.variance_par) {
         config.use_variance_ranked_partial_ar = true;
     }
@@ -954,6 +1132,10 @@ libgnss::FGOProcessor::FGOConfig buildFgoConfig(const Args& args) {
         if (args.ratio_threshold <= 0.0) config.lambda_ratio_threshold = 3.0;
         if (args.min_fixed <= 0) config.min_fixed_ambiguities = 6;
         if (args.par_max_std < 0.0) config.partial_ar_max_std_cycles = 0.25;
+    }
+    if (args.anchor_gated_unfix_reset) {
+        config.use_continuous_unfix_ambiguity_reset = true;
+        config.continuous_unfix_require_ddpr_anchor_disagreement = true;
     }
     if (args.par_max_std >= 0.0) {
         config.partial_ar_max_std_cycles = args.par_max_std;
@@ -1429,6 +1611,7 @@ HorizError horizontalErrorVsRef(const libgnss::FGOProcessor::FGOResult& r,
 // demotions -- i.e. exactly the label horizontalErrorVsRef() buckets on.
 void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
                   const std::vector<RefRow>& ref,
+                  const libgnss::FGOProcessor::FGOProblem& problem,
                   const std::string& path) {
     if (ref.empty()) {
         std::cerr << "Warning: --dump-csv requires --ref reference.csv; skipping dump.\n";
@@ -1450,20 +1633,74 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
            "x_ecef_m,y_ecef_m,z_ecef_m,position_covariance_trace_m2,"
            "ref_e_pos_m,ref_n_pos_m,ref_u_pos_m,"
            "vel_e_mps,vel_n_mps,vel_u_mps,"
-           "ratio,ratio_threshold,nfixed,ar_outcome,ddpr_rms_m,sd_doppler_rms_mps,gdop,nsat,sd_doppler_n,"
+           "ratio,ratio_threshold,nfixed,ar_outcome,ddpr_rms_m,ddpr_gnc_eval,ddpr_gnc_n,ddpr_gnc_stages,ddpr_gnc_initial_mu,ddpr_gnc_final_mu,ddpr_gnc_min_weight,ddpr_gnc_mean_weight,ddpr_gnc_effective_n,ddpr_gnc_downweighted_n,ddpr_gnc_weighted_rms_m,ddpr_gnc_cf_eval,ddpr_gnc_cf_success,ddpr_gnc_cf_n,ddpr_gnc_cf_stages,ddpr_gnc_cf_cost_before,ddpr_gnc_cf_cost_after,ddpr_gnc_cf_ddpr_rms_before_m,ddpr_gnc_cf_ddpr_rms_after_m,ddpr_gnc_cf_x_ecef_m,ddpr_gnc_cf_y_ecef_m,ddpr_gnc_cf_z_ecef_m,ddpr_gnc_cf_float_separation_m,ddpr_gnc_cf_lambda_eval,ddpr_gnc_cf_lambda_n,ddpr_gnc_cf_lambda_ratio,ddpr_gnc_cf_lambda_ratio_pass,sd_doppler_rms_mps,clock_resilient_tdcp_n,clock_resilient_tdcp_rms_m,clock_resilient_tdcp_max_abs_m,clock_resilient_tdcp_clean,clock_resilient_tdcp_witnessed_outliers,clock_resilient_tdcp_unexplained_outliers,gdop,nsat,sd_doppler_n,"
            "amb_candidates,lambda_attempts,lambda_stage,amb_var_median,amb_var_max,"
-           "imu_pose_correction_m,ddpr_anchor_eval,ddpr_anchor_n,ddpr_anchor_res_m,"
+           "imu_pose_correction_m,spp_seed_fresh,spp_seed_x_ecef_m,"
+           "spp_seed_y_ecef_m,spp_seed_z_ecef_m,"
+           "lambda_candidate_valid,lambda_candidate_nfixed,"
+           "lambda_candidate_ratio,lambda_candidate_x_ecef_m,"
+           "lambda_candidate_y_ecef_m,lambda_candidate_z_ecef_m,"
+           "lambda_candidate_bsr,lambda_candidate_bsr_qscale2,"
+           "lambda_candidate_bsr_qscale4,lambda_candidate_bsr_qscale8,"
+           "lambda_candidate_bsr_qscale16,lambda_candidate_ffrt_supported,"
+           "lambda_candidate_ffrt_accepts_any,lambda_candidate_ffrt_min_ratio,"
+           "lambda_candidate_ffrt_pass,lambda_candidate_integer_overlap,"
+           "lambda_candidate_integer_agreements,"
+           "lambda_candidate_integer_agreement_fraction,"
+           "lambda_candidate_integer_consensus_streak,"
+           "multiepoch_ar_eval,multiepoch_ar_n,multiepoch_ar_support_epochs,"
+           "multiepoch_ar_ratio,multiepoch_ar_bsr,multiepoch_ar_history_agree,"
+           "multiepoch_ar_ratio_pass,multiepoch_ar_candidate_valid,"
+           "multiepoch_ar_x_ecef_m,multiepoch_ar_y_ecef_m,"
+           "multiepoch_ar_z_ecef_m,multiepoch_ar_float_sep_m,"
+           "multiepoch_ar_imu_sep_m,multiepoch_ar_surplus_eval,"
+           "multiepoch_ar_surplus_pass,multiepoch_ar_surplus_level,"
+           "multiepoch_ar_surplus_used,multiepoch_ar_graph_cost_eval,"
+           "multiepoch_ar_graph_cost_pass,multiepoch_ar_graph_cost_factors,"
+           "multiepoch_ar_graph_cost_before,multiepoch_ar_graph_cost_after,"
+           "multiepoch_ar_graph_cost_delta,"
+           "gf_slip_events,gf_slip_max_jump_m,gf_slip_tainted_ambiguities,"
+           "doppler_slip_signals,doppler_slip_max_innovation_m,"
+           "gf_doppler_isolated_pairs,"
+           "conditional_mf_eval,conditional_mf_primary_n,conditional_mf_secondary_n,"
+           "conditional_mf_primary_ratio,conditional_mf_secondary_ratio,"
+           "conditional_mf_primary_bsr,conditional_mf_secondary_bsr,"
+           "conditional_mf_primary_pass,conditional_mf_secondary_pass,"
+           "conditional_mf_candidate_valid,conditional_mf_x_ecef_m,"
+           "conditional_mf_y_ecef_m,conditional_mf_z_ecef_m,"
+           "conditional_mf_float_sep_m,conditional_mf_imu_sep_m,"
+           "ratio_impact_eval,ratio_impact_trials,ratio_impact_best_ratio,"
+           "ratio_impact_best_nfixed,ratio_impact_x_ecef_m,"
+           "ratio_impact_y_ecef_m,ratio_impact_z_ecef_m,"
+           "ratio_impact_float_sep_m,ratio_impact_imu_sep_m,"
+           "disjoint_ar_eval,disjoint_ar_a_system_mask,"
+           "disjoint_ar_b_system_mask,disjoint_ar_a_n,disjoint_ar_b_n,"
+           "disjoint_ar_a_ratio,disjoint_ar_b_ratio,"
+           "disjoint_ar_a_bsr,disjoint_ar_b_bsr,"
+           "disjoint_ar_a_ratio_pass,disjoint_ar_b_ratio_pass,"
+           "disjoint_ar_a_candidate_valid,disjoint_ar_b_candidate_valid,"
+           "disjoint_ar_a_x_ecef_m,disjoint_ar_a_y_ecef_m,"
+           "disjoint_ar_a_z_ecef_m,disjoint_ar_b_x_ecef_m,"
+           "disjoint_ar_b_y_ecef_m,disjoint_ar_b_z_ecef_m,"
+           "disjoint_ar_ab_sep_m,disjoint_ar_a_primary_sep_m,"
+           "disjoint_ar_b_primary_sep_m,"
+           "ddpr_anchor_eval,ddpr_anchor_n,ddpr_anchor_res_m,"
            "ddpr_anchor_x_ecef_m,ddpr_anchor_y_ecef_m,ddpr_anchor_z_ecef_m,"
            "ddpr_anchor_h_err_m,ddpr_anchor_u_err_m,ddpr_anchor_prior,"
-           "fixed_float_sep_m,fixed_imu_pred_sep_m,fixed_postfit_ddcp_rms_m,fixed_postfit_ddcp_max_norm,fixed_postfit_ddcp_chi2_dof,fixed_postfit_ddcp_n,external_dr_sep_m,external_dr_mahal2,external_dr_age,external_doppler_valid,external_doppler_vel_e_mps,external_doppler_vel_n_mps,external_doppler_vel_u_mps,external_dr_eval,external_dr_accept,external_dr_reject,cp_hold,"
+           "fixed_float_sep_m,fixed_imu_pred_sep_m,fixed_postfit_ddcp_rms_m,fixed_postfit_ddcp_max_norm,fixed_postfit_ddcp_chi2_dof,fixed_postfit_ddcp_n,external_dr_sep_m,external_dr_mahal2,external_dr_age,external_doppler_valid,external_doppler_vel_e_mps,external_doppler_vel_n_mps,external_doppler_vel_u_mps,external_dr_eval,external_dr_accept,external_dr_reject,candidate_witness_eval,candidate_anchor_available,candidate_anchor_n,candidate_anchor_rms_m,candidate_anchor_sep_m,candidate_anchor_pass,candidate_imu_pass,candidate_doppler_available,candidate_doppler_pass,candidate_carrier_pass,candidate_witness_pass,selective_arc_restart_armed,selective_arc_restart_monitor_only,selective_arc_restart_candidate_sats,selective_arc_restart_candidate_pairs,selective_arc_restart_applied_arcs,selective_arc_restart_skipped_fixed,selective_arc_restart_skipped_thrash,selective_arc_restart_skipped_cap,motion_imu_n,motion_accel_std_mps2,motion_gyro_std_radps,motion_gyro_median_radps,motion_yaw_rate_radps,motion_seed_speed_mps,zupt_candidate,zupt_applied,nhc_candidate,nhc_applied,cp_hold,"
            "imu_aperture_accept,imu_aperture_reject,cp_available,cp_added,"
-           "cp_suppressed_hold,gen_bump_hold,gen_bump_fde,gen_bump_reset,"
+           "cp_suppressed_hold,amb_after_hold,amb_final,amb_excl_build,"
+           "amb_excl_hold,amb_excl_one_band,amb_excl_constellation,"
+           "amb_excl_prev_residual,amb_excl_fde,amb_excl_stale,"
+           "gen_bump_hold,gen_bump_fde,gen_bump_reset,"
            "gen_bump_warm_reset,gen_bump_stale_pin,"
            "surplus_eval,surplus_pass,surplus_level,surplus_used,surplus_rescue,surplus_veto,"
            "low_count_attempted,low_count_used,"
            "integer_reopt_eval,integer_reopt_pass,integer_reopt_base_cost_before,"
            "integer_reopt_base_cost_after,integer_reopt_base_cost_delta,"
-           "dr_bypass_eval,dr_bypass_horiz_err_m,dr_bypass_applied\n";
+           "dr_bypass_eval,dr_bypass_horiz_err_m,dr_bypass_applied,"
+           "clock_jump,clock_common_delta_m,"
+           "clock_common_delta_satellites\n";
     std::size_t ri = 0;
     for (std::size_t si = 0; si < r.solution.solutions.size(); ++si) {
         const auto& s = r.solution.solutions[si];
@@ -1515,17 +1752,152 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
             << s.ratio;
         if (si < r.epoch_diagnostics.size()) {
             const auto& d = r.epoch_diagnostics[si];
+            const auto& conditional = d.conditional_multiband_ar_shadow;
+            const auto& multiepoch = d.multiepoch_ar_shadow;
+            const auto& disjoint = d.disjoint_constellation_ar_shadow;
             out << ',' << d.effective_ratio_threshold
                 << ',' << s.num_fixed_ambiguities
                 << ',' << static_cast<int>(d.ar_outcome)
-                << ',' << d.ddpr_rms_m << ',' << d.sd_doppler_rms_mps
+                << ',' << d.ddpr_rms_m
+                << ',' << (d.ddpr_gnc_evaluated ? 1 : 0)
+                << ',' << d.ddpr_gnc_factor_count
+                << ',' << d.ddpr_gnc_stages
+                << ',' << d.ddpr_gnc_initial_mu
+                << ',' << d.ddpr_gnc_final_mu
+                << ',' << d.ddpr_gnc_min_weight
+                << ',' << d.ddpr_gnc_mean_weight
+                << ',' << d.ddpr_gnc_effective_factor_count
+                << ',' << d.ddpr_gnc_downweighted_factors
+                << ',' << d.ddpr_gnc_weighted_rms_m
+                << ',' << (d.ddpr_gnc_counterfactual_evaluated ? 1 : 0)
+                << ',' << (d.ddpr_gnc_counterfactual_succeeded ? 1 : 0)
+                << ',' << d.ddpr_gnc_counterfactual_factor_count
+                << ',' << d.ddpr_gnc_counterfactual_stages
+                << ',' << d.ddpr_gnc_counterfactual_cost_before
+                << ',' << d.ddpr_gnc_counterfactual_cost_after
+                << ',' << d.ddpr_gnc_counterfactual_ddpr_rms_before_m
+                << ',' << d.ddpr_gnc_counterfactual_ddpr_rms_after_m
+                << ',' << d.ddpr_gnc_counterfactual_position_ecef.x()
+                << ',' << d.ddpr_gnc_counterfactual_position_ecef.y()
+                << ',' << d.ddpr_gnc_counterfactual_position_ecef.z()
+                << ',' << d.ddpr_gnc_counterfactual_float_separation_m
+                << ',' << (d.ddpr_gnc_counterfactual_lambda_evaluated ? 1 : 0)
+                << ',' << d.ddpr_gnc_counterfactual_lambda_ambiguities
+                << ',' << d.ddpr_gnc_counterfactual_lambda_ratio
+                << ',' << (d.ddpr_gnc_counterfactual_lambda_ratio_pass ? 1 : 0)
+                << ',' << d.sd_doppler_rms_mps
+                << ',' << d.clock_resilient_tdcp_factors
+                << ',' << d.clock_resilient_tdcp_rms_m
+                << ',' << d.clock_resilient_tdcp_max_abs_m
+                << ',' << d.clock_resilient_tdcp_clean
+                << ',' << d.clock_resilient_tdcp_witnessed_outliers
+                << ',' << d.clock_resilient_tdcp_unexplained_outliers
                 << ',' << d.gdop << ',' << d.num_satellites
                 << ',' << d.sd_doppler_factors
                 << ',' << d.ambiguity_candidates << ',' << d.lambda_attempts
                 << ',' << d.lambda_selected_stage
                 << ',' << d.ambiguity_variance_median_cycles2
                 << ',' << d.ambiguity_variance_max_cycles2
-                << ',' << d.imu_pose_correction_m;
+                << ',' << d.imu_pose_correction_m
+                << ',' << (d.fresh_spp_solution ? 1 : 0)
+                << ',' << d.spp_seed_position_ecef.x()
+                << ',' << d.spp_seed_position_ecef.y()
+                << ',' << d.spp_seed_position_ecef.z()
+                << ',' << (d.lambda_candidate_available ? 1 : 0)
+                << ',' << d.lambda_candidate_fixed_ambiguities
+                << ',' << d.lambda_candidate_ratio
+                << ',' << d.lambda_candidate_position_ecef.x()
+                << ',' << d.lambda_candidate_position_ecef.y()
+                << ',' << d.lambda_candidate_position_ecef.z()
+                << ',' << d.lambda_candidate_bsr
+                << ',' << d.lambda_candidate_bsr_qscale2
+                << ',' << d.lambda_candidate_bsr_qscale4
+                << ',' << d.lambda_candidate_bsr_qscale8
+                << ',' << d.lambda_candidate_bsr_qscale16
+                << ',' << (d.lambda_candidate_ffrt_table_supported ? 1 : 0)
+                << ',' << (d.lambda_candidate_ffrt_accepts_any ? 1 : 0)
+                << ',' << d.lambda_candidate_ffrt_min_ratio
+                << ',' << (d.lambda_candidate_ffrt_pass ? 1 : 0)
+                << ',' << d.lambda_candidate_integer_overlap
+                << ',' << d.lambda_candidate_integer_agreements
+                << ',' << d.lambda_candidate_integer_agreement_fraction
+                << ',' << d.lambda_candidate_integer_consensus_streak
+                << ',' << (multiepoch.evaluated ? 1 : 0)
+                << ',' << multiepoch.persistent_ambiguities
+                << ',' << multiepoch.minimum_support_epochs
+                << ',' << multiepoch.ratio
+                << ',' << multiepoch.bootstrapped_success_rate
+                << ',' << (multiepoch.history_integers_agree ? 1 : 0)
+                << ',' << (multiepoch.ratio_passed ? 1 : 0)
+                << ',' << (multiepoch.candidate_available ? 1 : 0)
+                << ',' << multiepoch.candidate_position_ecef.x()
+                << ',' << multiepoch.candidate_position_ecef.y()
+                << ',' << multiepoch.candidate_position_ecef.z()
+                << ',' << multiepoch.float_separation_m
+                << ',' << multiepoch.imu_separation_m
+                << ',' << (multiepoch.surplus_validation_evaluated ? 1 : 0)
+                << ',' << (multiepoch.surplus_validation_pass ? 1 : 0)
+                << ',' << multiepoch.surplus_validation_fallback_level
+                << ',' << multiepoch.surplus_validation_surplus_used
+                << ',' << (multiepoch.graph_cost_evaluated ? 1 : 0)
+                << ',' << (multiepoch.graph_cost_pass ? 1 : 0)
+                << ',' << multiepoch.graph_cost_factor_count
+                << ',' << multiepoch.graph_cost_before
+                << ',' << multiepoch.graph_cost_after
+                << ',' << (multiepoch.graph_cost_after -
+                             multiepoch.graph_cost_before)
+                << ',' << d.gf_slip_shadow_event_pairs
+                << ',' << d.gf_slip_shadow_max_jump_m
+                << ',' << d.gf_slip_shadow_tainted_ambiguities
+                << ',' << d.doppler_slip_shadow_event_signals
+                << ',' << d.doppler_slip_shadow_max_innovation_m
+                << ',' << d.gf_doppler_shadow_isolated_pairs
+                << ',' << (conditional.evaluated ? 1 : 0)
+                << ',' << conditional.primary_ambiguities
+                << ',' << conditional.secondary_ambiguities
+                << ',' << conditional.primary_ratio
+                << ',' << conditional.secondary_ratio
+                << ',' << conditional.primary_bootstrapped_success_rate
+                << ',' << conditional.secondary_bootstrapped_success_rate
+                << ',' << (conditional.primary_ratio_passed ? 1 : 0)
+                << ',' << (conditional.secondary_ratio_passed ? 1 : 0)
+                << ',' << (conditional.candidate_available ? 1 : 0)
+                << ',' << conditional.candidate_position_ecef.x()
+                << ',' << conditional.candidate_position_ecef.y()
+                << ',' << conditional.candidate_position_ecef.z()
+                << ',' << conditional.float_separation_m
+                << ',' << conditional.imu_separation_m
+                << ',' << (d.ratio_impact_evaluated ? 1 : 0)
+                << ',' << d.ratio_impact_trials
+                << ',' << d.ratio_impact_best_ratio
+                << ',' << d.ratio_impact_best_fixed_ambiguities
+                << ',' << d.ratio_impact_best_position_ecef.x()
+                << ',' << d.ratio_impact_best_position_ecef.y()
+                << ',' << d.ratio_impact_best_position_ecef.z()
+                << ',' << d.ratio_impact_best_float_separation_m
+                << ',' << d.ratio_impact_best_imu_separation_m
+                << ',' << (disjoint.evaluated ? 1 : 0)
+                << ',' << disjoint.partition_a_system_mask
+                << ',' << disjoint.partition_b_system_mask
+                << ',' << disjoint.partition_a_ambiguities
+                << ',' << disjoint.partition_b_ambiguities
+                << ',' << disjoint.partition_a_ratio
+                << ',' << disjoint.partition_b_ratio
+                << ',' << disjoint.partition_a_bootstrapped_success_rate
+                << ',' << disjoint.partition_b_bootstrapped_success_rate
+                << ',' << (disjoint.partition_a_ratio_passed ? 1 : 0)
+                << ',' << (disjoint.partition_b_ratio_passed ? 1 : 0)
+                << ',' << (disjoint.partition_a_candidate_available ? 1 : 0)
+                << ',' << (disjoint.partition_b_candidate_available ? 1 : 0)
+                << ',' << disjoint.partition_a_position_ecef.x()
+                << ',' << disjoint.partition_a_position_ecef.y()
+                << ',' << disjoint.partition_a_position_ecef.z()
+                << ',' << disjoint.partition_b_position_ecef.x()
+                << ',' << disjoint.partition_b_position_ecef.y()
+                << ',' << disjoint.partition_b_position_ecef.z()
+                << ',' << disjoint.partition_separation_m
+                << ',' << disjoint.partition_a_primary_separation_m
+                << ',' << disjoint.partition_b_primary_separation_m;
             double anchor_horiz = -1.0;
             double anchor_up = -1.0;
             if (d.ddpr_anchor_evaluated && d.ddpr_anchor_position_ecef.norm() > 1e6) {
@@ -1564,12 +1936,50 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
                 << ',' << (d.external_dr_evaluated ? 1 : 0)
                 << ',' << (d.external_dr_accepted ? 1 : 0)
                 << ',' << (d.external_dr_rejected ? 1 : 0)
+                << ',' << (d.candidate_integrity_witness_evaluated ? 1 : 0)
+                << ',' << (d.candidate_integrity_anchor_available ? 1 : 0)
+                << ',' << d.candidate_integrity_anchor_factors
+                << ',' << d.candidate_integrity_anchor_rms_m
+                << ',' << d.candidate_integrity_anchor_separation_m
+                << ',' << (d.candidate_integrity_anchor_pass ? 1 : 0)
+                << ',' << (d.candidate_integrity_imu_pass ? 1 : 0)
+                << ',' << (d.candidate_integrity_doppler_available ? 1 : 0)
+                << ',' << (d.candidate_integrity_doppler_pass ? 1 : 0)
+                << ',' << (d.candidate_integrity_carrier_pass ? 1 : 0)
+                << ',' << (d.candidate_integrity_composite_pass ? 1 : 0)
+                << ',' << d.motion_constraint_imu_samples
+                << ',' << d.motion_constraint_accel_std_mps2
+                << ',' << d.motion_constraint_gyro_std_radps
+                << ',' << d.motion_constraint_gyro_median_radps
+                << ',' << d.motion_constraint_yaw_rate_radps
+                << ',' << d.motion_constraint_seed_speed_mps
+                << ',' << (d.zupt_candidate ? 1 : 0)
+                << ',' << (d.zupt_applied ? 1 : 0)
+                << ',' << (d.nhc_candidate ? 1 : 0)
+                << ',' << (d.nhc_applied ? 1 : 0)
                 << ',' << (d.carrier_hold_active ? 1 : 0)
+                << ',' << (d.selective_arc_restart_armed ? 1 : 0)
+                << ',' << (d.selective_arc_restart_monitor_only ? 1 : 0)
+                << ',' << d.selective_arc_restart_candidate_satellites
+                << ',' << d.selective_arc_restart_candidate_pairs
+                << ',' << d.selective_arc_restart_applied_arcs
+                << ',' << d.selective_arc_restart_skipped_fixed
+                << ',' << d.selective_arc_restart_skipped_thrash
+                << ',' << d.selective_arc_restart_skipped_cap
                 << ',' << (d.imu_aperture_accepted ? 1 : 0)
                 << ',' << (d.imu_aperture_rejected ? 1 : 0)
                 << ',' << d.carrier_factors_available
                 << ',' << d.carrier_factors_added
                 << ',' << d.carrier_factors_suppressed_hold
+                << ',' << d.ambiguity_candidates_after_hold
+                << ',' << d.ambiguity_candidates_final
+                << ',' << d.ambiguity_candidates_excluded_build_time
+                << ',' << d.ambiguity_candidates_excluded_hold
+                << ',' << d.ambiguity_candidates_excluded_one_band
+                << ',' << d.ambiguity_candidates_excluded_constellation
+                << ',' << d.ambiguity_candidates_excluded_previous_residual
+                << ',' << d.ambiguity_candidates_excluded_fde
+                << ',' << d.ambiguity_candidates_excluded_stale
                 << ',' << d.ambiguity_generation_bumps_hold
                 << ',' << d.ambiguity_generation_bumps_fde
                 << ',' << d.ambiguity_generation_bumps_reset
@@ -1600,8 +2010,534 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
                 << ',' << dr_bypass_horiz
                 << ',' << (d.dr_bypass_applied ? 1 : 0);
         }
+        out << ',' << (si < problem.clock_jumps.size() &&
+                       problem.clock_jumps[si] ? 1 : 0)
+            << ',' << (si < problem.gps_common_pseudorange_delta_m.size()
+                           ? problem.gps_common_pseudorange_delta_m[si]
+                           : 0.0)
+            << ',' << (si < problem.gps_common_pseudorange_delta_satellites.size()
+                           ? problem.gps_common_pseudorange_delta_satellites[si]
+                           : 0);
         out << '\n';
     }
+
+    const std::string gnc_trace_path = path + ".ddpr_gnc.csv";
+    std::ofstream gnc_trace_out(gnc_trace_path);
+    if (gnc_trace_out) {
+        gnc_trace_out << "tow,satellite,reference_satellite,system,prn,"
+                         "reference_system,reference_prn,signal,residual_m,"
+                         "sigma_m,normalized_residual,weight\n";
+        gnc_trace_out << std::fixed;
+        gnc_trace_out.precision(9);
+        for (const auto& epoch : r.epoch_diagnostics) {
+            for (const auto& trace : epoch.ddpr_gnc_factor_trace) {
+                gnc_trace_out << epoch.time.tow << ','
+                              << trace.satellite.toString() << ','
+                              << trace.reference_satellite.toString() << ','
+                              << static_cast<int>(trace.satellite.system) << ','
+                              << static_cast<int>(trace.satellite.prn) << ','
+                              << static_cast<int>(trace.reference_satellite.system) << ','
+                              << static_cast<int>(trace.reference_satellite.prn) << ','
+                              << static_cast<int>(trace.signal) << ','
+                              << trace.residual_m << ',' << trace.sigma_m << ','
+                              << trace.normalized_residual << ',' << trace.weight
+                              << '\n';
+            }
+        }
+    } else {
+        std::cerr << "Warning: cannot open DDPR GNC trace output file "
+                  << gnc_trace_path << "\n";
+    }
+
+    // Normalized companion table: the epoch CSV above answers "how many",
+    // while this row-per-satellite/signal trace answers exactly which carrier
+    // row left the LAMBDA funnel and at which existing gate.  It deliberately
+    // shares --dump-csv rather than adding another command-line switch.
+    const std::string trace_path = path + ".ar_candidates.csv";
+    std::ofstream trace_out(trace_path);
+    if (!trace_out) {
+        std::cerr << "Warning: cannot open AR candidate trace output file "
+                  << trace_path << "\n";
+        return;
+    }
+    trace_out << "tow,satellite,reference_satellite,system,prn,"
+                 "reference_system,reference_prn,signal,ambiguity_index,disposition\n";
+    trace_out << std::fixed;
+    trace_out.precision(3);
+    for (const auto& epoch : r.epoch_diagnostics) {
+        for (const auto& candidate : epoch.ambiguity_candidate_trace) {
+            trace_out << epoch.time.tow << ','
+                      << candidate.satellite.toString() << ','
+                      << candidate.reference_satellite.toString() << ','
+                      << static_cast<int>(candidate.satellite.system) << ','
+                      << static_cast<int>(candidate.satellite.prn) << ','
+                      << static_cast<int>(candidate.reference_satellite.system) << ','
+                      << static_cast<int>(candidate.reference_satellite.prn) << ','
+                      << static_cast<int>(candidate.signal) << ',';
+            if (candidate.ambiguity_index !=
+                std::numeric_limits<std::size_t>::max()) {
+                trace_out << candidate.ambiguity_index;
+            }
+            trace_out << ',' << static_cast<int>(candidate.disposition) << '\n';
+        }
+    }
+
+    const bool has_ratio_impact_trials = std::any_of(
+        r.epoch_diagnostics.begin(), r.epoch_diagnostics.end(),
+        [](const auto& epoch) { return !epoch.ratio_impact_trial_trace.empty(); });
+    if (!has_ratio_impact_trials) return;
+
+    const std::string impact_path = path + ".ratio_impact.csv";
+    std::ofstream impact_out(impact_path);
+    if (!impact_out) {
+        std::cerr << "Warning: cannot open ratio-impact trial output file "
+                  << impact_path << "\n";
+        return;
+    }
+    impact_out << "tow,excluded_satellite,system,prn,excluded_ambiguities,"
+                  "excluded_max_variance_cycles2,excluded_max_fractional_cycles,"
+                  "excluded_ddpr_residual_m,candidate_available,ratio,nfixed,"
+                  "x_ecef_m,y_ecef_m,z_ecef_m,float_sep_m,imu_sep_m\n";
+    impact_out << std::fixed;
+    impact_out.precision(6);
+    for (const auto& epoch : r.epoch_diagnostics) {
+        for (const auto& trial : epoch.ratio_impact_trial_trace) {
+            impact_out << epoch.time.tow << ','
+                       << trial.excluded_satellite.toString() << ','
+                       << static_cast<int>(trial.excluded_satellite.system) << ','
+                       << static_cast<int>(trial.excluded_satellite.prn) << ','
+                       << trial.excluded_ambiguities << ','
+                       << trial.excluded_max_variance_cycles2 << ','
+                       << trial.excluded_max_fractional_cycles << ','
+                       << trial.excluded_ddpr_residual_m << ','
+                       << (trial.candidate_available ? 1 : 0) << ','
+                       << trial.ratio << ',' << trial.fixed_ambiguities << ','
+                       << trial.candidate_position_ecef.x() << ','
+                       << trial.candidate_position_ecef.y() << ','
+                       << trial.candidate_position_ecef.z() << ','
+                       << trial.float_separation_m << ','
+                       << trial.imu_separation_m << '\n';
+        }
+    }
+}
+
+void dumpTemporalCarrierFactorCsv(
+    const libgnss::FGOProcessor::FGOResult& result,
+    const std::string& epoch_csv_path) {
+    const std::string path =
+        epoch_csv_path + ".clock_resilient_tdcp_factors.csv";
+    std::ofstream out(path);
+    if (!out) {
+        std::cerr << "Error: cannot open temporal carrier factor output file "
+                  << path << "\n";
+        return;
+    }
+    out << std::fixed << std::setprecision(6);
+    out << "tow,previous_epoch,current_epoch,target,reference,signal,"
+           "arc_length_epochs,delta_carrier_m,sigma_m,elevation_rad,"
+           "residual_m,normalized_residual,residual_outlier,"
+           "doppler_evaluated,doppler_innovation_signed_m,"
+           "doppler_innovation_m,"
+           "doppler_innovation_sigma_m,normalized_doppler_innovation,"
+           "doppler_outlier,doppler_calibration_evaluated,doppler_bias_m,"
+           "doppler_calibrated_scale_m,doppler_centered_innovation_m,"
+           "doppler_calibrated_score,doppler_calibrated_outlier,"
+           "geometry_free_witness,carrier_hold_witness,carrier_fde_witness,"
+           "classification\n";
+    for (const auto& row : result.temporal_carrier_shadow_factors) {
+        const auto& factor = row.factor;
+        double tow = 0.0;
+        if (factor.current_epoch_index < result.solution.solutions.size()) {
+            tow = result.solution.solutions[factor.current_epoch_index].time.tow;
+        }
+        const char* classification = "clean";
+        if (row.classification == libgnss::FGOProcessor::
+                TemporalCarrierShadowClassification::WitnessedOutlier) {
+            classification = "witnessed_outlier";
+        } else if (row.classification == libgnss::FGOProcessor::
+                       TemporalCarrierShadowClassification::UnexplainedOutlier) {
+            classification = "unexplained_outlier";
+        }
+        out << tow << ',' << factor.previous_epoch_index << ','
+            << factor.current_epoch_index << ',' << factor.satellite.toString()
+            << ',' << factor.reference_satellite.toString() << ','
+            << static_cast<int>(factor.signal) << ','
+            << factor.arc_length_epochs << ',' << factor.delta_carrier_m << ','
+            << factor.sigma_m << ',' << factor.elevation_rad << ','
+            << row.residual_m << ',' << row.normalized_residual << ','
+            << (row.residual_outlier ? 1 : 0) << ','
+            << (row.doppler_evaluated ? 1 : 0) << ','
+            << row.doppler_innovation_signed_m << ','
+            << row.doppler_innovation_m << ','
+            << row.doppler_innovation_sigma_m << ','
+            << row.normalized_doppler_innovation << ','
+            << (row.doppler_outlier ? 1 : 0) << ','
+            << (row.doppler_calibration_evaluated ? 1 : 0) << ','
+            << row.doppler_bias_m << ','
+            << row.doppler_calibrated_scale_m << ','
+            << row.doppler_centered_innovation_m << ','
+            << row.doppler_calibrated_score << ','
+            << (row.doppler_calibrated_outlier ? 1 : 0) << ','
+            << (row.geometry_free_witness ? 1 : 0) << ','
+            << (row.carrier_hold_witness ? 1 : 0) << ','
+            << (row.carrier_fde_witness ? 1 : 0) << ',' << classification
+            << '\n';
+    }
+}
+
+void dumpDisjointArShadowCsv(
+    const libgnss::FGOProcessor::FGOResult& result,
+    const std::string& epoch_csv_path) {
+    const std::string path = epoch_csv_path + ".disjoint_ar_shadow.csv";
+    std::ofstream out(path);
+    if (!out) {
+        std::cerr << "Error: cannot open disjoint AR shadow output file "
+                  << path << "\n";
+        return;
+    }
+    out << std::fixed << std::setprecision(6);
+    out << "tow,evaluated,primary_candidate_available,primary_ratio,"
+           "primary_x_ecef_m,primary_y_ecef_m,primary_z_ecef_m,"
+           "partition_a_system_mask,partition_b_system_mask,"
+           "partition_a_ambiguities,partition_b_ambiguities,"
+           "partition_a_ratio,partition_b_ratio,partition_a_bsr,partition_b_bsr,"
+           "partition_a_ratio_passed,partition_b_ratio_passed,"
+           "partition_a_candidate_available,partition_b_candidate_available,"
+           "partition_a_x_ecef_m,partition_a_y_ecef_m,partition_a_z_ecef_m,"
+           "partition_b_x_ecef_m,partition_b_y_ecef_m,partition_b_z_ecef_m,"
+           "partition_separation_m,partition_a_primary_separation_m,"
+           "partition_b_primary_separation_m\n";
+    for (const auto& epoch : result.epoch_diagnostics) {
+        const auto& shadow = epoch.disjoint_constellation_ar_shadow;
+        out << epoch.time.tow << ','
+            << (shadow.evaluated ? 1 : 0) << ','
+            << (epoch.lambda_candidate_available ? 1 : 0) << ','
+            << epoch.lambda_candidate_ratio << ','
+            << epoch.lambda_candidate_position_ecef.x() << ','
+            << epoch.lambda_candidate_position_ecef.y() << ','
+            << epoch.lambda_candidate_position_ecef.z() << ','
+            << shadow.partition_a_system_mask << ','
+            << shadow.partition_b_system_mask << ','
+            << shadow.partition_a_ambiguities << ','
+            << shadow.partition_b_ambiguities << ','
+            << shadow.partition_a_ratio << ','
+            << shadow.partition_b_ratio << ','
+            << shadow.partition_a_bootstrapped_success_rate << ','
+            << shadow.partition_b_bootstrapped_success_rate << ','
+            << (shadow.partition_a_ratio_passed ? 1 : 0) << ','
+            << (shadow.partition_b_ratio_passed ? 1 : 0) << ','
+            << (shadow.partition_a_candidate_available ? 1 : 0) << ','
+            << (shadow.partition_b_candidate_available ? 1 : 0) << ','
+            << shadow.partition_a_position_ecef.x() << ','
+            << shadow.partition_a_position_ecef.y() << ','
+            << shadow.partition_a_position_ecef.z() << ','
+            << shadow.partition_b_position_ecef.x() << ','
+            << shadow.partition_b_position_ecef.y() << ','
+            << shadow.partition_b_position_ecef.z() << ','
+            << shadow.partition_separation_m << ','
+            << shadow.partition_a_primary_separation_m << ','
+            << shadow.partition_b_primary_separation_m << '\n';
+    }
+}
+
+void dumpPredictedDdprQualityCsv(
+    const libgnss::FGOProcessor::FGOResult& result,
+    const std::string& epoch_csv_path) {
+    const std::string path = epoch_csv_path + ".predicted_ddpr_quality.csv";
+    std::ofstream out(path);
+    if (!out) {
+        std::cerr << "Error: cannot open predicted DDPR quality output file "
+                  << path << "\n";
+        return;
+    }
+    out << std::fixed << std::setprecision(6);
+    out << "tow,previous_epoch,current_epoch,target,reference,signal,dt_s,"
+           "pair_age_epochs,measured_ddpr_change_m,doppler_evaluated,"
+           "doppler_predicted_change_m,doppler_innovation_m,"
+           "doppler_innovation_sigma_m,normalized_doppler_innovation,"
+           "imu_geometry_evaluated,imu_predicted_change_m,"
+           "previous_predicted_ddpr_residual_m,"
+           "current_predicted_ddpr_residual_m,imu_innovation_m,"
+           "imu_innovation_sigma_m,normalized_imu_innovation,elevation_rad,"
+           "target_snr_dbhz,reference_snr_dbhz,proposed_action\n";
+    for (const auto& row : result.predicted_ddpr_quality_factors) {
+        double tow = 0.0;
+        if (row.current_epoch_index < result.solution.solutions.size()) {
+            tow = result.solution.solutions[row.current_epoch_index].time.tow;
+        }
+        const char* action = "unavailable";
+        if (row.proposed_action == libgnss::FGOProcessor::
+                PredictedDdprQualityAction::Keep) {
+            action = "keep";
+        } else if (row.proposed_action == libgnss::FGOProcessor::
+                       PredictedDdprQualityAction::Downweight) {
+            action = "downweight";
+        }
+        out << tow << ',' << row.previous_epoch_index << ','
+            << row.current_epoch_index << ',' << row.satellite.toString()
+            << ',' << row.reference_satellite.toString() << ','
+            << static_cast<int>(row.signal) << ',' << row.dt_s << ','
+            << row.pair_age_epochs << ',' << row.measured_ddpr_change_m << ','
+            << (row.doppler_evaluated ? 1 : 0) << ','
+            << row.doppler_predicted_change_m << ','
+            << row.doppler_innovation_m << ','
+            << row.doppler_innovation_sigma_m << ','
+            << row.normalized_doppler_innovation << ','
+            << (row.imu_geometry_evaluated ? 1 : 0) << ','
+            << row.imu_predicted_change_m << ','
+            << row.previous_predicted_ddpr_residual_m << ','
+            << row.current_predicted_ddpr_residual_m << ','
+            << row.imu_innovation_m << ','
+            << row.imu_innovation_sigma_m << ','
+            << row.normalized_imu_innovation << ',' << row.elevation_rad << ','
+            << row.target_snr_dbhz << ',' << row.reference_snr_dbhz << ','
+            << action << '\n';
+    }
+}
+
+void dumpPredictedDdprBiasStateCsv(
+    const libgnss::FGOProcessor::FGOResult& result,
+    const std::string& epoch_csv_path) {
+    const std::string path =
+        epoch_csv_path + ".predicted_ddpr_bias_state.csv";
+    std::ofstream out(path);
+    if (!out) {
+        std::cerr << "Error: cannot open predicted DDPR bias-state output file "
+                  << path << "\n";
+        return;
+    }
+    out << std::fixed << std::setprecision(6);
+    out << "tow,previous_epoch,current_epoch,target,reference,signal,dt_s,"
+           "pair_age_epochs,prior_updates,continuity_reset,prediction_usable,"
+           "update_applied,update_clipped,raw_residual_m,prior_bias_m,"
+           "prior_sigma_m,corrected_residual_m,measurement_sigma_m,"
+           "innovation_sigma_m,normalized_innovation,applied_innovation_m,"
+           "posterior_bias_m,posterior_sigma_m\n";
+    for (const auto& row : result.predicted_ddpr_bias_state_factors) {
+        double tow = 0.0;
+        if (row.current_epoch_index < result.solution.solutions.size()) {
+            tow = result.solution.solutions[row.current_epoch_index].time.tow;
+        }
+        out << tow << ',' << row.previous_epoch_index << ','
+            << row.current_epoch_index << ',' << row.satellite.toString()
+            << ',' << row.reference_satellite.toString() << ','
+            << static_cast<int>(row.signal) << ',' << row.dt_s << ','
+            << row.pair_age_epochs << ',' << row.prior_updates << ','
+            << (row.continuity_reset ? 1 : 0) << ','
+            << (row.prediction_usable ? 1 : 0) << ','
+            << (row.update_applied ? 1 : 0) << ','
+            << (row.update_clipped ? 1 : 0) << ','
+            << row.raw_residual_m << ',' << row.prior_bias_m << ','
+            << row.prior_sigma_m << ',' << row.corrected_residual_m << ','
+            << row.measurement_sigma_m << ',' << row.innovation_sigma_m << ','
+            << row.normalized_innovation << ',' << row.applied_innovation_m
+            << ',' << row.posterior_bias_m << ',' << row.posterior_sigma_m
+            << '\n';
+    }
+}
+
+void dumpSatelliteQuarantineCsv(
+    const libgnss::FGOProcessor::FGOResult& result,
+    const std::string& epoch_csv_path) {
+    const std::string path = epoch_csv_path + ".satellite_quarantine.csv";
+    std::ofstream out(path);
+    if (!out) {
+        std::cerr << "Error: cannot open satellite quarantine output file "
+                  << path << "\n";
+        return;
+    }
+    out << std::fixed << std::setprecision(6);
+    out << "tow,epoch,satellite,system,prn,postfit_ddpr_residual_m,"
+           "epoch_median_postfit_ddpr_residual_m,postfit_gross,"
+           "doppler_evaluated,doppler_outlier,imu_evaluated,imu_outlier,"
+           "temporal_support_pairs,quarantine_candidate\n";
+    for (const auto& row : result.satellite_quarantine_witnesses) {
+        double tow = 0.0;
+        if (row.epoch_index < result.solution.solutions.size()) {
+            tow = result.solution.solutions[row.epoch_index].time.tow;
+        }
+        out << tow << ',' << row.epoch_index << ','
+            << row.satellite.toString() << ','
+            << static_cast<int>(row.satellite.system) << ','
+            << static_cast<int>(row.satellite.prn) << ','
+            << row.postfit_ddpr_residual_m << ','
+            << row.epoch_median_postfit_ddpr_residual_m << ','
+            << (row.postfit_gross ? 1 : 0) << ','
+            << (row.doppler_evaluated ? 1 : 0) << ','
+            << (row.doppler_outlier ? 1 : 0) << ','
+            << (row.imu_evaluated ? 1 : 0) << ','
+            << (row.imu_outlier ? 1 : 0) << ','
+            << row.temporal_support_pairs << ','
+            << (row.quarantine_candidate ? 1 : 0) << '\n';
+    }
+}
+
+void dumpSelectiveArcRestartCsv(
+    const libgnss::FGOProcessor::FGOResult& result,
+    const std::string& epoch_csv_path) {
+    const std::string path = epoch_csv_path + ".selective_arc_restart.csv";
+    std::ofstream out(path);
+    if (!out) {
+        std::cerr << "Error: cannot open selective arc-restart output file "
+                  << path << "\n";
+        return;
+    }
+    out << std::fixed << std::setprecision(6);
+    out << "tow,detection_epoch,satellite,system,prn,is_reference,"
+           "ambiguity_index,detected,applied,postfit_residual_m,"
+           "epoch_median_postfit_residual_m,normalized_doppler_innovation,"
+           "normalized_imu_innovation\n";
+    for (const auto& row : result.selective_arc_restart_trace) {
+        double tow = 0.0;
+        if (row.detection_epoch < result.solution.solutions.size()) {
+            tow = result.solution.solutions[row.detection_epoch].time.tow;
+        }
+        out << tow << ',' << row.detection_epoch << ','
+            << row.satellite.toString() << ','
+            << static_cast<int>(row.satellite.system) << ','
+            << static_cast<int>(row.satellite.prn) << ','
+            << (row.is_reference ? 1 : 0) << ','
+            << row.ambiguity_index << ','
+            << (row.detected ? 1 : 0) << ','
+            << (row.applied ? 1 : 0) << ','
+            << row.postfit_residual_m << ','
+            << row.epoch_median_postfit_residual_m << ','
+            << row.normalized_doppler_innovation << ','
+            << row.normalized_imu_innovation << '\n';
+    }
+}
+
+struct TemporalShadowReplayInput {
+    std::vector<libgnss::Vector3d> positions_ecef;
+    std::vector<bool> carrier_hold_active;
+};
+
+bool loadTemporalShadowReplayCsv(
+    const std::string& path,
+    const libgnss::FGOProcessor::FGOProblem& problem,
+    TemporalShadowReplayInput& replay) {
+    std::ifstream input(path);
+    if (!input) {
+        std::cerr << "Error: cannot open temporal-shadow replay CSV " << path
+                  << "\n";
+        return false;
+    }
+    const auto split = [](const std::string& line) {
+        std::vector<std::string> fields;
+        std::stringstream stream(line);
+        std::string field;
+        while (std::getline(stream, field, ',')) {
+            fields.push_back(field);
+        }
+        return fields;
+    };
+
+    std::string line;
+    if (!std::getline(input, line)) {
+        std::cerr << "Error: temporal-shadow replay CSV is empty: " << path
+                  << "\n";
+        return false;
+    }
+    const auto header = split(line);
+    std::map<std::string, std::size_t> columns;
+    for (std::size_t i = 0; i < header.size(); ++i) {
+        columns[header[i]] = i;
+    }
+    for (const char* required :
+         {"tow", "x_ecef_m", "y_ecef_m", "z_ecef_m"}) {
+        if (columns.count(required) == 0) {
+            std::cerr << "Error: temporal-shadow replay CSV lacks column "
+                      << required << "\n";
+            return false;
+        }
+    }
+    const auto tow_column = columns["tow"];
+    const auto x_column = columns["x_ecef_m"];
+    const auto y_column = columns["y_ecef_m"];
+    const auto z_column = columns["z_ecef_m"];
+    const auto hold_column = columns.find("cp_hold");
+
+    replay.positions_ecef.clear();
+    replay.carrier_hold_active.clear();
+    replay.positions_ecef.reserve(problem.epochs.size());
+    replay.carrier_hold_active.reserve(problem.epochs.size());
+    std::size_t row = 0;
+    while (std::getline(input, line) && row < problem.epochs.size()) {
+        if (line.empty()) {
+            continue;
+        }
+        const auto fields = split(line);
+        const std::size_t required_max =
+            std::max({tow_column, x_column, y_column, z_column});
+        if (fields.size() <= required_max) {
+            std::cerr << "Error: malformed temporal-shadow replay row "
+                      << (row + 2) << "\n";
+            return false;
+        }
+        try {
+            const double tow = std::stod(fields[tow_column]);
+            if (std::abs(tow - problem.epochs[row].time.tow) > 1e-3) {
+                std::cerr << "Error: temporal-shadow replay TOW mismatch at row "
+                          << (row + 2) << " (csv=" << tow << ", problem="
+                          << problem.epochs[row].time.tow << ")\n";
+                return false;
+            }
+            replay.positions_ecef.emplace_back(std::stod(fields[x_column]),
+                                               std::stod(fields[y_column]),
+                                               std::stod(fields[z_column]));
+            bool hold = false;
+            if (hold_column != columns.end() &&
+                hold_column->second < fields.size()) {
+                hold = std::stoi(fields[hold_column->second]) != 0;
+            }
+            replay.carrier_hold_active.push_back(hold);
+        } catch (const std::exception& error) {
+            std::cerr << "Error: invalid temporal-shadow replay row "
+                      << (row + 2) << ": " << error.what() << "\n";
+            return false;
+        }
+        ++row;
+    }
+    if (row != problem.epochs.size()) {
+        std::cerr << "Error: temporal-shadow replay row count " << row
+                  << " does not match problem epochs " << problem.epochs.size()
+                  << "\n";
+        return false;
+    }
+    return true;
+}
+
+bool loadTemporalShadowTruthReplay(
+    const std::string& path,
+    const libgnss::FGOProcessor::FGOProblem& problem,
+    TemporalShadowReplayInput& replay) {
+    const auto reference = loadReference(path);
+    if (reference.empty()) {
+        std::cerr << "Error: cannot load temporal-shadow truth replay from "
+                  << path << "\n";
+        return false;
+    }
+    replay.positions_ecef.clear();
+    replay.carrier_hold_active.clear();
+    replay.positions_ecef.reserve(problem.epochs.size());
+    replay.carrier_hold_active.assign(problem.epochs.size(), false);
+    std::size_t reference_index = 0;
+    for (std::size_t i = 0; i < problem.epochs.size(); ++i) {
+        const auto& time = problem.epochs[i].time;
+        while (reference_index + 1 < reference.size() &&
+               std::abs(reference[reference_index + 1].time - time) <
+                   std::abs(reference[reference_index].time - time)) {
+            ++reference_index;
+        }
+        const double age_s = std::abs(reference[reference_index].time - time);
+        if (age_s > 0.11) {
+            std::cerr << "Error: no reference position within 0.11 s at epoch "
+                      << i << " (nearest age=" << age_s << " s)\n";
+            return false;
+        }
+        replay.positions_ecef.push_back(reference[reference_index].ecef);
+    }
+    return true;
 }
 
 // Populate problem.imu from an imu.csv + the already-built FGOProblem epochs.
@@ -1890,6 +2826,8 @@ bool readBoolVec(std::istream& is, std::vector<bool>& v) {
 void writeProblem(std::ostream& os, const libgnss::FGOProcessor::FGOProblem& p) {
     writeVec(os, p.epochs);
     writeBoolVec(os, p.clock_jumps);
+    writeVec(os, p.gps_common_pseudorange_delta_m);
+    writeVec(os, p.gps_common_pseudorange_delta_satellites);
     writeVec(os, p.pseudorange_factors);
     writeVec(os, p.tdcp_factors);
     writeVec(os, p.single_difference_doppler_factors);
@@ -1909,6 +2847,8 @@ void writeProblem(std::ostream& os, const libgnss::FGOProcessor::FGOProblem& p) 
 bool readProblem(std::istream& is, libgnss::FGOProcessor::FGOProblem& p) {
     return readVec(is, p.epochs) &&
            readBoolVec(is, p.clock_jumps) &&
+           readVec(is, p.gps_common_pseudorange_delta_m) &&
+           readVec(is, p.gps_common_pseudorange_delta_satellites) &&
            readVec(is, p.pseudorange_factors) &&
            readVec(is, p.tdcp_factors) &&
            readVec(is, p.single_difference_doppler_factors) &&
@@ -1949,7 +2889,7 @@ FileId statFile(const std::string& path) {
 // vector, new factor field, ...) -- an old cache then fails the magic/version
 // check in load() below and is rebuilt instead of misread.
 constexpr uint32_t kMagic = 0x50434647u;  // "PCFG" (problem-cache fgo)
-constexpr uint32_t kVersion = 6u;
+constexpr uint32_t kVersion = 10u;
 constexpr std::size_t kBuilderFingerprintBytes = 512u;
 
 struct Fingerprint {
@@ -2011,6 +2951,8 @@ Fingerprint computeFingerprint(const Args& args, const libgnss::FGOProcessor::FG
     COPY_BUILD_FIELD(elevation_sigma_err_a_m);
     COPY_BUILD_FIELD(elevation_sigma_err_b_m);
     COPY_BUILD_FIELD(elevation_sigma_pseudorange_ratio);
+    COPY_BUILD_FIELD(geometry_free_cycle_slip_threshold_m);
+    COPY_BUILD_FIELD(geometry_free_cycle_slip_confirmation_s);
     COPY_BUILD_FIELD(max_tdcp_gap_s);
     COPY_BUILD_FIELD(min_elevation_deg);
     COPY_BUILD_FIELD(min_satellites_per_epoch);
@@ -2031,7 +2973,10 @@ Fingerprint computeFingerprint(const Args& args, const libgnss::FGOProcessor::FG
     COPY_BUILD_FIELD(use_double_difference_factors);
     COPY_BUILD_FIELD(use_double_difference_secondary_code_alignment);
     COPY_BUILD_FIELD(use_elevation_dependent_sigma);
+    COPY_BUILD_FIELD(monitor_external_doppler_dr);
+    COPY_BUILD_FIELD(monitor_candidate_integrity_witness);
     COPY_BUILD_FIELD(use_external_doppler_dr_validation);
+    COPY_BUILD_FIELD(use_geometry_free_cycle_slip_reset);
     COPY_BUILD_FIELD(use_ionosphere_model);
     COPY_BUILD_FIELD(use_multi_constellation);
     COPY_BUILD_FIELD(use_multi_frequency_double_difference);
@@ -2242,6 +3187,127 @@ int main(int argc, char** argv) {
               << ", cmc_ref=" << (args.cmc_ref ? "on" : "off")
               << ", ref_avoided=" << problem.diagnostics.cmc_ref_avoided_count
               << "\n";
+    std::cout << "  Geometry-free slip reset: "
+              << (args.gf_slip_reset ? "on" : "off")
+              << " (threshold="
+              << config.geometry_free_cycle_slip_threshold_m
+              << " m, confirmation="
+              << config.geometry_free_cycle_slip_confirmation_s
+              << " s, confirmed_resets="
+              << problem.diagnostics.geometry_free_cycle_slip_resets
+              << ")\n";
+
+    if (!args.temporal_shadow_replay_csv.empty() ||
+        args.temporal_shadow_truth_replay) {
+        if (args.dump_csv_path.empty()) {
+            std::cerr << "Error: temporal-shadow replay requires --dump-csv "
+                         "<output-prefix>\n";
+            return 2;
+        }
+        TemporalShadowReplayInput replay;
+        const bool loaded = args.temporal_shadow_truth_replay
+            ? (!args.ref_path.empty() &&
+               loadTemporalShadowTruthReplay(args.ref_path, problem, replay))
+            : loadTemporalShadowReplayCsv(args.temporal_shadow_replay_csv,
+                                          problem, replay);
+        if (!loaded) {
+            if (args.temporal_shadow_truth_replay && args.ref_path.empty()) {
+                std::cerr << "Error: --clock-resilient-shadow-truth-replay "
+                             "requires --ref reference.csv\n";
+            }
+            return 1;
+        }
+        auto shadow =
+            libgnss::FGOProcessor::buildClockResilientTemporalCarrierShadow(
+                problem, config.single_difference_tdcp_sigma_m,
+                config.max_tdcp_gap_s);
+        auto geometry_free =
+            libgnss::FGOProcessor::analyzeGeometryFreeSlipShadow(
+                problem, 0.05, config.max_tdcp_gap_s);
+        std::vector<libgnss::FGOProcessor::FGOEpochDiagnostics>
+            epoch_diagnostics(problem.epochs.size());
+        for (std::size_t i = 0; i < epoch_diagnostics.size(); ++i) {
+            epoch_diagnostics[i].carrier_hold_active =
+                replay.carrier_hold_active[i];
+        }
+
+        libgnss::FGOProcessor::FGOResult replay_result;
+        replay_result.temporal_carrier_shadow_factors =
+            libgnss::FGOProcessor::
+                classifyClockResilientTemporalCarrierShadow(
+                    problem, shadow, replay.positions_ecef,
+                    epoch_diagnostics, &geometry_free);
+        if (args.predicted_ddpr_quality_shadow ||
+            args.predicted_ddpr_bias_state_shadow) {
+            auto quality_rows =
+                libgnss::FGOProcessor::analyzePredictedDdprQualityShadow(
+                    problem, replay.positions_ecef, replay.positions_ecef,
+                    config.single_difference_doppler_sigma_mps, 5.0,
+                    config.max_tdcp_gap_s);
+            if (args.predicted_ddpr_bias_state_shadow) {
+                replay_result.predicted_ddpr_bias_state_factors =
+                    libgnss::FGOProcessor::
+                        analyzePredictedDdprBiasStateShadow(
+                            quality_rows,
+                            config.predicted_ddpr_bias_process_noise_m_sqrt_s,
+                            config.predicted_ddpr_bias_initial_sigma_m,
+                            config.predicted_ddpr_bias_min_measurement_sigma_m,
+                            config.predicted_ddpr_bias_robust_update_sigma,
+                            config.predicted_ddpr_bias_min_prior_updates);
+            }
+            if (args.predicted_ddpr_quality_shadow) {
+                replay_result.predicted_ddpr_quality_factors =
+                    std::move(quality_rows);
+            }
+        }
+        replay_result.epoch_diagnostics = std::move(epoch_diagnostics);
+        for (std::size_t i = 0; i < problem.epochs.size(); ++i) {
+            libgnss::PositionSolution solution;
+            solution.time = problem.epochs[i].time;
+            solution.position_ecef = replay.positions_ecef[i];
+            replay_result.solution.addSolution(solution);
+        }
+        dumpTemporalCarrierFactorCsv(replay_result, args.dump_csv_path);
+        if (args.predicted_ddpr_quality_shadow) {
+            dumpPredictedDdprQualityCsv(replay_result, args.dump_csv_path);
+        }
+        if (args.predicted_ddpr_bias_state_shadow) {
+            dumpPredictedDdprBiasStateCsv(replay_result,
+                                          args.dump_csv_path);
+        }
+
+        std::size_t clean = 0;
+        std::size_t witnessed = 0;
+        std::size_t unexplained = 0;
+        for (const auto& row :
+             replay_result.temporal_carrier_shadow_factors) {
+            switch (row.classification) {
+                case libgnss::FGOProcessor::
+                    TemporalCarrierShadowClassification::Clean:
+                    ++clean;
+                    break;
+                case libgnss::FGOProcessor::
+                    TemporalCarrierShadowClassification::WitnessedOutlier:
+                    ++witnessed;
+                    break;
+                case libgnss::FGOProcessor::
+                    TemporalCarrierShadowClassification::UnexplainedOutlier:
+                    ++unexplained;
+                    break;
+            }
+        }
+        std::cout << "Temporal-shadow replay: factors="
+                  << replay_result.temporal_carrier_shadow_factors.size()
+                  << " clean=" << clean << " witnessed_outliers="
+                  << witnessed << " unexplained_outliers=" << unexplained
+                  << "\n  source="
+                  << (args.temporal_shadow_truth_replay
+                          ? args.ref_path
+                          : args.temporal_shadow_replay_csv)
+                  << "\n  output=" << args.dump_csv_path
+                  << ".clock_resilient_tdcp_factors.csv\n";
+        return 0;
+    }
 
     // --- MF hygiene diagnostics: per-signal DD residuals at the reference
     // trajectory (no solver). PR residual mean exposes per-band code/DCB
@@ -2378,7 +3444,25 @@ int main(int argc, char** argv) {
         const std::size_t ne = fl.solution.solutions.size();
         const HorizError he = horizontalErrorVsRef(fl, ref_rows);
         if (!args.dump_csv_path.empty()) {
-            dumpEpochCsv(fl, ref_rows, args.dump_csv_path);
+            dumpEpochCsv(fl, ref_rows, problem, args.dump_csv_path);
+            if (args.disjoint_ar_shadow) {
+                dumpDisjointArShadowCsv(fl, args.dump_csv_path);
+            }
+            if (args.clock_resilient_temporal_shadow) {
+                dumpTemporalCarrierFactorCsv(fl, args.dump_csv_path);
+            }
+            if (args.predicted_ddpr_quality_shadow) {
+                dumpPredictedDdprQualityCsv(fl, args.dump_csv_path);
+            }
+            if (args.predicted_ddpr_bias_state_shadow) {
+                dumpPredictedDdprBiasStateCsv(fl, args.dump_csv_path);
+            }
+            if (args.satellite_quarantine_shadow) {
+                dumpSatelliteQuarantineCsv(fl, args.dump_csv_path);
+            }
+            if (args.selective_arc_restart || args.selective_arc_restart_monitor) {
+                dumpSelectiveArcRestartCsv(fl, args.dump_csv_path);
+            }
         }
 
         std::cout << "\n=== (a4) MILESTONE 2c: IncrementalFixedLagSmoother (full-scale) ===\n"
@@ -2391,11 +3475,66 @@ int main(int argc, char** argv) {
                   << "  per-epoch LAMBDA: attempts=" << fl.diagnostics.lambda_ambiguity_attempts
                   << ", fixed_epochs=" << fl_fixed << "/" << ne << " ("
                   << (ne > 0 ? 100.0 * double(fl_fixed) / double(ne) : 0.0)
-                  << "% fix-rate), best_ratio=" << fl.diagnostics.lambda_ambiguity_ratio << "\n"
+                  << "% fix-rate), best_ratio=" << fl.diagnostics.lambda_ambiguity_ratio
+                  << ", stale_candidates_filtered="
+                  << fl.diagnostics.lambda_stale_candidates_filtered
+                  << ", joint_marginal_failures="
+                  << fl.diagnostics.lambda_joint_marginal_failures << "\n"
                   << "  partial AR: " << (config.use_fixed_lag_partial_lambda ? "on" : "off")
                   << " (min_fraction=" << config.fixed_lag_partial_lambda_min_fraction
                   << ", min_fixed=" << config.min_fixed_ambiguities
-                  << ", max_std_cycles=" << config.partial_ar_max_std_cycles << ")\n"
+                   << ", max_std_cycles=" << config.partial_ar_max_std_cycles
+                   << ", ratio_impact_monitor="
+                   << (config.monitor_ratio_impact_partial_ar ? "on" : "off")
+                   << ", disjoint_ar_shadow="
+                   << (config.monitor_disjoint_constellation_ar ? "on" : "off")
+                   << ", conditional_mf_shadow="
+                   << (config.monitor_conditional_multiband_ar ? "on" : "off")
+                   << ", multiepoch_ar_shadow="
+                   << (config.monitor_multiepoch_ar ? "on" : "off")
+                   << ", clock_resilient_temporal_shadow="
+                   << (config.monitor_clock_resilient_temporal_carrier ? "on" : "off")
+                   << ", predicted_ddpr_quality_shadow="
+                   << (config.monitor_predicted_ddpr_quality ? "on" : "off")
+                   << ", predicted_ddpr_bias_state_shadow="
+                   << (config.monitor_predicted_ddpr_bias_state ? "on" : "off")
+                   << ", ddpr_gnc_shadow="
+                   << (config.monitor_ddpr_gnc ? "on" : "off")
+                   << " (counterfactual_attempts="
+                   << fl.diagnostics.ddpr_gnc_counterfactual_attempts
+                   << ", successes="
+                   << fl.diagnostics.ddpr_gnc_counterfactual_successes << ')'
+                   << ", candidate_integrity_shadow="
+                   << (config.monitor_candidate_integrity_witness ? "on" : "off")
+                   << " (evaluated="
+                   << fl.diagnostics.candidate_integrity_witness_evaluated
+                   << ", passed="
+                   << fl.diagnostics.candidate_integrity_witness_passes << ')'
+                   << ", satellite_quarantine_shadow="
+                   << (config.monitor_satellite_quarantine_witness ? "on" : "off")
+                   << " (satellites="
+                   << fl.diagnostics.satellite_quarantine_witness_satellites
+                   << ", candidates="
+                   << fl.diagnostics.satellite_quarantine_candidates << ')'
+                   << ", selective_arc_restart="
+                   << (config.use_selective_arc_restart ? "on" : "off")
+                   << " (monitor="
+                   << (config.monitor_selective_arc_restart_candidates ? "on" : "off")
+                   << ", detection_epochs="
+                   << fl.diagnostics.selective_arc_restart_detection_epochs
+                   << ", candidates="
+                   << fl.diagnostics.selective_arc_restart_candidate_satellites
+                   << ", applied="
+                   << fl.diagnostics.selective_arc_restart_applied_arcs
+                   << ", skipped_fixed="
+                   << fl.diagnostics.selective_arc_restart_skipped_fixed
+                   << ", skipped_thrash="
+                   << fl.diagnostics.selective_arc_restart_skipped_thrash
+                   << ", skipped_cap="
+                   << fl.diagnostics.selective_arc_restart_skipped_cap
+                   << ", skipped_no_arc="
+                   << fl.diagnostics.selective_arc_restart_skipped_no_arc << ')'
+                   << ")\n"
                   << "  IMU ratio aperture: " << (args.imu_ratio_aperture ? "on" : "off")
                   << " (accepted=" << fl.diagnostics.imu_aided_ratio_accepts
                   << ", rejected=" << fl.diagnostics.imu_aided_ratio_rejects
@@ -2436,6 +3575,8 @@ int main(int argc, char** argv) {
                   << ", low:" << config.adaptive_ratio_nsat_low << ")\n"
                   << "  external Doppler-DR SSE: "
                   << (config.use_external_doppler_dr_validation ? "on" : "off")
+                  << ", shadow="
+                  << (config.monitor_external_doppler_dr ? "on" : "off")
                   << " (accepted=" << fl.diagnostics.external_doppler_dr_accepts
                   << ", rejected=" << fl.diagnostics.external_doppler_dr_rejects
                   << ", unavailable=" << fl.diagnostics.external_doppler_dr_unavailable
@@ -2445,7 +3586,8 @@ int main(int argc, char** argv) {
                   << "  NHC/ZUPT: nhc=" << (args.use_nhc ? "on" : "off")
                   << " (applied " << fl.diagnostics.nhc_epochs << " epochs), zupt="
                   << (args.use_zupt ? "on" : "off") << " (applied " << fl.diagnostics.zupt_epochs
-                  << " epochs)\n"
+                  << " epochs), shadow="
+                  << (args.motion_constraint_shadow ? "on" : "off") << "\n"
                   << "  quality-gates: " << (args.gates ? "on" : "off")
                   << " (fixing suppressed on " << fl.diagnostics.quality_gated_epochs
                   << " epochs)\n"
@@ -2460,14 +3602,34 @@ int main(int argc, char** argv) {
                   << ", min_sat=" << config.continuous_unfix_min_satellites
                   << ", max_gdop=" << config.continuous_unfix_max_gdop
                   << ", max_fde_fraction="
-                  << config.continuous_unfix_max_fde_reject_fraction << ")\n"
+                  << config.continuous_unfix_max_fde_reject_fraction
+                  << ", anchor_gate="
+                  << (config.continuous_unfix_require_ddpr_anchor_disagreement
+                          ? "on"
+                          : "off")
+                  << ", anchor_min_gap_m="
+                  << config.continuous_unfix_anchor_min_gap_m
+                  << ", anchor_allows="
+                  << fl.diagnostics.ambiguity_continuous_unfix_anchor_allows
+                  << ", anchor_skips="
+                  << fl.diagnostics.ambiguity_continuous_unfix_anchor_skips
+                  << ")\n"
                   << "  CMC screening: " << (args.cmc ? "on" : "off")
                   << " (jump_resets=" << fl.diagnostics.code_minus_carrier_jump_resets
                   << ", level_exclusions=" << fl.diagnostics.code_minus_carrier_level_exclusions
                   << ", cmc_ref=" << (args.cmc_ref ? "on" : "off")
                   << ", ref_avoided=" << fl.diagnostics.cmc_ref_avoided_count
                   << ")\n"
+                  << "  Geometry-free slip reset: "
+                  << (args.gf_slip_reset ? "on" : "off")
+                  << " (confirmed_resets="
+                  << fl.diagnostics.geometry_free_cycle_slip_resets
+                  << ", gross_spp_demotions="
+                  << fl.diagnostics.geometry_free_fix_guard_demotions
+                  << ")\n"
                   << "  CP-hold/sanity FSM: " << (args.cp_hold ? "on" : "off")
+                  << ", float_recovery="
+                  << (config.use_cp_hold_float_recovery ? "on" : "off")
                   << " (triggers=" << fl.diagnostics.cp_hold_triggers
                   << ", epochs_held=" << fl.diagnostics.cp_hold_epochs_held
                   << ", anchor_releases=" << fl.diagnostics.cp_hold_anchor_releases
@@ -2495,7 +3657,13 @@ int main(int argc, char** argv) {
                   << ", anchor_demotions=" << fl.diagnostics.fix_plausibility_anchor_demotions
                   << ", hold_skips=" << fl.diagnostics.fix_plausibility_hold_skips
                   << ", surplus_crosscheck=" << (args.fix_demote_surplus_crosscheck ? "on" : "off")
+                  << ", surplus_anchor_reprieve="
+                  << (args.fix_demote_surplus_anchor_reprieve ? "on" : "off")
                   << ", surplus_reprieves=" << fl.diagnostics.fix_plausibility_surplus_reprieves
+                  << ", spp_model_reprieve="
+                  << (args.fix_demote_spp_model_reprieve ? "on" : "off")
+                  << ", spp_model_reprieves="
+                  << fl.diagnostics.fix_plausibility_spp_model_reprieves
                   << ", distance_m=" << config.fix_demote_distance_m
                   << ", anchor=" << (args.fix_demote_anchor ? "on" : "off")
                   << ", anchor_distance_m=" << config.fix_demote_anchor_distance_m
@@ -2516,6 +3684,10 @@ int main(int argc, char** argv) {
                   << ", fails=" << fl.diagnostics.surplus_validation_fails
                   << ", insufficient_surplus=" << fl.diagnostics.surplus_validation_insufficient_surplus
                   << ", rescued_epochs=" << fl.diagnostics.surplus_validation_rescued_epochs
+                  << ", separation_rejects="
+                  << fl.diagnostics.surplus_validation_separation_rejects
+                  << ", quality_rejects="
+                  << fl.diagnostics.surplus_validation_quality_rejects
                   << ", vetoed_epochs=" << fl.diagnostics.surplus_validation_vetoed_epochs
                   << ", min_n=" << config.surplus_validation_min_surplus_satellites
                   << ", aperture_cycles(lt1/1to2/gt2)=" << config.surplus_validation_aperture_pdop_lt1_cycles

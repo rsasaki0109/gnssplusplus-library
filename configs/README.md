@@ -11,4 +11,9 @@ or credentials. Benchmark profiles without the `.example` marker are pinned
 reproduction inputs and should only change with their documented acceptance
 criteria.
 
+`examples/fuse.example.toml` is the compact configuration surface for
+`gnss fuse --config`. Command-line values override its `[gnss_fuse]` defaults.
+`examples/solve.example.toml` provides the same pattern for `gnss solve` and
+its `[gnss_solve]` table.
+
 Camera fixtures and other non-configuration assets live under `test_data/`.

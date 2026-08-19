@@ -90,6 +90,31 @@ TEST(ImuCsvTest, MissingFileProducesError) {
     EXPECT_FALSE(result.error.empty());
 }
 
+TEST(ImuCsvTest, ParsesRtklibExplorerSelfFormattedCsv) {
+    const auto path =
+        std::filesystem::temp_directory_path() / "libgnss_imu_rtklibexplorer_test.csv";
+    writeFile(
+        path,
+        "% UNIX time(s),    accX(g),  accY(g),  accZ(g),  gyroX(r/s),gyroY(r/s),"
+        "gyroZ(r/s),magX(uT),magY(uT),magZ(uT), unused\n"
+        "1752003261.8540001,0.1,-0.2,1.0,-0.01,0.02,-0.03,0,0,0,0\n");
+
+    ImuSeries series;
+    const auto result = loadRtklibExplorerImuCsv(path.string(), series);
+    std::filesystem::remove(path);
+
+    ASSERT_TRUE(result.ok) << result.error;
+    ASSERT_EQ(series.samples.size(), 1u);
+    EXPECT_EQ(series.samples[0].time.week, 2374);
+    EXPECT_NEAR(series.samples[0].time.tow, 243261.854, 1e-6);
+    EXPECT_NEAR(series.samples[0].accel_raw.x(), 0.980665, 1e-12);
+    EXPECT_NEAR(series.samples[0].accel_raw.y(), -1.96133, 1e-12);
+    EXPECT_NEAR(series.samples[0].accel_raw.z(), 9.80665, 1e-12);
+    EXPECT_NEAR(series.samples[0].gyro_raw_radps.x(), -0.01, 1e-12);
+    EXPECT_NEAR(series.samples[0].gyro_raw_radps.y(), 0.02, 1e-12);
+    EXPECT_NEAR(series.samples[0].gyro_raw_radps.z(), -0.03, 1e-12);
+}
+
 TEST(ImuAxisConventionTest, IdentityMappingIsPassthrough) {
     ImuAxisConvention convention;
     const Eigen::Vector3d raw(1.0, 2.0, 3.0);
@@ -128,6 +153,50 @@ TEST(ImuSeriesTest, GetSamplesFiltersByInclusiveTimeRange) {
     ASSERT_EQ(filtered.size(), 3u);
     EXPECT_NEAR(filtered.front().time.tow, 101.0, 1e-9);
     EXPECT_NEAR(filtered.back().time.tow, 103.0, 1e-9);
+}
+
+TEST(ImuSeriesTest, ShiftTimeShiftsAllSamples) {
+    ImuSeries series;
+    for (int i = 0; i < 3; ++i) {
+        ImuSample sample;
+        sample.time = GNSSTime(2000, 100.0 + i);
+        series.samples.push_back(sample);
+    }
+    series.shiftTime(0.25);
+    EXPECT_NEAR(series.samples[0].time.tow, 100.25, 1e-12);
+    EXPECT_NEAR(series.samples[2].time.tow, 102.25, 1e-12);
+    series.shiftTime(-0.5);
+    EXPECT_NEAR(series.samples[0].time.tow, 99.75, 1e-12);
+    EXPECT_EQ(series.samples[0].time.week, 2000);
+}
+
+TEST(ImuSeriesTest, ShiftTimeHandlesWeekRollover) {
+    ImuSeries series;
+    ImuSample near_end;
+    near_end.time = GNSSTime(2000, 604799.9);
+    ImuSample near_start;
+    near_start.time = GNSSTime(2000, 0.05);
+    series.samples.push_back(near_end);
+    series.samples.push_back(near_start);
+
+    series.shiftTime(0.2);  // pushes near_end across the rollover
+    EXPECT_EQ(series.samples[0].time.week, 2001);
+    EXPECT_NEAR(series.samples[0].time.tow, 0.1, 1e-6);
+
+    series.shiftTime(-0.3);  // pulls near_start (now 0.25) back across
+    EXPECT_EQ(series.samples[0].time.week, 2000);
+    EXPECT_NEAR(series.samples[0].time.tow, 604799.8, 1e-6);
+    EXPECT_EQ(series.samples[1].time.week, 1999);
+}
+
+TEST(ImuSeriesTest, ShiftTimeZeroIsIdentity) {
+    ImuSeries series;
+    ImuSample sample;
+    sample.time = GNSSTime(2000, 123.456);
+    series.samples.push_back(sample);
+    series.shiftTime(0.0);
+    EXPECT_EQ(series.samples[0].time.week, 2000);
+    EXPECT_DOUBLE_EQ(series.samples[0].time.tow, 123.456);
 }
 
 }  // namespace

@@ -3,6 +3,7 @@
 #include <libgnss++/core/types.hpp>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 
 using namespace libgnss;
 
@@ -78,6 +79,20 @@ TEST_F(TypesTest, Constants) {
     EXPECT_LT(constants::WGS84_F, 1.0);
 }
 
+TEST_F(TypesTest, PropagatedSolutionIsValidWithoutCurrentSatellitesButNeverFixed) {
+    PositionSolution solution;
+    solution.status = SolutionStatus::PROPAGATED;
+    solution.position_ecef = Vector3d(1.0, 2.0, 3.0);
+    solution.num_satellites = 0;
+
+    EXPECT_TRUE(solution.isValid());
+    EXPECT_FALSE(solution.isFixed());
+
+    solution.position_ecef.x() =
+        std::numeric_limits<double>::quiet_NaN();
+    EXPECT_FALSE(solution.isValid());
+}
+
 TEST_F(TypesTest, SolutionFileRoundTripsFgoQualityColumns) {
     Solution solution;
     PositionSolution sol;
@@ -147,4 +162,48 @@ TEST_F(TypesTest, SolutionLoaderMapsNamedOptionalColumns) {
     EXPECT_DOUBLE_EQ(sol.rtk_update_normalized_innovation_squared, 7.0);
     EXPECT_DOUBLE_EQ(sol.rtk_update_normalized_innovation_squared_per_observation, 0.35);
     EXPECT_EQ(sol.rtk_update_rejected_by_innovation_gate, 1);
+}
+
+TEST_F(TypesTest, SolutionLoaderParsesRtklibPositionVelocityAndCovariance) {
+    const std::filesystem::path path =
+        std::filesystem::path(GNSSPP_BINARY_DIR) / "solution_rtklib_input_test.pos";
+    std::filesystem::remove(path);
+
+    {
+        std::ofstream file(path);
+        ASSERT_TRUE(file.is_open());
+        file << "%  GPST latitude(deg) longitude(deg) height(m) Q ns "
+                "sdn(m) sde(m) sdu(m) sdne(m) sdeu(m) sdun(m) age(s) ratio "
+                "vn(m/s) ve(m/s) vu(m/s) sdvn sdve sdvu sdvne sdveu sdvun\n";
+        file << "2025/07/08 19:34:18.499 40.0 -105.0 1600.0 1 21 "
+                "0.01 0.02 0.03 -0.004 0.005 -0.006 0.0 4.5 "
+                "1.0 2.0 3.0 0.1 0.2 0.3 -0.04 0.05 -0.06\n";
+    }
+
+    Solution loaded;
+    ASSERT_TRUE(loaded.loadFromFile(path.string()));
+    std::filesystem::remove(path);
+
+    ASSERT_EQ(loaded.solutions.size(), 1u);
+    const PositionSolution& sol = loaded.solutions.front();
+    EXPECT_EQ(sol.time.week, 2374);
+    EXPECT_NEAR(sol.time.tow, 243258.499, 1e-6);
+    EXPECT_EQ(sol.status, SolutionStatus::FIXED);
+    EXPECT_EQ(sol.num_satellites, 21);
+    EXPECT_DOUBLE_EQ(sol.ratio, 4.5);
+    EXPECT_NEAR(sol.position_geodetic.latitude, 40.0 * M_PI / 180.0, 1e-12);
+    EXPECT_NEAR(sol.position_geodetic.longitude, -105.0 * M_PI / 180.0, 1e-12);
+    EXPECT_TRUE(sol.position_covariance.allFinite());
+    EXPECT_NEAR(sol.position_covariance.trace(), 0.01 * 0.01 + 0.02 * 0.02 +
+                                                     0.03 * 0.03,
+                1e-12);
+    ASSERT_TRUE(sol.has_velocity);
+    EXPECT_NEAR(sol.velocity_ned.x(), 1.0, 1e-12);
+    EXPECT_NEAR(sol.velocity_ned.y(), 2.0, 1e-12);
+    EXPECT_NEAR(sol.velocity_ned.z(), -3.0, 1e-12);
+    EXPECT_TRUE(sol.velocity_ecef.allFinite());
+    EXPECT_NEAR(sol.velocity_ecef.norm(), std::sqrt(14.0), 1e-12);
+    EXPECT_NEAR(sol.velocity_covariance.trace(), 0.1 * 0.1 + 0.2 * 0.2 +
+                                                     0.3 * 0.3,
+                1e-12);
 }

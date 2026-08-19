@@ -1,6 +1,7 @@
 #pragma once
 
 #include <deque>
+#include <limits>
 #include <memory>
 #include <vector>
 
@@ -131,6 +132,11 @@ public:
         // found apparently accepted carrier updates could make the augmented
         // covariance indefinite. Enable only for explicit research ablation.
         bool tight_dd_commit_carrier_updates = false;
+        // SSE-PAR external-solution contract: do not feed FLOAT positions
+        // back into the independent INS predictor.
+        bool position_updates_require_fixed = false;
+        double tight_dd_sse_fixed_anchor_max_age_s = 2.0;
+        double tight_dd_sse_fixed_anchor_max_nis_per_observation = 10.0;
 
         // Recovery from a gate "lockout spiral": a hard NIS gate is only
         // safe against an *isolated* bad epoch. If the true state has
@@ -163,6 +169,7 @@ public:
     struct TightlyCoupledDDResult {
         dd_imu_bridge::UpdateResult update;
         dd_imu_bridge::PartialARResult partial_ar;
+        dd_imu_bridge::SSEPartialARResult sse_partial_ar;
         dd_imu_bridge::SoftResetAction reset_action =
             dd_imu_bridge::SoftResetAction::REJECTED;
     };
@@ -179,6 +186,7 @@ public:
 
     bool isInitialized() const { return initialized_; }
     bool isOriginSet() const { return origin_set_; }
+    bool hasHealthyFixedAnchor() const;
     Eigen::Matrix3d ecefToLocalEnuRotation() const;
     /** @brief True once a heading latch has been made (see class doc: this alone does NOT mean the
      *  latch is trustworthy -- use isHeadingConverged() for a real health signal). */
@@ -229,6 +237,17 @@ public:
      */
     double getVelocityNisEma() const { return velocity_nis_ema_; }
 
+    /** Position-state injection from the most recent accepted GNSS position
+     * update, before any same-epoch velocity update. Used by offline
+     * GNSS/IMU time-offset scoring; false means no position update applied.
+     */
+    bool lastGnssPositionUpdateApplied() const {
+        return last_gnss_position_update_applied_;
+    }
+    const Eigen::Vector3d& lastGnssPositionCorrectionEnu() const {
+        return last_gnss_position_correction_enu_;
+    }
+
 private:
     Config config_;
     FusionState state_;
@@ -248,6 +267,9 @@ private:
 
     int position_consecutive_gate_rejections_ = 0;
     int velocity_consecutive_gate_rejections_ = 0;
+    bool last_gnss_position_update_applied_ = false;
+    Eigen::Vector3d last_gnss_position_correction_enu_ =
+        Eigen::Vector3d::Zero();
     std::unique_ptr<dd_imu_bridge::DDIMUBridge> dd_imu_bridge_;
     Eigen::Matrix<double, 15, 15> dd_transition_since_update_ =
         Eigen::Matrix<double, 15, 15>::Identity();
@@ -259,6 +281,10 @@ private:
     double velocity_nis_ema_ = 0.0;
     int consecutive_bad_heading_epochs_ = 0;
     int recovery_cooldown_remaining_epochs_ = 0;
+    bool has_fixed_anchor_ = false;
+    GNSSTime last_fixed_anchor_time_;
+    double last_fixed_anchor_nis_per_observation_ =
+        std::numeric_limits<double>::infinity();
 
     void initializeFromStaticWindow();
     bool detectStationary() const;

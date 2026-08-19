@@ -6,6 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "scripts" / "analysis"))
 
 import analyze_ppc_wrong_fix_residuals as audit  # noqa: E402
 import evaluate_ppc_residual_integrity_policy as policy_audit  # noqa: E402

@@ -4,23 +4,23 @@ Experimental workflows and evaluation results.
 
 ## PPP Ambiguity Resolution
 
-See `experiments/ppp_ar/` for PPP-AR experiment configurations and lane-level results.
+See `scripts/experiments/ppp_ar/` for PPP-AR experiment configurations and lane-level results.
 
 Keep PPP-AR, CLAS, and MADOCA strategy sweeps in the experiment lane until the
 behavior is stable enough to promote into a normal CLI or solver default. The
 lane is allowed to try competing policies, broad strategy catalogs, and
 reference-oracle comparisons; the stable solver path is not.
 
-Use `experiments/ppp_ar/run_experiments.py` for CLAS PPP policy sweeps:
+Use `scripts/experiments/ppp_ar/run_experiments.py` for CLAS PPP policy sweeps:
 
 ```bash
-python3 experiments/ppp_ar/run_experiments.py \
-  --config-toml experiments/ppp_ar/input.example.toml \
+python3 scripts/experiments/ppp_ar/run_experiments.py \
+  --config-toml scripts/experiments/ppp_ar/input.example.toml \
   --output-json output/ppp_ar_experiments/results.json \
   --markdown-out output/ppp_ar_experiments/results.md
 ```
 
-Use `experiments/ppp_ar/suite.example.toml` when a result is being evaluated
+Use `scripts/experiments/ppp_ar/suite.example.toml` when a result is being evaluated
 for promotion. A single-case win is a diagnostic result, not a promotion
 candidate.
 
@@ -50,7 +50,7 @@ Promotion should be staged:
 
 | Stage | Meaning | Allowed next step |
 |---|---|---|
-| `exploratory` | The arm does not repeatedly beat the control or has unclear tradeoffs. | Keep it under `experiments/` or delete it. |
+| `exploratory` | The arm does not repeatedly beat the control or has unclear tradeoffs. | Keep it under `scripts/experiments/` or delete it. |
 | `extended_trial` | The arm passes in most cases but not all. | Add cases, diagnostics, or a narrower env/config-gated trial. |
 | `trial_candidate` | The arm passes the shared gates across the suite. | Wire an opt-in CLI/profile flag with a dedicated sign-off. |
 | `promotion_candidate` | The arm passes the suite and improves solver-specific outcomes such as fixed epochs. | Consider default-on only after the stable sign-off passes. |

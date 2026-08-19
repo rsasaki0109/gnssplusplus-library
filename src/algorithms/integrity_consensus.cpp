@@ -352,7 +352,7 @@ bool RealtimeFixIntegrityGate::baseConfidenceMatches(
     const PositionSolution& solution) const {
     if (!solution.isFixed()) return false;
     // Field-for-field port of should_demote()'s satellite/ratio gate in
-    // scripts/apply_ppc_status_demotion.py: demote when the satellite count
+    // scripts/experiments/ppc/apply_ppc_status_demotion.py: demote when the satellite count
     // is below the hard floor, or the satellite count is at/below the
     // low-satellite ceiling with a weak ambiguity ratio.
     const bool low_satellites =

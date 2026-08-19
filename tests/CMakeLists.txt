@@ -32,9 +32,19 @@ if(GTest_FOUND)
         test_ppp_correction_contract.cpp
         test_rtk_ar_evaluation.cpp
         test_rtk_ar_selection.cpp
+        test_safe_fix_state_machine.cpp
+          test_fixed_quality_gate.cpp
+          test_fix_failure_budget.cpp
+    test_inertial_fix_evidence.cpp
+    test_disjoint_satellite_fix_evidence.cpp
+        test_disjoint_constellation_partition.cpp
+        test_causal_ambiguity_arc.cpp
         test_nlos_weights.cpp
         test_float_trust_policy.cpp
         test_rtk_slip_detection.cpp
+        test_rtk_adaptive_noise.cpp
+        test_rtk_doppler_rows.cpp
+        test_rtk_float_stabilizer.cpp
         test_rtk_measurement.cpp
         test_rtk_update.cpp
         test_rtk_ins_time_update.cpp
@@ -121,6 +131,10 @@ if(GTest_FOUND)
         gnss_fgo
         gnss_fuse
         gnss_live
+        gnss_pos_pd
+        gnss_pos_pdc
+        gnss_pos_vel_pd
+        gnss_pos_vel_pdc
         gnss_ppp
         gnss_replay
         gnss_rinex_info
@@ -167,6 +181,15 @@ if(GTest_FOUND)
     # Add test to CTest
     add_test(NAME run_tests COMMAND gnss_run_tests)
     add_test(
+        NAME clas_outage_legacy_kill_switch
+        COMMAND gnss_run_tests
+                --gtest_filter=PPPClasTest.MrtklibOutageResetKillSwitchRestoresLegacyOverflow
+    )
+    set_tests_properties(
+        clas_outage_legacy_kill_switch
+        PROPERTIES ENVIRONMENT "GNSS_PPP_CLAS_OUTAGE_RESET_PARITY=0"
+    )
+    add_test(
         NAME madoca_parity_tests
         COMMAND gnss_madoca_parity_tests
                 --gtest_filter=*MadocaParity*:MadocaBridgeConfig.*
@@ -177,12 +200,20 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_benchmark_scripts.py
     )
     add_test(
+        NAME python_fgo_arc_lifecycle_audit_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_fgo_arc_lifecycle_audit.py
+    )
+    add_test(
+        NAME python_fgo_external_dr_witness_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_fgo_external_dr_witness.py
+    )
+    add_test(
         NAME python_ppc_integrity_policy_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_ppc_integrity_policy_ci.py
     )
     add_test(
         NAME python_ppc_goal_completion_audit_tests
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/verify_ppc_goal_completion.py --check-only
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/experiments/ppc/verify_ppc_goal_completion.py --check-only
     )
     add_test(
         NAME python_cli_tests
@@ -207,6 +238,10 @@ if(GTest_FOUND)
     add_test(
         NAME python_madoca_solution_diff_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_madoca_solution_diff.py
+    )
+    add_test(
+        NAME python_madoca_release_matrix_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_madoca_release_matrix.py
     )
     add_test(
         NAME python_madoca_residual_component_diff_tests
@@ -373,6 +408,18 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_packaging.py
     )
     add_test(
+        NAME python_release_contract_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_release_contracts.py
+    )
+    add_test(
+        NAME python_growth_snapshot_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_growth_snapshot.py
+    )
+    add_test(
+        NAME python_community_health_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_community_health.py
+    )
+    add_test(
         NAME python_bindings_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_python_bindings.py
     )
@@ -389,8 +436,34 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_docs_site.py
     )
     add_test(
+        NAME python_use_case_guide_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_use_case_guides.py
+    )
+    add_test(
         NAME python_experiment_runner_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_experiment_runner.py
+    )
+    add_test(
+        NAME python_search_imu_time_offset_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_search_imu_time_offset.py
+    )
+    add_test(
+        NAME python_gnss_fuse_cli_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_gnss_fuse_cli.py
+    )
+    add_test(
+        NAME python_gnss_solve_cli_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_gnss_solve_cli.py
+    )
+    add_test(
+        NAME python_observable_native_cli_contract_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_observable_native_cli_contracts.py
+    )
+    set_tests_properties(
+        python_gnss_fuse_cli_tests
+        python_gnss_solve_cli_tests
+        python_observable_native_cli_contract_tests
+        PROPERTIES ENVIRONMENT "GNSSPP_BINARY_DIR=${CMAKE_BINARY_DIR}"
     )
     set_tests_properties(
         python_bindings_tests
@@ -413,6 +486,9 @@ if(GTest_FOUND)
 
     set(GNSSPP_CORE_TESTS
         run_tests
+        clas_outage_legacy_kill_switch
+        python_fgo_arc_lifecycle_audit_tests
+        python_fgo_external_dr_witness_tests
         python_ppc_integrity_policy_tests
         python_ppc_goal_completion_audit_tests
         python_artifact_manifest_contract_validator_tests
@@ -443,6 +519,14 @@ if(GTest_FOUND)
         python_spp_iteration_dump_summary_tests
         python_web_http_ux_tests
         python_experiment_runner_tests
+        python_gnss_fuse_cli_tests
+        python_gnss_solve_cli_tests
+        python_observable_native_cli_contract_tests
+        python_search_imu_time_offset_tests
+        python_use_case_guide_tests
+        python_release_contract_tests
+        python_growth_snapshot_tests
+        python_community_health_tests
     )
     set(GNSSPP_EXTENDED_TESTS
         python_packaging_tests

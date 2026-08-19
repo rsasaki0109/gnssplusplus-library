@@ -11,9 +11,6 @@ struct PPPEnvOverrides {
     // GNSS_PPP_MADOCA_ALLOW_PARTIAL_SSR: accept incomplete MADOCA SSR epochs
     // when set exactly to "1". Default false.
     bool madoca_allow_partial_ssr = false;
-    // GNSS_PPP_MADOCA_SSR_REPLAY: select native MADOCA L6 SSR corrections from
-    // per-PRN replay snapshots when set exactly to "1". Default false.
-    bool madoca_ssr_replay = false;
     // GNSS_PPP_REQUIRE_SSR_ORBIT: drop satellites missing SSR orbit
     // corrections when set to a value whose first char is not '0'. Default false.
     bool require_ssr_orbit = false;
@@ -78,17 +75,12 @@ struct PPPEnvOverrides {
     // GNSS_PPP_MADOCA_GLONASS: include GLONASS in coherent MADOCA unless set
     // exactly to "0". Default true.
     bool madoca_glonass = true;
-    // GNSS_PPP_MADOCA_GLONASS_PHASE: allow GLONASS phase rows in MADOCA when
-    // set exactly to "1". Default false.
-    bool madoca_glonass_phase = false;
+    // GNSS_PPP_MADOCA_GLONASS_PHASE: allow GLONASS phase rows in coherent
+    // MADOCA. Default true for MADOCALIB parity; set exactly to "0" to opt out.
+    bool madoca_glonass_phase = true;
     // GNSS_PPP_MADOCA_LOW_ELEV: admit coherent MADOCA observations down to the
     // MADOCALIB 10 degree mask unless set exactly to "0". Default true.
     bool madoca_low_elev = true;
-    // GNSS_PPP_MADOCA_GALILEO_GATE: apply MADOCALIB Galileo broadcast
-    // ephemeris admission semantics in coherent MADOCA when set exactly to "1",
-    // or when GNSS_PPP_MADOCA_EARLY_WINDOW is enabled. Default follows
-    // GNSS_PPP_MADOCA_EARLY_WINDOW.
-    bool madoca_galileo_gate = false;
     // GNSS_PPP_MADOCA_BIAS_IDENTITY: preserve MADOCA SSR code/phase-bias
     // signal identity instead of collapsed RTCM band ids unless set exactly
     // to "0". Exact identity is required for distinct BDS-3 B2a biases.

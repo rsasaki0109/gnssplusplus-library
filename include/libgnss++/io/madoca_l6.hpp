@@ -151,14 +151,6 @@ int decodeMadocaL6eFilesToProducts(const std::vector<std::string>& files,
                                    int gps_week,
                                    libgnss::SSRProducts& products);
 
-// Decode MADOCA L6E files as independent PRN streams and emit full per-stream
-// snapshots whenever any SSR component timestamp changes. This mirrors
-// MADOCALIB's per-epoch update_qzssl6e() replay more closely than the legacy
-// whole-file orbit/clock snapshot loader.
-int decodeMadocaL6eFilesToProductsReplay(const std::vector<std::string>& files,
-                                         int gps_week,
-                                         libgnss::SSRProducts& products);
-
 // Write the materialized native SSRProducts view used by MADOCA PPP. This is a
 // diagnostic boundary dump: it records the satellite key, correction epoch,
 // component reference times, IODs, orbit/clock values, and code/phase bias
@@ -172,7 +164,6 @@ int writeMadocaMaterializationCsv(const libgnss::SSRProducts& products,
 // <0 means the output file could not be opened.
 int writeMadocaL6eMaterializationCsv(const std::vector<std::string>& files,
                                      int gps_week,
-                                     const std::string& output_path,
-                                     bool replay_mode);
+                                     const std::string& output_path);
 
 }  // namespace libgnss::io

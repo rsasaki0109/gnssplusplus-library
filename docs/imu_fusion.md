@@ -41,7 +41,7 @@ Key flags: `--lever-arm x,y,z` (IMU→antenna, body FLU), `--zupt`/`--no-zupt`
 ## IMU input
 
 `imu.csv` is parsed by header name (whitespace/case/punctuation-insensitive),
-matching the convention of `scripts/analyze_ppc_imu_coverage.py`:
+matching the convention of `scripts/analysis/analyze_ppc_imu_coverage.py`:
 GPS TOW + week, accel in m/s², angular rate in deg/s (converted to rad/s at
 load). Body-axis convention is explicit (`ImuAxisConvention`), defaulting to
 FLU/Z-up, which is what the PPC-Dataset IMU actually logs (verified: stationary
@@ -62,6 +62,17 @@ Acc Z ≈ +9.81, despite the upstream README saying FRD).
 | Augmented INS/ambiguity update | `src/fusion/dd_imu_bridge.cpp` |
 | Doppler LS velocity (feeds SPP/RTK solutions) | `src/algorithms/spp_velocity.cpp` |
 | CLI | `apps/native/gnss_fuse.cpp` (registered as `fuse` in `apps/gnss.py`) |
+
+`gnss fuse --help` intentionally shows only everyday inputs, outputs, and
+presets. The accepted tuning and research flags remain backward-compatible
+and are listed under `gnss fuse --help-advanced`. Prefer `--navi776-tc`
+instead of spelling out its component tight-coupling flags.
+
+For repeatable runs, put defaults in a flat TOML `[gnss_fuse]` table and pass
+`--config <path>`. Keys may use `snake_case` or `kebab-case`; vector values
+such as `lever_arm` and `base_ecef` use three-element arrays. Command-line
+options are applied after the file regardless of where `--config` appears, so
+they are reliable one-run overrides. See `configs/examples/fuse.example.toml`.
 
 The fusion deliberately does not reuse `algorithms/kalman.hpp`: its
 RTKLIB-style "active state" convention (`x[i] != 0`) is incompatible with an
@@ -108,7 +119,7 @@ baseline versus safe-shadow p50/p95/p99 ECEF error was
 1.171/3.480/27.031 m versus 1.123/3.480/30.447 m; 301 epochs used the
 carrier-to-code fallback, partial AR and soft resets were both zero. This is
 near-neutral safety evidence, not adoption evidence; use
-`experiments/run_tight_dd_imu_ablation.py` for the full-six and blocked-span
+`scripts/experiments/run_tight_dd_imu_ablation.py` for the full-six and blocked-span
 comparison.
 
 The complementary RTK-hosted tightly-coupled path is specified in

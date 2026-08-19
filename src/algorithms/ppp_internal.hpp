@@ -2,6 +2,7 @@
 
 #include <libgnss++/algorithms/ppp.hpp>
 #include <libgnss++/algorithms/ppp_utils.hpp>
+#include <libgnss++/core/constants.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -21,6 +22,45 @@ inline int filterIterationCount(bool madoca_per_frequency_update,
         return 1;
     }
     return precise_products_loaded ? 3 : configured_iterations;
+}
+
+inline double geometryFreeSlipThresholdMeters(
+    bool madoca_per_frequency,
+    double configured_threshold_m) {
+    constexpr double kDefaultMinimumMeters = 0.5;
+    constexpr double kMadocalibMinimumMeters = 0.15;
+    return std::max(
+        configured_threshold_m,
+        madoca_per_frequency
+            ? kMadocalibMinimumMeters
+            : kDefaultMinimumMeters);
+}
+
+inline std::set<SignalType> geometryFreeSlippedSignals(
+    const std::map<SignalType, double>& previous_m,
+    const std::map<SignalType, double>& current_m,
+    double threshold_m) {
+    std::set<SignalType> slipped;
+    for (const auto& [signal, current] : current_m) {
+        const auto previous = previous_m.find(signal);
+        if (previous != previous_m.end() &&
+            std::isfinite(previous->second) &&
+            std::isfinite(current) &&
+            std::abs(current - previous->second) > threshold_m) {
+            slipped.insert(signal);
+        }
+    }
+    return slipped;
+}
+
+inline void clearCarrierIonospherePredictionHistory(
+    ppp_shared::PPPAmbiguityInfo& ambiguity) {
+    // A geometry-free discontinuity invalidates the carrier-derived temporal
+    // ionosphere delta along with the affected ambiguities. Applying that
+    // discontinuity to the ionosphere state before re-seeding the ambiguities
+    // double-counts the slip; MADOCALIB keeps the ionosphere state unchanged
+    // on the reset epoch and establishes a new carrier baseline instead.
+    ambiguity.has_last_carrier_ionosphere = false;
 }
 
 inline int perFrequencyArMinLockCount(bool madoca_per_frequency,
@@ -50,6 +90,34 @@ inline bool applyGpsL5MeasurementErrorFactor(
            (is_l5(primary_signal) || is_l5(secondary_signal));
 }
 
+inline bool madocaGalileoMwSupportsWideLaneAdmission(
+    GNSSSystem system,
+    double mw_double_difference_cycles,
+    int reference_sample_count,
+    int satellite_sample_count) {
+    constexpr int kMinimumSamples = 60;
+    constexpr double kMaximumFractionalCycles = 0.20;
+    return system == GNSSSystem::Galileo &&
+           reference_sample_count >= kMinimumSamples &&
+           satellite_sample_count >= kMinimumSamples &&
+           std::isfinite(mw_double_difference_cycles) &&
+           std::abs(
+               std::round(mw_double_difference_cycles) -
+               mw_double_difference_cycles) <
+               kMaximumFractionalCycles;
+}
+
+inline bool madocaHighAgreementRatioAccepted(bool madoca_per_frequency,
+                                             double ratio,
+                                             double threshold,
+                                             double matching_candidate_rate) {
+    constexpr double kRelativeTolerance = 0.01;
+    return ratio >= threshold ||
+           (madoca_per_frequency &&
+            matching_candidate_rate > 0.90 &&
+            ratio >= threshold * (1.0 - kRelativeTolerance));
+}
+
 inline bool alwaysRestoreArTrialState(PPPProcessor::PPPConfig::ARMethod method) {
     // MADOCALIB runs per-frequency EWL/WL/N1 constraints on xp/Pp, a copy of
     // the float filter.  The trial is never committed to rtk->x/P, including
@@ -57,20 +125,201 @@ inline bool alwaysRestoreArTrialState(PPPProcessor::PPPConfig::ARMethod method) 
     return method == PPPProcessor::PPPConfig::ARMethod::DD_PER_FREQ;
 }
 
+struct MadocaIonoConstraintInput {
+    SatelliteId satellite;
+    int state_index = -1;
+    double ionosphere_state_m = 0.0;
+    double delay_m = 0.0;
+    double std_m = 0.0;
+    double age_s = std::numeric_limits<double>::infinity();
+};
+
+struct MadocaIonoConstraintRow {
+    SatelliteId satellite;
+    int state_index = -1;
+    double target_m = 0.0;
+    double residual_m = 0.0;
+    double variance_m2 = 0.0;
+    double system_bias_m = 0.0;
+};
+
+inline int madocaIonoConstraintSystemSlot(GNSSSystem system) {
+    switch (system) {
+        case GNSSSystem::GPS: return 0;
+        case GNSSSystem::GLONASS: return 1;
+        case GNSSSystem::Galileo: return 2;
+        case GNSSSystem::QZSS: return 3;
+        default: return -1;
+    }
+}
+
+inline bool madocaIonoConstraintPositionGatePasses(
+    double horizontal_position_std_m,
+    double vertical_position_std_m) {
+    constexpr double kHorizontalThresholdM = 2.0;
+    constexpr double kVerticalThresholdM = 3.0;
+    // MADOCALIB applies L6D constraints while the previous position covariance
+    // is still loose. It stops only when both non-zero ENU standard deviations
+    // are below their convergence thresholds.
+    return !(
+        horizontal_position_std_m != 0.0 &&
+        vertical_position_std_m != 0.0 &&
+        horizontal_position_std_m < kHorizontalThresholdM &&
+        vertical_position_std_m < kVerticalThresholdM);
+}
+
+inline std::vector<MadocaIonoConstraintRow> buildMadocaIonoConstraintRows(
+    const std::vector<MadocaIonoConstraintInput>& inputs,
+    double horizontal_position_std_m,
+    double vertical_position_std_m) {
+    constexpr double kMaximumAgeSeconds = 300.0;
+    constexpr double kMaximumStdM = 1.0;
+    if (!madocaIonoConstraintPositionGatePasses(
+            horizontal_position_std_m, vertical_position_std_m)) {
+        return {};
+    }
+
+    std::array<double, 4> bias_sums{};
+    std::array<int, 4> bias_counts{};
+    const auto accepted = [&](const MadocaIonoConstraintInput& input) {
+        return madocaIonoConstraintSystemSlot(input.satellite.system) >= 0 &&
+               input.state_index >= 0 &&
+               std::isfinite(input.ionosphere_state_m) &&
+               std::isfinite(input.delay_m) &&
+               std::isfinite(input.std_m) &&
+               input.std_m <= kMaximumStdM &&
+               std::isfinite(input.age_s) &&
+               std::abs(input.age_s) <= kMaximumAgeSeconds;
+    };
+    for (const auto& input : inputs) {
+        if (!accepted(input)) {
+            continue;
+        }
+        const int slot = madocaIonoConstraintSystemSlot(input.satellite.system);
+        bias_sums[static_cast<size_t>(slot)] +=
+            input.delay_m - input.ionosphere_state_m;
+        ++bias_counts[static_cast<size_t>(slot)];
+    }
+
+    std::array<double, 4> system_biases{};
+    for (size_t slot = 0; slot < system_biases.size(); ++slot) {
+        if (bias_counts[slot] > 0) {
+            system_biases[slot] =
+                bias_sums[slot] / static_cast<double>(bias_counts[slot]);
+        }
+    }
+
+    std::vector<MadocaIonoConstraintRow> rows;
+    rows.reserve(inputs.size());
+    for (const auto& input : inputs) {
+        if (!accepted(input)) {
+            continue;
+        }
+        const int slot = madocaIonoConstraintSystemSlot(input.satellite.system);
+        const double system_bias = system_biases[static_cast<size_t>(slot)];
+        const double target = input.delay_m - system_bias;
+        rows.push_back({
+            input.satellite,
+            input.state_index,
+            target,
+            target - input.ionosphere_state_m,
+            input.std_m * input.std_m,
+            system_bias,
+        });
+    }
+    return rows;
+}
+
+inline Vector3d recenterPostfitReceiverPosition(
+    const Vector3d& corrected_receiver_position,
+    const Vector3d& prior_filter_position,
+    const Vector3d& updated_filter_position) {
+    // Precise corrections materialize the antenna phase-centre position at
+    // the epoch prior.  Only absolute positions should be recentered; a zero
+    // vector means the measurement model must obtain its receiver position
+    // from the filter state.
+    if (corrected_receiver_position.norm() <= 1000.0) {
+        return corrected_receiver_position;
+    }
+    return corrected_receiver_position +
+           (updated_filter_position - prior_filter_position);
+}
+
+inline double madocaIonosphereScale(double frequency_hz) {
+    if (!(frequency_hz > 0.0)) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    const double ratio = constants::GPS_L1_FREQ / frequency_hz;
+    return ratio * ratio;
+}
+
+inline double madocaIonosphereStateFromPrimaryMeters(
+    double primary_frequency_ionosphere_m,
+    double primary_frequency_hz) {
+    const double primary_scale = madocaIonosphereScale(primary_frequency_hz);
+    if (!std::isfinite(primary_scale) || !(primary_scale > 0.0)) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    return primary_frequency_ionosphere_m / primary_scale;
+}
+
+inline double madocaCorrectedCodeIonosphereStateMeters(
+    double fallback_primary_ionosphere_m,
+    double corrected_primary_code_m,
+    double corrected_secondary_code_m,
+    double primary_frequency_hz,
+    double secondary_frequency_hz) {
+    double primary_ionosphere_m = fallback_primary_ionosphere_m;
+    if (primary_frequency_hz > 0.0 &&
+        secondary_frequency_hz > 0.0 &&
+        std::isfinite(corrected_primary_code_m) &&
+        std::isfinite(corrected_secondary_code_m)) {
+        const double ratio = primary_frequency_hz / secondary_frequency_hz;
+        const double denominator = 1.0 - ratio * ratio;
+        if (std::abs(denominator) > 1e-6) {
+            primary_ionosphere_m =
+                (corrected_primary_code_m - corrected_secondary_code_m) /
+                denominator;
+        }
+    }
+    return madocaIonosphereStateFromPrimaryMeters(
+        primary_ionosphere_m, primary_frequency_hz);
+}
+
 inline double madocaCarrierIonosphereMeters(double phase_l1_m,
                                             double phase_l2_m,
                                             double frequency_l1_hz,
                                             double frequency_l2_hz) {
-    if (!(frequency_l1_hz > 0.0) || !(frequency_l2_hz > 0.0)) {
+    const double scale_l1 = madocaIonosphereScale(frequency_l1_hz);
+    const double scale_l2 = madocaIonosphereScale(frequency_l2_hz);
+    if (!std::isfinite(scale_l1) || !std::isfinite(scale_l2)) {
         return std::numeric_limits<double>::quiet_NaN();
     }
-    const double ratio = frequency_l1_hz / frequency_l2_hz;
-    const double denominator = 1.0 - ratio * ratio;
+    const double denominator = scale_l1 - scale_l2;
     if (std::abs(denominator) < 1e-12) {
         return std::numeric_limits<double>::quiet_NaN();
     }
-    // MADOCALIB udiono_ppp(): ionc = -(L1-L2)/(1-(f1/f2)^2).
+    // MADOCALIB udiono_ppp(): the estimated STEC state is referenced to the
+    // fixed GPS L1 frequency, including for non-GPS primary signals.
     return -(phase_l1_m - phase_l2_m) / denominator;
+}
+
+inline double madocaCarrierIonosphereMetersExcludingWindup(
+    double corrected_phase_l1_m,
+    double corrected_phase_l2_m,
+    double wavelength_l1_m,
+    double wavelength_l2_m,
+    double windup_cycles,
+    double frequency_l1_hz,
+    double frequency_l2_hz) {
+    // MADOCALIB udiono_ppp() calls corr_meas(..., phw=0). Native corrected
+    // phases already have phw*lambda removed, so restore that term before
+    // deriving the temporal carrier-ionosphere increment.
+    return madocaCarrierIonosphereMeters(
+        corrected_phase_l1_m + windup_cycles * wavelength_l1_m,
+        corrected_phase_l2_m + windup_cycles * wavelength_l2_m,
+        frequency_l1_hz,
+        frequency_l2_hz);
 }
 
 inline double madocaIonosphereProcessVariance(double zenith_variance_per_second,
@@ -81,6 +330,36 @@ inline double madocaIonosphereProcessVariance(double zenith_variance_per_second,
                                                    kMinimumElevationRad));
     return zenith_variance_per_second * std::abs(dt_seconds) /
            (sin_elevation * sin_elevation);
+}
+
+inline double madocaGlonassCodeIfbVariance(bool madoca_per_frequency,
+                                           GNSSSystem system) {
+    // MADOCALIB ppp_res(): VAR_GLO_IFB=SQR(0.6) is added to GLONASS
+    // pseudorange rows only. Carrier rows never call this helper.
+    return madoca_per_frequency && system == GNSSSystem::GLONASS
+        ? 0.6 * 0.6
+        : 0.0;
+}
+
+inline double initialTroposphereVariance(bool madoca_per_frequency,
+                                         bool broadcast_model,
+                                         double configured_variance) {
+    // MADOCALIB ppp.c initializes estimated ZTD with VAR_ZTD=SQR(0.12).
+    if (madoca_per_frequency) {
+        return 0.12 * 0.12;
+    }
+    return broadcast_model ? configured_variance : 25.0;
+}
+
+inline double initialIonosphereVariance(bool madoca_per_frequency,
+                                        double configured_override,
+                                        double configured_variance) {
+    if (configured_override > 0.0) {
+        return configured_override;
+    }
+    // MADOCALIB ppp.c initializes every estimated STEC state with
+    // VAR_IONO=SQR(60.0).
+    return madoca_per_frequency ? 60.0 * 60.0 : configured_variance;
 }
 
 inline std::string trimCopy(const std::string& text) {

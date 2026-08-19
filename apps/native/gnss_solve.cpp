@@ -1,4 +1,5 @@
 #include <Eigen/Dense>
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <exception>
@@ -9,6 +10,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -26,6 +28,7 @@
 #include <libgnss++/io/solution_writer.hpp>
 #include <libgnss++/models/troposphere.hpp>
 
+#include "cli_toml_config.hpp"
 #include "rtk_base_epoch_align.hpp"
 
 namespace {
@@ -102,6 +105,7 @@ struct SolveConfig {
     std::string rover_seed_pos_path;
     std::string diagnostics_csv_path;
     double rtk_update_outlier_threshold = 0.0;
+    bool student_t_rtk_front_end = false;
     double ratio_threshold = 3.0;
     bool enable_satellite_count_ratio_threshold = false;
     bool enable_ar_filter = false;
@@ -265,6 +269,25 @@ struct SolveConfig {
     bool enable_bsr_guided_decimation = false;
     int bsr_guided_worst_axes = 3;
     int bsr_guided_max_drop_steps = 6;
+    int lambda_candidate_shadow_count = 0;
+    double lambda_src_par_shadow_success_rate = 0.0;
+    double lambda_src_par_shadow_covariance_scale = 1.0;
+    int lambda_satellite_par_shadow_max_drop_steps = 0;
+    double lambda_satellite_par_shadow_covariance_scale = 16.0;
+    bool enable_lambda_satellite_par_shadow_quality_diverse = false;
+    bool enable_lambda_l1_l5_wlnl_shadow = false;
+    bool enable_lambda_l1_l5_wlnl_causal_arcs = false;
+    bool enable_safe_fix_shadow_state_machine = false;
+    bool enable_safe_fix_robust_consensus_shadow = false;
+    bool require_safe_fix_independent_failure_budget = false;
+    bool enable_library_fixed_quality_gate = false;
+    double library_fixed_quality_max_covariance_trace_m2 = 0.00025;
+    double library_fixed_quality_max_nis_per_observation = 10.0;
+    int library_fixed_quality_min_strong_observations = 28;
+    double library_fixed_quality_strong_max_nis_per_observation = 1.0;
+    bool enable_safe_float_continuity = false;
+    double safe_float_continuity_max_age_s = 6.0;
+    bool enable_safe_availability_fallback = false;
     // WP7: NLOS/multipath measurement weighting. Empty path / OFF mode
     // (both defaults) mean the feature is entirely inert.
     std::string nlos_weights_csv_path;
@@ -300,6 +323,15 @@ struct SolveConfig {
     double cmc_ref_return_min_elev_deg = 5.0;
     double cmc_ref_switch_max_elev_drop_deg = 10.0;
     double cmc_ref_switch_min_elev_deg = 30.0;
+    // navi.776 A2: innovation-based adaptive measurement variance
+    // (RTKConfig::enable_adaptive_measurement_noise). Off by default; see
+    // the config field's doc comment in rtk.hpp.
+    bool rtk_adaptive_noise = false;
+    double rtk_adaptive_noise_alpha_phase = 0.9;
+    double rtk_adaptive_noise_alpha_code = 0.5;
+    double rtk_adaptive_noise_min_scale = 0.25;
+    double rtk_adaptive_noise_max_scale = 25.0;
+    double rtk_adaptive_noise_max_baseline_m = 0.0;
     // Self-reference-free integer validation. This is independently opt-in;
     // it does not require the IMU tight-coupling path.
     bool cp_pr_fixed_gate = false;
@@ -873,12 +905,119 @@ public:
               << "bsr_guided_candidates_evaluated,bsr_guided_candidates_accepted,"
               << "wide_lane_total,wide_lane_fixed,"
               << "wide_lane_rejected,wide_lane_min_distance,wide_lane_max_distance,"
-              << "gf_slip_count,doppler_slip_l1_count,doppler_slip_l2_count,"
-              << "code_slip_l1_count,code_slip_l2_count,lli_slip_l1_count,"
-              << "lli_slip_l2_count,ambiguity_reset_l1_count,ambiguity_reset_l2_count,"
+              << "gf_slip_count,gf_slip_l1l5_count,"
+              << "doppler_slip_l1_count,doppler_slip_l2_count,doppler_slip_l5_count,"
+              << "code_slip_l1_count,code_slip_l2_count,code_slip_l5_count,"
+              << "lli_slip_l1_count,lli_slip_l2_count,lli_slip_l5_count,"
+              << "ambiguity_reset_l1_count,ambiguity_reset_l2_count,"
+              << "ambiguity_reset_l5_count,"
               << "adaptive_dynamic_slip_active,consecutive_nonfix_before_bias_update,"
               << "adaptive_dynamic_slip_hold_remaining,"
-              << "full_lambda_solved,full_ratio,selected_fixed,selected_ratio,"
+              << "full_lambda_solved,full_ratio,"
+              << "lambda_shadow_attempted,lambda_shadow_solved,"
+              << "lambda_shadow_runtime_ms,"
+              << "lambda_shadow_candidate_count,lambda_shadow_bsr,"
+              << "lambda_shadow_bsr_qscale2,lambda_shadow_bsr_qscale4,"
+              << "lambda_shadow_bsr_qscale8,lambda_shadow_bsr_qscale16,"
+              << "lambda_shadow_best_cost,lambda_shadow_second_cost,"
+              << "lambda_shadow_best_mass,lambda_shadow_effective_candidates,"
+              << "lambda_shadow_best_second_disagreements,"
+              << "lambda_shadow_ffrt_table_supported,"
+              << "lambda_shadow_ffrt_accepts_any,lambda_shadow_ffrt_passed,"
+              << "lambda_shadow_ffrt_min_ratio,"
+              << "lambda_shadow_best_ecef_x,lambda_shadow_best_ecef_y,"
+              << "lambda_shadow_best_ecef_z,"
+              << "lambda_shadow_best_correction_x,"
+              << "lambda_shadow_best_correction_y,"
+              << "lambda_shadow_best_correction_z,"
+              << "lambda_shadow_second_ecef_x,lambda_shadow_second_ecef_y,"
+              << "lambda_shadow_second_ecef_z,"
+              << "lambda_shadow_second_correction_x,"
+              << "lambda_shadow_second_correction_y,"
+              << "lambda_shadow_second_correction_z,";
+        for (int candidate = 0; candidate < 8; ++candidate) {
+            const int ordinal = candidate + 1;
+            file_ << "lambda_shadow_candidate_" << ordinal << "_cost,"
+                  << "lambda_shadow_candidate_" << ordinal << "_ecef_x,"
+                  << "lambda_shadow_candidate_" << ordinal << "_ecef_y,"
+                  << "lambda_shadow_candidate_" << ordinal << "_ecef_z,";
+        }
+        file_ << "lambda_shadow_second_position_delta_m,"
+              << "lambda_shadow_position_spread_max_m,"
+              << "lambda_src_par_shadow_attempted,"
+              << "lambda_src_par_shadow_solved,"
+              << "lambda_src_par_shadow_subset_size,"
+              << "lambda_src_par_shadow_bsr,"
+              << "lambda_src_par_shadow_ratio,"
+              << "lambda_src_par_shadow_ffrt_min_ratio,"
+              << "lambda_src_par_shadow_ffrt_passed,"
+              << "lambda_src_par_shadow_best_ecef_x,"
+              << "lambda_src_par_shadow_best_ecef_y,"
+              << "lambda_src_par_shadow_best_ecef_z,"
+              << "lambda_src_par_shadow_best_correction_x,"
+              << "lambda_src_par_shadow_best_correction_y,"
+              << "lambda_src_par_shadow_best_correction_z,"
+              << "lambda_src_par_shadow_second_position_delta_m,"
+              << "lambda_src_par_shadow_runtime_ms,"
+              << "lambda_satellite_par_shadow_attempted,"
+              << "lambda_satellite_par_shadow_subsets_evaluated,"
+              << "lambda_satellite_par_shadow_solved,"
+              << "lambda_satellite_par_shadow_subset_size,"
+              << "lambda_satellite_par_shadow_dropped_satellites,"
+              << "lambda_satellite_par_shadow_bsr,"
+              << "lambda_satellite_par_shadow_ratio,"
+              << "lambda_satellite_par_shadow_ffrt_min_ratio,"
+              << "lambda_satellite_par_shadow_ffrt_passed,"
+              << "lambda_satellite_par_shadow_best_ecef_x,"
+              << "lambda_satellite_par_shadow_best_ecef_y,"
+              << "lambda_satellite_par_shadow_best_ecef_z,"
+              << "lambda_satellite_par_shadow_best_correction_x,"
+              << "lambda_satellite_par_shadow_best_correction_y,"
+              << "lambda_satellite_par_shadow_best_correction_z,"
+              << "lambda_satellite_par_shadow_second_position_delta_m,"
+              << "lambda_satellite_par_shadow_runtime_ms,"
+              << "lambda_l1_l5_wlnl_shadow_attempted,"
+              << "lambda_l1_l5_wlnl_shadow_pair_count,"
+              << "lambda_l1_l5_wlnl_shadow_wl_bsr,"
+              << "lambda_l1_l5_wlnl_shadow_wl_ratio,"
+              << "lambda_l1_l5_wlnl_shadow_wl_ffrt_min_ratio,"
+              << "lambda_l1_l5_wlnl_shadow_wl_ffrt_passed,"
+              << "lambda_l1_l5_wlnl_shadow_mw_disagreements,"
+              << "lambda_l1_l5_wlnl_shadow_raw_mw_disagreements,"
+              << "lambda_l1_l5_wlnl_shadow_causal_arc_ready_pairs,"
+              << "lambda_l1_l5_wlnl_shadow_causal_arc_resets,"
+              << "lambda_l1_l5_wlnl_shadow_nl_bsr,"
+              << "lambda_l1_l5_wlnl_shadow_nl_ratio,"
+              << "lambda_l1_l5_wlnl_shadow_nl_ffrt_min_ratio,"
+              << "lambda_l1_l5_wlnl_shadow_nl_ffrt_passed,"
+              << "lambda_l1_l5_wlnl_shadow_best_ecef_x,"
+              << "lambda_l1_l5_wlnl_shadow_best_ecef_y,"
+              << "lambda_l1_l5_wlnl_shadow_best_ecef_z,"
+              << "lambda_l1_l5_wlnl_shadow_runtime_ms,"
+              << "safe_fix_shadow_enabled,safe_fix_shadow_state,"
+              << "safe_fix_shadow_declared_fixed,"
+              << "safe_fix_shadow_candidate_accepted,"
+              << "safe_fix_shadow_held,safe_fix_shadow_revoked,"
+              << "safe_fix_shadow_strong_acquisition,"
+              << "safe_fix_shadow_change_point_acquisition,"
+              << "safe_fix_shadow_acquisition_streak,"
+              << "safe_fix_shadow_hold_epochs,"
+              << "safe_fix_shadow_independent_consensus_delta_m,"
+              << "safe_fix_shadow_independent_source_families,"
+              << "safe_fix_shadow_joint_failure_probability,"
+              << "safe_fix_shadow_failure_budget_passed,"
+              << "inertial_fix_evidence_available,"
+              << "inertial_fix_evidence_healthy_anchor,"
+              << "inertial_fix_evidence_passed,"
+              << "inertial_fix_evidence_time_error_s,"
+              << "inertial_fix_evidence_position_delta_m,"
+              << "inertial_fix_evidence_nis_per_dimension,"
+              << "safe_float_continuity_attempted,"
+              << "safe_float_continuity_used,"
+              << "safe_float_continuity_solver_gap_anchor,"
+              << "safe_float_continuity_anchor_age_s,"
+              << "safe_float_continuity_velocity_age_s,"
+              << "selected_fixed,selected_ratio,"
               << "selected_pair_count,selected_distinct_sats,selected_distinct_systems,"
               << "selected_distinct_frequencies,selected_dual_frequency_sats,"
               << "selected_fixed_ambiguities,selected_used_subset,"
@@ -898,10 +1037,19 @@ public:
               << "final_fixed_applied,hold_fix_attempted,hold_fix_applied,"
               << "hold_fix_candidate_pairs,hold_fix_matched_pairs,hold_fix_jump_m,"
               << "hold_fix_float_divergence_m,hold_fix_reject_reason,"
+              << "library_fixed_quality_gate_enabled,"
+              << "library_fixed_quality_gate_passed,"
+              << "library_fixed_quality_gate_safe_shadow_branch,"
+              << "library_fixed_quality_gate_covariance_branch,"
+              << "library_fixed_quality_gate_strong_innovation_branch,"
+              << "library_fixed_quality_gate_demoted,"
               << "reject_reason,ar_skip_reason,"
               << "float_update_observation_count,float_update_prefit_residual_rms_m,"
               << "float_update_post_suppression_residual_rms_m,"
               << "float_update_nis_per_observation,float_update_suppressed_outliers,"
+              << "float_update_student_t_downweighted_rows,"
+              << "float_update_student_t_minimum_weight,"
+              << "float_update_student_t_mean_weight,"
               << "float_position_covariance_trace_m2\n";
         return true;
     }
@@ -942,19 +1090,234 @@ public:
         writeNumber(telemetry.wide_lane_max_distance);
         file_ << ","
               << telemetry.gf_slip_count << ","
+              << telemetry.gf_slip_l1l5_count << ","
               << telemetry.doppler_slip_l1_count << ","
               << telemetry.doppler_slip_l2_count << ","
+              << telemetry.doppler_slip_l5_count << ","
               << telemetry.code_slip_l1_count << ","
               << telemetry.code_slip_l2_count << ","
+              << telemetry.code_slip_l5_count << ","
               << telemetry.lli_slip_l1_count << ","
               << telemetry.lli_slip_l2_count << ","
+              << telemetry.lli_slip_l5_count << ","
               << telemetry.ambiguity_reset_l1_count << ","
               << telemetry.ambiguity_reset_l2_count << ","
+              << telemetry.ambiguity_reset_l5_count << ","
               << telemetry.adaptive_dynamic_slip_active << ","
               << telemetry.consecutive_nonfix_before_bias_update << ","
               << telemetry.adaptive_dynamic_slip_hold_remaining << ","
               << telemetry.full_lambda_solved << ",";
         writeNumber(telemetry.full_ratio);
+        file_ << ","
+              << telemetry.lambda_shadow_attempted << ","
+              << telemetry.lambda_shadow_solved << ",";
+        writeNumber(telemetry.lambda_shadow_runtime_ms);
+        file_ << ","
+              << telemetry.lambda_shadow_candidate_count << ",";
+        writeNumber(telemetry.lambda_shadow_bsr);
+        file_ << ",";
+        writeNumber(telemetry.lambda_shadow_bsr_qscale2);
+        file_ << ",";
+        writeNumber(telemetry.lambda_shadow_bsr_qscale4);
+        file_ << ",";
+        writeNumber(telemetry.lambda_shadow_bsr_qscale8);
+        file_ << ",";
+        writeNumber(telemetry.lambda_shadow_bsr_qscale16);
+        file_ << ",";
+        writeNumber(telemetry.lambda_shadow_best_cost);
+        file_ << ",";
+        writeNumber(telemetry.lambda_shadow_second_cost);
+        file_ << ",";
+        writeNumber(telemetry.lambda_shadow_best_mass);
+        file_ << ",";
+        writeNumber(telemetry.lambda_shadow_effective_candidates);
+        file_ << ","
+              << telemetry.lambda_shadow_best_second_disagreements << ","
+              << telemetry.lambda_shadow_ffrt_table_supported << ","
+              << telemetry.lambda_shadow_ffrt_accepts_any << ","
+              << telemetry.lambda_shadow_ffrt_passed << ",";
+        writeNumber(telemetry.lambda_shadow_ffrt_min_ratio);
+        file_ << ",";
+        writeNumber(telemetry.lambda_shadow_best_ecef_x);
+        file_ << ",";
+        writeNumber(telemetry.lambda_shadow_best_ecef_y);
+        file_ << ",";
+        writeNumber(telemetry.lambda_shadow_best_ecef_z);
+        file_ << ",";
+        writeNumber(telemetry.lambda_shadow_best_correction_x);
+        file_ << ",";
+        writeNumber(telemetry.lambda_shadow_best_correction_y);
+        file_ << ",";
+        writeNumber(telemetry.lambda_shadow_best_correction_z);
+        file_ << ",";
+        writeNumber(telemetry.lambda_shadow_second_ecef_x);
+        file_ << ",";
+        writeNumber(telemetry.lambda_shadow_second_ecef_y);
+        file_ << ",";
+        writeNumber(telemetry.lambda_shadow_second_ecef_z);
+        file_ << ",";
+        writeNumber(telemetry.lambda_shadow_second_correction_x);
+        file_ << ",";
+        writeNumber(telemetry.lambda_shadow_second_correction_y);
+        file_ << ",";
+        writeNumber(telemetry.lambda_shadow_second_correction_z);
+        file_ << ",";
+        for (int candidate = 0; candidate < 8; ++candidate) {
+            writeNumber(
+                telemetry.lambda_shadow_candidate_costs(candidate));
+            file_ << ",";
+            for (int axis = 0; axis < 3; ++axis) {
+                writeNumber(
+                    telemetry.lambda_shadow_candidate_ecef_m(
+                        axis, candidate));
+                file_ << ",";
+            }
+        }
+        writeNumber(telemetry.lambda_shadow_second_position_delta_m);
+        file_ << ",";
+        writeNumber(telemetry.lambda_shadow_position_spread_max_m);
+        file_ << ","
+              << telemetry.lambda_src_par_shadow_attempted << ","
+              << telemetry.lambda_src_par_shadow_solved << ","
+              << telemetry.lambda_src_par_shadow_subset_size << ",";
+        writeNumber(telemetry.lambda_src_par_shadow_bsr);
+        file_ << ",";
+        writeNumber(telemetry.lambda_src_par_shadow_ratio);
+        file_ << ",";
+        writeNumber(telemetry.lambda_src_par_shadow_ffrt_min_ratio);
+        file_ << ","
+              << telemetry.lambda_src_par_shadow_ffrt_passed << ",";
+        writeNumber(telemetry.lambda_src_par_shadow_best_ecef_x);
+        file_ << ",";
+        writeNumber(telemetry.lambda_src_par_shadow_best_ecef_y);
+        file_ << ",";
+        writeNumber(telemetry.lambda_src_par_shadow_best_ecef_z);
+        file_ << ",";
+        writeNumber(telemetry.lambda_src_par_shadow_best_correction_x);
+        file_ << ",";
+        writeNumber(telemetry.lambda_src_par_shadow_best_correction_y);
+        file_ << ",";
+        writeNumber(telemetry.lambda_src_par_shadow_best_correction_z);
+        file_ << ",";
+        writeNumber(
+            telemetry.lambda_src_par_shadow_second_position_delta_m);
+        file_ << ",";
+        writeNumber(telemetry.lambda_src_par_shadow_runtime_ms);
+        file_ << ","
+              << telemetry.lambda_satellite_par_shadow_attempted << ","
+              << telemetry.lambda_satellite_par_shadow_subsets_evaluated << ","
+              << telemetry.lambda_satellite_par_shadow_solved << ","
+              << telemetry.lambda_satellite_par_shadow_subset_size << ","
+              << telemetry.lambda_satellite_par_shadow_dropped_satellites
+              << ",";
+        writeNumber(telemetry.lambda_satellite_par_shadow_bsr);
+        file_ << ",";
+        writeNumber(telemetry.lambda_satellite_par_shadow_ratio);
+        file_ << ",";
+        writeNumber(telemetry.lambda_satellite_par_shadow_ffrt_min_ratio);
+        file_ << ","
+              << telemetry.lambda_satellite_par_shadow_ffrt_passed << ",";
+        writeNumber(telemetry.lambda_satellite_par_shadow_best_ecef_x);
+        file_ << ",";
+        writeNumber(telemetry.lambda_satellite_par_shadow_best_ecef_y);
+        file_ << ",";
+        writeNumber(telemetry.lambda_satellite_par_shadow_best_ecef_z);
+        file_ << ",";
+        writeNumber(
+            telemetry.lambda_satellite_par_shadow_best_correction_x);
+        file_ << ",";
+        writeNumber(
+            telemetry.lambda_satellite_par_shadow_best_correction_y);
+        file_ << ",";
+        writeNumber(
+            telemetry.lambda_satellite_par_shadow_best_correction_z);
+        file_ << ",";
+        writeNumber(
+            telemetry
+                .lambda_satellite_par_shadow_second_position_delta_m);
+        file_ << ",";
+        writeNumber(telemetry.lambda_satellite_par_shadow_runtime_ms);
+        file_ << ","
+              << telemetry.lambda_l1_l5_wlnl_shadow_attempted << ","
+              << telemetry.lambda_l1_l5_wlnl_shadow_pair_count << ",";
+        writeNumber(telemetry.lambda_l1_l5_wlnl_shadow_wl_bsr);
+        file_ << ",";
+        writeNumber(telemetry.lambda_l1_l5_wlnl_shadow_wl_ratio);
+        file_ << ",";
+        writeNumber(
+            telemetry.lambda_l1_l5_wlnl_shadow_wl_ffrt_min_ratio);
+        file_ << ","
+              << telemetry.lambda_l1_l5_wlnl_shadow_wl_ffrt_passed << ","
+              << telemetry.lambda_l1_l5_wlnl_shadow_mw_disagreements << ","
+              << telemetry
+                     .lambda_l1_l5_wlnl_shadow_raw_mw_disagreements
+              << ","
+              << telemetry
+                     .lambda_l1_l5_wlnl_shadow_causal_arc_ready_pairs
+              << ","
+              << telemetry.lambda_l1_l5_wlnl_shadow_causal_arc_resets
+              << ",";
+        writeNumber(telemetry.lambda_l1_l5_wlnl_shadow_nl_bsr);
+        file_ << ",";
+        writeNumber(telemetry.lambda_l1_l5_wlnl_shadow_nl_ratio);
+        file_ << ",";
+        writeNumber(
+            telemetry.lambda_l1_l5_wlnl_shadow_nl_ffrt_min_ratio);
+        file_ << ","
+              << telemetry.lambda_l1_l5_wlnl_shadow_nl_ffrt_passed << ",";
+        writeNumber(telemetry.lambda_l1_l5_wlnl_shadow_best_ecef_x);
+        file_ << ",";
+        writeNumber(telemetry.lambda_l1_l5_wlnl_shadow_best_ecef_y);
+        file_ << ",";
+        writeNumber(telemetry.lambda_l1_l5_wlnl_shadow_best_ecef_z);
+        file_ << ",";
+        writeNumber(telemetry.lambda_l1_l5_wlnl_shadow_runtime_ms);
+        file_ << ","
+              << telemetry.safe_fix_shadow_enabled << ","
+              << telemetry.safe_fix_shadow_state << ","
+              << telemetry.safe_fix_shadow_declared_fixed << ","
+              << telemetry.safe_fix_shadow_candidate_accepted << ","
+              << telemetry.safe_fix_shadow_held << ","
+              << telemetry.safe_fix_shadow_revoked << ","
+              << telemetry.safe_fix_shadow_strong_acquisition << ","
+              << telemetry.safe_fix_shadow_change_point_acquisition
+              << ","
+              << telemetry.safe_fix_shadow_acquisition_streak << ","
+              << telemetry.safe_fix_shadow_hold_epochs << ",";
+        writeNumber(
+            telemetry
+                .safe_fix_shadow_independent_consensus_delta_m);
+        file_ << ","
+              << telemetry
+                     .safe_fix_shadow_independent_source_families
+              << ",";
+        writeNumber(
+            telemetry.safe_fix_shadow_joint_failure_probability);
+        file_ << ","
+              << telemetry.safe_fix_shadow_failure_budget_passed
+              << ","
+              << telemetry.inertial_fix_evidence_available
+              << ","
+              << telemetry.inertial_fix_evidence_healthy_anchor
+              << ","
+              << telemetry.inertial_fix_evidence_passed
+              << ",";
+        writeNumber(telemetry.inertial_fix_evidence_time_error_s);
+        file_ << ",";
+        writeNumber(
+            telemetry.inertial_fix_evidence_position_delta_m);
+        file_ << ",";
+        writeNumber(
+            telemetry.inertial_fix_evidence_nis_per_dimension);
+        file_
+              << ","
+              << telemetry.safe_float_continuity_attempted << ","
+              << telemetry.safe_float_continuity_used << ","
+              << telemetry.safe_float_continuity_solver_gap_anchor
+              << ",";
+        writeNumber(telemetry.safe_float_continuity_anchor_age_s);
+        file_ << ",";
+        writeNumber(telemetry.safe_float_continuity_velocity_age_s);
         file_ << ","
               << telemetry.selected_fixed << ",";
         writeNumber(telemetry.selected_ratio);
@@ -1020,6 +1383,17 @@ public:
         writeNumber(telemetry.hold_fix_float_divergence_m);
         file_ << ","
               << telemetry.hold_fix_reject_reason << ","
+              << telemetry.library_fixed_quality_gate_enabled << ","
+              << telemetry.library_fixed_quality_gate_passed << ","
+              << telemetry
+                     .library_fixed_quality_gate_safe_shadow_branch
+              << ","
+              << telemetry.library_fixed_quality_gate_covariance_branch
+              << ","
+              << telemetry
+                     .library_fixed_quality_gate_strong_innovation_branch
+              << ","
+              << telemetry.library_fixed_quality_gate_demoted << ","
               << telemetry.reject_reason << ","
               << libgnss::RTKProcessor::arSkipReasonToString(telemetry.ar_skip_reason) << ","
               << telemetry.float_update_observation_count << ",";
@@ -1029,7 +1403,14 @@ public:
         file_ << ",";
         writeNumber(telemetry.float_update_nis_per_observation);
         file_ << ","
-              << telemetry.float_update_suppressed_outliers << ",";
+              << telemetry.float_update_suppressed_outliers << ","
+              << telemetry.float_update_student_t_downweighted_rows
+              << ",";
+        writeNumber(
+            telemetry.float_update_student_t_minimum_weight);
+        file_ << ",";
+        writeNumber(telemetry.float_update_student_t_mean_weight);
+        file_ << ",";
         writeNumber(telemetry.float_position_covariance_trace_m2);
         file_ << "\n";
         file_.flush();
@@ -1048,7 +1429,38 @@ private:
 
 void printUsage(const char* program_name) {
     std::cout
+        << "Usage: " << program_name << " --data-dir <dir> [options]\n"
+        << "       " << program_name
+        << " --rover <file> --base <file> --nav <file> [options]\n\n"
+        << "Batch RTK post-processing. Prefer a preset or TOML config for repeatable runs.\n\n"
+        << "Inputs:\n"
+        << "  --data-dir <dir>        Load rover.obs, base.obs, and navigation.nav\n"
+        << "  --rover <file>          Rover RINEX observation file\n"
+        << "  --base <file>           Base RINEX observation file\n"
+        << "  --nav <file>            Navigation RINEX file\n\n"
+        << "Common options:\n"
+        << "  --config <path>         Load flat TOML defaults; CLI options override them\n"
+        << "  --preset <name>         survey|low-cost|moving-base|odaiba\n"
+        << "  --mode <name>           auto|kinematic|static|moving-base\n"
+        << "  --iono <name>           auto|off|iflc|est\n"
+        << "  --ratio <value>         Ambiguity ratio threshold\n"
+        << "  --max-epochs <n>        Stop after n epochs (0 = no limit)\n"
+        << "  --out <file>            Solution output (default: output/rtk_solution.pos)\n"
+        << "  --kml <file>            Optional KML output path\n"
+        << "  --no-kml                Disable KML output\n"
+        << "  --verbose               Print per-epoch progress\n\n"
+        << "Help:\n"
+        << "  -h, --help              Show this everyday-use help\n"
+        << "  --help-advanced         Show every tuning, experiment, and diagnostic option\n\n"
+        << "Example:\n"
+        << "  " << program_name
+        << " --data-dir <run-dir> --preset low-cost --out output/rtk.pos\n";
+}
+
+void printAdvancedUsage(const char* program_name) {
+    std::cout
         << "Usage: " << program_name << " [options]\n"
+        << "  --config <path>           Load flat TOML defaults from [gnss_solve]; CLI wins\n"
         << "  --data-dir <dir>           Use <dir>/rover.obs, base.obs, navigation.nav\n"
         << "  --rover <file>             Rover RINEX observation file\n"
         << "  --base <file>              Base RINEX observation file\n"
@@ -1233,6 +1645,70 @@ void printUsage(const char* program_name) {
         << "                             (eigendecomposition-driven drop subsets)\n"
         << "                             alongside the variance-based progressive\n"
         << "                             drop family. Default: off.\n"
+        << "  --lambda-shadow-candidates <n>\n"
+        << "                             Record top-K MLAMBDA/BSR diagnostics without\n"
+        << "                             changing FIX decisions (0=off, 2..32)\n"
+        << "  --lambda-src-par-shadow-success-rate <p>\n"
+        << "                             Shadow-only SRC partial-AR success threshold\n"
+        << "                             (0=off; requires lambda shadow candidates)\n"
+        << "  --lambda-src-par-shadow-covariance-scale <s>\n"
+        << "                             Positive SRC/FFRT covariance inflation\n"
+        << "                             (default: 1)\n"
+        << "  --lambda-satellite-par-shadow-max-drops <n>\n"
+        << "                             Shadow-only satellite-group sequential PAR\n"
+        << "                             (0=off; requires lambda shadow candidates)\n"
+        << "  --lambda-satellite-par-shadow-covariance-scale <s>\n"
+        << "                             Positive satellite-PAR FFRT covariance\n"
+        << "                             inflation (default: 16)\n"
+        << "  --lambda-satellite-par-shadow-quality-diverse\n"
+        << "                             Add deduplicated variance/residual/fractional/\n"
+        << "                             elevation/SNR/azimuth satellite-drop paths\n"
+        << "  --lambda-l1-l5-wlnl-shadow\n"
+        << "                             Shadow-only L1/L5 WL->NL cascade with\n"
+        << "                             per-stage scale-16 FFRT and MW agreement;\n"
+        << "                             never changes filter/output decisions\n"
+        << "  --lambda-l1-l5-wlnl-causal-arcs\n"
+        << "                             Validate fresh WL searches with causal MW\n"
+        << "                             arc smoothing keyed by satellite, frequency,\n"
+        << "                             and reference generation (default: off)\n"
+        << "  --safe-fix-shadow-state-machine\n"
+        << "                             Run default-off FIX/hold/revoke telemetry;\n"
+        << "                             never changes output status or filter state\n"
+        << "  --safe-fix-robust-consensus-shadow\n"
+        << "                             Enable the experimental default-off robust\n"
+        << "                             full/satellite-PAR consensus state machine\n"
+        << "                             (ratio>=1.4, pairs>=12, 3x/2cm acquisition,\n"
+        << "                             strong/change-point shortcuts, no hold)\n"
+        << "  --safe-fix-independent-failure-budget\n"
+        << "                             Require >=2 distinct source families and\n"
+        << "                             joint fixed-failure probability <=2e-6;\n"
+        << "                             full and satellite-PAR count as one family\n"
+        << "  --library-fixed-quality-gate\n"
+        << "                             Demote library FIX unless safe-shadow or a\n"
+        << "                             structural quality branch passes (default: off)\n"
+        << "  --library-fixed-quality-max-cov-trace <m^2>\n"
+        << "                             Covariance-branch float ECEF trace ceiling\n"
+        << "                             (default: 0.00025)\n"
+        << "  --library-fixed-quality-max-nis <v>\n"
+        << "                             Covariance-branch NIS/observation ceiling\n"
+        << "                             (default: 10)\n"
+        << "  --library-fixed-quality-min-observations <n>\n"
+        << "                             Strong-innovation observation floor\n"
+        << "                             (default: 28)\n"
+        << "  --library-fixed-quality-strong-max-nis <v>\n"
+        << "                             Strong-innovation NIS/observation ceiling\n"
+        << "                             (default: 1)\n"
+        << "  --safe-float-continuity\n"
+        << "                             Emit bounded Doppler-propagated FLOAT output\n"
+        << "                             during short no-solution gaps (default: off)\n"
+        << "  --safe-float-continuity-max-age <seconds>\n"
+        << "                             Trusted-anchor and velocity age limit\n"
+        << "                             (default: 6)\n"
+        << "  --safe-availability-fallback\n"
+        << "                             Preserve epoch availability after fail-closed\n"
+        << "                             RTK rejection using independent SPP, then an\n"
+        << "                             explicit PROPAGATED estimate with inflated\n"
+        << "                             covariance; never supplies FIX authority\n"
         << "  --bsr-worst-axes <n>       Number of largest-eigenvalue Qb axes to score\n"
         << "                             per-pair loadings against (default: 3)\n"
         << "  --bsr-max-drops <n>        Max pairs to drop progressively in BSR-guided\n"
@@ -1337,6 +1813,24 @@ void printUsage(const char* program_name) {
         << "                             Companion absolute floor: the switch-away replacement\n"
         << "                             must also be above this elevation (default: 30.0). No\n"
         << "                             effect without --cmc-ref\n"
+        << "  --rtk-adaptive-noise       Innovation-based adaptive measurement variance\n"
+        << "                             (navi.776): per-satellite EWMA of v^2-HPH'-ref_var\n"
+        << "                             replaces the model DD satellite variance, clamped\n"
+        << "                             relative to it (default: off)\n"
+        << "  --rtk-adaptive-noise-alpha-phase <a>\n"
+        << "                             Carrier-phase EWMA memory factor (default: 0.9)\n"
+        << "  --rtk-adaptive-noise-alpha-code <a>\n"
+        << "                             Pseudorange EWMA memory factor (default: 0.5)\n"
+        << "  --rtk-adaptive-noise-min-scale <s>\n"
+        << "                             Adapted variance floor as a fraction of the model\n"
+        << "                             variance (default: 0.25)\n"
+        << "  --rtk-adaptive-noise-max-scale <s>\n"
+        << "                             Adapted variance ceiling as a multiple of the model\n"
+        << "                             variance (default: 25.0)\n"
+        << "  --rtk-adaptive-noise-max-baseline <m>\n"
+        << "                             Only adapt while the float baseline is at or below\n"
+        << "                             this many meters (default: 0 = no gate). Long\n"
+        << "                             baselines feed DD iono error into the adaptation\n"
         << "  --cp-pr-fixed-gate         Validate an integer candidate with independent\n"
         << "                             DD code-vs-carrier innovations before accepting it\n"
         << "                             (default: off; does not require tight coupling)\n"
@@ -1474,10 +1968,12 @@ void printUsage(const char* program_name) {
         << "  --integrity-log <file>     Write real-time integrity decisions and latency CSV\n"
         << "  --rtk-update-outlier-threshold <v>\n"
         << "                             Outlier rejection threshold for RTK measurement update (default: 30.0)\n"
+        << "  --student-t-rtk-front-end  Enable Student-t(nu=4) DD covariance inflation (default: off)\n"
         << "  --no-kinematic-post-filter Disable the kinematic output post-filter\n"
         << "  --no-base-interp           Require exact rover/base epoch alignment\n"
         << "  --verbose                  Print per-epoch progress summary\n"
-        << "  -h, --help                 Show this help\n";
+        << "  -h, --help                 Show concise everyday-use help\n"
+        << "  --help-advanced            Show this complete option reference\n";
 }
 
 [[noreturn]] void argumentError(const std::string& message, const char* program_name) {
@@ -1616,6 +2112,55 @@ libgnss::io::SolutionWriter::Format parseOutputFormat(const std::string& value,
 }
 
 SolveConfig parseArguments(int argc, char* argv[]) {
+    for (int i = 1; i < argc; ++i) {
+        const std::string arg = argv[i];
+        if (arg == "-h" || arg == "--help") {
+            printUsage(argv[0]);
+            std::exit(0);
+        }
+        if (arg == "--help-advanced") {
+            printAdvancedUsage(argv[0]);
+            std::exit(0);
+        }
+    }
+
+    const libgnss_apps::TomlCliSchema schema{
+        "gnss_solve",
+        {
+            {"--base-interp", ""},
+            {"--beidou", ""},
+            {"--glonass", ""},
+            {"--kinematic-post-filter", ""},
+            {"--kml", ""},
+            {"--wide-lane-ar", "--enable-wide-lane-ar"},
+        },
+        {
+            {"--arfilter", "--no-arfilter"},
+            {"--base-interp", "--no-base-interp"},
+            {"--beidou", "--no-beidou"},
+            {"--fixed-bridge-burst-guard", "--no-fixed-bridge-burst-guard"},
+            {"--float-bridge-tail-guard", "--no-float-bridge-tail-guard"},
+            {"--glonass", "--no-glonass"},
+            {"--integrity-base-gate", "--no-integrity-base-gate"},
+            {"--kinematic-post-filter", "--no-kinematic-post-filter"},
+            {"--kml", "--no-kml"},
+            {"--nonfix-drift-guard", "--no-nonfix-drift-guard"},
+            {"--spp-height-step-guard", "--no-spp-height-step-guard"},
+            {"--enable-wide-lane-ar", "--no-wide-lane-ar"},
+            {"--wide-lane-ar", "--no-wide-lane-ar"},
+        },
+        {},
+    };
+    std::vector<std::string> expanded_arguments =
+        libgnss_apps::expandTomlConfigArguments(argc, argv, schema);
+    std::vector<char*> expanded_argv;
+    expanded_argv.reserve(expanded_arguments.size());
+    for (auto& argument : expanded_arguments) {
+        expanded_argv.push_back(argument.data());
+    }
+    argc = static_cast<int>(expanded_argv.size());
+    argv = expanded_argv.data();
+
     SolveConfig config;
 
     for (int i = 1; i < argc; ++i) {
@@ -1688,6 +2233,30 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         }
         if (arg == "--cmc-ref-switch-min-elev" && i + 1 < argc) {
             config.cmc_ref_switch_min_elev_deg = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--rtk-adaptive-noise") {
+            config.rtk_adaptive_noise = true;
+            continue;
+        }
+        if (arg == "--rtk-adaptive-noise-alpha-phase" && i + 1 < argc) {
+            config.rtk_adaptive_noise_alpha_phase = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--rtk-adaptive-noise-alpha-code" && i + 1 < argc) {
+            config.rtk_adaptive_noise_alpha_code = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--rtk-adaptive-noise-min-scale" && i + 1 < argc) {
+            config.rtk_adaptive_noise_min_scale = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--rtk-adaptive-noise-max-scale" && i + 1 < argc) {
+            config.rtk_adaptive_noise_max_scale = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--rtk-adaptive-noise-max-baseline" && i + 1 < argc) {
+            config.rtk_adaptive_noise_max_baseline_m = std::stod(argv[++i]);
             continue;
         }
         if (arg == "--cp-pr-fixed-gate") {
@@ -2140,6 +2709,82 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.spp_height_step_guard_min_m = std::stod(argv[++i]);
         } else if (arg == "--spp-height-step-rate" && i + 1 < argc) {
             config.spp_height_step_guard_max_rate_mps = std::stod(argv[++i]);
+        } else if (arg == "--lambda-shadow-candidates" && i + 1 < argc) {
+            config.lambda_candidate_shadow_count = std::stoi(argv[++i]);
+        } else if (arg == "--lambda-src-par-shadow-success-rate" &&
+                   i + 1 < argc) {
+            config.lambda_src_par_shadow_success_rate =
+                std::stod(argv[++i]);
+        } else if (arg == "--lambda-src-par-shadow-covariance-scale" &&
+                   i + 1 < argc) {
+            config.lambda_src_par_shadow_covariance_scale =
+                std::stod(argv[++i]);
+        } else if (arg == "--lambda-satellite-par-shadow-max-drops" &&
+                   i + 1 < argc) {
+            config.lambda_satellite_par_shadow_max_drop_steps =
+                std::stoi(argv[++i]);
+        } else if (
+            arg == "--lambda-satellite-par-shadow-covariance-scale" &&
+            i + 1 < argc) {
+            config.lambda_satellite_par_shadow_covariance_scale =
+                std::stod(argv[++i]);
+        } else if (
+            arg ==
+            "--lambda-satellite-par-shadow-quality-diverse") {
+            config
+                .enable_lambda_satellite_par_shadow_quality_diverse =
+                true;
+        } else if (arg == "--lambda-l1-l5-wlnl-shadow") {
+            config.enable_lambda_l1_l5_wlnl_shadow = true;
+        } else if (arg == "--lambda-l1-l5-wlnl-causal-arcs") {
+            config.enable_lambda_l1_l5_wlnl_causal_arcs = true;
+        } else if (arg == "--safe-fix-shadow-state-machine") {
+            config.enable_safe_fix_shadow_state_machine = true;
+        } else if (arg == "--safe-fix-robust-consensus-shadow") {
+            config.enable_safe_fix_shadow_state_machine = true;
+            config.enable_safe_fix_robust_consensus_shadow = true;
+            config.lambda_candidate_shadow_count =
+                std::max(config.lambda_candidate_shadow_count, 2);
+            config.lambda_satellite_par_shadow_max_drop_steps =
+                std::max(
+                    config.lambda_satellite_par_shadow_max_drop_steps,
+                    8);
+        } else if (
+            arg == "--safe-fix-independent-failure-budget") {
+            config.require_safe_fix_independent_failure_budget =
+                true;
+        } else if (arg == "--library-fixed-quality-gate") {
+            config.enable_library_fixed_quality_gate = true;
+        } else if (
+            arg == "--library-fixed-quality-max-cov-trace" &&
+            i + 1 < argc) {
+            config.library_fixed_quality_max_covariance_trace_m2 =
+                std::stod(argv[++i]);
+        } else if (
+            arg == "--library-fixed-quality-max-nis" &&
+            i + 1 < argc) {
+            config.library_fixed_quality_max_nis_per_observation =
+                std::stod(argv[++i]);
+        } else if (
+            arg == "--library-fixed-quality-min-observations" &&
+            i + 1 < argc) {
+            config.library_fixed_quality_min_strong_observations =
+                std::stoi(argv[++i]);
+        } else if (
+            arg == "--library-fixed-quality-strong-max-nis" &&
+            i + 1 < argc) {
+            config
+                .library_fixed_quality_strong_max_nis_per_observation =
+                std::stod(argv[++i]);
+        } else if (arg == "--safe-float-continuity") {
+            config.enable_safe_float_continuity = true;
+        } else if (
+            arg == "--safe-float-continuity-max-age" &&
+            i + 1 < argc) {
+            config.safe_float_continuity_max_age_s =
+                std::stod(argv[++i]);
+        } else if (arg == "--safe-availability-fallback") {
+            config.enable_safe_availability_fallback = true;
         } else if (arg == "--prefer-trusted-seed") {
             config.prefer_trusted_seed = true;
         } else if (arg == "--doppler-float-seed") {
@@ -2152,6 +2797,8 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.diagnostics_csv_path = argv[++i];
         } else if (arg == "--rtk-update-outlier-threshold" && i + 1 < argc) {
             config.rtk_update_outlier_threshold = std::stod(argv[++i]);
+        } else if (arg == "--student-t-rtk-front-end") {
+            config.student_t_rtk_front_end = true;
         } else if (arg == "--no-kinematic-post-filter") {
             config.enable_kinematic_post_filter = false;
         } else if (arg == "--no-base-interp") {
@@ -2246,6 +2893,18 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     }
     if (config.cmc_ref_switch_min_elev_deg < 0.0) {
         argumentError("--cmc-ref-switch-min-elev must be >= 0", argv[0]);
+    }
+    if (config.rtk_adaptive_noise_alpha_phase < 0.0 || config.rtk_adaptive_noise_alpha_phase > 1.0) {
+        argumentError("--rtk-adaptive-noise-alpha-phase must be in [0, 1]", argv[0]);
+    }
+    if (config.rtk_adaptive_noise_alpha_code < 0.0 || config.rtk_adaptive_noise_alpha_code > 1.0) {
+        argumentError("--rtk-adaptive-noise-alpha-code must be in [0, 1]", argv[0]);
+    }
+    if (config.rtk_adaptive_noise_min_scale <= 0.0) {
+        argumentError("--rtk-adaptive-noise-min-scale must be > 0", argv[0]);
+    }
+    if (config.rtk_adaptive_noise_max_scale < config.rtk_adaptive_noise_min_scale) {
+        argumentError("--rtk-adaptive-noise-max-scale must be >= min scale", argv[0]);
     }
     if (config.cp_pr_fixed_gate_threshold_m <= 0.0) {
         argumentError("--cp-pr-fixed-gate-threshold must be > 0", argv[0]);
@@ -2498,6 +3157,127 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     if (config.skip_epochs < 0) {
         argumentError("--skip-epochs must be >= 0", argv[0]);
     }
+    if (config.lambda_candidate_shadow_count != 0 &&
+        (config.lambda_candidate_shadow_count < 2 ||
+         config.lambda_candidate_shadow_count > 32)) {
+        argumentError(
+            "--lambda-shadow-candidates must be 0 or in [2, 32]",
+            argv[0]);
+    }
+    if (!std::isfinite(config.lambda_src_par_shadow_success_rate) ||
+        config.lambda_src_par_shadow_success_rate < 0.0 ||
+        config.lambda_src_par_shadow_success_rate > 1.0) {
+        argumentError(
+            "--lambda-src-par-shadow-success-rate must be in [0, 1]",
+            argv[0]);
+    }
+    if (!std::isfinite(config.lambda_src_par_shadow_covariance_scale) ||
+        config.lambda_src_par_shadow_covariance_scale <= 0.0) {
+        argumentError(
+            "--lambda-src-par-shadow-covariance-scale must be > 0",
+            argv[0]);
+    }
+    if (config.lambda_src_par_shadow_success_rate > 0.0 &&
+        config.lambda_candidate_shadow_count < 2) {
+        argumentError(
+            "--lambda-src-par-shadow-success-rate requires "
+            "--lambda-shadow-candidates >= 2",
+            argv[0]);
+    }
+    if (config.lambda_satellite_par_shadow_max_drop_steps < 0 ||
+        config.lambda_satellite_par_shadow_max_drop_steps > 32) {
+        argumentError(
+            "--lambda-satellite-par-shadow-max-drops must be in [0, 32]",
+            argv[0]);
+    }
+    if (!std::isfinite(
+            config.lambda_satellite_par_shadow_covariance_scale) ||
+        config.lambda_satellite_par_shadow_covariance_scale <= 0.0) {
+        argumentError(
+            "--lambda-satellite-par-shadow-covariance-scale must be > 0",
+            argv[0]);
+    }
+    if (config.lambda_satellite_par_shadow_max_drop_steps > 0 &&
+        config.lambda_candidate_shadow_count < 2) {
+        argumentError(
+            "--lambda-satellite-par-shadow-max-drops requires "
+            "--lambda-shadow-candidates >= 2",
+            argv[0]);
+    }
+    if (
+        config.enable_lambda_satellite_par_shadow_quality_diverse &&
+        config.lambda_satellite_par_shadow_max_drop_steps <= 0) {
+        argumentError(
+            "--lambda-satellite-par-shadow-quality-diverse requires "
+            "--lambda-satellite-par-shadow-max-drops > 0",
+            argv[0]);
+    }
+    if (config.enable_lambda_l1_l5_wlnl_causal_arcs &&
+        !config.enable_lambda_l1_l5_wlnl_shadow) {
+        argumentError(
+            "--lambda-l1-l5-wlnl-causal-arcs requires "
+            "--lambda-l1-l5-wlnl-shadow",
+            argv[0]);
+    }
+    if (config.enable_safe_fix_shadow_state_machine &&
+        config.lambda_candidate_shadow_count < 2) {
+        argumentError(
+            "--safe-fix-shadow-state-machine requires "
+            "--lambda-shadow-candidates >= 2",
+            argv[0]);
+    }
+    if (config.enable_library_fixed_quality_gate &&
+        !config.enable_safe_fix_robust_consensus_shadow) {
+        argumentError(
+            "--library-fixed-quality-gate requires "
+            "--safe-fix-robust-consensus-shadow",
+            argv[0]);
+    }
+    if (config.require_safe_fix_independent_failure_budget &&
+        (!config.enable_safe_fix_robust_consensus_shadow ||
+         !config.enable_lambda_l1_l5_wlnl_shadow)) {
+        argumentError(
+            "--safe-fix-independent-failure-budget requires "
+            "--safe-fix-robust-consensus-shadow and "
+            "--lambda-l1-l5-wlnl-shadow",
+            argv[0]);
+    }
+    if (!std::isfinite(
+            config.library_fixed_quality_max_covariance_trace_m2) ||
+        config.library_fixed_quality_max_covariance_trace_m2 <= 0.0) {
+        argumentError(
+            "--library-fixed-quality-max-cov-trace must be > 0",
+            argv[0]);
+    }
+    if (!std::isfinite(
+            config.library_fixed_quality_max_nis_per_observation) ||
+        config.library_fixed_quality_max_nis_per_observation <= 0.0) {
+        argumentError(
+            "--library-fixed-quality-max-nis must be > 0",
+            argv[0]);
+    }
+    if (config.library_fixed_quality_min_strong_observations < 1) {
+        argumentError(
+            "--library-fixed-quality-min-observations must be >= 1",
+            argv[0]);
+    }
+    if (!std::isfinite(
+            config
+                .library_fixed_quality_strong_max_nis_per_observation) ||
+        config
+                .library_fixed_quality_strong_max_nis_per_observation <=
+            0.0) {
+        argumentError(
+            "--library-fixed-quality-strong-max-nis must be > 0",
+            argv[0]);
+    }
+    if (
+        !std::isfinite(config.safe_float_continuity_max_age_s) ||
+        config.safe_float_continuity_max_age_s <= 0.0) {
+        argumentError(
+            "--safe-float-continuity-max-age must be > 0",
+            argv[0]);
+    }
     if (!std::isfinite(config.doppler_float_seed_max_age_s) ||
         config.doppler_float_seed_max_age_s <= 0.0) {
         argumentError("--doppler-float-seed-max-age must be > 0", argv[0]);
@@ -2677,6 +3457,12 @@ int main(int argc, char* argv[]) {
         rtk_config.cmc_ref_return_min_elev_deg = config.cmc_ref_return_min_elev_deg;
         rtk_config.cmc_ref_switch_max_elev_drop_deg = config.cmc_ref_switch_max_elev_drop_deg;
         rtk_config.cmc_ref_switch_min_elev_deg = config.cmc_ref_switch_min_elev_deg;
+        rtk_config.enable_adaptive_measurement_noise = config.rtk_adaptive_noise;
+        rtk_config.adaptive_noise_alpha_phase = config.rtk_adaptive_noise_alpha_phase;
+        rtk_config.adaptive_noise_alpha_code = config.rtk_adaptive_noise_alpha_code;
+        rtk_config.adaptive_noise_min_variance_scale = config.rtk_adaptive_noise_min_scale;
+        rtk_config.adaptive_noise_max_variance_scale = config.rtk_adaptive_noise_max_scale;
+        rtk_config.adaptive_noise_max_baseline_m = config.rtk_adaptive_noise_max_baseline_m;
         rtk_config.enable_cp_pr_fixed_gate = config.cp_pr_fixed_gate;
         rtk_config.cp_pr_fixed_gate_threshold_m = config.cp_pr_fixed_gate_threshold_m;
         rtk_config.cp_pr_fixed_gate_min_pairs = config.cp_pr_fixed_gate_min_pairs;
@@ -2768,6 +3554,8 @@ int main(int argc, char* argv[]) {
         rtk_config.fixed_prefit_reset_streak = config.fixed_prefit_reset_streak;
         rtk_config.fixed_prefit_quarantine_only = config.fixed_prefit_quarantine_only;
         rtk_config.max_update_nis_per_observation = config.max_update_nis_per_observation;
+        rtk_config.student_t_front_end.enabled =
+            config.student_t_rtk_front_end;
         rtk_config.max_fixed_update_nis_per_observation =
             config.max_fixed_update_nis_per_observation;
         rtk_config.max_fixed_update_post_residual_rms_m =
@@ -2800,6 +3588,74 @@ int main(int argc, char* argv[]) {
         rtk_config.enable_bsr_guided_decimation = config.enable_bsr_guided_decimation;
         rtk_config.bsr_guided_worst_axes = config.bsr_guided_worst_axes;
         rtk_config.bsr_guided_max_drop_steps = config.bsr_guided_max_drop_steps;
+        rtk_config.lambda_candidate_shadow_count =
+            config.lambda_candidate_shadow_count;
+        rtk_config.lambda_src_par_shadow_success_rate =
+            config.lambda_src_par_shadow_success_rate;
+        rtk_config.lambda_src_par_shadow_covariance_scale =
+            config.lambda_src_par_shadow_covariance_scale;
+        rtk_config.lambda_satellite_par_shadow_max_drop_steps =
+            config.lambda_satellite_par_shadow_max_drop_steps;
+        rtk_config.lambda_satellite_par_shadow_covariance_scale =
+            config.lambda_satellite_par_shadow_covariance_scale;
+        rtk_config.lambda_satellite_par_shadow_quality_diverse =
+            config
+                .enable_lambda_satellite_par_shadow_quality_diverse;
+        rtk_config.lambda_l1_l5_wlnl_shadow =
+            config.enable_lambda_l1_l5_wlnl_shadow;
+        rtk_config.lambda_l1_l5_wlnl_causal_arc_smoothing =
+            config.enable_lambda_l1_l5_wlnl_causal_arcs;
+        rtk_config.safe_fix_shadow_state_machine.enabled =
+            config.enable_safe_fix_shadow_state_machine;
+        rtk_config.safe_fix_shadow_state_machine
+            .require_independent_failure_budget =
+            config.require_safe_fix_independent_failure_budget;
+        rtk_config.library_fixed_quality_gate.enabled =
+            config.enable_library_fixed_quality_gate;
+        rtk_config.library_fixed_quality_gate
+            .require_independent_failure_budget =
+            config.require_safe_fix_independent_failure_budget;
+        rtk_config.library_fixed_quality_gate
+            .maximum_float_position_covariance_trace_m2 =
+            config.library_fixed_quality_max_covariance_trace_m2;
+        rtk_config.library_fixed_quality_gate
+            .maximum_covariance_branch_nis_per_observation =
+            config.library_fixed_quality_max_nis_per_observation;
+        rtk_config.library_fixed_quality_gate
+            .minimum_strong_innovation_observations =
+            config.library_fixed_quality_min_strong_observations;
+        rtk_config.library_fixed_quality_gate
+            .maximum_strong_innovation_nis_per_observation =
+            config
+                .library_fixed_quality_strong_max_nis_per_observation;
+        if (config.enable_safe_fix_robust_consensus_shadow) {
+            rtk_config.safe_fix_shadow_state_machine
+                .acquisition_streak_epochs = 3;
+            rtk_config.safe_fix_shadow_state_machine
+                .maximum_acquisition_correction_jump_m = 0.02;
+            rtk_config.safe_fix_shadow_state_machine
+                .maximum_hold_epochs = 0;
+            rtk_config.safe_fix_shadow_state_machine
+                .minimum_absolute_ratio = 1.4;
+            rtk_config.safe_fix_shadow_state_machine
+                .maximum_independent_consensus_delta_m = 0.10;
+            rtk_config.safe_fix_shadow_state_machine
+                .allow_strong_instant_acquisition = true;
+            rtk_config.safe_fix_shadow_state_machine
+                .allow_change_point_acquisition = true;
+            rtk_config.safe_fix_shadow_minimum_pairs = 12;
+            rtk_config
+                .safe_fix_shadow_maximum_second_position_delta_m =
+                0.25;
+            rtk_config.safe_fix_shadow_maximum_nis_per_observation =
+                3.0;
+        }
+        rtk_config.safe_float_continuity.enabled =
+            config.enable_safe_float_continuity;
+        rtk_config.safe_float_continuity.maximum_anchor_age_s =
+            config.safe_float_continuity_max_age_s;
+        rtk_config.safe_float_continuity.maximum_velocity_age_s =
+            config.safe_float_continuity_max_age_s;
         if (!config.nlos_weights_csv_path.empty()) {
             auto table = std::make_shared<libgnss::nlos_weights::NlosWeightTable>(
                 libgnss::nlos_weights::loadNlosWeightsCsv(config.nlos_weights_csv_path));
@@ -3007,6 +3863,11 @@ int main(int argc, char* argv[]) {
         int fixed_bridge_burst_guard_inspected_segments = 0;
         int fixed_bridge_burst_guard_rejected_segments = 0;
         int fixed_bridge_burst_guard_rejected_epochs = 0;
+        int kinematic_postfilter_continuity_epochs = 0;
+        int immediate_guard_continuity_epochs = 0;
+        int availability_spp_fallback_epochs = 0;
+        int availability_propagated_fallback_epochs = 0;
+        int availability_postfilter_reinserted_epochs = 0;
         libgnss::PositionSolution last_fixed_output;
         bool have_last_fixed_output = false;
         libgnss::PositionSolution last_guard_output;
@@ -3035,6 +3896,8 @@ int main(int argc, char* argv[]) {
                 record_output(emission.solution);
             }
         };
+        libgnss::PositionSolution last_real_output;
+        bool have_last_real_output = false;
 
         while (rover_ok) {
             if (config.max_epochs > 0 && processed_rover_epochs >= config.max_epochs) {
@@ -3100,6 +3963,97 @@ int main(int argc, char* argv[]) {
             const libgnss::PositionSolution* last_output =
                 have_last_guard_output ? &last_guard_output : nullptr;
             const bool have_last_output = last_output != nullptr;
+            bool immediate_guard_continuity_used = false;
+            bool availability_fallback_used = false;
+            const auto replace_rejected_with_continuity =
+                [&](const libgnss::PositionSolution& rejected) {
+                    if (!rtk_config.safe_float_continuity.enabled) {
+                        return false;
+                    }
+                    libgnss::safe_float_continuity::Result continuity;
+                    Eigen::Vector3d velocity = Eigen::Vector3d::Zero();
+                    auto continuity_config =
+                        rtk_config.safe_float_continuity;
+                    const auto try_anchor =
+                        [&](const libgnss::PositionSolution& anchor,
+                            double maximum_age_s) {
+                            const double anchor_age_s =
+                                rejected.time - anchor.time;
+                            const bool use_current_velocity =
+                                rejected.has_velocity &&
+                                rejected.velocity_ecef.allFinite();
+                            if (!use_current_velocity &&
+                                !anchor.has_velocity) {
+                                return false;
+                            }
+                            velocity =
+                                use_current_velocity
+                                    ? rejected.velocity_ecef
+                                    : anchor.velocity_ecef;
+                            auto candidate_config =
+                                rtk_config.safe_float_continuity;
+                            candidate_config.maximum_anchor_age_s =
+                                std::min(
+                                    candidate_config
+                                        .maximum_anchor_age_s,
+                                    maximum_age_s);
+                            continuity =
+                                libgnss::safe_float_continuity::propagate(
+                                    candidate_config,
+                                    anchor.position_ecef,
+                                    anchor_age_s,
+                                    velocity,
+                                    use_current_velocity
+                                        ? 0.0
+                                        : anchor_age_s);
+                            if (continuity.valid) {
+                                continuity_config = candidate_config;
+                            }
+                            return continuity.valid;
+                        };
+                    // Prefer a validated FIXED anchor for the configured
+                    // outage horizon. Fall back to a real solver output only
+                    // for an isolated sub-second guard rejection.
+                    bool propagated =
+                        have_last_fixed_output &&
+                        try_anchor(
+                            last_fixed_output,
+                            continuity_config.maximum_anchor_age_s);
+                    if (!propagated && have_last_real_output) {
+                        propagated = try_anchor(
+                            last_real_output,
+                            continuity_config
+                                .maximum_solver_gap_anchor_age_s);
+                    }
+                    if (!propagated) {
+                        return false;
+                    }
+                    pos_solution = libgnss::PositionSolution{};
+                    pos_solution.time = rejected.time;
+                    pos_solution.status =
+                        libgnss::SolutionStatus::FLOAT;
+                    pos_solution.position_ecef =
+                        continuity.position_ecef;
+                    pos_solution.position_geodetic =
+                        libgnss::spp_utils::ecefToGeodetic(
+                            pos_solution.position_ecef);
+                    pos_solution.position_covariance =
+                        Eigen::Matrix3d::Identity() *
+                        continuity.position_variance_m2;
+                    pos_solution.velocity_ecef = velocity;
+                    pos_solution.velocity_covariance =
+                        Eigen::Matrix3d::Identity() *
+                        std::pow(
+                            continuity_config.velocity_sigma_mps,
+                            2.0);
+                    pos_solution.has_velocity = true;
+                    pos_solution.num_satellites = 4;
+                    pos_solution.ratio = 0.0;
+                    pos_solution.num_fixed_ambiguities = 0;
+                    immediate_guard_continuity_used = true;
+                    ++immediate_guard_continuity_epochs;
+                    return true;
+                };
             const auto jump_from_last_output = [&](const libgnss::PositionSolution& candidate) {
                 if (!have_last_output || !candidate.isValid()) {
                     return std::numeric_limits<double>::infinity();
@@ -3116,6 +4070,148 @@ int main(int argc, char* argv[]) {
                 }
                 return std::max(kDefaultNonFixedJumpGuardMeters, 25.0 * dt);
             };
+            // A raw solver gap used to bypass the same bounded FLOAT-only
+            // continuity path that handles rejected jumps and height steps.
+            // Route it through that fail-closed path as well: propagation
+            // still requires a trusted finite anchor, recent velocity, and
+            // the configured maximum age, and can never declare FIX.
+            if (!pos_solution.isValid()) {
+                auto rejected = pos_solution;
+                rejected.time = rover_obs.time;
+                replace_rejected_with_continuity(rejected);
+            }
+            if (
+                !pos_solution.isValid() &&
+                config.enable_safe_availability_fallback) {
+                auto spp_fallback =
+                    spp_processor.processEpoch(rover_obs, nav_data);
+                if (spp_fallback.isValid() &&
+                    spp_fallback.position_ecef.allFinite()) {
+                    spp_fallback.status =
+                        libgnss::SolutionStatus::SPP;
+                    pos_solution = spp_fallback;
+                    availability_fallback_used = true;
+                    ++availability_spp_fallback_epochs;
+                } else {
+                    const libgnss::PositionSolution*
+                        availability_anchor =
+                            last_output != nullptr &&
+                                    last_output
+                                        ->position_ecef
+                                        .allFinite()
+                                ? last_output
+                                : nullptr;
+                    Eigen::Vector3d anchor_position =
+                        Eigen::Vector3d::Zero();
+                    double anchor_variance_m2 = 1e6;
+                    double dt = 0.2;
+                    if (availability_anchor != nullptr) {
+                        anchor_position =
+                            availability_anchor->position_ecef;
+                        const double candidate_dt =
+                            rover_obs.time -
+                            availability_anchor->time;
+                        if (
+                            std::isfinite(candidate_dt) &&
+                            candidate_dt > 0.0) {
+                            dt = candidate_dt;
+                        }
+                        const double candidate_variance =
+                            availability_anchor
+                                ->position_covariance
+                                .trace() /
+                            3.0;
+                        if (
+                            std::isfinite(candidate_variance) &&
+                            candidate_variance >= 25.0) {
+                            anchor_variance_m2 =
+                                candidate_variance;
+                        } else {
+                            anchor_variance_m2 = 25.0;
+                        }
+                    } else if (
+                        rover_obs.receiver_position.allFinite() &&
+                        rover_obs.receiver_position.norm() > 1e6) {
+                        // This is an input/header or explicitly supplied
+                        // runtime seed, never audit truth. It is exposed only
+                        // as high-variance PROPAGATED availability.
+                        anchor_position =
+                            rover_obs.receiver_position;
+                    } else {
+                        anchor_position =
+                            Eigen::Vector3d::Constant(
+                                std::numeric_limits<double>::quiet_NaN());
+                    }
+
+                    Eigen::Vector3d velocity =
+                        Eigen::Vector3d::Zero();
+                    bool have_bounded_velocity = false;
+                    if (
+                        availability_anchor != nullptr &&
+                        availability_anchor->has_velocity &&
+                        availability_anchor
+                            ->velocity_ecef.allFinite() &&
+                        availability_anchor
+                                ->velocity_ecef.norm() <= 60.0) {
+                        velocity =
+                            availability_anchor->velocity_ecef;
+                        have_bounded_velocity = true;
+                    } else if (
+                        availability_anchor == last_output &&
+                        last_output != nullptr &&
+                        solution.solutions.size() >= 2) {
+                        const auto& previous =
+                            solution.solutions[
+                                solution.solutions.size() - 2];
+                        const double velocity_dt =
+                            last_output->time - previous.time;
+                        if (
+                            previous.position_ecef.allFinite() &&
+                            std::isfinite(velocity_dt) &&
+                            velocity_dt > 0.0 &&
+                            velocity_dt <= 2.0) {
+                            const Eigen::Vector3d candidate_velocity =
+                                (last_output->position_ecef -
+                                 previous.position_ecef) /
+                                velocity_dt;
+                            if (
+                                candidate_velocity.allFinite() &&
+                                candidate_velocity.norm() <= 60.0) {
+                                velocity = candidate_velocity;
+                                have_bounded_velocity = true;
+                            }
+                        }
+                    }
+                    pos_solution =
+                        libgnss::PositionSolution{};
+                    pos_solution.time = rover_obs.time;
+                    pos_solution.status =
+                        libgnss::SolutionStatus::PROPAGATED;
+                    pos_solution.position_ecef =
+                        anchor_position + velocity * dt;
+                    pos_solution.position_geodetic =
+                        libgnss::spp_utils::ecefToGeodetic(
+                            pos_solution.position_ecef);
+                    const double growth_sigma_m = 25.0 * dt;
+                    pos_solution.position_covariance =
+                        Eigen::Matrix3d::Identity() *
+                        (anchor_variance_m2 +
+                         growth_sigma_m * growth_sigma_m);
+                    pos_solution.velocity_ecef = velocity;
+                    pos_solution.velocity_covariance =
+                        Eigen::Matrix3d::Identity() * 625.0;
+                    pos_solution.has_velocity =
+                        have_bounded_velocity;
+                    pos_solution.num_satellites = 0;
+                    pos_solution.ratio = 0.0;
+                    pos_solution.num_fixed_ambiguities = 0;
+                    availability_fallback_used =
+                        pos_solution.isValid();
+                    if (availability_fallback_used) {
+                        ++availability_propagated_fallback_epochs;
+                    }
+                }
+            }
             if (used_interpolated_base && pos_solution.status == libgnss::SolutionStatus::FLOAT) {
                 auto spp_solution = spp_processor.processEpoch(rover_obs, nav_data);
                 if (spp_solution.isValid()) {
@@ -3136,18 +4232,24 @@ int main(int argc, char* argv[]) {
                 }
             }
 
-            if (pos_solution.isValid() &&
+            if (!availability_fallback_used &&
+                pos_solution.isValid() &&
                 pos_solution.status != libgnss::SolutionStatus::FIXED) {
                 const double candidate_jump = jump_from_last_output(pos_solution);
                 if (std::isfinite(candidate_jump) && candidate_jump > max_nonfixed_jump()) {
-                    pos_solution = libgnss::PositionSolution{};
-                    pos_solution.time = rover_obs.time;
-                    pos_solution.status = libgnss::SolutionStatus::NONE;
+                    const auto rejected = pos_solution;
+                    if (!replace_rejected_with_continuity(rejected)) {
+                        pos_solution = libgnss::PositionSolution{};
+                        pos_solution.time = rover_obs.time;
+                        pos_solution.status = libgnss::SolutionStatus::NONE;
+                    }
                 }
             }
 
-            if (pos_solution.isValid() &&
+            if (!availability_fallback_used &&
+                pos_solution.isValid() &&
                 pos_solution.status != libgnss::SolutionStatus::FIXED &&
+                !immediate_guard_continuity_used &&
                 have_last_fixed_output) {
                 double dt_since_fixed = pos_solution.time - last_fixed_output.time;
                 if (std::isfinite(dt_since_fixed) && dt_since_fixed > 0.0 && dt_since_fixed <= 5.0) {
@@ -3160,14 +4262,84 @@ int main(int argc, char* argv[]) {
                     const double max_height_drift = std::max(6.0, 3.0 * dt_since_fixed);
                     if (drift_from_fixed > max_fixed_drift ||
                         height_from_fixed > max_height_drift) {
-                        pos_solution = libgnss::PositionSolution{};
-                        pos_solution.time = rover_obs.time;
-                        pos_solution.status = libgnss::SolutionStatus::NONE;
+                        const auto rejected = pos_solution;
+                        if (!replace_rejected_with_continuity(rejected)) {
+                            pos_solution =
+                                libgnss::PositionSolution{};
+                            pos_solution.time = rover_obs.time;
+                            pos_solution.status =
+                                libgnss::SolutionStatus::NONE;
+                        }
                     }
                 }
             }
 
+            // A solver result can be valid at the raw boundary and then be
+            // rejected by the jump/height guards above. Preserve the same
+            // no-FIX availability contract at this final boundary as well.
+            if (
+                !pos_solution.isValid() &&
+                config.enable_safe_availability_fallback) {
+                Eigen::Vector3d anchor_position =
+                    Eigen::Vector3d::Constant(
+                        std::numeric_limits<double>::quiet_NaN());
+                double dt = 0.2;
+                double anchor_variance_m2 = 1e6;
+                if (
+                    last_output != nullptr &&
+                    last_output->position_ecef.allFinite()) {
+                    anchor_position = last_output->position_ecef;
+                    const double candidate_dt =
+                        rover_obs.time - last_output->time;
+                    if (
+                        std::isfinite(candidate_dt) &&
+                        candidate_dt > 0.0) {
+                        dt = candidate_dt;
+                    }
+                    const double candidate_variance =
+                        last_output->position_covariance.trace() /
+                        3.0;
+                    if (
+                        std::isfinite(candidate_variance) &&
+                        candidate_variance >= 25.0) {
+                        anchor_variance_m2 =
+                            candidate_variance;
+                    }
+                } else if (
+                    rover_obs.receiver_position.allFinite() &&
+                    rover_obs.receiver_position.norm() > 1e6) {
+                    anchor_position =
+                        rover_obs.receiver_position;
+                }
+                if (anchor_position.allFinite()) {
+                    pos_solution =
+                        libgnss::PositionSolution{};
+                    pos_solution.time = rover_obs.time;
+                    pos_solution.status =
+                        libgnss::SolutionStatus::PROPAGATED;
+                    pos_solution.position_ecef =
+                        anchor_position;
+                    pos_solution.position_geodetic =
+                        libgnss::spp_utils::ecefToGeodetic(
+                            anchor_position);
+                    const double growth_sigma_m = 25.0 * dt;
+                    pos_solution.position_covariance =
+                        Eigen::Matrix3d::Identity() *
+                        (anchor_variance_m2 +
+                         growth_sigma_m * growth_sigma_m);
+                    pos_solution.velocity_covariance =
+                        Eigen::Matrix3d::Identity() * 625.0;
+                    pos_solution.has_velocity = false;
+                    pos_solution.num_satellites = 0;
+                    pos_solution.ratio = 0.0;
+                    pos_solution.num_fixed_ambiguities = 0;
+                    availability_fallback_used = true;
+                    ++availability_propagated_fallback_epochs;
+                }
+            }
+
             const auto feedback_solution = pos_solution;
+            rtk_processor.applyLibraryFixedQualityGate(pos_solution);
             if (shouldDemoteFixedStatus(config, pos_solution)) {
                 pos_solution.status = libgnss::SolutionStatus::FLOAT;
             }
@@ -3231,6 +4403,14 @@ int main(int argc, char* argv[]) {
                 have_last_guard_output = true;
                 if (gated_feedback_solution.isFixed()) {
                     last_fixed_output = gated_feedback_solution;
+                if (!immediate_guard_continuity_used &&
+                    !availability_fallback_used &&
+                    !rtk_processor.getLastDebugTelemetry()
+                         .safe_float_continuity_used) {
+                    last_real_output = feedback_solution;
+                    have_last_real_output =
+                        feedback_solution.isValid();
+                }
                     have_last_fixed_output = true;
                 }
             }
@@ -3255,6 +4435,11 @@ int main(int argc, char* argv[]) {
         if (integrity_gate) {
             record_integrity_emissions(integrity_gate->flush());
         }
+        const std::vector<libgnss::PositionSolution>
+            availability_source_solutions =
+                config.enable_safe_availability_fallback
+                    ? solution.solutions
+                    : std::vector<libgnss::PositionSolution>{};
 
         if (config.enable_nonfix_drift_guard &&
             rtk_config.position_mode != libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC &&
@@ -3359,8 +4544,36 @@ int main(int argc, char* argv[]) {
                     const double max_height_step =
                         std::max(kDefaultVerticalStepGuardMeters, 4.0 * dt);
                     if (height_step > max_height_step) {
-                        // Drop this single epoch only; do not advance the
-                        // anchor or trigger a multi-epoch suppression.
+                        const auto continuity =
+                            libgnss::safe_float_continuity::propagate(
+                                rtk_config.safe_float_continuity,
+                                last_kept->position_ecef,
+                                dt,
+                                last_kept->velocity_ecef,
+                                dt);
+                        if (
+                            last_kept->has_velocity &&
+                            continuity.valid) {
+                            auto replacement = *last_kept;
+                            replacement.time = epoch_solution.time;
+                            replacement.status =
+                                libgnss::SolutionStatus::FLOAT;
+                            replacement.position_ecef =
+                                continuity.position_ecef;
+                            replacement.position_geodetic =
+                                libgnss::spp_utils::ecefToGeodetic(
+                                    replacement.position_ecef);
+                            replacement.position_covariance =
+                                Eigen::Matrix3d::Identity() *
+                                continuity.position_variance_m2;
+                            replacement.num_satellites = 4;
+                            replacement.ratio = 0.0;
+                            replacement.num_fixed_ambiguities = 0;
+                            filtered_solution.addSolution(replacement);
+                            ++kinematic_postfilter_continuity_epochs;
+                        }
+                        // Never advance the trusted post-filter anchor with a
+                        // propagated replacement.
                         continue;
                     }
                 }
@@ -3372,6 +4585,58 @@ int main(int argc, char* argv[]) {
                 }
             }
             solution = std::move(filtered_solution);
+        }
+
+        if (
+            config.enable_safe_availability_fallback &&
+            !availability_source_solutions.empty()) {
+            const auto epoch_key =
+                [](const libgnss::PositionSolution& epoch_solution) {
+                    return std::make_pair(
+                        epoch_solution.time.week,
+                        static_cast<long long>(std::llround(
+                            epoch_solution.time.tow * 1000.0)));
+                };
+            std::set<std::pair<int, long long>> kept_epochs;
+            for (const auto& epoch_solution : solution.solutions) {
+                kept_epochs.insert(epoch_key(epoch_solution));
+            }
+            for (const auto& source : availability_source_solutions) {
+                if (kept_epochs.count(epoch_key(source)) != 0) {
+                    continue;
+                }
+                auto degraded = source;
+                degraded.status =
+                    source.status ==
+                            libgnss::SolutionStatus::PROPAGATED
+                        ? libgnss::SolutionStatus::PROPAGATED
+                        : libgnss::SolutionStatus::SPP;
+                degraded.position_covariance +=
+                    Eigen::Matrix3d::Identity() * 10000.0;
+                degraded.ratio = 0.0;
+                degraded.num_fixed_ambiguities = 0;
+                if (
+                    degraded.status ==
+                    libgnss::SolutionStatus::PROPAGATED) {
+                    degraded.num_satellites = 0;
+                } else {
+                    degraded.num_satellites =
+                        std::max(4, degraded.num_satellites);
+                }
+                solution.addSolution(degraded);
+                kept_epochs.insert(epoch_key(degraded));
+                ++availability_postfilter_reinserted_epochs;
+            }
+            std::sort(
+                solution.solutions.begin(),
+                solution.solutions.end(),
+                [](const libgnss::PositionSolution& left,
+                   const libgnss::PositionSolution& right) {
+                    if (left.time.week != right.time.week) {
+                        return left.time.week < right.time.week;
+                    }
+                    return left.time.tow < right.time.tow;
+                });
         }
 
         if (solution.isEmpty()) {
@@ -3436,12 +4701,24 @@ int main(int argc, char* argv[]) {
                       << " rejected_segments=" << float_bridge_tail_guard_rejected_segments
                       << " rejected_epochs=" << float_bridge_tail_guard_rejected_epochs
                       << std::endl;
-            std::cout << "  fixed bridge-burst guard: "
+        std::cout << "  fixed bridge-burst guard: "
                       << (config.enable_fixed_bridge_burst_guard ? "enabled" : "disabled")
                       << " inspected_segments=" << fixed_bridge_burst_guard_inspected_segments
                       << " rejected_segments=" << fixed_bridge_burst_guard_rejected_segments
-                      << " rejected_epochs=" << fixed_bridge_burst_guard_rejected_epochs
-                      << std::endl;
+                  << " rejected_epochs=" << fixed_bridge_burst_guard_rejected_epochs
+                  << std::endl;
+        std::cout << "  kinematic post-filter FLOAT continuity epochs: "
+                  << kinematic_postfilter_continuity_epochs << std::endl;
+        std::cout << "  immediate guard FLOAT continuity epochs: "
+                  << immediate_guard_continuity_epochs << std::endl;
+        std::cout << "  safe availability SPP fallback epochs: "
+                  << availability_spp_fallback_epochs << std::endl;
+        std::cout << "  safe availability propagated epochs: "
+                  << availability_propagated_fallback_epochs
+                  << std::endl;
+        std::cout << "  safe availability post-filter reinsertions: "
+                  << availability_postfilter_reinserted_epochs
+                  << std::endl;
         }
         if (rtk_config.position_mode == libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC &&
             rover_header.approximate_position.norm() > 0.0 && mean_count > 0) {

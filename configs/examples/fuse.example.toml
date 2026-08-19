@@ -1,0 +1,17 @@
+# Copy this file and replace the dataset path and lever arm for your run.
+# Command-line options override every value in this file.
+
+[gnss_fuse]
+data_dir = "data/PPC-Dataset/tokyo/run1"
+out = "output/fused_solution.pos"
+rtk_pos_out = "output/rtk_solution.pos"
+
+# Validated high-level choices. Prefer these over individual research flags.
+preset = "low-cost"
+navi776_tc = true
+
+# IMU-to-antenna lever arm in body FLU coordinates, meters.
+lever_arm = [0.31, 0.0, 0.55]
+
+# 0 processes every epoch.
+max_epochs = 0

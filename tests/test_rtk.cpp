@@ -30,7 +30,7 @@ TEST(RTKConfigDefaultsTest, LowCountRescueIsDisabled) {
 
 // ============================================================================
 // Helper: RTKLIB reference solution (lat/lon in degrees, height in meters)
-// Parsed from output/rtklib_rtk_result.pos
+// Parsed from the bundled RTKLIB reference fixture.
 // ============================================================================
 struct RTKLIBEpoch {
     int week;
@@ -114,7 +114,7 @@ static std::vector<RTKLIBEpoch> parseRTKLIBPos(const std::string& filename) {
 class RTKRealDataTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        if (!sourcePathExists("output/rtklib_rtk_result.pos") ||
+        if (!sourcePathExists("test_data/rtk/rtklib_rtk_result.pos") ||
             !sourcePathExists("data/rover.obs") ||
             !sourcePathExists("data/base.obs") ||
             !sourcePathExists("data/navigation.nav")) {
@@ -122,7 +122,8 @@ protected:
         }
 
         // Load RTKLIB reference
-        rtklib_epochs_ = parseRTKLIBPos(sourcePath("output/rtklib_rtk_result.pos"));
+        rtklib_epochs_ = parseRTKLIBPos(
+            sourcePath("test_data/rtk/rtklib_rtk_result.pos"));
         ASSERT_GT(rtklib_epochs_.size(), 0u) << "Failed to load RTKLIB reference";
 
         // Build ECEF reference positions indexed by TOW
@@ -516,6 +517,149 @@ TEST(LAMBDATest, ExposesBothRatioCandidates) {
     EXPECT_TRUE(best.isApprox((VectorXd(3) << 1.0, -3.0, 5.0).finished()));
     EXPECT_FALSE(best.isApprox(second));
     EXPECT_GT(ratio, 1.0);
+}
+
+TEST(LAMBDATest, TopKDiagnosticsPreserveBestTwoAndExposeSuccessRate) {
+    VectorXd float_amb(3);
+    float_amb << 12.04, -3.97, 6.93;
+    MatrixXd cov(3, 3);
+    cov << 0.018, 0.010, -0.004,
+           0.010, 0.025,  0.006,
+          -0.004, 0.006,  0.020;
+
+    VectorXd best;
+    VectorXd second;
+    double ratio = 0.0;
+    ASSERT_TRUE(lambdaSearchCandidates(float_amb, cov, best, second, ratio));
+
+    LambdaCandidateDiagnostics diagnostics;
+    ASSERT_TRUE(lambdaSearchTopK(float_amb, cov, 8, diagnostics));
+    ASSERT_EQ(diagnostics.candidates.rows(), 3);
+    ASSERT_EQ(diagnostics.candidates.cols(), 8);
+    ASSERT_EQ(diagnostics.squared_residuals.size(), 8);
+    ASSERT_EQ(diagnostics.conditional_variances.size(), 3);
+    ASSERT_EQ(diagnostics.decorrelation_transform.rows(), 3);
+    ASSERT_EQ(diagnostics.decorrelation_transform.cols(), 3);
+    EXPECT_TRUE(diagnostics.decorrelated_float.isApprox(
+        diagnostics.decorrelation_transform.transpose() * float_amb));
+    EXPECT_TRUE(diagnostics.decorrelated_covariance.isApprox(
+        diagnostics.decorrelation_transform.transpose() * cov *
+        diagnostics.decorrelation_transform));
+    EXPECT_TRUE(diagnostics.squared_residuals.array().isFinite().all());
+    EXPECT_TRUE(
+        (diagnostics.squared_residuals.tail(7).array() >=
+         diagnostics.squared_residuals.head(7).array()).all());
+    EXPECT_TRUE(diagnostics.candidates.col(0).isApprox(best));
+    EXPECT_TRUE(diagnostics.candidates.col(1).isApprox(second));
+    EXPECT_DOUBLE_EQ(
+        diagnostics.squared_residuals(1) /
+            diagnostics.squared_residuals(0),
+        ratio);
+    EXPECT_GT(diagnostics.bootstrapped_success_rate, 0.0);
+    EXPECT_LE(diagnostics.bootstrapped_success_rate, 1.0);
+}
+
+TEST(LAMBDATest, TopKDiagnosticsFailClosedOnInvalidRequest) {
+    VectorXd float_amb = VectorXd::Zero(2);
+    MatrixXd covariance = MatrixXd::Identity(2, 2);
+    LambdaCandidateDiagnostics diagnostics;
+
+    EXPECT_FALSE(lambdaSearchTopK(float_amb, covariance, 0, diagnostics));
+    EXPECT_FALSE(lambdaSearchTopK(
+        float_amb, MatrixXd::Identity(3, 3), 2, diagnostics));
+}
+
+TEST(LAMBDATest, FixedFailureRateThresholdConvertsPublishedMu) {
+    FixedFailureRateRatioThreshold threshold;
+    ASSERT_TRUE(fixedFailureRateRatioThreshold(8, 0.95, 0.001, threshold));
+
+    const double expected_mu =
+        0.1751 * std::pow(0.05, -0.2605) - 0.0404;
+    EXPECT_NEAR(threshold.ils_failure_rate_proxy, 0.05, 1e-12);
+    EXPECT_NEAR(threshold.mu, expected_mu, 1e-12);
+    EXPECT_NEAR(
+        threshold.minimum_second_to_best_ratio, 1.0 / expected_mu, 1e-12);
+    EXPECT_TRUE(threshold.accepts_any_candidate);
+}
+
+TEST(LAMBDATest, FixedFailureRateThresholdUsesSafePiecewiseLimits) {
+    FixedFailureRateRatioThreshold threshold;
+
+    ASSERT_TRUE(fixedFailureRateRatioThreshold(8, 0.9995, 0.001, threshold));
+    EXPECT_DOUBLE_EQ(threshold.mu, 1.0);
+    EXPECT_DOUBLE_EQ(threshold.minimum_second_to_best_ratio, 1.0);
+    EXPECT_TRUE(threshold.accepts_any_candidate);
+
+    ASSERT_TRUE(fixedFailureRateRatioThreshold(8, 0.8, 0.001, threshold));
+    EXPECT_DOUBLE_EQ(threshold.mu, 0.0);
+    EXPECT_TRUE(std::isinf(threshold.minimum_second_to_best_ratio));
+    EXPECT_FALSE(threshold.accepts_any_candidate);
+}
+
+TEST(LAMBDATest, FixedFailureRateThresholdFailsClosedOutsideTable) {
+    FixedFailureRateRatioThreshold threshold;
+    EXPECT_FALSE(fixedFailureRateRatioThreshold(0, 0.99, 0.001, threshold));
+    EXPECT_FALSE(fixedFailureRateRatioThreshold(67, 0.99, 0.001, threshold));
+    EXPECT_FALSE(fixedFailureRateRatioThreshold(8, 0.99, 0.002, threshold));
+    EXPECT_FALSE(fixedFailureRateRatioThreshold(8, -0.1, 0.001, threshold));
+}
+
+TEST(LAMBDATest, CovarianceInflationLowersBootstrappedSuccessRate) {
+    VectorXd conditional_variances(3);
+    conditional_variances << 0.01, 0.02, 0.03;
+    const double nominal = bootstrappedSuccessRate(conditional_variances);
+    const double scale2 = bootstrappedSuccessRate(conditional_variances, 2.0);
+    const double scale4 = bootstrappedSuccessRate(conditional_variances, 4.0);
+
+    EXPECT_GT(nominal, scale2);
+    EXPECT_GT(scale2, scale4);
+    EXPECT_TRUE(std::isnan(
+        bootstrappedSuccessRate(conditional_variances, 0.0)));
+    conditional_variances(0) = -1.0;
+    EXPECT_TRUE(std::isnan(
+        bootstrappedSuccessRate(conditional_variances, 1.0)));
+}
+
+TEST(LAMBDATest, SuccessRateCriterionSelectsTrailingPrecisionSubset) {
+    VectorXd conditional_variances(4);
+    conditional_variances << 0.5, 0.1, 0.01, 0.005;
+
+    const int selected = successRateCriterionSubsetSize(
+        conditional_variances, 1.0, 0.99);
+    EXPECT_GE(selected, 1);
+    EXPECT_LT(selected, conditional_variances.size());
+    EXPECT_EQ(successRateCriterionSubsetSize(
+                  conditional_variances, 0.0, 0.99),
+              0);
+    EXPECT_EQ(successRateCriterionSubsetSize(
+                  conditional_variances, 1.0, 0.0),
+              0);
+}
+
+TEST(LAMBDATest, CandidateShadowIsDefaultOffAndConfigurable) {
+    RTKProcessor processor;
+    EXPECT_EQ(processor.getRTKConfig().lambda_candidate_shadow_count, 0);
+
+    auto config = processor.getRTKConfig();
+    config.lambda_candidate_shadow_count = 8;
+    processor.setRTKConfig(config);
+    EXPECT_EQ(processor.getRTKConfig().lambda_candidate_shadow_count, 8);
+    EXPECT_FALSE(processor.getLastDebugTelemetry().lambda_shadow_attempted);
+}
+
+TEST(LAMBDATest, SafeFixStateMachineIsDefaultOffAndShadowOnly) {
+    RTKProcessor processor;
+    EXPECT_FALSE(
+        processor.getRTKConfig().safe_fix_shadow_state_machine.enabled);
+    EXPECT_FALSE(
+        processor.getLastDebugTelemetry().safe_fix_shadow_enabled);
+
+    auto config = processor.getRTKConfig();
+    config.safe_fix_shadow_state_machine.enabled = true;
+    config.lambda_candidate_shadow_count = 2;
+    processor.setRTKConfig(config);
+    EXPECT_TRUE(
+        processor.getRTKConfig().safe_fix_shadow_state_machine.enabled);
 }
 
 // ============================================================================
@@ -1194,6 +1338,10 @@ TEST(RTKArSkipReasonTest, DefaultTelemetryHasNoneSkipReason) {
     EXPECT_FALSE(telemetry.adaptive_dynamic_slip_active);
     EXPECT_EQ(telemetry.consecutive_nonfix_before_bias_update, 0);
     EXPECT_EQ(telemetry.adaptive_dynamic_slip_hold_remaining, 0);
+    EXPECT_FALSE(
+        telemetry.lambda_shadow_candidate_costs.array().isFinite().any());
+    EXPECT_FALSE(
+        telemetry.lambda_shadow_candidate_ecef_m.array().isFinite().any());
 }
 
 TEST(RTKArSkipReasonTest, StringifyCoversAllValues) {

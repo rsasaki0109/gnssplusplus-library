@@ -79,12 +79,12 @@ bool requireRegularFiles(const std::vector<std::string>& paths,
     return true;
 }
 
-struct L6ePatternInfo {
+struct L6PatternInfo {
     bool matched = false;
     std::string pattern;
 };
 
-L6ePatternInfo hourlyL6ePattern(const std::string& input_path) {
+L6PatternInfo hourlyL6Pattern(const std::string& input_path, bool ionosphere) {
     const std::filesystem::path path(input_path);
     const std::string filename = path.filename().string();
     const auto dot_l6 = filename.rfind('.');
@@ -100,7 +100,8 @@ L6ePatternInfo hourlyL6ePattern(const std::string& input_path) {
         return {};
     }
     const std::string prn = filename.substr(dot_prn + 1, dot_l6 - dot_prn - 1);
-    if (prn.size() != 3 || prn == "200" || prn == "201") {
+    const bool is_ionosphere = prn == "200" || prn == "201";
+    if (prn.size() != 3 || is_ionosphere != ionosphere) {
         return {};
     }
     const std::string stem = filename.substr(0, dot_prn);
@@ -130,37 +131,6 @@ L6ePatternInfo hourlyL6ePattern(const std::string& input_path) {
         pattern_path = day_dir / pattern_name;
     }
     return {true, pattern_path.string()};
-}
-
-std::vector<std::string> condenseHourlyL6eInputs(
-    const std::vector<std::string>& inputs) {
-    constexpr size_t kMadocalibL6eStreamSlots = 7;
-    std::map<std::string, size_t> pattern_counts;
-    std::vector<L6ePatternInfo> infos;
-    infos.reserve(inputs.size());
-    for (const std::string& input : inputs) {
-        L6ePatternInfo info = hourlyL6ePattern(input);
-        if (info.matched) {
-            ++pattern_counts[info.pattern];
-        }
-        infos.push_back(std::move(info));
-    }
-
-    std::vector<std::string> condensed;
-    condensed.reserve(inputs.size());
-    std::set<std::string> emitted_patterns;
-    for (size_t i = 0; i < inputs.size(); ++i) {
-        const L6ePatternInfo& info = infos[i];
-        if (!info.matched ||
-            pattern_counts[info.pattern] <= kMadocalibL6eStreamSlots) {
-            condensed.push_back(inputs[i]);
-            continue;
-        }
-        if (emitted_patterns.insert(info.pattern).second) {
-            condensed.push_back(info.pattern);
-        }
-    }
-    return condensed;
 }
 
 #if GNSSPP_HAS_MADOCALIB_BRIDGE
@@ -219,6 +189,7 @@ void applySignalSelection(const prcopt_t& prcopt) {
     const int freq_nums_l1l2[MAXFREQ] = {1, 2, 0, 0, 0};
     const int freq_nums_l1l5[MAXFREQ] = {1, 5, 0, 0, 0};
     const int freq_nums_l1l2l5[MAXFREQ] = {1, 2, 5, 0, 0};
+    const int freq_nums_l1l5l2[MAXFREQ] = {1, 5, 2, 0, 0};
 
     const int freq_nums_e1e5a[MAXFREQ] = {1, 5, 0, 0, 0};
     const int freq_nums_e1e5b[MAXFREQ] = {1, 7, 0, 0, 0};
@@ -251,7 +222,9 @@ void applySignalSelection(const prcopt_t& prcopt) {
         set_obsdef(SYS_QZS, freq_nums_l1l2);
         break;
     default:
-        set_obsdef(SYS_QZS, freq_nums_l1l2l5);
+        // Match rnx2rtkp's pos2-sigqzs=L1/L5/L2 contract. QZSS uses L5 as
+        // frequency slot 1 and L2 as slot 2, unlike GPS L1/L2/L5.
+        set_obsdef(SYS_QZS, freq_nums_l1l5l2);
         break;
     }
     switch (prcopt.pppsig[2]) {
@@ -297,6 +270,40 @@ void applySignalSelection(const prcopt_t& prcopt) {
 #endif
 
 }  // namespace
+
+namespace detail {
+
+std::vector<std::string> condenseHourlyL6Inputs(
+    const std::vector<std::string>& inputs,
+    bool ionosphere) {
+    std::map<std::string, size_t> pattern_counts;
+    std::vector<L6PatternInfo> infos;
+    infos.reserve(inputs.size());
+    for (const std::string& input : inputs) {
+        L6PatternInfo info = hourlyL6Pattern(input, ionosphere);
+        if (info.matched) {
+            ++pattern_counts[info.pattern];
+        }
+        infos.push_back(std::move(info));
+    }
+
+    std::vector<std::string> condensed;
+    condensed.reserve(inputs.size());
+    std::set<std::string> emitted_patterns;
+    for (size_t i = 0; i < inputs.size(); ++i) {
+        const L6PatternInfo& info = infos[i];
+        if (!info.matched || pattern_counts[info.pattern] == 1) {
+            condensed.push_back(inputs[i]);
+            continue;
+        }
+        if (emitted_patterns.insert(info.pattern).second) {
+            condensed.push_back(info.pattern);
+        }
+    }
+    return condensed;
+}
+
+}  // namespace detail
 
 bool isAvailable() {
     return GNSSPP_HAS_MADOCALIB_BRIDGE != 0;
@@ -385,10 +392,31 @@ int runPostpos(const PostposOptions& options, std::string* error_message) {
     if (prcopt.ionocorr || prcopt.modear >= ARMODE_CONT) {
         prcopt.ionoopt = IONOOPT_EST;
     }
+    if (options.trace_ar && std::strstr(prcopt.pppopt, "-TRACE_AR") == nullptr) {
+        const std::string current_options(prcopt.pppopt);
+        const std::string trace_options =
+            current_options.empty() ? "-TRACE_AR" : current_options + " -TRACE_AR";
+        if (trace_options.size() >= sizeof(prcopt.pppopt)) {
+            if (error_message != nullptr) {
+                *error_message = "MADOCALIB pppopt is too long to enable -TRACE_AR";
+            }
+            return -1;
+        }
+        std::snprintf(prcopt.pppopt, sizeof(prcopt.pppopt), "%s", trace_options.c_str());
+    }
     applySignalSelection(prcopt);
 
-    for (size_t i = 0; i < options.mdciono_paths.size() && i < MIONO_MAX_PRN; ++i) {
-        prcopt.l6dpath[i] = const_cast<char*>(options.mdciono_paths[i].c_str());
+    const std::vector<std::string> mdciono_paths =
+        detail::condenseHourlyL6Inputs(options.mdciono_paths, true);
+    if (mdciono_paths.size() > MIONO_MAX_PRN) {
+        if (error_message != nullptr) {
+            *error_message =
+                "MADOCALIB accepts at most three independent L6D streams";
+        }
+        return -1;
+    }
+    for (size_t i = 0; i < mdciono_paths.size(); ++i) {
+        prcopt.l6dpath[i] = const_cast<char*>(mdciono_paths[i].c_str());
     }
 
     if (!options.antenna_path.empty()) {
@@ -398,7 +426,7 @@ int runPostpos(const PostposOptions& options, std::string* error_message) {
     solopt.trace = options.trace_level;
 
     const std::vector<std::string> auxiliary_input_paths =
-        condenseHourlyL6eInputs(options.auxiliary_input_paths);
+        detail::condenseHourlyL6Inputs(options.auxiliary_input_paths, false);
 
     std::vector<std::string> input_storage;
     input_storage.push_back(options.obs_path);

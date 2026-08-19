@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <libgnss++/algorithms/fgo.hpp>
+#include <libgnss++/algorithms/fgo_ddpr_gnc.hpp>
 #include <libgnss++/core/constants.hpp>
 
 #include <array>
@@ -9,6 +10,43 @@
 #include <vector>
 
 using namespace libgnss;
+
+TEST(FgoDdprGncTest, GraduatesToRobustWeightsAndSuppressesGrossOutlier) {
+    const std::vector<fgo_ddpr_gnc::Residual> residuals = {
+        {0.25, 1.0}, {0.5, 1.0}, {1.0, 1.0}, {20.0, 1.0}};
+
+    const auto result = fgo_ddpr_gnc::evaluate(residuals);
+
+    ASSERT_TRUE(result.evaluated);
+    ASSERT_EQ(result.weights.size(), residuals.size());
+    EXPECT_GT(result.stages, 1);
+    EXPECT_DOUBLE_EQ(result.final_mu, 1.0);
+    EXPECT_GT(result.weights[0], result.weights[1]);
+    EXPECT_GT(result.weights[1], result.weights[2]);
+    EXPECT_GT(result.weights[2], result.weights[3]);
+    EXPECT_LT(result.weights[3], 0.02);
+    EXPECT_NEAR(result.weights.back(),
+                4.0 / (4.0 + 400.0), 1e-12);
+    EXPECT_EQ(result.downweighted_factors, 1u);
+    EXPECT_LT(result.effective_factor_count,
+              static_cast<double>(residuals.size()));
+}
+
+TEST(FgoDdprGncTest, FailsClosedForInvalidSigmaOrSchedule) {
+    EXPECT_FALSE(fgo_ddpr_gnc::evaluate({{1.0, 0.0}}).evaluated);
+
+    fgo_ddpr_gnc::Config invalid;
+    invalid.graduation_divisor = 1.0;
+    EXPECT_FALSE(fgo_ddpr_gnc::evaluate({{1.0, 1.0}}, invalid).evaluated);
+}
+
+TEST(FgoDdprGncTest, DefaultScheduleReachesFinalKernelForUrbanScaleResidual) {
+    const auto result = fgo_ddpr_gnc::evaluate({{166.8, 1.0}});
+
+    ASSERT_TRUE(result.evaluated);
+    EXPECT_DOUBLE_EQ(result.final_mu, 1.0);
+    EXPECT_LT(result.stages, 32);
+}
 
 namespace {
 
@@ -466,6 +504,39 @@ std::vector<ObservationData> makeCmcObservationEpochs(
     return epochs;
 }
 
+std::vector<ObservationData> makeGeometryFreeObservationEpochs(
+    const NavigationData& nav,
+    const Vector3d& receiver_position,
+    const std::vector<double>& l1_bias_m,
+    const std::vector<double>& l2_bias_m) {
+    std::vector<ObservationData> epochs;
+    for (std::size_t epoch_index = 0; epoch_index < l1_bias_m.size();
+         ++epoch_index) {
+        ObservationData epoch(
+            GNSSTime(2300, 100100.0 + static_cast<double>(epoch_index)));
+        epoch.receiver_position = receiver_position;
+        for (uint8_t prn = 1; prn <= 2; ++prn) {
+            Observation l1;
+            if (!makeSyntheticGpsL1Observation(
+                    nav, SatelliteId(GNSSSystem::GPS, prn), epoch.time,
+                    receiver_position, l1_bias_m[epoch_index], l1)) {
+                continue;
+            }
+            l1.has_doppler = true;
+            l1.doppler = 0.0;
+            epoch.addObservation(l1);
+            Observation l2 = l1;
+            l2.signal = SignalType::GPS_L2C;
+            l2.carrier_phase =
+                (l2.pseudorange + l2_bias_m[epoch_index]) /
+                constants::GPS_L2_WAVELENGTH;
+            epoch.addObservation(l2);
+        }
+        epochs.push_back(epoch);
+    }
+    return epochs;
+}
+
 // Common config for CMC integration tests: minimal DD-only problem, all
 // satellites pass (no elevation/SNR gating gets in the way of a controlled
 // synthetic scenario), matching the style of
@@ -620,6 +691,7 @@ TEST(FGOTest, TimeDifferencedCarrierFactorsRecoverSyntheticTrajectory) {
     EXPECT_EQ(stats.fixed_solutions, 0u);
     EXPECT_EQ(result.diagnostics.pseudorange_factors, 12u);
     EXPECT_EQ(result.diagnostics.tdcp_factors, 6u);
+    EXPECT_EQ(result.diagnostics.tdcp_factors_inserted, 6u);
     EXPECT_EQ(result.diagnostics.tdcp_candidate_pairs, 6u);
     EXPECT_LT(result.diagnostics.residual_rms_m, 1e-5);
     EXPECT_LT(result.diagnostics.tdcp_residual_rms_m, 1e-5);
@@ -643,6 +715,7 @@ TEST(FGOTest, SingleDifferenceDopplerAndTdcpFactorsConstrainMotion) {
     EXPECT_TRUE(result.diagnostics.converged);
     EXPECT_EQ(result.diagnostics.single_difference_doppler_factors, 5u);
     EXPECT_EQ(result.diagnostics.single_difference_tdcp_factors, 5u);
+    EXPECT_EQ(result.diagnostics.single_difference_tdcp_factors_inserted, 5u);
     EXPECT_LT(result.diagnostics.single_difference_doppler_residual_rms_mps,
               1e-5);
     EXPECT_LT(result.diagnostics.single_difference_tdcp_residual_rms_m,
@@ -729,6 +802,439 @@ TEST(FGOTest, BuiltSingleDifferenceTdcpFactorsUseCurrentEpochLos) {
     }
 
     EXPECT_GT(max_previous_current_los_delta, 1e-8);
+}
+
+TEST(FGOTest, ExternalDopplerDrMonitorMaterializesShadowFactorsOnly) {
+    const NavigationData nav = makeSyntheticGpsNavigation(4);
+    const std::array<Vector3d, 2> rover_positions = {
+        Vector3d(1113194.0, -4841695.0, 3985350.0),
+        Vector3d(1113194.0, -4841695.0, 3985350.0),
+    };
+    const std::array<Vector3d, 2> base_positions = {
+        rover_positions[0] + Vector3d(-320.0, 180.0, 45.0),
+        rover_positions[1] + Vector3d(-320.0, 180.0, 45.0),
+    };
+    auto rover_epochs =
+        makeSyntheticDoubleDifferenceObservationEpochs(nav, rover_positions, 0.0);
+    auto base_epochs =
+        makeSyntheticDoubleDifferenceObservationEpochs(nav, base_positions, 0.0);
+    for (auto* epochs : {&rover_epochs, &base_epochs}) {
+        for (auto& epoch : *epochs) {
+            for (auto& observation : epoch.observations) {
+                observation.has_doppler = true;
+                observation.doppler = 0.0;
+            }
+        }
+    }
+
+    FGOProcessor::FGOConfig config;
+    config.use_spp_seed = false;
+    config.use_pseudorange_factors = false;
+    config.use_motion_factors = false;
+    config.use_tdcp_factors = false;
+    config.use_double_difference_factors = true;
+    config.use_single_difference_doppler_factors = false;
+    config.monitor_external_doppler_dr = true;
+    config.use_ionosphere_model = false;
+    config.use_troposphere_model = false;
+    config.min_elevation_deg = -90.0;
+    config.min_satellites_per_epoch = 2;
+
+    const auto problem = FGOProcessor(config).buildDoubleDifferenceProblem(
+        rover_epochs, base_epochs, nav, base_positions[0]);
+
+    EXPECT_FALSE(problem.single_difference_doppler_factors.empty());
+    EXPECT_FALSE(config.use_single_difference_doppler_factors);
+}
+
+TEST(FGOTest, CandidateIntegrityMonitorMaterializesShadowFactorsOnly) {
+    const NavigationData nav = makeSyntheticGpsNavigation(4);
+    const std::array<Vector3d, 2> rover_positions = {
+        Vector3d(1113194.0, -4841695.0, 3985350.0),
+        Vector3d(1113194.0, -4841695.0, 3985350.0),
+    };
+    const std::array<Vector3d, 2> base_positions = {
+        rover_positions[0] + Vector3d(-320.0, 180.0, 45.0),
+        rover_positions[1] + Vector3d(-320.0, 180.0, 45.0),
+    };
+    auto rover_epochs =
+        makeSyntheticDoubleDifferenceObservationEpochs(nav, rover_positions, 0.0);
+    auto base_epochs =
+        makeSyntheticDoubleDifferenceObservationEpochs(nav, base_positions, 0.0);
+    for (auto* epochs : {&rover_epochs, &base_epochs}) {
+        for (auto& epoch : *epochs) {
+            for (auto& observation : epoch.observations) {
+                observation.has_doppler = true;
+                observation.doppler = 0.0;
+            }
+        }
+    }
+
+    FGOProcessor::FGOConfig config;
+    config.use_spp_seed = false;
+    config.use_pseudorange_factors = false;
+    config.use_motion_factors = false;
+    config.use_tdcp_factors = false;
+    config.use_double_difference_factors = true;
+    config.use_single_difference_doppler_factors = false;
+    config.monitor_candidate_integrity_witness = true;
+    config.use_ionosphere_model = false;
+    config.use_troposphere_model = false;
+    config.min_elevation_deg = -90.0;
+    config.min_satellites_per_epoch = 2;
+
+    const auto problem = FGOProcessor(config).buildDoubleDifferenceProblem(
+        rover_epochs, base_epochs, nav, base_positions[0]);
+
+    EXPECT_FALSE(problem.single_difference_doppler_factors.empty());
+    EXPECT_FALSE(config.use_single_difference_doppler_factors);
+    EXPECT_FALSE(config.monitor_external_doppler_dr);
+}
+
+TEST(FGOTest, ClockResilientTemporalCarrierShadowCancelsCommonClockJump) {
+    const NavigationData nav = makeSyntheticGpsNavigation(4);
+    const std::array<Vector3d, 2> rover_positions = {
+        Vector3d(1113194.0, -4841695.0, 3985350.0),
+        Vector3d(1113214.0, -4841680.0, 3985342.0),
+    };
+    const std::array<Vector3d, 2> base_positions = {
+        rover_positions[0] + Vector3d(-320.0, 180.0, 45.0),
+        rover_positions[1] + Vector3d(-320.0, 180.0, 45.0),
+    };
+    const auto rover_epochs =
+        makeSyntheticDoubleDifferenceObservationEpochs(nav, rover_positions, 0.04);
+    const auto base_epochs =
+        makeSyntheticDoubleDifferenceObservationEpochs(nav, base_positions, 0.02);
+
+    FGOProcessor::FGOConfig config;
+    config.use_spp_seed = false;
+    config.use_pseudorange_factors = false;
+    config.use_motion_factors = false;
+    config.use_tdcp_factors = false;
+    config.use_double_difference_factors = true;
+    config.use_ionosphere_model = false;
+    config.use_troposphere_model = false;
+    config.min_elevation_deg = -90.0;
+    config.min_satellites_per_epoch = 2;
+
+    FGOProcessor processor(config);
+    const auto problem = processor.buildDoubleDifferenceProblem(
+        rover_epochs, base_epochs, nav, base_positions[0]);
+    const auto baseline =
+        FGOProcessor::buildClockResilientTemporalCarrierShadow(problem);
+    ASSERT_FALSE(baseline.empty());
+
+    auto jumped_problem = problem;
+    constexpr double clock_jump_m = constants::SPEED_OF_LIGHT * 0.001;
+    for (auto& observation : jumped_problem.carrier_observations) {
+        if (observation.epoch_index == 1) {
+            observation.corrected_carrier_m += clock_jump_m;
+        }
+    }
+    const auto jumped =
+        FGOProcessor::buildClockResilientTemporalCarrierShadow(jumped_problem);
+    ASSERT_EQ(jumped.size(), baseline.size());
+
+    using ObservationKey = std::tuple<std::size_t, SatelliteId, SignalType>;
+    std::map<ObservationKey, const FGOProcessor::CarrierPhaseFactor*> observations;
+    for (const auto& observation :
+         problem.double_difference_pseudorange_observations) {
+        observations[{observation.epoch_index, observation.satellite,
+                      observation.signal}] = &observation;
+    }
+
+    double max_previous_current_los_delta = 0.0;
+    for (std::size_t i = 0; i < baseline.size(); ++i) {
+        const auto& factor = baseline[i];
+        const auto& jumped_factor = jumped[i];
+        EXPECT_EQ(jumped_factor.satellite, factor.satellite);
+        EXPECT_EQ(jumped_factor.reference_satellite,
+                  factor.reference_satellite);
+        EXPECT_EQ(jumped_factor.signal, factor.signal);
+        EXPECT_NEAR(jumped_factor.delta_carrier_m, factor.delta_carrier_m,
+                    1e-9);
+
+        const auto previous_satellite = observations.at(
+            {factor.previous_epoch_index, factor.satellite, factor.signal});
+        const auto previous_reference = observations.at(
+            {factor.previous_epoch_index, factor.reference_satellite,
+             factor.signal});
+        const auto current_satellite = observations.at(
+            {factor.current_epoch_index, factor.satellite, factor.signal});
+        const auto current_reference = observations.at(
+            {factor.current_epoch_index, factor.reference_satellite,
+             factor.signal});
+        const Vector3d previous_los =
+            previous_satellite->los - previous_reference->los;
+        const Vector3d current_los =
+            current_satellite->los - current_reference->los;
+        EXPECT_LT((factor.previous_los - previous_los).norm(), 1e-12);
+        EXPECT_LT((factor.los - current_los).norm(), 1e-12);
+        EXPECT_EQ(factor.target_ambiguity_index,
+                  current_satellite->ambiguity_index);
+        EXPECT_EQ(factor.reference_ambiguity_index,
+                  current_reference->ambiguity_index);
+        EXPECT_EQ(factor.arc_length_epochs, 2);
+        max_previous_current_los_delta = std::max(
+            max_previous_current_los_delta,
+            (factor.previous_los - factor.los).norm());
+    }
+    EXPECT_GT(max_previous_current_los_delta, 1e-8);
+
+    auto switched_reference_problem = problem;
+    std::set<std::pair<SatelliteId, SignalType>> initial_references;
+    for (const auto& factor : baseline) {
+        initial_references.insert(
+            {factor.reference_satellite, factor.signal});
+    }
+    for (auto& observation : switched_reference_problem.carrier_observations) {
+        if (observation.epoch_index == 1 &&
+            initial_references.count(
+                {observation.satellite, observation.signal}) != 0) {
+            observation.has_carrier_phase = false;
+        }
+    }
+    const auto after_reference_switch =
+        FGOProcessor::buildClockResilientTemporalCarrierShadow(
+            switched_reference_problem);
+    EXPECT_TRUE(after_reference_switch.empty())
+        << "a new reference must start a fresh temporal arc";
+}
+
+TEST(FGOTest, ReportsSignedCommonGpsPseudorangeDeltaForClockAudit) {
+    const NavigationData nav = makeSyntheticGpsNavigation(4);
+    const std::array<Vector3d, 2> rover_positions = {
+        Vector3d(1113194.0, -4841695.0, 3985350.0),
+        Vector3d(1113194.0, -4841695.0, 3985350.0),
+    };
+    const std::array<Vector3d, 2> base_positions = {
+        rover_positions[0] + Vector3d(-320.0, 180.0, 45.0),
+        rover_positions[1] + Vector3d(-320.0, 180.0, 45.0),
+    };
+    const auto rover_epochs =
+        makeSyntheticDoubleDifferenceObservationEpochs(nav, rover_positions, 0.04);
+    const auto base_epochs =
+        makeSyntheticDoubleDifferenceObservationEpochs(nav, base_positions, 0.02);
+
+    FGOProcessor::FGOConfig config;
+    config.use_spp_seed = false;
+    config.use_pseudorange_factors = true;
+    config.use_double_difference_factors = true;
+    config.use_ionosphere_model = false;
+    config.use_troposphere_model = false;
+    config.min_elevation_deg = -90.0;
+    config.min_satellites_per_epoch = 2;
+
+    constexpr double jump_m = constants::SPEED_OF_LIGHT * 0.001;
+    const auto build_with_jump = [&](double jump) {
+        auto jumped = rover_epochs;
+        for (auto& observation : jumped[1].observations) {
+            observation.pseudorange += jump;
+        }
+        return FGOProcessor(config).buildDoubleDifferenceProblem(
+            jumped, base_epochs, nav, base_positions[0]);
+    };
+
+    const auto positive = build_with_jump(jump_m);
+    ASSERT_EQ(positive.gps_common_pseudorange_delta_m.size(), 2u);
+    ASSERT_EQ(positive.gps_common_pseudorange_delta_satellites.size(), 2u);
+    EXPECT_GT(positive.gps_common_pseudorange_delta_m[1], 1e5);
+    EXPECT_GE(positive.gps_common_pseudorange_delta_satellites[1], 2);
+
+    const auto negative = build_with_jump(-jump_m);
+    ASSERT_EQ(negative.gps_common_pseudorange_delta_m.size(), 2u);
+    EXPECT_LT(negative.gps_common_pseudorange_delta_m[1], -1e5);
+    EXPECT_GE(negative.gps_common_pseudorange_delta_satellites[1], 2);
+}
+
+TEST(FGOTest, PredictedDdprQualityShadowIsClockSafeAndFailClosed) {
+    FGOProcessor::FGOProblem problem;
+    problem.epochs.resize(2);
+    problem.epochs[0].time = GNSSTime(2300, 100000.0);
+    problem.epochs[1].time = GNSSTime(2300, 100001.0);
+
+    const Vector3d rover0(1113194.0, -4841695.0, 3985350.0);
+    const Vector3d rover1 = rover0 + Vector3d(12.0, 4.0, -1.0);
+    const Vector3d base = rover0 + Vector3d(-320.0, 180.0, 45.0);
+    const Vector3d target_satellite(15600000.0, 7540000.0, 20140000.0);
+    const Vector3d reference_satellite(-18760000.0, 2750000.0,
+                                        18610000.0);
+    const auto dd_range = [&](const Vector3d& rover) {
+        return ((target_satellite - rover).norm() -
+                (target_satellite - base).norm()) -
+               ((reference_satellite - rover).norm() -
+                (reference_satellite - base).norm());
+    };
+    const double geometry0 = dd_range(rover0);
+    const double geometry1 = dd_range(rover1);
+    const double dd_rate = geometry1 - geometry0;
+
+    const auto make_factor = [&](std::size_t epoch, double geometry,
+                                 double rover_clock_m,
+                                 double base_clock_m) {
+        FGOProcessor::DoubleDifferencePseudorangeFactor factor;
+        factor.epoch_index = epoch;
+        factor.satellite = SatelliteId(GNSSSystem::GPS, 5);
+        factor.reference_satellite = SatelliteId(GNSSSystem::GPS, 11);
+        factor.signal = SignalType::GPS_L1CA;
+        factor.rover_satellite_position_ecef = target_satellite;
+        factor.rover_reference_position_ecef = reference_satellite;
+        factor.base_satellite_position_ecef = target_satellite;
+        factor.base_reference_position_ecef = reference_satellite;
+        factor.base_position_ecef = base;
+        const double rover_target = (target_satellite -
+            (epoch == 0 ? rover0 : rover1)).norm();
+        const double rover_reference = (reference_satellite -
+            (epoch == 0 ? rover0 : rover1)).norm();
+        const double base_target = (target_satellite - base).norm();
+        const double base_reference = (reference_satellite - base).norm();
+        factor.observed_dd_pseudorange_m =
+            ((rover_target + rover_clock_m) -
+             (base_target + base_clock_m)) -
+            ((rover_reference + rover_clock_m) -
+             (base_reference + base_clock_m));
+        EXPECT_NEAR(factor.observed_dd_pseudorange_m, geometry, 1e-8);
+        factor.sigma_m = 0.5;
+        factor.rover_satellite_model.has_doppler_residual = true;
+        factor.rover_reference_model.has_doppler_residual = true;
+        factor.base_satellite_model.has_doppler_residual = true;
+        factor.base_reference_model.has_doppler_residual = true;
+        factor.rover_satellite_model.doppler_residual_mps = dd_rate;
+        factor.rover_satellite_model.elevation_rad = 0.8;
+        factor.rover_reference_model.elevation_rad = 0.9;
+        factor.rover_satellite_model.snr_dbhz = 42.0;
+        factor.rover_reference_model.snr_dbhz = 44.0;
+        return factor;
+    };
+    problem.double_difference_pseudorange_factors.push_back(
+        make_factor(0, geometry0, 25.0, -10.0));
+    // A roughly one-millisecond common rover clock jump cancels in the DD.
+    problem.double_difference_pseudorange_factors.push_back(
+        make_factor(1, geometry1, 299817.458, -10.0));
+
+    const std::vector<Vector3d> solved = {rover0, rover1};
+    const std::vector<Vector3d> predicted = {rover0, rover1};
+    const auto clean = FGOProcessor::analyzePredictedDdprQualityShadow(
+        problem, solved, predicted, 0.2, 5.0, 1.5);
+    ASSERT_EQ(clean.size(), 1u);
+    EXPECT_TRUE(clean[0].doppler_evaluated);
+    EXPECT_TRUE(clean[0].imu_geometry_evaluated);
+    EXPECT_NEAR(clean[0].doppler_innovation_m, 0.0, 1e-8);
+    EXPECT_NEAR(clean[0].imu_innovation_m, 0.0, 1e-8);
+    EXPECT_NEAR(clean[0].previous_predicted_ddpr_residual_m, 0.0, 1e-8);
+    EXPECT_NEAR(clean[0].current_predicted_ddpr_residual_m, 0.0, 1e-8);
+    EXPECT_EQ(clean[0].pair_age_epochs, 2);
+    EXPECT_EQ(clean[0].proposed_action,
+              FGOProcessor::PredictedDdprQualityAction::Keep);
+
+    auto outlier_problem = problem;
+    outlier_problem.double_difference_pseudorange_factors[1]
+        .observed_dd_pseudorange_m += 20.0;
+    const auto outlier = FGOProcessor::analyzePredictedDdprQualityShadow(
+        outlier_problem, solved, predicted, 0.2, 5.0, 1.5);
+    ASSERT_EQ(outlier.size(), 1u);
+    EXPECT_GT(outlier[0].normalized_doppler_innovation, 5.0);
+    EXPECT_GT(outlier[0].normalized_imu_innovation, 5.0);
+    EXPECT_NEAR(outlier[0].current_predicted_ddpr_residual_m, 20.0, 1e-8);
+    EXPECT_EQ(outlier[0].proposed_action,
+              FGOProcessor::PredictedDdprQualityAction::Downweight);
+
+    auto unavailable_problem = problem;
+    for (auto& factor :
+         unavailable_problem.double_difference_pseudorange_factors) {
+        factor.rover_satellite_model.has_doppler_residual = false;
+        factor.rover_reference_model.has_doppler_residual = false;
+        factor.base_satellite_model.has_doppler_residual = false;
+        factor.base_reference_model.has_doppler_residual = false;
+    }
+    const std::vector<Vector3d> unavailable_positions(2, Vector3d::Zero());
+    const auto unavailable =
+        FGOProcessor::analyzePredictedDdprQualityShadow(
+            unavailable_problem, unavailable_positions,
+            unavailable_positions);
+    ASSERT_EQ(unavailable.size(), 1u);
+    EXPECT_FALSE(unavailable[0].doppler_evaluated);
+    EXPECT_FALSE(unavailable[0].imu_geometry_evaluated);
+    EXPECT_EQ(unavailable[0].proposed_action,
+              FGOProcessor::PredictedDdprQualityAction::Unavailable);
+
+    auto switched_reference_problem = problem;
+    switched_reference_problem.double_difference_pseudorange_factors[1]
+        .reference_satellite = SatelliteId(GNSSSystem::GPS, 12);
+    const auto switched =
+        FGOProcessor::analyzePredictedDdprQualityShadow(
+            switched_reference_problem, solved, predicted);
+    EXPECT_TRUE(switched.empty());
+}
+
+TEST(FGOTest, PredictedDdprBiasStateShadowPredictsPersistentBiasCausally) {
+    const auto make_row = [](std::size_t previous_epoch,
+                             double residual_m) {
+        FGOProcessor::PredictedDdprQualityFactorDiagnostics row;
+        row.previous_epoch_index = previous_epoch;
+        row.current_epoch_index = previous_epoch + 1;
+        row.satellite = SatelliteId(GNSSSystem::GPS, 5);
+        row.reference_satellite = SatelliteId(GNSSSystem::GPS, 11);
+        row.signal = SignalType::GPS_L1CA;
+        row.dt_s = 1.0;
+        row.pair_age_epochs = static_cast<int>(previous_epoch + 2);
+        row.imu_geometry_evaluated = true;
+        row.current_predicted_ddpr_residual_m = residual_m;
+        row.imu_innovation_sigma_m = std::sqrt(0.5);
+        return row;
+    };
+    const std::vector<FGOProcessor::PredictedDdprQualityFactorDiagnostics>
+        rows = {make_row(0, 10.0), make_row(1, 10.0),
+                make_row(2, 10.0), make_row(3, 10.0)};
+
+    const auto diagnostics =
+        FGOProcessor::analyzePredictedDdprBiasStateShadow(rows);
+    ASSERT_EQ(diagnostics.size(), rows.size());
+    EXPECT_TRUE(diagnostics[0].continuity_reset);
+    EXPECT_FALSE(diagnostics[0].prediction_usable);
+    EXPECT_FALSE(diagnostics[1].prediction_usable);
+    ASSERT_TRUE(diagnostics[2].prediction_usable);
+    EXPECT_EQ(diagnostics[2].prior_updates, 2);
+    EXPECT_NEAR(diagnostics[2].prior_bias_m, 10.0, 0.2);
+    EXPECT_LT(std::abs(diagnostics[2].corrected_residual_m), 0.2);
+    EXPECT_GT(std::abs(diagnostics[2].raw_residual_m), 9.0);
+}
+
+TEST(FGOTest, PredictedDdprBiasStateShadowBoundsImpulseAndResetsOnGap) {
+    const auto make_row = [](std::size_t previous_epoch,
+                             double residual_m) {
+        FGOProcessor::PredictedDdprQualityFactorDiagnostics row;
+        row.previous_epoch_index = previous_epoch;
+        row.current_epoch_index = previous_epoch + 1;
+        row.satellite = SatelliteId(GNSSSystem::GPS, 5);
+        row.reference_satellite = SatelliteId(GNSSSystem::GPS, 11);
+        row.signal = SignalType::GPS_L1CA;
+        row.dt_s = 1.0;
+        row.pair_age_epochs = 2;
+        row.imu_geometry_evaluated = true;
+        row.current_predicted_ddpr_residual_m = residual_m;
+        row.imu_innovation_sigma_m = std::sqrt(0.5);
+        return row;
+    };
+    const std::vector<FGOProcessor::PredictedDdprQualityFactorDiagnostics>
+        rows = {make_row(0, 10.0), make_row(1, 10.0),
+                make_row(2, 40.0), make_row(3, 10.0),
+                make_row(5, -8.0)};
+
+    const auto diagnostics =
+        FGOProcessor::analyzePredictedDdprBiasStateShadow(rows);
+    ASSERT_EQ(diagnostics.size(), rows.size());
+    ASSERT_TRUE(diagnostics[2].prediction_usable);
+    EXPECT_NEAR(diagnostics[2].prior_bias_m, 10.0, 0.2)
+        << "the current impulse must not leak into its own prediction";
+    EXPECT_TRUE(diagnostics[2].update_clipped);
+    ASSERT_TRUE(diagnostics[3].prediction_usable);
+    EXPECT_LT(std::abs(diagnostics[3].prior_bias_m - 10.0), 1.0)
+        << "one impulse must not become a persistent 40 m bias";
+    EXPECT_TRUE(diagnostics[4].continuity_reset);
+    EXPECT_FALSE(diagnostics[4].prediction_usable);
+    EXPECT_EQ(diagnostics[4].prior_updates, 0);
+    EXPECT_NEAR(diagnostics[4].prior_bias_m, 0.0, 1e-12);
 }
 
 TEST(FGOTest, RobustLossDownweightsPseudorangeOutlier) {
@@ -1138,6 +1644,182 @@ TEST(FGOTest, PropagatesTdcpQualityDiagnostics) {
     EXPECT_EQ(result.diagnostics.tdcp_rejected_missing_previous, 3u);
     EXPECT_EQ(result.diagnostics.tdcp_rejected_loss_of_lock, 4u);
     EXPECT_EQ(result.diagnostics.tdcp_rejected_code_phase_jump, 5u);
+}
+
+TEST(FGOTest, GeometryFreeSlipShadowTaintsExistingDdAmbiguityArc) {
+    FGOProcessor::FGOProblem problem;
+    for (int epoch = 0; epoch < 3; ++epoch) {
+        FGOProcessor::EpochSeed seed;
+        seed.time = GNSSTime(2300, 100000.0 + 0.2 * epoch);
+        problem.epochs.push_back(seed);
+
+        const auto add_factor = [&](SignalType signal,
+                                    std::size_t ambiguity_index,
+                                    double target_sd_phase_m,
+                                    double reference_sd_phase_m) {
+            FGOProcessor::DoubleDifferenceCarrierFactor factor;
+            factor.epoch_index = static_cast<std::size_t>(epoch);
+            factor.ambiguity_index = ambiguity_index;
+            factor.satellite = SatelliteId(GNSSSystem::GPS, 1);
+            factor.reference_satellite = SatelliteId(GNSSSystem::GPS, 2);
+            factor.signal = signal;
+            factor.rover_satellite_model.raw_carrier_m = target_sd_phase_m;
+            factor.base_satellite_model.raw_carrier_m = 0.0;
+            factor.rover_reference_model.raw_carrier_m = reference_sd_phase_m;
+            factor.base_reference_model.raw_carrier_m = 0.0;
+            problem.double_difference_carrier_factors.push_back(factor);
+        };
+
+        const double slip_m = epoch == 0 ? 0.0 : 0.10;
+        add_factor(SignalType::GPS_L1CA, 0, 10.0 + slip_m, 1.0);
+        add_factor(SignalType::GPS_L2C, 1, 8.0, 2.0);
+    }
+
+    const auto shadow =
+        FGOProcessor::analyzeGeometryFreeSlipShadow(problem, 0.05, 1.5);
+    ASSERT_EQ(shadow.size(), 3u);
+    EXPECT_EQ(shadow[0].event_pairs, 0);
+    EXPECT_EQ(shadow[0].tainted_ambiguities, 0);
+    EXPECT_EQ(shadow[1].event_pairs, 1);
+    EXPECT_NEAR(shadow[1].max_jump_m, 0.10, 1e-12);
+    EXPECT_EQ(shadow[1].tainted_ambiguities, 2);
+    EXPECT_EQ(shadow[2].event_pairs, 0);
+    EXPECT_EQ(shadow[2].tainted_ambiguities, 2);
+}
+
+TEST(FGOTest, GeometryFreeSlipShadowUsesDopplerToIsolateSignal) {
+    FGOProcessor::FGOProblem problem;
+    for (int epoch = 0; epoch < 3; ++epoch) {
+        FGOProcessor::EpochSeed seed;
+        seed.time = GNSSTime(2300, 100000.0 + 0.2 * epoch);
+        problem.epochs.push_back(seed);
+
+        const auto add_factor = [&](SignalType signal,
+                                    std::size_t ambiguity_index,
+                                    double target_sd_phase_m,
+                                    double reference_sd_phase_m) {
+            FGOProcessor::DoubleDifferenceCarrierFactor factor;
+            factor.epoch_index = static_cast<std::size_t>(epoch);
+            factor.ambiguity_index = ambiguity_index;
+            factor.satellite = SatelliteId(GNSSSystem::GPS, 1);
+            factor.reference_satellite = SatelliteId(GNSSSystem::GPS, 2);
+            factor.signal = signal;
+            factor.rover_satellite_model.raw_carrier_m = target_sd_phase_m;
+            factor.base_satellite_model.raw_carrier_m = 0.0;
+            factor.rover_reference_model.raw_carrier_m = reference_sd_phase_m;
+            factor.base_reference_model.raw_carrier_m = 0.0;
+            factor.rover_satellite_model.has_doppler_residual = true;
+            factor.base_satellite_model.has_doppler_residual = true;
+            factor.rover_reference_model.has_doppler_residual = true;
+            factor.base_reference_model.has_doppler_residual = true;
+            problem.double_difference_carrier_factors.push_back(factor);
+        };
+
+        const double slip_m = epoch == 0 ? 0.0 : 0.40;
+        add_factor(SignalType::GPS_L1CA, 0, 10.0 + slip_m, 1.0);
+        add_factor(SignalType::GPS_L2C, 1, 8.0, 2.0);
+    }
+
+    const auto shadow =
+        FGOProcessor::analyzeGeometryFreeSlipShadow(problem, 0.05, 1.5);
+    ASSERT_EQ(shadow.size(), 3u);
+    EXPECT_EQ(shadow[0].doppler_event_signals, 0);
+    EXPECT_EQ(shadow[1].event_pairs, 1);
+    EXPECT_EQ(shadow[1].doppler_event_signals, 1);
+    EXPECT_NEAR(shadow[1].doppler_max_innovation_m, 0.40, 1e-12);
+    EXPECT_EQ(shadow[1].doppler_isolated_event_pairs, 1);
+    EXPECT_EQ(shadow[2].doppler_event_signals, 0);
+    EXPECT_EQ(shadow[2].doppler_isolated_event_pairs, 0);
+}
+
+TEST(FGOTest, GeometryFreeSlipResetBreaksBothBandsAfterConfirmation) {
+    const NavigationData nav = makeSyntheticGpsNavigation(2);
+    const Vector3d rover_position(1113194.0, -4841695.0, 3985350.0);
+    const Vector3d base_position =
+        rover_position + Vector3d(-320.0, 180.0, 45.0);
+    const std::vector<double> rover_l1 = {0.0, 0.0, 0.40, 0.40};
+    const std::vector<double> rover_l2 = {0.0, 0.0, 0.00, 0.00};
+    const std::vector<double> base_bias(4, 0.0);
+    const auto rover_epochs = makeGeometryFreeObservationEpochs(
+        nav, rover_position, rover_l1, rover_l2);
+    const auto base_epochs = makeGeometryFreeObservationEpochs(
+        nav, base_position, base_bias, base_bias);
+
+    FGOProcessor::FGOConfig config = makeCmcTestConfig();
+    config.use_code_minus_carrier_screening = false;
+    config.use_multi_frequency_double_difference = true;
+    config.use_geometry_free_cycle_slip_reset = true;
+    config.geometry_free_cycle_slip_threshold_m = 0.05;
+    const auto problem = FGOProcessor(config).buildDoubleDifferenceProblem(
+        rover_epochs, base_epochs, nav, base_position);
+
+    std::map<SignalType, std::map<std::size_t, std::size_t>> arcs;
+    for (const auto& factor : problem.double_difference_carrier_factors) {
+        arcs[factor.signal][factor.epoch_index] = factor.ambiguity_index;
+    }
+    ASSERT_EQ(arcs[SignalType::GPS_L1CA].size(), 4u);
+    ASSERT_EQ(arcs[SignalType::GPS_L2C].size(), 4u);
+    EXPECT_EQ(arcs[SignalType::GPS_L1CA].at(0),
+              arcs[SignalType::GPS_L1CA].at(1));
+    EXPECT_EQ(arcs[SignalType::GPS_L1CA].at(1),
+              arcs[SignalType::GPS_L1CA].at(2));
+    EXPECT_NE(arcs[SignalType::GPS_L1CA].at(2),
+              arcs[SignalType::GPS_L1CA].at(3));
+    EXPECT_EQ(arcs[SignalType::GPS_L2C].at(0),
+              arcs[SignalType::GPS_L2C].at(1));
+    EXPECT_EQ(arcs[SignalType::GPS_L2C].at(1),
+              arcs[SignalType::GPS_L2C].at(2));
+    EXPECT_NE(arcs[SignalType::GPS_L2C].at(2),
+              arcs[SignalType::GPS_L2C].at(3));
+    // The same controlled L1 jump is present on both satellites; one is the
+    // DD target and one the reference. Geometry-free detection cannot identify
+    // the changed band, so both bands for both satellites are conservatively
+    // reset one epoch after detection.
+    EXPECT_EQ(problem.diagnostics.geometry_free_cycle_slip_resets, 4u);
+
+    config.use_geometry_free_cycle_slip_reset = false;
+    const auto control = FGOProcessor(config).buildDoubleDifferenceProblem(
+        rover_epochs, base_epochs, nav, base_position);
+    std::map<SignalType, std::map<std::size_t, std::size_t>> control_arcs;
+    for (const auto& factor : control.double_difference_carrier_factors) {
+        control_arcs[factor.signal][factor.epoch_index] =
+            factor.ambiguity_index;
+    }
+    EXPECT_EQ(control_arcs[SignalType::GPS_L1CA].at(1),
+              control_arcs[SignalType::GPS_L1CA].at(2));
+    EXPECT_EQ(control_arcs[SignalType::GPS_L2C].at(1),
+              control_arcs[SignalType::GPS_L2C].at(2));
+    EXPECT_EQ(control.diagnostics.geometry_free_cycle_slip_resets, 0u);
+}
+
+TEST(FGOTest, GeometryFreeSlipResetDefersToReceiverArcBreak) {
+    const NavigationData nav = makeSyntheticGpsNavigation(2);
+    const Vector3d rover_position(1113194.0, -4841695.0, 3985350.0);
+    const Vector3d base_position =
+        rover_position + Vector3d(-320.0, 180.0, 45.0);
+    const std::vector<double> rover_l1 = {0.0, 0.0, 0.40, 0.40};
+    const std::vector<double> rover_l2 = {0.0, 0.0, 0.00, 0.00};
+    const std::vector<double> base_bias(4, 0.0);
+    auto rover_epochs = makeGeometryFreeObservationEpochs(
+        nav, rover_position, rover_l1, rover_l2);
+    const auto base_epochs = makeGeometryFreeObservationEpochs(
+        nav, base_position, base_bias, base_bias);
+    for (auto& observation : rover_epochs[3].observations) {
+        observation.lli = 1;
+        observation.loss_of_lock = true;
+    }
+
+    FGOProcessor::FGOConfig config = makeCmcTestConfig();
+    config.use_code_minus_carrier_screening = false;
+    config.use_multi_frequency_double_difference = true;
+    config.use_geometry_free_cycle_slip_reset = true;
+    const auto problem = FGOProcessor(config).buildDoubleDifferenceProblem(
+        rover_epochs, base_epochs, nav, base_position);
+
+    // The epoch-2 GF event was pending, but the epoch-3 receiver LLI already
+    // created new arcs. The debounce must cancel rather than count a second,
+    // redundant GF-driven reset.
+    EXPECT_EQ(problem.diagnostics.geometry_free_cycle_slip_resets, 0u);
 }
 
 TEST(FGOTest, CmcJumpForcesAmbiguityArcBreak) {
@@ -1651,4 +2333,19 @@ TEST(FGOTest, ElevationDependentSigmaMatchesPortedVarerrFormula) {
     // close to but not exactly 100.
     ASSERT_GT(cp_sigma_at_epoch0, 0.0);
     EXPECT_NEAR(pr_sigma_at_epoch0 / cp_sigma_at_epoch0, 100.0, 1.0);
+}
+
+TEST(FGOTest, LowCountRelaxSurplusQualityIsDefaultOffAndIndependent) {
+    const FGOProcessor::FGOConfig config;
+    EXPECT_FALSE(config.use_low_count_ambiguity_resolution);
+    EXPECT_FALSE(config.low_count_relax_surplus_quality);
+    EXPECT_FALSE(config.low_count_require_separation_witness);
+    EXPECT_EQ(config.low_count_min_candidates, 4);
+    EXPECT_DOUBLE_EQ(config.low_count_max_float_separation_m, 0.1);
+    EXPECT_DOUBLE_EQ(config.low_count_max_imu_prediction_separation_m, 0.1);
+    // The relaxation and witness are inert unless the low-count path is on.
+    EXPECT_FALSE(config.low_count_relax_surplus_quality &&
+                 !config.use_low_count_ambiguity_resolution);
+    EXPECT_FALSE(config.low_count_require_separation_witness &&
+                 !config.use_low_count_ambiguity_resolution);
 }

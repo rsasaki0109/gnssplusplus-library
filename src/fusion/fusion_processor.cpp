@@ -338,6 +338,8 @@ void LooseCouplingProcessor::processImuSample(const ImuSample& sample_body_flu) 
 }
 
 void LooseCouplingProcessor::processGnssSolution(const PositionSolution& solution) {
+    last_gnss_position_update_applied_ = false;
+    last_gnss_position_correction_enu_.setZero();
     if (!initialized_ || !solution.isValid()) {
         return;
     }
@@ -354,10 +356,39 @@ void LooseCouplingProcessor::processGnssSolution(const PositionSolution& solutio
     const Eigen::Matrix3d position_covariance_enu = regularizeCovariance3x3(
         r_e2n * solution.position_covariance * r_e2n.transpose(), kDefaultPositionSigmaM);
 
-    const auto position_system = fusion_measurement::buildGnssPositionUpdate(
-        state_, antenna_position_enu, position_covariance_enu, config_.lever_arm_body);
-    applyUpdateAndInject(position_system, config_.max_position_update_nis_per_observation,
-                        position_consecutive_gate_rejections_);
+    if (!config_.position_updates_require_fixed ||
+        solution.isFixed()) {
+        const auto position_system =
+            fusion_measurement::buildGnssPositionUpdate(
+                state_, antenna_position_enu,
+                position_covariance_enu,
+                config_.lever_arm_body);
+        const Eigen::Vector3d position_before =
+            state_.nominal.position_enu;
+        const auto position_result = applyUpdateAndInject(
+            position_system,
+            config_.max_position_update_nis_per_observation,
+            position_consecutive_gate_rejections_);
+        if (position_result.ok) {
+            last_gnss_position_update_applied_ = true;
+            last_gnss_position_correction_enu_ =
+                state_.nominal.position_enu - position_before;
+        }
+        if (solution.isFixed() && position_result.ok &&
+            std::isfinite(
+                position_result
+                    .normalized_innovation_squared_per_observation) &&
+            position_result
+                    .normalized_innovation_squared_per_observation <=
+                config_
+                    .tight_dd_sse_fixed_anchor_max_nis_per_observation) {
+            has_fixed_anchor_ = true;
+            last_fixed_anchor_time_ = solution.time;
+            last_fixed_anchor_nis_per_observation_ =
+                position_result
+                    .normalized_innovation_squared_per_observation;
+        }
+    }
 
     if (solution.has_velocity) {
         const Eigen::Vector3d antenna_velocity_enu = r_e2n * solution.velocity_ecef;
@@ -432,6 +463,9 @@ LooseCouplingProcessor::processTightlyCoupledDD(
     dd_transition_since_update_.setIdentity();
 
     result.update = dd_imu_bridge_->update(observations);
+    result.sse_partial_ar =
+        dd_imu_bridge_->evaluateSSEPartialAmbiguities(
+            observations, hasHealthyFixedAnchor());
     if (result.update.ok && result.update.carrier_update_accepted) {
         result.partial_ar = dd_imu_bridge_->resolvePartialAmbiguities(observations);
     } else if (result.update.rejected_by_innovation_gate &&
@@ -468,6 +502,21 @@ bool LooseCouplingProcessor::predictedAntennaPositionEcef(Eigen::Vector3d& ecef_
     const Eigen::Matrix3d cov_enu = h * state_.covariance * h.transpose();
     ecef_cov = r_n2e * cov_enu * r_e2n;
     return true;
+}
+
+bool LooseCouplingProcessor::hasHealthyFixedAnchor() const {
+    if (!has_fixed_anchor_ || !isHeadingConverged() ||
+        !std::isfinite(last_fixed_anchor_nis_per_observation_) ||
+        last_fixed_anchor_nis_per_observation_ >
+            config_
+                .tight_dd_sse_fixed_anchor_max_nis_per_observation) {
+        return false;
+    }
+    const double age_s =
+        state_.nominal.time - last_fixed_anchor_time_;
+    return std::isfinite(age_s) && age_s >= -1e-6 &&
+           age_s <=
+               config_.tight_dd_sse_fixed_anchor_max_age_s;
 }
 
 PositionSolution LooseCouplingProcessor::toPositionSolution() const {
