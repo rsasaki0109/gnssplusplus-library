@@ -2094,6 +2094,21 @@ private:
     bool resolveAmbiguities();
     bool resolveAmbiguities(std::vector<DDPair> dd_pairs);
 
+    /// MW wide-lane + narrow-lane integer recovery used by
+    /// resolveAmbiguities() when LAMBDA fails (long-baseline / IFLC mode).
+    void tryWlNlFallback(int na,
+                         int nb,
+                         double max_var,
+                         const std::vector<DDPair>& dd_pairs,
+                         const VectorXd& head_state,
+                         VectorXd& dd_float,
+                         MatrixXd& Qb,
+                         MatrixXd& Qab,
+                         VectorXd& dd_fixed,
+                         bool& fixed,
+                         double& ratio,
+                         std::vector<int>& initial_candidate_subset);
+
     PositionSolution generateSolution(const GNSSTime& time,
                                     SolutionStatus status,
                                     int num_satellites);

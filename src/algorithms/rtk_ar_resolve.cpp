@@ -48,6 +48,119 @@ bool RTKProcessor::resolveAmbiguities() {
     return resolveAmbiguities(buildDoubleDifferencePairs(sat_data, min_lock));
 }
 
+void RTKProcessor::tryWlNlFallback(int na,
+                                   int nb,
+                                   double max_var,
+                                   const std::vector<DDPair>& dd_pairs,
+                                   const VectorXd& head_state,
+                                   VectorXd& dd_float,
+                                   MatrixXd& Qb,
+                                   MatrixXd& Qab,
+                                   VectorXd& dd_fixed,
+                                   bool& fixed,
+                                   double& ratio,
+                                   std::vector<int>& initial_candidate_subset) {
+    const auto& sat_data = current_sat_data_;
+    // WL-NL fallback: when LAMBDA fails on long baseline, try MW wide-lane
+    // followed by a narrow-lane integer check. Historically this path was
+    // tied to IFLC; enable_wlnl_fallback lets iono-off runs test it without
+    // also forcing the wide-lane constraint pre-step.
+    if (!fixed &&
+        (rtk_config_.ionoopt == RTKConfig::IonoOpt::IFLC ||
+         rtk_config_.enable_wlnl_fallback) &&
+        max_var < 1.0) {
+        // Only attempt when KF has converged (max_var < 1 = several epochs in)
+        VectorXd wlnl_fixed = dd_float;
+        int wl_ok = 0, wl_total = 0;
+        std::set<int> wlnl_fixed_indices;
+        const double wlnl_acceptance_threshold =
+            std::max(0.0, rtk_config_.wide_lane_acceptance_threshold);
+
+        for (int i = 0; i < nb; ++i) {
+            if (dd_pairs[i].freq != 0 || dd_pairs[i].ref_sat.system == GNSSSystem::GLONASS) continue;
+            wl_total++;
+            int l2p = -1;
+            for (int j = 0; j < nb; ++j)
+                if (dd_pairs[j].freq == 1 &&
+                    dd_pairs[j].sat == dd_pairs[i].sat &&
+                    dd_pairs[j].ref_sat == dd_pairs[i].ref_sat) { l2p = j; break; }
+            if (l2p < 0) continue;
+
+            auto rit = sat_data.find(dd_pairs[i].ref_sat);
+            auto sit = sat_data.find(dd_pairs[i].sat);
+            if (rit == sat_data.end() || sit == sat_data.end()) continue;
+            if (!rit->second.has_l2 || !sit->second.has_l2) continue;
+            const double f1 = rit->second.l1_frequency_hz;
+            const double f2 = rit->second.l2_frequency_hz;
+            const double lam_wl = wideLaneWavelength(f1, f2);
+            const double c1_if = ionoFreeCoeff1(f1, f2);
+            const double c2_if = ionoFreeCoeff2(f1, f2);
+            const double lam_nl = narrowLaneWavelength(f1, f2);
+            if (lam_wl <= 0.0 || lam_nl <= 0.0) continue;
+
+            // MW wide-lane
+            auto mw_sd = [&](const SatelliteData& d) {
+                return (d.rover_l1_phase - d.base_l1_phase) - (d.rover_l2_phase - d.base_l2_phase)
+                     - (f1 * (d.rover_l1_code - d.base_l1_code) +
+                        f2 * (d.rover_l2_code - d.base_l2_code))
+                       / ((f1 + f2) * lam_wl);
+            };
+            double dd_mw = mw_sd(rit->second) - mw_sd(sit->second);
+            double nw = std::round(dd_mw);
+            if (std::abs(dd_mw - nw) > wlnl_acceptance_threshold) continue;
+
+            // IF → NL
+            double if_dd = c1_if * rit->second.l1_wavelength * dd_float(i) +
+                           c2_if * rit->second.l2_wavelength * dd_float(l2p);
+            double n2f = (if_dd - c1_if * rit->second.l1_wavelength * nw) / lam_nl;
+            double n2 = std::round(n2f);
+            if (std::abs(n2f - n2) > wlnl_acceptance_threshold) continue;
+
+            wlnl_fixed(i) = nw + n2;
+            wlnl_fixed(l2p) = n2;
+            wlnl_fixed_indices.insert(i);
+            wlnl_fixed_indices.insert(l2p);
+            wl_ok++;
+        }
+
+        if (wl_ok >= 3) {
+            // Use resolved pairs for position
+            std::vector<int> resolved(
+                wlnl_fixed_indices.begin(), wlnl_fixed_indices.end());
+            if ((int)resolved.size() >= 4) {
+                int ns = resolved.size();
+                VectorXd sf(ns), sx(ns);
+                MatrixXd sQb(ns, ns), sQab(na, ns);
+                for (int i = 0; i < ns; ++i) {
+                    sf(i) = dd_float(resolved[i]);
+                    sx(i) = wlnl_fixed(resolved[i]);
+                    for (int j = 0; j < ns; ++j) sQb(i,j) = Qb(resolved[i], resolved[j]);
+                    for (int j = 0; j < na; ++j) sQab(j,i) = Qab(j, resolved[i]);
+                }
+                sQb = (sQb + sQb.transpose()) / 2.0;
+                for (int i = 0; i < ns; ++i) if (sQb(i,i) < 1e-6) sQb(i,i) = 1e-6;
+                Eigen::LDLT<MatrixXd> slv(sQb);
+                if (slv.info() == Eigen::Success) {
+                    VectorXd xa = head_state - sQab * slv.solve(sf - sx);
+                    fixed_baseline_ = xa.head<3>();
+                    has_fixed_solution_ = true;
+                    dd_float = sf;
+                    Qb = sQb;
+                    Qab = sQab;
+                    dd_fixed = sx;
+                    fixed = true;
+                    ratio = 999.9;
+                    debug_telemetry_.used_wlnl_fallback = true;
+                    initial_candidate_subset = resolved;
+                    last_dd_pairs_ = dd_pairs;
+                    last_best_subset_ = resolved;
+                    last_dd_fixed_ = dd_fixed;
+                }
+            }
+        }
+    }
+}
+
 bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
     if (!filter_initialized_) {
         debug_telemetry_.ar_skip_reason = ARSkipReason::FILTER_NOT_INIT;
@@ -2046,104 +2159,9 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
     }
 
     // WL-NL fallback: when LAMBDA fails on long baseline, try MW wide-lane
-    // followed by a narrow-lane integer check. Historically this path was
-    // tied to IFLC; enable_wlnl_fallback lets iono-off runs test it without
-    // also forcing the wide-lane constraint pre-step.
-    if (!fixed &&
-        (rtk_config_.ionoopt == RTKConfig::IonoOpt::IFLC ||
-         rtk_config_.enable_wlnl_fallback) &&
-        max_var < 1.0) {
-        // Only attempt when KF has converged (max_var < 1 = several epochs in)
-        VectorXd wlnl_fixed = dd_float;
-        int wl_ok = 0, wl_total = 0;
-        std::set<int> wlnl_fixed_indices;
-        const double wlnl_acceptance_threshold =
-            std::max(0.0, rtk_config_.wide_lane_acceptance_threshold);
-
-        for (int i = 0; i < nb; ++i) {
-            if (dd_pairs[i].freq != 0 || dd_pairs[i].ref_sat.system == GNSSSystem::GLONASS) continue;
-            wl_total++;
-            int l2p = -1;
-            for (int j = 0; j < nb; ++j)
-                if (dd_pairs[j].freq == 1 &&
-                    dd_pairs[j].sat == dd_pairs[i].sat &&
-                    dd_pairs[j].ref_sat == dd_pairs[i].ref_sat) { l2p = j; break; }
-            if (l2p < 0) continue;
-
-            auto rit = sat_data.find(dd_pairs[i].ref_sat);
-            auto sit = sat_data.find(dd_pairs[i].sat);
-            if (rit == sat_data.end() || sit == sat_data.end()) continue;
-            if (!rit->second.has_l2 || !sit->second.has_l2) continue;
-            const double f1 = rit->second.l1_frequency_hz;
-            const double f2 = rit->second.l2_frequency_hz;
-            const double lam_wl = wideLaneWavelength(f1, f2);
-            const double c1_if = ionoFreeCoeff1(f1, f2);
-            const double c2_if = ionoFreeCoeff2(f1, f2);
-            const double lam_nl = narrowLaneWavelength(f1, f2);
-            if (lam_wl <= 0.0 || lam_nl <= 0.0) continue;
-
-            // MW wide-lane
-            auto mw_sd = [&](const SatelliteData& d) {
-                return (d.rover_l1_phase - d.base_l1_phase) - (d.rover_l2_phase - d.base_l2_phase)
-                     - (f1 * (d.rover_l1_code - d.base_l1_code) +
-                        f2 * (d.rover_l2_code - d.base_l2_code))
-                       / ((f1 + f2) * lam_wl);
-            };
-            double dd_mw = mw_sd(rit->second) - mw_sd(sit->second);
-            double nw = std::round(dd_mw);
-            if (std::abs(dd_mw - nw) > wlnl_acceptance_threshold) continue;
-
-            // IF → NL
-            double if_dd = c1_if * rit->second.l1_wavelength * dd_float(i) +
-                           c2_if * rit->second.l2_wavelength * dd_float(l2p);
-            double n2f = (if_dd - c1_if * rit->second.l1_wavelength * nw) / lam_nl;
-            double n2 = std::round(n2f);
-            if (std::abs(n2f - n2) > wlnl_acceptance_threshold) continue;
-
-            wlnl_fixed(i) = nw + n2;
-            wlnl_fixed(l2p) = n2;
-            wlnl_fixed_indices.insert(i);
-            wlnl_fixed_indices.insert(l2p);
-            wl_ok++;
-        }
-
-        if (wl_ok >= 3) {
-            // Use resolved pairs for position
-            std::vector<int> resolved(
-                wlnl_fixed_indices.begin(), wlnl_fixed_indices.end());
-            if ((int)resolved.size() >= 4) {
-                int ns = resolved.size();
-                VectorXd sf(ns), sx(ns);
-                MatrixXd sQb(ns, ns), sQab(na, ns);
-                for (int i = 0; i < ns; ++i) {
-                    sf(i) = dd_float(resolved[i]);
-                    sx(i) = wlnl_fixed(resolved[i]);
-                    for (int j = 0; j < ns; ++j) sQb(i,j) = Qb(resolved[i], resolved[j]);
-                    for (int j = 0; j < na; ++j) sQab(j,i) = Qab(j, resolved[i]);
-                }
-                sQb = (sQb + sQb.transpose()) / 2.0;
-                for (int i = 0; i < ns; ++i) if (sQb(i,i) < 1e-6) sQb(i,i) = 1e-6;
-                Eigen::LDLT<MatrixXd> slv(sQb);
-                if (slv.info() == Eigen::Success) {
-                    VectorXd xa = head_state - sQab * slv.solve(sf - sx);
-                    fixed_baseline_ = xa.head<3>();
-                    has_fixed_solution_ = true;
-                    dd_float = sf;
-                    Qb = sQb;
-                    Qab = sQab;
-                    dd_fixed = sx;
-                    fixed = true;
-                    ratio = 999.9;
-                    debug_telemetry_.used_wlnl_fallback = true;
-                    initial_candidate_subset = resolved;
-                    last_dd_pairs_ = dd_pairs;
-                    last_best_subset_ = resolved;
-                    last_dd_fixed_ = dd_fixed;
-                }
-            }
-        }
-    }
-
+    // followed by a narrow-lane integer check (see tryWlNlFallback).
+    tryWlNlFallback(na, nb, max_var, dd_pairs, head_state, dd_float, Qb, Qab,
+                    dd_fixed, fixed, ratio, initial_candidate_subset);
     // Partial AR: try removing worst satellites if full set fails
     rtk_ar_evaluation::CandidateState best_candidate;
     best_candidate.fixed = fixed;
