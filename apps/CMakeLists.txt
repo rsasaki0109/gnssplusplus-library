@@ -241,6 +241,7 @@ install(FILES
 install(FILES
     ${CMAKE_SOURCE_DIR}/configs/examples/fuse.example.toml
     ${CMAKE_SOURCE_DIR}/configs/examples/live.example.conf
+    ${CMAKE_SOURCE_DIR}/configs/examples/station.example.toml
     ${CMAKE_SOURCE_DIR}/configs/examples/solve.example.toml
     ${CMAKE_SOURCE_DIR}/configs/examples/web.example.toml
     DESTINATION configs/examples

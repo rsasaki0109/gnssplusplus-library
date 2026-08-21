@@ -2,6 +2,8 @@
 
 from ._support import *  # noqa: F401,F403
 
+import stat
+
 class RuntimeReceiverCases:
     def test_replay_solves_bundled_rinex_sequence(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_replay_test_") as temp_dir:
@@ -1474,6 +1476,107 @@ class RuntimeReceiverCases:
             self.assertEqual(resolved["config"]["rover_ubx"], "serial:///dev/ttyACM0")
             self.assertIn("--rover-ubx", resolved["command"])
             self.assertIn("--rover-ubx-baud", resolved["command"])
+
+    def test_station_check_validates_inputs_and_redacts_uri_credentials(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_station_check_") as temp_dir:
+            temp_root = Path(temp_dir)
+            config_path = temp_root / "station.toml"
+            config_path.write_text(
+                "\n".join(
+                    [
+                        "[station]",
+                        'name = "credential-check"',
+                        'run_root = "runs"',
+                        "[station.receiver]",
+                        'rover_rtcm = "ntrip://field:super-secret@caster.example/MOUNT"',
+                        f'base_rtcm = "{temp_root / "base.rtcm3"}"',
+                        "auto_restart = false",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (temp_root / "base.rtcm3").touch()
+
+            result = self.run_gnss("station", "check", "--config", str(config_path))
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertTrue(payload["ok"])
+            self.assertIn("ntrip://***@caster.example/MOUNT", payload["config"]["rover_rtcm"])
+            self.assertNotIn("super-secret", result.stdout)
+            self.assertIn("gnss_live", " ".join(payload["command"]))
+
+    def test_station_start_writes_run_contract_and_stop_is_idempotent(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_station_lifecycle_") as temp_dir:
+            temp_root = Path(temp_dir)
+            for name in ("rover.rtcm3", "base.rtcm3", "nav.rnx"):
+                (temp_root / name).touch()
+            config_path = temp_root / "station.toml"
+            config_path.write_text(
+                "\n".join(
+                    [
+                        "[station]",
+                        'name = "lifecycle"',
+                        'run_root = "runs"',
+                        "[station.receiver]",
+                        'rover_rtcm = "rover.rtcm3"',
+                        'base_rtcm = "base.rtcm3"',
+                        'nav_rinex = "nav.rnx"',
+                        "max_epochs = 1",
+                        "auto_restart = false",
+                        "quiet = true",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            started = self.run_gnss("station", "start", "--config", str(config_path))
+            self.assertEqual(started.returncode, 0, msg=started.stderr)
+            launch = json.loads(started.stdout)
+            run_dir = Path(launch["run_dir"])
+            self.assertEqual(launch["schema_version"], "station.v1")
+            for name in ("run.json", "receiver.conf", "status.json", "live.log"):
+                self.assertTrue((run_dir / name).is_file(), name)
+            self.assertEqual(stat.S_IMODE((run_dir / "receiver.conf").stat().st_mode) & 0o077, 0)
+
+            manifest = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["source_config_path"], str(config_path))
+            self.assertEqual(manifest["schema_version"], "station.v1")
+
+            status_result = self.run_gnss(
+                "station",
+                "status",
+                "--run-dir",
+                str(run_dir),
+                "--wait-seconds",
+                "5",
+            )
+            self.assertEqual(status_result.returncode, 0, msg=status_result.stderr)
+            status = json.loads(status_result.stdout)
+            self.assertFalse(status["healthy"])
+            self.assertFalse(status["pid_running"])
+            self.assertNotIn("super-secret", status_result.stdout)
+
+            stopped = self.run_gnss("station", "stop", "--run-dir", str(run_dir))
+            self.assertEqual(stopped.returncode, 0, msg=stopped.stderr)
+            stopped_payload = json.loads(stopped.stdout)
+            self.assertFalse(stopped_payload["pid_running"])
+
+    def test_station_stop_refuses_a_reused_pid(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_station_pid_guard_") as temp_dir:
+            run_dir = Path(temp_dir)
+            (run_dir / "run.json").write_text('{"schema_version":"station.v1"}\n', encoding="utf-8")
+            (run_dir / "status.json").write_text(
+                json.dumps({"state": "running", "pid": os.getpid()}) + "\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_gnss("station", "stop", "--run-dir", str(run_dir))
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("process identity does not match", result.stderr)
     def test_rcv_start_and_status_report_failed_background_run(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_rcv_start_test_") as temp_dir:
             temp_root = Path(temp_dir)

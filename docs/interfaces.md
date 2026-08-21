@@ -29,6 +29,7 @@ Examples:
 - `gnss stream`
 - `gnss convert`
 - `gnss live`
+- `gnss station` (`check|start|status|stop|restart`, with a station TOML)
 - `gnss rcv`
 - `gnss web`
 

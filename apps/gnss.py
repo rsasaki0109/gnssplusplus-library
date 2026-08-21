@@ -347,6 +347,11 @@ COMMANDS = {
         "target": python_target("gnss_rcv.py"),
         "summary": "Run the live solver from an rtkrcv-style config file and emit status snapshots.",
     },
+    "station": {
+        "kind": "python",
+        "target": python_target("gnss_station.py"),
+        "summary": "Validate and manage a long-running RTK station with run artifacts and health status.",
+    },
     "web": {
         "kind": "python",
         "target": python_target("gnss_web.py"),
@@ -673,6 +678,9 @@ def usage() -> str:
             "  python3 apps/gnss.py rcv status --status-out output/receiver_status.json --wait-seconds 5",
             "  python3 apps/gnss.py rcv status --status-out output/receiver_status.json --tail-log-lines 20",
             "  python3 apps/gnss.py rcv reload --status-out output/receiver_status.json --wait-seconds 1",
+            "  python3 apps/gnss.py station check --config configs/examples/station.example.toml",
+            "  python3 apps/gnss.py station start --config configs/examples/station.example.toml",
+            "  python3 apps/gnss.py station status --config configs/examples/station.example.toml --wait-seconds 5",
             "  python3 apps/gnss.py stats output/rtk_solution.pos",
             "  python3 apps/gnss.py compare output/rtk_solution.pos output/driving_rtklib_rtk.pos",
             "  python3 apps/gnss.py odaiba-benchmark --rtklib-bin /path/to/rnx2rtkp",

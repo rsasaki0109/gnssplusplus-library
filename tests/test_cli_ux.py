@@ -105,6 +105,7 @@ class CliUxTest(unittest.TestCase):
             "clas-ppp",
             "qzss-l6-info",
             "ppc-rtk-signoff",
+            "station",
             "web",
         ):
             self.assertIn(f"  {command}", result.stdout)
@@ -137,6 +138,7 @@ class CliUxTest(unittest.TestCase):
                 "--compact-code-bias-composition-policy",
             ),
             "web": ("usage: gnss web", "--artifact-manifest"),
+            "station": ("usage: gnss station", "--config-toml", "--run-dir"),
         }
 
         for command, snippets in expectations.items():
@@ -157,6 +159,7 @@ class CliUxTest(unittest.TestCase):
                 "--compact-bias-row-materialization",
             ),
             "web": ("usage: gnss web", "--artifact-manifest"),
+            "station": ("usage: gnss station", "--config-toml", "--run-dir"),
         }
 
         for command, snippets in expectations.items():

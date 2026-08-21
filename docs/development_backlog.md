@@ -76,6 +76,79 @@ Ref: `docs/tight_coupling.md`, `docs/navi776_techniques.md`.
 - Development continues in the `gnssplusplus-library-ffrt-shadow` worktree on
   `develop`.
 
+## 6. Long-term operational product roadmap (planned; reviewed 2026-08-20)
+
+The long-term product direction is to evolve `gnss station` from a process
+supervisor into a trusted GNSS station service. The service should cover
+provisioning, continuous operation, measurement-quality judgement, recovery,
+and reproducible delivery of solution artifacts. This section records the
+plan only; it does not activate any of the items below.
+
+### Phase 1: make measurement quality explicit
+
+- Define a versioned station-quality contract that separates process health
+  from measurement health.
+- Report FIX/FLOAT/SINGLE/NONE, correction age, solution freshness, satellite
+  count, position jumps, and time gaps.
+- Emit `usable`, `degraded`, or `unusable` plus machine-readable
+  `reason_codes`.
+- Build a replay corpus and long-running soak tests before changing defaults.
+
+The first acceptance bar is that a live process with stale or unusable
+measurements cannot be reported as healthy.
+
+### Phase 2: make unattended field operation safe
+
+- Package the station as a systemd/Docker service with graceful shutdown and
+  recovery after process, network, or power interruption.
+- Add disk-budget enforcement, retention and rotation for logs, RTCM, RINEX,
+  and solution artifacts.
+- Export health and quality metrics for monitoring and add actionable alerts.
+- Produce a support bundle containing configuration, status history, and
+  relevant logs without leaking credentials.
+
+### Phase 3: make the data contract reusable
+
+- Expose station status and solution events through REST/WebSocket and
+  Prometheus-compatible interfaces.
+- Keep the JSON contract usable by the local web UI, ROS2, robotics tooling,
+  and offline analysis without per-consumer parsing rules.
+- Attach configuration, software version, receiver identity, and correction
+  source metadata to each result for reproducibility.
+
+### Phase 4: manage multiple stations securely
+
+- Add station inventory, fleet views, remote status/log collection, and
+  controlled restart/configuration operations.
+- Version configurations with validation, staged rollout, and rollback.
+- Add TLS/mTLS, role-based access control, secret management, and audit logs.
+- Support correction-source failover and station redundancy where the field
+  deployment requires it.
+
+### Phase 5: scale the data and extension surface
+
+- Preserve raw and derived data with checksums, retention policies, and
+  replayable provenance.
+- Add stable adapters for GIS, CSV/Parquet, MQTT, and other downstream users.
+- Define plugin boundaries for receiver protocols, correction sources, quality
+  policies, and output sinks.
+- Publish hardware compatibility, release, and support matrices.
+
+### Provisional operating targets
+
+These are planning targets to calibrate with real deployments, not current
+guarantees:
+
+- recover from a routine service failure within 60 seconds;
+- pass 24-hour and 7-day continuous-operation soaks;
+- keep credentials out of logs and run artifacts;
+- reproduce a result from the same recorded input and configuration; and
+- bring a new station from configuration to validated operation in 15 minutes.
+
+The sequencing rule is measurement trust first, then unattended operation,
+then remote fleet control. Deterministic quality rules and replay evidence
+must precede predictive or automated tuning features.
+
 ## Discipline reminders
 
 - Default-OFF, OFF bit-identical (md5/CSV equality) for every new feature.
