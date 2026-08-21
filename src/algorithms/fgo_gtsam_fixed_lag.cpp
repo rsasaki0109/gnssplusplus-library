@@ -1,0 +1,5871 @@
+// Milestone 2c fixed-lag smoother path of the FGO GTSAM backend.
+// Split out of fgo_gtsam_backend.cpp; see fgo_gtsam_internal.hpp for the
+// shared helper surface.
+
+#include "fgo_gtsam_internal.hpp"
+
+namespace libgnss {
+
+using namespace fgo_gtsam_internal;
+
+// ===========================================================================
+// Milestone 2c: IncrementalFixedLagSmoother path (docs/gtsam_backend_design.md)
+// ===========================================================================
+//
+// Streams the IMU-coupled DD-RTK graph through gtsam::IncrementalFixedLagSmoother
+// instead of a single batch LM solve, so memory and per-epoch marginals stay
+// bounded at full-dataset scale (the batch gtsam::Marginals over ~25k vars hit
+// bad_alloc). Only used when config.use_fixed_lag_smoother && the IMU path is
+// active; otherwise optimizeProblemWithGtsam runs its batch LM path unchanged.
+//
+// Key-timestamp scheme (nav = ENU): every key is timestamped with the epoch
+// time in seconds relative to epoch 0. Pose/Vel/Bias X(i)/V(i)/B(i) are stamped
+// with epoch i, so they marginalize out fixed_lag_smoother_lag_s after epoch i.
+// Ambiguity nodes and the shared dummy node are RE-STAMPED to the current epoch
+// every time they are observed, so an ambiguity persists in the window while
+// its arc is active and marginalizes lag-seconds after its last observation
+// (arc end) -- i.e. ambiguities spanning the lag are simply kept in-window by
+// re-stamping (no fix-and-hold; per-epoch LAMBDA is a read-out off the windowed
+// marginals, ambiguities stay float in the graph, matching Phase-1/2b).
+FGOProcessor::FGOResult optimizeProblemFixedLag(
+    const FGOProcessor::FGOProblem& problem,
+    const FGOProcessor::FGOConfig& config,
+    FGOProcessor::FGOResult result) {
+    const auto start_time = std::chrono::high_resolution_clock::now();
+
+    const std::size_t num_epochs = problem.epochs.size();
+    const auto gf_slip_shadow =
+        (config.monitor_geometry_free_cycle_slip ||
+         config.monitor_clock_resilient_temporal_carrier)
+        ? FGOProcessor::analyzeGeometryFreeSlipShadow(
+              problem, 0.05, config.max_tdcp_gap_s)
+        : std::vector<FGOProcessor::GeometryFreeSlipShadowEpoch>{};
+    // Materialize this diagnostic stream once; it is never added to new_factors.
+    const auto clock_resilient_tdcp_shadow =
+        config.monitor_clock_resilient_temporal_carrier
+            ? FGOProcessor::buildClockResilientTemporalCarrierShadow(
+                  problem, config.single_difference_tdcp_sigma_m,
+                  config.max_tdcp_gap_s)
+            : std::vector<FGOProcessor::SingleDifferenceTdcpFactor>{};
+    const Point3 lever_arm_body(config.pose3_lever_arm_body_m.x(),
+                                config.pose3_lever_arm_body_m.y(),
+                                config.pose3_lever_arm_body_m.z());
+    const Rot3 R_ecef_nav = ecefFromEnuRotation(problem.imu.nav_origin_lat_rad,
+                                                problem.imu.nav_origin_lon_rad);
+    const Pose3 ecef_T_nav(R_ecef_nav, Point3(problem.imu.nav_origin_ecef));
+    const gtsam::gnss::LeverArm gnss_lever_arm(lever_arm_body, ecef_T_nav);
+    const Rot3 init_attitude_nav(problem.imu.init_attitude_body_to_nav);
+    const gtsam::imuBias::ConstantBias init_bias(problem.imu.init_accel_bias,
+                                                 problem.imu.init_gyro_bias);
+
+    auto antennaOf = [&](const Pose3& pose) -> Point3 {
+        return gnss_lever_arm.antennaPosition(pose);
+    };
+    auto navAntenna = [&](const Vector3d& ecef) -> Vector3d {
+        return ecef2enu(ecef - problem.imu.nav_origin_ecef, problem.imu.nav_origin_lat_rad,
+                        problem.imu.nav_origin_lon_rad);
+    };
+    auto stampOf = [&](std::size_t epoch) -> double {
+        return problem.epochs[epoch].time - problem.epochs[0].time;
+    };
+
+    // Group DD factors by epoch for O(1) streaming access.
+    std::vector<std::vector<const FGOProcessor::DoubleDifferencePseudorangeFactor*>> pr_by_epoch(
+        num_epochs);
+    std::vector<std::vector<const FGOProcessor::DoubleDifferenceCarrierFactor*>> cp_by_epoch(
+        num_epochs);
+    std::vector<std::vector<const FGOProcessor::SingleDifferenceDopplerFactor*>>
+        doppler_by_epoch(num_epochs);
+    for (const auto& f : problem.double_difference_pseudorange_factors) {
+        if (f.epoch_index < num_epochs) pr_by_epoch[f.epoch_index].push_back(&f);
+    }
+    for (const auto& f : problem.double_difference_carrier_factors) {
+        if (f.epoch_index < num_epochs && f.ambiguity_index < problem.ambiguity_states.size()) {
+            cp_by_epoch[f.epoch_index].push_back(&f);
+        }
+    }
+    for (const auto& f : problem.single_difference_doppler_factors) {
+        if (f.epoch_index < num_epochs) doppler_by_epoch[f.epoch_index].push_back(&f);
+    }
+    // Build-time-excluded DD carrier rows (CMC level exclusion; see
+    // FGOProblem::excluded_double_difference_carrier_factors), grouped the
+    // same way.  The surplus validator consumes these rows when enabled; the
+    // diagnostic candidate trace always records them.
+    std::vector<std::vector<const FGOProcessor::DoubleDifferenceCarrierFactor*>>
+        cp_excluded_by_epoch(num_epochs);
+    for (const auto& f : problem.excluded_double_difference_carrier_factors) {
+        if (f.epoch_index < num_epochs) cp_excluded_by_epoch[f.epoch_index].push_back(&f);
+    }
+
+    // --- DDPR-LS anchor solve (FGOConfig::use_ddpr_anchor; port of the
+    // reference's ddpr_only_position / _ddpr_build_specs / _ddpr_solve_with_fde).
+    // Reuses the SAME DoubleDifferencePseudorangeFactorArm construction the
+    // main loop uses (see the "DD pseudorange factors at epoch i" block
+    // below) against a dedicated, throwaway Pose3 key ('y', 0) so the mini
+    // solve never touches the smoother's key space. Plain (non-robust) noise
+    // throughout, matching the reference's huber_pr=0 default -- the same
+    // noise model is reused for both the LM solve and the FDE residual
+    // evaluation (the reference rebuilds a second "non-robust" graph for
+    // eval only because ITS default solve pass may be robust; ours already
+    // isn't, so one graph suffices for both).
+    // `exclude_sats` (optional): drop every DD PR row involving one of these
+    // satellites BEFORE solving. Used only by the fix-plausibility demotion's
+    // robust retry (a single gross multipath satellite can sit at the FDE
+    // floor below and poison both the pose and the residual trust test);
+    // nullptr for every pre-existing call site -- bit-identical behaviour.
+    auto solveDdprAnchor = [&](std::size_t epoch_idx, const Pose3& pose_init,
+                               const std::set<SatelliteId>* exclude_sats =
+                                   nullptr) -> DdprAnchorResult {
+        DdprAnchorResult out;
+        std::vector<const FGOProcessor::DoubleDifferencePseudorangeFactor*> active;
+        active.reserve(pr_by_epoch[epoch_idx].size());
+        for (const auto* fp : pr_by_epoch[epoch_idx]) {
+            if (exclude_sats && (exclude_sats->count(fp->satellite) ||
+                                 exclude_sats->count(fp->reference_satellite))) {
+                continue;
+            }
+            active.push_back(fp);
+        }
+        if (active.size() < static_cast<std::size_t>(std::max(1, config.ddpr_anchor_min_factors))) {
+            return out;
+        }
+        const gtsam::Key anchor_key = Symbol('y', 0);
+        gtsam::Vector6 prior_sigmas;
+        prior_sigmas << 0.05, 0.05, 0.1, 50.0, 50.0, 50.0;
+        const auto prior_noise = gtsam::noiseModel::Diagonal::Sigmas(prior_sigmas);
+
+        gtsam::Values est;
+        double res_rms = std::numeric_limits<double>::infinity();
+        bool have_est = false;
+
+        for (int fde_iter = 0; fde_iter < 3; ++fde_iter) {
+            gtsam::NonlinearFactorGraph g;
+            gtsam::Values v;
+            v.insert(anchor_key, pose_init);
+            g.addPrior(anchor_key, pose_init, prior_noise);
+            for (const auto* fp : active) {
+                const gtsam::gnss::DoubleDifferenceData dd{
+                    fp->rover_satellite_model.corrected_pseudorange_m,
+                    fp->base_satellite_model.corrected_pseudorange_m,
+                    fp->rover_reference_model.corrected_pseudorange_m,
+                    fp->base_reference_model.corrected_pseudorange_m,
+                    Point3(fp->rover_satellite_position_ecef),
+                    Point3(fp->rover_reference_position_ecef),
+                    Point3(fp->base_satellite_position_ecef),
+                    Point3(fp->base_reference_position_ecef),
+                    Point3(fp->base_position_ecef)};
+                g.emplace_shared<gtsam::DoubleDifferencePseudorangeFactorArm>(
+                    anchor_key, dd.rovRef, dd.baseRef, dd.rovTarget, dd.baseTarget, dd.satRefRov,
+                    dd.satTargetRov, dd.satRefBase, dd.satTargetBase, dd.basePos, lever_arm_body,
+                    ecef_T_nav, makeNoise(fp->sigma_m, /*robust=*/false, 0.0));
+            }
+            gtsam::Values cur_est;
+            try {
+                gtsam::LevenbergMarquardtParams lm_params;
+                lm_params.setMaxIterations(10);
+                cur_est = gtsam::LevenbergMarquardtOptimizer(g, v, lm_params).optimize();
+            } catch (const std::exception&) {
+                return out;  // solve failed -> not ok
+            }
+            est = cur_est;
+            have_est = true;
+
+            std::vector<const FGOProcessor::DoubleDifferencePseudorangeFactor*> kept;
+            kept.reserve(active.size());
+            double sq_sum = 0.0;
+            std::size_t dropped = 0;
+            for (std::size_t k = 0; k < active.size(); ++k) {
+                const double err = g.at(1 + k)->error(est);  // factor 0 is the pose prior
+                const double res_m = std::sqrt(std::max(0.0, err) * 2.0) * active[k]->sigma_m;
+                if (res_m > config.ddpr_anchor_fde_threshold_m &&
+                    (active.size() - dropped) > static_cast<std::size_t>(std::max(1, config.ddpr_anchor_min_factors))) {
+                    ++dropped;
+                    continue;
+                }
+                kept.push_back(active[k]);
+                sq_sum += res_m * res_m;
+            }
+            res_rms = kept.empty() ? 0.0 : std::sqrt(sq_sum / static_cast<double>(kept.size()));
+            active = kept;
+            if (dropped == 0) break;
+        }
+        if (!have_est || active.size() < static_cast<std::size_t>(std::max(1, config.ddpr_anchor_min_factors))) {
+            return out;
+        }
+        out.ok = true;
+        out.pose = est.at<Pose3>(anchor_key);
+        out.n_active = static_cast<int>(active.size());
+        out.res_rms = res_rms;
+        return out;
+    };
+
+    // IMU preintegration params (ENU / Z-up; gravity -Z).
+    auto imu_params = gtsam::PreintegrationCombinedParams::MakeSharedU(problem.imu.noise.gravity_mps2);
+    const auto sq = [](double s) { return s * s; };
+    imu_params->setAccelerometerCovariance(gtsam::I_3x3 * sq(problem.imu.noise.accel_noise_sigma));
+    imu_params->setGyroscopeCovariance(gtsam::I_3x3 * sq(problem.imu.noise.gyro_noise_sigma));
+    // Reference parity (FGOConfig::imu_integration_covariance, fgo.hpp):
+    // imu_integration_covariance IS the covariance directly (reference
+    // imu_integ_cov value semantics -- no squaring), replacing the
+    // sq(integration_sigma) computation for this fixed-lag path. Default
+    // 1e-6 reproduces the harness's hardcoded integration_sigma=1e-3 squared,
+    // so this is bit-identical unless the new knob is overridden.
+    imu_params->setIntegrationCovariance(gtsam::I_3x3 * config.imu_integration_covariance);
+    imu_params->setBiasAccCovariance(gtsam::I_3x3 * sq(problem.imu.noise.accel_bias_rw_sigma));
+    imu_params->setBiasOmegaCovariance(gtsam::I_3x3 * sq(problem.imu.noise.gyro_bias_rw_sigma));
+    const auto& imu_samples = problem.imu.samples_body_flu;
+
+    // Smoother. findUnusedFactorSlots is REQUIRED for fixed-lag marginalization;
+    // relinearize aggressively (skip=1, low threshold) since the IMU factors are
+    // strongly nonlinear and we take one update per epoch.
+    gtsam::ISAM2Params isam_params;
+    isam_params.findUnusedFactorSlots = true;
+    isam_params.relinearizeThreshold = 0.01;
+    isam_params.relinearizeSkip = 1;
+    // QR tolerates the occasional near-rank-deficient lag-boundary separator,
+    // but is prohibitively slow for the 12k-epoch PPC runs.  Keep Cholesky for
+    // the normal path; the exception path below now treats a partially updated
+    // iSAM2 instance as poisoned and immediately rebuilds it safely.
+    isam_params.factorization = config.fixed_lag_use_qr_factorization
+                                    ? gtsam::ISAM2Params::QR
+                                    : gtsam::ISAM2Params::CHOLESKY;
+    gtsam::IncrementalFixedLagSmoother smoother(config.fixed_lag_smoother_lag_s, isam_params);
+
+    // Per-epoch outputs.
+    std::vector<Point3> epoch_float_position(num_epochs, Point3(0, 0, 0));
+    std::vector<Vector3d> epoch_predicted_position(
+        num_epochs, Vector3d::Zero());
+    std::vector<Point3> epoch_fixed_position(num_epochs, Point3(0, 0, 0));
+    std::vector<bool> epoch_has_fixed(num_epochs, false);
+    std::vector<bool> epoch_fixed(num_epochs, false);
+    // Whether this FIX is allowed to validate later epochs.  Adaptive-ratio
+    // additions remain output-only until the configured ratio is met, which
+    // prevents a chain of mutually validating marginal fixes.
+    std::vector<bool> epoch_fixed_history_eligible(num_epochs, false);
+    std::vector<int> epoch_fixed_count(num_epochs, 0);
+    std::vector<double> epoch_ratio(num_epochs, 0.0);
+    std::vector<Vector3d> epoch_rpy_deg(num_epochs, Vector3d::Zero());
+    std::vector<Vector3d> epoch_vel_nav(num_epochs, Vector3d::Zero());
+    std::vector<bool> epoch_solved(num_epochs, false);
+    std::vector<FGOProcessor::FGOEpochDiagnostics> epoch_diagnostics(num_epochs);
+    std::vector<std::map<SatelliteId, double>>
+        satellite_quarantine_postfit_residuals;
+    if (config.monitor_satellite_quarantine_witness) {
+        satellite_quarantine_postfit_residuals.resize(num_epochs);
+    }
+    std::vector<std::set<std::size_t>> fde_rejected_ambiguities_by_epoch(
+        num_epochs);
+    std::map<std::size_t, double> amb_float_cycles;
+    std::map<std::size_t, int> amb_fixed_cycles;
+    std::map<std::size_t, double> amb_fixed_residual;
+
+    // 2e fix-and-hold: arcs whose DD ambiguity has been validated-fixed and
+    // pinned in the graph at its integer (reset automatically when the arc ends
+    // and the builder issues a fresh ambiguity index).
+    std::set<std::size_t> pinned_ambiguities;
+    std::size_t held_epoch_count = 0;
+
+    std::set<std::size_t> ambiguity_created;
+    bool dummy_created = false;
+    constexpr double kDummyPinSigmaCycles = 1e-3;
+
+    // Previous refined nav state (seed source for the next epoch's prediction).
+    gtsam::NavState prev_nav;
+    gtsam::imuBias::ConstantBias prev_bias = init_bias;
+    std::size_t sample_cursor = 0;
+    std::size_t total_fixed_ambiguities = 0;
+    std::size_t marginals_failures = 0;
+    std::size_t lambda_attempts = 0;
+    double best_ratio = 0.0;
+
+    // Independent DR track used only by the optional statistical
+    // solution-separation gate.  It never consumes the FGO velocity or float
+    // pose: velocity comes from an SD-Doppler-only weighted LS solve, and
+    // position is reset only by a previously validated high-ratio FIX.
+    bool external_dr_position_valid = false;
+    bool external_dr_velocity_valid = false;
+    Vector3d external_dr_position_ecef = Vector3d::Zero();
+    Vector3d external_dr_velocity_ecef = Vector3d::Zero();
+    Eigen::Matrix3d external_dr_position_cov = Eigen::Matrix3d::Identity();
+    Eigen::Matrix3d external_dr_velocity_cov = Eigen::Matrix3d::Identity() * 100.0;
+    GNSSTime external_dr_time;
+    int external_dr_age_epochs = 0;
+    // Empirically, on the PPC Tokyo/Nagoya urban data, a hard floor of six
+    // measurably outperforms the smaller PAR-floor-only gate (see the
+    // regression-hunt log): the four/five-ambiguity subsets it additionally
+    // allows resolve too often to a wrong-but-plausible-ratio integer vector
+    // in this multipath environment, so LAMBDA's ratio test alone is not a
+    // sufficient integrity check below six candidates. min_fixed_ambiguities
+    // remains the authoritative PAR floor above six.
+    const int min_candidates = std::max(6, std::max(1, config.min_fixed_ambiguities + 1));
+
+    const bool robust = config.use_robust_loss;
+
+    // Quality gates: satellites whose post-fit DDPR residual exceeded
+    // gate_per_sat_res_max_m LAST epoch (reference: prefit
+    // apply_per_sat_residual_gate keeps them out of the LAMBDA tree).
+    std::set<SatelliteId> gate_bad_sats;
+
+    // --- Sat-badness EWMA down-weighting state (FGOConfig::
+    // use_sat_badness_downweight; port of the inuex35 reference's
+    // preprocess/sat_quality.py SatQualityState). See use_sat_badness_
+    // downweight's comment in fgo.hpp for the full behavioural summary and
+    // deviations (cppr substitution, satellite identity, el/snr wiring,
+    // pair-update gating). All maps are no-ops (never populated, never
+    // read) whenever the master switch is off.
+    //
+    // last_ddpr_per_sat: snapshot of this epoch's (pre-FDE) per_sat_res,
+    // taken once per epoch below and read by the NEXT epoch's DD factor
+    // build for the res_s term -- reference tc._last_main_ddpr_per_sat /
+    // _mres_signals.per_sat, which is likewise set from main_ddpr_residuals'
+    // per-sat map and consumed one epoch later at factor-build time.
+    std::map<SatelliteId, double> sb_last_ddpr_per_sat;
+    std::map<SatelliteId, double> sb_obsq_ewma;
+    std::map<SatelliteId, int> sb_obsq_bad_streak;
+    std::map<SatelliteId, double> sb_recent_worst;
+    std::map<SatelliteId, double> sb_recent_cppr;
+    std::map<SatelliteId, double> sb_recent_ref_bad;
+    std::map<std::tuple<SatelliteId, SatelliteId, SignalType>, double> sb_recent_pair_bad;
+    std::map<SatelliteId, double> sb_latest_el_deg;
+    std::map<SatelliteId, double> sb_latest_snr_dbhz;
+    // Deviation (see fgo.hpp): substitute for the reference's unported
+    // CP-vs-PR innovation-consistency reject counter (rejc_cp_pr). Persistent
+    // per-(satellite, signal) count of THIS backend's own FDE carrier
+    // rejections.
+    //
+    // CLAMPED-variant deviation (fgo.hpp sat_badness_cppr_decay): unlike the
+    // faithful port (which never reset this and let it grow forever), this
+    // is now a decayed float -- cppr[s,sig] = decay*prev + this_epoch_rejects
+    // -- applied once per epoch by runFde() below (decay=1.0 reproduces the
+    // old ever-growing-counter behaviour exactly). Structurally empty/0
+    // whenever use_fde is off.
+    std::map<std::pair<SatelliteId, SignalType>, double> sb_fde_cp_reject_count;
+
+    // CLAMPED-variant helper (fgo.hpp sat_badness_residual_clamp_m): caps a
+    // per-satellite post-fit DDPR residual before it feeds any badness term.
+    // Applied only at badness's OWN reads/snapshots of per_sat_res (see the
+    // per-epoch state-update block below) -- never to the shared per_sat_res
+    // map itself, which use_epoch_quality_gates/use_cp_hold_recovery also
+    // consume raw and which must stay numerically untouched by this knob.
+    // 0 = no clamp = faithful (returns r unchanged).
+    auto sbClampResidual = [&](double r) -> double {
+        return config.sat_badness_residual_clamp_m > 0.0
+                   ? std::min(r, config.sat_badness_residual_clamp_m)
+                   : r;
+    };
+
+    // Continuous per-(reference, target, signal) badness score (0 when the
+    // master switch is off). `ref_sat` non-null adds the directional-pair
+    // term (only when sat_badness_alpha_recent_pair > 0 -- see fgo.hpp
+    // deviation 5). Mirrors SatQualityState.sat_badness() term-for-term, then
+    // (CLAMPED-variant deviation, fgo.hpp sat_badness_score_cap) caps the
+    // total before returning it -- 0 = no cap = faithful.
+    auto satBadness = [&](SatelliteId sat_id, SignalType freq,
+                          const SatelliteId* ref_sat) -> double {
+        if (!config.use_sat_badness_downweight) return 0.0;
+        const double ddpr_thr = std::max(1e-6, config.sat_badness_ddpr_threshold_m);
+        const int cppr_thr = std::max(1, config.sat_badness_cppr_threshold);
+        const double alpha_ddpr = std::max(0.0, config.sat_badness_alpha_ddpr);
+        const double alpha_cppr = std::max(0.0, config.sat_badness_alpha_cppr);
+        const double alpha_recent_cppr = std::max(0.0, config.sat_badness_alpha_recent_cppr);
+        const double alpha_recent_worst = std::max(0.0, config.sat_badness_alpha_recent_worst);
+        const double alpha_recent_ref = std::max(0.0, config.sat_badness_alpha_recent_ref);
+        const double alpha_recent_pair = std::max(0.0, config.sat_badness_alpha_recent_pair);
+        const double alpha_obsq_ewma = std::max(0.0, config.sat_badness_alpha_obsq_ewma);
+        const double alpha_obsq_streak = std::max(0.0, config.sat_badness_alpha_obsq_streak);
+        const double alpha_el = std::max(0.0, config.sat_badness_alpha_el);
+        const double alpha_snr = std::max(0.0, config.sat_badness_alpha_snr);
+        const double obsq_thr = std::max(1e-6, config.sat_badness_obsq_res_threshold_m);
+        const int obsq_streak_cap = std::max(1, config.sat_badness_obsq_bad_streak_cap);
+        const double el_ref_deg = std::max(1.0, config.sat_badness_el_ref_deg);
+        const double snr_ref_dbhz = config.sat_badness_snr_ref_dbhz;
+        const double snr_span_db = std::max(1.0, config.sat_badness_snr_span_db);
+
+        double score = 0.0;
+        {
+            const auto it = sb_last_ddpr_per_sat.find(sat_id);
+            const double res_s = it != sb_last_ddpr_per_sat.end() ? it->second : 0.0;
+            if (res_s > 0.0) score += alpha_ddpr * (res_s / ddpr_thr);
+        }
+        {
+            const auto it = sb_fde_cp_reject_count.find(std::make_pair(sat_id, freq));
+            const double cppr = it != sb_fde_cp_reject_count.end() ? it->second : 0.0;
+            if (cppr > 0.0) score += alpha_cppr * (cppr / cppr_thr);
+        }
+        {
+            const auto it = sb_recent_cppr.find(sat_id);
+            const double q = it != sb_recent_cppr.end() ? it->second : 0.0;
+            if (q > 0.0) score += alpha_recent_cppr * (q / cppr_thr);
+        }
+        {
+            const auto it = sb_recent_worst.find(sat_id);
+            const double q = it != sb_recent_worst.end() ? it->second : 0.0;
+            if (q > 0.0) score += alpha_recent_worst * q;
+        }
+        {
+            const auto it = sb_recent_ref_bad.find(sat_id);
+            const double q = it != sb_recent_ref_bad.end() ? it->second : 0.0;
+            if (q > 0.0) score += alpha_recent_ref * q;
+        }
+        if (ref_sat != nullptr && alpha_recent_pair > 0.0) {
+            const auto it = sb_recent_pair_bad.find(std::make_tuple(*ref_sat, sat_id, freq));
+            const double q = it != sb_recent_pair_bad.end() ? it->second : 0.0;
+            if (q > 0.0) score += alpha_recent_pair * q;
+        }
+        {
+            const auto it = sb_obsq_ewma.find(sat_id);
+            const double q = it != sb_obsq_ewma.end() ? it->second : 0.0;
+            if (q > 0.0) score += alpha_obsq_ewma * (q / obsq_thr);
+        }
+        {
+            const auto it = sb_obsq_bad_streak.find(sat_id);
+            const int streak = std::min(obsq_streak_cap, it != sb_obsq_bad_streak.end() ? it->second : 0);
+            if (streak > 0) {
+                score += alpha_obsq_streak * (static_cast<double>(streak) / obsq_streak_cap);
+            }
+        }
+        if (alpha_el > 0.0) {
+            const auto it = sb_latest_el_deg.find(sat_id);
+            const double el_deg = it != sb_latest_el_deg.end() ? it->second : 90.0;
+            const double penalty = std::max(0.0, std::min(1.0, (el_ref_deg - el_deg) / el_ref_deg));
+            score += alpha_el * penalty;
+        }
+        if (alpha_snr > 0.0) {
+            const auto it = sb_latest_snr_dbhz.find(sat_id);
+            const double snr = it != sb_latest_snr_dbhz.end() ? it->second : snr_ref_dbhz;
+            const double penalty = std::max(0.0, std::min(1.0, (snr_ref_dbhz - snr) / snr_span_db));
+            score += alpha_snr * penalty;
+        }
+        score = std::max(0.0, score);
+        if (config.sat_badness_score_cap > 0.0) {
+            score = std::min(score, config.sat_badness_score_cap);
+        }
+        return score;
+    };
+
+    // --- CP-hold / sanity FSM state (use_cp_hold_recovery) ---
+    //
+    // Arc-regeneration overlay: our front-end (fgo.cpp) statically assigns one
+    // ambiguity_index per continuous carrier arc for the WHOLE dataset before
+    // this backend ever runs, so it cannot react to a backend-only decision
+    // (bad post-fit residuals) to invalidate an arc mid-stream. `amb_generation`
+    // adds that reactive layer: bumping an index's generation makes
+    // ambSymbolId() mint a brand-new backend-local graph symbol the next time
+    // that ambiguity_index is observed, which the existing "ambiguity_created"
+    // fresh-arc bookkeeping below (seed value + prior, no held integer) then
+    // treats exactly like a genuinely new arc. Generation-0 resolves to the
+    // identity (symbol id == ambiguity_index), so this whole mechanism is a
+    // no-op -- and the backend bit-identical to pre-port -- whenever neither
+    // reset policy nor carrier FDE is enabled. Carrier FDE also bumps an
+    // ambiguity generation when it rejects a factor: without the overlay,
+    // that bump was recorded in diagnostics but ambSymbolId() kept returning
+    // the rejected arc's original key, so persistent urban outliers could be
+    // rejected repeatedly without ever starting a fresh ambiguity state.
+    // Continuous-unfix reacquisition deliberately uses the same overlay
+    // without enabling the CP-hold FSM.
+    const bool use_ambiguity_generation_overlay =
+        config.use_cp_hold_recovery ||
+        config.use_continuous_unfix_ambiguity_reset ||
+        config.use_fde ||
+        config.use_selective_arc_restart;
+    std::map<std::size_t, int> amb_generation;
+    std::map<std::pair<std::size_t, int>, std::size_t> amb_symbol_id;
+    // Epoch at which each pinned symbol's hold prior was created (keyed by
+    // graph symbol id, which is never reused across generations). Feeds
+    // use_stale_pin_invalidation's min-hold-age guard only; recording it is
+    // unconditional but behaviour-neutral.
+    std::map<std::size_t, std::size_t> pin_created_epoch;
+    std::size_t next_free_amb_symbol_id = problem.ambiguity_states.size();
+    // Ambiguity indices with a symbol currently live in the graph (added under
+    // their CURRENT generation); mass reset removes exactly these factors and
+    // then clears the set (see reset_ambiguities_with_cp_hold below).
+    std::set<std::size_t> live_ambiguity_indices;
+    // Reverse of ambSymbolId(): backend graph symbol id -> the caller-facing
+    // ambiguity_index it currently resolves for. Populated on every
+    // ambSymbolId() call (cheap; at most one entry per (index, generation)
+    // ever observed). Used by FDE's iterative mode, which discovers rejected
+    // carrier factors by scanning the live graph rather than iterating
+    // problem.ambiguity_states, so it needs to map a factor's ambiguityKey
+    // symbol back to the ambiguity_index whose hold/generation it must
+    // update.
+    std::map<std::size_t, std::size_t> sym_to_ambiguity_index;
+    auto ambSymbolId = [&](std::size_t idx) -> std::size_t {
+        std::size_t sid = idx;
+        if (use_ambiguity_generation_overlay) {
+            const auto git = amb_generation.find(idx);
+            const int gen = (git == amb_generation.end()) ? 0 : git->second;
+            if (gen != 0) {
+                const auto key = std::make_pair(idx, gen);
+                const auto it = amb_symbol_id.find(key);
+                if (it != amb_symbol_id.end()) {
+                    sid = it->second;
+                } else {
+                    sid = next_free_amb_symbol_id++;
+                    amb_symbol_id.emplace(key, sid);
+                }
+            }
+        }
+        sym_to_ambiguity_index[sid] = idx;
+        return sid;
+    };
+
+    int cp_hold_counter = 0;         ///< remaining epochs with carrier suppressed (reference _recov_cp_hold)
+    int cp_hold_release_streak = 0;  ///< consecutive clean epochs while held (reference _recov_cp_release_streak)
+    std::set<SatelliteId> selective_cp_hold_bad_sats;
+    // --- Active selective arc restart (use_selective_arc_restart) ---
+    // Ambiguity indices armed by the epoch-i causal Doppler/IMU/post-fit
+    // quarantine agreement and applied to epoch i+1's carrier factor build,
+    // mirroring the selective_cp_hold arm/apply one-epoch delay. Only the
+    // implicated PAIR's ambiguity index is armed (the DD differencing cannot
+    // identify which endpoint is faulty, so both endpoints' trace rows point
+    // at this same arc); arcs sharing an armed reference are NOT touched.
+    // Cleared every epoch.
+    std::set<std::size_t> selective_arc_restart_armed_ambiguities;
+    // Last epoch at which each ambiguity index's generation was bumped by this
+    // mechanism, for the selective_arc_restart_min_epochs_since_bump thrash
+    // guard (only the selective-arc-restart path writes here).
+    std::map<std::size_t, std::size_t> selective_arc_restart_last_bump_epoch;
+    // Causal DD pseudorange pair history for the active quarantine detector:
+    // (satellite, reference, signal) -> previous epoch's factor. Keyed by the
+    // same triple as analyzePredictedDdprQualityShadow so the Doppler/IMU
+    // innovations are computed over consecutive epochs of the SAME pair.
+    using ArcRestartPairKey = std::tuple<SatelliteId, SatelliteId, SignalType>;
+    std::map<ArcRestartPairKey, const FGOProcessor::DoubleDifferencePseudorangeFactor*>
+        selective_arc_restart_prev_pair;
+    // Consecutive bad epochs (reference _ddpr_bad_count). Double-valued (not
+    // int) so use_cp_hold_leaky_persist's fractional decay (e.g. 0.25/0.5)
+    // never loses precision; every write in the default (non-leaky) path
+    // stores exact integer values, so this is bit-identical to an int
+    // counter whenever the knob is off.
+    double ddpr_bad_count = 0.0;
+    double last_ddpr_rms = 0.0;      ///< previous epoch's post-fit DDPR RMS (reference _last_main_ddpr_res)
+    // Epoch index at which last_ddpr_rms was last written (reference
+    // _last_main_ddpr_epoch / _mres_signals.epoch); sentinel far in the past
+    // so the very first epochs are always treated as stale (reference inits
+    // to -10**9). Feeds the imu_integration_covariance_inflation staleness
+    // test below.
+    long long last_ddpr_rms_epoch = -1000000000LL;
+    // Most recent epoch whose carrier was CP-hold-suppressed; feeds the
+    // fix_demote_posthold_epochs cooldown only (sentinel far in the past).
+    long long last_held_epoch = -1000000000LL;
+    // Rolling history of per-epoch post-fit DDPR RMS values (previous epochs
+    // only; the current epoch is pushed AFTER its own demotion check so an
+    // excursion never dilutes its own baseline). Feeds fix_demote_res_rel.
+    std::deque<double> recent_ddpr_rms;
+    bool pim_discontinuity = false;  ///< one-shot: break the IMU chain at the NEXT epoch (reference _pim_discontinuity)
+    // DDPR-anchor bootstrap re-seed countdown (use_ddpr_anchor; reference
+    // tc._tc_bootstrap_ddpr_epochs). While > 0, every epoch gets a
+    // translation-only anchor prior (see the bootstrap block in the main
+    // loop) and CP-hold is forced to 0 via effectiveCpHoldEpochs() below
+    // (reference state.effective_cp_hold_epochs: bootstrap wins).
+    // The reference tight-coupling stage arms the DDPR translation bootstrap
+    // once at Phase-2 initialization, then re-arms it after a full recovery.
+    // Previously this port only implemented the recovery half, so enabling
+    // use_ddpr_anchor on a healthy run performed zero anchor solves unless an
+    // unrelated smoother exception happened first.
+    int ddpr_bootstrap_epochs_remaining =
+        config.use_ddpr_anchor ? config.ddpr_anchor_bootstrap_epochs : 0;
+    int continuous_unfix_streak = 0;
+    std::map<std::size_t, int> previous_lambda_candidate_cycles;
+    std::size_t previous_lambda_candidate_epoch =
+        std::numeric_limits<std::size_t>::max();
+    int lambda_candidate_integer_consensus_streak = 0;
+    struct MultiEpochIntegerHistory {
+        int integer = 0;
+        int consecutive_epochs = 0;
+        std::size_t last_epoch = std::numeric_limits<std::size_t>::max();
+    };
+    std::map<std::size_t, MultiEpochIntegerHistory> multiepoch_integer_history;
+
+    // Reference state.effective_cp_hold_epochs(): the configured CP-hold
+    // length, suppressed to 0 while the DDPR-anchor bootstrap countdown is
+    // active. A no-op (always returns config.cp_hold_epochs) whenever
+    // use_ddpr_anchor is false, so use_cp_hold_recovery's behaviour is
+    // unaffected unless the anchor is also enabled.
+    auto effectiveCpHoldEpochs = [&]() -> int {
+        if (config.use_ddpr_anchor && ddpr_bootstrap_epochs_remaining > 0) return 0;
+        return config.cp_hold_epochs;
+    };
+
+    // Mass reset shared by the persist path and the catastrophic fast path
+    // (reference _apply_sanity_reset / reset_ambiguities_with_cp_hold): collect
+    // every live ambiguity's tight fix-and-hold prior out of the live ISAM2
+    // graph, remove those pins via a smoother update, bump every generation
+    // (forcing fresh arcs), clear the pinned/live bookkeeping, and (re)engage
+    // CP-hold at full strength. Keep carrier, seed, and fixed-lag marginal
+    // factors for the old generation. Deleting all factors touching an
+    // ambiguity makes the navigation state abruptly pseudorange-only and can
+    // move the next pose by tens of metres. Leaving the unpinned old arc in
+    // the graph lets it re-float and hand over continuously to the new arc;
+    // it then ages out naturally after the lag window. Returns the number of
+    // tight hold priors removed.
+    auto resetAmbiguitiesWithCpHold = [&](std::size_t epoch_idx,
+                                          bool engage_cp_hold = true) -> std::size_t {
+        gtsam::FactorIndices remove_indices;
+        if (!live_ambiguity_indices.empty()) {
+            std::set<gtsam::Key> live_keys;
+            for (std::size_t idx : live_ambiguity_indices) {
+                live_keys.insert(ambiguityKey(ambSymbolId(idx)));
+            }
+            const double pin_sigma_ceiling = config.ambiguity_hold_sigma_cycles * 1.5;
+            const auto& factors = smoother.getISAM2().getFactorsUnsafe();
+            for (std::size_t fi = 0; fi < factors.size(); ++fi) {
+                const auto& f = factors[fi];
+                if (!f || f->keys().size() != 1 || !live_keys.count(f->keys()[0])) continue;
+                const auto* pf = dynamic_cast<const gtsam::PriorFactor<double>*>(f.get());
+                if (!pf) continue;
+                double sigma = std::numeric_limits<double>::infinity();
+                if (const auto iso = std::dynamic_pointer_cast<gtsam::noiseModel::Isotropic>(
+                        pf->noiseModel())) {
+                    sigma = iso->sigma();
+                } else if (const auto diag =
+                               std::dynamic_pointer_cast<gtsam::noiseModel::Diagonal>(
+                                   pf->noiseModel())) {
+                    sigma = diag->sigma(0);
+                }
+                if (sigma <= pin_sigma_ceiling) remove_indices.push_back(fi);
+            }
+        }
+        for (std::size_t idx : live_ambiguity_indices) {
+            const std::size_t old_sid = ambSymbolId(idx);  // resolve BEFORE bumping
+            ++amb_generation[idx];
+            ++result.diagnostics.ambiguity_generation_bumps;
+            ++result.diagnostics.ambiguity_generation_bumps_reset;
+            ++epoch_diagnostics[epoch_idx].ambiguity_generation_bumps_reset;
+            pinned_ambiguities.erase(old_sid);
+        }
+        live_ambiguity_indices.clear();
+        if (!remove_indices.empty()) {
+            try {
+                smoother.update(gtsam::NonlinearFactorGraph(), gtsam::Values(),
+                                gtsam::FixedLagSmoother::KeyTimestampMap(), remove_indices);
+                ++result.diagnostics.smoother_updates;
+            } catch (const std::exception& e) {
+                std::fprintf(stderr,
+                             "[fgo_gtsam_backend] cp-hold factor removal threw: %s\n", e.what());
+            }
+        }
+        // Our adaptation of the reference's bootstrap arming (see
+        // FGOConfig::use_ddpr_anchor's deviation note): opt-in re-seed after
+        // a mass/fast ambiguity reset, not just after a full warm reset.
+        // Armed BEFORE the hold length is computed below, so that -- per the
+        // reference's state.effective_cp_hold_epochs (bootstrap and global
+        // CP-hold are mutually exclusive; bootstrap wins) -- the reset that
+        // arms the bootstrap engages NO carrier hold: the bootstrap needs
+        // the fresh carrier arcs + anchor translation priors flowing
+        // immediately to pull the float back.
+        if (engage_cp_hold && config.use_ddpr_anchor &&
+            config.cp_hold_bootstrap_after_mass_reset) {
+            ddpr_bootstrap_epochs_remaining = config.ddpr_anchor_bootstrap_epochs;
+        }
+        cp_hold_counter = engage_cp_hold ? effectiveCpHoldEpochs() : 0;
+        cp_hold_release_streak = 0;
+        ddpr_bad_count = 0;
+        if (engage_cp_hold && config.cp_hold_break_imu_chain) {
+            pim_discontinuity = true;
+        }
+        if (engage_cp_hold) ++result.diagnostics.cp_hold_triggers;
+        return remove_indices.size();
+    };
+
+    // Per-arc variant of the mass reset above (FGOConfig::
+    // use_stale_pin_invalidation): remove ONLY the listed arcs'
+    // current-generation live factors (fix-and-hold prior included) via the
+    // same removeFactorIndices path, bump their generations so the next
+    // observation re-enters as a fresh float arc, and drop them from the
+    // pinned/live bookkeeping. Unlike resetAmbiguitiesWithCpHold this
+    // engages no CP-hold, breaks no IMU chain, resets no counters and
+    // leaves every other arc's pin in place. Returns factors removed.
+    auto invalidateArcs = [&](std::size_t epoch_idx,
+                              const std::vector<std::size_t>& arc_indices) -> std::size_t {
+        if (arc_indices.empty()) return 0;
+        std::set<gtsam::Key> purge_keys;
+        for (std::size_t idx : arc_indices) {
+            purge_keys.insert(ambiguityKey(ambSymbolId(idx)));
+        }
+        // Remove ONLY each arc's fix-and-hold PIN -- the unary
+        // PriorFactor<double> whose sigma is the (tight)
+        // ambiguity_hold_sigma_cycles. Everything else stays: the fresh-arc
+        // SEED prior keeps the variable determined no matter what later
+        // removes its carrier factors (FDE relies on that invariant -- an
+        // earlier variant that also stripped the seed prior produced
+        // indeterminate-system cascades and a hard crash on run1), and the
+        // DD carrier factors keep contributing, so the arc simply RE-FLOATS
+        // within the window -- the point of the release.
+        const double pin_sigma_ceiling = config.ambiguity_hold_sigma_cycles * 1.5;
+        gtsam::FactorIndices remove_indices;
+        const auto& factors = smoother.getISAM2().getFactorsUnsafe();
+        for (std::size_t fi = 0; fi < factors.size(); ++fi) {
+            const auto& f = factors[fi];
+            if (!f || f->keys().size() != 1 || !purge_keys.count(f->keys()[0])) continue;
+            const auto* pf = dynamic_cast<const gtsam::PriorFactor<double>*>(f.get());
+            if (!pf) continue;
+            double sigma = std::numeric_limits<double>::infinity();
+            if (const auto iso = std::dynamic_pointer_cast<gtsam::noiseModel::Isotropic>(
+                    pf->noiseModel())) {
+                sigma = iso->sigma();
+            } else if (const auto diag = std::dynamic_pointer_cast<gtsam::noiseModel::Diagonal>(
+                           pf->noiseModel())) {
+                sigma = diag->sigma(0);
+            }
+            if (sigma <= pin_sigma_ceiling) remove_indices.push_back(fi);
+        }
+        for (std::size_t idx : arc_indices) {
+            const std::size_t old_sid = ambSymbolId(idx);  // resolve BEFORE bumping
+            ++amb_generation[idx];
+            ++result.diagnostics.ambiguity_generation_bumps;
+            ++result.diagnostics.ambiguity_generation_bumps_stale_pin;
+            ++epoch_diagnostics[epoch_idx].ambiguity_generation_bumps_stale_pin;
+            pinned_ambiguities.erase(old_sid);
+            live_ambiguity_indices.erase(idx);
+        }
+        if (!remove_indices.empty()) {
+            try {
+                smoother.update(gtsam::NonlinearFactorGraph(), gtsam::Values(),
+                                gtsam::FixedLagSmoother::KeyTimestampMap(), remove_indices);
+                ++result.diagnostics.smoother_updates;
+            } catch (const std::exception& e) {
+                std::fprintf(stderr,
+                             "[fgo_gtsam_backend] stale-pin factor removal threw: %s\n",
+                             e.what());
+            }
+        }
+        return remove_indices.size();
+    };
+
+    // --- FDE (GICI-style Fault Detection and Exclusion; FGOConfig::use_fde).
+    // See use_fde's comment in fgo.hpp for the full design rationale
+    // (ordering vs. the sanity FSM / LAMBDA, residual reconstruction
+    // arithmetic, single-pass vs. iterative). Called from the per-epoch
+    // loop AFTER the shared post-fit DDPR diagnostics pass (so the sanity
+    // FSM below still sees PRE-FDE residuals) but BEFORE per-epoch LAMBDA.
+    //
+    // `local_indices_for_epoch` / `new_indices_for_epoch` identify THIS
+    // epoch's own DD PR/CP factors precisely (local index within the
+    // graph just passed to smoother.update(), and that update's
+    // ISAM2Result::newFactorsIndices to resolve them to live graph
+    // indices) -- used only in single-pass mode. Iterative mode ignores
+    // them and scans the whole live graph by factor type instead.
+    //
+    // On any rejected CP factor, the caller-visible ambiguity_index is
+    // written into `*rejected_ambiguity_indices` so the caller can drop it
+    // from this epoch's still-pending LAMBDA candidate list (the factor
+    // backing that candidate no longer exists in the graph).
+    //
+    // Returns the number of factors actually removed (0 = no-op /
+    // safeguarded / evaluation or removal failed).
+    auto runFde = [&](std::size_t epoch_idx,
+                      const std::vector<std::size_t>& local_indices_for_epoch,
+                      const gtsam::FactorIndices& new_indices_for_epoch,
+                      std::set<std::size_t>* rejected_ambiguity_indices) -> std::size_t {
+        if (!config.use_fde) return 0;
+        const int max_iter = std::max(1, config.fde_max_iterations);
+        const bool iterative = max_iter > 1;
+        std::size_t total_rejected = 0;
+
+        // CLAMPED-variant deviation (fgo.hpp sat_badness_cppr_decay): this
+        // call's rejects, by (satellite, signal), accumulated across every
+        // FDE round below and folded into sb_fde_cp_reject_count's decay
+        // exactly once (at applyCpprDecay()'s call sites, one per return
+        // path) before this lambda returns.
+        std::map<std::pair<SatelliteId, SignalType>, int> sb_cppr_delta_this_call;
+        auto applyCpprDecay = [&]() {
+            const double decay = std::min(1.0, std::max(0.0, config.sat_badness_cppr_decay));
+            std::set<std::pair<SatelliteId, SignalType>> keys;
+            for (const auto& kv : sb_fde_cp_reject_count) keys.insert(kv.first);
+            for (const auto& kv : sb_cppr_delta_this_call) keys.insert(kv.first);
+            for (const auto& k : keys) {
+                const double prev = sb_fde_cp_reject_count.count(k) ? sb_fde_cp_reject_count[k] : 0.0;
+                const double add = sb_cppr_delta_this_call.count(k)
+                                        ? static_cast<double>(sb_cppr_delta_this_call.at(k))
+                                        : 0.0;
+                sb_fde_cp_reject_count[k] = decay * prev + add;
+            }
+        };
+
+        struct FdeEntry {
+            std::size_t graph_idx;
+            bool is_carrier;
+            double res_m;
+        };
+
+        for (int fde_iter = 0; fde_iter < max_iter; ++fde_iter) {
+            const auto& factors = smoother.getISAM2().getFactorsUnsafe();
+            std::vector<std::size_t> candidate_graph_indices;
+            if (iterative) {
+                // Whole live graph, re-scanned fresh every round so a prior
+                // round's removal never leaves a stale index dangling.
+                candidate_graph_indices.reserve(factors.size());
+                for (std::size_t fi = 0; fi < factors.size(); ++fi) {
+                    if (factors[fi]) candidate_graph_indices.push_back(fi);
+                }
+            } else {
+                candidate_graph_indices.reserve(local_indices_for_epoch.size());
+                for (std::size_t li : local_indices_for_epoch) {
+                    if (li < new_indices_for_epoch.size()) {
+                        candidate_graph_indices.push_back(new_indices_for_epoch[li]);
+                    }
+                }
+            }
+            if (candidate_graph_indices.empty()) break;
+
+            gtsam::Values estimate;
+            try {
+                estimate = smoother.calculateEstimate();
+            } catch (const std::exception&) {
+                break;  // cannot evaluate residuals -- abandon FDE, keep current estimate
+            }
+
+            // Residual in meters: evaluateError() directly, NOT factor->error()
+            // (see the design-note above runFde -- error() runs the noise
+            // model's loss(), which for a Robust/Huber-wrapped factor
+            // returns the DOWN-WEIGHTED loss, not the raw chi-squared
+            // distance, silently weakening outlier detection exactly for
+            // the large residuals FDE exists to catch). evaluateError()
+            // bypasses the noise model entirely and returns the 1-D raw
+            // (unwhitened) residual directly in meters, so no sigma
+            // reconstruction is needed at all -- correct whether or not
+            // config.use_robust_loss is set.
+            std::vector<FdeEntry> pr_entries, cp_entries;
+            for (std::size_t gi : candidate_graph_indices) {
+                if (gi >= factors.size() || !factors[gi]) continue;
+                const auto& f = factors[gi];
+                const auto* pr_f =
+                    dynamic_cast<const gtsam::DoubleDifferencePseudorangeFactorArm*>(f.get());
+                const auto* cp_f =
+                    pr_f ? nullptr
+                         : dynamic_cast<const gtsam::DoubleDifferenceCarrierPhaseFactorArm*>(
+                               f.get());
+                if (!pr_f && !cp_f) continue;
+                try {
+                    if (pr_f) {
+                        const Pose3 pose = estimate.at<Pose3>(f->keys()[0]);
+                        const double res_m = std::abs(pr_f->evaluateError(pose)(0));
+                        pr_entries.push_back({gi, false, res_m});
+                    } else if (!config.fde_pseudorange_only) {
+                        const Pose3 pose = estimate.at<Pose3>(f->keys()[0]);
+                        const double amb_ref = estimate.at<double>(f->keys()[1]);
+                        const double amb_target = estimate.at<double>(f->keys()[2]);
+                        const double res_m =
+                            std::abs(cp_f->evaluateError(pose, amb_ref, amb_target)(0));
+                        cp_entries.push_back({gi, true, res_m});
+                    }
+                } catch (const std::exception&) {
+                    continue;
+                }
+            }
+
+            double pr_median = 0.0, cp_median = 0.0;
+            if (config.fde_median_subtraction) {
+                auto medianOf = [](const std::vector<FdeEntry>& v) {
+                    if (v.empty()) return 0.0;
+                    std::vector<double> r;
+                    r.reserve(v.size());
+                    for (const auto& e : v) r.push_back(e.res_m);
+                    std::sort(r.begin(), r.end());
+                    return r[r.size() / 2];
+                };
+                pr_median = medianOf(pr_entries);
+                cp_median = medianOf(cp_entries);
+            }
+
+            std::vector<FdeEntry> reject_entries;
+            if (iterative) {
+                // Single worst |res - median| exceeder across PR and CP
+                // combined (reference _fde_pick_rejects_iterative); ties
+                // favor whichever group is scanned first (PR), matching the
+                // reference's strict '>' override in the CP loop.
+                double best_d = 0.0;
+                int best_pr = -1, best_cp = -1;
+                for (std::size_t k = 0; k < pr_entries.size(); ++k) {
+                    const double d = std::abs(pr_entries[k].res_m - pr_median);
+                    if (d > config.fde_pseudorange_threshold_m && d > best_d) {
+                        best_d = d;
+                        best_pr = static_cast<int>(k);
+                        best_cp = -1;
+                    }
+                }
+                for (std::size_t k = 0; k < cp_entries.size(); ++k) {
+                    const double d = std::abs(cp_entries[k].res_m - cp_median);
+                    if (d > config.fde_carrier_threshold_m && d > best_d) {
+                        best_d = d;
+                        best_cp = static_cast<int>(k);
+                        best_pr = -1;
+                    }
+                }
+                if (best_pr < 0 && best_cp < 0) break;  // no outlier this round -- done
+                reject_entries.push_back(best_pr >= 0 ? pr_entries[static_cast<std::size_t>(best_pr)]
+                                                       : cp_entries[static_cast<std::size_t>(best_cp)]);
+            } else {
+                for (const auto& e : pr_entries) {
+                    if (std::abs(e.res_m - pr_median) > config.fde_pseudorange_threshold_m) {
+                        reject_entries.push_back(e);
+                    }
+                }
+                for (const auto& e : cp_entries) {
+                    if (std::abs(e.res_m - cp_median) > config.fde_carrier_threshold_m) {
+                        reject_entries.push_back(e);
+                    }
+                }
+                if (reject_entries.empty()) break;  // no-op: nothing exceeded threshold
+                // Safeguard (single-pass only, matching the reference): a
+                // runaway reject fraction likely means the FLOAT itself is
+                // wrong (not the measurements), so excluding that many
+                // factors would just poison the graph further -- abandon
+                // FDE for the epoch and hand off to CP-hold instead.
+                const std::size_t nv = pr_entries.size() + cp_entries.size();
+                const double frac_limit = config.fde_max_rejected_fraction *
+                                          static_cast<double>(std::max<std::size_t>(1, nv));
+                if (static_cast<double>(reject_entries.size()) > frac_limit) {
+                    ++result.diagnostics.fde_safeguard_skips;
+                    // Reference trigger_cp_hold(..., skip_if_active=True):
+                    // engage the hold at full strength unless already
+                    // active. With use_cp_hold_recovery off there is no
+                    // hold to engage -- FDE simply skips this epoch.
+                    if (config.use_cp_hold_recovery && cp_hold_counter <= 0) {
+                        cp_hold_counter = effectiveCpHoldEpochs();
+                        cp_hold_release_streak = 0;
+                        ++result.diagnostics.cp_hold_triggers;
+                    }
+                    applyCpprDecay();
+                    return total_rejected;  // 0: FDE skipped entirely this epoch
+                }
+            }
+
+            // Cycle-slip bookkeeping for rejected CP factors (reference
+            // _fde_reset_rejected_amb): release the fix-and-hold pin and
+            // bump the generation. Applied BEFORE the removal update below
+            // is attempted, mirroring the reference's own ordering (which
+            // does this even though the isam2 removal could still fail).
+            std::size_t cp_quarantined = 0;
+            std::set<gtsam::Key> quarantine_pin_keys;
+            for (const auto& e : reject_entries) {
+                if (!e.is_carrier) continue;
+                const auto& f = factors[e.graph_idx];
+                if (!f || f->keys().size() < 2) continue;
+                // Key 1 is ambRef = ambiguityKey(sym_idx) by construction
+                // (see the DoubleDifferenceCarrierPhaseFactorArm emplace
+                // site above: position, ambRef, ambTarget=dummy).
+                const gtsam::Symbol sym(f->keys()[1]);
+                const std::size_t sym_idx = sym.index();
+                const auto it = sym_to_ambiguity_index.find(sym_idx);
+                if (it == sym_to_ambiguity_index.end()) continue;
+                const std::size_t amb_idx = it->second;
+                if (rejected_ambiguity_indices) rejected_ambiguity_indices->insert(amb_idx);
+                if (config.fde_carrier_quarantine) {
+                    ++cp_quarantined;
+                    ++result.diagnostics.fde_carrier_quarantines;
+                    pinned_ambiguities.erase(sym_idx);
+                    quarantine_pin_keys.insert(f->keys()[1]);
+                } else {
+                    pinned_ambiguities.erase(sym_idx);
+                    ++amb_generation[amb_idx];
+                    ++result.diagnostics.ambiguity_generation_bumps;
+                    ++result.diagnostics.ambiguity_generation_bumps_fde;
+                    ++epoch_diagnostics[epoch_idx].ambiguity_generation_bumps_fde;
+                    live_ambiguity_indices.erase(amb_idx);
+                }
+                // Sat-badness cppr substitute (see fgo.hpp deviation 1): count
+                // this FDE carrier reject against the arc's physical
+                // (satellite, signal) identity. Cheap and harmless when the
+                // master switch is off; only actually consumed by satBadness()
+                // when config.use_sat_badness_downweight is true.
+                if (amb_idx < problem.ambiguity_states.size()) {
+                    const auto& amb = problem.ambiguity_states[amb_idx];
+                    ++sb_cppr_delta_this_call[std::make_pair(amb.satellite, amb.signal)];
+                }
+            }
+
+            gtsam::FactorIndices remove_indices;
+            remove_indices.reserve(reject_entries.size());
+            std::size_t pr_rejected = 0, cp_rejected = 0;
+            for (const auto& e : reject_entries) {
+                if (e.is_carrier && config.fde_carrier_quarantine) continue;
+                remove_indices.push_back(e.graph_idx);
+                if (e.is_carrier) {
+                    ++cp_rejected;
+                } else {
+                    ++pr_rejected;
+                }
+            }
+            if (!remove_indices.empty()) {
+                try {
+                    smoother.update(gtsam::NonlinearFactorGraph(), gtsam::Values(),
+                                    gtsam::FixedLagSmoother::KeyTimestampMap(), remove_indices);
+                    ++result.diagnostics.smoother_updates;
+                } catch (const std::exception& e) {
+                    std::fprintf(stderr,
+                                 "[fgo_gtsam_backend] FDE factor removal epoch %zu threw: %s\n",
+                                 epoch_idx, e.what());
+                    break;  // abandon FDE; keep the estimate as it stood before this attempt
+                }
+            }
+            // A quarantined ambiguity must also stop influencing the float
+            // through an old fix-and-hold pin.  Remove only its tight unary
+            // integer prior; retain its seed prior and every carrier factor,
+            // so the same arc re-floats without a generation/key tear.
+            if (!quarantine_pin_keys.empty()) {
+                const double pin_sigma_ceiling = config.ambiguity_hold_sigma_cycles * 1.5;
+                for (std::size_t fi = 0; fi < factors.size(); ++fi) {
+                    const auto& f = factors[fi];
+                    if (!f || f->keys().size() != 1 ||
+                        !quarantine_pin_keys.count(f->keys()[0])) {
+                        continue;
+                    }
+                    const auto* pf = dynamic_cast<const gtsam::PriorFactor<double>*>(f.get());
+                    if (!pf) continue;
+                    double sigma = std::numeric_limits<double>::infinity();
+                    if (const auto iso = std::dynamic_pointer_cast<gtsam::noiseModel::Isotropic>(
+                            pf->noiseModel())) {
+                        sigma = iso->sigma();
+                    } else if (const auto diag =
+                                   std::dynamic_pointer_cast<gtsam::noiseModel::Diagonal>(
+                                       pf->noiseModel())) {
+                        sigma = diag->sigma(0);
+                    }
+                    if (sigma <= pin_sigma_ceiling) remove_indices.push_back(fi);
+                }
+            }
+            result.diagnostics.fde_pseudorange_rejections += pr_rejected;
+            result.diagnostics.fde_carrier_rejections += cp_rejected;
+            total_rejected += pr_rejected + cp_rejected + cp_quarantined;
+
+            if (!iterative || cp_quarantined > 0) {
+                applyCpprDecay();
+                return total_rejected;  // single removal batch, done
+            }
+        }
+        applyCpprDecay();
+        return total_rejected;
+    };
+
+    // --- Exception recovery (use_solve_exception_recovery): full warm reset
+    // (reference recovery.warm_reset_phase2), the fallback for REPEATED
+    // smoother.update() failures. Destroys and recreates the smoother from
+    // scratch and re-anchors epoch `epoch_idx` at (seed_pose, zero velocity,
+    // seed_bias) with loose-but-finite priors, matching the reference's
+    // rot/pos/vel/bias sigmas. Unlike the Python reference (which restarts
+    // its own relative epoch counter at 0), this keeps the SAME epoch index
+    // i / key space -- there is nothing special about our key numbering to
+    // reset, so re-anchoring in place is the direct equivalent. Also bumps
+    // every live ambiguity's generation (the fresh smoother has none of
+    // their factors any more) and engages CP-hold. Throws on failure (the
+    // caller decides whether to give up on the epoch).
+    auto performFullWarmReset = [&](std::size_t epoch_idx, const Pose3& seed_pose,
+                                    const gtsam::imuBias::ConstantBias& seed_bias) {
+        smoother = gtsam::IncrementalFixedLagSmoother(config.fixed_lag_smoother_lag_s, isam_params);
+        dummy_created = false;
+        ambiguity_created.clear();
+        pinned_ambiguities.clear();
+        for (std::size_t idx : live_ambiguity_indices) {
+            ++amb_generation[idx];
+            ++result.diagnostics.ambiguity_generation_bumps;
+            ++result.diagnostics.ambiguity_generation_bumps_warm_reset;
+            ++epoch_diagnostics[epoch_idx].ambiguity_generation_bumps_warm_reset;
+        }
+        live_ambiguity_indices.clear();
+
+        constexpr double kDegToRad = 3.14159265358979323846 / 180.0;
+        const double rot_sigma = config.cp_hold_warm_reset_rotation_sigma_deg * kDegToRad;
+        gtsam::Vector6 pose_sigmas;
+        pose_sigmas << rot_sigma, rot_sigma, rot_sigma, 2.0, 2.0, 3.0;
+        const gtsam::Vector3 zero_vel = gtsam::Vector3::Zero();
+
+        gtsam::NonlinearFactorGraph reset_factors;
+        gtsam::Values reset_values;
+        gtsam::FixedLagSmoother::KeyTimestampMap reset_ts;
+        reset_values.insert(positionKey(epoch_idx), seed_pose);
+        reset_values.insert(velocityKey(epoch_idx), zero_vel);
+        reset_values.insert(biasKey(epoch_idx), seed_bias);
+        reset_factors.addPrior(positionKey(epoch_idx), seed_pose,
+                               gtsam::noiseModel::Diagonal::Sigmas(pose_sigmas));
+        reset_factors.addPrior<gtsam::Vector3>(
+            velocityKey(epoch_idx), zero_vel, gtsam::noiseModel::Isotropic::Sigma(3, 3.0));
+        reset_factors.addPrior(biasKey(epoch_idx), seed_bias,
+                               gtsam::noiseModel::Isotropic::Sigma(6, 0.01));
+        const double te_reset = stampOf(epoch_idx);
+        reset_ts[positionKey(epoch_idx)] = te_reset;
+        reset_ts[velocityKey(epoch_idx)] = te_reset;
+        reset_ts[biasKey(epoch_idx)] = te_reset;
+        smoother.update(reset_factors, reset_values, reset_ts);
+        ++result.diagnostics.smoother_updates;
+
+        prev_nav = gtsam::NavState(seed_pose, zero_vel);
+        prev_bias = seed_bias;
+        // Bootstrap re-seed: reference arms this once at Phase-2 init; this
+        // port arms it after EVERY full warm reset instead (see
+        // FGOConfig::use_ddpr_anchor's deviation note) -- unconditional
+        // (unlike the mass/fast-reset arming in resetAmbiguitiesWithCpHold,
+        // which is opt-in via cp_hold_bootstrap_after_mass_reset) because a
+        // full warm reset always throws away the smoother's linearization
+        // entirely. Armed BEFORE the hold computation below so the
+        // reference's bootstrap-suppresses-CP-hold rule
+        // (state.effective_cp_hold_epochs) applies to this very reset.
+        if (config.use_ddpr_anchor) {
+            ddpr_bootstrap_epochs_remaining = config.ddpr_anchor_bootstrap_epochs;
+        }
+        if (config.use_cp_hold_recovery) {
+            cp_hold_counter = effectiveCpHoldEpochs();
+            cp_hold_release_streak = 0;
+        }
+    };
+
+    // Exception-only fixed-lag boundary audit.  Indeterminate-system errors
+    // name the variable at which elimination failed (usually x(i-lag-1)).
+    // Dump its actual nonlinear-factor degree and every referenced key's
+    // presence before rebuilding the poisoned smoother.  This distinguishes
+    // a missing/orphan key from a genuinely rank-deficient connected clique.
+    auto dumpLagBoundaryAudit = [&](std::size_t epoch_idx, const char* error_text) {
+        try {
+            char target_chr = 'x';
+            std::size_t target_idx = epoch_idx > 26 ? epoch_idx - 26 : 0;
+            if (const char* p = std::strstr(error_text, "Symbol: ")) {
+                char parsed_chr = 0;
+                std::size_t parsed_idx = 0;
+                if (std::sscanf(p, "Symbol: %c%zu", &parsed_chr, &parsed_idx) == 2) {
+                    target_chr = parsed_chr;
+                    target_idx = parsed_idx;
+                }
+            }
+            const gtsam::Key target_key = gtsam::Symbol(target_chr, target_idx);
+            const auto& lin = smoother.getLinearizationPoint();
+            const auto& graph = smoother.getISAM2().getFactorsUnsafe();
+            std::size_t target_degree = 0;
+            std::size_t target_unary = 0;
+            std::size_t missing_key_refs = 0;
+            for (const auto& factor : graph) {
+                if (!factor) continue;
+                bool has_target = false;
+                for (gtsam::Key key : factor->keys()) {
+                    has_target = has_target || key == target_key;
+                    if (!lin.exists(key)) ++missing_key_refs;
+                }
+                if (has_target) {
+                    ++target_degree;
+                    if (factor->keys().size() == 1) ++target_unary;
+                }
+            }
+            std::fprintf(stderr,
+                         "[lag-audit] epoch=%zu target=%c%zu exists=%d degree=%zu unary=%zu "
+                         "lin_values=%zu graph_slots=%zu missing_key_refs=%zu\n",
+                         epoch_idx, target_chr, target_idx, lin.exists(target_key) ? 1 : 0,
+                         target_degree, target_unary, lin.size(), graph.size(), missing_key_refs);
+            std::size_t printed = 0;
+            for (std::size_t fi = 0; fi < graph.size() && printed < 24; ++fi) {
+                const auto& factor = graph[fi];
+                if (!factor || std::find(factor->keys().begin(), factor->keys().end(),
+                                         target_key) == factor->keys().end()) {
+                    continue;
+                }
+                const char* kind = "other";
+                if (dynamic_cast<const gtsam::PriorFactor<Pose3>*>(factor.get())) kind = "pose-prior";
+                else if (dynamic_cast<const gtsam::CombinedImuFactor*>(factor.get())) kind = "imu";
+                else if (dynamic_cast<const gtsam::LinearContainerFactor*>(factor.get()))
+                    kind = "marginal";
+                else if (dynamic_cast<const gtsam::DoubleDifferencePseudorangeFactorArm*>(factor.get()))
+                    kind = "ddpr";
+                else if (dynamic_cast<const gtsam::DoubleDifferenceCarrierPhaseFactorArm*>(factor.get()))
+                    kind = "ddcp";
+                std::fprintf(stderr, "[lag-audit]   factor=%zu kind=%s keys=", fi, kind);
+                for (gtsam::Key key : factor->keys()) {
+                    const gtsam::Symbol sym(key);
+                    std::fprintf(stderr, "%c%zu:%d ", sym.chr(), sym.index(),
+                                 lin.exists(key) ? 1 : 0);
+                }
+                std::fprintf(stderr, "\n");
+                if (const auto* marginal =
+                        dynamic_cast<const gtsam::LinearContainerFactor*>(factor.get())) {
+                    const gtsam::Matrix information = marginal->factor()->information();
+                    if (information.rows() > 0) {
+                        Eigen::SelfAdjointEigenSolver<gtsam::Matrix> eig(information);
+                        if (eig.info() == Eigen::Success) {
+                            const auto values = eig.eigenvalues();
+                            const double max_abs = values.cwiseAbs().maxCoeff();
+                            const double tol = std::max(1e-12, max_abs * 1e-10);
+                            const Eigen::Index rank =
+                                (values.array().abs() > tol).count();
+                            std::fprintf(
+                                stderr,
+                                "[lag-audit]     marginal_dim=%lld rank=%lld eig_min=%.6e "
+                                "eig_max=%.6e cond_abs=%.6e\n",
+                                static_cast<long long>(information.rows()),
+                                static_cast<long long>(rank), values.minCoeff(), values.maxCoeff(),
+                                values.cwiseAbs().minCoeff() > 0.0
+                                    ? max_abs / values.cwiseAbs().minCoeff()
+                                    : std::numeric_limits<double>::infinity());
+                        }
+                    }
+                }
+                ++printed;
+            }
+        } catch (const std::exception& audit_error) {
+            std::fprintf(stderr, "[lag-audit] epoch=%zu audit failed: %s\n", epoch_idx,
+                         audit_error.what());
+        }
+    };
+
+    // surplus_validation_overrides_history_dr_max_consecutive: count of
+    // immediately-preceding FIXED epochs (skipping FLOAT/unsolved ones,
+    // which neither increment nor reset it) that were themselves DR-gate
+    // overrides. Reset only by a normally-validated FIXED epoch (see the
+    // knob's doc comment in fgo.hpp).
+    std::size_t dr_bypass_consecutive_streak = 0;
+    for (std::size_t i = 0; i < num_epochs; ++i) {
+        // Fold epoch (i-1)'s FINAL outcome into the streak before starting
+        // epoch i's own processing. Deliberately done here -- at the top of
+        // THIS iteration, reading the previous iteration's already-fully-
+        // settled epoch_fixed/epoch_diagnostics entries -- rather than at
+        // the bottom of the previous iteration, because that loop body has
+        // several mid-iteration `continue` escapes (CP-hold/sanity paths)
+        // that would otherwise skip a bottom-of-loop update; the previous
+        // iteration's array entries are guaranteed final by the time this
+        // iteration begins regardless of which exit path it took.
+        if (config.surplus_validation_overrides_history_dr_max_consecutive > 0 &&
+            i > 0) {
+            const std::size_t prev = i - 1;
+            if (epoch_fixed[prev]) {
+                if (epoch_diagnostics[prev].dr_bypass_applied) {
+                    ++dr_bypass_consecutive_streak;
+                } else {
+                    dr_bypass_consecutive_streak = 0;
+                }
+            }
+        }
+        epoch_diagnostics[i].time = problem.epochs[i].time;
+        epoch_diagnostics[i].fresh_spp_solution =
+            problem.epochs[i].fresh_spp_solution;
+        epoch_diagnostics[i].spp_seed_position_ecef =
+            problem.epochs[i].position_ecef;
+        if (i < gf_slip_shadow.size()) {
+            epoch_diagnostics[i].gf_slip_shadow_event_pairs =
+                gf_slip_shadow[i].event_pairs;
+            epoch_diagnostics[i].gf_slip_shadow_max_jump_m =
+                gf_slip_shadow[i].max_jump_m;
+            epoch_diagnostics[i].gf_slip_shadow_tainted_ambiguities =
+                gf_slip_shadow[i].tainted_ambiguities;
+            epoch_diagnostics[i].doppler_slip_shadow_event_signals =
+                gf_slip_shadow[i].doppler_event_signals;
+            epoch_diagnostics[i].doppler_slip_shadow_max_innovation_m =
+                gf_slip_shadow[i].doppler_max_innovation_m;
+            epoch_diagnostics[i].gf_doppler_shadow_isolated_pairs =
+                gf_slip_shadow[i].doppler_isolated_event_pairs;
+        }
+        epoch_diagnostics[i].ar_outcome = config.use_lambda_ambiguity_fix
+            ? FGOProcessor::AmbiguityResolutionOutcome::SmootherFailure
+            : FGOProcessor::AmbiguityResolutionOutcome::Disabled;
+        epoch_diagnostics[i].ambiguity_candidates =
+            static_cast<int>(cp_by_epoch[i].size());
+        auto& candidate_trace = epoch_diagnostics[i].ambiguity_candidate_trace;
+        candidate_trace.reserve(cp_by_epoch[i].size() + cp_excluded_by_epoch[i].size());
+        for (const auto* fp : cp_excluded_by_epoch[i]) {
+            candidate_trace.push_back(
+                {fp->satellite, fp->reference_satellite, fp->signal,
+                 fp->ambiguity_index,
+                 FGOProcessor::AmbiguityCandidateDisposition::BuildTimeExcluded});
+            ++epoch_diagnostics[i].ambiguity_candidates_excluded_build_time;
+        }
+        const auto addCandidateTrace = [&](const auto& factor) -> std::size_t {
+            candidate_trace.push_back(
+                {factor.satellite, factor.reference_satellite, factor.signal,
+                 factor.ambiguity_index,
+                 FGOProcessor::AmbiguityCandidateDisposition::LambdaEligible});
+            return candidate_trace.size() - 1;
+        };
+        const auto setCandidateDisposition =
+            [&](std::size_t ambiguity_index,
+                FGOProcessor::AmbiguityCandidateDisposition disposition) {
+                for (auto& entry : candidate_trace) {
+                    if (entry.ambiguity_index == ambiguity_index) {
+                        entry.disposition = disposition;
+                        return;
+                    }
+                }
+            };
+        gtsam::NonlinearFactorGraph new_factors;
+        gtsam::Values new_values;
+        gtsam::FixedLagSmoother::KeyTimestampMap ts;
+        const double te = stampOf(i);
+
+        // --- Pose / velocity / bias seed for epoch i ---
+        Pose3 pose_seed;
+        gtsam::Vector3 vel_seed;
+        std::size_t win_begin = sample_cursor, win_end = sample_cursor;  // IMU window for ZUPT/NHC
+        if (i == 0) {
+            const Vector3d antenna_nav = navAntenna(problem.epochs[0].position_ecef);
+            pose_seed = Pose3(init_attitude_nav,
+                              Point3(antenna_nav) - init_attitude_nav * lever_arm_body);
+            vel_seed = gtsam::Vector3(problem.imu.init_velocity_nav);
+            // ZUPT/NHC window for epoch 0: the first interval [epoch0, epoch1).
+            const GNSSTime a = problem.epochs[0].time;
+            const GNSSTime b = problem.epochs[1].time;
+            std::size_t k = 0;
+            while (k < imu_samples.size() && imu_samples[k].time < a) ++k;
+            win_begin = k;
+            while (k < imu_samples.size() && imu_samples[k].time < b) ++k;
+            win_end = k;
+        } else {
+            // Preintegrate [epoch i-1, epoch i) and IMU-predict the seed.
+            const GNSSTime t0 = problem.epochs[i - 1].time;
+            const GNSSTime t1 = problem.epochs[i].time;
+            while (sample_cursor < imu_samples.size() && imu_samples[sample_cursor].time < t0) {
+                ++sample_cursor;
+            }
+            win_begin = sample_cursor;
+            // Reference parity: residual-driven per-epoch integration-
+            // covariance inflation (FGOConfig::
+            // use_imu_integration_covariance_inflation; port of
+            // imu_preintegration.py's _apply_mres_integ_cov_override). Mutate
+            // the SHARED imu_params in place immediately before this epoch's
+            // PIM is constructed -- integrateMeasurement() below bakes the
+            // covariance in at integration time, so this affects only the
+            // PIM about to be built, never any already-linearized factor.
+            if (config.use_imu_integration_covariance_inflation) {
+                const int stale_max = config.imu_integration_covariance_stale_epochs;
+                const bool is_stale = stale_max > 0 &&
+                    (static_cast<long long>(i) - last_ddpr_rms_epoch) > stale_max;
+                const double default_cov = config.imu_integration_covariance;
+                double integ_eff = default_cov;
+                if (!is_stale) {
+                    const double dt_epoch = std::max(t1 - t0, 1e-3);
+                    integ_eff = std::max(default_cov, sq(last_ddpr_rms) / dt_epoch);
+                    const double cap = config.imu_integration_covariance_max;
+                    if (cap > 0.0) integ_eff = std::min(integ_eff, cap);
+                }
+                imu_params->setIntegrationCovariance(gtsam::I_3x3 * integ_eff);
+            }
+            gtsam::PreintegratedCombinedMeasurements pim(imu_params, prev_bias);
+            std::size_t j = sample_cursor;
+            GNSSTime prev_time = t0;
+            std::size_t integrated = 0;
+            while (j < imu_samples.size() && imu_samples[j].time < t1) {
+                const double dt = imu_samples[j].time - prev_time;
+                if (dt > 1e-9) {
+                    pim.integrateMeasurement(gtsam::Vector3(imu_samples[j].accel_raw),
+                                             gtsam::Vector3(imu_samples[j].gyro_raw_radps), dt);
+                    ++integrated;
+                }
+                prev_time = imu_samples[j].time;
+                ++j;
+            }
+            win_end = j;
+            const double dt_tail = t1 - prev_time;
+            if (integrated > 0 && dt_tail > 1e-9 && j > 0) {
+                pim.integrateMeasurement(gtsam::Vector3(imu_samples[j - 1].accel_raw),
+                                         gtsam::Vector3(imu_samples[j - 1].gyro_raw_radps), dt_tail);
+            }
+            if (integrated > 0) {
+                const gtsam::NavState pred = pim.predict(prev_nav, prev_bias);
+                pose_seed = pred.pose();
+                vel_seed = pred.velocity();
+                // CP-hold / sanity FSM: break the IMU chain the epoch after a
+                // mass/fast reset (reference add_imu_chain's discontinuity
+                // path). The seed is still the IMU prediction (dead-reckoned
+                // from the pre-reset state, same as normal), but NO
+                // CombinedImuFactor links epoch i back to epoch i-1 -- instead
+                // a loose PriorPose3/PriorVector anchors epoch i at the seed so
+                // a wrong pre-reset pose cannot drag the post-reset solution
+                // back through the IMU factor.
+                if (config.use_cp_hold_recovery && pim_discontinuity) {
+                    gtsam::Vector6 break_sigmas;
+                    const double trans_sig = config.cp_hold_imu_break_translation_sigma_m;
+                    break_sigmas << 0.1, 0.1, 0.3, trans_sig, trans_sig, trans_sig;
+                    new_factors.addPrior(positionKey(i), pose_seed,
+                                         gtsam::noiseModel::Diagonal::Sigmas(break_sigmas));
+                    new_factors.addPrior<gtsam::Vector3>(
+                        velocityKey(i), vel_seed, gtsam::noiseModel::Isotropic::Sigma(3, 2.0));
+                    new_factors.addPrior(biasKey(i), prev_bias,
+                                         gtsam::noiseModel::Isotropic::Sigma(6, 0.01));
+                    pim_discontinuity = false;
+                } else {
+                    new_factors.emplace_shared<gtsam::CombinedImuFactor>(
+                        positionKey(i - 1), velocityKey(i - 1), positionKey(i), velocityKey(i),
+                        biasKey(i - 1), biasKey(i), pim);
+                }
+            } else {
+                // IMU dropout: hold pose at the DD antenna seed, loose continuity.
+                const Vector3d antenna_nav = navAntenna(problem.epochs[i].position_ecef);
+                pose_seed = Pose3(prev_nav.attitude(),
+                                  Point3(antenna_nav) - prev_nav.attitude() * lever_arm_body);
+                vel_seed = prev_nav.velocity();
+                new_factors.emplace_shared<gtsam::BetweenFactor<gtsam::Vector3>>(
+                    velocityKey(i - 1), velocityKey(i), gtsam::Vector3::Zero(),
+                    gtsam::noiseModel::Isotropic::Sigma(3, 10.0));
+                new_factors.emplace_shared<gtsam::BetweenFactor<gtsam::imuBias::ConstantBias>>(
+                    biasKey(i - 1), biasKey(i), gtsam::imuBias::ConstantBias(),
+                    gtsam::noiseModel::Isotropic::Sigma(6, 1.0));
+            }
+        }
+        epoch_predicted_position[i] = antennaOf(pose_seed);
+        new_values.insert(positionKey(i), pose_seed);
+        new_values.insert(velocityKey(i), vel_seed);
+        new_values.insert(biasKey(i), prev_bias);
+        ts[positionKey(i)] = te;
+        ts[velocityKey(i)] = te;
+        ts[biasKey(i)] = te;
+
+        // Doppler is a velocity observation independent of the carrier
+        // ambiguity state.  LOS arrives in ECEF while velocityKey(i) is ENU.
+        // Rotate the covector before forming the dot product.
+        if (config.use_single_difference_doppler_factors) {
+            for (const auto* fp : doppler_by_epoch[i]) {
+                const gtsam::Vector3 los_nav = R_ecef_nav.matrix().transpose() * fp->los;
+                if (!los_nav.allFinite() || los_nav.norm() <= 1e-9 ||
+                    !std::isfinite(fp->residual_mps)) {
+                    continue;
+                }
+                const auto noise = makeNoise(fp->sigma_mps, config.use_robust_loss,
+                                             config.tdcp_huber_threshold_sigma);
+                new_factors.emplace_shared<SingleDifferenceDopplerVelocityFactor>(
+                    velocityKey(i), los_nav, fp->residual_mps, noise);
+                ++epoch_diagnostics[i].sd_doppler_factors;
+            }
+        }
+
+        if (i == 0) {
+            gtsam::Vector6 pose_prior_sigmas;
+            pose_prior_sigmas << problem.imu.init_attitude_sigma_roll_pitch_rad,
+                problem.imu.init_attitude_sigma_roll_pitch_rad,
+                problem.imu.init_attitude_sigma_yaw_rad, 1e6, 1e6, 1e6;
+            new_factors.addPrior(positionKey(0), pose_seed,
+                                 gtsam::noiseModel::Diagonal::Sigmas(pose_prior_sigmas));
+            new_factors.addPrior(velocityKey(0), gtsam::Vector3(problem.imu.init_velocity_nav),
+                                 gtsam::noiseModel::Isotropic::Sigma(
+                                     3, problem.imu.init_velocity_sigma_mps));
+            gtsam::Vector6 bias_prior_sigmas;
+            bias_prior_sigmas << problem.imu.init_accel_bias_sigma,
+                problem.imu.init_accel_bias_sigma, problem.imu.init_accel_bias_sigma,
+                problem.imu.init_gyro_bias_sigma, problem.imu.init_gyro_bias_sigma,
+                problem.imu.init_gyro_bias_sigma;
+            new_factors.addPrior(biasKey(0), init_bias,
+                                 gtsam::noiseModel::Diagonal::Sigmas(bias_prior_sigmas));
+        }
+
+        // --- DD pseudorange factors at epoch i ---
+        // fde_local_indices: local index (within new_factors) of every DD
+        // PR/CP factor added THIS epoch, only tracked when FGOConfig::use_fde
+        // is set (see runFde()'s single-pass mode, which resolves these to
+        // live graph indices via this epoch's ISAM2Result::newFactorsIndices
+        // right after the smoother update below).
+        std::vector<std::size_t> fde_local_indices;
+        for (const auto* fp : pr_by_epoch[i]) {
+            const auto& factor = *fp;
+            const gtsam::gnss::DoubleDifferenceData dd{
+                factor.rover_satellite_model.corrected_pseudorange_m,
+                factor.base_satellite_model.corrected_pseudorange_m,
+                factor.rover_reference_model.corrected_pseudorange_m,
+                factor.base_reference_model.corrected_pseudorange_m,
+                Point3(factor.rover_satellite_position_ecef),
+                Point3(factor.rover_reference_position_ecef),
+                Point3(factor.base_satellite_position_ecef),
+                Point3(factor.base_reference_position_ecef),
+                Point3(factor.base_position_ecef)};
+            // Sat-badness sigma inflation (FGOConfig::use_sat_badness_downweight;
+            // port of factors.py's _add_ddpr_factor): bad_pair = max badness of
+            // the pair's two satellites, computed from the PREVIOUS epoch's
+            // quality state (see satBadness()/sb_last_ddpr_per_sat above), then
+            // inflates the base sigma BEFORE robust-loss wrapping -- mirrors the
+            // reference's base noise -> scale -> robust-wrap order exactly.
+            double pr_sigma = factor.sigma_m;
+            if (config.use_sat_badness_downweight) {
+                const double bad_pair = std::max(
+                    satBadness(factor.reference_satellite, factor.signal, nullptr),
+                    satBadness(factor.satellite, factor.signal, &factor.reference_satellite));
+                result.diagnostics.sat_badness_max_score_seen =
+                    std::max(result.diagnostics.sat_badness_max_score_seen, bad_pair);
+                if (config.sat_badness_pseudorange_sigma_scale > 0.0 && bad_pair > 0.0) {
+                    pr_sigma *= (1.0 + config.sat_badness_pseudorange_sigma_scale * bad_pair);
+                    ++result.diagnostics.sat_badness_downweighted_factors;
+                }
+            }
+            const auto noise = makeNoise(pr_sigma, robust,
+                                         config.pseudorange_huber_threshold_sigma);
+            const std::size_t local_idx = new_factors.size();
+            new_factors.emplace_shared<gtsam::DoubleDifferencePseudorangeFactorArm>(
+                positionKey(i), dd.rovRef, dd.baseRef, dd.rovTarget, dd.baseTarget, dd.satRefRov,
+                dd.satTargetRov, dd.satRefBase, dd.satTargetBase, dd.basePos, lever_arm_body,
+                ecef_T_nav, noise);
+            if (config.use_fde) fde_local_indices.push_back(local_idx);
+        }
+
+        // --- CP-hold / sanity FSM: release hysteresis + carrier suppression
+        // decision for epoch i (reference preprocess/gate.py lines ~113-128).
+        // Decided BEFORE building this epoch's DD carrier factors so the
+        // suppression takes effect immediately. last_ddpr_rms is the PREVIOUS
+        // epoch's post-fit DDPR RMS; this epoch's own RMS is computed after
+        // its solve (below) and feeds the FSM trigger for the epoch AFTER.
+        bool skip_cp_now = false;
+        if (config.use_cp_hold_recovery || config.use_selective_cp_hold) {
+            skip_cp_now = cp_hold_counter > 0;
+            if (skip_cp_now) {
+                if (config.use_cp_hold_recovery) {
+                    last_held_epoch = static_cast<long long>(i);
+                }
+                --cp_hold_counter;
+                ++result.diagnostics.cp_hold_epochs_held;
+                const double release_thr = config.cp_hold_release_threshold_m;
+                if (release_thr > 0.0) {
+                    if (last_ddpr_rms > 0.0 && last_ddpr_rms <= release_thr) {
+                        ++cp_hold_release_streak;
+                    } else {
+                        cp_hold_release_streak = 0;
+                    }
+                    // Release hysteresis: don't let the hold counter reach 0
+                    // until residuals have proven clean for
+                    // cp_hold_release_count consecutive epochs -- extend by one
+                    // more epoch at a time otherwise (reference: tc._recov_cp_hold = 1).
+                    if (cp_hold_counter <= 0 && cp_hold_release_streak < config.cp_hold_release_count) {
+                        cp_hold_counter = 1;
+                    }
+                }
+            }
+        }
+        if (skip_cp_now && config.use_cp_hold_recovery &&
+            config.use_cp_hold_anchor_release && config.use_ddpr_anchor) {
+            ++result.diagnostics.ddpr_anchor_solves;
+            const DdprAnchorResult anchor = solveDdprAnchor(i, pose_seed);
+            const double anchor_gap = anchor.ok
+                                          ? (antennaOf(anchor.pose) -
+                                             antennaOf(pose_seed)).norm()
+                                          : std::numeric_limits<double>::infinity();
+            const bool trusted =
+                anchor.ok && anchor.n_active >= config.ddpr_anchor_min_factors &&
+                anchor.res_rms <= config.ddpr_anchor_max_residual_m &&
+                anchor_gap <= config.ddpr_anchor_imu_max_gap_m;
+            if (trusted) {
+                ++result.diagnostics.ddpr_anchor_successes;
+                ++result.diagnostics.cp_hold_anchor_releases;
+                const Pose3 anchor_pose(pose_seed.rotation(), anchor.pose.translation());
+                new_values.update(positionKey(i), anchor_pose);
+                gtsam::Vector6 anchor_sigmas;
+                const double sigma = config.ddpr_anchor_bootstrap_sigma_m;
+                anchor_sigmas << 1e6, 1e6, 1e6, sigma, sigma, sigma;
+                new_factors.addPrior(
+                    positionKey(i), anchor_pose,
+                    gtsam::noiseModel::Diagonal::Sigmas(anchor_sigmas));
+                skip_cp_now = false;
+                cp_hold_counter = 0;
+                cp_hold_release_streak = 0;
+            }
+        }
+        epoch_diagnostics[i].carrier_hold_active = skip_cp_now;
+
+        // --- DD carrier factors + ambiguity nodes at epoch i ---
+        std::vector<std::size_t> epoch_amb_indices;
+        for (const auto* fp : cp_by_epoch[i]) {
+            const auto& factor = *fp;
+            const std::size_t trace_index = addCandidateTrace(factor);
+            ++epoch_diagnostics[i].carrier_factors_available;
+            const bool selectively_bad_pair =
+                selective_cp_hold_bad_sats.count(factor.satellite) > 0 ||
+                selective_cp_hold_bad_sats.count(factor.reference_satellite) > 0;
+            if (config.use_cp_hold_recovery && skip_cp_now &&
+                !config.use_selective_cp_hold &&
+                !config.use_cp_hold_float_recovery) {
+                // Carrier suppressed for the duration of the hold: DD
+                // pseudorange keeps flowing (added above, unaffected) but no
+                // carrier factor/symbol is added here, and (mirroring
+                // _carry_prev_amb) the arc's generation bumps every held
+                // epoch so there is no carrier continuity across the hold
+                // once it releases.
+                const std::size_t idx = factor.ambiguity_index;
+                const std::size_t old_sid = ambSymbolId(idx);
+                ++amb_generation[idx];
+                ++result.diagnostics.ambiguity_generation_bumps;
+                ++result.diagnostics.ambiguity_generation_bumps_hold;
+                ++epoch_diagnostics[i].ambiguity_generation_bumps_hold;
+                ++epoch_diagnostics[i].carrier_factors_suppressed_hold;
+                ++epoch_diagnostics[i].ambiguity_candidates_excluded_hold;
+                candidate_trace[trace_index].disposition =
+                    FGOProcessor::AmbiguityCandidateDisposition::CarrierHoldSuppressed;
+                pinned_ambiguities.erase(old_sid);
+                live_ambiguity_indices.erase(idx);
+                continue;
+            }
+            // Active selective arc restart: if this DD carrier arc was armed
+            // at the previous epoch (the implicated pair's ambiguity index),
+            // restart ONLY that ambiguity generation (fresh symbol) here,
+            // preserving the DDPR factors and every clean carrier arc. The
+            // armed set was populated causally at epoch i-1 and is cleared
+            // every epoch.
+            if (config.use_selective_arc_restart &&
+                selective_arc_restart_armed_ambiguities.count(
+                    factor.ambiguity_index) > 0) {
+                const std::size_t idx = factor.ambiguity_index;
+                const auto lb = selective_arc_restart_last_bump_epoch.find(idx);
+                const bool thrash_ok =
+                    lb == selective_arc_restart_last_bump_epoch.end() ||
+                    (i - lb->second) >= static_cast<std::size_t>(
+                                           config.selective_arc_restart_min_epochs_since_bump);
+                const bool cap_ok =
+                    epoch_diagnostics[i].selective_arc_restart_applied_arcs <
+                    config.selective_arc_restart_max_arcs_per_epoch;
+                if (thrash_ok && cap_ok) {
+                    const std::size_t old_sid = ambSymbolId(idx);
+                    ++amb_generation[idx];
+                    selective_arc_restart_last_bump_epoch[idx] = i;
+                    pinned_ambiguities.erase(old_sid);
+                    ++result.diagnostics.ambiguity_generation_bumps;
+                    ++epoch_diagnostics[i].selective_arc_restart_applied_arcs;
+                    ++result.diagnostics.selective_arc_restart_applied_arcs;
+                    // Mark the corresponding detection-time trace rows applied
+                    // (target and reference roles for this ambiguity index).
+                    if (i > 0) {
+                        auto& prev_trace = epoch_diagnostics[i - 1].selective_arc_restart_trace;
+                        for (auto& row : prev_trace) {
+                            if (row.ambiguity_index == idx) row.applied = true;
+                        }
+                    }
+                    for (auto& row : result.selective_arc_restart_trace) {
+                        if (row.ambiguity_index == idx) row.applied = true;
+                    }
+                } else if (!thrash_ok) {
+                    ++epoch_diagnostics[i].selective_arc_restart_skipped_thrash;
+                    ++result.diagnostics.selective_arc_restart_skipped_thrash;
+                } else {
+                    ++epoch_diagnostics[i].selective_arc_restart_skipped_cap;
+                    ++result.diagnostics.selective_arc_restart_skipped_cap;
+                }
+            }
+            const auto& ambiguity = problem.ambiguity_states[factor.ambiguity_index];
+            const std::size_t sym_idx = ambSymbolId(factor.ambiguity_index);
+            if (!dummy_created) {
+                new_values.insert(dummyAmbiguityKey(), 0.0);
+                new_factors.addPrior(dummyAmbiguityKey(), 0.0,
+                                     gtsam::noiseModel::Isotropic::Sigma(1, kDummyPinSigmaCycles));
+                dummy_created = true;
+            }
+            // `ambiguity_created` is historical bookkeeping, not proof that
+            // the key is still inside the fixed-lag Values.  A carrier arc can
+            // disappear longer than the lag (so a(sym) is marginalized) yet
+            // reappear before the builder's wider segment-gap timeout.  In
+            // that case the same symbol must be inserted again; otherwise the
+            // new carrier factor references a missing key (invalid map key).
+            const gtsam::Key amb_key = ambiguityKey(sym_idx);
+            const bool ambiguity_in_values =
+                new_values.exists(amb_key) || smoother.getLinearizationPoint().exists(amb_key);
+            if (!ambiguity_in_values) {
+                ambiguity_created.insert(sym_idx);
+                pinned_ambiguities.erase(sym_idx);
+                const double seed_cycles = ambiguity.wavelength_m > 0.0
+                                               ? ambiguity.initial_ambiguity_m / ambiguity.wavelength_m
+                                               : ambiguity.initial_ambiguity_m;
+                new_values.insert(amb_key, seed_cycles);
+                if (config.use_ambiguity_priors && config.ambiguity_prior_sigma_m > 0.0 &&
+                    ambiguity.wavelength_m > 0.0) {
+                    new_factors.addPrior(
+                        amb_key, seed_cycles,
+                        gtsam::noiseModel::Isotropic::Sigma(
+                            1, config.ambiguity_prior_sigma_m / ambiguity.wavelength_m));
+                }
+            }
+            const gtsam::gnss::DoubleDifferenceData dd{
+                factor.rover_satellite_model.corrected_carrier_m,
+                factor.base_satellite_model.corrected_carrier_m,
+                factor.rover_reference_model.corrected_carrier_m,
+                factor.base_reference_model.corrected_carrier_m,
+                Point3(factor.rover_satellite_position_ecef),
+                Point3(factor.rover_reference_position_ecef),
+                Point3(factor.base_satellite_position_ecef),
+                Point3(factor.base_reference_position_ecef),
+                Point3(factor.base_position_ecef)};
+            // Sat-badness sigma inflation (port of factors.py's
+            // _compute_cp_sigma; the ddcp_res_weight_* block further down in
+            // the reference is a separate, unported mechanism -- out of
+            // scope). Same bad_pair formula as the DD PR site above.
+            double cp_sigma = factor.sigma_m;
+            if (config.use_cp_hold_recovery && skip_cp_now &&
+                config.use_cp_hold_float_recovery) {
+                cp_sigma *= config.cp_hold_float_recovery_sigma_scale;
+            }
+            if (config.use_selective_cp_hold && skip_cp_now && selectively_bad_pair) {
+                cp_sigma *= config.selective_cp_hold_sigma_scale;
+                ++result.diagnostics.selective_cp_hold_downweighted_factors;
+            }
+            if (config.use_sat_badness_downweight) {
+                const double bad_pair = std::max(
+                    satBadness(factor.reference_satellite, factor.signal, nullptr),
+                    satBadness(factor.satellite, factor.signal, &factor.reference_satellite));
+                result.diagnostics.sat_badness_max_score_seen =
+                    std::max(result.diagnostics.sat_badness_max_score_seen, bad_pair);
+                if (config.sat_badness_carrier_sigma_scale > 0.0 && bad_pair > 0.0) {
+                    cp_sigma *= (1.0 + config.sat_badness_carrier_sigma_scale * bad_pair);
+                    ++result.diagnostics.sat_badness_downweighted_factors;
+                }
+            }
+            const auto noise = makeNoise(cp_sigma, robust,
+                                         config.carrier_phase_huber_threshold_sigma);
+            const std::size_t cp_local_idx = new_factors.size();
+            new_factors.emplace_shared<gtsam::DoubleDifferenceCarrierPhaseFactorArm>(
+                positionKey(i), ambiguityKey(sym_idx), dummyAmbiguityKey(),
+                dd.rovRef, dd.baseRef, dd.rovTarget, dd.baseTarget, dd.satRefRov, dd.satTargetRov,
+                dd.satRefBase, dd.satTargetBase, dd.basePos, ambiguity.wavelength_m, lever_arm_body,
+                ecef_T_nav, noise);
+            ++epoch_diagnostics[i].carrier_factors_added;
+            if (config.use_fde) fde_local_indices.push_back(cp_local_idx);
+            ts[ambiguityKey(sym_idx)] = te;  // re-stamp: keep in-window while active
+            if (!(config.use_selective_cp_hold && skip_cp_now && selectively_bad_pair) &&
+                !(config.use_cp_hold_recovery && skip_cp_now &&
+                  config.use_cp_hold_float_recovery)) {
+                epoch_amb_indices.push_back(factor.ambiguity_index);
+            } else {
+                ++epoch_diagnostics[i].ambiguity_candidates_excluded_hold;
+                candidate_trace[trace_index].disposition =
+                    FGOProcessor::AmbiguityCandidateDisposition::CarrierHoldQuarantined;
+            }
+            // Track active arcs for every reset policy, not only the CP-hold
+            // FSM. The GICI-style continuous-unfix reset also needs to bump
+            // all currently observed ambiguity generations while leaving the
+            // carrier/IMU chains active.
+            live_ambiguity_indices.insert(factor.ambiguity_index);
+        }
+        if (dummy_created) ts[dummyAmbiguityKey()] = te;
+        epoch_diagnostics[i].ambiguity_candidates_after_hold =
+            static_cast<int>(epoch_amb_indices.size());
+
+        // --- DDPR-anchor bootstrap re-seed (use_ddpr_anchor; port of
+        // optimize/stage.py's BOOT_DDPR_EPOCHS translation-only re-seed).
+        // While the countdown (armed after a warm/mass reset -- see
+        // resetAmbiguitiesWithCpHold / performFullWarmReset) is running,
+        // every epoch gets an anchor-only translation prior alongside the
+        // normal graph: rotation unconstrained (sigma 1e6, taken from the
+        // IMU-predicted pose so it does not fight attitude), translation
+        // pulled toward THIS epoch's independent DDPR-LS position (sigma
+        // ddpr_anchor_bootstrap_sigma_m). This is the primary lever against
+        // the CP-hold FSM's known FLOAT-degradation cost: a pull-back
+        // channel to truth that does not depend on carrier/AR recovering
+        // first. The countdown decrements every armed epoch regardless of
+        // whether this epoch's anchor solve succeeds (reference: stage.py
+        // decrements outside the try/except).
+        if (config.use_ddpr_anchor && ddpr_bootstrap_epochs_remaining > 0) {
+            ++result.diagnostics.ddpr_anchor_solves;
+            const DdprAnchorResult boot_anchor = solveDdprAnchor(i, pose_seed);
+            epoch_diagnostics[i].ddpr_anchor_evaluated = true;
+            epoch_diagnostics[i].ddpr_anchor_active_factors = boot_anchor.n_active;
+            epoch_diagnostics[i].ddpr_anchor_residual_rms_m = boot_anchor.res_rms;
+            if (boot_anchor.ok) {
+                epoch_diagnostics[i].ddpr_anchor_position_ecef = antennaOf(boot_anchor.pose);
+            }
+            if (boot_anchor.ok && boot_anchor.n_active >= config.ddpr_anchor_min_factors) {
+                // "successes" counts TRUSTED solves (res gate included) for
+                // diagnostic consistency with the other two call sites; the
+                // prior itself is added on the reference's weaker condition
+                // (solve ok, n >= 4 -- stage.py has no residual gate here).
+                if (boot_anchor.res_rms <= config.ddpr_anchor_max_residual_m) {
+                    ++result.diagnostics.ddpr_anchor_successes;
+                }
+                gtsam::Vector6 boot_sigmas;
+                const double bs = config.ddpr_anchor_bootstrap_sigma_m;
+                boot_sigmas << 1e6, 1e6, 1e6, bs, bs, bs;
+                const Pose3 boot_pose(pose_seed.rotation(), boot_anchor.pose.translation());
+                new_factors.addPrior(positionKey(i), boot_pose,
+                                     gtsam::noiseModel::Diagonal::Sigmas(boot_sigmas));
+                epoch_diagnostics[i].ddpr_anchor_bootstrap_prior_applied = true;
+                ++result.diagnostics.ddpr_anchor_bootstrap_prior_epochs;
+            }
+            --ddpr_bootstrap_epochs_remaining;
+        }
+
+        // MF-AR step 1: the DD carrier factors for every band stay in the graph
+        // (added above) and constrain the float, but the per-epoch LAMBDA
+        // integer ratio test below is restricted to one band per satellite so
+        // correlated multi-frequency bands don't weaken the all-or-nothing fix.
+        if (config.double_difference_lambda_one_band_per_satellite &&
+            epoch_amb_indices.size() > 1) {
+            const std::vector<std::size_t> candidates_before_one_band =
+                epoch_amb_indices;
+            epoch_amb_indices = selectOneBandPerSatellite(epoch_amb_indices, problem);
+            const std::set<std::size_t> retained(
+                epoch_amb_indices.begin(), epoch_amb_indices.end());
+            for (const std::size_t idx : candidates_before_one_band) {
+                if (retained.count(idx) == 0) {
+                    ++epoch_diagnostics[i].ambiguity_candidates_excluded_one_band;
+                    setCandidateDisposition(
+                        idx,
+                        FGOProcessor::AmbiguityCandidateDisposition::
+                            OneBandPerSatelliteExcluded);
+                }
+            }
+        }
+        // MF-AR step 2 (gated): keep Galileo arcs out of the integer search /
+        // fix-and-hold entirely -- their DD factors still shape the float.
+        if (config.exclude_galileo_ambiguity_fixing) {
+            const std::size_t candidates_before_constellation =
+                epoch_amb_indices.size();
+            for (const std::size_t idx : epoch_amb_indices) {
+                if (problem.ambiguity_states[idx].satellite.system ==
+                    GNSSSystem::Galileo) {
+                    setCandidateDisposition(
+                        idx,
+                        FGOProcessor::AmbiguityCandidateDisposition::
+                            ConstellationExcluded);
+                }
+            }
+            epoch_amb_indices.erase(
+                std::remove_if(epoch_amb_indices.begin(), epoch_amb_indices.end(),
+                               [&](std::size_t idx) {
+                                   return problem.ambiguity_states[idx].satellite.system ==
+                                          GNSSSystem::Galileo;
+                               }),
+                epoch_amb_indices.end());
+            epoch_diagnostics[i].ambiguity_candidates_excluded_constellation +=
+                static_cast<int>(
+                    candidates_before_constellation - epoch_amb_indices.size());
+        }
+        epoch_diagnostics[i].ambiguity_candidates =
+            static_cast<int>(epoch_amb_indices.size());
+
+        // --- Milestone 2d: NHC + ZUPT pseudo-measurements (gated per epoch) ---
+        const ImuWindowStats wstats =
+            (config.monitor_motion_constraints || config.use_nhc ||
+             config.use_zupt)
+                ? imuWindowStats(imu_samples, win_begin, win_end, problem.imu.init_accel_bias,
+                                 problem.imu.init_gyro_bias)
+                : ImuWindowStats{};
+        const double seed_speed = vel_seed.norm();
+        const bool zupt_candidate =
+            wstats.n >= config.zupt_min_samples &&
+            wstats.accel_std <= config.zupt_max_accel_std &&
+            wstats.gyro_std <= config.zupt_max_gyro_std &&
+            wstats.gyro_median <= config.zupt_max_gyro_median &&
+            // Velocity gate: reject false ZUPT during constant-velocity motion
+            // (quiet accelerometer but non-zero speed).
+            (config.zupt_max_speed_mps <= 0.0 || seed_speed <= config.zupt_max_speed_mps);
+        const bool stationary = config.use_zupt && zupt_candidate;
+        auto& motion_diag = epoch_diagnostics[i];
+        motion_diag.motion_constraint_imu_samples = wstats.n;
+        motion_diag.motion_constraint_accel_std_mps2 = wstats.accel_std;
+        motion_diag.motion_constraint_gyro_std_radps = wstats.gyro_std;
+        motion_diag.motion_constraint_gyro_median_radps = wstats.gyro_median;
+        motion_diag.motion_constraint_yaw_rate_radps = wstats.yaw_rate_abs;
+        motion_diag.motion_constraint_seed_speed_mps = seed_speed;
+        motion_diag.zupt_candidate = zupt_candidate;
+        if (stationary && config.zupt_sigma_mps > 0.0) {
+            // ZUPT: pin Vel(i) ~ 0 (mirrors inuex35 _add_zero_velocity_prior).
+            const gtsam::Vector3 zero_velocity = gtsam::Vector3::Zero();
+            new_factors.addPrior<gtsam::Vector3>(
+                velocityKey(i), zero_velocity,
+                gtsam::noiseModel::Isotropic::Sigma(3, config.zupt_sigma_mps));
+            ++result.diagnostics.zupt_epochs;
+            motion_diag.zupt_applied = true;
+        }
+        const double horizontal_seed_speed = std::hypot(vel_seed.x(), vel_seed.y());
+        const bool nhc_candidate =
+            (!config.use_zupt || !zupt_candidate) &&
+            horizontal_seed_speed >= config.nhc_min_speed_mps &&
+            wstats.yaw_rate_abs <= config.nhc_max_yaw_rate_radps;
+        motion_diag.nhc_candidate = nhc_candidate;
+        if (config.use_nhc && !stationary) {
+            // NHC: apply only to moving, non-turning epochs so it never fights
+            // legitimate lateral motion (mirrors nhc.py's speed gate + a
+            // yaw-rate gate for turns). Speed comes from the seed velocity.
+            if (nhc_candidate) {
+                gtsam::Vector2 nhc_sigmas(config.nhc_sigma_lateral_mps,
+                                          config.nhc_sigma_vertical_mps);
+                new_factors.emplace_shared<NonHolonomicFactor>(
+                    positionKey(i), velocityKey(i),
+                    gtsam::noiseModel::Diagonal::Sigmas(nhc_sigmas));
+                ++result.diagnostics.nhc_epochs;
+                motion_diag.nhc_applied = true;
+            }
+        }
+
+        // --- Preemptive regularization ---
+        // Weak-geometry urban epochs (few DD sats + near-stationary IMU) can
+        // leave a DOF (typically yaw, or velocity/bias) unobservable, so the
+        // incremental Cholesky throws IndeterminantLinearSystemException. That
+        // is unrecoverable here: iSAM2 partially commits the new values before
+        // throwing, and skipping the epoch orphans X(i)/V(i)/B(i) so every later
+        // IMU factor references a missing key ("invalid map key") and the whole
+        // tail cascades. A very loose per-epoch prior on pose/velocity/bias
+        // (anchored to the seed) regularizes the Hessian so it is always
+        // positive-definite. Sigmas are far looser than the real measurements
+        // (rot 10 rad, trans 1000 m, vel 100 m/s, bias 10), so the effect on
+        // the DD-cm solution is negligible -- they only fill rank in the null
+        // space that would otherwise be unobservable.
+        {
+            // Sigmas loose vs the real measurements (DD ~cm, IMU) but tight
+            // enough to keep the Hessian well-conditioned even when an epoch's
+            // measurement info on some DOF is ~0 (few DD sats / IMU dropout):
+            // rot 1 rad, trans 100 m, vel 10 m/s, bias 1.
+            gtsam::Vector6 reg_pose;
+            reg_pose << 1.0, 1.0, 1.0, 100.0, 100.0, 100.0;
+            new_factors.addPrior(positionKey(i), pose_seed,
+                                 gtsam::noiseModel::Diagonal::Sigmas(reg_pose));
+            const gtsam::Vector3 v_reg = vel_seed;
+            new_factors.addPrior<gtsam::Vector3>(velocityKey(i), v_reg,
+                                                 gtsam::noiseModel::Isotropic::Sigma(3, 10.0));
+            new_factors.addPrior(biasKey(i), prev_bias,
+                                 gtsam::noiseModel::Isotropic::Sigma(6, 1.0));
+        }
+
+        // --- Smoother update ---
+        bool update_ok = true;
+        // FDE (use_fde): resolved only on the PRIMARY (non-exception) path,
+        // since exception recovery below (loose-prior retry / warm reset)
+        // never actually adds this epoch's own DD PR/CP factors to the
+        // graph -- there would be nothing for FDE to evaluate this epoch in
+        // that case (see runFde's call site further down for the gating).
+        gtsam::FactorIndices fde_new_indices;
+        bool fde_indices_valid = false;
+        try {
+            smoother.update(new_factors, new_values, ts);
+            if (config.use_fde) {
+                fde_new_indices = smoother.getISAM2Result().newFactorsIndices;
+                fde_indices_valid = true;
+            }
+        } catch (const std::exception& e) {
+            std::fprintf(stderr, "[fgo_gtsam_backend] smoother.update() epoch %zu threw: %s\n", i,
+                         e.what());
+            dumpLagBoundaryAudit(i, e.what());
+            update_ok = false;
+            ++result.diagnostics.smoother_recovery_epochs;
+            // --- Exception recovery (use_solve_exception_recovery; reference
+            // recovery.handle_solve_exception). Targets the known
+            // IndeterminantLinearSystemException tail failure (tokyo run2,
+            // ~epoch 6390): without this, the epoch is skipped (`continue`
+            // below) and the run keeps going in a degraded state, but a
+            // SECOND failure while the graph is still poisoned would repeat
+            // forever with no recovery. ---
+            if (config.use_solve_exception_recovery) {
+                // Stage 0 (use_ddpr_anchor only; reference
+                // handle_solve_exception's ACTUAL first choice --
+                // try_ddpr_reset before the loose-prior fallback): warm-reset
+                // the smoother seeded at (this epoch's DDPR-LS anchor
+                // translation, IMU-predicted rotation, zero velocity) when
+                // the anchor is trusted. Falls through to stage 1 otherwise.
+                bool anchor_recovered = false;
+                if (config.use_ddpr_anchor) {
+                    ++result.diagnostics.ddpr_anchor_solves;
+                    const DdprAnchorResult anchor = solveDdprAnchor(i, pose_seed);
+                    if (anchor.ok && anchor.n_active >= config.ddpr_anchor_min_factors &&
+                        anchor.res_rms <= config.ddpr_anchor_max_residual_m) {
+                        ++result.diagnostics.ddpr_anchor_successes;
+                        try {
+                            const Pose3 anchor_seed_pose(pose_seed.rotation(),
+                                                         anchor.pose.translation());
+                            performFullWarmReset(i, anchor_seed_pose, prev_bias);
+                            update_ok = true;
+                            anchor_recovered = true;
+                            ++result.diagnostics.ddpr_anchored_warm_resets;
+                        } catch (const std::exception& e_anchor) {
+                            std::fprintf(stderr,
+                                         "[fgo_gtsam_backend] ddpr-anchored warm reset epoch %zu "
+                                         "threw: %s -- falling back\n",
+                                         i, e_anchor.what());
+                        }
+                    }
+                }
+                if (!anchor_recovered) {
+                    // iSAM2 may partially commit Values before update() throws.
+                    // Retrying the same smoother with x/v/b(i) therefore causes
+                    // duplicate-key or invalid-map cascades.  Once an update
+                    // fails, treat that smoother as poisoned and rebuild it
+                    // immediately.  This is state recovery, not a measurement
+                    // tuning choice; the current epoch is re-anchored at its IMU
+                    // prediction when no independently trusted DDPR anchor exists.
+                    try {
+                        performFullWarmReset(i, pose_seed, prev_bias);
+                        update_ok = true;
+                        ++result.diagnostics.solve_exception_warm_resets;
+                    } catch (const std::exception& e3) {
+                        std::fprintf(stderr,
+                                     "[fgo_gtsam_backend] full warm reset epoch %zu threw: %s -- "
+                                     "epoch skipped\n",
+                                     i, e3.what());
+                        update_ok = false;
+                    }
+                }  // !anchor_recovered
+            }
+        }
+        ++result.diagnostics.smoother_updates;
+        if (!update_ok) {
+            continue;
+        }
+        epoch_diagnostics[i].ar_outcome = config.use_lambda_ambiguity_fix
+            ? FGOProcessor::AmbiguityResolutionOutcome::NoCandidates
+            : FGOProcessor::AmbiguityResolutionOutcome::Disabled;
+        epoch_solved[i] = true;
+        result.diagnostics.smoother_max_window_vars = std::max(
+            result.diagnostics.smoother_max_window_vars, smoother.getLinearizationPoint().size());
+
+        // Refined state for epoch i (seed source for next epoch).
+        Pose3 pose_i = smoother.calculateEstimate<Pose3>(positionKey(i));
+        gtsam::Vector3 vel_i = smoother.calculateEstimate<gtsam::Vector3>(velocityKey(i));
+
+        // Run only after this epoch's final integrity decision. The helper
+        // optimizes copied Values and cloned DDPR factors, so this lambda can
+        // only populate diagnostics; it cannot alter iSAM2 or FIX/FLOAT.
+        auto runDdprGncCounterfactual = [&]() {
+            auto& diagnostic = epoch_diagnostics[i];
+            if (!config.monitor_ddpr_gnc_counterfactual || epoch_fixed[i] ||
+                diagnostic.ddpr_gnc_counterfactual_evaluated) {
+                return;
+            }
+            ++result.diagnostics.ddpr_gnc_counterfactual_attempts;
+            try {
+                const DdprGncCounterfactualOutcome counterfactual =
+                    evaluateDdprGncCounterfactual(
+                        smoother.getISAM2().getFactorsUnsafe(),
+                        smoother.calculateEstimate(), positionKey(i),
+                        [&]() {
+                            std::vector<gtsam::Key> keys;
+                            keys.reserve(epoch_amb_indices.size());
+                            for (const std::size_t index : epoch_amb_indices) {
+                                keys.push_back(ambiguityKey(ambSymbolId(index)));
+                            }
+                            return keys;
+                        }(),
+                        config);
+                diagnostic.ddpr_gnc_counterfactual_evaluated =
+                    counterfactual.evaluated;
+                diagnostic.ddpr_gnc_counterfactual_succeeded =
+                    counterfactual.succeeded;
+                diagnostic.ddpr_gnc_counterfactual_factor_count =
+                    counterfactual.factor_count;
+                diagnostic.ddpr_gnc_counterfactual_stages = counterfactual.stages;
+                diagnostic.ddpr_gnc_counterfactual_cost_before =
+                    counterfactual.base_cost_before;
+                diagnostic.ddpr_gnc_counterfactual_cost_after =
+                    counterfactual.base_cost_after;
+                diagnostic.ddpr_gnc_counterfactual_ddpr_rms_before_m =
+                    counterfactual.ddpr_rms_before_m;
+                diagnostic.ddpr_gnc_counterfactual_ddpr_rms_after_m =
+                    counterfactual.ddpr_rms_after_m;
+                diagnostic.ddpr_gnc_counterfactual_lambda_evaluated =
+                    counterfactual.lambda_evaluated;
+                diagnostic.ddpr_gnc_counterfactual_lambda_ambiguities =
+                    counterfactual.lambda_ambiguities;
+                diagnostic.ddpr_gnc_counterfactual_lambda_ratio =
+                    counterfactual.lambda_ratio;
+                diagnostic.ddpr_gnc_counterfactual_lambda_ratio_pass =
+                    counterfactual.lambda_ratio_pass;
+                if (counterfactual.succeeded && counterfactual.optimized_pose) {
+                    const Point3 candidate_ant =
+                        antennaOf(*counterfactual.optimized_pose);
+                    diagnostic.ddpr_gnc_counterfactual_position_ecef =
+                        Vector3d(candidate_ant);
+                    diagnostic.ddpr_gnc_counterfactual_float_separation_m =
+                        (Vector3d(candidate_ant) - epoch_float_position[i]).norm();
+                    ++result.diagnostics.ddpr_gnc_counterfactual_successes;
+                }
+            } catch (const std::exception&) {
+                // Shadow diagnostics are deliberately fail-closed.
+            }
+        };
+
+        // Independent SD-Doppler velocity LS and DR propagation.  No FGO
+        // state enters this estimator.  A single robust re-fit removes rows
+        // beyond 4 sigma so one Doppler outlier cannot dominate the track.
+        if (config.monitor_external_doppler_dr ||
+            config.use_external_doppler_dr_validation ||
+            config.monitor_candidate_integrity_witness) {
+            std::vector<const FGOProcessor::SingleDifferenceDopplerFactor*> active_doppler =
+                doppler_by_epoch[i];
+            Vector3d doppler_velocity = Vector3d::Zero();
+            Eigen::Matrix3d doppler_cov = Eigen::Matrix3d::Identity() * 100.0;
+            bool doppler_ok = false;
+            for (int pass = 0; pass < 2; ++pass) {
+                Eigen::Matrix3d normal = Eigen::Matrix3d::Zero();
+                Vector3d rhs = Vector3d::Zero();
+                for (const auto* fp : active_doppler) {
+                    const double sigma = std::max(1e-4, fp->sigma_mps);
+                    const double w = 1.0 / (sigma * sigma);
+                    normal.noalias() += w * fp->los * fp->los.transpose();
+                    rhs.noalias() += w * fp->los * fp->residual_mps;
+                }
+                const Eigen::LDLT<Eigen::Matrix3d> ldlt(normal);
+                if (active_doppler.size() < static_cast<std::size_t>(
+                                                std::max(3, config.external_doppler_dr_min_factors)) ||
+                    ldlt.info() != Eigen::Success) {
+                    break;
+                }
+                doppler_velocity = ldlt.solve(rhs);
+                doppler_cov = ldlt.solve(Eigen::Matrix3d::Identity());
+                if (!doppler_velocity.allFinite() || !doppler_cov.allFinite()) break;
+                doppler_ok = true;
+                if (pass == 0) {
+                    std::vector<const FGOProcessor::SingleDifferenceDopplerFactor*> kept;
+                    kept.reserve(active_doppler.size());
+                    for (const auto* fp : active_doppler) {
+                        const double sigma = std::max(1e-4, fp->sigma_mps);
+                        const double normalized =
+                            std::abs(fp->residual_mps - fp->los.dot(doppler_velocity)) / sigma;
+                        if (normalized <= 4.0) kept.push_back(fp);
+                    }
+                    if (kept.size() == active_doppler.size()) break;
+                    active_doppler = std::move(kept);
+                    doppler_ok = false;
+                }
+            }
+
+            const GNSSTime current_time = problem.epochs[i].time;
+            if (external_dr_position_valid) {
+                const double dt = current_time - external_dr_time;
+                if (dt > 0.0 && dt <= config.max_tdcp_gap_s) {
+                    const Vector3d next_velocity =
+                        doppler_ok ? doppler_velocity : external_dr_velocity_ecef;
+                    external_dr_position_ecef +=
+                        0.5 * (external_dr_velocity_ecef + next_velocity) * dt;
+                    const Eigen::Matrix3d next_cov =
+                        doppler_ok ? doppler_cov : external_dr_velocity_cov;
+                    external_dr_position_cov +=
+                        0.25 * dt * dt * (external_dr_velocity_cov + next_cov);
+                    const double q = config.external_doppler_dr_process_noise_mps * dt;
+                    external_dr_position_cov += Eigen::Matrix3d::Identity() * q * q;
+                    ++external_dr_age_epochs;
+                } else {
+                    external_dr_position_valid = false;
+                }
+            }
+            if (doppler_ok) {
+                external_dr_velocity_ecef = doppler_velocity;
+                external_dr_velocity_cov = 0.5 * (doppler_cov + doppler_cov.transpose());
+                external_dr_velocity_valid = true;
+                epoch_diagnostics[i].external_doppler_velocity_valid = true;
+                epoch_diagnostics[i].external_doppler_velocity_ecef_mps = doppler_velocity;
+            }
+            external_dr_time = current_time;
+            epoch_diagnostics[i].external_dr_age_epochs =
+                external_dr_position_valid ? external_dr_age_epochs : -1;
+        }
+
+        // Observation-domain Doppler diagnostic at the optimized velocity.
+        // Keep it independent of whether AR is enabled so it can validate the
+        // new factor before it participates in any relaxed fixing policy.
+        {
+            double sum_sq = 0.0;
+            int count = 0;
+            if (config.use_single_difference_doppler_factors) {
+                for (const auto* fp : doppler_by_epoch[i]) {
+                    const gtsam::Vector3 los_nav = R_ecef_nav.matrix().transpose() * fp->los;
+                    if (!los_nav.allFinite()) continue;
+                    const double residual = fp->residual_mps - los_nav.dot(vel_i);
+                    if (!std::isfinite(residual)) continue;
+                    sum_sq += residual * residual;
+                    ++count;
+                }
+            }
+            epoch_diagnostics[i].sd_doppler_rms_mps =
+                count > 0 ? std::sqrt(sum_sq / static_cast<double>(count)) : 0.0;
+        }
+        epoch_diagnostics[i].imu_pose_correction_m =
+            (antennaOf(pose_i) - antennaOf(pose_seed)).norm();
+        prev_bias = smoother.calculateEstimate<gtsam::imuBias::ConstantBias>(biasKey(i));
+        prev_nav = gtsam::NavState(pose_i, vel_i);
+
+        // Re-read every still-in-window pose so each epoch's recorded estimate
+        // is its most-smoothed value at the moment it exits the window.
+        const gtsam::Values& lin = smoother.getLinearizationPoint();
+        for (std::size_t j = i + 1; j-- > 0;) {
+            if (!lin.exists(positionKey(j))) break;  // older keys already marginalized
+            const Pose3 pj = smoother.calculateEstimate<Pose3>(positionKey(j));
+            const gtsam::Vector3 vj = smoother.calculateEstimate<gtsam::Vector3>(velocityKey(j));
+            epoch_float_position[j] = antennaOf(pj);
+            const gtsam::Matrix3 R = pj.rotation().matrix();
+            const Eigen::Vector3d fwd = R.col(0);
+            const Eigen::Vector3d left = R.col(1);
+            constexpr double kRadToDeg = 180.0 / 3.14159265358979323846;
+            double heading = std::atan2(fwd.x(), fwd.y()) * kRadToDeg;
+            if (heading < 0.0) heading += 360.0;
+            const double pitch = std::asin(std::max(-1.0, std::min(1.0, fwd.z()))) * kRadToDeg;
+            const double roll = std::atan2(left.z(), R.col(2).z()) * kRadToDeg;
+            epoch_rpy_deg[j] = Vector3d(roll, pitch, heading);
+            epoch_vel_nav[j] = Vector3d(vj);
+        }
+
+        // --- Shared post-fit DDPR residual / GDOP computation (reference:
+        // postfit.main_ddpr_residuals -- epoch RMS + per-sat max, charged to
+        // both the target and the reference satellite -- and gate.py's
+        // GDOP/nsat gate). Computed ONCE at the smoothed antenna position
+        // AFTER the update and reused by BOTH the per-epoch quality gates
+        // (use_epoch_quality_gates) and the CP-hold/sanity FSM
+        // (use_cp_hold_recovery) below -- the two features are independent
+        // knobs but share this one (possibly expensive) residual pass. ---
+        // These are integrity diagnostics, not merely inputs to optional
+        // gates.  Compute them unconditionally so nsat/GDOP/DDPR never become
+        // misleading zeros just because every behavior-changing gate is off.
+        const bool need_ddpr_residuals = true;
+        int nsat = 0;
+        double gdop = std::numeric_limits<double>::infinity();
+        double ddpr_rms = 0.0;
+        std::map<SatelliteId, double> per_sat_res;
+        std::vector<fgo_ddpr_gnc::Residual> gnc_residuals;
+        // Per-(ref, target, signal) residual rows, only collected when the
+        // sat-badness pair term is actually active (fgo.hpp deviation 5) --
+        // feeds update_pair_quality below.
+        const bool collect_pair_rows =
+            config.use_sat_badness_downweight && config.sat_badness_alpha_recent_pair > 0.0;
+        std::vector<std::tuple<SatelliteId, SatelliteId, SignalType, double>> sb_pair_rows;
+        if (need_ddpr_residuals) {
+            const Point3 ant_p = antennaOf(pose_i);
+            const Vector3d ant(ant_p.x(), ant_p.y(), ant_p.z());
+
+            // (a) GDOP / nsat over this epoch's DD satellites.
+            std::map<SatelliteId, Vector3d> sat_positions;
+            for (const auto* fp : pr_by_epoch[i]) {
+                sat_positions.emplace(fp->satellite, fp->rover_satellite_position_ecef);
+                sat_positions.emplace(fp->reference_satellite,
+                                      fp->rover_reference_position_ecef);
+            }
+            nsat = static_cast<int>(sat_positions.size());
+            if (nsat >= 4) {
+                Eigen::MatrixXd H(nsat, 4);
+                int row = 0;
+                for (const auto& [sid, sp] : sat_positions) {
+                    (void)sid;
+                    const Vector3d d = sp - ant;
+                    const double rng = d.norm();
+                    if (rng > 0.0) {
+                        H.block<1, 3>(row, 0) = (-d / rng).transpose();
+                    } else {
+                        H.block<1, 3>(row, 0).setZero();
+                    }
+                    H(row, 3) = 1.0;
+                    ++row;
+                }
+                const Eigen::Matrix4d Ninv = (H.transpose() * H).inverse();
+                if (Ninv.allFinite()) {
+                    gdop = std::sqrt(std::max(0.0, Ninv.trace()));
+                }
+            }
+
+            // (b) post-fit DD-pseudorange residuals at the smoothed antenna.
+            double res_sq_sum = 0.0;
+            std::size_t res_n = 0;
+            for (const auto* fp : pr_by_epoch[i]) {
+                const double geom =
+                    ((fp->rover_satellite_position_ecef - ant).norm() -
+                     (fp->base_satellite_position_ecef - fp->base_position_ecef).norm()) -
+                    ((fp->rover_reference_position_ecef - ant).norm() -
+                     (fp->base_reference_position_ecef - fp->base_position_ecef).norm());
+                const double res = std::abs(fp->observed_dd_pseudorange_m - geom);
+                if (config.monitor_ddpr_gnc) {
+                    gnc_residuals.push_back({res, fp->sigma_m});
+                }
+                res_sq_sum += res * res;
+                ++res_n;
+                double& worst = per_sat_res[fp->satellite];
+                worst = std::max(worst, res);
+                double& worst_ref = per_sat_res[fp->reference_satellite];
+                worst_ref = std::max(worst_ref, res);
+                if (collect_pair_rows) {
+                    sb_pair_rows.emplace_back(fp->reference_satellite, fp->satellite,
+                                              fp->signal, res);
+                }
+            }
+            ddpr_rms = res_n > 0 ? std::sqrt(res_sq_sum / static_cast<double>(res_n)) : 0.0;
+        }
+        epoch_diagnostics[i].ddpr_rms_m = ddpr_rms;
+        if (config.monitor_satellite_quarantine_witness) {
+            satellite_quarantine_postfit_residuals[i] = per_sat_res;
+        }
+        if (config.monitor_ddpr_gnc) {
+            fgo_ddpr_gnc::Config gnc_config;
+            gnc_config.shape = config.ddpr_gnc_shape;
+            gnc_config.graduation_divisor = config.ddpr_gnc_graduation_divisor;
+            gnc_config.max_stages = config.ddpr_gnc_max_stages;
+            gnc_config.downweighted_threshold =
+                config.ddpr_gnc_downweighted_threshold;
+            const auto gnc = fgo_ddpr_gnc::evaluate(gnc_residuals, gnc_config);
+            auto& diagnostics = epoch_diagnostics[i];
+            diagnostics.ddpr_gnc_evaluated = gnc.evaluated;
+            diagnostics.ddpr_gnc_factor_count =
+                static_cast<int>(gnc_residuals.size());
+            diagnostics.ddpr_gnc_stages = gnc.stages;
+            diagnostics.ddpr_gnc_initial_mu = gnc.initial_mu;
+            diagnostics.ddpr_gnc_final_mu = gnc.final_mu;
+            diagnostics.ddpr_gnc_min_weight = gnc.min_weight;
+            diagnostics.ddpr_gnc_mean_weight = gnc.mean_weight;
+            diagnostics.ddpr_gnc_effective_factor_count =
+                gnc.effective_factor_count;
+            diagnostics.ddpr_gnc_downweighted_factors =
+                static_cast<int>(gnc.downweighted_factors);
+            diagnostics.ddpr_gnc_weighted_rms_m = gnc.weighted_rms_m;
+            if (gnc.evaluated && gnc.weights.size() == pr_by_epoch[i].size()) {
+                diagnostics.ddpr_gnc_factor_trace.reserve(gnc.weights.size());
+                for (std::size_t row = 0; row < gnc.weights.size(); ++row) {
+                    const auto* factor = pr_by_epoch[i][row];
+                    FGOProcessor::DdprGncFactorTrace trace;
+                    trace.satellite = factor->satellite;
+                    trace.reference_satellite = factor->reference_satellite;
+                    trace.signal = factor->signal;
+                    trace.residual_m = gnc_residuals[row].residual_m;
+                    trace.sigma_m = gnc_residuals[row].sigma_m;
+                    trace.normalized_residual =
+                        trace.residual_m / trace.sigma_m;
+                    trace.weight = gnc.weights[row];
+                    diagnostics.ddpr_gnc_factor_trace.push_back(trace);
+                }
+            }
+            if (gnc.evaluated) {
+                ++result.diagnostics.ddpr_gnc_evaluated_epochs;
+                result.diagnostics.ddpr_gnc_factors += gnc_residuals.size();
+                result.diagnostics.ddpr_gnc_downweighted_factors +=
+                    gnc.downweighted_factors;
+            }
+        }
+        epoch_diagnostics[i].gdop = gdop;
+        epoch_diagnostics[i].num_satellites = nsat;
+        bool validation_anchor_attempted = false;
+        DdprAnchorResult validation_anchor;
+        const auto ensureValidationAnchor = [&]() {
+            if (!validation_anchor_attempted) {
+                validation_anchor_attempted = true;
+                ++result.diagnostics.ddpr_anchor_solves;
+                validation_anchor = solveDdprAnchor(i, pose_seed);
+                if (validation_anchor.ok &&
+                    validation_anchor.n_active >= config.ddpr_anchor_min_factors &&
+                    validation_anchor.res_rms <= config.ddpr_anchor_max_residual_m) {
+                    ++result.diagnostics.ddpr_anchor_successes;
+                }
+            }
+            return validation_anchor.ok &&
+                validation_anchor.n_active >= config.ddpr_anchor_min_factors &&
+                validation_anchor.res_rms <= config.ddpr_anchor_max_residual_m;
+        };
+        const auto anchorValidationAgrees = [&](const Eigen::Vector3d& candidate) {
+            if (!config.use_ddpr_anchor_aided_validation || !config.use_ddpr_anchor) {
+                return false;
+            }
+            const bool trusted = ensureValidationAnchor();
+            const bool agrees =
+                trusted &&
+                (candidate - Eigen::Vector3d(antennaOf(validation_anchor.pose))).norm() <=
+                    config.ddpr_anchor_validation_max_separation_m;
+            if (agrees) {
+                ++result.diagnostics.ddpr_anchor_validation_accepts;
+            } else {
+                ++result.diagnostics.ddpr_anchor_validation_rejects;
+            }
+            return agrees;
+        };
+
+        // --- Sat-badness EWMA down-weighting: per-epoch state update
+        // (FGOConfig::use_sat_badness_downweight; port of the reference's
+        // update_reference_quality / update_observation_quality /
+        // update_pair_quality, called once per epoch directly off THIS
+        // epoch's pre-FDE per_sat_res -- same ordering as the reference's
+        // stage.py _compute_postfit_diagnostics, which calls these BEFORE
+        // apply_fde). ---
+        if (config.use_sat_badness_downweight) {
+            constexpr double kRadToDegSb = 180.0 / 3.14159265358979323846;
+
+            // (a) update_reference_quality: decay/update recent_ref_bad for
+            // every DISTINCT reference satellite backing this epoch's DD
+            // pseudorange factors (the reference selects one ref per
+            // (system, signal) group; only the set of currently-active refs
+            // matters here, not the group key itself).
+            {
+                const double decay = std::min(1.0, std::max(0.0, config.sat_badness_recent_ref_decay));
+                const double thr = std::max(1e-6, config.sat_badness_obsq_res_threshold_m);
+                std::set<SatelliteId> active_refs;
+                for (const auto* fp : pr_by_epoch[i]) active_refs.insert(fp->reference_satellite);
+                for (SatelliteId r : active_refs) {
+                    const double prev = sb_recent_ref_bad.count(r) ? sb_recent_ref_bad[r] : 0.0;
+                    const auto it = per_sat_res.find(r);
+                    // CLAMPED-variant deviation (fgo.hpp sat_badness_residual_
+                    // clamp_m): clamp upstream of the reference's own existing
+                    // min(2,.) increment limit below (left unchanged).
+                    const double res = it != per_sat_res.end() ? sbClampResidual(it->second) : 0.0;
+                    const double incr = res > 0.0 ? std::min(2.0, res / thr) : 0.0;
+                    sb_recent_ref_bad[r] = decay * prev + incr;
+                }
+                for (auto& [sid, v] : sb_recent_ref_bad) {
+                    if (!active_refs.count(sid)) v = decay * v;
+                }
+            }
+
+            // (b) update_observation_quality: per-sat EWMA/streak (hard reset
+            // -- not decay -- for sats not seen this epoch), recent_worst /
+            // recent_cppr decay, and latest el/snr snapshot.
+            std::optional<SatelliteId> worst_sat;
+            {
+                const double alpha = std::min(1.0, std::max(0.0, config.sat_badness_obsq_ewma_alpha));
+                const double thr_obsq = config.sat_badness_obsq_bad_streak_threshold_m;
+                const double worst_decay = std::min(1.0, std::max(0.0, config.sat_badness_recent_worst_decay));
+                const double cppr_decay = std::min(1.0, std::max(0.0, config.sat_badness_recent_cppr_decay));
+
+                std::set<SatelliteId> seen;
+                double worst_val = -1.0;
+                for (const auto& [sid, rmax] : per_sat_res) {
+                    seen.insert(sid);
+                    // CLAMPED-variant deviation (fgo.hpp sat_badness_residual_
+                    // clamp_m): clamp the residual before it feeds the EWMA
+                    // input or the bad-streak comparison -- both direct
+                    // badness inputs. The "worst satellite" argmax just below
+                    // deliberately keeps the RAW rmax: clamping is monotonic
+                    // (order-preserving), so it cannot change which satellite
+                    // is identified as worst, and per_sat_res itself (read by
+                    // use_epoch_quality_gates/use_cp_hold_recovery elsewhere)
+                    // is never touched.
+                    const double rmax_c = sbClampResidual(rmax);
+                    const double prev = sb_obsq_ewma.count(sid) ? sb_obsq_ewma[sid] : 0.0;
+                    sb_obsq_ewma[sid] = prev <= 0.0 ? rmax_c : ((1.0 - alpha) * prev + alpha * rmax_c);
+                    if (rmax_c > thr_obsq) {
+                        sb_obsq_bad_streak[sid] = (sb_obsq_bad_streak.count(sid) ? sb_obsq_bad_streak[sid] : 0) + 1;
+                    } else {
+                        sb_obsq_bad_streak[sid] = 0;
+                    }
+                    if (rmax > worst_val) {
+                        worst_val = rmax;
+                        worst_sat = sid;
+                    }
+                }
+                for (auto& [sid, v] : sb_obsq_ewma) {
+                    if (!seen.count(sid)) v = 0.0;
+                }
+                for (auto& [sid, v] : sb_obsq_bad_streak) {
+                    if (!seen.count(sid)) v = 0;
+                }
+
+                // recent_cppr's "this epoch" input: our FDE-substitute reject
+                // count as of THIS point in the pipeline (i.e. as of the end
+                // of the LAST epoch FDE actually ran -- FDE for THIS epoch
+                // runs later, below), maxed across signal for each satellite
+                // (mirrors gate.py's sat_cppr_sat: max over freq of
+                // rejc_cp_pr). See fgo.hpp deviation 1.
+                std::map<SatelliteId, double> cppr_this_epoch;
+                for (const auto& [key, cnt] : sb_fde_cp_reject_count) {
+                    double& v = cppr_this_epoch[key.first];
+                    v = std::max(v, cnt);
+                }
+
+                std::set<SatelliteId> active_sats(seen);
+                if (worst_sat) active_sats.insert(*worst_sat);
+                for (const auto& [sid, v] : cppr_this_epoch) {
+                    (void)v;
+                    active_sats.insert(sid);
+                }
+
+                for (SatelliteId sid : active_sats) {
+                    const double prev_w = sb_recent_worst.count(sid) ? sb_recent_worst[sid] : 0.0;
+                    const double is_worst = (worst_sat && *worst_sat == sid) ? 1.0 : 0.0;
+                    sb_recent_worst[sid] = worst_decay * prev_w + is_worst;
+
+                    const double prev_c = sb_recent_cppr.count(sid) ? sb_recent_cppr[sid] : 0.0;
+                    const double cppr_cur = cppr_this_epoch.count(sid) ? cppr_this_epoch[sid] : 0.0;
+                    sb_recent_cppr[sid] = cppr_decay * prev_c + cppr_cur;
+                }
+                for (auto& [sid, v] : sb_recent_worst) {
+                    if (!active_sats.count(sid)) v = worst_decay * v;
+                }
+                for (auto& [sid, v] : sb_recent_cppr) {
+                    if (!active_sats.count(sid)) v = cppr_decay * v;
+                }
+
+                // Latest elevation/SNR: only entries observed THIS epoch are
+                // updated (reference: latest_el_deg/latest_snr_dbhz retain
+                // their last-seen value for sats absent this epoch).
+                for (const auto* fp : pr_by_epoch[i]) {
+                    sb_latest_el_deg[fp->satellite] = fp->elevation_rad * kRadToDegSb;
+                    sb_latest_el_deg[fp->reference_satellite] =
+                        fp->rover_reference_model.elevation_rad * kRadToDegSb;
+                    sb_latest_snr_dbhz[fp->satellite] = fp->rover_satellite_model.snr_dbhz;
+                    sb_latest_snr_dbhz[fp->reference_satellite] =
+                        fp->rover_reference_model.snr_dbhz;
+                }
+            }
+
+            // (c) update_pair_quality: gated on the alpha itself (fgo.hpp
+            // deviation 5) -- the reference profile ships alpha_recent_pair
+            // at 0.0, contributing nothing.
+            if (collect_pair_rows) {
+                const double decay = std::min(1.0, std::max(0.0, config.sat_badness_recent_pair_decay));
+                const double thr = std::max(1e-6, config.sat_badness_obsq_res_threshold_m);
+                std::set<std::tuple<SatelliteId, SatelliteId, SignalType>> seen_pairs;
+                for (const auto& [ref, sat, freq, res] : sb_pair_rows) {
+                    const auto key = std::make_tuple(ref, sat, freq);
+                    seen_pairs.insert(key);
+                    const double prev = sb_recent_pair_bad.count(key) ? sb_recent_pair_bad[key] : 0.0;
+                    // CLAMPED-variant deviation (fgo.hpp sat_badness_residual_
+                    // clamp_m): same upstream clamp as recent_ref_bad above,
+                    // ahead of the reference's own existing min(2,.) limit.
+                    const double incr = res > 0.0 ? std::min(2.0, sbClampResidual(res) / thr) : 0.0;
+                    sb_recent_pair_bad[key] = decay * prev + incr;
+                }
+                for (auto& [key, v] : sb_recent_pair_bad) {
+                    if (!seen_pairs.count(key)) v = decay * v;
+                }
+            }
+
+            // (d) Snapshot THIS epoch's (pre-FDE) per_sat_res as "last epoch"
+            // for the NEXT epoch's res_s term (reference: tc._mres_signals.
+            // per_sat, set from this same pre-FDE per_sat_res pass).
+            // CLAMPED-variant deviation (fgo.hpp sat_badness_residual_clamp_m):
+            // the snapshot itself is clamped -- this is the direct res_s term
+            // satBadness() reads next epoch -- while per_sat_res (the shared
+            // map other features also read) stays raw.
+            sb_last_ddpr_per_sat.clear();
+            for (const auto& [sid, r] : per_sat_res) {
+                sb_last_ddpr_per_sat[sid] = sbClampResidual(r);
+            }
+        }
+
+        // --- Per-epoch quality gates (port of the reference's gate.py /
+        // postfit.py fixing policy; see FGOConfig::use_epoch_quality_gates).
+        // Gated epochs keep their factors but attempt no LAMBDA, add no
+        // holds, and are never labelled FIXED via held integers. ---
+        bool fix_allowed = true;
+        if (config.use_epoch_quality_gates) {
+            if (nsat < config.gate_min_satellites ||
+                gdop > config.gate_gdop_max ||
+                (config.gate_ddpr_res_max_m > 0.0 &&
+                 ddpr_rms > config.gate_ddpr_res_max_m)) {
+                fix_allowed = false;
+                epoch_diagnostics[i].ar_outcome =
+                    FGOProcessor::AmbiguityResolutionOutcome::QualityGateRejected;
+                ++result.diagnostics.quality_gated_epochs;
+            }
+
+            // (c) satellites flagged by LAST epoch's post-fit residuals stay
+            // out of this epoch's LAMBDA candidate set (their factors and
+            // held pins are untouched).
+            if (!gate_bad_sats.empty() && !epoch_amb_indices.empty()) {
+                const std::size_t candidates_before_residual_gate =
+                    epoch_amb_indices.size();
+                for (const std::size_t idx : epoch_amb_indices) {
+                    const auto& amb = problem.ambiguity_states[idx];
+                    if (gate_bad_sats.count(amb.satellite) > 0 ||
+                        gate_bad_sats.count(amb.reference_satellite) > 0) {
+                        setCandidateDisposition(
+                            idx,
+                            FGOProcessor::AmbiguityCandidateDisposition::
+                                PreviousResidualGateExcluded);
+                    }
+                }
+                epoch_amb_indices.erase(
+                    std::remove_if(
+                        epoch_amb_indices.begin(), epoch_amb_indices.end(),
+                        [&](std::size_t idx) {
+                            const auto& amb = problem.ambiguity_states[idx];
+                            return gate_bad_sats.count(amb.satellite) > 0 ||
+                                   gate_bad_sats.count(amb.reference_satellite) > 0;
+                        }),
+                    epoch_amb_indices.end());
+                epoch_diagnostics[i]
+                    .ambiguity_candidates_excluded_previous_residual +=
+                    static_cast<int>(
+                        candidates_before_residual_gate -
+                        epoch_amb_indices.size());
+            }
+            gate_bad_sats.clear();
+            if (config.gate_per_sat_res_max_m > 0.0) {
+                for (const auto& [sid, r] : per_sat_res) {
+                    if (r > config.gate_per_sat_res_max_m) {
+                        gate_bad_sats.insert(sid);
+                    }
+                }
+            }
+        }
+
+        // --- FDE (use_fde): runs AFTER the shared post-fit DDPR diagnostics
+        // pass above (nsat/gdop/ddpr_rms/per_sat_res, already computed at
+        // the post-solve pre-FDE estimate -- the CP-hold/sanity FSM further
+        // below reuses THOSE pre-FDE numbers unchanged, exactly mirroring
+        // the reference's stage.py ordering: main_ddpr_residuals runs
+        // before apply_fde, so the sanity trigger sees pre-FDE residuals)
+        // but BEFORE per-epoch LAMBDA/fix-and-hold, so ambiguity resolution
+        // sees the float already cleaned of gross outliers. Gated on the
+        // PRIMARY smoother.update having succeeded without exception (see
+        // fde_indices_valid's declaration above).
+        double fde_pr_reject_fraction_this_epoch = 0.0;
+        double fde_cp_reject_fraction_this_epoch = 0.0;
+        if (config.use_fde && fde_indices_valid) {
+            const std::size_t pr_rejections_before =
+                result.diagnostics.fde_pseudorange_rejections;
+            const std::size_t cp_rejections_before =
+                result.diagnostics.fde_carrier_rejections;
+            std::set<std::size_t> fde_rejected_amb;
+            const std::size_t fde_removed =
+                runFde(i, fde_local_indices, fde_new_indices, &fde_rejected_amb);
+            fde_rejected_ambiguities_by_epoch[i] = fde_rejected_amb;
+            const std::size_t pr_rejected =
+                result.diagnostics.fde_pseudorange_rejections -
+                pr_rejections_before;
+            const std::size_t cp_rejected =
+                result.diagnostics.fde_carrier_rejections -
+                cp_rejections_before;
+            if (!pr_by_epoch[i].empty()) {
+                fde_pr_reject_fraction_this_epoch =
+                    static_cast<double>(pr_rejected) /
+                    static_cast<double>(pr_by_epoch[i].size());
+            }
+            if (epoch_diagnostics[i].carrier_factors_added > 0) {
+                fde_cp_reject_fraction_this_epoch =
+                    static_cast<double>(cp_rejected) /
+                    static_cast<double>(
+                        epoch_diagnostics[i].carrier_factors_added);
+            }
+            if (fde_removed > 0) {
+                ++result.diagnostics.fde_epochs;
+                // A rejected CP factor's ambiguity_index may still be
+                // sitting in this epoch's still-pending LAMBDA candidate
+                // list (built before FDE ran) -- its factor no longer
+                // exists, so drop it (mirrors the cp-hold suppression
+                // branch above, which never adds a suppressed arc to
+                // epoch_amb_indices in the first place).
+                if (!fde_rejected_amb.empty()) {
+                    for (const std::size_t idx : epoch_amb_indices) {
+                        if (fde_rejected_amb.count(idx) > 0) {
+                            setCandidateDisposition(
+                                idx,
+                                FGOProcessor::AmbiguityCandidateDisposition::
+                                    FdeExcluded);
+                        }
+                    }
+                    const std::size_t candidates_before_fde =
+                        epoch_amb_indices.size();
+                    epoch_amb_indices.erase(
+                        std::remove_if(epoch_amb_indices.begin(), epoch_amb_indices.end(),
+                                       [&](std::size_t idx) {
+                                           return fde_rejected_amb.count(idx) > 0;
+                                       }),
+                        epoch_amb_indices.end());
+                    epoch_diagnostics[i].ambiguity_candidates_excluded_fde +=
+                        static_cast<int>(
+                            candidates_before_fde - epoch_amb_indices.size());
+                }
+                // Refresh the post-FDE estimate: downstream LAMBDA/fix-and-
+                // hold and the REPORTED pose for this epoch must see the
+                // cleaned float (reference: the pose snapshot in stage.py's
+                // _compute_postfit_diagnostics happens AFTER apply_fde).
+                pose_i = smoother.calculateEstimate<Pose3>(positionKey(i));
+                vel_i = smoother.calculateEstimate<gtsam::Vector3>(velocityKey(i));
+                prev_bias = smoother.calculateEstimate<gtsam::imuBias::ConstantBias>(biasKey(i));
+                prev_nav = gtsam::NavState(pose_i, vel_i);
+                epoch_float_position[i] = antennaOf(pose_i);
+                const gtsam::Matrix3 R_fde = pose_i.rotation().matrix();
+                const Eigen::Vector3d fwd_fde = R_fde.col(0);
+                const Eigen::Vector3d left_fde = R_fde.col(1);
+                constexpr double kRadToDegFde = 180.0 / 3.14159265358979323846;
+                double heading_fde = std::atan2(fwd_fde.x(), fwd_fde.y()) * kRadToDegFde;
+                if (heading_fde < 0.0) heading_fde += 360.0;
+                const double pitch_fde =
+                    std::asin(std::max(-1.0, std::min(1.0, fwd_fde.z()))) * kRadToDegFde;
+                const double roll_fde = std::atan2(left_fde.z(), R_fde.col(2).z()) * kRadToDegFde;
+                epoch_rpy_deg[i] = Vector3d(roll_fde, pitch_fde, heading_fde);
+                epoch_vel_nav[i] = Vector3d(vel_i);
+            }
+        }
+
+        if (!config.use_lambda_ambiguity_fix) {
+            for (const std::size_t idx : epoch_amb_indices) {
+                setCandidateDisposition(
+                    idx,
+                    FGOProcessor::AmbiguityCandidateDisposition::
+                        AmbiguityResolutionDisabled);
+            }
+        } else if (!fix_allowed) {
+            for (const std::size_t idx : epoch_amb_indices) {
+                setCandidateDisposition(
+                    idx,
+                    FGOProcessor::AmbiguityCandidateDisposition::
+                        EpochQualityGateExcluded);
+            }
+        }
+
+        // --- Per-epoch LAMBDA off the bounded windowed marginals ---
+        if (fix_allowed && config.use_lambda_ambiguity_fix && !epoch_amb_indices.empty()) {
+            // FDE, exception recovery, or an ambiguity-generation bump can
+            // invalidate a candidate after epoch_amb_indices was assembled.
+            // Never request a joint marginal containing a key that has
+            // already left the active smoother.
+            const gtsam::Values& lambda_linearization_point =
+                smoother.getLinearizationPoint();
+            const std::size_t candidates_before_filter = epoch_amb_indices.size();
+            for (const std::size_t idx : epoch_amb_indices) {
+                if (!lambda_linearization_point.exists(
+                        ambiguityKey(ambSymbolId(idx)))) {
+                    setCandidateDisposition(
+                        idx,
+                        FGOProcessor::AmbiguityCandidateDisposition::
+                            StaleSmootherKeyExcluded);
+                }
+            }
+            epoch_amb_indices.erase(
+                std::remove_if(
+                    epoch_amb_indices.begin(), epoch_amb_indices.end(),
+                    [&](std::size_t idx) {
+                        return !lambda_linearization_point.exists(
+                            ambiguityKey(ambSymbolId(idx)));
+                    }),
+                epoch_amb_indices.end());
+            result.diagnostics.lambda_stale_candidates_filtered +=
+                candidates_before_filter - epoch_amb_indices.size();
+            epoch_diagnostics[i].ambiguity_candidates_excluded_stale +=
+                static_cast<int>(
+                    candidates_before_filter - epoch_amb_indices.size());
+            epoch_diagnostics[i].ambiguity_candidates_final =
+                static_cast<int>(epoch_amb_indices.size());
+
+            std::sort(epoch_amb_indices.begin(), epoch_amb_indices.end(),
+                      [&](std::size_t a, std::size_t b) {
+                          const auto& sa = problem.ambiguity_states[a];
+                          const auto& sb = problem.ambiguity_states[b];
+                          return std::tie(sa.satellite, sa.reference_satellite, sa.signal, a) <
+                                 std::tie(sb.satellite, sb.reference_satellite, sb.signal, b);
+                      });
+            const int n = static_cast<int>(epoch_amb_indices.size());
+            // Below-floor rescue (use_low_count_ambiguity_resolution): let a
+            // below-floor epoch INTO the LAMBDA attempt, gated separately
+            // below on a mandatory surplus-satellite pass (see the knob's
+            // comment in fgo.hpp). Requires use_surplus_satellite_validation
+            // too, since the surplus verdict is the only integrity check
+            // this path accepts. Default off (or surplus validation off):
+            // is_low_count_attempt is always false when n >= min_candidates,
+            // so this changes nothing for the established path.
+            const bool is_low_count_attempt = n < min_candidates;
+            const bool low_count_entry_allowed =
+                is_low_count_attempt && config.use_low_count_ambiguity_resolution &&
+                config.use_surplus_satellite_validation &&
+                n >= std::max(1, config.low_count_min_candidates);
+            if (n > 0 && is_low_count_attempt && !low_count_entry_allowed) {
+                epoch_diagnostics[i].ar_outcome =
+                    FGOProcessor::AmbiguityResolutionOutcome::InsufficientCandidates;
+            }
+            if (n >= min_candidates || low_count_entry_allowed) {
+                if (is_low_count_attempt) {
+                    ++result.diagnostics.low_count_ambiguity_attempts;
+                    epoch_diagnostics[i].low_count_ar_attempted = true;
+                }
+                epoch_diagnostics[i].ar_outcome =
+                    FGOProcessor::AmbiguityResolutionOutcome::MarginalFailure;
+                gtsam::KeyVector keys;
+                keys.reserve(n + 1);
+                keys.push_back(positionKey(i));
+                for (std::size_t idx : epoch_amb_indices) keys.push_back(ambiguityKey(ambSymbolId(idx)));
+
+                Eigen::VectorXd float_amb(n);
+                Eigen::MatrixXd q_amb(n, n);
+                Eigen::MatrixXd pos_amb(3, n);
+                Eigen::Matrix3d antenna_position_cov = Eigen::Matrix3d::Zero();
+                bool has_antenna_position_cov = false;
+                bool ok = true;
+                try {
+                    const gtsam::JointMarginal joint =
+                        smoother.getISAM2().jointMarginalCovariance(keys);
+                    // Cov(antenna, amb) via the 3x6 antenna Jacobian at pose_i.
+                    gtsam::Matrix36 H_antenna_pose;
+                    {
+                        gtsam::gnss::LeverArm::PoseFrame frame;
+                        gnss_lever_arm.antennaPosition(pose_i, &frame);
+                        for (int r3 = 0; r3 < 3; ++r3) {
+                            gtsam::Matrix13 unit = gtsam::Matrix13::Zero();
+                            unit(0, r3) = 1.0;
+                            H_antenna_pose.row(r3) = gnss_lever_arm.antennaPoseJacobian(unit, frame);
+                        }
+                        const gtsam::Matrix pose_cov =
+                            joint(positionKey(i), positionKey(i));
+                        if (pose_cov.rows() == 6 && pose_cov.cols() == 6) {
+                            antenna_position_cov =
+                                H_antenna_pose * pose_cov * H_antenna_pose.transpose();
+                            antenna_position_cov =
+                                0.5 * (antenna_position_cov + antenna_position_cov.transpose());
+                            has_antenna_position_cov = antenna_position_cov.allFinite();
+                        }
+                    }
+                    for (int r = 0; r < n && ok; ++r) {
+                        const gtsam::Key rk = ambiguityKey(ambSymbolId(epoch_amb_indices[r]));
+                        float_amb(r) = smoother.calculateEstimate<double>(rk);
+                        const gtsam::Matrix pr = joint(positionKey(i), rk);  // 6x1
+                        const Eigen::Vector3d pr3 = H_antenna_pose * pr;
+                        pos_amb(0, r) = pr3(0);
+                        pos_amb(1, r) = pr3(1);
+                        pos_amb(2, r) = pr3(2);
+                        for (int c = 0; c < n; ++c) {
+                            q_amb(r, c) = joint(rk, ambiguityKey(ambSymbolId(epoch_amb_indices[c])))(0, 0);
+                        }
+                    }
+                } catch (const std::exception&) {
+                    ok = false;
+                    ++result.diagnostics.lambda_joint_marginal_failures;
+                }
+                if (ok && float_amb.allFinite() && q_amb.allFinite()) {
+                    epoch_diagnostics[i].ar_outcome =
+                        FGOProcessor::AmbiguityResolutionOutcome::LambdaSearchFailed;
+                    q_amb = 0.5 * (q_amb + q_amb.transpose());
+                    for (int k = 0; k < n; ++k) {
+                        q_amb(k, k) += std::max(1e-12, std::abs(q_amb(k, k)) * 1e-9);
+                    }
+                    {
+                        std::vector<double> diagonal;
+                        diagonal.reserve(static_cast<std::size_t>(n));
+                        double vmax = 0.0;
+                        for (int k = 0; k < n; ++k) {
+                            diagonal.push_back(q_amb(k, k));
+                            vmax = std::max(vmax, q_amb(k, k));
+                        }
+                        std::sort(diagonal.begin(), diagonal.end());
+                        epoch_diagnostics[i].ambiguity_variance_median_cycles2 =
+                            diagonal.empty() ? 0.0 : diagonal[diagonal.size() / 2];
+                        epoch_diagnostics[i].ambiguity_variance_max_cycles2 = vmax;
+                    }
+
+                    // Diagnostic-only conditional multi-band AR shadow. Unlike the
+                    // historical one-band mode, this retains every band in
+                    // the eventual counterfactual integer vector.  The
+                    // primary stage must first pass the configured ratio;
+                    // the remaining bands are then resolved using the exact
+                    // Gaussian conditional mean/covariance given those
+                    // primary integers.  Nothing below mutates the graph,
+                    // ambiguity map, FIX label, ratio, or hold state.
+                    if (config.monitor_conditional_multiband_ar &&
+                        config.use_multi_frequency_double_difference && n > 1) {
+                        const std::vector<std::size_t> primary_indices =
+                            selectOneBandPerSatellite(epoch_amb_indices, problem);
+                        const std::set<std::size_t> primary_set(
+                            primary_indices.begin(), primary_indices.end());
+                        std::vector<int> primary_order;
+                        std::vector<int> secondary_order;
+                        for (int candidate = 0; candidate < n; ++candidate) {
+                            if (primary_set.count(epoch_amb_indices[candidate]) != 0) {
+                                primary_order.push_back(candidate);
+                            } else {
+                                secondary_order.push_back(candidate);
+                            }
+                        }
+                        auto& shadow = epoch_diagnostics[i];
+                        if (primary_order.size() >=
+                                static_cast<std::size_t>(min_candidates) &&
+                            !secondary_order.empty()) {
+                            const int np = static_cast<int>(primary_order.size());
+                            const int ns = static_cast<int>(secondary_order.size());
+                            auto& conditional =
+                                shadow.conditional_multiband_ar_shadow;
+                            conditional.evaluated = true;
+                            conditional.primary_ambiguities = np;
+                            conditional.secondary_ambiguities = ns;
+                            Eigen::VectorXd a_primary(np);
+                            Eigen::MatrixXd q_primary(np, np);
+                            for (int r = 0; r < np; ++r) {
+                                a_primary(r) = float_amb(primary_order[r]);
+                                for (int c = 0; c < np; ++c) {
+                                    q_primary(r, c) =
+                                        q_amb(primary_order[r], primary_order[c]);
+                                }
+                            }
+                            LambdaCandidateDiagnostics primary_diag;
+                            if (lambdaSearchTopK(
+                                    a_primary, q_primary, 2, primary_diag)) {
+                                const double primary_best =
+                                    primary_diag.squared_residuals(0);
+                                conditional.primary_ratio =
+                                    primary_best > 0.0
+                                        ? primary_diag.squared_residuals(1) /
+                                              primary_best
+                                        : 0.0;
+                                conditional.primary_bootstrapped_success_rate =
+                                    primary_diag.bootstrapped_success_rate;
+                                conditional.primary_ratio_passed =
+                                    std::isfinite(conditional.primary_ratio) &&
+                                    (config.lambda_ratio_threshold <= 0.0 ||
+                                     conditional.primary_ratio >
+                                         config.lambda_ratio_threshold);
+                                if (conditional.primary_ratio_passed) {
+                                    Eigen::VectorXd a_secondary(ns);
+                                    Eigen::MatrixXd q_secondary(ns, ns);
+                                    Eigen::MatrixXd q_secondary_primary(ns, np);
+                                    for (int r = 0; r < ns; ++r) {
+                                        a_secondary(r) = float_amb(secondary_order[r]);
+                                        for (int c = 0; c < ns; ++c) {
+                                            q_secondary(r, c) =
+                                                q_amb(secondary_order[r],
+                                                      secondary_order[c]);
+                                        }
+                                        for (int c = 0; c < np; ++c) {
+                                            q_secondary_primary(r, c) =
+                                                q_amb(secondary_order[r],
+                                                      primary_order[c]);
+                                        }
+                                    }
+                                    const Eigen::LDLT<Eigen::MatrixXd> primary_ldlt(
+                                        q_primary);
+                                    if (primary_ldlt.info() == Eigen::Success) {
+                                        const Eigen::VectorXd primary_fixed =
+                                            primary_diag.candidates.col(0);
+                                        const Eigen::VectorXd conditional_float =
+                                            a_secondary + q_secondary_primary *
+                                                primary_ldlt.solve(
+                                                    primary_fixed - a_primary);
+                                        Eigen::MatrixXd conditional_q =
+                                            q_secondary - q_secondary_primary *
+                                                primary_ldlt.solve(
+                                                    q_secondary_primary.transpose());
+                                        conditional_q = 0.5 *
+                                            (conditional_q + conditional_q.transpose());
+                                        for (int k = 0; k < ns; ++k) {
+                                            conditional_q(k, k) += std::max(
+                                                1e-12,
+                                                std::abs(conditional_q(k, k)) * 1e-9);
+                                        }
+                                        LambdaCandidateDiagnostics secondary_diag;
+                                        if (conditional_float.allFinite() &&
+                                            conditional_q.allFinite() &&
+                                            lambdaSearchTopK(conditional_float,
+                                                             conditional_q, 2,
+                                                             secondary_diag)) {
+                                            const double secondary_best =
+                                                secondary_diag.squared_residuals(0);
+                                            conditional.secondary_ratio =
+                                                secondary_best > 0.0
+                                                    ? secondary_diag.squared_residuals(1) /
+                                                          secondary_best
+                                                    : 0.0;
+                                            conditional.secondary_bootstrapped_success_rate =
+                                                secondary_diag.bootstrapped_success_rate;
+                                            conditional.secondary_ratio_passed =
+                                                std::isfinite(conditional.secondary_ratio) &&
+                                                (config.lambda_ratio_threshold <= 0.0 ||
+                                                 conditional.secondary_ratio >
+                                                     config.lambda_ratio_threshold);
+                                            if (conditional.secondary_ratio_passed) {
+                                                Eigen::VectorXd all_fixed = float_amb;
+                                                for (int r = 0; r < np; ++r) {
+                                                    all_fixed(primary_order[r]) =
+                                                        primary_diag.candidates(r, 0);
+                                                }
+                                                for (int r = 0; r < ns; ++r) {
+                                                    all_fixed(secondary_order[r]) =
+                                                        secondary_diag.candidates(r, 0);
+                                                }
+                                                const Eigen::LDLT<Eigen::MatrixXd> all_ldlt(
+                                                    q_amb);
+                                                if (all_ldlt.info() == Eigen::Success) {
+                                                    const Eigen::VectorXd correction =
+                                                        all_ldlt.solve(float_amb - all_fixed);
+                                                    const Eigen::Vector3d candidate =
+                                                        Eigen::Vector3d(antennaOf(pose_i)) -
+                                                        pos_amb * correction;
+                                                    if (correction.allFinite() &&
+                                                        candidate.allFinite()) {
+                                                        conditional.candidate_available = true;
+                                                        conditional.candidate_position_ecef =
+                                                            candidate;
+                                                        conditional.float_separation_m =
+                                                            (candidate - Eigen::Vector3d(
+                                                                         antennaOf(pose_i)))
+                                                                .norm();
+                                                        conditional.imu_separation_m =
+                                                            (candidate - Eigen::Vector3d(
+                                                                         antennaOf(pose_seed)))
+                                                                .norm();
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // --- MF-AR step 2: partial AR (port of the Eigen path's
+                    // use_partial_lambda_ambiguity_fix). Candidate order:
+                    // identity (= the deterministic sat/ref/signal sort above)
+                    // for the legacy all-or-nothing path; best-first by
+                    // (fractional cycles, variance) with a
+                    // max_lambda_ambiguities cap when partial AR is enabled.
+                    // The loop below runs exactly ONCE at full size when
+                    // partial AR is off -- bit-identical legacy behaviour. ---
+                    std::vector<int> order(n);
+                    std::iota(order.begin(), order.end(), 0);
+                    int attempt_n = n;
+                    int min_subset = n;  // all-or-nothing: single attempt
+                    if (config.use_fixed_lag_partial_lambda) {
+                        std::stable_sort(
+                            order.begin(), order.end(), [&](int a, int b) {
+                                const double fa = std::abs(
+                                    float_amb(a) - std::round(float_amb(a)));
+                                const double fb = std::abs(
+                                    float_amb(b) - std::round(float_amb(b)));
+                                if (config.use_variance_ranked_partial_ar) {
+                                    const double va = q_amb(a, a);
+                                    const double vb = q_amb(b, b);
+                                    if (va != vb) return va < vb;
+                                }
+                                if (fa == fb) {
+                                    return q_amb(a, a) < q_amb(b, b);
+                                }
+                                return fa < fb;
+                            });
+                        if (config.use_residual_screened_partial_ar &&
+                            !per_sat_res.empty()) {
+                            std::vector<double> residual_values;
+                            residual_values.reserve(per_sat_res.size());
+                            for (const auto& [sid, residual] : per_sat_res) {
+                                (void)sid;
+                                residual_values.push_back(residual);
+                            }
+                            std::sort(residual_values.begin(), residual_values.end());
+                            const double median =
+                                residual_values[residual_values.size() / 2];
+                            const double absolute_floor =
+                                config.cp_hold_fast_worst_satellite_min_m;
+                            const double relative_ratio =
+                                config.cp_hold_multipath_median_ratio;
+                            order.erase(
+                                std::remove_if(order.begin(), order.end(), [&](int candidate) {
+                                    const auto& ambiguity = problem.ambiguity_states[
+                                        epoch_amb_indices[candidate]];
+                                    double worst = 0.0;
+                                    const auto sat_it = per_sat_res.find(ambiguity.satellite);
+                                    if (sat_it != per_sat_res.end()) worst = sat_it->second;
+                                    const auto ref_it =
+                                        per_sat_res.find(ambiguity.reference_satellite);
+                                    if (ref_it != per_sat_res.end()) {
+                                        worst = std::max(worst, ref_it->second);
+                                    }
+                                    return worst > absolute_floor &&
+                                           (median <= 1e-9 ||
+                                            worst > relative_ratio * median);
+                                }),
+                                order.end());
+                        }
+                        attempt_n = config.max_lambda_ambiguities > 0
+                                        ? std::min(static_cast<int>(order.size()),
+                                                   config.max_lambda_ambiguities)
+                                        : static_cast<int>(order.size());
+                        min_subset = std::max(1, config.min_fixed_ambiguities);
+                        // Subset floor: drop a few outliers, never the
+                        // majority (see fixed_lag_partial_lambda_min_fraction).
+                        const double fraction = std::min(
+                            1.0, std::max(0.0,
+                                          config.fixed_lag_partial_lambda_min_fraction));
+                        min_subset = std::max(
+                            min_subset,
+                            static_cast<int>(std::ceil(fraction * attempt_n)));
+                    }
+                    // Below-floor rescue: a low-count attempt is already at a
+                    // minimal candidate count by construction (gated on
+                    // entry by low_count_min_candidates); don't let ordinary
+                    // partial-AR shrink it further with the normal
+                    // min_fixed_ambiguities/fraction floors, which are tuned
+                    // for the >=6-candidate regime and would often exceed
+                    // attempt_n here and suppress the attempt entirely.
+                    // Single all-or-nothing attempt at the full (possibly
+                    // residual-screened) candidate set.
+                    if (is_low_count_attempt) {
+                        attempt_n = static_cast<int>(order.size());
+                        min_subset = attempt_n;
+                    }
+
+                    // PPC constellation PAR is a sequence of distinct
+                    // ambiguity pools, not merely a constellation-first sort:
+                    // GQEBR -> GQEB -> GQER -> GQB -> GQR -> GQ.  Build those
+                    // exact pools and run one LAMBDA test per pool.  The
+                    // legacy partial-AR path remains the quality-ranked prefix
+                    // shrink used when this opt-in mode is disabled.
+                    std::vector<std::vector<int>> lambda_orders;
+                    std::vector<int> lambda_stages;
+                    if (config.use_constellation_ranked_partial_ar) {
+                        const auto allowedInStage = [&](GNSSSystem system, int stage) {
+                            if (system == GNSSSystem::GPS || system == GNSSSystem::QZSS) {
+                                return true;
+                            }
+                            if (system == GNSSSystem::Galileo) {
+                                return stage <= 2;
+                            }
+                            if (system == GNSSSystem::BeiDou) {
+                                return stage == 0 || stage == 1 || stage == 3;
+                            }
+                            if (system == GNSSSystem::GLONASS) {
+                                return stage == 0 || stage == 2 || stage == 4;
+                            }
+                            return stage == 0;
+                        };
+                        for (int stage = 0; stage < 6; ++stage) {
+                            std::vector<int> pool;
+                            for (int candidate : order) {
+                                const auto system = problem.ambiguity_states[
+                                    epoch_amb_indices[candidate]].satellite.system;
+                                if (allowedInStage(system, stage)) pool.push_back(candidate);
+                            }
+                            if (config.max_lambda_ambiguities > 0 &&
+                                pool.size() > static_cast<std::size_t>(
+                                                  config.max_lambda_ambiguities)) {
+                                pool.resize(static_cast<std::size_t>(
+                                    config.max_lambda_ambiguities));
+                            }
+                            if (config.use_variance_ranked_partial_ar &&
+                                config.partial_ar_max_std_cycles > 0.0) {
+                                while (!pool.empty() &&
+                                       std::sqrt(std::max(0.0,
+                                           q_amb(pool.back(), pool.back()))) >
+                                           config.partial_ar_max_std_cycles) {
+                                    pool.pop_back();
+                                }
+                            }
+                            if (pool.size() < static_cast<std::size_t>(
+                                                  std::max(1, config.min_fixed_ambiguities))) {
+                                continue;
+                            }
+                            if (std::find(lambda_orders.begin(), lambda_orders.end(), pool) ==
+                                lambda_orders.end()) {
+                                lambda_orders.push_back(std::move(pool));
+                                lambda_stages.push_back(stage);
+                            }
+                        }
+                    } else {
+                        for (int subset = attempt_n; subset >= min_subset; --subset) {
+                            lambda_orders.emplace_back(order.begin(), order.begin() + subset);
+                            lambda_stages.push_back(-1);
+                        }
+                    }
+                    const std::vector<int> ratio_impact_order(
+                        order.begin(), order.begin() + attempt_n);
+
+                    bool float_cycles_recorded = false;
+                    std::map<std::size_t, int> lambda_candidate_cycles_this_epoch;
+                    for (std::size_t lambda_order_idx = 0;
+                         lambda_order_idx < lambda_orders.size(); ++lambda_order_idx) {
+                        order = lambda_orders[lambda_order_idx];
+                        const int subset = static_cast<int>(order.size());
+                        const bool full_candidate_attempt = lambda_order_idx == 0;
+                        if (config.use_variance_ranked_partial_ar &&
+                            config.partial_ar_max_std_cycles > 0.0) {
+                            bool exceeds_std_gate = false;
+                            for (int candidate : order) {
+                                if (std::sqrt(std::max(
+                                        0.0, q_amb(candidate, candidate))) >
+                                    config.partial_ar_max_std_cycles) {
+                                    exceeds_std_gate = true;
+                                    break;
+                                }
+                            }
+                            if (exceeds_std_gate) continue;
+                        }
+                        Eigen::VectorXd sub_float(subset);
+                        Eigen::MatrixXd sub_q(subset, subset);
+                        Eigen::MatrixXd sub_pos(3, subset);
+                        for (int r = 0; r < subset; ++r) {
+                            sub_float(r) = float_amb(order[r]);
+                            sub_pos.col(r) = pos_amb.col(order[r]);
+                            for (int c = 0; c < subset; ++c) {
+                                sub_q(r, c) = q_amb(order[r], order[c]);
+                            }
+                        }
+
+                        Eigen::VectorXd fixed_amb;
+                        double ratio = 0.0;
+                        ++lambda_attempts;
+                        ++result.diagnostics.lambda_ambiguity_attempts;
+                        ++epoch_diagnostics[i].lambda_attempts;
+                        result.diagnostics.lambda_ambiguity_candidates +=
+                            static_cast<std::size_t>(subset);
+                        LambdaCandidateDiagnostics lambda_diagnostics;
+                        if (!lambdaSearchTopK(
+                                sub_float, sub_q, 2, lambda_diagnostics)) {
+                            if (!config.use_fixed_lag_partial_lambda) break;
+                            continue;
+                        }
+                        fixed_amb = lambda_diagnostics.candidates.col(0);
+                        const double best_residual =
+                            lambda_diagnostics.squared_residuals(0);
+                        const double second_residual =
+                            lambda_diagnostics.squared_residuals(1);
+                        ratio = best_residual > 0.0
+                                    ? second_residual / best_residual
+                                    : 0.0;
+                        result.diagnostics.lambda_ambiguity_fix_solved = true;
+                        epoch_diagnostics[i].ar_outcome =
+                            FGOProcessor::AmbiguityResolutionOutcome::RatioRejected;
+                        best_ratio = std::max(best_ratio, ratio);
+                        epoch_ratio[i] = ratio;
+                        Eigen::Vector3d provisional_fixed_ant = Eigen::Vector3d::Zero();
+                        Eigen::Matrix3d provisional_fixed_cov = Eigen::Matrix3d::Zero();
+                        bool has_provisional_fixed_ant = false;
+                        bool has_provisional_fixed_cov = false;
+                        if (fixed_amb.size() == subset) {
+                            const Eigen::VectorXd delta = sub_float - fixed_amb;
+                            const Eigen::LDLT<Eigen::MatrixXd> ldlt(sub_q);
+                            if (ldlt.info() == Eigen::Success) {
+                                const Eigen::VectorXd corr = ldlt.solve(delta);
+                                if (corr.allFinite()) {
+                                    const Eigen::Vector3d pd = sub_pos * corr;
+                                    if (pd.allFinite()) {
+                                        provisional_fixed_ant =
+                                            Eigen::Vector3d(antennaOf(pose_i)) - pd;
+                                        has_provisional_fixed_ant = true;
+                                        epoch_diagnostics[i].lambda_candidate_available = true;
+                                        epoch_diagnostics[i].lambda_candidate_position_ecef =
+                                            provisional_fixed_ant;
+                                        epoch_diagnostics[i]
+                                            .lambda_candidate_fixed_ambiguities = subset;
+                                        epoch_diagnostics[i].lambda_candidate_ratio = ratio;
+                                        epoch_diagnostics[i].lambda_candidate_bsr =
+                                            lambda_diagnostics
+                                                .bootstrapped_success_rate;
+                                        epoch_diagnostics[i]
+                                            .lambda_candidate_bsr_qscale2 =
+                                            bootstrappedSuccessRate(
+                                                lambda_diagnostics
+                                                    .conditional_variances,
+                                                2.0);
+                                        epoch_diagnostics[i]
+                                            .lambda_candidate_bsr_qscale4 =
+                                            bootstrappedSuccessRate(
+                                                lambda_diagnostics
+                                                    .conditional_variances,
+                                                4.0);
+                                        epoch_diagnostics[i]
+                                            .lambda_candidate_bsr_qscale8 =
+                                            bootstrappedSuccessRate(
+                                                lambda_diagnostics
+                                                    .conditional_variances,
+                                                8.0);
+                                        epoch_diagnostics[i]
+                                            .lambda_candidate_bsr_qscale16 =
+                                            bootstrappedSuccessRate(
+                                                lambda_diagnostics
+                                                    .conditional_variances,
+                                                16.0);
+                                        FixedFailureRateRatioThreshold ffrt;
+                                        if (fixedFailureRateRatioThreshold(
+                                                subset,
+                                                lambda_diagnostics
+                                                    .bootstrapped_success_rate,
+                                                0.001, ffrt)) {
+                                            epoch_diagnostics[i]
+                                                .lambda_candidate_ffrt_table_supported =
+                                                true;
+                                            epoch_diagnostics[i]
+                                                .lambda_candidate_ffrt_accepts_any =
+                                                ffrt.accepts_any_candidate;
+                                            epoch_diagnostics[i]
+                                                .lambda_candidate_ffrt_min_ratio =
+                                                ffrt.minimum_second_to_best_ratio;
+                                            epoch_diagnostics[i]
+                                                .lambda_candidate_ffrt_pass =
+                                                ffrt.accepts_any_candidate &&
+                                                std::isfinite(ratio) &&
+                                                ratio > ffrt
+                                                            .minimum_second_to_best_ratio;
+                                        }
+                                        epoch_diagnostics[i].fixed_float_separation_m =
+                                            (provisional_fixed_ant - Eigen::Vector3d(
+                                                 antennaOf(pose_i))).norm();
+                                        epoch_diagnostics[i].fixed_imu_prediction_separation_m =
+                                            (provisional_fixed_ant - Eigen::Vector3d(
+                                                 antennaOf(pose_seed))).norm();
+                                        if (has_antenna_position_cov) {
+                                            provisional_fixed_cov =
+                                                antenna_position_cov -
+                                                sub_pos * ldlt.solve(sub_pos.transpose());
+                                            provisional_fixed_cov = 0.5 *
+                                                (provisional_fixed_cov +
+                                                 provisional_fixed_cov.transpose());
+                                            // Numerical conditioning can
+                                            // leave tiny negative diagonal
+                                            // terms after the Schur update.
+                                            for (int axis = 0; axis < 3; ++axis) {
+                                                provisional_fixed_cov(axis, axis) =
+                                                    std::max(1e-6,
+                                                        provisional_fixed_cov(axis, axis));
+                                            }
+                                            has_provisional_fixed_cov =
+                                                provisional_fixed_cov.allFinite();
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Observation-domain validation of the integer
+                        // hypothesis.  Reconstruct every current DD carrier
+                        // row at the covariance-corrected fixed antenna
+                        // position; ambiguities selected by this LAMBDA
+                        // attempt use their integer, while unselected rows
+                        // retain their float ambiguity.  This is diagnostic
+                        // only for now and therefore cannot change FIX rate.
+                        // Hoisted to attempt scope (not just this if-block)
+                        // so the surplus-satellite validation below -- which
+                        // needs to know exactly which ambiguities THIS
+                        // attempt fixed -- can also see it.
+                        std::map<std::size_t, int> fixed_cycles_by_index;
+                        if (has_provisional_fixed_ant) {
+                            for (int r = 0; r < subset; ++r) {
+                                fixed_cycles_by_index[epoch_amb_indices[order[r]]] =
+                                    static_cast<int>(std::lround(fixed_amb(r)));
+                            }
+                            lambda_candidate_cycles_this_epoch =
+                                fixed_cycles_by_index;
+                            const auto ambiguityMeters = [&](std::size_t idx,
+                                                             double* value_m) -> bool {
+                                if (!value_m || idx >= problem.ambiguity_states.size()) {
+                                    return false;
+                                }
+                                const auto& state = problem.ambiguity_states[idx];
+                                const auto fixed_it = fixed_cycles_by_index.find(idx);
+                                if (fixed_it != fixed_cycles_by_index.end()) {
+                                    *value_m = static_cast<double>(fixed_it->second) *
+                                               state.wavelength_m;
+                                    return std::isfinite(*value_m);
+                                }
+                                const gtsam::Key key = ambiguityKey(ambSymbolId(idx));
+                                try {
+                                    *value_m = smoother.calculateEstimate<double>(key) *
+                                               state.wavelength_m;
+                                    return std::isfinite(*value_m);
+                                } catch (const std::exception&) {
+                                    return false;
+                                }
+                            };
+
+                            double sum_sq_m = 0.0;
+                            double chi2 = 0.0;
+                            double max_normalized = 0.0;
+                            int count = 0;
+                            for (const auto* fp : cp_by_epoch[i]) {
+                                // valpos must test the hypothesis actually
+                                // fixed by this attempt.  Carrier rows whose
+                                // ambiguity stayed float are not evidence for
+                                // or against this integer subset.
+                                if (!fixed_cycles_by_index.count(fp->ambiguity_index)) continue;
+                                double ambiguity_m = 0.0;
+                                if (!ambiguityMeters(fp->ambiguity_index, &ambiguity_m)) continue;
+                                if (fp->use_ambiguity_difference) {
+                                    double reference_ambiguity_m = 0.0;
+                                    if (!ambiguityMeters(fp->reference_ambiguity_index,
+                                                         &reference_ambiguity_m)) {
+                                        continue;
+                                    }
+                                    ambiguity_m -= reference_ambiguity_m;
+                                }
+                                const Eigen::Vector3d& ant = provisional_fixed_ant;
+                                const double geometry =
+                                    ((fp->rover_satellite_position_ecef - ant).norm() -
+                                     (fp->base_satellite_position_ecef -
+                                      fp->base_position_ecef).norm()) -
+                                    ((fp->rover_reference_position_ecef - ant).norm() -
+                                     (fp->base_reference_position_ecef -
+                                      fp->base_position_ecef).norm());
+                                const double residual =
+                                    fp->observed_dd_carrier_m - (geometry + ambiguity_m);
+                                const double sigma = std::max(1e-4, fp->sigma_m);
+                                if (!std::isfinite(residual) || !std::isfinite(sigma)) continue;
+                                const double normalized = std::abs(residual) / sigma;
+                                sum_sq_m += residual * residual;
+                                chi2 += normalized * normalized;
+                                max_normalized = std::max(max_normalized, normalized);
+                                ++count;
+                            }
+                            epoch_diagnostics[i].fixed_postfit_ddcp_factors = count;
+                            epoch_diagnostics[i].fixed_postfit_ddcp_rms_m =
+                                count > 0 ? std::sqrt(sum_sq_m / static_cast<double>(count)) : 0.0;
+                            epoch_diagnostics[i].fixed_postfit_ddcp_max_normalized =
+                                max_normalized;
+                            epoch_diagnostics[i].fixed_postfit_ddcp_chi2_per_dof =
+                                count > 3 ? chi2 / static_cast<double>(count - 3) : 0.0;
+                        }
+                        const double scheduled_ratio_threshold =
+                            nsat >= 20 ? config.adaptive_ratio_nsat20
+                            : nsat >= 15 ? config.adaptive_ratio_nsat15
+                            : nsat >= 10 ? config.adaptive_ratio_nsat10
+                                         : config.adaptive_ratio_nsat_low;
+                        // Adaptive AR is a monotonic extension of the tuned
+                        // baseline: sparse geometry must never make the gate
+                        // stricter than the configured threshold.
+                        const double effective_ratio_threshold =
+                            config.use_satellite_count_adaptive_ratio
+                                ? (config.lambda_ratio_threshold > 0.0
+                                       ? std::min(config.lambda_ratio_threshold,
+                                                  scheduled_ratio_threshold)
+                                       : scheduled_ratio_threshold)
+                                : config.lambda_ratio_threshold;
+                        epoch_diagnostics[i].effective_ratio_threshold =
+                            effective_ratio_threshold;
+                        const bool configured_ratio_pass =
+                            std::isfinite(ratio) &&
+                            (config.lambda_ratio_threshold <= 0.0 ||
+                             ratio > config.lambda_ratio_threshold);
+                        const bool normal_ratio_pass =
+                            std::isfinite(ratio) &&
+                            (effective_ratio_threshold <= 0.0 ||
+                             ratio > effective_ratio_threshold);
+                        // --- Surplus-satellite independent integrity
+                        // validation (use_surplus_satellite_validation).
+                        // Evaluated for EVERY attempt (both the established
+                        // ratio zone and the relaxed rescue zone) whenever
+                        // enabled, purely so monitor mode can log a verdict
+                        // for ratio>=threshold fixes too (Stage A: validate
+                        // the validator before using it to rescue/veto
+                        // anything). Decision use (rescue below, veto at
+                        // established_path_pass) is gated separately. ---
+                        bool surplus_evaluated = false;
+                        bool surplus_pass = false;
+                        if (config.use_surplus_satellite_validation &&
+                            has_provisional_fixed_ant && std::isfinite(ratio)) {
+                            std::vector<const FGOProcessor::DoubleDifferenceCarrierFactor*>
+                                surplus_pool = cp_by_epoch[i];
+                            surplus_pool.insert(surplus_pool.end(), cp_excluded_by_epoch[i].begin(),
+                                                cp_excluded_by_epoch[i].end());
+                            const SurplusValidationOutcome surplus_diag =
+                                evaluateSurplusSatelliteValidation(
+                                    surplus_pool, fixed_cycles_by_index, provisional_fixed_ant, config);
+                            surplus_evaluated = surplus_diag.evaluated;
+                            surplus_pass = surplus_diag.pass;
+                            epoch_diagnostics[i].surplus_validation_evaluated = surplus_evaluated;
+                            epoch_diagnostics[i].surplus_validation_pass = surplus_pass;
+                            epoch_diagnostics[i].surplus_validation_fallback_level =
+                                surplus_diag.fallback_level;
+                            epoch_diagnostics[i].surplus_validation_surplus_used =
+                                surplus_diag.surplus_used;
+                            if (surplus_evaluated) {
+                                ++result.diagnostics.surplus_validation_attempts;
+                                if (surplus_pass) {
+                                    ++result.diagnostics.surplus_validation_passes;
+                                } else {
+                                    ++result.diagnostics.surplus_validation_fails;
+                                }
+                                if (surplus_diag.fallback_level >= 0 &&
+                                    surplus_diag.fallback_level < 6) {
+                                    ++result.diagnostics.surplus_validation_fallback_level_histogram
+                                        [surplus_diag.fallback_level];
+                                }
+                            } else {
+                                ++result.diagnostics.surplus_validation_insufficient_surplus;
+                            }
+                        }
+                        bool aperture_pass = false;
+                        if (!configured_ratio_pass &&
+                            config.use_imu_aided_ratio_aperture &&
+                            std::isfinite(ratio) &&
+                            ratio > config.imu_aided_relaxed_ratio_threshold &&
+                            has_provisional_fixed_ant) {
+                            const double float_sep =
+                                (provisional_fixed_ant - Eigen::Vector3d(antennaOf(pose_i))).norm();
+                            const double pred_sep =
+                                (provisional_fixed_ant - Eigen::Vector3d(antennaOf(pose_seed))).norm();
+                            aperture_pass =
+                                float_sep <= config.imu_aided_max_float_separation_m &&
+                                pred_sep <= config.imu_aided_max_prediction_separation_m;
+                            if (aperture_pass) {
+                                ++result.diagnostics.imu_aided_ratio_accepts;
+                                epoch_diagnostics[i].imu_aperture_accepted = true;
+                            } else {
+                                ++result.diagnostics.imu_aided_ratio_rejects;
+                                epoch_diagnostics[i].imu_aperture_rejected = true;
+                                epoch_diagnostics[i].ar_outcome =
+                                    FGOProcessor::AmbiguityResolutionOutcome::ImuApertureRejected;
+                            }
+                        }
+                        if (!normal_ratio_pass && !aperture_pass &&
+                            std::isfinite(ratio) &&
+                            ratio > config.imu_aided_relaxed_ratio_threshold &&
+                            has_provisional_fixed_ant &&
+                            anchorValidationAgrees(provisional_fixed_ant)) {
+                            aperture_pass = true;
+                        }
+                        // Stage B rescue: require both the independent
+                        // surplus-satellite pass and the existing fixed-vs-
+                        // float / IMU-prediction separation aperture.  The
+                        // latter is correlated with this graph, so it cannot
+                        // replace the surplus test, but it prevents a
+                        // surplus pass from bypassing the same gross
+                        // consistency bound used by IMU-aided relaxed-ratio
+                        // fixes. Monitor mode never reaches here.
+                        bool surplus_rescue_applied = false;
+                        const bool surplus_rescue_pre_candidate =
+                            !config.surplus_validation_monitor_only &&
+                            !normal_ratio_pass && !aperture_pass &&
+                            std::isfinite(ratio) &&
+                            ratio > config.imu_aided_relaxed_ratio_threshold &&
+                            has_provisional_fixed_ant && surplus_evaluated && surplus_pass;
+                        // A relaxed-ratio rescue must be supported by a
+                        // well-observed, globally code-consistent epoch, a
+                        // carrier-consistent fixed hypothesis, and the
+                        // strongest cross-constellation surplus pool.
+                        // Sparse geometry, gross DD-code disagreement,
+                        // carrier post-fit RMS above roughly a quarter cycle,
+                        // and GQ-only fallback each admitted wrong-but-
+                        // internally-consistent fixes in full PPC runs.
+                        // Monitoring and established-ratio vetoes still
+                        // retain all fallback levels; this floor applies only
+                        // when the surplus verdict would create a new FIXED
+                        // solution.
+                        constexpr int kSurplusRescueMinSatellites = 10;
+                        constexpr double kSurplusRescueMaxDdprRmsM = 5.0;
+                        constexpr double kSurplusRescueMaxPostfitDdcpRmsM = 0.05;
+                        // navi.776 low-count follow-up: a sparse epoch cannot
+                        // meet the nsat>=10 / ddcp>=4 floors by construction,
+                        // so when the user opts in, a low-count attempt is
+                        // exempt from exactly those two arms. The ddpr_rms,
+                        // DDCP RMS, and fallback-level==0 floors (and the
+                        // mandatory surplus pass) are retained.
+                        const bool low_count_relaxed_quality =
+                            is_low_count_attempt &&
+                            config.low_count_relax_surplus_quality &&
+                            nsat >= 4;
+                        const bool low_count_relaxed_ddcp =
+                            is_low_count_attempt &&
+                            config.low_count_relax_surplus_quality &&
+                            epoch_diagnostics[i].fixed_postfit_ddcp_factors >= 2;
+                        const bool surplus_rescue_quality_pass =
+                            (nsat >= kSurplusRescueMinSatellites ||
+                             low_count_relaxed_quality) &&
+                            std::isfinite(ddpr_rms) &&
+                            ddpr_rms <= kSurplusRescueMaxDdprRmsM &&
+                            (epoch_diagnostics[i].fixed_postfit_ddcp_factors >= 4 ||
+                             low_count_relaxed_ddcp) &&
+                            std::isfinite(
+                                epoch_diagnostics[i].fixed_postfit_ddcp_rms_m) &&
+                            epoch_diagnostics[i].fixed_postfit_ddcp_rms_m <=
+                                kSurplusRescueMaxPostfitDdcpRmsM &&
+                            epoch_diagnostics[i].surplus_validation_fallback_level == 0;
+                        const bool surplus_rescue_candidate =
+                            surplus_rescue_pre_candidate && surplus_rescue_quality_pass;
+                        if (surplus_rescue_pre_candidate && !surplus_rescue_quality_pass) {
+                            ++result.diagnostics.surplus_validation_quality_rejects;
+                        }
+                        if (surplus_rescue_candidate) {
+                            const bool separation_pass =
+                                epoch_diagnostics[i].fixed_float_separation_m <=
+                                    config.imu_aided_max_float_separation_m &&
+                                epoch_diagnostics[i].fixed_imu_prediction_separation_m <=
+                                    config.imu_aided_max_prediction_separation_m;
+                            if (separation_pass) {
+                                aperture_pass = true;
+                                surplus_rescue_applied = true;
+                            } else {
+                                ++result.diagnostics.surplus_validation_separation_rejects;
+                            }
+                        }
+                        // Monitor every provisional candidate against the
+                        // Doppler-only dead-reckoning track before any ratio
+                        // decision. The track contains no FGO state between
+                        // its high-confidence reset epochs, and monitor mode
+                        // never contributes to an acceptance decision.
+                        epoch_diagnostics[i].external_dr_evaluated = false;
+                        epoch_diagnostics[i].external_dr_accepted = false;
+                        epoch_diagnostics[i].external_dr_rejected = false;
+                        bool external_dr_available = false;
+                        bool external_dr_candidate_pass = false;
+                        double external_dr_separation_m = 0.0;
+                        double external_dr_mahalanobis2 = 0.0;
+                        if ((config.monitor_external_doppler_dr ||
+                             config.use_external_doppler_dr_validation ||
+                             config.monitor_candidate_integrity_witness) &&
+                            external_dr_position_valid &&
+                            has_provisional_fixed_ant &&
+                            has_provisional_fixed_cov &&
+                            (!config.monitor_external_doppler_dr ||
+                             external_dr_age_epochs > 0) &&
+                            (!config.monitor_candidate_integrity_witness ||
+                             external_dr_age_epochs > 0) &&
+                            external_dr_age_epochs <=
+                                config.external_doppler_dr_max_age_epochs) {
+                            Eigen::Matrix3d combined_cov =
+                                external_dr_position_cov + provisional_fixed_cov;
+                            combined_cov =
+                                0.5 * (combined_cov + combined_cov.transpose());
+                            const Eigen::LDLT<Eigen::Matrix3d> cov_ldlt(combined_cov);
+                            if (cov_ldlt.info() == Eigen::Success &&
+                                cov_ldlt.vectorD().allFinite() &&
+                                (cov_ldlt.vectorD().array() > 0.0).all()) {
+                                const Eigen::Vector3d delta =
+                                    provisional_fixed_ant - external_dr_position_ecef;
+                                const double mahalanobis2 =
+                                    delta.dot(cov_ldlt.solve(delta));
+                                external_dr_available = std::isfinite(mahalanobis2);
+                                external_dr_candidate_pass =
+                                    external_dr_available &&
+                                    mahalanobis2 <=
+                                        config.external_doppler_dr_chi2_threshold;
+                                external_dr_separation_m = delta.norm();
+                                external_dr_mahalanobis2 = mahalanobis2;
+                                if (config.monitor_external_doppler_dr) {
+                                    epoch_diagnostics[i].external_dr_evaluated =
+                                        external_dr_available;
+                                    epoch_diagnostics[i].external_dr_separation_m =
+                                        external_dr_separation_m;
+                                    epoch_diagnostics[i].external_dr_mahalanobis2 =
+                                        external_dr_mahalanobis2;
+                                    epoch_diagnostics[i].external_dr_accepted =
+                                        external_dr_candidate_pass;
+                                    epoch_diagnostics[i].external_dr_rejected =
+                                        external_dr_available &&
+                                        !external_dr_candidate_pass;
+                                }
+                                if (external_dr_available &&
+                                    config.monitor_external_doppler_dr) {
+                                    if (external_dr_candidate_pass) {
+                                        ++result.diagnostics.external_doppler_dr_accepts;
+                                    } else {
+                                        ++result.diagnostics.external_doppler_dr_rejects;
+                                    }
+                                }
+                            }
+                        }
+
+                        if (config.monitor_candidate_integrity_witness &&
+                            has_provisional_fixed_ant && std::isfinite(ratio) &&
+                            ratio > config.imu_aided_relaxed_ratio_threshold) {
+                            auto& witness = epoch_diagnostics[i];
+                            const bool anchor_available = ensureValidationAnchor();
+                            const double anchor_separation = anchor_available
+                                ? (provisional_fixed_ant - Eigen::Vector3d(
+                                      antennaOf(validation_anchor.pose))).norm()
+                                : 0.0;
+                            const bool anchor_pass = anchor_available &&
+                                anchor_separation <=
+                                    config.ddpr_anchor_validation_max_separation_m;
+                            const bool imu_pass =
+                                witness.fixed_imu_prediction_separation_m <=
+                                    config.imu_aided_max_prediction_separation_m;
+                            constexpr double kCandidateCarrierMaxRmsM = 0.05;
+                            const bool carrier_pass =
+                                witness.fixed_postfit_ddcp_factors >= 4 &&
+                                std::isfinite(witness.fixed_postfit_ddcp_rms_m) &&
+                                witness.fixed_postfit_ddcp_rms_m <=
+                                    kCandidateCarrierMaxRmsM;
+                            witness.candidate_integrity_anchor_available =
+                                anchor_available;
+                            witness.candidate_integrity_anchor_factors =
+                                validation_anchor.n_active;
+                            witness.candidate_integrity_anchor_rms_m =
+                                validation_anchor.res_rms;
+                            witness.candidate_integrity_anchor_separation_m =
+                                anchor_separation;
+                            witness.candidate_integrity_anchor_pass = anchor_pass;
+                            witness.candidate_integrity_imu_pass = imu_pass;
+                            witness.candidate_integrity_doppler_available =
+                                external_dr_available;
+                            witness.candidate_integrity_doppler_pass =
+                                external_dr_candidate_pass;
+                            witness.candidate_integrity_carrier_pass = carrier_pass;
+                            witness.candidate_integrity_witness_evaluated =
+                                anchor_available && external_dr_available;
+                            witness.candidate_integrity_composite_pass =
+                                witness.candidate_integrity_witness_evaluated &&
+                                anchor_pass && imu_pass &&
+                                external_dr_candidate_pass && carrier_pass;
+                        }
+
+                        // Integrity-aided aperture: the conventional
+                        // fixed-vs-float separation is correlated because
+                        // both hypotheses come from this graph.  A candidate
+                        // above the existing relaxed ratio may instead be
+                        // tested by carrier post-fit plus an independently
+                        // propagated Doppler-only DR solution.  Such a fix is
+                        // output-only below; it cannot seed hold/history.
+                        const bool integrity_candidate =
+                            !configured_ratio_pass && !normal_ratio_pass &&
+                            !aperture_pass && std::isfinite(ratio) &&
+                            ratio > config.imu_aided_relaxed_ratio_threshold &&
+                            has_provisional_fixed_ant &&
+                            config.use_fixed_hypothesis_postfit_validation &&
+                            config.use_external_doppler_dr_validation;
+                        const bool newly_relaxed_ratio_pass =
+                            normal_ratio_pass && !configured_ratio_pass;
+                        // If the legacy IMU aperture already accepts this
+                        // candidate, preserve that established path exactly.
+                        // Only the incremental adaptive acceptance needs the
+                        // new independent integrity checks.
+                        const bool adaptive_only_pass =
+                            newly_relaxed_ratio_pass && !aperture_pass;
+                        bool fixed_history_dr_pass = true;
+                        bool fixed_history_dr_evaluated = false;
+                        // Set true only by the surplus-override branch below.
+                        // Kept separate from epoch_diagnostics[i].dr_bypass_
+                        // applied (which is only committed once THIS attempt
+                        // is confirmed to be the one that ends up FIXED, near
+                        // "epoch_fixed[i] = true" below) so a later attempt in
+                        // the same epoch that fixes via a normal path never
+                        // inherits a stale flag from an earlier rejected one.
+                        bool dr_bypass_applied_this_attempt = false;
+                        if ((normal_ratio_pass || aperture_pass || integrity_candidate) &&
+                            config.use_fixed_history_dr_validation) {
+                            if (!has_provisional_fixed_ant) {
+                                fixed_history_dr_pass = false;
+                            } else {
+                                const std::size_t window = static_cast<std::size_t>(
+                                    std::max(1, config.fixed_history_dr_window_epochs));
+                                const std::size_t first = i > window ? i - window : 0;
+                                Eigen::Vector3d weighted_prediction =
+                                    Eigen::Vector3d::Zero();
+                                double total_weight = 0.0;
+                                for (std::size_t j = first; j < i; ++j) {
+                                    if (!epoch_fixed[j] ||
+                                        !epoch_fixed_history_eligible[j] ||
+                                        !epoch_has_fixed[j] ||
+                                        !epoch_solved[j]) {
+                                        continue;
+                                    }
+                                    Eigen::Vector3d prediction =
+                                        Eigen::Vector3d(epoch_fixed_position[j]);
+                                    for (std::size_t k = j + 1; k <= i; ++k) {
+                                        const double dt = problem.epochs[k].time -
+                                                          problem.epochs[k - 1].time;
+                                        if (!(dt > 0.0) || dt > config.max_tdcp_gap_s) {
+                                            prediction.setConstant(
+                                                std::numeric_limits<double>::quiet_NaN());
+                                            break;
+                                        }
+                                        const Eigen::Vector3d v_mid =
+                                            0.5 * (epoch_vel_nav[k - 1] +
+                                                   epoch_vel_nav[k]);
+                                        prediction += R_ecef_nav.matrix() * (v_mid * dt);
+                                    }
+                                    if (!prediction.allFinite()) continue;
+                                    const double weight = 1.0 /
+                                        static_cast<double>(std::max<std::size_t>(1, i - j));
+                                    weighted_prediction += weight * prediction;
+                                    total_weight += weight;
+                                }
+                                if (total_weight > 0.0) {
+                                    fixed_history_dr_evaluated = true;
+                                    weighted_prediction /= total_weight;
+                                    fixed_history_dr_pass =
+                                        (provisional_fixed_ant - weighted_prediction).norm() <=
+                                        config.fixed_history_dr_max_separation_m;
+                                    if (fixed_history_dr_pass) {
+                                        ++result.diagnostics.fixed_history_dr_accepts;
+                                    } else {
+                                        ++result.diagnostics.fixed_history_dr_rejects;
+                                        epoch_diagnostics[i].ar_outcome =
+                                            FGOProcessor::AmbiguityResolutionOutcome::FixedHistoryRejected;
+                                    }
+                                }
+                            }
+                        }
+                        // Monitor-only counterfactual (cheap, always run):
+                        // capture the raw candidate position the FIRST time
+                        // this epoch has a surplus-passed attempt blocked
+                        // purely by the DR verdict, before any reprieve or
+                        // override below can change it. Never influences the
+                        // FIX/FLOAT decision by itself.
+                        if (fixed_history_dr_evaluated && !fixed_history_dr_pass &&
+                            surplus_evaluated && surplus_pass && has_provisional_fixed_ant &&
+                            !epoch_diagnostics[i].dr_bypass_candidate_evaluated) {
+                            epoch_diagnostics[i].dr_bypass_candidate_evaluated = true;
+                            epoch_diagnostics[i].dr_bypass_candidate_position_ecef =
+                                Vector3d(provisional_fixed_ant);
+                        }
+                        if (!fixed_history_dr_pass && has_provisional_fixed_ant &&
+                            anchorValidationAgrees(provisional_fixed_ant)) {
+                            fixed_history_dr_pass = true;
+                        }
+                        // "c2" lever (surplus_validation_overrides_history_dr):
+                        // a candidate still rejected by the DR gate after the
+                        // anchor reprieve above is accepted anyway when the
+                        // independent surplus-satellite validation ALREADY
+                        // passed for this same attempt this epoch -- two
+                        // independent integrity checks (one re-using this
+                        // arc's own recent fixed history, one re-differencing
+                        // observations that did NOT produce this candidate)
+                        // agreeing is treated as sufficient. Default off; see
+                        // the knob's doc comment in fgo.hpp.
+                        const bool dr_bypass_otherwise_qualifies =
+                            !fixed_history_dr_pass &&
+                            config.surplus_validation_overrides_history_dr &&
+                            fixed_history_dr_evaluated && surplus_evaluated && surplus_pass &&
+                            (config.surplus_validation_overrides_history_dr_min_surplus_used <= 0 ||
+                             epoch_diagnostics[i].surplus_validation_surplus_used >=
+                                 config.surplus_validation_overrides_history_dr_min_surplus_used);
+                        // Consecutive-run cap (surplus_validation_overrides_
+                        // history_dr_max_consecutive): a candidate that
+                        // otherwise qualifies for the override is still
+                        // blocked once dr_bypass_consecutive_streak (this
+                        // arc's run of immediately-preceding FIXED epochs
+                        // that were themselves overrides -- see the knob's
+                        // doc comment in fgo.hpp for the reset rule) has
+                        // already reached the configured limit. <=0 leaves
+                        // the override unlimited, exactly as before this
+                        // knob existed.
+                        const bool dr_bypass_cap_blocks =
+                            dr_bypass_otherwise_qualifies &&
+                            config.surplus_validation_overrides_history_dr_max_consecutive > 0 &&
+                            dr_bypass_consecutive_streak >=
+                                static_cast<std::size_t>(
+                                    config.surplus_validation_overrides_history_dr_max_consecutive);
+                        if (dr_bypass_otherwise_qualifies && !dr_bypass_cap_blocks) {
+                            fixed_history_dr_pass = true;
+                            dr_bypass_applied_this_attempt = true;
+                            ++result.diagnostics.fixed_history_dr_surplus_overrides;
+                        } else if (dr_bypass_cap_blocks) {
+                            ++result.diagnostics.fixed_history_dr_surplus_override_capped;
+                        }
+                        bool postfit_pass = true;
+                        const bool validate_normal_ratio_postfit =
+                            config.fixed_postfit_validate_normal_ratio &&
+                            (config.fixed_postfit_normal_ratio_ceiling <= 0.0 ||
+                             ratio <= config.fixed_postfit_normal_ratio_ceiling);
+                        const bool postfit_evaluated =
+                            (normal_ratio_pass || aperture_pass || integrity_candidate) &&
+                            config.use_fixed_hypothesis_postfit_validation &&
+                            (validate_normal_ratio_postfit || adaptive_only_pass ||
+                             integrity_candidate);
+                        if (postfit_evaluated) {
+                            const auto& d = epoch_diagnostics[i];
+                            postfit_pass =
+                                d.fixed_postfit_ddcp_factors >=
+                                    std::max(1, config.fixed_postfit_min_factors) &&
+                                (config.fixed_postfit_max_rms_m <= 0.0 ||
+                                 d.fixed_postfit_ddcp_rms_m <=
+                                     config.fixed_postfit_max_rms_m) &&
+                                (config.fixed_postfit_max_normalized_residual <= 0.0 ||
+                                 d.fixed_postfit_ddcp_max_normalized <=
+                                     config.fixed_postfit_max_normalized_residual) &&
+                                (config.fixed_postfit_max_chi2_per_dof <= 0.0 ||
+                                 d.fixed_postfit_ddcp_chi2_per_dof <=
+                                     config.fixed_postfit_max_chi2_per_dof);
+                            if (postfit_pass) {
+                                ++result.diagnostics.fixed_postfit_validation_accepts;
+                            } else {
+                                ++result.diagnostics.fixed_postfit_validation_rejects;
+                                epoch_diagnostics[i].ar_outcome =
+                                    FGOProcessor::AmbiguityResolutionOutcome::PostfitRejected;
+                            }
+                        }
+                        bool external_dr_pass = true;
+                        const bool relaxed_fix_path =
+                            adaptive_only_pass || integrity_candidate;
+                        if (relaxed_fix_path &&
+                            config.use_external_doppler_dr_validation) {
+                            if (external_dr_available) {
+                                external_dr_pass = external_dr_candidate_pass;
+                                if (!config.monitor_external_doppler_dr) {
+                                    epoch_diagnostics[i].external_dr_evaluated = true;
+                                    epoch_diagnostics[i].external_dr_separation_m =
+                                        external_dr_separation_m;
+                                    epoch_diagnostics[i].external_dr_mahalanobis2 =
+                                        external_dr_mahalanobis2;
+                                    epoch_diagnostics[i].external_dr_accepted =
+                                        external_dr_candidate_pass;
+                                    epoch_diagnostics[i].external_dr_rejected =
+                                        !external_dr_candidate_pass;
+                                    if (external_dr_candidate_pass) {
+                                        ++result.diagnostics.external_doppler_dr_accepts;
+                                    } else {
+                                        ++result.diagnostics.external_doppler_dr_rejects;
+                                    }
+                                }
+                            } else if ((adaptive_only_pass || integrity_candidate) &&
+                                       config.external_doppler_dr_require_for_relaxed_fix) {
+                                external_dr_pass = false;
+                                ++result.diagnostics.external_doppler_dr_unavailable;
+                            }
+                        }
+                        const bool incremental_integrity_pass =
+                            (adaptive_only_pass || integrity_candidate) &&
+                            postfit_pass && external_dr_pass;
+                        const bool output_only_relaxed_candidate =
+                            incremental_integrity_pass;
+                        int pinned_here_before_relaxed_fix = 0;
+                        if (output_only_relaxed_candidate &&
+                            config.use_ambiguity_hold) {
+                            for (std::size_t idx : epoch_amb_indices) {
+                                if (pinned_ambiguities.count(ambSymbolId(idx))) {
+                                    ++pinned_here_before_relaxed_fix;
+                                }
+                            }
+                        }
+                        const bool defer_relaxed_fix_to_existing_hold =
+                            output_only_relaxed_candidate &&
+                            pinned_here_before_relaxed_fix >=
+                                config.ambiguity_hold_min_fixed;
+                        const bool relaxed_plausibility_pass =
+                            !output_only_relaxed_candidate ||
+                            !config.use_fix_plausibility_demotion ||
+                            (has_provisional_fixed_ant &&
+                             (provisional_fixed_ant -
+                              Eigen::Vector3d(antennaOf(pose_seed))).norm() <=
+                                 config.fix_demote_distance_m &&
+                             (config.fix_demote_res_m <= 0.0 ||
+                              ddpr_rms <= config.fix_demote_res_m));
+                        // Stage B veto: an established-ratio fix (would pass
+                        // regardless of aperture_pass) that the surplus test
+                        // independently rejects. Separate opt-in knob;
+                        // monitor mode never demotes (logging only).
+                        const bool surplus_veto_triggered =
+                            !config.surplus_validation_monitor_only &&
+                            config.surplus_validation_veto_high_ratio_fails &&
+                            configured_ratio_pass && surplus_evaluated && !surplus_pass &&
+                            (config.surplus_validation_veto_ratio_ceiling <= 0.0 ||
+                             ratio <= config.surplus_validation_veto_ratio_ceiling) &&
+                            (config.surplus_validation_veto_min_ddpr_rms_m <= 0.0 ||
+                             ddpr_rms >= config.surplus_validation_veto_min_ddpr_rms_m);
+                        const bool established_path_pass =
+                            (configured_ratio_pass || aperture_pass) &&
+                            fixed_history_dr_pass && !surplus_veto_triggered &&
+                            (!postfit_evaluated || postfit_pass);
+                        // Below-floor rescue decision (use_low_count_
+                        // ambiguity_resolution): a below-floor attempt is
+                        // decided SOLELY by this -- never by
+                        // established_path_pass/incremental_integrity_pass
+                        // above, which were tuned for the >=min_candidates
+                        // regime and would otherwise let a low-count
+                        // candidate slip through the ordinary
+                        // adaptive-ratio/IMU-aperture paths without ever
+                        // being cross-checked by the surplus test. Mandatory
+                        // surplus pass, optional additional ratio floor; on
+                        // any other outcome the epoch stays FLOAT exactly as
+                        // it did before this knob existed.
+                        const bool low_count_pass =
+                            is_low_count_attempt && std::isfinite(ratio) &&
+                            (config.low_count_min_ratio <= 0.0 ||
+                             ratio > config.low_count_min_ratio) &&
+                            surplus_evaluated && surplus_pass &&
+                            surplus_rescue_quality_pass &&
+                            (!config.low_count_require_separation_witness ||
+                             (std::isfinite(
+                                  epoch_diagnostics[i].fixed_float_separation_m) &&
+                              epoch_diagnostics[i].fixed_float_separation_m <=
+                                  config.low_count_max_float_separation_m &&
+                              std::isfinite(
+                                  epoch_diagnostics[i].fixed_imu_prediction_separation_m) &&
+                              epoch_diagnostics[i].fixed_imu_prediction_separation_m <=
+                                  config.low_count_max_imu_prediction_separation_m));
+                        const bool fixed_decision_pass = std::isfinite(ratio) &&
+                            (is_low_count_attempt
+                                 ? low_count_pass
+                                 : (established_path_pass || incremental_integrity_pass)) &&
+                            !defer_relaxed_fix_to_existing_hold &&
+                            relaxed_plausibility_pass && fixed_amb.size() == subset;
+                        bool integer_constrained_pass = true;
+                        if (fixed_decision_pass &&
+                            config.use_integer_constrained_reoptimization) {
+                            integer_constrained_pass = false;
+                            ++result.diagnostics.integer_constrained_reoptimization_attempts;
+                            epoch_diagnostics[i]
+                                .integer_constrained_reoptimization_evaluated = true;
+                            try {
+                                const auto& active_factors =
+                                    smoother.getISAM2().getFactorsUnsafe();
+                                const gtsam::Values initial_values =
+                                    smoother.calculateEstimate();
+                                std::vector<std::pair<gtsam::Key, double>>
+                                    integer_constraints;
+                                integer_constraints.reserve(subset);
+                                for (int r = 0; r < subset; ++r) {
+                                    const std::size_t idx = epoch_amb_indices[order[r]];
+                                    integer_constraints.emplace_back(
+                                        ambiguityKey(ambSymbolId(idx)),
+                                        static_cast<double>(std::lround(fixed_amb(r))));
+                                }
+                                const IntegerConstrainedGraphCostOutcome cost =
+                                    evaluateIntegerConstrainedGraphCost(
+                                        active_factors, initial_values,
+                                        integer_constraints, positionKey(i), config);
+                                epoch_diagnostics[i]
+                                    .integer_constrained_base_cost_before =
+                                        cost.base_cost_before;
+                                epoch_diagnostics[i]
+                                    .integer_constrained_base_cost_after =
+                                        cost.base_cost_after;
+                                integer_constrained_pass = cost.evaluated && cost.pass;
+                                if (integer_constrained_pass && cost.optimized_pose) {
+                                    provisional_fixed_ant =
+                                        Eigen::Vector3d(antennaOf(*cost.optimized_pose));
+                                    has_provisional_fixed_ant =
+                                        provisional_fixed_ant.allFinite();
+                                }
+                            } catch (const std::exception&) {
+                                integer_constrained_pass = false;
+                            }
+                            epoch_diagnostics[i]
+                                .integer_constrained_reoptimization_pass =
+                                    integer_constrained_pass;
+                            if (integer_constrained_pass) {
+                                ++result.diagnostics
+                                      .integer_constrained_reoptimization_accepts;
+                            } else {
+                                ++result.diagnostics
+                                      .integer_constrained_reoptimization_rejects;
+                                epoch_diagnostics[i].ar_outcome =
+                                    FGOProcessor::AmbiguityResolutionOutcome::
+                                        IntegerConstrainedReoptimizationRejected;
+                            }
+                        }
+                        const bool fixed_epoch =
+                            fixed_decision_pass && integer_constrained_pass;
+                        // Record float ambiguity values for the result mapping
+                        // (full candidate set, once).
+                        if (!float_cycles_recorded) {
+                            for (int r = 0; r < n; ++r) {
+                                amb_float_cycles[epoch_amb_indices[r]] = float_amb(r);
+                            }
+                            float_cycles_recorded = true;
+                        }
+                        if (surplus_rescue_applied && fixed_epoch) {
+                            ++result.diagnostics.surplus_validation_rescued_epochs;
+                            epoch_diagnostics[i].surplus_validation_used_for_rescue = true;
+                        }
+                        if (surplus_veto_triggered) {
+                            ++result.diagnostics.surplus_validation_vetoed_epochs;
+                            epoch_diagnostics[i].surplus_validation_used_for_veto = true;
+                            epoch_diagnostics[i].ar_outcome =
+                                FGOProcessor::AmbiguityResolutionOutcome::SurplusValidationRejected;
+                        }
+                        if (is_low_count_attempt && !low_count_pass) {
+                            epoch_diagnostics[i].ar_outcome =
+                                FGOProcessor::AmbiguityResolutionOutcome::LowCountRejected;
+                        }
+                        if (!fixed_epoch) {
+                            if (!config.use_fixed_lag_partial_lambda) break;
+                            continue;
+                        }
+                        if (is_low_count_attempt) {
+                            ++result.diagnostics.low_count_ambiguity_fix_accepted;
+                            epoch_diagnostics[i].low_count_ar_used = true;
+                        }
+
+                        epoch_fixed[i] = true;
+                        epoch_diagnostics[i].dr_bypass_applied = dr_bypass_applied_this_attempt;
+                        // A DR-bypassed candidate failed the one integrity
+                        // check that re-uses this arc's own recent fixed
+                        // history; treat it the same as any other "output-
+                        // only" relaxed fix -- label this epoch FIXED but
+                        // never pin its integers into the persistent graph
+                        // (would poison the rest of the arc if the bypass was
+                        // wrong) and never let it seed the DR window used to
+                        // validate OTHER epochs. Measured on tokyo1 full-run:
+                        // allowing hold-pinning here raised FIXED RMS from
+                        // 0.787 m to 1.018 m and collapsed <50cm rate from
+                        // 58% to 25% -- a small number of wrong pinned
+                        // integers cascades through the shared ambiguity/pose
+                        // graph far beyond the bypassed epoch itself.
+                        const bool output_only_relaxed_fix =
+                            output_only_relaxed_candidate || is_low_count_attempt ||
+                            dr_bypass_applied_this_attempt;
+                        epoch_fixed_history_eligible[i] =
+                            !output_only_relaxed_fix;
+                        epoch_diagnostics[i].ar_outcome =
+                            FGOProcessor::AmbiguityResolutionOutcome::Fixed;
+                        epoch_diagnostics[i].lambda_selected_stage =
+                            lambda_stages[lambda_order_idx];
+                        epoch_fixed_count[i] = subset;
+                        total_fixed_ambiguities += static_cast<std::size_t>(subset);
+                        result.diagnostics.lambda_ambiguity_fix_used = true;
+                        result.diagnostics.lambda_ambiguity_used_candidates +=
+                            static_cast<std::size_t>(subset);
+                        if (subset < attempt_n) {
+                            result.diagnostics.partial_lambda_ambiguity_fix_used = true;
+                        }
+                        for (int r = 0; r < subset; ++r) {
+                            const std::size_t idx = epoch_amb_indices[order[r]];
+                            const int fi = static_cast<int>(std::lround(fixed_amb(r)));
+                            amb_fixed_cycles[idx] = fi;
+                            amb_fixed_residual[idx] =
+                                sub_float(r) - static_cast<double>(fi);
+                        }
+                        if (config.use_epoch_lambda_fixed_output && has_provisional_fixed_ant) {
+                            epoch_fixed_position[i] = Point3(provisional_fixed_ant);
+                            epoch_has_fixed[i] = true;
+                        }
+                        if ((config.monitor_external_doppler_dr ||
+                             config.use_external_doppler_dr_validation ||
+                             config.monitor_candidate_integrity_witness) &&
+                            has_provisional_fixed_ant && has_provisional_fixed_cov &&
+                            external_dr_velocity_valid &&
+                            ratio >= config.external_doppler_dr_reset_min_ratio) {
+                            external_dr_position_ecef = provisional_fixed_ant;
+                            external_dr_position_cov = provisional_fixed_cov;
+                            external_dr_position_valid = true;
+                            external_dr_time = problem.epochs[i].time;
+                            external_dr_age_epochs = 0;
+                            epoch_diagnostics[i].external_dr_age_epochs = 0;
+                        }
+
+                        // --- 2e fix-and-hold: pin newly-validated arcs at
+                        // their integer so they persist for the rest of the
+                        // arc. Stricter ratio gate than "mark FIXED". With
+                        // partial AR, only a FULL-set validation may hold:
+                        // a shrunken subset that squeaked past the ratio test
+                        // is enough to label this epoch FIXED, but pinning its
+                        // integers would poison the arc for its whole
+                        // remaining lifetime if any are wrong (measured on
+                        // tokyo1 full-run deep urban: FIXED rms 6.2 m). ---
+                        // Fix plausibility (use_fix_plausibility_demotion):
+                        // never PIN integers from an epoch whose fixed
+                        // position is implausibly far from the IMU
+                        // prediction -- the demotion pass below the hold
+                        // block strips the FIXED label; skipping the hold
+                        // here additionally stops the (likely wrong)
+                        // integers from poisoning the arc's remaining
+                        // lifetime. Evaluated lazily (last && operand) so
+                        // the skip counter only counts epochs that would
+                        // otherwise actually have held.
+                        const auto holdBlockedByPlausibility = [&]() -> bool {
+                            if (!config.use_fix_plausibility_demotion) return false;
+                            const Point3 fix_ant = epoch_has_fixed[i]
+                                                       ? Point3(epoch_fixed_position[i])
+                                                       : antennaOf(pose_i);
+                            const double gap = (fix_ant - antennaOf(pose_seed)).norm();
+                            if (gap <= config.fix_demote_distance_m) return false;
+                            ++result.diagnostics.fix_plausibility_hold_skips;
+                            return true;
+                        };
+                        // A normal ratio-test pass can still imply a large
+                        // position jump.  When the IMU aperture is enabled,
+                        // apply the same solution-separation test to every
+                        // candidate before turning it into a persistent hold,
+                        // not only to candidates admitted through the relaxed
+                        // ratio path.  Otherwise a marginal ratio pass can pin
+                        // a wrong integer for the remainder of a long arc.
+                        const auto holdBlockedByImuAperture = [&]() -> bool {
+                            if (!config.use_imu_aided_ratio_aperture) return false;
+                            if (!has_provisional_fixed_ant) {
+                                ++result.diagnostics.fix_plausibility_hold_skips;
+                                return true;
+                            }
+                            const double float_sep =
+                                (provisional_fixed_ant -
+                                 Eigen::Vector3d(antennaOf(pose_i))).norm();
+                            const double pred_sep =
+                                (provisional_fixed_ant -
+                                 Eigen::Vector3d(antennaOf(pose_seed))).norm();
+                            if (float_sep <= config.imu_aided_max_float_separation_m &&
+                                pred_sep <= config.imu_aided_max_prediction_separation_m) {
+                                return false;
+                            }
+                            ++result.diagnostics.fix_plausibility_hold_skips;
+                            return true;
+                        };
+                        // A geometry-free arc reset deliberately discards
+                        // carrier history. During the resulting low-redundancy
+                        // reacquisition, do not pin an integer candidate when
+                        // all independent code evidence is grossly inconsistent:
+                        // poor DD-code fit plus a fresh standalone SPP solution
+                        // over 25 m away. The ratio ceiling keeps this guard on
+                        // the ambiguous near-threshold fringe; well-observed
+                        // high-ratio fixes are unaffected.
+                        const auto holdBlockedByGfGrossSpp = [&]() -> bool {
+                            if (!config.use_geometry_free_cycle_slip_reset ||
+                                subset > kGfGuardMaxFixedAmbiguities ||
+                                !std::isfinite(ratio) || ratio > kGfGuardMaxRatio ||
+                                !std::isfinite(ddpr_rms) ||
+                                ddpr_rms < kGfGuardMinDdprRmsM ||
+                                !epoch_diagnostics[i].fresh_spp_solution ||
+                                !epoch_diagnostics[i]
+                                     .spp_seed_position_ecef.allFinite()) {
+                                return false;
+                            }
+                            const Point3 fix_ant = epoch_has_fixed[i]
+                                                       ? Point3(epoch_fixed_position[i])
+                                                       : provisional_fixed_ant;
+                            if ((Eigen::Vector3d(fix_ant) -
+                                 epoch_diagnostics[i].spp_seed_position_ecef)
+                                    .norm() <= kGfGuardMaxSppSeparationM) {
+                                return false;
+                            }
+                            ++result.diagnostics.fix_plausibility_hold_skips;
+                            return true;
+                        };
+                        const bool temporally_validated_partial_hold =
+                            config.use_fixed_history_dr_validation &&
+                            fixed_history_dr_evaluated && fixed_history_dr_pass;
+                        // Guardrail (use_low_count_ambiguity_resolution):
+                        // a below-floor fix NEVER seeds fix-and-hold,
+                        // unconditionally -- not even when
+                        // allow_relaxed_ratio_fix_and_hold is set for other
+                        // relaxed paths. A wrong low-count integer pinned
+                        // for an arc's remaining lifetime would poison every
+                        // later epoch of that arc; the simplest safe choice
+                        // is to always re-attempt LAMBDA fresh next epoch.
+                        if (config.use_ambiguity_hold && !is_low_count_attempt &&
+                            (!output_only_relaxed_fix ||
+                             config.allow_relaxed_ratio_fix_and_hold) &&
+                            (full_candidate_attempt || temporally_validated_partial_hold) &&
+                            ratio > config.ambiguity_hold_ratio_threshold &&
+                            subset >= config.ambiguity_hold_min_fixed &&
+                            !holdBlockedByPlausibility() &&
+                            !holdBlockedByImuAperture() &&
+                            !holdBlockedByGfGrossSpp()) {
+                            gtsam::NonlinearFactorGraph hold_factors;
+                            const auto hold_noise = gtsam::noiseModel::Isotropic::Sigma(
+                                1, config.ambiguity_hold_sigma_cycles);
+                            for (int r = 0; r < subset; ++r) {
+                                const std::size_t idx = epoch_amb_indices[order[r]];
+                                const std::size_t sym_idx = ambSymbolId(idx);
+                                if (pinned_ambiguities.count(sym_idx)) continue;
+                                const int fi = static_cast<int>(std::lround(fixed_amb(r)));
+                                hold_factors.addPrior(ambiguityKey(sym_idx),
+                                                      static_cast<double>(fi), hold_noise);
+                                pinned_ambiguities.insert(sym_idx);
+                                pin_created_epoch[sym_idx] = i;
+                            }
+                            if (hold_factors.size() > 0) {
+                                try {
+                                    smoother.update(hold_factors, gtsam::Values(),
+                                                    gtsam::FixedLagSmoother::KeyTimestampMap());
+                                    ++result.diagnostics.smoother_updates;
+                                    // Re-read epoch i now that holds pin it.
+                                    pose_i = smoother.calculateEstimate<Pose3>(positionKey(i));
+                                    vel_i = smoother.calculateEstimate<gtsam::Vector3>(
+                                        velocityKey(i));
+                                    prev_nav = gtsam::NavState(pose_i, vel_i);
+                                    epoch_float_position[i] = antennaOf(pose_i);
+                                } catch (const std::exception& e) {
+                                    std::fprintf(stderr,
+                                                 "[fgo_gtsam_backend] hold update epoch %zu "
+                                                 "threw: %s\n",
+                                                 i, e.what());
+                                }
+                            }
+                        }
+                        break;  // validated subset found
+                    }
+
+                    // Constellation-disjoint ambiguity solution-separation
+                    // shadow. Whole constellation groups stay together so
+                    // no target/reference satellite can occur in both
+                    // reduced LAMBDA searches. Both subproblems still come
+                    // from the shared float graph, so their agreement is
+                    // telemetry only and never authorizes a FIX.
+                    if (config.monitor_disjoint_constellation_ar) {
+                        std::vector<disjoint_constellation_partition::Candidate>
+                            partition_candidates;
+                        partition_candidates.reserve(static_cast<std::size_t>(n));
+                        for (int candidate = 0; candidate < n; ++candidate) {
+                            const std::size_t ambiguity_index =
+                                epoch_amb_indices[candidate];
+                            if (ambiguity_index >= problem.ambiguity_states.size()) {
+                                continue;
+                            }
+                            partition_candidates.push_back({
+                                static_cast<int>(problem.ambiguity_states[ambiguity_index]
+                                                     .satellite.system),
+                                candidate});
+                        }
+                        const auto partitioned =
+                            disjoint_constellation_partition::partition(
+                                partition_candidates);
+                        auto& shadow = epoch_diagnostics[i]
+                                           .disjoint_constellation_ar_shadow;
+                        shadow.partition_a_system_mask =
+                            partitioned.partition_a_system_mask;
+                        shadow.partition_b_system_mask =
+                            partitioned.partition_b_system_mask;
+                        shadow.partition_a_ambiguities =
+                            static_cast<int>(partitioned.partition_a.size());
+                        shadow.partition_b_ambiguities =
+                            static_cast<int>(partitioned.partition_b.size());
+                        const int minimum_partition = std::max(
+                            1, config.disjoint_constellation_ar_min_ambiguities);
+                        if (partitioned.available(minimum_partition)) {
+                            shadow.evaluated = true;
+                            const Eigen::Vector3d float_antenna = Eigen::Vector3d(
+                                antennaOf(lambda_linearization_point.at<Pose3>(
+                                    positionKey(i))));
+                            const auto solvePartition =
+                                [&](const std::vector<int>& indexes,
+                                    double& ratio,
+                                    double& bootstrapped_success_rate,
+                                    bool& ratio_passed,
+                                    bool& candidate_available,
+                                    Vector3d& candidate_position) {
+                                    const int count =
+                                        static_cast<int>(indexes.size());
+                                    Eigen::VectorXd partition_float(count);
+                                    Eigen::MatrixXd partition_q(count, count);
+                                    Eigen::MatrixXd partition_pos(3, count);
+                                    for (int row = 0; row < count; ++row) {
+                                        partition_float(row) = float_amb(indexes[row]);
+                                        partition_pos.col(row) = pos_amb.col(indexes[row]);
+                                        for (int column = 0; column < count; ++column) {
+                                            partition_q(row, column) =
+                                                q_amb(indexes[row], indexes[column]);
+                                        }
+                                    }
+                                    LambdaCandidateDiagnostics diagnostics;
+                                    if (!lambdaSearchTopK(partition_float, partition_q,
+                                                          2, diagnostics)) {
+                                        return;
+                                    }
+                                    const double best =
+                                        diagnostics.squared_residuals(0);
+                                    ratio = best > 0.0
+                                        ? diagnostics.squared_residuals(1) / best
+                                        : 0.0;
+                                    bootstrapped_success_rate =
+                                        diagnostics.bootstrapped_success_rate;
+                                    ratio_passed = std::isfinite(ratio) &&
+                                        (config.lambda_ratio_threshold <= 0.0 ||
+                                         ratio > config.lambda_ratio_threshold);
+                                    const Eigen::LDLT<Eigen::MatrixXd> ldlt(
+                                        partition_q);
+                                    if (ldlt.info() != Eigen::Success) return;
+                                    const Eigen::VectorXd correction = ldlt.solve(
+                                        partition_float -
+                                        diagnostics.candidates.col(0));
+                                    const Eigen::Vector3d position_delta =
+                                        partition_pos * correction;
+                                    if (!correction.allFinite() ||
+                                        !position_delta.allFinite()) {
+                                        return;
+                                    }
+                                    candidate_position =
+                                        float_antenna - position_delta;
+                                    candidate_available =
+                                        candidate_position.allFinite();
+                                };
+                            solvePartition(
+                                partitioned.partition_a,
+                                shadow.partition_a_ratio,
+                                shadow.partition_a_bootstrapped_success_rate,
+                                shadow.partition_a_ratio_passed,
+                                shadow.partition_a_candidate_available,
+                                shadow.partition_a_position_ecef);
+                            solvePartition(
+                                partitioned.partition_b,
+                                shadow.partition_b_ratio,
+                                shadow.partition_b_bootstrapped_success_rate,
+                                shadow.partition_b_ratio_passed,
+                                shadow.partition_b_candidate_available,
+                                shadow.partition_b_position_ecef);
+                            if (shadow.partition_a_candidate_available &&
+                                shadow.partition_b_candidate_available) {
+                                shadow.partition_separation_m =
+                                    (shadow.partition_a_position_ecef -
+                                     shadow.partition_b_position_ecef)
+                                        .norm();
+                                if (epoch_diagnostics[i]
+                                        .lambda_candidate_available) {
+                                    shadow.partition_a_primary_separation_m =
+                                        (shadow.partition_a_position_ecef -
+                                         epoch_diagnostics[i]
+                                             .lambda_candidate_position_ecef)
+                                            .norm();
+                                    shadow.partition_b_primary_separation_m =
+                                        (shadow.partition_b_position_ecef -
+                                         epoch_diagnostics[i]
+                                             .lambda_candidate_position_ecef)
+                                            .norm();
+                                }
+                            }
+                        }
+                    }
+
+                    // Multi-epoch AR shadow. Select only uninterrupted DD
+                    // arcs whose integer candidate has persisted for the
+                    // configured number of epochs, then run LAMBDA again on
+                    // their current joint marginal. This is deliberately
+                    // read-only: it cannot add factors, hold ambiguities, or
+                    // alter epoch_fixed/epoch_ratio.
+                    if (config.monitor_multiepoch_ar &&
+                        !lambda_candidate_cycles_this_epoch.empty()) {
+                        std::vector<int> persistent_order;
+                        int minimum_support = std::numeric_limits<int>::max();
+                        for (int candidate = 0; candidate < n; ++candidate) {
+                            const std::size_t ambiguity_index =
+                                epoch_amb_indices[candidate];
+                            const auto current =
+                                lambda_candidate_cycles_this_epoch.find(
+                                    ambiguity_index);
+                            if (current ==
+                                lambda_candidate_cycles_this_epoch.end()) {
+                                continue;
+                            }
+                            const auto history = multiepoch_integer_history.find(
+                                ambiguity_index);
+                            if (history == multiepoch_integer_history.end() ||
+                                history->second.last_epoch + 1 != i ||
+                                history->second.integer != current->second) {
+                                continue;
+                            }
+                            const int support =
+                                history->second.consecutive_epochs + 1;
+                            if (support >=
+                                std::max(2,
+                                    config.multiepoch_ar_min_consensus_epochs)) {
+                                persistent_order.push_back(candidate);
+                                minimum_support = std::min(minimum_support, support);
+                            }
+                        }
+
+                        auto& shadow = epoch_diagnostics[i].multiepoch_ar_shadow;
+                        shadow.persistent_ambiguities =
+                            static_cast<int>(persistent_order.size());
+                        shadow.minimum_support_epochs =
+                            minimum_support == std::numeric_limits<int>::max()
+                                ? 0
+                                : minimum_support;
+                        if (shadow.persistent_ambiguities >=
+                            std::max(1, config.multiepoch_ar_min_ambiguities)) {
+                            shadow.evaluated = true;
+                            const int np = shadow.persistent_ambiguities;
+                            Eigen::VectorXd persistent_float(np);
+                            Eigen::MatrixXd persistent_q(np, np);
+                            Eigen::MatrixXd persistent_pos(3, np);
+                            for (int r = 0; r < np; ++r) {
+                                persistent_float(r) = float_amb(persistent_order[r]);
+                                persistent_pos.col(r) = pos_amb.col(persistent_order[r]);
+                                for (int c = 0; c < np; ++c) {
+                                    persistent_q(r, c) =
+                                        q_amb(persistent_order[r],
+                                              persistent_order[c]);
+                                }
+                            }
+                            LambdaCandidateDiagnostics persistent_diagnostics;
+                            if (lambdaSearchTopK(persistent_float, persistent_q, 2,
+                                                 persistent_diagnostics)) {
+                                const double best =
+                                    persistent_diagnostics.squared_residuals(0);
+                                shadow.ratio = best > 0.0
+                                    ? persistent_diagnostics.squared_residuals(1) /
+                                          best
+                                    : 0.0;
+                                shadow.bootstrapped_success_rate =
+                                    persistent_diagnostics.bootstrapped_success_rate;
+                                shadow.ratio_passed = std::isfinite(shadow.ratio) &&
+                                    (config.lambda_ratio_threshold <= 0.0 ||
+                                     shadow.ratio > config.lambda_ratio_threshold);
+                                shadow.history_integers_agree = true;
+                                for (int r = 0; r < np; ++r) {
+                                    const std::size_t ambiguity_index =
+                                        epoch_amb_indices[persistent_order[r]];
+                                    const int resolved = static_cast<int>(std::lround(
+                                        persistent_diagnostics.candidates(r, 0)));
+                                    if (resolved !=
+                                        lambda_candidate_cycles_this_epoch.at(
+                                            ambiguity_index)) {
+                                        shadow.history_integers_agree = false;
+                                        break;
+                                    }
+                                }
+                                const Eigen::LDLT<Eigen::MatrixXd> ldlt(persistent_q);
+                                if (ldlt.info() == Eigen::Success) {
+                                    const Eigen::VectorXd correction = ldlt.solve(
+                                        persistent_float -
+                                        persistent_diagnostics.candidates.col(0));
+                                    const Eigen::Vector3d position_delta =
+                                        persistent_pos * correction;
+                                    if (correction.allFinite() &&
+                                        position_delta.allFinite()) {
+                                        shadow.candidate_position_ecef =
+                                            Eigen::Vector3d(antennaOf(pose_i)) -
+                                            position_delta;
+                                        shadow.candidate_available = true;
+                                        shadow.float_separation_m =
+                                            position_delta.norm();
+                                        shadow.imu_separation_m =
+                                            (shadow.candidate_position_ecef -
+                                             Eigen::Vector3d(antennaOf(pose_seed)))
+                                                .norm();
+
+                                        // Validate the persistent integer
+                                        // hypothesis with carrier rows that
+                                        // did not participate in this reduced
+                                        // LAMBDA search. This reuses the
+                                        // established alternate-reference
+                                        // surplus test, but supplies exactly
+                                        // the multi-epoch subset so every
+                                        // deciding row is held out from the
+                                        // candidate covariance and integers.
+                                        std::map<std::size_t, int>
+                                            persistent_cycles_by_index;
+                                        for (int r = 0; r < np; ++r) {
+                                            const std::size_t ambiguity_index =
+                                                epoch_amb_indices[
+                                                    persistent_order[r]];
+                                            persistent_cycles_by_index[
+                                                ambiguity_index] =
+                                                static_cast<int>(std::lround(
+                                                    persistent_diagnostics
+                                                        .candidates(r, 0)));
+                                        }
+                                        // Score the persistent hypothesis
+                                        // against the complete active graph,
+                                        // including historical factors in the
+                                        // fixed-lag window. This is deliberately
+                                        // read-only: unlike the normal accepted
+                                        // FIX path, its optimized Values are not
+                                        // consumed by the estimator.
+                                        try {
+                                            std::vector<std::pair<gtsam::Key, double>>
+                                                integer_constraints;
+                                            integer_constraints.reserve(
+                                                persistent_cycles_by_index.size());
+                                            for (const auto& [ambiguity_index,
+                                                              integer_cycles] :
+                                                 persistent_cycles_by_index) {
+                                                integer_constraints.emplace_back(
+                                                    ambiguityKey(ambSymbolId(
+                                                        ambiguity_index)),
+                                                    static_cast<double>(integer_cycles));
+                                            }
+                                            const auto& active_factors =
+                                                smoother.getISAM2().getFactorsUnsafe();
+                                            const gtsam::Values initial_values =
+                                                smoother.calculateEstimate();
+                                            const IntegerConstrainedGraphCostOutcome
+                                                graph_cost =
+                                                    evaluateIntegerConstrainedGraphCost(
+                                                        active_factors, initial_values,
+                                                        integer_constraints,
+                                                        std::nullopt, config);
+                                            shadow.graph_cost_evaluated =
+                                                graph_cost.evaluated;
+                                            shadow.graph_cost_pass = graph_cost.pass;
+                                            shadow.graph_cost_factor_count =
+                                                graph_cost.base_factor_count;
+                                            shadow.graph_cost_before =
+                                                graph_cost.base_cost_before;
+                                            shadow.graph_cost_after =
+                                                graph_cost.base_cost_after;
+                                        } catch (const std::exception&) {
+                                            // A failed diagnostic must never
+                                            // alter the estimator or candidate.
+                                        }
+                                        std::vector<const FGOProcessor::
+                                            DoubleDifferenceCarrierFactor*>
+                                            surplus_pool = cp_by_epoch[i];
+                                        surplus_pool.insert(
+                                            surplus_pool.end(),
+                                            cp_excluded_by_epoch[i].begin(),
+                                            cp_excluded_by_epoch[i].end());
+                                        const SurplusValidationOutcome
+                                            surplus_diag =
+                                                evaluateSurplusSatelliteValidation(
+                                                    surplus_pool,
+                                                    persistent_cycles_by_index,
+                                                    shadow.candidate_position_ecef,
+                                                    config);
+                                        shadow.surplus_validation_evaluated =
+                                            surplus_diag.evaluated;
+                                        shadow.surplus_validation_pass =
+                                            surplus_diag.pass;
+                                        shadow.surplus_validation_fallback_level =
+                                            surplus_diag.fallback_level;
+                                        shadow.surplus_validation_surplus_used =
+                                            surplus_diag.surplus_used;
+                                    }
+                                }
+                            }
+                        }
+
+                        for (const auto& [ambiguity_index, fixed_integer] :
+                             lambda_candidate_cycles_this_epoch) {
+                            auto& history =
+                                multiepoch_integer_history[ambiguity_index];
+                            if (history.last_epoch + 1 == i &&
+                                history.integer == fixed_integer) {
+                                ++history.consecutive_epochs;
+                            } else {
+                                history.consecutive_epochs = 1;
+                            }
+                            history.integer = fixed_integer;
+                            history.last_epoch = i;
+                        }
+                        for (auto it = multiepoch_integer_history.begin();
+                             it != multiepoch_integer_history.end();) {
+                            if (it->second.last_epoch + 1 < i) {
+                                it = multiepoch_integer_history.erase(it);
+                            } else {
+                                ++it;
+                            }
+                        }
+                    }
+
+                    // Read-only temporal integer-consensus shadow. Compare
+                    // the final candidate attempted at adjacent epochs over
+                    // ambiguity indices shared by both candidates. Because
+                    // the index identifies a concrete DD arc, LLI/CMC/FDE
+                    // generation changes cannot masquerade as continuity.
+                    if (!lambda_candidate_cycles_this_epoch.empty()) {
+                        int overlap = 0;
+                        int agreements = 0;
+                        if (previous_lambda_candidate_epoch !=
+                                std::numeric_limits<std::size_t>::max() &&
+                            previous_lambda_candidate_epoch + 1 == i) {
+                            for (const auto& [ambiguity_index, fixed_integer] :
+                                 lambda_candidate_cycles_this_epoch) {
+                                const auto previous =
+                                    previous_lambda_candidate_cycles.find(
+                                        ambiguity_index);
+                                if (previous ==
+                                    previous_lambda_candidate_cycles.end()) {
+                                    continue;
+                                }
+                                ++overlap;
+                                if (previous->second == fixed_integer) {
+                                    ++agreements;
+                                }
+                            }
+                        }
+                        const bool consensus = overlap >= 4 && agreements == overlap;
+                        lambda_candidate_integer_consensus_streak =
+                            consensus
+                                ? lambda_candidate_integer_consensus_streak + 1
+                                : 1;
+                        epoch_diagnostics[i].lambda_candidate_integer_overlap =
+                            overlap;
+                        epoch_diagnostics[i].lambda_candidate_integer_agreements =
+                            agreements;
+                        epoch_diagnostics[i]
+                            .lambda_candidate_integer_agreement_fraction =
+                            overlap > 0
+                                ? static_cast<double>(agreements) /
+                                      static_cast<double>(overlap)
+                                : 0.0;
+                        epoch_diagnostics[i]
+                            .lambda_candidate_integer_consensus_streak =
+                            lambda_candidate_integer_consensus_streak;
+                        previous_lambda_candidate_cycles =
+                            std::move(lambda_candidate_cycles_this_epoch);
+                        previous_lambda_candidate_epoch = i;
+                    }
+
+                    // Monitor-only satellite-impact audit, modeled after
+                    // RTKLIB demo5's AR-filter/exclusion retry. Evaluate the
+                    // actual LAMBDA ratio after removing each target
+                    // satellite from the full ranked pool. This deliberately
+                    // runs only after the established pipeline left the epoch
+                    // ratio-rejected, and cannot change any estimator state
+                    // or FIX/FLOAT decision.
+                    if (config.monitor_ratio_impact_partial_ar &&
+                        !epoch_fixed[i] &&
+                        epoch_diagnostics[i].ar_outcome ==
+                            FGOProcessor::AmbiguityResolutionOutcome::RatioRejected) {
+                        std::set<SatelliteId> drop_satellites;
+                        for (int candidate : ratio_impact_order) {
+                            drop_satellites.insert(
+                                problem.ambiguity_states[
+                                    epoch_amb_indices[candidate]].satellite);
+                        }
+                        for (const SatelliteId& drop_satellite : drop_satellites) {
+                            FGOProcessor::RatioImpactTrialTrace trial;
+                            trial.excluded_satellite = drop_satellite;
+                            std::vector<int> pool;
+                            pool.reserve(ratio_impact_order.size());
+                            for (int candidate : ratio_impact_order) {
+                                const auto& ambiguity = problem.ambiguity_states[
+                                    epoch_amb_indices[candidate]];
+                                if (ambiguity.satellite != drop_satellite) {
+                                    pool.push_back(candidate);
+                                } else {
+                                    ++trial.excluded_ambiguities;
+                                    trial.excluded_max_variance_cycles2 = std::max(
+                                        trial.excluded_max_variance_cycles2,
+                                        q_amb(candidate, candidate));
+                                    trial.excluded_max_fractional_cycles = std::max(
+                                        trial.excluded_max_fractional_cycles,
+                                        std::abs(float_amb(candidate) -
+                                                 std::round(float_amb(candidate))));
+                                }
+                            }
+                            if (pool.size() < static_cast<std::size_t>(min_subset) ||
+                                pool.size() == ratio_impact_order.size()) {
+                                continue;
+                            }
+                            epoch_diagnostics[i].ratio_impact_evaluated = true;
+                            ++epoch_diagnostics[i].ratio_impact_trials;
+                            const auto residual_it = per_sat_res.find(drop_satellite);
+                            if (residual_it != per_sat_res.end()) {
+                                trial.excluded_ddpr_residual_m = residual_it->second;
+                            }
+                            const int monitor_n = static_cast<int>(pool.size());
+                            Eigen::VectorXd monitor_float(monitor_n);
+                            Eigen::MatrixXd monitor_q(monitor_n, monitor_n);
+                            Eigen::MatrixXd monitor_pos(3, monitor_n);
+                            for (int r = 0; r < monitor_n; ++r) {
+                                monitor_float(r) = float_amb(pool[r]);
+                                monitor_pos.col(r) = pos_amb.col(pool[r]);
+                                for (int c = 0; c < monitor_n; ++c) {
+                                    monitor_q(r, c) = q_amb(pool[r], pool[c]);
+                                }
+                            }
+                            Eigen::VectorXd monitor_fixed;
+                            double monitor_ratio = 0.0;
+                            if (!lambdaSearch(monitor_float, monitor_q,
+                                              monitor_fixed, monitor_ratio) ||
+                                !std::isfinite(monitor_ratio) ||
+                                monitor_fixed.size() != monitor_n) {
+                                epoch_diagnostics[i].ratio_impact_trial_trace.push_back(
+                                    std::move(trial));
+                                continue;
+                            }
+                            trial.ratio = monitor_ratio;
+                            trial.fixed_ambiguities = monitor_n;
+                            const Eigen::VectorXd delta =
+                                monitor_float - monitor_fixed;
+                            const Eigen::LDLT<Eigen::MatrixXd> ldlt(monitor_q);
+                            if (ldlt.info() != Eigen::Success) {
+                                epoch_diagnostics[i].ratio_impact_trial_trace.push_back(
+                                    std::move(trial));
+                                continue;
+                            }
+                            const Eigen::VectorXd correction = ldlt.solve(delta);
+                            if (!correction.allFinite()) {
+                                epoch_diagnostics[i].ratio_impact_trial_trace.push_back(
+                                    std::move(trial));
+                                continue;
+                            }
+                            const Eigen::Vector3d position_delta =
+                                monitor_pos * correction;
+                            if (!position_delta.allFinite()) {
+                                epoch_diagnostics[i].ratio_impact_trial_trace.push_back(
+                                    std::move(trial));
+                                continue;
+                            }
+                            const Eigen::Vector3d candidate_position =
+                                Eigen::Vector3d(antennaOf(pose_i)) -
+                                position_delta;
+                            if (!candidate_position.allFinite()) {
+                                epoch_diagnostics[i].ratio_impact_trial_trace.push_back(
+                                    std::move(trial));
+                                continue;
+                            }
+                            trial.candidate_available = true;
+                            trial.candidate_position_ecef = candidate_position;
+                            trial.float_separation_m =
+                                (candidate_position - Eigen::Vector3d(
+                                     antennaOf(pose_i))).norm();
+                            trial.imu_separation_m =
+                                (candidate_position - Eigen::Vector3d(
+                                     antennaOf(pose_seed))).norm();
+                            epoch_diagnostics[i].ratio_impact_trial_trace.push_back(trial);
+                            if (monitor_ratio <=
+                                epoch_diagnostics[i].ratio_impact_best_ratio) {
+                                continue;
+                            }
+                            epoch_diagnostics[i].ratio_impact_best_ratio =
+                                monitor_ratio;
+                            epoch_diagnostics[i]
+                                .ratio_impact_best_fixed_ambiguities = monitor_n;
+                            epoch_diagnostics[i]
+                                .ratio_impact_best_position_ecef =
+                                    candidate_position;
+                            epoch_diagnostics[i]
+                                .ratio_impact_best_float_separation_m =
+                                    trial.float_separation_m;
+                            epoch_diagnostics[i]
+                                .ratio_impact_best_imu_separation_m =
+                                    trial.imu_separation_m;
+                        }
+                    }
+                } else {
+                    ++marginals_failures;
+                }
+            }
+        }
+
+        // --- 2e fix-and-hold: an epoch whose arcs are (mostly) already held is
+        // FIXED regardless of the fresh per-epoch LAMBDA -- the integers are
+        // known and the smoother position (with the held priors active) is the
+        // fixed solution. This is the main fix-rate lever. Quality-gated
+        // epochs are never labelled FIXED this way (reference: no fixing on a
+        // corrupt epoch). ---
+        if (fix_allowed && config.use_ambiguity_hold &&
+            config.report_held_ambiguities_as_fixed && !epoch_fixed[i]) {
+            int held_here = 0;
+            for (std::size_t idx : epoch_amb_indices) {
+                if (pinned_ambiguities.count(ambSymbolId(idx))) ++held_here;
+            }
+            if (held_here >= config.ambiguity_hold_min_fixed) {
+                epoch_fixed[i] = true;
+                epoch_fixed_history_eligible[i] = true;
+                epoch_fixed_count[i] = held_here;
+                epoch_has_fixed[i] = true;
+                epoch_fixed_position[i] = antennaOf(pose_i);
+                ++held_epoch_count;
+                for (std::size_t idx : epoch_amb_indices) {
+                    const std::size_t sym_idx = ambSymbolId(idx);
+                    if (pinned_ambiguities.count(sym_idx) && !amb_fixed_cycles.count(idx)) {
+                        // Record the held integer (rounded from the current estimate).
+                        const double v = smoother.calculateEstimate<double>(ambiguityKey(sym_idx));
+                        amb_fixed_cycles[idx] = static_cast<int>(std::lround(v));
+                    }
+                }
+            }
+        }
+
+        // --- Fix plausibility demotion (use_fix_plausibility_demotion). Runs
+        // AFTER all FIXED labeling (fresh per-epoch LAMBDA above AND the
+        // held-arc path) and BEFORE the sanity FSM, so a demoted epoch feeds
+        // the FSM's catastrophic fast path with nb == 0 exactly like a
+        // genuinely unfixed epoch. Mirrors the FSM's pose-replacement gap
+        // test (fixed/graph position vs the IMU-predicted pose_seed) but
+        // acts on the LABEL only: graph values, the reported float position
+        // and pre-existing pins are untouched. (New pins from THIS epoch
+        // were already suppressed by holdBlockedByPlausibility above.) ---
+        if (config.use_fix_plausibility_demotion && epoch_fixed[i]) {
+            const Point3 fix_ant =
+                epoch_has_fixed[i] ? Point3(epoch_fixed_position[i]) : antennaOf(pose_i);
+            const double gap = (fix_ant - antennaOf(pose_seed)).norm();
+            const bool distance_demote = gap > config.fix_demote_distance_m;
+            const bool residual_demote =
+                config.fix_demote_res_m > 0.0 &&
+                ddpr_rms > config.fix_demote_res_m;
+            const bool posthold_demote =
+                config.fix_demote_posthold_epochs > 0 &&
+                static_cast<long long>(i) - last_held_epoch <=
+                    static_cast<long long>(config.fix_demote_posthold_epochs);
+            bool relative_residual_demote = false;
+            if (config.fix_demote_res_rel > 0.0 && recent_ddpr_rms.size() >= 20) {
+                std::vector<double> h(recent_ddpr_rms.begin(), recent_ddpr_rms.end());
+                std::nth_element(h.begin(), h.begin() + h.size() / 2, h.end());
+                const double med = h[h.size() / 2];
+                relative_residual_demote =
+                    ddpr_rms > config.cp_hold_main_residual_threshold_m &&
+                    ddpr_rms > config.fix_demote_res_rel * med;
+            }
+            bool demote = distance_demote;
+            // Extreme-residual variant (fix_demote_res_m): an epoch whose own
+            // post-fit DDPR RMS is in the tens of metres cannot be a
+            // trustworthy fix regardless of what the IMU/anchor say (see the
+            // knob's comment for the measured legit-vs-wrong-basin
+            // separation). Label-only, this epoch only.
+            if (!demote && residual_demote) {
+                demote = true;
+            }
+            // Post-hold cooldown variant (fix_demote_posthold_epochs): a fix
+            // validated within k epochs of the last carrier-suppressed epoch
+            // stands on arcs the hold's regeneration just re-created --
+            // sub-second float history in exactly the conditions where the
+            // ratio test is least trustworthy (see the knob's comment for
+            // the measured 45.8 m case that no local witness catches).
+            if (!demote && posthold_demote) {
+                demote = true;
+            }
+            // Relative-residual variant (fix_demote_res_rel): "suddenly much
+            // worse than this run's own recent normal" -- run-adaptive where
+            // the absolute fix_demote_res_m cannot be (see the knob's
+            // comment for the measured per-run separations). Previous-epoch
+            // history only; absolute floor = the FSM trigger threshold.
+            if (!demote && relative_residual_demote) {
+                demote = true;
+            }
+            // Anchor-gap variant (fix_demote_use_ddpr_anchor): the IMU
+            // prediction rides an already-converged wrong basin, but the
+            // per-epoch DDPR-LS anchor is re-solved from this epoch's DD
+            // pseudoranges alone and does not. Only a TRUSTED anchor (same
+            // trust test as the FSM's anchor stage) may veto the label; an
+            // untrusted anchor (multipath-heavy pseudoranges under a
+            // legitimate fix) never demotes.
+            // Gross-offender gate (fix_demote_anchor_gross): the anchor-gap
+            // check below is only EVALUATED on epochs whose pre-FDE per-
+            // satellite post-fit DD residual signature shows one dominant
+            // offender (max > fix_demote_anchor_gross_abs_m AND max >
+            // fix_demote_anchor_gross_ratio * median) -- see the knob's
+            // comment in fgo.hpp for why this separates tokyo run3's actual
+            // wrong-basin bands from run1's diffuse-multipath false-veto
+            // signature. No-op (gate always open) when the knob is off.
+            bool anchor_gross_gate_open = true;
+            bool demotion_anchor_trusted = false;
+            bool anchor_demote = false;
+            double demotion_anchor_gap_m =
+                std::numeric_limits<double>::infinity();
+            if (config.fix_demote_use_ddpr_anchor && config.fix_demote_anchor_gross) {
+                anchor_gross_gate_open = false;
+                if (!per_sat_res.empty()) {
+                    std::vector<double> gross_vals;
+                    gross_vals.reserve(per_sat_res.size());
+                    double gross_max = 0.0;
+                    for (const auto& [sid, r] : per_sat_res) {
+                        (void)sid;
+                        gross_vals.push_back(r);
+                        gross_max = std::max(gross_max, r);
+                    }
+                    std::sort(gross_vals.begin(), gross_vals.end());
+                    const double gross_median = gross_vals[gross_vals.size() / 2];
+                    if (gross_max > config.fix_demote_anchor_gross_abs_m &&
+                        (gross_median <= 1e-9 ||
+                         gross_max > config.fix_demote_anchor_gross_ratio * gross_median)) {
+                        anchor_gross_gate_open = true;
+                    }
+                }
+                if (!anchor_gross_gate_open) {
+                    ++result.diagnostics.fix_plausibility_anchor_gross_gated;
+                }
+            }
+            const bool evaluate_demotion_anchor =
+                config.fix_demote_surplus_anchor_reprieve ||
+                (config.fix_demote_use_ddpr_anchor && config.use_ddpr_anchor);
+            if (evaluate_demotion_anchor && anchor_gross_gate_open) {
+                ++result.diagnostics.ddpr_anchor_solves;
+                const double trust_res = config.fix_demote_anchor_trust_res_m > 0.0
+                                             ? config.fix_demote_anchor_trust_res_m
+                                             : config.ddpr_anchor_max_residual_m;
+                DdprAnchorResult anchor = solveDdprAnchor(i, pose_seed);
+                // Robust retry: a single gross multipath satellite (measured
+                // on run2's wrong-basin stretch: one ~120 m per-sat residual
+                // over a ~1 m median) both drags the anchor pose (the anchor
+                // LS is non-robust) and fails its residual trust test, while
+                // the anchor's own internal FDE cannot drop the row once at
+                // its min-factors floor. Excluding the worst per-sat
+                // offender(s) up front restores a trustworthy anchor exactly
+                // on those epochs; a genuinely inconsistent epoch stays
+                // untrusted after the retries and never demotes (fail-safe:
+                // the FIXED label stands).
+                if (!(anchor.ok && anchor.n_active >= config.ddpr_anchor_min_factors &&
+                      anchor.res_rms <= trust_res) &&
+                    !per_sat_res.empty()) {
+                    std::vector<std::pair<double, SatelliteId>> worst_sats;
+                    worst_sats.reserve(per_sat_res.size());
+                    for (const auto& [sid, r] : per_sat_res) worst_sats.emplace_back(r, sid);
+                    std::sort(worst_sats.begin(), worst_sats.end(),
+                              [](const auto& a, const auto& b) { return a.first > b.first; });
+                    std::set<SatelliteId> excl;
+                    for (std::size_t w = 0; w < worst_sats.size() && w < 2; ++w) {
+                        if (worst_sats[w].first <= trust_res) break;  // nothing gross left
+                        excl.insert(worst_sats[w].second);
+                        const DdprAnchorResult retry = solveDdprAnchor(i, pose_seed, &excl);
+                        if (retry.ok && retry.n_active >= config.ddpr_anchor_min_factors &&
+                            retry.res_rms <= trust_res) {
+                            anchor = retry;
+                            break;
+                        }
+                    }
+                }
+                epoch_diagnostics[i].ddpr_anchor_evaluated = true;
+                epoch_diagnostics[i].ddpr_anchor_active_factors = anchor.n_active;
+                epoch_diagnostics[i].ddpr_anchor_residual_rms_m = anchor.res_rms;
+                if (anchor.ok) {
+                    epoch_diagnostics[i].ddpr_anchor_position_ecef =
+                        antennaOf(anchor.pose);
+                }
+                if (anchor.ok && anchor.n_active >= config.ddpr_anchor_min_factors &&
+                    anchor.res_rms <= trust_res) {
+                    ++result.diagnostics.ddpr_anchor_successes;
+                    const double anchor_gap = (fix_ant - antennaOf(anchor.pose)).norm();
+                    demotion_anchor_trusted = true;
+                    demotion_anchor_gap_m = anchor_gap;
+                    if (config.fix_demote_use_ddpr_anchor &&
+                        anchor_gap > config.fix_demote_anchor_distance_m) {
+                        demote = true;
+                        anchor_demote = true;
+                        ++result.diagnostics.fix_plausibility_anchor_demotions;
+                    }
+                }
+            }
+            // Surplus-satellite cross-check (fix_demote_surplus_crosscheck):
+            // reprieve a demotion when THIS epoch's own surplus-satellite
+            // verdict (from its fresh LAMBDA attempt above; independent
+            // re-differencing against excluded/surplus satellites) already
+            // vouches for the fix. Fail-safe: no verdict or a failing
+            // verdict demotes exactly as before. See the knob's comment in
+            // fgo.hpp for the measured false-alarm/discrimination numbers.
+            const bool anchor_reprieve_pass =
+                !config.fix_demote_surplus_anchor_reprieve ||
+                (demotion_anchor_trusted &&
+                 demotion_anchor_gap_m <=
+                     config.fix_demote_surplus_anchor_max_gap_m &&
+                 nsat >= config.fix_demote_surplus_anchor_min_satellites &&
+                 std::isfinite(epoch_diagnostics[i].fixed_float_separation_m) &&
+                 epoch_diagnostics[i].fixed_float_separation_m <=
+                     config.fix_demote_surplus_anchor_max_float_separation_m &&
+                 std::isfinite(
+                     epoch_diagnostics[i].fixed_postfit_ddcp_rms_m) &&
+                 epoch_diagnostics[i].fixed_postfit_ddcp_rms_m <=
+                     config
+                         .fix_demote_surplus_anchor_max_postfit_ddcp_rms_m);
+            if (demote && config.fix_demote_surplus_crosscheck &&
+                epoch_diagnostics[i].surplus_validation_evaluated &&
+                epoch_diagnostics[i].surplus_validation_pass &&
+                anchor_reprieve_pass) {
+                demote = false;
+                ++result.diagnostics.fix_plausibility_surplus_reprieves;
+            }
+            // A large absolute DDPR residual can be common-mode code
+            // multipath even when the carrier integer hypothesis is strong.
+            // Reprieve only that isolated reason, and only when both the
+            // LAMBDA/IMU model and a fresh standalone-code SPP position agree
+            // with the fixed candidate. Any other simultaneous demotion
+            // reason, missing/stale SPP, or weak candidate fails closed.
+            const bool residual_only_demote =
+                residual_demote && !distance_demote && !posthold_demote &&
+                !relative_residual_demote && !anchor_demote;
+            const bool spp_model_reprieve =
+                demote && config.fix_demote_spp_model_reprieve &&
+                residual_only_demote &&
+                epoch_diagnostics[i].lambda_candidate_available &&
+                epoch_diagnostics[i].lambda_candidate_fixed_ambiguities >=
+                    config.fix_demote_spp_model_min_fixed_ambiguities &&
+                std::isfinite(
+                    epoch_diagnostics[i].fixed_imu_prediction_separation_m) &&
+                epoch_diagnostics[i].fixed_imu_prediction_separation_m <=
+                    config.fix_demote_spp_model_max_imu_separation_m &&
+                epoch_diagnostics[i].fresh_spp_solution &&
+                epoch_diagnostics[i].spp_seed_position_ecef.allFinite() &&
+                (Eigen::Vector3d(fix_ant) -
+                 epoch_diagnostics[i].spp_seed_position_ecef).norm() <=
+                    config.fix_demote_spp_model_max_agreement_m;
+            if (spp_model_reprieve) {
+                demote = false;
+                ++result.diagnostics.fix_plausibility_spp_model_reprieves;
+            }
+            // Fail closed on the same gross code inconsistency used above to
+            // block new holds after a geometry-free arc reset. Apply this
+            // after all reprieves so correlated graph/IMU or surplus evidence
+            // cannot overrule a fresh independent SPP disagreement exceeding
+            // 25 m in the low-redundancy, poor-DDPR regime.
+            const bool gf_gross_spp_demote =
+                config.use_geometry_free_cycle_slip_reset &&
+                epoch_fixed_count[i] <= kGfGuardMaxFixedAmbiguities &&
+                std::isfinite(epoch_ratio[i]) &&
+                epoch_ratio[i] <= kGfGuardMaxRatio &&
+                std::isfinite(ddpr_rms) &&
+                ddpr_rms >= kGfGuardMinDdprRmsM &&
+                epoch_diagnostics[i].fresh_spp_solution &&
+                epoch_diagnostics[i].spp_seed_position_ecef.allFinite() &&
+                (Eigen::Vector3d(fix_ant) -
+                 epoch_diagnostics[i].spp_seed_position_ecef).norm() >
+                    kGfGuardMaxSppSeparationM;
+            if (gf_gross_spp_demote) {
+                demote = true;
+                ++result.diagnostics.geometry_free_fix_guard_demotions;
+            }
+            if (demote) {
+                epoch_fixed[i] = false;
+                epoch_fixed_history_eligible[i] = false;
+                epoch_fixed_count[i] = 0;
+                epoch_has_fixed[i] = false;
+                ++result.diagnostics.fix_plausibility_demotions;
+            }
+        }
+
+        // The GF reset's integrity guard is intrinsic to that opt-in graph
+        // change. Keep it active even when the broader, independently
+        // configurable fix-plausibility demotion feature is disabled.
+        if (!config.use_fix_plausibility_demotion &&
+            config.use_geometry_free_cycle_slip_reset && epoch_fixed[i]) {
+            const Point3 fix_ant = epoch_has_fixed[i]
+                                       ? Point3(epoch_fixed_position[i])
+                                       : antennaOf(pose_i);
+            const bool gf_gross_spp_demote =
+                epoch_fixed_count[i] <= kGfGuardMaxFixedAmbiguities &&
+                std::isfinite(epoch_ratio[i]) &&
+                epoch_ratio[i] <= kGfGuardMaxRatio &&
+                std::isfinite(ddpr_rms) &&
+                ddpr_rms >= kGfGuardMinDdprRmsM &&
+                epoch_diagnostics[i].fresh_spp_solution &&
+                epoch_diagnostics[i].spp_seed_position_ecef.allFinite() &&
+                (Eigen::Vector3d(fix_ant) -
+                 epoch_diagnostics[i].spp_seed_position_ecef).norm() >
+                    kGfGuardMaxSppSeparationM;
+            if (gf_gross_spp_demote) {
+                epoch_fixed[i] = false;
+                epoch_fixed_history_eligible[i] = false;
+                epoch_fixed_count[i] = 0;
+                epoch_has_fixed[i] = false;
+                ++result.diagnostics.geometry_free_fix_guard_demotions;
+                ++result.diagnostics.fix_plausibility_demotions;
+            }
+        }
+
+        // GICI-style reacquisition after a sustained fresh-AR outage under
+        // otherwise good observations. A long unfix streak with adequate
+        // geometry and low FDE reject ratios is evidence that the ambiguity
+        // state has gone stale, not that the epoch is intrinsically unusable.
+        // Bump live ambiguity generations only; do not engage CP hold, break
+        // the IMU chain, or alter this epoch's already-reported FLOAT result.
+        if (config.use_continuous_unfix_ambiguity_reset) {
+            const bool good_observation =
+                nsat >= config.continuous_unfix_min_satellites &&
+                gdop <= config.continuous_unfix_max_gdop &&
+                fde_pr_reject_fraction_this_epoch <
+                    config.continuous_unfix_max_fde_reject_fraction &&
+                fde_cp_reject_fraction_this_epoch <
+                    config.continuous_unfix_max_fde_reject_fraction;
+            if (epoch_fixed[i]) {
+                continuous_unfix_streak = 0;
+            } else if (good_observation) {
+                ++continuous_unfix_streak;
+            } else {
+                continuous_unfix_streak = 0;
+            }
+            if (continuous_unfix_streak >
+                    std::max(0, config.continuous_unfix_reset_epochs) &&
+                !live_ambiguity_indices.empty()) {
+                bool reset_allowed = true;
+                if (config
+                        .continuous_unfix_require_ddpr_anchor_disagreement) {
+                    ++result.diagnostics.ddpr_anchor_solves;
+                    const DdprAnchorResult anchor =
+                        solveDdprAnchor(i, pose_seed);
+                    const double anchor_seed_gap =
+                        anchor.ok
+                            ? (antennaOf(anchor.pose) -
+                               antennaOf(pose_seed))
+                                  .norm()
+                            : std::numeric_limits<double>::infinity();
+                    const bool trusted =
+                        anchor.ok &&
+                        anchor.n_active >= config.ddpr_anchor_min_factors &&
+                        anchor.res_rms <=
+                            config.ddpr_anchor_max_residual_m &&
+                        anchor_seed_gap <=
+                            config.ddpr_anchor_imu_max_gap_m;
+                    const double state_gap =
+                        trusted
+                            ? (antennaOf(anchor.pose) - antennaOf(pose_i))
+                                  .norm()
+                            : 0.0;
+                    reset_allowed =
+                        trusted && std::isfinite(state_gap) &&
+                        state_gap >=
+                            config.continuous_unfix_anchor_min_gap_m;
+                    if (trusted) {
+                        ++result.diagnostics.ddpr_anchor_successes;
+                    }
+                    if (reset_allowed) {
+                        ++result.diagnostics
+                              .ambiguity_continuous_unfix_anchor_allows;
+                    } else {
+                        ++result.diagnostics
+                              .ambiguity_continuous_unfix_anchor_skips;
+                    }
+                }
+                if (reset_allowed) {
+                    resetAmbiguitiesWithCpHold(
+                        i, /*engage_cp_hold=*/false);
+                    ++result.diagnostics
+                          .ambiguity_continuous_unfix_resets;
+                }
+                continuous_unfix_streak = 0;
+            }
+        }
+
+        // Rolling per-epoch RMS history for fix_demote_res_rel (previous
+        // epochs only -- pushed AFTER this epoch's own demotion check so an
+        // excursion never dilutes its own baseline).
+        if (config.use_fix_plausibility_demotion && config.fix_demote_res_rel > 0.0 &&
+            need_ddpr_residuals && !per_sat_res.empty()) {
+            recent_ddpr_rms.push_back(ddpr_rms);
+            const std::size_t win = static_cast<std::size_t>(
+                std::max(20, config.fix_demote_res_rel_window));
+            while (recent_ddpr_rms.size() > win) recent_ddpr_rms.pop_front();
+        }
+
+        // --- CP-hold / sanity FSM (use_cp_hold_recovery). Runs LAST, after
+        // this epoch's LAMBDA/fix-and-hold, because the catastrophic fast
+        // path needs "no fixed solution this epoch" (nb == 0) exactly like
+        // the reference's postfit.run_ddpr_sanity(..., nb=...), which the
+        // runner calls from validation/postprocess.py AFTER AR for the
+        // epoch (see validation/postfit.py's trigger -> multipath-skip ->
+        // fast-path -> persist -> gdop-skip -> anchor stages -> apply-reset
+        // pipeline; the DDPR-LS anchor stages are ported inside the persist
+        // path below, gated by FGOConfig::use_ddpr_anchor). ---
+        if (config.use_cp_hold_recovery || config.use_selective_cp_hold) {
+            const int nb = epoch_fixed[i] ? epoch_fixed_count[i] : 0;
+            bool did_reset = false;
+            double pred_res = 0.0;
+            if (config.use_selective_cp_hold) {
+                selective_cp_hold_bad_sats.clear();
+                if (ddpr_rms > config.cp_hold_main_residual_threshold_m) {
+                    std::vector<double> residuals;
+                    residuals.reserve(per_sat_res.size());
+                    for (const auto& [sid, residual] : per_sat_res) {
+                        (void)sid;
+                        residuals.push_back(residual);
+                    }
+                    std::sort(residuals.begin(), residuals.end());
+                    const double median = residuals.empty()
+                                              ? 0.0
+                                              : residuals[residuals.size() / 2];
+                    for (const auto& [sid, residual] : per_sat_res) {
+                        const bool absolute_gross =
+                            residual > config.cp_hold_fast_worst_satellite_min_m;
+                        const bool relative_gross =
+                            median <= 1e-9 ||
+                            residual > config.cp_hold_multipath_median_ratio * median;
+                        if (absolute_gross && relative_gross) {
+                            selective_cp_hold_bad_sats.insert(sid);
+                        }
+                    }
+                }
+                // Selective mode is a per-satellite residual exclusion, not
+                // a mass-reset state machine. Reusing the legacy mass reset
+                // while clean carrier arcs remain live invalidates its
+                // all-arcs-cleared invariant and can corrupt fixed-lag factor
+                // bookkeeping. Arm a one-epoch selective hold for the next
+                // epoch and leave the graph/clean ambiguity arcs intact.
+                cp_hold_counter = selective_cp_hold_bad_sats.empty() ? 0 : 1;
+                cp_hold_release_streak = 0;
+                if (!selective_cp_hold_bad_sats.empty()) {
+                    ++result.diagnostics.cp_hold_triggers;
+                }
+                last_ddpr_rms = ddpr_rms;
+                last_ddpr_rms_epoch = static_cast<long long>(i);
+                runDdprGncCounterfactual();
+                continue;
+            }
+            if (ddpr_rms > config.cp_hold_main_residual_threshold_m) {
+                // Stage: multipath-dominated skip -- one dominant multipath
+                // satellite is not a wrong basin (reference
+                // _ddpr_multipath_dominated). Bad-count/CP-hold are frozen
+                // (not reset, not incremented) on this path, matching the
+                // reference: the skip returns before _ddpr_sanity_persist.
+                bool multipath_dominated = false;
+                if (config.cp_hold_multipath_median_ratio > 0.0 &&
+                    static_cast<int>(per_sat_res.size()) >= config.cp_hold_multipath_min_satellites) {
+                    std::vector<double> vals;
+                    vals.reserve(per_sat_res.size());
+                    for (const auto& [sid, r] : per_sat_res) {
+                        (void)sid;
+                        vals.push_back(r);
+                    }
+                    std::sort(vals.begin(), vals.end());
+                    const double median = vals[vals.size() / 2];
+                    const double max_v = vals.back();
+                    if (median > 1e-3 && (max_v / median) > config.cp_hold_multipath_median_ratio) {
+                        multipath_dominated = true;
+                        ++result.diagnostics.sanity_multipath_skips;
+                    }
+                }
+                if (!multipath_dominated) {
+                    // DDPR residual evaluated at the IMU-predicted pose
+                    // (pose_seed, this epoch's pre-solve seed) -- reference
+                    // _compute_res_at_pred. Feeds the fast path AND the pose
+                    // replacement decision below.
+                    {
+                        const Point3 pred_ant_p = antennaOf(pose_seed);
+                        const Vector3d pred_ant(pred_ant_p.x(), pred_ant_p.y(), pred_ant_p.z());
+                        double sq_sum = 0.0;
+                        std::size_t n = 0;
+                        for (const auto* fp : pr_by_epoch[i]) {
+                            const double geom =
+                                ((fp->rover_satellite_position_ecef - pred_ant).norm() -
+                                 (fp->base_satellite_position_ecef - fp->base_position_ecef).norm()) -
+                                ((fp->rover_reference_position_ecef - pred_ant).norm() -
+                                 (fp->base_reference_position_ecef - fp->base_position_ecef).norm());
+                            const double res = std::abs(fp->observed_dd_pseudorange_m - geom);
+                            sq_sum += res * res;
+                            ++n;
+                        }
+                        pred_res = n > 0 ? std::sqrt(sq_sum / static_cast<double>(n)) : 0.0;
+                    }
+
+                    // Stage: catastrophic fast path. Fires immediately
+                    // (bypassing persist) when residuals are catastrophic,
+                    // no fixed solution this epoch, and the worst
+                    // per-satellite residual clears the fast-path floor
+                    // (reference _ddpr_sanity_fast_path).
+                    double worst_sat_res = 0.0;
+                    for (const auto& [sid, r] : per_sat_res) {
+                        (void)sid;
+                        worst_sat_res = std::max(worst_sat_res, r);
+                    }
+                    const bool fast_eligible =
+                        ddpr_rms > config.cp_hold_catastrophic_threshold_m && nb == 0 &&
+                        worst_sat_res >= config.cp_hold_fast_worst_satellite_min_m;
+                    if (fast_eligible) {
+                        resetAmbiguitiesWithCpHold(i);
+                        ++result.diagnostics.sanity_fast_resets;
+                        did_reset = true;
+                    } else {
+                        // Stage: persist. Every bad epoch (re)engages
+                        // CP-hold at full strength; the mass reset itself
+                        // only fires once cp_hold_persist_epochs consecutive
+                        // bad epochs have accumulated (reference
+                        // _ddpr_sanity_persist / trigger_cp_hold).
+                        ++ddpr_bad_count;
+                        cp_hold_counter = std::max(cp_hold_counter, effectiveCpHoldEpochs());
+                        cp_hold_release_streak = 0;
+                        ++result.diagnostics.cp_hold_triggers;
+                        if (ddpr_bad_count >= config.cp_hold_persist_epochs) {
+                            // Stage: GDOP gate -- abort the reset (CP-hold
+                            // stays engaged) when geometry is too weak to
+                            // trust the residual signal (reference
+                            // _ddpr_sanity_gdop_ok).
+                            if (config.cp_hold_max_gdop <= 0.0 || gdop <= config.cp_hold_max_gdop) {
+                                // Stage: DDPR-LS anchor fetch + anchor-vs-IMU
+                                // gap (use_ddpr_anchor; reference
+                                // _ddpr_sanity_fetch_anchor / _anchor_vs_imu).
+                                // DIAGNOSTIC ONLY here: the reference's own
+                                // control flow converges on the exact same
+                                // _apply_sanity_reset() call whether the
+                                // anchor is untrusted, disagrees with the IMU
+                                // prediction, or agrees -- see
+                                // FGOConfig::use_ddpr_anchor's comment. So
+                                // this records whether the gate WOULD have
+                                // skipped/allowed the reset without actually
+                                // gating it, faithfully matching the
+                                // reference.
+                                if (config.use_ddpr_anchor) {
+                                    ++result.diagnostics.ddpr_anchor_solves;
+                                    const DdprAnchorResult anchor = solveDdprAnchor(i, pose_seed);
+                                    const bool anchor_trusted =
+                                        anchor.ok && anchor.n_active >= config.ddpr_anchor_min_factors &&
+                                        anchor.res_rms <= config.ddpr_anchor_max_residual_m;
+                                    if (anchor_trusted) {
+                                        ++result.diagnostics.ddpr_anchor_successes;
+                                        const Point3 anchor_ant = antennaOf(anchor.pose);
+                                        const Point3 pred_ant = antennaOf(pose_seed);
+                                        const double gap = (anchor_ant - pred_ant).norm();
+                                        const bool clean_anchor =
+                                            anchor.res_rms < config.ddpr_anchor_clean_residual_m &&
+                                            ddpr_rms > config.ddpr_anchor_clean_main_residual_m;
+                                        const bool catastrophic_res =
+                                            ddpr_rms > config.cp_hold_catastrophic_threshold_m;
+                                        const bool persistent_bad =
+                                            ddpr_bad_count >= config.ddpr_anchor_persist_override &&
+                                            anchor.res_rms < config.ddpr_anchor_clean_residual_m;
+                                        const bool hard_reject =
+                                            gap > config.ddpr_anchor_imu_hard_max_m && !clean_anchor;
+                                        const bool soft_reject =
+                                            gap > config.ddpr_anchor_imu_max_gap_m &&
+                                            !catastrophic_res && !persistent_bad;
+                                        if (hard_reject || soft_reject) {
+                                            ++result.diagnostics.ddpr_anchor_gated_resets_skipped;
+                                        } else {
+                                            ++result.diagnostics.ddpr_anchor_gated_resets_allowed;
+                                        }
+                                    } else {
+                                        ++result.diagnostics.ddpr_anchor_gated_resets_skipped;
+                                    }
+                                }
+                                resetAmbiguitiesWithCpHold(i);
+                                ++result.diagnostics.sanity_mass_resets;
+                                did_reset = true;
+                            } else {
+                                ++result.diagnostics.sanity_gdop_skips;
+                            }
+                        }
+                    }
+
+                    // Stage: pose replacement for the REPORTED solution only
+                    // (reference _sanity_report_translation /
+                    // _apply_sanity_reset always reports 'FLT' after a
+                    // reset). The graph values (pose_i, prev_nav, the
+                    // smoother's linearization point) are untouched.
+                    if (did_reset) {
+                        epoch_fixed[i] = false;
+                        epoch_fixed_history_eligible[i] = false;
+                        const double thr = config.cp_hold_pose_replace_threshold_m;
+                        const Point3 graph_ant_pose = antennaOf(pose_i);
+                        Point3 report_ant = graph_ant_pose;
+                        if (thr > 0.0 && pred_res <= thr) {
+                            const Point3 pred_ant_pose = antennaOf(pose_seed);
+                            const double gap = (graph_ant_pose - pred_ant_pose).norm();
+                            if (gap > thr) {
+                                report_ant = pred_ant_pose;
+                                ++result.diagnostics.sanity_pose_replacements;
+                            }
+                        }
+                        epoch_float_position[i] = report_ant;
+                    }
+                }
+
+                // Stage (opt-in, this port's own addition): stale-pin
+                // invalidation (use_stale_pin_invalidation). The persist
+                // stage above requires CONSECUTIVE bad epochs and never
+                // fires on the "wrong pin at ~3 m, residuals hovering around
+                // the trigger threshold" failure mode, so a stale
+                // fix-and-hold pin can ride for minutes; and a
+                // multipath-dominated epoch (skipped above precisely because
+                // a MASS reset would be overkill for one bad satellite) is
+                // exactly the case where releasing THAT satellite's pin
+                // per-arc is the right-sized response. So this stage runs on
+                // EVERY trigger epoch -- multipath-dominated or not --
+                // releasing only the pinned arcs whose own satellite's
+                // per-sat post-fit residual exceeds the threshold (per-arc
+                // removal + generation bump via invalidateArcs); every other
+                // pin, the CP-hold state and the persist counter are
+                // untouched. Skipped when a mass/fast reset already cleared
+                // every arc this epoch.
+                if (config.use_stale_pin_invalidation && !did_reset &&
+                    !pinned_ambiguities.empty()) {
+                    std::vector<std::size_t> stale_arcs;
+                    for (std::size_t idx : live_ambiguity_indices) {
+                        const std::size_t sid = ambSymbolId(idx);
+                        if (!pinned_ambiguities.count(sid)) continue;
+                        if (config.stale_pin_min_hold_age_epochs > 0) {
+                            const auto ait = pin_created_epoch.find(sid);
+                            if (ait != pin_created_epoch.end() &&
+                                i - ait->second < static_cast<std::size_t>(
+                                                      config.stale_pin_min_hold_age_epochs)) {
+                                continue;  // pin too young to judge
+                            }
+                        }
+                        const auto rit =
+                            per_sat_res.find(problem.ambiguity_states[idx].satellite);
+                        if (rit == per_sat_res.end()) continue;  // not observed this epoch
+                        if (rit->second > config.stale_pin_per_sat_residual_m) {
+                            stale_arcs.push_back(idx);
+                        }
+                    }
+                    if (!stale_arcs.empty()) {
+                        invalidateArcs(i, stale_arcs);
+                        result.diagnostics.stale_pin_invalidations += stale_arcs.size();
+                    }
+                }
+            } else if (config.use_cp_hold_leaky_persist) {
+                // Leaky decay (deliberate deviation from the reference's
+                // hard reset -- see FGOConfig::use_cp_hold_leaky_persist).
+                // A clean epoch drains the counter by cp_hold_persist_decay
+                // instead of zeroing it outright, so an intermittently-bad
+                // stretch's bad epochs can accumulate net credit across the
+                // interleaved clean ones.
+                ddpr_bad_count = std::max(0.0, ddpr_bad_count - config.cp_hold_persist_decay);
+            } else {
+                ddpr_bad_count = 0.0;
+            }
+            last_ddpr_rms = ddpr_rms;
+            last_ddpr_rms_epoch = static_cast<long long>(i);
+        }
+        runDdprGncCounterfactual();
+
+        // --- Active selective arc-restart detection (use_selective_arc_restart
+        // / monitor_selective_arc_restart_candidates). Runs LAST so the causal
+        // Doppler/IMU innovations use the final float solution and this epoch's
+        // post-fit attribution. Arms satellites for the NEXT epoch's carrier
+        // factor build (one-epoch delay, mirroring selective_cp_hold). ---
+        if (config.use_selective_arc_restart ||
+            config.monitor_selective_arc_restart_candidates) {
+            selective_arc_restart_armed_ambiguities.clear();
+            auto& diagnostics = epoch_diagnostics[i];
+            diagnostics.selective_arc_restart_armed = false;
+            diagnostics.selective_arc_restart_monitor_only =
+                !config.use_selective_arc_restart;
+
+            const auto finite_position = [](const Vector3d& p) {
+                return p.allFinite() && p.norm() > 0.0;
+            };
+            const auto dd_range = [](const FGOProcessor::DoubleDifferencePseudorangeFactor& f,
+                                     const Vector3d& rover_position_ecef) {
+                const double rover_target =
+                    (f.rover_satellite_position_ecef - rover_position_ecef).norm();
+                const double rover_reference =
+                    (f.rover_reference_position_ecef - rover_position_ecef).norm();
+                const double base_target =
+                    (f.base_satellite_position_ecef - f.base_position_ecef).norm();
+                const double base_reference =
+                    (f.base_reference_position_ecef - f.base_position_ecef).norm();
+                return (rover_target - base_target) -
+                       (rover_reference - base_reference);
+            };
+            const auto dd_doppler = [](const FGOProcessor::DoubleDifferencePseudorangeFactor& f,
+                                       double& value) {
+                const auto& rt = f.rover_satellite_model;
+                const auto& rr = f.rover_reference_model;
+                const auto& bt = f.base_satellite_model;
+                const auto& br = f.base_reference_model;
+                if (!rt.has_doppler_residual || !rr.has_doppler_residual ||
+                    !bt.has_doppler_residual || !br.has_doppler_residual) {
+                    return false;
+                }
+                value = (rt.doppler_residual_mps - bt.doppler_residual_mps) -
+                        (rr.doppler_residual_mps - br.doppler_residual_mps);
+                return std::isfinite(value);
+            };
+
+            const double threshold = std::max(
+                0.0, config.satellite_quarantine_normalized_threshold);
+            const double safe_doppler_sigma = std::max(
+                1e-6, config.single_difference_doppler_sigma_mps);
+            const double gross_floor = config.cp_hold_fast_worst_satellite_min_m;
+            const double median_ratio = config.cp_hold_multipath_median_ratio;
+            const bool skip_fixed =
+                epoch_fixed[i] && epoch_ratio[i] >= config.selective_arc_restart_skip_fixed_ratio;
+
+            // Post-fit gross attribution median over the epoch's satellites.
+            std::vector<double> ordered_res;
+            ordered_res.reserve(per_sat_res.size());
+            for (const auto& [sat, residual] : per_sat_res) {
+                (void)sat;
+                ordered_res.push_back(residual);
+            }
+            std::sort(ordered_res.begin(), ordered_res.end());
+            const double epoch_median = ordered_res.empty()
+                                            ? 0.0
+                                            : ordered_res[ordered_res.size() / 2];
+
+            if (!skip_fixed && i > 0) {
+                std::map<ArcRestartPairKey, double> measured_change;
+                std::map<ArcRestartPairKey, double> doppler_innovation_norm;
+                std::map<ArcRestartPairKey, double> imu_innovation_norm;
+                for (const auto* factor : pr_by_epoch[i]) {
+                    const ArcRestartPairKey key{factor->satellite,
+                                                factor->reference_satellite,
+                                                factor->signal};
+                    const auto prev = selective_arc_restart_prev_pair.find(key);
+                    if (prev == selective_arc_restart_prev_pair.end()) continue;
+                    const auto* p = prev->second;
+                    const bool consecutive =
+                        p->epoch_index + 1 == i &&
+                        (problem.epochs[i].time - problem.epochs[i - 1].time) > 0.0;
+                    if (!consecutive) continue;
+                    measured_change[key] =
+                        factor->observed_dd_pseudorange_m - p->observed_dd_pseudorange_m;
+
+                    double cur_dd_doppler = 0.0, prev_dd_doppler = 0.0;
+                    const bool has_cur = dd_doppler(*factor, cur_dd_doppler);
+                    const bool has_prev = dd_doppler(*p, prev_dd_doppler);
+                    if (has_cur && has_prev) {
+                        const double predicted = 0.5 * (prev_dd_doppler + cur_dd_doppler) *
+                                                 (problem.epochs[i].time - problem.epochs[i - 1].time);
+                        const double innovation = measured_change[key] - predicted;
+                        const double sigma = std::hypot(
+                            std::sqrt(2.0) *
+                                (problem.epochs[i].time - problem.epochs[i - 1].time) *
+                                safe_doppler_sigma,
+                            std::hypot(p->sigma_m, factor->sigma_m));
+                        doppler_innovation_norm[key] =
+                            sigma > 0.0 ? std::abs(innovation) / sigma : 0.0;
+                    }
+                    if (i - 1 < epoch_float_position.size() &&
+                        finite_position(epoch_float_position[i - 1]) &&
+                        finite_position(epoch_predicted_position[i])) {
+                        const double predicted =
+                            dd_range(*factor, epoch_predicted_position[i]) -
+                            dd_range(*p, epoch_float_position[i - 1]);
+                        const double innovation = measured_change[key] - predicted;
+                        const double sigma = std::hypot(p->sigma_m, factor->sigma_m);
+                        imu_innovation_norm[key] =
+                            sigma > 0.0 ? std::abs(innovation) / sigma : 0.0;
+                    }
+                }
+
+                for (const auto* factor : pr_by_epoch[i]) {
+                    const ArcRestartPairKey key{factor->satellite,
+                                                factor->reference_satellite,
+                                                factor->signal};
+                    const auto dp = doppler_innovation_norm.find(key);
+                    const auto im = imu_innovation_norm.find(key);
+                    const bool doppler_outlier =
+                        dp != doppler_innovation_norm.end() && dp->second > threshold;
+                    const bool imu_outlier =
+                        im != imu_innovation_norm.end() && im->second > threshold;
+                    const bool innovations_agree =
+                        config.selective_arc_restart_require_both_innovations
+                            ? doppler_outlier && imu_outlier
+                            : doppler_outlier || imu_outlier;
+                    if (!innovations_agree) continue;
+
+                    // A DD pair cannot identify which endpoint is faulty, so
+                    // the pair is attributed to BOTH its target and reference
+                    // satellite. Require BOTH endpoints' post-fit attribution
+                    // to be gross, matching the witness's per-satellite rule.
+                    bool all_endpoints_gross = true;
+                    for (const SatelliteId satellite :
+                         {factor->satellite, factor->reference_satellite}) {
+                        const auto rit = per_sat_res.find(satellite);
+                        if (rit == per_sat_res.end()) {
+                            all_endpoints_gross = false;
+                            continue;
+                        }
+                        const bool absolute_gross = rit->second > gross_floor;
+                        const bool relative_gross =
+                            epoch_median <= 1e-9 ||
+                            rit->second > median_ratio * epoch_median;
+                        if (!absolute_gross || !relative_gross) {
+                            all_endpoints_gross = false;
+                        }
+                    }
+                    if (!all_endpoints_gross) continue;
+
+                    // A candidate pair is identified (Doppler + IMU + both
+                    // endpoints gross). Record it even when no live carrier arc
+                    // exists to restart -- that is a legitimate "detected but
+                    // not armable" outcome, not silence.
+                    ++diagnostics.selective_arc_restart_candidate_satellites;
+                    ++result.diagnostics.selective_arc_restart_candidate_satellites;
+                    std::size_t first_armed = std::numeric_limits<std::size_t>::max();
+                    for (const SatelliteId satellite :
+                         {factor->satellite, factor->reference_satellite}) {
+                        const auto rit = per_sat_res.find(satellite);
+                        for (const auto* cf : cp_by_epoch[i]) {
+                            if (cf->satellite == satellite ||
+                                cf->reference_satellite == satellite) {
+                                first_armed =
+                                    std::min(first_armed, cf->ambiguity_index);
+                            }
+                        }
+                        FGOProcessor::SelectiveArcRestartTrace trace;
+                        trace.detection_epoch = i;
+                        trace.satellite = satellite;
+                        trace.is_reference =
+                            satellite == factor->reference_satellite;
+                        trace.ambiguity_index = first_armed;
+                        trace.detected = true;
+                        trace.postfit_residual_m =
+                            rit != per_sat_res.end() ? rit->second : 0.0;
+                        trace.epoch_median_postfit_residual_m = epoch_median;
+                        trace.normalized_doppler_innovation =
+                            dp != doppler_innovation_norm.end() ? dp->second : 0.0;
+                        trace.normalized_imu_innovation =
+                            im != imu_innovation_norm.end() ? im->second : 0.0;
+                        diagnostics.selective_arc_restart_trace.push_back(trace);
+                        result.selective_arc_restart_trace.push_back(trace);
+                    }
+
+                    // Arm the ambiguity indices of every live DD carrier arc
+                    // that touches a candidate endpoint (as target or
+                    // reference). The PR pair itself may reference a
+                    // satellite that has no carrier arc in the graph this
+                    // epoch, so the armed set is the union over the carrier
+                    // factors actually present -- exactly the arcs a restart
+                    // could affect. If no carrier arc exists, the pair is
+                    // reported but nothing is armed (nothing to restart).
+                    bool armed_any = false;
+                    for (const SatelliteId satellite :
+                         {factor->satellite, factor->reference_satellite}) {
+                        for (const auto* cf : cp_by_epoch[i]) {
+                            if (cf->satellite == satellite ||
+                                cf->reference_satellite == satellite) {
+                                if (selective_arc_restart_armed_ambiguities.insert(
+                                        cf->ambiguity_index).second) {
+                                    ++diagnostics.selective_arc_restart_candidate_pairs;
+                                    ++result.diagnostics
+                                          .selective_arc_restart_candidate_pairs;
+                                }
+                                armed_any = true;
+                            }
+                        }
+                    }
+                    if (!armed_any) {
+                        ++result.diagnostics
+                              .selective_arc_restart_skipped_no_arc;
+                    }
+                }
+            }
+            if (!skip_fixed &&
+                diagnostics.selective_arc_restart_candidate_satellites > 0) {
+                diagnostics.selective_arc_restart_armed = true;
+                ++result.diagnostics.selective_arc_restart_detection_epochs;
+            } else if (skip_fixed) {
+                ++result.diagnostics.selective_arc_restart_skipped_fixed;
+                diagnostics.selective_arc_restart_skipped_fixed = 1;
+            }
+
+            // Maintain the causal pair history for the NEXT epoch.
+            std::map<ArcRestartPairKey, const FGOProcessor::DoubleDifferencePseudorangeFactor*>
+                next_prev_pair;
+            for (const auto* factor : pr_by_epoch[i]) {
+                next_prev_pair[{factor->satellite, factor->reference_satellite,
+                                factor->signal}] = factor;
+            }
+            selective_arc_restart_prev_pair = std::move(next_prev_pair);
+        }
+    }
+    // Later warm resets can retroactively refresh positions still inside the
+    // lag window. Recompute candidate separation against the final reported
+    // FLOAT trajectory so the exported metric matches the solution CSV.
+    for (std::size_t i = 0; i < num_epochs; ++i) {
+        auto& diagnostic = epoch_diagnostics[i];
+        if (!diagnostic.ddpr_gnc_counterfactual_succeeded) continue;
+        diagnostic.ddpr_gnc_counterfactual_float_separation_m =
+            (diagnostic.ddpr_gnc_counterfactual_position_ecef -
+             Vector3d(epoch_float_position[i])).norm();
+    }
+    result.diagnostics.partial_lambda_ambiguity_fix_used = held_epoch_count > 0;
+    result.diagnostics.ambiguity_hold_epochs = held_epoch_count;
+    result.diagnostics.ambiguity_hold_arcs = pinned_ambiguities.size();
+
+    // --- Diagnostics ---
+    result.diagnostics.converged = true;
+    result.diagnostics.iterations = static_cast<int>(result.diagnostics.smoother_updates);
+    result.diagnostics.imu_intervals = num_epochs > 0 ? num_epochs - 1 : 0;
+    result.diagnostics.lambda_ambiguity_ratio = best_ratio;
+    for (const auto& diagnostic : epoch_diagnostics) {
+        if (diagnostic.candidate_integrity_witness_evaluated) {
+            ++result.diagnostics.candidate_integrity_witness_evaluated;
+        }
+        if (diagnostic.candidate_integrity_composite_pass) {
+            ++result.diagnostics.candidate_integrity_witness_passes;
+        }
+    }
+    {
+        double weighted_sum_sq = 0.0;
+        std::size_t count = 0;
+        for (const auto& d : epoch_diagnostics) {
+            if (d.sd_doppler_factors <= 0 || !std::isfinite(d.sd_doppler_rms_mps)) continue;
+            weighted_sum_sq += d.sd_doppler_rms_mps * d.sd_doppler_rms_mps *
+                               static_cast<double>(d.sd_doppler_factors);
+            count += static_cast<std::size_t>(d.sd_doppler_factors);
+        }
+        result.diagnostics.single_difference_doppler_residual_rms_mps =
+            count > 0 ? std::sqrt(weighted_sum_sq / static_cast<double>(count)) : 0.0;
+    }
+    result.diagnostics.fixed_solution = total_fixed_ambiguities > 0;
+    result.diagnostics.fixed_ambiguities = total_fixed_ambiguities;
+    if (marginals_failures > 0) {
+        std::fprintf(stderr, "[fgo_gtsam_backend] fixed-lag: %zu epoch(s) LAMBDA marginal failure\n",
+                     marginals_failures);
+    }
+
+    // --- Ambiguity estimates (captured during streaming; window-marginalized
+    // nodes cannot be read from the final smoother) ---
+    result.ambiguity_estimates.reserve(problem.ambiguity_states.size());
+    for (std::size_t idx = 0; idx < problem.ambiguity_states.size(); ++idx) {
+        const auto& ambiguity = problem.ambiguity_states[idx];
+        FGOProcessor::AmbiguityEstimate est;
+        est.satellite = ambiguity.satellite;
+        est.signal = ambiguity.signal;
+        est.segment_index = ambiguity.segment_index;
+        est.wavelength_m = ambiguity.wavelength_m;
+        const auto fit = amb_float_cycles.find(idx);
+        if (fit != amb_float_cycles.end()) {
+            est.ambiguity_cycles = fit->second;
+            est.ambiguity_m = fit->second * ambiguity.wavelength_m;
+        }
+        const auto xit = amb_fixed_cycles.find(idx);
+        if (xit != amb_fixed_cycles.end()) {
+            est.is_fixed = true;
+            est.fixed_by_lambda = true;
+            est.fixed_cycles = xit->second;
+            est.fixed_ambiguity_m = xit->second * ambiguity.wavelength_m;
+            est.fix_residual_cycles = amb_fixed_residual.at(idx);
+        }
+        result.ambiguity_estimates.push_back(est);
+    }
+
+    // --- Per-epoch solutions ---
+    // TODO(agent/realtime-fix-integrity follow-up, Fix 3): solution.position_
+    // covariance is intentionally left unpopulated (default-constructed) on
+    // this fixed-lag path -- dumpEpochCsv() in gnss_fgo_parity.cpp now emits
+    // an empty CSV field for it rather than a fake 0.0, so downstream
+    // consumers (e.g. ShadowEstimateHealthGate) correctly treat it as
+    // missing. A real per-epoch trace IS already computed nearby
+    // (antenna_position_cov / provisional_fixed_cov, both derived from
+    // smoother.getISAM2().jointMarginalCovariance(keys) during the per-epoch
+    // LAMBDA block above) but only for the pose_i snapshot AT THE MOMENT
+    // LAMBDA runs for epoch i. epoch_float_position[i] (see the window
+    // re-read loop above, "Re-read every still-in-window pose") keeps being
+    // refined by later epochs until i leaves the fixed-lag window, so that
+    // captured trace would silently stop matching the final reported
+    // position by the time this loop reads it -- wiring it through without
+    // re-deriving a matching marginal at emission time would trade a
+    // visibly-missing value for a silently-stale one. Left unpopulated
+    // rather than risk feeding a mismatched covariance into a health/
+    // consensus gate; a correct fix would recompute (or cache) the marginal
+    // for each epoch's FINAL window-exit pose, which is a larger, separately
+    // scoped change.
+    if (!clock_resilient_tdcp_shadow.empty()) {
+        result.temporal_carrier_shadow_factors = FGOProcessor::
+            classifyClockResilientTemporalCarrierShadow(
+                problem, clock_resilient_tdcp_shadow, epoch_float_position,
+                epoch_diagnostics, &gf_slip_shadow,
+                &fde_rejected_ambiguities_by_epoch);
+    }
+    if (config.monitor_predicted_ddpr_quality ||
+        config.monitor_predicted_ddpr_bias_state ||
+        config.monitor_satellite_quarantine_witness) {
+        const double quality_threshold =
+            config.monitor_satellite_quarantine_witness
+                ? config.satellite_quarantine_normalized_threshold
+                : 5.0;
+        auto quality_rows = FGOProcessor::analyzePredictedDdprQualityShadow(
+            problem, epoch_float_position, epoch_predicted_position,
+            config.single_difference_doppler_sigma_mps, quality_threshold,
+            config.max_tdcp_gap_s);
+        if (config.monitor_satellite_quarantine_witness) {
+            struct TemporalEvidence {
+                bool doppler_evaluated = false;
+                bool doppler_outlier = false;
+                bool imu_evaluated = false;
+                bool imu_outlier = false;
+                int support_pairs = 0;
+            };
+            std::vector<std::map<SatelliteId, TemporalEvidence>> evidence(
+                num_epochs);
+            for (const auto& row : quality_rows) {
+                if (row.current_epoch_index >= num_epochs) continue;
+                const bool doppler_outlier = row.doppler_evaluated &&
+                    row.normalized_doppler_innovation > quality_threshold;
+                const bool imu_outlier = row.imu_geometry_evaluated &&
+                    row.normalized_imu_innovation > quality_threshold;
+                for (const SatelliteId satellite :
+                     {row.satellite, row.reference_satellite}) {
+                    auto& item = evidence[row.current_epoch_index][satellite];
+                    item.doppler_evaluated |= row.doppler_evaluated;
+                    item.doppler_outlier |= doppler_outlier;
+                    item.imu_evaluated |= row.imu_geometry_evaluated;
+                    item.imu_outlier |= imu_outlier;
+                    if (doppler_outlier && imu_outlier) {
+                        ++item.support_pairs;
+                    }
+                }
+            }
+            for (std::size_t epoch_index = 0; epoch_index < num_epochs;
+                 ++epoch_index) {
+                const auto& residuals =
+                    satellite_quarantine_postfit_residuals[epoch_index];
+                if (residuals.empty()) continue;
+                std::vector<double> ordered;
+                ordered.reserve(residuals.size());
+                for (const auto& [satellite, residual] : residuals) {
+                    (void)satellite;
+                    ordered.push_back(residual);
+                }
+                std::sort(ordered.begin(), ordered.end());
+                const double median = ordered[ordered.size() / 2];
+                for (const auto& [satellite, residual] : residuals) {
+                    FGOProcessor::SatelliteQuarantineWitnessDiagnostics row;
+                    row.epoch_index = epoch_index;
+                    row.satellite = satellite;
+                    row.postfit_ddpr_residual_m = residual;
+                    row.epoch_median_postfit_ddpr_residual_m = median;
+                    row.postfit_gross =
+                        residual > config.cp_hold_fast_worst_satellite_min_m &&
+                        (median <= 1e-9 ||
+                         residual >
+                             config.cp_hold_multipath_median_ratio * median);
+                    const auto temporal = evidence[epoch_index].find(satellite);
+                    if (temporal != evidence[epoch_index].end()) {
+                        row.doppler_evaluated =
+                            temporal->second.doppler_evaluated;
+                        row.doppler_outlier =
+                            temporal->second.doppler_outlier;
+                        row.imu_evaluated = temporal->second.imu_evaluated;
+                        row.imu_outlier = temporal->second.imu_outlier;
+                        row.temporal_support_pairs =
+                            temporal->second.support_pairs;
+                    }
+                    row.quarantine_candidate =
+                        row.postfit_gross && row.temporal_support_pairs > 0;
+                    ++result.diagnostics
+                          .satellite_quarantine_witness_satellites;
+                    if (row.quarantine_candidate) {
+                        ++result.diagnostics
+                              .satellite_quarantine_candidates;
+                    }
+                    result.satellite_quarantine_witnesses.push_back(row);
+                }
+            }
+        }
+        if (config.monitor_predicted_ddpr_bias_state) {
+            result.predicted_ddpr_bias_state_factors =
+                FGOProcessor::analyzePredictedDdprBiasStateShadow(
+                    quality_rows,
+                    config.predicted_ddpr_bias_process_noise_m_sqrt_s,
+                    config.predicted_ddpr_bias_initial_sigma_m,
+                    config.predicted_ddpr_bias_min_measurement_sigma_m,
+                    config.predicted_ddpr_bias_robust_update_sigma,
+                    config.predicted_ddpr_bias_min_prior_updates);
+        }
+        if (config.monitor_predicted_ddpr_quality) {
+            result.predicted_ddpr_quality_factors = std::move(quality_rows);
+        }
+    }
+    const bool have_amb = !problem.ambiguity_states.empty();
+    result.epoch_diagnostics = std::move(epoch_diagnostics);
+    result.epoch_attitude_rpy_deg.resize(num_epochs);
+    result.epoch_velocity_nav_mps.resize(num_epochs);
+    for (std::size_t i = 0; i < num_epochs; ++i) {
+        PositionSolution solution;
+        solution.time = problem.epochs[i].time;
+        const bool fixed = epoch_fixed[i] && epoch_has_fixed[i];
+        if (fixed) {
+            solution.status = SolutionStatus::FIXED;
+            solution.position_ecef = epoch_fixed_position[i];
+        } else {
+            solution.status = have_amb ? SolutionStatus::FLOAT : SolutionStatus::SPP;
+            solution.position_ecef = epoch_float_position[i];
+        }
+        if (!epoch_solved[i]) {
+            solution.status = SolutionStatus::NONE;
+        }
+        solution.num_frequencies = 1;
+        solution.ratio = epoch_ratio[i];
+        solution.num_fixed_ambiguities = epoch_fixed_count[i];
+        double lat = 0.0, lon = 0.0, h = 0.0;
+        ecef2geodetic(solution.position_ecef, lat, lon, h);
+        solution.position_geodetic = GeodeticCoord(lat, lon, h);
+        result.solution.addSolution(solution);
+        result.epoch_attitude_rpy_deg[i] = epoch_rpy_deg[i];
+        result.epoch_velocity_nav_mps[i] = epoch_vel_nav[i];
+    }
+
+    const auto end_time = std::chrono::high_resolution_clock::now();
+    result.diagnostics.processing_time_ms =
+        std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(end_time - start_time)
+            .count();
+    result.diagnostics.total_processing_time_ms = result.diagnostics.processing_time_ms;
+    return result;
+}
+
+}  // namespace libgnss

@@ -341,7 +341,7 @@ if(GTSAM_FOUND)
     # GTSAM backend TU and the gtsam link dependency must live here too, not
     # on gnss_lib, otherwise the backend-selector forward declaration in
     # fgo.cpp would be an unresolved symbol at link time.
-    target_sources(gnss_lib_solvers PRIVATE src/algorithms/fgo_gtsam_backend.cpp)
+    target_sources(gnss_lib_solvers PRIVATE src/algorithms/fgo_gtsam_backend.cpp src/algorithms/fgo_gtsam_fixed_lag.cpp)
     target_link_libraries(gnss_lib_solvers PUBLIC gtsam)
     target_compile_definitions(gnss_lib_solvers PUBLIC GNSSPP_HAS_GTSAM=1)
     if(MSVC)
