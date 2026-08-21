@@ -31,6 +31,142 @@
 namespace libgnss {
 
 using namespace rtk_internal;
+// AR search state shared by resolveAmbiguities() and its extracted
+// helpers; compute_subset_diversity remains a member because DDPair is
+// a private nested type.
+
+struct ArSubsetDiversity {
+    int distinct_sats = 0;
+    int distinct_systems = 0;
+    int distinct_frequencies = 0;
+    int dual_frequency_sats = 0;
+    };
+
+struct ArWideLaneConstraint {
+    int l1_index = -1;
+    int l2_index = -1;
+    double fixed_integer = 0.0;
+    };
+
+struct ArSearchProblem {
+    VectorXd head_state;
+    VectorXd dd_float;
+    MatrixXd Qb;
+    MatrixXd Qab;
+    };
+
+
+bool passes_subset_diversity_gate(const RTKProcessor::RTKConfig& config,
+                             const ArSubsetDiversity& diversity) {
+    if (config.min_subset_sats_for_ar > 0 &&
+        diversity.distinct_sats < config.min_subset_sats_for_ar) {
+        return false;
+    }
+    if (config.min_subset_systems_for_ar > 0 &&
+        diversity.distinct_systems < config.min_subset_systems_for_ar) {
+        return false;
+    }
+    if (config.min_subset_frequencies_for_ar > 0 &&
+        diversity.distinct_frequencies < config.min_subset_frequencies_for_ar) {
+        return false;
+    }
+    if (config.min_subset_dual_frequency_sats_for_ar > 0 &&
+        diversity.dual_frequency_sats < config.min_subset_dual_frequency_sats_for_ar) {
+        return false;
+    }
+    return true;
+};
+
+ArSearchProblem build_search_problem(
+    const VectorXd& base_dd_float,
+    const MatrixXd& base_Qb,
+    const MatrixXd& base_Qab,
+    const VectorXd& base_head_state,
+    int nb,
+    const std::vector<ArWideLaneConstraint>& wide_lane_constraints,
+    const std::vector<int>& subset) {
+    ArSearchProblem problem;
+    problem.head_state = base_head_state;
+    if (subset.size() == static_cast<size_t>(nb)) {
+        problem.dd_float = base_dd_float;
+        problem.Qb = base_Qb;
+        problem.Qab = base_Qab;
+    } else {
+        const auto subset_matrices =
+            rtk_ar_evaluation::extractSubset(base_dd_float, base_Qb, base_Qab, subset);
+        problem.dd_float = subset_matrices.dd_float;
+        problem.Qb = subset_matrices.Qb;
+        problem.Qab = subset_matrices.Qab;
+    }
+
+    if (!wide_lane_constraints.empty()) {
+        std::map<int, int> local_index_by_full_index;
+        for (int local = 0; local < static_cast<int>(subset.size()); ++local) {
+            local_index_by_full_index[subset[local]] = local;
+        }
+
+        for (const auto& constraint : wide_lane_constraints) {
+            const auto l1_it = local_index_by_full_index.find(constraint.l1_index);
+            const auto l2_it = local_index_by_full_index.find(constraint.l2_index);
+            if (l1_it == local_index_by_full_index.end() ||
+                l2_it == local_index_by_full_index.end()) {
+                continue;
+            }
+            applyAmbiguityConstraintUpdate(problem.head_state,
+                                           problem.dd_float,
+                                           problem.Qb,
+                                           problem.Qab,
+                                           l1_it->second,
+                                           l2_it->second,
+                                           constraint.fixed_integer,
+                                           1e-4);
+        }
+    }
+
+    if (wide_lane_constraints.empty()) {
+        return problem;
+    }
+
+    problem.Qb = (problem.Qb + problem.Qb.transpose()) * 0.5;
+    for (int i = 0; i < problem.Qb.rows(); ++i) {
+        if (problem.Qb(i, i) < 1e-6) {
+            problem.Qb(i, i) = 1e-6;
+        }
+    }
+    return problem;
+};
+
+ArSubsetDiversity RTKProcessor::compute_subset_diversity(
+    const std::vector<DDPair>& dd_pairs,
+                             const std::vector<int>& subset) const {
+    ArSubsetDiversity diversity;
+    std::set<SatelliteId> sats;
+    std::set<GNSSSystem> systems;
+    std::set<int> frequencies;
+    std::map<SatelliteId, std::set<int>> frequencies_by_sat;
+    for (int index : subset) {
+        if (index < 0 || index >= static_cast<int>(dd_pairs.size())) {
+            continue;
+        }
+        const auto& pair = dd_pairs[index];
+        sats.insert(pair.sat);
+        systems.insert(pair.sat.system);
+        frequencies.insert(pair.freq);
+        frequencies_by_sat[pair.sat].insert(pair.freq);
+    }
+    for (const auto& [sat, sat_frequencies] : frequencies_by_sat) {
+        (void)sat;
+        if (sat_frequencies.size() >= 2) {
+            diversity.dual_frequency_sats++;
+        }
+    }
+    diversity.distinct_sats = static_cast<int>(sats.size());
+    diversity.distinct_systems = static_cast<int>(systems.size());
+    diversity.distinct_frequencies = static_cast<int>(frequencies.size());
+    return diversity;
+};
+
+
 
 bool RTKProcessor::resolveAmbiguities() {
     if (!filter_initialized_) {
@@ -405,58 +541,6 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
             : 0.0;
     debug_telemetry_.min_full_ratio_for_subset_ar = min_full_ratio_for_subset_ar;
 
-    struct SubsetDiversity {
-        int distinct_sats = 0;
-        int distinct_systems = 0;
-        int distinct_frequencies = 0;
-        int dual_frequency_sats = 0;
-    };
-    auto compute_subset_diversity = [&](const std::vector<int>& subset) {
-        SubsetDiversity diversity;
-        std::set<SatelliteId> sats;
-        std::set<GNSSSystem> systems;
-        std::set<int> frequencies;
-        std::map<SatelliteId, std::set<int>> frequencies_by_sat;
-        for (int index : subset) {
-            if (index < 0 || index >= static_cast<int>(dd_pairs.size())) {
-                continue;
-            }
-            const auto& pair = dd_pairs[index];
-            sats.insert(pair.sat);
-            systems.insert(pair.sat.system);
-            frequencies.insert(pair.freq);
-            frequencies_by_sat[pair.sat].insert(pair.freq);
-        }
-        for (const auto& [sat, sat_frequencies] : frequencies_by_sat) {
-            (void)sat;
-            if (sat_frequencies.size() >= 2) {
-                diversity.dual_frequency_sats++;
-            }
-        }
-        diversity.distinct_sats = static_cast<int>(sats.size());
-        diversity.distinct_systems = static_cast<int>(systems.size());
-        diversity.distinct_frequencies = static_cast<int>(frequencies.size());
-        return diversity;
-    };
-    auto passes_subset_diversity_gate = [&](const SubsetDiversity& diversity) {
-        if (rtk_config_.min_subset_sats_for_ar > 0 &&
-            diversity.distinct_sats < rtk_config_.min_subset_sats_for_ar) {
-            return false;
-        }
-        if (rtk_config_.min_subset_systems_for_ar > 0 &&
-            diversity.distinct_systems < rtk_config_.min_subset_systems_for_ar) {
-            return false;
-        }
-        if (rtk_config_.min_subset_frequencies_for_ar > 0 &&
-            diversity.distinct_frequencies < rtk_config_.min_subset_frequencies_for_ar) {
-            return false;
-        }
-        if (rtk_config_.min_subset_dual_frequency_sats_for_ar > 0 &&
-            diversity.dual_frequency_sats < rtk_config_.min_subset_dual_frequency_sats_for_ar) {
-            return false;
-        }
-        return true;
-    };
 
     // === Wide-lane AR pre-step (default-off) ===
     // Frozen copies of full-size matrices for use in build_search_problem
@@ -472,12 +556,7 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
     }
     std::vector<int> initial_candidate_subset = full_subset;
 
-    struct WideLaneConstraint {
-        int l1_index = -1;
-        int l2_index = -1;
-        double fixed_integer = 0.0;
-    };
-    std::vector<WideLaneConstraint> wide_lane_constraints;
+    std::vector<ArWideLaneConstraint> wide_lane_constraints;
     int wide_lane_total = 0;
     int wide_lane_fixed = 0;
     int wide_lane_rejected = 0;
@@ -1205,67 +1284,10 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
         debug_telemetry_.wide_lane_max_distance = wide_lane_max_distance;
     }
 
-    struct SearchProblem {
-        VectorXd head_state;
-        VectorXd dd_float;
-        MatrixXd Qb;
-        MatrixXd Qab;
-    };
-    auto build_search_problem = [&](const std::vector<int>& subset) {
-        SearchProblem problem;
-        problem.head_state = base_head_state;
-        if (subset.size() == static_cast<size_t>(nb)) {
-            problem.dd_float = base_dd_float;
-            problem.Qb = base_Qb;
-            problem.Qab = base_Qab;
-        } else {
-            const auto subset_matrices =
-                rtk_ar_evaluation::extractSubset(base_dd_float, base_Qb, base_Qab, subset);
-            problem.dd_float = subset_matrices.dd_float;
-            problem.Qb = subset_matrices.Qb;
-            problem.Qab = subset_matrices.Qab;
-        }
-
-        if (!wide_lane_constraints.empty()) {
-            std::map<int, int> local_index_by_full_index;
-            for (int local = 0; local < static_cast<int>(subset.size()); ++local) {
-                local_index_by_full_index[subset[local]] = local;
-            }
-
-            for (const auto& constraint : wide_lane_constraints) {
-                const auto l1_it = local_index_by_full_index.find(constraint.l1_index);
-                const auto l2_it = local_index_by_full_index.find(constraint.l2_index);
-                if (l1_it == local_index_by_full_index.end() ||
-                    l2_it == local_index_by_full_index.end()) {
-                    continue;
-                }
-                applyAmbiguityConstraintUpdate(problem.head_state,
-                                               problem.dd_float,
-                                               problem.Qb,
-                                               problem.Qab,
-                                               l1_it->second,
-                                               l2_it->second,
-                                               constraint.fixed_integer,
-                                               1e-4);
-            }
-        }
-
-        if (wide_lane_constraints.empty()) {
-            return problem;
-        }
-
-        problem.Qb = (problem.Qb + problem.Qb.transpose()) * 0.5;
-        for (int i = 0; i < problem.Qb.rows(); ++i) {
-            if (problem.Qb(i, i) < 1e-6) {
-                problem.Qb(i, i) = 1e-6;
-            }
-        }
-        return problem;
-    };
 
     // Standard LAMBDA path
     if (!fixed) {
-        const auto full_problem = build_search_problem(full_subset);
+        const auto full_problem = build_search_problem(base_dd_float, base_Qb, base_Qab, base_head_state, nb, wide_lane_constraints, full_subset);
         const bool full_solved =
             lambdaMethod(full_problem.dd_float, full_problem.Qb, dd_fixed, ratio);
         debug_telemetry_.full_lambda_solved = full_solved;
@@ -1461,7 +1483,7 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
                         static_cast<int>(
                             causal_arc_search_subset.size());
                     const auto arc_problem =
-                        build_search_problem(causal_arc_search_subset);
+                        build_search_problem(base_dd_float, base_Qb, base_Qab, base_head_state, nb, wide_lane_constraints, causal_arc_search_subset);
                     VectorXd arc_search_float = arc_problem.dd_float;
                     MatrixXd arc_search_covariance = arc_problem.Qb;
                     if (rtk_config_.lambda_causal_arc_smoothed_search) {
@@ -1950,7 +1972,7 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
                         debug_telemetry_
                             .lambda_satellite_par_shadow_subsets_evaluated++;
                         const auto satellite_problem =
-                            build_search_problem(subset);
+                            build_search_problem(base_dd_float, base_Qb, base_Qab, base_head_state, nb, wide_lane_constraints, subset);
                         LambdaCandidateDiagnostics satellite_candidate;
                         if (!lambdaSearchTopK(
                                 satellite_problem.dd_float,
@@ -2196,9 +2218,9 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
             if (ns < min_subset_pairs_for_ar) {
                 return false;
             }
-            const auto subset_diversity = compute_subset_diversity(subset);
+            const auto subset_diversity = compute_subset_diversity(dd_pairs, subset);
             debug_telemetry_.subset_candidates_evaluated++;
-            if (!passes_subset_diversity_gate(subset_diversity)) {
+            if (!passes_subset_diversity_gate(rtk_config_, subset_diversity)) {
                 debug_telemetry_.subset_candidates_rejected_by_diversity++;
                 return false;
             }
@@ -2207,7 +2229,7 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
                 return false;
             }
 
-            const auto subset_problem = build_search_problem(subset);
+            const auto subset_problem = build_search_problem(base_dd_float, base_Qb, base_Qab, base_head_state, nb, wide_lane_constraints, subset);
             VectorXd sub_fixed;
             double sub_ratio = 0.0;
             if (!lambdaMethod(subset_problem.dd_float, subset_problem.Qb, sub_fixed, sub_ratio)) {
@@ -2314,9 +2336,28 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
         }
     }
 
+return finishAmbiguityResolution(nb, ratio, fixed, dd_pairs,
+                                dd_fixed, best_candidate,
+                                base_dd_float, base_Qb, base_Qab,
+                                base_head_state,
+                                wide_lane_constraints);
+}
+
+bool RTKProcessor::finishAmbiguityResolution(
+    int nb,
+    double ratio,
+    bool fixed,
+    const std::vector<DDPair>& dd_pairs,
+    const VectorXd& dd_fixed,
+    const rtk_ar_evaluation::CandidateState& best_candidate,
+    const VectorXd& base_dd_float,
+    const MatrixXd& base_Qb,
+    const MatrixXd& base_Qab,
+    const VectorXd& base_head_state,
+    const std::vector<ArWideLaneConstraint>& wide_lane_constraints) {
     debug_telemetry_.selected_ratio = ratio;
     debug_telemetry_.selected_pair_count = static_cast<int>(best_candidate.subset.size());
-    const auto selected_diversity = compute_subset_diversity(best_candidate.subset);
+    const auto selected_diversity = compute_subset_diversity(dd_pairs, best_candidate.subset);
     debug_telemetry_.selected_distinct_sats = selected_diversity.distinct_sats;
     debug_telemetry_.selected_distinct_systems = selected_diversity.distinct_systems;
     debug_telemetry_.selected_distinct_frequencies = selected_diversity.distinct_frequencies;
@@ -2349,7 +2390,8 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
     debug_telemetry_.selected_fixed = true;
 
     // Fixed solution: xa = y[:na] - Qab * Qb^{-1} * (dd_float - dd_fixed)
-    const auto fixed_problem = build_search_problem(best_candidate.subset);
+    const auto fixed_problem = build_search_problem(base_dd_float, base_Qb, base_Qab, base_head_state,
+                         nb, wide_lane_constraints, best_candidate.subset);
     VectorXd xa;
     if (!rtk_ar_evaluation::solveFixedHeadState(fixed_problem.head_state,
                                                 fixed_problem.Qab,

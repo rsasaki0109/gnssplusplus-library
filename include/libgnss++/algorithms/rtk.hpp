@@ -31,6 +31,15 @@
 
 namespace libgnss {
 
+namespace rtk_ar_evaluation {
+struct CandidateState;
+}  // namespace rtk_ar_evaluation
+
+// Defined (and populated) by the ambiguity-resolution TU; only used here as
+// an opaque reference parameter.
+struct ArWideLaneConstraint;
+struct ArSubsetDiversity;
+
 /**
  * @brief Real-Time Kinematic (RTK) processor
  *
@@ -2108,6 +2117,25 @@ private:
                          bool& fixed,
                          double& ratio,
                          std::vector<int>& initial_candidate_subset);
+
+    ArSubsetDiversity compute_subset_diversity(
+        const std::vector<DDPair>& dd_pairs,
+        const std::vector<int>& subset) const;
+
+    /// Records selection telemetry and computes the final fixed baseline for
+    /// resolveAmbiguities(); returns false when the epoch stays float.
+    bool finishAmbiguityResolution(
+        int nb,
+        double ratio,
+        bool fixed,
+        const std::vector<DDPair>& dd_pairs,
+        const VectorXd& dd_fixed,
+        const rtk_ar_evaluation::CandidateState& best_candidate,
+        const VectorXd& base_dd_float,
+        const MatrixXd& base_Qb,
+        const MatrixXd& base_Qab,
+        const VectorXd& base_head_state,
+        const std::vector<ArWideLaneConstraint>& wide_lane_constraints);
 
     PositionSolution generateSolution(const GNSSTime& time,
                                     SolutionStatus status,
