@@ -149,6 +149,15 @@ set(GNSS_RTK_RUNTIME_SOURCES
     src/algorithms/rtk_validation.cpp
     src/algorithms/integrity_consensus.cpp
     src/algorithms/rtk.cpp
+    src/algorithms/rtk_state.cpp
+    src/algorithms/rtk_satellites.cpp
+    src/algorithms/rtk_bias.cpp
+    src/algorithms/rtk_fallback.cpp
+    src/algorithms/rtk_epoch.cpp
+    src/algorithms/rtk_quality_gates.cpp
+    src/algorithms/rtk_filter.cpp
+    src/algorithms/rtk_ar_resolve.cpp
+    src/algorithms/rtk_ar_validate.cpp
     src/algorithms/spp.cpp
     src/algorithms/spp_velocity.cpp
     src/algorithms/lambda.cpp
