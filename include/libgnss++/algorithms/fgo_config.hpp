@@ -6,7 +6,6 @@
 #include <vector>
 
 namespace libgnss {
-namespace fgo {
 
 /**
  * @brief Selects which numerical backend FGOProcessor::optimizeProblem uses.
@@ -23,6 +22,8 @@ enum class FGOBackend {
     Eigen,
     GTSAM,
 };
+
+namespace fgo {
 
 /**
  * @brief Tuning knobs for FGOProcessor (see libgnss++/algorithms/fgo.hpp).
