@@ -27,11 +27,13 @@ test_rinex_read.cpp
 # Generated (except docs/)
 *.png
 !docs/*.png
+!tests/fixtures/**/*.png
 *.html
 !site-pages/**/*.html
 !apps/commands/visualization/gnss_web.html
 *.kml
 *.pos
+!tests/fixtures/**/*.pos
 site/
 
 # Explicit tracked text files
