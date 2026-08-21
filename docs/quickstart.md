@@ -263,7 +263,7 @@ libgnss++ `.atl` format, then run a paired PPP bench with ATL toggled:
 python3 apps/gnss.py vmf-atl \
   --station PERT \
   --station TSKB \
-  --output-dir test_data/iers
+  --output-dir tests/fixtures/iers
 
 python3 apps/gnss.py ppp-iers-atm-tidal-loading-multisite-bench \
   --sites configs/benchmarks/iers_atl_multisite_vmf.example.json \
@@ -273,7 +273,7 @@ python3 apps/gnss.py ppp-iers-atm-tidal-loading-multisite-bench \
 The example config expects the PPP observation/products under
 `data/igs_2026105/` and uses the tracked VMF-derived ATL fixtures for
 PERT and TSKB. Use site-specific real coefficients for production
-validation; `test_data/iers/tskb_synth.atl` is only a deterministic
+validation; `tests/fixtures/iers/tskb_synth.atl` is only a deterministic
 smoke fixture.
 
 ## Local docs

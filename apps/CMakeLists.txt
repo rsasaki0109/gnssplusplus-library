@@ -262,10 +262,10 @@ install(FILES
 )
 
 install(FILES
-    ${CMAKE_SOURCE_DIR}/test_data/iers/pert_vmf.atl
-    ${CMAKE_SOURCE_DIR}/test_data/iers/tskb_synth.atl
-    ${CMAKE_SOURCE_DIR}/test_data/iers/tskb_vmf.atl
-    DESTINATION test_data/iers
+    ${CMAKE_SOURCE_DIR}/tests/fixtures/iers/pert_vmf.atl
+    ${CMAKE_SOURCE_DIR}/tests/fixtures/iers/tskb_synth.atl
+    ${CMAKE_SOURCE_DIR}/tests/fixtures/iers/tskb_vmf.atl
+    DESTINATION tests/fixtures/iers
 )
 
 # Keep the first-run demo's tiny, project-authored inputs available to the

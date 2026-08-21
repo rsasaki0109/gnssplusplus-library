@@ -438,7 +438,7 @@ does not block Phase C:
 
   The checked smoke config
   `configs/benchmarks/iers_atl_multisite_smoke.example.json` uses the small
-  synthetic fixture `test_data/iers/tskb_synth.atl` and reproduces
+  synthetic fixture `tests/fixtures/iers/tskb_synth.atl` and reproduces
   the single-site result exactly (`median = 0.169 mm`, `p95 =
   0.358 mm`, `max = 0.901 mm`) when the 2026-04-15 TSKB PPP
   products are available under `data/igs_2026105/`.
@@ -450,7 +450,7 @@ does not block Phase C:
   millimeter coefficients to libgnss++ amplitude/phase meter ATL
   files, and flips VMF east/north into the west/south convention used
   by `AtmosphericTidalLoadingCoefficients`. The checked fixtures
-  `test_data/iers/pert_vmf.atl` and `test_data/iers/tskb_vmf.atl`
+  `tests/fixtures/iers/pert_vmf.atl` and `tests/fixtures/iers/tskb_vmf.atl`
   came from that path.
 
   On the 2026-04-15 IGS PPP data, the real VMF ATL multi-site smoke

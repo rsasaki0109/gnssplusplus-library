@@ -34,7 +34,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("test_data") / "iers",
+        default=Path("tests/fixtures") / "iers",
         help="Directory for generated .atl files.",
     )
     parser.add_argument(
