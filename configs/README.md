@@ -15,6 +15,8 @@ criteria.
 `gnss fuse --config`. Command-line values override its `[gnss_fuse]` defaults.
 `examples/solve.example.toml` provides the same pattern for `gnss solve` and
 its `[gnss_solve]` table.
+`examples/ppp_static.toml` and `examples/clas_kinematic.toml` are ready-to-run
+`gnss_ppp` profiles for static PPP and CLAS PPP-RTK kinematic positioning.
 
 `examples/station.example.toml` is the operational entry point for a
 long-running rover/base RTK session. It uses `[station]` plus
@@ -35,4 +37,4 @@ ordinary paths are resolved relative to the TOML file. Credentials are
 redacted in JSON output and run manifests, while the generated private
 receiver config remains readable only by the launching user where supported.
 
-Camera fixtures and other non-configuration assets live under `test_data/`.
+Camera fixtures and other non-configuration assets live under `tests/fixtures/`.
