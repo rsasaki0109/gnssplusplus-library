@@ -7,5 +7,5 @@ Name: libgnsspp
 Description: GNSS processing library and CLI toolchain
 Version: @PROJECT_VERSION@
 Requires: eigen3
-Libs: -L${libdir} -lgnss_lib -lgnss_lib_noopt
+Libs: -L${libdir} -lgnss_lib -lgnss_lib_solvers
 Cflags: -I${includedir}

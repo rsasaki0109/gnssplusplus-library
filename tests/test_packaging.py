@@ -28,12 +28,12 @@ EXE_SUFFIX = ".exe" if os.name == "nt" else ""
 if os.name == "nt":
     STATIC_LIB_NAMES = {
         "gnss_lib": "gnss_lib.lib",
-        "gnss_lib_noopt": "gnss_lib_noopt.lib",
+        "gnss_lib_solvers": "gnss_lib_solvers.lib",
     }
 else:
     STATIC_LIB_NAMES = {
         "gnss_lib": "libgnss_lib.a",
-        "gnss_lib_noopt": "libgnss_lib_noopt.a",
+        "gnss_lib_solvers": "libgnss_lib_solvers.a",
     }
 
 
@@ -219,7 +219,7 @@ class PackagingSmokeTest(unittest.TestCase):
                 prefix / "bin" / "gnss_qzss_l6_info.py",
                 prefix / "include" / "libgnss++" / "gnss.hpp",
                 prefix / "lib" / STATIC_LIB_NAMES["gnss_lib"],
-                prefix / "lib" / STATIC_LIB_NAMES["gnss_lib_noopt"],
+                prefix / "lib" / STATIC_LIB_NAMES["gnss_lib_solvers"],
                 prefix / "lib" / "cmake" / "libgnsspp" / "libgnssppConfig.cmake",
                 prefix / "lib" / "pkgconfig" / "libgnsspp.pc",
                 prefix / "tools" / "rtk_stats.py",
@@ -269,7 +269,7 @@ class PackagingSmokeTest(unittest.TestCase):
                 self.assertTrue(path.exists(), f"missing installed artifact: {path}")
 
             pc_contents = (prefix / "lib" / "pkgconfig" / "libgnsspp.pc").read_text(encoding="utf-8")
-            self.assertIn("Libs: -L${libdir} -lgnss_lib -lgnss_lib_noopt", pc_contents)
+            self.assertIn("Libs: -L${libdir} -lgnss_lib -lgnss_lib_solvers", pc_contents)
             self.assertIn("Cflags: -I${includedir}", pc_contents)
 
             config_contents = (

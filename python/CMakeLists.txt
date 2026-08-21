@@ -18,7 +18,7 @@ foreach(GNSSPP_PYTHON_FILE ${GNSSPP_PYTHON_FILES})
 endforeach()
 
 pybind11_add_module(_libgnsspp MODULE libgnsspp/bindings.cpp)
-target_link_libraries(_libgnsspp PRIVATE gnss_lib gnss_lib_noopt)
+target_link_libraries(_libgnsspp PRIVATE gnss_lib gnss_lib_solvers)
 target_include_directories(_libgnsspp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/libgnsspp)
 set_target_properties(_libgnsspp PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${GNSSPP_PYTHON_PACKAGE_DIR}

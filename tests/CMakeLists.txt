@@ -119,7 +119,7 @@ if(GTest_FOUND)
         GNSSPP_BINARY_DIR="${CMAKE_BINARY_DIR}"
     )
     target_link_libraries(gnss_run_tests
-        gnss_lib gnss_lib_noopt
+        gnss_lib gnss_lib_solvers
         sofa
         ginan_iers2010
         GTest::GTest
@@ -161,7 +161,7 @@ if(GTest_FOUND)
         GNSSPP_BINARY_DIR="${CMAKE_BINARY_DIR}"
     )
     target_link_libraries(gnss_madoca_parity_tests
-        gnss_lib gnss_lib_noopt
+        gnss_lib gnss_lib_solvers
         sofa
         ginan_iers2010
         GTest::GTest
@@ -172,7 +172,7 @@ if(GTest_FOUND)
 
     add_executable(gnss_integrity_tests test_integrity_consensus.cpp)
     target_link_libraries(gnss_integrity_tests
-        gnss_lib gnss_lib_noopt
+        gnss_lib gnss_lib_solvers
         GTest::GTest
         GTest::Main
         Threads::Threads

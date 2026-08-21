@@ -128,9 +128,10 @@ set(GNSS_SOURCES
     src/iers/sub_daily_eop.cpp
 )
 
-# RTK/SPP/LAMBDA sources are shared by the no-optimization support archive and
-# the optimized runtime archive. Keep this list canonical so the two targets
-# cannot silently drift apart when a solver source is added or removed.
+# RTK/SPP/LAMBDA sources are shared by the solver support archive and the
+# optimized runtime archive. They are compiled exactly once, as an OBJECT
+# library, and packaged into both static archives so the two targets cannot
+# silently drift apart when a solver source is added or removed.
 set(GNSS_RTK_RUNTIME_SOURCES
     src/algorithms/rtk_ar_selection.cpp
     src/algorithms/rtk_ar_evaluation.cpp
@@ -155,19 +156,18 @@ set(GNSS_RTK_RUNTIME_SOURCES
     src/core/observation.cpp
 )
 
-# List source files for the no-optimization library. The FGO-only sources stay
-# here because tests and the FGO applications intentionally use this archive.
-set(GNSS_SOURCES_NO_OPTIMIZATION
-    ${GNSS_RTK_RUNTIME_SOURCES}
+# Solver-only sources layered on top of the shared RTK runtime objects.
+# Tests and the FGO applications intentionally use this archive.
+set(GNSS_SOLVER_SOURCES
     src/algorithms/fgo_ddpr_gnc.cpp
     src/algorithms/fgo.cpp
     src/algorithms/ppp_env_overrides.cpp
 )
 
-# Production RTK applications must not inherit the historical -O0 workaround
-# used by the monolithic FGO/test support archive.  Keep FGO in
-# gnss_lib_noopt, while compiling the online RTK/SPP/LAMBDA path as its own
-# optimized archive so the documented per-epoch runtime budget is meaningful.
+# Production RTK applications must not inherit solver-archive extras such as
+# FGO.  Keep FGO in gnss_lib_solvers, while packaging the online RTK/SPP/LAMBDA
+# path as its own optimized archive so the documented per-epoch runtime budget
+# is meaningful.
 # Create the main library
 add_library(gnss_lib STATIC ${GNSS_SOURCES})
 target_include_directories(gnss_lib PUBLIC
@@ -282,63 +282,75 @@ else()
             GNSSPP_HAS_MADOCALIB_ORACLE=0)
 endif()
 
-# Historically -O0/-Od for debuggability; the hot solver paths in this list
-# (lambda, navigation, spp, observation) made kinematic runs ~2.3x slower.
-# -O2 output is byte-identical on the CLAS kinematic parity runs.
-add_library(gnss_lib_noopt STATIC ${GNSS_SOURCES_NO_OPTIMIZATION})
+# The RTK/SPP/LAMBDA runtime path is compiled once at -O2 and packaged into
+# both static archives below. (Historically the solver archive was -O0 for
+# debuggability, which made kinematic runs ~2.3x slower; -O2 output is
+# byte-identical on the CLAS kinematic parity runs.)
+add_library(gnss_rtk_core OBJECT ${GNSS_RTK_RUNTIME_SOURCES})
 if(MSVC)
-    target_compile_options(gnss_lib_noopt PRIVATE /O2)
+    target_compile_options(gnss_rtk_core PRIVATE /O2)
 else()
-    target_compile_options(gnss_lib_noopt PRIVATE -O2)
+    target_compile_options(gnss_rtk_core PRIVATE -O2)
 endif()
-target_include_directories(gnss_lib_noopt PUBLIC
+target_include_directories(gnss_rtk_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
-target_link_libraries(gnss_lib_noopt PUBLIC Eigen3::Eigen)
+target_link_libraries(gnss_rtk_core PUBLIC Eigen3::Eigen)
 if(CHOLMOD_INCLUDE_DIR AND CHOLMOD_LIBRARY)
-    target_include_directories(gnss_lib_noopt PRIVATE ${CHOLMOD_INCLUDE_DIR})
-    target_compile_definitions(gnss_lib_noopt PRIVATE GNSSPP_HAS_CHOLMOD=1)
-    target_link_libraries(gnss_lib_noopt PRIVATE ${CHOLMOD_LIBRARY})
+    target_include_directories(gnss_rtk_core PRIVATE ${CHOLMOD_INCLUDE_DIR})
+    target_compile_definitions(gnss_rtk_core PRIVATE GNSSPP_HAS_CHOLMOD=1)
+    target_link_libraries(gnss_rtk_core PRIVATE ${CHOLMOD_LIBRARY})
 endif()
 
-add_library(gnss_rtk_runtime STATIC ${GNSS_RTK_RUNTIME_SOURCES})
+# Production runtime archive: the online RTK/SPP/LAMBDA path only.
+add_library(gnss_rtk_runtime STATIC $<TARGET_OBJECTS:gnss_rtk_core>)
 target_include_directories(gnss_rtk_runtime PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 target_link_libraries(gnss_rtk_runtime PUBLIC Eigen3::Eigen)
-if(MSVC)
-    target_compile_options(gnss_rtk_runtime PRIVATE /O2)
-else()
-    target_compile_options(gnss_rtk_runtime PRIVATE -O2)
+
+# Solver support archive: the shared runtime objects plus FGO. The historical
+# target name "gnss_lib_noopt" referred to its old -O0 build; it is compiled
+# at -O2 today, so the target is named for what it contains instead.
+add_library(gnss_lib_solvers STATIC ${GNSS_SOLVER_SOURCES} $<TARGET_OBJECTS:gnss_rtk_core>)
+target_include_directories(gnss_lib_solvers PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+target_link_libraries(gnss_lib_solvers PUBLIC Eigen3::Eigen)
+if(CHOLMOD_INCLUDE_DIR AND CHOLMOD_LIBRARY)
+    target_include_directories(gnss_lib_solvers PRIVATE ${CHOLMOD_INCLUDE_DIR})
+    target_compile_definitions(gnss_lib_solvers PRIVATE GNSSPP_HAS_CHOLMOD=1)
+    target_link_libraries(gnss_lib_solvers PRIVATE ${CHOLMOD_LIBRARY})
 endif()
 if(GTSAM_FOUND)
-    # fgo.cpp (FGOProcessor::optimizeProblem) lives in gnss_lib_noopt, so the
+    # fgo.cpp (FGOProcessor::optimizeProblem) lives in gnss_lib_solvers, so the
     # GTSAM backend TU and the gtsam link dependency must live here too, not
     # on gnss_lib, otherwise the backend-selector forward declaration in
     # fgo.cpp would be an unresolved symbol at link time.
-    target_sources(gnss_lib_noopt PRIVATE src/algorithms/fgo_gtsam_backend.cpp)
-    target_link_libraries(gnss_lib_noopt PUBLIC gtsam)
-    target_compile_definitions(gnss_lib_noopt PUBLIC GNSSPP_HAS_GTSAM=1)
+    target_sources(gnss_lib_solvers PRIVATE src/algorithms/fgo_gtsam_backend.cpp)
+    target_link_libraries(gnss_lib_solvers PUBLIC gtsam)
+    target_compile_definitions(gnss_lib_solvers PUBLIC GNSSPP_HAS_GTSAM=1)
     if(MSVC)
         # gtsam.dll dllexports a handful of STL template instantiations that back
         # its Key containers (std::map<uint64,uint64>, std::vector<uint64>, ...).
         # Those same instantiations also appear as COMDAT symbols in our own
         # object files (e.g. fgo.obj), so every executable that links both
-        # gnss_lib_noopt and gtsam hits LNK2005 "already defined". /FORCE:MULTIPLE
+        # gnss_lib_solvers and gtsam hits LNK2005 "already defined". /FORCE:MULTIPLE
         # tells the linker to keep the first definition and drop the duplicates;
         # this is the standard GTSAM-on-Windows shared-build workaround and is
         # safe here because the colliding symbols are identical inline STL code.
         # Propagated as an INTERFACE option so every consumer (apps, tests) that
-        # transitively links gtsam through gnss_lib_noopt inherits it.
-        target_link_options(gnss_lib_noopt INTERFACE /FORCE:MULTIPLE)
+        # transitively links gtsam through gnss_lib_solvers inherits it.
+        target_link_options(gnss_lib_solvers INTERFACE /FORCE:MULTIPLE)
     endif()
 endif()
 
 set(GNSS_INSTALL_TARGETS
     gnss_lib
-    gnss_lib_noopt
+    gnss_lib_solvers
     gnss_rtk_runtime
     sofa
     ginan_iers2010)
