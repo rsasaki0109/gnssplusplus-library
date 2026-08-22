@@ -22,10 +22,10 @@ set(GNSS_APP_TARGETS
 set(GNSS_NATIVE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/native)
 
 add_executable(gnss_spp ${GNSS_NATIVE_DIR}/gnss_spp.cpp)
-target_link_libraries(gnss_spp PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
+target_link_libraries(gnss_spp PRIVATE gnss_lib gnss_lib_solvers Threads::Threads)
 
 add_executable(gnss_fgo ${GNSS_NATIVE_DIR}/gnss_fgo.cpp)
-target_link_libraries(gnss_fgo PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
+target_link_libraries(gnss_fgo PRIVATE gnss_lib gnss_lib_solvers Threads::Threads)
 if(GTSAM_FOUND)
     target_compile_definitions(gnss_fgo PRIVATE GNSS_WITH_GTSAM=1)
     target_link_libraries(gnss_fgo PRIVATE gtsam)
@@ -33,11 +33,11 @@ endif()
 
 # Real-data Eigen-vs-GTSAM FGO backend parity harness. Only meaningful when the
 # library is built with the GTSAM backend (otherwise FGOBackend::GTSAM falls
-# back to Eigen). gnss_lib_noopt carries the gtsam link + /FORCE:MULTIPLE as an
+# back to Eigen). gnss_lib_solvers carries the gtsam link + /FORCE:MULTIPLE as an
 # INTERFACE requirement, so this target inherits both automatically.
 if(GTSAM_FOUND)
     add_executable(gnss_fgo_parity ${GNSS_NATIVE_DIR}/gnss_fgo_parity.cpp)
-    target_link_libraries(gnss_fgo_parity PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
+    target_link_libraries(gnss_fgo_parity PRIVATE gnss_lib gnss_lib_solvers Threads::Threads)
 endif()
 
 add_executable(gnss_fuse
@@ -50,19 +50,19 @@ add_executable(gnss_safe_bridge gnss_safe_bridge.cpp)
 target_link_libraries(gnss_safe_bridge PRIVATE gnss_lib gnss_rtk_runtime)
 
 add_executable(gnss_vel_d ${GNSS_NATIVE_DIR}/gnss_vel_d.cpp)
-target_link_libraries(gnss_vel_d PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
+target_link_libraries(gnss_vel_d PRIVATE gnss_lib gnss_lib_solvers Threads::Threads)
 
 add_executable(gnss_pos_pdc ${GNSS_NATIVE_DIR}/gnss_pos_pdc.cpp)
-target_link_libraries(gnss_pos_pdc PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
+target_link_libraries(gnss_pos_pdc PRIVATE gnss_lib gnss_lib_solvers Threads::Threads)
 
 add_executable(gnss_pos_pd ${GNSS_NATIVE_DIR}/gnss_pos_pd.cpp)
-target_link_libraries(gnss_pos_pd PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
+target_link_libraries(gnss_pos_pd PRIVATE gnss_lib gnss_lib_solvers Threads::Threads)
 
 add_executable(gnss_pos_vel_pdc ${GNSS_NATIVE_DIR}/gnss_pos_vel_pdc.cpp)
-target_link_libraries(gnss_pos_vel_pdc PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
+target_link_libraries(gnss_pos_vel_pdc PRIVATE gnss_lib gnss_lib_solvers Threads::Threads)
 
 add_executable(gnss_pos_vel_pd ${GNSS_NATIVE_DIR}/gnss_pos_vel_pd.cpp)
-target_link_libraries(gnss_pos_vel_pd PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
+target_link_libraries(gnss_pos_vel_pd PRIVATE gnss_lib gnss_lib_solvers Threads::Threads)
 
 add_executable(gnss_solve
     ${GNSS_NATIVE_DIR}/gnss_solve.cpp
@@ -73,41 +73,43 @@ target_link_libraries(gnss_solve PRIVATE gnss_lib gnss_rtk_runtime Threads::Thre
 add_executable(gnss_ppp
     ${GNSS_NATIVE_DIR}/gnss_ppp.cpp
     ${GNSS_NATIVE_DIR}/cli_toml_config.cpp)
-target_link_libraries(gnss_ppp PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
+target_link_libraries(gnss_ppp PRIVATE gnss_lib gnss_lib_solvers Threads::Threads)
 
 if(MADOCALIB_PARITY_LINK)
     # The linked MADOCALIB runtime is an oracle-only CI surface. Keep its
     # command-line selector out of the installed production gnss_ppp binary.
-    add_executable(gnss_madocalib_oracle ${GNSS_NATIVE_DIR}/gnss_ppp.cpp)
+    add_executable(gnss_madocalib_oracle
+        ${GNSS_NATIVE_DIR}/gnss_ppp.cpp
+        ${GNSS_NATIVE_DIR}/cli_toml_config.cpp)
     target_compile_definitions(
         gnss_madocalib_oracle PRIVATE GNSSPP_MADOCALIB_ORACLE_CLI=1)
     target_link_libraries(
-        gnss_madocalib_oracle PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
+        gnss_madocalib_oracle PRIVATE gnss_lib gnss_lib_solvers Threads::Threads)
 endif()
 
 add_executable(gnss_visibility ${GNSS_NATIVE_DIR}/gnss_visibility.cpp)
-target_link_libraries(gnss_visibility PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
+target_link_libraries(gnss_visibility PRIVATE gnss_lib gnss_lib_solvers Threads::Threads)
 
 add_executable(gnss_nav_products ${GNSS_NATIVE_DIR}/gnss_nav_products.cpp)
-target_link_libraries(gnss_nav_products PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
+target_link_libraries(gnss_nav_products PRIVATE gnss_lib gnss_lib_solvers Threads::Threads)
 
 add_executable(gnss_rinex_info ${GNSS_NATIVE_DIR}/gnss_rinex_info.cpp)
-target_link_libraries(gnss_rinex_info PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
+target_link_libraries(gnss_rinex_info PRIVATE gnss_lib gnss_lib_solvers Threads::Threads)
 
 add_executable(gnss_stream ${GNSS_NATIVE_DIR}/gnss_stream.cpp)
-target_link_libraries(gnss_stream PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
+target_link_libraries(gnss_stream PRIVATE gnss_lib gnss_lib_solvers Threads::Threads)
 
 add_executable(gnss_ubx_info ${GNSS_NATIVE_DIR}/gnss_ubx_info.cpp)
-target_link_libraries(gnss_ubx_info PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
+target_link_libraries(gnss_ubx_info PRIVATE gnss_lib gnss_lib_solvers Threads::Threads)
 
 add_executable(gnss_convert ${GNSS_NATIVE_DIR}/gnss_convert.cpp)
-target_link_libraries(gnss_convert PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
+target_link_libraries(gnss_convert PRIVATE gnss_lib gnss_lib_solvers Threads::Threads)
 
 add_executable(gnss_replay ${GNSS_NATIVE_DIR}/gnss_replay.cpp)
-target_link_libraries(gnss_replay PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
+target_link_libraries(gnss_replay PRIVATE gnss_lib gnss_lib_solvers Threads::Threads)
 
 add_executable(gnss_live ${GNSS_NATIVE_DIR}/gnss_live.cpp)
-target_link_libraries(gnss_live PRIVATE gnss_lib gnss_lib_noopt Threads::Threads)
+target_link_libraries(gnss_live PRIVATE gnss_lib gnss_lib_solvers Threads::Threads)
 
 install(TARGETS ${GNSS_APP_TARGETS}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
@@ -241,6 +243,7 @@ install(FILES
 install(FILES
     ${CMAKE_SOURCE_DIR}/configs/examples/fuse.example.toml
     ${CMAKE_SOURCE_DIR}/configs/examples/live.example.conf
+    ${CMAKE_SOURCE_DIR}/configs/examples/station.example.toml
     ${CMAKE_SOURCE_DIR}/configs/examples/solve.example.toml
     ${CMAKE_SOURCE_DIR}/configs/examples/web.example.toml
     DESTINATION configs/examples
@@ -261,10 +264,10 @@ install(FILES
 )
 
 install(FILES
-    ${CMAKE_SOURCE_DIR}/test_data/iers/pert_vmf.atl
-    ${CMAKE_SOURCE_DIR}/test_data/iers/tskb_synth.atl
-    ${CMAKE_SOURCE_DIR}/test_data/iers/tskb_vmf.atl
-    DESTINATION test_data/iers
+    ${CMAKE_SOURCE_DIR}/tests/fixtures/iers/pert_vmf.atl
+    ${CMAKE_SOURCE_DIR}/tests/fixtures/iers/tskb_synth.atl
+    ${CMAKE_SOURCE_DIR}/tests/fixtures/iers/tskb_vmf.atl
+    DESTINATION tests/fixtures/iers
 )
 
 # Keep the first-run demo's tiny, project-authored inputs available to the

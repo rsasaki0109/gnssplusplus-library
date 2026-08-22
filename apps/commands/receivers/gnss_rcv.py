@@ -8,6 +8,7 @@ import datetime as dt
 import glob
 import json
 import os
+import re
 import shlex
 import signal
 import subprocess
@@ -63,7 +64,10 @@ ALLOWED_KEYS = {
     "auto_restart",
     "restart_delay_seconds",
     "restart_max_attempts",
+    "status_redact",
 }
+
+RUNTIME_USERINFO_RE = re.compile(r"(://)([^/@\s]+)@")
 
 
 def find_binary(target_name: str) -> str | None:
@@ -221,6 +225,26 @@ def read_status(path: Path) -> dict[str, object]:
 
 def is_truthy(value: str) -> bool:
     return value.strip().lower() in TRUE_VALUES
+
+
+def public_runtime_config(config: dict[str, str]) -> dict[str, str]:
+    """Return the config safe to persist in status/launcher JSON artifacts."""
+    if not is_truthy(config.get("status_redact", "")):
+        return config
+    public: dict[str, str] = {}
+    secret_parts = ("password", "passwd", "token", "secret", "credential", "api_key")
+    for key, value in config.items():
+        if any(part in key.casefold() for part in secret_parts):
+            public[key] = "***"
+        else:
+            public[key] = RUNTIME_USERINFO_RE.sub(r"\1***@", str(value))
+    return public
+
+
+def public_runtime_command(command: list[str], config: dict[str, str]) -> list[str]:
+    if not is_truthy(config.get("status_redact", "")):
+        return command
+    return [RUNTIME_USERINFO_RE.sub(r"\1***@", str(token)) for token in command]
 
 
 def resolve_status_path(config_path: Path | None, explicit_path: str | None) -> Path | None:
@@ -394,8 +418,8 @@ def build_run_payload(
     payload: dict[str, object] = {
         "action": "run",
         "config_path": str(config_path),
-        "config": config,
-        "command": command,
+        "config": public_runtime_config(config),
+        "command": public_runtime_command(command, config),
     }
     if status_path is not None:
         payload["status_path"] = str(status_path)
@@ -431,8 +455,8 @@ def write_runtime_status(
         "started_at": started_at,
         "pid": pid,
         "config_path": str(config_path),
-        "config": config,
-        "command": command,
+        "config": public_runtime_config(config),
+        "command": public_runtime_command(command, config),
     }
     if log_path is not None:
         payload["log_path"] = str(log_path)
@@ -642,8 +666,8 @@ def start_receiver(args: argparse.Namespace) -> int:
     resolved = {
         "action": "start",
         "config_path": str(config_path),
-        "config": config,
-        "command": command,
+        "config": public_runtime_config(config),
+        "command": public_runtime_command(command, config),
         "status_path": str(status_path),
         "log_path": str(log_path) if log_path is not None else None,
         "launcher_command": launcher_command,
@@ -675,8 +699,8 @@ def start_receiver(args: argparse.Namespace) -> int:
         "started_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "pid": child.pid,
         "config_path": str(config_path),
-        "config": config,
-        "command": command,
+        "config": public_runtime_config(config),
+        "command": public_runtime_command(command, config),
         "status_path": str(status_path),
         "launcher_command": launcher_command,
     }

@@ -720,7 +720,8 @@ class WebUISmokeTest(unittest.TestCase):
                     self.assertIn("decode:", page.locator("#ros2-bag-table tbody").text_content())
                     self.assertIn("1/2", page.locator("#ros2-bag-metrics").text_content())
                     self.assertIn("2/2", page.locator("#ros2-bag-metrics").text_content())
-                    self.assertEqual(page.locator("canvas").count(), 5)
+                    # lib, rtk, moving-base history/heading, visibility, live PPP
+                    self.assertEqual(page.locator("canvas").count(), 6)
                     self.assertIn("FIXED", page.locator("#status-legend").text_content())
                     self.assertIn("ppc_tokyo_run1_rtk_summary.json", page.locator("#ppc-table tbody").text_content())
                     self.assertIn("96.67%", page.locator("#ppc-table tbody").text_content())

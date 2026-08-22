@@ -29,3 +29,19 @@ modifications.
   project root in `LICENSE-third-party.md`. Attribution notices required
   by upstream licenses are aggregated in the project root `NOTICE`
   file.
+
+## Relationship to `external/`
+
+`external/` is a separate, gitignored location and must not be confused
+with this directory:
+
+| | `third_party/` | `external/` |
+|---|---|---|
+| Tracked in git | Yes | No (gitignored) |
+| Role | Vendored sources compiled into libgnss++ targets | Full checkouts of upstream projects used as opt-in parity oracles or reference implementations |
+| Build integration | Always configured via `add_subdirectory` | Only when explicitly enabled (e.g. `-DMADOCALIB_PARITY_LINK=ON -DMADOCALIB_ROOT_DIR=external/madocalib`) |
+| License obligations | Aggregated in `LICENSE-third-party.md` / `NOTICE` | Remains with the upstream checkout; not redistributed |
+
+Currently `external/` holds a MADOCALIB (RTKLIB-derived) checkout used to
+verify MADOCA-USB behavior against an independent implementation. See
+`docs/madocalib_native_migration.md` for usage.

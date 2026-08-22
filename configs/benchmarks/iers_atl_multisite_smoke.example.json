@@ -8,7 +8,7 @@
     {
       "name": "TSKB",
       "obs": "data/igs_2026105/TSKB.rnx",
-      "atm_tidal_loading": "test_data/iers/tskb_synth.atl"
+      "atm_tidal_loading": "tests/fixtures/iers/tskb_synth.atl"
     }
   ]
 }

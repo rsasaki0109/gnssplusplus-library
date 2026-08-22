@@ -78,8 +78,8 @@ class IersMultisiteBenchHelpersTest(unittest.TestCase):
     def test_resolve_config_path_falls_back_to_source_root(self) -> None:
         self.assertEqual(
             iers_multisite_bench.resolve_config_path(
-                "test_data/iers/tskb_synth.atl", Path("/tmp")),
-            ROOT_DIR / "test_data" / "iers" / "tskb_synth.atl",
+                "tests/fixtures/iers/tskb_synth.atl", Path("/tmp")),
+            ROOT_DIR / "tests/fixtures" / "iers" / "tskb_synth.atl",
         )
 
 
@@ -150,8 +150,8 @@ class IersAtmTidalLoadingMultisiteBenchHelpersTest(unittest.TestCase):
     def test_resolve_config_path_falls_back_to_source_root(self) -> None:
         self.assertEqual(
             iers_atl_multisite_bench.resolve_config_path(
-                "test_data/iers/tskb_synth.atl", Path("/tmp")),
-            ROOT_DIR / "test_data" / "iers" / "tskb_synth.atl",
+                "tests/fixtures/iers/tskb_synth.atl", Path("/tmp")),
+            ROOT_DIR / "tests/fixtures" / "iers" / "tskb_synth.atl",
         )
 
 

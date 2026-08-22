@@ -1,5 +1,5 @@
 # gnss_ppp configuration for standard static PPP
-# Usage: gnss_ppp --config conf/ppp_static.toml --obs rover.obs --sp3 orbit.sp3 --clk clock.clk --out out.pos
+# Usage: gnss_ppp --config configs/examples/ppp_static.toml --obs rover.obs --sp3 orbit.sp3 --clk clock.clk --out out.pos
 
 [gnss_ppp]
 

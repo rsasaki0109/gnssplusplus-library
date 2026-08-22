@@ -1,5 +1,5 @@
 # gnss_ppp configuration for CLAS PPP-RTK kinematic positioning
-# Usage: gnss_ppp --config conf/clas_kinematic.toml --obs rover.obs --out out.pos
+# Usage: gnss_ppp --config configs/examples/clas_kinematic.toml --obs rover.obs --out out.pos
 #
 # Command-line arguments always override values in this file.
 

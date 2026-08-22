@@ -100,6 +100,7 @@ python3 apps/gnss.py replay \
 | `gnss ppp-products-signoff` | Run static, kinematic, or PPC PPP sign-off with fetched product presets or templates, plus comparison CSV/PNG artifacts |
 | `gnss vmf-atl` | Convert VMF site-wise GNSS tidal APL coefficients into libgnss++ ATL coefficient files |
 | `gnss stream` | Inspect and relay RTCM over file, NTRIP, TCP, or serial |
+| `gnss station` | Validate, start, monitor, stop, and restart a long-running RTK session with run artifacts |
 | `gnss convert` | Convert RTCM or UBX into simple RINEX outputs |
 | `gnss ubx-info` | Inspect `NAV-PVT`, `RAWX`, `SFRBX` from file or serial |
 | `gnss ionex-info` | Inspect `IONEX` headers, maps, and auxiliary DCB blocks |
@@ -108,6 +109,27 @@ python3 apps/gnss.py replay \
 | `gnss web` | Local browser UI for summary JSON, live/moving-base/PPP-product sign-offs, trajectories, moving-base/visibility plots, receiver status, and artifact links |
 | `gnss ppc-rtk-signoff` | Fixed RTK sign-off profiles for PPC Tokyo/Nagoya, with optional RTKLIB/commercial receiver side-by-side output |
 | `gnss ppc-coverage-matrix` | Full six-run PPC Tokyo/Nagoya coverage-profile matrix with JSON/Markdown summaries |
+
+## Long-running RTK station
+
+For a field receiver and correction stream, copy
+`configs/examples/station.example.toml`, replace the endpoints, and validate
+before starting:
+
+```bash
+gnss station check --config configs/examples/station.example.toml
+gnss station start --config configs/examples/station.example.toml
+gnss station status --config configs/examples/station.example.toml --wait-seconds 5 --tail-log-lines 20
+```
+
+Each start creates a timestamped directory under `run_root` and writes a
+resolved receiver config, `run.json`, `status.json`, `live.log`, and the
+solution file. `latest.json` lets `status` and `stop` find the newest run;
+`gnss station stop --config ...` is safe to repeat. Stations enable child
+process restart by default; set `auto_restart = false` when an operator must
+inspect a failure before it is restarted. JSON output masks URI credentials.
+The longer-term operational roadmap is tracked in
+[`docs/development_backlog.md`](development_backlog.md#long-term-operational-product-roadmap).
 
 ## Local web UI
 
@@ -241,7 +263,7 @@ libgnss++ `.atl` format, then run a paired PPP bench with ATL toggled:
 python3 apps/gnss.py vmf-atl \
   --station PERT \
   --station TSKB \
-  --output-dir test_data/iers
+  --output-dir tests/fixtures/iers
 
 python3 apps/gnss.py ppp-iers-atm-tidal-loading-multisite-bench \
   --sites configs/benchmarks/iers_atl_multisite_vmf.example.json \
@@ -251,7 +273,7 @@ python3 apps/gnss.py ppp-iers-atm-tidal-loading-multisite-bench \
 The example config expects the PPP observation/products under
 `data/igs_2026105/` and uses the tracked VMF-derived ATL fixtures for
 PERT and TSKB. Use site-specific real coefficients for production
-validation; `test_data/iers/tskb_synth.atl` is only a deterministic
+validation; `tests/fixtures/iers/tskb_synth.atl` is only a deterministic
 smoke fixture.
 
 ## Local docs

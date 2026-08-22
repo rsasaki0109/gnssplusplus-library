@@ -44,7 +44,7 @@ COPY --from=builder /opt/libgnsspp /opt/libgnsspp
 ENV PATH=/opt/libgnsspp/bin:${PATH}
 ENV PYTHONPATH=/opt/libgnsspp/lib/python3/site-packages
 
-COPY --from=builder /src/conf /opt/libgnsspp/conf
+COPY --from=builder /src/configs /opt/libgnsspp/configs
 
 WORKDIR /workspace
 EXPOSE 8085
@@ -58,7 +58,7 @@ RUN gnss --help >/dev/null \
 # One-liner examples (mount data with -v):
 #
 #   docker run --rm -v "$PWD/data:/data" -v "$PWD/out:/out" libgnsspp \
-#     ppp --config /opt/libgnsspp/conf/clas_kinematic.toml \
+#     ppp --config /opt/libgnsspp/configs/examples/clas_kinematic.toml \
 #         --obs /data/rover.obs --nav /data/base.nav \
 #         --ssr /data/ssr_expanded.csv \
 #         --out /out/solution.pos --geojson /out/solution.geojson

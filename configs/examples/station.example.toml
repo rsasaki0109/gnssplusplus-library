@@ -1,0 +1,31 @@
+# Copy this file and replace the input endpoints before starting a station.
+# Paths without a URI scheme are resolved relative to this TOML file.
+
+[station]
+name = "field-rover"
+run_root = "../../output/stations"
+solution_name = "solution.pos"
+
+[station.receiver]
+# Choose exactly one rover input.  URI examples:
+# rover_ubx = "serial:///dev/ttyACM0"
+# rover_rtcm = "ntrip://user:password@caster.example/MOUNT"
+rover_rtcm = "../../data/rover.rtcm3"
+base_rtcm = "../../data/base.rtcm3"
+nav_rinex = "../../data/navigation.nav"
+
+# Named operational settings are intentionally small in the station layer;
+# advanced tuning remains available through `gnss rcv`/`gnss live`.
+format = "pos"
+max_epochs = 0
+ratio = 3.0
+base_hold_seconds = 0.5
+elevation_mask_deg = 15
+glonass_ar = "off"
+
+# Stations default to automatic child-process restart.  Set false when a
+# failed run must remain stopped for an operator to inspect.
+auto_restart = true
+restart_delay_seconds = 2.0
+restart_max_attempts = 0
+quiet = true

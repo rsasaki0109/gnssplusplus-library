@@ -32,6 +32,7 @@ class PythonBindingsSmokeTest(unittest.TestCase):
             "test_read_rinex_observation_epochs_returns_epoch_summaries",
             "test_solve_spp_file_returns_valid_solution_records",
             "test_solve_ppp_file_returns_valid_solution_records",
+            "test_solve_ppp_file_accepts_new_kwargs",
         } and not repo_data_exists("data/rover_static.obs", "data/navigation_static.nav"):
             self.skipTest("repo static test data is not available")
 
