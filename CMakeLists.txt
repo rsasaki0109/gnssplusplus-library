@@ -83,6 +83,10 @@ set(GNSS_SOURCES
     src/io/rinex.cpp
     src/io/rinex4.cpp
     src/io/rtcm.cpp
+    src/io/rtcm_encode.cpp
+    src/io/rtcm_decode_observation.cpp
+    src/io/rtcm_decode_nav.cpp
+    src/io/rtcm_reader.cpp
     src/io/rtcm_stream.cpp
     src/io/ubx.cpp
     src/io/qzss_l6.cpp
