@@ -83,6 +83,10 @@ set(GNSS_SOURCES
     src/io/rinex.cpp
     src/io/rinex4.cpp
     src/io/rtcm.cpp
+    src/io/rtcm_encode.cpp
+    src/io/rtcm_decode_observation.cpp
+    src/io/rtcm_decode_nav.cpp
+    src/io/rtcm_reader.cpp
     src/io/rtcm_stream.cpp
     src/io/ubx.cpp
     src/io/qzss_l6.cpp
@@ -103,10 +107,15 @@ set(GNSS_SOURCES
     src/algorithms/ppp_ar.cpp
     src/algorithms/ppp_atmosphere.cpp
     src/algorithms/ppp_clas.cpp
+    src/algorithms/ppp_clas_slip.cpp
+    src/algorithms/ppp_clas_measurements.cpp
+    src/algorithms/ppp_clas_update_diag.cpp
     src/algorithms/ppp_clas_diagnostics.cpp
     src/algorithms/ppp_clas_dd.cpp
+    src/algorithms/ppp_clas_dd_scaffold.cpp
     src/algorithms/ppp_clas_sd.cpp
     src/algorithms/ppp_osr.cpp
+    src/algorithms/ppp_clas_osr_continuity.cpp
     src/algorithms/ppp_wlnl.cpp
     src/algorithms/ppp_clas_epoch.cpp
     src/algorithms/ppp_env_overrides.cpp
