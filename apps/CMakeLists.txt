@@ -78,7 +78,9 @@ target_link_libraries(gnss_ppp PRIVATE gnss_lib gnss_lib_solvers Threads::Thread
 if(MADOCALIB_PARITY_LINK)
     # The linked MADOCALIB runtime is an oracle-only CI surface. Keep its
     # command-line selector out of the installed production gnss_ppp binary.
-    add_executable(gnss_madocalib_oracle ${GNSS_NATIVE_DIR}/gnss_ppp.cpp)
+    add_executable(gnss_madocalib_oracle
+        ${GNSS_NATIVE_DIR}/gnss_ppp.cpp
+        ${GNSS_NATIVE_DIR}/cli_toml_config.cpp)
     target_compile_definitions(
         gnss_madocalib_oracle PRIVATE GNSSPP_MADOCALIB_ORACLE_CLI=1)
     target_link_libraries(
