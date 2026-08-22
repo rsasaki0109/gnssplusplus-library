@@ -115,6 +115,7 @@ set(GNSS_SOURCES
     src/algorithms/ppp_clas_dd_scaffold.cpp
     src/algorithms/ppp_clas_sd.cpp
     src/algorithms/ppp_osr.cpp
+    src/algorithms/ppp_clas_osr_continuity.cpp
     src/algorithms/ppp_wlnl.cpp
     src/algorithms/ppp_clas_epoch.cpp
     src/algorithms/ppp_env_overrides.cpp
