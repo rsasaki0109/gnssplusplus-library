@@ -103,6 +103,9 @@ set(GNSS_SOURCES
     src/algorithms/ppp_ar.cpp
     src/algorithms/ppp_atmosphere.cpp
     src/algorithms/ppp_clas.cpp
+    src/algorithms/ppp_clas_slip.cpp
+    src/algorithms/ppp_clas_measurements.cpp
+    src/algorithms/ppp_clas_update_diag.cpp
     src/algorithms/ppp_clas_diagnostics.cpp
     src/algorithms/ppp_clas_dd.cpp
     src/algorithms/ppp_clas_sd.cpp
