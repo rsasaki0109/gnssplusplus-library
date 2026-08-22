@@ -162,6 +162,9 @@ set(GNSS_RTK_RUNTIME_SOURCES
     src/algorithms/spp_velocity.cpp
     src/algorithms/lambda.cpp
     src/core/navigation.cpp
+    src/core/precise_products.cpp
+    src/core/ssr_products.cpp
+    src/core/ionex_dcb_products.cpp
     src/core/observation.cpp
 )
 
