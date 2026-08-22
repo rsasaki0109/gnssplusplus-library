@@ -112,6 +112,7 @@ set(GNSS_SOURCES
     src/algorithms/ppp_clas_update_diag.cpp
     src/algorithms/ppp_clas_diagnostics.cpp
     src/algorithms/ppp_clas_dd.cpp
+    src/algorithms/ppp_clas_dd_scaffold.cpp
     src/algorithms/ppp_clas_sd.cpp
     src/algorithms/ppp_osr.cpp
     src/algorithms/ppp_wlnl.cpp
