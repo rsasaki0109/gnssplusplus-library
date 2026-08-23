@@ -27,3 +27,12 @@ degraded, or unusable.
 For the Tsukuba static-survey demonstration, use the [Japan static survey
 guide](use_cases/japan_static_survey.md). Its independent truth and antenna
 frame boundaries are stricter than a RINEX-header comparison.
+
+## Next application releases
+
+The [primary application roadmap](application_use_case_roadmap.md) puts
+user-facing workflows ahead of general infrastructure. The active queue is
+smartphone raw GNSS (R5), UAV navigation (R6), and structural displacement
+monitoring (R7), followed by integrity/geofencing (R8) and GNSS timing (R9).
+Station operations, RINEX 4, and MADOCA parity work enter this queue only when
+an active application gate needs them.

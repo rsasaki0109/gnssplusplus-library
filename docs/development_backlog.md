@@ -1,5 +1,10 @@
 # Development backlog (2026-08-08)
 
+Product priority is defined by the
+[application use-case roadmap](application_use_case_roadmap.md). This file is
+the supporting engineering and station-operations backlog; it must not
+pre-empt the active application release unless that release depends on it.
+
 Status after PR #437 (FGO quarantine/arc-restart audits), PR #438
 (adaptive-R phase-only/per-system alpha + low-count AR surplus-quality
 relaxation), and the adaptive-R real-data validation

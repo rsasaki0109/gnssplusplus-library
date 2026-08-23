@@ -24,7 +24,7 @@ nav:
   - Home: index.md
   - Use cases:
       - Overview: use_cases.md
-      - Development roadmap: application_use_case_roadmap.md
+      - Primary application roadmap: application_use_case_roadmap.md
       - Development plan (Japanese): application_use_case_development_plan.md
       - Urban RTK and IMU continuity: use_cases/urban_rtk_fgo.md
       - R1 urban RTK/IMU field checklist: use_cases/urban_rtk_imu_field_checklist.md

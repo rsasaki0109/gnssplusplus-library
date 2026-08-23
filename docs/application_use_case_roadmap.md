@@ -2,6 +2,17 @@
 
 Date: 2026-08-23
 
+Reorganised: 2026-08-24
+
+## Priority policy
+
+This is the primary product roadmap. User-facing application workflows take
+priority over station-management infrastructure and broad solver research.
+Infrastructure work may enter a release only when it is required by the next
+application acceptance gate. The operational station plan in
+[Development backlog](development_backlog.md) and the RINEX/MADOCA plans are
+supporting tracks, not competing top-level product queues.
+
 ## Goal
 
 Turn the positioning features already present in libgnss++ into reproducible
@@ -9,16 +20,23 @@ application workflows. Each workflow must start from obtainable data, produce
 artifacts a downstream user understands, state an accuracy boundary, and have
 a machine-readable acceptance gate.
 
-The development order is:
+The completed first wave is:
 
 1. urban RTK continuity with IMU/ZUPT and optional NHC;
 2. static survey and control-point measurement with GEONET/IGS data;
 3. reference-trajectory production for HD maps and SLAM evaluation;
 4. sub-metre wide-area positioning with CLAS/MADOCA;
-5. discovery spikes for smartphone GNSS and UAV navigation.
+The next application wave is:
 
-Structural monitoring, GNSS time service, and integrity/geofencing remain
-parked until the first four workflows share a stable quality contract.
+5. smartphone raw-GNSS positioning;
+6. UAV survey/navigation and reference-trajectory delivery;
+7. structural displacement monitoring;
+8. integrity/geofence decisions over qualified solutions;
+9. GNSS timing and holdover assessment.
+
+R1--R4 now provide the first common quality contract. R5 starts immediately;
+R6--R9 remain ordered by dataset readiness and dependency, not by low-level
+solver convenience.
 
 ## Common product contract
 
@@ -161,17 +179,71 @@ Acceptance gate:
 - sub-metre claims are truth-scored and population-qualified;
 - loss of L6 produces an explicit degraded state rather than a silent success.
 
-## Discovery queue
+## Next application release train
 
-Run these as time-boxed design spikes only after R2 is usable:
+| Order | Release | User outcome | Primary reuse | Exit decision |
+|---:|---|---|---|---|
+| Now | R5 Smartphone raw GNSS | An Android dataset becomes a truth-scored `.pos` bundle without manual conversion | R2 acquisition/provenance, R3 bundle/gate | Go only with a public train/holdout pair and lossless automatic conversion |
+| Next | R6 UAV navigation | A UAV operator receives a lever-arm/attitude-qualified flight and landing trajectory | R1 fusion, R3 consumer profiles | Go only without vehicle NHC and with an independent flight reference |
+| Next | R7 Structural monitoring | A maintainer receives multi-day displacement/noise reports rather than isolated PPP points | R2 static PPP and covariance | Go only when multi-day repeatability separates motion from solver/environment noise |
+| Later | R8 Integrity/geofencing | An application consumes qualified positions and explicit alert/reject reasons | R1--R4 state vocabulary | Go only with measured false-alarm, missed-alert, stale-data and alert-latency populations |
+| Later | R9 GNSS timing | An operator receives clock bias/drift uncertainty and tested holdover limits | PPP clock state and station replay | Go only when UTC/GPST/leap-second and uncertainty contracts are explicit |
 
-| Candidate | Spike | Go condition |
-|---|---|---|
-| Smartphone raw GNSS | Inventory Android/Google challenge formats and map them to existing observation interfaces | One public train/holdout pair can be converted without lossy manual steps |
-| UAV navigation | Audit dynamics, attitude, lever arm, NHC assumptions, output rates, and landing-path metrics | Existing fusion supports the dynamics without enabling vehicle-only constraints |
-| Structural monitoring | Replay static PPP as a time series and estimate noise floor before trend detection | Stable coordinates and covariance are available across multi-day data |
-| GNSS clock/NTP | Audit clock-state observability and timestamp APIs | Clock estimate has a documented uncertainty and holdover model |
-| Integrity/geofencing | Reuse quality reason codes and propagated-state age | R1–R4 summaries share the same usable/degraded/unusable vocabulary |
+### R5 — Smartphone raw-GNSS workflow (next, four-week target)
+
+Scope:
+
+- freeze one public Android train route and one sealed holdout route;
+- implement a deterministic source-format-to-observation adapter with no
+  spreadsheet or hand-renaming step;
+- inventory device capabilities, signals, duty cycling, clock discontinuities,
+  antenna metadata, and missing observables in the manifest;
+- run standalone and precise-product lanes supported by the actual fields;
+- emit POS, KML/PNG, log, summary, rejected spans, and provenance manifest;
+- score accuracy, solution availability, truth coverage, time gaps, and device
+  exclusions separately.
+
+Acceptance gate:
+
+- clean-room materialisation and bounded smoke succeed;
+- malformed timestamps, clock resets, missing truth, and unsupported signals
+  fail closed;
+- development thresholds are frozen before the holdout is opened;
+- one untouched holdout run is preserved without post-failure tuning;
+- the guide names supported device/data classes and never generalises one
+  handset result to all Android devices.
+
+### R6 — UAV survey/navigation workflow (four-week target)
+
+Scope and gate:
+
+- select a public flight with raw GNSS, IMU/attitude, antenna/body lever arm,
+  timestamps, and independent reference;
+- define cruise, turn, climb/descent, hover, and landing populations;
+- disable vehicle-only NHC and reject undefined frame/lever-arm inputs;
+- gate horizontal/vertical error, trajectory coverage, maximum gap/jump,
+  attitude alignment, and landing-path continuity;
+- publish separate navigation, mapping, and visualisation decisions.
+
+### R7 — Structural displacement monitoring (four-week target)
+
+Scope and gate:
+
+- extend the R2 public station route to multiple days without using daily
+  RINEX header positions as truth;
+- report daily/interval coordinates, empirical covariance, environmental and
+  product provenance, gaps, steps, and long-term drift;
+- estimate the stable-site noise floor before selecting displacement limits;
+- require an injected/surveyed displacement witness before claiming detection;
+- label a result `unusable` when reference frame, antenna history, monument
+  change, or observation continuity is ambiguous.
+
+### R8/R9 — Safety and timing applications
+
+R8 consumes the common quality summaries; it does not invent integrity from a
+FIX flag. R9 begins with an observability audit and must publish uncertainty
+and holdover evidence before exposing an NTP/PTP-style service. Neither may
+pre-empt R5--R7 merely because its infrastructure is convenient to build.
 
 ## Work rules
 
@@ -188,17 +260,22 @@ Run these as time-boxed design spikes only after R2 is usable:
 
 ## Immediate backlog
 
-The next implementation slice is R1 fusion root-cause correction using the
-scorer and artifact manifest now in place:
+The next implementation slice is R5 discovery and data-contract freeze:
 
-1. identify the first divergence in the full-run bridge CSV;
-2. distinguish propagation, heading-alignment, velocity-update, and
-   re-anchoring failures with existing telemetry;
-3. correct and test the Tokyo run1 root cause without inspecting holdouts;
-4. freeze thresholds after a passing full run1;
-5. evaluate run2 and run3 once with unchanged settings;
-6. promote a vehicle profile only if both holdouts pass.
+1. inventory public Android raw-GNSS datasets with independent reference;
+2. choose one development route and one sealed holdout route;
+3. record source terms, hashes, time systems, device model, signal fields, and
+   reference role;
+4. map source fields to the existing observation and clock interfaces;
+5. build the smallest automatic converter and a malformed-input negative test;
+6. produce a 10-minute smoke POS without claiming accuracy from it;
+7. score development truth coverage, horizontal/vertical error, gaps, jumps,
+   and state populations;
+8. freeze thresholds and the complete invocation in a manifest;
+9. run the holdout once without tuning;
+10. publish a Go/No-Go report before starting R6 implementation.
 
-In parallel only with non-overlapping work, R2 may inventory the exact
-GEONET/IGS station/date and download terms. No solver tuning starts in R2
-until the public-data fixture and truth contract are frozen.
+R1 and R4 negative results remain maintenance inputs, not permission to tune
+on their sealed runs. Station-service, RINEX 4, MADOCA parity, and upstream
+adoption work continue only as bounded enablers for an active application
+release.

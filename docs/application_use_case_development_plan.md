@@ -187,6 +187,10 @@ R1実装中にR2-00/R2-01を別担当が進められる場合に限り、8週間
 
 ## 8. 調査キュー
 
+この節はR1〜R4実施時点の記録である。R1〜R4完了後の優先順位とR5以降の
+完了条件は [Application use-case development roadmap](application_use_case_roadmap.md)
+へ移管した。
+
 R2がクリーン環境で再現できた後に、各候補を最大2人日で調査する。
 
 1. スマートフォン生GNSS: Android/Google公開形式を観測インターフェースに対応付け、

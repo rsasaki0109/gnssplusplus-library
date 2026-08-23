@@ -129,7 +129,9 @@ solution file. `latest.json` lets `status` and `stop` find the newest run;
 process restart by default; set `auto_restart = false` when an operator must
 inspect a failure before it is restarted. JSON output masks URI credentials.
 The longer-term operational roadmap is tracked in
-[`docs/development_backlog.md`](development_backlog.md#long-term-operational-product-roadmap).
+[`docs/development_backlog.md`](development_backlog.md). Application delivery
+priority is defined separately by the
+[primary application roadmap](application_use_case_roadmap.md).
 
 ## Local web UI
 
