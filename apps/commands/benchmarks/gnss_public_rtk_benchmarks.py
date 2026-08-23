@@ -60,12 +60,12 @@ PROFILES: tuple[PublicRTKBenchmark, ...] = (
     PublicRTKBenchmark(
         profile_id="gsdc",
         name="Google Smartphone Decimeter Challenge",
-        status="adapter-contract",
+        status="standalone-signoff",
         role="phone-grade stress",
         reference="precise ground truth for raw GNSS and IMU traces",
         receiver_artifacts="Android raw GNSS measurements and sensor logs",
-        adapter="smartphone-gnss-adapter preserves and validates GSDC 2023 raw rows; native solver mapping remains pending",
-        caveat="useful stress data, but phone antenna/clock behavior is a different receiver class",
+        adapter="smartphone-gnss-workflow runs frozen GSDC 2023 archive validation, GPS L1 RINEX mapping, native SPP, truth sign-off, and bundle generation",
+        caveat="phone antenna/clock behavior is a different receiver class; the precise-product variant regressed and is not promoted",
         source="https://www.ion.org/gnss/googlecompetition.cfm",
     ),
     PublicRTKBenchmark(
@@ -156,6 +156,7 @@ def parse_args() -> argparse.Namespace:
             "rawx-rinex-adapter",
             "receiver-fix-signoff",
             "adapter-contract",
+            "standalone-signoff",
             "candidate",
         ),
         default=None,

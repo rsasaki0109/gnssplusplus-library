@@ -506,12 +506,12 @@ class PublicRTKBenchmarksTest(unittest.TestCase):
     def test_matrix_separates_candidate_adapters(self) -> None:
         candidates = public_rtk_benchmarks.select_profiles(["candidate"])
         candidate_ids = {profile.profile_id for profile in candidates}
-        adapter_contracts = public_rtk_benchmarks.select_profiles(["adapter-contract"])
-        adapter_contract_ids = {profile.profile_id for profile in adapter_contracts}
+        smartphone_signoffs = public_rtk_benchmarks.select_profiles(["standalone-signoff"])
+        smartphone_signoff_ids = {profile.profile_id for profile in smartphone_signoffs}
         markdown = public_rtk_benchmarks.render_markdown(candidates)
 
         self.assertNotIn("gsdc", candidate_ids)
-        self.assertIn("gsdc", adapter_contract_ids)
+        self.assertIn("gsdc", smartphone_signoff_ids)
         self.assertIn("Ford Highway Driving RTK", markdown)
         self.assertNotIn("urban-nav-tokyo", candidate_ids)
         self.assertNotIn("smartloc", candidate_ids)

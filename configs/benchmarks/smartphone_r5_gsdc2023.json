@@ -54,5 +54,36 @@
     "horizontal_p95_m": 16.353068947914387,
     "vertical_p95_abs_m": 28.375588846435548,
     "max_solution_gap_s": 8.0
+  },
+  "holdout_run1": {
+    "pre_holdout_commit": "98b15f4",
+    "opened_after_threshold_freeze": true,
+    "post_failure_tuning": false,
+    "decision": "pass",
+    "selected_epochs": 1601,
+    "solution_epochs": 1596,
+    "availability_ratio": 0.9968769519050593,
+    "horizontal_median_m": 4.127134105903826,
+    "horizontal_p95_m": 14.910236695744151,
+    "vertical_p95_abs_m": 29.890210870321848,
+    "max_solution_gap_s": 4.0,
+    "all_frozen_gates_passed": true
+  },
+  "precise_product_development_lane": {
+    "status": "evaluated-not-promoted",
+    "reason": "CODE final SP3/CLK increased horizontal median error without smartphone code/ISRB bias correction",
+    "sp3": {
+      "url": "https://www.aiub.unibe.ch/download/CODE/2023/COD0OPSFIN_20231440000_01D_05M_ORB.SP3.gz",
+      "sha256_uncompressed": "8bad4d79a3c77a2f9b851963dedb73d9e794c1c3b4942cec5739a699cbd6e7bf"
+    },
+    "clk": {
+      "url": "https://www.aiub.unibe.ch/download/CODE/2023/COD0OPSFIN_20231440000_01D_30S_CLK.CLK.gz",
+      "sha256_uncompressed": "f1bebc2a299f1492f6937c8242d2e1db80d1991c64f76f196ed5ecb6e769298b"
+    },
+    "precise_measurements": 8125,
+    "availability_ratio": 0.9949385394070861,
+    "horizontal_median_m": 11.815166921454445,
+    "horizontal_p95_m": 21.18186936104088,
+    "vertical_p95_abs_m": 30.54707265383911
   }
 }

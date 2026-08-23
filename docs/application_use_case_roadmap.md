@@ -183,18 +183,20 @@ Acceptance gate:
 
 | Order | Release | User outcome | Primary reuse | Exit decision |
 |---:|---|---|---|---|
-| Now | R5 Smartphone raw GNSS | An Android dataset becomes a truth-scored `.pos` bundle without manual conversion | R2 acquisition/provenance, R3 bundle/gate | Go only with a public train/holdout pair and lossless automatic conversion |
-| Next | R6 UAV navigation | A UAV operator receives a lever-arm/attitude-qualified flight and landing trajectory | R1 fusion, R3 consumer profiles | Go only without vehicle NHC and with an independent flight reference |
+| Complete | R5 Smartphone raw GNSS | An Android dataset becomes a truth-scored `.pos` bundle without manual conversion | R2 acquisition/provenance, R3 bundle/gate | Development and untouched holdout passed the frozen standalone profile; precise variant was not promoted |
+| Now | R6 UAV navigation | A UAV operator receives a lever-arm/attitude-qualified flight and landing trajectory | R1 fusion, R3 consumer profiles | Go only without vehicle NHC and with an independent flight reference |
 | Next | R7 Structural monitoring | A maintainer receives multi-day displacement/noise reports rather than isolated PPP points | R2 static PPP and covariance | Go only when multi-day repeatability separates motion from solver/environment noise |
 | Later | R8 Integrity/geofencing | An application consumes qualified positions and explicit alert/reject reasons | R1--R4 state vocabulary | Go only with measured false-alarm, missed-alert, stale-data and alert-latency populations |
 | Later | R9 GNSS timing | An operator receives clock bias/drift uncertainty and tested holdover limits | PPP clock state and station replay | Go only when UTC/GPST/leap-second and uncertainty contracts are explicit |
 
 ### R5 — Smartphone raw-GNSS workflow (next, four-week target)
 
-Status: source archive and Pixel 7 Pro development/holdout routes frozen;
+Status: complete. Source archive and Pixel 7 Pro development/holdout routes frozen;
 lossless row preservation, fail-closed adapter, GPS L1 RINEX mapping, native
 standalone SPP, truth sign-off, and development thresholds are complete. The
-holdout is still sealed pending the pre-holdout commit.
+untouched holdout run1 passed every frozen standalone gate. The one-command
+workflow emits POS, KML, PNG, log, summaries, and a hash manifest. The
+development precise-product variant regressed and was explicitly not promoted.
 
 Scope:
 
@@ -265,20 +267,21 @@ pre-empt R5--R7 merely because its infrastructure is convenient to build.
 
 ## Immediate backlog
 
-The next implementation slice is R5 discovery and data-contract freeze:
+R5 items 1--10 are complete. The next implementation slice is R6 UAV data and
+frame-contract freeze:
 
-1. inventory public Android raw-GNSS datasets with independent reference;
-2. choose one development route and one sealed holdout route;
-3. record source terms, hashes, time systems, device model, signal fields, and
-   reference role;
-4. map source fields to the existing observation and clock interfaces;
-5. build the smallest automatic converter and a malformed-input negative test;
-6. produce a 10-minute smoke POS without claiming accuracy from it;
-7. score development truth coverage, horizontal/vertical error, gaps, jumps,
-   and state populations;
-8. freeze thresholds and the complete invocation in a manifest;
-9. run the holdout once without tuning;
-10. publish a Go/No-Go report before starting R6 implementation.
+1. inventory public flights containing raw GNSS, IMU/attitude, and independent
+   trajectory truth;
+2. choose one development flight and one sealed holdout flight;
+3. freeze licence, source hashes, time systems, antenna/body frames, lever arm,
+   sensor rates, and reference role;
+4. map GNSS and IMU fields without enabling vehicle NHC;
+5. implement malformed frame, time, and lever-arm negative tests;
+6. produce a bounded flight smoke bundle;
+7. score cruise, turn, climb/descent, hover, and landing populations;
+8. freeze navigation, mapping, and visualisation profile thresholds;
+9. run the UAV holdout once without tuning;
+10. publish R6 Go/No-Go before starting R7 implementation.
 
 R1 and R4 negative results remain maintenance inputs, not permission to tune
 on their sealed runs. Station-service, RINEX 4, MADOCA parity, and upstream

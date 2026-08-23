@@ -1,0 +1,44 @@
+{
+  "schema_version": "smartphone-r5-holdout-record.v1",
+  "profile_id": "gsdc2023-pixel7pro-standalone-v1",
+  "pre_holdout_commit": "98b15f4",
+  "dataset_id": "2023-09-06-22-49-us-ca-routebb1/pixel7pro",
+  "device_model": "pixel7pro",
+  "role": "holdout",
+  "run": 1,
+  "post_failure_tuning": false,
+  "decision": "pass",
+  "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+  "inputs": {
+    "device_gnss_sha256": "f6c05015842cc0a389ed2c426b15aed980819a80a2baa828ca77bfa53aba245b",
+    "ground_truth_sha256": "abb4076259100afa716cba5f845f285a719b19e17d16c6f2903355bbe58879a7",
+    "broadcast_nav_sha256": "21236469a4048817d53bac9faaab04bd87558d100c56ebf8fec25740edc7f696"
+  },
+  "metrics": {
+    "selected_epochs": 1601,
+    "solution_epochs": 1596,
+    "truth_matched_epochs": 1596,
+    "solution_availability_ratio": 0.9968769519050593,
+    "truth_scored_coverage_ratio": 0.9968769519050593,
+    "horizontal_median_m": 4.127134105903826,
+    "horizontal_p95_m": 14.910236695744151,
+    "horizontal_max_m": 41.208369854165745,
+    "vertical_median_abs_m": 6.2493856010038815,
+    "vertical_p95_abs_m": 29.890210870321848,
+    "vertical_max_abs_m": 111.93170621949528,
+    "max_solution_gap_s": 4.0
+  },
+  "gates": {
+    "availability_min": {"threshold": 0.98, "passed": true},
+    "truth_coverage_min": {"threshold": 0.98, "passed": true},
+    "horizontal_median_max_m": {"threshold": 7.0, "passed": true},
+    "horizontal_p95_max_m": {"threshold": 25.0, "passed": true},
+    "vertical_p95_max_m": {"threshold": 45.0, "passed": true},
+    "max_gap_s": {"threshold": 10.0, "passed": true}
+  },
+  "invocation_contract": {
+    "adapter": "smartphone-gnss-adapter --role holdout --skip-epochs 1",
+    "solver": "gnss spp with frozen defaults and matching brdc.nav",
+    "signoff": "smartphone-gnss-signoff --profile configs/benchmarks/smartphone_r5_gsdc2023.json"
+  }
+}

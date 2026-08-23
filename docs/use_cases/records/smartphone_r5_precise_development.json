@@ -1,0 +1,24 @@
+{
+  "schema_version": "smartphone-r5-variant-record.v1",
+  "profile_id": "gsdc2023-pixel7pro-standalone-v1",
+  "dataset_id": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+  "variant": "code-final-sp3-clk",
+  "role": "development-only",
+  "decision": "not-promoted",
+  "reason": "precise orbit/clock application without smartphone code/ISRB bias correction regressed horizontal median error",
+  "products": {
+    "sp3_sha256_uncompressed": "8bad4d79a3c77a2f9b851963dedb73d9e794c1c3b4942cec5739a699cbd6e7bf",
+    "clk_sha256_uncompressed": "f1bebc2a299f1492f6937c8242d2e1db80d1991c64f76f196ed5ecb6e769298b"
+  },
+  "metrics": {
+    "solution_epochs": 1376,
+    "availability_ratio": 0.9949385394070861,
+    "precise_orbit_clock_measurements": 8125,
+    "horizontal_median_m": 11.815166921454445,
+    "horizontal_p95_m": 21.18186936104088,
+    "vertical_p95_abs_m": 30.54707265383911,
+    "standalone_horizontal_median_m": 4.928490754936462,
+    "horizontal_median_regression_m": 6.886676166517983
+  },
+  "holdout_run": "not-run-for-unpromoted-variant"
+}

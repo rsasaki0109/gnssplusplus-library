@@ -31,9 +31,9 @@ frame boundaries are stricter than a RINEX-header comparison.
 ## Next application releases
 
 The [primary application roadmap](application_use_case_roadmap.md) puts
-user-facing workflows ahead of general infrastructure. The active queue is
-smartphone raw GNSS (R5), UAV navigation (R6), and structural displacement
-monitoring (R7), followed by integrity/geofencing (R8) and GNSS timing (R9).
+user-facing workflows ahead of general infrastructure. Smartphone raw GNSS
+(R5) is complete; the active queue is UAV navigation (R6) and structural
+displacement monitoring (R7), followed by integrity/geofencing (R8) and GNSS timing (R9).
 Station operations, RINEX 4, and MADOCA parity work enter this queue only when
 an active application gate needs them.
 

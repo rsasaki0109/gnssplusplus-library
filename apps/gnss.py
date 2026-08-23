@@ -564,6 +564,11 @@ COMMANDS = {
         "target": python_target("gnss_smartphone_gnss_signoff.py"),
         "summary": "Truth-score a smartphone libgnss++ POS and enforce R5 availability, error, and gap gates.",
     },
+    "smartphone-gnss-workflow": {
+        "kind": "python",
+        "target": python_target("gnss_smartphone_gnss_workflow.py"),
+        "summary": "Run the frozen R5 archive-to-POS/KML/PNG/sign-off workflow and emit a hash manifest.",
+    },
     "clas-ppp": {
         "kind": "python",
         "target": python_target("gnss_clas_ppp.py"),
