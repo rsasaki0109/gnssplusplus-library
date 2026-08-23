@@ -72,6 +72,26 @@ TEST(FusionUpdateTest, RejectsEmptyMeasurementSystem) {
     EXPECT_EQ(result.observation_count, 0);
 }
 
+TEST(FusionUpdateTest, RejectsNonPositiveInnovationCovarianceWithoutMutation) {
+    Eigen::Matrix<double, 15, 1> error_state = Eigen::Matrix<double, 15, 1>::Zero();
+    Eigen::Matrix<double, 15, 15> covariance = Eigen::Matrix<double, 15, 15>::Identity();
+    const auto original_error_state = error_state;
+
+    auto system = makeIdentity3System(Eigen::Vector3d(1.0, -2.0, 0.5), 0.1);
+    // The first observed state has P+R < 0. LDLT used to return a finite
+    // nonsense solve here, producing a tiny/negative NIS and accepting the
+    // update. The dense fusion update must reject it before any mutation.
+    covariance(fusion_index::POSITION, fusion_index::POSITION) = -1.0;
+    const auto original_covariance = covariance;
+    const auto result = fusion_update::applyDenseUpdate(error_state, covariance, system, 1.0);
+
+    EXPECT_FALSE(result.ok);
+    EXPECT_FALSE(result.rejected_by_innovation_gate);
+    EXPECT_TRUE(result.rejected_by_invalid_innovation_covariance);
+    EXPECT_TRUE(error_state.isApprox(original_error_state, 0.0));
+    EXPECT_TRUE(covariance.isApprox(original_covariance, 0.0));
+}
+
 TEST(FusionUpdateTest, JosephFormCovarianceStaysSymmetricAndPositiveSemiDefiniteAfterManyUpdates) {
     Eigen::Matrix<double, 15, 1> error_state = Eigen::Matrix<double, 15, 1>::Zero();
     Eigen::Matrix<double, 15, 15> covariance = Eigen::Matrix<double, 15, 15>::Identity();

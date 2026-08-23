@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/fusion/fusion_processor.hpp>
 
 namespace libgnss {
@@ -32,6 +33,35 @@ LooseCouplingProcessor::Config makeConfig(bool zupt_enable) {
     config.zupt_enable = zupt_enable;
     config.align_static_window_s = 1.0;  // 100 samples
     return config;
+}
+
+PositionSolution makeGnssSolution(const LooseCouplingProcessor& processor,
+                                  const Eigen::Vector3d& velocity_enu,
+                                  bool has_velocity) {
+    constexpr double kLat = 35.6 * M_PI / 180.0;
+    constexpr double kLon = 139.7 * M_PI / 180.0;
+    PositionSolution solution;
+    solution.time = processor.state().nominal.time;
+    solution.status = SolutionStatus::FIXED;
+    solution.num_satellites = 10;
+    solution.position_ecef = geodetic2ecef(kLat, kLon, 50.0);
+    solution.position_covariance = Eigen::Matrix3d::Identity();
+    solution.has_velocity = has_velocity;
+    if (has_velocity) {
+        solution.velocity_ecef = enu2ecef(velocity_enu, kLat, kLon);
+        solution.velocity_covariance = 0.01 * Eigen::Matrix3d::Identity();
+    }
+    return solution;
+}
+
+void feedQuietSamples(LooseCouplingProcessor& processor, int count, int start_index = 0) {
+    GNSSTime time = processor.state().nominal.time;
+    for (int i = 0; i < count; ++i) {
+        processor.processImuSample(
+            makeStationarySample(start_index + i, time, Eigen::Vector3d::Zero(),
+                                 Eigen::Vector3d::Zero(), 0.0, 0.0));
+        time = time + kDt;
+    }
 }
 
 void feedStationaryRun(LooseCouplingProcessor& processor, int sample_count,
@@ -127,6 +157,70 @@ TEST(FusionZuptTest, GyroAndAccelBiasRemainCloseToTrueValuesDuringExtendedStatio
     const Eigen::Vector3d accel_bias_error = processor.state().nominal.accel_bias - true_accel_bias;
     EXPECT_LT(gyro_bias_error.norm(), 0.01);
     EXPECT_LT(accel_bias_error.norm(), 0.1);
+}
+
+TEST(FusionZuptTest, FreshMovingGnssVelocitySuppressesFalseZupt) {
+    LooseCouplingProcessor processor(makeConfig(/*zupt_enable=*/true));
+    feedStationaryRun(processor, 150, Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero(),
+                       0.0, 0.0);
+    const std::size_t before = processor.zuptUpdateCount();
+    processor.processGnssSolution(
+        makeGnssSolution(processor, Eigen::Vector3d(2.0, 0.0, 0.0), true));
+    feedQuietSamples(processor, 40);
+    EXPECT_EQ(processor.zuptUpdateCount(), before)
+        << "fresh GNSS speed above the gate must block a stationary-IMU false ZUPT";
+}
+
+TEST(FusionZuptTest, FreshLowSpeedGnssVelocityKeepsLegacyZuptBehavior) {
+    LooseCouplingProcessor processor(makeConfig(/*zupt_enable=*/true));
+    feedStationaryRun(processor, 150, Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero(),
+                       0.0, 0.0);
+    const std::size_t before = processor.zuptUpdateCount();
+    processor.processGnssSolution(
+        makeGnssSolution(processor, Eigen::Vector3d(0.2, 0.0, 0.0), true));
+    feedQuietSamples(processor, 40);
+    EXPECT_GT(processor.zuptUpdateCount(), before)
+        << "fresh GNSS speed below the gate must preserve ZUPT behavior";
+}
+
+TEST(FusionZuptTest, LastKnownMovingGnssVelocityContinuesSuppressingZupt) {
+    LooseCouplingProcessor processor(makeConfig(/*zupt_enable=*/true));
+    feedStationaryRun(processor, 150, Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero(),
+                       0.0, 0.0);
+    const std::size_t before = processor.zuptUpdateCount();
+    processor.processGnssSolution(
+        makeGnssSolution(processor, Eigen::Vector3d(2.0, 0.0, 0.0), true));
+    feedQuietSamples(processor, 140);
+    EXPECT_EQ(processor.zuptUpdateCount(), before)
+        << "a stale last-known moving velocity must keep suppressing false ZUPT";
+}
+
+TEST(FusionZuptTest, FreshLowSpeedGnssVelocityReleasesMovingLatch) {
+    LooseCouplingProcessor processor(makeConfig(/*zupt_enable=*/true));
+    feedStationaryRun(processor, 150, Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero(),
+                       0.0, 0.0);
+    const std::size_t before = processor.zuptUpdateCount();
+    processor.processGnssSolution(
+        makeGnssSolution(processor, Eigen::Vector3d(2.0, 0.0, 0.0), true));
+    feedQuietSamples(processor, 40);
+    EXPECT_EQ(processor.zuptUpdateCount(), before);
+    processor.processGnssSolution(
+        makeGnssSolution(processor, Eigen::Vector3d(0.2, 0.0, 0.0), true));
+    feedQuietSamples(processor, 40);
+    EXPECT_GT(processor.zuptUpdateCount(), before)
+        << "a fresh low-speed velocity must release the moving latch";
+}
+
+TEST(FusionZuptTest, PositionOnlyGnssKeepsLegacyZuptBehavior) {
+    LooseCouplingProcessor processor(makeConfig(/*zupt_enable=*/true));
+    feedStationaryRun(processor, 150, Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero(),
+                       0.0, 0.0);
+    const std::size_t before = processor.zuptUpdateCount();
+    processor.processGnssSolution(
+        makeGnssSolution(processor, Eigen::Vector3d::Zero(), false));
+    feedQuietSamples(processor, 40);
+    EXPECT_GT(processor.zuptUpdateCount(), before)
+        << "without a GNSS velocity, the compatibility path must allow ZUPT";
 }
 
 }  // namespace

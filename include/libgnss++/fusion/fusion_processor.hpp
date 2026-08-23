@@ -43,6 +43,12 @@ public:
         double zupt_max_accel_std = 0.55;
         double zupt_max_gyro_std = 0.030;
         double zupt_max_gyro_median = 0.020;
+        // Suppress a stationary-IMU ZUPT after a GNSS Doppler velocity proves
+        // the vehicle is moving.  The moving latch remains in force until a
+        // later low-speed GNSS velocity releases it; when no GNSS velocity
+        // has ever been available, the legacy detector remains enabled.
+        bool zupt_gnss_speed_gate_enable = true;
+        double zupt_gnss_speed_gate_threshold_mps = 0.5;
 
         bool nhc_enable = false;  ///< off unless platform == vehicle (docs/design.md 3.8)
         double nhc_sigma_lateral_mps = 0.3;
@@ -138,24 +144,35 @@ public:
         double tight_dd_sse_fixed_anchor_max_age_s = 2.0;
         double tight_dd_sse_fixed_anchor_max_nis_per_observation = 10.0;
 
-        // Recovery from a gate "lockout spiral": a hard NIS gate is only
-        // safe against an *isolated* bad epoch. If the true state has
-        // drifted (e.g. through a long degraded-RTK segment) far enough
-        // that even the next *correct* GNSS fix looks like an outlier
-        // relative to the (by-then-wrong) prediction, a naive gate rejects
-        // it too -- and every subsequent fix looks even more like an
-        // outlier as dead-reckoning error keeps growing, so the filter can
-        // never resynchronize (found validating docs/design.md's Doppler
-        // velocity task on PPC tokyo/run1: any single fixed NIS threshold
-        // either let a genuine bad-geometry/float-reconvergence fix corrupt
-        // attitude, or -- once tightened enough to block it -- locked the
-        // filter out of every later correction for the rest of the run).
-        // After this many *consecutive* gate rejections on the same channel
-        // (position or velocity, tracked independently), force-accept the
-        // next update unconditionally to break the spiral. <= 0 disables
-        // (gate rejections are then permanent, matching the pre-existing
-        // behavior).
-        int max_consecutive_gate_rejections = 5;
+        // Recovery from a gate "lockout spiral". After this many consecutive
+        // position-gate rejections, a trusted FIXED position may perform a
+        // deterministic position-only re-anchor. The re-anchor is deliberately
+        // not an ungated EKF update: it does not apply to FLOAT/SPP solutions,
+        // velocity updates, attitude, or bias states. <= 0 disables this
+        // recovery (gate rejections then remain rejected). The application
+        // policy uses 30 consecutive FIXED epochs by default; the longer
+        // patience is the trust condition for the unbounded default target.
+        int max_consecutive_gate_rejections = 30;
+        // A trusted FIXED re-anchor may optionally be bounded in local ENU
+        // metres by setting a finite positive value. The default +infinity
+        // deliberately has no arbitrary distance cap: after the FIXED
+        // patience gate, a real outage can leave the inertial position tens
+        // or hundreds of metres away even when the returning FIX is accurate.
+        // <= 0 disables re-anchoring; a finite value remains available for
+        // applications with an independent maximum-jump contract.
+        double max_fixed_position_reanchor_m =
+            std::numeric_limits<double>::infinity();
+
+        // Recovery from a velocity-gate lockout. After this many consecutive
+        // GNSS velocity rejections, a finite/PSD Doppler solution may perform
+        // a velocity-only re-anchor. This is deliberately independent of the
+        // position patience above: the velocity state is reset to the
+        // lever-arm-compensated antenna velocity, while position, attitude,
+        // and biases remain untouched. <= 0 disables this recovery.
+        int max_consecutive_velocity_gate_rejections = 3;
+        // Maximum norm of a velocity-only re-anchor correction in m/s. <= 0
+        // disables re-anchoring; a large correction is treated as untrusted.
+        double max_gnss_velocity_reanchor_mps = 20.0;
     };
 
     explicit LooseCouplingProcessor(const Config& config);
@@ -209,6 +226,20 @@ public:
     PositionSolution toPositionSolution() const;
 
     /**
+     * @brief Convert the fused state to an antenna-frame PositionSolution.
+     *
+     * Unlike toPositionSolution(), whose position and velocity are the IMU
+     * origin by contract, this output applies the configured body-FLU
+     * IMU-to-antenna lever arm.  Position uses p + R*r and velocity uses
+     * v + R*(omega x r), where omega is the latest bias-corrected gyro
+     * sample.  Both reported covariances are H*P*H^T using the same
+     * lever-arm Jacobians as the GNSS position/velocity measurement models.
+     * The method is intended for external fused .pos/KML products; internal
+     * propagated-solution consumers must continue to use toPositionSolution().
+     */
+    PositionSolution toAntennaPositionSolution() const;
+
+    /**
      * @brief Phase 1 GNSS/IMU coupling (docs/design.md): current best-
      * estimate ANTENNA-frame ECEF position + covariance, lever-arm
      * compensated, for feeding into e.g. RTKProcessor::
@@ -247,6 +278,18 @@ public:
     const Eigen::Vector3d& lastGnssPositionCorrectionEnu() const {
         return last_gnss_position_correction_enu_;
     }
+    /** True when the last position correction was a fixed-solution re-anchor. */
+    bool lastGnssPositionReanchored() const { return last_gnss_position_reanchored_; }
+    /** True when the last velocity correction was a bounded Doppler re-anchor. */
+    bool lastGnssVelocityReanchored() const {
+        return last_gnss_velocity_reanchored_;
+    }
+    const Eigen::Vector3d& lastGnssVelocityCorrectionEnu() const {
+        return last_gnss_velocity_correction_enu_;
+    }
+
+    /** Number of applied loose-coupling ZUPT updates (diagnostic). */
+    std::size_t zuptUpdateCount() const { return zupt_updates_; }
 
 private:
     Config config_;
@@ -264,11 +307,18 @@ private:
     std::vector<ImuSample> static_window_;
     std::deque<ImuSample> zupt_window_;
     Eigen::Vector3d last_angular_rate_body_ = Eigen::Vector3d::Zero();
+    bool has_gnss_velocity_ = false;
+    double last_gnss_velocity_speed_mps_ = 0.0;
+    std::size_t zupt_updates_ = 0;
 
     int position_consecutive_gate_rejections_ = 0;
     int velocity_consecutive_gate_rejections_ = 0;
     bool last_gnss_position_update_applied_ = false;
+    bool last_gnss_position_reanchored_ = false;
+    bool last_gnss_velocity_reanchored_ = false;
     Eigen::Vector3d last_gnss_position_correction_enu_ =
+        Eigen::Vector3d::Zero();
+    Eigen::Vector3d last_gnss_velocity_correction_enu_ =
         Eigen::Vector3d::Zero();
     std::unique_ptr<dd_imu_bridge::DDIMUBridge> dd_imu_bridge_;
     Eigen::Matrix<double, 15, 15> dd_transition_since_update_ =
@@ -288,9 +338,15 @@ private:
 
     void initializeFromStaticWindow();
     bool detectStationary() const;
+    bool gnssSpeedGateAllowsZupt() const;
     fusion_update::FusionUpdateResult applyUpdateAndInject(
         const fusion_measurement::FusionMeasurementSystem& system, double max_nis_per_observation,
         int& consecutive_gate_rejections);
+    bool reanchorPositionFromFixedSolution(const Eigen::Vector3d& antenna_position_enu,
+                                           const Eigen::Matrix3d& position_covariance_enu);
+    bool reanchorVelocityFromGnssSolution(
+        const Eigen::Vector3d& antenna_velocity_enu,
+        const Eigen::Matrix3d& velocity_covariance_enu);
     void injectAndReset();
     void updateHeadingHealthAndMaybeRecover(const fusion_update::FusionUpdateResult& velocity_result);
     void inflateYawUncertainty();

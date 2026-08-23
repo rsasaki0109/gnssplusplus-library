@@ -158,6 +158,13 @@ bool LooseCouplingProcessor::detectStationary() const {
            gyro_median <= config_.zupt_max_gyro_median;
 }
 
+bool LooseCouplingProcessor::gnssSpeedGateAllowsZupt() const {
+    if (!config_.zupt_gnss_speed_gate_enable || !has_gnss_velocity_) {
+        return true;
+    }
+    return last_gnss_velocity_speed_mps_ <= config_.zupt_gnss_speed_gate_threshold_mps;
+}
+
 void LooseCouplingProcessor::injectAndReset() {
     auto& nominal = state_.nominal;
     nominal.position_enu += error_state_.segment<3>(fusion_index::POSITION);
@@ -174,30 +181,117 @@ void LooseCouplingProcessor::injectAndReset() {
 fusion_update::FusionUpdateResult LooseCouplingProcessor::applyUpdateAndInject(
     const fusion_measurement::FusionMeasurementSystem& system, double max_nis_per_observation,
     int& consecutive_gate_rejections) {
-    auto result =
+    const auto result =
         fusion_update::applyDenseUpdate(error_state_, state_.covariance, system, max_nis_per_observation);
-
-    if (!result.ok && result.rejected_by_innovation_gate &&
-        config_.max_consecutive_gate_rejections > 0 &&
-        consecutive_gate_rejections >= config_.max_consecutive_gate_rejections) {
-        // Lockout-spiral escape hatch (see Config::max_consecutive_gate_rejections):
-        // this channel has been rejected too many epochs in a row, meaning
-        // the gate itself -- not a single bad measurement -- is now the
-        // reason the filter can't resynchronize. Force this update through
-        // ungated; if the true state really had drifted, this large
-        // correction is exactly what's needed to recover, and if this
-        // particular fix also happens to be bad, the gate resumes rejecting
-        // (and re-arms the same escape hatch) from the next epoch.
-        result = fusion_update::applyDenseUpdate(error_state_, state_.covariance, system, 0.0);
-    }
 
     if (result.ok) {
         injectAndReset();
         consecutive_gate_rejections = 0;
-    } else if (result.rejected_by_innovation_gate) {
-        ++consecutive_gate_rejections;
+    } else if (result.rejected_by_innovation_gate ||
+               result.rejected_by_invalid_innovation_covariance) {
+        // A prolonged GNSS outage must not wrap this state back to a negative
+        // value and accidentally disable a configured fixed-position recovery.
+        if (consecutive_gate_rejections < std::numeric_limits<int>::max()) {
+            ++consecutive_gate_rejections;
+        }
     }
     return result;
+}
+
+bool LooseCouplingProcessor::reanchorPositionFromFixedSolution(
+    const Eigen::Vector3d& antenna_position_enu,
+    const Eigen::Matrix3d& position_covariance_enu) {
+    const Eigen::Matrix3d rotation = state_.nominal.attitude_body_to_enu.toRotationMatrix();
+    const Eigen::Vector3d target_position_enu =
+        antenna_position_enu - rotation * config_.lever_arm_body;
+    const Eigen::Vector3d position_before = state_.nominal.position_enu;
+    const Eigen::Vector3d position_correction = target_position_enu - position_before;
+    const double max_position_correction_m =
+        config_.max_fixed_position_reanchor_m;
+    const bool finite_correction_bound_exceeded =
+        std::isfinite(max_position_correction_m) &&
+        position_correction.norm() > max_position_correction_m;
+    if (!target_position_enu.allFinite() || !position_before.allFinite() ||
+        !position_correction.allFinite() ||
+        max_position_correction_m <= 0.0 ||
+        std::isnan(max_position_correction_m) ||
+        finite_correction_bound_exceeded) {
+        return false;
+    }
+
+    Eigen::Matrix3d attitude_covariance =
+        state_.covariance.block<3, 3>(fusion_index::ATTITUDE, fusion_index::ATTITUDE);
+    attitude_covariance = regularizeCovariance3x3(attitude_covariance, 1.0);
+    const Eigen::Matrix3d position_attitude_jacobian =
+        -rotation * attitude::skew(config_.lever_arm_body);
+    const Eigen::Matrix3d reanchor_covariance =
+        position_covariance_enu +
+        position_attitude_jacobian * attitude_covariance * position_attitude_jacobian.transpose();
+    if (!reanchor_covariance.allFinite()) {
+        return false;
+    }
+
+    state_.nominal.position_enu = target_position_enu;
+    state_.covariance.block<3, 15>(fusion_index::POSITION, 0).setZero();
+    state_.covariance.block<15, 3>(0, fusion_index::POSITION).setZero();
+    state_.covariance.block<3, 3>(fusion_index::POSITION, fusion_index::POSITION) =
+        reanchor_covariance;
+    error_state_.segment<3>(fusion_index::POSITION).setZero();
+    last_gnss_position_correction_enu_ = position_correction;
+    return last_gnss_position_correction_enu_.allFinite();
+}
+
+bool LooseCouplingProcessor::reanchorVelocityFromGnssSolution(
+    const Eigen::Vector3d& antenna_velocity_enu,
+    const Eigen::Matrix3d& velocity_covariance_enu) {
+    const Eigen::Matrix3d rotation = state_.nominal.attitude_body_to_enu.toRotationMatrix();
+    const Eigen::Vector3d lever_velocity_body =
+        last_angular_rate_body_.cross(config_.lever_arm_body);
+    const Eigen::Vector3d target_velocity_enu =
+        antenna_velocity_enu - rotation * lever_velocity_body;
+    const Eigen::Vector3d velocity_before = state_.nominal.velocity_enu;
+    const Eigen::Vector3d velocity_correction = target_velocity_enu - velocity_before;
+    if (!target_velocity_enu.allFinite() || !velocity_before.allFinite() ||
+        !velocity_correction.allFinite() ||
+        config_.max_gnss_velocity_reanchor_mps <= 0.0 ||
+        !std::isfinite(config_.max_gnss_velocity_reanchor_mps) ||
+        velocity_correction.norm() > config_.max_gnss_velocity_reanchor_mps ||
+        !velocity_covariance_enu.allFinite()) {
+        return false;
+    }
+
+    Eigen::Matrix3d attitude_covariance =
+        state_.covariance.block<3, 3>(fusion_index::ATTITUDE,
+                                      fusion_index::ATTITUDE);
+    attitude_covariance = regularizeCovariance3x3(attitude_covariance, 1.0);
+    const Eigen::Matrix3d velocity_attitude_jacobian =
+        -rotation * attitude::skew(lever_velocity_body);
+    Eigen::Matrix3d reanchor_covariance =
+        velocity_covariance_enu +
+        velocity_attitude_jacobian * attitude_covariance *
+            velocity_attitude_jacobian.transpose();
+    reanchor_covariance = regularizeCovariance3x3(
+        reanchor_covariance, kDefaultVelocitySigmaMps);
+    if (!reanchor_covariance.allFinite()) {
+        return false;
+    }
+    const Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eig(reanchor_covariance);
+    if (eig.info() != Eigen::Success || !eig.eigenvalues().allFinite() ||
+        eig.eigenvalues().minCoeff() < 0.0) {
+        return false;
+    }
+
+    // This is a velocity-only reset. In particular, do not inject attitude,
+    // position, or bias error and do not retain cross-covariances that would
+    // immediately reintroduce the rejected velocity innovation.
+    state_.nominal.velocity_enu = target_velocity_enu;
+    state_.covariance.block<3, 15>(fusion_index::VELOCITY, 0).setZero();
+    state_.covariance.block<15, 3>(0, fusion_index::VELOCITY).setZero();
+    state_.covariance.block<3, 3>(fusion_index::VELOCITY,
+                                  fusion_index::VELOCITY) = reanchor_covariance;
+    error_state_.segment<3>(fusion_index::VELOCITY).setZero();
+    last_gnss_velocity_correction_enu_ = velocity_correction;
+    return last_gnss_velocity_correction_enu_.allFinite();
 }
 
 void LooseCouplingProcessor::inflateYawUncertainty() {
@@ -323,10 +417,11 @@ void LooseCouplingProcessor::processImuSample(const ImuSample& sample_body_flu) 
         zupt_window_.pop_front();
     }
 
-    if (config_.zupt_enable && detectStationary()) {
+    if (config_.zupt_enable && gnssSpeedGateAllowsZupt() && detectStationary()) {
         const auto system = fusion_measurement::buildZuptUpdate(state_, config_.zupt_sigma_mps);
         int unused_rejections = 0;  // ZUPT is always ungated (max_nis=0.0), never rejected.
         applyUpdateAndInject(system, 0.0, unused_rejections);
+        ++zupt_updates_;
     }
     if (config_.nhc_enable) {
         const auto system = fusion_measurement::buildNhcUpdate(
@@ -339,7 +434,10 @@ void LooseCouplingProcessor::processImuSample(const ImuSample& sample_body_flu) 
 
 void LooseCouplingProcessor::processGnssSolution(const PositionSolution& solution) {
     last_gnss_position_update_applied_ = false;
+    last_gnss_position_reanchored_ = false;
+    last_gnss_velocity_reanchored_ = false;
     last_gnss_position_correction_enu_.setZero();
+    last_gnss_velocity_correction_enu_.setZero();
     if (!initialized_ || !solution.isValid()) {
         return;
     }
@@ -352,9 +450,25 @@ void LooseCouplingProcessor::processGnssSolution(const PositionSolution& solutio
 
     const Eigen::Matrix3d r_e2n = ecefToEnuRotation(origin_lat_, origin_lon_);
 
+    if (solution.has_velocity && solution.velocity_ecef.allFinite()) {
+        const Eigen::Vector3d velocity_enu = r_e2n * solution.velocity_ecef;
+        if (velocity_enu.allFinite()) {
+            has_gnss_velocity_ = true;
+            last_gnss_velocity_speed_mps_ = velocity_enu.norm();
+        }
+    }
+
     const Eigen::Vector3d antenna_position_enu = r_e2n * (solution.position_ecef - origin_ecef_);
     const Eigen::Matrix3d position_covariance_enu = regularizeCovariance3x3(
         r_e2n * solution.position_covariance * r_e2n.transpose(), kDefaultPositionSigmaM);
+
+    // A non-FIXED solution is never trusted for position recovery. Reset the
+    // FIX patience even when position_updates_require_fixed skips the normal
+    // FLOAT/SPP EKF update entirely; otherwise a stale rejection streak could
+    // survive a FLOAT epoch and arm a later FIX too early.
+    if (!solution.isFixed()) {
+        position_consecutive_gate_rejections_ = 0;
+    }
 
     if (!config_.position_updates_require_fixed ||
         solution.isFixed()) {
@@ -365,14 +479,31 @@ void LooseCouplingProcessor::processGnssSolution(const PositionSolution& solutio
                 config_.lever_arm_body);
         const Eigen::Vector3d position_before =
             state_.nominal.position_enu;
-        const auto position_result = applyUpdateAndInject(
+        auto position_result = applyUpdateAndInject(
             position_system,
             config_.max_position_update_nis_per_observation,
             position_consecutive_gate_rejections_);
-        if (position_result.ok) {
+        // Only a consecutive run of trusted FIXED rejections is eligible for
+        // the deterministic position re-anchor. SPP/FLOAT rejects must not
+        // consume the patience budget or leave a stale budget armed for the
+        // next FIX epoch.
+        if (!position_result.ok &&
+            (position_result.rejected_by_innovation_gate ||
+             position_result.rejected_by_invalid_innovation_covariance) &&
+            solution.isFixed() && config_.max_consecutive_gate_rejections > 0 &&
+            position_consecutive_gate_rejections_ >= config_.max_consecutive_gate_rejections &&
+            reanchorPositionFromFixedSolution(antenna_position_enu, position_covariance_enu)) {
+            position_result.ok = true;
+            position_consecutive_gate_rejections_ = 0;
             last_gnss_position_update_applied_ = true;
-            last_gnss_position_correction_enu_ =
-                state_.nominal.position_enu - position_before;
+            last_gnss_position_reanchored_ = true;
+        }
+        if (position_result.ok) {
+            if (!last_gnss_position_reanchored_) {
+                last_gnss_position_update_applied_ = true;
+                last_gnss_position_correction_enu_ =
+                    state_.nominal.position_enu - position_before;
+            }
         }
         if (solution.isFixed() && position_result.ok &&
             std::isfinite(
@@ -395,13 +526,42 @@ void LooseCouplingProcessor::processGnssSolution(const PositionSolution& solutio
         const Eigen::Matrix3d velocity_covariance_enu = regularizeCovariance3x3(
             r_e2n * solution.velocity_covariance * r_e2n.transpose(), kDefaultVelocitySigmaMps);
 
+        // A velocity-only recovery is allowed only for an independently
+        // solved, finite/PSD Doppler covariance. regularizeCovariance3x3()
+        // is intentionally not the quality gate here: replacing a NaN or a
+        // grossly indefinite covariance with a fallback would turn an
+        // untrusted solution into an unconditional reset.
+        bool velocity_solution_quality_ok = solution.velocity_ecef.allFinite() &&
+            solution.velocity_covariance.allFinite();
+        if (velocity_solution_quality_ok) {
+            const Eigen::Matrix3d raw_velocity_covariance =
+                0.5 * (solution.velocity_covariance +
+                        solution.velocity_covariance.transpose());
+            const Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eig(
+                raw_velocity_covariance);
+            velocity_solution_quality_ok =
+                eig.info() == Eigen::Success && eig.eigenvalues().allFinite() &&
+                eig.eigenvalues().minCoeff() >= -1e-9;
+        }
+
         const auto velocity_system = fusion_measurement::buildGnssVelocityUpdate(
             state_, antenna_velocity_enu, velocity_covariance_enu, config_.lever_arm_body,
             last_angular_rate_body_);
         const auto velocity_result = applyUpdateAndInject(
             velocity_system, config_.max_velocity_update_nis_per_observation,
             velocity_consecutive_gate_rejections_);
-
+        if (!velocity_result.ok &&
+            (velocity_result.rejected_by_innovation_gate ||
+             velocity_result.rejected_by_invalid_innovation_covariance) &&
+            velocity_solution_quality_ok &&
+            config_.max_consecutive_velocity_gate_rejections > 0 &&
+            velocity_consecutive_gate_rejections_ >=
+                config_.max_consecutive_velocity_gate_rejections &&
+            reanchorVelocityFromGnssSolution(
+                antenna_velocity_enu, velocity_covariance_enu)) {
+            velocity_consecutive_gate_rejections_ = 0;
+            last_gnss_velocity_reanchored_ = true;
+        }
         // Post-latch health/recovery (yaw-covariance inflation only -- see
         // Config::heading_recovery_* doc comment) must run before the fresh-
         // latch attempt below, though in practice it only ever affects that
@@ -545,6 +705,55 @@ PositionSolution LooseCouplingProcessor::toPositionSolution() const {
         solution.position_ecef = state_.nominal.position_enu;
         solution.has_velocity = false;
     }
+
+    return solution;
+}
+
+PositionSolution LooseCouplingProcessor::toAntennaPositionSolution() const {
+    PositionSolution solution = toPositionSolution();
+    if (!origin_set_) {
+        return solution;
+    }
+
+    const Eigen::Matrix3d r_e2n = ecefToEnuRotation(origin_lat_, origin_lon_);
+    const Eigen::Matrix3d r_n2e = r_e2n.transpose();
+    const Eigen::Matrix3d rotation = state_.nominal.attitude_body_to_enu.toRotationMatrix();
+    const Eigen::Vector3d lever_velocity_body =
+        last_angular_rate_body_.cross(config_.lever_arm_body);
+
+    const Eigen::Vector3d antenna_position_enu =
+        state_.nominal.position_enu + rotation * config_.lever_arm_body;
+    solution.position_ecef = origin_ecef_ + r_n2e * antenna_position_enu;
+    double lat = 0.0, lon = 0.0, height = 0.0;
+    ecef2geodetic(solution.position_ecef, lat, lon, height);
+    solution.position_geodetic = GeodeticCoord(lat, lon, height);
+
+    Eigen::MatrixXd position_h = Eigen::MatrixXd::Zero(3, fusion_index::SIZE);
+    position_h.block<3, 3>(0, fusion_index::POSITION) = Eigen::Matrix3d::Identity();
+    position_h.block<3, 3>(0, fusion_index::ATTITUDE) =
+        -rotation * attitude::skew(config_.lever_arm_body);
+    const Eigen::Matrix3d position_covariance_enu =
+        position_h * state_.covariance * position_h.transpose();
+    solution.position_covariance =
+        r_n2e * position_covariance_enu * r_e2n;
+
+    const Eigen::Vector3d antenna_velocity_enu =
+        state_.nominal.velocity_enu + rotation * lever_velocity_body;
+    solution.velocity_ecef = r_n2e * antenna_velocity_enu;
+    solution.has_velocity = true;
+
+    // Keep this Jacobian identical to buildGnssVelocityUpdate().  The latest
+    // bias-corrected gyro sample is treated as an observed input, so this
+    // H*P*H^T covers state uncertainty but deliberately does not add a
+    // separate gyro measurement-noise term.
+    Eigen::MatrixXd velocity_h = Eigen::MatrixXd::Zero(3, fusion_index::SIZE);
+    velocity_h.block<3, 3>(0, fusion_index::VELOCITY) = Eigen::Matrix3d::Identity();
+    velocity_h.block<3, 3>(0, fusion_index::ATTITUDE) =
+        -rotation * attitude::skew(lever_velocity_body);
+    const Eigen::Matrix3d velocity_covariance_enu =
+        velocity_h * state_.covariance * velocity_h.transpose();
+    solution.velocity_covariance =
+        r_n2e * velocity_covariance_enu * r_e2n;
 
     return solution;
 }

@@ -12,6 +12,7 @@ import subprocess
 import sys
 
 from support.gnss_runtime import ensure_input_exists, resolve_gnss_command
+from support.gnss_static_metrics import parse_ecef, static_truth_metrics
 
 
 from support.gnss_runtime import application_root
@@ -81,6 +82,16 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Fail if mean used-satellite count is below this value.",
     )
+    parser.add_argument(
+        "--truth-ecef",
+        default=None,
+        help="Independent rover marker coordinate as X,Y,Z metres (never inferred from the RINEX header).",
+    )
+    parser.add_argument("--truth-source", default=None, help="Published coordinate source recorded in the summary.")
+    parser.add_argument("--truth-frame", default=None, help="Reference frame and epoch recorded in the summary.")
+    parser.add_argument("--base-ecef", default=None, help="Independent base marker coordinate X,Y,Z passed to solve --base-ecef.")
+    parser.add_argument("--require-horizontal-error-max", type=float, default=None)
+    parser.add_argument("--require-vertical-error-max", type=float, default=None)
     return parser.parse_args()
 
 
@@ -136,10 +147,11 @@ def build_summary_payload(args: argparse.Namespace) -> dict[str, object]:
     if not records:
         raise SystemExit(f"No solution epochs found in {args.out}")
 
-    errors = [
-        math.dist((float(record["x"]), float(record["y"]), float(record["z"])), rover_position)
-        for record in records
-    ]
+    truth_ecef = getattr(args, "truth_ecef", None)
+    truth_position = parse_ecef(truth_ecef) if truth_ecef else rover_position
+    truth_metrics = static_truth_metrics(
+        records, truth_position, accepted_statuses={4} if truth_ecef else None
+    )
     fixed_count = sum(1 for record in records if int(record["status"]) == 4)
     mean_satellites = sum(int(record["satellites"]) for record in records) / len(records)
 
@@ -152,12 +164,21 @@ def build_summary_payload(args: argparse.Namespace) -> dict[str, object]:
         "epochs": len(records),
         "fixed_epochs": fixed_count,
         "fix_rate_pct": rounded(100.0 * fixed_count / len(records)),
-        "mean_position_error_m": rounded(sum(errors) / len(errors)),
-        "max_position_error_m": rounded(max(errors)),
+        "mean_position_error_m": rounded(float(truth_metrics["epoch_error_3d_mean_m"])),
+        "max_position_error_m": rounded(float(truth_metrics["epoch_error_3d_max_m"])),
         "mean_satellites": rounded(mean_satellites),
         "rover_header_position_ecef_m": [rounded(value) for value in rover_position],
         "base_header_position_ecef_m": [rounded(value) for value in base_position],
         "header_baseline_m": rounded(math.dist(rover_position, base_position)),
+        "base_position_used_ecef_m": list(parse_ecef(args.base_ecef)) if getattr(args, "base_ecef", None) else [rounded(value) for value in base_position],
+        "base_position_role": "independent_published_coordinate" if getattr(args, "base_ecef", None) else "rinex_header_approximate",
+        "accuracy_reference": {
+            "role": "independent_published_coordinate" if truth_ecef else "rinex_header_approximate_non_independent",
+            "source": getattr(args, "truth_source", None),
+            "frame": getattr(args, "truth_frame", None),
+            "accuracy_claim_allowed": bool(truth_ecef and getattr(args, "truth_source", None) and getattr(args, "truth_frame", None)),
+        },
+        "static_truth_metrics": truth_metrics,
     }
     args.summary_json.parent.mkdir(parents=True, exist_ok=True)
     args.summary_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -198,6 +219,26 @@ def enforce_summary_requirements(payload: dict[str, object], args: argparse.Name
             f"mean satellites {float(payload['mean_satellites']):.6f} < "
             f"{args.require_mean_sats_min:.6f}"
         )
+    truth_metrics = payload["static_truth_metrics"]
+    assert isinstance(truth_metrics, dict)
+    require_horizontal = getattr(args, "require_horizontal_error_max", None)
+    require_vertical = getattr(args, "require_vertical_error_max", None)
+    if require_horizontal is not None:
+        value = float(truth_metrics["horizontal_error_m"])
+        if value > require_horizontal:
+            failures.append(
+                f"horizontal error {value:.6f} m > {require_horizontal:.6f} m"
+            )
+    if require_vertical is not None:
+        value = float(truth_metrics["vertical_error_m"])
+        if value > require_vertical:
+            failures.append(
+                f"vertical error {value:.6f} m > {require_vertical:.6f} m"
+            )
+    if (require_horizontal is not None or require_vertical is not None) and not bool(
+        payload["accuracy_reference"]["accuracy_claim_allowed"]  # type: ignore[index]
+    ):
+        failures.append("independent --truth-ecef, --truth-source, and --truth-frame are required for accuracy gates")
 
     if failures:
         message = "Short-baseline sign-off checks failed:\n" + "\n".join(
@@ -215,6 +256,16 @@ def main() -> int:
     ensure_input_exists(args.nav, "navigation file", ROOT_DIR)
     if args.max_epochs == 0:
         raise SystemExit("--max-epochs must be positive or -1")
+    if args.truth_ecef is not None:
+        try:
+            parse_ecef(args.truth_ecef)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
+    if args.base_ecef is not None:
+        try:
+            parse_ecef(args.base_ecef)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.summary_json.parent.mkdir(parents=True, exist_ok=True)
@@ -236,6 +287,8 @@ def main() -> int:
     ]
     if args.max_epochs > 0:
         command.extend(["--max-epochs", str(args.max_epochs)])
+    if args.base_ecef is not None:
+        command.extend(["--base-ecef", *[str(value) for value in parse_ecef(args.base_ecef)]])
     run_command(command)
 
     payload = build_summary_payload(args)

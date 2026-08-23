@@ -10,8 +10,22 @@ rtk_pos_out = "output/rtk_solution.pos"
 preset = "low-cost"
 navi776_tc = true
 
-# IMU-to-antenna lever arm in body FLU coordinates, meters.
-lever_arm = [0.31, 0.0, 0.55]
+# Tokyo PPC IMU-to-antenna lever arm in the published vehicle coordinates,
+# meters. Preserve the signed Z component from data/PPC-Dataset/README.md.
+lever_arm = [0.31, 0.0, -0.55]
+
+# Suppress false ZUPT when the last-known GNSS Doppler speed proves motion. A
+# moving decision remains latched until a later low-speed GNSS velocity
+# releases it; with no GNSS velocity, the legacy IMU-only detector remains in
+# use. The default-on gate is a safety guard for smooth constant-speed motion.
+zupt_gnss_speed_gate = true
+zupt_gnss_speed_threshold_mps = 0.5
+
+# Recover from a short GNSS Doppler velocity-gate lockout without overwriting
+# position, attitude, or biases. Set patience to 0 to disable this bounded
+# velocity-only re-anchor.
+max_consecutive_velocity_gate_rejections = 3
+max_gnss_velocity_reanchor_mps = 20.0
 
 # 0 processes every epoch.
 max_epochs = 0

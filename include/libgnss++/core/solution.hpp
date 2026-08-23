@@ -3,6 +3,7 @@
 #include <vector>
 #include <string>
 #include <chrono>
+#include <limits>
 #include "types.hpp"
 
 namespace libgnss {
@@ -17,12 +18,17 @@ struct PositionSolution {
     // Position
     Vector3d position_ecef;         ///< Position in ECEF coordinates
     GeodeticCoord position_geodetic; ///< Position in geodetic coordinates
-    Matrix3d position_covariance;   ///< Position covariance matrix
+    // Eigen matrices do not value-initialize their coefficients.  Keep an
+    // absent covariance visibly invalid so consumers can select a documented
+    // fallback instead of accidentally treating stack garbage as R.
+    Matrix3d position_covariance =
+        Matrix3d::Constant(std::numeric_limits<double>::quiet_NaN());
     
     // Velocity (if available)
     Vector3d velocity_ecef;         ///< Velocity in ECEF coordinates
     Vector3d velocity_ned;          ///< Velocity in NED coordinates
-    Matrix3d velocity_covariance;   ///< Velocity covariance matrix
+    Matrix3d velocity_covariance =
+        Matrix3d::Constant(std::numeric_limits<double>::quiet_NaN());
     bool has_velocity = false;
     
     // Clock

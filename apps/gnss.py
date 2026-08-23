@@ -87,6 +87,33 @@ COMMANDS = {
         "target": python_target("gnss_robotics_smoke.py"),
         "summary": "Run a short PPC RTK replay with robotics-friendly realtime gates.",
     },
+    "urban-bridge-score": {
+        "kind": "python",
+        "target": python_target("gnss_urban_bridge_score.py"),
+        "summary": "Score RTK-degraded spans, fused IMU bridge drift, and reacquisition jumps against PPC truth.",
+    },
+    "urban-continuity-bundle": {
+        "kind": "python",
+        "target": python_target("gnss_urban_continuity_bundle.py"),
+        "summary": "Build one auditable RTK/IMU continuity bundle with POS, KML, PNG, score, and manifest artifacts.",
+    },
+    "japan-static-survey": {
+        "kind": "python",
+        "target": python_target("gnss_japan_static_survey.py"),
+        "summary": "Fetch and evaluate the frozen IGS Tsukuba relative-static and PPP survey example.",
+    },
+    "trajectory-bundle": {
+        "kind": "python", "target": python_target("gnss_trajectory_bundle.py"),
+        "summary": "Package and truth-score a versioned trajectory for SLAM, maps, or visualization.",
+    },
+    "trajectory-bundle-validate": {
+        "kind": "python", "target": python_target("gnss_trajectory_bundle_validate.py"),
+        "summary": "Validate trajectory hashes, frames, and consumer gates without rerunning a solver.",
+    },
+    "clas-application-decision": {
+        "kind": "python", "target": python_target("gnss_clas_application_decision.py"),
+        "summary": "Acquire, decode, truth-score, and gate one public PPC/QZSS CLAS application run.",
+    },
     "ros2-doctor": {
         "kind": "python",
         "target": python_target("gnss_ros2_doctor.py"),

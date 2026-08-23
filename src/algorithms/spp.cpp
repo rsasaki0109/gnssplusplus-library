@@ -452,6 +452,12 @@ double robustHuberWeightFactor(double residual_m,
     return std::clamp(threshold_sigma / normalized_residual, bounded_min, 1.0);
 }
 
+// A valid SPP geometry covariance is normally obtained from the weighted
+// pseudorange normal matrix.  This fallback is deliberately conservative for
+// a rank-deficient or numerically unusable geometry; callers must never see
+// an uninitialized Eigen matrix in a PositionSolution.
+constexpr double kSppFallbackPositionSigmaM = 100.0;
+
 }  // namespace
 
 SPPProcessor::SPPProcessor() {
@@ -1367,6 +1373,90 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
     const int final_num_unknowns = 4 + static_cast<int>(final_bias_groups.size());
     const int final_degrees_of_freedom =
         static_cast<int>(final_measurements.size()) - final_num_unknowns;
+
+    const auto calculatePositionCovariance = [&]() {
+        const Matrix3d fallback_covariance =
+            Matrix3d::Identity() *
+            (kSppFallbackPositionSigmaM * kSppFallbackPositionSigmaM);
+        if (final_measurements.size() < static_cast<size_t>(final_num_unknowns) ||
+            final_num_unknowns < 4) {
+            return fallback_covariance;
+        }
+
+        MatrixXd geometry = MatrixXd::Zero(
+            static_cast<int>(final_measurements.size()), final_num_unknowns);
+        for (int i = 0; i < static_cast<int>(final_measurements.size()); ++i) {
+            const auto& measurement = final_measurements[static_cast<size_t>(i)];
+            const Vector3d delta = measurement.satellite_position - position;
+            const double range = delta.norm();
+            if (!std::isfinite(range) || range <= 0.0 ||
+                !std::isfinite(measurement.variance) ||
+                measurement.variance <= 0.0) {
+                return fallback_covariance;
+            }
+
+            const Vector3d los = delta / range;
+            geometry(i, 0) = -los.x();
+            geometry(i, 1) = -los.y();
+            geometry(i, 2) = -los.z();
+            geometry(i, 3) = 1.0;
+            const auto bias_column = final_bias_columns.find(measurement.clock_group);
+            if (bias_column != final_bias_columns.end()) {
+                geometry(i, bias_column->second) = 1.0;
+            }
+        }
+
+        MatrixXd normal = MatrixXd::Zero(final_num_unknowns, final_num_unknowns);
+        for (int i = 0; i < geometry.rows(); ++i) {
+            const double weight = 1.0 / final_measurements[static_cast<size_t>(i)].variance;
+            if (!std::isfinite(weight) || weight <= 0.0) {
+                return fallback_covariance;
+            }
+            normal.noalias() += weight * geometry.row(i).transpose() * geometry.row(i);
+        }
+        normal = 0.5 * (normal + normal.transpose());
+        if (!normal.allFinite()) {
+            return fallback_covariance;
+        }
+
+        const Eigen::SelfAdjointEigenSolver<MatrixXd> normal_eigen_solver(normal);
+        if (normal_eigen_solver.info() != Eigen::Success ||
+            !normal_eigen_solver.eigenvalues().allFinite()) {
+            return fallback_covariance;
+        }
+        const double max_eigenvalue = normal_eigen_solver.eigenvalues().maxCoeff();
+        const double min_eigenvalue = normal_eigen_solver.eigenvalues().minCoeff();
+        const double relative_tolerance =
+            1e-12 * std::max(1.0, std::abs(max_eigenvalue));
+        if (!std::isfinite(max_eigenvalue) ||
+            !std::isfinite(min_eigenvalue) ||
+            min_eigenvalue <= relative_tolerance) {
+            return fallback_covariance;
+        }
+
+        const VectorXd inverse_eigenvalues =
+            normal_eigen_solver.eigenvalues().cwiseInverse();
+        const MatrixXd full_covariance =
+            normal_eigen_solver.eigenvectors() *
+            inverse_eigenvalues.asDiagonal() *
+            normal_eigen_solver.eigenvectors().transpose();
+        if (!full_covariance.allFinite() || full_covariance.rows() < 3) {
+            return fallback_covariance;
+        }
+
+        const Matrix3d covariance = 0.5 *
+            (full_covariance.block(0, 0, 3, 3) +
+             full_covariance.block(0, 0, 3, 3).transpose());
+        const Eigen::SelfAdjointEigenSolver<Matrix3d> covariance_eigen_solver(covariance);
+        if (covariance_eigen_solver.info() != Eigen::Success ||
+            !covariance.allFinite() ||
+            covariance_eigen_solver.eigenvalues().minCoeff() < -1e-10) {
+            return fallback_covariance;
+        }
+        return covariance;
+    };
+
+    solution.position_covariance = calculatePositionCovariance();
     const double final_residual_rms = residualRms(final_residuals);
     const double final_max_abs_residual = maxAbsResidual(final_residuals);
     double final_chi_square = 0.0;

@@ -14,6 +14,7 @@ import sys
 import tempfile
 
 from support.gnss_runtime import ensure_input_exists, resolve_gnss_command, run_fetch_products
+from support.gnss_static_metrics import parse_ecef, static_truth_metrics
 
 
 from support.gnss_runtime import application_root
@@ -61,6 +62,8 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional DCB / Bias-SINEX product.",
     )
+    parser.add_argument("--antex", type=Path, default=None, help="Optional receiver ANTEX file passed to gnss ppp.")
+    parser.add_argument("--receiver-antenna-type", default=None, help="ANTEX antenna key override passed to gnss ppp.")
     parser.add_argument(
         "--out",
         type=Path,
@@ -109,6 +112,11 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Fail if PPP_FLOAT/PPP_FIXED epochs are below this percentage of valid epochs.",
     )
+    parser.add_argument("--truth-ecef", default=None, help="Independent station marker coordinate as X,Y,Z metres.")
+    parser.add_argument("--truth-source", default=None, help="Published coordinate source recorded in the summary.")
+    parser.add_argument("--truth-frame", default=None, help="Reference frame and epoch recorded in the summary.")
+    parser.add_argument("--require-horizontal-error-max", type=float, default=None)
+    parser.add_argument("--require-vertical-error-max", type=float, default=None)
     parser.add_argument(
         "--enable-ar",
         action="store_true",
@@ -326,10 +334,11 @@ def build_summary_payload(args: argparse.Namespace) -> dict[str, object]:
     if not records:
         raise SystemExit(f"No solution epochs found in {args.out}")
 
-    errors = [
-        math.dist((float(record["x"]), float(record["y"]), float(record["z"])), header_position)
-        for record in records
-    ]
+    truth_ecef = getattr(args, "truth_ecef", None)
+    truth_position = parse_ecef(truth_ecef) if truth_ecef else header_position
+    truth_metrics = static_truth_metrics(
+        records, truth_position, accepted_statuses=PPP_STATUSES if truth_ecef else None
+    )
     ppp_float_epochs = sum(1 for record in records if int(record["status"]) == 5)
     ppp_fixed_epochs = sum(1 for record in records if int(record["status"]) == 6)
     ppp_epochs = sum(1 for record in records if int(record["status"]) in PPP_STATUSES)
@@ -356,10 +365,19 @@ def build_summary_payload(args: argparse.Namespace) -> dict[str, object]:
         "ppp_solution_rate_pct": rounded(100.0 * ppp_epochs / len(records)),
         "ambiguity_resolution_enabled": bool(args.enable_ar),
         "ar_ratio_threshold": rounded(args.ar_ratio_threshold),
-        "mean_position_error_m": rounded(sum(errors) / len(errors)),
-        "max_position_error_m": rounded(max(errors)),
+        "mean_position_error_m": rounded(float(truth_metrics["epoch_error_3d_mean_m"])),
+        "max_position_error_m": rounded(float(truth_metrics["epoch_error_3d_max_m"])),
         "mean_satellites": rounded(mean_satellites),
         "header_position_ecef_m": [rounded(value) for value in header_position],
+        "antex": str(getattr(args, "antex", None)) if getattr(args, "antex", None) is not None else None,
+        "receiver_antenna_type": getattr(args, "receiver_antenna_type", None),
+        "accuracy_reference": {
+            "role": "independent_published_coordinate" if truth_ecef else "rinex_header_approximate_non_independent",
+            "source": getattr(args, "truth_source", None),
+            "frame": getattr(args, "truth_frame", None),
+            "accuracy_claim_allowed": bool(truth_ecef and getattr(args, "truth_source", None) and getattr(args, "truth_frame", None)),
+        },
+        "static_truth_metrics": truth_metrics,
     }
     ppp_run_summary = getattr(args, "ppp_run_summary", None)
     if isinstance(ppp_run_summary, dict):
@@ -457,6 +475,26 @@ def enforce_summary_requirements(payload: dict[str, object], args: argparse.Name
             f"PPP solution rate {float(payload['ppp_solution_rate_pct']):.6f}% < "
             f"{args.require_ppp_solution_rate_min:.6f}%"
         )
+    truth_metrics = payload["static_truth_metrics"]
+    assert isinstance(truth_metrics, dict)
+    require_horizontal = getattr(args, "require_horizontal_error_max", None)
+    require_vertical = getattr(args, "require_vertical_error_max", None)
+    if require_horizontal is not None:
+        value = float(truth_metrics["horizontal_error_m"])
+        if value > require_horizontal:
+            failures.append(
+                f"horizontal error {value:.6f} m > {require_horizontal:.6f} m"
+            )
+    if require_vertical is not None:
+        value = float(truth_metrics["vertical_error_m"])
+        if value > require_vertical:
+            failures.append(
+                f"vertical error {value:.6f} m > {require_vertical:.6f} m"
+            )
+    if (require_horizontal is not None or require_vertical is not None) and not bool(
+        payload["accuracy_reference"]["accuracy_claim_allowed"]  # type: ignore[index]
+    ):
+        failures.append("independent --truth-ecef, --truth-source, and --truth-frame are required for accuracy gates")
     if (
         args.require_ppp_fixed_epochs_min is not None
         and int(payload["ppp_fixed_epochs"]) < args.require_ppp_fixed_epochs_min
@@ -538,12 +576,21 @@ def main() -> int:
         ensure_input_exists(args.sp3, "SP3 file", ROOT_DIR)
     if args.clk is not None:
         ensure_input_exists(args.clk, "CLK file", ROOT_DIR)
+    if args.antex is not None:
+        ensure_input_exists(args.antex, "ANTEX file", ROOT_DIR)
     if args.malib_bin is not None:
         ensure_input_exists(args.malib_bin, "MALIB binary", ROOT_DIR)
     if args.malib_bin is not None:
         ensure_input_exists(args.malib_config, "MALIB config", ROOT_DIR)
     if args.max_epochs == 0:
         raise SystemExit("--max-epochs must be positive or -1")
+    if args.truth_ecef is not None:
+        try:
+            parse_ecef(args.truth_ecef)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
+    if args.receiver_antenna_type is not None and args.antex is None:
+        raise SystemExit("--receiver-antenna-type requires --antex")
     if args.enable_ar and args.ar_ratio_threshold <= 0.0:
         raise SystemExit("--ar-ratio-threshold must be positive")
     if args.generate_products and args.fetch_products:
@@ -625,6 +672,10 @@ def main() -> int:
         command.extend(["--ionex", str(resolved_ionex)])
     if resolved_dcb is not None:
         command.extend(["--dcb", str(resolved_dcb)])
+    if args.antex is not None:
+        command.extend(["--antex", str(args.antex)])
+    if args.receiver_antenna_type is not None:
+        command.extend(["--receiver-antenna-type", args.receiver_antenna_type])
     if args.enable_ar:
         command.extend(["--enable-ar", "--ar-ratio-threshold", str(args.ar_ratio_threshold)])
     if args.resolved_static_anchor_blend:

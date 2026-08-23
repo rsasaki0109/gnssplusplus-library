@@ -20,6 +20,7 @@ namespace fusion_update {
 struct FusionUpdateResult {
     bool ok = false;
     bool rejected_by_innovation_gate = false;
+    bool rejected_by_invalid_innovation_covariance = false;
     int observation_count = 0;
     double normalized_innovation_squared = 0.0;
     double normalized_innovation_squared_per_observation = 0.0;

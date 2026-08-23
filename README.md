@@ -14,7 +14,8 @@ handling without an external RTKLIB runtime.
 - Products: `SP3`, `CLK`, `IONEX`, `DCB`
 - Extras: benchmarks, web dashboard, Python bindings, Docker, ROS 2 playback
 
-[Choose a use case](docs/use_cases.md): [RTKLIB migration](docs/use_cases/rtklib_migration.md),
+[Choose a use case](docs/use_cases.md): [urban RTK + IMU continuity](docs/use_cases/urban_rtk_fgo.md),
+[RTKLIB migration](docs/use_cases/rtklib_migration.md),
 [ROS2 receiver/bag replay](docs/use_cases/ros2.md), or [QZSS L6 / CLAS / MADOCA](docs/use_cases/qzss_l6.md).
 
 ![Feature overview](docs/libgnsspp_feature_overview.png)

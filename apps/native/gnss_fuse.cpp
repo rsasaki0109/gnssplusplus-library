@@ -666,6 +666,12 @@ void printAdvancedUsage(const char* program_name) {
         << "                                independently accepted FIX positions to INS\n"
         << "  --lever-arm x,y,z            IMU -> antenna lever arm, body FLU, meters (default 0,0,0)\n"
         << "  --zupt / --no-zupt           Enable/disable zero-velocity updates (default: enabled)\n"
+        << "  --zupt-gnss-speed-gate / --no-zupt-gnss-speed-gate\n"
+        << "                                Latch suppression after last-known GNSS\n"
+        << "                                speed exceeds 0.5 m/s (default: enabled)\n"
+        << "  --zupt-gnss-speed-threshold-mps <mps>\n"
+        << "                                Moving-speed threshold for the ZUPT gate\n"
+        << "                                (default: 0.5)\n"
         << "  --nhc / --no-nhc             Enable/disable the non-holonomic constraint (default: disabled)\n"
         << "  --imu-grade <grade>          tactical|consumer|industrial|nav_grade (default: tactical)\n"
         << "  --align-vel-thresh <mps>     Minimum GNSS speed to attempt heading alignment (default: 1.0)\n"
@@ -697,11 +703,18 @@ void printAdvancedUsage(const char* program_name) {
         << "                                against RTK float-reconvergence jumps corrupting attitude\n"
         << "                                via the lever-arm coupling; <=0 disables). Default: 500.0\n"
         << "  --max-velocity-nis <v>       Same gate for the GNSS velocity update. Default: 500.0\n"
+        << "  --max-consecutive-velocity-gate-rejections <n>\n"
+        << "                                After this many consecutive velocity-gate\n"
+        << "                                rejections, allow a bounded Doppler velocity-only\n"
+        << "                                re-anchor (<=0 disables). Default: 3\n"
+        << "  --max-gnss-velocity-reanchor-mps <mps>\n"
+        << "                                Maximum velocity correction accepted by the\n"
+        << "                                velocity-only re-anchor. Default: 20.0\n"
         << "  --max-consecutive-gate-rejections <n>\n"
-        << "                                Force-accept a channel's update after this many\n"
-        << "                                consecutive NIS-gate rejections, to escape a lockout\n"
-        << "                                spiral where the drifted state makes every later fix\n"
-        << "                                look like an outlier too (<=0 disables). Default: 30\n"
+        << "                                After this many consecutive position-gate rejections,\n"
+        << "                                allow a trusted FIXED position-only re-anchor; FLOAT,\n"
+        << "                                velocity, attitude, and bias updates are never forced\n"
+        << "                                through (<=0 disables). Default: 30\n"
         << "  --preset <survey|low-cost|moving-base|odaiba>\n"
         << "                                RTK tuning preset, only used with --base (default: none)\n"
         << "  --ratio <value>              RTK ambiguity ratio threshold (default: 3.0)\n"
@@ -1488,6 +1501,7 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             {"--nhc", "--no-nhc"},
             {"--navi776-tc", ""},
             {"--zupt", "--no-zupt"},
+            {"--zupt-gnss-speed-gate", "--no-zupt-gnss-speed-gate"},
         },
         {
             {"--base-ecef", libgnss_apps::TomlArrayStyle::SEPARATE_ARGUMENTS},
@@ -1525,23 +1539,15 @@ FuseOptions parseArguments(int argc, char* argv[]) {
     // not a change to the library default) rather than shipping ungated by
     // default; both remain overridable via --max-position-nis/--max-velocity-nis.
     //
-    // The threshold and LooseCouplingProcessor::Config::
-    // max_consecutive_gate_rejections (the lockout-spiral escape hatch, see
-    // fusion_processor.hpp) interact non-monotonically -- a tight threshold
-    // rejects more often, so the escape hatch engages more often too, each
-    // time risking forcing through a genuinely bad update. Empirically swept
-    // on PPC tokyo/run1 (docs/design.md validation): 500 paired with a
-    // patience of 30 consecutive rejections gave the best result of the
-    // configurations tried (H-RMSE ~9 m, roll/pitch RMSE ~1 deg, vs. e.g.
-    // 20/5 which spirals into tens of km of drift, or 500/5 which recovers
-    // position but leaves roll RMSE ~17 deg from more frequent forced
-    // updates). Treat these as a reasonable starting point for a low-cost
-    // receiver + this preset, not a universally optimal constant -- both are
-    // exposed via --max-position-nis/--max-velocity-nis/
-    // --max-consecutive-gate-rejections for retuning on other datasets.
+    // A gated update is never retried ungated. Once the position channel has
+    // rejected this many consecutive epochs, a FIXED solution may perform a
+    // position-only re-anchor; velocity, attitude, and bias states remain
+    // protected by their ordinary NIS gate.
     options.fusion_config.max_position_update_nis_per_observation = 500.0;
     options.fusion_config.max_velocity_update_nis_per_observation = 500.0;
     options.fusion_config.max_consecutive_gate_rejections = 30;
+    options.fusion_config.max_consecutive_velocity_gate_rejections = 3;
+    options.fusion_config.max_gnss_velocity_reanchor_mps = 20.0;
     std::string imu_grade = "tactical";
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
@@ -1789,6 +1795,13 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             options.fusion_config.zupt_enable = true;
         } else if (arg == "--no-zupt") {
             options.fusion_config.zupt_enable = false;
+        } else if (arg == "--zupt-gnss-speed-gate") {
+            options.fusion_config.zupt_gnss_speed_gate_enable = true;
+        } else if (arg == "--no-zupt-gnss-speed-gate") {
+            options.fusion_config.zupt_gnss_speed_gate_enable = false;
+        } else if (arg == "--zupt-gnss-speed-threshold-mps") {
+            options.fusion_config.zupt_gnss_speed_gate_threshold_mps =
+                std::stod(requireValue(arg, i, argc, argv));
         } else if (arg == "--nhc") {
             options.fusion_config.nhc_enable = true;
         } else if (arg == "--no-nhc") {
@@ -1824,6 +1837,12 @@ FuseOptions parseArguments(int argc, char* argv[]) {
                 std::stod(requireValue(arg, i, argc, argv));
         } else if (arg == "--max-velocity-nis") {
             options.fusion_config.max_velocity_update_nis_per_observation =
+                std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--max-consecutive-velocity-gate-rejections") {
+            options.fusion_config.max_consecutive_velocity_gate_rejections =
+                std::stoi(requireValue(arg, i, argc, argv));
+        } else if (arg == "--max-gnss-velocity-reanchor-mps") {
+            options.fusion_config.max_gnss_velocity_reanchor_mps =
                 std::stod(requireValue(arg, i, argc, argv));
         } else if (arg == "--max-consecutive-gate-rejections") {
             options.fusion_config.max_consecutive_gate_rejections =
@@ -2076,6 +2095,23 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             "--integrity-anchor-max-age-s must be finite and positive",
             argv[0]);
     }
+    if (!std::isfinite(options.fusion_config.zupt_gnss_speed_gate_threshold_mps) ||
+        options.fusion_config.zupt_gnss_speed_gate_threshold_mps < 0.0) {
+        argumentError(
+            "--zupt-gnss-speed-threshold-mps must be finite and non-negative",
+            argv[0]);
+    }
+    if (options.fusion_config.max_consecutive_velocity_gate_rejections < 0) {
+        argumentError(
+            "--max-consecutive-velocity-gate-rejections must be non-negative",
+            argv[0]);
+    }
+    if (!std::isfinite(options.fusion_config.max_gnss_velocity_reanchor_mps) ||
+        options.fusion_config.max_gnss_velocity_reanchor_mps < 0.0) {
+        argumentError(
+            "--max-gnss-velocity-reanchor-mps must be finite and non-negative",
+            argv[0]);
+    }
     options.fusion_config.tight_dd_sse_fixed_anchor_max_age_s =
         options.integrity_anchor_max_age_s;
     if (options.max_epochs < 0) argumentError("--max-epochs must be non-negative", argv[0]);
@@ -2203,7 +2239,7 @@ int runSppFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
         }
 
         if (fusion_processor.isOriginSet()) {
-            fused_solution.addSolution(fusion_processor.toPositionSolution());
+            fused_solution.addSolution(fusion_processor.toAntennaPositionSolution());
             attitude_writer.write(fusion_processor.state().nominal.time,
                                   fusion_processor.state().nominal.attitude_body_to_enu);
         }
@@ -2302,7 +2338,7 @@ int runPositionSolutionFusion(
         }
 
         if (fusion_processor.isOriginSet()) {
-            fused_solution.addSolution(fusion_processor.toPositionSolution());
+            fused_solution.addSolution(fusion_processor.toAntennaPositionSolution());
             attitude_writer.write(
                 fusion_processor.state().nominal.time,
                 fusion_processor.state().nominal.attitude_body_to_enu);
@@ -3576,7 +3612,7 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
             fused_solution.addSolution(pos_solution);
         } else if (fusion_processor.isOriginSet()) {
             fused_solution.addSolution(
-                fusion_processor.toPositionSolution());
+                fusion_processor.toAntennaPositionSolution());
         }
         if (fusion_processor.isOriginSet()) {
             attitude_writer.write(fusion_processor.state().nominal.time,

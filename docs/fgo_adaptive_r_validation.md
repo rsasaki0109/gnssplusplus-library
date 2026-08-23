@@ -11,7 +11,7 @@ nesting limit, so validation used the clang-ninja Windows build).
 
 ## Method
 
-Tokyo run1, PPC 5 Hz, `--data-dir`, `--lever-arm 0.31,0,0.55`, `--preset
+Tokyo run1, PPC 5 Hz, `--data-dir`, `--lever-arm 0.31,0,-0.55`, `--preset
 low-cost`, `--ratio 2.4`, `--max-subset-ar-drop-steps 18`,
 `--rtk-snr-weighting`, `--no-arfilter`. Four configurations, each scored
 against `reference.csv` ECEF:

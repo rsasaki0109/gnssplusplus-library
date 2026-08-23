@@ -2402,8 +2402,13 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             continue;
         }
         if (arg == "--base-ecef" && i + 3 < argc) {
-            config.base_position_ecef = Eigen::Vector3d(
-                std::stod(argv[++i]), std::stod(argv[++i]), std::stod(argv[++i]));
+            // Do not increment i multiple times in constructor arguments: C++
+            // does not guarantee their evaluation order, and optimized builds
+            // have observed the supplied XYZ being reversed.
+            const double base_x = std::stod(argv[++i]);
+            const double base_y = std::stod(argv[++i]);
+            const double base_z = std::stod(argv[++i]);
+            config.base_position_ecef = Eigen::Vector3d(base_x, base_y, base_z);
             config.base_position_override = true;
             continue;
         }

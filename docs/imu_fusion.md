@@ -16,7 +16,7 @@ gnss fuse \
   --base  data/PPC-Dataset/tokyo/run1/base.obs \
   --nav   data/PPC-Dataset/tokyo/run1/base.nav \
   --imu   data/PPC-Dataset/tokyo/run1/imu.csv \
-  --lever-arm 0.31,0,0.55 \
+  --lever-arm 0.31,0,-0.55 \
   --preset low-cost \
   --out output/fused.pos
 ```
@@ -34,9 +34,59 @@ apparently accepted carrier updates could make the covariance indefinite.
 Without either flag the established loose-coupling path is unchanged.
 
 Key flags: `--lever-arm x,y,z` (IMU→antenna, body FLU), `--zupt`/`--no-zupt`
-(default on), `--nhc`/`--no-nhc` (default off), `--imu-grade`,
+(default on), `--zupt-gnss-speed-gate`/`--no-zupt-gnss-speed-gate` (default
+on), and `--zupt-gnss-speed-threshold-mps` (default 0.5). A last-known GNSS
+velocity above the threshold latches ZUPT suppression until a later low-speed
+GNSS velocity releases it; stale/missing velocity does not silently re-enable
+ZUPT after a moving latch. If no GNSS velocity has ever been available, the
+legacy IMU-only detector is preserved. The default-on gate is a safety guard
+against the IMU variance/median detector mistaking smooth constant-speed
+motion for a stop. `--nhc`/`--no-nhc` (default off), `--imu-grade`,
 `--max-position-nis`/`--max-velocity-nis`/`--max-consecutive-gate-rejections`
 (innovation gating), heading-alignment window/threshold knobs (see `--help`).
+
+When a GNSS Doppler velocity update is rejected repeatedly, the default
+`--max-consecutive-velocity-gate-rejections 3` recovery can re-anchor only the
+IMU-origin velocity from the same finite, positive-semidefinite Doppler
+covariance. The antenna measurement is converted with
+`v_imu = v_antenna - R(omega x lever_arm)`; position, attitude, and biases are
+left unchanged, velocity cross-covariances are cleared, and the correction is
+bounded by `--max-gnss-velocity-reanchor-mps` (default 20 m/s). A malformed
+covariance or an over-bound correction cannot trigger the recovery. This is a
+bounded deterministic recovery for velocity-gate lockout, not an ungated EKF
+retry; set the patience to 0 to disable it.
+
+Position-gate recovery follows the same separation: only a run of trusted
+`FIXED` rejections can trigger the position-only re-anchor, and a `FLOAT` or
+SPP epoch resets that patience counter. The application default is 30
+consecutive `FIXED` epochs. The default position correction bound is unlimited
+(`+infinity`), because a genuine outage can leave the IMU origin tens or
+hundreds of metres from a returning, accurate FIX; an application that has an
+independent maximum-jump contract can set a finite
+`max_fixed_position_reanchor_m` in the library configuration. The reset still
+requires finite target/covariance data and changes only position (including
+its covariance block); it never retries a rejected EKF update or overwrites
+velocity, attitude, or biases.
+
+## Position frame contract
+
+The loose ESKF nominal `position_enu` and `velocity_enu` are always the IMU
+origin. `LooseCouplingProcessor::toPositionSolution()` preserves that
+IMU-origin contract for internal consumers, including tight-coupling
+propagation, priors, and integrity evidence. The GNSS/RTK input and the PPC
+`reference.csv` are antenna-frame positions.
+
+External fused `.pos` and KML products emitted by `gnss fuse` use
+`toAntennaPositionSolution()`: position is `p_imu + R_body_to_enu * lever_arm`
+and velocity is `v_imu + R_body_to_enu * (omega_body x lever_arm)`, then both
+are rotated to ECEF. Their position and velocity covariance are the matching
+`H P H^T` projections, including the lever-arm attitude Jacobian. The
+velocity projection treats the latest bias-corrected gyro sample as an
+observed input and therefore does not include a separate gyro measurement
+noise term. Do not change internal propagated-solution callers to the
+antenna method without separately auditing their frame contract.
+The `urban-bridge-score` JSON summary records the same declaration under
+`coordinate_frame_contract` so archived metrics remain auditable.
 
 ## IMU input
 
@@ -97,6 +147,13 @@ Fusion trades some average accuracy (IMU dead-reckoning drift during long
 urban outages) for near-total availability: ~99% of reference epochs get a
 solution vs 69–92% for RTK alone, with ~94–100% of RTK outage epochs bridged.
 Fixed-epoch accuracy is not degraded.
+
+The Tokyo/run1 3500-epoch ZUPT A/B confirmed 21 false applications while the
+last GNSS speed was 0.529–4.014 m/s (tow 187483.0–187491.0). The moving latch
+is therefore retained for safety, although this short A/B did not improve the
+trajectory score: gate off/on max bridge was 81.938/102.780 m and fixed-P95
+regression was 36.044/36.209 m. This is a safety hardening result, not an
+accuracy-pass result; the full run1 gate was not opened from this slice.
 
 Known limits: consumer/tactical-grade dead-reckoning drifts tens of meters
 through multi-minute outages; vertical error remains weaker than horizontal;

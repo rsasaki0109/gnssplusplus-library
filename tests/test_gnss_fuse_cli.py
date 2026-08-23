@@ -59,8 +59,9 @@ class GnssFuseCliTest(unittest.TestCase):
                         "[gnss_fuse]",
                         'gnss_pos = "missing-solution.pos"',
                         'imu = "missing-imu.csv"',
-                        "lever_arm = [0.31, 0.0, 0.55]",
+                        "lever_arm = [0.31, 0.0, -0.55]",
                         "navi776_tc = false",
+                        "zupt_gnss_speed_gate = false",
                         "base_interp = true",
                         "max_epochs = -1",
                     ]
@@ -98,9 +99,47 @@ class GnssFuseCliTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stderr)
         self.assertIn("--navi776-tc", result.stdout)
+        self.assertIn("--zupt-gnss-speed-gate", result.stdout)
         self.assertIn("--tc-doppler-sigma", result.stdout)
         self.assertIn("--rtk-ins-prior-inflation", result.stdout)
         self.assertIn("--help-advanced", result.stdout)
+
+    def test_zupt_speed_threshold_rejects_non_finite_or_negative_values(self) -> None:
+        for invalid in ("-1", "nan"):
+            result = self.run_fuse(
+                "--imu", "missing-imu.csv",
+                "--gnss-pos", "missing-solution.pos",
+                "--zupt-gnss-speed-threshold-mps", invalid,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(
+                "--zupt-gnss-speed-threshold-mps must be finite and non-negative",
+                result.stderr,
+            )
+
+    def test_velocity_reanchor_options_reject_invalid_values(self) -> None:
+        result = self.run_fuse(
+            "--imu", "missing-imu.csv",
+            "--gnss-pos", "missing-solution.pos",
+            "--max-consecutive-velocity-gate-rejections", "-1",
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn(
+            "--max-consecutive-velocity-gate-rejections must be non-negative",
+            result.stderr,
+        )
+
+        for invalid in ("-1", "nan"):
+            result = self.run_fuse(
+                "--imu", "missing-imu.csv",
+                "--gnss-pos", "missing-solution.pos",
+                "--max-gnss-velocity-reanchor-mps", invalid,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(
+                "--max-gnss-velocity-reanchor-mps must be finite and non-negative",
+                result.stderr,
+            )
 
 
 if __name__ == "__main__":

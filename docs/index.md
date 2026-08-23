@@ -9,6 +9,11 @@ checked benchmark artifacts.
 ## Start here
 
 - [Use cases](use_cases.md)
+- [R1 urban RTK/IMU field checklist](use_cases/urban_rtk_imu_field_checklist.md)
+- [Japan static survey (IGS Tsukuba)](use_cases/japan_static_survey.md)
+- [Reference trajectory bundles](use_cases/trajectory_ground_truth.md)
+- [CLAS/MADOCA application decision](use_cases/clas_submeter.md)
+- [Application use-case development roadmap](application_use_case_roadmap.md)
 - [Robotics quick start](robotics_quickstart.md)
 - [Research quick start](research_quickstart.md)
 - [Self-contained offline demo](self_contained_demo.md)

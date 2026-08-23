@@ -93,6 +93,15 @@ TEST_F(TypesTest, PropagatedSolutionIsValidWithoutCurrentSatellitesButNeverFixed
     EXPECT_FALSE(solution.isValid());
 }
 
+TEST_F(TypesTest, PositionSolutionCovariancesDefaultToInvalid) {
+    const PositionSolution solution;
+
+    // An omitted covariance must be rejected by consumers rather than being
+    // interpreted as whatever coefficients Eigen happened to leave behind.
+    EXPECT_FALSE(solution.position_covariance.allFinite());
+    EXPECT_FALSE(solution.velocity_covariance.allFinite());
+}
+
 TEST_F(TypesTest, SolutionFileRoundTripsFgoQualityColumns) {
     Solution solution;
     PositionSolution sol;

@@ -546,6 +546,31 @@ TEST_F(SPPTest, BasicPositioning) {
     EXPECT_LT(solution.pdop, 20.0);
 }
 
+TEST_F(SPPTest, PositionCovarianceIsFinitePsdAndDeterministic) {
+    SPPProcessor first;
+    SPPProcessor second;
+    ASSERT_TRUE(first.initialize(processor_config_));
+    ASSERT_TRUE(second.initialize(processor_config_));
+
+    const auto first_solution = first.processEpoch(obs_data_, nav_data_);
+    const auto second_solution = second.processEpoch(obs_data_, nav_data_);
+
+    ASSERT_TRUE(first_solution.isValid());
+    ASSERT_TRUE(second_solution.isValid());
+    ASSERT_TRUE(first_solution.position_covariance.allFinite());
+    ASSERT_TRUE(second_solution.position_covariance.allFinite());
+    EXPECT_TRUE(first_solution.position_covariance.isApprox(
+        second_solution.position_covariance, 1e-12));
+
+    const Eigen::Matrix3d first_covariance =
+        0.5 * (first_solution.position_covariance +
+               first_solution.position_covariance.transpose());
+    const Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eigen_solver(
+        first_covariance);
+    ASSERT_EQ(eigen_solver.info(), Eigen::Success);
+    EXPECT_GE(eigen_solver.eigenvalues().minCoeff(), -1e-10);
+}
+
 TEST_F(SPPTest, InsufficientSatellites) {
     const ObservationData trimmed = makeInsufficientObservationSet();
     ASSERT_EQ(trimmed.observations.size(), 3u);

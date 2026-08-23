@@ -3,9 +3,11 @@
 #include <libgnss++/fusion/fusion_processor.hpp>
 
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include <libgnss++/core/coordinates.hpp>
+#include <libgnss++/fusion/attitude.hpp>
 #include <libgnss++/fusion/mechanization.hpp>
 
 namespace libgnss {
@@ -83,6 +85,479 @@ TEST(FusionProcessorSyntheticTest, ReportsAcceptedGnssPositionCorrectionBeforeVe
     EXPECT_TRUE(processor.lastGnssPositionUpdateApplied());
     EXPECT_GT(processor.lastGnssPositionCorrectionEnu().x(), 0.0);
     EXPECT_TRUE(processor.lastGnssPositionCorrectionEnu().allFinite());
+}
+
+TEST(FusionProcessorSyntheticTest, AntennaFrameOutputAppliesLeverArmToPositionVelocityAndCovariance) {
+    LooseCouplingProcessor::Config config;
+    config.align_static_window_s = 0.1;
+    config.zupt_enable = false;
+    config.nhc_enable = false;
+    config.lever_arm_body = Eigen::Vector3d(0.31, 0.0, -0.55);
+    LooseCouplingProcessor processor(config);
+
+    GNSSTime time(2200, 100000.0);
+    for (int i = 0; i < 20; ++i) {
+        ImuSample sample;
+        sample.time = time;
+        sample.accel_raw = Eigen::Vector3d(0.0, 0.0, kGravity);
+        sample.gyro_raw_radps.setZero();
+        processor.processImuSample(sample);
+        time = time + kDt;
+    }
+    ASSERT_TRUE(processor.isInitialized());
+
+    const double lat = 35.6 * M_PI / 180.0;
+    const double lon = 139.7 * M_PI / 180.0;
+    PositionSolution anchor;
+    anchor.time = time;
+    anchor.status = SolutionStatus::FIXED;
+    anchor.num_satellites = 10;
+    anchor.position_ecef = geodetic2ecef(lat, lon, 50.0);
+    anchor.position_covariance = Eigen::Matrix3d::Identity();
+    processor.processGnssSolution(anchor);
+    ASSERT_TRUE(processor.isOriginSet());
+
+    // Leave a nonzero, known angular rate in the processor so the velocity
+    // lever-arm term and its attitude Jacobian are exercised as well.
+    const Eigen::Vector3d angular_rate_body(0.0, 0.0, 0.2);
+    ImuSample motion;
+    motion.time = time;
+    motion.accel_raw = Eigen::Vector3d(0.0, 0.0, kGravity);
+    motion.gyro_raw_radps = angular_rate_body;
+    processor.processImuSample(motion);
+
+    const PositionSolution imu_solution = processor.toPositionSolution();
+    const PositionSolution antenna_solution = processor.toAntennaPositionSolution();
+    const FusionState& state = processor.state();
+    const Eigen::Matrix3d ecef_to_enu = processor.ecefToLocalEnuRotation();
+    const Eigen::Matrix3d enu_to_ecef = ecef_to_enu.transpose();
+    const Eigen::Matrix3d rotation = state.nominal.attitude_body_to_enu.toRotationMatrix();
+    const Eigen::Vector3d lever_arm = config.lever_arm_body;
+    const Eigen::Vector3d corrected_angular_rate_body =
+        angular_rate_body - state.nominal.gyro_bias;
+    const Eigen::Vector3d lever_velocity_body = corrected_angular_rate_body.cross(lever_arm);
+
+    const Eigen::Vector3d expected_position_ecef =
+        imu_solution.position_ecef + enu_to_ecef * (rotation * lever_arm);
+    const Eigen::Vector3d expected_velocity_ecef =
+        imu_solution.velocity_ecef + enu_to_ecef * (rotation * lever_velocity_body);
+    EXPECT_TRUE(antenna_solution.position_ecef.isApprox(expected_position_ecef, 1e-9));
+    EXPECT_TRUE(antenna_solution.velocity_ecef.isApprox(expected_velocity_ecef, 1e-9))
+        << "actual=" << antenna_solution.velocity_ecef.transpose()
+        << " expected=" << expected_velocity_ecef.transpose()
+        << " imu=" << imu_solution.velocity_ecef.transpose();
+    double expected_lat = 0.0;
+    double expected_lon = 0.0;
+    double expected_height = 0.0;
+    ecef2geodetic(expected_position_ecef, expected_lat, expected_lon, expected_height);
+    EXPECT_NEAR(antenna_solution.position_geodetic.latitude, expected_lat, 1e-12);
+    EXPECT_NEAR(antenna_solution.position_geodetic.longitude, expected_lon, 1e-12);
+    EXPECT_NEAR(antenna_solution.position_geodetic.height, expected_height, 1e-8);
+    EXPECT_TRUE(antenna_solution.has_velocity);
+    EXPECT_NE(antenna_solution.position_ecef, imu_solution.position_ecef);
+    EXPECT_NE(antenna_solution.velocity_ecef, imu_solution.velocity_ecef);
+
+    Eigen::MatrixXd position_h = Eigen::MatrixXd::Zero(3, fusion_index::SIZE);
+    position_h.block<3, 3>(0, fusion_index::POSITION) = Eigen::Matrix3d::Identity();
+    position_h.block<3, 3>(0, fusion_index::ATTITUDE) =
+        -rotation * attitude::skew(lever_arm);
+    const Eigen::Matrix3d expected_position_covariance_enu =
+        position_h * state.covariance * position_h.transpose();
+
+    Eigen::MatrixXd velocity_h = Eigen::MatrixXd::Zero(3, fusion_index::SIZE);
+    velocity_h.block<3, 3>(0, fusion_index::VELOCITY) = Eigen::Matrix3d::Identity();
+    velocity_h.block<3, 3>(0, fusion_index::ATTITUDE) =
+        -rotation * attitude::skew(lever_velocity_body);
+    const Eigen::Matrix3d expected_velocity_covariance_enu =
+        velocity_h * state.covariance * velocity_h.transpose();
+
+    EXPECT_TRUE(antenna_solution.position_covariance.isApprox(
+        enu_to_ecef * expected_position_covariance_enu * ecef_to_enu, 1e-12));
+    EXPECT_TRUE(antenna_solution.velocity_covariance.isApprox(
+        enu_to_ecef * expected_velocity_covariance_enu * ecef_to_enu, 1e-12))
+        << "actual=\n" << antenna_solution.velocity_covariance
+        << " expected=\n"
+        << enu_to_ecef * expected_velocity_covariance_enu * ecef_to_enu;
+}
+
+TEST(FusionProcessorSyntheticTest, FixedPositionGateReanchorsPositionOnly) {
+    LooseCouplingProcessor::Config config;
+    config.align_static_window_s = 0.1;
+    config.zupt_enable = false;
+    config.nhc_enable = false;
+    config.lever_arm_body = Eigen::Vector3d(0.31, 0.0, -0.55);
+    config.max_position_update_nis_per_observation = 0.1;
+    config.max_velocity_update_nis_per_observation = 0.1;
+    config.max_consecutive_gate_rejections = 2;
+    config.position_updates_require_fixed = true;
+    LooseCouplingProcessor processor(config);
+
+    GNSSTime time(2200, 100000.0);
+    for (int i = 0; i < 20; ++i) {
+        ImuSample sample;
+        sample.time = time;
+        sample.accel_raw = Eigen::Vector3d(0.0, 0.0, kGravity);
+        sample.gyro_raw_radps.setZero();
+        processor.processImuSample(sample);
+        time = time + kDt;
+    }
+    ASSERT_TRUE(processor.isInitialized());
+
+    const Eigen::Vector3d origin_ecef =
+        geodetic2ecef(35.6 * M_PI / 180.0, 139.7 * M_PI / 180.0, 50.0);
+    PositionSolution anchor;
+    anchor.time = time;
+    anchor.status = SolutionStatus::FIXED;
+    anchor.num_satellites = 10;
+    anchor.position_ecef = origin_ecef;
+    // Give the first anchor enough measurement covariance to absorb the
+    // initial lever-arm offset without tripping the intentionally strict
+    // regression gate below.
+    anchor.position_covariance = 100.0 * Eigen::Matrix3d::Identity();
+    processor.processGnssSolution(anchor);
+    ASSERT_TRUE(processor.isOriginSet());
+
+    const FusionState before_rejections = processor.state();
+    const Eigen::Matrix3d ecef_to_enu = processor.ecefToLocalEnuRotation();
+    const Eigen::Matrix3d enu_to_ecef = ecef_to_enu.transpose();
+    const Eigen::Matrix3d rotation =
+        before_rejections.nominal.attitude_body_to_enu.toRotationMatrix();
+    // The default library re-anchor bound is intentionally unbounded. A
+    // returning, accurate FIX can be more than the old 20 m arbitrary cap
+    // away after a long outage; the FIX patience gate is the trust condition.
+    const Eigen::Vector3d desired_antenna_position_enu =
+        before_rejections.nominal.position_enu +
+        rotation * config.lever_arm_body + Eigen::Vector3d(25.0, -2.0, 1.0);
+
+    PositionSolution fixed_outlier = anchor;
+    fixed_outlier.position_covariance = 0.01 * Eigen::Matrix3d::Identity();
+    fixed_outlier.position_ecef =
+        origin_ecef + enu_to_ecef * desired_antenna_position_enu;
+    fixed_outlier.time = time + kDt;
+
+    // The first gate rejection only arms the patience counter. It must not
+    // change the nominal state or the position correction telemetry.
+    processor.processGnssSolution(fixed_outlier);
+    EXPECT_FALSE(processor.lastGnssPositionUpdateApplied());
+    EXPECT_FALSE(processor.lastGnssPositionReanchored());
+    EXPECT_TRUE(processor.state().nominal.position_enu.isApprox(
+        before_rejections.nominal.position_enu, 1e-12));
+
+    // The second rejection reaches the configured patience and invokes the
+    // fixed-position-only re-anchor. No ungated EKF gain is used here.
+    const Eigen::Vector3d velocity_before = processor.state().nominal.velocity_enu;
+    const Eigen::Quaterniond attitude_before =
+        processor.state().nominal.attitude_body_to_enu;
+    const Eigen::Vector3d accel_bias_before = processor.state().nominal.accel_bias;
+    const Eigen::Vector3d gyro_bias_before = processor.state().nominal.gyro_bias;
+    const Eigen::Matrix3d attitude_covariance =
+        before_rejections.covariance.block<3, 3>(fusion_index::ATTITUDE,
+                                                 fusion_index::ATTITUDE);
+    const Eigen::Matrix3d position_attitude_jacobian =
+        -rotation * attitude::skew(config.lever_arm_body);
+    const Eigen::Matrix3d expected_position_covariance =
+        0.01 * Eigen::Matrix3d::Identity() +
+        position_attitude_jacobian * attitude_covariance *
+            position_attitude_jacobian.transpose();
+
+    fixed_outlier.time = fixed_outlier.time + kDt;
+    processor.processGnssSolution(fixed_outlier);
+    ASSERT_TRUE(processor.lastGnssPositionUpdateApplied());
+    ASSERT_TRUE(processor.lastGnssPositionReanchored());
+    EXPECT_TRUE(processor.state().nominal.position_enu.isApprox(
+        desired_antenna_position_enu - rotation * config.lever_arm_body, 1e-10));
+    EXPECT_TRUE(processor.lastGnssPositionCorrectionEnu().isApprox(
+        processor.state().nominal.position_enu - before_rejections.nominal.position_enu,
+        1e-10));
+    EXPECT_TRUE(processor.state().nominal.velocity_enu.isApprox(velocity_before, 1e-12));
+    EXPECT_TRUE(processor.state().nominal.attitude_body_to_enu.coeffs().isApprox(
+        attitude_before.coeffs(), 1e-12));
+    EXPECT_TRUE(processor.state().nominal.accel_bias.isApprox(accel_bias_before, 1e-12));
+    EXPECT_TRUE(processor.state().nominal.gyro_bias.isApprox(gyro_bias_before, 1e-12));
+    EXPECT_TRUE((processor.state().covariance.block<3, 3>(fusion_index::POSITION,
+                                                          fusion_index::POSITION)
+                     .isApprox(expected_position_covariance, 1e-9)));
+    EXPECT_TRUE((processor.state().covariance.block<3, 12>(fusion_index::POSITION, 3)
+                     .isZero(1e-12)));
+    EXPECT_TRUE((processor.state().covariance.block<12, 3>(3, fusion_index::POSITION)
+                     .isZero(1e-12)));
+    EXPECT_TRUE(processor.state().covariance.allFinite());
+
+    // A following same-position FIXED solution is handled by the ordinary
+    // gated update after the counter reset, not by another forced correction.
+    fixed_outlier.time = fixed_outlier.time + kDt;
+    processor.processGnssSolution(fixed_outlier);
+    EXPECT_TRUE(processor.lastGnssPositionUpdateApplied());
+    EXPECT_FALSE(processor.lastGnssPositionReanchored());
+
+    // A velocity gate rejection never invokes the position re-anchor path and
+    // does not force an update after its own consecutive-rejection threshold.
+    const Eigen::Vector3d velocity_before_rejection = processor.state().nominal.velocity_enu;
+    PositionSolution velocity_outlier = fixed_outlier;
+    velocity_outlier.has_velocity = true;
+    velocity_outlier.velocity_ecef =
+        enu_to_ecef * Eigen::Vector3d(10.0, 0.0, 0.0);
+    velocity_outlier.velocity_covariance = 0.01 * Eigen::Matrix3d::Identity();
+    velocity_outlier.time = velocity_outlier.time + kDt;
+    processor.processGnssSolution(velocity_outlier);
+    velocity_outlier.time = velocity_outlier.time + kDt;
+    processor.processGnssSolution(velocity_outlier);
+    EXPECT_FALSE(processor.lastGnssPositionReanchored());
+    EXPECT_TRUE(processor.state().nominal.velocity_enu.isApprox(
+        velocity_before_rejection, 1e-10));
+
+    // Arm one FIX rejection, then send FLOAT positions. FLOAT positions are
+    // never eligible for recovery, and must reset the FIX patience even when
+    // position_updates_require_fixed skips their normal EKF update entirely.
+    PositionSolution fixed_before_float = fixed_outlier;
+    fixed_before_float.position_ecef += enu_to_ecef * Eigen::Vector3d(8.0, 0.0, 0.0);
+    fixed_before_float.position_covariance = 0.01 * Eigen::Matrix3d::Identity();
+    fixed_before_float.time = fixed_outlier.time + kDt;
+    processor.processGnssSolution(fixed_before_float);
+    EXPECT_FALSE(processor.lastGnssPositionReanchored());
+
+    // FLOAT positions are never eligible for the position-only recovery,
+    // even after the same consecutive-rejection threshold is reached.
+    PositionSolution float_outlier = fixed_outlier;
+    float_outlier.status = SolutionStatus::FLOAT;
+    float_outlier.position_ecef += enu_to_ecef * Eigen::Vector3d(8.0, 0.0, 0.0);
+    float_outlier.position_covariance = 0.01 * Eigen::Matrix3d::Identity();
+    const Eigen::Vector3d position_before_float = processor.state().nominal.position_enu;
+    for (int i = 0; i < 2; ++i) {
+        float_outlier.time = float_outlier.time + kDt;
+        processor.processGnssSolution(float_outlier);
+    }
+    EXPECT_FALSE(processor.lastGnssPositionUpdateApplied());
+    EXPECT_FALSE(processor.lastGnssPositionReanchored());
+    EXPECT_TRUE(processor.state().nominal.position_enu.isApprox(position_before_float, 1e-12));
+
+    // One FIX rejection after FLOAT must only arm the counter; a stale
+    // pre-FLOAT rejection would have incorrectly triggered a re-anchor here.
+    float_outlier.status = SolutionStatus::FIXED;
+    float_outlier.time = float_outlier.time + kDt;
+    processor.processGnssSolution(float_outlier);
+    EXPECT_FALSE(processor.lastGnssPositionReanchored());
+}
+
+TEST(FusionProcessorSyntheticTest, FixedPositionReanchorDisabledWhenPatienceIsZero) {
+    LooseCouplingProcessor::Config config;
+    config.align_static_window_s = 0.1;
+    config.zupt_enable = false;
+    config.max_position_update_nis_per_observation = 0.1;
+    config.max_consecutive_gate_rejections = 0;
+    LooseCouplingProcessor processor(config);
+
+    GNSSTime time(2200, 100000.0);
+    for (int i = 0; i < 20; ++i) {
+        ImuSample sample;
+        sample.time = time;
+        sample.accel_raw = Eigen::Vector3d(0.0, 0.0, kGravity);
+        processor.processImuSample(sample);
+        time = time + kDt;
+    }
+    ASSERT_TRUE(processor.isInitialized());
+
+    PositionSolution solution;
+    solution.time = time;
+    solution.status = SolutionStatus::FIXED;
+    solution.num_satellites = 10;
+    const Eigen::Vector3d origin_ecef =
+        geodetic2ecef(35.6 * M_PI / 180.0, 139.7 * M_PI / 180.0, 50.0);
+    solution.position_ecef = origin_ecef;
+    solution.position_covariance = Eigen::Matrix3d::Identity();
+    processor.processGnssSolution(solution);
+    const Eigen::Vector3d position_before = processor.state().nominal.position_enu;
+
+    solution.position_ecef += processor.ecefToLocalEnuRotation().transpose() *
+                             Eigen::Vector3d(5.0, 0.0, 0.0);
+    solution.position_covariance = 0.01 * Eigen::Matrix3d::Identity();
+    for (int i = 0; i < 3; ++i) {
+        solution.time = solution.time + kDt;
+        processor.processGnssSolution(solution);
+    }
+    EXPECT_FALSE(processor.lastGnssPositionUpdateApplied());
+    EXPECT_FALSE(processor.lastGnssPositionReanchored());
+    EXPECT_TRUE(processor.state().nominal.position_enu.isApprox(position_before, 1e-12));
+}
+
+TEST(FusionProcessorSyntheticTest, VelocityGateReanchorsVelocityOnlyWithLeverArm) {
+    LooseCouplingProcessor::Config config;
+    config.align_static_window_s = 0.1;
+    config.zupt_enable = false;
+    config.nhc_enable = false;
+    config.lever_arm_body = Eigen::Vector3d(0.31, 0.0, -0.55);
+    config.max_position_update_nis_per_observation = 0.0;
+    config.max_velocity_update_nis_per_observation = 0.1;
+    config.max_consecutive_velocity_gate_rejections = 2;
+    config.max_gnss_velocity_reanchor_mps = 5.0;
+    config.position_updates_require_fixed = true;
+    config.align_velocity_threshold_mps = 100.0;
+    LooseCouplingProcessor processor(config);
+
+    GNSSTime time(2200, 100000.0);
+    for (int i = 0; i < 20; ++i) {
+        ImuSample sample;
+        sample.time = time;
+        sample.accel_raw = Eigen::Vector3d(0.0, 0.0, kGravity);
+        sample.gyro_raw_radps.setZero();
+        processor.processImuSample(sample);
+        time = time + kDt;
+    }
+    ASSERT_TRUE(processor.isInitialized());
+
+    const Eigen::Vector3d origin_ecef =
+        geodetic2ecef(35.6 * M_PI / 180.0, 139.7 * M_PI / 180.0, 50.0);
+    PositionSolution anchor;
+    anchor.time = time;
+    anchor.status = SolutionStatus::FIXED;
+    anchor.num_satellites = 10;
+    anchor.position_ecef = origin_ecef;
+    anchor.position_covariance = 100.0 * Eigen::Matrix3d::Identity();
+    processor.processGnssSolution(anchor);
+    ASSERT_TRUE(processor.isOriginSet());
+
+    const Eigen::Vector3d angular_rate_body(0.0, 0.0, 0.2);
+    ImuSample motion;
+    motion.time = time + kDt;
+    motion.accel_raw = Eigen::Vector3d(0.0, 0.0, kGravity);
+    motion.gyro_raw_radps = angular_rate_body;
+    processor.processImuSample(motion);
+
+    const FusionState before = processor.state();
+    const Eigen::Matrix3d ecef_to_enu = processor.ecefToLocalEnuRotation();
+    const Eigen::Matrix3d enu_to_ecef = ecef_to_enu.transpose();
+    const Eigen::Matrix3d rotation =
+        before.nominal.attitude_body_to_enu.toRotationMatrix();
+    const Eigen::Vector3d target_velocity_enu(2.0, -1.0, 0.5);
+    const Eigen::Vector3d corrected_angular_rate_body =
+        angular_rate_body - before.nominal.gyro_bias;
+    const Eigen::Vector3d lever_velocity_body =
+        corrected_angular_rate_body.cross(config.lever_arm_body);
+
+    PositionSolution velocity_solution = anchor;
+    velocity_solution.status = SolutionStatus::FLOAT;
+    velocity_solution.time = motion.time + kDt;
+    velocity_solution.position_ecef = origin_ecef + enu_to_ecef *
+        (before.nominal.position_enu + rotation * config.lever_arm_body);
+    velocity_solution.position_covariance = 100.0 * Eigen::Matrix3d::Identity();
+    velocity_solution.velocity_ecef = enu_to_ecef *
+        (target_velocity_enu + rotation * lever_velocity_body);
+    velocity_solution.velocity_covariance =
+        0.01 * Eigen::Matrix3d::Identity();
+    velocity_solution.has_velocity = true;
+
+    processor.processGnssSolution(velocity_solution);
+    EXPECT_FALSE(processor.lastGnssVelocityReanchored());
+    EXPECT_TRUE(processor.state().nominal.velocity_enu.isApprox(
+        before.nominal.velocity_enu, 1e-8))
+        << "actual=" << processor.state().nominal.velocity_enu.transpose()
+        << " before=" << before.nominal.velocity_enu.transpose();
+
+    const Eigen::Vector3d position_before = processor.state().nominal.position_enu;
+    const Eigen::Quaterniond attitude_before =
+        processor.state().nominal.attitude_body_to_enu;
+    const Eigen::Vector3d accel_bias_before = processor.state().nominal.accel_bias;
+    const Eigen::Vector3d gyro_bias_before = processor.state().nominal.gyro_bias;
+    velocity_solution.time = velocity_solution.time + kDt;
+    processor.processGnssSolution(velocity_solution);
+
+    ASSERT_TRUE(processor.lastGnssVelocityReanchored());
+    EXPECT_TRUE(processor.state().nominal.velocity_enu.isApprox(
+        target_velocity_enu, 1e-10));
+    EXPECT_TRUE(processor.lastGnssVelocityCorrectionEnu().isApprox(
+        target_velocity_enu - before.nominal.velocity_enu, 1e-10));
+    EXPECT_TRUE(processor.state().nominal.position_enu.isApprox(
+        position_before, 1e-8));
+    EXPECT_TRUE(processor.state().nominal.attitude_body_to_enu.coeffs().isApprox(
+        attitude_before.coeffs(), 1e-8));
+    EXPECT_TRUE(processor.state().nominal.accel_bias.isApprox(accel_bias_before, 1e-8));
+    EXPECT_TRUE(processor.state().nominal.gyro_bias.isApprox(gyro_bias_before, 1e-6));
+
+    const Eigen::Matrix3d attitude_covariance =
+        before.covariance.block<3, 3>(fusion_index::ATTITUDE,
+                                      fusion_index::ATTITUDE);
+    const Eigen::Matrix3d velocity_attitude_jacobian =
+        -rotation * attitude::skew(lever_velocity_body);
+    const Eigen::Matrix3d expected_velocity_covariance =
+        0.01 * Eigen::Matrix3d::Identity() +
+        velocity_attitude_jacobian * attitude_covariance *
+            velocity_attitude_jacobian.transpose();
+    const Eigen::Matrix3d velocity_covariance_after =
+        processor.state().covariance.block(
+            fusion_index::VELOCITY, fusion_index::VELOCITY, 3, 3);
+    const Eigen::MatrixXd velocity_cross_position_after =
+        processor.state().covariance.block(
+            fusion_index::VELOCITY, fusion_index::POSITION, 3, 3);
+    const Eigen::MatrixXd velocity_cross_attitude_bias_after =
+        processor.state().covariance.block(
+            fusion_index::VELOCITY, fusion_index::ATTITUDE, 3, 9);
+    const Eigen::MatrixXd velocity_cross_position_transpose_after =
+        processor.state().covariance.block(
+            fusion_index::POSITION, fusion_index::VELOCITY, 3, 3);
+    const Eigen::MatrixXd velocity_cross_attitude_bias_transpose_after =
+        processor.state().covariance.block(
+            fusion_index::ATTITUDE, fusion_index::VELOCITY, 9, 3);
+    EXPECT_TRUE(velocity_covariance_after.isApprox(
+        expected_velocity_covariance, 1e-9));
+    EXPECT_TRUE(velocity_cross_position_after.isZero(1e-12));
+    EXPECT_TRUE(velocity_cross_attitude_bias_after.isZero(1e-12));
+    EXPECT_TRUE(velocity_cross_position_transpose_after.isZero(1e-12));
+    EXPECT_TRUE(velocity_cross_attitude_bias_transpose_after.isZero(1e-12));
+    EXPECT_TRUE(processor.state().covariance.allFinite());
+    const Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> velocity_covariance_eig(
+        velocity_covariance_after);
+    ASSERT_EQ(velocity_covariance_eig.info(), Eigen::Success);
+    EXPECT_GE(velocity_covariance_eig.eigenvalues().minCoeff(), 0.0);
+
+    // A malformed Doppler covariance cannot be promoted to a recovery target
+    // merely because regularizeCovariance3x3() has a conservative fallback.
+    velocity_solution.velocity_covariance(0, 0) =
+        std::numeric_limits<double>::quiet_NaN();
+    velocity_solution.time = velocity_solution.time + kDt;
+    processor.processGnssSolution(velocity_solution);
+    EXPECT_FALSE(processor.lastGnssVelocityReanchored());
+}
+
+TEST(FusionProcessorSyntheticTest, FixedPositionReanchorRejectsUnboundedCorrection) {
+    LooseCouplingProcessor::Config config;
+    config.align_static_window_s = 0.1;
+    config.zupt_enable = false;
+    config.max_position_update_nis_per_observation = 0.1;
+    config.max_consecutive_gate_rejections = 2;
+    config.max_fixed_position_reanchor_m = 1.0;
+    LooseCouplingProcessor processor(config);
+
+    GNSSTime time(2200, 100000.0);
+    for (int i = 0; i < 20; ++i) {
+        ImuSample sample;
+        sample.time = time;
+        sample.accel_raw = Eigen::Vector3d(0.0, 0.0, kGravity);
+        processor.processImuSample(sample);
+        time = time + kDt;
+    }
+    ASSERT_TRUE(processor.isInitialized());
+
+    PositionSolution solution;
+    solution.time = time;
+    solution.status = SolutionStatus::FIXED;
+    solution.num_satellites = 10;
+    const Eigen::Vector3d origin_ecef =
+        geodetic2ecef(35.6 * M_PI / 180.0, 139.7 * M_PI / 180.0, 50.0);
+    solution.position_ecef = origin_ecef;
+    solution.position_covariance = Eigen::Matrix3d::Identity();
+    processor.processGnssSolution(solution);
+    const Eigen::Vector3d position_before = processor.state().nominal.position_enu;
+
+    solution.position_ecef += processor.ecefToLocalEnuRotation().transpose() *
+                             Eigen::Vector3d(5.0, 0.0, 0.0);
+    solution.position_covariance = 0.01 * Eigen::Matrix3d::Identity();
+    for (int i = 0; i < 2; ++i) {
+        solution.time = solution.time + kDt;
+        processor.processGnssSolution(solution);
+    }
+    EXPECT_FALSE(processor.lastGnssPositionUpdateApplied());
+    EXPECT_FALSE(processor.lastGnssPositionReanchored());
+    EXPECT_TRUE(processor.state().nominal.position_enu.isApprox(position_before, 1e-12));
 }
 
 TEST(FusionProcessorSyntheticTest, AppliesTightlyCoupledDDRowsToLiveINSState) {
