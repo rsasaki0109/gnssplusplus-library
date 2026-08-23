@@ -554,6 +554,16 @@ COMMANDS = {
         "target": python_target("gnss_smartloc_signoff.py"),
         "summary": "Run smartLoc adapter export plus receiver-fix comparison gates.",
     },
+    "smartphone-gnss-adapter": {
+        "kind": "python",
+        "target": python_target("gnss_smartphone_gnss_adapter.py"),
+        "summary": "Validate and normalize Google Smartphone Decimeter Challenge raw GNSS and truth CSVs.",
+    },
+    "smartphone-gnss-signoff": {
+        "kind": "python",
+        "target": python_target("gnss_smartphone_gnss_signoff.py"),
+        "summary": "Truth-score a smartphone libgnss++ POS and enforce R5 availability, error, and gap gates.",
+    },
     "clas-ppp": {
         "kind": "python",
         "target": python_target("gnss_clas_ppp.py"),

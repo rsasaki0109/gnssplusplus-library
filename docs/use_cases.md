@@ -36,3 +36,5 @@ smartphone raw GNSS (R5), UAV navigation (R6), and structural displacement
 monitoring (R7), followed by integrity/geofencing (R8) and GNSS timing (R9).
 Station operations, RINEX 4, and MADOCA parity work enter this queue only when
 an active application gate needs them.
+
+R5 implementation begins at the [smartphone raw GNSS guide](use_cases/smartphone_raw_gnss.md).

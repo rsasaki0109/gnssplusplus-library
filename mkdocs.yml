@@ -31,6 +31,7 @@ nav:
       - Japan static survey: use_cases/japan_static_survey.md
       - Reference trajectory bundle: use_cases/trajectory_ground_truth.md
       - CLAS/MADOCA application decision: use_cases/clas_submeter.md
+      - Smartphone raw GNSS (R5): use_cases/smartphone_raw_gnss.md
       - RTKLIB migration: use_cases/rtklib_migration.md
       - ROS2 receiver and bag replay: use_cases/ros2.md
       - QZSS L6, CLAS, and MADOCA: use_cases/qzss_l6.md

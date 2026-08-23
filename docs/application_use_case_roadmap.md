@@ -191,6 +191,11 @@ Acceptance gate:
 
 ### R5 — Smartphone raw-GNSS workflow (next, four-week target)
 
+Status: source archive and Pixel 7 Pro development/holdout routes frozen;
+lossless row preservation, fail-closed adapter, GPS L1 RINEX mapping, native
+standalone SPP, truth sign-off, and development thresholds are complete. The
+holdout is still sealed pending the pre-holdout commit.
+
 Scope:
 
 - freeze one public Android train route and one sealed holdout route;

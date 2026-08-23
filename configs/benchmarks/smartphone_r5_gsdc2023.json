@@ -1,0 +1,58 @@
+{
+  "schema_version": "smartphone-r5-profile.v1",
+  "profile_id": "gsdc2023-pixel7pro-standalone-v1",
+  "frozen_at": "2026-08-24",
+  "archive": {
+    "url": "https://taroz.net/data/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "source_terms": "Original GSDC competition terms; local evaluation only; convenience archive from taroz/gsdc2023",
+    "redistribution": "not-authorized-by-this-profile"
+  },
+  "datasets": {
+    "development": {
+      "id": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+      "device_model": "pixel7pro",
+      "device_gnss_sha256": "c5af6cc3aeae6ab29a2a10d975d291b8fba4fab15273c0729163cd639ff10e42",
+      "ground_truth_sha256": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a",
+      "broadcast_nav_sha256": "16c859f8015c874398978bae6004172c355f7d3a3b06fa81b54aac88b6b78d33",
+      "skip_epochs": 1
+    },
+    "holdout": {
+      "id": "2023-09-06-22-49-us-ca-routebb1/pixel7pro",
+      "device_model": "pixel7pro",
+      "device_gnss_sha256": "f6c05015842cc0a389ed2c426b15aed980819a80a2baa828ca77bfa53aba245b",
+      "ground_truth_sha256": "abb4076259100afa716cba5f845f285a719b19e17d16c6f2903355bbe58879a7",
+      "broadcast_nav_sha256": "21236469a4048817d53bac9faaab04bd87558d100c56ebf8fec25740edc7f696",
+      "skip_epochs": 1,
+      "sealed_before_threshold_freeze": true
+    }
+  },
+  "native_observation_contract": {
+    "supported_source_signal": "GPS_L1_CA",
+    "rinex_observation_types": ["C1C", "L1C", "D1C", "S1C"],
+    "time_source": "ArrivalTimeNanosSinceGpsEpoch",
+    "initial_position_source": "device_wls_ecef_first_selected_epoch"
+  },
+  "solver": {
+    "command": "gnss spp",
+    "lane": "single-frequency GPS L1 standalone",
+    "additional_arguments": []
+  },
+  "thresholds": {
+    "availability_min": 0.98,
+    "truth_coverage_min": 0.98,
+    "horizontal_median_max": 7.0,
+    "horizontal_p95_max": 25.0,
+    "vertical_p95_max": 45.0,
+    "max_gap_s": 10.0
+  },
+  "frozen_from_development": {
+    "selected_epochs": 1383,
+    "solution_epochs": 1376,
+    "availability_ratio": 0.9949385394070861,
+    "horizontal_median_m": 4.928490754936462,
+    "horizontal_p95_m": 16.353068947914387,
+    "vertical_p95_abs_m": 28.375588846435548,
+    "max_solution_gap_s": 8.0
+  }
+}
