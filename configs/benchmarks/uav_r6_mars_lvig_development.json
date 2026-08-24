@@ -1,0 +1,119 @@
+{
+  "schema_version": "uav-r6-profile.v1",
+  "profile_status": "development-data-contract",
+  "dataset_name": "MARS-LVIG",
+  "dataset_citation": "Li et al., MARS-LVIG dataset, IJRR 43(8), 2024, doi:10.1177/02783649241227968",
+  "candidate_audit": [
+    {
+      "dataset": "MARS-LVIG",
+      "decision": "selected",
+      "reason": "publishes raw multi-constellation GNSS observables, hardware-synchronised IMU, independent onboard RTK position and yaw, and CAD antenna offsets"
+    },
+    {
+      "dataset": "INSANE",
+      "decision": "rejected_as_primary",
+      "reason": "publishes UAV IMU, dual-RTK and calibration but its inspected sensor archives contain receiver PVT/velocity rather than pseudorange and carrier-phase observations required for a libgnss++ solve"
+    }
+  ],
+  "datasets": {
+    "development": {
+      "id": "HKisland_GNSS03",
+      "filename": "HKisland_GNSS03.bag",
+      "expected_bytes": 10040751440,
+      "sha256": "8ce44d1d6338b7610a2120094f3ec11483c23dd7c5a368870820c06e0c5dc317",
+      "official_file_id": "136xN27vdpUe88NugHhPKArZBveiYD3hj",
+      "source_page": "https://mars.hku.hk/dataset.html",
+      "expected_duration_s": 390.999239668,
+      "expected_topics": {
+        "/ublox_driver/range_meas": 3911,
+        "/ublox_driver/receiver_pvt": 3910,
+        "/livox/imu": 81564,
+        "/dji_osdk_ros/rtk_position": 1955,
+        "/dji_osdk_ros/attitude": 39101,
+        "/dji_osdk_ros/rtk_yaw": 1955,
+        "/dji_osdk_ros/rtk_info_position": 1955,
+        "/dji_osdk_ros/rtk_info_yaw": 1955
+      },
+      "urls": [
+        "https://huggingface.co/datasets/swd123456/HKisland_GNSS03_Dataset_from_MARS-LVIG/resolve/main/HKisland_GNSS03.bag?download=true",
+        "https://drive.usercontent.google.com/download?id=136xN27vdpUe88NugHhPKArZBveiYD3hj&export=download&confirm=t"
+      ],
+      "licence_status": "dataset source page has no explicit data licence; article record is CC BY-NC-ND 4.0 and does not prove dataset redistribution rights",
+      "redistribution": "not permitted by this profile; users fetch from the named source for local evaluation"
+    },
+    "holdout": {
+      "id": "HKairport_GNSS03",
+      "filename": "HKairport_GNSS03.bag",
+      "expected_bytes": 9756614351,
+      "sha256": null,
+      "official_file_id": "1ORuC3xyi7yonIzD8mTmKDWRU0T6snu9n",
+      "source_page": "https://mars.hku.hk/dataset.html",
+      "expected_duration_s": 396.99604022,
+      "expected_topics": {
+        "/ublox_driver/range_meas": 3970,
+        "/ublox_driver/receiver_pvt": 3970,
+        "/livox/imu": 82626,
+        "/dji_osdk_ros/rtk_position": 1985,
+        "/dji_osdk_ros/attitude": 39702,
+        "/dji_osdk_ros/rtk_yaw": 1985,
+        "/dji_osdk_ros/rtk_info_position": 1985,
+        "/dji_osdk_ros/rtk_info_yaw": 1985
+      },
+      "urls": [
+        "https://drive.usercontent.google.com/download?id=1ORuC3xyi7yonIzD8mTmKDWRU0T6snu9n&export=download&confirm=t"
+      ],
+      "licence_status": "same unresolved dataset licence as development",
+      "redistribution": "not permitted by this profile; holdout remains sealed until thresholds are frozen"
+    }
+  },
+  "frame_contract": {
+    "body_frame": "Livox Avia LiDAR sensor frame",
+    "body_frame_axes_status": "pending_real_bag_and_official_figure_verification",
+    "lidar_to_dji_body_rotation_status": "unresolved_do_not_apply_lever_arm",
+    "observed_imu_frame_id": "livox_frame",
+    "observed_attitude_frame_id": "body_FLU",
+    "rtk_truth_frame": "WGS84 latitude/longitude and ellipsoidal height at the DJI RTK antenna phase centre",
+    "rtk_truth_empty_frame_id_policy": "allowed only because this profile explicitly supplies the DJI OSDK NavSatFix semantic frame",
+    "raw_gnss_antenna_phase_center_in_lidar_m": [-0.3501, 0.1631, 0.0],
+    "rtk_truth_antenna_phase_center_in_lidar_m": [-0.1471, -0.3049, 0.3448],
+    "raw_to_truth_antenna_vector_in_lidar_m": [0.203, -0.468, 0.3448],
+    "raw_to_truth_antenna_distance_m": 0.6157272448089333,
+    "calibration_source": "MARS-LVIG CAD_extrinsic.yaml",
+    "calibration_sha256": "95b6e86add4de2e0edf09363855bf997dcca45a5477bf1f4470036e21d2c9bf8",
+    "vehicle_nhc": false,
+    "navigation_rule": "until the fixed rotation is resolved, compare raw and RTK antenna phase centres without rotating the vector and report 0.6157272448089333 m as a separate worst-case reference-point mismatch bound; never describe the result as body-origin accuracy",
+    "mapping_rule": "No-Go unless full six-DoF independent mapping truth and the LiDAR-to-body rotation are both available; MARS-LVIG bag RTK truth is four-DoF position plus yaw"
+  },
+  "topic_contract": {
+    "measurement": "/ublox_driver/range_meas",
+    "ephemeris": "/ublox_driver/ephem",
+    "glonass_ephemeris": "/ublox_driver/glo_ephem",
+    "ionosphere": "/ublox_driver/iono_params",
+    "raw_receiver_pvt": "/ublox_driver/receiver_pvt",
+    "imu": "/livox/imu",
+    "rtk_truth": "/dji_osdk_ros/rtk_position",
+    "attitude": "/dji_osdk_ros/attitude",
+    "rtk_yaw": "/dji_osdk_ros/rtk_yaw",
+    "rtk_position_status": "/dji_osdk_ros/rtk_info_position",
+    "rtk_yaw_status": "/dji_osdk_ros/rtk_info_yaw"
+  },
+  "navigation_product": {
+    "date_utc": "2023-10-24",
+    "day_of_year": 297,
+    "filename": "BRDC00IGS_R_20232970000_01D_MN.rnx",
+    "compressed_filename": "BRDC00IGS_R_20232970000_01D_MN.rnx.gz",
+    "url": "https://igs.bkg.bund.de/root_ftp/IGS/BRDC/2023/297/BRDC00IGS_R_20232970000_01D_MN.rnx.gz",
+    "compressed_bytes": 1282741,
+    "compressed_sha256": "bb7a72759975fde5624b8e1189b33a2b7618d673354e8c6c676f48d0ffbba3f7",
+    "uncompressed_bytes": 11369600,
+    "uncompressed_sha256": "d5135d67a483f10e69d239cc1b8b5c21c0b6daf2e4ca1989c22cff4287966288",
+    "provider": "International GNSS Service merged broadcast ephemeris via the BKG IGS data centre",
+    "role": "solver input only; not trajectory truth"
+  },
+  "time_contract": {
+    "sensor_time": "UTC synchronized from UAV RTK GPRMC/PPS",
+    "raw_gnss_time": "GNSS receiver time carried by gnss_comm messages; conversion must preserve week/TOW and declare leap seconds",
+    "comparison_time": "UTC",
+    "maximum_alignment_tolerance_s": 0.05
+  }
+}

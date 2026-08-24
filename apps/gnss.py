@@ -569,6 +569,16 @@ COMMANDS = {
         "target": python_target("gnss_smartphone_gnss_workflow.py"),
         "summary": "Run the frozen R5 archive-to-POS/KML/PNG/sign-off workflow and emit a hash manifest.",
     },
+    "uav-mars-acquire": {
+        "kind": "python",
+        "target": python_target("gnss_uav_mars_acquire.py"),
+        "summary": "Acquire and fail-closed validate a frozen MARS-LVIG UAV ROS1 bag for the R6 workflow.",
+    },
+    "uav-mars-adapter": {
+        "kind": "python",
+        "target": python_target("gnss_uav_mars_adapter.py"),
+        "summary": "Extract MARS-LVIG raw GNSS, IMU, attitude, and independent RTK truth under the frozen R6 frame contract.",
+    },
     "clas-ppp": {
         "kind": "python",
         "target": python_target("gnss_clas_ppp.py"),
