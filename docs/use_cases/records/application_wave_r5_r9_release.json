@@ -1,0 +1,60 @@
+{
+  "schema_version": "libgnsspp.application_wave_release.v1",
+  "roadmap": "R5-R9",
+  "completed_utc": "2026-08-24",
+  "branch": "develop",
+  "release_outcomes": {
+    "R5": {
+      "application": "smartphone raw GNSS",
+      "decision": "qualified_go_standalone_profile",
+      "boundary": "Pixel 7 Pro GSDC fixture only; precise-product variant not promoted",
+      "record": "smartphone_r5_holdout_run1.json"
+    },
+    "R6": {
+      "application": "UAV navigation/survey",
+      "decision": "no_go",
+      "boundary": "development navigation/visualization passed; mapping and opened MCAP holdout did not",
+      "record": "uav_r6_holdout_run1.json"
+    },
+    "R7": {
+      "application": "structural displacement monitoring",
+      "decision": "qualified_go_stable_site_synthetic_witness",
+      "boundary": "not a real structure, seasonal characterization, or field alert approval",
+      "record": "structural_r7_holdout_run1.json"
+    },
+    "R8": {
+      "application": "integrity-aware geofence decisions",
+      "decision": "no_go",
+      "boundary": "empirical envelope is not certified integrity; Nagoya stopped before geofence output",
+      "record": "integrity_r8_holdout_run1.json"
+    },
+    "R9": {
+      "application": "GNSS timing and holdover",
+      "decision": "assessment_no_go_and_service_no_go",
+      "boundary": "holdout clock-step failure; simulated holdover without physical PPS or real outage",
+      "record": "timing_r9_holdout_run1.json"
+    }
+  },
+  "frozen_development_commits": {
+    "R6": "0dfcc4e",
+    "R7": "ac17c61",
+    "R8": "4711433",
+    "R9": "4e1fb1d"
+  },
+  "closure_commits_before_integrated_record": {
+    "R6": "ad616cc",
+    "R7": "ed11ec5",
+    "R8": "fc7e5bb"
+  },
+  "integrated_audit": {
+    "python_tests": 64,
+    "python_test_status": "passed",
+    "mkdocs_build": "passed_with_upstream_material_mkdocs_2_warning",
+    "native_target": "gnss_spp",
+    "native_build": "passed",
+    "json_validation": "all benchmark profiles and use-case records passed python json.tool",
+    "diff_check": "passed"
+  },
+  "holdout_policy": "R6, R7, R8, and R9 opened holdouts are closed and must not be rerun. New work requires a new profile and new sealed data.",
+  "push_state": "local develop only; no remote push performed by this record"
+}

@@ -14,6 +14,7 @@ checked benchmark artifacts.
 - [Japan static survey (IGS Tsukuba)](use_cases/japan_static_survey.md)
 - [Structural displacement monitoring](use_cases/structural_displacement_monitoring.md)
 - [Integrity-aware geofence decisions](use_cases/integrity_geofence_decisions.md)
+- [GNSS timing and holdover](use_cases/gnss_timing_holdover.md)
 - [Reference trajectory bundles](use_cases/trajectory_ground_truth.md)
 - [CLAS/MADOCA application decision](use_cases/clas_submeter.md)
 - [Robotics quick start](robotics_quickstart.md)

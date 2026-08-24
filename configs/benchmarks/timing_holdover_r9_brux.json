@@ -1,7 +1,7 @@
 {
   "schema_version": "libgnsspp.timing_holdover.profile.v1",
   "profile_id": "r9-brux-2024-001-002-v1",
-  "release_state": "sealed",
+  "release_state": "closed_no_go",
   "station": "BRUX00BEL",
   "minimum_lock_coverage_pct": 95.0,
   "maximum_lock_phase_p95_abs_ns": 39,

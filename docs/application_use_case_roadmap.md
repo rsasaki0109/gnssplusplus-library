@@ -185,9 +185,9 @@ Acceptance gate:
 |---:|---|---|---|---|
 | Complete | R5 Smartphone raw GNSS | An Android dataset becomes a truth-scored `.pos` bundle without manual conversion | R2 acquisition/provenance, R3 bundle/gate | Development and untouched holdout passed the frozen standalone profile; precise variant was not promoted |
 | Complete (No-Go) | R6 UAV navigation | A UAV operator receives a lever-arm/attitude-qualified flight and landing trajectory | R1 fusion, R3 consumer profiles | Development navigation/visualization passed, mapping was No-Go, and untouched holdout run1 failed closed on an invalid MCAP schema; no promotion or post-failure tuning |
-| Now | R7 Structural monitoring | A maintainer receives multi-day displacement/noise reports rather than isolated PPP points | R2 static PPP and covariance | Go only when multi-day repeatability separates motion from solver/environment noise |
-| Later | R8 Integrity/geofencing | An application consumes qualified positions and explicit alert/reject reasons | R1--R4 state vocabulary | Go only with measured false-alarm, missed-alert, stale-data and alert-latency populations |
-| Later | R9 GNSS timing | An operator receives clock bias/drift uncertainty and tested holdover limits | PPP clock state and station replay | Go only when UTC/GPST/leap-second and uncertainty contracts are explicit |
+| Complete (qualified Go) | R7 Structural monitoring | A maintainer receives multi-day displacement/noise reports rather than isolated PPP points | R2 static PPP and covariance | Stable-site/synthetic-witness route passed; field structural deployment remains outside the claim |
+| Complete (No-Go) | R8 Integrity/geofencing | An application consumes qualified positions and explicit alert/reject reasons | R1--R4 state vocabulary | Tokyo development passed; Nagoya stopped on upstream quality before issuing a decision |
+| Complete (No-Go) | R9 GNSS timing | An operator receives clock bias/drift uncertainty and tested holdover limits | SPP clock state and IGS station clocks | Holdout exceeded the clock-step gate; PPS and real outage remain unobserved |
 
 ### R5 — Smartphone raw-GNSS workflow (next, four-week target)
 
@@ -269,6 +269,12 @@ inside/outside/unknown semantics. The Nagoya run1 holdout failed upstream
 bridge coverage and maximum-error gates, so no geofence decision was emitted
 and the profile was closed without tuning.
 
+R9 status: complete with an assessment and service No-Go. BRUX SPP clock bias
+was scored against independent IGS final receiver clocks; lock phase,
+frequency, and simulated 5--30 minute holdover were published. The sealed day
+exceeded the frozen lock-step gate. Physical PPS and real receiver-outage
+behavior remain unobserved, so no NTP/PTP-style service is exposed.
+
 R8 consumes the common quality summaries; it does not invent integrity from a
 FIX flag. R9 begins with an observability audit and must publish uncertainty
 and holdover evidence before exposing an NTP/PTP-style service. Neither may
@@ -289,12 +295,11 @@ pre-empt R5--R7 merely because its infrastructure is convenient to build.
 
 ## Immediate backlog
 
-R5--R8 are complete. R6 and R8 concluded No-Go and their opened holdouts must
-not be rerun; the R7 holdout passed and is likewise closed. The active
-implementation slice is R9 GNSS timing and holdover assessment. Start with an
-observability audit, select public timing data with an independent clock
-reference, separate GNSS lock from holdover, publish phase/frequency error and
-uncertainty populations, then freeze and run one untouched holdout.
+R5--R9 are complete. R6, R8, and R9 concluded No-Go and their opened holdouts
+must not be rerun; the R7 holdout passed and is likewise closed. Future work
+must start a new release with new sealed data. The next planning pass should
+prioritize field evidence that closes the explicit No-Go causes rather than
+tuning any preserved holdout.
 
 R1 and R4 negative results remain maintenance inputs, not permission to tune
 on their sealed runs. Station-service, RINEX 4, MADOCA parity, and upstream

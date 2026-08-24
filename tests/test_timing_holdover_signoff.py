@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT_DIR / "apps/commands"))
 sys.path.insert(0, str(ROOT_DIR / "apps/commands/benchmarks"))
 
 import gnss_timing_holdover_signoff as signoff  # noqa: E402
+import gnss_timing_holdover_workflow as workflow  # noqa: E402
 
 
 class TimingHoldoverSignoffTest(unittest.TestCase):
@@ -77,6 +78,26 @@ class TimingHoldoverSignoffTest(unittest.TestCase):
         self.assertIn("receiver_clock_bias_s", source)
         position_writer = (ROOT_DIR / "src/core/solution.cpp").read_text(encoding="utf-8")
         self.assertNotIn("receiver_clock_bias_s", position_writer)
+
+    def test_closed_profile_and_guide_keep_service_boundary(self) -> None:
+        import json
+
+        profile = json.loads((ROOT_DIR / "configs/benchmarks/timing_holdover_r9_brux.json").read_text(encoding="utf-8"))
+        self.assertEqual(profile["release_state"], "closed_no_go")
+        self.assertTrue(profile["service_decision"].startswith("no_go"))
+        guide = (ROOT_DIR / "docs/use_cases/gnss_timing_holdover.md").read_text(encoding="utf-8")
+        for token in ("IGS final CLK", "physical PPS", "NTP/PTP", "closed_no_go", "simulated holdover"):
+            self.assertIn(token, guide)
+
+    def test_opened_holdout_workflow_is_not_rerun(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="r9_opened_") as temp_dir:
+            root = Path(temp_dir); output = root / "output"; output.mkdir()
+            (output / "workflow_manifest.json").write_text("{}\n", encoding="utf-8")
+            args = workflow.parse_args([
+                "--phase", "holdout", "--mode", "full", "--output-dir", str(output),
+                "--cache-dir", str(root / "cache"),
+            ])
+            self.assertEqual(workflow.run(args), 2)
 
 
 if __name__ == "__main__":

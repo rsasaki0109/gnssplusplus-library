@@ -1,0 +1,37 @@
+{
+  "schema_version": "libgnsspp.timing_holdover.record.v1",
+  "release": "R9",
+  "role": "sealed_holdout_run1",
+  "station": "BRUX00BEL",
+  "date_utc": "2024-01-02",
+  "profile_frozen_commit": "4e1fb1d",
+  "profile_state_after_run": "closed_no_go",
+  "status": "failed",
+  "assessment_decision": "degraded",
+  "service_decision": "No-Go",
+  "failure": "maximum lock step 14.709317602260663 ns exceeded frozen 12 ns gate",
+  "spp_epochs": 2880,
+  "valid_spp_epochs": 2880,
+  "matched_igs_clock_epochs": 283,
+  "lock_coverage_pct": 100.0,
+  "lock_phase_p95_abs_ns": 21.25699936123889,
+  "lock_phase_max_abs_ns": 24.516614825998378,
+  "maximum_lock_step_ns": 14.709317602260663,
+  "relative_frequency_p95_abs": 7.016430660036428e-12,
+  "simulated_holdover_p95_abs_ns": {
+    "300": 21.860936946395675,
+    "600": 21.984631158160816,
+    "900": 22.122055973022793,
+    "1800": 22.51963489784539
+  },
+  "artifacts": {
+    "workflow_manifest_sha256": "984e1749cf90b9370eb5abf9513a2e8d5d9c3f85f27d62049fcfef70a3549b29",
+    "workflow_log_sha256": "e46ff8389d897e7f66573d7e771ff3ce166222072573152f498854cdbd0ea2ba",
+    "receiver_clock_csv_sha256": "0d55f1e27a72482e95831373828a2af4a7bc3e8d2fca1cea73cfd7ff0fce2c37",
+    "signoff_summary_sha256": "56545c23dcc5987b79789fb4c141d8db7083dbeac15da9e42bcf7574b9084041",
+    "clock_comparison_csv_sha256": "7b9688328a92b0dd7288214237f2571a8a49318d3a17daaeff1e2ee4b9c63ac4",
+    "spp_pos_sha256": "16b5f478d055498e80bc59b68bc1ad57240aad3d43319ece50d3f6ac8fe600a8"
+  },
+  "rerun_policy": "Do not rerun or tune 2024-01-02. A new timing release requires a new frozen profile and a new sealed day.",
+  "observability_boundary": "No physical PPS edge, system clock, real receiver outage, temperature, or power transient was measured."
+}
