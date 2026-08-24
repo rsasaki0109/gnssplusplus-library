@@ -19,6 +19,7 @@
     "development": {
       "id": "HKisland_GNSS03",
       "filename": "HKisland_GNSS03.bag",
+      "container": "ros1_bag",
       "expected_bytes": 10040751440,
       "sha256": "8ce44d1d6338b7610a2120094f3ec11483c23dd7c5a368870820c06e0c5dc317",
       "official_file_id": "136xN27vdpUe88NugHhPKArZBveiYD3hj",
@@ -43,10 +44,18 @@
     },
     "holdout": {
       "id": "HKairport_GNSS03",
-      "filename": "HKairport_GNSS03.bag",
-      "expected_bytes": 9756614351,
-      "sha256": null,
+      "filename": "HKairport_GNSS03_0.mcap",
+      "container": "mcap",
+      "expected_bytes": 10035115566,
+      "sha256": "d85e39b936aaa95c469772089efa5bb377da0735c6aca6510e87a1c767951de7",
       "official_file_id": "1ORuC3xyi7yonIzD8mTmKDWRU0T6snu9n",
+      "official_ros1_source": {
+        "filename": "HKairport_GNSS03.bag",
+        "expected_bytes": 9756614351,
+        "sha256": null,
+        "status": "Google Drive quota prevented full acquisition; do not claim byte identity with the MCAP derivative"
+      },
+      "container_derivative": "DapengFeng/MCAP conversion of the named MARS-LVIG flight; topic types/counts are revalidated by the adapter, but provenance is not equivalent to an original ROS1 byte hash",
       "source_page": "https://mars.hku.hk/dataset.html",
       "expected_duration_s": 396.99604022,
       "expected_topics": {
@@ -60,7 +69,7 @@
         "/dji_osdk_ros/rtk_info_yaw": 1985
       },
       "urls": [
-        "https://drive.usercontent.google.com/download?id=1ORuC3xyi7yonIzD8mTmKDWRU0T6snu9n&export=download&confirm=t"
+        "https://huggingface.co/datasets/DapengFeng/MCAP/resolve/main/mars_lvig/HKairport_GNSS03/HKairport_GNSS03_0.mcap?download=true"
       ],
       "licence_status": "same unresolved dataset licence as development",
       "redistribution": "not permitted by this profile; holdout remains sealed until thresholds are frozen"

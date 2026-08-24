@@ -18,6 +18,7 @@ from urllib.request import Request, urlopen
 
 SCHEMA_VERSION = "uav-mars-acquire.v1"
 ROSBAG_MAGIC = b"#ROSBAG V2.0\n"
+MCAP_MAGIC = b"\x89MCAP0\r\n"
 
 
 def fail(message: str) -> "NoReturn":
@@ -70,16 +71,19 @@ def dataset_contract(profile: dict[str, object], role: str) -> dict[str, object]
     return dataset
 
 
-def validate_bag(path: Path, expected_bytes: int, expected_sha256: str) -> dict[str, object]:
+def validate_bag(path: Path, expected_bytes: int, expected_sha256: str, container: str) -> dict[str, object]:
     if not path.is_file():
         fail(f"missing ROS1 bag: {path}")
     actual_bytes = path.stat().st_size
     if actual_bytes != expected_bytes:
         fail(f"ROS1 bag size mismatch: expected {expected_bytes}, got {actual_bytes}")
+    expected_magic = {"ros1_bag": ROSBAG_MAGIC, "mcap": MCAP_MAGIC}.get(container)
+    if expected_magic is None:
+        fail(f"unsupported frozen container: {container}")
     with path.open("rb") as handle:
-        magic = handle.read(len(ROSBAG_MAGIC))
-    if magic != ROSBAG_MAGIC:
-        fail("input is not a ROS1 bag (quota/login/error pages are rejected)")
+        magic = handle.read(len(expected_magic))
+    if magic != expected_magic:
+        fail(f"input is not the frozen {container} container (quota/login/error pages are rejected)")
     actual_sha256 = sha256(path)
     if actual_sha256 != expected_sha256:
         fail(f"ROS1 bag SHA-256 mismatch: expected {expected_sha256}, got {actual_sha256}")
@@ -169,7 +173,11 @@ def main() -> int:
                 errors.append(f"{url}: {exc}")
         if selected_url is None:
             fail("all R6 sources failed:\n" + "\n".join(errors))
-    validated = validate_bag(destination, int(dataset["expected_bytes"]), str(dataset["sha256"]))
+    container = str(dataset.get("container", "ros1_bag"))
+    validated = validate_bag(
+        destination, int(dataset["expected_bytes"]), str(dataset["sha256"]), container
+    )
+    validated["container"] = container
     payload = {
         "schema_version": SCHEMA_VERSION,
         "dataset": {

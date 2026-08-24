@@ -24,7 +24,9 @@ class UavMarsAcquireTests(unittest.TestCase):
         )
 
     @staticmethod
-    def write_profile(path: Path, bag: bytes, *, frozen: bool = True) -> None:
+    def write_profile(
+        path: Path, bag: bytes, *, frozen: bool = True, container: str = "ros1_bag"
+    ) -> None:
         digest = hashlib.sha256(bag).hexdigest() if frozen else None
         payload = {
             "schema_version": "uav-r6-profile.v1",
@@ -32,6 +34,7 @@ class UavMarsAcquireTests(unittest.TestCase):
                 "development": {
                     "id": "fixture-flight",
                     "filename": "fixture.bag",
+                    "container": container,
                     "expected_bytes": len(bag),
                     "sha256": digest,
                     "urls": ["https://invalid.example/fixture.bag"],
@@ -82,7 +85,23 @@ class UavMarsAcquireTests(unittest.TestCase):
                 "--output-dir", str(work / "output"),
             )
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn("not a ROS1 bag", result.stderr)
+            self.assertIn("quota/login/error pages are rejected", result.stderr)
+
+    def test_validates_frozen_mcap_container(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            work = Path(directory)
+            data = b"\x89MCAP0\r\n" + bytes(range(64))
+            input_path = work / "fixture.mcap"
+            input_path.write_bytes(data)
+            profile = work / "profile.json"
+            self.write_profile(profile, data, container="mcap")
+            result = self.run_cli(
+                "--profile", str(profile), "--role", "development",
+                "--input", str(input_path), "--output-dir", str(work / "output"),
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            summary = json.loads((work / "output" / "acquire_summary.json").read_text())
+            self.assertEqual(summary["bag"]["container"], "mcap")
 
     def test_rejects_unfrozen_dataset_before_network_access(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

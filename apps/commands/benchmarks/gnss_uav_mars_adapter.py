@@ -18,6 +18,7 @@ from typing import Iterable
 SCHEMA_VERSION = "uav-mars-adapter.v1"
 GPS_EPOCH = datetime(1980, 1, 6)
 ROSBAG_MAGIC = b"#ROSBAG V2.0\n"
+MCAP_MAGIC = b"\x89MCAP0\r\n"
 FREQUENCY_TOLERANCE_HZ = 2_000.0
 SYSTEMS = (
     (1, 32, "G", 0),
@@ -296,9 +297,13 @@ def main() -> int:
     bag_sha256 = sha256(args.bag)
     if bag_bytes != int(bag_contract.get("bytes", -1)) or bag_sha256 != bag_contract.get("sha256"):
         fail("bag size/hash does not match acquire summary")
+    container = str(expected_dataset.get("container", "ros1_bag"))
+    expected_magic = {"ros1_bag": ROSBAG_MAGIC, "mcap": MCAP_MAGIC}.get(container)
+    if expected_magic is None:
+        fail(f"unsupported R6 container: {container}")
     with args.bag.open("rb") as handle:
-        if handle.read(len(ROSBAG_MAGIC)) != ROSBAG_MAGIC:
-            fail("input is not a ROS1 bag")
+        if handle.read(len(expected_magic)) != expected_magic:
+            fail(f"input is not the frozen {container} container")
     frame_contract = profile.get("frame_contract")
     if not isinstance(frame_contract, dict) or frame_contract.get("vehicle_nhc") is not False:
         fail("R6 frame contract must explicitly disable vehicle NHC")
@@ -493,7 +498,7 @@ def main() -> int:
         "dataset": {"id": acquire_dataset.get("id"), "role": args.role},
         "profile": {"path": str(args.profile), "sha256": sha256(args.profile)},
         "acquire_summary": {"path": str(args.acquire_summary), "sha256": sha256(args.acquire_summary)},
-        "source_bag": {"path": str(args.bag), "bytes": bag_bytes, "sha256": bag_sha256},
+        "source_bag": {"path": str(args.bag), "bytes": bag_bytes, "sha256": bag_sha256, "container": container},
         "topics": {
             "measurement": measurement_connection.topic,
             "raw_receiver_pvt": pvt_connection.topic,
