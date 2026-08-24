@@ -106,18 +106,33 @@
     "rtk_position_status": "/dji_osdk_ros/rtk_info_position",
     "rtk_yaw_status": "/dji_osdk_ros/rtk_info_yaw"
   },
-  "navigation_product": {
-    "date_utc": "2023-10-24",
-    "day_of_year": 297,
-    "filename": "BRDC00IGS_R_20232970000_01D_MN.rnx",
-    "compressed_filename": "BRDC00IGS_R_20232970000_01D_MN.rnx.gz",
-    "url": "https://igs.bkg.bund.de/root_ftp/IGS/BRDC/2023/297/BRDC00IGS_R_20232970000_01D_MN.rnx.gz",
-    "compressed_bytes": 1282741,
-    "compressed_sha256": "bb7a72759975fde5624b8e1189b33a2b7618d673354e8c6c676f48d0ffbba3f7",
-    "uncompressed_bytes": 11369600,
-    "uncompressed_sha256": "d5135d67a483f10e69d239cc1b8b5c21c0b6daf2e4ca1989c22cff4287966288",
-    "provider": "International GNSS Service merged broadcast ephemeris via the BKG IGS data centre",
-    "role": "solver input only; not trajectory truth"
+  "navigation_products": {
+    "development": {
+      "date_utc": "2023-10-24",
+      "day_of_year": 297,
+      "filename": "BRDC00IGS_R_20232970000_01D_MN.rnx",
+      "compressed_filename": "BRDC00IGS_R_20232970000_01D_MN.rnx.gz",
+      "url": "https://igs.bkg.bund.de/root_ftp/IGS/BRDC/2023/297/BRDC00IGS_R_20232970000_01D_MN.rnx.gz",
+      "compressed_bytes": 1282741,
+      "compressed_sha256": "bb7a72759975fde5624b8e1189b33a2b7618d673354e8c6c676f48d0ffbba3f7",
+      "uncompressed_bytes": 11369600,
+      "uncompressed_sha256": "d5135d67a483f10e69d239cc1b8b5c21c0b6daf2e4ca1989c22cff4287966288",
+      "provider": "International GNSS Service merged broadcast ephemeris via the BKG IGS data centre",
+      "role": "solver input only; not trajectory truth"
+    },
+    "holdout": {
+      "date_utc": "2023-10-25",
+      "day_of_year": 298,
+      "filename": "BRDC00IGS_R_20232980000_01D_MN.rnx",
+      "compressed_filename": "BRDC00IGS_R_20232980000_01D_MN.rnx.gz",
+      "url": "https://garner.ucsd.edu/pub/rinex/2023/298/BRDC00IGS_R_20232980000_01D_MN.rnx.gz",
+      "compressed_bytes": 1272479,
+      "compressed_sha256": "c7940a3f4b7725271d1a04cde3f6d8fe2a927e93e06dd94f954cbf733ec0979b",
+      "uncompressed_bytes": 11649764,
+      "uncompressed_sha256": "8c6315a2940b02a485371e9be93f8291a4fb062e23ef8ea00a3eb8a42993dbd8",
+      "provider": "International GNSS Service merged broadcast ephemeris via the SOPAC/UCSD data centre",
+      "role": "solver input only; not trajectory truth"
+    }
   },
   "time_contract": {
     "sensor_time": "UTC synchronized from UAV RTK GPRMC/PPS",
