@@ -1,0 +1,31 @@
+{
+  "schema_version": "libgnsspp.integrity_geofence.record.v1",
+  "release": "R8",
+  "role": "development",
+  "dataset": "PPC Tokyo run1",
+  "status": "passed",
+  "decision": "usable",
+  "truth_epochs": 11951,
+  "qualified_epochs": 11741,
+  "inside_epochs": 1633,
+  "outside_epochs": 9937,
+  "unknown_epochs": 381,
+  "decisive_availability_pct": 96.81198226089867,
+  "misleading_decisions": 0,
+  "envelope_exceedance_epochs": 0,
+  "empirical_protection_envelopes_m": {
+    "fixed": 24.0,
+    "bridge_0_5s": 71.8,
+    "bridge_5_15s": 71.9,
+    "bridge_15_30s": 71.9,
+    "bridge_30_60s": 71.9
+  },
+  "unknown_reasons": {
+    "boundary_intersects_protection_envelope": 171,
+    "solution_missing": 27,
+    "unqualified_or_over_60s_since_fix": 183
+  },
+  "summary_sha256": "d75e5651436ec3a1515d9fc931ea26e70ff13265f1961c65d18c4ba775da8e63",
+  "decisions_csv_sha256": "7b82af94a1c288e8753f8d66180e6503ee6e973794d514e503cf14b405800bb7",
+  "claim_boundary": "EPE is a finite-dataset conservative envelope, not a probabilistic integrity guarantee."
+}

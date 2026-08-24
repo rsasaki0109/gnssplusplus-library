@@ -1,0 +1,43 @@
+{
+  "schema_version": "libgnsspp.integrity_geofence.profile.v1",
+  "profile_id": "r8-ppc-tokyo-nagoya-v1",
+  "release_state": "sealed",
+  "geofence": {
+    "shape": "circle",
+    "radius_m": 500.0,
+    "anchor_rule": "first_rtk_fixed_epoch"
+  },
+  "maximum_qualified_age_s": 60.0,
+  "empirical_protection_envelopes_m": {
+    "fixed": 24.0,
+    "bridge_0_5s": 71.8,
+    "bridge_5_15s": 71.9,
+    "bridge_15_30s": 71.9,
+    "bridge_30_60s": 71.9
+  },
+  "gates": {
+    "maximum_misleading_decisions": 0,
+    "maximum_envelope_exceedance_pct": 0.1,
+    "minimum_decisive_availability_pct": 80.0
+  },
+  "development": {
+    "dataset": "PPC Tokyo run1",
+    "truth_epochs": 11951,
+    "decisive_availability_pct": 96.81198226089867,
+    "misleading_decisions": 0,
+    "envelope_exceedance_pct": 0.0,
+    "summary_sha256": "d75e5651436ec3a1515d9fc931ea26e70ff13265f1961c65d18c4ba775da8e63"
+  },
+  "sealed_holdout": {
+    "dataset": "PPC Nagoya run1",
+    "inputs": {
+      "base.nav": {"bytes": 2428013, "sha256": "4a8e0e074c45604052936043a5dadd674d9a972c5f9c27a866ca4f9667df22d5"},
+      "base.obs": {"bytes": 14235780, "sha256": "7c5738135ee203bbb10925e57d5e98f7c9d5cd84ee27b0d92e386a6a29a2b872"},
+      "imu.csv": {"bytes": 14384069, "sha256": "1503944e298a47b395837028e8b6eca8b889ee2c2bc38b6c1d9606d6dde90f70"},
+      "reference.csv": {"bytes": 1063676, "sha256": "804f7b1d6845c2c5c717fe7868b7637a4a40bfb2e4a9f6811042b18d5ef00e0d"},
+      "rover.obs": {"bytes": 70328575, "sha256": "d9ee4e38c857f109cb430dab34e7958867060edb99e5f8b1c020abdd29d345cb"},
+      "trajectory.kml": {"bytes": 52376, "sha256": "a3f4be984e391bb1061526727939e3cdb0bfc96373d20a37674cfb243f24414d"}
+    }
+  },
+  "claim_boundary": "Empirical protection envelope (EPE) from one development drive; not certified integrity risk, HPL/VPL, or safety-of-life authorization."
+}

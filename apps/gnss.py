@@ -112,6 +112,16 @@ COMMANDS = {
         "target": python_target("gnss_structural_displacement_workflow.py"),
         "summary": "Run the frozen R7 multi-day development or one-shot sealed holdout workflow.",
     },
+    "integrity-geofence-signoff": {
+        "kind": "python",
+        "target": python_target("gnss_integrity_geofence_signoff.py"),
+        "summary": "Truth-score empirical protection envelopes and fail-safe inside/outside/unknown geofence decisions.",
+    },
+    "integrity-geofence-workflow": {
+        "kind": "python",
+        "target": python_target("gnss_integrity_geofence_workflow.py"),
+        "summary": "Build a qualified urban solution and run the frozen R8 empirical-envelope geofence decision workflow.",
+    },
     "trajectory-bundle": {
         "kind": "python", "target": python_target("gnss_trajectory_bundle.py"),
         "summary": "Package and truth-score a versioned trajectory for SLAM, maps, or visualization.",
