@@ -135,6 +135,24 @@ class JapanStaticSurveyTest(unittest.TestCase):
                 survey.convert_crx(source, output, root / "missing-CRX2RNX")
             self.assertFalse(output.exists())
 
+    def test_crx_conversion_removes_stale_output_before_noninteractive_replay(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="japan_survey_replay_") as temp_dir:
+            root = Path(temp_dir)
+            import gzip
+
+            source = root / "observation.crx.gz"
+            source.write_bytes(gzip.compress(b"compact payload\n"))
+            output = root / "observation.rnx"
+            output.write_text("stale\n", encoding="ascii")
+            converter = root / "converter"
+            converter.write_text(
+                "#!/bin/sh\nprintf 'fresh\\n' > \"${1%.crx}.rnx\"\n",
+                encoding="ascii",
+            )
+            converter.chmod(0o755)
+            survey.convert_crx(source, output, converter)
+            self.assertEqual(output.read_text(encoding="ascii"), "fresh\n")
+
     def test_child_commands_carry_independent_truth_and_antenna_contract(self) -> None:
         with tempfile.TemporaryDirectory(prefix="japan_survey_commands_") as temp_dir:
             root = Path(temp_dir)

@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT_DIR / "apps" / "commands"))
 sys.path.insert(0, str(ROOT_DIR / "apps" / "commands" / "benchmarks"))
 
 import gnss_structural_displacement_signoff as signoff  # noqa: E402
+import gnss_structural_displacement_workflow as workflow  # noqa: E402
 
 
 TRUTH = (-3957184.9682679, 3310231.00877522, 3737703.81925572)
@@ -84,6 +85,42 @@ class StructuralDisplacementSignoffTest(unittest.TestCase):
             (root / "relative_summary.json").write_text(json.dumps(summary), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "header position"):
                 signoff.load_bundle(root)
+
+    def test_opened_holdout_is_not_rerun(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="r7_holdout_") as temp_dir:
+            root = Path(temp_dir)
+            output = root / "opened"
+            output.mkdir()
+            (output / "workflow_manifest.json").write_text("{}\n", encoding="utf-8")
+            args = workflow.parse_args(
+                [
+                    "--phase", "holdout", "--mode", "full", "--output-dir", str(output),
+                    "--cache-dir", str(root / "cache"),
+                ]
+            )
+            self.assertEqual(workflow.run(args), 2)
+
+    def test_profile_and_guide_preserve_claim_boundaries(self) -> None:
+        profile = json.loads(
+            (ROOT_DIR / "configs/benchmarks/structural_displacement_r7_tsukuba.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(profile["release_state"], "closed_passed")
+        self.assertEqual(profile["development_dates_utc"], ["2024-01-01", "2024-01-02", "2024-01-03"])
+        guide = (ROOT_DIR / "docs/use_cases/structural_displacement_monitoring.md").read_text(
+            encoding="utf-8"
+        )
+        for token in (
+            "structural-displacement-workflow", "SOLUTION/EPOCHS", "SOLUTION/ESTIMATE",
+            "APPROX POSITION XYZ", "synthetic witness", "usable", "degraded", "unusable",
+            "station log", "weather", "closed_passed",
+        ):
+            self.assertIn(token, guide)
+        self.assertIn(
+            "use_cases/structural_displacement_monitoring.md",
+            (ROOT_DIR / "mkdocs.yml").read_text(encoding="utf-8"),
+        )
 
 
 if __name__ == "__main__":

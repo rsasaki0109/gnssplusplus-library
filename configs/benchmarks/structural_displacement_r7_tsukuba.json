@@ -1,7 +1,7 @@
 {
   "schema_version": "libgnsspp.structural_displacement.profile.v1",
   "profile_id": "r7-tsukuba-2024-001-004-v1",
-  "release_state": "sealed",
+  "release_state": "closed_passed",
   "baseline_ecef_m": [
     -3957184.9718091562,
     3310231.0216212682,

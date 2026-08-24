@@ -1,0 +1,41 @@
+{
+  "schema_version": "libgnsspp.structural_displacement.record.v1",
+  "release": "R7",
+  "role": "sealed_holdout_run1",
+  "status": "passed",
+  "decision": "usable",
+  "run_date_utc": "2026-08-24",
+  "observation_date_utc": "2024-01-04",
+  "profile_frozen_commit": "ac17c61",
+  "profile_state_after_run": "closed_passed",
+  "population": {
+    "epochs": 2880,
+    "fixed_epochs": 2876,
+    "fix_rate_pct": 99.861111,
+    "gap_count": 0,
+    "maximum_gap_s": 30.0
+  },
+  "offset_from_frozen_baseline_enu_m": [
+    -0.00030669876364280475,
+    0.00005827824628692837,
+    0.0005667384993162234
+  ],
+  "stable_site_alert": false,
+  "false_alert_count": 0,
+  "synthetic_witness": {
+    "enu_m": [0.04, -0.02, 0.08],
+    "horizontal_m": 0.044721359549995794,
+    "magnitude_3d_m": 0.09165151389911681,
+    "azimuth_deg": 116.56505117707799,
+    "detected": true,
+    "magnitude_error_m": 0.0,
+    "direction_error_deg": 0.0,
+    "provenance": "Frozen synthetic injection; no observed field displacement claim."
+  },
+  "source_result_sha256": "41862c6ba5f5669001b5ee1d49424edccd7b20f2cc29a1f7e1656ed130eb37ce",
+  "workflow_manifest_sha256": "242af35cdc4c537af9c80e15c15c34be58d401d0013a9a81c4d8e62f5d8ad453",
+  "upstream_manifest_sha256": "10578d79005cb6874d572f50f69f79895a7e0fca4cd004537cd32d4c4efaffb7",
+  "relative_position_sha256": "4661295853be8ab156e2769f08b1ff12e53b9c81270c5b3809001a8f2af49bf5",
+  "rerun_check": "refused with exit status 2 after workflow_manifest.json existed",
+  "claim_boundary": "The pass qualifies this frozen stable-station and synthetic-alert workflow. It is not evidence of real structural motion or seasonal performance."
+}

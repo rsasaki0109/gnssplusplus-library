@@ -12,6 +12,7 @@ checked benchmark artifacts.
 - [Primary application roadmap](application_use_case_roadmap.md)
 - [R1 urban RTK/IMU field checklist](use_cases/urban_rtk_imu_field_checklist.md)
 - [Japan static survey (IGS Tsukuba)](use_cases/japan_static_survey.md)
+- [Structural displacement monitoring](use_cases/structural_displacement_monitoring.md)
 - [Reference trajectory bundles](use_cases/trajectory_ground_truth.md)
 - [CLAS/MADOCA application decision](use_cases/clas_submeter.md)
 - [Robotics quick start](robotics_quickstart.md)

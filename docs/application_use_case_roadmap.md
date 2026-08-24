@@ -245,6 +245,11 @@ Scope and gate:
 
 ### R7 — Structural displacement monitoring (four-week target)
 
+Status: complete. Three public development days established the stable-site
+noise floor and frozen alert gates. The later sealed day passed once without
+tuning; the profile is closed and reruns are refused. The `usable` decision is
+limited to stable-station repeatability and synthetic-alert qualification.
+
 Scope and gate:
 
 - extend the R2 public station route to multiple days without using daily
@@ -278,24 +283,12 @@ pre-empt R5--R7 merely because its infrastructure is convenient to build.
 
 ## Immediate backlog
 
-R5 and R6 items 1--10 are complete; R6 concluded No-Go and its opened holdout
-must not be rerun. The active implementation slice is R7 structural monitoring:
-
-1. freeze at least three public observation days for one demonstrably stable
-   station and keep a later day sealed;
-2. freeze station reference frame, antenna/receiver history, monument event
-   evidence, source/product hashes, and missing-data rules;
-3. compute daily and fixed-interval coordinates without using each day's RINEX
-   approximate header position as truth;
-4. publish empirical covariance, gaps, steps, long-term drift, and product/
-   environment provenance;
-5. estimate the stable-site horizontal/vertical noise floor on development days;
-6. inject a known displacement witness after the noise floor and verify
-   detection plus direction/magnitude reporting;
-7. freeze repeatability, continuity, false-alert, and witness-detection gates;
-8. run the sealed day once without tuning;
-9. publish R7 usable/degraded/unusable decisions and the one-command report;
-10. complete R7 docs and tests before opening R8 implementation.
+R5--R7 items 1--10 are complete. R6 concluded No-Go and its opened holdout
+must not be rerun; the R7 holdout passed and is likewise closed. The active
+implementation slice is R8 integrity/geofence decisions. It must consume the
+quality and population contracts already emitted by R3--R7, define protection
+levels and unknown/degraded handling without treating FIX as integrity, freeze
+development gates, and preserve one untouched holdout before R9 begins.
 
 R1 and R4 negative results remain maintenance inputs, not permission to tune
 on their sealed runs. Station-service, RINEX 4, MADOCA parity, and upstream

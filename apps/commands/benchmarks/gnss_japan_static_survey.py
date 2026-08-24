@@ -356,8 +356,13 @@ def convert_crx(source_gz: Path, destination: Path, converter: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     crx_path = destination.with_suffix(".crx")
     materialize_gzip(source_gz, crx_path)
-    completed = subprocess.run([str(converter), str(crx_path)], capture_output=True, text=True, check=False)
     generated = crx_path.with_suffix(".rnx")
+    # RNXCMP prompts on an existing output file.  A non-interactive replay
+    # must deterministically regenerate this derivative from the verified
+    # compact source instead of waiting forever for terminal input.
+    if generated.exists():
+        generated.unlink()
+    completed = subprocess.run([str(converter), str(crx_path)], capture_output=True, text=True, check=False)
     try:
         if completed.returncode != 0 or not generated.is_file():
             raise ValueError(f"CRX2RNX failed ({completed.returncode}): {(completed.stdout + completed.stderr).strip()}")
