@@ -1,0 +1,36 @@
+{
+  "schema_version": "uav-r6-holdout-record.v1",
+  "dataset_id": "HKairport_GNSS03",
+  "role": "holdout",
+  "run": 1,
+  "pre_holdout_commits": {
+    "thresholds": "0dfcc4e",
+    "container_hash": "5f14b31",
+    "navigation_hash": "5e17ba2",
+    "workflow": "604b3ce"
+  },
+  "post_failure_tuning": false,
+  "input": {
+    "container": "mcap",
+    "bytes": 10035115566,
+    "sha256": "d85e39b936aaa95c469772089efa5bb377da0735c6aca6510e87a1c767951de7",
+    "provenance_boundary": "Public DapengFeng/MCAP derivative of the named MARS-LVIG flight; not byte-identical evidence for the official ROS1 bag."
+  },
+  "navigation": {
+    "date_utc": "2023-10-25",
+    "bytes": 11649764,
+    "sha256": "8c6315a2940b02a485371e9be93f8291a4fb062e23ef8ea00a3eb8a42993dbd8"
+  },
+  "profile_sha256": "799bd7e30f42766e856a601a8a6744a656aec10461068daff3fbedbd7b5b80ee",
+  "workflow_manifest_sha256": "eacedb8e02b33cd1327279b6d72e938b8a2adea80c3e4fd8500e98a32d8bae93",
+  "workflow_log_sha256": "8028f2a10102f883c1a0187232187473491227721f27f896349a212fb6d99485",
+  "return_codes": [0, 1],
+  "failed_stage": "adapter",
+  "failure": "rosbags MCAP storage rejected an embedded schema whose encoding field is empty (KeyError: '').",
+  "decisions": {
+    "navigation": "no_go_holdout_not_processed",
+    "mapping": "no_go",
+    "visualization": "no_go_holdout_not_processed"
+  },
+  "rerun_policy": "No rerun and no reader/profile/threshold change after opening run1; a future attempt requires a new release profile and a new sealed holdout."
+}

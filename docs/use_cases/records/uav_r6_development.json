@@ -1,0 +1,38 @@
+{
+  "schema_version": "uav-r6-development-record.v1",
+  "dataset_id": "HKisland_GNSS03",
+  "role": "development",
+  "container": "ros1_bag",
+  "decision": {
+    "navigation": "pass",
+    "mapping": "no_go",
+    "visualization": "pass"
+  },
+  "source_sha256": "8ce44d1d6338b7610a2120094f3ec11483c23dd7c5a368870820c06e0c5dc317",
+  "navigation_sha256": "d5135d67a483f10e69d239cc1b8b5c21c0b6daf2e4ca1989c22cff4287966288",
+  "profile_sha256_at_signoff": "58aeedcac0d4152306c2a0707a01ffbea9df2741c79f6b1b2f5ce312b81a658e",
+  "metrics": {
+    "selected_epochs": 3911,
+    "solution_epochs": 3911,
+    "solution_availability_ratio": 1.0,
+    "truth_interpolated_epochs": 3907,
+    "truth_coverage_ratio": 0.9989772436716953,
+    "horizontal_p95_m": 6.253344071608742,
+    "vertical_p95_abs_m": 8.463845849856595,
+    "max_solution_gap_s": 0.10000014305114746,
+    "max_horizontal_jump_m": 2.135099963400585,
+    "attitude_rtk_yaw_p95_abs_deg": 6.321978977637368,
+    "rtk_position_fixed_ratio": 1.0,
+    "rtk_yaw_fixed_ratio": 1.0,
+    "reference_point_mismatch_bound_m": 0.6157272448089333
+  },
+  "populations": {
+    "cruise_epochs": 2030,
+    "turn_epochs": 552,
+    "climb_descent_epochs": 666,
+    "hover_epochs": 1146,
+    "landing_epochs": 300
+  },
+  "all_28_frozen_gates_passed": true,
+  "mapping_no_go_reason": "The bag supplies only four-DoF independent RTK position/yaw truth and the LiDAR-to-DJI-body fixed rotation is unresolved."
+}

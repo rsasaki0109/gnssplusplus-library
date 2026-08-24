@@ -18,6 +18,12 @@ SPEC.loader.exec_module(WORKFLOW)
 
 
 class UavMarsWorkflowTests(unittest.TestCase):
+    def test_closed_holdout_cannot_be_rerun(self) -> None:
+        with self.assertRaises(SystemExit) as raised:
+            WORKFLOW.enforce_holdout_policy({"holdout_run1": {"closed": True}}, "holdout")
+        self.assertIn("must not be rerun", str(raised.exception))
+        WORKFLOW.enforce_holdout_policy({"holdout_run1": {"closed": True}}, "development")
+
     def test_navigation_product_requires_frozen_bytes_and_hash(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "brdc.rnx"

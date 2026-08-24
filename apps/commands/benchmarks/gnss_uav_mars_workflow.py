@@ -63,6 +63,12 @@ def validate_navigation(path: Path, profile: dict[str, object], role: str) -> di
     }
 
 
+def enforce_holdout_policy(profile: dict[str, object], role: str) -> None:
+    run1 = profile.get("holdout_run1")
+    if role == "holdout" and isinstance(run1, dict) and run1.get("closed") is True:
+        fail("R6 holdout run1 is closed and must not be rerun; use a new versioned profile and sealed flight")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog=os.environ.get("GNSS_CLI_NAME"))
     parser.add_argument("--input", type=Path, required=True, help="Frozen ROS1 bag or MCAP flight container")
@@ -88,6 +94,7 @@ def main() -> int:
     if args.max_epochs == 0 or args.max_epochs < -1:
         fail("--max-epochs must be -1 or a positive integer")
     profile = load_profile(args.profile)
+    enforce_holdout_policy(profile, args.role)
     navigation = validate_navigation(args.navigation, profile, args.role)
     dataset = dict(dict(profile.get("datasets", {})).get(args.role, {}))
     if not dataset:

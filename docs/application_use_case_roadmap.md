@@ -184,8 +184,8 @@ Acceptance gate:
 | Order | Release | User outcome | Primary reuse | Exit decision |
 |---:|---|---|---|---|
 | Complete | R5 Smartphone raw GNSS | An Android dataset becomes a truth-scored `.pos` bundle without manual conversion | R2 acquisition/provenance, R3 bundle/gate | Development and untouched holdout passed the frozen standalone profile; precise variant was not promoted |
-| Now | R6 UAV navigation | A UAV operator receives a lever-arm/attitude-qualified flight and landing trajectory | R1 fusion, R3 consumer profiles | Go only without vehicle NHC and with an independent flight reference |
-| Next | R7 Structural monitoring | A maintainer receives multi-day displacement/noise reports rather than isolated PPP points | R2 static PPP and covariance | Go only when multi-day repeatability separates motion from solver/environment noise |
+| Complete (No-Go) | R6 UAV navigation | A UAV operator receives a lever-arm/attitude-qualified flight and landing trajectory | R1 fusion, R3 consumer profiles | Development navigation/visualization passed, mapping was No-Go, and untouched holdout run1 failed closed on an invalid MCAP schema; no promotion or post-failure tuning |
+| Now | R7 Structural monitoring | A maintainer receives multi-day displacement/noise reports rather than isolated PPP points | R2 static PPP and covariance | Go only when multi-day repeatability separates motion from solver/environment noise |
 | Later | R8 Integrity/geofencing | An application consumes qualified positions and explicit alert/reject reasons | R1--R4 state vocabulary | Go only with measured false-alarm, missed-alert, stale-data and alert-latency populations |
 | Later | R9 GNSS timing | An operator receives clock bias/drift uncertainty and tested holdover limits | PPP clock state and station replay | Go only when UTC/GPST/leap-second and uncertainty contracts are explicit |
 
@@ -221,6 +221,17 @@ Acceptance gate:
   handset result to all Android devices.
 
 ### R6 — UAV survey/navigation workflow (four-week target)
+
+Status: complete with an R6 release No-Go. MARS-LVIG development acquisition,
+raw-GNSS/IMU/attitude/truth adaptation, native SPP, five motion populations,
+28 frozen gates, separate consumer decisions, one-command workflow, negative
+tests, and documentation are complete. Development navigation and visualization
+passed; mapping was No-Go because only four-DoF truth and no resolved
+LiDAR-to-body rotation were available. The untouched MCAP holdout run1 stopped
+fail-closed on an empty embedded schema encoding before solution generation.
+The failure is preserved without tuning or rerun. See
+`docs/use_cases/uav_navigation.md` and the two R6 records under
+`docs/use_cases/records/`.
 
 Scope and gate:
 
@@ -267,21 +278,24 @@ pre-empt R5--R7 merely because its infrastructure is convenient to build.
 
 ## Immediate backlog
 
-R5 items 1--10 are complete. The next implementation slice is R6 UAV data and
-frame-contract freeze:
+R5 and R6 items 1--10 are complete; R6 concluded No-Go and its opened holdout
+must not be rerun. The active implementation slice is R7 structural monitoring:
 
-1. inventory public flights containing raw GNSS, IMU/attitude, and independent
-   trajectory truth;
-2. choose one development flight and one sealed holdout flight;
-3. freeze licence, source hashes, time systems, antenna/body frames, lever arm,
-   sensor rates, and reference role;
-4. map GNSS and IMU fields without enabling vehicle NHC;
-5. implement malformed frame, time, and lever-arm negative tests;
-6. produce a bounded flight smoke bundle;
-7. score cruise, turn, climb/descent, hover, and landing populations;
-8. freeze navigation, mapping, and visualisation profile thresholds;
-9. run the UAV holdout once without tuning;
-10. publish R6 Go/No-Go before starting R7 implementation.
+1. freeze at least three public observation days for one demonstrably stable
+   station and keep a later day sealed;
+2. freeze station reference frame, antenna/receiver history, monument event
+   evidence, source/product hashes, and missing-data rules;
+3. compute daily and fixed-interval coordinates without using each day's RINEX
+   approximate header position as truth;
+4. publish empirical covariance, gaps, steps, long-term drift, and product/
+   environment provenance;
+5. estimate the stable-site horizontal/vertical noise floor on development days;
+6. inject a known displacement witness after the noise floor and verify
+   detection plus direction/magnitude reporting;
+7. freeze repeatability, continuity, false-alert, and witness-detection gates;
+8. run the sealed day once without tuning;
+9. publish R7 usable/degraded/unusable decisions and the one-command report;
+10. complete R7 docs and tests before opening R8 implementation.
 
 R1 and R4 negative results remain maintenance inputs, not permission to tune
 on their sealed runs. Station-service, RINEX 4, MADOCA parity, and upstream

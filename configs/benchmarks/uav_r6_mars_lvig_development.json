@@ -1,6 +1,6 @@
 {
   "schema_version": "uav-r6-profile.v1",
-  "profile_status": "development-data-contract",
+  "profile_status": "closed-r6-no-go",
   "dataset_name": "MARS-LVIG",
   "dataset_citation": "Li et al., MARS-LVIG dataset, IJRR 43(8), 2024, doi:10.1177/02783649241227968",
   "candidate_audit": [
@@ -165,5 +165,16 @@
     "population_epochs_min": 100,
     "population_horizontal_p95_max_m": 8.0,
     "population_vertical_p95_max_m": 12.0
+  },
+  "holdout_run1": {
+    "closed": true,
+    "opened_after_threshold_freeze": true,
+    "post_failure_tuning": false,
+    "pre_holdout_workflow_commit": "604b3ce",
+    "decision": "no_go_holdout_not_processed",
+    "failed_stage": "adapter",
+    "reason": "public MCAP derivative embeds a schema with an empty encoding field, rejected by the frozen rosbags reader",
+    "record": "docs/use_cases/records/uav_r6_holdout_run1.json",
+    "rerun": "forbidden; a future attempt requires a new versioned profile and different sealed flight"
   }
 }
