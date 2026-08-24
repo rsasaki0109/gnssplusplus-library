@@ -123,6 +123,91 @@ HOLDOUT_SOURCES: dict[str, dict[str, Any]] = {
     },
 }
 
+R7_DAY3_SOURCES: dict[str, dict[str, Any]] = {
+    **SOURCES,
+    "rover_crx_gz": {
+        "url": "https://igs.bkg.bund.de/root_ftp/IGS/obs/2024/003/TSK200JPN_R_20240030000_01D_30S_MO.crx.gz",
+        "bytes": 2096488,
+        "sha256": "486da032007e088929cf0e30dd8d7de2a062f6033cddfa36159389811570d2b3",
+    },
+    "base_crx_gz": {
+        "url": "https://igs.bkg.bund.de/root_ftp/IGS/obs/2024/003/TSKB00JPN_R_20240030000_01D_30S_MO.crx.gz",
+        "bytes": 1460592,
+        "sha256": "bab29258d2510e33174958a27d0f63426cf5b1d325cee512adce48c59d475821",
+    },
+    "nav_gz": {
+        "url": "https://igs.bkg.bund.de/root_ftp/IGS/BRDC/2024/003/BRDC00IGS_R_20240030000_01D_MN.rnx.gz",
+        "bytes": 1273188,
+        "sha256": "144539c8e12ff51724c06a6d8aeeb04e8683510bf9a19fe8d65ce46ddd009f1c",
+    },
+    "sp3_gz": {
+        "url": "https://igs.bkg.bund.de/root_ftp/IGS/products/2295/IGS0OPSFIN_20240030000_01D_15M_ORB.SP3.gz",
+        "bytes": 103051,
+        "sha256": "42d988af68fcce1eda621d3f89022644120a74ebf13914a3f7f1ad7f0526773b",
+    },
+    "clk_gz": {
+        "url": "https://igs.bkg.bund.de/root_ftp/IGS/products/2295/IGS0OPSFIN_20240030000_01D_30S_CLK.CLK.gz",
+        "bytes": 2549496,
+        "sha256": "5c8295a152dd0f196ccbc08f26f8c11e6c071a066b61a87f43e9b2d8ae80acb8",
+    },
+}
+
+R7_DAY4_SOURCES: dict[str, dict[str, Any]] = {
+    **SOURCES,
+    "rover_crx_gz": {
+        "url": "https://igs.bkg.bund.de/root_ftp/IGS/obs/2024/004/TSK200JPN_R_20240040000_01D_30S_MO.crx.gz",
+        "bytes": 2107072,
+        "sha256": "4132e6b647c07e3e8437333364d345e7c156fff70a456797323e659e9446e62b",
+    },
+    "base_crx_gz": {
+        "url": "https://igs.bkg.bund.de/root_ftp/IGS/obs/2024/004/TSKB00JPN_R_20240040000_01D_30S_MO.crx.gz",
+        "bytes": 1478816,
+        "sha256": "d0b6e306c8a1815dede253ba43b0aa918842279287ddd2210abadfef443fb906",
+    },
+    "nav_gz": {
+        "url": "https://igs.bkg.bund.de/root_ftp/IGS/BRDC/2024/004/BRDC00IGS_R_20240040000_01D_MN.rnx.gz",
+        "bytes": 1272904,
+        "sha256": "f03b2c2da281dce479f4f46d65a5b15c8f889512b55bdf680aa395bf57fd1570",
+    },
+    "sp3_gz": {
+        "url": "https://igs.bkg.bund.de/root_ftp/IGS/products/2295/IGS0OPSFIN_20240040000_01D_15M_ORB.SP3.gz",
+        "bytes": 102794,
+        "sha256": "798447aec712e7173e536bee83f02b8643ca7bdf797d59143615623e663d6624",
+    },
+    "clk_gz": {
+        "url": "https://igs.bkg.bund.de/root_ftp/IGS/products/2295/IGS0OPSFIN_20240040000_01D_30S_CLK.CLK.gz",
+        "bytes": 2545853,
+        "sha256": "74bb50b415dc8caac8947e9fa875873da331b4863b88c848064de3b976fe6eed",
+    },
+}
+
+DATASETS: dict[str, dict[str, Any]] = {
+    "development": {
+        "profile": PROFILE, "role": "development", "day": "001",
+        "epoch": datetime(2024, 1, 1, tzinfo=timezone.utc), "sources": SOURCES,
+    },
+    "holdout": {
+        "profile": HOLDOUT_PROFILE, "role": "sealed_holdout", "day": "002",
+        "epoch": datetime(2024, 1, 2, tzinfo=timezone.utc), "sources": HOLDOUT_SOURCES,
+    },
+    "r7-development-day1": {
+        "profile": "igs-tsukuba-r7-2024-001", "role": "r7_development", "day": "001",
+        "epoch": datetime(2024, 1, 1, tzinfo=timezone.utc), "sources": SOURCES,
+    },
+    "r7-development-day2": {
+        "profile": "igs-tsukuba-r7-2024-002", "role": "r7_development", "day": "002",
+        "epoch": datetime(2024, 1, 2, tzinfo=timezone.utc), "sources": HOLDOUT_SOURCES,
+    },
+    "r7-development-day3": {
+        "profile": "igs-tsukuba-r7-2024-003", "role": "r7_development", "day": "003",
+        "epoch": datetime(2024, 1, 3, tzinfo=timezone.utc), "sources": R7_DAY3_SOURCES,
+    },
+    "r7-holdout-day4": {
+        "profile": "igs-tsukuba-r7-2024-004-holdout", "role": "r7_sealed_holdout", "day": "004",
+        "epoch": datetime(2024, 1, 4, tzinfo=timezone.utc), "sources": R7_DAY4_SOURCES,
+    },
+}
+
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     raw = list(sys.argv[1:] if argv is None else argv)
@@ -131,8 +216,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--cache-dir", type=Path, default=Path.home() / ".cache/libgnsspp/japan-static-survey")
     parser.add_argument("--mode", choices=("smoke", "full"), default="smoke")
     parser.add_argument(
-        "--dataset", choices=("development", "holdout"), default="development",
-        help="Frozen 2024-01-01 development day or untouched 2024-01-02 release holdout.",
+        "--dataset", choices=tuple(DATASETS), default="development",
+        help="Frozen R2 day or one of the separately role-labelled R7 monitoring days.",
     )
     parser.add_argument("--offline", action="store_true", help="Use only hash-verified cache entries.")
     parser.add_argument("--force-fetch", action="store_true")
@@ -299,11 +384,11 @@ def rinex_antenna_type(path: Path) -> str:
 
 def acquire(args: argparse.Namespace) -> tuple[dict[str, Path], dict[str, Any]]:
     cache_dir = args.cache_dir.resolve()
-    holdout = args.dataset == "holdout"
-    sources = HOLDOUT_SOURCES if holdout else SOURCES
-    profile = HOLDOUT_PROFILE if holdout else PROFILE
-    observation_epoch = datetime(2024, 1, 2 if holdout else 1, tzinfo=timezone.utc)
-    day = "002" if holdout else "001"
+    dataset = DATASETS[args.dataset]
+    sources = dataset["sources"]
+    profile = str(dataset["profile"])
+    observation_epoch = dataset["epoch"]
+    day = str(dataset["day"])
     downloads: dict[str, Path] = {}
     for name, source in sources.items():
         if name == "rnxcmp_linux_x86_64" and (shutil.which("CRX2RNX") or shutil.which("crx2rnx")):
@@ -334,7 +419,7 @@ def acquire(args: argparse.Namespace) -> tuple[dict[str, Path], dict[str, Any]]:
     base_antenna = rinex_antenna_type(paths["base_obs"])
     metadata = {
         "profile": profile,
-        "dataset_role": "sealed_holdout" if holdout else "development",
+        "dataset_role": dataset["role"],
         "observation_epoch_utc": observation_epoch.isoformat(),
         "sources": {name: {**source, "cache": record(downloads[name]) if name in downloads else None} for name, source in sources.items()},
         "materialized": {name: record(path) for name, path in paths.items()},
@@ -440,8 +525,8 @@ def run(args: argparse.Namespace) -> int:
     log_path.write_text("libgnss++ japan-static-survey\n", encoding="utf-8")
     manifest: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION, "status": "running", "exit_status": None,
-        "profile": HOLDOUT_PROFILE if args.dataset == "holdout" else PROFILE,
-        "dataset_role": "sealed_holdout" if args.dataset == "holdout" else "development",
+        "profile": DATASETS[args.dataset]["profile"],
+        "dataset_role": DATASETS[args.dataset]["role"],
         "mode": args.mode,
         "run": {"argv": [str(DISPATCHER), "japan-static-survey", *getattr(args, "_raw_argv", [])], "cwd": str(Path.cwd().resolve()), **software_record()},
         "provenance": {

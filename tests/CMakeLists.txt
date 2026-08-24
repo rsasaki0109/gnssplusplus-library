@@ -452,6 +452,10 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_japan_static_survey.py
     )
     add_test(
+        NAME python_structural_displacement_signoff_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_structural_displacement_signoff.py
+    )
+    add_test(
         NAME python_trajectory_bundle_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_trajectory_bundle.py
     )
@@ -547,6 +551,7 @@ if(GTest_FOUND)
         python_urban_bridge_score_tests
         python_urban_continuity_bundle_tests
         python_japan_static_survey_tests
+        python_structural_displacement_signoff_tests
         python_release_contract_tests
         python_growth_snapshot_tests
         python_community_health_tests

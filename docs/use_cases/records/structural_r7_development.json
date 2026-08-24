@@ -1,0 +1,44 @@
+{
+  "schema_version": "libgnsspp.structural_displacement.record.v1",
+  "release": "R7",
+  "role": "development",
+  "status": "passed",
+  "decision": "usable",
+  "run_date_utc": "2026-08-24",
+  "station_pair": ["TSK200JPN", "TSKB00JPN"],
+  "observation_dates_utc": ["2024-01-01", "2024-01-02", "2024-01-03"],
+  "population": {
+    "days": 3,
+    "epochs_per_day": 2880,
+    "nominal_interval_s": 30,
+    "coordinate_windows_per_day": 4,
+    "coordinate_window_s": 21600
+  },
+  "noise_floor": {
+    "horizontal_1sigma_m": 0.00035787738995215264,
+    "vertical_1sigma_m": 0.0006619444136665143,
+    "limitation": "Three consecutive days do not characterize seasonal or structure-specific motion."
+  },
+  "frozen_gates": {
+    "horizontal_alert_m": 0.02,
+    "vertical_alert_m": 0.04,
+    "minimum_fix_rate_pct": 99.0,
+    "maximum_gap_s": 60.0,
+    "maximum_false_alerts": 0
+  },
+  "synthetic_witness_enu_m": [0.04, -0.02, 0.08],
+  "synthetic_witness_detected": true,
+  "source_result_sha256": "551122e4044ecebf6f13628718a7cba1129bd83eee31cdb99b7b3575bcd76ad7",
+  "upstream_manifest_sha256": [
+    "f2b5b67e5fa9f332f29aa254ad595c5a71609885bb495e3c6588f66e910902ec",
+    "98ecbfacfa99d660412f53c8d1802cf56310bf0f6bb2e67596c740ed31d88218",
+    "8dad8d2aac6a1be941f2e916a886d393414736888e23d0e6530646ea58db4390"
+  ],
+  "relative_position_sha256": [
+    "aa6b603a20041b464b4aa20fb3abf73094beb5a8804248cd0e5938e6e66d36e7",
+    "4192e4c2f80fb325270e215d5bda55aa09810de0cf736d72ca675d7f4c6251c8",
+    "f1225ddc845a307201a20b8bb95778f937e3de2443608c99037802b9c88da6ca"
+  ],
+  "regeneration_command": "python3 apps/gnss.py structural-displacement-workflow --phase development --mode full --output-dir output/structural_r7/development --cache-dir data/structural_r7/cache",
+  "claim_boundary": "Stable-station repeatability and injected-witness detection only; no observed structural displacement."
+}

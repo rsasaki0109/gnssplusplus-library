@@ -102,6 +102,16 @@ COMMANDS = {
         "target": python_target("gnss_japan_static_survey.py"),
         "summary": "Fetch and evaluate the frozen IGS Tsukuba relative-static and PPP survey example.",
     },
+    "structural-displacement-signoff": {
+        "kind": "python",
+        "target": python_target("gnss_structural_displacement_signoff.py"),
+        "summary": "Score multi-day static coordinates, continuity, noise floor, drift, and an injected displacement witness.",
+    },
+    "structural-displacement-workflow": {
+        "kind": "python",
+        "target": python_target("gnss_structural_displacement_workflow.py"),
+        "summary": "Run the frozen R7 multi-day development or one-shot sealed holdout workflow.",
+    },
     "trajectory-bundle": {
         "kind": "python", "target": python_target("gnss_trajectory_bundle.py"),
         "summary": "Package and truth-score a versioned trajectory for SLAM, maps, or visualization.",

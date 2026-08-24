@@ -1,0 +1,32 @@
+{
+  "schema_version": "libgnsspp.structural_displacement.profile.v1",
+  "profile_id": "r7-tsukuba-2024-001-004-v1",
+  "release_state": "sealed",
+  "baseline_ecef_m": [
+    -3957184.9718091562,
+    3310231.0216212682,
+    3737703.8220189153
+  ],
+  "development_dates_utc": [
+    "2024-01-01",
+    "2024-01-02",
+    "2024-01-03"
+  ],
+  "holdout_date_utc": "2024-01-04",
+  "horizontal_alert_m": 0.02,
+  "vertical_alert_m": 0.04,
+  "minimum_fix_rate_pct": 99.0,
+  "maximum_gap_s": 60.0,
+  "maximum_false_alerts": 0,
+  "witness_enu_m": [0.04, -0.02, 0.08],
+  "maximum_witness_magnitude_error_m": 0.005,
+  "maximum_witness_direction_error_deg": 2.0,
+  "development_evidence": {
+    "population_days": 3,
+    "horizontal_noise_1sigma_m": 0.00035787738995215264,
+    "vertical_noise_1sigma_m": 0.0006619444136665143,
+    "maximum_observed_step_3d_m": 0.0009468533103202536,
+    "regeneration_command": "python3 apps/gnss.py structural-displacement-workflow --phase development --mode full --output-dir output/structural_r7/development --cache-dir data/structural_r7/cache"
+  },
+  "claim_boundary": "Three-day TSK2-versus-TSKB stable-site repeatability and synthetic witness only; no observed structural displacement or seasonal noise claim."
+}
