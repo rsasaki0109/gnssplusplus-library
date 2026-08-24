@@ -584,6 +584,11 @@ COMMANDS = {
         "target": python_target("gnss_uav_mars_signoff.py"),
         "summary": "Truth-score an R6 UAV flight and publish separate navigation, mapping, and visualization decisions.",
     },
+    "uav-mars-workflow": {
+        "kind": "python",
+        "target": python_target("gnss_uav_mars_workflow.py"),
+        "summary": "Run the frozen R6 UAV container-to-POS/KML/PNG/sign-off workflow and emit a hash manifest.",
+    },
     "clas-ppp": {
         "kind": "python",
         "target": python_target("gnss_clas_ppp.py"),
