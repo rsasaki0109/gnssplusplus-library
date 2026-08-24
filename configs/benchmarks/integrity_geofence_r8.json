@@ -1,7 +1,7 @@
 {
   "schema_version": "libgnsspp.integrity_geofence.profile.v1",
   "profile_id": "r8-ppc-tokyo-nagoya-v1",
-  "release_state": "sealed",
+  "release_state": "closed_no_go",
   "geofence": {
     "shape": "circle",
     "radius_m": 500.0,

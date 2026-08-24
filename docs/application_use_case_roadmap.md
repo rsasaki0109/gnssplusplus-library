@@ -263,6 +263,12 @@ Scope and gate:
 
 ### R8/R9 — Safety and timing applications
 
+R8 status: complete with a cross-city release No-Go. Tokyo development froze
+age-populated empirical protection envelopes and conservative
+inside/outside/unknown semantics. The Nagoya run1 holdout failed upstream
+bridge coverage and maximum-error gates, so no geofence decision was emitted
+and the profile was closed without tuning.
+
 R8 consumes the common quality summaries; it does not invent integrity from a
 FIX flag. R9 begins with an observability audit and must publish uncertainty
 and holdover evidence before exposing an NTP/PTP-style service. Neither may
@@ -283,12 +289,12 @@ pre-empt R5--R7 merely because its infrastructure is convenient to build.
 
 ## Immediate backlog
 
-R5--R7 items 1--10 are complete. R6 concluded No-Go and its opened holdout
-must not be rerun; the R7 holdout passed and is likewise closed. The active
-implementation slice is R8 integrity/geofence decisions. It must consume the
-quality and population contracts already emitted by R3--R7, define protection
-levels and unknown/degraded handling without treating FIX as integrity, freeze
-development gates, and preserve one untouched holdout before R9 begins.
+R5--R8 are complete. R6 and R8 concluded No-Go and their opened holdouts must
+not be rerun; the R7 holdout passed and is likewise closed. The active
+implementation slice is R9 GNSS timing and holdover assessment. Start with an
+observability audit, select public timing data with an independent clock
+reference, separate GNSS lock from holdover, publish phase/frequency error and
+uncertainty populations, then freeze and run one untouched holdout.
 
 R1 and R4 negative results remain maintenance inputs, not permission to tune
 on their sealed runs. Station-service, RINEX 4, MADOCA parity, and upstream

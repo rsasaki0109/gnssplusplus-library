@@ -1,0 +1,38 @@
+{
+  "schema_version": "libgnsspp.integrity_geofence.record.v1",
+  "release": "R8",
+  "role": "sealed_holdout_run1",
+  "dataset": "PPC Nagoya run1",
+  "profile_frozen_commit": "4711433",
+  "profile_state_after_run": "closed_no_go",
+  "status": "failed",
+  "decision": "unusable",
+  "release_decision": "No-Go",
+  "failure_stage": "upstream_quality_bundle",
+  "geofence_decision_executed": false,
+  "upstream_metrics": {
+    "reference_epochs": 7651,
+    "rtk_fixed_epochs": 4853,
+    "rtk_fixed_availability_pct": 63.429617,
+    "fused_availability_pct": 99.228859,
+    "fused_bridge_coverage_pct": 97.891351,
+    "max_bridge_horizontal_error_m": 100.191101,
+    "max_reacquisition_error_step_m": 0.545576,
+    "fixed_p95_regression_m": 1.818777,
+    "fused_nonfinite_epochs": 0
+  },
+  "failed_frozen_gates": [
+    "fused_bridge_coverage_pct 97.891351 < 99.0",
+    "max_bridge_horizontal_error_m 100.191101 > 75.0"
+  ],
+  "artifacts": {
+    "workflow_manifest_sha256": "f797fecd5fb6c97a985e59e68da01714ccf5b730a0332ef320ec5f6e642cbef4",
+    "workflow_log_sha256": "2886efc59ef4e7f8d5518195286e1e765ef1bdf396f1964eb810246f2e270f75",
+    "upstream_manifest_sha256": "ecc29ff144d6c64ccf21b53aa9e77e53be8d1d47a832a1b1e043afa3a3f93fa8",
+    "upstream_score_sha256": "1f86c3d1ea84e2ca6803d6b15481298815552cca78a69994163b15055fb11264",
+    "rtk_pos_sha256": "fb14ec7541ae3e1d4ea31ea2ca749e1e42878f30583ee324f0fc35b68bf21929",
+    "fused_pos_sha256": "96610e688047da62def8e9853419a4ee837a5d12939798619a220800ee00a0ed"
+  },
+  "rerun_policy": "Do not rerun or tune Nagoya run1. A new release requires a new frozen profile and a new sealed holdout.",
+  "claim_boundary": "No geofence result was issued because upstream positioning quality failed before the decision stage."
+}

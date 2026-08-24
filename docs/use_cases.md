@@ -9,6 +9,7 @@ the longer validation path is worth the time.
 | Autonomous-driving or navigation developer bridging an urban RTK outage | Rover/base/navigation RINEX plus vehicle IMU CSV | Matched RTK and fused `.pos` streams plus KML | 5–15 min for a bounded replay | [Urban RTK + IMU/NHC/ZUPT](use_cases/urban_rtk_fgo.md) |
 | Survey/developer evaluating a Japanese static station pair | IGS Tsukuba CRX/RINEX, broadcast nav, final SP3/CLK | Relative static and PPP `.pos`, KML, PNG, summaries, manifest | 1–15 min | [Japan static survey](use_cases/japan_static_survey.md) |
 | Monitoring engineer qualifying a displacement-alert pipeline | Four frozen IGS Tsukuba days, SINEX truth, station logs | Daily/6-hour coordinates, covariance, steps, drift, witness score, decision JSON | 5–30 min | [Structural displacement monitoring](use_cases/structural_displacement_monitoring.md) |
+| Application engineer testing conservative zone decisions | PPC RTK/fused trajectory, independent Applanix truth | EPE populations, inside/outside/unknown ledger, GeoJSON, scorecard, fail-safe manifest | 1–20 min | [Integrity-aware geofence decisions](use_cases/integrity_geofence_decisions.md) |
 | Perception or mapping developer consuming a reference trajectory | A solved `.pos` plus independent PPC Applanix reference | Versioned raw/accepted POS, KML, plot, ROS2 metadata, summary and hash manifest | 1–2 min after solving | [Reference trajectory bundle](use_cases/trajectory_ground_truth.md) |
 | Fleet or guidance developer evaluating wide-area corrections | PPC RINEX, QZSS public L6, independent Applanix reference | CLAS solution, decode diagnostics, truth score and application decision | Full replay is compute-intensive | [CLAS/MADOCA sub-meter decision](use_cases/clas_submeter.md) |
 | UAV operator evaluating standalone flight continuity | MARS-LVIG raw-GNSS flight container, matching IGS NAV, DJI RTK/attitude truth | POS, motion-population score, KML/PNG and separate navigation/mapping/visualization decisions | 1–3 min after the 10 GB source is local | [UAV navigation and flight continuity](use_cases/uav_navigation.md) |
@@ -35,8 +36,8 @@ frame boundaries are stricter than a RINEX-header comparison.
 The [primary application roadmap](application_use_case_roadmap.md) puts
 user-facing workflows ahead of general infrastructure. Smartphone raw GNSS
 (R5) is complete and UAV navigation (R6) concluded with a documented No-Go;
-R7 structural displacement monitoring is complete; the active release is
-integrity/geofence decisions (R8), followed by
+R7 is complete and R8 concluded with a cross-city No-Go. The active release is
+GNSS timing and holdover assessment (R9), followed by
 integrity/geofencing (R8) and GNSS timing (R9).
 Station operations, RINEX 4, and MADOCA parity work enter this queue only when
 an active application gate needs them.

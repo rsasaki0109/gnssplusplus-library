@@ -73,7 +73,7 @@ class IntegrityGeofenceSignoffTest(unittest.TestCase):
         profile = json.loads(
             (ROOT_DIR / "configs/benchmarks/integrity_geofence_r8.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(profile["release_state"], "sealed")
+        self.assertEqual(profile["release_state"], "closed_no_go")
         self.assertIn("not certified integrity", profile["claim_boundary"])
         self.assertEqual(profile["maximum_qualified_age_s"], 60.0)
 
