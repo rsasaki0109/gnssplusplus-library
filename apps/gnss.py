@@ -579,6 +579,11 @@ COMMANDS = {
         "target": python_target("gnss_uav_mars_adapter.py"),
         "summary": "Extract MARS-LVIG raw GNSS, IMU, attitude, and independent RTK truth under the frozen R6 frame contract.",
     },
+    "uav-mars-signoff": {
+        "kind": "python",
+        "target": python_target("gnss_uav_mars_signoff.py"),
+        "summary": "Truth-score an R6 UAV flight and publish separate navigation, mapping, and visualization decisions.",
+    },
     "clas-ppp": {
         "kind": "python",
         "target": python_target("gnss_clas_ppp.py"),

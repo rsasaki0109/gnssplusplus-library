@@ -114,6 +114,32 @@
     "sensor_time": "UTC synchronized from UAV RTK GPRMC/PPS",
     "raw_gnss_time": "GNSS receiver time carried by gnss_comm messages; conversion must preserve week/TOW and declare leap seconds",
     "comparison_time": "UTC",
+    "gps_utc_leap_seconds": 18,
     "maximum_alignment_tolerance_s": 0.05
+  },
+  "segmentation": {
+    "hover_horizontal_speed_max_mps": 1.0,
+    "cruise_horizontal_speed_min_mps": 3.0,
+    "turn_yaw_rate_min_degps": 10.0,
+    "climb_descent_vertical_speed_min_mps": 1.0,
+    "landing_tail_duration_s": 30.0,
+    "truth_interpolation_span_max_s": 0.25,
+    "method": "motion labels are computed only from independent RTK truth; landing is the final 30 s population and overlaps other motion labels"
+  },
+  "thresholds": {
+    "frozen_before_holdout": "2026-08-24",
+    "basis": "HKisland_GNSS03 development run; rounded outward from the recorded development metrics without inspecting HKairport_GNSS03 payloads",
+    "availability_min": 0.99,
+    "truth_coverage_min": 0.995,
+    "horizontal_p95_max_m": 8.0,
+    "vertical_p95_max_m": 12.0,
+    "max_solution_gap_s": 0.2,
+    "max_horizontal_jump_m": 5.0,
+    "attitude_yaw_p95_max_deg": 10.0,
+    "rtk_fixed_ratio_min": 0.99,
+    "landing_horizontal_p95_max_m": 7.0,
+    "population_epochs_min": 100,
+    "population_horizontal_p95_max_m": 8.0,
+    "population_vertical_p95_max_m": 12.0
   }
 }
