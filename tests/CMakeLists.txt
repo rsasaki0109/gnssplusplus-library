@@ -460,6 +460,10 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_integrity_geofence_signoff.py
     )
     add_test(
+        NAME python_timing_holdover_signoff_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_timing_holdover_signoff.py
+    )
+    add_test(
         NAME python_trajectory_bundle_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_trajectory_bundle.py
     )
@@ -557,6 +561,7 @@ if(GTest_FOUND)
         python_japan_static_survey_tests
         python_structural_displacement_signoff_tests
         python_integrity_geofence_signoff_tests
+        python_timing_holdover_signoff_tests
         python_release_contract_tests
         python_growth_snapshot_tests
         python_community_health_tests

@@ -1,0 +1,36 @@
+{
+  "schema_version": "libgnsspp.timing_holdover.profile.v1",
+  "profile_id": "r9-brux-2024-001-002-v1",
+  "release_state": "sealed",
+  "station": "BRUX00BEL",
+  "minimum_lock_coverage_pct": 95.0,
+  "maximum_lock_phase_p95_abs_ns": 39,
+  "maximum_lock_step_ns": 12,
+  "maximum_holdover_p95_abs_ns": {
+    "300": 40,
+    "600": 40,
+    "900": 40,
+    "1800": 42
+  },
+  "maximum_holdover_horizon_s": 1800,
+  "development": {
+    "date_utc": "2024-01-01",
+    "matched_lock_epochs": 288,
+    "lock_phase_p95_abs_ns": 25.70710332672763,
+    "maximum_lock_step_ns": 7.407300286149181,
+    "simulated_holdover_p95_abs_ns": {
+      "300": 26.053195240210112,
+      "600": 26.476243552189732,
+      "900": 26.63010093489295,
+      "1800": 27.782747624380033
+    }
+  },
+  "holdout": {
+    "date_utc": "2024-01-02",
+    "observation_sha256": "91b1b0b32efea3b6795285fee5539a7842dd449c9ecfee6c7a38a07db71fc77c",
+    "navigation_sha256": "5b3fb3aac5e43fcdeedcb6f476ca78c87e120e5bba413a2d63c4c599dde64502",
+    "igs_clk_sha256": "ce249669b845fc7bd3ee9efa78547b15f4535000d333df9066ca8be8b6a4bd03"
+  },
+  "service_decision": "no_go_missing_physical_pps_and_real_outage_test",
+  "claim_boundary": "Offline SPP-vs-IGS-CLK and simulated linear holdover only; no physical PPS/NTP/PTP service evidence."
+}

@@ -1,0 +1,30 @@
+{
+  "schema_version": "libgnsspp.timing_holdover.record.v1",
+  "release": "R9",
+  "role": "development",
+  "station": "BRUX00BEL",
+  "date_utc": "2024-01-01",
+  "status": "passed",
+  "assessment_decision": "usable",
+  "service_decision": "No-Go",
+  "spp_epochs": 2880,
+  "matched_igs_clock_epochs": 288,
+  "lock_coverage_pct": 100.0,
+  "lock_phase_p95_abs_ns": 25.70710332672763,
+  "lock_phase_max_abs_ns": 28.255352815724695,
+  "maximum_lock_step_ns": 7.407300286149181,
+  "relative_frequency_p95_abs": 7.939049857000641e-12,
+  "simulated_holdover_p95_abs_ns": {
+    "300": 26.053195240210112,
+    "600": 26.476243552189732,
+    "900": 26.63010093489295,
+    "1800": 27.782747624380033
+  },
+  "artifacts": {
+    "workflow_manifest_sha256": "b65932f8ce08cbfdf4a60743bdb90ddf32dff452046124d0bfc6f03c8ee3fe8e",
+    "receiver_clock_csv_sha256": "a2279ecce70f866194bc806dbd36b4e431aec2d2bb2105c3d59d4ccdacae8a58",
+    "signoff_summary_sha256": "18c83495112792e49fed332a04ad77b260a50624766180328925ae3edf11c83c",
+    "clock_comparison_csv_sha256": "85f494e1b367c7f421c0dca5600f91e8631c4b759e1e25d388cd302591c20956"
+  },
+  "observability_boundary": "The source remains GNSS-connected. Holdover is a linear extrapolation scored against independent IGS CLK, not a physical PPS outage test."
+}

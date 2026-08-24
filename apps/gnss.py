@@ -122,6 +122,16 @@ COMMANDS = {
         "target": python_target("gnss_integrity_geofence_workflow.py"),
         "summary": "Build a qualified urban solution and run the frozen R8 empirical-envelope geofence decision workflow.",
     },
+    "timing-holdover-signoff": {
+        "kind": "python",
+        "target": python_target("gnss_timing_holdover_signoff.py"),
+        "summary": "Compare SPP receiver-clock telemetry with IGS final station clocks and assess simulated holdover.",
+    },
+    "timing-holdover-workflow": {
+        "kind": "python",
+        "target": python_target("gnss_timing_holdover_workflow.py"),
+        "summary": "Acquire BRUX RINEX/IGS clocks, emit receiver-clock telemetry, and assess lock plus simulated holdover.",
+    },
     "trajectory-bundle": {
         "kind": "python", "target": python_target("gnss_trajectory_bundle.py"),
         "summary": "Package and truth-score a versioned trajectory for SLAM, maps, or visualization.",

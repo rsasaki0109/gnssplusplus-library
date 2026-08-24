@@ -9,6 +9,7 @@
 #include <string>
 
 #include <libgnss++/algorithms/spp.hpp>
+#include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/solution.hpp>
 #include <libgnss++/io/rinex.hpp>
 
@@ -19,6 +20,7 @@ struct Options {
     std::string nav_path;
     std::string out_path;
     std::string summary_json_path;
+    std::string clock_csv_path;
     std::string sp3_path;
     std::string clk_path;
     std::string ssr_path;
@@ -174,6 +176,7 @@ void printUsage(const char* program_name) {
         << "  --nav <nav.rnx>                   RINEX navigation file\n"
         << "  --out <solution.pos>              Output position file\n"
         << "  --summary-json <summary.json>     Write machine-readable run summary\n"
+        << "  --clock-csv <clock.csv>           Write SPP receiver clock bias/drift telemetry\n"
         << "  --max-epochs <n>                  Stop after n epochs\n"
         << "  --elevation-mask-deg <deg>        Elevation mask in degrees (default: 15)\n"
         << "  --snr-mask <dbhz>                 Minimum SNR/CN0 threshold (default: 0)\n"
@@ -235,6 +238,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.out_path = requireValue(arg, i, argc, argv);
         } else if (arg == "--summary-json") {
             options.summary_json_path = requireValue(arg, i, argc, argv);
+        } else if (arg == "--clock-csv") {
+            options.clock_csv_path = requireValue(arg, i, argc, argv);
         } else if (arg == "--max-epochs") {
             options.max_epochs = std::stoi(requireValue(arg, i, argc, argv));
         } else if (arg == "--elevation-mask-deg" || arg == "--elevation-mask") {
@@ -610,6 +615,19 @@ int main(int argc, char* argv[]) {
         summary.ionex_maps = processor.getLoadedIONEXMapCount();
         summary.dcb_entries = processor.getLoadedDCBEntryCount();
         libgnss::ObservationData obs;
+        std::ofstream clock_csv;
+        if (!options.clock_csv_path.empty()) {
+            clock_csv.open(options.clock_csv_path);
+            if (!clock_csv.is_open()) {
+                std::cerr << "Error: failed to open clock CSV: "
+                          << options.clock_csv_path << "\n";
+                return 1;
+            }
+            clock_csv
+                << "gps_week,gps_tow_s,receiver_clock_bias_m,"
+                   "receiver_clock_bias_s,receiver_clock_drift_sps,status,satellites,pdop\n";
+            clock_csv << std::setprecision(17);
+        }
         while (obs_reader.readObservationEpoch(obs)) {
             if (options.max_epochs > 0 && summary.processed_epochs >= options.max_epochs) {
                 break;
@@ -621,6 +639,18 @@ int main(int argc, char* argv[]) {
             summary.addSolution(epoch_solution);
             if (epoch_solution.isValid()) {
                 solution.addSolution(epoch_solution);
+                if (clock_csv.is_open()) {
+                    clock_csv
+                        << epoch_solution.time.week << ','
+                        << epoch_solution.time.tow << ','
+                        << epoch_solution.receiver_clock_bias << ','
+                        << epoch_solution.receiver_clock_bias /
+                               libgnss::constants::SPEED_OF_LIGHT << ','
+                        << epoch_solution.receiver_clock_drift << ','
+                        << static_cast<int>(epoch_solution.status) << ','
+                        << epoch_solution.num_satellites << ','
+                        << epoch_solution.pdop << '\n';
+                }
             }
             ++summary.processed_epochs;
         }
