@@ -154,7 +154,8 @@ class UrbanContinuityBundleTest(unittest.TestCase):
                 hashlib.sha256(fused_path.read_bytes()).hexdigest(),
             )
             self.assertIn(payload["binary"]["version_available"], (True, False))
-            self.assertEqual(payload["manifest_path"], str(manifest_path))
+            # display_path resolves symlinks (macOS: /var -> /private/var).
+            self.assertEqual(payload["manifest_path"], str(manifest_path.resolve()))
             self.assertEqual(payload["dataset_provenance"]["dataset"], "PPC-Dataset")
             self.assertIn("upstream", payload["dataset_provenance"])
             self.assertIn("license", payload["dataset_provenance"])
