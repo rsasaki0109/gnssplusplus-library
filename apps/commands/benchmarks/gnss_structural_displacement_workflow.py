@@ -32,6 +32,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--cache-dir", type=Path, required=True)
     parser.add_argument("--profile", type=Path, default=DEFAULT_PROFILE)
     parser.add_argument("--offline", action="store_true")
+    parser.add_argument(
+        "--snapshot-dir", type=Path,
+        help="camera snapshot evidence directory forwarded to the sign-off",
+    )
     args = parser.parse_args(argv)
     if args.phase == "holdout" and args.mode != "full":
         parser.error("the sealed holdout may only be opened in full mode")
@@ -109,6 +113,7 @@ def run(args: argparse.Namespace) -> int:
         *[part for bundle in bundles for part in ("--bundle", bundle)],
         "--output", signoff_path,
         *(["--profile", profile_path] if args.phase == "holdout" else []),
+        *(["--snapshot-dir", args.snapshot_dir.resolve()] if args.snapshot_dir else []),
     )
     step = run_step(argv, log_path)
     manifest["steps"].append(step)

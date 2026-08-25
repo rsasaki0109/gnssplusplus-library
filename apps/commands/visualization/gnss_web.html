@@ -464,6 +464,35 @@
 
     <section class="card" style="margin-top: 18px;">
       <div class="section-title">
+        <h2>Status trajectories & wrong-fix events</h2>
+        <span class="tiny">/api/status-trajectory — linked map and error series with brushing</span>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
+        <select id="stf-ledger-select" style="max-width:280px;">
+          <option value="">— wrong-fix ledger —</option>
+        </select>
+        <input id="stf-pos-path" placeholder=".pos path under root" style="min-width:260px;" />
+        <input id="stf-reference-path" placeholder="reference.csv (optional)" style="min-width:220px;" />
+        <label class="tiny">wrong-fix &gt;
+          <input id="stf-threshold" value="0.5" size="4" /> m</label>
+        <button id="stf-load">Load</button>
+        <span class="tiny" id="stf-summary"></span>
+      </div>
+      <div class="grid two plot-wrap">
+        <div class="plot-card">
+          <h3>Map (brushed epochs highlighted)</h3>
+          <canvas id="stf-map" width="600" height="420"></canvas>
+        </div>
+        <div class="plot-card">
+          <h3>3D error vs TOW (hover to brush, click event to zoom)</h3>
+          <canvas id="stf-series" width="600" height="420"></canvas>
+        </div>
+      </div>
+      <div id="stf-events" style="margin-top:10px;"></div>
+    </section>
+
+    <section class="card" style="margin-top: 18px;">
+      <div class="section-title">
         <h2>Visibility summaries</h2>
         <span class="tiny">summary rows plus a quick polar view from the first CSV artifact</span>
       </div>
@@ -629,6 +658,213 @@
       ctx.font = "12px IBM Plex Sans, sans-serif";
       ctx.fillText(`epochs: ${payload.epoch_count}`, 14, 18);
       ctx.fillText(payload.path, 14, canvas.height - 10);
+    }
+
+    const stfState = { points: [], hoverTow: null, zoom: null };
+
+    function stfVisible() {
+      if (!stfState.zoom) return stfState.points;
+      const [t0, t1] = stfState.zoom;
+      return stfState.points.filter((p) => p.tow >= t0 && p.tow <= t1);
+    }
+
+    function drawStfMap() {
+      const canvas = document.getElementById("stf-map");
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const points = stfVisible();
+      if (!points.length) {
+        ctx.fillStyle = "#6b7280";
+        ctx.font = "14px IBM Plex Sans, sans-serif";
+        ctx.fillText("Load a .pos to view", 20, 40);
+        return;
+      }
+      const pad = 28;
+      const xs = points.map((p) => p.east_m);
+      const ys = points.map((p) => p.north_m);
+      const minX = Math.min(...xs), maxX = Math.max(...xs);
+      const minY = Math.min(...ys), maxY = Math.max(...ys);
+      const padX = Math.max((maxX - minX) * 0.05, 1);
+      const padY = Math.max((maxY - minY) * 0.05, 1);
+      const scale = Math.min(
+        (canvas.width - pad * 2) / (maxX - minX + padX * 2),
+        (canvas.height - pad * 2) / (maxY - minY + padY * 2)
+      );
+      const mapX = (v) => pad + (v - minX + padX) * scale;
+      const mapY = (v) => canvas.height - pad - (v - minY + padY) * scale;
+      ctx.strokeStyle = "#d1d5db";
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      points.forEach((p, i) =>
+        i ? ctx.lineTo(mapX(p.east_m), mapY(p.north_m)) : ctx.moveTo(mapX(p.east_m), mapY(p.north_m)));
+      ctx.stroke();
+      for (const p of points) {
+        ctx.fillStyle = p.color || "#64748b";
+        ctx.beginPath();
+        ctx.arc(mapX(p.east_m), mapY(p.north_m), 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (stfState.hoverTow != null) {
+        const t = stfState.hoverTow;
+        for (const p of points) {
+          if (Math.abs(p.tow - t) <= 5) {
+            ctx.strokeStyle = "#2563eb";
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(mapX(p.east_m), mapY(p.north_m), 5, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        }
+      }
+    }
+
+    function drawStfSeries() {
+      const canvas = document.getElementById("stf-series");
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const points = stfVisible().filter((p) => p.error_m != null);
+      if (!points.length) {
+        ctx.fillStyle = "#6b7280";
+        ctx.font = "14px IBM Plex Sans, sans-serif";
+        ctx.fillText(stfState.points.length ? "No reference-matched epochs" : "Load a .pos with a reference.csv", 20, 40);
+        return;
+      }
+      const pad = 40;
+      const t0 = points[0].tow, t1 = points[points.length - 1].tow;
+      const eMax = Math.max(...points.map((p) => p.error_m), 0.1);
+      const mapX = (v) => pad + ((v - t0) / Math.max(t1 - t0, 1e-9)) * (canvas.width - pad * 2);
+      const mapY = (v) => canvas.height - pad - (v / eMax) * (canvas.height - pad * 2);
+      ctx.strokeStyle = "#e5e7eb";
+      ctx.beginPath();
+      for (let i = 1; i <= 3; i++) {
+        const y = mapY((eMax * i) / 3);
+        ctx.moveTo(pad, y);
+        ctx.lineTo(canvas.width - pad, y);
+      }
+      ctx.stroke();
+      for (const p of points) {
+        ctx.fillStyle = p.color || "#64748b";
+        ctx.fillRect(mapX(p.tow) - 1, mapY(p.error_m) - 1, 2.4, 2.4);
+      }
+      ctx.fillStyle = "#6b7280";
+      ctx.font = "11px IBM Plex Sans, sans-serif";
+      ctx.fillText(`${eMax.toFixed(2)} m`, 4, mapY(eMax) + 4);
+      ctx.fillText(`${t0.toFixed(0)} s`, pad, canvas.height - 8);
+      ctx.fillText(`${t1.toFixed(0)} s`, canvas.width - pad - 30, canvas.height - 8);
+      if (stfState.hoverTow != null && stfState.hoverTow >= t0 && stfState.hoverTow <= t1) {
+        const x = mapX(stfState.hoverTow);
+        ctx.strokeStyle = "#2563eb";
+        ctx.beginPath();
+        ctx.moveTo(x, pad);
+        ctx.lineTo(x, canvas.height - pad);
+        ctx.stroke();
+      }
+      if (stfState.zoom) {
+        ctx.fillStyle = "#2563eb";
+        ctx.fillText(`zoom ${stfState.zoom[0].toFixed(0)}-${stfState.zoom[1].toFixed(0)} s (double-click to reset)`, pad, 16);
+      }
+    }
+
+    function stfSummaryText(payload) {
+      const counts = Object.entries(payload.status_counts || {})
+        .map(([k, v]) => `${k} ${v}`)
+        .join(", ");
+      return `${payload.epoch_count} epochs · ${counts}` +
+        (payload.wrong_fix_count ? ` · WRONG_FIX ${payload.wrong_fix_count}` : "");
+    }
+
+    function stfApplyFromLedgerSelection() {
+      const select = document.getElementById("stf-ledger-select");
+      const option = select.selectedOptions[0];
+      if (!option || !option.dataset.pos) return;
+      document.getElementById("stf-pos-path").value = option.dataset.pos;
+      document.getElementById("stf-reference-path").value = option.dataset.reference || "";
+      stfLoad();
+    }
+
+    async function stfLoad() {
+      const pos = document.getElementById("stf-pos-path").value.trim();
+      if (!pos) return;
+      const reference = document.getElementById("stf-reference-path").value.trim();
+      const threshold = parseFloat(document.getElementById("stf-threshold").value) || 0.5;
+      const params = new URLSearchParams({ path: pos, threshold: String(threshold) });
+      if (reference) params.set("reference", reference);
+      try {
+        const payload = await fetchJson(`/api/status-trajectory?${params}`);
+        stfState.points = payload.points || [];
+        stfState.zoom = null;
+        stfState.hoverTow = null;
+        document.getElementById("stf-summary").textContent =
+          payload.available ? stfSummaryText(payload) : (payload.error || "unavailable");
+        drawStfMap();
+        drawStfSeries();
+      } catch (error) {
+        document.getElementById("stf-summary").textContent = `error: ${error.message}`;
+      }
+    }
+
+    function stfWire() {
+      const series = document.getElementById("stf-series");
+      series.addEventListener("mousemove", (event) => {
+        const rect = series.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const points = stfVisible().filter((p) => p.error_m != null);
+        if (!points.length) return;
+        const pad = 40;
+        const t0 = points[0].tow, t1 = points[points.length - 1].tow;
+        const frac = (x - pad) / (rect.width - pad * 2);
+        stfState.hoverTow = t0 + Math.min(Math.max(frac, 0), 1) * (t1 - t0);
+        drawStfSeries();
+        drawStfMap();
+      });
+      series.addEventListener("mouseleave", () => {
+        stfState.hoverTow = null;
+        drawStfSeries();
+        drawStfMap();
+      });
+      series.addEventListener("dblclick", () => {
+        stfState.zoom = null;
+        drawStfSeries();
+        drawStfMap();
+      });
+      document.getElementById("stf-load").addEventListener("click", stfLoad);
+      document.getElementById("stf-ledger-select").addEventListener("change", stfApplyFromLedgerSelection);
+    }
+
+    function stfPopulateLedgers(ledgers) {
+      const select = document.getElementById("stf-ledger-select");
+      for (const ledger of ledgers || []) {
+        const option = document.createElement("option");
+        option.value = ledger._path;
+        option.textContent = `${ledger._path} (${ledger.event_count} events)`;
+        const first = (ledger.events || [])[0] || {};
+        option.dataset.pos = first.pos || "";
+        option.dataset.reference = first.reference_csv || "";
+        select.appendChild(option);
+      }
+      const eventsHost = document.getElementById("stf-events");
+      if ((ledgers || []).length) {
+        const ledger = ledgers[0];
+        eventsHost.innerHTML = ledger.events
+          .map((event) => {
+            const label = `${event.run || "run"}: ${event.start_tow_s}-${event.end_tow_s}s · max ${event.max_error_m} m · ${event.severity || ""}`;
+            return `<span class="chip" style="cursor:pointer;" data-start="${event.start_tow_s}" data-end="${event.end_tow_s}">${escapeHtml(label)}</span>`;
+          })
+          .join(" ");
+        for (const chip of eventsHost.querySelectorAll(".chip")) {
+          chip.addEventListener("click", () => {
+            const start = parseFloat(chip.dataset.start) - 30;
+            const end = parseFloat(chip.dataset.end) + 30;
+            stfState.zoom = [start, end];
+            drawStfSeries();
+            drawStfMap();
+          });
+        }
+      } else {
+        eventsHost.innerHTML = '<span class="tiny">No wrong-fix ledgers found (output/*wrong_fix*ledger*.json).</span>';
+      }
     }
 
     function renderLegend() {
@@ -1194,6 +1430,7 @@
 
     async function init() {
       renderLegend();
+      stfWire();
       const overview = await fetchJson("/api/overview");
       const docsLink = document.getElementById("docs-link");
       if (overview.docs_url) docsLink.href = overview.docs_url;
@@ -1213,6 +1450,8 @@
         chip.textContent = `${key}: ${value}`;
         chips.appendChild(chip);
       }
+
+      stfPopulateLedgers(overview.wrong_fix_ledgers);
 
       const odaiba = overview.odaiba_summary || {};
       document.getElementById("odaiba-source").textContent = overview.artifacts.odaiba_summary || "";

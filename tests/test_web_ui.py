@@ -3,8 +3,9 @@
 
 from __future__ import annotations
 
-import json
 import base64
+import json
+import os
 import socket
 import subprocess
 import sys
@@ -720,8 +721,9 @@ class WebUISmokeTest(unittest.TestCase):
                     self.assertIn("decode:", page.locator("#ros2-bag-table tbody").text_content())
                     self.assertIn("1/2", page.locator("#ros2-bag-metrics").text_content())
                     self.assertIn("2/2", page.locator("#ros2-bag-metrics").text_content())
-                    # lib, rtk, moving-base history/heading, visibility, live PPP
-                    self.assertEqual(page.locator("canvas").count(), 6)
+                    # lib, rtk, moving-base history/heading, visibility, live PPP,
+                    # status-trajectory map/series
+                    self.assertEqual(page.locator("canvas").count(), 8)
                     self.assertIn("FIXED", page.locator("#status-legend").text_content())
                     self.assertIn("ppc_tokyo_run1_rtk_summary.json", page.locator("#ppc-table tbody").text_content())
                     self.assertIn("96.67%", page.locator("#ppc-table tbody").text_content())
@@ -783,7 +785,16 @@ class WebUISmokeTest(unittest.TestCase):
                     )
                     browser.close()
             finally:
-                process.terminate()
+                # On Windows apps/gnss.py runs the server as a child process;
+                # killing only the dispatcher leaves the server holding the
+                # stdout pipe, so tear down the whole process tree.
+                if os.name == "nt":
+                    subprocess.run(
+                        ["taskkill", "/F", "/T", "/PID", str(process.pid)],
+                        capture_output=True,
+                    )
+                else:
+                    process.terminate()
                 try:
                     process.communicate(timeout=5)
                 except subprocess.TimeoutExpired:
