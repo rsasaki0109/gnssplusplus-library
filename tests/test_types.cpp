@@ -94,7 +94,9 @@ TEST_F(TypesTest, PropagatedSolutionIsValidWithoutCurrentSatellitesButNeverFixed
 }
 
 TEST_F(TypesTest, PositionSolutionCovariancesDefaultToInvalid) {
-    const PositionSolution solution;
+    // Value-initialize: const default initialization is ill-formed without a
+    // user-provided default constructor (strict clang/macOS builds).
+    const PositionSolution solution{};
 
     // An omitted covariance must be rejected by consumers rather than being
     // interpreted as whatever coefficients Eigen happened to leave behind.
