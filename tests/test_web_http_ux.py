@@ -55,6 +55,7 @@ def make_args(root: Path, manifest_path: Path) -> argparse.Namespace:
         visibility_summary_glob="output/visibility*_summary.json",
         moving_base_summary_glob="output/*moving_base_summary.json",
         ppp_products_summary_glob="output/*ppp*_products*_summary.json",
+        wrong_fix_ledger_glob="output/*wrong_fix*ledger*.json",
         artifact_manifest=manifest_path,
         docs_url=gnss_web.DOCS_SITE_URL,
     )
@@ -442,6 +443,51 @@ class WebHttpUxTest(unittest.TestCase):
                 server.shutdown()
                 server.server_close()
                 thread.join(timeout=5)
+
+
+class StatusTrajectoryPayloadTest(unittest.TestCase):
+    def test_status_trajectory_classifies_wrong_fix(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_status_traj_") as temp_dir:
+            root = Path(temp_dir)
+            pos = root / "run.pos"
+            truth_ecef = (-3957184.0, 3310231.0, 3737703.0)
+            rows = [
+                "% week tow x y z sdn sdnE sdnN sdu sdu sdne sdnu sdue sdu sdu age ratio",
+            ]
+            epochs = [
+                (2300, 1.0, truth_ecef, 4),
+                (2300, 30.0, tuple(v + 0.05 for v in truth_ecef), 4),
+                (2300, 60.0, tuple(v + 2.0 for v in truth_ecef), 4),
+                (2300, 90.0, tuple(v - 0.3 for v in truth_ecef), 3),
+            ]
+            for week, tow, ecef, status in epochs:
+                rows.append(f"{week} {tow} " + " ".join(f"{v:.4f}" for v in ecef) +
+                            f" 0.01 0.01 0.01 {status} 8 0.5")
+            pos.write_text("\n".join(rows) + "\n", encoding="utf-8", newline="\n")
+            reference = root / "reference.csv"
+            ref_lines = [
+                "GPS Week,GPS TOW (s),ECEF X (m),ECEF Y (m),ECEF Z (m)",
+            ]
+            for week, tow, _, _ in epochs:
+                ref_lines.append(f"{week},{tow}," + ",".join(f"{v:.4f}" for v in truth_ecef))
+            reference.write_text("\n".join(ref_lines) + "\n", encoding="utf-8", newline="\n")
+
+            payload = gnss_web.build_status_trajectory_payload(pos, root, reference, 0.5)
+            self.assertTrue(payload["available"])
+            self.assertEqual(payload["epoch_count"], 4)
+            self.assertEqual(payload["wrong_fix_count"], 1)
+            self.assertEqual(payload["status_counts"].get("FIXED"), 2)
+            self.assertEqual(payload["status_counts"].get("FLOAT"), 1)
+            wrong = [p for p in payload["points"] if p["status"] == "WRONG_FIX"]
+            self.assertEqual(len(wrong), 1)
+            self.assertGreater(wrong[0]["error_m"], 0.5)
+
+    def test_status_trajectory_missing_file(self) -> None:
+        payload = gnss_web.build_status_trajectory_payload(
+            Path("does_not_exist.pos"), Path("."), None, 0.5
+        )
+        self.assertFalse(payload["available"])
+        self.assertIn("not found", payload["error"])
 
 
 if __name__ == "__main__":

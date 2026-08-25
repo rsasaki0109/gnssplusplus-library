@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import os
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -132,6 +133,11 @@ def parse_args() -> argparse.Namespace:
         "--ppp-products-summary-glob",
         default="output/*ppp*_products*_summary.json",
         help="Glob under --root for gnss PPP product signoff summary JSON files.",
+    )
+    parser.add_argument(
+        "--wrong-fix-ledger-glob",
+        default="output/*wrong_fix*ledger*.json",
+        help="Glob under --root for wrong-fix event ledger JSON files.",
     )
     parser.add_argument(
         "--artifact-manifest",
@@ -428,6 +434,149 @@ def downsample_points(points: list[dict[str, Any]], limit: int = MAX_RENDER_POIN
     if sampled[-1] != points[-1]:
         sampled.append(points[-1])
     return sampled
+
+
+WGS84_A = 6378137.0
+WGS84_E2 = 6.69437999014e-3
+
+STATUS_TRAJECTORY_STYLE = {
+    1: ("SPP", "#95a5a6"),
+    2: ("DGPS", "#7f8c8d"),
+    3: ("FLOAT", "#f39c12"),
+    4: ("FIXED", "#2ecc71"),
+    5: ("BRIDGE", "#3498db"),
+    7: ("PROPAGATED", "#9b59b6"),
+}
+WRONG_FIX_COLOR = "#e74c3c"
+
+
+def ecef_to_geodetic_deg(x: float, y: float, z: float) -> tuple[float, float]:
+    """Bowring's closed-form approximation; adequate for an ENU origin."""
+    lon = math.atan2(y, x)
+    p = math.hypot(x, y)
+    if p < 1e-9:
+        return math.copysign(90.0, z), math.degrees(lon)
+    lat = math.atan2(z, p * (1.0 - WGS84_E2))
+    for _ in range(4):
+        sin_lat = math.sin(lat)
+        n = WGS84_A / math.sqrt(1.0 - WGS84_E2 * sin_lat * sin_lat)
+        lat = math.atan2(z + WGS84_E2 * n * sin_lat, p)
+    return math.degrees(lat), math.degrees(lon)
+
+
+def ecef_delta_to_enu(delta: tuple[float, float, float], lat_deg: float, lon_deg: float) -> tuple[float, float, float]:
+    lat = math.radians(lat_deg)
+    lon = math.radians(lon_deg)
+    sin_lat, cos_lat = math.sin(lat), math.cos(lat)
+    sin_lon, cos_lon = math.sin(lon), math.cos(lon)
+    dx, dy, dz = delta
+    return (
+        -sin_lon * dx + cos_lon * dy,
+        -sin_lat * cos_lon * dx - sin_lat * sin_lon * dy + cos_lat * dz,
+        cos_lat * cos_lon * dx + cos_lat * sin_lon * dy + sin_lat * dz,
+    )
+
+
+def load_reference_ecef(csv_path: Path) -> dict[tuple[int, float], tuple[float, float, float]]:
+    reference: dict[tuple[int, float], tuple[float, float, float]] = {}
+    with csv_path.open("r", encoding="utf-8", newline="") as stream:
+        for row in csv.DictReader(stream):
+            try:
+                week = int(float(row["GPS Week"]))
+                tow = round(float(row["GPS TOW (s)"]), 3)
+                ecef = (
+                    float(row["ECEF X (m)"]),
+                    float(row["ECEF Y (m)"]),
+                    float(row["ECEF Z (m)"]),
+                )
+            except (KeyError, TypeError, ValueError):
+                continue
+            reference[(week, tow)] = ecef
+    return reference
+
+
+def build_status_trajectory_payload(
+    pos_path: Path,
+    root_dir: Path,
+    reference_path: Path | None = None,
+    wrong_fix_threshold_m: float = 0.5,
+) -> dict[str, Any]:
+    if not pos_path.exists():
+        return {"available": False, "path": relative_display(pos_path, root_dir),
+                "error": "file not found"}
+    reference = load_reference_ecef(reference_path) if reference_path and reference_path.exists() else {}
+    origin = None
+    points: list[dict[str, Any]] = []
+    status_counts: dict[str, int] = {}
+    wrong_fix_count = 0
+    with pos_path.open("r", encoding="utf-8", errors="replace") as stream:
+        for line in stream:
+            if line.startswith("%") or not line.strip():
+                continue
+            parts = line.split()
+            if len(parts) < 10:
+                continue
+            try:
+                week = int(float(parts[0]))
+                tow = round(float(parts[1]), 3)
+                ecef = (float(parts[2]), float(parts[3]), float(parts[4]))
+                status_int = int(float(parts[8]))
+            except ValueError:
+                continue
+            if origin is None:
+                lat_deg, lon_deg = ecef_to_geodetic_deg(*ecef)
+                origin = (lat_deg, lon_deg)
+            status_name, color = STATUS_TRAJECTORY_STYLE.get(status_int, ("UNKNOWN", "#7f8c8d"))
+            error_m = None
+            if reference:
+                ref = reference.get((week, tow))
+                if ref is not None:
+                    error_m = math.sqrt(sum((a - b) ** 2 for a, b in zip(ecef, ref)))
+                    if status_int == 4 and error_m > wrong_fix_threshold_m:
+                        status_name, color = "WRONG_FIX", WRONG_FIX_COLOR
+                        wrong_fix_count += 1
+            enu = ecef_delta_to_enu(ecef, *origin)
+            status_counts[status_name] = status_counts.get(status_name, 0) + 1
+            points.append(
+                {
+                    "tow": tow,
+                    "east_m": round(enu[0], 3),
+                    "north_m": round(enu[1], 3),
+                    "status": status_name,
+                    "color": color,
+                    "error_m": round(error_m, 4) if error_m is not None else None,
+                }
+            )
+    if origin is None:
+        return {"available": False, "path": relative_display(pos_path, root_dir),
+                "error": "no epochs"}
+    return {
+        "available": True,
+        "path": relative_display(pos_path, root_dir),
+        "reference": relative_display(reference_path, root_dir) if reference_path else None,
+        "wrong_fix_threshold_m": wrong_fix_threshold_m,
+        "epoch_count": len(points),
+        "wrong_fix_count": wrong_fix_count,
+        "status_counts": status_counts,
+        "points": downsample_points(points),
+    }
+
+
+def summarize_wrong_fix_ledger(payload: dict[str, Any], path: Path, root_dir: Path) -> dict[str, Any]:
+    events = payload.get("events") if isinstance(payload.get("events"), list) else []
+    runs = payload.get("runs") if isinstance(payload.get("runs"), list) else []
+    durations = [float(e["duration_s"]) for e in events if isinstance(e, dict)
+                 and isinstance(e.get("duration_s"), (int, float))]
+    errors = [float(e["max_error_m"]) for e in events if isinstance(e, dict)
+              and isinstance(e.get("max_error_m"), (int, float))]
+    return {
+        "_path": relative_display(path, root_dir),
+        "run_count": len(runs),
+        "event_count": len(events),
+        "total_duration_s": round(sum(durations), 3),
+        "max_error_m": round(max(errors), 4) if errors else None,
+        "events": events[:200],
+    }
 
 
 def build_solution_payload(name: str, path: Path, root_dir: Path, solver_label: str) -> dict[str, Any]:
@@ -835,6 +984,13 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
             continue
         field_report_summaries.append(summarize_field_report(payload, path, root_dir))
 
+    wrong_fix_ledgers: list[dict[str, Any]] = []
+    for path in sorted(root_dir.glob(args.wrong_fix_ledger_glob)):
+        payload = load_json(path)
+        if payload is None:
+            continue
+        wrong_fix_ledgers.append(summarize_wrong_fix_ledger(payload, path, root_dir))
+
     artifact_manifest_payload = load_json(artifact_manifest_path)
     artifact_manifest = []
     if artifact_manifest_payload is not None:
@@ -863,6 +1019,7 @@ def build_overview(args: argparse.Namespace) -> dict[str, Any]:
         "visibility_summaries": visibility_summaries,
         "moving_base_summaries": moving_base_summaries,
         "ppp_products_summaries": ppp_products_summaries,
+        "wrong_fix_ledgers": wrong_fix_ledgers,
         "ppc_spp_policy_suites": ppc_spp_policy_suites,
         "artifact_manifest": artifact_manifest,
         "receiver_status": rcv_status,
@@ -1010,6 +1167,37 @@ def make_handler(args: argparse.Namespace):
                     except OSError:
                         pass
                     self._write_json({"available": True, "points": points, "last_tow": last_tow})
+                    return
+                if parsed.path == "/api/status-trajectory":
+                    pos_arg = query.get("path", [""])[0]
+                    if not pos_arg:
+                        self._write_json({"error": "missing pos path"}, HTTPStatus.BAD_REQUEST)
+                        return
+                    try:
+                        pos_path = resolve_under_root(root_dir, pos_arg)
+                    except ValueError:
+                        self._write_json({"error": "pos path escapes artifact root"}, HTTPStatus.BAD_REQUEST)
+                        return
+                    ref_arg = query.get("reference", [None])[0]
+                    reference_path = None
+                    if ref_arg:
+                        try:
+                            reference_path = resolve_under_root(root_dir, ref_arg)
+                        except ValueError:
+                            self._write_json(
+                                {"error": "reference path escapes artifact root"},
+                                HTTPStatus.BAD_REQUEST,
+                            )
+                            return
+                    try:
+                        threshold = float(query.get("threshold", ["0.5"])[0])
+                    except ValueError:
+                        threshold = 0.5
+                    self._write_json(
+                        build_status_trajectory_payload(
+                            pos_path, root_dir, reference_path, threshold
+                        )
+                    )
                     return
                 if parsed.path == "/api/stream-stats":
                     stats_arg = query.get("path", [""])[0]
