@@ -68,6 +68,15 @@ Weather observations are not bundled and local environmental/loading models
 are not applied. This absence is emitted explicitly in `signoff.json` and is
 another reason the three-day noise floor cannot be generalized seasonally.
 
+Optional camera snapshots add visual context. Pass
+`--snapshot-dir` (workflow or sign-off) with files named `YYYYMMDD*` or
+`YYYY-MM-DD*` (UTC). Each snapshot is SHA-256 hashed into
+`signoff.json` under `visual_evidence`; a day without a snapshot is declared
+absent, and when the channel is provided an absent day or an unmatched file
+fails the contract (`visual_evidence_incomplete`,
+`visual_evidence_unmatched_files`). Snapshots are site context, never a
+displacement measurement.
+
 ## Artifacts and metrics
 
 Each upstream day contains `.pos`, KML, PNG, summaries, a log, and a manifest.

@@ -86,6 +86,41 @@ class StructuralDisplacementSignoffTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "header position"):
                 signoff.load_bundle(root)
 
+    def test_visual_evidence_hashed_and_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="r7_snaps_") as temp_dir:
+            root = Path(temp_dir)
+            (root / "20240101T090000.jpg").write_bytes(b"day1")
+            (root / "2024-01-03_morning.png").write_bytes(b"day3")
+            (root / "unrelated.txt").write_bytes(b"ignored")
+            days = [fake_day(1), fake_day(2), fake_day(3)]
+            evidence = signoff.collect_visual_evidence(root, days)  # type: ignore[arg-type]
+            self.assertEqual(evidence["declared_absent"], ["2024-01-02"])
+            self.assertEqual(evidence["days"]["2024-01-01"][0]["name"], "20240101T090000.jpg")
+            self.assertEqual(len(evidence["days"]["2024-01-03"]), 1)
+            self.assertNotEqual(
+                evidence["days"]["2024-01-01"][0]["sha256"],
+                evidence["days"]["2024-01-03"][0]["sha256"],
+            )
+            self.assertEqual(
+                signoff.enforce_visual_evidence_contract(evidence),
+                ["visual_evidence_incomplete"],
+            )
+            complete = dict(
+                evidence,
+                declared_absent=[],
+                days=dict(evidence["days"], **{
+                    "2024-01-02": [{"name": "20240102T090000.jpg", "sha256": "x", "bytes": 4}]
+                }),
+            )
+            self.assertEqual(signoff.enforce_visual_evidence_contract(complete), [])
+
+    def test_visual_evidence_absent_is_disclosed_not_fatal(self) -> None:
+        days = [fake_day(1), fake_day(2), fake_day(3)]
+        evidence = signoff.collect_visual_evidence(None, days)  # type: ignore[arg-type]
+        self.assertFalse(evidence["provided"])
+        self.assertEqual(evidence["declared_absent"], ["2024-01-01", "2024-01-02", "2024-01-03"])
+        self.assertEqual(signoff.enforce_visual_evidence_contract(evidence), [])
+
     def test_opened_holdout_is_not_rerun(self) -> None:
         with tempfile.TemporaryDirectory(prefix="r7_holdout_") as temp_dir:
             root = Path(temp_dir)

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -18,6 +19,8 @@ from support.gnss_static_metrics import static_truth_metrics
 
 SCHEMA_VERSION = "libgnsspp.structural_displacement.v1"
 
+SNAPSHOT_SUFFIXES = {".jpg", ".jpeg", ".png", ".tif", ".tiff"}
+
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -27,6 +30,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--role", choices=("development", "sealed_holdout"), required=True)
     parser.add_argument("--profile", type=Path)
+    parser.add_argument(
+        "--snapshot-dir", type=Path,
+        help="directory of camera snapshot evidence named YYYYMMDD* or YYYY-MM-DD* (UTC)",
+    )
     return parser.parse_args(argv)
 
 
@@ -131,6 +138,74 @@ def load_bundle(path: Path) -> dict[str, Any]:
             "local_loading_model": "not applied",
         },
     }
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def snapshot_date(name: str) -> str | None:
+    stem = Path(name).stem
+    compact = stem.replace("-", "")[:8]
+    if len(compact) >= 8 and compact[:8].isdigit():
+        return f"{compact[:4]}-{compact[4:6]}-{compact[6:8]}"
+    return None
+
+
+def collect_visual_evidence(
+    snapshot_dir: Path | None, days: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Assemble camera-snapshot evidence keyed by observation day (UTC).
+
+    Follows the environment-disclosure pattern: a missing channel is declared
+    explicitly, and a provided directory is hashed file-by-file so the
+    sign-off records exactly what visual evidence existed.
+    """
+    dates = [str(day["date_utc"]) for day in days]
+    evidence: dict[str, Any] = {
+        "policy": (
+            "hash-verified camera snapshots named YYYYMMDD* or YYYY-MM-DD* (UTC); "
+            "snapshots are contextual evidence of the site, not a displacement measurement"
+        ),
+        "provided": snapshot_dir is not None,
+        "source": str(snapshot_dir.resolve()) if snapshot_dir is not None else None,
+        "days": {},
+        "declared_absent": list(dates),
+        "unmatched_files": [],
+    }
+    if snapshot_dir is None or not snapshot_dir.is_dir():
+        return evidence
+    by_date: dict[str, list[dict[str, Any]]] = {}
+    unmatched: list[str] = []
+    for path in sorted(snapshot_dir.rglob("*")):
+        if not path.is_file() or path.suffix.lower() not in SNAPSHOT_SUFFIXES:
+            continue
+        date = snapshot_date(path.name)
+        if date is None or date not in dates:
+            unmatched.append(path.name)
+            continue
+        by_date.setdefault(date, []).append(
+            {"name": path.name, "sha256": sha256_file(path), "bytes": path.stat().st_size}
+        )
+    evidence["days"] = by_date
+    evidence["unmatched_files"] = unmatched
+    evidence["declared_absent"] = [date for date in dates if date not in by_date]
+    return evidence
+
+
+def enforce_visual_evidence_contract(evidence: dict[str, Any]) -> list[str]:
+    if not evidence["provided"]:
+        return []
+    failures = []
+    if evidence["declared_absent"]:
+        failures.append("visual_evidence_incomplete")
+    if evidence["unmatched_files"]:
+        failures.append("visual_evidence_unmatched_files")
+    return failures
 
 
 def sample_std(values: list[float]) -> float:
@@ -269,6 +344,8 @@ def run(args: argparse.Namespace) -> int:
     try:
         days = [load_bundle(path.resolve()) for path in args.bundle]
         failures = enforce_contract(days)
+        visual_evidence = collect_visual_evidence(args.snapshot_dir, days)
+        failures.extend(enforce_visual_evidence_contract(visual_evidence))
         if args.role == "development":
             analysis = analyse_development(days)
             gate_passed = not failures and analysis["false_alert_count"] == 0 and analysis["synthetic_witness"]["detected"]
@@ -285,6 +362,7 @@ def run(args: argparse.Namespace) -> int:
             "status": "passed" if gate_passed else "failed",
             "decision": decision,
             "contract_failures": failures,
+            "visual_evidence": visual_evidence,
             "daily_coordinates": days,
             "analysis": analysis,
             "claim_boundary": "stable-station repeatability and synthetic witness only; not observed structural motion",
