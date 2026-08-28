@@ -50,6 +50,11 @@ cmake --build build --target gnss_ppp --parallel 2
 python3 apps/gnss.py demo
 ```
 
+After the native demo, run `python3 apps/gnss.py next`. It validates the local
+demo result and gives one copy-paste next command for SPP, RTK, PPP, ROS2,
+QZSS, or C++ integration. The check is local; it does not transmit or store
+usage data. Installed builds expose the same command as `gnss next`.
+
 ## Use the C++20 library
 
 The install exports a standard CMake package and the `libgnsspp::gnss_lib`
