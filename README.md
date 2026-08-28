@@ -53,7 +53,9 @@ python3 apps/gnss.py demo
 After the native demo, run `python3 apps/gnss.py next`. It validates the local
 demo result and gives one copy-paste next command for SPP, RTK, PPP, ROS2,
 QZSS, or C++ integration. The check is local; it does not transmit or store
-usage data. Installed builds expose the same command as `gnss next`.
+usage data. After a standard SPP, RTK, or PPP output is created, the same
+command validates that it contains solution epochs and advances to a KML
+inspection step. Installed builds expose the command as `gnss next`.
 
 ## Use the C++20 library
 

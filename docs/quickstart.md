@@ -18,7 +18,14 @@ python3 apps/gnss.py next --goal rtk
 ```
 
 `gnss next` only inspects local artifacts. Use `--format json` to integrate the
-same progress decision into another interface.
+same progress decision into another interface. It reports four local stages:
+`first-run`, `choose-goal`, `apply-to-data`, and `inspect-result`. Standard
+`output/spp_solution.pos`, `output/rtk_solution.pos`, and
+`output/ppp_solution.pos` files advance to inspection only when they contain at
+least one solution epoch; empty or header-only outputs remain at
+`apply-to-data`. If a documented standard input is not present, the command
+lists the missing paths and opens focused command help instead of recommending
+a processing command that is guaranteed to fail.
 
 ## Docker
 
