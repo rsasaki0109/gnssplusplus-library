@@ -202,6 +202,13 @@ def main() -> int:
     print(f"  position: {paths['pos']}")
     print(f"  kml:      {paths['kml']}")
     print(f"  summary:  {paths['summary']}")
+    source_next = (
+        "py apps/gnss.py next" if os.name == "nt" else "python3 apps/gnss.py next"
+    )
+    print(
+        f"Next: run `gnss next` (`{source_next}` from a source checkout) "
+        "to choose a route for your own data."
+    )
     return 0
 
 

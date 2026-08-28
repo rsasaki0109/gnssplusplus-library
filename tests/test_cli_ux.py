@@ -100,6 +100,7 @@ class CliUxTest(unittest.TestCase):
         for command in (
             "doctor",
             "demo",
+            "next",
             "solve",
             "ppp",
             "clas-ppp",
@@ -128,6 +129,7 @@ class CliUxTest(unittest.TestCase):
         expectations = {
             "doctor": ("usage: gnss doctor", "--strict"),
             "demo": ("usage: gnss demo", "--output-dir"),
+            "next": ("usage: gnss next", "--goal", "--workspace"),
             "qzss-l6-info": (
                 "usage: gnss qzss-l6-info",
                 "--compact-bias-row-materialization",
@@ -154,6 +156,7 @@ class CliUxTest(unittest.TestCase):
             "commands": ("Usage: gnss commands", "--json", "--query"),
             "doctor": ("usage: gnss doctor", "--strict"),
             "demo": ("usage: gnss demo", "--output-dir"),
+            "next": ("usage: gnss next", "--goal", "--workspace"),
             "qzss-l6-info": (
                 "usage: gnss qzss-l6-info",
                 "--compact-bias-row-materialization",

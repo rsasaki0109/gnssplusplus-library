@@ -8,6 +8,18 @@ cmake --build build -j
 python3 apps/gnss.py doctor
 ```
 
+At any point, ask for one concrete next step. Before a successful demo this
+recommends the offline first run; afterwards it offers a route based on the
+kind of data or integration you want to use:
+
+```bash
+python3 apps/gnss.py next
+python3 apps/gnss.py next --goal rtk
+```
+
+`gnss next` only inspects local artifacts. Use `--format json` to integrate the
+same progress decision into another interface.
+
 ## Docker
 
 For the no-build self-contained demo, use the published image and mount only

@@ -82,6 +82,11 @@ COMMANDS = {
         "target": python_target("gnss_demo.py"),
         "summary": "Run the tracked offline PPP demo and emit a .pos, KML, and JSON summary.",
     },
+    "next": {
+        "kind": "python",
+        "target": python_target("gnss_next.py"),
+        "summary": "Inspect local progress and recommend one concrete next command.",
+    },
     "robotics-smoke": {
         "kind": "python",
         "target": python_target("gnss_robotics_smoke.py"),
