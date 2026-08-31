@@ -88,6 +88,49 @@ See the [v0.2.0 release highlights](docs/releases/v0.2.0.md) and
 | CLAS PPP | Six PPC Tokyo/Nagoya runs vs MRTKLIB CLAS | 24.851% aggregate FIX, 0.377 m FIX RMS2D (lower than MRTKLIB on all six runs), 36.523 m all-solution RMS2D across 58,259 scored epochs; 19 FIX epochs (0.03%) exceed 3 m, all in one pre-existing 4 s Nagoya 2 burst |
 | Urban RTK | UrbanNav Tokyo Odaiba vs RTKLIB `demo5` | More fixes, lower Hp95/Vp95; `--preset odaiba` closes Hmed |
 | SPP | PPC SPP adaptive robust + policy gate | No P95 regression with <=1 pp positioning drop |
+| Smartphone GSDC 2023 | Galileo E1/Hatch/WLS/FGO and upstream-MAT lanes | 40-route/71,936-key test candidate; server private 0.782 (late/unofficial) |
+
+### RTK runtime and smartphone GSDC 2023
+
+The Release RTK broadcast-state cache preserves the position stream and
+reduces measured solver wall time. The paired run used 120 valid epochs, 116
+fixed epochs, and zero wrong fixes in both variants; the complete evidence is
+in the [RTK cache record](docs/use_cases/records/rtk_ppc_tokyo_spp_cache_prepost_release.json).
+
+| RTK metric | Baseline | Optimized |
+|---|---:|---:|
+| Solver wall (s) | 1.4098465 | **1.3217735 (-6.246992%)** |
+| Epoch P50 (ms) | 11.728235 | **11.030901** |
+| Epoch P95 (ms) | 13.204182 | **12.3482985** |
+| Valid / fixed | 120 / 116 | 120 / 116 |
+| Wrong fixes | 0 | 0 |
+| Position output | byte-identical reference | byte-identical reference |
+
+The smartphone lane comparison below reports the server values from three
+single authorized submissions; they are evidence, not tuning targets.
+
+| Kaggle lane | Public | Private |
+|---|---:|---:|
+| WLS | 4.018 | 4.873 |
+| Native FGO v5 | 3.952 | 4.276 |
+| Upstream GNSS+IMU MAT v2 | 1.235 | **0.782** |
+
+The current upstream-MAT v2 payload is SHA256
+`ded15a2a92349b06accfe18bc2afa12c35f7a282497d70ab9fcedf15471fc1f3`, with
+40 routes and 71,936 official keys. Its local train four-diagnostic mean is
+`0.506790881 m`, and no test truth was materialized or read. The submission
+was late, so it has no official rank; score-order insertion gives hypothetical
+public rank 4 and private rank 1, with private `0.782` below the frozen winner
+snapshot `0.883`. See the [smartphone pipeline notes](docs/use_cases/smartphone_raw_gnss.md),
+[metric audit](docs/use_cases/records/smartphone_r5_kaggle_metric_primary_source_audit_v1.json),
+[submission record](docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_v2_kaggle_submission_v1.json),
+and [final completion audit](docs/use_cases/records/rtk_smartphone_performance_final_completion_audit.json).
+
+The upstream result MAT files are public precomputed artifacts from the
+MIT-licensed `taroz/gsdc2023` reproduction path; the competition dataset terms
+still apply, and downloaded MAT/CSV payloads are not vendored here. Experimental
+smartphone lanes and all No-Go alternatives remain development-only; RTK/SPP
+production defaults are unchanged.
 
 ### PPC 2024 goal matrix vs Kaiyodai and gici-open
 
