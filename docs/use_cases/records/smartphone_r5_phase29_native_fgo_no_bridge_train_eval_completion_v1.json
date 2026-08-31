@@ -1,0 +1,42 @@
+{
+  "schema_version": "smartphone-r5-phase29-native-fgo-no-bridge-train-evaluation-completion.v1",
+  "phase": 29,
+  "result": {
+    "path": "docs/use_cases/records/smartphone_r5_phase29_native_fgo_no_bridge_train_eval_result_v1.json",
+    "sha256": "88d2cf8b91460e098873872cbcd1d0be8df2a15adf1d3a43749c7301e1533536",
+    "candidate_was_not_regenerated_after_score": true,
+    "truth_was_not_reopened_after_score": true
+  },
+  "verification": {
+    "release_build": {
+      "command": "cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --config Release -j2",
+      "passed": true
+    },
+    "full_serial_ctest": {
+      "command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} ctest --test-dir build --output-on-failure -j1",
+      "passed": 132,
+      "failed": 0,
+      "total": 132,
+      "wall_seconds": 84.27,
+      "captured_log_sha256": "91cdb6df68eedffe17ae1e0ad1fd30e47948ceff3a73dcc9f2e0bf43a5236640"
+    },
+    "phase29_unit_tests": {
+      "command": "python3 -m unittest -v tests/test_smartphone_phase29_train_eval.py",
+      "passed": 5,
+      "failed": 0
+    },
+    "score_artifacts": {
+      "truth_materialization_sha256": "dcc474f928f9295daa36913f458157f00fe5f088cfcc2397387a0f06555346e5",
+      "score_report_sha256": "17b04e752cc988a6278a05c9beac7918ff753c6dfcc3feb6a6855c0eb9eff792",
+      "score_manifest_sha256": "d5044867b12ab670b63c08279ad6955fcdb8d1d02e69c60b444105802f9f87fc"
+    }
+  },
+  "policy": {
+    "validation_truth_open_count": 0,
+    "future_holdout_truth_open_count": 0,
+    "kaggle_mutation": false,
+    "token_access": false,
+    "mat_read_or_generated": false,
+    "post_score_tuning": false
+  }
+}

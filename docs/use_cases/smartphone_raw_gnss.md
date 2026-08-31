@@ -3470,3 +3470,44 @@ and
 The focused native tests passed 23/23.  The new CLI contract accepts the
 bridge-free spelling through raw input loading, rejects explicit bridge
 conflicts before input open, and preserves the legacy spelling.
+
+### Phase 29 development train comparison (No-Go)
+
+Phase 29 compared the already sealed Phase28 bridge-free TDCP/IMU/FGO outputs
+with the already sealed Phase25 raw-clock no-bridge control.  The candidate was
+not rerun or changed.  A pre-truth freeze and evaluator were committed before
+the three historical development-train `ground_truth.csv` members were
+materialized.  A single evaluator process parsed each truth file exactly once;
+validation and future-holdout truth remained sealed.
+
+The candidate improved the aggregate horizontal diagnostics (WGS84 P50
+2.773 m vs 5.690 m; WGS84 P95 224.873 m vs 236.022 m; all four local
+diagnostic variants improved) with unchanged availability/coverage
+(0.999559).  It did not satisfy the route-group gate: the Samsung route's
+WGS84 P95 was 669.324 m vs 669.121 m, and its maximum transition speed rose
+to 174.08 m/s from 151.01 m/s.  The frozen four-column prediction contains no
+height, so V P95 is explicitly unavailable and the gate fails closed rather
+than manufacturing a vertical estimate.  The resulting development lane is
+therefore No-Go and no fresh validation was opened.
+
+The freeze, path-only erratum, evaluator freeze, and sealed result are
+`docs/use_cases/records/smartphone_r5_phase29_native_fgo_no_bridge_train_eval_freeze_v1.json`,
+`docs/use_cases/records/smartphone_r5_phase29_native_fgo_no_bridge_train_eval_freeze_erratum_v1.json`,
+`docs/use_cases/records/smartphone_r5_phase29_train_evaluator_freeze_v1.json`,
+and
+`docs/use_cases/records/smartphone_r5_phase29_native_fgo_no_bridge_train_eval_result_v1.json`.
+Reproduction is:
+
+```text
+python3 apps/commands/benchmarks/gnss_smartphone_phase29_train_eval.py materialize-truth
+python3 apps/commands/benchmarks/gnss_smartphone_phase29_train_eval.py score
+```
+
+The score artifact records three truth reads, raw archive SHA
+`bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408`, and
+candidate/control hashes.  No MAT, token, Kaggle, validation, holdout, or
+post-score tuning was used.
+
+After the Release build was reconfigured, the full serial CTest suite passed
+132/132 (84.27 s); the Phase 29 evaluator unit suite passed 5/5.  These are
+recorded separately so the immutable score artifact is not rewritten.
