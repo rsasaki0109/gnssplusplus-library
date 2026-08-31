@@ -1,6 +1,7 @@
 set(GNSS_APP_TARGETS
     gnss_spp
     gnss_fgo
+    gnss_smartphone_fgo
     gnss_fuse
     gnss_vel_d
     gnss_pos_pdc
@@ -30,6 +31,12 @@ if(GTSAM_FOUND)
     target_compile_definitions(gnss_fgo PRIVATE GNSS_WITH_GTSAM=1)
     target_link_libraries(gnss_fgo PRIVATE gtsam)
 endif()
+
+# Opt-in native-only smartphone entry point.  The raw Android CSV conversion
+# is reusable in gnss_lib; this executable wires it directly to the existing
+# native FGO problem builder without accepting published result MAT files.
+add_executable(gnss_smartphone_fgo ${GNSS_NATIVE_DIR}/gnss_smartphone_fgo.cpp)
+target_link_libraries(gnss_smartphone_fgo PRIVATE gnss_lib gnss_lib_solvers Threads::Threads)
 
 # Real-data Eigen-vs-GTSAM FGO backend parity harness. Only meaningful when the
 # library is built with the GTSAM backend (otherwise FGOBackend::GTSAM falls

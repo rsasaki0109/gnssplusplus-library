@@ -13,6 +13,7 @@ if(GTest_FOUND)
     # Windows. OUTPUT_NAME keeps the binary named run_tests for scripts/CI.
     add_executable(gnss_run_tests
         test_imu_csv.cpp
+        test_android_raw_gnss.cpp
         test_attitude.cpp
         test_mechanization.cpp
         test_preintegration.cpp
@@ -139,6 +140,7 @@ if(GTest_FOUND)
         gnss_replay
         gnss_rinex_info
         gnss_solve
+        gnss_smartphone_fgo
         gnss_stream
         gnss_ubx_info
         gnss_vel_d
@@ -222,6 +224,10 @@ if(GTest_FOUND)
     add_test(
         NAME python_smartphone_native_fgo_v3_heading_optional_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_fgo_v3_heading_optional.py
+    )
+    add_test(
+        NAME python_smartphone_native_only_contract_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_only.py
     )
     add_test(
         NAME python_ppc_integrity_policy_tests
