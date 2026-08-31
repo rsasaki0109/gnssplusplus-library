@@ -1,0 +1,223 @@
+{
+  "schema_version": "smartphone-r5-phase32-quality-anchor-train-evaluation-freeze.v1",
+  "phase": 32,
+  "status": "frozen-before-development-truth-reread",
+  "purpose": "One-shot development-only evaluation of the already sealed Phase31 quality-anchor lane against the already sealed Phase28 TDCP/no-bridge control.",
+  "candidate": {
+    "id": "native_fgo_raw_quality_anchor_spp_replay_v1",
+    "phase31_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase31_quality_anchor_freeze_v1.json",
+      "sha256": "e650a2fbcb823d5eb306f7def58e6118d157d6b94136a48d05cc9e01db2299bb"
+    },
+    "phase31_structural_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase31_quality_anchor_structural_result_v1.json",
+      "sha256": "1b25f3397835157a244f1f91b57151049e14b0c6fff75aadb56244fa6d8b5ba7"
+    },
+    "solver_rerun": false,
+    "candidate_mutation": false,
+    "production_default_changed": false
+  },
+  "control": {
+    "id": "phase28_tdcp_no_bridge_sealed_control",
+    "phase28_structural_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase28_native_fgo_no_bridge_structural_result_v1.json",
+      "sha256": "43638e5de0cb0075906a21c9b53dd829c234f6c6a7321a33e93978ca4c3c7941"
+    },
+    "solver_rerun": false,
+    "control_mutation": false
+  },
+  "routes": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "control": {
+        "submission": "output/smartphone-r5/phase28-native-fgo-no-bridge-structural-v1/tdcp_no_bridge/pixel5/submission.csv",
+        "submission_sha256": "c199f9efc57c5318830f529ae8ebc33996ec916bb03e57e4bfdccfe775978e8c",
+        "summary": "output/smartphone-r5/phase28-native-fgo-no-bridge-structural-v1/tdcp_no_bridge/pixel5/summary.json",
+        "summary_sha256": "a607d7908cf4c55a9701801508ee928d8bbb8ae97213d51cbadaa038b2edc90b",
+        "prediction_rows": 2158,
+        "repeat_byte_identical": true
+      },
+      "candidate": {
+        "submission": "output/smartphone-r5/phase31-quality-anchor-structural-v1/anchor/pixel5/submission.csv",
+        "submission_sha256": "d4d7652e5d12389466e586fe2d8e85d34977a7e11036cee2f591a89293c5426c",
+        "summary": "output/smartphone-r5/phase31-quality-anchor-structural-v1/anchor/pixel5/summary.json",
+        "summary_sha256": "b0ecd9c0eb931b11908a4e19ea54cb21a7a530492ac6fee245086dff93722460",
+        "prediction_rows": 2158,
+        "repeat_byte_identical": true
+      }
+    },
+    "2021-07-27-19-49-us-ca-mtv-b/pixel4": {
+      "control": {
+        "submission": "output/smartphone-r5/phase28-native-fgo-no-bridge-structural-v1/tdcp_no_bridge/pixel4/submission.csv",
+        "submission_sha256": "e7f8ade3b2ccc52ad169730b3f91d3a08fe720377c13e753cdee3dc2c116d643",
+        "summary": "output/smartphone-r5/phase28-native-fgo-no-bridge-structural-v1/tdcp_no_bridge/pixel4/summary.json",
+        "summary_sha256": "13d22531d1c06312fb2fc9e983682fa02a6a0c9e43180e640d25549d8a9931c1",
+        "prediction_rows": 1677,
+        "repeat_byte_identical": true
+      },
+      "candidate": {
+        "submission": "output/smartphone-r5/phase31-quality-anchor-structural-v1/anchor/pixel4/submission.csv",
+        "submission_sha256": "18d90461883f9b51dc5e235ff2fda2e535d31678bb47b232a6aec12662faacdc",
+        "summary": "output/smartphone-r5/phase31-quality-anchor-structural-v1/anchor/pixel4/summary.json",
+        "summary_sha256": "915f002eeb1c2f4728741d72e8225f6a36959462d4569f8a04f0ce3eb17da988",
+        "prediction_rows": 1677,
+        "repeat_byte_identical": true
+      }
+    },
+    "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+      "control": {
+        "submission": "output/smartphone-r5/phase28-native-fgo-no-bridge-structural-v1/tdcp_no_bridge/smg988b/submission.csv",
+        "submission_sha256": "1cfb9f3204934499fa9edf9e8073564897cf3660818e9a14afa5ddcb9c65f507",
+        "summary": "output/smartphone-r5/phase28-native-fgo-no-bridge-structural-v1/tdcp_no_bridge/smg988b/summary.json",
+        "summary_sha256": "28a0ffd472e68f79e59fd9032acc5b70a7bdec4afe1b8fcf5b60f1da8cd60f81",
+        "prediction_rows": 1164,
+        "repeat_byte_identical": true
+      },
+      "candidate": {
+        "submission": "output/smartphone-r5/phase31-quality-anchor-structural-v1/anchor/smg988b/submission.csv",
+        "submission_sha256": "65b44029a90e75a6b11e96b6ae9344020dee55bb8b5ea9b8bee79f2c765bca47",
+        "summary": "output/smartphone-r5/phase31-quality-anchor-structural-v1/anchor/smg988b/summary.json",
+        "summary_sha256": "77beb1b59aadefcdac0394c775f5ab45eb58c10ec7af92f21990dbbc694438b8",
+        "prediction_rows": 1164,
+        "repeat_byte_identical": true
+      }
+    }
+  },
+  "truth_materialization": {
+    "path": "output/smartphone-r5/phase29-no-bridge-train-eval-v1/truth_materialization.json",
+    "sha256": "dcc474f928f9295daa36913f458157f00fe5f088cfcc2397387a0f06555346e5",
+    "status": "truth-materialized-not-parsed-before-phase32",
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "truth_parse_count_before_phase32": 0,
+    "validation_truth_materialized": false,
+    "future_holdout_truth_materialized": false,
+    "routes": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "path": "output/smartphone-r5/phase29-no-bridge-train-eval-v1/truth/2021-03-16-18-59-us-ca-mtv-a/pixel5/ground_truth.csv",
+        "member": "dataset_2023/train/2021-03-16-18-59-us-ca-mtv-a/pixel5/ground_truth.csv",
+        "sha256": "7c84ed6a80b1bbb08c0ffad57493513833b9d5474e22a43c5a44da82824ee22d",
+        "bytes": 210009,
+        "crc32_hex": "9f60a62f"
+      },
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4": {
+        "path": "output/smartphone-r5/phase29-no-bridge-train-eval-v1/truth/2021-07-27-19-49-us-ca-mtv-b/pixel4/ground_truth.csv",
+        "member": "dataset_2023/train/2021-07-27-19-49-us-ca-mtv-b/pixel4/ground_truth.csv",
+        "sha256": "cc7598498eb55937e9644ccf991b5ab478533363e732b3fb44c447fff6a566cd",
+        "bytes": 164681,
+        "crc32_hex": "58b5d164"
+      },
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+        "path": "output/smartphone-r5/phase29-no-bridge-train-eval-v1/truth/2021-07-14-20-50-us-ca-mtv-e/sm-g988b/ground_truth.csv",
+        "member": "dataset_2023/train/2021-07-14-20-50-us-ca-mtv-e/sm-g988b/ground_truth.csv",
+        "sha256": "164a434967f0eeefde2812a27281d39e858024fba6e82015a9dc26bdfb3ad1a8",
+        "bytes": 113328,
+        "crc32_hex": "944179f8"
+      }
+    }
+  },
+  "truth_access": {
+    "phase32_truth_reads_before_freeze": 0,
+    "phase32_truth_materialized_before_freeze": false,
+    "phase29_historical_truth_reads": 3,
+    "phase30_historical_samsung_recovery_read": 1,
+    "phase31_truth_reads": 0,
+    "validation_truth_open_count_before_freeze": 0,
+    "holdout_truth_open_count_before_freeze": 0,
+    "mat_read_or_generated": false,
+    "token_access": false,
+    "post_score_tuning": false,
+    "test_truth_read": false,
+    "already_opened_development_truth_only": true,
+    "fresh_validation_and_future_holdout_remain_sealed": true
+  },
+  "evaluator_contract": {
+    "source": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase29_train_eval.py",
+      "sha256": "b3890989a870c2c0db7ffd63e336d9c253d488c3e2d54e6859069eb105573337",
+      "freeze": {
+        "path": "docs/use_cases/records/smartphone_r5_phase29_train_evaluator_freeze_v1.json",
+        "sha256": "b155dc662ce8e3e429b5a80a9b5a36ad2c41682ad715642f4bb6febd0d4dcd7c"
+      }
+    },
+    "phase32_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase32_quality_anchor_eval.py",
+      "sha256": "1c9288e40a4b3569ed059486a5ea4c71f9f2eaa095dc335736b12e1064800b78"
+    },
+    "truth_policy": "Read each already-materialized development truth CSV once in one process only after this freeze; verify its pre-sealed hash/byte count before scoring.",
+    "key_policy": "Score control and candidate on the exact common truth-matched key set; require identical matched sets. Count lane extras/missing coverage and never interpolate or use truth to fill them.",
+    "diagnostic_variants": [
+      "haversine_sphere__linear_n_minus_1",
+      "haversine_sphere__nearest_rank_ceiling",
+      "wgs84_vincenty__linear_n_minus_1",
+      "wgs84_vincenty__nearest_rank_ceiling"
+    ],
+    "route_gate": "All four horizontal variants, horizontal P50/P95, availability, truth coverage, and >70m/s continuity must be non-regressed route-wise.",
+    "aggregate_gate": "All four horizontal variants must strictly improve in macro mean; horizontal P50/P95, availability, truth coverage, and continuity must not regress.",
+    "vertical_gate": "informational-unavailable",
+    "vertical_reason": "The sealed native submission schema contains phone, UnixTimeMillis, LatitudeDegrees, LongitudeDegrees only; it has no predicted height.",
+    "tolerance": 1e-12,
+    "one_process": true,
+    "no_post_score_tuning": true
+  },
+  "source_and_binary_hashes": {
+    "apps/commands/benchmarks/gnss_smartphone_phase32_quality_anchor_eval.py": "1c9288e40a4b3569ed059486a5ea4c71f9f2eaa095dc335736b12e1064800b78",
+    "tests/test_smartphone_phase32_quality_anchor_eval.py": "1339535f081b6aae5bf509ce3602b775c8849d16e91c2a120cc0c9dff934f30d",
+    "tests/CMakeLists.txt": "b85967881bc6686fb5a6df30266d174872c933b5d051bc04546850dd777bd15b",
+    "apps/commands/benchmarks/gnss_smartphone_phase29_train_eval.py": "b3890989a870c2c0db7ffd63e336d9c253d488c3e2d54e6859069eb105573337",
+    "include/libgnss++/algorithms/fgo_quality_anchor.hpp": "dc8a7174534a089ba3bcfc478ece3c9307088090104cd539359fbc90ef151e44",
+    "include/libgnss++/algorithms/fgo_config.hpp": "c1bfdfec388ac6ff91112917cb33ba344d81479a9f22e38819dd9af38f052cab",
+    "include/libgnss++/algorithms/fgo.hpp": "ea4ebe964090a4f05e192e7a22550a9ac5725e0c01b08d698a0e23b936700053",
+    "src/algorithms/fgo_problems.cpp": "931f6d42a050b70d13daad2df21c689e8962a6030b1b3ce268730c1e20c43c44",
+    "apps/native/gnss_fgo_imu_no_base.cpp": "00ad0c2a155a5a4c9ddccdd2339c9ef26e0162c4f66c958ee06240f06e7c705e",
+    "build/apps/gnss_fgo_imu_no_base": "883701ef34606af4be84a44181f6b3616b2559ee4031982fff98d73dbbbbe7bd",
+    "docs/use_cases/records/smartphone_r5_phase31_quality_anchor_structural_result_v1.json": "1b25f3397835157a244f1f91b57151049e14b0c6fff75aadb56244fa6d8b5ba7"
+  },
+  "raw_input_provenance": {
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "inference_inputs": [
+      "raw device_gnss.csv",
+      "raw device_imu.csv",
+      "broadcast brdc.nav"
+    ],
+    "phase32_solver_inputs": "none; only previously sealed prediction artifacts are read",
+    "forbidden": [
+      "ground truth for inference",
+      "any .mat file",
+      "device WLS/enriched coordinates",
+      "sample/submission coordinates as inference data",
+      "validation or holdout data",
+      "Kaggle scores/token"
+    ]
+  },
+  "authorization": {
+    "candidate_control_mutation": false,
+    "solver_rerun": false,
+    "phase32_truth_reads_before_freeze": 0,
+    "truth_read_after_freeze_authorized": 3,
+    "truth_read_count_per_route": 1,
+    "fresh_validation_truth_open_count": 0,
+    "future_holdout_truth_open_count": 0,
+    "kaggle_or_external_mutation": false,
+    "mat_read_or_generated": false,
+    "post_score_tuning": false,
+    "one_shot_evaluation": true
+  },
+  "validation_policy": {
+    "fresh_validation": "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+    "future_holdout": "2023-05-16-19-54-us-ca-mtv-xe1/pixel5",
+    "remains_sealed": true,
+    "open_only_if_unchanged_train_gate_passes": true
+  },
+  "commands": {
+    "pure_evaluator_tests": "python3 tests/test_smartphone_phase32_quality_anchor_eval.py",
+    "score_once_after_freeze": "python3 apps/commands/benchmarks/gnss_smartphone_phase32_quality_anchor_eval.py score",
+    "no_solver_rerun": true,
+    "no_post_score_tuning": true
+  },
+  "integrity": {
+    "freeze_record_hash": "computed after this record is committed and stored in the Phase32 result manifest",
+    "candidate_control_artifacts_must_remain_byte_identical": true,
+    "truth_hash_and_bytes_verified_before_metrics": true,
+    "atomic_result_required": true,
+    "no_truth_coordinate_used_for_inference": true
+  }
+}
