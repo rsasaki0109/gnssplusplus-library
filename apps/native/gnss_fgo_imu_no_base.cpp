@@ -12,6 +12,7 @@
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/fusion/fusion_initialization.hpp>
+#include <libgnss++/io/android_raw_gnss.hpp>
 #include <libgnss++/io/imu.hpp>
 #include <libgnss++/io/rinex.hpp>
 
@@ -52,25 +53,30 @@ constexpr double kHeadingConsistencyRad = 20.0 * kPi / 180.0;
 constexpr double kGravityNormMin = 0.70 * kGravity;
 constexpr double kGravityNormMax = 1.30 * kGravity;
 constexpr double kGravityNormStdMax = 1.50;
+constexpr double kUpstreamImuSyncCoefficient = 0.5;
 
 struct Options {
     std::string obs_path;
     std::string nav_path;
     std::string imu_path;
     std::string android_imu_path;
+    std::string android_gnss_path;
     std::string out_path;
     std::string summary_path;
     std::string dataset_id = "native-fgo-v2-imu-no-base";
     int max_epochs = kDefaultEpochLimit;
     int skip_epochs = 0;
+    bool all_epochs = false;
 };
 
 void usage(const char* program) {
     std::cout << "Usage: " << program
-              << " --obs <rover.obs> --nav <brdc.nav>"
-                 " (--imu <imu.csv> | --android-imu <device_imu.csv>)"
+              << " (--obs <rover.obs> --imu <imu.csv>"
+                 " | --android-gnss <device_gnss.csv> --android-imu <device_imu.csv>)"
+                 " --nav <brdc.nav>"
                  " --out <submission.csv> --summary-json <summary.json>"
-                 " [--dataset-id <id>] [--skip-epochs <n>] [--max-epochs 10..30]\n";
+                 " [--dataset-id <id>] [--skip-epochs <n>]"
+                 " [--max-epochs 10..30 | --all-epochs]\n";
 }
 
 bool requireValue(int argc, char** argv, int& index, std::string& value) {
@@ -108,6 +114,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
             if (!requireValue(argc, argv, i, options.imu_path)) return false;
         } else if (arg == "--android-imu") {
             if (!requireValue(argc, argv, i, options.android_imu_path)) return false;
+        } else if (arg == "--android-gnss") {
+            if (!requireValue(argc, argv, i, options.android_gnss_path)) return false;
         } else if (arg == "--out") {
             if (!requireValue(argc, argv, i, options.out_path)) return false;
         } else if (arg == "--summary-json") {
@@ -139,20 +147,26 @@ bool parseArguments(int argc, char** argv, Options& options) {
             } catch (...) {
                 return false;
             }
+        } else if (arg == "--all-epochs") {
+            options.all_epochs = true;
         } else {
             std::cerr << "Unknown argument: " << arg << "\n";
             return false;
         }
     }
-    if (options.obs_path.empty() || options.nav_path.empty() ||
+    const bool android_raw = !options.android_imu_path.empty();
+    const bool has_observation_file = !options.obs_path.empty();
+    if (options.nav_path.empty() ||
         (options.imu_path.empty() == options.android_imu_path.empty()) ||
+        (options.android_imu_path.empty() != options.android_gnss_path.empty()) ||
+        (android_raw == has_observation_file) ||
         options.out_path.empty() || options.summary_path.empty()) {
         usage(argv[0]);
         return false;
     }
-    const std::array<const std::string*, 5> file_paths = {
+    const std::array<const std::string*, 6> file_paths = {
         &options.obs_path, &options.nav_path, &options.imu_path,
-        &options.android_imu_path, &options.out_path};
+        &options.android_imu_path, &options.android_gnss_path, &options.out_path};
     for (const std::string* path : file_paths) {
         if (path != nullptr && !path->empty() && hasMatExtension(*path)) {
             std::cerr << "MATLAB .mat paths are forbidden by the native/raw contract\n";
@@ -219,13 +233,16 @@ struct ImuBuildReport {
     double gravity_norm_std = 0.0;
     int heading_windows = 0;
     bool android_raw = false;
+    libgnss::io::AndroidRawGnssDiagnostics android_gnss_diagnostics;
     libgnss::AndroidImuCsvLoadResult android_load;
+    libgnss::AndroidGnssTimeAnchorLoadResult android_gnss_anchor_load;
 };
 
 bool buildImuInput(const std::string& path,
                    libgnss::FGOProcessor::FGOProblem& problem,
                    ImuBuildReport& report,
-                   bool android_raw = false) {
+                   bool android_raw = false,
+                   const std::vector<libgnss::AndroidGnssTimeAnchor>& gnss_time_anchors = {}) {
     if (problem.epochs.size() < 2) {
         report.failure = "fewer than two GNSS epochs";
         return false;
@@ -234,7 +251,11 @@ bool buildImuInput(const std::string& path,
     libgnss::ImuSeries series;
     report.android_raw = android_raw;
     if (android_raw) {
-        report.android_load = libgnss::loadAndroidImuCsv(path, series);
+        libgnss::AndroidImuCsvConfig android_config;
+        android_config.require_gnss_elapsed_anchor = true;
+        android_config.imu_sync_coefficient = kUpstreamImuSyncCoefficient;
+        report.android_load = libgnss::loadAndroidImuCsv(
+            path, series, android_config, gnss_time_anchors);
         if (!report.android_load.ok || series.isEmpty()) {
             report.failure = report.android_load.error.empty()
                                  ? "empty Android IMU series"
@@ -412,7 +433,7 @@ std::string makeSummary(const Options& options,
     std::ostringstream out;
     out << std::setprecision(17);
     out << "{\n"
-        << "  \"schema_version\": \"smartphone-r5-native-fgo-v2-mat-no-base-run.v1\",\n"
+        << "  \"schema_version\": \"smartphone-r5-native-fgo-android-imu-no-base-run.v2\",\n"
         << "  \"dataset_id\": ";
     writeJsonString(out, options.dataset_id);
     out << ",\n  \"status\": "
@@ -422,16 +443,43 @@ std::string makeSummary(const Options& options,
         << "  \"no_base_contract\": true,\n"
         << "  \"production_default_changed\": false,\n"
         << "  \"skip_epochs\": " << options.skip_epochs << ",\n"
+        << "  \"all_epochs\": " << (options.all_epochs ? "true" : "false") << ",\n"
         << "  \"inputs\": {\n"
         << "    \"observation\": ";
-    writeJsonString(out, options.obs_path);
+    if (options.obs_path.empty()) {
+        out << "null";
+    } else {
+        writeJsonString(out, options.obs_path);
+    }
     out << ",\n    \"navigation\": ";
     writeJsonString(out, options.nav_path);
     out << ",\n    \"imu\": ";
     writeJsonString(out, options.android_imu_path.empty()
                             ? options.imu_path
                             : options.android_imu_path);
-    out << "\n  },\n"
+    out << ",\n    \"android_gnss\": ";
+    if (options.android_gnss_path.empty()) {
+        out << "null";
+    } else {
+        writeJsonString(out, options.android_gnss_path);
+    }
+    out << "\n  },\n";
+    if (imu_report.android_raw) {
+        const auto& gnss = imu_report.android_gnss_diagnostics;
+        out << "  \"android_gnss_diagnostics\": {\n"
+            << "    \"input_rows\": " << gnss.input_rows << ",\n"
+            << "    \"raw_rows\": " << gnss.raw_rows << ",\n"
+            << "    \"selected_rows\": " << gnss.selected_rows << ",\n"
+            << "    \"selected_epochs\": " << gnss.selected_epochs << ",\n"
+            << "    \"carrier_rows\": " << gnss.carrier_rows << ",\n"
+            << "    \"doppler_rows\": " << gnss.doppler_rows << ",\n"
+            << "    \"clock_discontinuities\": " << gnss.clock_discontinuities << ",\n"
+            << "    \"timing_formula\": ";
+        writeJsonString(out, gnss.timing_formula);
+        out << ",\n    \"no_device_wls_seed\": true\n"
+            << "  },\n";
+    }
+    out
         << "  \"epochs\": {\n"
         << "    \"problem\": " << problem.epochs.size() << ",\n"
         << "    \"output\": " << result.solution.solutions.size() << ",\n"
@@ -466,7 +514,7 @@ std::string makeSummary(const Options& options,
         << "    \"mounting_rpy_deg_xyz\": [-85.0, 178.0, -94.0],\n"
         << "    \"timestamp_contract\": ";
     writeJsonString(out, imu_report.android_raw
-                           ? "UTC milliseconds + 18 s -> GPST; elapsedRealtimeNanos gyro anchors"
+                           ? "GNSS ChipsetElapsedRealtimeNanos -> UTC milliseconds by linear interpolation/extrapolation; gyro anchors; sync coefficient 0.5; UTC + 18 s -> GPST"
                            : "GPST week/TOW CSV; no runtime offset");
     out << ",\n"
         << "    \"android_alignment\": ";
@@ -494,6 +542,30 @@ std::string makeSummary(const Options& options,
             << alignment.median_abs_pair_offset_ms << ",\n"
             << "      \"maximum_abs_pair_offset_ms\": "
             << alignment.maximum_abs_pair_offset_ms << ",\n"
+            << "      \"gnss_anchor_points\": "
+            << alignment.gnss_anchor_points << ",\n"
+            << "      \"gnss_anchor_exact_rows\": "
+            << alignment.gnss_anchor_exact_rows << ",\n"
+            << "      \"gnss_anchor_interpolated_rows\": "
+            << alignment.gnss_anchor_interpolated_rows << ",\n"
+            << "      \"gnss_anchor_extrapolated_rows\": "
+            << alignment.gnss_anchor_extrapolated_rows << ",\n"
+            << "      \"first_mapped_utc_time_ms\": "
+            << alignment.first_mapped_utc_time_ms << ",\n"
+            << "      \"last_mapped_utc_time_ms\": "
+            << alignment.last_mapped_utc_time_ms << ",\n"
+            << "      \"imu_sync_coefficient\": "
+            << alignment.imu_sync_coefficient << ",\n"
+            << "      \"first_dt_s\": " << alignment.first_dt_s << ",\n"
+            << "      \"last_dt_s\": " << alignment.last_dt_s << ",\n"
+            << "      \"dt_tail_repeated\": "
+            << (alignment.dt_tail_repeated ? "true" : "false") << ",\n"
+            << "      \"anchor_input_rows\": "
+            << imu_report.android_gnss_anchor_load.input_rows << ",\n"
+            << "      \"anchor_raw_rows\": "
+            << imu_report.android_gnss_anchor_load.raw_rows << ",\n"
+            << "      \"anchor_duplicate_utc_timestamps\": "
+            << imu_report.android_gnss_anchor_load.duplicate_utc_timestamps << ",\n"
             << "      \"first_gyro_elapsed_ns\": "
             << alignment.first_gyro_elapsed_ns << ",\n"
             << "      \"last_gyro_elapsed_ns\": "
@@ -523,15 +595,37 @@ int main(int argc, char** argv) {
     Options options;
     if (!parseArguments(argc, argv, options)) return 2;
 
+    const bool android_raw = !options.android_imu_path.empty();
     libgnss::io::RINEXReader obs_reader;
-    if (!obs_reader.open(options.obs_path)) {
-        std::cerr << "failed to open observation file\n";
-        return 1;
-    }
     libgnss::io::RINEXReader::RINEXHeader obs_header;
-    if (!obs_reader.readHeader(obs_header)) {
-        std::cerr << "failed to read observation header\n";
-        return 1;
+    libgnss::io::AndroidRawGnssResult android_gnss;
+    if (android_raw) {
+        libgnss::io::AndroidRawGnssConfig android_gnss_config;
+        std::string conversion_error;
+        if (!libgnss::io::loadAndroidRawGnssCsv(
+                options.android_gnss_path, android_gnss_config, android_gnss,
+                conversion_error)) {
+            std::cerr << "failed to convert raw Android GNSS: "
+                      << conversion_error << "\n";
+            return 1;
+        }
+        if (android_gnss.observations.isEmpty()) {
+            std::cerr << "raw Android GNSS has no usable observation epochs\n";
+            return 1;
+        }
+        // Raw mode consumes the Android observation series directly.  It does
+        // not synthesize a RINEX intermediate and does not use the optional
+        // device-provided WLS position retained by the adapter.
+        obs_header.interval = 1.0;
+    } else {
+        if (!obs_reader.open(options.obs_path)) {
+            std::cerr << "failed to open observation file\n";
+            return 1;
+        }
+        if (!obs_reader.readHeader(obs_header)) {
+            std::cerr << "failed to read observation header\n";
+            return 1;
+        }
     }
     libgnss::io::RINEXReader nav_reader;
     if (!nav_reader.open(options.nav_path)) {
@@ -547,13 +641,30 @@ int main(int argc, char** argv) {
     std::vector<libgnss::ObservationData> epochs;
     libgnss::ObservationData epoch;
     int observation_index = 0;
-    while (epochs.size() < static_cast<std::size_t>(options.max_epochs) &&
-           obs_reader.readObservationEpoch(epoch)) {
-        if (observation_index++ < options.skip_epochs) continue;
-        if (obs_header.approximate_position.norm() > 1.0e6) {
-            epoch.receiver_position = obs_header.approximate_position;
+    if (android_raw) {
+        for (auto& raw_epoch : android_gnss.observations.epochs) {
+            if (observation_index++ < options.skip_epochs) continue;
+            if (!options.all_epochs &&
+                epochs.size() >= static_cast<std::size_t>(options.max_epochs)) {
+                break;
+            }
+            // SPPProcessor uses the epoch position only as a numerical initial
+            // frame when no receiver seed is supplied.  This fixed Earth
+            // surface point is deliberately route/device independent; it is
+            // not emitted and cannot carry a device-WLS/result coordinate.
+            raw_epoch.receiver_position = libgnss::Vector3d(6378137.0, 0.0, 0.0);
+            epochs.push_back(std::move(raw_epoch));
         }
-        epochs.push_back(epoch);
+    } else {
+        while ((options.all_epochs ||
+                epochs.size() < static_cast<std::size_t>(options.max_epochs)) &&
+               obs_reader.readObservationEpoch(epoch)) {
+            if (observation_index++ < options.skip_epochs) continue;
+            if (obs_header.approximate_position.norm() > 1.0e6) {
+                epoch.receiver_position = obs_header.approximate_position;
+            }
+            epochs.push_back(epoch);
+        }
     }
     if (epochs.size() < 2) {
         std::cerr << "fewer than two observation epochs\n";
@@ -572,6 +683,16 @@ int main(int argc, char** argv) {
     config.use_single_difference_doppler_factors = false;
     config.use_single_difference_tdcp_factors = false;
     config.pose3_lever_arm_body_m = libgnss::Vector3d::Zero();
+    if (android_raw) {
+        // The raw path starts SPP from the route-independent Earth-surface
+        // initializer above.  Applying a nonzero elevation mask at that
+        // deliberately distant point can discard the whole first epoch
+        // before SPP has a chance to converge.  The native SPP seed still
+        // applies its finite geometry/health checks; this only makes raw
+        // startup independent of a device-provided coordinate.
+        config.min_elevation_deg = 0.0;
+        config.min_snr_dbhz = 0.0;
+    }
     const libgnss::FGOProcessor processor(config);
     libgnss::FGOProcessor::FGOProblem problem =
         processor.buildPseudorangeProblem(epochs, nav);
@@ -581,9 +702,23 @@ int main(int argc, char** argv) {
     }
 
     ImuBuildReport imu_report;
-    const bool android_raw = !options.android_imu_path.empty();
+    if (android_raw) {
+        imu_report.android_gnss_diagnostics = android_gnss.diagnostics;
+    }
     const std::string imu_path = android_raw ? options.android_imu_path : options.imu_path;
-    bool use_imu = buildImuInput(imu_path, problem, imu_report, android_raw);
+    std::vector<libgnss::AndroidGnssTimeAnchor> gnss_time_anchors;
+    if (android_raw) {
+        imu_report.android_gnss_anchor_load =
+            libgnss::loadAndroidGnssTimeAnchors(options.android_gnss_path,
+                                                gnss_time_anchors);
+        if (!imu_report.android_gnss_anchor_load.ok) {
+            std::cerr << "failed to load GNSS elapsed-time anchors: "
+                      << imu_report.android_gnss_anchor_load.error << "\n";
+            return 1;
+        }
+    }
+    bool use_imu = buildImuInput(imu_path, problem, imu_report, android_raw,
+                                 gnss_time_anchors);
     bool fallback = false;
     libgnss::FGOProcessor::FGOResult result;
     if (use_imu) {

@@ -100,6 +100,49 @@ struct ImuCsvLoadResult {
 };
 
 /**
+ * @brief One raw Android GNSS clock anchor used by the IMU synchronizer.
+ *
+ * The pair is deliberately kept in the original integer domains.  The
+ * upstream MATLAB path interpolates UTC milliseconds as a function of
+ * ``ChipsetElapsedRealtimeNanos``; converting either clock to a rounded
+ * floating-point timestamp before interpolation would lose that contract.
+ */
+struct AndroidGnssTimeAnchor {
+    std::int64_t utc_time_ms = 0;
+    std::int64_t elapsed_realtime_nanos = 0;
+};
+
+/**
+ * @brief Diagnostics returned by loadAndroidGnssTimeAnchors().
+ */
+struct AndroidGnssTimeAnchorLoadResult {
+    bool ok = false;
+    std::string error;
+    std::size_t input_rows = 0;
+    std::size_t raw_rows = 0;
+    std::size_t unsupported_rows = 0;
+    std::size_t duplicate_utc_timestamps = 0;
+    std::size_t unique_anchors = 0;
+    std::int64_t first_utc_time_ms = 0;
+    std::int64_t last_utc_time_ms = 0;
+    std::int64_t first_elapsed_realtime_nanos = 0;
+    std::int64_t last_elapsed_realtime_nanos = 0;
+};
+
+/**
+ * @brief Extract the raw GNSS UTC/elapsed clock anchors from device_gnss.csv.
+ *
+ * Only the raw ``MessageType=Raw`` rows and the two clock columns are read;
+ * no position, truth, result, or sample coordinates are accepted.  One
+ * anchor is retained per UTC epoch, matching the upstream unique() contract.
+ * The returned elapsed clock must be strictly increasing so linear
+ * interpolation/extrapolation is deterministic and fail-closed.
+ */
+AndroidGnssTimeAnchorLoadResult loadAndroidGnssTimeAnchors(
+    const std::string& path,
+    std::vector<AndroidGnssTimeAnchor>& anchors);
+
+/**
  * @brief Contract for loading the raw Android ``device_imu.csv`` streams.
  *
  * Android timestamps are retained as two distinct clocks: ``utcTimeMillis``
@@ -116,6 +159,12 @@ struct AndroidImuCsvConfig {
     double gps_utc_leap_seconds = 18.0;
     double maximum_accel_pair_offset_s = 0.025;
     bool allow_endpoint_nearest = true;
+    // Raw IMU inference must opt into the GNSS elapsed->UTC synchronization
+    // contract.  The low-level parser keeps a legacy direct-UTC mode for
+    // isolated parser callers; the native raw entrypoint sets this true and
+    // fails closed when anchors are absent or invalid.
+    bool require_gnss_elapsed_anchor = false;
+    double imu_sync_coefficient = 0.5;
 };
 
 /**
@@ -141,10 +190,20 @@ struct AndroidImuCsvLoadResult {
     std::int64_t last_gyro_elapsed_ns = 0;
     double median_abs_pair_offset_ms = 0.0;
     double maximum_abs_pair_offset_ms = 0.0;
+    std::size_t gnss_anchor_points = 0;
+    std::size_t gnss_anchor_exact_rows = 0;
+    std::size_t gnss_anchor_interpolated_rows = 0;
+    std::size_t gnss_anchor_extrapolated_rows = 0;
+    double first_mapped_utc_time_ms = 0.0;
+    double last_mapped_utc_time_ms = 0.0;
+    double imu_sync_coefficient = 0.5;
+    double first_dt_s = 0.0;
+    double last_dt_s = 0.0;
+    bool dt_tail_repeated = false;
     bool elapsed_clock_preserved = false;
-    // The raw adapter intentionally does not claim the upstream GNSS
-    // elapsed->UTC interpolation. It uses Android UTC for GPST conversion
-    // and preserves elapsedRealtimeNanos for a later anchor stage.
+    // True only when the supplied GNSS elapsed->UTC anchors were used for
+    // every synchronized IMU timestamp.  Direct UTC conversion is never
+    // reported as an anchored raw inference.
     bool gnss_elapsed_anchor_applied = false;
 };
 
@@ -175,17 +234,18 @@ ImuCsvLoadResult loadImuCsv(const std::string& path, ImuSeries& out);
  * row (the MATLAB ``unique`` behavior), acceleration is interpolated on the
  * common elapsedRealtimeNanos clock, and unbracketed samples are only
  * nearest-held within AndroidImuCsvConfig::maximum_accel_pair_offset_s.
- * Output samples contain the gyro UTC time converted to GPST, the preserved
- * elapsedRealtimeNanos anchor, and raw sensor axes; mounting is an explicit
- * caller operation via ImuAxisConvention or a documented mounting matrix.
- * The GNSS-observation elapsed->UTC interpolation and sync_coefficient from
- * upstream imuprocessing.m are not silently inferred by this loader; its
- * diagnostic explicitly reports that gap for a later synchronization stage.
+ * Output samples contain the gyro UTC time converted to GPST using the
+ * supplied GNSS elapsed->UTC anchors when the opt-in requirement is enabled,
+ * the preserved elapsedRealtimeNanos anchor, and raw sensor axes; mounting is
+ * an explicit caller operation via ImuAxisConvention or a documented matrix.
+ * The anchor path mirrors MATLAB interp1(...,"linear","extrap") and reports
+ * exact/interpolated/extrapolated rows plus the frozen sync coefficient.
  */
 AndroidImuCsvLoadResult loadAndroidImuCsv(
     const std::string& path,
     ImuSeries& out,
-    const AndroidImuCsvConfig& config = {});
+    const AndroidImuCsvConfig& config = {},
+    const std::vector<AndroidGnssTimeAnchor>& gnss_time_anchors = {});
 
 /**
  * @brief Load rtklibexplorer/GNSS_IMU's cleaned `imu_*_sf.csv` format.

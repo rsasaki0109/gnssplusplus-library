@@ -160,6 +160,76 @@ TEST(AndroidImuCsvTest, ConvertsUtcAndAlignsAccelOnElapsedClock) {
     EXPECT_LT(series.samples[1].time, series.samples[2].time);
 }
 
+TEST(AndroidImuCsvTest, SynchronizesUtcFromGnssElapsedAnchorsAndRequiresThem) {
+    const auto gnss_path =
+        std::filesystem::temp_directory_path() / "libgnss_android_gnss_anchor_test.csv";
+    writeFile(
+        gnss_path,
+        "MessageType,utcTimeMillis,ChipsetElapsedRealtimeNanos\n"
+        "Raw,1700000000000,1000000000\n"
+        "UncalFix,1700000000500,1500000000\n"
+        "Raw,1700000001000,2000000000\n"
+        // MATLAB unique(utcTimeMillis) retains the first elapsed value.
+        "Raw,1700000001000,2100000000\n");
+
+    std::vector<AndroidGnssTimeAnchor> anchors;
+    const auto anchor_result = loadAndroidGnssTimeAnchors(gnss_path.string(), anchors);
+    ASSERT_TRUE(anchor_result.ok) << anchor_result.error;
+    EXPECT_EQ(anchor_result.input_rows, 4u);
+    EXPECT_EQ(anchor_result.raw_rows, 3u);
+    EXPECT_EQ(anchor_result.unsupported_rows, 1u);
+    EXPECT_EQ(anchor_result.duplicate_utc_timestamps, 1u);
+    ASSERT_EQ(anchors.size(), 2u);
+    EXPECT_EQ(anchors.front().utc_time_ms, 1700000000000LL);
+    EXPECT_EQ(anchors.back().elapsed_realtime_nanos, 2000000000LL);
+
+    const std::string imu_header =
+        "MessageType,utcTimeMillis,elapsedRealtimeNanos,MeasurementX,MeasurementY,"
+        "MeasurementZ,BiasX,BiasY,BiasZ";
+    const auto imu_path =
+        std::filesystem::temp_directory_path() / "libgnss_android_gnss_anchor_imu_test.csv";
+    writeFile(
+        imu_path,
+        imu_header + "\n"
+                     // The raw UTC values below are intentionally unrelated;
+                     // anchored elapsed time is authoritative for inference.
+                     "UncalAccel,1800000000000,1000000000,1,2,3,0,0,0\n"
+                     "UncalAccel,1800000000010,1010000000,3,4,5,0,0,0\n"
+                     "UncalGyro,1800000000000,1005000000,0.1,0.2,0.3,0,0,0\n"
+                     "UncalGyro,1800000000010,1010000000,0.4,0.5,0.6,0,0,0\n");
+
+    AndroidImuCsvConfig config;
+    config.require_gnss_elapsed_anchor = true;
+    config.imu_sync_coefficient = 0.5;
+    ImuSeries series;
+    const auto result = loadAndroidImuCsv(imu_path.string(), series, config, anchors);
+    ASSERT_TRUE(result.ok) << result.error;
+    EXPECT_TRUE(result.gnss_elapsed_anchor_applied);
+    EXPECT_EQ(result.gnss_anchor_points, 2u);
+    EXPECT_EQ(result.gnss_anchor_interpolated_rows, 2u);
+    EXPECT_EQ(result.gnss_anchor_extrapolated_rows, 0u);
+    EXPECT_DOUBLE_EQ(result.imu_sync_coefficient, 0.5);
+    EXPECT_NEAR(result.first_mapped_utc_time_ms, 1700000000005.0, 1e-6);
+    EXPECT_NEAR(result.last_mapped_utc_time_ms, 1700000000010.0, 1e-6);
+    // GNSSTime stores seconds in a double; at a 2023 epoch the representable
+    // spacing is about 0.12 microseconds, so keep the oracle tighter than the
+    // sensor contract but above that unavoidable timestamp quantisation.
+    EXPECT_NEAR(result.first_dt_s, 0.005, 1e-6);
+    EXPECT_NEAR(result.last_dt_s, 0.005, 1e-6);
+    EXPECT_TRUE(result.dt_tail_repeated);
+    ASSERT_EQ(series.samples.size(), 2u);
+    EXPECT_EQ(series.samples.front().elapsed_realtime_nanos, 1005000000LL);
+    EXPECT_NEAR(series.samples.front().accel_raw.x(), 2.0, 1e-12);
+
+    ImuSeries rejected_series;
+    const auto rejected = loadAndroidImuCsv(imu_path.string(), rejected_series, config);
+    EXPECT_FALSE(rejected.ok);
+    EXPECT_NE(rejected.error.find("requires GNSS elapsed-time anchors"), std::string::npos);
+
+    std::filesystem::remove(gnss_path);
+    std::filesystem::remove(imu_path);
+}
+
 TEST(AndroidImuCsvTest, AppliesPairBoundAtBoundaryAndOmitsBeyondIt) {
     const std::string header =
         "MessageType,utcTimeMillis,elapsedRealtimeNanos,MeasurementX,MeasurementY,"
@@ -229,6 +299,16 @@ TEST(AndroidImuCsvTest, RejectsMatInputsBeforeOpeningAnyFile) {
     EXPECT_FALSE(result.ok);
     EXPECT_NE(result.error.find("MATLAB .mat inputs are forbidden"), std::string::npos);
     EXPECT_TRUE(series.samples.empty());
+}
+
+TEST(AndroidImuCsvTest, RejectsMatGnssAnchorInputsBeforeOpeningAnyFile) {
+    std::vector<AndroidGnssTimeAnchor> anchors;
+    const auto result = loadAndroidGnssTimeAnchors(
+        (std::filesystem::temp_directory_path() / "gnss_anchor_input.mat").string(),
+        anchors);
+    EXPECT_FALSE(result.ok);
+    EXPECT_NE(result.error.find("MATLAB .mat inputs are forbidden"), std::string::npos);
+    EXPECT_TRUE(anchors.empty());
 }
 
 TEST(ImuCsvTest, ParsesRtklibExplorerSelfFormattedCsv) {
