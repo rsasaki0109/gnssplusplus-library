@@ -1,0 +1,66 @@
+{
+  "schema_version": "smartphone-r5-phase12-residual-ionosphere-verification.v1",
+  "candidate_id": "native-residual-ionosphere-gtsam-v1",
+  "score_record": "docs/use_cases/records/smartphone_r5_phase12_residual_ionosphere_score_result_v1.json",
+  "score_record_sha256": "999e3c5c7361d55d313377e1c0aa898cc95030a3339db4e87a0187682546f44d",
+  "candidate_artifacts": {
+    "submission": "output/smartphone-r5/phase12-residual-ionosphere-gtsam-v1/submission.csv",
+    "submission_sha256": "3069f149bc98b0383d008d5f20cc80cd4ada9f9eb1b5d09f05353895a2d5a26f",
+    "summary": "output/smartphone-r5/phase12-residual-ionosphere-gtsam-v1/summary.json",
+    "summary_sha256": "ce209dfd0a7b3662f8dff9512b3947acf5e3af840c94467ba84fccd132669cda",
+    "train_score": "output/smartphone-r5/phase12-residual-ionosphere-gtsam-v1/train_score.json",
+    "train_score_sha256": "12bd999d73abd666a26c4c5d67d9a0ce6551872b150d66185283c19780d425a8"
+  },
+  "verification": {
+    "release_build": {
+      "command": "cmake --build build --parallel 4",
+      "passed": true,
+      "binary": "build/apps/gnss_fgo_imu_no_base",
+      "binary_sha256": "8e72bf4d57517ba9eaa6532280eb806f7913f189f2b13ca9ec23ede3d40c3ffa"
+    },
+    "focused_residual_ionosphere_tests": {
+      "command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:$LD_LIBRARY_PATH build/tests/run_tests --gtest_filter=ResidualIonosphereContractTest.*:FGOGtsamResidualIonosphereFactorTest.*",
+      "passed": 4,
+      "failed": 0
+    },
+    "full_serial_ctest": {
+      "command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:$LD_LIBRARY_PATH ctest --test-dir build --output-on-failure --parallel 1",
+      "total": 131,
+      "passed": 130,
+      "failed": 1,
+      "failure": "python_cli_tests: QZSS L6 PTY fixture received frames=0/discarded=244; this pre-existing PTY/environment failure is outside the Phase12 files and is not used to select the candidate",
+      "non_pty_rerun": {
+        "command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:$LD_LIBRARY_PATH ctest --test-dir build --output-on-failure --parallel 1 -E ^python_cli_tests$",
+        "total": 130,
+        "passed": 130,
+        "failed": 0
+      }
+    },
+    "json_parse": true,
+    "git_diff_check": true,
+    "candidate_key_gate": {
+      "rows": 1383,
+      "raw_target_keys": "1383/1383",
+      "duplicate_keys": 0,
+      "missing_keys": 0,
+      "extra_keys": 0,
+      "nonfinite_coordinates": 0,
+      "out_of_range_coordinates": 0
+    },
+    "forbidden_input_scan": {
+      "mat_opened": false,
+      "mat_generated": false,
+      "truth_reads_after_score": false,
+      "validation_holdout_test_reads": false,
+      "token_or_kaggle_access": false,
+      "device_wls_or_precomputed_coordinates": false
+    }
+  },
+  "post_score_changes": {
+    "algorithm_code": false,
+    "numeric_parameters": false,
+    "candidate_artifacts": false,
+    "documentation_and_verification_records_only": true
+  },
+  "verification_record_hash": "computed after apply_patch"
+}

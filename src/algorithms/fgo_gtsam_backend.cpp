@@ -25,6 +25,7 @@
 // single shared dummy node pinned to 0 with a tight prior.
 
 #include <libgnss++/algorithms/disjoint_constellation_partition.hpp>
+#include <libgnss++/algorithms/residual_ionosphere_contract.hpp>
 #include "fgo_gtsam_internal.hpp"
 
 namespace libgnss {
@@ -68,6 +69,8 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
     const bool use_gnss_velocity_states =
         !use_imu && !use_pose3 && config.use_velocity_states &&
         !problem.undifferenced_doppler_factors.empty();
+    const bool use_residual_ionosphere =
+        config.use_residual_ionosphere_states && !problem.epochs.empty();
     double gnss_velocity_origin_lat_rad = 0.0;
     double gnss_velocity_origin_lon_rad = 0.0;
     if (use_gnss_velocity_states) {
@@ -392,6 +395,21 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
         return ordinal;
     };
 
+    // One state per problem epoch keeps the residual ionosphere contract
+    // explicit even through a sparse GNSS epoch.  States are tied only within
+    // a continuous time/clock segment below; a detected clock jump or an
+    // invalid/long interval receives a fresh physical prior instead.
+    if (use_residual_ionosphere) {
+        result.diagnostics.residual_ionosphere_states = num_epochs;
+        result.diagnostics.residual_ionosphere_invalid_coefficients =
+            problem.diagnostics.residual_ionosphere_invalid_coefficients;
+        result.diagnostics.residual_ionosphere_min_coefficient =
+            std::numeric_limits<double>::infinity();
+        for (std::size_t i = 0; i < num_epochs; ++i) {
+            initial.insert(residualIonosphereKey(i), 0.0);
+        }
+    }
+
     // Ambiguity nodes: one per AmbiguityState, in the units that state's
     // consuming factor expects (cycles for DD, meters for undifferenced).
     for (std::size_t i = 0; i < problem.ambiguity_states.size(); ++i) {
@@ -431,7 +449,84 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
             ensureSignalBias(factor.satellite.system, factor.signal);
         const auto noise = makeNoise(factor.sigma_m, config.use_robust_loss,
                                      config.pseudorange_huber_threshold_sigma);
-        if (signal_bias_ordinal > 0) {
+        const bool valid_ionosphere_coefficient =
+            residual_ionosphere::finiteCoefficient(
+                factor.residual_ionosphere_coefficient);
+        if (use_residual_ionosphere && !valid_ionosphere_coefficient) {
+            ++result.diagnostics.residual_ionosphere_invalid_coefficients;
+            continue;
+        }
+        if (use_residual_ionosphere) {
+            const double coefficient = factor.residual_ionosphere_coefficient;
+            ++result.diagnostics.residual_ionosphere_factors;
+            result.diagnostics.residual_ionosphere_min_coefficient = std::min(
+                result.diagnostics.residual_ionosphere_min_coefficient,
+                coefficient);
+            result.diagnostics.residual_ionosphere_max_coefficient = std::max(
+                result.diagnostics.residual_ionosphere_max_coefficient,
+                coefficient);
+            const gtsam::Key ionosphere =
+                residualIonosphereKey(factor.epoch_index);
+            if (signal_bias_ordinal > 0) {
+                const gtsam::Key signal_bias = signalBiasKey(signal_bias_ordinal);
+                if (use_pose3) {
+                    if (ordinal == 0) {
+                        graph.emplace_shared<
+                            PseudorangeFactorPlainSignalBiasResidualIonosphereArm>(
+                            positionKey(factor.epoch_index), base_clock,
+                            signal_bias, ionosphere,
+                            factor.corrected_pseudorange_m,
+                            Point3(factor.satellite_position_ecef),
+                            gnss_lever_arm, coefficient, noise);
+                    } else {
+                        graph.emplace_shared<
+                            PseudorangeFactorISBSignalBiasResidualIonosphereArm>(
+                            positionKey(factor.epoch_index), base_clock,
+                            isbKey(ordinal), signal_bias, ionosphere,
+                            factor.corrected_pseudorange_m,
+                            Point3(factor.satellite_position_ecef),
+                            gnss_lever_arm, coefficient, noise);
+                    }
+                } else if (ordinal == 0) {
+                    graph.emplace_shared<
+                        PseudorangeFactorPlainSignalBiasResidualIonosphere>(
+                        positionKey(factor.epoch_index), base_clock, signal_bias,
+                        ionosphere, factor.corrected_pseudorange_m,
+                        Point3(factor.satellite_position_ecef), coefficient, noise);
+                } else {
+                    graph.emplace_shared<
+                        PseudorangeFactorISBSignalBiasResidualIonosphere>(
+                        positionKey(factor.epoch_index), base_clock,
+                        isbKey(ordinal), signal_bias, ionosphere,
+                        factor.corrected_pseudorange_m,
+                        Point3(factor.satellite_position_ecef), coefficient, noise);
+                }
+            } else if (use_pose3) {
+                if (ordinal == 0) {
+                    graph.emplace_shared<PseudorangeFactorPlainResidualIonosphereArm>(
+                        positionKey(factor.epoch_index), base_clock, ionosphere,
+                        factor.corrected_pseudorange_m,
+                        Point3(factor.satellite_position_ecef), gnss_lever_arm,
+                        coefficient, noise);
+                } else {
+                    graph.emplace_shared<PseudorangeFactorISBResidualIonosphereArm>(
+                        positionKey(factor.epoch_index), base_clock, isbKey(ordinal),
+                        ionosphere, factor.corrected_pseudorange_m,
+                        Point3(factor.satellite_position_ecef), gnss_lever_arm,
+                        coefficient, noise);
+                }
+            } else if (ordinal == 0) {
+                graph.emplace_shared<PseudorangeFactorPlainResidualIonosphere>(
+                    positionKey(factor.epoch_index), base_clock, ionosphere,
+                    factor.corrected_pseudorange_m,
+                    Point3(factor.satellite_position_ecef), coefficient, noise);
+            } else {
+                graph.emplace_shared<PseudorangeFactorISBResidualIonosphere>(
+                    positionKey(factor.epoch_index), base_clock, isbKey(ordinal),
+                    ionosphere, factor.corrected_pseudorange_m,
+                    Point3(factor.satellite_position_ecef), coefficient, noise);
+            }
+        } else if (signal_bias_ordinal > 0) {
             const gtsam::Key signal_bias = signalBiasKey(signal_bias_ordinal);
             if (use_pose3) {
                 if (ordinal == 0) {
@@ -779,6 +874,36 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
             graph.addPrior(signalBiasKey(ordinal), 0.0, noise);
         }
     }
+    if (use_residual_ionosphere &&
+        std::isfinite(config.residual_ionosphere_prior_sigma_m) &&
+        config.residual_ionosphere_prior_sigma_m > 0.0) {
+        const auto prior_noise = gtsam::noiseModel::Isotropic::Sigma(
+            1, config.residual_ionosphere_prior_sigma_m);
+        // The first state is a gauge anchor.  Additional segment starts get
+        // the same weak physical prior after a clock jump or an unusable
+        // interval so no state can drift through a discontinuity.
+        graph.addPrior(residualIonosphereKey(0), 0.0, prior_noise);
+        for (std::size_t i = 1; i < num_epochs; ++i) {
+            const double dt = problem.epochs[i].time - problem.epochs[i - 1].time;
+            const bool clock_jump =
+                i < problem.clock_jumps.size() && problem.clock_jumps[i];
+            const double rw_sigma = residual_ionosphere::randomWalkSigma(
+                dt, config.residual_ionosphere_random_walk_sigma_m_per_sqrt_s);
+            const bool continuous =
+                !clock_jump && std::isfinite(rw_sigma) &&
+                (config.residual_ionosphere_max_gap_s <= 0.0 ||
+                 (std::isfinite(dt) &&
+                  dt <= config.residual_ionosphere_max_gap_s));
+            if (continuous) {
+                graph.emplace_shared<gtsam::BetweenFactor<double>>(
+                    residualIonosphereKey(i - 1), residualIonosphereKey(i), 0.0,
+                    gtsam::noiseModel::Isotropic::Sigma(1, rw_sigma));
+            } else {
+                graph.addPrior(residualIonosphereKey(i), 0.0, prior_noise);
+                ++result.diagnostics.residual_ionosphere_resets;
+            }
+        }
+    }
     if (use_gnss_velocity_states) {
         // The Doppler rows normally provide full rank per epoch; this very
         // broad prior is only a numerical gauge guard for a sparse/degenerate
@@ -1061,6 +1186,35 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
         }
     }
 
+    if (use_residual_ionosphere) {
+        result.residual_ionosphere_estimates_m.assign(
+            num_epochs, std::numeric_limits<double>::quiet_NaN());
+        double sum_squared = 0.0;
+        std::size_t finite_count = 0;
+        for (std::size_t i = 0; i < num_epochs; ++i) {
+            const gtsam::Key key = residualIonosphereKey(i);
+            if (!optimized.exists(key)) continue;
+            const double estimate = optimized.at<double>(key);
+            result.residual_ionosphere_estimates_m[i] = estimate;
+            if (!std::isfinite(estimate)) {
+                ++result.diagnostics.residual_ionosphere_invalid_coefficients;
+                continue;
+            }
+            result.diagnostics.residual_ionosphere_max_abs_m = std::max(
+                result.diagnostics.residual_ionosphere_max_abs_m,
+                std::abs(estimate));
+            sum_squared += estimate * estimate;
+            ++finite_count;
+        }
+        result.diagnostics.residual_ionosphere_rms_m =
+            finite_count > 0
+                ? std::sqrt(sum_squared / static_cast<double>(finite_count))
+                : std::numeric_limits<double>::infinity();
+        if (!std::isfinite(result.diagnostics.residual_ionosphere_min_coefficient)) {
+            result.diagnostics.residual_ionosphere_min_coefficient = 0.0;
+        }
+    }
+
     // --- Map per-epoch solutions ---
     const bool have_ambiguities = !problem.ambiguity_states.empty();
     for (std::size_t i = 0; i < num_epochs; ++i) {
@@ -1206,13 +1360,21 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
                         signalBiasKey(signal_bias_ordinal));
                 }
             }
+            double residual_ionosphere_m = 0.0;
+            if (use_residual_ionosphere &&
+                optimized.exists(residualIonosphereKey(factor.epoch_index))) {
+                residual_ionosphere_m =
+                    factor.residual_ionosphere_coefficient *
+                    optimized.at<double>(
+                        residualIonosphereKey(factor.epoch_index));
+            }
             // Plain Euclidean range to match the native backend and the factor
             // model above (satellite positions are already earth-rotation
             // corrected; no additional Sagnac term).
             const double range =
                 (Point3(factor.satellite_position_ecef) - position).norm();
             const double predicted = range + constants::SPEED_OF_LIGHT * clock_s +
-                                     signal_bias_m;
+                                     signal_bias_m + residual_ionosphere_m;
             const double residual = factor.corrected_pseudorange_m - predicted;
             sum += residual * residual;
             ++count;

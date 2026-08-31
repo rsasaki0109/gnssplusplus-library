@@ -4166,4 +4166,70 @@ TEST(FGOGtsamSignalBiasFactorTest, KeyOrdinalIsStableForSecondarySignalsOnly) {
     EXPECT_EQ(signal_bias::ordinal(GNSSSystem::Galileo, SignalType::GAL_E1), -1);
 }
 
+TEST(FGOGtsamResidualIonosphereFactorTest, UsesCoefficientSignAndJacobian) {
+    using libgnss::fgo_gtsam_internal::PseudorangeFactorPlainResidualIonosphere;
+    const gtsam::Point3 receiver(6'370'000.0, 1'000.0, 2'000.0);
+    const gtsam::Point3 satellite = receiver + gtsam::Point3(20'000'000.0,
+                                                               1'000'000.0,
+                                                               -500'000.0);
+    const double range = (satellite - receiver).norm();
+    constexpr double clock_s = 2.0e-6;
+    constexpr double ionosphere_m = 4.5;
+    constexpr double coefficient = 1.75;
+    const double measurement = range + gtsam::gnss::C_LIGHT * clock_s +
+                               coefficient * ionosphere_m;
+    const auto noise = gtsam::noiseModel::Isotropic::Sigma(1, 1.0);
+    const PseudorangeFactorPlainResidualIonosphere factor(
+        gtsam::Symbol('x', 0), gtsam::Symbol('c', 0), gtsam::Symbol('j', 0),
+        measurement, satellite, coefficient, noise);
+    gtsam::Matrix H_position;
+    gtsam::Matrix H_clock;
+    gtsam::Matrix H_ionosphere;
+    const gtsam::Vector error = factor.evaluateError(
+        receiver, clock_s, ionosphere_m, &H_position, &H_clock,
+        &H_ionosphere);
+    ASSERT_EQ(error.size(), 1);
+    EXPECT_NEAR(error(0), 0.0, 1e-9);
+    EXPECT_NEAR(H_position.norm(), 1.0, 1e-12);
+    EXPECT_NEAR(H_clock(0, 0), gtsam::gnss::C_LIGHT, 1e-6);
+    EXPECT_NEAR(H_ionosphere(0, 0), coefficient, 1e-12);
+    const gtsam::Vector positive_state = factor.evaluateError(
+        receiver, clock_s, ionosphere_m + 1.0, nullptr, nullptr, nullptr);
+    EXPECT_NEAR(positive_state(0), coefficient, 1e-9);
+}
+
+TEST(FGOGtsamResidualIonosphereFactorTest, FullBiasAndIonosphereKeysAreIndependent) {
+    using libgnss::fgo_gtsam_internal::
+        PseudorangeFactorISBSignalBiasResidualIonosphere;
+    const gtsam::Point3 receiver(6'370'000.0, 1'000.0, 2'000.0);
+    const gtsam::Point3 satellite = receiver + gtsam::Point3(21'000'000.0,
+                                                               -1'000'000.0,
+                                                               400'000.0);
+    const double range = (satellite - receiver).norm();
+    constexpr double clock_s = 1.0e-6;
+    constexpr double isb_s = -0.25e-6;
+    constexpr double signal_bias_m = -160.0;
+    constexpr double ionosphere_m = 3.0;
+    constexpr double coefficient = 1.25;
+    const double measurement =
+        range + gtsam::gnss::C_LIGHT * (clock_s + isb_s) + signal_bias_m +
+        coefficient * ionosphere_m;
+    const auto noise = gtsam::noiseModel::Isotropic::Sigma(1, 1.0);
+    const PseudorangeFactorISBSignalBiasResidualIonosphere factor(
+        gtsam::Symbol('x', 0), gtsam::Symbol('c', 0), gtsam::Symbol('i', 1),
+        gtsam::Symbol('f', 2), gtsam::Symbol('j', 0), measurement, satellite,
+        coefficient, noise);
+    gtsam::Matrix H_isb;
+    gtsam::Matrix H_signal;
+    gtsam::Matrix H_ionosphere;
+    const gtsam::Vector error = factor.evaluateError(
+        receiver, clock_s, isb_s, signal_bias_m, ionosphere_m, nullptr,
+        nullptr, &H_isb, &H_signal, &H_ionosphere);
+    ASSERT_EQ(error.size(), 1);
+    EXPECT_NEAR(error(0), 0.0, 1e-9);
+    EXPECT_NEAR(H_isb(0, 0), gtsam::gnss::C_LIGHT, 1e-6);
+    EXPECT_DOUBLE_EQ(H_signal(0, 0), 1.0);
+    EXPECT_NEAR(H_ionosphere(0, 0), coefficient, 1e-12);
+}
+
 #endif  // GNSSPP_HAS_GTSAM

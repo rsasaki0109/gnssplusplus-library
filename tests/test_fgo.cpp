@@ -4,6 +4,7 @@
 #include <libgnss++/algorithms/fgo.hpp>
 #include <libgnss++/algorithms/fgo_ddpr_gnc.hpp>
 #include <libgnss++/algorithms/pdc_state_bridge.hpp>
+#include <libgnss++/algorithms/residual_ionosphere_contract.hpp>
 #include <libgnss++/algorithms/tdcp_contract.hpp>
 #include <libgnss++/core/constants.hpp>
 
@@ -14,6 +15,32 @@
 #include <vector>
 
 using namespace libgnss;
+
+TEST(ResidualIonosphereContractTest, UsesFiniteThinShellAndFrequencyScale) {
+    using namespace residual_ionosphere;
+    constexpr double half_pi = 1.57079632679489661923;
+    EXPECT_NEAR(mappingFactor(half_pi), 1.0, 1e-12);
+    EXPECT_GT(mappingFactor(0.25), 1.0);
+    const double l1 = signalCoefficient(half_pi, constants::GPS_L1_FREQ);
+    const double l5 = signalCoefficient(half_pi, constants::GPS_L5_FREQ);
+    EXPECT_NEAR(l1, 1.0, 1e-12);
+    EXPECT_NEAR(l5, (constants::GPS_L1_FREQ / constants::GPS_L5_FREQ) *
+                         (constants::GPS_L1_FREQ / constants::GPS_L5_FREQ),
+                1e-12);
+    EXPECT_TRUE(finiteCoefficient(l5));
+    EXPECT_FALSE(finiteCoefficient(signalCoefficient(0.0, constants::GPS_L1_FREQ)));
+    EXPECT_FALSE(finiteCoefficient(signalCoefficient(0.5, 0.0)));
+    EXPECT_NEAR(randomWalkSigma(4.0, 0.5), 1.0, 1e-12);
+    EXPECT_FALSE(std::isfinite(randomWalkSigma(0.0, 0.5)));
+}
+
+TEST(ResidualIonosphereContractTest, DefaultConfigDoesNotEnableState) {
+    FGOProcessor::FGOConfig config;
+    EXPECT_FALSE(config.use_residual_ionosphere_states);
+    EXPECT_DOUBLE_EQ(config.residual_ionosphere_prior_sigma_m, 10.0);
+    FGOProcessor::PseudorangeFactor factor;
+    EXPECT_DOUBLE_EQ(factor.residual_ionosphere_coefficient, 0.0);
+}
 
 TEST(PdcStateBridgeTest, SolvesSyntheticNativePositionAndClock) {
     const Vector3d seed(6'370'000.0, 1'000.0, 2'000.0);

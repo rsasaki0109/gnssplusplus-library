@@ -78,6 +78,7 @@ struct Options {
     bool native_pdc_state_bridge = false;
     bool native_pdc_imu_tdcp = false;
     bool native_signal_bias_states = false;
+    bool native_residual_ionosphere = false;
 };
 
 void usage(const char* program) {
@@ -90,7 +91,7 @@ void usage(const char* program) {
                  " [--max-epochs 10..30 | --all-epochs]"
                  " [--android-raw-utc-keys] [--fgo-imu-sparse-recovery]"
                  " [--native-pdc-state-bridge] [--native-pdc-imu-tdcp]"
-                 " [--native-signal-bias-states]\n";
+                 " [--native-signal-bias-states] [--native-residual-ionosphere]\n";
 }
 
 bool requireValue(int argc, char** argv, int& index, std::string& value) {
@@ -173,6 +174,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
             options.native_pdc_imu_tdcp = true;
         } else if (arg == "--native-signal-bias-states") {
             options.native_signal_bias_states = true;
+        } else if (arg == "--native-residual-ionosphere") {
+            options.native_residual_ionosphere = true;
         } else {
             std::cerr << "Unknown argument: " << arg << "\n";
             return false;
@@ -238,6 +241,19 @@ bool parseArguments(int argc, char** argv, Options& options) {
     }
     if (options.native_signal_bias_states && !android_raw) {
         std::cerr << "--native-signal-bias-states requires Android raw GNSS/IMU input\n";
+        return false;
+    }
+    if (options.native_residual_ionosphere &&
+        (!android_raw || !options.android_raw_utc_key_contract ||
+         !options.all_epochs || options.skip_epochs != 0)) {
+        std::cerr << "--native-residual-ionosphere requires Android raw input, "
+                     "--android-raw-utc-keys, --all-epochs, and no skipped epochs\n";
+        return false;
+    }
+    if (options.native_residual_ionosphere &&
+        (!options.native_signal_bias_states || !options.native_pdc_imu_tdcp)) {
+        std::cerr << "--native-residual-ionosphere requires the frozen "
+                     "--native-signal-bias-states and --native-pdc-imu-tdcp base recipe\n";
         return false;
     }
     return true;
@@ -973,6 +989,8 @@ std::string makeSummary(const Options& options,
         << (options.native_pdc_imu_tdcp ? "true" : "false") << ",\n"
         << "  \"native_signal_bias_states\": "
         << (options.native_signal_bias_states ? "true" : "false") << ",\n"
+        << "  \"native_residual_ionosphere\": "
+        << (options.native_residual_ionosphere ? "true" : "false") << ",\n"
         << "  \"native_pdc_state_bridge_report\": {\n"
         << "    \"enabled\": "
         << (pdc_bridge_report.enabled ? "true" : "false") << ",\n"
@@ -1056,6 +1074,12 @@ std::string makeSummary(const Options& options,
         << result.diagnostics.receiver_signal_bias_factors << ",\n"
         << "    \"receiver_signal_bias_states\": "
         << result.diagnostics.receiver_signal_bias_states << ",\n"
+        << "    \"residual_ionosphere_factors\": "
+        << result.diagnostics.residual_ionosphere_factors << ",\n"
+        << "    \"residual_ionosphere_states\": "
+        << result.diagnostics.residual_ionosphere_states << ",\n"
+        << "    \"residual_ionosphere_resets\": "
+        << result.diagnostics.residual_ionosphere_resets << ",\n"
         << "    \"tdcp_factors_built\": " << problem.tdcp_factors.size() << ",\n"
         << "    \"double_difference_pseudorange_factors\": "
         << problem.double_difference_pseudorange_factors.size() << ",\n"
@@ -1072,6 +1096,30 @@ std::string makeSummary(const Options& options,
             << "\": " << value;
     }
     out << "},\n"
+        << "  \"residual_ionosphere_contract\": {\n"
+        << "    \"enabled\": "
+        << (options.native_residual_ionosphere ? "true" : "false") << ",\n"
+        << "    \"prior_sigma_m\": 10.0,\n"
+        << "    \"random_walk_sigma_m_per_sqrt_s\": 1.0,\n"
+        << "    \"max_abs_state_limit_m\": 30.0,\n"
+        << "    \"max_gap_s\": 2.0,\n"
+        << "    \"mapping\": \"thin-shell earth-radius 6371000 m, shell-height 350000 m\",\n"
+        << "    \"state_units\": \"vertical L1 residual ionosphere metres\",\n"
+        << "    \"sign\": \"positive coefficient*state increases predicted pseudorange\",\n"
+        << "    \"factors\": " << result.diagnostics.residual_ionosphere_factors << ",\n"
+        << "    \"states\": " << result.diagnostics.residual_ionosphere_states << ",\n"
+        << "    \"resets\": " << result.diagnostics.residual_ionosphere_resets << ",\n"
+        << "    \"invalid_coefficients\": "
+        << result.diagnostics.residual_ionosphere_invalid_coefficients << ",\n"
+        << "    \"max_abs_state_m\": "
+        << result.diagnostics.residual_ionosphere_max_abs_m << ",\n"
+        << "    \"rms_state_m\": "
+        << result.diagnostics.residual_ionosphere_rms_m << ",\n"
+        << "    \"min_coefficient\": "
+        << result.diagnostics.residual_ionosphere_min_coefficient << ",\n"
+        << "    \"max_coefficient\": "
+        << result.diagnostics.residual_ionosphere_max_coefficient << "\n"
+        << "  },\n"
         << "  \"tdcp_contract\": {\n"
         << "    \"enabled\": " << (tdcp_report.enabled ? "true" : "false") << ",\n"
         << "    \"factors_built\": " << tdcp_report.factors_built << ",\n"
@@ -1410,6 +1458,18 @@ int main(int argc, char** argv) {
         config.use_receiver_signal_bias_states = true;
         config.receiver_signal_bias_prior_sigma_m = 1000.0;
     }
+    if (options.native_residual_ionosphere) {
+        // Phase12 candidate: retain the Phase11 static receiver IFB states
+        // and add one raw-geometry-mapped residual L1 ionosphere state per
+        // epoch.  These are fixed physical defaults (thin-shell mapping in
+        // the contract header, weak zero gauge, and random walk); no value is
+        // selected from truth or a trajectory.
+        config.use_residual_ionosphere_states = true;
+        config.residual_ionosphere_prior_sigma_m = 10.0;
+        config.residual_ionosphere_random_walk_sigma_m_per_sqrt_s = 1.0;
+        config.residual_ionosphere_max_abs_m = 30.0;
+        config.residual_ionosphere_max_gap_s = 2.0;
+    }
     config.pose3_lever_arm_body_m = libgnss::Vector3d::Zero();
     if (android_raw) {
         // The raw path starts SPP from the route-independent Earth-surface
@@ -1539,6 +1599,41 @@ int main(int argc, char** argv) {
     if (result.solution.isEmpty() || !result.diagnostics.converged) {
         std::cerr << "FGO produced no finite converged output\n";
         return 1;
+    }
+    if (options.native_residual_ionosphere) {
+        const auto& residual_diagnostics = result.diagnostics;
+        const bool finite_states =
+            result.residual_ionosphere_estimates_m.size() == problem.epochs.size() &&
+            std::all_of(result.residual_ionosphere_estimates_m.begin(),
+                        result.residual_ionosphere_estimates_m.end(),
+                        [](double value) { return std::isfinite(value); });
+        const bool structural_ok =
+            !fallback &&
+            problem.diagnostics.residual_ionosphere_invalid_coefficients == 0U &&
+            residual_diagnostics.residual_ionosphere_invalid_coefficients == 0U &&
+            residual_diagnostics.residual_ionosphere_factors ==
+                problem.pseudorange_factors.size() &&
+            residual_diagnostics.residual_ionosphere_states == problem.epochs.size() &&
+            finite_states &&
+            residual_diagnostics.residual_ionosphere_max_abs_m <=
+                config.residual_ionosphere_max_abs_m &&
+            residual_diagnostics.residual_ionosphere_factors > 0U &&
+            std::isfinite(residual_diagnostics.initial_cost) &&
+            std::isfinite(residual_diagnostics.final_cost) &&
+            residual_diagnostics.final_cost <= residual_diagnostics.initial_cost;
+        if (!structural_ok) {
+            std::cerr << "residual-ionosphere structural contract failed closed: "
+                      << "fallback=" << (fallback ? "true" : "false")
+                      << " factors=" << residual_diagnostics.residual_ionosphere_factors
+                      << "/" << problem.pseudorange_factors.size()
+                      << " states=" << residual_diagnostics.residual_ionosphere_states
+                      << "/" << problem.epochs.size()
+                      << " invalid="
+                      << residual_diagnostics.residual_ionosphere_invalid_coefficients
+                      << " max_abs_m="
+                      << residual_diagnostics.residual_ionosphere_max_abs_m << "\n";
+            return 1;
+        }
     }
     if (!problem.double_difference_pseudorange_factors.empty() ||
         !problem.double_difference_carrier_factors.empty()) {

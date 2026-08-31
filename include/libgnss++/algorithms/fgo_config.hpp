@@ -175,6 +175,25 @@ struct Config {
         // Weak zero-mean gauge prior for a signal-bias state [m].  This is a
         // fixed physical regularizer, not a truth-trained correction.
         double receiver_signal_bias_prior_sigma_m = 1000.0;
+        // Research-only residual-ionosphere states.  The existing Klobuchar,
+        // troposphere, satellite-clock, and broadcast group-delay corrections
+        // remain applied exactly once by the problem builder.  When enabled,
+        // one vertical L1 residual state [m] is attached to each pseudorange
+        // epoch with a fixed thin-shell/elevation/frequency coefficient and
+        // connected by a random walk.  Default OFF preserves the established
+        // graph and output byte-for-byte.
+        bool use_residual_ionosphere_states = false;
+        // Weak zero-mean gauge prior for the first state in each continuous
+        // clock/time segment.  This is a physical regularizer, not a
+        // truth-trained offset.
+        double residual_ionosphere_prior_sigma_m = 10.0;
+        // Random-walk density in metres/sqrt(second), fixed before scoring.
+        double residual_ionosphere_random_walk_sigma_m_per_sqrt_s = 1.0;
+        // A structural sanity bound for the estimated residual state.  The
+        // backend records out-of-bound values and the raw candidate fails
+        // closed; it is not used to clip or select a solution.
+        double residual_ionosphere_max_abs_m = 30.0;
+        double residual_ionosphere_max_gap_s = 2.0;
         bool use_single_difference_doppler_factors = false;
         bool use_single_difference_tdcp_factors = false;
         bool use_velocity_states = false;

@@ -2929,3 +2929,61 @@ submission hashes.  The raw truth-free artifacts are under
 `d8da69a0cfea3e12d78c072ac76b5c0ac108ed5f7210fb1d3d8bce872d906a70`.
 The candidate is not enabled by the normal CLI defaults and no validation,
 holdout, test, Kaggle, or token access occurred.
+
+### Residual-ionosphere state candidate (phase 12, development-only pass)
+
+Phase 12 tested one additional raw-only state without changing the Phase 11
+recipe or production defaults: a vertical L1 residual-ionosphere state in
+metres for each epoch.  Each pseudorange factor uses the native
+broadcast-navigation elevation and the fixed thin-shell mapping (earth radius
+`6371000 m`, shell height `350000 m`) multiplied by `(f_L1/f_signal)^2`.
+The first state has a fixed-before-truth zero prior (`10 m`), consecutive
+states use a `1 m/sqrt(s)` random walk, and gaps over `2 s` or clock resets
+start a new prior.  The `30 m` absolute state limit is a structural
+fail-closed check, never a clip or truth-derived selector.  Existing
+Klobuchar, satellite-clock, Saastamoinen, broadcast group-delay, static
+Phase 11 IFB, and signal-specific TDCP terms are applied exactly once.
+
+The pre-candidate raw audit used only timing, signal, pseudorange, frequency,
+CN0, and ADR fields.  It did not read the enriched `SvPosition*` or
+`SvElevationDegrees` columns; candidate elevation comes only from native
+broadcast-nav geometry.  The finite same-satellite adjusted pair residuals
+had median/MAD `7.5077/3.8973 m` for GPS L1/L5 and `6.2637/2.3983 m` for
+Galileo E1/E5a, with per-epoch linear drifts `-0.000964` and `-0.000456
+m/s`, respectively.  This is an observability audit, not a fitted
+ionosphere calibration.
+
+The frozen truth-free run retained 1,383/1,383 exact raw UTC target keys and
+had zero interpolation, fallback, invalid coefficients, resets, or
+transitions over `70 m/s`.  It used 39,539 residual-ionosphere pseudorange
+factors and 1,384 states; coefficient range was `1.069716–5.052460`, state
+max/RMS `3.652294/1.868437 m`, and TDCP had 23,399 finite factors.  GTSAM
+converged in 12 iterations, reducing cost from `1.804659525e9` to
+`64362.4132`; IMU fallback was false.  The sealed summary SHA256 is
+`ce209dfd0a7b3662f8dff9512b3947acf5e3af840c94467ba84fccd132669cda`, and the
+submission SHA256 is
+`3069f149bc98b0383d0088d5f20cc80cd4ada9f9eb1b5d09f05353895a2d5a26`.
+
+After the freeze and structural seal, the same declared development truth was
+read once.  All four local diagnostics improved over Phase 11:
+WGS84/Vincenty linear/nearest `3.192249/3.192569 m` versus
+`3.215582/3.216006 m`, and Haversine linear/nearest `3.195505/3.195826 m`
+versus `3.217859/3.218284 m`.  H P50 was `2.370134 m` (Phase 11
+`2.358741 m`) and H P95 was `4.014364 m` (Phase 11 `4.072424 m`).  Because
+the public Kaggle formula's earth model and percentile convention remain
+unpublished, these are local diagnostics and not an official score.  This is
+a single-route development-only pass; no validation, holdout, test, Kaggle,
+token, or MAT access occurred, and the native `0.782`-class target remains
+unachieved.
+
+The immutable audit, freeze, structural seal, score, and companion manifests
+are:
+
+- `docs/use_cases/records/smartphone_r5_phase12_residual_ionosphere_raw_audit_v1.json`;
+- `docs/use_cases/records/smartphone_r5_phase12_residual_ionosphere_freeze_v1.json`;
+- `docs/use_cases/records/smartphone_r5_phase12_residual_ionosphere_structural_seal_v1.json`;
+- `docs/use_cases/records/smartphone_r5_phase12_residual_ionosphere_score_result_v1.json`.
+
+The candidate remains opt-in through
+`--native-residual-ionosphere` and requires the frozen Phase 11 signal-bias
+and PDC/IMU/TDCP flags.  No post-score candidate change is permitted.

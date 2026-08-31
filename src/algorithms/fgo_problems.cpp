@@ -4,6 +4,7 @@
 #include <libgnss++/algorithms/doppler_contract.hpp>
 #include <libgnss++/algorithms/tdcp_contract.hpp>
 #include <libgnss++/algorithms/signal_bias_contract.hpp>
+#include <libgnss++/algorithms/residual_ionosphere_contract.hpp>
 #include <libgnss++/algorithms/spp.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
@@ -262,6 +263,17 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                              config_.pseudorange_sigma_m /
                                  std::max(1e-6, pseudorange_elevation_scale));
                 factor.elevation_rad = geometry.elevation;
+                factor.residual_ionosphere_coefficient =
+                    residual_ionosphere::signalCoefficient(
+                        geometry.elevation,
+                        signalFrequencyHz(observation.signal, eph));
+                if (config_.use_residual_ionosphere_states) {
+                    ++problem.diagnostics.residual_ionosphere_candidate_rows;
+                    if (!residual_ionosphere::finiteCoefficient(
+                            factor.residual_ionosphere_coefficient)) {
+                        ++problem.diagnostics.residual_ionosphere_invalid_coefficients;
+                    }
+                }
                 epoch_factors.push_back(factor);
                 if (observation.satellite.system == GNSSSystem::GPS) {
                     gps_pseudorange_by_satellite[observation.satellite] =

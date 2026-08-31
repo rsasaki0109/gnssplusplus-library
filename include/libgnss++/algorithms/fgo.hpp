@@ -80,6 +80,12 @@ public:
         double corrected_pseudorange_m = 0.0;
         double sigma_m = 1.0;
         double elevation_rad = 0.0;
+        // Coefficient for the optional shared vertical L1 residual-ionosphere
+        // state [m].  It is precomputed from the raw-row signal frequency and
+        // seed elevation; zero means the row cannot participate in that
+        // opt-in candidate.  The field is diagnostic-only when the candidate
+        // is disabled.
+        double residual_ionosphere_coefficient = 0.0;
     };
 
     struct TimeDifferencedCarrierFactor {
@@ -253,6 +259,8 @@ public:
         std::size_t tdcp_rejected_loss_of_lock = 0;
         std::size_t tdcp_rejected_invalid_measurement = 0;
         std::size_t tdcp_rejected_code_phase_jump = 0;
+        std::size_t residual_ionosphere_invalid_coefficients = 0;
+        std::size_t residual_ionosphere_candidate_rows = 0;
         std::size_t code_minus_carrier_jump_resets = 0;       ///< CMC screening: arc breaks forced
         std::size_t geometry_free_cycle_slip_resets = 0;      ///< confirmed geometry-free band resets
         std::size_t code_minus_carrier_level_exclusions = 0;  ///< CMC screening: (sat,signal) epochs excluded
@@ -517,6 +525,14 @@ public:
         std::size_t pseudorange_factors = 0;
         std::size_t receiver_signal_bias_factors = 0;
         std::size_t receiver_signal_bias_states = 0;
+        std::size_t residual_ionosphere_factors = 0;
+        std::size_t residual_ionosphere_states = 0;
+        std::size_t residual_ionosphere_resets = 0;
+        std::size_t residual_ionosphere_invalid_coefficients = 0;
+        double residual_ionosphere_max_abs_m = 0.0;
+        double residual_ionosphere_rms_m = 0.0;
+        double residual_ionosphere_min_coefficient = 0.0;
+        double residual_ionosphere_max_coefficient = 0.0;
         /// TDCP measurements present in the backend-independent problem.
         std::size_t tdcp_factors = 0;
         /// TDCP residual rows/factors actually inserted by the selected backend.
@@ -1138,6 +1154,9 @@ public:
         // only by the opt-in signal-bias backend path.
         std::map<std::pair<GNSSSystem, SignalType>, double>
             receiver_signal_bias_estimates_m;
+        // Per-epoch vertical L1 residual-ionosphere estimates [m], populated
+        // only by the opt-in raw candidate.
+        std::vector<double> residual_ionosphere_estimates_m;
         std::vector<LambdaDebugEntry> lambda_debug_entries;
         std::vector<CostTraceEntry> cost_trace_entries;
         std::vector<FGOEpochDiagnostics> epoch_diagnostics;
