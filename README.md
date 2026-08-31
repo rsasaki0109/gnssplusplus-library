@@ -192,6 +192,24 @@ default solver and prior lanes are unchanged.  See the [Phase 21 freeze](docs/us
 [raw structural manifest](docs/use_cases/records/smartphone_r5_phase21_position_offset_manifest_v1.json),
 and [one-shot score](docs/use_cases/records/smartphone_r5_phase21_position_offset_score_result_v1.json).
 
+Phase 22 audited the native GNSS measurement model against the pinned
+RTKLIB/MATLAB specification.  Orbit/clock/relativity, Sagnac, broadcast
+ionosphere, and troposphere corrections are already present; the largest
+raw-only, source-supported gap selected for a bounded experiment was
+Galileo E1 broadcast group-delay selection (F/NAV BGD E1/E5a versus I/NAV
+BGD E1/E5b).  The opt-in candidate was finite and converged on both raw-only
+structural routes, but its sealed Pixel7 development score regressed all four
+diagnostics from `3.192248964` to `3.268181634 m` (WGS84/Vincenty-linear), so
+it is a No-Go and remains unpromoted.  No validation/holdout/test truth,
+`.mat` input, or production-default change was made.  See the [Phase 22
+measurement-model audit](docs/use_cases/records/smartphone_r5_phase22_measurement_model_gap_audit_v1.json),
+[freeze](docs/use_cases/records/smartphone_r5_phase22_galileo_tgd_freeze_v1.json),
+[truth-free manifest](docs/use_cases/records/smartphone_r5_phase22_galileo_tgd_manifest_v1.json),
+and [sealed score](docs/use_cases/records/smartphone_r5_phase22_galileo_tgd_score_result_v1.json).
+The separate mi8 cross-device development comparison improved all four
+variants by roughly 0.041--0.045 m, but does not override the Pixel7 primary
+route failure and is not validation/generalization evidence.
+
 ### RTK runtime and smartphone GSDC 2023
 
 The Release RTK broadcast-state cache preserves the position stream and

@@ -36,9 +36,14 @@
     "src/algorithms/fgo.cpp": "be5d6710a32bbb5037a93f20d14c6ba1c2f1a318eb859c865a7b027fe717ef38",
     "src/algorithms/fgo_problems.cpp": "3452d2b252d1a38624011f4af968809594d2b03b6a410c5b16b2675f74461dd8"
   },
+  "post_phase22_compatible_source_hashes": {
+    "src/algorithms/fgo_problems.cpp": "85173f6f87fc1bd45c4934abb0d889d81a49c6ba8d805549925abafacf3cba6c"
+  },
   "post_phase13_compatible_release_binary_sha256": "3e7825ec4eece3039b52c8b9ee51f3d7026c733aa10ebc73e19be13bd5927663",
   "post_phase20_compatible_release_binary_sha256": "4a2dcf653be3963695f69afc5a1ac4df9dec301523dfd3d2280d8a2e555de836",
   "post_phase21_compatible_release_binary_sha256": "8d457372a27d7ac86f933294f7af8ab0e1b0d879f6ce80c3c4bbf8f57f82416b",
+  "post_phase22_compatible_release_binary_sha256": "8baf48e4291441ffcd040556ee1da22c392db95ac2f190a3c6bfd464e7319028",
+  "post_phase22_compatibility_note": "Phase 22 adds an opt-in Galileo E1 source-specific broadcast group-delay helper; this historical factor audit remains unchanged and accepts the relinked source/binary only as a compatibility pin.",
   "post_phase21_compatibility_note": "Phase 21 exports exact GTSAM Rot3::rpy values and adds an opt-in upstream phone-position offset helper; this historical factor audit remains unchanged and accepts the relinked Release binary only as a compatibility pin.",
   "post_phase20_compatibility_note": "Phase 20 adds opt-in upstream stop velocity and consecutive-stop Pose3 constraints to the shared solver; this historical factor audit remains unchanged and accepts the relinked Release binary only as a compatibility pin.",
   "post_phase12_compatibility_note": "Phase 12 adds opt-in residual-ionosphere coefficients to pseudorange problem rows; the historical PDC factor audit remains immutable and accepts this exact source/binary only as a compatibility pin.",
