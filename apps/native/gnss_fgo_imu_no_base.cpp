@@ -83,6 +83,7 @@ struct Options {
     bool native_residual_ionosphere = false;
     bool native_upstream_quality = false;
     bool native_carrier_code_leveling = false;
+    bool native_carrier_code_innovation_reset = false;
 };
 
 void usage(const char* program) {
@@ -97,7 +98,8 @@ void usage(const char* program) {
                  " [--android-utc-wall-clock-fallback]"
                  " [--native-pdc-state-bridge] [--native-pdc-imu-tdcp]"
                  " [--native-signal-bias-states] [--native-residual-ionosphere]"
-                 " [--native-upstream-quality] [--native-carrier-code-leveling]\n";
+                 " [--native-upstream-quality] [--native-carrier-code-leveling]"
+                 " [--native-carrier-code-innovation-reset]\n";
 }
 
 bool requireValue(int argc, char** argv, int& index, std::string& value) {
@@ -188,6 +190,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
             options.native_upstream_quality = true;
         } else if (arg == "--native-carrier-code-leveling") {
             options.native_carrier_code_leveling = true;
+        } else if (arg == "--native-carrier-code-innovation-reset") {
+            options.native_carrier_code_innovation_reset = true;
         } else {
             std::cerr << "Unknown argument: " << arg << "\n";
             return false;
@@ -292,6 +296,12 @@ bool parseArguments(int argc, char** argv, Options& options) {
          options.native_upstream_quality)) {
         std::cerr << "--native-carrier-code-leveling requires the frozen Android "
                      "Phase12 base recipe, all epochs, and Phase13 off\n";
+        return false;
+    }
+    if (options.native_carrier_code_innovation_reset &&
+        !options.native_carrier_code_leveling) {
+        std::cerr << "--native-carrier-code-innovation-reset requires "
+                     "--native-carrier-code-leveling\n";
         return false;
     }
     return true;
@@ -1039,6 +1049,9 @@ std::string makeSummary(const Options& options,
         << (options.native_upstream_quality ? "true" : "false") << ",\n"
         << "  \"native_carrier_code_leveling\": "
         << (options.native_carrier_code_leveling ? "true" : "false") << ",\n"
+        << "  \"native_carrier_code_innovation_reset\": "
+        << (options.native_carrier_code_innovation_reset ? "true" : "false")
+        << ",\n"
         << "  \"android_utc_wall_clock_fallback\": "
         << (options.android_utc_wall_clock_fallback ? "true" : "false") << ",\n"
         << "  \"android_utc_wall_clock_fallback_applied\": "
@@ -1304,6 +1317,17 @@ std::string makeSummary(const Options& options,
         << carrier_code_leveling_report.reset_gap << ",\n"
         << "    \"reset_clock_discontinuity\": "
         << carrier_code_leveling_report.reset_clock_discontinuity << ",\n"
+        << "    \"innovation_reset_enabled\": "
+        << (options.native_carrier_code_innovation_reset ? "true" : "false")
+        << ",\n"
+        << "    \"innovation_reset_threshold_m\": "
+        << carrier_code_leveling_report.innovation_reset_threshold_m << ",\n"
+        << "    \"reset_innovation\": "
+        << carrier_code_leveling_report.reset_innovation << ",\n"
+        << "    \"max_abs_innovation_accepted_m\": "
+        << carrier_code_leveling_report.max_abs_innovation_accepted_m << ",\n"
+        << "    \"max_abs_innovation_rejected_m\": "
+        << carrier_code_leveling_report.max_abs_innovation_rejected_m << ",\n"
         << "    \"max_abs_level_adjustment_m\": "
         << carrier_code_leveling_report.max_abs_level_adjustment_m << ",\n"
         << "    \"max_abs_phase_increment_m\": "
@@ -1571,9 +1595,13 @@ int main(int argc, char** argv) {
         // Doppler, timestamps, nav, and all other signals remain untouched.
         libgnss::ObservationSeries raw_series;
         raw_series.epochs = epochs;
+        libgnss::carrier_code_leveling::Config leveling_config;
+        leveling_config.enable_innovation_reset =
+            options.native_carrier_code_innovation_reset;
         const auto leveling = libgnss::carrier_code_leveling::apply(
             raw_series, android_gnss.epoch_utc_time_millis,
-            android_gnss.epoch_hardware_clock_discontinuity_count);
+            android_gnss.epoch_hardware_clock_discontinuity_count,
+            leveling_config);
         if (!leveling.ok) {
             std::cerr << "carrier-code leveling failed closed: "
                       << leveling.error << "\n";

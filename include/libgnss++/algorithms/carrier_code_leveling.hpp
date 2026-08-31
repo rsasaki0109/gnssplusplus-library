@@ -10,6 +10,7 @@
 // standard causal Hatch recursion to the code field while leaving every other
 // observable untouched.
 
+#include <libgnss++/algorithms/observable_upstream_preprocessing.hpp>
 #include <libgnss++/core/observation.hpp>
 #include <libgnss++/core/signals.hpp>
 
@@ -31,6 +32,11 @@ struct Config {
     double max_gap_s = 1.5;
     SignalType signal = SignalType::GAL_E1;
     bool require_hardware_clock_counts = true;
+    // Optional raw P-vs-ADR innovation reset.  The default preserves the
+    // Phase 14 Hatch contract byte-for-byte.  When enabled, the threshold is
+    // derived from the pinned upstream adjacent P-D pair rule; callers cannot
+    // tune a second threshold through this API.
+    bool enable_innovation_reset = false;
 };
 
 struct Diagnostics {
@@ -48,9 +54,13 @@ struct Diagnostics {
     std::size_t reset_missing_or_nonfinite_adr = 0U;
     std::size_t reset_gap = 0U;
     std::size_t reset_clock_discontinuity = 0U;
+    std::size_t reset_innovation = 0U;
     std::size_t rejected_nonfinite_level = 0U;
     double max_abs_level_adjustment_m = 0.0;
     double max_abs_phase_increment_m = 0.0;
+    double max_abs_innovation_accepted_m = 0.0;
+    double max_abs_innovation_rejected_m = 0.0;
+    double innovation_reset_threshold_m = 0.0;
 };
 
 struct Result {
@@ -123,6 +133,18 @@ inline Result apply(const ObservationSeries& input,
         result.error = "carrier-code leveling gap is below one millisecond";
         return result;
     }
+
+    const double innovation_reset_threshold_m =
+        observable_upstream::pairThreshold(
+            observable_upstream::bandForSignal(config.signal), 'P');
+    if (config.enable_innovation_reset &&
+        (!std::isfinite(innovation_reset_threshold_m) ||
+         !(innovation_reset_threshold_m > 0.0))) {
+        result.error = "carrier-code innovation reset lacks an upstream P threshold";
+        return result;
+    }
+    result.diagnostics.innovation_reset_threshold_m =
+        config.enable_innovation_reset ? innovation_reset_threshold_m : 0.0;
 
     using Key = std::pair<SatelliteId, SignalType>;
     std::map<Key, detail::ArcState> arcs;
@@ -205,6 +227,31 @@ inline Result apply(const ObservationSeries& input,
             const std::size_t count =
                 std::min(config.window_samples, previous.count + 1U);
             const double predicted = previous.smoothed_m + phase_increment;
+            const double innovation = observation.pseudorange - predicted;
+            if (!std::isfinite(innovation)) {
+                arcs.erase(previous_it);
+                ++result.diagnostics.rejected_nonfinite_level;
+                ++result.diagnostics.reset_missing_or_nonfinite_adr;
+                continue;
+            }
+            if (config.enable_innovation_reset &&
+                std::abs(innovation) > innovation_reset_threshold_m) {
+                // The raw code is the only safe emitted value after a
+                // discontinuity: do not smooth across a suspected code/ADR
+                // seam and do not synthesize a corrected coordinate.
+                result.diagnostics.max_abs_innovation_rejected_m = std::max(
+                    result.diagnostics.max_abs_innovation_rejected_m,
+                    std::abs(innovation));
+                ++result.diagnostics.reset_innovation;
+                ++result.diagnostics.arcs_started;
+                arcs[key] = detail::ArcState{timestamp_ms, adr_m,
+                                             observation.pseudorange, 1U,
+                                             clock_count};
+                continue;
+            }
+            result.diagnostics.max_abs_innovation_accepted_m = std::max(
+                result.diagnostics.max_abs_innovation_accepted_m,
+                std::abs(innovation));
             const double smoothed =
                 (static_cast<double>(count - 1U) * predicted +
                  observation.pseudorange) /

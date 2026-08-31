@@ -15,6 +15,7 @@ using libgnss::ObservationData;
 using libgnss::ObservationSeries;
 using libgnss::SatelliteId;
 using libgnss::SignalType;
+using libgnss::carrier_code_leveling::Config;
 
 Observation makeE1(double code_m, double adr_m, uint8_t lli = 0U) {
     Observation observation(SatelliteId(GNSSSystem::Galileo, 5),
@@ -37,6 +38,19 @@ ObservationSeries threeEpochSeries() {
                                     100.0 + 0.2 * i));
         series.addEpoch(epoch);
     }
+    return series;
+}
+
+ObservationSeries twoEpochCodeSeries(double current_code_m) {
+    ObservationSeries series;
+    ObservationData first(GNSSTime(2200, 100.0));
+    first.addObservation(makeE1(20'000'000.0, 100.0));
+    ObservationData second(GNSSTime(2200, 101.0));
+    // Keeping ADR constant makes the innovation equal to the hand-chosen
+    // raw-code step, which exercises the exact upstream 40 m boundary.
+    second.addObservation(makeE1(current_code_m, 100.0));
+    series.addEpoch(first);
+    series.addEpoch(second);
     return series;
 }
 
@@ -114,6 +128,57 @@ TEST(CarrierCodeLevelingTest, RejectsNonMonotonicEpochKeys) {
         threeEpochSeries(), {1'000, 1'000, 3'000}, {0, 0, 0});
     EXPECT_FALSE(result.ok);
     EXPECT_NE(result.error.find("strictly increasing"), std::string::npos);
+}
+
+TEST(CarrierCodeLevelingTest, InnovationResetUsesUpstreamL1Boundary) {
+    Config config;
+    config.enable_innovation_reset = true;
+
+    const auto below = libgnss::carrier_code_leveling::apply(
+        twoEpochCodeSeries(20'000'039.9), {1'000, 2'000}, {0, 0}, config);
+    ASSERT_TRUE(below.ok) << below.error;
+    EXPECT_EQ(below.diagnostics.reset_innovation, 0U);
+    EXPECT_EQ(below.diagnostics.updates, 1U);
+    EXPECT_NEAR(
+        below.observations.epochs[1].observations.front().pseudorange,
+        20'000'019.95, 1.0e-9);
+    EXPECT_NEAR(below.diagnostics.max_abs_innovation_accepted_m, 39.9,
+                1.0e-8);
+
+    const auto exact = libgnss::carrier_code_leveling::apply(
+        twoEpochCodeSeries(20'000'040.0), {1'000, 2'000}, {0, 0}, config);
+    ASSERT_TRUE(exact.ok) << exact.error;
+    EXPECT_DOUBLE_EQ(exact.diagnostics.innovation_reset_threshold_m, 40.0);
+    EXPECT_EQ(exact.diagnostics.reset_innovation, 0U);
+    EXPECT_EQ(exact.diagnostics.updates, 1U);
+    EXPECT_DOUBLE_EQ(
+        exact.observations.epochs[1].observations.front().pseudorange,
+        20'000'020.0);
+    EXPECT_DOUBLE_EQ(exact.diagnostics.max_abs_innovation_accepted_m, 40.0);
+    EXPECT_DOUBLE_EQ(exact.diagnostics.max_abs_innovation_rejected_m, 0.0);
+
+    const auto over = libgnss::carrier_code_leveling::apply(
+        twoEpochCodeSeries(20'000'040.1), {1'000, 2'000}, {0, 0}, config);
+    ASSERT_TRUE(over.ok) << over.error;
+    EXPECT_EQ(over.diagnostics.reset_innovation, 1U);
+    EXPECT_EQ(over.diagnostics.updates, 0U);
+    EXPECT_DOUBLE_EQ(
+        over.observations.epochs[1].observations.front().pseudorange,
+        20'000'040.1);
+    EXPECT_NEAR(over.diagnostics.max_abs_innovation_rejected_m, 40.1,
+                1.0e-8);
+    EXPECT_EQ(over.diagnostics.arcs_started, 2U);
+}
+
+TEST(CarrierCodeLevelingTest, InnovationResetIsOptInAndDefaultPreservesHatch) {
+    const auto result = libgnss::carrier_code_leveling::apply(
+        twoEpochCodeSeries(20'000'040.1), {1'000, 2'000}, {0, 0});
+    ASSERT_TRUE(result.ok) << result.error;
+    EXPECT_EQ(result.diagnostics.reset_innovation, 0U);
+    EXPECT_EQ(result.diagnostics.innovation_reset_threshold_m, 0.0);
+    EXPECT_NEAR(
+        result.observations.epochs[1].observations.front().pseudorange,
+        20'000'020.05, 1.0e-9);
 }
 
 }  // namespace

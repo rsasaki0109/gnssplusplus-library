@@ -106,6 +106,20 @@ Hatch candidate was rejected before truth because its raw carrier/code seam
 diagnostics reached 399,723 m.  See the [Phase 15 freeze](docs/use_cases/records/smartphone_r5_phase15_utc_wall_clock_fallback_freeze_v1.json)
 and [sealed structural result](docs/use_cases/records/smartphone_r5_phase15_utc_wall_clock_fallback_structural_result_v1.json).
 
+Phase 16 adds an opt-in raw P-vs-ADR innovation reset to that Hatch lane.  The
+40 m boundary is taken from the existing upstream adjacent P-D rule; only a
+strictly larger innovation resets the satellite/signal arc and emits raw P.
+On the mi8 structural route this converted the 399,723 m accepted Hatch
+adjustment into 18 fail-closed arc resets, with accepted innovation <=13.293 m
+and 1,416/1,416 finite keys.  On the already-used Pixel7 development route no
+reset was needed, so the candidate is byte-identical to its Phase 14 Hatch
+control; compared with the separately frozen Phase 12 submission it scored
+3.146250666 m versus 3.192248964 m across the local WGS84-linear diagnostic.
+This is development-only evidence (the evaluation needed one failed CLI
+key-alias recovery plus one scoring read), not a new validation/holdout claim;
+native 0.782-class remains unachieved.  See the [Phase 16 freeze](docs/use_cases/records/smartphone_r5_phase16_carrier_code_innovation_reset_freeze_v1.json)
+and [sealed score result](docs/use_cases/records/smartphone_r5_phase16_carrier_code_innovation_reset_score_result_v1.json).
+
 ### RTK runtime and smartphone GSDC 2023
 
 The Release RTK broadcast-state cache preserves the position stream and

@@ -3102,3 +3102,40 @@ wall/RSS, and the zero-truth policy are in
 `docs/use_cases/records/smartphone_r5_phase15_utc_wall_clock_fallback_freeze_v1_manifest.json`,
 and
 `docs/use_cases/records/smartphone_r5_phase15_utc_wall_clock_fallback_structural_result_v1.json`.
+
+### Carrier-code innovation reset (phase 16, development-only)
+
+Phase 16 keeps the Phase 14 causal Galileo E1 Hatch-30 transform and adds one
+opt-in, raw-only seam guard.  Before each update it computes
+`I_t = P_t - (S_(t-1) + ADR_t - ADR_(t-1))`.  The threshold is not a tuned
+constant: it is obtained from
+`observable_upstream::pairThreshold(bandForSignal(GAL_E1), 'P')`, which is
+the pinned upstream L1 P-D pair threshold of 40 m.  `abs(I_t) <= 40 m` keeps
+the Hatch update, while `abs(I_t) > 40 m` discards the prior arc, emits the
+finite raw code at the current epoch, and starts a new arc.  Existing invalid
+ADR/LLI/loss, gap, and hardware-clock resets remain fail-closed.  The option
+is `--native-carrier-code-innovation-reset`; it requires the existing
+`--native-carrier-code-leveling` recipe and is disabled by default.  No graph
+state, truth, MAT, enriched satellite fields, device-WLS coordinates, or
+Phase13 quality flag is introduced.
+
+The predeclared fixture proves 39.9 m and exactly 40.0 m are accepted and
+40.1 m resets.  Raw structural runs were generated and sealed before scoring:
+mi8 used 1,416/1,416 finite target keys, converged, and reset 18 innovations;
+accepted innovation max was 13.293 m, while the rejected maximum was
+1,199,176.586 m.  Pixel7 had zero innovation resets and its candidate bytes
+are identical to the Phase 14 Hatch control.  For the permitted, already-used
+development comparison, the authoritative Phase 12 submission
+(`3069f149...a26f`) remained the accuracy baseline; the Phase 16 candidate
+(`803f2568...532cd`) scored 3.146250666 m WGS84-linear versus 3.192248964 m,
+with all four local diagnostic variants improving and coverage 1383/1383.
+The first CLI evaluation used the wrong phone alias and failed before scoring;
+the corrected invocation was recorded as an evaluation-recovery read, so the
+sealed record reports two truth reads rather than hiding the orchestration
+error.  No validation, holdout, test truth, or Kaggle submission was used.
+
+The freeze, raw structural manifest, and score/recovery record are
+`docs/use_cases/records/smartphone_r5_phase16_carrier_code_innovation_reset_freeze_v1.json`,
+`docs/use_cases/records/smartphone_r5_phase16_carrier_code_innovation_reset_freeze_v1_manifest.json`,
+and
+`docs/use_cases/records/smartphone_r5_phase16_carrier_code_innovation_reset_score_result_v1.json`.

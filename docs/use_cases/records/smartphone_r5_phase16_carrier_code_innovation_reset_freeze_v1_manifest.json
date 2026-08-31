@@ -1,0 +1,187 @@
+{
+  "schema_version": "smartphone-r5-phase16-carrier-code-innovation-reset-freeze-manifest.v1",
+  "base_commit": "8a2602a",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_phase16_carrier_code_innovation_reset_freeze_v1.json",
+  "freeze_record_sha256": "44f3a1acd5164f87c6695ae196d69f0923e5e9f1f3a7b8af40a7169e4aa79c56",
+  "manifest_sha256": "excluded from self-hash",
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7"
+  },
+  "source_hashes": {
+    "include/libgnss++/algorithms/carrier_code_leveling.hpp": "b5b85f08b5e2e866ddaa9b5b504633f54238e4f1cfcc0d0112024aff088ef08a",
+    "include/libgnss++/algorithms/observable_upstream_preprocessing.hpp": "70b2f5607efdc9dfe2c964eeacc9bd59d7b07267a732f3475c1ea3141956724b",
+    "apps/native/gnss_fgo_imu_no_base.cpp": "303fdb32ae87d6d27091d40853a52ca62001846d004b404304d7c877549b42c1",
+    "tests/test_carrier_code_leveling.cpp": "0a86d0649bcdee7ea7f76e1986618eb73814d993f91eb83610bdba0faf4735f9"
+  },
+  "release_artifacts": {
+    "build/apps/gnss_fgo_imu_no_base": "8ec6c07c26921d2c922601ba4b0502e6024ea93e387b5de6893c35d967a7881e",
+    "build/tests/run_tests": "c0e42e023761f142953e927675c921bd5d9e6dc41368cc1d786bd41ae6bd7f80"
+  },
+  "raw_inputs": {
+    "mi8": {
+      "route": "2022-08-04-20-07-us-ca-sjc-q",
+      "phone": "mi8",
+      "role": "structural-smoke-only; route overlaps prior truth and is never scored",
+      "device_gnss.csv": {
+        "path": "output/smartphone-r5/phase15-utc-wall-clock-fallback-structural/inputs/mi8/device_gnss.csv",
+        "sha256": "ccf143cf8b156e507599090e0a5eedc1009244899ea3b1b3b8b01842a35a9ea4"
+      },
+      "device_imu.csv": {
+        "path": "output/smartphone-r5/phase15-utc-wall-clock-fallback-structural/inputs/mi8/device_imu.csv",
+        "sha256": "6e32cba3e0086b7a9c34ab5bd34cd86879b0581fe8314c5819214f1e66ec32d3"
+      },
+      "brdc.nav": {
+        "path": "output/smartphone-r5/phase15-utc-wall-clock-fallback-structural/inputs/mi8/brdc.nav",
+        "sha256": "5f2e67a87eca95c77d04f72184fd615a7858ff3c948c2e5a681957791219a4c3"
+      }
+    },
+    "pixel7_development": {
+      "route": "2023-05-24-20-26-us-ca-sjc-ge2",
+      "phone": "pixel7pro",
+      "role": "already-used development identity; one permitted post-seal truth reread only",
+      "device_gnss.csv": {
+        "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_gnss.csv",
+        "sha256": "c5af6cc3aeae6ab29a2a10d975d291b8fba4fab15273c0729163cd639ff10e42"
+      },
+      "device_imu.csv": {
+        "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_imu.csv",
+        "sha256": "8f1c582bdad545d11e68349b221001b69e2a9d43f9257e60038c193276fa1804"
+      },
+      "brdc.nav": {
+        "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/brdc.nav",
+        "sha256": "16c859f8015c874398978bae6004172c355f7d3a3b06fa81b54aac88b6b78d33"
+      }
+    }
+  },
+  "candidate": {
+    "signal": "Galileo E1",
+    "hatch_window_samples": 30,
+    "hatch_max_gap_s": 1.5,
+    "innovation_formula": "raw P_current - (previous smoothed P + ADR_current - ADR_previous)",
+    "innovation_reset_threshold_source": "observable_upstream::pairThreshold(observable_upstream::bandForSignal(GAL_E1), 'P')",
+    "innovation_reset_threshold_m": 40.0,
+    "boundary": "abs(innovation) <= 40.0 m accepts Hatch update; abs(innovation) > 40.0 m resets arc and emits raw P",
+    "reset_state": "current raw P and ADR become the first state of a new arc",
+    "preserved_resets": ["invalid code", "invalid/missing ADR", "loss/cycle slip", "gap >1.5 s", "hardware clock discontinuity"],
+    "phase13_upstream_quality": false,
+    "new_graph_state": false,
+    "production_default": false,
+    "truth_free_parameter_search": false
+  },
+  "structural_artifacts": {
+    "mi8_baseline": {
+      "summary": "output/smartphone-r5/phase16-carrier-code-innovation-reset-v1/mi8/baseline/summary.json",
+      "summary_sha256": "81e9a0ce5e361b94190750409477cb623567e51c4574840a93d621ae89c77b50",
+      "submission": "output/smartphone-r5/phase16-carrier-code-innovation-reset-v1/mi8/baseline/submission.csv",
+      "submission_sha256": "5650c41dd73833cf9ec35238bbad5e6ba3a8c4180ee89226425abbd1af13deec",
+      "rows": 1416,
+      "target_keys": 1416,
+      "graph_factors": 77867,
+      "graph_converged": true,
+      "resets_innovation": 0,
+      "max_abs_level_adjustment_m": 399723.24144420365,
+      "max_abs_innovation_m": 1199172.3128689863,
+      "wall_seconds": 13.74,
+      "maximum_rss_kb": 202324
+    },
+    "mi8_candidate": {
+      "summary": "output/smartphone-r5/phase16-carrier-code-innovation-reset-v1/mi8/candidate/summary.json",
+      "summary_sha256": "84ea0782a23a212859558ae013bc71d2ca0aa45658b0e7f2a9b73e4d6d9aee9b",
+      "submission": "output/smartphone-r5/phase16-carrier-code-innovation-reset-v1/mi8/candidate/submission.csv",
+      "submission_sha256": "f1ddbfa14dc8dbe179e2eaf896e31a3f69b216fc3cb2a0c24de429877d35e272",
+      "rows": 1416,
+      "target_keys": 1416,
+      "graph_factors": 78044,
+      "graph_converged": true,
+      "resets_innovation": 18,
+      "max_abs_innovation_accepted_m": 13.292552024126053,
+      "max_abs_innovation_rejected_m": 1199176.5859814361,
+      "max_abs_level_adjustment_m": 6.6462760110226782,
+      "wall_seconds": 25.94,
+      "maximum_rss_kb": 202712,
+      "run_log": "output/smartphone-r5/phase16-carrier-code-innovation-reset-v1/mi8/candidate/run.log",
+      "run_log_sha256": "03437d555c9be47f680a84649ebbf718326cb27aa01571d63948eb8dda4d5d6b"
+    },
+    "pixel7_phase14_hatch_control": {
+      "summary": "output/smartphone-r5/phase16-carrier-code-innovation-reset-v1/pixel7pro/baseline/summary.json",
+      "summary_sha256": "a6afd6e6b9abc92f8725292d4e32708c31233596f9016096d69421037ad0c0f0",
+      "submission": "output/smartphone-r5/phase16-carrier-code-innovation-reset-v1/pixel7pro/baseline/submission.csv",
+      "submission_sha256": "803f25689650df54e6d959605ca80b567d4ccdf28271b570fa0ad41d342532cd",
+      "rows": 1383,
+      "target_keys": 1383,
+      "graph_factors": 68503,
+      "graph_converged": true,
+      "resets_innovation": 0,
+      "max_abs_level_adjustment_m": 12.406640823464841,
+      "max_speed_mps": 19.62386537894278
+    },
+    "pixel7_candidate": {
+      "summary": "output/smartphone-r5/phase16-carrier-code-innovation-reset-v1/pixel7pro/candidate/summary.json",
+      "summary_sha256": "b6e71bcd4951eabe034cd77c4f3762452f618943e5c9767a38dc37f19c923a7d",
+      "submission": "output/smartphone-r5/phase16-carrier-code-innovation-reset-v1/pixel7pro/candidate/submission.csv",
+      "submission_sha256": "803f25689650df54e6d959605ca80b567d4ccdf28271b570fa0ad41d342532cd",
+      "rows": 1383,
+      "target_keys": 1383,
+      "graph_factors": 68503,
+      "graph_converged": true,
+      "resets_innovation": 0,
+      "max_abs_level_adjustment_m": 12.406640823464841,
+      "max_speed_mps": 19.62386537894278,
+      "byte_identical_to_baseline": true,
+      "wall_seconds": 20.78,
+      "maximum_rss_kb": 194864,
+      "run_log": "output/smartphone-r5/phase16-carrier-code-innovation-reset-v1/pixel7pro/candidate/run.log",
+      "run_log_sha256": "1b14d9cc04a590731170c8d9d8e149d55057de4fcf4edb15c871d35cc35bd8de"
+    },
+    "pixel7_phase12_comparison_baseline": {
+      "summary": "output/smartphone-r5/phase12-residual-ionosphere-gtsam-v1/summary.json",
+      "summary_sha256": "ce209dfd0a7b3662f8dff9512b3947acf5e3af840c94467ba84fccd132669cda",
+      "submission": "output/smartphone-r5/phase12-residual-ionosphere-gtsam-v1/submission.csv",
+      "submission_sha256": "3069f149bc98b0383d008d5f20cc80cd4ada9f9eb1b5d09f05353895a2d5a26f",
+      "rows": 1383,
+      "target_keys": 1383,
+      "frozen_wgs84_linear_m": 3.1922489635126103,
+      "role": "authoritative accuracy comparator; already scored development baseline, not regenerated or used to tune the candidate"
+    }
+  },
+  "structural_repeatability": {
+    "mi8_candidate_repeated": true,
+    "mi8_candidate_csv_hash_repeated": true,
+    "mi8_candidate_summary_hash_repeated": true,
+    "pixel7_candidate_csv_hash_repeated": true,
+    "pixel7_candidate_and_phase14_hatch_control_csv_byte_identical": true,
+    "pixel7_candidate_and_phase12_comparison_baseline_csv_byte_identical": false
+  },
+  "pre_truth_verification": {
+    "truth_read_count": 0,
+    "validation_truth_read_count": 0,
+    "holdout_truth_read_count": 0,
+    "test_truth_read_count": 0,
+    "mat_read_count": 0,
+    "enriched_columns_read": 0,
+    "device_wls_or_precomputed_coordinates_read": 0,
+    "output_key_checks": "all four structural CSVs have exact unique finite self-key sets and no missing/extra rows",
+    "physical_transition_check": "maximum geodetic transition speed 35.34 m/s for mi8 and 19.62 m/s for Pixel7; >70 m/s count 0",
+    "focused_tests": "CarrierCodeLevelingTest.* and UpstreamObservablePreprocessingTest.*: 12/12",
+    "release_build": "gnss_run_tests and gnss_fgo_imu_no_base",
+    "candidate_status": "structural pass; compare candidate once against the separately identified frozen Phase12 submission after this manifest is sealed"
+  },
+  "commands": {
+    "focused_tests": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} build/tests/run_tests --gtest_filter='CarrierCodeLevelingTest.*:UpstreamObservablePreprocessingTest.*'",
+    "full_ctest": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} ctest --test-dir build -j1 --output-on-failure",
+    "diff_check": "git diff --check",
+    "truth_evaluation": "not yet run; after sealing this manifest, one development-only evaluation may read the already-used Pixel7 ground_truth.csv once and compare baseline/candidate with all four diagnostics"
+  },
+  "decision": {
+    "status": "structural-pass-awaiting-development-score",
+    "promotion": false,
+    "accuracy_score": null,
+    "reason": "The 40 m upstream P-D innovation reset removes the unbounded accepted Hatch update on mi8. Pixel7 is byte-identical to its Phase14 Hatch control, but accuracy comparison must use the authoritative frozen Phase12 submission (3069f149...), not the Phase14 Hatch control.",
+    "no_post_score_tuning": true,
+    "native_default_changed": false,
+    "kaggle_submission": false,
+    "next_action": "Seal this manifest, then perform the single permitted Pixel7 development comparison; no validation/holdout/test truth."
+  }
+}
