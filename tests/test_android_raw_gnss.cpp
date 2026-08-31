@@ -93,6 +93,8 @@ TEST(AndroidRawGnssTest, ReconstructsRawClockAndObservableSigns) {
     std::string error;
     ASSERT_TRUE(loadAndroidRawGnssCsv(path.string(), config, result, error)) << error;
     ASSERT_EQ(result.observations.epochs.size(), 1u);
+    ASSERT_EQ(result.epoch_utc_time_millis.size(), 1u);
+    EXPECT_EQ(result.epoch_utc_time_millis.front(), 1'700'000'000'000LL);
     ASSERT_EQ(result.observations.epochs.front().observations.size(), 1u);
     const auto& observation = result.observations.epochs.front().observations.front();
     const double wavelength = constants::SPEED_OF_LIGHT / constants::GPS_L1_FREQ;
@@ -324,6 +326,62 @@ TEST(AndroidRawGnssTest, MatlabPathsFailClosedBeforeOpening) {
         (std::filesystem::temp_directory_path() / "poisoned.MaT").string(),
         config, result, error));
     EXPECT_NE(error.find("MATLAB"), std::string::npos);
+}
+
+TEST(AndroidRawGnssTest, AlignsSolutionsToRawUtcKeysWithWarmupAndGapRules) {
+    const GNSSTime t0(2200, 100'000.0);
+    const std::vector<GNSSTime> raw_times = {
+        t0, t0 + 1.0, t0 + 2.0, t0 + 3.0};
+    const std::vector<std::int64_t> raw_utc = {
+        1'700'000'000'000LL, 1'700'000'001'000LL,
+        1'700'000'002'000LL, 1'700'000'003'000LL};
+    const Vector3d p0(6'378'137.0, 0.0, 0.0);
+    const Vector3d p2(6'378'137.0, 20.0, 0.0);
+    const std::vector<AndroidRawGnssSolutionPoint> solutions = {
+        {t0 + 0.0005, p0}, {t0 + 2.0, p2}};
+
+    AndroidRawGnssEpochAlignment alignment;
+    std::string error;
+    ASSERT_TRUE(alignAndroidRawGnssSolutionsToUtcKeys(
+        raw_times, raw_utc, solutions, 1.0, alignment, error)) << error;
+    ASSERT_EQ(alignment.target_epochs, 3u);
+    ASSERT_EQ(alignment.epochs.size(), 3u);
+    EXPECT_EQ(alignment.exact_solution_epochs, 1u);
+    EXPECT_EQ(alignment.interpolated_epochs, 1u);
+    EXPECT_EQ(alignment.edge_hold_epochs, 1u);
+    EXPECT_EQ(alignment.unresolved_epochs, 0u);
+    EXPECT_EQ(alignment.epochs[0].utc_time_millis, raw_utc[1]);
+    EXPECT_EQ(alignment.epochs[0].source,
+              AndroidRawGnssEpochSource::EcefLinearInterpolation);
+    EXPECT_NEAR(alignment.epochs[0].position_ecef.y(), 10.0, 1e-12);
+    EXPECT_EQ(alignment.epochs[1].source,
+              AndroidRawGnssEpochSource::ExactSolution);
+    EXPECT_EQ(alignment.epochs[2].source,
+              AndroidRawGnssEpochSource::NearestEdgeHold);
+    EXPECT_EQ(alignment.epochs[2].position_ecef.y(), 20.0);
+    EXPECT_DOUBLE_EQ(alignment.max_interpolation_gap_ms, 2'000.0);
+    EXPECT_DOUBLE_EQ(alignment.max_edge_hold_gap_ms, 1'000.0);
+}
+
+TEST(AndroidRawGnssTest, RawUtcAlignmentRejectsCrossEpochDuplicateAndUnresolved) {
+    const GNSSTime t0(2200, 100'000.0);
+    const std::vector<GNSSTime> raw_times = {t0, t0 + 1.0, t0 + 2.0};
+    const std::vector<std::int64_t> raw_utc = {1000, 2000, 3000};
+    const Vector3d position(6'378'137.0, 0.0, 0.0);
+    const std::vector<AndroidRawGnssSolutionPoint> duplicate = {
+        {t0 + 1.0, position}, {t0 + 1.0001, position}};
+    AndroidRawGnssEpochAlignment alignment;
+    std::string error;
+    EXPECT_FALSE(alignAndroidRawGnssSolutionsToUtcKeys(
+        raw_times, raw_utc, duplicate, 1.0, alignment, error));
+    EXPECT_NE(error.find("multiple"), std::string::npos);
+
+    const std::vector<AndroidRawGnssSolutionPoint> no_match = {
+        {t0 + 10.0, position}};
+    error.clear();
+    EXPECT_FALSE(alignAndroidRawGnssSolutionsToUtcKeys(
+        raw_times, raw_utc, no_match, 1.0, alignment, error));
+    EXPECT_NE(error.find("tolerance"), std::string::npos);
 }
 
 }  // namespace

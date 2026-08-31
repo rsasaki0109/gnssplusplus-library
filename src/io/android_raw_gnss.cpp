@@ -558,6 +558,7 @@ bool appendEpoch(EpochAccumulator& accumulator,
         return false;
     }
     result.observations.addEpoch(epoch);
+    result.epoch_utc_time_millis.push_back(accumulator.utc_millis);
     ++result.diagnostics.selected_epochs;
     result.diagnostics.last_gps_tow = accumulator.time.tow;
     return true;
@@ -907,6 +908,153 @@ bool loadAndroidRawGnssCsv(const std::string& path,
     if (have_epoch && !appendEpoch(accumulator, result, error)) return false;
     if (result.observations.epochs.empty()) {
         error = "raw Android GNSS CSV has no supported finite observations";
+        return false;
+    }
+    if (result.epoch_utc_time_millis.size() !=
+        result.observations.epochs.size()) {
+        error = "raw Android UTC epoch-key alignment invariant failed";
+        return false;
+    }
+    return true;
+}
+
+bool alignAndroidRawGnssSolutionsToUtcKeys(
+    const std::vector<GNSSTime>& raw_epoch_times,
+    const std::vector<std::int64_t>& epoch_utc_time_millis,
+    const std::vector<AndroidRawGnssSolutionPoint>& solutions,
+    double solution_time_tolerance_ms,
+    AndroidRawGnssEpochAlignment& alignment,
+    std::string& error) {
+    alignment = AndroidRawGnssEpochAlignment{};
+    if (raw_epoch_times.size() != epoch_utc_time_millis.size()) {
+        error = "raw observation epochs and integer UTC keys are not one-to-one";
+        return false;
+    }
+    if (raw_epoch_times.size() < 2U) {
+        error = "at least two raw epochs are required for the warm-up contract";
+        return false;
+    }
+    if (solutions.empty() || !std::isfinite(solution_time_tolerance_ms) ||
+        solution_time_tolerance_ms < 0.0) {
+        error = "solution alignment requires finite solutions and tolerance";
+        return false;
+    }
+    for (std::size_t i = 1U; i < epoch_utc_time_millis.size(); ++i) {
+        if (epoch_utc_time_millis[i] <= epoch_utc_time_millis[i - 1U]) {
+            error = "raw integer UTC epoch keys are not strictly increasing";
+            return false;
+        }
+    }
+
+    const std::size_t raw_epoch_count = raw_epoch_times.size();
+    std::vector<int> solution_for_raw(raw_epoch_count, -1);
+    std::size_t raw_cursor = 0U;
+    for (std::size_t solution_index = 0U;
+         solution_index < solutions.size(); ++solution_index) {
+        const auto& solution = solutions[solution_index];
+        if (!solution.position_ecef.allFinite() ||
+            solution.position_ecef.norm() < 6.0e6 ||
+            solution.position_ecef.norm() > 7.0e6) {
+            error = "native solution has non-finite or out-of-Earth ECEF position";
+            return false;
+        }
+        if (solution_index > 0U &&
+            solution.time < solutions[solution_index - 1U].time) {
+            error = "native solution times are not monotonic";
+            return false;
+        }
+        while (raw_cursor + 1U < raw_epoch_count) {
+            const double current_delta = std::abs(
+                raw_epoch_times[raw_cursor] - solution.time);
+            const double next_delta = std::abs(
+                raw_epoch_times[raw_cursor + 1U] - solution.time);
+            if (next_delta < current_delta) {
+                ++raw_cursor;
+                continue;
+            }
+            break;
+        }
+        const double delta_ms = 1000.0 * std::abs(
+            raw_epoch_times[raw_cursor] - solution.time);
+        if (!std::isfinite(delta_ms) || delta_ms > solution_time_tolerance_ms) {
+            error = "native solution time is outside raw UTC epoch tolerance";
+            return false;
+        }
+        if (solution_for_raw[raw_cursor] >= 0) {
+            error = "multiple native solutions matched one raw UTC epoch";
+            return false;
+        }
+        solution_for_raw[raw_cursor] = static_cast<int>(solution_index);
+    }
+
+    alignment.target_epochs = raw_epoch_count - 1U;
+    alignment.epochs.reserve(alignment.target_epochs);
+    for (std::size_t raw_index = 1U; raw_index < raw_epoch_count; ++raw_index) {
+        AndroidRawGnssAlignedEpoch aligned;
+        aligned.utc_time_millis = epoch_utc_time_millis[raw_index];
+        const int exact_solution_index = solution_for_raw[raw_index];
+        if (exact_solution_index >= 0) {
+            aligned.position_ecef =
+                solutions[static_cast<std::size_t>(exact_solution_index)].position_ecef;
+            aligned.source = AndroidRawGnssEpochSource::ExactSolution;
+            ++alignment.exact_solution_epochs;
+            alignment.epochs.push_back(aligned);
+            continue;
+        }
+
+        std::size_t left = raw_index;
+        while (left > 0U && solution_for_raw[left] < 0) --left;
+        std::size_t right = raw_index;
+        while (right + 1U < raw_epoch_count && solution_for_raw[right] < 0) {
+            ++right;
+        }
+        const bool have_left = solution_for_raw[left] >= 0 && left < raw_index;
+        const bool have_right = solution_for_raw[right] >= 0 && right > raw_index;
+        if (have_left && have_right) {
+            const double span_ms = static_cast<double>(
+                epoch_utc_time_millis[right] - epoch_utc_time_millis[left]);
+            const double offset_ms = static_cast<double>(
+                epoch_utc_time_millis[raw_index] - epoch_utc_time_millis[left]);
+            if (!(span_ms > 0.0) || offset_ms < 0.0 || offset_ms > span_ms) {
+                error = "invalid same-trip ECEF interpolation bracket";
+                return false;
+            }
+            const double fraction = offset_ms / span_ms;
+            const Vector3d& left_position =
+                solutions[static_cast<std::size_t>(solution_for_raw[left])].position_ecef;
+            const Vector3d& right_position =
+                solutions[static_cast<std::size_t>(solution_for_raw[right])].position_ecef;
+            aligned.position_ecef = left_position + fraction * (right_position - left_position);
+            aligned.source = AndroidRawGnssEpochSource::EcefLinearInterpolation;
+            alignment.max_interpolation_gap_ms = std::max(
+                alignment.max_interpolation_gap_ms, span_ms);
+            ++alignment.interpolated_epochs;
+        } else {
+            const std::size_t edge = have_left ? left : (have_right ? right : raw_epoch_count);
+            if (edge == raw_epoch_count) {
+                ++alignment.unresolved_epochs;
+                continue;
+            }
+            aligned.position_ecef =
+                solutions[static_cast<std::size_t>(solution_for_raw[edge])].position_ecef;
+            aligned.source = AndroidRawGnssEpochSource::NearestEdgeHold;
+            alignment.max_edge_hold_gap_ms = std::max(
+                alignment.max_edge_hold_gap_ms,
+                std::abs(static_cast<double>(epoch_utc_time_millis[raw_index] -
+                                             epoch_utc_time_millis[edge])));
+            ++alignment.edge_hold_epochs;
+        }
+        if (!aligned.position_ecef.allFinite() ||
+            aligned.position_ecef.norm() < 6.0e6 ||
+            aligned.position_ecef.norm() > 7.0e6) {
+            error = "aligned ECEF position is non-finite or out of Earth range";
+            return false;
+        }
+        alignment.epochs.push_back(aligned);
+    }
+    if (alignment.unresolved_epochs != 0U ||
+        alignment.epochs.size() != alignment.target_epochs) {
+        error = "one or more target raw UTC epochs could not be resolved";
         return false;
     }
     return true;

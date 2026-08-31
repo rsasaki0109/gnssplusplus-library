@@ -23,6 +23,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -67,6 +68,7 @@ struct Options {
     int max_epochs = kDefaultEpochLimit;
     int skip_epochs = 0;
     bool all_epochs = false;
+    bool android_raw_utc_key_contract = false;
 };
 
 void usage(const char* program) {
@@ -76,7 +78,8 @@ void usage(const char* program) {
                  " --nav <brdc.nav>"
                  " --out <submission.csv> --summary-json <summary.json>"
                  " [--dataset-id <id>] [--skip-epochs <n>]"
-                 " [--max-epochs 10..30 | --all-epochs]\n";
+                 " [--max-epochs 10..30 | --all-epochs]"
+                 " [--android-raw-utc-keys]\n";
 }
 
 bool requireValue(int argc, char** argv, int& index, std::string& value) {
@@ -149,6 +152,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
             }
         } else if (arg == "--all-epochs") {
             options.all_epochs = true;
+        } else if (arg == "--android-raw-utc-keys") {
+            options.android_raw_utc_key_contract = true;
         } else {
             std::cerr << "Unknown argument: " << arg << "\n";
             return false;
@@ -175,6 +180,15 @@ bool parseArguments(int argc, char** argv, Options& options) {
     }
     if (hasMatExtension(options.summary_path)) {
         std::cerr << "MATLAB .mat paths are forbidden by the native/raw contract\n";
+        return false;
+    }
+    if (options.android_raw_utc_key_contract && !android_raw) {
+        std::cerr << "--android-raw-utc-keys requires the Android raw GNSS/IMU path\n";
+        return false;
+    }
+    if (options.android_raw_utc_key_contract &&
+        (!options.all_epochs || options.skip_epochs != 0)) {
+        std::cerr << "--android-raw-utc-keys requires --all-epochs without --skip-epochs\n";
         return false;
     }
     return true;
@@ -303,6 +317,25 @@ struct ImuBuildReport {
     libgnss::io::AndroidRawGnssDiagnostics android_gnss_diagnostics;
     libgnss::AndroidImuCsvLoadResult android_load;
     libgnss::AndroidGnssTimeAnchorLoadResult android_gnss_anchor_load;
+};
+
+struct RawUtcOutputReport {
+    bool enabled = false;
+    bool warmup_epoch_excluded = false;
+    std::size_t raw_epoch_keys = 0;
+    std::size_t target_epochs = 0;
+    std::size_t exact_solution_epochs = 0;
+    std::size_t interpolated_epochs = 0;
+    std::size_t edge_hold_epochs = 0;
+    std::size_t unresolved_epochs = 0;
+    double solution_time_tolerance_ms = 0.0;
+    double max_interpolation_gap_ms = 0.0;
+    double max_edge_hold_gap_ms = 0.0;
+};
+
+struct OutputPosition {
+    std::int64_t utc_time_millis = 0;
+    libgnss::Vector3d position_ecef = libgnss::Vector3d::Zero();
 };
 
 bool buildImuInput(const std::string& path,
@@ -529,7 +562,8 @@ std::string makeSummary(const Options& options,
                         const libgnss::FGOProcessor::FGOProblem& problem,
                         const libgnss::FGOProcessor::FGOResult& result,
                         const ImuBuildReport& imu_report,
-                        bool fallback) {
+                        bool fallback,
+                        const RawUtcOutputReport& raw_utc_report = RawUtcOutputReport{}) {
     std::ostringstream out;
     out << std::setprecision(17);
     out << "{\n"
@@ -701,8 +735,29 @@ std::string makeSummary(const Options& options,
     }
     out << "    \"failure\": ";
     writeJsonString(out, imu_report.failure);
-    out << "\n  },\n"
-        << "  \"output_contract\": {\n"
+    out << "\n  },\n";
+    if (raw_utc_report.enabled) {
+        out << "  \"raw_utc_key_contract\": {\n"
+            << "    \"warmup_epoch_excluded\": true,\n"
+            << "    \"raw_epoch_keys\": " << raw_utc_report.raw_epoch_keys << ",\n"
+            << "    \"target_epochs\": " << raw_utc_report.target_epochs << ",\n"
+            << "    \"exact_solution_epochs\": "
+            << raw_utc_report.exact_solution_epochs << ",\n"
+            << "    \"interpolated_epochs\": "
+            << raw_utc_report.interpolated_epochs << ",\n"
+            << "    \"edge_hold_epochs\": " << raw_utc_report.edge_hold_epochs << ",\n"
+            << "    \"unresolved_epochs\": " << raw_utc_report.unresolved_epochs << ",\n"
+            << "    \"solution_time_tolerance_ms\": "
+            << raw_utc_report.solution_time_tolerance_ms << ",\n"
+            << "    \"max_interpolation_gap_ms\": "
+            << raw_utc_report.max_interpolation_gap_ms << ",\n"
+            << "    \"max_edge_hold_gap_ms\": "
+            << raw_utc_report.max_edge_hold_gap_ms << ",\n"
+            << "    \"coordinate_interpolation\": \"ECEF linear then geodetic\",\n"
+            << "    \"device_wls_coordinates_used\": false\n"
+            << "  },\n";
+    }
+    out << "  \"output_contract\": {\n"
         << "    \"header\": \"phone,UnixTimeMillis,LatitudeDegrees,LongitudeDegrees\",\n"
         << "    \"finite_coordinates\": true,\n"
         << "    \"unix_time_leap_seconds\": 18,\n"
@@ -722,6 +777,7 @@ int main(int argc, char** argv) {
     libgnss::io::RINEXReader obs_reader;
     libgnss::io::RINEXReader::RINEXHeader obs_header;
     libgnss::io::AndroidRawGnssResult android_gnss;
+    std::vector<libgnss::GNSSTime> android_raw_epoch_times;
     if (android_raw) {
         libgnss::io::AndroidRawGnssConfig android_gnss_config;
         std::string conversion_error;
@@ -735,6 +791,10 @@ int main(int argc, char** argv) {
         if (android_gnss.observations.isEmpty()) {
             std::cerr << "raw Android GNSS has no usable observation epochs\n";
             return 1;
+        }
+        android_raw_epoch_times.reserve(android_gnss.observations.epochs.size());
+        for (const auto& raw_epoch : android_gnss.observations.epochs) {
+            android_raw_epoch_times.push_back(raw_epoch.time);
         }
         // Raw mode consumes the Android observation series directly.  It does
         // not synthesize a RINEX intermediate and does not use the optional
@@ -939,23 +999,75 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    RawUtcOutputReport raw_utc_report;
+    std::vector<OutputPosition> output_positions;
+    if (options.android_raw_utc_key_contract) {
+        constexpr double kSolutionTimeToleranceMs = 2.0;
+        std::vector<libgnss::io::AndroidRawGnssSolutionPoint> solution_points;
+        solution_points.reserve(result.solution.solutions.size());
+        for (const auto& solution : result.solution.solutions) {
+            solution_points.push_back({solution.time, solution.position_ecef});
+        }
+        libgnss::io::AndroidRawGnssEpochAlignment alignment;
+        std::string alignment_error;
+        if (!libgnss::io::alignAndroidRawGnssSolutionsToUtcKeys(
+                android_raw_epoch_times, android_gnss.epoch_utc_time_millis,
+                solution_points, kSolutionTimeToleranceMs, alignment,
+                alignment_error)) {
+            std::cerr << "failed to align output to raw UTC keys: "
+                      << alignment_error << "\n";
+            return 1;
+        }
+        raw_utc_report.enabled = true;
+        raw_utc_report.warmup_epoch_excluded = true;
+        raw_utc_report.raw_epoch_keys = android_gnss.epoch_utc_time_millis.size();
+        raw_utc_report.target_epochs = alignment.target_epochs;
+        raw_utc_report.exact_solution_epochs = alignment.exact_solution_epochs;
+        raw_utc_report.interpolated_epochs = alignment.interpolated_epochs;
+        raw_utc_report.edge_hold_epochs = alignment.edge_hold_epochs;
+        raw_utc_report.unresolved_epochs = alignment.unresolved_epochs;
+        raw_utc_report.solution_time_tolerance_ms = kSolutionTimeToleranceMs;
+        raw_utc_report.max_interpolation_gap_ms = alignment.max_interpolation_gap_ms;
+        raw_utc_report.max_edge_hold_gap_ms = alignment.max_edge_hold_gap_ms;
+        output_positions.reserve(alignment.epochs.size());
+        for (const auto& aligned : alignment.epochs) {
+            output_positions.push_back({aligned.utc_time_millis,
+                                        aligned.position_ecef});
+        }
+    } else {
+        output_positions.reserve(result.solution.solutions.size());
+        for (const auto& solution : result.solution.solutions) {
+            const double timestamp = unixMillis(solution.time);
+            if (!std::isfinite(timestamp)) {
+                std::cerr << "non-finite output timestamp\n";
+                return 1;
+            }
+            output_positions.push_back({static_cast<std::int64_t>(timestamp),
+                                        solution.position_ecef});
+        }
+    }
+
     std::ostringstream csv;
     csv << "phone,UnixTimeMillis,LatitudeDegrees,LongitudeDegrees\n";
     std::size_t finite_rows = 0;
-    for (const auto& solution : result.solution.solutions) {
-        double lat = solution.position_geodetic.latitude;
-        double lon = solution.position_geodetic.longitude;
-        if (!std::isfinite(lat) || !std::isfinite(lon)) {
-            double output_height = 0.0;
-            libgnss::ecef2geodetic(solution.position_ecef, lat, lon, output_height);
+    for (const auto& output_position : output_positions) {
+        if (!output_position.position_ecef.allFinite() ||
+            output_position.position_ecef.norm() < 6.0e6 ||
+            output_position.position_ecef.norm() > 7.0e6) {
+            std::cerr << "non-finite or out-of-Earth output row\n";
+            return 1;
         }
-        const double timestamp = unixMillis(solution.time);
-        if (!std::isfinite(timestamp) || !std::isfinite(lat) || !std::isfinite(lon) ||
+        double lat = 0.0;
+        double lon = 0.0;
+        double output_height = 0.0;
+        libgnss::ecef2geodetic(output_position.position_ecef, lat, lon,
+                               output_height);
+        if (!std::isfinite(lat) || !std::isfinite(lon) ||
             std::abs(lat) > kPi / 2.0 || std::abs(lon) > kPi) {
             std::cerr << "non-finite or out-of-range output row\n";
             return 1;
         }
-        csv << options.dataset_id << ',' << static_cast<long long>(timestamp) << ','
+        csv << options.dataset_id << ',' << output_position.utc_time_millis << ','
             << std::fixed << std::setprecision(10) << lat * kRadToDeg << ','
             << lon * kRadToDeg << '\n';
         ++finite_rows;
@@ -964,7 +1076,8 @@ int main(int argc, char** argv) {
         std::cerr << "failed to atomically publish output\n";
         return 1;
     }
-    const std::string summary = makeSummary(options, problem, result, imu_report, fallback);
+    const std::string summary = makeSummary(options, problem, result, imu_report,
+                                            fallback, raw_utc_report);
     if (!atomicWrite(options.summary_path, summary)) {
         std::cerr << "failed to atomically publish summary\n";
         return 1;

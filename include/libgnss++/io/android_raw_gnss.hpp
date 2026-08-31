@@ -13,6 +13,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 #include <string>
 
 #include <libgnss++/core/observation.hpp>
@@ -77,7 +78,58 @@ struct AndroidRawGnssDiagnostics {
 struct AndroidRawGnssResult {
     ObservationSeries observations;
     AndroidRawGnssDiagnostics diagnostics;
+    // The integer UTC key belongs to the same selected-epoch position as
+    // observations.epochs.  Keeping it beside (rather than reconstructing it
+    // from) GNSSTime prevents a GPST/UTC floating-point round trip from
+    // changing the official phone timestamp key.
+    std::vector<std::int64_t> epoch_utc_time_millis;
 };
+
+struct AndroidRawGnssSolutionPoint {
+    GNSSTime time;
+    Vector3d position_ecef = Vector3d::Zero();
+};
+
+enum class AndroidRawGnssEpochSource {
+    ExactSolution,
+    EcefLinearInterpolation,
+    NearestEdgeHold
+};
+
+struct AndroidRawGnssAlignedEpoch {
+    std::int64_t utc_time_millis = 0;
+    Vector3d position_ecef = Vector3d::Zero();
+    AndroidRawGnssEpochSource source = AndroidRawGnssEpochSource::ExactSolution;
+};
+
+struct AndroidRawGnssEpochAlignment {
+    std::vector<AndroidRawGnssAlignedEpoch> epochs;
+    std::size_t target_epochs = 0;
+    std::size_t exact_solution_epochs = 0;
+    std::size_t interpolated_epochs = 0;
+    std::size_t edge_hold_epochs = 0;
+    std::size_t unresolved_epochs = 0;
+    double max_interpolation_gap_ms = 0.0;
+    double max_edge_hold_gap_ms = 0.0;
+};
+
+/**
+ * @brief Align native solution states to the original raw UTC epoch keys.
+ *
+ * This is an opt-in output contract for Android raw runs.  It drops exactly
+ * the first raw epoch as a declared GNSS/IMU pre-roll, matches solution times
+ * to raw epochs within the supplied quantization tolerance, and fills missing
+ * target epochs only with same-trip ECEF interpolation or a finite nearest
+ * edge hold.  It never reads or synthesizes coordinates from device WLS,
+ * truth, sample submissions, imported result files, or another trip.
+ */
+bool alignAndroidRawGnssSolutionsToUtcKeys(
+    const std::vector<GNSSTime>& raw_epoch_times,
+    const std::vector<std::int64_t>& epoch_utc_time_millis,
+    const std::vector<AndroidRawGnssSolutionPoint>& solutions,
+    double solution_time_tolerance_ms,
+    AndroidRawGnssEpochAlignment& alignment,
+    std::string& error);
 
 /**
  * @brief Load raw Android ``device_gnss.csv`` rows.
