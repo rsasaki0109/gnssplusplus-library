@@ -71,6 +71,16 @@ CANDIDATE_FLAGS: dict[str, tuple[str, ...]] = {
     ),
 }
 
+# The archived 2021 Android exports have no ChipsetElapsedRealtimeNanos
+# anchors.  This explicit raw-only portability contract maps their UTC wall
+# clock to GPST after the GNSS raw-clock parser has succeeded.  It does not
+# change the pseudorange source and is separate from the frozen candidate
+# matrix above.
+RAW_CLOCK_FLAGS: tuple[str, ...] = (
+    "--android-raw-clock-only",
+    "--android-utc-wall-clock-fallback",
+)
+
 
 class Phase24Error(ValueError):
     """Raised when a frozen raw-only contract cannot be proven."""
@@ -335,6 +345,7 @@ def run_train_candidates(freeze_path: Path, input_root: Path, output_root: Path,
                 "--dataset-id", selected.dataset_id,
                 "--all-epochs",
                 "--android-raw-utc-keys",
+                *RAW_CLOCK_FLAGS,
                 *flags,
             ]
             return_code, wall_seconds, output = _run_command(command, log_path)
@@ -362,6 +373,11 @@ def run_train_candidates(freeze_path: Path, input_root: Path, output_root: Path,
                 "freeze_record": str(freeze_path),
                 "freeze_record_sha256": sha256(freeze_path),
                 "raw_only_inputs": {key: {"path": str(path), "sha256": sha256(path), "bytes": path.stat().st_size} for key, path in paths.items()},
+                "raw_clock_contract": {
+                    "flags": list(RAW_CLOCK_FLAGS),
+                    "pseudorange_source": "TimeNanos/FullBiasNanos/BiasNanos/TimeOffsetNanos/ReceivedSvTimeNanos",
+                    "enriched_pseudorange_used": False,
+                },
                 "forbidden_inputs": {"mat": False, "truth": False, "sample": False, "precomputed_trajectory": False, "device_wls": False},
                 "command": command,
                 "return_code": return_code,
@@ -390,6 +406,8 @@ def run_train_candidates(freeze_path: Path, input_root: Path, output_root: Path,
         "freeze_record_sha256": sha256(freeze_path),
         "binary": {"path": str(binary), "sha256": sha256(binary)},
         "candidate_flags": CANDIDATE_FLAGS,
+        "raw_clock_flags": RAW_CLOCK_FLAGS,
+        "enriched_pseudorange_used": False,
         "truth_open_count": 0,
         "mat_member_opened": False,
         "results": results,

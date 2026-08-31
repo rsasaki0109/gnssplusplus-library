@@ -345,6 +345,7 @@ struct RawRow {
 
 bool parseRawRow(const std::vector<std::string>& row,
                  const ColumnMap& columns,
+                 bool parse_enriched_pseudorange,
                  RawRow& output,
                  std::string& error) {
     const auto requiredInt = [&](std::string_view name, std::int64_t& target) {
@@ -431,7 +432,7 @@ bool parseRawRow(const std::vector<std::string>& row,
         return false;
     }
     output.has_cn0_dbhz = columns.has("cn0dbhz");
-    if (columns.has("rawpseudorangemeters") &&
+    if (parse_enriched_pseudorange && columns.has("rawpseudorangemeters") &&
         !parseFiniteDouble(columns.value(row, "rawpseudorangemeters"),
                            output.raw_pseudorange_m, true)) {
         error = "invalid RawPseudorangeMeters";
@@ -598,8 +599,10 @@ bool loadAndroidRawGnssCsv(const std::string& path,
         return false;
     }
     result.diagnostics.timing_formula =
-        "week=floor((TimeNanos-baseFullBiasNanos)/1e9/604800); "
-        "tow_rx=(TimeNanos-baseFullBiasNanos-week*604800e9)/1e9-BiasNanos/1e9";
+        "segment_base=first FullBiasNanos; reset when successive |TimeNanos "
+        "delta|>1e9 ns; week=floor((TimeNanos-segment_base)/1e9/604800); "
+        "epoch_tow=(TimeNanos-segment_base-week*604800e9)/1e9-BiasNanos/1e9; "
+        "per-signal tow_rx=epoch_tow-TimeOffsetNanos/1e9 (long double)";
     result.diagnostics.carrier_formula =
         "L=AccumulatedDeltaRangeMeters/(c/CarrierFrequencyHz); "
         "published five-device ADR sign correction is applied";
@@ -633,6 +636,8 @@ bool loadAndroidRawGnssCsv(const std::string& path,
         }
         columns.index.emplace(key, i);
     }
+    result.diagnostics.enriched_pseudorange_input_ignored =
+        columns.has("rawpseudorangemeters") && !config.verify_enriched_pseudorange;
     const std::vector<std::string> required = {
         "messagetype", "utctimemillis", "timenanos", "fullbiasnanos",
         "receivedsvtimenanos", "svid", "constellationtype",
@@ -677,11 +682,16 @@ bool loadAndroidRawGnssCsv(const std::string& path,
         }
         ++result.diagnostics.raw_rows;
         RawRow raw;
-        if (!parseRawRow(row, columns, raw, error)) {
+        if (!parseRawRow(row, columns, config.verify_enriched_pseudorange, raw,
+                         error)) {
             error = "raw Android GNSS row " +
                     std::to_string(result.diagnostics.input_rows + 1U) +
                     ": " + error;
             return false;
+        }
+        if (!config.verify_enriched_pseudorange &&
+            columns.has("rawpseudorangemeters")) {
+            ++result.diagnostics.enriched_pseudorange_ignored_rows;
         }
         // gnsslog2obs.m removes zero receiver times and transmit times below
         // 1e10 ns before constructing an epoch (its lines 19-22 and 83-89).

@@ -32,7 +32,9 @@ struct AndroidRawGnssConfig {
     /// The enriched ArrivalTimeNanosSinceGpsEpoch column is diagnostic only.
     bool require_raw_android_clock = true;
     /// When an enriched RawPseudorangeMeters column is present, compare it to
-    /// the raw-clock reconstruction and reject a large disagreement.
+    /// the raw-clock reconstruction and reject a large disagreement.  The
+    /// explicit raw-clock-only application mode sets this false; in that mode
+    /// the optional enriched field is not parsed and cannot affect inference.
     bool verify_enriched_pseudorange = true;
     double enriched_pseudorange_tolerance_m = 0.05;
 };
@@ -57,6 +59,8 @@ struct AndroidRawGnssDiagnostics {
     std::size_t clock_discontinuities = 0;
     std::size_t enriched_pseudorange_checks = 0;
     std::size_t enriched_pseudorange_mismatches = 0;
+    std::size_t enriched_pseudorange_ignored_rows = 0;
+    bool enriched_pseudorange_input_ignored = false;
     std::size_t receiver_position_rows = 0;
     std::size_t gps_rows = 0;
     std::size_t gps_l1_rows = 0;
@@ -149,12 +153,13 @@ bool alignAndroidRawGnssSolutionsToUtcKeys(
  * pseudorange-rate is converted to RINEX Doppler as ``-rate/lambda``.
  *
  * Duplicate satellite/signal rows in one epoch, malformed finite values,
- * unsupported raw timing, and large disagreement with an enriched
- * pseudorange column fail closed.  Result/truth/submission coordinates and
- * imported outputs are never used.  A finite device-provided WLS ECEF column
- * is retained in ``ObservationData`` for adapter compatibility and
- * diagnostics, but the dedicated raw PDC executable explicitly ignores it
- * and obtains its seed from native SPP.
+ * unsupported raw timing, and (in strict diagnostic mode) large disagreement
+ * with an enriched pseudorange column fail closed.  Result/truth/submission
+ * coordinates and imported outputs are never used.  A finite device-provided
+ * WLS ECEF column is retained in ``ObservationData`` for adapter compatibility
+ * and diagnostics, but the dedicated raw PDC executable explicitly ignores it
+ * and obtains its seed from native SPP.  Raw-clock-only mode ignores optional
+ * enriched pseudorange text entirely.
  */
 bool loadAndroidRawGnssCsv(const std::string& path,
                            const AndroidRawGnssConfig& config,

@@ -3362,3 +3362,24 @@ candidate improved all four local variants by only about 6.7 micrometres
 against the Phase 12 control (WGS84-linear `3.192248964 -> 3.192242309 m`),
 with 1,383/1,383 matched keys.  No further truth read, rerun, tuning,
 validation/holdout/test access, or Kaggle/token access is allowed.
+
+### Raw Android clock contract and Phase 25 structural result
+
+Phase 25 separates raw Android clock reconstruction from the optional enriched
+`RawPseudorangeMeters` diagnostic.  The explicit `--android-raw-clock-only`
+mode uses only `TimeNanos`, `FullBiasNanos`, `BiasNanos`, `TimeOffsetNanos`,
+transmit time, state, and clock-discontinuity metadata; the strict default
+still verifies an enriched column when present.  The fixed contract resets a
+segment only after a successive `TimeNanos` gap strictly greater than one
+second, unwraps system transmit times using the declared
+GPS/Galileo/GLONASS/BeiDou rules, and uses long-double arithmetic.  No `.mat`,
+truth, WLS, enriched satellite coordinate, or sample coordinate is an
+inference input.
+
+The three raw-only no-bridge smoke routes reached finite converged native FGO
+outputs.  The twelve frozen Phase 24 bridge recipes all failed closed at the
+PDC state quality/convergence gate (Pixel first-P RMS about 1.3 km; Samsung
+velocity about 17 km/s), so no truth was opened and the matrix is a structural
+No-Go.  The audit and result are sealed in
+`docs/use_cases/records/smartphone_r5_phase25_raw_clock_audit_v1.json` and
+`docs/use_cases/records/smartphone_r5_phase25_raw_clock_structural_result_v1.json`.

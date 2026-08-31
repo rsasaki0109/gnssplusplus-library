@@ -76,6 +76,7 @@ struct Options {
     int skip_epochs = 0;
     bool all_epochs = false;
     bool android_raw_utc_key_contract = false;
+    bool android_raw_clock_only = false;
     bool android_utc_wall_clock_fallback = false;
     bool fgo_imu_sparse_recovery = false;
     bool native_pdc_state_bridge = false;
@@ -110,7 +111,8 @@ void usage(const char* program) {
                  " --out <submission.csv> --summary-json <summary.json>"
                  " [--dataset-id <id>] [--skip-epochs <n>]"
                  " [--max-epochs 10..30 | --all-epochs]"
-                 " [--android-raw-utc-keys] [--fgo-imu-sparse-recovery]"
+                 " [--android-raw-utc-keys] [--android-raw-clock-only]"
+                 " [--fgo-imu-sparse-recovery]"
                  " [--android-utc-wall-clock-fallback]"
                  " [--native-pdc-state-bridge] [--native-pdc-imu-tdcp]"
                  " [--native-signal-bias-states] [--native-residual-ionosphere]"
@@ -201,6 +203,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
             options.all_epochs = true;
         } else if (arg == "--android-raw-utc-keys") {
             options.android_raw_utc_key_contract = true;
+        } else if (arg == "--android-raw-clock-only") {
+            options.android_raw_clock_only = true;
         } else if (arg == "--android-utc-wall-clock-fallback") {
             options.android_utc_wall_clock_fallback = true;
         } else if (arg == "--fgo-imu-sparse-recovery") {
@@ -267,6 +271,10 @@ bool parseArguments(int argc, char** argv, Options& options) {
     }
     if (options.android_raw_utc_key_contract && !android_raw) {
         std::cerr << "--android-raw-utc-keys requires the Android raw GNSS/IMU path\n";
+        return false;
+    }
+    if (options.android_raw_clock_only && !android_raw) {
+        std::cerr << "--android-raw-clock-only requires Android raw GNSS/IMU input\n";
         return false;
     }
     if (options.android_raw_utc_key_contract &&
@@ -1251,6 +1259,16 @@ std::string makeSummary(const Options& options,
             << "    \"carrier_rows\": " << gnss.carrier_rows << ",\n"
             << "    \"doppler_rows\": " << gnss.doppler_rows << ",\n"
             << "    \"clock_discontinuities\": " << gnss.clock_discontinuities << ",\n"
+            << "    \"enriched_pseudorange_checks\": "
+            << gnss.enriched_pseudorange_checks << ",\n"
+            << "    \"enriched_pseudorange_mismatches\": "
+            << gnss.enriched_pseudorange_mismatches << ",\n"
+            << "    \"enriched_pseudorange_ignored_rows\": "
+            << gnss.enriched_pseudorange_ignored_rows << ",\n"
+            << "    \"enriched_pseudorange_input_ignored\": "
+            << (gnss.enriched_pseudorange_input_ignored ? "true" : "false")
+            << ",\n"
+            << "    \"pseudorange_source\": \"raw Android clock timing only\",\n"
             << "    \"timing_formula\": ";
         writeJsonString(out, gnss.timing_formula);
         out << ",\n    \"no_device_wls_seed\": true\n"
@@ -1796,6 +1814,8 @@ int main(int argc, char** argv) {
     std::vector<libgnss::GNSSTime> android_raw_epoch_times;
     if (android_raw) {
         libgnss::io::AndroidRawGnssConfig android_gnss_config;
+        android_gnss_config.verify_enriched_pseudorange =
+            !options.android_raw_clock_only;
         std::string conversion_error;
         if (!libgnss::io::loadAndroidRawGnssCsv(
                 options.android_gnss_path, android_gnss_config, android_gnss,

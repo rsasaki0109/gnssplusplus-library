@@ -145,6 +145,10 @@ class Phase24RouteGroupTests(unittest.TestCase):
             ),
         )
         self.assertNotIn(".mat", " ".join(sum(MODULE.CANDIDATE_FLAGS.values(), ())).lower())
+        self.assertEqual(
+            MODULE.RAW_CLOCK_FLAGS,
+            ("--android-raw-clock-only", "--android-utc-wall-clock-fallback"),
+        )
 
 
 if __name__ == "__main__":

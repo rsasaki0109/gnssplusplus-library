@@ -1,0 +1,73 @@
+{
+  "schema_version": "smartphone-r5-phase25-raw-clock-structural-result.v1",
+  "status": "no-go-for-phase24-candidate-matrix",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase25_raw_clock_contract_freeze_v1.json",
+    "sha256": "a65b22ed348067d2787f0369d6139708572679fbe49cd943d2eb7677d4675889"
+  },
+  "raw_audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase25_raw_clock_audit_v1.json",
+    "sha256": "385f8241148bbcbcafb894799750ba8031e2e443352f47581e05ab237d28690c"
+  },
+  "truth_and_mat_policy": {
+    "truth_open_count": 0,
+    "mat_open_count": 0,
+    "ground_truth_materialized": false,
+    "mat_generated": false,
+    "derived_RawPseudorangeMeters_used": false,
+    "enriched_SvPosition_SvElevation_Wls_used": false,
+    "sample_or_precomputed_coordinates_used": false
+  },
+  "inputs": {
+    "materialization_summary": {
+      "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/train_materialization_summary.json",
+      "sha256": "5e8de62f45e752a3b50a651cba75ca97cb16e8aefb1693af8ad18d5b439aa866"
+    },
+    "raw_archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "route_count": 3,
+    "raw_files_per_route": ["device_gnss.csv", "device_imu.csv", "brdc.nav"]
+  },
+  "raw_clock_only_contract": {
+    "flags": ["--android-raw-clock-only", "--android-utc-wall-clock-fallback"],
+    "receiver_rule": "integer TimeNanos minus segment base FullBiasNanos, reset only on a successive gap strictly greater than 1 second; long-double intermediate arithmetic",
+    "system_rules": "GPS/Galileo raw transmit TOW; GLONASS time-of-day mapped -3h/+18s and nearest day; BeiDou +14s; nearest GPS-week unwrap",
+    "solver_pseudorange": "raw clock P only; optional RawPseudorangeMeters is neither parsed nor used",
+    "imu_clock": "UTC wall-clock to GPST fallback because the three archived device_gnss files have no ChipsetElapsedRealtimeNanos values",
+    "production_default": "strict enriched-column verification remains unchanged unless the explicit flag is supplied"
+  },
+  "raw_only_solver_smoke_without_phase24_bridge": {
+    "purpose": "Prove the repaired raw clock boundary reaches a finite native solver without changing the frozen Phase24 candidate flags.",
+    "route_results": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {"problem_epochs": 2159, "output_epochs": 2159, "interpolated_epochs": 0, "graph_factors": 68231, "converged": true, "summary_sha256": "98139a1138d8bc3084ad66f008266adece7dc5ed6c58a58f1ae32b002fbd4e38", "submission_sha256": "00f52a2578d99fa301f32e545f77c4bc7dcce04bbcd776db5ee494c7fb8a0320"},
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4": {"problem_epochs": 1678, "output_epochs": 1678, "interpolated_epochs": 0, "graph_factors": 58248, "converged": true, "summary_sha256": "a47b66286a1814358cefee1645cb8a50e31104706e1ca98f699572e19603d14f", "submission_sha256": "c6d7545fd30f8ff28b1469ff4b40d2a48966fedd152b0abd50d7dc569e008059"},
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {"problem_epochs": 1130, "output_epochs": 1130, "interpolated_epochs": 35, "graph_factors": 21010, "converged": true, "summary_sha256": "1c1a1be54b325ded505ff54740aa0ab5d516c89ea05eae54f7cb12d451e98ed3", "submission_sha256": "d5df038f18978be78e1b03d07bf32c4643923baf0dafa4778709f15801bb76e"}
+    },
+    "interpretation": "Raw clock parsing and the unmodified no-base native FGO path are structurally operational on all three routes; the sm-g988b interpolation is the existing raw-UTC key contract and not a new estimator."
+  },
+  "frozen_phase24_candidate_matrix": {
+    "truth_free_summary": {
+      "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/truth_free_train_summary.json",
+      "sha256": "5de974b2bab893ea22bc7341b2e9875b6bb779b2ca751d1ba588bedd84fa07e5"
+    },
+    "candidate_count": 12,
+    "completed_count": 0,
+    "fail_closed_count": 12,
+    "all_logs_are_truth_free": true,
+    "failure_class": "native PDC state bridge quality-gate rejection or non-convergence after up to 1000 iterations",
+    "route_failure_evidence": {
+      "pixel5": "first P rows=39, D rows=0, first initial P RMS=1328.79m, max normalized RMS=712.277, converged=false",
+      "pixel4": "first P rows=39, D rows=0, first initial P RMS=1282.15m, max normalized RMS=279.671, converged=false",
+      "sm-g988b": "first P rows=34, D rows=0, first initial P RMS=7.64485m but velocity=17095m/s and normalized RMS=64629.5, epoch quality gate rejected"
+    },
+    "truth_score": "skipped; structural candidate matrix did not produce any sealed candidate output",
+    "decision": "No-Go. Do not open train/validation/holdout truth for this matrix and do not tune the raw-clock rule from these failures. Preserve the successful no-bridge smoke and the failure logs as separate evidence."
+  },
+  "source_changes": [
+    "Expose --android-raw-clock-only as an explicit opt-in boundary.",
+    "Do not parse the optional RawPseudorangeMeters field in raw-clock-only mode; strict default remains intact.",
+    "Record ignored enriched-row counts and raw timing formula in native summary.",
+    "Add raw clock week/segment/malformed-enriched-column regression fixtures.",
+    "Pass the explicit raw-clock-only and UTC wall-clock fallback flags from the frozen route runner."
+  ],
+  "next_action": "Investigate the PDC state bridge measurement/quality contract independently; this Phase25 record does not authorize truth scoring or parameter changes."
+}
