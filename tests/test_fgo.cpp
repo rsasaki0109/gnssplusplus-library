@@ -86,6 +86,54 @@ TEST(PdcStateBridgeTest, SolvesSyntheticNativePositionAndClock) {
     EXPECT_LT(result.final_cost, result.initial_cost);
 }
 
+TEST(PdcStateBridgeTest, UsesFiniteRawWlsVelocityAndClockRateSeed) {
+    const Vector3d seed(6'370'000.0, 1'000.0, 2'000.0);
+    const Vector3d target = seed + Vector3d(1.25, -2.0, 0.75);
+    const Vector3d velocity(4.0, -2.0, 1.0);
+    constexpr double clock_rate_mps = 0.3;
+    const std::vector<Vector3d> lines = {
+        {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0},
+        {-0.5773502691896258, -0.5773502691896258, 0.5773502691896258},
+        {0.5773502691896258, -0.5773502691896258, -0.5773502691896258}};
+    std::vector<pdc_state_bridge::PseudorangeRow> pseudorange;
+    std::vector<pdc_state_bridge::DopplerRow> doppler;
+    for (std::size_t i = 0; i < lines.size(); ++i) {
+        const Vector3d satellite = target + 20'000'000.0 * lines[i];
+        pseudorange.push_back({0, SatelliteId{}, GNSSSystem::GPS, satellite,
+                               (satellite - target).norm() + 12.5, 0.5});
+        doppler.push_back({0, lines[i], lines[i].dot(velocity) + clock_rate_mps,
+                           0.05});
+    }
+    const std::vector<pdc_state_bridge::EpochInput> unseeded_epochs = {
+        {GNSSTime(2200, 100.0), seed, 0.0, false}};
+    auto seeded_epochs = unseeded_epochs;
+    seeded_epochs[0].seed_velocity_ecef_mps = velocity;
+    seeded_epochs[0].seed_clock_rate_mps = clock_rate_mps;
+    seeded_epochs[0].has_seed_velocity = true;
+    seeded_epochs[0].has_seed_clock_rate = true;
+
+    pdc_state_bridge::Options options;
+    options.max_iterations = 100;
+    const auto unseeded = pdc_state_bridge::solve(
+        unseeded_epochs, pseudorange, doppler, options);
+    const auto seeded = pdc_state_bridge::solve(
+        seeded_epochs, pseudorange, doppler, options);
+    ASSERT_TRUE(unseeded.valid) << unseeded.reason;
+    ASSERT_TRUE(seeded.valid) << seeded.reason;
+    EXPECT_LT(seeded.initial_cost, unseeded.initial_cost);
+    EXPECT_NEAR((seeded.epochs.front().state.velocity_ecef_mps - velocity).norm(),
+                0.0, 1e-3);
+    EXPECT_NEAR(seeded.epochs.front().state.clock_rate_mps, clock_rate_mps,
+                1e-3);
+
+    seeded_epochs[0].seed_velocity_ecef_mps =
+        Vector3d::Constant(std::numeric_limits<double>::quiet_NaN());
+    const auto invalid = pdc_state_bridge::solve(
+        seeded_epochs, pseudorange, doppler, options);
+    EXPECT_FALSE(invalid.valid);
+    EXPECT_EQ(invalid.reason, "invalid-velocity-seed");
+}
+
 TEST(PdcStateBridgeTest, RejectsInvalidDopplerGeometryBeforeSolving) {
     const Vector3d seed(6'370'000.0, 0.0, 0.0);
     std::vector<pdc_state_bridge::PseudorangeRow> pseudorange;

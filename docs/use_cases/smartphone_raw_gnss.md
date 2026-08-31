@@ -3383,3 +3383,35 @@ velocity about 17 km/s), so no truth was opened and the matrix is a structural
 No-Go.  The audit and result are sealed in
 `docs/use_cases/records/smartphone_r5_phase25_raw_clock_audit_v1.json` and
 `docs/use_cases/records/smartphone_r5_phase25_raw_clock_structural_result_v1.json`.
+
+### Phase 26 native PDC bridge diagnosis (structural No-Go)
+
+Phase 26 diagnosed the opt-in raw-only native PDC state bridge before any
+truth read.  The first corrected-Doppler epoch has zero rows by contract:
+receiver clock drift requires an adjacent epoch; all later epochs retained D
+rows.  The shared Doppler sign/units contract is covered by the standalone
+WLS and unit tests, and the three routes had finite raw WLS estimates (maximum
+velocity 36.4--44.3 m/s, WLS normalized RMS at most 3.91).
+
+The bridge had a real state-handoff omission: although the existing raw WLS
+initializer was requested, the bridge initialized velocity and clock-rate to
+zero.  The opt-in correction now passes valid WLS values as initial states and
+leaves invalid estimates at the historical zero initialization; no parameter,
+gate, or production default changed.  The fixed P+D+temporal bridge still
+fails structurally on all three routes: Pixel5 reaches 2,135.6 m/s, Pixel4
+does not converge, and Samsung reaches 31,992.1 m/s with 1,122 velocity-bound
+violations.  Pixel seed position steps are as high as 2,181.5 m/s; Samsung's
+corrected-D absolute median is 110.465 m/s despite a bounded WLS solution.
+This indicates an unresolved conditioning/model mismatch, not a justified
+unit fix or quality-gate relaxation.
+
+Accordingly the bridge remains a structural No-Go.  No development truth,
+validation, holdout, or Phase 24 matrix was opened or rerun.  The freeze,
+diagnostic result, raw commands, log hashes, and source/binary hashes are
+sealed in
+`docs/use_cases/records/smartphone_r5_phase26_pdc_bridge_diagnostic_freeze_v1.json`,
+`docs/use_cases/records/smartphone_r5_phase26_pdc_bridge_wls_handoff_freeze_v1.json`,
+and
+`docs/use_cases/records/smartphone_r5_phase26_pdc_bridge_diagnostic_result_v1.json`.
+The focused native test set passed 22/22; production/default lanes remain
+unchanged.

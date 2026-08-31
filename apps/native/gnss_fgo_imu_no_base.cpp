@@ -777,12 +777,31 @@ bool populateNativePdcStateBridge(
             report.failure = "non-finite PDC epoch seed";
             return false;
         }
+        libgnss::Vector3d seed_velocity_ecef_mps =
+            libgnss::Vector3d::Zero();
+        double seed_clock_rate_mps = 0.0;
+        bool has_seed_velocity = false;
+        bool has_seed_clock_rate = false;
+        if (epoch_index < problem.doppler_velocity_wls_estimates.size()) {
+            const auto& wls = problem.doppler_velocity_wls_estimates[epoch_index];
+            if (wls.valid && wls.velocity_ecef_mps.allFinite() &&
+                std::isfinite(wls.clock_rate_mps)) {
+                seed_velocity_ecef_mps = wls.velocity_ecef_mps;
+                seed_clock_rate_mps = wls.clock_rate_mps;
+                has_seed_velocity = true;
+                has_seed_clock_rate = true;
+            }
+        }
         epochs.push_back({source.time,
                           source.position_ecef,
                           source.receiver_clock_bias_m,
                           epoch_index < problem.clock_jumps.size()
                               ? problem.clock_jumps[epoch_index]
-                              : false});
+                              : false,
+                          seed_velocity_ecef_mps,
+                          seed_clock_rate_mps,
+                          has_seed_velocity,
+                          has_seed_clock_rate});
     }
 
     std::vector<libgnss::pdc_state_bridge::PseudorangeRow> pseudorange_rows;
@@ -944,11 +963,10 @@ bool populateNativePdcStateBridge(
     bridge_options.max_position_norm_m = 1.0e7;
 
     // The bridge is intentionally diagnosed against the already-built
-    // raw-observable Doppler WLS initializer.  This does not select or alter
-    // the bridge solve; it records whether the requested initializer exists
-    // and what the later FGO handoff would have received.  A zero bridge
-    // velocity is therefore distinguishable from a physically gated WLS
-    // estimate rather than being mistaken for a Doppler-unit failure.
+    // raw-observable Doppler WLS initializer.  This does not reweight or
+    // select measurements; it records the exact finite seed that is handed
+    // to the bridge when available, so a later quality failure remains
+    // distinguishable from a Doppler-unit failure.
     for (std::size_t epoch_index = 0;
          epoch_index < problem.doppler_velocity_wls_estimates.size();
          ++epoch_index) {

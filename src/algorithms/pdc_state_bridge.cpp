@@ -334,6 +334,17 @@ SolveResult solve(const std::vector<EpochInput>& epochs,
             result.reason = "invalid-epoch-seed";
             return result;
         }
+        if (epoch.has_seed_velocity &&
+            (!epoch.seed_velocity_ecef_mps.allFinite() ||
+             !std::isfinite(epoch.seed_velocity_ecef_mps.norm()))) {
+            result.reason = "invalid-velocity-seed";
+            return result;
+        }
+        if (epoch.has_seed_clock_rate &&
+            !std::isfinite(epoch.seed_clock_rate_mps)) {
+            result.reason = "invalid-clock-rate-seed";
+            return result;
+        }
     }
     IndexedRows rows;
     rows.pseudorange.resize(epochs.size());
@@ -366,6 +377,13 @@ SolveResult solve(const std::vector<EpochInput>& epochs,
         state.segment<3>(positionColumn(i, 0)) = epochs[i].seed_position_ecef;
         for (int group = 0; group < 5; ++group) {
             state(clockColumn(i, group)) = epochs[i].seed_clock_bias_m;
+        }
+        if (epochs[i].has_seed_velocity) {
+            state.segment<3>(velocityColumn(i, 0)) =
+                epochs[i].seed_velocity_ecef_mps;
+        }
+        if (epochs[i].has_seed_clock_rate) {
+            state(clockRateColumn(i)) = epochs[i].seed_clock_rate_mps;
         }
     }
     result.initial_cost = computeCost(epochs, rows, state, options);

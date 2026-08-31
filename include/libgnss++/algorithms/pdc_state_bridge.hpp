@@ -39,6 +39,14 @@ struct EpochInput {
     Vector3d seed_position_ecef = Vector3d::Zero();
     double seed_clock_bias_m = 0.0;
     bool clock_jump = false;
+    // Optional raw-observable Doppler-WLS initializer.  When present it is
+    // only an initial value; the bridge still solves velocity and clock-rate
+    // from its own P+D+temporal equations.  Invalid/unavailable estimates
+    // deliberately retain the historical zero initializer.
+    Vector3d seed_velocity_ecef_mps = Vector3d::Zero();
+    double seed_clock_rate_mps = 0.0;
+    bool has_seed_velocity = false;
+    bool has_seed_clock_rate = false;
 };
 
 /** Physically predeclared, truth-free controls matching the native PDC path. */
