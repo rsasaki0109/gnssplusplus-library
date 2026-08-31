@@ -1,0 +1,99 @@
+{
+  "schema_version": "smartphone-r5-phase23-upstream-residual-screening-gap-audit.v1",
+  "status": "source-only-audit-complete",
+  "created_at_utc": "2026-09-01T00:00:00Z",
+  "purpose": "Compare the pinned taroz residual exclusion/weighting order with the native raw-observable quality implementation before selecting one opt-in raw-only component.",
+  "input_policy": {
+    "allowed": ["raw device_gnss.csv", "raw device_imu.csv", "broadcast brdc.nav"],
+    "mat_inputs": false,
+    "truth_used_for_audit": false,
+    "enriched_satellite_or_receiver_columns": false,
+    "base_observation_compensation": "not available under raw+nav-only contract"
+  },
+  "upstream_sources": {
+    "repository": "taroz/gsdc2023",
+    "commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "license": "MIT",
+    "functions/exobs.m": {
+      "sha256": "e22db383f372f26597333d674a12ee1e2adfdc97b00828fbbc5470903947f456",
+      "lines": "1-78",
+      "contract": "status masks: D SNR/multipath; P SNR/code-lock/multipath/range/status; L SNR/slip/valid/multipath, plus TDCP jump"
+    },
+    "functions/exobs_residuals.m": {
+      "sha256": "50c954a825edbdeaf5c9884486aff56c058f51d47610a06722d4f42b33095324",
+      "lines": "1-111",
+      "contract": "D elevation then abs(resD-dclk/obs.dt)>Dmask_res; P two-sided dDP then global system median ISB residual; L two-sided dDL"
+    },
+    "functions/obserrmodel.m": {
+      "sha256": "43d0671a25c81fa6d7df0e1fbe81bf48a14eb3a35c8399600200b44961a7f9ef",
+      "lines": "1-39",
+      "contract": "MATLAB midpoint-rank p85 SNR model; P=sn_base*signal factor, D=sn_base/12, L=sn_base*signal factor/400"
+    },
+    "functions/gnsslog2obs.m": {
+      "sha256": "665ce43d1fc3c5a9c3b3a6fd76f81539126e3ab897fbba484ab0ccd18964acff",
+      "lines": "103-136",
+      "contract": "dclk=c*DriftNanosPerSecond/1e9 in m/s; raw epoch timing and observations are formed before residual filtering"
+    },
+    "fgo_gnss.m": {
+      "sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3",
+      "lines": "50-82,123-200",
+      "contract": "residuals -> exobs_residuals -> residual recomputation -> observation error model -> P/D/TDCP graph"
+    },
+    "parameters.m": {
+      "sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52",
+      "lines": "64-101",
+      "contract": "D residual 3 m/s (non-init), P residual 20/15 m, P-D 40/20 m, L-D 1.5 m, time interval 1.5 s"
+    }
+  },
+  "native_sources": {
+    "include/libgnss++/algorithms/observable_upstream_preprocessing.hpp": "70b2f5607efdc9dfe2c964eeacc9bd59d7b07267a732f3475c1ea3141956724b",
+    "src/algorithms/fgo_problems.cpp": "85173f6f87fc1bd45c4934abb0d889d81a49c6ba8d805549925abafacf3cba6c",
+    "include/libgnss++/algorithms/fgo_config.hpp": "9ce8652ba845aa310c4ebe7f3a90d8c1bd61287e6ae0c007a551874306b5937d",
+    "include/libgnss++/core/observation.hpp": "b301be3447198a24e60314667b62e0e45f70b6aae5434aae6a2ce09cd0180932",
+    "src/io/android_raw_gnss.cpp": "790ff71c83482de0dfc9760b4d7c45d4d8adc135082d78f0b75e034bcfd645e8",
+    "apps/native/gnss_fgo_imu_no_base.cpp": "1eef5a4f5777e2de22a0cc144aafd2a2e7d71b0dbf99aca7b2f795eda05d67c3"
+  },
+  "comparison": {
+    "already_implemented": [
+      "Android raw status/range/clock masks from exobs.m in android_raw_gnss.cpp",
+      "two-sided raw P-D and L-D equations and 1.5 s pair gate in observable_upstream_preprocessing.hpp",
+      "MATLAB midpoint-rank SNR p85 and signal factors/ratios",
+      "global system-by-band pseudorange residual center in fgo_problems.cpp when the historical upstream-quality flag is enabled",
+      "optimizer-time Huber loss in fgo.cpp/fgo_gtsam_backend.cpp"
+    ],
+    "mismatches": [
+      {
+        "component": "D residual exclusion",
+        "upstream": "absolute abs(resD-dclk/obs.dt) threshold, with dclk from raw DriftNanosPerSecond or a documented phone-specific estimate",
+        "native": "per-epoch median of receiver-only residual_mps, thresholded by 3 m/s, only in the broader upstream-quality lane",
+        "impact": "raw clock drift is not retained in ObservationData, and median centering can retain a common-mode bad D set or remove a valid row",
+        "evidence": "native src/algorithms/fgo_problems.cpp:565-597; upstream functions/exobs_residuals.m:14-36"
+      },
+      {
+        "component": "residual pass order",
+        "upstream": "residuals are recomputed after exobs_residuals before obserrmodel/graph",
+        "native": "seed residuals are computed during factor preparation; no second native satellite residual pass exists",
+        "impact": "exact second-pass parity needs a separate SPP/Gsat residual representation and is not selected for this bounded phase",
+        "evidence": "upstream fgo_gnss.m:50-82; native fgo_problems.cpp factor construction"
+      },
+      {
+        "component": "D weighting",
+        "upstream": "SNR p85 D sigma=sn_base/12 before graph",
+        "native": "available only with use_upstream_observable_quality; legacy raw lane uses fixed/elevation sigma and optimizer Huber",
+        "impact": "already exposed as a separate rejected Phase13 candidate; not bundled into the new isolated screen"
+      }
+    ]
+  },
+  "selection": {
+    "candidate_id": "native-raw-upstream-absolute-doppler-screen-v1",
+    "selected_component": "preserve raw DriftNanosPerSecond as epoch receiver clock range-rate and apply the upstream absolute D residual gate to receiver-only native D factors",
+    "why_selected": "It is the only clearly unported residual rejection rule with an available raw Android source field and a fixed published threshold; it is smaller and more attributable than repeating the entire Gsat/SPP pass.",
+    "not_selected": {
+      "repeated_full_residual_pass": "requires an unimplemented Gsat residual state and would change more than one component",
+      "SNR_weighting": "already implemented behind Phase13 and its Pixel score was a No-Go",
+      "P_global_ISB": "already implemented and separately recorded as the v2.1 exactness No-Go"
+    },
+    "truth_free_decision": true,
+    "leaderboard_or_holdout_used": false
+  }
+}
