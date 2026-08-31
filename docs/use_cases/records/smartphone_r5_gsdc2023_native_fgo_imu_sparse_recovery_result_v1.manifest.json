@@ -1,0 +1,10 @@
+{
+  "schema_version": "smartphone-r5-native-fgo-imu-sparse-recovery-result-manifest.v1",
+  "result_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_imu_sparse_recovery_result_v1.json",
+  "result_record_sha256": "61177d85cecc349dc7d50330355a4fcc4ee18d6a67d778e4cfaed7c209a2111f",
+  "freeze_record_sha256": "b852c28124e397c1a9a5f303e2d5655ba85e463a1fceb35528004c7b6ff80879",
+  "artifact_record_sha256": "5d87f1011b2312c87f32d6ad189d73b24f965b0990d94642167231c7d1a405af",
+  "truth_read_count": 1,
+  "promotion": "no-go",
+  "immutable_result": true
+}

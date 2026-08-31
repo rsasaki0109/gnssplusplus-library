@@ -424,7 +424,13 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                                             : epoch_carriers.size();
         if (static_cast<int>(usable_epoch_measurements) <
             config_.min_satellites_per_epoch) {
-            continue;
+            if (!config_.retain_sparse_epochs_for_imu) {
+                continue;
+            }
+            ++problem.diagnostics.sparse_epochs_retained;
+            if (usable_epoch_measurements == 0) {
+                ++problem.diagnostics.sparse_empty_epochs_retained;
+            }
         }
 
         const std::size_t epoch_index = problem.epochs.size();

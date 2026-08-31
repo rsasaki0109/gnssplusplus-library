@@ -51,6 +51,12 @@ struct Config {
         double max_float_position_jump_m = 0.0;
 
         bool use_spp_seed = true;
+        // Research-only raw Android recovery switch. When enabled, epochs
+        // with fewer than min_satellites_per_epoch usable measurements are
+        // retained so the IMU/temporal graph can carry state through short
+        // GNSS outages. The default remains false; this never invents
+        // coordinates or relaxes finite/solver checks.
+        bool retain_sparse_epochs_for_imu = false;
         bool use_pseudorange_factors = true;
         bool use_motion_factors = true;
         bool use_position_motion_factors = true;

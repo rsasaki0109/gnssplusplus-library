@@ -1,0 +1,93 @@
+{
+  "schema_version": "smartphone-r5-native-fgo-imu-sparse-recovery-freeze.v1",
+  "status": "frozen-before-truth-free-artifact",
+  "created_utc": "2026-08-31T11:04:38Z",
+  "candidate": "fgo_imu_sparse_recovery",
+  "classification": "coverage-recovery-candidate",
+  "scope": {
+    "route": "2023-05-24-20-26-us-ca-sjc-ge2",
+    "device": "pixel7pro",
+    "role": "development-train",
+    "raw_epochs_expected": 1384,
+    "target_epochs_expected": 1383,
+    "truth_read_before_freeze": false,
+    "truth_read_count_before_freeze": 0,
+    "validation_or_holdout_access": false
+  },
+  "hypothesis": "Retaining below-floor raw epochs in the existing native GTSAM IMU graph removes the 287-epoch/49-second postprocessing gap; admitting supported secondary raw frequencies increases native P/D support. This is not a dedicated gnss_pos_vel_pdc state bridge and does not consume its coordinate output.",
+  "inputs": {
+    "device_gnss_csv": {
+      "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_gnss.csv",
+      "sha256": "c5af6cc3aeae6ab29a2a10d975d291b8fba4fab15273c0729163cd639ff10e42",
+      "bytes": 29178760
+    },
+    "device_imu_csv": {
+      "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_imu.csv",
+      "sha256": "8f1c582bdad545d11e68349b221001b69e2a9d43f9257e60038c193276fa1804",
+      "bytes": 35153166
+    },
+    "broadcast_nav": {
+      "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/brdc.nav",
+      "sha256": "16c859f8015c874398978bae6004172c355f7d3a3b06fa81b54aac88b6b78d33",
+      "bytes": 11979490
+    }
+  },
+  "source_sha256": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "310db3d7a538da0de06872d8d5440a38962d331e83b364bab447220581ac01be",
+    "include/libgnss++/algorithms/fgo.hpp": "265ad4d9e4565d37abaf6d6ad8829a069ab84437bfc48a0ec73f4cbe4401ceee",
+    "include/libgnss++/algorithms/fgo_config.hpp": "f3706721d39663614325ad6a7fb8c1000f337cc696409be9e1ad04c314fc09b7",
+    "src/algorithms/fgo.cpp": "560449ba520fde40d65dc00b11086765b27479b0f672aa55be2df38d18cabcb1",
+    "src/algorithms/fgo_problems.cpp": "0e8c4b3172ffc1379fb26208646d740af56ecb813d72f9c6c01e2a1bbc115f6c",
+    "tests/test_fgo.cpp": "bd4a70b45828e98df859c48c3a11b0a4c8690090f0281fca25ea98811d8a852e"
+  },
+  "release_binary": {
+    "path": "build/apps/gnss_fgo_imu_no_base",
+    "sha256": "6dfe9a213d91a42915c070dd1e6d39efe42da6f8b06e6a577dc72d90325c530f",
+    "build_type": "Release",
+    "gtsam_backend": true
+  },
+  "parameters": {
+    "backend": "GTSAM",
+    "imu_graph": true,
+    "pose3_state": true,
+    "max_iterations": 12,
+    "gnss_first_max_iterations": 1000,
+    "pseudorange_factors": true,
+    "undifferenced_doppler_factors": true,
+    "corrected_undifferenced_doppler_factors": true,
+    "tdcp_factors": false,
+    "carrier_phase_factors": false,
+    "double_difference_factors": false,
+    "min_satellites_per_epoch": 4,
+    "min_elevation_deg": 0.0,
+    "min_snr_dbhz": 0.0,
+    "retain_sparse_epochs_for_imu": true,
+    "use_multi_frequency_double_difference_switch_for_raw_signal_eligibility": true,
+    "all_epochs": true,
+    "skip_epochs": 0,
+    "raw_utc_key_contract": true,
+    "solution_time_tolerance_ms": 2.0,
+    "imu_mounting_rpy_deg_xyz": [-85.0, 178.0, -94.0],
+    "imu_sync_coefficient": 0.5,
+    "gravity_mps2": 9.80665,
+    "no_device_wls_seed": true,
+    "no_coordinate_file_handoff": true
+  },
+  "contracts": {
+    "allowed_inputs": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "forbidden_inputs": ["*.mat", "ground_truth.csv", "sample_submission.csv", "result_gnss*.mat", "device-provided WLS", "prior trajectory/output coordinates"],
+    "output": "raw UTC target keys, finite Earth-bounded ECEF converted to latitude/longitude, atomic publish",
+    "fallback": "existing native no-IMU FGO is recorded only if the IMU graph fails; candidate promotion requires fallback=false",
+    "production_default_changed": false,
+    "post_freeze_tuning": false
+  },
+  "commands": {
+    "truth_free_generation": "env LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} build/apps/gnss_fgo_imu_no_base --android-gnss <declared-device_gnss.csv> --android-imu <declared-device_imu.csv> --nav <declared-brdc.nav> --out <candidate.csv> --summary-json <candidate-summary.json> --dataset-id 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro --all-epochs --android-raw-utc-keys --fgo-imu-sparse-recovery",
+    "truth_scoring_after_seal_only": "PYTHONPATH=apps/commands:apps/commands/benchmarks python3 apps/commands/benchmarks/gnss_smartphone_kaggle_evaluate.py --submission <sealed-candidate.csv> --ground-truth <declared-ground_truth.csv> --phone 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro"
+  },
+  "gates": {
+    "structural": ["problem/output cover all 1383 target keys", "fallback=false", "converged=true", "finite Earth-bounded coordinates", "no base/DD factors", "deterministic repeat", "no forbidden input read"],
+    "promotion": ["WGS84 linear score < 68.0475838937948m", "missing/extra/nonfinite=0", "no new physical continuity failure", "availability non-regression"],
+    "truth_policy": "truth is read once only after truth-free output and hashes are sealed; no validation/holdout is opened"
+  }
+}

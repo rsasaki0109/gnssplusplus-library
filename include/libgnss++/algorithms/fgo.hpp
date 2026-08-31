@@ -233,6 +233,8 @@ public:
         std::size_t input_epochs = 0;
         std::size_t seeded_epochs = 0;
         std::size_t skipped_epochs_without_seed = 0;
+        std::size_t sparse_epochs_retained = 0;
+        std::size_t sparse_empty_epochs_retained = 0;
         std::size_t double_difference_matched_base_epochs = 0;
         std::size_t double_difference_interpolated_base_epochs = 0;
         std::size_t double_difference_candidate_pairs = 0;
@@ -464,6 +466,8 @@ public:
         int iterations = 0;
         bool converged = false;
         std::size_t epochs = 0;
+        std::size_t sparse_epochs_retained = 0;
+        std::size_t sparse_empty_epochs_retained = 0;
         std::size_t pseudorange_factors = 0;
         /// TDCP measurements present in the backend-independent problem.
         std::size_t tdcp_factors = 0;

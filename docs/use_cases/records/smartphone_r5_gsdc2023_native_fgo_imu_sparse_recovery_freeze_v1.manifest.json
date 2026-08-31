@@ -1,0 +1,16 @@
+{
+  "schema_version": "smartphone-r5-native-fgo-imu-sparse-recovery-freeze-manifest.v1",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_imu_sparse_recovery_freeze_v1.json",
+  "freeze_record_sha256": "b852c28124e397c1a9a5f303e2d5655ba85e463a1fceb35528004c7b6ff80879",
+  "candidate": "fgo_imu_sparse_recovery",
+  "truth_free": true,
+  "truth_open_count": 0,
+  "input_members_hashed": [
+    "device_gnss.csv",
+    "device_imu.csv",
+    "brdc.nav"
+  ],
+  "forbidden_members_opened": false,
+  "artifact_generation_authorized_after_freeze": true,
+  "immutable_after_generation": true
+}

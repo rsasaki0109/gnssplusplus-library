@@ -83,6 +83,10 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
     }
     result.diagnostics.single_difference_doppler_factors =
         problem.single_difference_doppler_factors.size();
+    result.diagnostics.sparse_epochs_retained =
+        problem.diagnostics.sparse_epochs_retained;
+    result.diagnostics.sparse_empty_epochs_retained =
+        problem.diagnostics.sparse_empty_epochs_retained;
     result.diagnostics.single_difference_tdcp_factors =
         problem.single_difference_tdcp_factors.size();
     result.diagnostics.carrier_phase_factors = problem.carrier_phase_factors.size();

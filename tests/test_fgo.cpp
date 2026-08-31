@@ -794,6 +794,50 @@ TEST(FGOTest, EmptyProblemProducesNoSolutions) {
     EXPECT_EQ(result.diagnostics.pseudorange_factors, 0u);
 }
 
+TEST(FGOTest, SparseEpochRecoveryIsOptInAndRetainsBelowFloorEpochs) {
+    const NavigationData nav = makeSyntheticGpsNavigation(4);
+    const Vector3d receiver_position(1113194.0, -4841695.0, 3985350.0);
+    std::vector<ObservationData> epochs;
+    for (std::size_t epoch_index = 0; epoch_index < 2; ++epoch_index) {
+        ObservationData epoch(GNSSTime(2300, 100100.0 + epoch_index));
+        epoch.receiver_position = receiver_position;
+        const std::size_t satellite_count = epoch_index == 0 ? 4 : 3;
+        for (std::size_t prn = 1; prn <= satellite_count; ++prn) {
+            Observation observation;
+            ASSERT_TRUE(makeSyntheticGpsL1Observation(
+                nav, SatelliteId(GNSSSystem::GPS, static_cast<uint8_t>(prn)),
+                epoch.time, receiver_position, 0.0, observation));
+            epoch.addObservation(observation);
+        }
+        epochs.push_back(std::move(epoch));
+    }
+
+    FGOProcessor::FGOConfig default_config;
+    default_config.use_multi_constellation = false;
+    default_config.use_motion_factors = false;
+    default_config.use_tdcp_factors = false;
+    default_config.use_carrier_phase_factors = false;
+    default_config.use_ionosphere_model = false;
+    default_config.use_troposphere_model = false;
+    default_config.min_elevation_deg = -90.0;
+    default_config.min_snr_dbhz = 0.0;
+    default_config.min_satellites_per_epoch = 4;
+
+    const auto baseline = FGOProcessor(default_config).buildPseudorangeProblem(
+        epochs, nav);
+    EXPECT_EQ(baseline.epochs.size(), 1u);
+    EXPECT_EQ(baseline.diagnostics.sparse_epochs_retained, 0u);
+
+    auto recovery_config = default_config;
+    recovery_config.retain_sparse_epochs_for_imu = true;
+    const auto recovery = FGOProcessor(recovery_config).buildPseudorangeProblem(
+        epochs, nav);
+    EXPECT_EQ(recovery.epochs.size(), 2u);
+    EXPECT_EQ(recovery.diagnostics.sparse_epochs_retained, 1u);
+    EXPECT_EQ(recovery.diagnostics.sparse_empty_epochs_retained, 0u);
+    ASSERT_EQ(recovery.pseudorange_factors.size(), 7u);
+}
+
 TEST(FGOTest, BatchPseudorangeFactorsRecoverSyntheticTrajectory) {
     FGOProcessor::FGOConfig config;
     config.max_iterations = 10;

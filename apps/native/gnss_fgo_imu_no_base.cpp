@@ -69,6 +69,7 @@ struct Options {
     int skip_epochs = 0;
     bool all_epochs = false;
     bool android_raw_utc_key_contract = false;
+    bool fgo_imu_sparse_recovery = false;
 };
 
 void usage(const char* program) {
@@ -79,7 +80,7 @@ void usage(const char* program) {
                  " --out <submission.csv> --summary-json <summary.json>"
                  " [--dataset-id <id>] [--skip-epochs <n>]"
                  " [--max-epochs 10..30 | --all-epochs]"
-                 " [--android-raw-utc-keys]\n";
+                 " [--android-raw-utc-keys] [--fgo-imu-sparse-recovery]\n";
 }
 
 bool requireValue(int argc, char** argv, int& index, std::string& value) {
@@ -154,6 +155,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
             options.all_epochs = true;
         } else if (arg == "--android-raw-utc-keys") {
             options.android_raw_utc_key_contract = true;
+        } else if (arg == "--fgo-imu-sparse-recovery") {
+            options.fgo_imu_sparse_recovery = true;
         } else {
             std::cerr << "Unknown argument: " << arg << "\n";
             return false;
@@ -189,6 +192,12 @@ bool parseArguments(int argc, char** argv, Options& options) {
     if (options.android_raw_utc_key_contract &&
         (!options.all_epochs || options.skip_epochs != 0)) {
         std::cerr << "--android-raw-utc-keys requires --all-epochs without --skip-epochs\n";
+        return false;
+    }
+    if (options.fgo_imu_sparse_recovery &&
+        (!android_raw || !options.android_raw_utc_key_contract)) {
+        std::cerr << "--fgo-imu-sparse-recovery requires Android raw input and "
+                     "--android-raw-utc-keys\n";
         return false;
     }
     return true;
@@ -567,7 +576,7 @@ std::string makeSummary(const Options& options,
     std::ostringstream out;
     out << std::setprecision(17);
     out << "{\n"
-        << "  \"schema_version\": \"smartphone-r5-native-fgo-android-imu-no-base-run.v2\",\n"
+        << "  \"schema_version\": \"smartphone-r5-native-fgo-android-imu-no-base-run.v3\",\n"
         << "  \"dataset_id\": ";
     writeJsonString(out, options.dataset_id);
     out << ",\n  \"status\": "
@@ -576,6 +585,8 @@ std::string makeSummary(const Options& options,
         << "  \"base_factors\": false,\n"
         << "  \"no_base_contract\": true,\n"
         << "  \"production_default_changed\": false,\n"
+        << "  \"fgo_imu_sparse_recovery\": "
+        << (options.fgo_imu_sparse_recovery ? "true" : "false") << ",\n"
         << "  \"skip_epochs\": " << options.skip_epochs << ",\n"
         << "  \"all_epochs\": " << (options.all_epochs ? "true" : "false") << ",\n"
         << "  \"inputs\": {\n"
@@ -617,6 +628,10 @@ std::string makeSummary(const Options& options,
         << "  \"epochs\": {\n"
         << "    \"problem\": " << problem.epochs.size() << ",\n"
         << "    \"output\": " << result.solution.solutions.size() << ",\n"
+        << "    \"sparse_epochs_retained\": "
+        << result.diagnostics.sparse_epochs_retained << ",\n"
+        << "    \"sparse_empty_epochs_retained\": "
+        << result.diagnostics.sparse_empty_epochs_retained << ",\n"
         << "    \"pseudorange_factors\": " << problem.pseudorange_factors.size() << ",\n"
         << "    \"tdcp_factors_built\": " << problem.tdcp_factors.size() << ",\n"
         << "    \"double_difference_pseudorange_factors\": "
@@ -871,6 +886,14 @@ int main(int argc, char** argv) {
         // raw adapter; keep it opt-in to this research entry point only.
         config.use_undifferenced_doppler_factors = true;
         config.use_corrected_undifferenced_doppler_factors = true;
+    }
+    if (options.fgo_imu_sparse_recovery) {
+        // One fixed, raw-only recovery candidate: retain epochs below the
+        // normal four-satellite floor for the IMU/temporal chain and admit
+        // all supported secondary raw frequencies to the same P/D graph.
+        // This is opt-in; the production/default graph remains unchanged.
+        config.retain_sparse_epochs_for_imu = true;
+        config.use_multi_frequency_double_difference = true;
     }
     config.pose3_lever_arm_body_m = libgnss::Vector3d::Zero();
     if (android_raw) {
