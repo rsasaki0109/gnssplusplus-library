@@ -134,6 +134,44 @@ TEST(PdcStateBridgeTest, UsesFiniteRawWlsVelocityAndClockRateSeed) {
     EXPECT_EQ(invalid.reason, "invalid-velocity-seed");
 }
 
+TEST(PdcStateBridgeTest, IntegratesWlsPositionSeedsAndResetsAtClockJump) {
+    const Vector3d anchor(6'370'000.0, 1'000.0, 2'000.0);
+    const Vector3d velocity0(4.0, -2.0, 1.0);
+    const Vector3d velocity2(6.0, -1.0, 2.0);
+    const std::vector<pdc_state_bridge::EpochInput> epochs = {
+        {GNSSTime(2200, 100.0), anchor, 0.0, false},
+        {GNSSTime(2200, 101.0), anchor + Vector3d(100.0, 0.0, 0.0), 0.0,
+         false},
+        {GNSSTime(2200, 102.0), anchor + Vector3d(200.0, 0.0, 0.0), 0.0,
+         false}};
+    const std::vector<pdc_state_bridge::PositionSeedVelocity> velocities = {
+        {true, velocity0}, {false, Vector3d::Zero()}, {true, velocity2}};
+    const auto integrated = pdc_state_bridge::integratePositionSeeds(
+        epochs, velocities, {false, false, false});
+    ASSERT_TRUE(integrated.valid);
+    EXPECT_EQ(integrated.anchor_index, 0U);
+    EXPECT_EQ(integrated.integrated_epochs, 2U);
+    EXPECT_EQ(integrated.held_velocity_epochs, 1U);
+    EXPECT_EQ(integrated.per_epoch_spp_fallback_epochs, 0U);
+    EXPECT_EQ(integrated.reset_intervals, 0U);
+    EXPECT_NEAR((integrated.positions[1] - (anchor + velocity0)).norm(), 0.0,
+                1e-9);
+    EXPECT_NEAR((integrated.positions[2] -
+                 (anchor + velocity0 + 0.5 * (velocity0 + velocity2)))
+                    .norm(),
+                0.0, 1e-9);
+
+    const auto reset = pdc_state_bridge::integratePositionSeeds(
+        epochs, {{true, velocity0}, {true, velocity0}, {true, velocity2}},
+        {false, true, false});
+    ASSERT_TRUE(reset.valid);
+    EXPECT_EQ(reset.integrated_epochs, 1U);
+    EXPECT_EQ(reset.per_epoch_spp_fallback_epochs, 1U);
+    EXPECT_EQ(reset.reset_intervals, 1U);
+    EXPECT_NEAR((reset.positions[1] - epochs[1].seed_position_ecef).norm(),
+                0.0, 1e-9);
+}
+
 TEST(PdcStateBridgeTest, RejectsInvalidDopplerGeometryBeforeSolving) {
     const Vector3d seed(6'370'000.0, 0.0, 0.0);
     std::vector<pdc_state_bridge::PseudorangeRow> pseudorange;

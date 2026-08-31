@@ -592,6 +592,13 @@ struct NativePdcBridgeReport {
     double wls_first_velocity_norm_mps = 0.0;
     double wls_first_clock_rate_mps = 0.0;
     std::string wls_first_reason;
+    std::size_t integrated_seed_anchor_index = 0;
+    std::size_t integrated_seed_epochs = 0;
+    std::size_t integrated_seed_held_velocity_epochs = 0;
+    std::size_t integrated_seed_spp_fallback_epochs = 0;
+    std::size_t integrated_seed_reset_intervals = 0;
+    double integrated_seed_max_step_speed_mps = 0.0;
+    double integrated_seed_max_displacement_from_spp_m = 0.0;
     std::size_t fgo_seed_displacement_count = 0;
     double fgo_seed_displacement_p50_m = 0.0;
     double fgo_seed_displacement_max_m = 0.0;
@@ -768,7 +775,10 @@ bool populateNativePdcStateBridge(
     }
 
     std::vector<libgnss::pdc_state_bridge::EpochInput> epochs;
+    std::vector<libgnss::pdc_state_bridge::PositionSeedVelocity>
+        seed_velocities;
     epochs.reserve(problem.epochs.size());
+    seed_velocities.reserve(problem.epochs.size());
     for (std::size_t epoch_index = 0; epoch_index < problem.epochs.size();
          ++epoch_index) {
         const auto& source = problem.epochs[epoch_index];
@@ -802,6 +812,32 @@ bool populateNativePdcStateBridge(
                           seed_clock_rate_mps,
                           has_seed_velocity,
                           has_seed_clock_rate});
+        seed_velocities.push_back({has_seed_velocity, seed_velocity_ecef_mps});
+    }
+
+    const auto integrated_seeds = libgnss::pdc_state_bridge::integratePositionSeeds(
+        epochs, seed_velocities, problem.clock_jumps, 1.5);
+    if (!integrated_seeds.valid ||
+        integrated_seeds.positions.size() != epochs.size()) {
+        report.failure = "invalid integrated raw WLS position seed";
+        return false;
+    }
+    report.integrated_seed_anchor_index = integrated_seeds.anchor_index;
+    report.integrated_seed_epochs = integrated_seeds.integrated_epochs;
+    report.integrated_seed_held_velocity_epochs =
+        integrated_seeds.held_velocity_epochs;
+    report.integrated_seed_spp_fallback_epochs =
+        integrated_seeds.per_epoch_spp_fallback_epochs;
+    report.integrated_seed_reset_intervals = integrated_seeds.reset_intervals;
+    report.integrated_seed_max_step_speed_mps =
+        integrated_seeds.max_integrated_step_speed_mps;
+    report.integrated_seed_max_displacement_from_spp_m =
+        integrated_seeds.max_displacement_from_spp_m;
+    std::vector<libgnss::pdc_state_bridge::EpochInput> bridge_epochs = epochs;
+    for (std::size_t epoch_index = 0; epoch_index < bridge_epochs.size();
+         ++epoch_index) {
+        bridge_epochs[epoch_index].seed_position_ecef =
+            integrated_seeds.positions[epoch_index];
     }
 
     std::vector<libgnss::pdc_state_bridge::PseudorangeRow> pseudorange_rows;
@@ -1001,7 +1037,7 @@ bool populateNativePdcStateBridge(
     }
 
     const auto solve = libgnss::pdc_state_bridge::solve(
-        epochs, pseudorange_rows, doppler_rows, bridge_options);
+        bridge_epochs, pseudorange_rows, doppler_rows, bridge_options);
     report.motion_intervals = solve.motion_intervals;
     report.iterations = solve.iterations;
     report.initial_cost = solve.initial_cost;
@@ -1110,7 +1146,21 @@ bool populateNativePdcStateBridge(
                 << report.wls_first_velocity_norm_mps
                 << "; wls_first_clock_rate_mps="
                 << report.wls_first_clock_rate_mps
-                << "; wls_first_reason=" << report.wls_first_reason;
+                << "; wls_first_reason=" << report.wls_first_reason
+                << "; integrated_seed_anchor="
+                << report.integrated_seed_anchor_index
+                << "; integrated_seed_epochs="
+                << report.integrated_seed_epochs
+                << "; integrated_seed_holds="
+                << report.integrated_seed_held_velocity_epochs
+                << "; integrated_seed_spp_fallbacks="
+                << report.integrated_seed_spp_fallback_epochs
+                << "; integrated_seed_resets="
+                << report.integrated_seed_reset_intervals
+                << "; integrated_seed_step_max_mps="
+                << report.integrated_seed_max_step_speed_mps
+                << "; integrated_seed_displacement_max_m="
+                << report.integrated_seed_max_displacement_from_spp_m;
         if (!solve.epochs.empty()) {
             const auto& first = solve.epochs.front();
             double initial_sum_squared = 0.0;
@@ -1132,6 +1182,8 @@ bool populateNativePdcStateBridge(
                     << "; first_d_rows=" << first.doppler_rows
                     << "; first_pos_norm=" << first.state.position_ecef.norm()
                     << "; first_pos_seed_norm="
+                    << bridge_epochs.front().seed_position_ecef.norm()
+                    << "; first_pos_spp_seed_norm="
                     << epochs.front().seed_position_ecef.norm()
                     << "; first_clock_m=" << first.state.clock_bias_m[0]
                     << "; first_vel_norm="
@@ -1524,6 +1576,20 @@ std::string makeSummary(const Options& options,
         << "    \"wls_first_reason\": ";
     writeJsonString(out, pdc_bridge_report.wls_first_reason);
     out << ",\n"
+        << "    \"integrated_seed_anchor_index\": "
+        << pdc_bridge_report.integrated_seed_anchor_index << ",\n"
+        << "    \"integrated_seed_epochs\": "
+        << pdc_bridge_report.integrated_seed_epochs << ",\n"
+        << "    \"integrated_seed_held_velocity_epochs\": "
+        << pdc_bridge_report.integrated_seed_held_velocity_epochs << ",\n"
+        << "    \"integrated_seed_spp_fallback_epochs\": "
+        << pdc_bridge_report.integrated_seed_spp_fallback_epochs << ",\n"
+        << "    \"integrated_seed_reset_intervals\": "
+        << pdc_bridge_report.integrated_seed_reset_intervals << ",\n"
+        << "    \"integrated_seed_max_step_speed_mps\": "
+        << pdc_bridge_report.integrated_seed_max_step_speed_mps << ",\n"
+        << "    \"integrated_seed_max_displacement_from_spp_m\": "
+        << pdc_bridge_report.integrated_seed_max_displacement_from_spp_m << ",\n"
         << "    \"fgo_seed_displacement_count\": "
         << pdc_bridge_report.fgo_seed_displacement_count << ",\n"
         << "    \"fgo_seed_displacement_p50_m\": "

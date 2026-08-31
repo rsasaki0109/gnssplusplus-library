@@ -1,0 +1,104 @@
+{
+  "schema": "smartphone-phase27-pdc-bridge-integrated-seed-result-v1",
+  "phase": "27",
+  "decision": "No-Go",
+  "status": "sealed-structural-no-go",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_phase27_pdc_bridge_integrated_seed_freeze_v1.json",
+  "truth_policy": {
+    "truth_open_count": 0,
+    "validation_opened": false,
+    "holdout_opened": false,
+    "phase24_matrix_rerun": false,
+    "mat_read_or_generated": false,
+    "kaggle_or_token_access": false
+  },
+  "candidate": {
+    "name": "native_raw_pdc_bridge_integrated_wls_position_seed_v1",
+    "change_scope": "initializer position only",
+    "anchor": "first finite native SPP ECEF position",
+    "position_rule": "bounded trapezoidal integration of existing valid raw Doppler-WLS ECEF velocities; previous-velocity hold only for an invalid current WLS interval; original per-epoch SPP on clock jump/gap/no prior velocity",
+    "max_gap_s": 1.5,
+    "no_cross_trip_or_extrapolation": true,
+    "objective_and_parameters_unchanged": true,
+    "production_default_changed": false,
+    "quality_gate_relaxed": false
+  },
+  "raw_structural_runs": [
+    {
+      "route": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "log_sha256": "f983b44f09704bc2e5d6352493f1590759e4618b105848a5ea3aa7cd87fd1419",
+      "bridge_failure": "epoch-quality-gate-rejected",
+      "converged": true,
+      "iterations": 990,
+      "epochs": 2159,
+      "integrated_seed_epochs": 2158,
+      "held_velocity_epochs": 0,
+      "spp_fallback_epochs": 0,
+      "reset_intervals": 0,
+      "integrated_seed_step_max_mps": 44.3036,
+      "integrated_seed_max_displacement_from_spp_m": 1767.4,
+      "bridge_max_velocity_mps": 2135.01,
+      "bridge_velocity_over_bound": 1,
+      "bridge_max_clock_rate_mps": 15.0811,
+      "bridge_max_normalized_rms": 657.244
+    },
+    {
+      "route": "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "log_sha256": "04164ddddb4263de7598d2b83b2e79e0939bdf5a5dcb8958feed791f9fab8cc9",
+      "bridge_failure": "optimizer-did-not-converge",
+      "converged": false,
+      "iterations": 1000,
+      "epochs": 1678,
+      "integrated_seed_epochs": 1677,
+      "held_velocity_epochs": 41,
+      "spp_fallback_epochs": 0,
+      "reset_intervals": 0,
+      "integrated_seed_step_max_mps": 36.3456,
+      "integrated_seed_max_displacement_from_spp_m": 2306.68,
+      "bridge_max_velocity_mps": 65.595,
+      "bridge_velocity_over_bound": 0,
+      "bridge_max_clock_rate_mps": 6.84685,
+      "bridge_max_normalized_rms": 240.115
+    },
+    {
+      "route": "2021-07-14-20-50-us-ca-mtv-e/sm-g988b",
+      "log_sha256": "cdd54d3fc93ea10c5cac41890df79acb533fa05bd9fe3009fd828016d3ffcd31",
+      "bridge_failure": "epoch-quality-gate-rejected",
+      "converged": true,
+      "iterations": 83,
+      "epochs": 1165,
+      "integrated_seed_epochs": 1164,
+      "held_velocity_epochs": 0,
+      "spp_fallback_epochs": 0,
+      "reset_intervals": 0,
+      "integrated_seed_step_max_mps": 36.5136,
+      "integrated_seed_max_displacement_from_spp_m": 43.433,
+      "bridge_max_velocity_mps": 32180.3,
+      "bridge_velocity_over_bound": 1122,
+      "bridge_max_clock_rate_mps": 109.759,
+      "bridge_max_normalized_rms": 61755.4
+    }
+  ],
+  "structural_interpretation": {
+    "seed_conditioning": "The WLS-derived integrated positions are finite, route-local, and physically bounded at every attempted step. They materially reduce raw SPP discontinuity only as an initializer.",
+    "bridge_outcome": "No structural improvement to the fixed P+D+temporal solve: all three routes still fail the existing convergence/quality/velocity gates.",
+    "diagnosis": "The remaining failure is not explained by raw timing, Doppler sign/unit, or per-epoch SPP discontinuity alone. Further changes would be a new model/conditioning candidate, not an initializer-only correctness fix.",
+    "score": "not opened; no accuracy claim"
+  },
+  "tests": {
+    "command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib build/tests/run_tests --gtest_filter='PdcStateBridgeTest.*:DopplerContractTest.*:AndroidRawGnssTest.*'",
+    "result": "23/23 passed",
+    "log_sha256": "0ef06df558b248c34ede622e4e267957b5f72e800073b3dca2dbd8846f361220",
+    "build": "gnss_fgo_imu_no_base and gnss_run_tests succeeded",
+    "full_serial_ctest": "132/132 passed",
+    "full_serial_ctest_log_sha256": "54531b8d0ece1539fa47b699c804f93a96ee19bb02de3dceba26618c3ae3ead4"
+  },
+  "source_hashes_after_implementation": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "3213e6b0b918f89a13ea6fe476298db52780bf5e0369e8bc8de0ce526c2c549f",
+    "include/libgnss++/algorithms/pdc_state_bridge.hpp": "d3c40100955960cf9ee6613f18bcd90e8f23191b26ca61e680714f46cd3d44c0",
+    "src/algorithms/pdc_state_bridge.cpp": "1e80b0d6add9bbbb6b633bd0e1e128553a463b4c0acba1129f0f9b0e995da6d0",
+    "tests/test_fgo.cpp": "8257a203341c35ef138673f715068b2e3ee92ffdb22943b5284c006e39c35043",
+    "build/apps/gnss_fgo_imu_no_base": "0e885e3b315373303beedfc0aa3825dca8d11b8b6f87d60dff18ebb215feb668"
+  },
+  "next_action": "Do not open development truth, validation, holdout, or rerun the Phase24 matrix. Keep this initializer-only candidate No-Go; a future bridge candidate needs a separately frozen model/conditioning design."
+}

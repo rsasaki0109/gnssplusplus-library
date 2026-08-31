@@ -3415,3 +3415,27 @@ and
 `docs/use_cases/records/smartphone_r5_phase26_pdc_bridge_diagnostic_result_v1.json`.
 The focused native test set passed 22/22; production/default lanes remain
 unchanged.
+
+### Phase 27 integrated WLS position seed (structural No-Go)
+
+Phase 27 tested one initializer-only conditioning change.  The first finite
+native SPP ECEF position was used as a route-local anchor, and existing valid
+raw Doppler-WLS ECEF velocities were integrated with the fixed epoch intervals
+using trapezoidal updates.  A missing current WLS estimate could use only the
+previous valid velocity for that interval; clock jumps, invalid intervals, or
+missing prior velocity reverted to the original per-epoch SPP seed and reset
+the chain.  The P+D+temporal objective, all weights/gates, and production
+defaults were unchanged.
+
+The raw structural runs produced finite bounded seeds (Pixel5 2,158
+integrated epochs, maximum step 44.30 m/s; Pixel4 1,677 epochs with 41
+velocity holds, 36.35 m/s; Samsung 1,164 epochs, 36.51 m/s).  Nevertheless,
+the bridge still failed on all three routes: Pixel5 reached 2,135.0 m/s,
+Pixel4 did not converge, and Samsung reached 32,180.3 m/s with 1,122
+velocity-bound violations.  Position-seed conditioning alone is therefore a
+No-Go and was not truth-scored; the Phase 24 matrix remains unopened.  The
+freeze, raw logs, structural result, and hashes are sealed in
+`docs/use_cases/records/smartphone_r5_phase27_pdc_bridge_integrated_seed_freeze_v1.json`
+and
+`docs/use_cases/records/smartphone_r5_phase27_pdc_bridge_integrated_seed_result_v1.json`.
+The focused native test set passed 23/23.

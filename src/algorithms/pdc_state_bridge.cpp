@@ -315,6 +315,108 @@ int clockGroupIndex(GNSSSystem group) {
     }
 }
 
+IntegratedPositionSeeds integratePositionSeeds(
+    const std::vector<EpochInput>& epochs,
+    const std::vector<PositionSeedVelocity>& velocities,
+    const std::vector<bool>& clock_jumps,
+    double max_gap_s) {
+    IntegratedPositionSeeds result;
+    result.positions.resize(epochs.size());
+    if (epochs.empty() || velocities.size() != epochs.size() ||
+        !(max_gap_s > 0.0) || !std::isfinite(max_gap_s)) {
+        return result;
+    }
+
+    std::size_t anchor = epochs.size();
+    for (std::size_t i = 0; i < epochs.size(); ++i) {
+        const auto& position = epochs[i].seed_position_ecef;
+        if (position.allFinite() && std::isfinite(position.norm()) &&
+            position.norm() > 1.0e6 && position.norm() < 1.0e7) {
+            anchor = i;
+            break;
+        }
+    }
+    if (anchor == epochs.size()) return result;
+
+    for (std::size_t i = 0; i < epochs.size(); ++i) {
+        result.positions[i] = epochs[i].seed_position_ecef;
+    }
+    result.anchor_index = anchor;
+    result.valid = true;
+
+    Vector3d previous_velocity = Vector3d::Zero();
+    bool have_previous_velocity = false;
+    if (velocities[anchor].valid &&
+        velocities[anchor].velocity_ecef_mps.allFinite()) {
+        previous_velocity = velocities[anchor].velocity_ecef_mps;
+        have_previous_velocity = true;
+    }
+
+    for (std::size_t i = anchor + 1U; i < epochs.size(); ++i) {
+        const double dt = epochs[i].time - epochs[i - 1U].time;
+        const bool clock_jump = i < clock_jumps.size() && clock_jumps[i];
+        const bool continuous = std::isfinite(dt) && dt > 0.0 &&
+                                dt <= max_gap_s && !clock_jump;
+        const bool current_velocity_valid =
+            velocities[i].valid && velocities[i].velocity_ecef_mps.allFinite();
+        bool used_integral = false;
+        if (continuous && have_previous_velocity) {
+            Vector3d displacement = dt * previous_velocity;
+            if (current_velocity_valid) {
+                displacement = 0.5 * dt *
+                               (previous_velocity +
+                                velocities[i].velocity_ecef_mps);
+            }
+            const Vector3d candidate = result.positions[i - 1U] + displacement;
+            if (candidate.allFinite() && std::isfinite(candidate.norm()) &&
+                candidate.norm() > 1.0e6 && candidate.norm() < 1.0e7) {
+                result.positions[i] = candidate;
+                ++result.integrated_epochs;
+                used_integral = true;
+                if (!current_velocity_valid) {
+                    ++result.held_velocity_epochs;
+                }
+            }
+        }
+
+        if (!used_integral) {
+            const auto& spp_position = epochs[i].seed_position_ecef;
+            if (!spp_position.allFinite() ||
+                !std::isfinite(spp_position.norm()) ||
+                spp_position.norm() <= 1.0e6 || spp_position.norm() >= 1.0e7) {
+                result.valid = false;
+                return result;
+            }
+            result.positions[i] = spp_position;
+            ++result.per_epoch_spp_fallback_epochs;
+        }
+        const double displacement =
+            (result.positions[i] - epochs[i].seed_position_ecef).norm();
+        if (std::isfinite(displacement)) {
+            result.max_displacement_from_spp_m = std::max(
+                result.max_displacement_from_spp_m, displacement);
+        }
+        if (used_integral) {
+            const double step_speed =
+                (result.positions[i] - result.positions[i - 1U]).norm() / dt;
+            if (std::isfinite(step_speed)) {
+                result.max_integrated_step_speed_mps = std::max(
+                    result.max_integrated_step_speed_mps, step_speed);
+            }
+        }
+
+        if (!continuous || !used_integral) {
+            ++result.reset_intervals;
+            have_previous_velocity = false;
+        }
+        if (current_velocity_valid) {
+            previous_velocity = velocities[i].velocity_ecef_mps;
+            have_previous_velocity = true;
+        }
+    }
+    return result;
+}
+
 SolveResult solve(const std::vector<EpochInput>& epochs,
                   const std::vector<PseudorangeRow>& pseudorange_rows,
                   const std::vector<DopplerRow>& doppler_rows,

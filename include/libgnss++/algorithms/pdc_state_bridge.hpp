@@ -49,6 +49,25 @@ struct EpochInput {
     bool has_seed_clock_rate = false;
 };
 
+/** A finite raw-observable velocity accepted for position-seed integration. */
+struct PositionSeedVelocity {
+    bool valid = false;
+    Vector3d velocity_ecef_mps = Vector3d::Zero();
+};
+
+/** Diagnostics and positions produced by the deterministic seed conditioner. */
+struct IntegratedPositionSeeds {
+    bool valid = false;
+    std::size_t anchor_index = 0;
+    std::size_t integrated_epochs = 0;
+    std::size_t held_velocity_epochs = 0;
+    std::size_t per_epoch_spp_fallback_epochs = 0;
+    std::size_t reset_intervals = 0;
+    double max_integrated_step_speed_mps = 0.0;
+    double max_displacement_from_spp_m = 0.0;
+    std::vector<Vector3d> positions;
+};
+
 /** Physically predeclared, truth-free controls matching the native PDC path. */
 struct Options {
     int max_iterations = 12;
@@ -108,6 +127,20 @@ struct SolveResult {
 
 /** Map FGO's shared clock groups to the five-column native PDC contract. */
 int clockGroupIndex(GNSSSystem group);
+
+/**
+ * Build a route-local position initializer from an SPP anchor and raw WLS
+ * velocities.  The helper never extrapolates across a clock jump or a gap;
+ * it falls back to that epoch's SPP position and restarts the chain.  When a
+ * current velocity is absent but the previous velocity is valid, a bounded
+ * constant-velocity hold is used for that interval.  It does not alter the
+ * P+D+temporal objective solved below.
+ */
+IntegratedPositionSeeds integratePositionSeeds(
+    const std::vector<EpochInput>& epochs,
+    const std::vector<PositionSeedVelocity>& velocities,
+    const std::vector<bool>& clock_jumps,
+    double max_gap_s = 1.5);
 
 /**
  * @brief Solve the full raw P+D+temporal PDC state in memory.
