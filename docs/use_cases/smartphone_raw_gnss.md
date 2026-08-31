@@ -3439,3 +3439,34 @@ freeze, raw logs, structural result, and hashes are sealed in
 and
 `docs/use_cases/records/smartphone_r5_phase27_pdc_bridge_integrated_seed_result_v1.json`.
 The focused native test set passed 23/23.
+
+### Phase 28 explicit bridge-free TDCP/IMU/FGO separation (structural No-Go)
+
+Phase 28 separated the historical `--native-pdc-imu-tdcp` bundle into an
+explicit opt-in spelling, `--native-pdc-imu-tdcp-no-bridge`.  The new spelling
+enables the existing raw TDCP, IMU, and GTSAM FGO configuration while leaving
+the native PDC state bridge disabled; the old spelling retains its historical
+bridge-backed behavior.  No noise, Huber, gate, iteration, raw-clock, or
+production default changed.  The disabled-bridge diagnostics were also made
+JSON-safe by emitting zero instead of IEEE infinity.
+
+The bridge-free TDCP/IMU/FGO base reached finite, converged outputs on all
+three raw-only routes and repeated byte-identically.  It built 31,488, 27,080,
+and 12,357 TDCP factors for Pixel5, Pixel4, and sm-g988b respectively, with
+no solver fallback.  The existing sm-g988b raw-UTC contract still required 35
+four-second key interpolations; this was recorded, not tuned.
+
+The fixed applicability probes for Galileo E1/E5a Hatch, upstream stop
+constraints, and phone-position offset each succeeded on the two Pixel routes
+but failed closed on sm-g988b because the IMU solve fell back and these
+candidate contracts forbid fallback.  Therefore the all-route structural gate
+failed and no development truth or Phase 24 matrix was opened.  These are
+raw-only structural results, not accuracy claims; validation, holdout, and
+Kaggle remain sealed.  Freeze and result hashes are recorded in
+`docs/use_cases/records/smartphone_r5_phase28_native_fgo_no_bridge_freeze_v1.json`
+and
+`docs/use_cases/records/smartphone_r5_phase28_native_fgo_no_bridge_structural_result_v1.json`.
+
+The focused native tests passed 23/23.  The new CLI contract accepts the
+bridge-free spelling through raw input loading, rejects explicit bridge
+conflicts before input open, and preserves the legacy spelling.

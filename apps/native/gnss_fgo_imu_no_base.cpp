@@ -81,6 +81,7 @@ struct Options {
     bool fgo_imu_sparse_recovery = false;
     bool native_pdc_state_bridge = false;
     bool native_pdc_imu_tdcp = false;
+    bool native_pdc_imu_tdcp_no_bridge = false;
     bool native_signal_bias_states = false;
     bool native_residual_ionosphere = false;
     bool native_upstream_quality = false;
@@ -115,6 +116,7 @@ void usage(const char* program) {
                  " [--fgo-imu-sparse-recovery]"
                  " [--android-utc-wall-clock-fallback]"
                  " [--native-pdc-state-bridge] [--native-pdc-imu-tdcp]"
+                 " [--native-pdc-imu-tdcp-no-bridge]"
                  " [--native-signal-bias-states] [--native-residual-ionosphere]"
                  " [--native-upstream-quality] [--native-carrier-code-leveling]"
                  " [--native-upstream-absolute-doppler-screen]"
@@ -213,6 +215,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
             options.native_pdc_state_bridge = true;
         } else if (arg == "--native-pdc-imu-tdcp") {
             options.native_pdc_imu_tdcp = true;
+        } else if (arg == "--native-pdc-imu-tdcp-no-bridge") {
+            options.native_pdc_imu_tdcp_no_bridge = true;
         } else if (arg == "--native-signal-bias-states") {
             options.native_signal_bias_states = true;
         } else if (arg == "--native-residual-ionosphere") {
@@ -263,10 +267,15 @@ bool parseArguments(int argc, char** argv, Options& options) {
         std::cerr << "MATLAB .mat paths are forbidden by the native/raw contract\n";
         return false;
     }
-    if (options.native_pdc_imu_tdcp) {
-        // The TDCP candidate is deliberately a single raw-only recipe.  It
-        // reuses the in-process PDC state bridge and therefore cannot be
-        // accidentally invoked on a RINEX/precomputed lane.
+    if (options.native_pdc_imu_tdcp_no_bridge) {
+        // This explicit split keeps the existing --native-pdc-imu-tdcp
+        // behavior byte-compatible while exposing the same in-process
+        // TDCP/IMU/FGO graph without its failed PDC state initializer.
+        options.native_pdc_imu_tdcp = true;
+    } else if (options.native_pdc_imu_tdcp) {
+        // Preserve the historical TDCP recipe: it includes the in-process
+        // PDC state bridge unless the explicit no-bridge spelling above was
+        // requested.
         options.native_pdc_state_bridge = true;
     }
     if (options.android_raw_utc_key_contract && !android_raw) {
@@ -307,6 +316,16 @@ bool parseArguments(int argc, char** argv, Options& options) {
          !options.all_epochs || options.skip_epochs != 0)) {
         std::cerr << "--native-pdc-imu-tdcp requires Android raw input, "
                      "--android-raw-utc-keys, --all-epochs, and no skipped epochs\n";
+        return false;
+    }
+    if (options.native_pdc_imu_tdcp_no_bridge && options.native_pdc_state_bridge) {
+        std::cerr << "--native-pdc-imu-tdcp-no-bridge conflicts with "
+                     "--native-pdc-state-bridge\n";
+        return false;
+    }
+    if (options.native_pdc_imu_tdcp_no_bridge && options.native_upstream_quality) {
+        std::cerr << "--native-pdc-imu-tdcp-no-bridge is incompatible with "
+                     "--native-upstream-quality, which requires the PDC bridge\n";
         return false;
     }
     if (options.native_signal_bias_states && !android_raw) {
@@ -568,13 +587,16 @@ struct NativePdcBridgeReport {
     std::size_t later_epoch_doppler_rows = 0;
     std::size_t epochs_with_doppler = 0;
     std::size_t finite_raw_clock_drift_epochs = 0;
-    double min_epoch_dt_s = std::numeric_limits<double>::infinity();
+    // Keep the disabled diagnostic JSON standards-compliant.  solve() fills
+    // the actual minimum when the bridge is enabled; zero means "not run".
+    double min_epoch_dt_s = 0.0;
     double max_epoch_dt_s = 0.0;
     std::size_t invalid_or_large_epoch_intervals = 0;
     double doppler_residual_rms_mps = 0.0;
     double doppler_abs_p50_mps = 0.0;
     double doppler_abs_max_mps = 0.0;
-    double doppler_sigma_min_mps = std::numeric_limits<double>::infinity();
+    // As above, a disabled bridge must not serialize IEEE infinity as JSON.
+    double doppler_sigma_min_mps = 0.0;
     double doppler_sigma_max_mps = 0.0;
     double initial_pseudorange_rms_m = 0.0;
     double initial_pseudorange_max_m = 0.0;
@@ -1459,6 +1481,8 @@ std::string makeSummary(const Options& options,
         << (options.native_pdc_state_bridge ? "true" : "false") << ",\n"
         << "  \"native_pdc_imu_tdcp\": "
         << (options.native_pdc_imu_tdcp ? "true" : "false") << ",\n"
+        << "  \"native_pdc_imu_tdcp_no_bridge\": "
+        << (options.native_pdc_imu_tdcp_no_bridge ? "true" : "false") << ",\n"
         << "  \"native_signal_bias_states\": "
         << (options.native_signal_bias_states ? "true" : "false") << ",\n"
         << "  \"native_residual_ionosphere\": "

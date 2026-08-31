@@ -21,6 +21,7 @@ APP_SOURCE = ROOT / "apps" / "native" / "gnss_pos_vel_pdc.cpp"
 APP = ROOT / "build" / "apps" / "gnss_pos_vel_pdc"
 FGO_SOURCE = ROOT / "apps" / "native" / "gnss_smartphone_fgo.cpp"
 FGO_APP = ROOT / "build" / "apps" / "gnss_smartphone_fgo"
+NO_BASE_FGO_SOURCE = ROOT / "apps" / "native" / "gnss_fgo_imu_no_base.cpp"
 BENCHMARKS = ROOT / "apps" / "commands" / "benchmarks"
 if str(BENCHMARKS) not in sys.path:
     sys.path.insert(0, str(BENCHMARKS))
@@ -51,6 +52,25 @@ class NativeGnssPdcBridgeTests(unittest.TestCase):
         source = FGO_SOURCE.read_text(encoding="utf-8")
         self.assertIn("lowered.find(\".mat\")", source)
         self.assertIn("forbiddenPath(options.output)", source)
+
+    def test_no_base_tdcp_recipe_can_explicitly_skip_the_pdc_bridge(self) -> None:
+        source = NO_BASE_FGO_SOURCE.read_text(encoding="utf-8")
+        for token in (
+            "--native-pdc-imu-tdcp-no-bridge",
+            "native_pdc_imu_tdcp_no_bridge",
+            "native_pdc_state_bridge = true",
+            "native_pdc_imu_tdcp_no_bridge && options.native_upstream_quality",
+        ):
+            self.assertIn(token, source)
+        self.assertIn(
+            "options.native_pdc_imu_tdcp_no_bridge && options.native_pdc_state_bridge",
+            source,
+        )
+        # The opt-in split must preserve the old bridge-backed recipe and only
+        # suppress the bridge when the new spelling is explicit.
+        self.assertIn(
+            "} else if (options.native_pdc_imu_tdcp) {", source
+        )
 
     def test_orchestrator_is_raw_nav_only_and_rejects_mat_before_open(self) -> None:
         source = (BENCHMARKS / "gnss_smartphone_native_gnss_pdc.py").read_text(
