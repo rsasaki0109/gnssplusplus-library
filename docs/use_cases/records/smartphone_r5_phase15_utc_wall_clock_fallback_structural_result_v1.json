@@ -1,0 +1,149 @@
+{
+  "schema_version": "smartphone-r5-phase15-utc-wall-clock-fallback-structural-result.v1",
+  "status": "sealed-no-go-before-truth",
+  "candidate_id": "native-android-utc-wall-clock-anchor-v1-plus-phase14-e1-hatch",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_phase15_utc_wall_clock_fallback_freeze_v1.json",
+  "freeze_record_sha256": "9fcc6a55ddb95f4375e81e3d87b11f37e424327a7953dfc6c96df2540cbc567f",
+  "freeze_manifest": "docs/use_cases/records/smartphone_r5_phase15_utc_wall_clock_fallback_freeze_v1_manifest.json",
+  "freeze_manifest_sha256": "79d9308a3fe5c7b83a811ebd83e2b8dd913f5bb2c23dc976fcdcd768b2e0a13e",
+  "policy": {
+    "raw_only": true,
+    "allowed_inputs": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "truth_read_count": 0,
+    "validation_read_count": 0,
+    "holdout_read_count": 0,
+    "test_truth_read_count": 0,
+    "mat_read_count": 0,
+    "sample_submission_read_count": 0,
+    "enriched_columns_used": 0,
+    "device_wls_or_precomputed_coordinates_used": 0,
+    "token_or_kaggle_access": false,
+    "external_mutation": false,
+    "post_score_tuning": false,
+    "production_default_changed": false
+  },
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7"
+  },
+  "identity": {
+    "route": "2022-08-04-20-07-us-ca-sjc-q",
+    "phone": "mi8",
+    "role": "structural-smoke-only",
+    "route_disjoint_validation": false,
+    "reason": "Another phone on this route has prior development truth evidence; this mi8 smoke was intentionally not scored."
+  },
+  "raw_timing_fallback": {
+    "gnss_rows": 63852,
+    "raw_rows": 63852,
+    "unique_utc_anchors": 1417,
+    "duplicate_utc_timestamps": 62435,
+    "maximum_anchor_gap_ms": 1000,
+    "slope_ns_per_ms": 1000000.0611720121,
+    "drift_ppm": 0.06117201212111137,
+    "maximum_fit_residual_ms": 0.003562133205652237,
+    "elapsed_realtime_nonempty_rows": 0,
+    "imu_pairing": "UTC milliseconds converted to integer nanoseconds",
+    "fabricated_elapsed_realtime_nanos": false,
+    "fallback_fail_closed_bounds": {
+      "minimum_unique_anchors": 3,
+      "maximum_anchor_gap_ms": 5000,
+      "maximum_absolute_drift_ppm": 1000,
+      "maximum_fit_residual_ms": 2,
+      "hardware_clock_count": "constant when present",
+      "mixed_clock_domains": "reject"
+    }
+  },
+  "structural_runs": {
+    "mi8_baseline": {
+      "summary_sha256": "079cc6e4173409c2adea8b9398208d1e0ca9a3029c4785dd140d32e89863e268",
+      "submission_sha256": "1cfb0ac4147a02d4d03e93da1dc906118d7c5258f00462bbc41dd8ce66e75d94",
+      "rows": 1416,
+      "target_keys": 1416,
+      "interpolation": 0,
+      "edge_hold": 0,
+      "graph_factors": 78027,
+      "imu_intervals": 1416,
+      "wall_seconds": 14.38,
+      "maximum_rss_kb": 202616
+    },
+    "mi8_e1_hatch": {
+      "summary_sha256": "36ed2b8f02fe9250fdc96db69b7af1bec03161eb9205e9eb5d164b3d9813aeb7",
+      "submission_sha256": "5650c41dd73833cf9ec35238bbad5e6ba3a8c4180ee89226425abbd1af13deec",
+      "rows": 1416,
+      "target_keys": 1416,
+      "interpolation": 0,
+      "edge_hold": 0,
+      "graph_factors": 77867,
+      "imu_intervals": 1416,
+      "hatch_target_rows": 12703,
+      "hatch_eligible_rows": 5917,
+      "hatch_smoothed_rows": 5345,
+      "hatch_arcs_started": 572,
+      "maximum_level_adjustment_m": 399723.24144420365,
+      "maximum_phase_increment_m": 505.2809635642493,
+      "wall_seconds": 13.16,
+      "maximum_rss_kb": 202476
+    },
+    "pixel7_elapsed_baseline": {
+      "summary_sha256": "7713e19f7e73e4e498bcd1e53ef8da1fbadb32cd0de1e244ef78f21ff9bb4446",
+      "submission_sha256": "3069f149bc98b0383d008d5f20cc80cd4ada9f9eb1b5d09f05353895a2d5a26f",
+      "rows": 1383,
+      "target_keys": 1383,
+      "elapsed_anchor_points": 1384,
+      "fallback_applied": false,
+      "wall_seconds": 11.67,
+      "maximum_rss_kb": 194804
+    },
+    "pixel7_elapsed_e1_hatch": {
+      "summary_sha256": "1173dfac3c77361d0cd230f4a84ad2436e7fe2de6f6b76bf2c8622de8cc7b95f",
+      "submission_sha256": "803f25689650df54e6d959605ca80b567d4ccdf28271b570fa0ad41d342532cd",
+      "rows": 1383,
+      "target_keys": 1383,
+      "elapsed_anchor_points": 1384,
+      "fallback_applied": false,
+      "hatch_target_rows": 10446,
+      "hatch_eligible_rows": 6061,
+      "hatch_smoothed_rows": 5218,
+      "hatch_arcs_started": 843,
+      "maximum_level_adjustment_m": 12.40664082346484,
+      "maximum_phase_increment_m": 903.1155531491386,
+      "wall_seconds": 12.04,
+      "maximum_rss_kb": 194764
+    }
+  },
+  "structural_checks": {
+    "focused_tests": "AndroidUtcGpsMappingTest.*:AndroidImuCsvTest.*",
+    "focused_tests_passed": 9,
+    "focused_tests_failed": 0,
+    "full_serial_ctest": "131/131",
+    "full_serial_ctest_failed": 0,
+    "release_targets_built": ["gnss_run_tests", "gnss_fgo_imu_no_base"],
+    "finite_coordinates": true,
+    "duplicate_keys": 0,
+    "missing_keys": 0,
+    "extra_keys": 0,
+    "sample_coordinate_fallback": 0,
+    "unresolved_epochs": 0,
+    "deterministic_csv_hash_repeated": true
+  },
+  "decision": {
+    "status": "No-Go",
+    "promotion": false,
+    "accuracy_score": null,
+    "reason": "The timestamp fallback is physically bounded and reaches the native graph, but the pre-frozen E1 Hatch lane produces a 399,723 m maximum code-level adjustment and a 505 m phase increment on the mi8 structural route. A raw seam/reset has not been proven, so fail closed before truth rather than fit a reset threshold from this output.",
+    "next_action": "Retain the Phase 12 baseline and investigate generic ADR/code discontinuity semantics; do not reopen development truth or use this candidate for validation/holdout."
+  },
+  "source_hashes": {
+    "include/libgnss++/io/imu.hpp": "154675958cc37c865dd76165ad92d922689c81670206efaf9584ebbb7bd87d8c",
+    "src/io/imu.cpp": "79efa99a4b24cc7895fb8756a59967604c1048a1a297d2662f00cb23b239809a",
+    "apps/native/gnss_fgo_imu_no_base.cpp": "bb319815bda3fb89aa956873bf0190a63d28548b7b31d2f49fea8351a31255ab",
+    "tests/test_imu_csv.cpp": "b0e8aa217bcadf32eaa97b428c2b33fd4de74c2a46ebb92d7ca3900103ed19a9"
+  },
+  "release_hashes": {
+    "build/apps/gnss_fgo_imu_no_base": "c5aa4a7f4cf2c01ee7d31768cf942b4ce03802d0fdae8e92b61d3db0f73469ca",
+    "build/tests/run_tests": "d9d1438be58eb0a074f85f160f9286c8979dc2177e2a71f08ae4ef0a4a525536"
+  },
+  "record_sha256": "excluded-from-self-hash"
+}

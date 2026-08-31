@@ -3,8 +3,10 @@
 #include <libgnss++/io/imu.hpp>
 
 #include <cmath>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <string>
 
 namespace libgnss {
 namespace {
@@ -228,6 +230,161 @@ TEST(AndroidImuCsvTest, SynchronizesUtcFromGnssElapsedAnchorsAndRequiresThem) {
 
     std::filesystem::remove(gnss_path);
     std::filesystem::remove(imu_path);
+}
+
+TEST(AndroidUtcGpsMappingTest, FitsRawHardwareGpsToUtcAndSynchronizesBlankImuClock) {
+    constexpr std::int64_t kUtc0 = 1'700'000'000'000;
+    constexpr std::int64_t kGps0 = 1'300'000'000'000'000'000LL;
+    constexpr std::int64_t kFullBias = -1'299'000'000'000'000'000LL;
+    const auto gnss_path =
+        std::filesystem::temp_directory_path() / "libgnss_android_utc_gps_mapping_test.csv";
+    const std::string gnss_header =
+        "MessageType,utcTimeMillis,TimeNanos,FullBiasNanos,BiasNanos,"
+        "HardwareClockDiscontinuityCount";
+    // A 0.1 ppm positive clock drift is represented directly in the raw GPS
+    // hardware time; no arrival-time or receiver-coordinate column is used.
+    writeFile(
+        gnss_path,
+        gnss_header + "\n" +
+            "Raw," + std::to_string(kUtc0) + "," +
+            std::to_string(kGps0 + kFullBias) + "," +
+            std::to_string(kFullBias) + ",0.0,0\n" +
+            "Raw," + std::to_string(kUtc0 + 1000) + "," +
+            std::to_string(kGps0 + 1'000'000'100LL + kFullBias) + "," +
+            std::to_string(kFullBias) + ",0.0,0\n" +
+            "Raw," + std::to_string(kUtc0 + 2000) + "," +
+            std::to_string(kGps0 + 2'000'000'200LL + kFullBias) + "," +
+            std::to_string(kFullBias) + ",0.0,0\n");
+
+    AndroidGnssUtcGpsMapping mapping;
+    const auto mapping_result =
+        loadAndroidGnssUtcGpsMapping(gnss_path.string(), mapping);
+    ASSERT_TRUE(mapping_result.ok) << mapping_result.error;
+    EXPECT_EQ(mapping_result.raw_rows, 3u);
+    EXPECT_EQ(mapping.unique_anchors, 3u);
+    EXPECT_TRUE(mapping.valid);
+    EXPECT_TRUE(mapping.hardware_clock_count_field_present);
+    EXPECT_TRUE(mapping.hardware_clock_count_constant);
+    EXPECT_NEAR(mapping.slope_nanos_per_ms, 1'000'000.1, 1e-6);
+    EXPECT_NEAR(mapping.drift_ppm, 0.1, 1e-6);
+    EXPECT_NEAR(mapping.maximum_fit_residual_ms, 0.0, 1e-12);
+    EXPECT_NEAR(static_cast<double>(mapping.gpsNanosAtUtc(kUtc0 + 1000) -
+                                    static_cast<long double>(kGps0 + 1'000'000'100LL)),
+                0.0, 1e-3);
+
+    const auto imu_path =
+        std::filesystem::temp_directory_path() / "libgnss_android_utc_gps_imu_test.csv";
+    const std::string imu_header =
+        "MessageType,utcTimeMillis,elapsedRealtimeNanos,MeasurementX,MeasurementY,"
+        "MeasurementZ,BiasX,BiasY,BiasZ";
+    // The elapsed clock is intentionally blank.  UTC is the pairing clock,
+    // while the output retains -1 rather than inventing elapsed timestamps.
+    writeFile(
+        imu_path,
+        imu_header + "\n" +
+            "UncalAccel," + std::to_string(kUtc0) + ",,1,2,3,0,0,0\n" +
+            "UncalAccel," + std::to_string(kUtc0 + 10) + ",,3,4,5,0,0,0\n" +
+            "UncalAccel," + std::to_string(kUtc0 + 20) + ",,5,6,7,0,0,0\n" +
+            "UncalGyro," + std::to_string(kUtc0) + ",,0.1,0.2,0.3,0,0,0\n" +
+            "UncalGyro," + std::to_string(kUtc0 + 10) + ",,0.4,0.5,0.6,0,0,0\n" +
+            "UncalGyro," + std::to_string(kUtc0 + 20) + ",,0.7,0.8,0.9,0,0,0\n");
+    AndroidImuCsvConfig config;
+    config.require_gnss_elapsed_anchor = true;
+    config.allow_utc_wall_clock_fallback = true;
+    ImuSeries series;
+    const auto result = loadAndroidImuCsv(
+        imu_path.string(), series, config, {}, &mapping);
+    ASSERT_TRUE(result.ok) << result.error;
+    EXPECT_TRUE(result.utc_wall_clock_fallback_applied);
+    EXPECT_FALSE(result.gnss_elapsed_anchor_applied);
+    EXPECT_FALSE(result.elapsed_clock_preserved);
+    EXPECT_EQ(result.utc_mapping_anchors, 3u);
+    EXPECT_NEAR(result.utc_mapping_drift_ppm, 0.1, 1e-6);
+    EXPECT_EQ(result.first_gyro_elapsed_ns, -1);
+    EXPECT_EQ(result.last_gyro_elapsed_ns, -1);
+    ASSERT_EQ(series.samples.size(), 3u);
+    EXPECT_EQ(series.samples.front().elapsed_realtime_nanos, -1);
+    EXPECT_NEAR(result.first_dt_s, 0.010, 1e-6);
+    EXPECT_NEAR(result.last_dt_s, 0.010, 1e-6);
+    EXPECT_TRUE(result.dt_tail_repeated);
+
+    std::filesystem::remove(gnss_path);
+    std::filesystem::remove(imu_path);
+}
+
+TEST(AndroidUtcGpsMappingTest, RejectsClockBoundsAndMixedImuDomains) {
+    constexpr std::int64_t kUtc0 = 1'700'000'000'000;
+    constexpr std::int64_t kFullBias = -1'299'000'000'000'000'000LL;
+    const std::string header =
+        "MessageType,utcTimeMillis,TimeNanos,FullBiasNanos,BiasNanos,"
+        "HardwareClockDiscontinuityCount";
+    const auto path = std::filesystem::temp_directory_path() /
+                      "libgnss_android_utc_gps_mapping_reject_test.csv";
+    const auto make_rows = [&](std::int64_t gap_ms, double slope_ns_per_ms,
+                               int count1) {
+        const std::int64_t gps0 = 1'300'000'000'000'000'000LL;
+        const auto gps_at = [&](std::int64_t delta_ms) {
+            return gps0 + static_cast<std::int64_t>(
+                std::llround(static_cast<double>(delta_ms) * slope_ns_per_ms));
+        };
+        return header + "\n" +
+               "Raw," + std::to_string(kUtc0) + "," +
+               std::to_string(gps_at(0) + kFullBias) + "," +
+               std::to_string(kFullBias) + ",0," + std::to_string(count1) + "\n" +
+               "Raw," + std::to_string(kUtc0 + gap_ms) + "," +
+               std::to_string(gps_at(gap_ms) + kFullBias) + "," +
+               std::to_string(kFullBias) + ",0," + std::to_string(count1) + "\n" +
+               "Raw," + std::to_string(kUtc0 + 2 * gap_ms) + "," +
+               std::to_string(gps_at(2 * gap_ms) + kFullBias) + "," +
+               std::to_string(kFullBias) + ",0,0\n";
+    };
+    AndroidGnssUtcGpsMapping mapping;
+    writeFile(path, make_rows(1000, 1'002'000.0, 0));
+    auto result = loadAndroidGnssUtcGpsMapping(path.string(), mapping);
+    EXPECT_FALSE(result.ok);
+    EXPECT_NE(result.error.find("drift/residual"), std::string::npos);
+
+    writeFile(path, make_rows(5001, 1'000'000.0, 0));
+    result = loadAndroidGnssUtcGpsMapping(path.string(), mapping);
+    EXPECT_FALSE(result.ok);
+    EXPECT_NE(result.error.find("gap exceeds 5000"), std::string::npos);
+
+    writeFile(path, make_rows(1000, 1'000'000.0, 1));
+    result = loadAndroidGnssUtcGpsMapping(path.string(), mapping);
+    EXPECT_FALSE(result.ok);
+    EXPECT_NE(result.error.find("discontinuity"), std::string::npos);
+    std::filesystem::remove(path);
+
+    const auto imu_path = std::filesystem::temp_directory_path() /
+                          "libgnss_android_utc_gps_mixed_domain_test.csv";
+    writeFile(
+        imu_path,
+        "MessageType,utcTimeMillis,elapsedRealtimeNanos,MeasurementX,MeasurementY,"
+        "MeasurementZ,BiasX,BiasY,BiasZ\n"
+        "UncalAccel,1700000000000,,1,2,3,0,0,0\n"
+        "UncalGyro,1700000000000,1000000000,0,0,0,0,0,0\n");
+    AndroidImuCsvConfig config;
+    config.require_gnss_elapsed_anchor = true;
+    config.allow_utc_wall_clock_fallback = true;
+    ImuSeries series;
+    AndroidGnssUtcGpsMapping valid_mapping;
+    valid_mapping.valid = true;
+    valid_mapping.unique_anchors = 3;
+    valid_mapping.slope_nanos_per_ms = 1'000'000.0;
+    valid_mapping.drift_ppm = 0.0;
+    const auto mixed = loadAndroidImuCsv(
+        imu_path.string(), series, config, {}, &valid_mapping);
+    EXPECT_FALSE(mixed.ok);
+    EXPECT_NE(mixed.error.find("mixes"), std::string::npos);
+    std::filesystem::remove(imu_path);
+}
+
+TEST(AndroidUtcGpsMappingTest, RejectsMatBeforeOpeningFile) {
+    AndroidGnssUtcGpsMapping mapping;
+    const auto result = loadAndroidGnssUtcGpsMapping(
+        (std::filesystem::temp_directory_path() / "mapping.mat").string(), mapping);
+    EXPECT_FALSE(result.ok);
+    EXPECT_NE(result.error.find("MATLAB .mat inputs are forbidden"), std::string::npos);
 }
 
 TEST(AndroidImuCsvTest, AppliesPairBoundAtBoundaryAndOmitsBeyondIt) {

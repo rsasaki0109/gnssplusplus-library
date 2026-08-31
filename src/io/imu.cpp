@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <fstream>
+#include <limits>
 #include <map>
 #include <sstream>
 #include <unordered_map>
@@ -124,7 +125,12 @@ bool parseInt64(const std::string& text, std::int64_t& value) {
 
 struct AndroidRawImuSample {
     std::int64_t utc_time_ms = 0;
-    std::int64_t elapsed_time_ns = 0;
+    // The pairing clock is either the original monotonic Android clock or,
+    // only for the explicit raw UTC fallback, UTC milliseconds converted to
+    // integer nanoseconds.  Never fabricate elapsedRealtimeNanos: the
+    // public elapsed field remains -1 in the latter mode.
+    std::int64_t elapsed_time_ns = -1;
+    std::int64_t pairing_time_ns = -1;
     Eigen::Vector3d measurement = Eigen::Vector3d::Zero();
     Eigen::Vector3d bias = Eigen::Vector3d::Zero();
 };
@@ -134,6 +140,22 @@ GNSSTime androidUtcToGpsTime(double utc_time_ms, double leap_seconds) {
                                kUnixSecondsAtGpsEpoch + leap_seconds;
     const int week = static_cast<int>(std::floor(gps_seconds / kSecondsPerGpsWeek));
     return GNSSTime(week, gps_seconds - static_cast<double>(week) * kSecondsPerGpsWeek);
+}
+
+GNSSTime gpsNanosToGpsTime(long double gps_time_nanos) {
+    if (!std::isfinite(static_cast<double>(gps_time_nanos))) {
+        return GNSSTime();
+    }
+    const long double gps_seconds = gps_time_nanos / 1.0e9L;
+    const long double week_value = std::floor(gps_seconds / kSecondsPerGpsWeek);
+    if (!std::isfinite(static_cast<double>(week_value)) ||
+        week_value < static_cast<long double>(std::numeric_limits<int>::min()) ||
+        week_value > static_cast<long double>(std::numeric_limits<int>::max())) {
+        return GNSSTime();
+    }
+    const int week = static_cast<int>(week_value);
+    return GNSSTime(week, static_cast<double>(
+        gps_seconds - static_cast<long double>(week) * kSecondsPerGpsWeek));
 }
 
 bool validateAndroidGnssTimeAnchors(
@@ -466,11 +488,250 @@ AndroidGnssTimeAnchorLoadResult loadAndroidGnssTimeAnchors(
     return result;
 }
 
+AndroidGnssUtcGpsMappingLoadResult loadAndroidGnssUtcGpsMapping(
+    const std::string& path,
+    AndroidGnssUtcGpsMapping& mapping) {
+    AndroidGnssUtcGpsMappingLoadResult result;
+    mapping = AndroidGnssUtcGpsMapping{};
+    if (hasMatExtension(path)) {
+        result.error = "MATLAB .mat inputs are forbidden by the raw/native IMU contract";
+        return result;
+    }
+
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        result.error = "could not open raw Android GNSS CSV for UTC/GPS mapping: " + path;
+        return result;
+    }
+    std::string header_line;
+    if (!std::getline(file, header_line)) {
+        result.error = "raw Android GNSS CSV is empty: " + path;
+        return result;
+    }
+    if (!header_line.empty() && header_line.back() == '\r') header_line.pop_back();
+    const std::vector<std::string> raw_headers = splitCsvLine(header_line);
+    HeaderLookup lookup;
+    for (std::size_t i = 0; i < raw_headers.size(); ++i) {
+        const std::string normalized = normalizeHeader(raw_headers[i]);
+        if (normalized.empty() || !lookup.emplace(normalized, i).second) {
+            result.error = "raw Android GNSS UTC/GPS mapping header has duplicate or empty fields";
+            return result;
+        }
+    }
+    const auto find_required = [&](const char* name, std::size_t& index) {
+        const auto it = lookup.find(name);
+        if (it == lookup.end()) return false;
+        index = it->second;
+        return true;
+    };
+    std::size_t message_index = 0U;
+    std::size_t utc_index = 0U;
+    std::size_t time_index = 0U;
+    std::size_t full_bias_index = 0U;
+    std::size_t bias_index = 0U;
+    if (!find_required("messagetype", message_index) ||
+        !find_required("utctimemillis", utc_index) ||
+        !find_required("timenanos", time_index) ||
+        !find_required("fullbiasnanos", full_bias_index) ||
+        !find_required("biasnanos", bias_index)) {
+        result.error = "raw Android GNSS UTC/GPS mapping requires MessageType, utcTimeMillis, "
+                       "TimeNanos, FullBiasNanos, and BiasNanos";
+        return result;
+    }
+    std::size_t discontinuity_index = 0U;
+    const bool has_discontinuity_count =
+        find_required("hardwareclockdiscontinuitycount", discontinuity_index);
+
+    struct RawAnchor {
+        std::int64_t utc_time_ms = 0;
+        long double gps_time_nanos = 0.0L;
+        int discontinuity_count = 0;
+    };
+    std::map<std::int64_t, RawAnchor> by_utc;
+    std::string line;
+    std::size_t row_number = 1U;
+    while (std::getline(file, line)) {
+        ++row_number;
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (trimWhitespace(line).empty()) continue;
+        ++result.input_rows;
+        const std::vector<std::string> fields = splitCsvLine(line);
+        if (fields.size() != raw_headers.size()) {
+            result.error = "raw Android GNSS UTC/GPS mapping row " +
+                           std::to_string(row_number) + ": expected " +
+                           std::to_string(raw_headers.size()) + " columns, got " +
+                           std::to_string(fields.size());
+            return result;
+        }
+        if (trimWhitespace(fields[message_index]) != "Raw") {
+            ++result.unsupported_rows;
+            continue;
+        }
+        ++result.raw_rows;
+        RawAnchor anchor;
+        std::int64_t time_nanos = 0;
+        std::int64_t full_bias_nanos = 0;
+        if (!parseInt64(fields[utc_index], anchor.utc_time_ms) ||
+            !parseInt64(fields[time_index], time_nanos) ||
+            !parseInt64(fields[full_bias_index], full_bias_nanos) ||
+            anchor.utc_time_ms < 0) {
+            result.error = "raw Android GNSS UTC/GPS mapping row " +
+                           std::to_string(row_number) +
+                           ": UTC, TimeNanos, and FullBiasNanos must be valid integers";
+            return result;
+        }
+        bool bias_ok = false;
+        const double bias_nanos = parseDouble(fields[bias_index], bias_ok);
+        if (!bias_ok || !std::isfinite(bias_nanos)) {
+            result.error = "raw Android GNSS UTC/GPS mapping row " +
+                           std::to_string(row_number) + ": BiasNanos must be finite";
+            return result;
+        }
+        if (has_discontinuity_count) {
+            std::int64_t count = 0;
+            if (!parseInt64(fields[discontinuity_index], count) ||
+                count < 0 || count > std::numeric_limits<int>::max()) {
+                result.error = "raw Android GNSS UTC/GPS mapping row " +
+                               std::to_string(row_number) +
+                               ": HardwareClockDiscontinuityCount must be a non-negative integer";
+                return result;
+            }
+            anchor.discontinuity_count = static_cast<int>(count);
+        }
+        anchor.gps_time_nanos = static_cast<long double>(time_nanos) -
+                                static_cast<long double>(full_bias_nanos) -
+                                static_cast<long double>(bias_nanos);
+        if (!std::isfinite(static_cast<double>(anchor.gps_time_nanos))) {
+            result.error = "raw Android GNSS UTC/GPS mapping contains a non-finite GPS time";
+            return result;
+        }
+        const auto [unused, inserted] = by_utc.emplace(anchor.utc_time_ms, anchor);
+        if (!inserted) ++result.duplicate_utc_timestamps;
+        (void)unused;
+    }
+
+    if (by_utc.size() < 3U) {
+        result.error = "raw Android UTC/GPS mapping requires at least three unique raw epochs";
+        return result;
+    }
+    std::vector<RawAnchor> anchors;
+    anchors.reserve(by_utc.size());
+    for (const auto& [unused, anchor] : by_utc) {
+        anchors.push_back(anchor);
+        (void)unused;
+    }
+    if (has_discontinuity_count) {
+        const int expected_count = anchors.front().discontinuity_count;
+        for (const RawAnchor& anchor : anchors) {
+            if (anchor.discontinuity_count != expected_count) {
+                result.error = "raw Android UTC/GPS mapping rejects a hardware-clock "
+                               "discontinuity within the anchor span";
+                return result;
+            }
+        }
+        mapping.hardware_clock_count_field_present = true;
+        mapping.hardware_clock_count_constant = true;
+        mapping.hardware_clock_discontinuity_count = expected_count;
+    }
+    long double max_gap_ms = 0.0L;
+    for (std::size_t i = 1U; i < anchors.size(); ++i) {
+        if (anchors[i - 1U].utc_time_ms >= anchors[i].utc_time_ms ||
+            anchors[i - 1U].gps_time_nanos >= anchors[i].gps_time_nanos) {
+            result.error = "raw Android UTC/GPS mapping anchors must be strictly increasing";
+            return result;
+        }
+        max_gap_ms = std::max(max_gap_ms, static_cast<long double>(
+            anchors[i].utc_time_ms - anchors[i - 1U].utc_time_ms));
+    }
+    constexpr long double kMaximumAnchorGapMs = 5000.0L;
+    if (max_gap_ms > kMaximumAnchorGapMs) {
+        result.error = "raw Android UTC/GPS mapping anchor gap exceeds 5000 ms";
+        return result;
+    }
+
+    const long double utc0 = static_cast<long double>(anchors.front().utc_time_ms);
+    const long double gps0 = anchors.front().gps_time_nanos;
+    long double sum_xx = 0.0L;
+    long double sum_xy = 0.0L;
+    for (const RawAnchor& anchor : anchors) {
+        const long double x = static_cast<long double>(anchor.utc_time_ms) - utc0;
+        const long double y = anchor.gps_time_nanos - gps0;
+        sum_xx += x * x;
+        sum_xy += x * y;
+    }
+    if (!(sum_xx > 0.0L) || !std::isfinite(static_cast<double>(sum_xx)) ||
+        !std::isfinite(static_cast<double>(sum_xy))) {
+        result.error = "raw Android UTC/GPS mapping has no finite time span";
+        return result;
+    }
+    const long double slope = sum_xy / sum_xx;
+    long double sum_residual = 0.0L;
+    for (const RawAnchor& anchor : anchors) {
+        const long double x = static_cast<long double>(anchor.utc_time_ms) - utc0;
+        const long double y = anchor.gps_time_nanos - gps0;
+        sum_residual += y - slope * x;
+    }
+    const long double intercept = sum_residual / static_cast<long double>(anchors.size());
+    std::vector<double> residuals_ms;
+    residuals_ms.reserve(anchors.size());
+    long double max_residual_ms = 0.0L;
+    for (const RawAnchor& anchor : anchors) {
+        const long double x = static_cast<long double>(anchor.utc_time_ms) - utc0;
+        const long double y = anchor.gps_time_nanos - gps0;
+        const long double residual_ms = (intercept + slope * x - y) / 1.0e6L;
+        if (!std::isfinite(static_cast<double>(residual_ms))) {
+            result.error = "raw Android UTC/GPS mapping fit is non-finite";
+            return result;
+        }
+        const double abs_residual_ms = static_cast<double>(std::abs(residual_ms));
+        residuals_ms.push_back(abs_residual_ms);
+        max_residual_ms = std::max(max_residual_ms, static_cast<long double>(abs_residual_ms));
+    }
+    std::sort(residuals_ms.begin(), residuals_ms.end());
+    const double p95_index = (static_cast<double>(residuals_ms.size()) - 1.0) * 0.95;
+    const std::size_t p95_lower = static_cast<std::size_t>(std::floor(p95_index));
+    const std::size_t p95_upper = std::min(p95_lower + 1U, residuals_ms.size() - 1U);
+    const double p95_alpha = p95_index - static_cast<double>(p95_lower);
+    const double p95_residual_ms = residuals_ms[p95_lower] +
+                                   p95_alpha * (residuals_ms[p95_upper] -
+                                                residuals_ms[p95_lower]);
+    const long double drift_ppm = (slope / 1.0e6L - 1.0L) * 1.0e6L;
+    constexpr long double kMaximumDriftPpm = 1000.0L;
+    constexpr long double kMaximumFitResidualMs = 2.0L;
+    if (!std::isfinite(static_cast<double>(slope)) ||
+        std::abs(drift_ppm) > kMaximumDriftPpm ||
+        max_residual_ms > kMaximumFitResidualMs) {
+        result.error = "raw Android UTC/GPS mapping violates fixed drift/residual bounds";
+        return result;
+    }
+    const long double ref_gps_rounded = std::round(gps0);
+    if (ref_gps_rounded < static_cast<long double>(std::numeric_limits<std::int64_t>::min()) ||
+        ref_gps_rounded > static_cast<long double>(std::numeric_limits<std::int64_t>::max())) {
+        result.error = "raw Android UTC/GPS mapping reference GPS time is out of range";
+        return result;
+    }
+    mapping.valid = true;
+    mapping.reference_utc_time_ms = anchors.front().utc_time_ms;
+    mapping.reference_gps_time_nanos = static_cast<std::int64_t>(ref_gps_rounded);
+    mapping.intercept_offset_nanos = static_cast<double>(
+        (gps0 - ref_gps_rounded) + intercept);
+    mapping.slope_nanos_per_ms = static_cast<double>(slope);
+    mapping.drift_ppm = static_cast<double>(drift_ppm);
+    mapping.maximum_fit_residual_ms = static_cast<double>(max_residual_ms);
+    mapping.p95_fit_residual_ms = p95_residual_ms;
+    mapping.maximum_anchor_gap_ms = static_cast<double>(max_gap_ms);
+    mapping.unique_anchors = anchors.size();
+    result.mapping = mapping;
+    result.ok = true;
+    return result;
+}
+
 AndroidImuCsvLoadResult loadAndroidImuCsv(
     const std::string& path,
     ImuSeries& out,
     const AndroidImuCsvConfig& config,
-    const std::vector<AndroidGnssTimeAnchor>& gnss_time_anchors) {
+    const std::vector<AndroidGnssTimeAnchor>& gnss_time_anchors,
+    const AndroidGnssUtcGpsMapping* utc_gps_mapping) {
     AndroidImuCsvLoadResult result;
     out.samples.clear();
 
@@ -499,10 +760,23 @@ AndroidImuCsvLoadResult loadAndroidImuCsv(
         return result;
     }
     const bool use_gnss_anchor = !gnss_time_anchors.empty();
+    const bool use_utc_wall_clock_fallback =
+        !use_gnss_anchor && config.allow_utc_wall_clock_fallback &&
+        utc_gps_mapping != nullptr;
     if (use_gnss_anchor) {
         std::string validation_error;
         if (!validateAndroidGnssTimeAnchors(gnss_time_anchors, validation_error)) {
             result.error = validation_error;
+            return result;
+        }
+    } else if (use_utc_wall_clock_fallback) {
+        if (!utc_gps_mapping->valid || utc_gps_mapping->unique_anchors < 3U ||
+            !std::isfinite(utc_gps_mapping->slope_nanos_per_ms) ||
+            !std::isfinite(utc_gps_mapping->drift_ppm) ||
+            !std::isfinite(utc_gps_mapping->maximum_fit_residual_ms) ||
+            utc_gps_mapping->maximum_fit_residual_ms > 2.0 ||
+            std::abs(utc_gps_mapping->drift_ppm) > 1000.0) {
+            result.error = "raw Android UTC wall-clock fallback requires a validated GNSS mapping";
             return result;
         }
     } else if (config.require_gnss_elapsed_anchor) {
@@ -511,6 +785,16 @@ AndroidImuCsvLoadResult loadAndroidImuCsv(
     }
     result.gnss_anchor_points = gnss_time_anchors.size();
     result.imu_sync_coefficient = config.imu_sync_coefficient;
+    if (use_utc_wall_clock_fallback) {
+        result.utc_wall_clock_fallback_applied = true;
+        result.utc_mapping_anchors = utc_gps_mapping->unique_anchors;
+        result.utc_mapping_slope_ns_per_ms = utc_gps_mapping->slope_nanos_per_ms;
+        result.utc_mapping_drift_ppm = utc_gps_mapping->drift_ppm;
+        result.utc_mapping_max_fit_residual_ms =
+            utc_gps_mapping->maximum_fit_residual_ms;
+        result.utc_mapping_max_anchor_gap_ms =
+            utc_gps_mapping->maximum_anchor_gap_ms;
+    }
 
     std::ifstream file(path);
     if (!file.is_open()) {
@@ -565,6 +849,10 @@ AndroidImuCsvLoadResult loadAndroidImuCsv(
 
     std::map<std::int64_t, AndroidRawImuSample> accel_by_utc;
     std::map<std::int64_t, AndroidRawImuSample> gyro_by_utc;
+    // -1 = not seen, 0 = monotonic elapsedRealtimeNanos, 1 = explicit UTC
+    // wall-clock fallback.  Mixing clock domains would make pairing and
+    // synchronization physically meaningless, so reject it.
+    int timestamp_mode = -1;
     std::string line;
     std::size_t row_number = 1;
     while (std::getline(file, line)) {
@@ -590,12 +878,52 @@ AndroidImuCsvLoadResult loadAndroidImuCsv(
 
         AndroidRawImuSample sample;
         if (!parseInt64(fields[utc_index], sample.utc_time_ms) ||
-            !parseInt64(fields[elapsed_index], sample.elapsed_time_ns) ||
-            sample.utc_time_ms < 0 || sample.elapsed_time_ns < 0) {
+            sample.utc_time_ms < 0) {
             result.error = "Android IMU row " + std::to_string(row_number) +
                            ": invalid integer timestamp";
             out.samples.clear();
             return result;
+        }
+        const std::string elapsed_text = trimWhitespace(fields[elapsed_index]);
+        if (elapsed_text.empty()) {
+            if (!use_utc_wall_clock_fallback) {
+                result.error = "Android IMU row " + std::to_string(row_number) +
+                               ": elapsedRealtimeNanos is empty and UTC wall-clock "
+                               "fallback is not explicitly enabled";
+                out.samples.clear();
+                return result;
+            }
+            constexpr std::int64_t kMillisToNanos = 1000000;
+            if (sample.utc_time_ms > std::numeric_limits<std::int64_t>::max() /
+                                        kMillisToNanos) {
+                result.error = "Android IMU row " + std::to_string(row_number) +
+                               ": UTC timestamp overflows pairing clock";
+                out.samples.clear();
+                return result;
+            }
+            sample.elapsed_time_ns = -1;
+            sample.pairing_time_ns = sample.utc_time_ms * kMillisToNanos;
+            if (timestamp_mode == 0) {
+                result.error = "Android IMU mixes elapsedRealtimeNanos and UTC wall-clock rows";
+                out.samples.clear();
+                return result;
+            }
+            timestamp_mode = 1;
+        } else {
+            if (!parseInt64(elapsed_text, sample.elapsed_time_ns) ||
+                sample.elapsed_time_ns < 0) {
+                result.error = "Android IMU row " + std::to_string(row_number) +
+                               ": invalid integer timestamp";
+                out.samples.clear();
+                return result;
+            }
+            sample.pairing_time_ns = sample.elapsed_time_ns;
+            if (timestamp_mode == 1) {
+                result.error = "Android IMU mixes UTC wall-clock and elapsedRealtimeNanos rows";
+                out.samples.clear();
+                return result;
+            }
+            timestamp_mode = 0;
         }
         bool ok = true;
         for (int axis = 0; axis < 3; ++axis) {
@@ -650,22 +978,22 @@ AndroidImuCsvLoadResult loadAndroidImuCsv(
     }
     const auto elapsed_order = [](const AndroidRawImuSample& lhs,
                                   const AndroidRawImuSample& rhs) {
-        if (lhs.elapsed_time_ns != rhs.elapsed_time_ns) {
-            return lhs.elapsed_time_ns < rhs.elapsed_time_ns;
+        if (lhs.pairing_time_ns != rhs.pairing_time_ns) {
+            return lhs.pairing_time_ns < rhs.pairing_time_ns;
         }
         return lhs.utc_time_ms < rhs.utc_time_ms;
     };
     std::sort(accel.begin(), accel.end(), elapsed_order);
     std::sort(gyro.begin(), gyro.end(), elapsed_order);
     for (size_t i = 1; i < accel.size(); ++i) {
-        if (accel[i - 1].elapsed_time_ns >= accel[i].elapsed_time_ns) {
-            result.error = "Android accelerometer elapsedRealtimeNanos is not strictly increasing";
+        if (accel[i - 1].pairing_time_ns >= accel[i].pairing_time_ns) {
+            result.error = "Android accelerometer pairing timestamps are not strictly increasing";
             return result;
         }
     }
     for (size_t i = 1; i < gyro.size(); ++i) {
-        if (gyro[i - 1].elapsed_time_ns >= gyro[i].elapsed_time_ns) {
-            result.error = "Android gyroscope elapsedRealtimeNanos is not strictly increasing";
+        if (gyro[i - 1].pairing_time_ns >= gyro[i].pairing_time_ns) {
+            result.error = "Android gyroscope pairing timestamps are not strictly increasing";
             return result;
         }
     }
@@ -675,11 +1003,11 @@ AndroidImuCsvLoadResult loadAndroidImuCsv(
     const std::int64_t maximum_offset_ns = static_cast<std::int64_t>(std::llround(
         config.maximum_accel_pair_offset_s * 1.0e9));
     const auto accel_by_elapsed = [](const AndroidRawImuSample& sample) {
-        return sample.elapsed_time_ns;
+        return sample.pairing_time_ns;
     };
     for (const auto& gyro_sample : gyro) {
         const auto upper = std::lower_bound(
-            accel.begin(), accel.end(), gyro_sample.elapsed_time_ns,
+            accel.begin(), accel.end(), gyro_sample.pairing_time_ns,
             [&](const AndroidRawImuSample& sample, std::int64_t elapsed) {
                 return accel_by_elapsed(sample) < elapsed;
             });
@@ -688,13 +1016,13 @@ AndroidImuCsvLoadResult loadAndroidImuCsv(
         if (upper != accel.begin()) {
             const auto previous = upper - 1;
             if (nearest == nullptr ||
-                std::llabs(previous->elapsed_time_ns - gyro_sample.elapsed_time_ns) <=
-                    std::llabs(nearest->elapsed_time_ns - gyro_sample.elapsed_time_ns)) {
+                std::llabs(previous->pairing_time_ns - gyro_sample.pairing_time_ns) <=
+                    std::llabs(nearest->pairing_time_ns - gyro_sample.pairing_time_ns)) {
                 nearest = &*previous;
             }
         }
         if (nearest == nullptr ||
-            std::llabs(nearest->elapsed_time_ns - gyro_sample.elapsed_time_ns) >
+            std::llabs(nearest->pairing_time_ns - gyro_sample.pairing_time_ns) >
                 maximum_offset_ns) {
             ++result.omitted_rows;
             continue;
@@ -702,17 +1030,17 @@ AndroidImuCsvLoadResult loadAndroidImuCsv(
 
         Eigen::Vector3d acceleration;
         if (upper != accel.end() &&
-            upper->elapsed_time_ns == gyro_sample.elapsed_time_ns) {
+            upper->pairing_time_ns == gyro_sample.pairing_time_ns) {
             acceleration = upper->measurement;
             ++result.exact_elapsed_matches;
         } else if (upper != accel.end() && upper != accel.begin() &&
-                   (upper - 1)->elapsed_time_ns < gyro_sample.elapsed_time_ns &&
-                   upper->elapsed_time_ns > gyro_sample.elapsed_time_ns) {
+                   (upper - 1)->pairing_time_ns < gyro_sample.pairing_time_ns &&
+                   upper->pairing_time_ns > gyro_sample.pairing_time_ns) {
             const auto& lower_sample = *(upper - 1);
             const double denominator = static_cast<double>(
-                upper->elapsed_time_ns - lower_sample.elapsed_time_ns);
+                upper->pairing_time_ns - lower_sample.pairing_time_ns);
             const double alpha = static_cast<double>(
-                gyro_sample.elapsed_time_ns - lower_sample.elapsed_time_ns) / denominator;
+                gyro_sample.pairing_time_ns - lower_sample.pairing_time_ns) / denominator;
             acceleration = (1.0 - alpha) * lower_sample.measurement +
                            alpha * upper->measurement;
             ++result.interpolated_rows;
@@ -733,17 +1061,17 @@ AndroidImuCsvLoadResult loadAndroidImuCsv(
         ImuSample output_sample;
         bool anchor_exact = false;
         bool anchor_extrapolated = false;
-        const double synchronized_utc_ms = use_gnss_anchor
-            ? interpolateAndroidGnssUtc(gnss_time_anchors,
-                                         gyro_sample.elapsed_time_ns,
-                                         anchor_exact, anchor_extrapolated)
-            : static_cast<double>(gyro_sample.utc_time_ms);
-        if (!std::isfinite(synchronized_utc_ms)) {
-            result.error = "Android IMU GNSS-anchor interpolation produced a non-finite UTC time";
-            out.samples.clear();
-            return result;
-        }
+        double synchronized_utc_ms = static_cast<double>(gyro_sample.utc_time_ms);
+        GNSSTime synchronized_gps_time;
         if (use_gnss_anchor) {
+            synchronized_utc_ms = interpolateAndroidGnssUtc(
+                gnss_time_anchors, gyro_sample.pairing_time_ns,
+                anchor_exact, anchor_extrapolated);
+            if (!std::isfinite(synchronized_utc_ms)) {
+                result.error = "Android IMU GNSS-anchor interpolation produced a non-finite UTC time";
+                out.samples.clear();
+                return result;
+            }
             if (anchor_exact) {
                 ++result.gnss_anchor_exact_rows;
             } else if (anchor_extrapolated) {
@@ -751,9 +1079,17 @@ AndroidImuCsvLoadResult loadAndroidImuCsv(
             } else {
                 ++result.gnss_anchor_interpolated_rows;
             }
+            synchronized_gps_time = androidUtcToGpsTime(
+                synchronized_utc_ms, config.gps_utc_leap_seconds);
+        } else if (use_utc_wall_clock_fallback) {
+            const long double mapped_gps_nanos =
+                utc_gps_mapping->gpsNanosAtUtc(gyro_sample.utc_time_ms);
+            synchronized_gps_time = gpsNanosToGpsTime(mapped_gps_nanos);
+        } else {
+            synchronized_gps_time = androidUtcToGpsTime(
+                synchronized_utc_ms, config.gps_utc_leap_seconds);
         }
-        output_sample.time = androidUtcToGpsTime(
-            synchronized_utc_ms, config.gps_utc_leap_seconds);
+        output_sample.time = synchronized_gps_time;
         output_sample.elapsed_realtime_nanos = gyro_sample.elapsed_time_ns;
         output_sample.accel_raw = acceleration;
         // Android UncalGyro is already rad/s.  Bias is intentionally not
@@ -770,8 +1106,8 @@ AndroidImuCsvLoadResult loadAndroidImuCsv(
         out.samples.push_back(output_sample);
         ++result.paired_rows;
         pair_offsets_ms.push_back(
-            static_cast<double>(std::llabs(nearest->elapsed_time_ns -
-                                           gyro_sample.elapsed_time_ns)) /
+            static_cast<double>(std::llabs(nearest->pairing_time_ns -
+                                           gyro_sample.pairing_time_ns)) /
             1.0e6);
     }
 
@@ -818,7 +1154,7 @@ AndroidImuCsvLoadResult loadAndroidImuCsv(
     result.last_gyro_utc_ms = gyro.back().utc_time_ms;
     result.first_gyro_elapsed_ns = gyro.front().elapsed_time_ns;
     result.last_gyro_elapsed_ns = gyro.back().elapsed_time_ns;
-    result.elapsed_clock_preserved = true;
+    result.elapsed_clock_preserved = !use_utc_wall_clock_fallback;
     if (!pair_offsets_ms.empty()) {
         std::sort(pair_offsets_ms.begin(), pair_offsets_ms.end());
         const size_t middle = pair_offsets_ms.size() / 2U;

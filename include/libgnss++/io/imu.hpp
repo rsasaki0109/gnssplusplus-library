@@ -143,6 +143,62 @@ AndroidGnssTimeAnchorLoadResult loadAndroidGnssTimeAnchors(
     std::vector<AndroidGnssTimeAnchor>& anchors);
 
 /**
+ * @brief Raw GNSS hardware-GPS to UTC affine consistency mapping.
+ *
+ * This is an explicit fallback for Android logs that contain no
+ * ``elapsedRealtimeNanos`` in either GNSS or sensor rows.  It is fitted only
+ * from raw ``TimeNanos``, ``FullBiasNanos``, ``BiasNanos`` and
+ * ``utcTimeMillis`` fields.  ``ArrivalTimeNanosSinceGpsEpoch`` and all
+ * receiver/satellite coordinates are deliberately outside this API.
+ */
+struct AndroidGnssUtcGpsMapping {
+    bool valid = false;
+    std::int64_t reference_utc_time_ms = 0;
+    std::int64_t reference_gps_time_nanos = 0;
+    double intercept_offset_nanos = 0.0;
+    double slope_nanos_per_ms = 0.0;
+    double drift_ppm = 0.0;
+    double maximum_fit_residual_ms = 0.0;
+    double p95_fit_residual_ms = 0.0;
+    double maximum_anchor_gap_ms = 0.0;
+    std::size_t unique_anchors = 0;
+    bool hardware_clock_count_field_present = false;
+    bool hardware_clock_count_constant = false;
+    int hardware_clock_discontinuity_count = 0;
+
+    long double gpsNanosAtUtc(std::int64_t utc_time_ms) const {
+        return static_cast<long double>(reference_gps_time_nanos) +
+               static_cast<long double>(intercept_offset_nanos) +
+               static_cast<long double>(utc_time_ms - reference_utc_time_ms) *
+                   static_cast<long double>(slope_nanos_per_ms);
+    }
+};
+
+/** @brief Diagnostics returned by loadAndroidGnssUtcGpsMapping(). */
+struct AndroidGnssUtcGpsMappingLoadResult {
+    bool ok = false;
+    std::string error;
+    std::size_t input_rows = 0;
+    std::size_t raw_rows = 0;
+    std::size_t unsupported_rows = 0;
+    std::size_t duplicate_utc_timestamps = 0;
+    AndroidGnssUtcGpsMapping mapping;
+};
+
+/**
+ * @brief Fit a bounded raw-only GPS-nanoseconds versus UTC-milliseconds map.
+ *
+ * The function is a physical consistency witness for the explicit
+ * wall-clock fallback, not a general timestamp repair.  It requires at least
+ * three unique one-clock raw epochs, a constant hardware discontinuity count
+ * when that field is present, no long anchor gap, a near-unit clock slope, and
+ * sub-millisecond-scale residuals.  Any violation fails closed.
+ */
+AndroidGnssUtcGpsMappingLoadResult loadAndroidGnssUtcGpsMapping(
+    const std::string& path,
+    AndroidGnssUtcGpsMapping& mapping);
+
+/**
  * @brief Contract for loading the raw Android ``device_imu.csv`` streams.
  *
  * Android timestamps are retained as two distinct clocks: ``utcTimeMillis``
@@ -164,6 +220,10 @@ struct AndroidImuCsvConfig {
     // isolated parser callers; the native raw entrypoint sets this true and
     // fails closed when anchors are absent or invalid.
     bool require_gnss_elapsed_anchor = false;
+    // Explicitly permit the raw UTC wall-clock fallback only when a validated
+    // AndroidGnssUtcGpsMapping is supplied.  The native entrypoint keeps this
+    // false by default, so missing elapsed clocks remain fail-closed.
+    bool allow_utc_wall_clock_fallback = false;
     double imu_sync_coefficient = 0.5;
 };
 
@@ -205,6 +265,13 @@ struct AndroidImuCsvLoadResult {
     // every synchronized IMU timestamp.  Direct UTC conversion is never
     // reported as an anchored raw inference.
     bool gnss_elapsed_anchor_applied = false;
+    // True only for the explicit raw-GNSS hardware-GPS/UTC affine fallback.
+    bool utc_wall_clock_fallback_applied = false;
+    std::size_t utc_mapping_anchors = 0;
+    double utc_mapping_slope_ns_per_ms = 0.0;
+    double utc_mapping_drift_ppm = 0.0;
+    double utc_mapping_max_fit_residual_ms = 0.0;
+    double utc_mapping_max_anchor_gap_ms = 0.0;
 };
 
 /**
@@ -245,7 +312,8 @@ AndroidImuCsvLoadResult loadAndroidImuCsv(
     const std::string& path,
     ImuSeries& out,
     const AndroidImuCsvConfig& config = {},
-    const std::vector<AndroidGnssTimeAnchor>& gnss_time_anchors = {});
+    const std::vector<AndroidGnssTimeAnchor>& gnss_time_anchors = {},
+    const AndroidGnssUtcGpsMapping* utc_gps_mapping = nullptr);
 
 /**
  * @brief Load rtklibexplorer/GNSS_IMU's cleaned `imu_*_sf.csv` format.

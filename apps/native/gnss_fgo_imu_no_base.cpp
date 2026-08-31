@@ -75,6 +75,7 @@ struct Options {
     int skip_epochs = 0;
     bool all_epochs = false;
     bool android_raw_utc_key_contract = false;
+    bool android_utc_wall_clock_fallback = false;
     bool fgo_imu_sparse_recovery = false;
     bool native_pdc_state_bridge = false;
     bool native_pdc_imu_tdcp = false;
@@ -93,6 +94,7 @@ void usage(const char* program) {
                  " [--dataset-id <id>] [--skip-epochs <n>]"
                  " [--max-epochs 10..30 | --all-epochs]"
                  " [--android-raw-utc-keys] [--fgo-imu-sparse-recovery]"
+                 " [--android-utc-wall-clock-fallback]"
                  " [--native-pdc-state-bridge] [--native-pdc-imu-tdcp]"
                  " [--native-signal-bias-states] [--native-residual-ionosphere]"
                  " [--native-upstream-quality] [--native-carrier-code-leveling]\n";
@@ -170,6 +172,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
             options.all_epochs = true;
         } else if (arg == "--android-raw-utc-keys") {
             options.android_raw_utc_key_contract = true;
+        } else if (arg == "--android-utc-wall-clock-fallback") {
+            options.android_utc_wall_clock_fallback = true;
         } else if (arg == "--fgo-imu-sparse-recovery") {
             options.fgo_imu_sparse_recovery = true;
         } else if (arg == "--native-pdc-state-bridge") {
@@ -225,6 +229,13 @@ bool parseArguments(int argc, char** argv, Options& options) {
     if (options.android_raw_utc_key_contract &&
         (!options.all_epochs || options.skip_epochs != 0)) {
         std::cerr << "--android-raw-utc-keys requires --all-epochs without --skip-epochs\n";
+        return false;
+    }
+    if (options.android_utc_wall_clock_fallback &&
+        (!android_raw || !options.android_raw_utc_key_contract ||
+         !options.all_epochs || options.skip_epochs != 0)) {
+        std::cerr << "--android-utc-wall-clock-fallback requires Android raw input, "
+                     "--android-raw-utc-keys, --all-epochs, and no skipped epochs\n";
         return false;
     }
     if (options.fgo_imu_sparse_recovery &&
@@ -409,6 +420,7 @@ struct ImuBuildReport {
     libgnss::io::AndroidRawGnssDiagnostics android_gnss_diagnostics;
     libgnss::AndroidImuCsvLoadResult android_load;
     libgnss::AndroidGnssTimeAnchorLoadResult android_gnss_anchor_load;
+    libgnss::AndroidGnssUtcGpsMappingLoadResult android_gnss_utc_mapping_load;
 };
 
 struct RawUtcOutputReport {
@@ -772,7 +784,8 @@ bool buildImuInput(const std::string& path,
                    ImuBuildReport& report,
                    bool android_raw = false,
                    const std::vector<libgnss::AndroidGnssTimeAnchor>& gnss_time_anchors = {},
-                   const std::vector<libgnss::Vector3d>* gnss_first_velocities_enu = nullptr) {
+                   const std::vector<libgnss::Vector3d>* gnss_first_velocities_enu = nullptr,
+                   const libgnss::AndroidGnssUtcGpsMapping* utc_gps_mapping = nullptr) {
     if (problem.epochs.size() < 2) {
         report.failure = "fewer than two GNSS epochs";
         return false;
@@ -783,9 +796,10 @@ bool buildImuInput(const std::string& path,
     if (android_raw) {
         libgnss::AndroidImuCsvConfig android_config;
         android_config.require_gnss_elapsed_anchor = true;
+        android_config.allow_utc_wall_clock_fallback = utc_gps_mapping != nullptr;
         android_config.imu_sync_coefficient = kUpstreamImuSyncCoefficient;
         report.android_load = libgnss::loadAndroidImuCsv(
-            path, series, android_config, gnss_time_anchors);
+            path, series, android_config, gnss_time_anchors, utc_gps_mapping);
         if (!report.android_load.ok || series.isEmpty()) {
             report.failure = report.android_load.error.empty()
                                  ? "empty Android IMU series"
@@ -1025,6 +1039,12 @@ std::string makeSummary(const Options& options,
         << (options.native_upstream_quality ? "true" : "false") << ",\n"
         << "  \"native_carrier_code_leveling\": "
         << (options.native_carrier_code_leveling ? "true" : "false") << ",\n"
+        << "  \"android_utc_wall_clock_fallback\": "
+        << (options.android_utc_wall_clock_fallback ? "true" : "false") << ",\n"
+        << "  \"android_utc_wall_clock_fallback_applied\": "
+        << (imu_report.android_load.utc_wall_clock_fallback_applied
+                ? "true"
+                : "false") << ",\n"
         << "  \"native_pdc_state_bridge_report\": {\n"
         << "    \"enabled\": "
         << (pdc_bridge_report.enabled ? "true" : "false") << ",\n"
@@ -1329,7 +1349,9 @@ std::string makeSummary(const Options& options,
         << "    \"mounting_rpy_deg_xyz\": [-85.0, 178.0, -94.0],\n"
         << "    \"timestamp_contract\": ";
     writeJsonString(out, imu_report.android_raw
-                           ? "GNSS ChipsetElapsedRealtimeNanos -> UTC milliseconds by linear interpolation/extrapolation; gyro anchors; sync coefficient 0.5; UTC + 18 s -> GPST"
+                           ? (imu_report.android_load.utc_wall_clock_fallback_applied
+                                  ? "Raw GNSS TimeNanos-FullBiasNanos-BiasNanos -> UTC milliseconds affine map; UTC wall-clock pairing; raw UTC -> GPST; elapsedRealtimeNanos absent and not fabricated"
+                                  : "GNSS ChipsetElapsedRealtimeNanos -> UTC milliseconds by linear interpolation/extrapolation; gyro anchors; sync coefficient 0.5; UTC + 18 s -> GPST")
                            : "GPST week/TOW CSV; no runtime offset");
     out << ",\n"
         << "    \"android_alignment\": ";
@@ -1381,6 +1403,24 @@ std::string makeSummary(const Options& options,
             << imu_report.android_gnss_anchor_load.raw_rows << ",\n"
             << "      \"anchor_duplicate_utc_timestamps\": "
             << imu_report.android_gnss_anchor_load.duplicate_utc_timestamps << ",\n"
+            << "      \"utc_mapping_input_rows\": "
+            << imu_report.android_gnss_utc_mapping_load.input_rows << ",\n"
+            << "      \"utc_mapping_raw_rows\": "
+            << imu_report.android_gnss_utc_mapping_load.raw_rows << ",\n"
+            << "      \"utc_mapping_unsupported_rows\": "
+            << imu_report.android_gnss_utc_mapping_load.unsupported_rows << ",\n"
+            << "      \"utc_mapping_duplicate_utc_timestamps\": "
+            << imu_report.android_gnss_utc_mapping_load.duplicate_utc_timestamps << ",\n"
+            << "      \"utc_mapping_hardware_clock_count_field_present\": "
+            << (imu_report.android_gnss_utc_mapping_load.mapping
+                        .hardware_clock_count_field_present
+                    ? "true"
+                    : "false") << ",\n"
+            << "      \"utc_mapping_hardware_clock_count_constant\": "
+            << (imu_report.android_gnss_utc_mapping_load.mapping
+                        .hardware_clock_count_constant
+                    ? "true"
+                    : "false") << ",\n"
             << "      \"first_gyro_elapsed_ns\": "
             << alignment.first_gyro_elapsed_ns << ",\n"
             << "      \"last_gyro_elapsed_ns\": "
@@ -1388,7 +1428,19 @@ std::string makeSummary(const Options& options,
             << "      \"elapsed_clock_preserved\": "
             << (alignment.elapsed_clock_preserved ? "true" : "false") << ",\n"
             << "      \"gnss_elapsed_anchor_applied\": "
-            << (alignment.gnss_elapsed_anchor_applied ? "true" : "false") << "\n"
+            << (alignment.gnss_elapsed_anchor_applied ? "true" : "false") << ",\n"
+            << "      \"utc_wall_clock_fallback_applied\": "
+            << (alignment.utc_wall_clock_fallback_applied ? "true" : "false") << ",\n"
+            << "      \"utc_mapping_anchors\": "
+            << alignment.utc_mapping_anchors << ",\n"
+            << "      \"utc_mapping_slope_ns_per_ms\": "
+            << alignment.utc_mapping_slope_ns_per_ms << ",\n"
+            << "      \"utc_mapping_drift_ppm\": "
+            << alignment.utc_mapping_drift_ppm << ",\n"
+            << "      \"utc_mapping_max_fit_residual_ms\": "
+            << alignment.utc_mapping_max_fit_residual_ms << ",\n"
+            << "      \"utc_mapping_max_anchor_gap_ms\": "
+            << alignment.utc_mapping_max_anchor_gap_ms << "\n"
             << "    },\n";
     }
     out << "    \"failure\": ";
@@ -1755,20 +1807,45 @@ int main(int argc, char** argv) {
     }
     const std::string imu_path = android_raw ? options.android_imu_path : options.imu_path;
     std::vector<libgnss::AndroidGnssTimeAnchor> gnss_time_anchors;
+    libgnss::AndroidGnssUtcGpsMapping android_utc_gps_mapping;
     if (android_raw) {
-        imu_report.android_gnss_anchor_load =
-            libgnss::loadAndroidGnssTimeAnchors(options.android_gnss_path,
-                                                gnss_time_anchors);
-        if (!imu_report.android_gnss_anchor_load.ok) {
-            std::cerr << "failed to load GNSS elapsed-time anchors: "
-                      << imu_report.android_gnss_anchor_load.error << "\n";
-            return 1;
+        if (options.android_utc_wall_clock_fallback) {
+            // Prefer the authoritative monotonic Android anchor whenever it
+            // is present.  The opt-in wall-clock mapping is a portability
+            // fallback for the mi8-style all-blank elapsed column, never a
+            // second competing clock selected for a route that already has
+            // valid elapsed anchors.
+            imu_report.android_gnss_anchor_load =
+                libgnss::loadAndroidGnssTimeAnchors(options.android_gnss_path,
+                                                    gnss_time_anchors);
+            if (!imu_report.android_gnss_anchor_load.ok) {
+                imu_report.android_gnss_utc_mapping_load =
+                    libgnss::loadAndroidGnssUtcGpsMapping(
+                        options.android_gnss_path, android_utc_gps_mapping);
+                if (!imu_report.android_gnss_utc_mapping_load.ok) {
+                    std::cerr << "failed to load raw GNSS UTC/GPS mapping: "
+                              << imu_report.android_gnss_utc_mapping_load.error << "\n";
+                    return 1;
+                }
+            }
+        } else {
+            imu_report.android_gnss_anchor_load =
+                libgnss::loadAndroidGnssTimeAnchors(options.android_gnss_path,
+                                                    gnss_time_anchors);
+            if (!imu_report.android_gnss_anchor_load.ok) {
+                std::cerr << "failed to load GNSS elapsed-time anchors: "
+                          << imu_report.android_gnss_anchor_load.error << "\n";
+                return 1;
+            }
         }
     }
     bool use_imu = buildImuInput(imu_path, problem, imu_report, android_raw,
                                  gnss_time_anchors,
                                  android_raw && gnss_first_ok
                                      ? &gnss_first_velocities_enu
+                                     : nullptr,
+                                 options.android_utc_wall_clock_fallback
+                                     ? &android_utc_gps_mapping
                                      : nullptr);
     bool fallback = false;
     libgnss::FGOProcessor::FGOResult result;

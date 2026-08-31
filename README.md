@@ -95,6 +95,17 @@ opt-in structural No-Go: the only unused identity available for a smoke lacks
 the GNSS elapsed-time anchor required by the native IMU contract, so no truth
 was opened and no accuracy claim was made.  See the [phase 14 record](docs/use_cases/records/smartphone_r5_phase14_carrier_code_leveling_structural_blocker_v1.json).
 
+Phase 15 adds a raw-only, opt-in UTC/GPS affine timing fallback for Android
+logs whose `elapsedRealtimeNanos` column is entirely blank.  It uses only
+`TimeNanos - FullBiasNanos - BiasNanos` and `utcTimeMillis`, with fixed
+monotonicity, 5 s gap, 1000 ppm drift, and 2 ms fit-residual gates; valid
+elapsed anchors remain authoritative and production defaults are unchanged.
+The mi8 structural smoke reached the native graph (1,417 anchors, 0.061 ppm
+drift, 0.00356 ms maximum fit residual), while the unchanged Phase 14 E1
+Hatch candidate was rejected before truth because its raw carrier/code seam
+diagnostics reached 399,723 m.  See the [Phase 15 freeze](docs/use_cases/records/smartphone_r5_phase15_utc_wall_clock_fallback_freeze_v1.json)
+and [sealed structural result](docs/use_cases/records/smartphone_r5_phase15_utc_wall_clock_fallback_structural_result_v1.json).
+
 ### RTK runtime and smartphone GSDC 2023
 
 The Release RTK broadcast-state cache preserves the position stream and

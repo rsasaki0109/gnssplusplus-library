@@ -3067,3 +3067,38 @@ the sealed blocker report and source/binary/input hashes are
 The focused raw/helper tests passed 14/14.  Phase 12 remains the promoted
 baseline, production defaults are unchanged, and a genuinely route-disjoint
 validation asset is required before any truth comparison.
+
+### Raw UTC/GPS timing fallback (phase 15, structural seal)
+
+Some Android logs expose no usable `ChipsetElapsedRealtimeNanos` in either
+the GNSS or IMU stream.  Phase 15 adds the explicit
+`--android-utc-wall-clock-fallback` option for that portability case.  The
+fallback first fits the raw GNSS hardware GPS clock
+`TimeNanos-FullBiasNanos-BiasNanos` against `utcTimeMillis`, and then uses the
+validated affine map only to pair IMU rows and convert their UTC timestamps
+to GPST.  It requires at least three unique raw epochs, constant hardware
+clock-discontinuity count, a maximum 5 s anchor gap, absolute drift no more
+than 1,000 ppm, and maximum fit residual no more than 2 ms.  It pairs in
+integer UTC nanoseconds and keeps the public `elapsedRealtimeNanos` value
+absent rather than fabricating a monotonic clock.  A route with valid
+elapsed anchors always uses those anchors, even when the option is present.
+
+The clock semantics are consistent with the Android APIs: elapsed real time
+is a monotonic nanosecond clock from boot, while GNSS hardware time is a
+separate GPS-referenced clock; see the official
+[GnssClock reference](https://developer.android.com/reference/android/location/GnssClock)
+and [SensorEvent timestamp reference](https://developer.android.com/reference/android/hardware/SensorEvent.html).
+The implementation deliberately ignores `ArrivalTimeNanosSinceGpsEpoch`,
+`SvPosition*`, `SvElevationDegrees`, device-WLS coordinates, MAT files, and
+truth.  The mi8 raw-only structural run had 1,417 unique anchors, 0.061 ppm
+fitted drift, 0.00356 ms maximum fit residual, and 1,416/1,416 target output
+keys with no coordinate interpolation.  The Phase 14 E1 Hatch candidate
+itself was then rejected before truth: its raw seam diagnostics reached
+399,723 m maximum level adjustment (phase increment 505 m), so this phase
+does not promote it or claim an accuracy score.  The Pixel7 run confirmed
+that valid elapsed anchors remain authoritative.  Full details, hashes,
+wall/RSS, and the zero-truth policy are in
+`docs/use_cases/records/smartphone_r5_phase15_utc_wall_clock_fallback_freeze_v1.json`,
+`docs/use_cases/records/smartphone_r5_phase15_utc_wall_clock_fallback_freeze_v1_manifest.json`,
+and
+`docs/use_cases/records/smartphone_r5_phase15_utc_wall_clock_fallback_structural_result_v1.json`.
