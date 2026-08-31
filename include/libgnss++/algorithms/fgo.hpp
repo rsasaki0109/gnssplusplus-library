@@ -260,6 +260,19 @@ public:
         std::size_t input_epochs = 0;
         std::size_t seeded_epochs = 0;
         std::size_t skipped_epochs_without_seed = 0;
+        // Truth-free SPP anchor replay diagnostics.  These are populated only
+        // for FGOConfig::use_quality_anchor_initialization.
+        bool quality_anchor_initialization_enabled = false;
+        bool quality_anchor_selected = false;
+        std::size_t quality_anchor_index = std::numeric_limits<std::size_t>::max();
+        std::size_t quality_anchor_candidates = 0;
+        std::size_t quality_anchor_forward_valid_epochs = 0;
+        std::size_t quality_anchor_backward_valid_epochs = 0;
+        std::size_t quality_anchor_fallback_epochs = 0;
+        int quality_anchor_satellites = 0;
+        double quality_anchor_gdop = std::numeric_limits<double>::quiet_NaN();
+        double quality_anchor_normalized_residual_rms =
+            std::numeric_limits<double>::quiet_NaN();
         std::size_t sparse_epochs_retained = 0;
         std::size_t sparse_empty_epochs_retained = 0;
         std::size_t double_difference_matched_base_epochs = 0;

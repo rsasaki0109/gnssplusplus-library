@@ -1,4 +1,5 @@
 #include <libgnss++/algorithms/fgo.hpp>
+#include <libgnss++/algorithms/fgo_quality_anchor.hpp>
 
 #include <libgnss++/algorithms/lambda.hpp>
 #include <libgnss++/algorithms/doppler_contract.hpp>
@@ -75,6 +76,117 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
 
     SPPProcessor spp_processor(spp_config);
     spp_processor.initialize(spp_processor_config);
+
+    // The historical builder feeds one stateful chronological SPP pass
+    // directly into the graph.  That makes the first poor SPP basin a
+    // persistent initializer even when later raw epochs have much stronger
+    // geometry.  The opt-in quality-anchor contract performs a truth-free
+    // reconnaissance pass, chooses one deterministic raw/nav quality anchor,
+    // and replays the *same* SPP implementation outward from that epoch in
+    // both directions.  No prefix is trimmed and no coordinate is shifted;
+    // this only changes the initial values handed to the unchanged FGO graph.
+    std::vector<PositionSolution> quality_anchor_spp_solutions;
+    bool use_quality_anchor_spp_solutions = false;
+    if (config_.use_quality_anchor_initialization) {
+        problem.diagnostics.quality_anchor_initialization_enabled = true;
+        std::vector<PositionSolution> reconnaissance(input_epochs.size());
+        for (std::size_t i = 0; i < input_epochs.size(); ++i) {
+            reconnaissance[i] = spp_processor.processEpoch(input_epochs[i], nav);
+        }
+
+        std::vector<fgo_quality_anchor::Candidate> candidates;
+        candidates.reserve(reconnaissance.size());
+        const double residual_sigma = std::max(1e-6, config_.pseudorange_sigma_m);
+        for (std::size_t i = 0; i < reconnaissance.size(); ++i) {
+            const auto& solution = reconnaissance[i];
+            const double residual_rms =
+                std::isfinite(solution.spp_pre_qc_residual_rms_m)
+                    ? solution.spp_pre_qc_residual_rms_m
+                    : solution.residual_rms;
+            if (!fgo_quality_anchor::eligible(
+                    solution.isValid(), solution.position_ecef.allFinite(),
+                    solution.position_ecef.norm(), solution.num_satellites,
+                    solution.gdop, residual_rms / residual_sigma)) {
+                continue;
+            }
+            fgo_quality_anchor::Candidate quality;
+            quality.index = i;
+            quality.satellites = solution.num_satellites;
+            quality.gdop = solution.gdop;
+            quality.normalized_residual = residual_rms / residual_sigma;
+            candidates.push_back(quality);
+        }
+        problem.diagnostics.quality_anchor_candidates = candidates.size();
+        if (const auto* anchor = fgo_quality_anchor::choose(candidates)) {
+            const std::size_t anchor_index = anchor->index;
+            problem.diagnostics.quality_anchor_selected = true;
+            problem.diagnostics.quality_anchor_index = anchor_index;
+            problem.diagnostics.quality_anchor_satellites = anchor->satellites;
+            problem.diagnostics.quality_anchor_gdop = anchor->gdop;
+            problem.diagnostics.quality_anchor_normalized_residual_rms =
+                anchor->normalized_residual;
+
+            std::vector<PositionSolution> forward(input_epochs.size());
+            std::vector<PositionSolution> backward(input_epochs.size());
+            std::vector<bool> forward_assigned(input_epochs.size(), false);
+            std::vector<bool> backward_assigned(input_epochs.size(), false);
+            auto replay_from_anchor = [&](bool forward_pass,
+                                          std::vector<PositionSolution>& output,
+                                          std::vector<bool>& assigned,
+                                          std::size_t& valid_count) {
+                SPPProcessor replay_processor(spp_config);
+                replay_processor.initialize(spp_processor_config);
+                auto process_index = [&](std::size_t index) {
+                    ObservationData replay_epoch = input_epochs[index];
+                    if (index == anchor_index) {
+                        // The anchor itself is a raw/nav-derived SPP result;
+                        // use it as the first numerical state for this replay.
+                        replay_epoch.receiver_position =
+                            reconnaissance[anchor_index].position_ecef;
+                    }
+                    output[index] = replay_processor.processEpoch(replay_epoch, nav);
+                    assigned[index] = true;
+                    if (output[index].isValid() &&
+                        output[index].position_ecef.allFinite() &&
+                        output[index].position_ecef.norm() > 1e6) {
+                        ++valid_count;
+                    }
+                };
+                for (const std::size_t index : fgo_quality_anchor::outwardOrder(
+                         input_epochs.size(), anchor_index, forward_pass)) {
+                    process_index(index);
+                }
+            };
+            std::size_t forward_valid = 0;
+            std::size_t backward_valid = 0;
+            replay_from_anchor(true, forward, forward_assigned, forward_valid);
+            replay_from_anchor(false, backward, backward_assigned, backward_valid);
+            quality_anchor_spp_solutions.resize(input_epochs.size());
+            for (std::size_t i = 0; i < input_epochs.size(); ++i) {
+                const bool assigned = i < anchor_index ? backward_assigned[i]
+                                                        : forward_assigned[i];
+                quality_anchor_spp_solutions[i] =
+                    i < anchor_index ? backward[i] : forward[i];
+                if (!assigned) {
+                    quality_anchor_spp_solutions[i] = reconnaissance[i];
+                    ++problem.diagnostics.quality_anchor_fallback_epochs;
+                }
+            }
+            problem.diagnostics.quality_anchor_forward_valid_epochs = forward_valid;
+            problem.diagnostics.quality_anchor_backward_valid_epochs = backward_valid;
+            // The replay arrays are complete for every raw input index.  A
+            // valid anchor plus at least one outward state is sufficient to
+            // select the candidate; individual invalid SPP epochs continue to
+            // use the existing last-valid-seed fail-closed behavior below.
+            use_quality_anchor_spp_solutions =
+                quality_anchor_spp_solutions.size() == input_epochs.size();
+        } else {
+            // The reconnaissance processor has consumed all input epochs.  A
+            // failed quality contract must therefore reset it before the
+            // historical chronological pass is used below.
+            spp_processor.reset();
+        }
+    }
 
     const double effective_min_elevation_deg =
         config_.use_upstream_observable_quality
@@ -168,7 +280,11 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
 
         PositionSolution spp_solution = makeInvalidSolution(epoch.time);
         if (config_.use_spp_seed) {
-            spp_solution = spp_processor.processEpoch(epoch, nav);
+            if (use_quality_anchor_spp_solutions) {
+                spp_solution = quality_anchor_spp_solutions[input_epoch_index];
+            } else {
+                spp_solution = spp_processor.processEpoch(epoch, nav);
+            }
         }
 
         if (spp_solution.isValid()) {

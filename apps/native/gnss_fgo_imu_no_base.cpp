@@ -93,6 +93,7 @@ struct Options {
     bool native_upstream_stop_constraints = false;
     bool native_upstream_position_offset = false;
     bool native_signal_specific_galileo_tgd = false;
+    bool native_quality_anchor = false;
 };
 
 const char* carrierSignalName(libgnss::SignalType signal) {
@@ -125,7 +126,8 @@ void usage(const char* program) {
                  " [--native-carrier-code-gal-e1-e5a]"
                  " [--native-upstream-stop-constraints]"
                  " [--native-upstream-position-offset]"
-                 " [--native-signal-specific-galileo-tgd]\n";
+                 " [--native-signal-specific-galileo-tgd]"
+                 " [--native-quality-anchor]\n";
 }
 
 bool requireValue(int argc, char** argv, int& index, std::string& value) {
@@ -239,6 +241,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
             options.native_upstream_position_offset = true;
         } else if (arg == "--native-signal-specific-galileo-tgd") {
             options.native_signal_specific_galileo_tgd = true;
+        } else if (arg == "--native-quality-anchor") {
+            options.native_quality_anchor = true;
         } else {
             std::cerr << "Unknown argument: " << arg << "\n";
             return false;
@@ -1506,6 +1510,8 @@ std::string makeSummary(const Options& options,
         << "  \"native_signal_specific_galileo_tgd\": "
         << (options.native_signal_specific_galileo_tgd ? "true" : "false")
         << ",\n"
+        << "  \"native_quality_anchor\": "
+        << (options.native_quality_anchor ? "true" : "false") << ",\n"
         ;
     if (options.native_carrier_code_primary_l1_e1) {
         out << "  \"native_carrier_code_primary_l1_e1\": true,\n";
@@ -1904,6 +1910,50 @@ std::string makeSummary(const Options& options,
         << "    \"failure\": ";
     writeJsonString(out, position_offset_report.failure);
     out << "\n  },\n"
+        << "  \"quality_anchor_initialization\": {\n"
+        << "    \"enabled\": "
+        << (problem.diagnostics.quality_anchor_initialization_enabled
+                ? "true"
+                : "false") << ",\n"
+        << "    \"selected\": "
+        << (problem.diagnostics.quality_anchor_selected ? "true" : "false")
+        << ",\n"
+        << "    \"anchor_index\": ";
+    if (problem.diagnostics.quality_anchor_selected) {
+        out << problem.diagnostics.quality_anchor_index;
+    } else {
+        out << "null";
+    }
+    out << ",\n"
+        << "    \"eligible_candidates\": "
+        << problem.diagnostics.quality_anchor_candidates << ",\n"
+        << "    \"forward_valid_epochs\": "
+        << problem.diagnostics.quality_anchor_forward_valid_epochs << ",\n"
+        << "    \"backward_valid_epochs\": "
+        << problem.diagnostics.quality_anchor_backward_valid_epochs << ",\n"
+        << "    \"fallback_epochs\": "
+        << problem.diagnostics.quality_anchor_fallback_epochs << ",\n"
+        << "    \"anchor_satellites\": "
+        << problem.diagnostics.quality_anchor_satellites << ",\n"
+        << "    \"anchor_gdop\": ";
+    if (std::isfinite(problem.diagnostics.quality_anchor_gdop)) {
+        out << problem.diagnostics.quality_anchor_gdop;
+    } else {
+        out << "null";
+    }
+    out << ",\n"
+        << "    \"anchor_normalized_residual_rms\": ";
+    if (std::isfinite(problem.diagnostics.quality_anchor_normalized_residual_rms)) {
+        out << problem.diagnostics.quality_anchor_normalized_residual_rms;
+    } else {
+        out << "null";
+    }
+    out << ",\n"
+        << "    \"ranking\": [\"satellites_desc\", \"gdop_asc\", "
+           "\"normalized_residual_rms_asc\", \"input_index_asc\"],\n"
+        << "    \"truth_free\": true,\n"
+        << "    \"graph_model_changed\": false\n"
+        << "  },\n"
         << "  \"graph\": {\n"
         << "    \"factors\": " << result.diagnostics.graph_factors << ",\n"
         << "    \"values\": " << result.diagnostics.graph_values << ",\n"
@@ -2439,6 +2489,7 @@ int main(int argc, char** argv) {
     config.pose3_lever_arm_body_m = libgnss::Vector3d::Zero();
     config.use_signal_specific_galileo_group_delay =
         options.native_signal_specific_galileo_tgd;
+    config.use_quality_anchor_initialization = options.native_quality_anchor;
     if (android_raw) {
         // The raw path starts SPP from the route-independent Earth-surface
         // initializer above.  Applying a nonzero elevation mask at that

@@ -412,6 +412,10 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase24_route_group.py
     )
     add_test(
+        NAME python_smartphone_phase31_quality_anchor_structural_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase31_quality_anchor_structural.py
+    )
+    add_test(
         NAME python_smartphone_reacquisition_eval_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_reacquisition_eval.py
     )

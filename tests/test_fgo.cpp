@@ -2,6 +2,7 @@
 #include <libgnss++/algorithms/doppler_contract.hpp>
 #include <libgnss++/algorithms/doppler_velocity_wls.hpp>
 #include <libgnss++/algorithms/fgo.hpp>
+#include <libgnss++/algorithms/fgo_quality_anchor.hpp>
 #include <libgnss++/algorithms/fgo_ddpr_gnc.hpp>
 #include <libgnss++/algorithms/pdc_state_bridge.hpp>
 #include <libgnss++/algorithms/residual_ionosphere_contract.hpp>
@@ -15,6 +16,66 @@
 #include <vector>
 
 using namespace libgnss;
+
+TEST(FGOQualityAnchorTest, RankingIsDeterministicAndSatelliteFirst) {
+    using fgo_quality_anchor::Candidate;
+    const Candidate fewer_satellites{2, 9, 1.01, 0.1};
+    const Candidate more_satellites{7, 10, 9.0, 9.0};
+    EXPECT_TRUE(fgo_quality_anchor::better(more_satellites, fewer_satellites));
+    EXPECT_FALSE(fgo_quality_anchor::better(fewer_satellites, more_satellites));
+
+    const Candidate lower_gdop{4, 10, 1.1, 2.0};
+    const Candidate higher_gdop{3, 10, 1.2, 0.1};
+    EXPECT_TRUE(fgo_quality_anchor::better(lower_gdop, higher_gdop));
+
+    const Candidate lower_residual{5, 10, 1.1, 0.5};
+    const Candidate higher_residual{6, 10, 1.1, 0.6};
+    EXPECT_TRUE(fgo_quality_anchor::better(lower_residual, higher_residual));
+    const Candidate earlier{1, 10, 1.1, 0.5};
+    const Candidate later{8, 10, 1.1, 0.5};
+    EXPECT_TRUE(fgo_quality_anchor::better(earlier, later));
+}
+
+TEST(FGOQualityAnchorTest, NoEligibleEpochFailsClosedToHistoricalPass) {
+    EXPECT_FALSE(fgo_quality_anchor::eligible(
+        false, true, 6.4e6, 20, 1.0, 1.0));
+    EXPECT_FALSE(fgo_quality_anchor::eligible(
+        true, true, 6.4e6, 3, 1.0, 1.0));
+    EXPECT_FALSE(fgo_quality_anchor::eligible(
+        true, false, 6.4e6, 20, 1.0, 1.0));
+    const std::vector<fgo_quality_anchor::Candidate> no_candidates;
+    EXPECT_EQ(fgo_quality_anchor::choose(no_candidates), nullptr);
+}
+
+TEST(FGOQualityAnchorTest, ReplayOrdersAreAnchorOutwardAndGraphChronological) {
+    const auto forward = fgo_quality_anchor::outwardOrder(6, 2, true);
+    const auto backward = fgo_quality_anchor::outwardOrder(6, 2, false);
+    EXPECT_EQ(forward, (std::vector<std::size_t>{2, 3, 4, 5}));
+    EXPECT_EQ(backward, (std::vector<std::size_t>{2, 1, 0}));
+
+    // The replay order is allowed to decrease only while collecting seeds;
+    // the builder merges by input index before constructing graph factors.
+    std::vector<std::size_t> merged(6, 0);
+    for (std::size_t index = 0; index < backward.size(); ++index) {
+        merged[backward[index]] = backward[index];
+    }
+    for (std::size_t index = 0; index < forward.size(); ++index) {
+        merged[forward[index]] = forward[index];
+    }
+    EXPECT_EQ(merged, (std::vector<std::size_t>{0, 1, 2, 3, 4, 5}));
+    EXPECT_EQ(fgo_quality_anchor::graphOrder(6),
+              (std::vector<std::size_t>{0, 1, 2, 3, 4, 5}));
+
+    // The reverse SPP pass is seed collection only.  Graph construction is
+    // required to use the chronological input order, so no negative-dt graph
+    // factor can be introduced by the reverse traversal.
+    EXPECT_TRUE(std::is_sorted(merged.begin(), merged.end()));
+}
+
+TEST(FGOQualityAnchorTest, ConfigIsOptInOnly) {
+    FGOProcessor::FGOConfig config;
+    EXPECT_FALSE(config.use_quality_anchor_initialization);
+}
 
 TEST(ResidualIonosphereContractTest, UsesFiniteThinShellAndFrequencyScale) {
     using namespace residual_ionosphere;

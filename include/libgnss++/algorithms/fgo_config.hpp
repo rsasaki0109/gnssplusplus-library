@@ -51,6 +51,13 @@ struct Config {
         double max_float_position_jump_m = 0.0;
 
         bool use_spp_seed = true;
+        // Research-only, raw/nav-derived SPP initialization.  The builder
+        // first audits all finite per-epoch SPP solutions, chooses a
+        // deterministic quality anchor (satellite count, GDOP, normalized
+        // residual, then time), and replays the stateful SPP pass outward
+        // from that anchor.  The default remains the historical chronological
+        // pass so production and existing callers remain byte-compatible.
+        bool use_quality_anchor_initialization = false;
         // Raw no-base research paths may use the dedicated receiver-only SPP
         // seed contract. The historical default keeps inter-system clock
         // states enabled for compatibility.

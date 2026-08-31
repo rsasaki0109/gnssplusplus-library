@@ -3536,3 +3536,40 @@ converged, with 1130 problem epochs, 1129 exact and 35 interpolated output
 epochs, and zero unresolved keys.  No generic truth-free recovery rule was
 therefore authorized; prefix trimming, translation, or initial-state changes
 would be a new estimator decision rather than a demonstrated raw anomaly.
+
+### Phase 31 quality-anchor SPP replay (truth-free structural pass)
+
+Phase 31 freezes an opt-in initializer-only experiment for the long Samsung
+settling transient diagnosed in Phase 30.  A raw/nav-only reconnaissance pass
+examines every finite SPP epoch, ranks a deterministic anchor by satellite
+count (descending), GDOP, normalized pre-QC residual RMS, and input index, and
+then resets the same SPP processor to replay outward from that anchor in both
+directions.  The replay seeds are merged by the original chronological input
+index before the unchanged P/D/TDCP/IMU graph is built.  There is no prefix
+trim, coordinate translation, truth coordinate, WLS input, or graph-model or
+production-default change; the flag is `--native-quality-anchor`.
+
+The three fixed raw-only Phase 29 routes all produced finite converged output
+and repeated byte-identically.  Pixel5 selected anchor index 1791 (34 sats,
+GDOP 0.856966), Pixel4 index 1371 (34 sats, GDOP 0.871907), and sm-g988b
+index 1065 (28 sats, GDOP 1.109648); all replay fallback counts were zero.
+The output key contracts were 2158/2158, 1677/1677, and 1164/1164 exact
+post-warm-up epochs, with no unresolved keys.  The Samsung first-30-transition
+maximum fell truth-free from the sealed Phase 28 comparator's 174.084 m/s to
+3.116 m/s, and its >70 m/s transition count fell from 4 to 0; the two Pixel
+routes remained physically safe and unchanged at the displayed precision.
+This is structural evidence only, so no development truth was opened by
+Phase 31 and no accuracy or promotion claim is made.  The machine-readable
+freeze, structural result, and manifest are in
+`docs/use_cases/records/smartphone_r5_phase31_quality_anchor_freeze_v1.json`,
+`docs/use_cases/records/smartphone_r5_phase31_quality_anchor_structural_result_v1.json`,
+and the truth-free artifact manifest under
+`output/smartphone-r5/phase31-quality-anchor-structural-v1/`.
+Reproduce the audit after the three raw-only commands with:
+
+```text
+python3 apps/commands/benchmarks/gnss_smartphone_phase31_quality_anchor_structural.py seal
+```
+
+The raw solver commands use only `device_gnss.csv`, `device_imu.csv`, and
+`brdc.nav`; validation, holdout, MAT, token, and Kaggle inputs remain sealed.

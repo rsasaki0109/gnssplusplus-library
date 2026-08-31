@@ -241,6 +241,15 @@ the native result summary: it was not a libgnss++ inference run and cannot
 establish the native 0.782-class target. Native smartphone experiments remain
 development-only, and RTK/SPP production defaults are unchanged.
 
+Phase 31 adds an opt-in raw/nav-only quality-anchor SPP replay initializer to
+address the Samsung startup transient.  The three fixed development routes
+all reached finite converged output and byte-identical repeat artifacts; the
+Samsung first-30-transition maximum dropped from the sealed comparator's
+174.084 m/s to 3.116 m/s with no >70 m/s transitions.  This is truth-free
+structural evidence only—no new truth was opened and native 0.782-class
+accuracy remains unachieved.  See the [Phase 31 freeze](docs/use_cases/records/smartphone_r5_phase31_quality_anchor_freeze_v1.json)
+and [structural result](docs/use_cases/records/smartphone_r5_phase31_quality_anchor_structural_result_v1.json).
+
 ### PPC 2024 goal matrix vs Kaiyodai and gici-open
 
 The audited KF/FGO selected profile clears the distance-weighted PPC public
