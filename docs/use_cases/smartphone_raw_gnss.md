@@ -3322,3 +3322,43 @@ and
 `docs/use_cases/records/smartphone_r5_phase21_position_offset_score_result_v1.json`.
 The source hashes, raw-only commands, one-shot truth policy, and the explicit
 P95 caveat are sealed in those records.
+
+### Upstream absolute Doppler residual screen (phase 23, structural No-Go)
+
+Phase 23 ports one isolated raw-only rule from the pinned
+`exobs_residuals.m`: receiver-only Doppler residuals are corrected with the
+raw Android `DriftNanosPerSecond` clock-rate field and accepted only when
+`abs(residual_mps - dclk_mps / observation_interval_s) <= 3 m/s`.  The clock
+rate conversion and the median, two-decimal observation interval are fixed by
+the upstream `gnsslog2obs.m` and `gt.Gtime.estInterval` contracts.  Existing
+SNR weighting, Huber settings, P/D/L adjacent masks, TDCP, and all estimator
+parameters remain unchanged.  The option is
+`--native-upstream-absolute-doppler-screen` and is disabled by default.
+
+The raw adapter now retains `DriftNanosPerSecond` as an explicit metres/second
+field; missing drift is rejected by this opt-in screen rather than estimated
+from a coordinate.  A Pixel7 raw run was finite, converged without fallback,
+complete at 1,383/1,383 keys, and its repeat was byte-identical.  It examined
+39,539 D factors, retained 25,890, rejected 13,649 (29 lacked the raw clock
+field), and had a maximum transition of 19.565 m/s.  The same fixed recipe on
+the declared mi8 raw route failed closed because the reduced D graph caused the
+IMU solution to fall back; publishing that fallback would violate the frozen
+Phase 12 structural contract.  No development truth was opened, so this
+candidate is a structural No-Go and has no accuracy claim.  The existing
+Phase 12 output remains the immutable baseline (its CSV hash is
+`3069f149...d5a26`).  The exact input, binary, output, failure-log hashes and
+the stale preimplementation option spelling are recorded in
+`docs/use_cases/records/smartphone_r5_phase23_doppler_residual_screen_structural_seal_v1.json`
+and its companion manifest.
+
+The structural seal's prescribed next action was to stop without truth.  A
+later explicit phase instruction nevertheless authorized one diagnostic
+Pixel-only comparison using the already-used development truth.  That read
+was performed once in the intersection evaluator and is disclosed as a
+protocol contradiction in
+`docs/use_cases/records/smartphone_r5_phase23_doppler_residual_screen_pixel_score_result_v1.json`;
+it does not override the two-route No-Go or promote the candidate.  The
+candidate improved all four local variants by only about 6.7 micrometres
+against the Phase 12 control (WGS84-linear `3.192248964 -> 3.192242309 m`),
+with 1,383/1,383 matched keys.  No further truth read, rerun, tuning,
+validation/holdout/test access, or Kaggle/token access is allowed.

@@ -11,6 +11,8 @@ namespace {
 using libgnss::SignalType;
 using libgnss::observable_upstream::ObservationBand;
 using libgnss::observable_upstream::carrierDopplerDifference;
+using libgnss::observable_upstream::acceptsAbsoluteDopplerResidual;
+using libgnss::observable_upstream::dopplerResidualAfterReceiverClock;
 using libgnss::observable_upstream::linearPercentile;
 using libgnss::observable_upstream::pairThreshold;
 using libgnss::observable_upstream::pseudorangeDopplerDifference;
@@ -107,6 +109,20 @@ TEST(UpstreamObservablePreprocessingTest, AppliesTwoSidedAdjacentMasksAndGapGate
     EXPECT_EQ(pd_rejections, 0U);
     EXPECT_TRUE(masks[0].pseudorange.empty());
     EXPECT_TRUE(masks[1].pseudorange.empty());
+}
+
+TEST(UpstreamObservablePreprocessingTest,
+     AppliesRawClockDriftToAbsoluteDopplerResidual) {
+    // DriftNanosPerSecond has already been converted to range m/s by the
+    // Android adapter.  The upstream residual rule then divides by the
+    // scalar observation interval before applying its 3 m/s bound.
+    EXPECT_DOUBLE_EQ(dopplerResidualAfterReceiverClock(10.0, 2.0, 2.0), 9.0);
+    EXPECT_TRUE(acceptsAbsoluteDopplerResidual(4.0, 2.0, 2.0, 3.0));
+    EXPECT_FALSE(acceptsAbsoluteDopplerResidual(4.01, 2.0, 2.0, 3.0));
+    EXPECT_FALSE(acceptsAbsoluteDopplerResidual(
+        10.0, std::numeric_limits<double>::quiet_NaN(), 1.0, 3.0));
+    EXPECT_TRUE(std::isnan(dopplerResidualAfterReceiverClock(
+        10.0, 2.0, 0.0)));
 }
 
 }  // namespace

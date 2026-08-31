@@ -206,6 +206,13 @@ struct Config {
         double upstream_min_elevation_deg = 5.0;
         double upstream_max_adjacent_gap_s = 1.5;
         std::string upstream_device_model;
+        // Isolated raw-only port of exobs_residuals.m's absolute Doppler
+        // residual screen.  The Android adapter supplies the optional
+        // DriftNanosPerSecond field in m/s; rows without it are rejected by
+        // this opt-in screen.  This does not enable SNR weighting or alter
+        // the historical upstream-quality proxy above.
+        bool use_upstream_absolute_doppler_residual_screen = false;
+        double upstream_absolute_doppler_residual_threshold_mps = 3.0;
         bool use_single_difference_doppler_factors = false;
         bool use_single_difference_tdcp_factors = false;
         bool use_velocity_states = false;

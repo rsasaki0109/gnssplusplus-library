@@ -1,0 +1,97 @@
+{
+  "schema_version": "smartphone-r5-phase23-doppler-residual-screen-pixel-score-result.v1",
+  "status": "development-only-pixel-comparison-after-overall-structural-no-go",
+  "candidate_id": "native-raw-upstream-absolute-doppler-screen-v1",
+  "route_device": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+  "overall_decision": "no-go",
+  "overall_decision_reason": "The fixed candidate passed Pixel structural and accuracy comparison but failed closed on the declared mi8 structural route; it is not promoted or generalized.",
+  "protocol_consistency": {
+    "structural_seal_instruction": "do not open development truth after the two-route structural No-Go",
+    "later_phase_instruction": "explicitly authorized one already-used Pixel development comparison without changing the candidate",
+    "contradiction": true,
+    "truth_read_performed": true,
+    "handling": "This record discloses the later read rather than treating it as a clean structural-gate evaluation; the overall No-Go and no-promotion decision remain unchanged. No further truth read or rerun is permitted."
+  },
+  "freeze": {
+    "record": "docs/use_cases/records/smartphone_r5_phase23_doppler_residual_screen_freeze_v1.json",
+    "record_sha256": "5372c92bea8a888365e50557de41a505f13baba34d73ac79cb2f80a6682504eb",
+    "structural_seal": "docs/use_cases/records/smartphone_r5_phase23_doppler_residual_screen_structural_seal_v1.json",
+    "structural_seal_sha256": "00793eecdabfd9692f31f1751fa08e6c9cef34887e0af844244890039189109f",
+    "structural_manifest": "docs/use_cases/records/smartphone_r5_phase23_doppler_residual_screen_structural_manifest_v1.json",
+    "structural_manifest_sha256": "cf7cdb82972fb38864dc085afcbb765b476a6c250fb9c98a70f1a4ef2f97c1e7",
+    "score_authorization": "docs/use_cases/records/smartphone_r5_phase23_doppler_residual_screen_pixel_score_authorization_v1.json",
+    "score_authorization_sha256": "a7ed7bf2a37f417f5271cd3700499b99ea25a84f73ef7ac860a93ac05a5e1b4c"
+  },
+  "truth_policy": {
+    "mat_read_count_this_phase": 0,
+    "truth_read_count_this_phase": 1,
+    "truth_read_scope": "already-used Pixel7 development ground_truth.csv; one intersection evaluator process read it once after the raw candidate and control artifacts were sealed",
+    "truth_sha256": null,
+    "truth_sha256_note": "intersection evaluator intentionally did not reopen or hash the truth after its single read",
+    "validation_truth_read_count": 0,
+    "holdout_truth_read_count": 0,
+    "test_truth_read_count": 0,
+    "enriched_satellite_columns_used": false,
+    "device_wls_or_precomputed_coordinates_used": false,
+    "leaderboard_or_token_access": false,
+    "external_mutation": false,
+    "score_used_for_parameter_selection": false,
+    "post_score_tuning": false,
+    "candidate_rerun_after_score": false,
+    "cumulative_history_note": "Earlier development truth reads remain disclosed by Phase19-22 records; this record reports this phase's single read explicitly."
+  },
+  "evaluation": {
+    "evaluator": "apps/commands/benchmarks/gnss_smartphone_kaggle_intersection_eval.py",
+    "command": "PYTHONPATH=apps/commands/benchmarks python3 apps/commands/benchmarks/gnss_smartphone_kaggle_intersection_eval.py --truth <already-used Pixel7 development ground_truth.csv> --submission control=<sealed control.csv> --submission candidate=<sealed candidate.csv> --output <phase23_score.json> --phone 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "report": "output/smartphone-r5/phase23-absolute-doppler-screen-v1/pixel7pro/phase23_score.json",
+    "report_sha256": "5ef9671164b11566108f000f476f99a427a515572622ca87e1b107751110e26b",
+    "truth_rows": 1383,
+    "matched_rows": 1383,
+    "coverage": 1.0,
+    "matched_key_set_sha256": "7bffc3887021a0379e2c56e1529bbd5d8d1fe02277636f28ea4287961ec28f9a",
+    "control_submission_sha256": "3069f149bc98b0383d008d5f20cc80cd4ada9f9eb1b5d09f05353895a2d5a26f",
+    "candidate_submission_sha256": "2de16cfe2d769d991b2734dca8d1b081bd62dbfdcacaefed8403a1f9b2ecd87f",
+    "candidate_repeat_submission_sha256": "2de16cfe2d769d991b2734dca8d1b081bd62dbfdcacaefed8403a1f9b2ecd87f",
+    "all_four_strictly_improved": true,
+    "pixel_comparison_decision": "development-only-accept-under-local-four-variant-gate"
+  },
+  "metrics_m": {
+    "control": {
+      "wgs84_vincenty__linear_n_minus_1": 3.1922489635126103,
+      "wgs84_vincenty__nearest_rank_ceiling": 3.192568555787111,
+      "haversine_sphere__linear_n_minus_1": 3.19550488592491,
+      "haversine_sphere__nearest_rank_ceiling": 3.195826163862037
+    },
+    "candidate": {
+      "wgs84_vincenty__linear_n_minus_1": 3.1922423093824244,
+      "wgs84_vincenty__nearest_rank_ceiling": 3.192561402912901,
+      "haversine_sphere__linear_n_minus_1": 3.1954982319127403,
+      "haversine_sphere__nearest_rank_ceiling": 3.1958190097552537
+    },
+    "candidate_minus_control": {
+      "wgs84_vincenty__linear_n_minus_1": -0.000006654130185967944,
+      "wgs84_vincenty__nearest_rank_ceiling": -0.000007152874210269999,
+      "haversine_sphere__linear_n_minus_1": -0.000006654012169704515,
+      "haversine_sphere__nearest_rank_ceiling": -0.000007154106783424652
+    }
+  },
+  "artifacts": {
+    "pixel_candidate_summary": "output/smartphone-r5/phase23-absolute-doppler-screen-v1/pixel7pro/candidate/summary.json",
+    "pixel_candidate_summary_sha256": "d7dbf813790625c87d21bfb4973cc251aef99489d2bc5aad13dfcbe32a937f05",
+    "pixel_candidate_submission": "output/smartphone-r5/phase23-absolute-doppler-screen-v1/pixel7pro/candidate/submission.csv",
+    "pixel_candidate_submission_sha256": "2de16cfe2d769d991b2734dca8d1b081bd62dbfdcacaefed8403a1f9b2ecd87f",
+    "pixel_control_submission_sha256": "3069f149bc98b0383d008d5f20cc80cd4ada9f9eb1b5d09f05353895a2d5a26f",
+    "mi8_candidate_output": "not published; fail-closed",
+    "mi8_failure_log_sha256": "bc2fbee0301987134a7f6c8c6e060ae3dc07c40934509f10760527531b909657"
+  },
+  "verification": {
+    "release_build": "passed: cmake --build build --config Release --target run_tests gnss_fgo_imu_no_base -j2",
+    "focused_tests": "17/17 passed",
+    "full_serial_ctest": "131/131 passed",
+    "diff_check": "passed",
+    "json_parse": "passed",
+    "candidate_deterministic_repeat": true,
+    "no_truth_or_mat_before_artifact_seal": true
+  },
+  "score_record_sha256": "excluded-from-self-hash; compute from committed file"
+}

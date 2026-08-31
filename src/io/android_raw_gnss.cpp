@@ -318,6 +318,8 @@ struct RawRow {
     std::int64_t time_nanos = 0;
     std::int64_t full_bias_nanos = 0;
     double bias_nanos = 0.0;
+    double drift_nanos_per_second = std::numeric_limits<double>::quiet_NaN();
+    bool has_drift_nanos_per_second = false;
     double bias_uncertainty_nanos = std::numeric_limits<double>::quiet_NaN();
     std::int64_t received_sv_time_nanos = 0;
     double time_offset_nanos = 0.0;
@@ -380,6 +382,15 @@ bool parseRawRow(const std::vector<std::string>& row,
                            output.bias_uncertainty_nanos, true)) {
         error = "invalid BiasUncertaintyNanos";
         return false;
+    }
+    if (columns.has("driftnanospersecond")) {
+        if (!parseFiniteDouble(columns.value(row, "driftnanospersecond"),
+                               output.drift_nanos_per_second, true)) {
+            error = "invalid DriftNanosPerSecond";
+            return false;
+        }
+        output.has_drift_nanos_per_second =
+            std::isfinite(output.drift_nanos_per_second);
     }
     if (columns.has("timeoffsetnanos") &&
         !parseFiniteDouble(columns.value(row, "timeoffsetnanos"),
@@ -534,6 +545,8 @@ bool validReceiverPosition(const RawRow& row, Vector3d& position) {
 struct EpochAccumulator {
     GNSSTime time;
     double clock_bias_seconds = 0.0;
+    double receiver_clock_drift_mps =
+        std::numeric_limits<double>::quiet_NaN();
     int hardware_clock_discontinuity_count = 0;
     Vector3d receiver_position = Vector3d::Zero();
     bool have_receiver_position = false;
@@ -547,6 +560,7 @@ bool appendEpoch(EpochAccumulator& accumulator,
     if (accumulator.observations.empty()) return true;
     ObservationData epoch(accumulator.time);
     epoch.receiver_clock_bias = accumulator.clock_bias_seconds;
+    epoch.receiver_clock_drift_mps = accumulator.receiver_clock_drift_mps;
     if (accumulator.have_receiver_position) {
         epoch.receiver_position = accumulator.receiver_position;
         ++result.diagnostics.receiver_position_rows;
@@ -719,6 +733,11 @@ bool loadAndroidRawGnssCsv(const std::string& path,
             accumulator.utc_millis = raw.utc_millis;
             accumulator.time = epoch_time;
             accumulator.clock_bias_seconds = clock_bias_seconds;
+            accumulator.receiver_clock_drift_mps =
+                raw.has_drift_nanos_per_second
+                    ? raw.drift_nanos_per_second *
+                          constants::SPEED_OF_LIGHT / 1.0e9
+                    : std::numeric_limits<double>::quiet_NaN();
             accumulator.hardware_clock_discontinuity_count =
                 raw.hardware_clock_discontinuity_count;
             have_epoch = true;

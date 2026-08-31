@@ -199,6 +199,35 @@ inline double residualThreshold(ObservationBand band, char observable) {
     }
 }
 
+/**
+ * Apply the upstream receiver-clock correction to a Doppler residual.
+ *
+ * ``gnsslog2obs.m`` stores ``dclk`` as c*DriftNanosPerSecond/1e9 in m/s,
+ * while ``exobs_residuals.m`` evaluates ``resD-dclk/obs.dt``.  Keeping this
+ * small equation in the library makes the unit contract explicit and lets
+ * the opt-in native screen be tested without a solver or a coordinate.
+ */
+inline double dopplerResidualAfterReceiverClock(double residual_mps,
+                                                double dclk_mps,
+                                                double observation_interval_s) {
+    if (!std::isfinite(residual_mps) || !std::isfinite(dclk_mps) ||
+        !(observation_interval_s > 0.0) ||
+        !std::isfinite(observation_interval_s)) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    return residual_mps - dclk_mps / observation_interval_s;
+}
+
+inline bool acceptsAbsoluteDopplerResidual(double residual_mps,
+                                           double dclk_mps,
+                                           double observation_interval_s,
+                                           double threshold_mps = 3.0) {
+    const double corrected = dopplerResidualAfterReceiverClock(
+        residual_mps, dclk_mps, observation_interval_s);
+    return std::isfinite(corrected) && std::isfinite(threshold_mps) &&
+           threshold_mps > 0.0 && std::abs(corrected) <= threshold_mps;
+}
+
 inline double pairThreshold(ObservationBand band, char pair_kind) {
     switch (pair_kind) {
         case 'P': return band == ObservationBand::L1 ? 40.0 : 20.0;

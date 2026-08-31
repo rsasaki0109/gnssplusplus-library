@@ -110,6 +110,46 @@ TEST(AndroidRawGnssTest, ReconstructsRawClockAndObservableSigns) {
     std::filesystem::remove(path);
 }
 
+TEST(AndroidRawGnssTest, RetainsRawReceiverClockDriftInEpoch) {
+    const auto path = fixturePath("clock_drift");
+    constexpr std::int64_t full_bias = -1'300'000'000'000'000'000LL;
+    constexpr int week = 2200;
+    constexpr double tow = 100'000.123;
+    const auto time_nanos = static_cast<std::int64_t>(
+        static_cast<long double>(full_bias) +
+        (static_cast<long double>(week) * 604'800.0L + tow) * 1.0e9L);
+    const auto transmit_nanos = static_cast<std::int64_t>(
+        (tow - 0.070) * 1.0e9);
+    {
+        std::ofstream output(path);
+        ASSERT_TRUE(output.is_open());
+        // DriftNanosPerSecond is optional in the Android logger schema.  Keep
+        // it explicit in this fixture so the adapter's m/s conversion is
+        // tested at the same boundary used by the residual screen.
+        output << "MessageType,utcTimeMillis,TimeNanos,FullBiasNanos,BiasNanos,"
+                  "DriftNanosPerSecond,BiasUncertaintyNanos,TimeOffsetNanos,"
+                  "HardwareClockDiscontinuityCount,Svid,ConstellationType,"
+                  "ReceivedSvTimeNanos,PseudorangeRateMetersPerSecond,"
+                  "AccumulatedDeltaRangeState,AccumulatedDeltaRangeMeters,"
+                  "CarrierFrequencyHz,Cn0DbHz,SignalType,RawPseudorangeMeters\n";
+        output << std::setprecision(17)
+               << "Raw,1700000000000," << time_nanos << ',' << full_bias
+               << ",0,38.0,0,0,7,3,1," << transmit_nanos
+               << ",0,1,42," << constants::GPS_L1_FREQ
+               << ",40,GPS_L1_CA,\n";
+    }
+
+    AndroidRawGnssResult result;
+    std::string error;
+    ASSERT_TRUE(loadAndroidRawGnssCsv(path.string(), AndroidRawGnssConfig{},
+                                      result, error))
+        << error;
+    ASSERT_EQ(result.observations.epochs.size(), 1u);
+    EXPECT_NEAR(result.observations.epochs.front().receiver_clock_drift_mps,
+                38.0 * constants::SPEED_OF_LIGHT / 1.0e9, 1.0e-12);
+    std::filesystem::remove(path);
+}
+
 TEST(AndroidRawGnssTest, DropsNonPositiveRawClockRangeLikeUpstreamCodeMask) {
     const auto path = fixturePath("non_positive_range");
     constexpr std::int64_t full_bias = -1'300'000'000'000'000'000LL;

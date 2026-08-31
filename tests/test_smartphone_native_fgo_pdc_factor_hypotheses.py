@@ -70,6 +70,11 @@ class NativeFgoPdcFactorHypothesisTests(unittest.TestCase):
             )
             if relative_path in phase22_compatibility:
                 accepted.add(phase22_compatibility[relative_path])
+            phase23_compatibility = self.manifest.get(
+                "post_phase23_compatible_source_hashes", {}
+            )
+            if relative_path in phase23_compatibility:
+                accepted.add(phase23_compatibility[relative_path])
             self.assertIn(sha256(ROOT / relative_path), accepted, relative_path)
         current_binary_sha256 = sha256(ROOT / "build/apps/gnss_fgo")
         accepted_binary_sha256 = {
@@ -84,6 +89,7 @@ class NativeFgoPdcFactorHypothesisTests(unittest.TestCase):
             self.manifest.get("post_phase20_compatible_release_binary_sha256"),
             self.manifest.get("post_phase21_compatible_release_binary_sha256"),
             self.manifest.get("post_phase22_compatible_release_binary_sha256"),
+            self.manifest.get("post_phase23_compatible_release_binary_sha256"),
         }
         self.assertIn(current_binary_sha256, accepted_binary_sha256)
 

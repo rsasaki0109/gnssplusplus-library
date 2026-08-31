@@ -41,6 +41,12 @@ public:
         // until an opt-in raw bridge normalizes it.  Keep the marker explicit
         // so a bridge never guesses units from magnitude.
         bool receiver_clock_bias_is_meters = false;
+        // Optional raw Android receiver clock drift [m/s], copied from the
+        // input epoch when DriftNanosPerSecond is available.  NaN means that
+        // no raw drift was supplied; no estimator may infer it from a
+        // coordinate for an upstream residual-screen candidate.
+        double receiver_clock_drift_mps =
+            std::numeric_limits<double>::quiet_NaN();
         // True only when position_ecef came from a valid SPP solve at this
         // epoch; false for last-valid/header fallbacks.
         bool fresh_spp_solution = false;
@@ -289,6 +295,11 @@ public:
         std::size_t upstream_ld_pair_rejections = 0;
         std::size_t upstream_doppler_residual_rejections = 0;
         std::size_t upstream_pseudorange_residual_rejections = 0;
+        std::size_t upstream_absolute_doppler_candidates = 0;
+        std::size_t upstream_absolute_doppler_factors = 0;
+        std::size_t upstream_absolute_doppler_rejections = 0;
+        std::size_t upstream_absolute_doppler_missing_clock = 0;
+        double upstream_absolute_doppler_max_abs_corrected_residual = 0.0;
         // Source-specific Galileo E1 group-delay selection diagnostics. These
         // remain zero for the legacy/default path.
         std::size_t galileo_e1_fnav_group_delay_rows = 0;

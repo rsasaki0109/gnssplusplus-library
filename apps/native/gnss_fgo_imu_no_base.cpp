@@ -83,6 +83,7 @@ struct Options {
     bool native_signal_bias_states = false;
     bool native_residual_ionosphere = false;
     bool native_upstream_quality = false;
+    bool native_upstream_absolute_doppler_screen = false;
     bool native_carrier_code_leveling = false;
     bool native_carrier_code_innovation_reset = false;
     bool native_carrier_code_primary_l1_e1 = false;
@@ -114,6 +115,7 @@ void usage(const char* program) {
                  " [--native-pdc-state-bridge] [--native-pdc-imu-tdcp]"
                  " [--native-signal-bias-states] [--native-residual-ionosphere]"
                  " [--native-upstream-quality] [--native-carrier-code-leveling]"
+                 " [--native-upstream-absolute-doppler-screen]"
                  " [--native-carrier-code-innovation-reset]"
                  " [--native-carrier-code-primary-l1-e1]"
                  " [--native-carrier-code-gal-e1-e5a]"
@@ -213,6 +215,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
             options.native_residual_ionosphere = true;
         } else if (arg == "--native-upstream-quality") {
             options.native_upstream_quality = true;
+        } else if (arg == "--native-upstream-absolute-doppler-screen") {
+            options.native_upstream_absolute_doppler_screen = true;
         } else if (arg == "--native-carrier-code-leveling") {
             options.native_carrier_code_leveling = true;
         } else if (arg == "--native-carrier-code-innovation-reset") {
@@ -321,6 +325,17 @@ bool parseArguments(int argc, char** argv, Options& options) {
          !options.native_signal_bias_states || !options.native_pdc_imu_tdcp)) {
         std::cerr << "--native-upstream-quality requires the frozen Android raw "
                      "Phase12 base recipe and all epochs\n";
+        return false;
+    }
+    if (options.native_upstream_absolute_doppler_screen &&
+        (!android_raw || !options.android_raw_utc_key_contract ||
+         !options.all_epochs || options.skip_epochs != 0 ||
+         !options.native_residual_ionosphere ||
+         !options.native_signal_bias_states || !options.native_pdc_imu_tdcp ||
+         options.native_upstream_quality)) {
+        std::cerr << "--native-upstream-absolute-doppler-screen requires the "
+                     "frozen Android raw Phase12 base recipe, all epochs, and "
+                     "Phase13 upstream quality off\n";
         return false;
     }
     if (options.native_carrier_code_leveling &&
@@ -1141,6 +1156,9 @@ std::string makeSummary(const Options& options,
         << (options.native_residual_ionosphere ? "true" : "false") << ",\n"
         << "  \"native_upstream_quality\": "
         << (options.native_upstream_quality ? "true" : "false") << ",\n"
+        << "  \"native_upstream_absolute_doppler_screen\": "
+        << (options.native_upstream_absolute_doppler_screen ? "true" : "false")
+        << ",\n"
         << "  \"native_carrier_code_leveling\": "
         << (options.native_carrier_code_leveling ? "true" : "false") << ",\n"
         << "  \"native_carrier_code_innovation_reset\": "
@@ -1332,6 +1350,25 @@ std::string makeSummary(const Options& options,
         << "    \"pseudorange_sigma_contract\": \"snr_scale*signal_type_factor\",\n"
         << "    \"doppler_sigma_contract\": \"snr_scale/12\",\n"
         << "    \"carrier_tdcp_contract\": \"Phase12 frozen sigma 0.03; upstream L weighting not enabled\"\n"
+        << "  },\n"
+        << "  \"upstream_absolute_doppler_screen\": {\n"
+        << "    \"enabled\": "
+        << (options.native_upstream_absolute_doppler_screen ? "true" : "false")
+        << ",\n"
+        << "    \"threshold_mps\": 3.0,\n"
+        << "    \"clock_source\": \"raw DriftNanosPerSecond*c/1e9\",\n"
+        << "    \"residual_contract\": \"abs(residual_mps-dclk_mps/observation_interval_s)\",\n"
+        << "    \"candidates\": "
+        << problem.diagnostics.upstream_absolute_doppler_candidates << ",\n"
+        << "    \"factors\": "
+        << problem.diagnostics.upstream_absolute_doppler_factors << ",\n"
+        << "    \"rejections\": "
+        << problem.diagnostics.upstream_absolute_doppler_rejections << ",\n"
+        << "    \"missing_clock\": "
+        << problem.diagnostics.upstream_absolute_doppler_missing_clock << ",\n"
+        << "    \"max_abs_corrected_residual_mps\": "
+        << problem.diagnostics.upstream_absolute_doppler_max_abs_corrected_residual
+        << "\n"
         << "  },\n"
         << "  \"receiver_signal_bias_estimates_m\": {";
     bool first_signal_bias = true;
@@ -1957,6 +1994,13 @@ int main(int argc, char** argv) {
         // legacy carrier sign-offset list.  An empty model is intentional:
         // it prevents device identity from selecting a quality mask.
         config.upstream_device_model.clear();
+    }
+    if (options.native_upstream_absolute_doppler_screen) {
+        // Phase23 isolated source-level port: use the raw Android receiver
+        // clock drift in exobs_residuals.m's absolute D residual gate while
+        // leaving Phase12 weights, factors, and Huber settings untouched.
+        config.use_upstream_absolute_doppler_residual_screen = true;
+        config.upstream_absolute_doppler_residual_threshold_mps = 3.0;
     }
     if (options.native_upstream_stop_constraints) {
         // These values are the pinned upstream parameters; they are not

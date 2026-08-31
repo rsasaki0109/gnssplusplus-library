@@ -115,6 +115,22 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                    ? values[middle]
                    : 0.5 * (values[middle - 1U] + values[middle]);
     };
+    double upstream_observation_interval_s =
+        std::numeric_limits<double>::quiet_NaN();
+    if (config_.use_upstream_absolute_doppler_residual_screen) {
+        std::vector<double> intervals;
+        intervals.reserve(input_epochs.size() > 1U ? input_epochs.size() - 1U : 0U);
+        for (std::size_t i = 1; i < input_epochs.size(); ++i) {
+            const double dt = input_epochs[i].time - input_epochs[i - 1U].time;
+            if (std::isfinite(dt) && dt > 0.0) intervals.push_back(dt);
+        }
+        const double median_interval = finiteMedian(std::move(intervals));
+        if (std::isfinite(median_interval) && median_interval > 0.0) {
+            // Match gt.Gtime.estInterval's default two-decimal estimate.
+            upstream_observation_interval_s =
+                std::round(median_interval * 100.0) / 100.0;
+        }
+    }
     std::vector<std::map<std::pair<SatelliteId, SignalType>, PreparedCarrierObservation>>
         carrier_by_problem_epoch;
     std::vector<std::map<std::pair<SatelliteId, SignalType>, PreparedCarrierObservation>>
@@ -179,6 +195,7 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
             ++problem.diagnostics.skipped_epochs_without_seed;
             continue;
         }
+        seed.receiver_clock_drift_mps = epoch.receiver_clock_drift_mps;
 
         std::vector<PseudorangeFactor> epoch_factors;
         epoch_factors.reserve(epoch.observations.size());
@@ -562,7 +579,47 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
             }
         }
 
-        if (config_.use_upstream_observable_quality) {
+        if (config_.use_upstream_absolute_doppler_residual_screen) {
+            // The upstream residual pass uses the raw Android receiver clock
+            // drift, not an epoch median proxy.  Keep this candidate isolated
+            // from the broader SNR/ISB quality lane so any score change is
+            // attributable to this one missing rule.
+            problem.diagnostics.upstream_absolute_doppler_candidates +=
+                epoch_doppler_factors.size();
+            std::vector<UndifferencedDopplerFactor> filtered_doppler;
+            filtered_doppler.reserve(epoch_doppler_factors.size());
+            const double dclk_mps =
+                problem.epochs.empty()
+                    ? std::numeric_limits<double>::quiet_NaN()
+                    : epoch.receiver_clock_drift_mps;
+            for (const auto& factor : epoch_doppler_factors) {
+                const double corrected = upstream::dopplerResidualAfterReceiverClock(
+                    factor.residual_mps, dclk_mps,
+                    upstream_observation_interval_s);
+                if (std::isfinite(corrected)) {
+                    problem.diagnostics
+                        .upstream_absolute_doppler_max_abs_corrected_residual =
+                        std::max(problem.diagnostics
+                                     .upstream_absolute_doppler_max_abs_corrected_residual,
+                                 std::abs(corrected));
+                }
+                if (upstream::acceptsAbsoluteDopplerResidual(
+                        factor.residual_mps, dclk_mps,
+                        upstream_observation_interval_s,
+                        config_.upstream_absolute_doppler_residual_threshold_mps)) {
+                    filtered_doppler.push_back(factor);
+                } else {
+                    ++problem.diagnostics.upstream_absolute_doppler_rejections;
+                    if (!std::isfinite(dclk_mps) ||
+                        !(upstream_observation_interval_s > 0.0)) {
+                        ++problem.diagnostics.upstream_absolute_doppler_missing_clock;
+                    }
+                }
+            }
+            epoch_doppler_factors.swap(filtered_doppler);
+            problem.diagnostics.upstream_absolute_doppler_factors +=
+                epoch_doppler_factors.size();
+        } else if (config_.use_upstream_observable_quality) {
             // exobs_residuals.m removes Doppler rows whose modeled residual
             // differs from the epoch median by more than 3 m/s.  Apply this
             // only to the receiver-only D factors; TDCP keeps the frozen

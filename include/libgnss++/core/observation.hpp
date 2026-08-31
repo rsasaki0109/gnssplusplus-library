@@ -4,6 +4,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <limits>
 #include "types.hpp"
 
 namespace libgnss {
@@ -61,6 +62,13 @@ public:
     GNSSTime time;
     Vector3d receiver_position;     ///< Approximate receiver position (ECEF)
     double receiver_clock_bias = 0.0;
+    // Optional raw Android receiver clock rate in range metres/second.  This
+    // is populated only when the input explicitly carries
+    // DriftNanosPerSecond; NaN means that no rate was available.  Keeping the
+    // unit explicit prevents residual filters from estimating a rate from a
+    // coordinate or silently treating a bias [s] as a drift [m/s].
+    double receiver_clock_drift_mps =
+        std::numeric_limits<double>::quiet_NaN();
     
     std::vector<Observation> observations;
 
@@ -190,6 +198,7 @@ public:
         rinex_frequency_slots.clear();
         receiver_position.setZero();
         receiver_clock_bias = 0.0;
+        receiver_clock_drift_mps = std::numeric_limits<double>::quiet_NaN();
     }
     
     /**
