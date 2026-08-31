@@ -1,0 +1,43 @@
+{
+  "schema_version": "smartphone-r5-phase10-native-pdc-imu-tdcp-score-result-manifest.v1",
+  "score_record": "docs/use_cases/records/smartphone_r5_phase10_native_pdc_imu_tdcp_score_result_v1.json",
+  "score_record_sha256": "7a80b755c5bf72097eba5f811d5c5550c5a8245f0eeb32272d3f5857b79d2798",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_phase10_native_pdc_imu_tdcp_freeze_v1.json",
+  "freeze_record_sha256": "f5f9cfce03c72d4d8fa1bd8297906110fc0caa7ae44475d0bd6da5306107a072",
+  "freeze_manifest": "docs/use_cases/records/smartphone_r5_phase10_native_pdc_imu_tdcp_freeze_v1_manifest.json",
+  "freeze_manifest_sha256": "7db7faed45ea196821413c7cad4977955f1ab1a600451a8938b45a94b39347d9",
+  "route": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+  "truth_policy": {
+    "truth_free_artifact_sealed_before_read": true,
+    "development_truth_read_count": 1,
+    "validation_truth_read_count": 0,
+    "holdout_truth_read_count": 0,
+    "test_truth_read_count": 0,
+    "mat_read_count": 0,
+    "kaggle_or_token_access": false,
+    "post_score_algorithm_changes": false
+  },
+  "artifacts_sha256": {
+    "output/smartphone-r5/phase10-native-pdc-imu-tdcp-v1/submission.csv": "5a367a306123a4557f42e2b59a4760bc4eb2edfd1d36492bcab6ab2c88e240bb",
+    "output/smartphone-r5/phase10-native-pdc-imu-tdcp-v1/summary.json": "f3f2f471c854b711347e8c7758a80f7865803de35cba021df8e7eef43f687261",
+    "output/smartphone-r5/phase10-native-pdc-imu-tdcp-v1/train_score.json": "28abf477dd2c951a36dd8e7c4ff2ec7e2bd7326f96cfdf02014d9dcd8dda9327"
+  },
+  "metric_summary": {
+    "wgs84_vincenty_linear_m": 3.913768483524376,
+    "wgs84_vincenty_nearest_rank_m": 3.914159024830025,
+    "haversine_linear_m": 3.913807299615721,
+    "haversine_nearest_rank_m": 3.914202588766112,
+    "mean_m": 3.9139843491840582,
+    "coverage_ratio": 1.0,
+    "missing_extra_nonfinite": 0,
+    "promotion": "development-only; validation/holdout remains closed"
+  },
+  "runtime": {
+    "wall_seconds": 14.76,
+    "max_rss_kb": 157316,
+    "tdcp_factors_built": 15485,
+    "tdcp_factors_inserted": 15485,
+    "tdcp_residual_rms_m": 0.02514301226758668,
+    "fallback": false
+  }
+}

@@ -1,0 +1,103 @@
+{
+  "schema_version": "smartphone-r5-phase10-native-pdc-imu-tdcp-score-result.v1",
+  "status": "development-train-gate-pass",
+  "candidate_id": "native-pdc-imu-tdcp-v1",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_phase10_native_pdc_imu_tdcp_freeze_v1.json",
+  "freeze_record_sha256": "f5f9cfce03c72d4d8fa1bd8297906110fc0caa7ae44475d0bd6da5306107a072",
+  "freeze_manifest": "docs/use_cases/records/smartphone_r5_phase10_native_pdc_imu_tdcp_freeze_v1_manifest.json",
+  "freeze_manifest_sha256": "7db7faed45ea196821413c7cad4977955f1ab1a600451a8938b45a94b39347d9",
+  "dataset_id": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+  "truth_policy": {
+    "truth_path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv",
+    "truth_sha256": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a",
+    "truth_read_after_freeze_count": 1,
+    "truth_read_reason": "single frozen development-train metric evaluation after truth-free artifact and freeze-manifest hash seal",
+    "score_evaluation_passes": 1,
+    "truth_free_generation_before_truth": true,
+    "validation_truth_open_count": 0,
+    "holdout_truth_open_count": 0,
+    "test_truth_open_count": 0,
+    "mat_members_read": false,
+    "token_or_kaggle_access": false,
+    "leaderboard_used_for_tuning": false,
+    "post_score_algorithm_or_parameter_changes": false
+  },
+  "candidate_artifacts": {
+    "submission": "output/smartphone-r5/phase10-native-pdc-imu-tdcp-v1/submission.csv",
+    "submission_sha256": "5a367a306123a4557f42e2b59a4760bc4eb2edfd1d36492bcab6ab2c88e240bb",
+    "submission_bytes": 117609,
+    "summary": "output/smartphone-r5/phase10-native-pdc-imu-tdcp-v1/summary.json",
+    "summary_sha256": "f3f2f471c854b711347e8c7758a80f7865803de35cba021df8e7eef43f687261",
+    "score": "output/smartphone-r5/phase10-native-pdc-imu-tdcp-v1/train_score.json",
+    "score_sha256": "28abf477dd2c951a36dd8e7c4ff2ec7e2bd7326f96cfdf02014d9dcd8dda9327",
+    "run_log_sha256": "a0df492b07e07807eb7df739a7d9481248fcbf6f0e00c3e13f48aced64642edc",
+    "score_log_sha256": "a26f74acaedc82ef59a9710d7632ac921d44a68fae4afa4b47454b929a19f480",
+    "rows": 1383,
+    "truth_matched_rows": 1383,
+    "missing_extra_nonfinite": 0
+  },
+  "candidate_metrics": {
+    "availability_ratio": 1.0,
+    "truth_coverage_ratio": 1.0,
+    "vertical_p95_abs_m": null,
+    "vertical_metric_note": "The raw native four-column submission emits latitude/longitude only; vertical is not scored by this evaluator.",
+    "diagnostic_variants_m": {
+      "wgs84_vincenty__linear_n_minus_1": 3.913768483524376,
+      "wgs84_vincenty__nearest_rank_ceiling": 3.914159024830025,
+      "haversine_sphere__linear_n_minus_1": 3.913807299615721,
+      "haversine_sphere__nearest_rank_ceiling": 3.914202588766112
+    },
+    "diagnostic_mean_m": 3.9139843491840582,
+    "p50_m": 2.2863969335790113,
+    "p95_m": 5.54114003346974,
+    "gate": {
+      "reference_candidate": "Phase9 native-pdc-imu bridge frozen development score",
+      "reference_wgs84_linear_m": 5.927331890307588,
+      "reference_diagnostic_mean_m": 5.926583869152841,
+      "all_four_variants_strictly_improved": true,
+      "coverage_non_regressed": true,
+      "fixed_gate_m": 68.0475838937948,
+      "fixed_gate_passed": true,
+      "promotion_decision": "development-only candidate passes this route gate; no validation or holdout promotion is authorized by this record"
+    }
+  },
+  "truth_free_runtime": {
+    "problem_epochs": 1384,
+    "target_output_epochs": 1383,
+    "pseudorange_rows": 27462,
+    "doppler_rows": 27440,
+    "tdcp_candidate_pairs": 16527,
+    "tdcp_factors_built": 15485,
+    "tdcp_factors_inserted": 15485,
+    "tdcp_rejected_gap": 0,
+    "tdcp_rejected_missing_previous": 2360,
+    "tdcp_rejected_loss_of_lock": 0,
+    "tdcp_rejected_invalid_measurement": 0,
+    "tdcp_rejected_code_phase_jump": 1042,
+    "tdcp_arc_count": 2065,
+    "tdcp_median_arc_length_epochs": 4.0,
+    "tdcp_max_arc_length_epochs": 170,
+    "tdcp_residual_rms_m": 0.02514301226758668,
+    "tdcp_normalized_residual_rms": 0.8381004089195556,
+    "fgo_iterations": 12,
+    "fgo_converged": true,
+    "combined_imu_intervals": 1383,
+    "fallback": false,
+    "interpolated_output_epochs": 0,
+    "edge_hold_output_epochs": 0,
+    "wall_seconds": 14.76,
+    "max_rss_kb": 157316
+  },
+  "comparison_notes": {
+    "phase9_result_unchanged": true,
+    "tdcp_candidate_is_not_claimed_as_standalone_ambiguity_solution": true,
+    "ordinary_tdcp_semantics": "same-satellite/same-signal adjacent ADR difference; no base, DD, or standalone ambiguity state",
+    "attribution_limit": "The candidate retains Phase9 PDC/IMU bridge initialization and graph recipe; this score isolates enabling the already audited ordinary TDCP path only at the candidate command level, not an independently rerun no-bridge ablation.",
+    "known_metric_limit": "The public primary source does not publish the distance earth model or percentile interpolation; all four declared local variants are retained and the primary Kaggle score remains undetermined."
+  },
+  "reproduction": {
+    "truth_free_command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:$LD_LIBRARY_PATH build/apps/gnss_fgo_imu_no_base --android-gnss <device_gnss.csv> --android-imu <device_imu.csv> --nav <brdc.nav> --out <submission.csv> --summary-json <summary.json> --dataset-id 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro --all-epochs --android-raw-utc-keys --native-pdc-imu-tdcp",
+    "score_command": "PYTHONPATH=apps/commands:apps/commands/benchmarks python3 apps/commands/benchmarks/gnss_smartphone_kaggle_evaluate.py --submission <sealed-submission.csv> --ground-truth <declared-development-ground_truth.csv> --output-json <train_score.json> --phone 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "no_solver_rerun_after_truth": true
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "schema_version": "smartphone-r5-phase10-native-pdc-imu-tdcp-freeze-manifest.v1",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_phase10_native_pdc_imu_tdcp_freeze_v1.json",
+  "freeze_record_sha256": "f5f9cfce03c72d4d8fa1bd8297906110fc0caa7ae44475d0bd6da5306107a072",
+  "route": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+  "truth_policy": {
+    "truth_free_artifact_sealed": true,
+    "ground_truth_members_read": false,
+    "truth_open_count": 0,
+    "validation_open_count": 0,
+    "holdout_open_count": 0,
+    "test_open_count": 0,
+    "kaggle_or_token_access": false,
+    "post_freeze_algorithm_changes": false
+  },
+  "source_sha256": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "f511a86023d4a75b6fa4cfac058b2ca8d51ac2489673a922b6f3fddcd639b107",
+    "include/libgnss++/algorithms/tdcp_contract.hpp": "8f0b6fa0604868dbafa4a2e98b5d8e5e5bc58fd19929b5c705f1957e7a955101",
+    "src/algorithms/fgo_problems.cpp": "3b2c5549170b4f18f7df04703d8dd5105f9a3b85a50fb4fab25fffc76b42d9c4",
+    "include/libgnss++/algorithms/fgo.hpp": "229cd509394c7ab6996c2ee73bf8e0b1fbe494b4ae2904adc5fd31d4b6754939",
+    "tests/test_fgo.cpp": "cec4a501aaee8ce9419eca39259bd10d4d3a20b39060770ae901efb360487c89"
+  },
+  "binary_sha256": {
+    "build/apps/gnss_fgo_imu_no_base": "611d69a2c81e9cb07ebe6088e204069b0511cb6bdfb6651724e0e44965d8b8d2"
+  },
+  "input_sha256": {
+    "device_gnss.csv": "c5af6cc3aeae6ab29a2a10d975d291b8fba4fab15273c0729163cd639ff10e42",
+    "device_imu.csv": "8f1c582bdad545d11e68349b221001b69e2a9d43f9257e60038c193276fa1804",
+    "brdc.nav": "16c859f8015c874398978bae6004172c355f7d3a3b06fa81b54aac88b6b78d33"
+  },
+  "truth_free_artifacts_sha256": {
+    "output/smartphone-r5/phase10-native-pdc-imu-tdcp-v1/submission.csv": "5a367a306123a4557f42e2b59a4760bc4eb2edfd1d36492bcab6ab2c88e240bb",
+    "output/smartphone-r5/phase10-native-pdc-imu-tdcp-v1/summary.json": "f3f2f471c854b711347e8c7758a80f7865803de35cba021df8e7eef43f687261"
+  },
+  "artifact_contract": {
+    "raw_only": true,
+    "tdcp_pair_key": "(SatelliteId, SignalType)",
+    "same_satellite_signal_only": true,
+    "ordinary_tdcp_no_ambiguity_state": true,
+    "finite_inserted_factors": 15485,
+    "exact_raw_target_keys": 1383,
+    "missing_extra_nonfinite": 0,
+    "interpolation_epochs": 0,
+    "deterministic_atomic_publish": true
+  },
+  "score_authorization": {
+    "allowed_next_action": "after this manifest is hash-sealed, read the declared development truth once and publish pass/fail",
+    "forbidden_next_actions": [
+      "change algorithm or numeric parameters after score",
+      "open validation or holdout",
+      "read MAT/sample/result/device-WLS files",
+      "Kaggle or token access"
+    ]
+  }
+}

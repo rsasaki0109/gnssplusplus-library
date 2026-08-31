@@ -247,8 +247,10 @@ public:
         std::size_t double_difference_rejected_no_reference = 0;
         std::size_t tdcp_candidate_pairs = 0;
         std::size_t tdcp_rejected_gap = 0;
+        std::size_t tdcp_rejected_clock_discontinuity = 0;
         std::size_t tdcp_rejected_missing_previous = 0;
         std::size_t tdcp_rejected_loss_of_lock = 0;
+        std::size_t tdcp_rejected_invalid_measurement = 0;
         std::size_t tdcp_rejected_code_phase_jump = 0;
         std::size_t code_minus_carrier_jump_resets = 0;       ///< CMC screening: arc breaks forced
         std::size_t geometry_free_cycle_slip_resets = 0;      ///< confirmed geometry-free band resets

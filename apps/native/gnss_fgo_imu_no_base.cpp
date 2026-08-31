@@ -30,6 +30,7 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -56,6 +57,9 @@ constexpr double kGravityNormMin = 0.70 * kGravity;
 constexpr double kGravityNormMax = 1.30 * kGravity;
 constexpr double kGravityNormStdMax = 1.50;
 constexpr double kUpstreamImuSyncCoefficient = 0.5;
+constexpr double kNativeTdcpMaxGapS = 2.0;
+constexpr double kNativeTdcpSigmaM = 0.03;
+constexpr double kNativeTdcpCodePhaseJumpThresholdM = 10.0;
 
 struct Options {
     std::string obs_path;
@@ -72,6 +76,7 @@ struct Options {
     bool android_raw_utc_key_contract = false;
     bool fgo_imu_sparse_recovery = false;
     bool native_pdc_state_bridge = false;
+    bool native_pdc_imu_tdcp = false;
 };
 
 void usage(const char* program) {
@@ -83,7 +88,7 @@ void usage(const char* program) {
                  " [--dataset-id <id>] [--skip-epochs <n>]"
                  " [--max-epochs 10..30 | --all-epochs]"
                  " [--android-raw-utc-keys] [--fgo-imu-sparse-recovery]"
-                 " [--native-pdc-state-bridge]\n";
+                 " [--native-pdc-state-bridge] [--native-pdc-imu-tdcp]\n";
 }
 
 bool requireValue(int argc, char** argv, int& index, std::string& value) {
@@ -162,6 +167,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
             options.fgo_imu_sparse_recovery = true;
         } else if (arg == "--native-pdc-state-bridge") {
             options.native_pdc_state_bridge = true;
+        } else if (arg == "--native-pdc-imu-tdcp") {
+            options.native_pdc_imu_tdcp = true;
         } else {
             std::cerr << "Unknown argument: " << arg << "\n";
             return false;
@@ -190,6 +197,12 @@ bool parseArguments(int argc, char** argv, Options& options) {
         std::cerr << "MATLAB .mat paths are forbidden by the native/raw contract\n";
         return false;
     }
+    if (options.native_pdc_imu_tdcp) {
+        // The TDCP candidate is deliberately a single raw-only recipe.  It
+        // reuses the in-process PDC state bridge and therefore cannot be
+        // accidentally invoked on a RINEX/precomputed lane.
+        options.native_pdc_state_bridge = true;
+    }
     if (options.android_raw_utc_key_contract && !android_raw) {
         std::cerr << "--android-raw-utc-keys requires the Android raw GNSS/IMU path\n";
         return false;
@@ -209,6 +222,13 @@ bool parseArguments(int argc, char** argv, Options& options) {
         (!android_raw || !options.android_raw_utc_key_contract ||
          !options.all_epochs || options.skip_epochs != 0)) {
         std::cerr << "--native-pdc-state-bridge requires Android raw input, "
+                     "--android-raw-utc-keys, --all-epochs, and no skipped epochs\n";
+        return false;
+    }
+    if (options.native_pdc_imu_tdcp &&
+        (!android_raw || !options.android_raw_utc_key_contract ||
+         !options.all_epochs || options.skip_epochs != 0)) {
+        std::cerr << "--native-pdc-imu-tdcp requires Android raw input, "
                      "--android-raw-utc-keys, --all-epochs, and no skipped epochs\n";
         return false;
     }
@@ -377,10 +397,136 @@ struct NativePdcBridgeReport {
     std::string failure;
 };
 
+struct TdcpRuntimeReport {
+    bool enabled = false;
+    std::size_t factors_built = 0;
+    std::size_t factors_inserted = 0;
+    std::size_t candidate_pairs = 0;
+    std::size_t rejected_gap = 0;
+    std::size_t rejected_clock_discontinuity = 0;
+    std::size_t rejected_missing_previous = 0;
+    std::size_t rejected_loss_of_lock = 0;
+    std::size_t rejected_invalid_measurement = 0;
+    std::size_t rejected_code_phase_jump = 0;
+    std::size_t finite_residuals = 0;
+    std::size_t nonfinite_residuals = 0;
+    std::size_t arc_count = 0;
+    std::size_t min_arc_length_epochs = 0;
+    std::size_t max_arc_length_epochs = 0;
+    double median_arc_length_epochs = 0.0;
+    double sigma_m = kNativeTdcpSigmaM;
+    double max_gap_s = kNativeTdcpMaxGapS;
+    double code_phase_jump_threshold_m = kNativeTdcpCodePhaseJumpThresholdM;
+    double residual_rms_m = 0.0;
+    double normalized_residual_rms = 0.0;
+    double max_abs_residual_m = 0.0;
+};
+
 struct OutputPosition {
     std::int64_t utc_time_millis = 0;
     libgnss::Vector3d position_ecef = libgnss::Vector3d::Zero();
 };
+
+TdcpRuntimeReport evaluateTdcpRuntime(
+    const libgnss::FGOProcessor::FGOProblem& problem,
+    const libgnss::FGOProcessor::FGOResult& result,
+    bool enabled) {
+    TdcpRuntimeReport report;
+    report.enabled = enabled;
+    if (!enabled) return report;
+    report.factors_built = problem.tdcp_factors.size();
+    report.factors_inserted = result.diagnostics.tdcp_factors_inserted;
+    report.candidate_pairs = problem.diagnostics.tdcp_candidate_pairs;
+    report.rejected_gap = problem.diagnostics.tdcp_rejected_gap;
+    report.rejected_clock_discontinuity =
+        problem.diagnostics.tdcp_rejected_clock_discontinuity;
+    report.rejected_missing_previous =
+        problem.diagnostics.tdcp_rejected_missing_previous;
+    report.rejected_loss_of_lock = problem.diagnostics.tdcp_rejected_loss_of_lock;
+    report.rejected_invalid_measurement =
+        problem.diagnostics.tdcp_rejected_invalid_measurement;
+    report.rejected_code_phase_jump =
+        problem.diagnostics.tdcp_rejected_code_phase_jump;
+
+    using CarrierKey = std::pair<libgnss::SatelliteId, libgnss::SignalType>;
+    struct ArcState {
+        std::size_t last_current_epoch = 0;
+        std::size_t length_epochs = 0;
+    };
+    std::map<CarrierKey, ArcState> active_arcs;
+    std::vector<std::size_t> arc_lengths;
+    arc_lengths.reserve(problem.tdcp_factors.size());
+    double sum_squared = 0.0;
+    double sum_normalized_squared = 0.0;
+    for (const auto& factor : problem.tdcp_factors) {
+        const CarrierKey key{factor.satellite, factor.signal};
+        auto arc_it = active_arcs.find(key);
+        if (arc_it == active_arcs.end() ||
+            factor.previous_epoch_index != arc_it->second.last_current_epoch) {
+            if (arc_it != active_arcs.end()) {
+                arc_lengths.push_back(arc_it->second.length_epochs);
+            }
+            active_arcs[key] = {factor.current_epoch_index, 2U};
+        } else {
+            arc_it->second.last_current_epoch = factor.current_epoch_index;
+            ++arc_it->second.length_epochs;
+        }
+
+        const bool indices_valid =
+            factor.previous_epoch_index < result.solution.solutions.size() &&
+            factor.current_epoch_index < result.solution.solutions.size();
+        if (!indices_valid) {
+            ++report.nonfinite_residuals;
+            continue;
+        }
+        const auto& previous =
+            result.solution.solutions[factor.previous_epoch_index];
+        const auto& current = result.solution.solutions[factor.current_epoch_index];
+        const double previous_range =
+            (factor.previous_satellite_position_ecef - previous.position_ecef).norm();
+        const double current_range =
+            (factor.current_satellite_position_ecef - current.position_ecef).norm();
+        const double residual =
+            current_range + libgnss::constants::SPEED_OF_LIGHT * current.receiver_clock_bias -
+            previous_range - libgnss::constants::SPEED_OF_LIGHT * previous.receiver_clock_bias -
+            factor.delta_carrier_m;
+        if (!std::isfinite(residual) || !(factor.sigma_m > 0.0) ||
+            !std::isfinite(factor.sigma_m)) {
+            ++report.nonfinite_residuals;
+            continue;
+        }
+        ++report.finite_residuals;
+        sum_squared += residual * residual;
+        const double normalized = residual / factor.sigma_m;
+        sum_normalized_squared += normalized * normalized;
+        report.max_abs_residual_m =
+            std::max(report.max_abs_residual_m, std::abs(residual));
+        if (report.finite_residuals == 1U) report.sigma_m = factor.sigma_m;
+    }
+    for (const auto& [key, arc] : active_arcs) {
+        (void)key;
+        arc_lengths.push_back(arc.length_epochs);
+    }
+    if (!arc_lengths.empty()) {
+        std::sort(arc_lengths.begin(), arc_lengths.end());
+        report.arc_count = arc_lengths.size();
+        report.min_arc_length_epochs = arc_lengths.front();
+        report.max_arc_length_epochs = arc_lengths.back();
+        const std::size_t middle = arc_lengths.size() / 2U;
+        report.median_arc_length_epochs =
+            arc_lengths.size() % 2U == 0U
+                ? 0.5 * static_cast<double>(arc_lengths[middle - 1U] +
+                                             arc_lengths[middle])
+                : static_cast<double>(arc_lengths[middle]);
+    }
+    if (report.finite_residuals > 0U) {
+        report.residual_rms_m =
+            std::sqrt(sum_squared / static_cast<double>(report.finite_residuals));
+        report.normalized_residual_rms = std::sqrt(
+            sum_normalized_squared / static_cast<double>(report.finite_residuals));
+    }
+    return report;
+}
 
 bool populateNativePdcStateBridge(
     libgnss::FGOProcessor::FGOProblem& problem,
@@ -797,7 +943,8 @@ std::string makeSummary(const Options& options,
                         bool fallback,
                         const NativePdcBridgeReport& pdc_bridge_report =
                             NativePdcBridgeReport{},
-                        const RawUtcOutputReport& raw_utc_report = RawUtcOutputReport{}) {
+                        const RawUtcOutputReport& raw_utc_report = RawUtcOutputReport{},
+                        const TdcpRuntimeReport& tdcp_report = TdcpRuntimeReport{}) {
     std::ostringstream out;
     out << std::setprecision(17);
     out << "{\n"
@@ -814,6 +961,8 @@ std::string makeSummary(const Options& options,
         << (options.fgo_imu_sparse_recovery ? "true" : "false") << ",\n"
         << "  \"native_pdc_state_bridge\": "
         << (options.native_pdc_state_bridge ? "true" : "false") << ",\n"
+        << "  \"native_pdc_imu_tdcp\": "
+        << (options.native_pdc_imu_tdcp ? "true" : "false") << ",\n"
         << "  \"native_pdc_state_bridge_report\": {\n"
         << "    \"enabled\": "
         << (pdc_bridge_report.enabled ? "true" : "false") << ",\n"
@@ -898,6 +1047,44 @@ std::string makeSummary(const Options& options,
         << problem.double_difference_pseudorange_factors.size() << ",\n"
         << "    \"double_difference_carrier_factors\": "
         << problem.double_difference_carrier_factors.size() << "\n"
+        << "  },\n"
+        << "  \"tdcp_contract\": {\n"
+        << "    \"enabled\": " << (tdcp_report.enabled ? "true" : "false") << ",\n"
+        << "    \"factors_built\": " << tdcp_report.factors_built << ",\n"
+        << "    \"factors_inserted\": " << tdcp_report.factors_inserted << ",\n"
+        << "    \"candidate_pairs\": " << tdcp_report.candidate_pairs << ",\n"
+        << "    \"rejected_gap\": " << tdcp_report.rejected_gap << ",\n"
+        << "    \"rejected_clock_discontinuity\": "
+        << tdcp_report.rejected_clock_discontinuity << ",\n"
+        << "    \"rejected_missing_previous\": "
+        << tdcp_report.rejected_missing_previous << ",\n"
+        << "    \"rejected_loss_of_lock\": "
+        << tdcp_report.rejected_loss_of_lock << ",\n"
+        << "    \"rejected_invalid_measurement\": "
+        << tdcp_report.rejected_invalid_measurement << ",\n"
+        << "    \"rejected_code_phase_jump\": "
+        << tdcp_report.rejected_code_phase_jump << ",\n"
+        << "    \"finite_residuals\": " << tdcp_report.finite_residuals << ",\n"
+        << "    \"nonfinite_residuals\": " << tdcp_report.nonfinite_residuals << ",\n"
+        << "    \"arc_count\": " << tdcp_report.arc_count << ",\n"
+        << "    \"min_arc_length_epochs\": "
+        << tdcp_report.min_arc_length_epochs << ",\n"
+        << "    \"median_arc_length_epochs\": "
+        << tdcp_report.median_arc_length_epochs << ",\n"
+        << "    \"max_arc_length_epochs\": "
+        << tdcp_report.max_arc_length_epochs << ",\n"
+        << "    \"sigma_m\": " << tdcp_report.sigma_m << ",\n"
+        << "    \"max_gap_s\": " << tdcp_report.max_gap_s << ",\n"
+        << "    \"code_phase_jump_threshold_m\": "
+        << tdcp_report.code_phase_jump_threshold_m << ",\n"
+        << "    \"residual_rms_m\": " << tdcp_report.residual_rms_m << ",\n"
+        << "    \"normalized_residual_rms\": "
+        << tdcp_report.normalized_residual_rms << ",\n"
+        << "    \"max_abs_residual_m\": " << tdcp_report.max_abs_residual_m << ",\n"
+        << "    \"pair_key\": \"(satellite,signal)\",\n"
+        << "    \"adr_state_slip_fail_closed\": true,\n"
+        << "    \"standalone_carrier_ambiguity_factors\": false,\n"
+        << "    \"base_or_double_difference_factors\": false\n"
         << "  },\n"
         << "  \"graph\": {\n"
         << "    \"factors\": " << result.diagnostics.graph_factors << ",\n"
@@ -1137,7 +1324,11 @@ int main(int argc, char** argv) {
     config.use_double_difference_factors = false;
     config.use_pseudorange_factors = true;
     config.use_carrier_phase_factors = false;
-    config.use_tdcp_factors = false;
+    // Ordinary TDCP remains disabled for the historical raw lane.  The
+    // Phase10 candidate enables the already audited same-satellite/same-signal
+    // ADR path only through its explicit opt-in, with no standalone ambiguity
+    // or base/double-difference factors.
+    config.use_tdcp_factors = options.native_pdc_imu_tdcp;
     config.use_single_difference_doppler_factors = false;
     config.use_single_difference_tdcp_factors = false;
     if (android_raw) {
@@ -1170,6 +1361,17 @@ int main(int argc, char** argv) {
         // in-process P+D state solve sees their finite rows.
         config.spp_model_intersystem_bias = false;
         config.use_native_pdc_state_bridge = true;
+    }
+    if (options.native_pdc_imu_tdcp) {
+        // Freeze the ordinary TDCP contract explicitly instead of inheriting
+        // mutable library defaults: 30 ms ADR-difference noise, a 2 s
+        // adjacent-epoch limit, and fail-closed loss-of-lock/code-phase gates.
+        config.tdcp_sigma_m = kNativeTdcpSigmaM;
+        config.max_tdcp_gap_s = kNativeTdcpMaxGapS;
+        config.reject_tdcp_loss_of_lock = true;
+        config.reject_tdcp_code_phase_jump = true;
+        config.tdcp_code_phase_jump_threshold_m =
+            kNativeTdcpCodePhaseJumpThresholdM;
     }
     config.pose3_lever_arm_body_m = libgnss::Vector3d::Zero();
     if (android_raw) {
@@ -1307,6 +1509,20 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    const TdcpRuntimeReport tdcp_report = evaluateTdcpRuntime(
+        problem, result, options.native_pdc_imu_tdcp);
+    if (options.native_pdc_imu_tdcp &&
+        (tdcp_report.factors_built == 0U ||
+         tdcp_report.factors_inserted != tdcp_report.factors_built ||
+         tdcp_report.nonfinite_residuals != 0U)) {
+        std::cerr << "native PDC+IMU TDCP contract failed: built="
+                  << tdcp_report.factors_built
+                  << " inserted=" << tdcp_report.factors_inserted
+                  << " nonfinite_residuals=" << tdcp_report.nonfinite_residuals
+                  << "\n";
+        return 1;
+    }
+
     // Keep the bridge's basin effect observable without reading truth: compare
     // each final FGO position with the corresponding finite PDC initializer.
     // This is a diagnostic only; it never changes a state or selects a lane.
@@ -1422,7 +1638,7 @@ int main(int argc, char** argv) {
     }
     const std::string summary = makeSummary(options, problem, result, imu_report,
                                             fallback, pdc_bridge_report,
-                                            raw_utc_report);
+                                            raw_utc_report, tdcp_report);
     if (!atomicWrite(options.summary_path, summary)) {
         std::cerr << "failed to atomically publish summary\n";
         return 1;

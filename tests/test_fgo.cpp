@@ -4,6 +4,7 @@
 #include <libgnss++/algorithms/fgo.hpp>
 #include <libgnss++/algorithms/fgo_ddpr_gnc.hpp>
 #include <libgnss++/algorithms/pdc_state_bridge.hpp>
+#include <libgnss++/algorithms/tdcp_contract.hpp>
 #include <libgnss++/core/constants.hpp>
 
 #include <array>
@@ -159,6 +160,38 @@ TEST(FgoDdprGncTest, DefaultScheduleReachesFinalKernelForUrbanScaleResidual) {
 }
 
 namespace {
+
+TEST(TdcpContractTest, AcceptsFiniteAdjacentPairAtConfiguredGapBoundary) {
+    const auto decision = tdcp_contract::evaluateAdjacentPair(
+        2.0, false, false, 1.25, 1.20, 2.0, true, true, 10.0);
+    EXPECT_TRUE(decision.accepted());
+    EXPECT_EQ(decision.reason, tdcp_contract::PairRejectReason::Accepted);
+}
+
+TEST(TdcpContractTest, RejectsGapLossLockNonfiniteAndCodePhaseJump) {
+    const auto gap = tdcp_contract::evaluateAdjacentPair(
+        2.000001, false, false, 1.0, 1.0, 2.0, true, true, 10.0);
+    EXPECT_EQ(gap.reason, tdcp_contract::PairRejectReason::Gap);
+
+    const auto loss = tdcp_contract::evaluateAdjacentPair(
+        1.0, true, false, 1.0, 1.0, 2.0, true, true, 10.0);
+    EXPECT_EQ(loss.reason, tdcp_contract::PairRejectReason::LossOfLock);
+
+    const auto nonfinite = tdcp_contract::evaluateAdjacentPair(
+        1.0, false, false, std::numeric_limits<double>::quiet_NaN(), 1.0,
+        2.0, true, true, 10.0);
+    EXPECT_EQ(nonfinite.reason,
+              tdcp_contract::PairRejectReason::NonFiniteMeasurement);
+
+    const auto jump = tdcp_contract::evaluateAdjacentPair(
+        1.0, false, false, 11.000001, 1.0, 2.0, true, true, 10.0);
+    EXPECT_EQ(jump.reason, tdcp_contract::PairRejectReason::CodePhaseJump);
+
+    const auto clock = tdcp_contract::evaluateAdjacentPair(
+        1.0, false, false, 1.0, 1.0, 2.0, true, true, 10.0, false, true);
+    EXPECT_EQ(clock.reason,
+              tdcp_contract::PairRejectReason::ClockDiscontinuity);
+}
 
 TEST(DopplerContractTest, AndroidRinexRoundTripAndApproachSigns) {
     const double frequency_hz = constants::GPS_L1_FREQ;

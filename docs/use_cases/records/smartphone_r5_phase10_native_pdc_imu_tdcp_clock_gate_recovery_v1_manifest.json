@@ -1,0 +1,28 @@
+{
+  "schema_version": "smartphone-r5-phase10-native-pdc-imu-tdcp-clock-gate-recovery-manifest.v1",
+  "recovery_record": "docs/use_cases/records/smartphone_r5_phase10_native_pdc_imu_tdcp_clock_gate_recovery_v1.json",
+  "recovery_record_sha256": "4908e8ecbc04adbee63dbb8f20625c610a604e8ad90c1981b770e95ed3c8d45b",
+  "prior_scored_candidate": "output/smartphone-r5/phase10-native-pdc-imu-tdcp-v1/submission.csv",
+  "recovery_candidate": "output/smartphone-r5/phase10-native-pdc-imu-tdcp-v1-clock-gate/submission.csv",
+  "prior_scored_candidate_sha256": "5a367a306123a4557f42e2b59a4760bc4eb2edfd1d36492bcab6ab2c88e240bb",
+  "recovery_candidate_sha256": "5a367a306123a4557f42e2b59a4760bc4eb2edfd1d36492bcab6ab2c88e240bb",
+  "byte_identical": true,
+  "truth_policy": {
+    "recovery_truth_read_count": 0,
+    "prior_score_reused": true,
+    "mat_read_count": 0,
+    "validation_open_count": 0,
+    "holdout_open_count": 0,
+    "test_open_count": 0,
+    "kaggle_or_token_access": false
+  },
+  "contract": {
+    "clock_discontinuity_pair_rejection": true,
+    "dt_max_s": 2.0,
+    "loss_of_lock_rejection": true,
+    "nonfinite_rejection": true,
+    "code_phase_jump_max_m": 10.0,
+    "same_satellite_same_signal_key": true,
+    "base_or_double_difference": false
+  }
+}

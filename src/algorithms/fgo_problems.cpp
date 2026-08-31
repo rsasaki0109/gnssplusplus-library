@@ -2,6 +2,7 @@
 
 #include <libgnss++/algorithms/lambda.hpp>
 #include <libgnss++/algorithms/doppler_contract.hpp>
+#include <libgnss++/algorithms/tdcp_contract.hpp>
 #include <libgnss++/algorithms/spp.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
@@ -789,22 +790,38 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                 }
                 const auto& previous = previous_it->second;
                 ++problem.diagnostics.tdcp_candidate_pairs;
-                if (config_.reject_tdcp_loss_of_lock &&
-                    (previous.loss_of_lock || current.loss_of_lock)) {
-                    ++problem.diagnostics.tdcp_rejected_loss_of_lock;
-                    continue;
-                }
-
                 const double delta_carrier_m =
                     current.corrected_carrier_m - previous.corrected_carrier_m;
                 const double delta_code_m =
                     current.corrected_pseudorange_m - previous.corrected_pseudorange_m;
-                const double code_phase_jump_m = std::abs(delta_carrier_m - delta_code_m);
-                if (config_.reject_tdcp_code_phase_jump &&
-                    config_.tdcp_code_phase_jump_threshold_m > 0.0 &&
-                    code_phase_jump_m > config_.tdcp_code_phase_jump_threshold_m) {
-                    ++problem.diagnostics.tdcp_rejected_code_phase_jump;
-                    continue;
+                const auto decision = tdcp_contract::evaluateAdjacentPair(
+                    dt, previous.loss_of_lock, current.loss_of_lock,
+                    delta_carrier_m, delta_code_m, max_gap,
+                    config_.reject_tdcp_loss_of_lock,
+                    config_.reject_tdcp_code_phase_jump,
+                    config_.tdcp_code_phase_jump_threshold_m,
+                    epoch_index > 0 && epoch_index - 1 < problem.clock_jumps.size() &&
+                        problem.clock_jumps[epoch_index - 1],
+                    epoch_index < problem.clock_jumps.size() &&
+                        problem.clock_jumps[epoch_index]);
+                switch (decision.reason) {
+                    case tdcp_contract::PairRejectReason::Accepted:
+                        break;
+                    case tdcp_contract::PairRejectReason::Gap:
+                        ++problem.diagnostics.tdcp_rejected_gap;
+                        continue;
+                    case tdcp_contract::PairRejectReason::ClockDiscontinuity:
+                        ++problem.diagnostics.tdcp_rejected_clock_discontinuity;
+                        continue;
+                    case tdcp_contract::PairRejectReason::LossOfLock:
+                        ++problem.diagnostics.tdcp_rejected_loss_of_lock;
+                        continue;
+                    case tdcp_contract::PairRejectReason::NonFiniteMeasurement:
+                        ++problem.diagnostics.tdcp_rejected_invalid_measurement;
+                        continue;
+                    case tdcp_contract::PairRejectReason::CodePhaseJump:
+                        ++problem.diagnostics.tdcp_rejected_code_phase_jump;
+                        continue;
                 }
 
                 TimeDifferencedCarrierFactor factor;
