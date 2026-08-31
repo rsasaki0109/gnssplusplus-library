@@ -1,0 +1,205 @@
+{
+  "schema_version": "smartphone-r5-phase29-native-fgo-no-bridge-train-evaluation-freeze.v1",
+  "phase": 29,
+  "status": "frozen-before-train-truth-materialization-or-open",
+  "created_at_utc": "2026-09-01T00:00:00Z",
+  "purpose": "Compare the already sealed converged native no-bridge FGO candidate with the already sealed Phase25 no-bridge control on the fixed development train cohort. This is a route-grouped development evaluation, not fresh validation or holdout evidence.",
+  "parent_evidence": {
+    "phase24_split_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase24_route_group_split_freeze_v1.json",
+      "sha256": "a20fb65524648fab76c5494d2f28b1846e48fae821296bbdfc212cf6519e4a62"
+    },
+    "phase25_structural_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase25_raw_clock_structural_result_v1.json",
+      "sha256": "ffe737069bad363951a82fb79f4d25252e0b31150690e993825612379c65df9f"
+    },
+    "phase28_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase28_native_fgo_no_bridge_freeze_v1.json",
+      "sha256": "a932782df2d65e45730d107420183692b0990ba814b0850eb242d2f4086c9e80"
+    },
+    "phase28_structural_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase28_native_fgo_no_bridge_structural_result_v1.json",
+      "sha256": "43638e5de0cb0075906a21c9b53dd829c234f6c6a7321a33e93978ca4c3c7941"
+    }
+  },
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_directory_only_before_freeze": true,
+    "truth_members_materialized_before_freeze": false,
+    "truth_members_opened_before_freeze": false,
+    "allowed_raw_members": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "truth_member": "ground_truth.csv"
+  },
+  "identities": {
+    "development_train": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b"
+    ],
+    "route_disjoint_roles": true,
+    "fresh_validation": {
+      "id": "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+      "remains_sealed": true,
+      "truth_open_count_before_train_gate": 0
+    },
+    "future_holdout": {
+      "id": "2023-05-16-19-54-us-ca-mtv-xe1/pixel5",
+      "remains_sealed": true,
+      "truth_open_count_before_train_gate": 0,
+      "materialized": false
+    },
+    "historical_development_truth": "These three identities have prior development evidence in earlier records. Phase29 does not call them never-opened or fresh; it reuses them only for the predeclared development train comparison."
+  },
+  "inference_contract": {
+    "candidate_id": "phase28_tdcp_no_bridge",
+    "candidate_flags": [
+      "--native-pdc-imu-tdcp-no-bridge",
+      "--android-raw-clock-only",
+      "--android-utc-wall-clock-fallback",
+      "--android-raw-utc-keys"
+    ],
+    "control_id": "phase25_raw_clock_no_bridge_control",
+    "control_artifact_root": "output/smartphone-r5/phase25-raw-clock-eval-v1/no_bridge",
+    "candidate_artifact_root": "output/smartphone-r5/phase28-native-fgo-no-bridge-structural-v1/tdcp_no_bridge",
+    "control_and_candidate_are_sealed": true,
+    "solver_rerun_authorized": false,
+    "candidate_or_control_change_authorized": false,
+    "numeric_model_change": false,
+    "pdc_state_bridge": false,
+    "factors": ["pseudorange", "ordinary_tdcp", "motion", "combined_imu"],
+    "raw_inputs_only": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "forbidden_inputs": [
+      "ground_truth.csv during inference",
+      "any .mat file",
+      "sample/submission coordinates",
+      "precomputed/result trajectory",
+      "device WLS or enriched SvPosition/SvElevation columns",
+      "leaderboard score"
+    ],
+    "raw_pseudorange_source": "Android raw timing/status/measurement fields; RawPseudorangeMeters and enriched satellite columns are not used",
+    "truth_role": "scoring-only after sealed prediction artifacts; never a solver or selection input"
+  },
+  "sealed_route_artifacts": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "control": {
+        "submission": "output/smartphone-r5/phase25-raw-clock-eval-v1/no_bridge/2021-03-16-18-59-us-ca-mtv-a/pixel5/submission.csv",
+        "submission_sha256": "00f52a2578d99fa301f32e545f77c4bc7dcce04bbcd776db5ee494c7fb8a0320",
+        "summary": "output/smartphone-r5/phase25-raw-clock-eval-v1/no_bridge/2021-03-16-18-59-us-ca-mtv-a/pixel5/summary.json",
+        "summary_sha256": "98139a1138d8bc3084ad66f008266adece7dc5ed6c58a58f1ae32b002fbd4e38",
+        "converged": true,
+        "epochs": 2159
+      },
+      "candidate": {
+        "submission": "output/smartphone-r5/phase28-native-fgo-no-bridge-structural-v1/tdcp_no_bridge/pixel5/submission.csv",
+        "submission_sha256": "c199f9efc57c5318830f529ae8ebc33996ec916bb03e57e4bfdccfe775978e8c",
+        "summary": "output/smartphone-r5/phase28-native-fgo-no-bridge-structural-v1/tdcp_no_bridge/pixel5/summary.json",
+        "summary_sha256": "a607d7908cf4c55a9701801508ee928d8bbb8ae97213d51cbadaa038b2edc90b",
+        "converged": true,
+        "epochs": 2159,
+        "exact_solution_epochs": 2158
+      }
+    },
+    "2021-07-27-19-49-us-ca-mtv-b/pixel4": {
+      "control": {
+        "submission": "output/smartphone-r5/phase25-raw-clock-eval-v1/no_bridge/2021-07-27-19-49-us-ca-mtv-b/pixel4/submission.csv",
+        "submission_sha256": "c6d7545fd30f8ff28b1469ff4b40d2a48966fedd152b0abd50d7dc569e008059",
+        "summary": "output/smartphone-r5/phase25-raw-clock-eval-v1/no_bridge/2021-07-27-19-49-us-ca-mtv-b/pixel4/summary.json",
+        "summary_sha256": "a47b66286a1814358cefee1645cb8a50e31104706e1ca98f699572e19603d14f",
+        "converged": true,
+        "epochs": 1678
+      },
+      "candidate": {
+        "submission": "output/smartphone-r5/phase28-native-fgo-no-bridge-structural-v1/tdcp_no_bridge/pixel4/submission.csv",
+        "submission_sha256": "e7f8ade3b2ccc52ad169730b3f91d3a08fe720377c13e753cdee3dc2c116d643",
+        "summary": "output/smartphone-r5/phase28-native-fgo-no-bridge-structural-v1/tdcp_no_bridge/pixel4/summary.json",
+        "summary_sha256": "13d22531d1c06312fb2fc9e983682fa02a6a0c9e43180e640d25549d8a9931c1",
+        "converged": true,
+        "epochs": 1678,
+        "exact_solution_epochs": 1677
+      }
+    },
+    "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+      "control": {
+        "submission": "output/smartphone-r5/phase25-raw-clock-eval-v1/no_bridge/2021-07-14-20-50-us-ca-mtv-e/sm-g988b/submission.csv",
+        "submission_sha256": "d5df038f18978be78e1b03d07bf32c4643923baf0dafa4778709f15801bb76e2",
+        "summary": "output/smartphone-r5/phase25-raw-clock-eval-v1/no_bridge/2021-07-14-us-ca-mtv-e/sm-g988b/summary.json",
+        "summary_sha256": "1c1a1be54b325ded505ff54740aa0ab5d516c89ea05eae54f7cb12d451e98ed3",
+        "converged": true,
+        "epochs": 1130,
+        "interpolated_epochs": 35
+      },
+      "candidate": {
+        "submission": "output/smartphone-r5/phase28-native-fgo-no-bridge-structural-v1/tdcp_no_bridge/smg988b/submission.csv",
+        "submission_sha256": "1cfb9f3204934499fa9edf9e8073564897cf3660818e9a14afa5ddcb9c65f507",
+        "summary": "output/smartphone-r5/phase28-native-fgo-no-bridge-structural-v1/tdcp_no_bridge/smg988b/summary.json",
+        "summary_sha256": "28a0ffd472e68f79e59fd9032acc5b70a7bdec4afe1b8fcf5b60f1da8cd60f81",
+        "converged": true,
+        "epochs": 1130,
+        "target_epochs": 1164,
+        "interpolated_epochs": 35
+      }
+    }
+  },
+  "evaluation_protocol": {
+    "one_evaluator_process": true,
+    "truth_materialization": "Only the three declared train ground_truth.csv members may be materialized after this freeze and before scoring; no validation/holdout truth may be materialized.",
+    "truth_read_count_per_route": 1,
+    "truth_read_count_total": 3,
+    "same_truth_key_set_required": true,
+    "metrics": [
+      "WGS84 Vincenty horizontal P50/P95 with linear (n-1) percentile",
+      "WGS84 Vincenty horizontal P50/P95 with nearest-rank ceiling",
+      "Haversine spherical horizontal P50/P95 with linear (n-1) percentile",
+      "Haversine spherical horizontal P50/P95 with nearest-rank ceiling",
+      "vertical P95 absolute error",
+      "availability and truth coverage",
+      "physical continuity and >70 m/s transition diagnostics"
+    ],
+    "aggregation": "Arithmetic macro-mean of route-level metrics; no route, timestamp, or truth data crosses a route boundary.",
+    "duplicate_nonfinite_phone_mismatch": "fail-closed",
+    "missing_prediction": "counted as unavailable; no interpolation or hold is introduced during scoring",
+    "control_candidate_alignment": "Both lanes are scored on the exact same truth-matched key set per route; any mismatch fails the run.",
+    "post_score_tuning": false
+  },
+  "promotion_gate": {
+    "routewise": "Candidate must strictly improve all four diagnostic variants for every route, with no H P50/P95, V P95, availability, coverage, or continuity regression.",
+    "aggregate": "Candidate must strictly improve all four diagnostic variants and their macro mean, with H P50/P95, V P95, availability, coverage, and continuity non-regression.",
+    "validation": "Open the already frozen fresh validation only if every unchanged development-train gate passes; otherwise leave it sealed.",
+    "holdout": "Always sealed in Phase29.",
+    "development_only": true,
+    "kaggle_submission": false
+  },
+  "source_and_binary_pins": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "04866823b3b70243a08199216a6c61316eaad2922fd105f3c3d22baa2b025ee6",
+    "tests/test_smartphone_native_gnss_pdc_bridge.py": "42bcbda278f7401c542c1183a921a759500b41a474007dbc2528aa5a15b1990b",
+    "configs/benchmarks/smartphone_r5_gsdc2023.json": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776",
+    "build/apps/gnss_fgo_imu_no_base": "3d261b18d43ddb6556986e20c3fe64abea047b7615a763e1237cba3b7e9bdc5a",
+    "git_head_at_freeze": "8318709aae2f254951afd4dcbe723562463afa0b"
+  },
+  "commands": {
+    "freeze_validation": "python3 -m json.tool docs/use_cases/records/smartphone_r5_phase29_native_fgo_no_bridge_train_eval_freeze_v1.json",
+    "sealed_artifact_hash_check": "sha256sum output/smartphone-r5/phase25-raw-clock-eval-v1/no_bridge/*/*/{submission.csv,summary.json} output/smartphone-r5/phase28-native-fgo-no-bridge-structural-v1/tdcp_no_bridge/*/{submission.csv,summary.json}",
+    "truth_materialization_after_freeze_only": "Use the Phase24 archive allowlist for only the three train ground_truth.csv members; record central CRC/size and SHA before scoring.",
+    "score": "One route-group evaluator process reads each declared train truth exactly once and writes one atomic sealed result; no solver command is rerun.",
+    "validation": "Forbidden unless the unchanged train gate passes; one process/open maximum.",
+    "holdout": "Forbidden."
+  },
+  "authorization": {
+    "truth_open_count_before_freeze": 0,
+    "truth_materialized_before_freeze": false,
+    "fresh_validation_truth_open_count_before_freeze": 0,
+    "future_holdout_truth_open_count_before_freeze": 0,
+    "mat_read_or_generated": false,
+    "token_access": false,
+    "kaggle_or_external_mutation": false,
+    "no_post_holdout_or_score_tuning": true
+  },
+  "integrity": {
+    "freeze_record_hash": "computed after commit and stored in the companion manifest",
+    "candidate_control_artifacts_must_remain_byte_identical": true,
+    "atomic_result_required": true,
+    "truth_hash_before_after_required": true,
+    "future_holdout_remains_sealed": true
+  }
+}
