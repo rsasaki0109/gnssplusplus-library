@@ -1,0 +1,57 @@
+{
+  "schema_version": "smartphone-r5-phase30-samsung-chronology-freeze-manifest.v1",
+  "status": "sealed-before-phase30-samsung-truth-reopen",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_phase30_samsung_chronology_freeze_v1.json",
+    "sha256": "7ded663956cf5373cb78e7aff248a5a945b5dcc0ae1eec1824f26386dd2d98aa"
+  },
+  "phase29_parent_result": {
+    "path": "docs/use_cases/records/smartphone_r5_phase29_native_fgo_no_bridge_train_eval_result_v1.json",
+    "sha256": "88d2cf8b91460e098873872cbcd1d0be8df2a15adf1d3a43749c7301e1533536"
+  },
+  "scope": {
+    "dataset_id": "2021-07-14-20-50-us-ca-mtv-e/sm-g988b",
+    "phase30_truth_additional_open_count": 1,
+    "pixel_truth_opened": false,
+    "fresh_validation_truth_opened": false,
+    "future_holdout_truth_opened": false,
+    "test_truth_opened": false,
+    "mat_read_or_generated": false,
+    "token_access": false,
+    "kaggle_or_external_mutation": false,
+    "candidate_or_control_changed": false,
+    "solver_rerun": false
+  },
+  "contract": {
+    "truth_is_postfreeze_chronology_only": true,
+    "one_process": true,
+    "one_truth_payload_read": true,
+    "raw_structural_fields_only": true,
+    "tail_threshold_m": 500.0,
+    "large_error_threshold_m": 100.0,
+    "continuity_bound_mps": 70.0,
+    "raw_clock_gap_threshold_ms": 1000.0,
+    "source_linearity_tolerance_m": 0.01,
+    "no_truth_coordinate_fitting": true,
+    "no_new_lane_authorization": true,
+    "no_postscore_tuning": true
+  },
+  "source_hashes": {
+    "apps/commands/benchmarks/gnss_smartphone_phase30_samsung_chronology.py": "7d9cf2608340a7ac1dc4a74bde7416cedc96555491ee6cb4c7088ac1e7ee3d39",
+    "tests/test_smartphone_phase30_samsung_chronology.py": "2964a43531bf24b27a6a2dd4b02364a506a5fc3df985ec98b6ccc35c71a9329c",
+    "apps/commands/benchmarks/gnss_smartphone_kaggle.py": "1b0a978bf89dc2adeb8c61a7b5d0c204cd91aafadb721a75075d85d7da9d30ce"
+  },
+  "integrity": {
+    "prediction_and_summary_hashes_frozen": true,
+    "raw_gnss_hash_frozen": true,
+    "truth_hash_and_bytes_frozen_from_phase29_materialization": true,
+    "freeze_record_hash_pinned_here": true,
+    "result_publish_atomic_required": true
+  },
+  "commands": {
+    "truth_free_tests": "python3 -m unittest -v tests/test_smartphone_phase30_samsung_chronology.py",
+    "authorized_score": "python3 apps/commands/benchmarks/gnss_smartphone_phase30_samsung_chronology.py score",
+    "validation": "forbidden",
+    "holdout": "forbidden"
+  }
+}
