@@ -1,0 +1,42 @@
+{
+  "schema_version": "smartphone-r5-phase29-native-fgo-no-bridge-train-evaluation-freeze-manifest.v1",
+  "status": "sealed-before-train-truth-materialization-or-open",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_phase29_native_fgo_no_bridge_train_eval_freeze_v1.json",
+    "sha256": "96a9dbded706d25681737d6d569d0bbac2bf893839a08e78973167204a100d5c"
+  },
+  "git_commit": "0b794c6",
+  "truth_access": {
+    "train_truth_materialized": false,
+    "train_truth_open_count": 0,
+    "fresh_validation_materialized": false,
+    "fresh_validation_truth_open_count": 0,
+    "future_holdout_materialized": false,
+    "future_holdout_truth_open_count": 0,
+    "mat_read_or_generated": false,
+    "token_access": false,
+    "external_mutation": false
+  },
+  "candidate_and_control": {
+    "candidate_artifacts_sealed": true,
+    "control_artifacts_sealed": true,
+    "candidate_or_control_regeneration": false,
+    "candidate_or_control_parameter_change": false,
+    "candidate_flag": "--native-pdc-imu-tdcp-no-bridge",
+    "raw_clock_flags": [
+      "--android-raw-clock-only",
+      "--android-utc-wall-clock-fallback",
+      "--android-raw-utc-keys"
+    ]
+  },
+  "evaluation": {
+    "route_count": 3,
+    "one_process": true,
+    "truth_reads_per_route": 1,
+    "metrics_frozen": true,
+    "validation_authorized_only_after_train_pass": true,
+    "holdout_forbidden": true,
+    "post_score_tuning": false
+  },
+  "artifact_hashes_verified_before_truth": true
+}
