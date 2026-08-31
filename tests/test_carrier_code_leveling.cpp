@@ -30,6 +30,19 @@ Observation makeE1(double code_m, double adr_m, uint8_t lli = 0U) {
     return observation;
 }
 
+Observation makeL1(double code_m, double adr_m, uint8_t lli = 0U) {
+    Observation observation(SatelliteId(GNSSSystem::GPS, 5),
+                            SignalType::GPS_L1CA);
+    const double wavelength = libgnss::signalWavelengthMeters(observation);
+    observation.pseudorange = code_m;
+    observation.has_pseudorange = true;
+    observation.carrier_phase = adr_m / wavelength;
+    observation.has_carrier_phase = true;
+    observation.lli = lli;
+    observation.valid = true;
+    return observation;
+}
+
 ObservationSeries threeEpochSeries() {
     ObservationSeries series;
     for (int i = 0; i < 3; ++i) {
@@ -179,6 +192,77 @@ TEST(CarrierCodeLevelingTest, InnovationResetIsOptInAndDefaultPreservesHatch) {
     EXPECT_NEAR(
         result.observations.epochs[1].observations.front().pseudorange,
         20'000'020.05, 1.0e-9);
+}
+
+TEST(CarrierCodeLevelingTest, GPSInnovationResetUsesSameUpstreamL1Boundary) {
+    Config config;
+    config.signal = SignalType::GPS_L1CA;
+    config.enable_innovation_reset = true;
+    ObservationSeries series;
+    ObservationData first(GNSSTime(2200, 100.0));
+    first.addObservation(makeL1(20'000'000.0, 100.0));
+    ObservationData second(GNSSTime(2200, 101.0));
+    second.addObservation(makeL1(20'000'040.1, 100.0));
+    series.addEpoch(first);
+    series.addEpoch(second);
+
+    const auto result = libgnss::carrier_code_leveling::apply(
+        series, {1'000, 2'000}, {0, 0}, config);
+    ASSERT_TRUE(result.ok) << result.error;
+    ASSERT_EQ(result.diagnostics.per_signal.size(), 1U);
+    EXPECT_EQ(result.diagnostics.per_signal[0].signal, SignalType::GPS_L1CA);
+    EXPECT_EQ(result.diagnostics.per_signal[0].reset_innovation, 1U);
+    EXPECT_DOUBLE_EQ(result.diagnostics.per_signal[0].innovation_reset_threshold_m,
+                     40.0);
+    EXPECT_DOUBLE_EQ(
+        result.observations.epochs[1].observations.front().pseudorange,
+        20'000'040.1);
+}
+
+TEST(CarrierCodeLevelingTest, ExplicitPrimarySetKeepsSignalArcsIndependent) {
+    Config config;
+    config.signals = {SignalType::GPS_L1CA, SignalType::GAL_E1};
+    config.enable_innovation_reset = true;
+
+    ObservationSeries series;
+    ObservationData first(GNSSTime(2200, 100.0));
+    first.addObservation(makeL1(20'000'000.0, 100.0));
+    first.addObservation(makeE1(21'000'000.0, 200.0));
+    ObservationData second(GNSSTime(2200, 101.0));
+    second.addObservation(makeL1(20'000'000.4, 100.2));
+    second.addObservation(makeE1(21'000'000.4, 200.2));
+    Observation untouched(SatelliteId(GNSSSystem::GPS, 5), SignalType::GPS_L5);
+    untouched.pseudorange = 22'000'000.0;
+    untouched.has_pseudorange = true;
+    untouched.valid = true;
+    second.addObservation(untouched);
+    series.addEpoch(first);
+    series.addEpoch(second);
+
+    const auto result = libgnss::carrier_code_leveling::apply(
+        series, {1'000, 2'000}, {0, 0}, config);
+    ASSERT_TRUE(result.ok) << result.error;
+    ASSERT_EQ(result.diagnostics.per_signal.size(), 2U);
+    EXPECT_EQ(result.diagnostics.per_signal[0].signal, SignalType::GPS_L1CA);
+    EXPECT_EQ(result.diagnostics.per_signal[1].signal, SignalType::GAL_E1);
+    for (const auto& diagnostics : result.diagnostics.per_signal) {
+        EXPECT_EQ(diagnostics.target_rows, 2U);
+        EXPECT_EQ(diagnostics.eligible_rows, 2U);
+        EXPECT_EQ(diagnostics.updates, 1U);
+        EXPECT_EQ(diagnostics.reset_innovation, 0U);
+        EXPECT_DOUBLE_EQ(diagnostics.innovation_reset_threshold_m, 40.0);
+    }
+    EXPECT_DOUBLE_EQ(result.observations.epochs[1].observations[2].pseudorange,
+                     22'000'000.0);
+}
+
+TEST(CarrierCodeLevelingTest, ExplicitPrimarySetRejectsUnsupportedBand) {
+    Config config;
+    config.signals = {SignalType::GPS_L5};
+    const auto result = libgnss::carrier_code_leveling::apply(
+        twoEpochCodeSeries(20'000'000.0), {1'000, 2'000}, {0, 0}, config);
+    EXPECT_FALSE(result.ok);
+    EXPECT_NE(result.error.find("GPS_L1CA and GAL_E1"), std::string::npos);
 }
 
 }  // namespace

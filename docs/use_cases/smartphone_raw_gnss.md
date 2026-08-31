@@ -3139,3 +3139,34 @@ The freeze, raw structural manifest, and score/recovery record are
 `docs/use_cases/records/smartphone_r5_phase16_carrier_code_innovation_reset_freeze_v1_manifest.json`,
 and
 `docs/use_cases/records/smartphone_r5_phase16_carrier_code_innovation_reset_score_result_v1.json`.
+
+### Primary GPS L1 C/A + Galileo E1 Hatch (phase 17, sealed)
+
+Phase 17 adds an explicit opt-in primary-signal set to the Phase 16 raw
+innovation-reset Hatch transform.  `--native-carrier-code-primary-l1-e1`
+selects GPS L1 C/A and Galileo E1 independently; each uses the existing
+upstream-derived 40 m P-vs-ADR threshold, 30-sample Hatch window, 1.5 s gap
+reset, and per-satellite/per-signal arc state.  GLO, QZSS, BDS, L5, and E5
+are rejected by the explicit-set API.  Empty `Config.signals` and the old
+single-signal command preserve Phase 16 behavior byte-for-byte.
+
+The raw-only structural artifacts used `device_gnss.csv`, `device_imu.csv`,
+and `brdc.nav` only.  The mi8 control/candidate converged with 1,416/1,416
+keys; the candidate had 9,541 GPS L1 C/A and 5,917 Galileo E1 eligible rows
+and 18 Galileo innovation resets.  Pixel7 control and candidate both had
+1,383/1,383 keys, zero resets, and the candidate was byte-identical to the
+Phase 16 control.  Both candidates were deterministic and passed the
+finite/continuity structural checks.  Hashes and complete per-signal
+diagnostics are in
+`docs/use_cases/records/smartphone_r5_phase17_primary_l1_e1_freeze_v1_manifest.json`.
+
+The freeze permitted one same-route mi8-phone development comparison after
+structural sealing.  That one evaluator process opened the exact-phone
+`ground_truth.csv` once and materialized it, then stopped before any metric
+was computed because the frozen key check reported `extra=17` and
+`missing=1`.  The truth file was not reopened, the candidates were not
+changed or rerun, and no accuracy/promotion claim is made.  The explicit
+truth-open count, central archive metadata, and failure status are sealed in
+`docs/use_cases/records/smartphone_r5_phase17_primary_l1_e1_score_result_v1.json`.
+This is same-route cross-device development evidence only; Pixel7 truth was
+not reread and validation/holdout/test truth remained unopened.

@@ -84,7 +84,16 @@ struct Options {
     bool native_upstream_quality = false;
     bool native_carrier_code_leveling = false;
     bool native_carrier_code_innovation_reset = false;
+    bool native_carrier_code_primary_l1_e1 = false;
 };
+
+const char* carrierSignalName(libgnss::SignalType signal) {
+    switch (signal) {
+        case libgnss::SignalType::GPS_L1CA: return "GPS_L1CA";
+        case libgnss::SignalType::GAL_E1: return "GAL_E1";
+        default: return "UNSUPPORTED";
+    }
+}
 
 void usage(const char* program) {
     std::cout << "Usage: " << program
@@ -99,7 +108,8 @@ void usage(const char* program) {
                  " [--native-pdc-state-bridge] [--native-pdc-imu-tdcp]"
                  " [--native-signal-bias-states] [--native-residual-ionosphere]"
                  " [--native-upstream-quality] [--native-carrier-code-leveling]"
-                 " [--native-carrier-code-innovation-reset]\n";
+                 " [--native-carrier-code-innovation-reset]"
+                 " [--native-carrier-code-primary-l1-e1]\n";
 }
 
 bool requireValue(int argc, char** argv, int& index, std::string& value) {
@@ -192,6 +202,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
             options.native_carrier_code_leveling = true;
         } else if (arg == "--native-carrier-code-innovation-reset") {
             options.native_carrier_code_innovation_reset = true;
+        } else if (arg == "--native-carrier-code-primary-l1-e1") {
+            options.native_carrier_code_primary_l1_e1 = true;
         } else {
             std::cerr << "Unknown argument: " << arg << "\n";
             return false;
@@ -302,6 +314,14 @@ bool parseArguments(int argc, char** argv, Options& options) {
         !options.native_carrier_code_leveling) {
         std::cerr << "--native-carrier-code-innovation-reset requires "
                      "--native-carrier-code-leveling\n";
+        return false;
+    }
+    if (options.native_carrier_code_primary_l1_e1 &&
+        (!options.native_carrier_code_leveling ||
+         !options.native_carrier_code_innovation_reset)) {
+        std::cerr << "--native-carrier-code-primary-l1-e1 requires "
+                     "--native-carrier-code-leveling and "
+                     "--native-carrier-code-innovation-reset\n";
         return false;
     }
     return true;
@@ -1052,7 +1072,11 @@ std::string makeSummary(const Options& options,
         << "  \"native_carrier_code_innovation_reset\": "
         << (options.native_carrier_code_innovation_reset ? "true" : "false")
         << ",\n"
-        << "  \"android_utc_wall_clock_fallback\": "
+        ;
+    if (options.native_carrier_code_primary_l1_e1) {
+        out << "  \"native_carrier_code_primary_l1_e1\": true,\n";
+    }
+    out << "  \"android_utc_wall_clock_fallback\": "
         << (options.android_utc_wall_clock_fallback ? "true" : "false") << ",\n"
         << "  \"android_utc_wall_clock_fallback_applied\": "
         << (imu_report.android_load.utc_wall_clock_fallback_applied
@@ -1291,7 +1315,11 @@ std::string makeSummary(const Options& options,
         << "  \"carrier_code_leveling\": {\n"
         << "    \"enabled\": "
         << (carrier_code_leveling_report.enabled ? "true" : "false") << ",\n"
-        << "    \"signal\": \"Galileo E1\",\n"
+        << "    \"signal\": ";
+    writeJsonString(out, options.native_carrier_code_primary_l1_e1
+                             ? "GPS_L1CA+GAL_E1"
+                             : "Galileo E1");
+    out << ",\n"
         << "    \"window_samples\": 30,\n"
         << "    \"max_gap_s\": 1.5,\n"
         << "    \"target_rows\": "
@@ -1332,7 +1360,53 @@ std::string makeSummary(const Options& options,
         << carrier_code_leveling_report.max_abs_level_adjustment_m << ",\n"
         << "    \"max_abs_phase_increment_m\": "
         << carrier_code_leveling_report.max_abs_phase_increment_m << ",\n"
-        << "    \"no_new_graph_state\": true,\n"
+        ;
+    if (options.native_carrier_code_primary_l1_e1) {
+        out << "    \"signals\": [\"GPS_L1CA\", \"GAL_E1\"],\n"
+            << "    \"per_signal\": [";
+        for (std::size_t index = 0U;
+             index < carrier_code_leveling_report.per_signal.size(); ++index) {
+            if (index != 0U) out << ",";
+            const auto& signal_diagnostics =
+                carrier_code_leveling_report.per_signal[index];
+            out << "\n      {\n        \"signal\": ";
+            writeJsonString(out, carrierSignalName(signal_diagnostics.signal));
+            out << ",\n"
+                << "        \"target_rows\": "
+                << signal_diagnostics.target_rows << ",\n"
+                << "        \"eligible_rows\": "
+                << signal_diagnostics.eligible_rows << ",\n"
+                << "        \"smoothed_rows\": "
+                << signal_diagnostics.smoothed_rows << ",\n"
+                << "        \"arcs_started\": "
+                << signal_diagnostics.arcs_started << ",\n"
+                << "        \"updates\": " << signal_diagnostics.updates << ",\n"
+                << "        \"reset_invalid_code\": "
+                << signal_diagnostics.reset_invalid_code << ",\n"
+                << "        \"reset_invalid_adr\": "
+                << signal_diagnostics.reset_invalid_adr << ",\n"
+                << "        \"reset_adr\": "
+                << signal_diagnostics.reset_adr << ",\n"
+                << "        \"reset_cycle_slip\": "
+                << signal_diagnostics.reset_cycle_slip << ",\n"
+                << "        \"reset_missing_or_nonfinite_adr\": "
+                << signal_diagnostics.reset_missing_or_nonfinite_adr << ",\n"
+                << "        \"reset_gap\": " << signal_diagnostics.reset_gap << ",\n"
+                << "        \"reset_clock_discontinuity\": "
+                << signal_diagnostics.reset_clock_discontinuity << ",\n"
+                << "        \"reset_innovation\": "
+                << signal_diagnostics.reset_innovation << ",\n"
+                << "        \"innovation_reset_threshold_m\": "
+                << signal_diagnostics.innovation_reset_threshold_m << ",\n"
+                << "        \"max_abs_innovation_accepted_m\": "
+                << signal_diagnostics.max_abs_innovation_accepted_m << ",\n"
+                << "        \"max_abs_innovation_rejected_m\": "
+                << signal_diagnostics.max_abs_innovation_rejected_m << "\n"
+                << "      }";
+        }
+        out << "\n    ],\n";
+    }
+    out << "    \"no_new_graph_state\": true,\n"
         << "    \"truth_free\": true\n"
         << "  },\n"
         << "  \"gnss_first\": {\n"
@@ -1591,13 +1665,18 @@ int main(int argc, char** argv) {
     libgnss::carrier_code_leveling::Diagnostics carrier_code_leveling_report;
     if (options.native_carrier_code_leveling) {
         // Keep the leveling transform in the same process and before the FGO
-        // problem builder.  Only raw P is changed for Galileo E1; carrier,
-        // Doppler, timestamps, nav, and all other signals remain untouched.
+        // problem builder.  Only raw P is changed for the explicitly selected
+        // primary signals; carrier, Doppler, timestamps, nav, and every other
+        // signal remain untouched.
         libgnss::ObservationSeries raw_series;
         raw_series.epochs = epochs;
         libgnss::carrier_code_leveling::Config leveling_config;
         leveling_config.enable_innovation_reset =
             options.native_carrier_code_innovation_reset;
+        if (options.native_carrier_code_primary_l1_e1) {
+            leveling_config.signals = {libgnss::SignalType::GPS_L1CA,
+                                       libgnss::SignalType::GAL_E1};
+        }
         const auto leveling = libgnss::carrier_code_leveling::apply(
             raw_series, android_gnss.epoch_utc_time_millis,
             android_gnss.epoch_hardware_clock_discontinuity_count,

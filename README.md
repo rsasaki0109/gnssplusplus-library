@@ -120,6 +120,25 @@ key-alias recovery plus one scoring read), not a new validation/holdout claim;
 native 0.782-class remains unachieved.  See the [Phase 16 freeze](docs/use_cases/records/smartphone_r5_phase16_carrier_code_innovation_reset_freeze_v1.json)
 and [sealed score result](docs/use_cases/records/smartphone_r5_phase16_carrier_code_innovation_reset_score_result_v1.json).
 
+Phase 17 is an opt-in extension that applies the same raw P-vs-ADR
+innovation reset independently to GPS L1 C/A and Galileo E1.  Both 40 m
+thresholds come from the pinned upstream adjacent P-D rule; unsupported bands
+are rejected and the historical single-signal API remains unchanged.  The
+mi8 and Pixel7 raw-only runs were finite, converged, deterministic, and had
+no physical-transition gate violation.  The mi8 candidate processed 9,541
+GPS L1 C/A and 5,917 Galileo E1 eligible rows, with 18 Galileo resets; the
+Pixel7 candidate had no resets and was byte-identical to its Phase 16
+control.  See the [Phase 17 freeze](docs/use_cases/records/smartphone_r5_phase17_primary_l1_e1_freeze_v1.json)
+and [structural manifest](docs/use_cases/records/smartphone_r5_phase17_primary_l1_e1_freeze_v1_manifest.json).
+
+The permitted post-freeze mi8 development comparison opened its exact-phone
+`ground_truth.csv` once, but stopped before scoring at the frozen key check
+(`extra=17`, `missing=1`).  It was not retried, so no accuracy or promotion
+claim is made; the failure and truth-open count are sealed in the [Phase 17
+result record](docs/use_cases/records/smartphone_r5_phase17_primary_l1_e1_score_result_v1.json).
+Pixel7 truth was not reread, and validation/holdout/test truth remained
+unopened.  Native 0.782-class remains unachieved.
+
 ### RTK runtime and smartphone GSDC 2023
 
 The Release RTK broadcast-state cache preserves the position stream and

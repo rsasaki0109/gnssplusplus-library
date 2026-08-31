@@ -37,6 +37,30 @@ struct Config {
     // derived from the pinned upstream adjacent P-D pair rule; callers cannot
     // tune a second threshold through this API.
     bool enable_innovation_reset = false;
+    // An explicit set is an opt-in primary-band extension.  The supported
+    // multi-signal set is deliberately limited to GPS L1 C/A and Galileo E1;
+    // an empty set preserves the historical single `signal` contract.
+    std::vector<SignalType> signals;
+};
+
+struct SignalDiagnostics {
+    SignalType signal = SignalType::GAL_E1;
+    std::size_t target_rows = 0U;
+    std::size_t eligible_rows = 0U;
+    std::size_t smoothed_rows = 0U;
+    std::size_t arcs_started = 0U;
+    std::size_t updates = 0U;
+    std::size_t reset_invalid_code = 0U;
+    std::size_t reset_invalid_adr = 0U;
+    std::size_t reset_adr = 0U;
+    std::size_t reset_cycle_slip = 0U;
+    std::size_t reset_missing_or_nonfinite_adr = 0U;
+    std::size_t reset_gap = 0U;
+    std::size_t reset_clock_discontinuity = 0U;
+    std::size_t reset_innovation = 0U;
+    double max_abs_innovation_accepted_m = 0.0;
+    double max_abs_innovation_rejected_m = 0.0;
+    double innovation_reset_threshold_m = 0.0;
 };
 
 struct Diagnostics {
@@ -61,6 +85,7 @@ struct Diagnostics {
     double max_abs_innovation_accepted_m = 0.0;
     double max_abs_innovation_rejected_m = 0.0;
     double innovation_reset_threshold_m = 0.0;
+    std::vector<SignalDiagnostics> per_signal;
 };
 
 struct Result {
@@ -90,6 +115,10 @@ inline bool validAdrState(const Observation& observation) {
     // with an explicit loss marker even if a numeric carrier is present.
     return observation.valid && observation.has_carrier_phase &&
            !observation.loss_of_lock && observation.lli == 0U;
+}
+
+inline bool isPrimaryMultiSignal(SignalType signal) {
+    return signal == SignalType::GPS_L1CA || signal == SignalType::GAL_E1;
 }
 
 }  // namespace detail
@@ -134,17 +163,51 @@ inline Result apply(const ObservationSeries& input,
         return result;
     }
 
-    const double innovation_reset_threshold_m =
-        observable_upstream::pairThreshold(
-            observable_upstream::bandForSignal(config.signal), 'P');
-    if (config.enable_innovation_reset &&
-        (!std::isfinite(innovation_reset_threshold_m) ||
-         !(innovation_reset_threshold_m > 0.0))) {
-        result.error = "carrier-code innovation reset lacks an upstream P threshold";
-        return result;
+    std::vector<SignalType> selected_signals;
+    if (config.signals.empty()) {
+        selected_signals.push_back(config.signal);
+    } else {
+        for (const SignalType signal : config.signals) {
+            if (!detail::isPrimaryMultiSignal(signal)) {
+                result.error =
+                    "carrier-code multi-signal selection only supports GPS_L1CA and GAL_E1";
+                return result;
+            }
+            if (std::find(selected_signals.begin(), selected_signals.end(), signal) !=
+                selected_signals.end()) {
+                result.error = "carrier-code multi-signal selection contains a duplicate";
+                return result;
+            }
+            selected_signals.push_back(signal);
+        }
+        if (selected_signals.empty()) {
+            result.error = "carrier-code multi-signal selection is empty";
+            return result;
+        }
     }
-    result.diagnostics.innovation_reset_threshold_m =
-        config.enable_innovation_reset ? innovation_reset_threshold_m : 0.0;
+
+    std::map<SignalType, std::size_t> signal_diagnostic_indices;
+    for (const SignalType signal : selected_signals) {
+        const double threshold = observable_upstream::pairThreshold(
+            observable_upstream::bandForSignal(signal), 'P');
+        if (config.enable_innovation_reset &&
+            (!std::isfinite(threshold) || !(threshold > 0.0))) {
+            result.error = "carrier-code innovation reset lacks an upstream P threshold";
+            return result;
+        }
+        SignalDiagnostics signal_diagnostics;
+        signal_diagnostics.signal = signal;
+        signal_diagnostics.innovation_reset_threshold_m =
+            config.enable_innovation_reset ? threshold : 0.0;
+        signal_diagnostic_indices.emplace(signal,
+                                          result.diagnostics.per_signal.size());
+        result.diagnostics.per_signal.push_back(signal_diagnostics);
+        if (result.diagnostics.per_signal.size() == 1U) {
+            // Retain the historical aggregate field for single-signal callers.
+            result.diagnostics.innovation_reset_threshold_m =
+                signal_diagnostics.innovation_reset_threshold_m;
+        }
+    }
 
     using Key = std::pair<SatelliteId, SignalType>;
     std::map<Key, detail::ArcState> arcs;
@@ -166,24 +229,32 @@ inline Result apply(const ObservationSeries& input,
                                     ? 0
                                     : hardware_clock_counts[epoch_index];
         for (auto& observation : epoch.observations) {
-            if (observation.signal != config.signal) continue;
+            const auto signal_diagnostic_it =
+                signal_diagnostic_indices.find(observation.signal);
+            if (signal_diagnostic_it == signal_diagnostic_indices.end()) continue;
+            auto& signal_diagnostics =
+                result.diagnostics.per_signal[signal_diagnostic_it->second];
             ++result.diagnostics.target_rows;
+            ++signal_diagnostics.target_rows;
             const Key key{observation.satellite, observation.signal};
 
             if (!observation.valid || !observation.has_pseudorange ||
                 !detail::finitePositive(observation.pseudorange)) {
                 arcs.erase(key);
                 ++result.diagnostics.reset_invalid_code;
+                ++signal_diagnostics.reset_invalid_code;
                 continue;
             }
             if (observation.loss_of_lock) {
                 arcs.erase(key);
                 ++result.diagnostics.reset_adr;
+                ++signal_diagnostics.reset_adr;
                 continue;
             }
             if ((observation.lli & 0x01U) != 0U) {
                 arcs.erase(key);
                 ++result.diagnostics.reset_cycle_slip;
+                ++signal_diagnostics.reset_cycle_slip;
                 continue;
             }
             const double wavelength = signalWavelengthMeters(observation);
@@ -194,9 +265,11 @@ inline Result apply(const ObservationSeries& input,
                 !std::isfinite(adr_m) || std::abs(adr_m) >= 1.0e9) {
                 arcs.erase(key);
                 ++result.diagnostics.reset_missing_or_nonfinite_adr;
+                ++signal_diagnostics.reset_missing_or_nonfinite_adr;
                 continue;
             }
             ++result.diagnostics.eligible_rows;
+            ++signal_diagnostics.eligible_rows;
 
             auto previous_it = arcs.find(key);
             if (previous_it != arcs.end()) {
@@ -205,11 +278,13 @@ inline Result apply(const ObservationSeries& input,
                 if (elapsed_ms <= 0 || elapsed_ms > max_gap_ms) {
                     arcs.erase(previous_it);
                     ++result.diagnostics.reset_gap;
+                    ++signal_diagnostics.reset_gap;
                     previous_it = arcs.end();
                 } else if (config.require_hardware_clock_counts &&
                            clock_count != previous.clock_count) {
                     arcs.erase(previous_it);
                     ++result.diagnostics.reset_clock_discontinuity;
+                    ++signal_diagnostics.reset_clock_discontinuity;
                     previous_it = arcs.end();
                 }
             }
@@ -219,6 +294,7 @@ inline Result apply(const ObservationSeries& input,
                                              observation.pseudorange, 1U,
                                              clock_count};
                 ++result.diagnostics.arcs_started;
+                ++signal_diagnostics.arcs_started;
                 continue;
             }
 
@@ -232,10 +308,12 @@ inline Result apply(const ObservationSeries& input,
                 arcs.erase(previous_it);
                 ++result.diagnostics.rejected_nonfinite_level;
                 ++result.diagnostics.reset_missing_or_nonfinite_adr;
+                ++signal_diagnostics.reset_missing_or_nonfinite_adr;
                 continue;
             }
             if (config.enable_innovation_reset &&
-                std::abs(innovation) > innovation_reset_threshold_m) {
+                std::abs(innovation) >
+                    signal_diagnostics.innovation_reset_threshold_m) {
                 // The raw code is the only safe emitted value after a
                 // discontinuity: do not smooth across a suspected code/ADR
                 // seam and do not synthesize a corrected coordinate.
@@ -243,7 +321,12 @@ inline Result apply(const ObservationSeries& input,
                     result.diagnostics.max_abs_innovation_rejected_m,
                     std::abs(innovation));
                 ++result.diagnostics.reset_innovation;
+                ++signal_diagnostics.reset_innovation;
+                signal_diagnostics.max_abs_innovation_rejected_m = std::max(
+                    signal_diagnostics.max_abs_innovation_rejected_m,
+                    std::abs(innovation));
                 ++result.diagnostics.arcs_started;
+                ++signal_diagnostics.arcs_started;
                 arcs[key] = detail::ArcState{timestamp_ms, adr_m,
                                              observation.pseudorange, 1U,
                                              clock_count};
@@ -251,6 +334,9 @@ inline Result apply(const ObservationSeries& input,
             }
             result.diagnostics.max_abs_innovation_accepted_m = std::max(
                 result.diagnostics.max_abs_innovation_accepted_m,
+                std::abs(innovation));
+            signal_diagnostics.max_abs_innovation_accepted_m = std::max(
+                signal_diagnostics.max_abs_innovation_accepted_m,
                 std::abs(innovation));
             const double smoothed =
                 (static_cast<double>(count - 1U) * predicted +
@@ -260,6 +346,7 @@ inline Result apply(const ObservationSeries& input,
                 arcs.erase(previous_it);
                 ++result.diagnostics.rejected_nonfinite_level;
                 ++result.diagnostics.reset_missing_or_nonfinite_adr;
+                ++signal_diagnostics.reset_missing_or_nonfinite_adr;
                 continue;
             }
             observation.pseudorange = smoothed;
@@ -271,6 +358,8 @@ inline Result apply(const ObservationSeries& input,
                 std::abs(phase_increment));
             ++result.diagnostics.smoothed_rows;
             ++result.diagnostics.updates;
+            ++signal_diagnostics.smoothed_rows;
+            ++signal_diagnostics.updates;
             arcs[key] = detail::ArcState{timestamp_ms, adr_m, smoothed, count,
                                          clock_count};
         }
