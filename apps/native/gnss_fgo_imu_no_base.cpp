@@ -9,6 +9,7 @@
 // stream alignment.
 
 #include <libgnss++/algorithms/fgo.hpp>
+#include <libgnss++/algorithms/pdc_state_bridge.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/fusion/fusion_initialization.hpp>
@@ -70,6 +71,7 @@ struct Options {
     bool all_epochs = false;
     bool android_raw_utc_key_contract = false;
     bool fgo_imu_sparse_recovery = false;
+    bool native_pdc_state_bridge = false;
 };
 
 void usage(const char* program) {
@@ -80,7 +82,8 @@ void usage(const char* program) {
                  " --out <submission.csv> --summary-json <summary.json>"
                  " [--dataset-id <id>] [--skip-epochs <n>]"
                  " [--max-epochs 10..30 | --all-epochs]"
-                 " [--android-raw-utc-keys] [--fgo-imu-sparse-recovery]\n";
+                 " [--android-raw-utc-keys] [--fgo-imu-sparse-recovery]"
+                 " [--native-pdc-state-bridge]\n";
 }
 
 bool requireValue(int argc, char** argv, int& index, std::string& value) {
@@ -157,6 +160,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
             options.android_raw_utc_key_contract = true;
         } else if (arg == "--fgo-imu-sparse-recovery") {
             options.fgo_imu_sparse_recovery = true;
+        } else if (arg == "--native-pdc-state-bridge") {
+            options.native_pdc_state_bridge = true;
         } else {
             std::cerr << "Unknown argument: " << arg << "\n";
             return false;
@@ -198,6 +203,13 @@ bool parseArguments(int argc, char** argv, Options& options) {
         (!android_raw || !options.android_raw_utc_key_contract)) {
         std::cerr << "--fgo-imu-sparse-recovery requires Android raw input and "
                      "--android-raw-utc-keys\n";
+        return false;
+    }
+    if (options.native_pdc_state_bridge &&
+        (!android_raw || !options.android_raw_utc_key_contract ||
+         !options.all_epochs || options.skip_epochs != 0)) {
+        std::cerr << "--native-pdc-state-bridge requires Android raw input, "
+                     "--android-raw-utc-keys, --all-epochs, and no skipped epochs\n";
         return false;
     }
     return true;
@@ -342,10 +354,221 @@ struct RawUtcOutputReport {
     double max_edge_hold_gap_ms = 0.0;
 };
 
+struct NativePdcBridgeReport {
+    bool enabled = false;
+    bool ok = false;
+    std::size_t epochs = 0;
+    std::size_t pseudorange_rows = 0;
+    std::size_t doppler_rows = 0;
+    std::size_t motion_intervals = 0;
+    std::size_t valid_position_states = 0;
+    std::size_t rejected_position_states = 0;
+    std::size_t valid_velocity_states = 0;
+    std::size_t state_seeds = 0;
+    int iterations = 0;
+    double initial_cost = 0.0;
+    double final_cost = 0.0;
+    double max_velocity_norm_mps = 0.0;
+    double max_clock_rate_abs_mps = 0.0;
+    double max_normalized_rms = 0.0;
+    std::size_t fgo_seed_displacement_count = 0;
+    double fgo_seed_displacement_p50_m = 0.0;
+    double fgo_seed_displacement_max_m = 0.0;
+    std::string failure;
+};
+
 struct OutputPosition {
     std::int64_t utc_time_millis = 0;
     libgnss::Vector3d position_ecef = libgnss::Vector3d::Zero();
 };
+
+bool populateNativePdcStateBridge(
+    libgnss::FGOProcessor::FGOProblem& problem,
+    NativePdcBridgeReport& report) {
+    report.enabled = true;
+    report.epochs = problem.epochs.size();
+    report.pseudorange_rows = problem.pseudorange_factors.size();
+    report.doppler_rows = problem.undifferenced_doppler_factors.size();
+    if (problem.epochs.empty() || problem.pseudorange_factors.empty()) {
+        report.failure = "native PDC bridge has no pseudorange rows";
+        return false;
+    }
+
+    // buildPseudorangeProblem historically carries a fresh SPP clock in the
+    // receiver_clock_bias_m field as seconds, while all FGO state equations
+    // use metres.  The marker makes this candidate-only normalization
+    // explicit and prevents magnitude-based unit guesses.
+    for (auto& epoch : problem.epochs) {
+        if (!epoch.receiver_clock_bias_is_meters) {
+            if (!std::isfinite(epoch.receiver_clock_bias_m)) {
+                report.failure = "non-finite SPP clock seed";
+                return false;
+            }
+            epoch.receiver_clock_bias_m *= libgnss::constants::SPEED_OF_LIGHT;
+            epoch.receiver_clock_bias_is_meters = true;
+        }
+    }
+
+    std::vector<libgnss::pdc_state_bridge::EpochInput> epochs;
+    epochs.reserve(problem.epochs.size());
+    for (std::size_t epoch_index = 0; epoch_index < problem.epochs.size();
+         ++epoch_index) {
+        const auto& source = problem.epochs[epoch_index];
+        if (!source.position_ecef.allFinite() ||
+            !std::isfinite(source.receiver_clock_bias_m)) {
+            report.failure = "non-finite PDC epoch seed";
+            return false;
+        }
+        epochs.push_back({source.time,
+                          source.position_ecef,
+                          source.receiver_clock_bias_m,
+                          epoch_index < problem.clock_jumps.size()
+                              ? problem.clock_jumps[epoch_index]
+                              : false});
+    }
+
+    std::vector<libgnss::pdc_state_bridge::PseudorangeRow> pseudorange_rows;
+    pseudorange_rows.reserve(problem.pseudorange_factors.size());
+    for (const auto& factor : problem.pseudorange_factors) {
+        if (factor.epoch_index >= epochs.size()) {
+            report.failure = "PDC row epoch index out of range";
+            return false;
+        }
+        pseudorange_rows.push_back({factor.epoch_index,
+                                    factor.satellite,
+                                    factor.clock_group,
+                                    factor.satellite_position_ecef,
+                                    factor.corrected_pseudorange_m,
+                                    factor.sigma_m});
+    }
+    std::vector<libgnss::pdc_state_bridge::DopplerRow> doppler_rows;
+    doppler_rows.reserve(problem.undifferenced_doppler_factors.size());
+    for (const auto& factor : problem.undifferenced_doppler_factors) {
+        if (factor.epoch_index >= epochs.size()) {
+            report.failure = "PDC Doppler row epoch index out of range";
+            return false;
+        }
+        doppler_rows.push_back({factor.epoch_index,
+                                factor.los,
+                                factor.residual_mps,
+                                factor.sigma_mps});
+    }
+
+    libgnss::pdc_state_bridge::Options bridge_options;
+    // Match the dedicated native PDC recipe. These values are physical/config
+    // defaults fixed before truth; this bridge does not learn from the route.
+    bridge_options.max_iterations = 1000;
+    bridge_options.min_pseudorange_rows = 4;
+    bridge_options.min_doppler_rows = 4;
+    bridge_options.pseudorange_huber_threshold_sigma = 1.234;
+    bridge_options.doppler_huber_threshold_sigma = 1.234;
+    bridge_options.position_prior_sigma_m = 1000.0;
+    bridge_options.clock_prior_sigma_m = 1.0e6;
+    bridge_options.velocity_prior_sigma_mps = 1000.0;
+    bridge_options.clock_rate_prior_sigma_mps = 1000.0;
+    bridge_options.motion_sigma_m = 0.1;
+    bridge_options.clock_motion_sigma_m = 0.1;
+    bridge_options.clock_jump_sigma_m = 1.0e6;
+    bridge_options.inter_system_clock_motion_sigma_m = 1.0e-6;
+    bridge_options.clock_rate_between_sigma_mps = 0.1;
+    bridge_options.max_velocity_mps = 70.0;
+    bridge_options.max_clock_rate_mps = 2000.0;
+    bridge_options.max_normalized_rms = 25.0;
+    bridge_options.max_position_norm_m = 1.0e7;
+
+    const auto solve = libgnss::pdc_state_bridge::solve(
+        epochs, pseudorange_rows, doppler_rows, bridge_options);
+    report.motion_intervals = solve.motion_intervals;
+    report.iterations = solve.iterations;
+    report.initial_cost = solve.initial_cost;
+    report.final_cost = solve.final_cost;
+    report.max_velocity_norm_mps = solve.max_velocity_norm_mps;
+    report.max_clock_rate_abs_mps = solve.max_clock_rate_abs_mps;
+    for (const auto& estimate : solve.epochs) {
+        if (estimate.valid) {
+            ++report.valid_position_states;
+            ++report.valid_velocity_states;
+        } else {
+            ++report.rejected_position_states;
+        }
+        if (std::isfinite(estimate.normalized_rms)) {
+            report.max_normalized_rms =
+                std::max(report.max_normalized_rms, estimate.normalized_rms);
+        }
+    }
+    problem.native_pdc_state_seeds.clear();
+    problem.native_pdc_state_seeds.reserve(solve.epochs.size());
+    for (std::size_t epoch_index = 0; epoch_index < solve.epochs.size();
+         ++epoch_index) {
+        const auto& estimate = solve.epochs[epoch_index];
+        if (!estimate.valid) continue;
+        libgnss::FGOProcessor::NativePdcStateSeed seed;
+        seed.epoch_index = epoch_index;
+        seed.position_ecef = estimate.state.position_ecef;
+        seed.velocity_ecef_mps = estimate.state.velocity_ecef_mps;
+        seed.clock_bias_m = estimate.state.clock_bias_m;
+        seed.clock_rate_mps = estimate.state.clock_rate_mps;
+        seed.pseudorange_rows = estimate.pseudorange_rows;
+        seed.doppler_rows = estimate.doppler_rows;
+        seed.normalized_pseudorange_rms = estimate.normalized_rms;
+        seed.has_position = seed.position_ecef.allFinite();
+        seed.has_velocity = seed.velocity_ecef_mps.allFinite();
+        seed.has_clock = std::isfinite(seed.clock_bias_m[0]);
+        seed.has_clock_rate = std::isfinite(seed.clock_rate_mps);
+        if (seed.has_position || seed.has_velocity) {
+            problem.native_pdc_state_seeds.push_back(seed);
+        }
+    }
+    report.state_seeds = problem.native_pdc_state_seeds.size();
+    report.ok = solve.valid && report.state_seeds > 0;
+    if (!report.ok) {
+        std::ostringstream failure;
+        failure << (solve.reason.empty() ? "native PDC state solve failed"
+                                         : solve.reason)
+                << "; converged=" << (solve.converged ? "true" : "false")
+                << "; iterations=" << solve.iterations
+                << "; valid_epochs=" << solve.valid_epochs
+                << "; final_cost=" << solve.final_cost
+                << "; max_velocity_mps=" << solve.max_velocity_norm_mps
+                << "; max_clock_rate_mps=" << solve.max_clock_rate_abs_mps
+                << "; max_normalized_rms=" << report.max_normalized_rms;
+        if (!solve.epochs.empty()) {
+            const auto& first = solve.epochs.front();
+            double initial_sum_squared = 0.0;
+            double initial_max_abs = 0.0;
+            int initial_count = 0;
+            for (const auto& row : pseudorange_rows) {
+                if (row.epoch_index != 0) continue;
+                const double residual =
+                    (row.satellite_position_ecef - epochs.front().seed_position_ecef).norm() +
+                    epochs.front().seed_clock_bias_m - row.corrected_pseudorange_m;
+                if (std::isfinite(residual)) {
+                    initial_sum_squared += residual * residual;
+                    initial_max_abs = std::max(initial_max_abs, std::abs(residual));
+                    ++initial_count;
+                }
+            }
+            failure << "; first_reason=" << first.reason
+                    << "; first_p_rows=" << first.pseudorange_rows
+                    << "; first_d_rows=" << first.doppler_rows
+                    << "; first_pos_norm=" << first.state.position_ecef.norm()
+                    << "; first_pos_seed_norm="
+                    << epochs.front().seed_position_ecef.norm()
+                    << "; first_clock_m=" << first.state.clock_bias_m[0]
+                    << "; first_vel_norm="
+                    << first.state.velocity_ecef_mps.norm()
+                    << "; seed_clock_m=" << epochs.front().seed_clock_bias_m
+                    << "; first_initial_p_rms_m="
+                    << (initial_count > 0
+                            ? std::sqrt(initial_sum_squared /
+                                       static_cast<double>(initial_count))
+                            : std::numeric_limits<double>::quiet_NaN())
+                    << "; first_initial_p_max_m=" << initial_max_abs;
+        }
+        report.failure = failure.str();
+    }
+    return report.ok;
+}
 
 bool buildImuInput(const std::string& path,
                    libgnss::FGOProcessor::FGOProblem& problem,
@@ -572,6 +795,8 @@ std::string makeSummary(const Options& options,
                         const libgnss::FGOProcessor::FGOResult& result,
                         const ImuBuildReport& imu_report,
                         bool fallback,
+                        const NativePdcBridgeReport& pdc_bridge_report =
+                            NativePdcBridgeReport{},
                         const RawUtcOutputReport& raw_utc_report = RawUtcOutputReport{}) {
     std::ostringstream out;
     out << std::setprecision(17);
@@ -587,6 +812,41 @@ std::string makeSummary(const Options& options,
         << "  \"production_default_changed\": false,\n"
         << "  \"fgo_imu_sparse_recovery\": "
         << (options.fgo_imu_sparse_recovery ? "true" : "false") << ",\n"
+        << "  \"native_pdc_state_bridge\": "
+        << (options.native_pdc_state_bridge ? "true" : "false") << ",\n"
+        << "  \"native_pdc_state_bridge_report\": {\n"
+        << "    \"enabled\": "
+        << (pdc_bridge_report.enabled ? "true" : "false") << ",\n"
+        << "    \"ok\": " << (pdc_bridge_report.ok ? "true" : "false") << ",\n"
+        << "    \"epochs\": " << pdc_bridge_report.epochs << ",\n"
+        << "    \"pseudorange_rows\": " << pdc_bridge_report.pseudorange_rows << ",\n"
+        << "    \"doppler_rows\": " << pdc_bridge_report.doppler_rows << ",\n"
+        << "    \"motion_intervals\": " << pdc_bridge_report.motion_intervals << ",\n"
+        << "    \"valid_position_states\": "
+        << pdc_bridge_report.valid_position_states << ",\n"
+        << "    \"rejected_position_states\": "
+        << pdc_bridge_report.rejected_position_states << ",\n"
+        << "    \"valid_velocity_states\": "
+        << pdc_bridge_report.valid_velocity_states << ",\n"
+        << "    \"state_seeds\": " << pdc_bridge_report.state_seeds << ",\n"
+        << "    \"iterations\": " << pdc_bridge_report.iterations << ",\n"
+        << "    \"initial_cost\": " << pdc_bridge_report.initial_cost << ",\n"
+        << "    \"final_cost\": " << pdc_bridge_report.final_cost << ",\n"
+        << "    \"max_velocity_norm_mps\": "
+        << pdc_bridge_report.max_velocity_norm_mps << ",\n"
+        << "    \"max_clock_rate_abs_mps\": "
+        << pdc_bridge_report.max_clock_rate_abs_mps << ",\n"
+        << "    \"max_normalized_rms\": "
+        << pdc_bridge_report.max_normalized_rms << ",\n"
+        << "    \"fgo_seed_displacement_count\": "
+        << pdc_bridge_report.fgo_seed_displacement_count << ",\n"
+        << "    \"fgo_seed_displacement_p50_m\": "
+        << pdc_bridge_report.fgo_seed_displacement_p50_m << ",\n"
+        << "    \"fgo_seed_displacement_max_m\": "
+        << pdc_bridge_report.fgo_seed_displacement_max_m << ",\n"
+        << "    \"failure\": ";
+    writeJsonString(out, pdc_bridge_report.failure);
+    out << "\n  },\n"
         << "  \"skip_epochs\": " << options.skip_epochs << ",\n"
         << "  \"all_epochs\": " << (options.all_epochs ? "true" : "false") << ",\n"
         << "  \"inputs\": {\n"
@@ -895,6 +1155,22 @@ int main(int argc, char** argv) {
         config.retain_sparse_epochs_for_imu = true;
         config.use_multi_frequency_double_difference = true;
     }
+    if (options.native_pdc_state_bridge) {
+        // One frozen bridge recipe: solve the full native P+D+temporal state
+        // from the same in-memory raw rows, then use finite states only as
+        // initial values for the CombinedImuFactor graph. No duplicate P/D
+        // priors are added because the graph owns those measurements.
+        // Secondary-frequency DD is intentionally not enabled here; this is a
+        // PDC-state bridge, not the previously rejected sparse multi-frequency
+        // coverage candidate.
+        config.retain_sparse_epochs_for_imu = true;
+        config.use_doppler_velocity_wls_initialization = true;
+        // Match the already-used raw native SPP seed contract: a receiver-only
+        // first pass avoids rejecting low-count mixed-system epochs before the
+        // in-process P+D state solve sees their finite rows.
+        config.spp_model_intersystem_bias = false;
+        config.use_native_pdc_state_bridge = true;
+    }
     config.pose3_lever_arm_body_m = libgnss::Vector3d::Zero();
     if (android_raw) {
         // The raw path starts SPP from the route-independent Earth-surface
@@ -911,6 +1187,14 @@ int main(int argc, char** argv) {
         processor.buildPseudorangeProblem(epochs, nav);
     if (problem.epochs.size() < 2 || problem.pseudorange_factors.empty()) {
         std::cerr << "no-base problem has insufficient seeded pseudorange factors\n";
+        return 1;
+    }
+
+    NativePdcBridgeReport pdc_bridge_report;
+    if (options.native_pdc_state_bridge &&
+        !populateNativePdcStateBridge(problem, pdc_bridge_report)) {
+        std::cerr << "native PDC state bridge failed closed: "
+                  << pdc_bridge_report.failure << "\n";
         return 1;
     }
 
@@ -972,6 +1256,7 @@ int main(int argc, char** argv) {
                     problem.epochs[i].receiver_clock_bias_m =
                         gnss_solutions[i].receiver_clock_bias *
                         libgnss::constants::SPEED_OF_LIGHT;
+                    problem.epochs[i].receiver_clock_bias_is_meters = true;
                 }
             }
         }
@@ -1020,6 +1305,42 @@ int main(int argc, char** argv) {
         !problem.double_difference_carrier_factors.empty()) {
         std::cerr << "no-base contract violated by problem builder\n";
         return 1;
+    }
+
+    // Keep the bridge's basin effect observable without reading truth: compare
+    // each final FGO position with the corresponding finite PDC initializer.
+    // This is a diagnostic only; it never changes a state or selects a lane.
+    if (options.native_pdc_state_bridge &&
+        !problem.native_pdc_state_seeds.empty()) {
+        std::vector<double> displacements;
+        displacements.reserve(problem.native_pdc_state_seeds.size());
+        for (std::size_t epoch_index = 0; epoch_index < problem.epochs.size();
+             ++epoch_index) {
+            const auto seed_it = std::find_if(
+                problem.native_pdc_state_seeds.begin(),
+                problem.native_pdc_state_seeds.end(),
+                [epoch_index](const auto& seed) {
+                    return seed.epoch_index == epoch_index;
+                });
+            if (seed_it == problem.native_pdc_state_seeds.end() ||
+                epoch_index >= result.solution.solutions.size()) {
+                continue;
+            }
+            const auto& solution = result.solution.solutions[epoch_index];
+            const double displacement =
+                (solution.position_ecef - seed_it->position_ecef).norm();
+            if (std::isfinite(displacement)) displacements.push_back(displacement);
+        }
+        if (!displacements.empty()) {
+            std::sort(displacements.begin(), displacements.end());
+            const std::size_t middle = displacements.size() / 2U;
+            pdc_bridge_report.fgo_seed_displacement_count = displacements.size();
+            pdc_bridge_report.fgo_seed_displacement_p50_m =
+                (displacements.size() % 2U == 0U)
+                    ? 0.5 * (displacements[middle - 1U] + displacements[middle])
+                    : displacements[middle];
+            pdc_bridge_report.fgo_seed_displacement_max_m = displacements.back();
+        }
     }
 
     RawUtcOutputReport raw_utc_report;
@@ -1100,7 +1421,8 @@ int main(int argc, char** argv) {
         return 1;
     }
     const std::string summary = makeSummary(options, problem, result, imu_report,
-                                            fallback, raw_utc_report);
+                                            fallback, pdc_bridge_report,
+                                            raw_utc_report);
     if (!atomicWrite(options.summary_path, summary)) {
         std::cerr << "failed to atomically publish summary\n";
         return 1;

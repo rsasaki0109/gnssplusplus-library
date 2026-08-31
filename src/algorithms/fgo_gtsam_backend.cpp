@@ -97,6 +97,25 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
         gnss_lever_arm = gtsam::gnss::LeverArm(lever_arm_body, ecef_T_nav);
     }
 
+    // The native PDC bridge is solved in this process from the same raw P/D
+    // rows that are added below.  Use its finite state only as an initializer;
+    // never add a second PDC prior/factor for those already-owned rows.
+    auto nativePdcSeedFor = [&](std::size_t epoch)
+        -> const FGOProcessor::NativePdcStateSeed* {
+        if (!config.use_native_pdc_state_bridge) return nullptr;
+        for (const auto& seed : problem.native_pdc_state_seeds) {
+            if (seed.epoch_index == epoch) return &seed;
+        }
+        return nullptr;
+    };
+    auto positionSeedEcef = [&](std::size_t epoch) -> Vector3d {
+        const auto* seed = nativePdcSeedFor(epoch);
+        if (seed != nullptr && seed->has_position && seed->position_ecef.allFinite()) {
+            return seed->position_ecef;
+        }
+        return problem.epochs[epoch].position_ecef;
+    };
+
     // Initial body->nav (ENU) attitude from Stage-1 alignment; used as the
     // dead-reckoning start point for the 2b pose attitude seeds below.
     const Rot3 init_attitude_nav(problem.imu.init_attitude_body_to_nav);
@@ -124,9 +143,9 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
             // 2a: pose in ECEF, identity attitude (unobservable without IMU);
             // translation = antenna seed minus lever arm.
             initial.insert(positionKey(i),
-                           Pose3(Rot3(), Point3(problem.epochs[i].position_ecef) - lever_arm_body));
+                           Pose3(Rot3(), Point3(positionSeedEcef(i)) - lever_arm_body));
         } else {
-            initial.insert(positionKey(i), Point3(problem.epochs[i].position_ecef));
+            initial.insert(positionKey(i), Point3(positionSeedEcef(i)));
         }
     }
 
@@ -136,6 +155,37 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
         // is not a concrete GTSAM value on all supported Eigen versions.
         const gtsam::Vector3 zero_velocity = gtsam::Vector3::Zero();
         for (std::size_t i = 0; i < num_epochs; ++i) {
+            const auto* pdc_seed = nativePdcSeedFor(i);
+            if (pdc_seed != nullptr && pdc_seed->has_velocity &&
+                pdc_seed->velocity_ecef_mps.allFinite() &&
+                pdc_seed->has_clock_rate &&
+                std::isfinite(pdc_seed->clock_rate_mps)) {
+                const Vector3d velocity_nav = ecef2enu(
+                    pdc_seed->velocity_ecef_mps,
+                    gnss_velocity_origin_lat_rad,
+                    gnss_velocity_origin_lon_rad);
+                if (velocity_nav.allFinite()) {
+                    initial.insert(velocityKey(i), gtsam::Vector3(velocity_nav));
+                    initial.insert(dopplerClockDriftKey(i), pdc_seed->clock_rate_mps);
+                    continue;
+                }
+            }
+            if (config.use_doppler_velocity_wls_initialization &&
+                i < problem.doppler_velocity_wls_estimates.size() &&
+                problem.doppler_velocity_wls_estimates[i].valid) {
+                const auto& estimate = problem.doppler_velocity_wls_estimates[i];
+                const Vector3d velocity_nav = ecef2enu(
+                    estimate.velocity_ecef_mps,
+                    gnss_velocity_origin_lat_rad,
+                    gnss_velocity_origin_lon_rad);
+                if (velocity_nav.allFinite() &&
+                    std::isfinite(estimate.clock_rate_mps)) {
+                    initial.insert(velocityKey(i), gtsam::Vector3(velocity_nav));
+                    initial.insert(dopplerClockDriftKey(i),
+                                   estimate.clock_rate_mps);
+                    continue;
+                }
+            }
             initial.insert(velocityKey(i), zero_velocity);
             initial.insert(dopplerClockDriftKey(i), 0.0);
         }
@@ -212,7 +262,7 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
         std::vector<Point3> antenna_nav(num_epochs);
         for (std::size_t i = 0; i < num_epochs; ++i) {
             antenna_nav[i] = Point3(ecef2enu(
-                problem.epochs[i].position_ecef - problem.imu.nav_origin_ecef,
+                positionSeedEcef(i) - problem.imu.nav_origin_ecef,
                 problem.imu.nav_origin_lat_rad, problem.imu.nav_origin_lon_rad));
         }
 
@@ -224,11 +274,22 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
             initial.insert(positionKey(i), Pose3(attitude_seed[i], body_nav));
 
             Vector3d vel = problem.imu.init_velocity_nav;
+            const auto* pdc_seed = nativePdcSeedFor(i);
+            if (pdc_seed != nullptr && pdc_seed->has_velocity &&
+                pdc_seed->velocity_ecef_mps.allFinite()) {
+                const Vector3d seed_velocity_nav = ecef2enu(
+                    pdc_seed->velocity_ecef_mps,
+                    problem.imu.nav_origin_lat_rad,
+                    problem.imu.nav_origin_lon_rad);
+                if (seed_velocity_nav.allFinite()) vel = seed_velocity_nav;
+            }
             if (num_epochs >= 2) {
                 const std::size_t a = (i + 1 < num_epochs) ? i : i - 1;
                 const double dt = problem.epochs[a + 1].time - problem.epochs[a].time;
-                if (dt > 1e-3) {
+                if (pdc_seed == nullptr || !pdc_seed->has_velocity) {
+                  if (dt > 1e-3) {
                     vel = (antenna_nav[a + 1] - antenna_nav[a]) / dt;
+                  }
                 }
             }
             initial.insert(velocityKey(i), gtsam::Vector3(vel));
@@ -295,9 +356,15 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
     auto ensureBaseClock = [&](std::size_t epoch) -> gtsam::Key {
         const gtsam::Key key = clockKey(epoch);
         if (inserted_clock_keys.insert(key).second) {
+            const auto* pdc_seed = nativePdcSeedFor(epoch);
+            const double clock_bias_m =
+                pdc_seed != nullptr && pdc_seed->has_clock &&
+                        std::isfinite(pdc_seed->clock_bias_m[0])
+                    ? pdc_seed->clock_bias_m[0]
+                    : (epoch < num_epochs ? problem.epochs[epoch].receiver_clock_bias_m
+                                           : 0.0);
             initial.insert(key, epoch < num_epochs
-                                    ? problem.epochs[epoch].receiver_clock_bias_m /
-                                          constants::SPEED_OF_LIGHT
+                                    ? clock_bias_m / constants::SPEED_OF_LIGHT
                                     : 0.0);
         }
         return key;

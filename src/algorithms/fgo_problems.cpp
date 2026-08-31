@@ -65,6 +65,7 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
     spp_config.apply_atmospheric_corrections =
         config_.use_ionosphere_model || config_.use_troposphere_model;
     spp_config.use_multi_constellation = config_.use_multi_constellation;
+    spp_config.model_intersystem_bias = config_.spp_model_intersystem_bias;
 
     SPPProcessor spp_processor(spp_config);
     spp_processor.initialize(spp_processor_config);
@@ -110,6 +111,11 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
         if (spp_solution.isValid()) {
             seed.position_ecef = spp_solution.position_ecef;
             seed.receiver_clock_bias_m = spp_solution.receiver_clock_bias;
+            // SPP's internal/returned clock state is a range bias in metres
+            // (see SPPProcessor::calculatePredictedRange), despite the legacy
+            // PositionSolution field comment saying seconds.  Mark it
+            // explicitly so the opt-in PDC bridge cannot multiply it by c.
+            seed.receiver_clock_bias_is_meters = true;
             seed.fresh_spp_solution = true;
             last_valid_seed_position_ecef = seed.position_ecef;
             last_valid_seed_clock_bias_m = seed.receiver_clock_bias_m;
@@ -117,9 +123,11 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
         } else if (have_last_valid_seed) {
             seed.position_ecef = last_valid_seed_position_ecef;
             seed.receiver_clock_bias_m = last_valid_seed_clock_bias_m;
+            seed.receiver_clock_bias_is_meters = true;
         } else if (epoch.receiver_position.norm() > 1e6) {
             seed.position_ecef = epoch.receiver_position;
             seed.receiver_clock_bias_m = epoch.receiver_clock_bias * constants::SPEED_OF_LIGHT;
+            seed.receiver_clock_bias_is_meters = true;
         } else {
             ++problem.diagnostics.skipped_epochs_without_seed;
             continue;

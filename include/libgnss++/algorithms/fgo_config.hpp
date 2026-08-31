@@ -51,6 +51,10 @@ struct Config {
         double max_float_position_jump_m = 0.0;
 
         bool use_spp_seed = true;
+        // Raw no-base research paths may use the dedicated receiver-only SPP
+        // seed contract. The historical default keeps inter-system clock
+        // states enabled for compatibility.
+        bool spp_model_intersystem_bias = true;
         // Research-only raw Android recovery switch. When enabled, epochs
         // with fewer than min_satellites_per_epoch usable measurements are
         // retained so the IMU/temporal graph can carry state through short
@@ -156,6 +160,11 @@ struct Config {
         // fail-closed; production/default graphs remain byte-compatible when
         // this switch is false.
         bool use_doppler_velocity_wls_initialization = false;
+        // Research-only in-memory native PDC state bridge. When enabled,
+        // FGO backends may use finite, quality-gated PDC position/velocity/
+        // clock seeds supplied on FGOProblem::native_pdc_state_seeds. No
+        // additional P/D factors are added and the default graph is unchanged.
+        bool use_native_pdc_state_bridge = false;
         bool use_single_difference_doppler_factors = false;
         bool use_single_difference_tdcp_factors = false;
         bool use_velocity_states = false;

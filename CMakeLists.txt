@@ -185,6 +185,7 @@ set(GNSS_SOLVER_SOURCES
     src/algorithms/fgo.cpp
     src/algorithms/fgo_problems.cpp
     src/algorithms/fgo_shadows.cpp
+    src/algorithms/pdc_state_bridge.cpp
     src/algorithms/ppp_env_overrides.cpp
 )
 

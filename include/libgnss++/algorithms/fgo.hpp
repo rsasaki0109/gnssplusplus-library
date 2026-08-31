@@ -10,6 +10,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <array>
 #include <limits>
 #include <map>
 #include <set>
@@ -35,6 +36,10 @@ public:
         GNSSTime time;
         Vector3d position_ecef = Vector3d::Zero();
         double receiver_clock_bias_m = 0.0;
+        // The historical SPP seed stores receiver_clock_bias_m in seconds
+        // until an opt-in raw bridge normalizes it.  Keep the marker explicit
+        // so a bridge never guesses units from magnitude.
+        bool receiver_clock_bias_is_meters = false;
         // True only when position_ecef came from a valid SPP solve at this
         // epoch; false for last-valid/header fallbacks.
         bool fresh_spp_solution = false;
@@ -299,6 +304,41 @@ public:
         ImuNoiseParams noise;
     };
 
+    /**
+     * @brief A truth-free native PDC state used as an optional initializer.
+     *
+     * This is intentionally a value object, not a coordinate-file interface.
+     * The smartphone bridge constructs it in memory from the same
+     * PseudorangeFactor/UndifferencedDopplerFactor rows consumed by FGO.  A
+     * backend may reject an individual component by its `has_*` flag. The
+     * P/D measurements are not duplicated as priors; the production/default
+     * graph remains unchanged when the bridge config flag is false.
+     */
+    // State-only handoff from the in-process native PDC solve. This is an
+    // initializer/diagnostic record, not an additional graph factor: the same
+    // raw P/D observations remain owned by the normal FGO graph.
+    struct NativePdcStateSeed {
+        std::size_t epoch_index = 0;
+        Vector3d position_ecef = Vector3d::Zero();
+        Vector3d velocity_ecef_mps = Vector3d::Zero();
+        std::array<double, 5> clock_bias_m = {0.0, 0.0, 0.0, 0.0, 0.0};
+        double clock_rate_mps = 0.0;
+        double position_sigma_m = 0.0;
+        double velocity_sigma_mps = 0.0;
+        double clock_sigma_m = 0.0;
+        double clock_rate_sigma_mps = 0.0;
+        int pseudorange_rows = 0;
+        int doppler_rows = 0;
+        int rank = 0;
+        double condition_number = std::numeric_limits<double>::infinity();
+        double normalized_pseudorange_rms =
+            std::numeric_limits<double>::infinity();
+        bool has_position = false;
+        bool has_velocity = false;
+        bool has_clock = false;
+        bool has_clock_rate = false;
+    };
+
     struct FGOProblem {
         std::vector<EpochSeed> epochs;
         ImuInput imu;  ///< Milestone 2b IMU inputs (valid only when populated).
@@ -337,6 +377,9 @@ public:
         // validator looks up wavelength from `signal` instead.
         std::vector<DoubleDifferenceCarrierFactor> excluded_double_difference_carrier_factors;
         std::vector<AmbiguityBetweenFactor> ambiguity_between_factors;
+        // Optional in-memory PDC state bridge.  Empty unless a caller has
+        // explicitly enabled and populated the research-only bridge.
+        std::vector<NativePdcStateSeed> native_pdc_state_seeds;
         FGOProblemDiagnostics diagnostics;
     };
 
@@ -565,6 +608,10 @@ public:
         std::size_t selective_arc_restart_skipped_no_arc = 0;
         std::size_t graph_factors = 0;
         std::size_t graph_values = 0;
+        std::size_t native_pdc_position_seeds = 0;
+        std::size_t native_pdc_velocity_seeds = 0;
+        std::size_t native_pdc_clock_seeds = 0;
+        std::size_t native_pdc_clock_rate_seeds = 0;
         std::size_t imu_intervals = 0;  ///< 2b: CombinedImuFactors added between epochs
         std::size_t smoother_max_window_vars = 0;  ///< 2c: peak in-window variable count
         std::size_t smoother_updates = 0;          ///< 2c: number of smoother.update() calls

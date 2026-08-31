@@ -1,0 +1,126 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-pdc-imu-bridge-score-result.v1",
+  "status": "train-gate-pass",
+  "candidate_id": "native-fgo-pdc-imu-bridge-v1",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_imu_bridge_freeze_v1.json",
+  "freeze_record_sha256": "9dcf58a186b62de8f3dadfbb47f10f3ee0744c81998dd2e1821cb833c099b2c1",
+  "freeze_manifest": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_imu_bridge_freeze_v1_manifest.json",
+  "freeze_manifest_sha256": "ce27cd9a970a256031727997fae13f9b8b702705a65b09a34761b4230a58d870",
+  "dataset_id": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+  "truth_policy": {
+    "truth_path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv",
+    "truth_sha256": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a",
+    "truth_read_after_freeze_count": 3,
+    "truth_read_after_freeze_reason": [
+      "first read inspected row/key schema before scoring",
+      "second read was the initial metric invocation",
+      "third read reran the same frozen metric calculation to capture all four variants after the initial output was incomplete"
+    ],
+    "score_evaluation_passes": 1,
+    "pre_score_schema_or_metric_audit_reads": 2,
+    "truth_materialized_after_freeze": false,
+    "ground_truth_members_read": true,
+    "mat_members_read": false,
+    "validation_truth_open_count": 0,
+    "holdout_truth_open_count": 0,
+    "test_truth_open_count": 0,
+    "token_or_kaggle_access": false,
+    "post_score_algorithm_or_parameter_changes": false,
+    "leaderboard_used_for_tuning": false
+  },
+  "candidate_artifacts": {
+    "submission": "output/smartphone-r5/phase9-native-pdc-imu-bridge-v8/submission.csv",
+    "submission_sha256": "2a48661c5d18e80dbd9ee5e73efe64355d802cdc0541168ad2dab94c10c785f8",
+    "submission_bytes": 105162,
+    "summary": "output/smartphone-r5/phase9-native-pdc-imu-bridge-v8/summary.json",
+    "summary_sha256": "4c7db2b8b80fe282c92e3f27a865171df9aa47c983e7e10d507d155af87266f5",
+    "rows": 1383,
+    "truth_matched_rows": 1383,
+    "missing_extra_nonfinite": 0
+  },
+  "candidate_metrics": {
+    "availability_ratio": 1.0,
+    "truth_coverage_ratio": 1.0,
+    "vertical_p95_abs_m": null,
+    "vertical_metric_note": "The native four-column phone submission contract emits latitude/longitude only; no altitude estimate is emitted, so vertical is not scored.",
+    "wgs84_vincenty": {
+      "p50_linear_n_minus_1_m": 3.0583656044707803,
+      "p95_linear_n_minus_1_m": 8.796298176144397,
+      "p50_nearest_rank_ceiling_m": 3.0583656044707803,
+      "p95_nearest_rank_ceiling_m": 8.796481358667686,
+      "diagnostic_linear_m": 5.927331890307588,
+      "diagnostic_nearest_rank_m": 5.9274234815692335,
+      "max_m": 16.825412978906698
+    },
+    "haversine_sphere": {
+      "p50_linear_n_minus_1_m": 3.058299816708899,
+      "p95_linear_n_minus_1_m": 8.793371879287287,
+      "p50_nearest_rank_ceiling_m": 3.058299816708899,
+      "p95_nearest_rank_ceiling_m": 8.795198189997027,
+      "diagnostic_linear_m": 5.925835847998093,
+      "diagnostic_nearest_rank_m": 5.926749003352963,
+      "max_m": 16.786162695583666
+    },
+    "diagnostic_mean_linear_m": 5.926583869152841,
+    "diagnostic_mean_nearest_rank_m": 5.927086242461098
+  },
+  "comparators": {
+    "phase8_legacy_factor_selection_comparator": {
+      "artifact": "output/smartphone-r5/phase9-baseline-diagnostic/submission.csv",
+      "availability_ratio": 1.0,
+      "truth_coverage_ratio": 1.0,
+      "wgs84_p50_linear_n_minus_1_m": 158.2845963671314,
+      "wgs84_p95_linear_n_minus_1_m": 340.67438800415283,
+      "diagnostic_mean_linear_m": 249.2329532397934,
+      "comparison_scope": "Phase8 legacy factor-selection comparator, not a same-problem no-bridge ablation",
+      "problem_contract_differences": [
+        "spp_model_intersystem_bias=false in the bridge run",
+        "sparse epoch retention in the bridge run",
+        "bridge P rows=27462 versus comparator P rows=4874",
+        "bridge final graph has 1384 problem epochs versus comparator 1097"
+      ]
+    },
+    "prior_native_pdc_state_contract": {
+      "artifact": "output/smartphone-r5/native-gnss-pdc-state-contract-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/keyed.csv",
+      "wgs84_p50_linear_n_minus_1_m": 72.05920544608776,
+      "wgs84_p95_linear_n_minus_1_m": 72.75850459689087,
+      "diagnostic_mean_linear_m": 72.32729504573376
+    },
+    "prior_native_pdc_direct": {
+      "artifact": "output/smartphone-r5/native-gnss-pdc-direct-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/keyed.csv",
+      "wgs84_p50_linear_n_minus_1_m": 1.7223536260496444,
+      "wgs84_p95_linear_n_minus_1_m": 180.49693679604457,
+      "diagnostic_mean_linear_m": 91.1951020377973
+    }
+  },
+  "gate": {
+    "fixed_wgs84_linear_threshold_m": 68.0475838937948,
+    "candidate_wgs84_diagnostic_linear_m": 5.927331890307588,
+    "strict_horizontal_gate_passed": true,
+    "coverage_gate_passed": true,
+    "finite_key_gate_passed": true,
+    "all_four_variants_reported": true,
+    "vertical_gate": "not_applicable_to_latitude_longitude_only_output",
+    "promotion_decision": "development-only candidate passes this single route gate; no validation/holdout promotion authorized by this record"
+  },
+  "runtime": {
+    "wall_seconds": 10.83,
+    "max_rss_kb": 155764,
+    "pdc_iterations": 48,
+    "fgo_iterations": 7,
+    "pdc_valid_state_seeds": 207,
+    "combined_imu_intervals": 1383,
+    "pdc_fgo_seed_displacement_p50_m": 461.0862621490895,
+    "pdc_fgo_seed_displacement_max_m": 984.7570120024196
+  },
+  "attribution_limits": {
+    "pdc_seed_effect_isolated": false,
+    "reason": "The final FGO moved materially from the 207 finite PDC seeds and the bridge changed raw epoch/factor selection relative to the Phase8 comparator.",
+    "same_factor_no_seed_ablation": "not_generated_after_truth_evaluation_to_preserve_the_sealed_candidate_and_no_post_score_rerun_contract"
+  },
+  "reproduction": {
+    "truth_free_command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:$LD_LIBRARY_PATH build/apps/gnss_fgo_imu_no_base --android-gnss <device_gnss.csv> --android-imu <device_imu.csv> --nav <brdc.nav> --out <submission.csv> --summary-json <summary.json> --all-epochs --android-raw-utc-keys --native-pdc-state-bridge",
+    "metric_implementation": "apps/commands/benchmarks/gnss_smartphone_kaggle.py and gnss_smartphone_trajectory_smoother_eval.py",
+    "no_solver_rerun_after_truth": true
+  }
+}

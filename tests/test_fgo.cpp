@@ -3,6 +3,7 @@
 #include <libgnss++/algorithms/doppler_velocity_wls.hpp>
 #include <libgnss++/algorithms/fgo.hpp>
 #include <libgnss++/algorithms/fgo_ddpr_gnc.hpp>
+#include <libgnss++/algorithms/pdc_state_bridge.hpp>
 #include <libgnss++/core/constants.hpp>
 
 #include <array>
@@ -12,6 +13,113 @@
 #include <vector>
 
 using namespace libgnss;
+
+TEST(PdcStateBridgeTest, SolvesSyntheticNativePositionAndClock) {
+    const Vector3d seed(6'370'000.0, 1'000.0, 2'000.0);
+    const Vector3d target = seed + Vector3d(1.25, -2.0, 0.75);
+    constexpr double clock_bias_m = 12.5;
+    const Vector3d velocity(4.0, -2.0, 1.0);
+    constexpr double clock_rate_mps = 0.3;
+    const std::vector<Vector3d> satellites = {
+        {20'000'000.0, 0.0, 0.0},
+        {0.0, 20'000'000.0, 0.0},
+        {0.0, 0.0, 20'000'000.0},
+        {-20'000'000.0, -20'000'000.0, 20'000'000.0},
+        {20'000'000.0, -20'000'000.0, -20'000'000.0},
+    };
+    const std::vector<Vector3d> lines = {
+        {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0},
+        {-0.5773502691896258, -0.5773502691896258, 0.5773502691896258},
+        {0.5773502691896258, -0.5773502691896258, -0.5773502691896258}};
+    std::vector<pdc_state_bridge::PseudorangeRow> pseudorange;
+    std::vector<pdc_state_bridge::DopplerRow> doppler;
+    for (std::size_t i = 0; i < lines.size(); ++i) {
+        const Vector3d satellite = target + 20'000'000.0 * lines[i];
+        pseudorange.push_back({0, SatelliteId{}, GNSSSystem::GPS, satellite,
+                               (satellite - target).norm() + clock_bias_m, 0.5});
+        doppler.push_back({0, lines[i], lines[i].dot(velocity) + clock_rate_mps,
+                           0.05});
+    }
+    const std::vector<pdc_state_bridge::EpochInput> epochs = {
+        {GNSSTime(2200, 100.0), seed, 0.0, false}};
+    pdc_state_bridge::Options options;
+    options.max_iterations = 100;
+    const auto result = pdc_state_bridge::solve(epochs, pseudorange, doppler,
+                                                options);
+    ASSERT_TRUE(result.valid) << result.reason;
+    ASSERT_EQ(result.epochs.size(), 1U);
+    const auto& estimate = result.epochs.front();
+    ASSERT_TRUE(estimate.valid) << estimate.reason;
+    EXPECT_NEAR((estimate.state.position_ecef - target).norm(), 0.0, 1e-3);
+    EXPECT_NEAR(estimate.state.clock_bias_m[0], clock_bias_m, 1e-3);
+    EXPECT_NEAR((estimate.state.velocity_ecef_mps - velocity).norm(), 0.0,
+                1e-3);
+    EXPECT_NEAR(estimate.state.clock_rate_mps, clock_rate_mps, 1e-3);
+    EXPECT_LT(result.final_cost, result.initial_cost);
+}
+
+TEST(PdcStateBridgeTest, RejectsInvalidDopplerGeometryBeforeSolving) {
+    const Vector3d seed(6'370'000.0, 0.0, 0.0);
+    std::vector<pdc_state_bridge::PseudorangeRow> pseudorange;
+    const std::vector<Vector3d> lines = {
+        {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0},
+        {-0.5773502691896258, -0.5773502691896258, 0.5773502691896258}};
+    for (const auto& line : lines) {
+        const Vector3d satellite = seed + 20'000'000.0 * line;
+        pseudorange.push_back({0, SatelliteId{}, GNSSSystem::GPS, satellite,
+                               (satellite - seed).norm(), 1.0});
+    }
+    const std::vector<pdc_state_bridge::DopplerRow> invalid_doppler = {
+        {0, Vector3d::Zero(), 0.0, 0.2}};
+    const std::vector<pdc_state_bridge::EpochInput> epochs = {
+        {GNSSTime(2200, 100.0), seed, 0.0, false}};
+    const auto result = pdc_state_bridge::solve(epochs, pseudorange,
+                                                invalid_doppler);
+    EXPECT_FALSE(result.valid);
+    EXPECT_EQ(result.reason, "invalid-doppler-row");
+}
+
+TEST(PdcStateBridgeTest, SolvesTemporalStatesAndHonorsClockJumpBoundary) {
+    const Vector3d seed0(6'370'000.0, 1'000.0, 2'000.0);
+    const Vector3d velocity(4.0, -2.0, 1.0);
+    constexpr double clock0_m = 12.5;
+    constexpr double clock_rate_mps = 0.3;
+    const std::vector<Vector3d> lines = {
+        {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0},
+        {-0.5773502691896258, -0.5773502691896258, 0.5773502691896258},
+        {0.5773502691896258, -0.5773502691896258, -0.5773502691896258}};
+    const std::vector<pdc_state_bridge::EpochInput> epochs = {
+        {GNSSTime(2200, 100.0), seed0, 0.0, false},
+        {GNSSTime(2200, 101.0), seed0 + velocity, 0.0, true}};
+    std::vector<pdc_state_bridge::PseudorangeRow> pseudorange;
+    std::vector<pdc_state_bridge::DopplerRow> doppler;
+    for (std::size_t epoch = 0; epoch < epochs.size(); ++epoch) {
+        const Vector3d target = seed0 + static_cast<double>(epoch) * velocity;
+        const double clock = clock0_m + static_cast<double>(epoch) * clock_rate_mps;
+        for (const auto& line : lines) {
+            const Vector3d satellite = target + 20'000'000.0 * line;
+            pseudorange.push_back({epoch, SatelliteId{}, GNSSSystem::GPS,
+                                   satellite, (satellite - target).norm() + clock,
+                                   0.5});
+            doppler.push_back({epoch, line, line.dot(velocity) + clock_rate_mps,
+                               0.05});
+        }
+    }
+    pdc_state_bridge::Options options;
+    options.max_iterations = 100;
+    const auto result = pdc_state_bridge::solve(epochs, pseudorange, doppler,
+                                                options);
+    ASSERT_TRUE(result.valid) << result.reason;
+    EXPECT_EQ(result.motion_intervals, 1U);
+    EXPECT_EQ(result.valid_epochs, 2U);
+    ASSERT_EQ(result.epochs.size(), 2U);
+    EXPECT_NEAR((result.epochs[1].state.position_ecef -
+                 result.epochs[0].state.position_ecef - velocity).norm(),
+                0.0, 1e-3);
+    EXPECT_NEAR((result.epochs[1].state.velocity_ecef_mps - velocity).norm(),
+                0.0, 1e-3);
+    EXPECT_NEAR(result.epochs[1].state.clock_rate_mps, clock_rate_mps, 1e-3);
+}
 
 TEST(FgoDdprGncTest, GraduatesToRobustWeightsAndSuppressesGrossOutlier) {
     const std::vector<fgo_ddpr_gnc::Residual> residuals = {

@@ -13,6 +13,12 @@
   "release_binary_sha256": "a10d13da4614f7cdc8e24556f5a32f870aee6c7aa94c5d3e890429996d583b0c",
   "post_phase5_compatible_release_binary_sha256": "5a33abd2ca01e305ef24bb813f65e14140e9395116ae6145dce219c017bbb6e2",
   "post_phase7_compatible_release_binary_sha256": "e32877287b54c1b2304cee19e9a6367ad7129f5940587256e6dd1375698a3b06",
+  "post_phase9_compatible_release_binary_sha256": "e1c97ba2fc5f83154ab1603789e66ea682b6ae934d9b493c071f541f7fc53d75",
+  "post_phase9_compatible_source_hashes": {
+    "src/algorithms/fgo.cpp": "e45d4c1fde8f7e3bf3fb86e89fdda880cd4459b9523797d868f0596dade81025",
+    "src/algorithms/fgo_problems.cpp": "2732c1a064267046b721bf7585560d91550069f65c34b698cd57d31eb9ece0a3"
+  },
+  "post_phase9_compatibility_note": "Phase 9 adds the opt-in in-process raw P+D+temporal native PDC state bridge and explicit SPP clock-unit tagging. The historical factor-hypothesis source pins remain immutable; the exact current hashes are accepted only as compatibility pins for this source-level regression test.",
   "post_phase7_compatibility_note": "Phase 7 adds the opt-in GNSS-first GTSAM velocity/clock-drift factor and relinks the shared solver archive; the historical hypothesis artifact and source pins remain unchanged.",
   "post_phase5_compatibility_note": "The Phase 5 raw Android IMU API changes the shared static library ABI and therefore relinks this otherwise unchanged executable. The original release hash remains the historical sealed value; the exact current Release hash is accepted only as a compatibility pin for source-level regression tests.",
   "source_hashes": {

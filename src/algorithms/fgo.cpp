@@ -87,6 +87,22 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
         problem.diagnostics.sparse_epochs_retained;
     result.diagnostics.sparse_empty_epochs_retained =
         problem.diagnostics.sparse_empty_epochs_retained;
+    if (config_.use_native_pdc_state_bridge) {
+        for (const auto& seed : problem.native_pdc_state_seeds) {
+            if (seed.has_position) {
+                ++result.diagnostics.native_pdc_position_seeds;
+            }
+            if (seed.has_velocity) {
+                ++result.diagnostics.native_pdc_velocity_seeds;
+            }
+            if (seed.has_clock) {
+                ++result.diagnostics.native_pdc_clock_seeds;
+            }
+            if (seed.has_clock_rate) {
+                ++result.diagnostics.native_pdc_clock_rate_seeds;
+            }
+        }
+    }
     result.diagnostics.single_difference_tdcp_factors =
         problem.single_difference_tdcp_factors.size();
     result.diagnostics.carrier_phase_factors = problem.carrier_phase_factors.size();

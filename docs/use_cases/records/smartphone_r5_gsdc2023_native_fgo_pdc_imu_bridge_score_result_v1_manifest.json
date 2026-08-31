@@ -1,0 +1,33 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-pdc-imu-bridge-score-result-manifest.v1",
+  "result_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_imu_bridge_score_result_v1.json",
+  "result_record_sha256": "ede75489d823db32e2d9c20249236aaeb245c49239861f0aa3eea93911ff52dc",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_imu_bridge_freeze_v1.json",
+  "freeze_record_sha256": "9dcf58a186b62de8f3dadfbb47f10f3ee0744c81998dd2e1821cb833c099b2c1",
+  "freeze_manifest": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_imu_bridge_freeze_v1_manifest.json",
+  "freeze_manifest_sha256": "ce27cd9a970a256031727997fae13f9b8b702705a65b09a34761b4230a58d870",
+  "truth": {
+    "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv",
+    "sha256": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a",
+    "score_evaluation_passes": 1,
+    "truth_read_after_freeze_count": 3,
+    "validation_open_count": 0,
+    "holdout_open_count": 0,
+    "test_open_count": 0,
+    "mat_open_count": 0
+  },
+  "sealed_artifacts": {
+    "submission": {
+      "path": "output/smartphone-r5/phase9-native-pdc-imu-bridge-v8/submission.csv",
+      "sha256": "2a48661c5d18e80dbd9ee5e73efe64355d802cdc0541168ad2dab94c10c785f8"
+    },
+    "summary": {
+      "path": "output/smartphone-r5/phase9-native-pdc-imu-bridge-v8/summary.json",
+      "sha256": "4c7db2b8b80fe282c92e3f27a865171df9aa47c983e7e10d507d155af87266f5"
+    }
+  },
+  "decision": "train-gate-pass",
+  "post_score_mutation": false,
+  "external_mutation": false,
+  "token_access": false
+}
