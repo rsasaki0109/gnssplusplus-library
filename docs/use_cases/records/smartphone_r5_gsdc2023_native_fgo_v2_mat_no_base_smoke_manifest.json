@@ -1,0 +1,55 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-v2-mat-no-base-smoke-manifest.v1",
+  "record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_mat_no_base_smoke.json",
+  "record_sha256": "a6c9b1852711ccf53cb190c8defebb99d5fff1e7d87f076c8b9892cdc204f457",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_mat_no_base_freeze.json",
+  "freeze_record_sha256": "eabc310247f60f07a5d4641bb3d5d051fb88a4de66626b3407194121f8b21197",
+  "release_binary": {
+    "path": "build/apps/gnss_fgo_imu_no_base",
+    "sha256": "48a44536bde0c76f396ba2775b40bf32f6ca296f2235185f8ecfd622c0a32903"
+  },
+  "source_sha256": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "fe5674ab9c3c370a3295630f76d05edff2706654e1fcb54735ea48bd7ea77d11",
+    "apps/commands/benchmarks/gnss_smartphone_phone_data_mat.py": "377382ea143f2ef5f4cfbd08e5fdb55510a1f72ec894b25ee4b006aac2585cc0",
+    "apps/CMakeLists.txt": "9827a74b2218c7809e21141eaf0c818b2ddcc43da0f9237840ba61f3750f9b0a",
+    "tests/test_smartphone_native_fgo_v2_mat.py": "1ff393552674fa89a67e4ed34eeecc104832de98696dfb32dbc3da5dca75f9a1",
+    "tests/CMakeLists.txt": "d099e843059da70a65f78e89d7d5dddab6a001892929a0d06ae540f572299225"
+  },
+  "upstream": {
+    "taroz_commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "taroz_license": "MIT",
+    "gtsam_gnss_commit": "e679b72b620fc6800723578e4077dd157587d129",
+    "gtsam_gnss_license": "MIT"
+  },
+  "generated_artifacts": {
+    "root": "output/smartphone-r5/native-fgo-v2-mat-no-base-v1",
+    "sha256_manifest": "output/smartphone-r5/native-fgo-v2-mat-no-base-v1/manifests/artifact_sha256.txt",
+    "sha256_manifest_digest": "eb27caab66d9033babf16e96a9ee616737b1a30335fc401719b0f793a52bf96a",
+    "count": 14,
+    "smoke_submission_sha256": "1a5b4c7f6233a633ec6d7f4774228087144d915ed3a0a2bc613bcff4ad023825",
+    "smoke_summary_sha256": "4b5db456dc7465c175bf25c49851a0dc59e9c0a9a60aff7cc2bc15f63d3715b4",
+    "train_submission_sha256": "9a3a37c7793a83b5618109a4d91ea016cdff158fedfdb2a07e22b4deebc24d08",
+    "train_summary_sha256": "c484a83b1a3f00bfc57997ae8d3e0a68c117b1b2a7083534d986fd3c3746aaa8",
+    "mat_converter_summary_sha256": "1795766258a93ed0cade72530c118c8d216a7b0e6d4775a3cf8126d7c1e6a347",
+    "mat_converted_imu_sha256": "01501ba1271a2fac31f77238486b8c36a916ad6c757b462781d52af190270042"
+  },
+  "truth": {
+    "train_truth_path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv",
+    "train_truth_sha256": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a",
+    "read_only_evaluation_invocations": 2,
+    "validation_or_holdout_open_count": 0,
+    "kaggle_or_token_access": false
+  },
+  "decision": {
+    "structural_smoke": "GO: 30 epochs, 452 pseudorange factors, 29 CombinedImuFactor intervals, 121 graph values, finite output",
+    "train_short_window": "NO-GO for promotion: candidate H P95 13.7280986659 m versus v1 same-window 2.0009204943 m; H median 2.3891977902 m versus 1.4609035197 m",
+    "production_default": "unchanged",
+    "next_action": "do not open validation/holdout; retain prototype only and investigate complete custom Doppler/TDCP integration separately"
+  },
+  "reproducibility": {
+    "matlab_required": false,
+    "truth_free_commands_are_atomic": true,
+    "official_kaggle_submission": false,
+    "post_truth_parameter_tuning": false
+  }
+}

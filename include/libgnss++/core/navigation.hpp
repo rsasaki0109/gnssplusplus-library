@@ -5,6 +5,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <cstdint>
 #include "types.hpp"
 
 namespace libgnss {
@@ -218,6 +219,18 @@ public:
     TroposphereModel troposphere_model;
 
     NavigationData();
+
+    /**
+     * @brief Monotonic revision for supported navigation-data mutations.
+     *
+     * Consumers that retain a navigation-dependent result for a bounded
+     * operation (for example, one synchronous RTK epoch) can use this value
+     * together with object identity to fail closed when the navigation
+     * container has been replaced or updated.  Direct writes to the public
+     * containers are not revisioned; such callers should use addEphemeris(),
+     * clear(), or otherwise avoid retaining dependent results.
+     */
+    std::uint64_t getRevision() const { return revision_; }
     /**
      * @brief Add ephemeris data
      */
@@ -380,6 +393,7 @@ private:
 
     mutable std::map<SatelliteStateCacheKey, SatelliteStateCacheValue>
         satellite_state_cache_;
+    std::uint64_t revision_ = 0;
 };
 
 /**

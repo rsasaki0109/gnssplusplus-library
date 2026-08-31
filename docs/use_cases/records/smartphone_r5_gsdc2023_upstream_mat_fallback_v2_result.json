@@ -1,0 +1,231 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-upstream-mat-fallback-result.v2",
+  "status": "completed-truth-free-complete-test-candidate",
+  "purpose": "Complete the immutable upstream-MAT v1 test conversion without reading test truth or official sample coordinates.",
+  "freeze": {
+    "record_path": "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_fallback_v2_freeze.json",
+    "record_sha256": "4b815827140e217fe9c05a3b1ab1c086f3c5433fe9a92c47c519c36eb561988a",
+    "manifest_path": "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_fallback_v2_freeze_manifest.json",
+    "manifest_sha256": "b5725f94efe9f4bb6d75b69d0de019512385e08628c988d937ed05522b4c4295",
+    "sealed_before_generation": true
+  },
+  "input_evidence": {
+    "archive": {
+      "path": "data/gsdc2023/cache/dataset_2023.zip",
+      "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408"
+    },
+    "inventory": {
+      "path": "output/smartphone-r5/gsdc2023-upstream-mat-v1/mat_inventory.json",
+      "sha256": "a54d54305442bfc826a34a5e59debe12ebcb55caf03d6235fdf0e125c5bd609c"
+    },
+    "v1_batch_manifest": {
+      "path": "output/smartphone-r5/gsdc2023-upstream-mat-v1/test-batch/test_batch.manifest.json",
+      "sha256": "3c29d25fee11125fc6e644b52ea8e52b8b10c8d3308d73f84c74835e894885e7"
+    },
+    "v1_failure": {
+      "path": "output/smartphone-r5/gsdc2023-upstream-mat-v1/test-batch/batch_failure.json",
+      "sha256": "64b787f3b9e110e6fc889c7df16819eac480401c4bb3d1183999f7122c413c84",
+      "unresolved_before_v2": 601
+    },
+    "coverage_diagnostic": {
+      "path": "output/smartphone-r5/gsdc2023-upstream-mat-v1/test-batch/fallback_diagnostic_v2.json",
+      "sha256": "1a5a91d2c87a384af59bedf5d0a1611151eb577dd13482ad039d2e4ccbac5093",
+      "truth_used": false,
+      "sample_coordinates_read": false
+    },
+    "frozen_v5": {
+      "path": "output/smartphone-r5/native-fgo-test-v5-source-seam-bridge/submission.csv",
+      "sha256": "89de0e03ff8eb687c9228ac19a1e62d160400b317352652cf8665b22591eef26",
+      "record_path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_test_submission_source_seam_bridge_v1.json",
+      "record_sha256": "ff90e3f9e2164765503a7a5c4ea2a794851db532e9e89a257b40e9dd6840ca8e",
+      "source_manifest_sha256": "dbba0ebe190d99aaeb1163405bd49f19bd7dc449be76241880f0d11f7e43c519",
+      "sample_coordinate_fallback_rows": 0,
+      "role": "already sealed truth-free source only"
+    },
+    "upstream_helper": {
+      "path": "output/reproducibility-cache/gsdc2023/functions/submission.m",
+      "sha256": "db97431c1da52b93b8903eb4c604141b3c8d6dfb7ad33b6df237e414a7e8c9ac",
+      "line_evidence": "21-38",
+      "published_semantics": "intersect obs.utcms with sample UTC keys, fillmissing nearest, then nearest interp1 extrapolation"
+    }
+  },
+  "unresolved_diagnosis": {
+    "2022-04-25-21-04-us-ca-ebf-x/mi8": {
+      "sample_keys": 1897,
+      "result_gnss_imu_finite_rows": 1325,
+      "result_gnss_finite_rows": 1325,
+      "mat_exact_keys_each": 1298,
+      "mat_missing_range_ms": [1650920678000, 1650921276000],
+      "mat_missing_count": 599,
+      "phone_data_obs_utcms": {
+        "count": 1924,
+        "sample_coverage": "1897/1897",
+        "first_ms": 1650920678000,
+        "last_ms": 1650922601000
+      },
+      "raw_wls": {
+        "path": "output/smartphone-r5/wls-test-batch-derived-unverified-v1/routes/2022-04-25-21-04-us-ca-ebf-x/outputs/mi8/selected.pos",
+        "sha256": "80e742f937df41bdf675be52525ea8fff4f514e04e2f4510feee4d6628a5a08d",
+        "rows": 1923,
+        "sample_exact_keys": 1896
+      },
+      "v5_exact_keys": 1897,
+      "v2_selected": {
+        "result_gnss_imu_exact": 1298,
+        "result_gnss_imu_edge_hold": 1,
+        "v5_exact": 598
+      }
+    },
+    "2022-10-06-20-46-us-ca-sjc-r/sm-a205u": {
+      "sample_keys": 1699,
+      "result_gnss_imu_finite_rows": 1696,
+      "result_gnss_finite_rows": 1696,
+      "mat_exact_keys_each": 1696,
+      "mat_missing_range_ms": [1665089219996, 1665089222000],
+      "mat_missing_count": 3,
+      "phone_data_obs_utcms": {
+        "count": 1697,
+        "sample_coverage": "1697/1699",
+        "first_ms": 1665089222000,
+        "last_ms": 1665090919999
+      },
+      "raw_wls": {
+        "path": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/routes/2022-10-06-20-46-us-ca-sjc-r/outputs/sm-a205u/selected.pos",
+        "sha256": "cc70b3f01f1a1b935c72674402da752ad6e82fb4e8df115ea719cb1362c2fb52",
+        "rows": 1698,
+        "sample_exact_keys": 1698
+      },
+      "v5_exact_keys": 1699,
+      "v2_selected": {
+        "result_gnss_imu_exact": 1696,
+        "v5_exact": 3
+      }
+    }
+  },
+  "fallback_contract_applied": {
+    "hierarchy": [
+      "result_gnss_imu exact, same-trip interpolation <=10000 ms, edge hold <=1000 ms",
+      "result_gnss exact, same-trip interpolation <=10000 ms, edge hold <=1000 ms",
+      "frozen v5 exact, then bounded same-trip projection",
+      "approved truth-free raw WLS same-trip projection"
+    ],
+    "same_trip_only": true,
+    "cross_trip_interpolation": false,
+    "interpolation_max_gap_ms": 10000,
+    "edge_hold_max_gap_ms": 1000,
+    "long_gap": "never bridged; the two long/over-bound gaps were resolved by v5 exact coordinates",
+    "sample_coordinate_fallback": false,
+    "truth_fallback": false,
+    "max_transition_speed_mps": 70.0,
+    "ecef_norm_range_m": [6000000.0, 7500000.0],
+    "isolated_source_seam_repair": false,
+    "atomic_publish": true
+  },
+  "candidate": {
+    "source": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_gsdc2023_upstream_mat_fallback_v2.py",
+      "sha256": "a47acae7d12205b984d6b310290d676e6a1d57ae16a070818293c1083584f4a8"
+    },
+    "fixture_test": {
+      "path": "tests/test_smartphone_gsdc2023_upstream_mat_fallback_v2.py",
+      "sha256": "3037cfa0756b959a7890defc9c79af421cd8f90f9c42a710d32cc3d310fdd1e"
+    },
+    "output_dir": "output/smartphone-r5/gsdc2023-upstream-mat-v2/test-batch",
+    "submission": {
+      "path": "output/smartphone-r5/gsdc2023-upstream-mat-v2/test-batch/submission.csv",
+      "sha256": "ded15a2a92349b06accfe18bc2afa12c35f7a282497d70ab9fcedf15471fc1f3",
+      "bytes": 6150020,
+      "rows": 71936
+    },
+    "submission_manifest": {
+      "path": "output/smartphone-r5/gsdc2023-upstream-mat-v2/test-batch/submission.manifest.json",
+      "sha256": "b0a94f8ff2ac42358fda5dcbd11e9c82b9b95abe99a55460d0bd1e6390b1652e"
+    },
+    "run_manifest": {
+      "path": "output/smartphone-r5/gsdc2023-upstream-mat-v2/test-batch/fallback_v2_run_manifest.json",
+      "sha256": "c99d2ac3419ac98ac80fa49dbda49ca349b11e28668a8c873c7294f5c6723efa"
+    },
+    "repeat_generation": {
+      "truth_free": true,
+      "separate_output_submission_sha256": "ded15a2a92349b06accfe18bc2afa12c35f7a282497d70ab9fcedf15471fc1f3",
+      "byte_identical_submission": true,
+      "algorithm_rerun": false
+    }
+  },
+  "source_counts": {
+    "result_gnss_imu_exact": 71334,
+    "result_gnss_imu_edge_hold": 1,
+    "result_gnss_exact": 0,
+    "result_gnss_interpolated": 0,
+    "result_gnss_edge_hold": 0,
+    "v5_exact": 601,
+    "approved_wls": 0,
+    "unresolved": 0
+  },
+  "verification": {
+    "header": ["tripId", "UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
+    "official_key_order_exact": true,
+    "official_key_count": 71936,
+    "duplicate_keys": 0,
+    "missing_keys": 0,
+    "extra_keys": 0,
+    "nonfinite_coordinates": 0,
+    "known_dummy_rows": 0,
+    "out_of_earth_rows": 0,
+    "continuity": {
+      "transition_count": 71896,
+      "max_speed_mps": 42.52691494991829,
+      "over_bound_count": 0,
+      "bound_mps": 70.0
+    },
+    "source_seams": {
+      "source_change_count": 3,
+      "over_bound_source_changes": 0,
+      "maximum_source_change_speed_mps": 27.83337112023827
+    },
+    "per_route_coverage": "All 40 route artifacts and counts are sealed in fallback_v2_run_manifest.json; the two previously unresolved routes are summarized above.",
+    "truth_used": false,
+    "test_truth_materialized": false,
+    "test_truth_open_count": 0,
+    "validation_truth_open_count": 0,
+    "holdout_truth_open_count": 0,
+    "official_sample_coordinates_read": false,
+    "external_mutation": false
+  },
+  "build_and_test_policy": {
+    "release_binary_path": "build/apps/gnss_fgo",
+    "release_binary_sha256": "a10d13da4614f7cdc8e24556f5a32f870aee6c7aa94c5d3e890429996d583b0c",
+    "production_defaults_changed": false,
+    "v1_failure_immutable": true,
+    "v5_bytes_immutable": true,
+    "kaggle_submission": false,
+    "token_access": false,
+    "no_post_generation_tuning": true,
+    "required_commands": [
+      "python3 -m unittest -v tests/test_smartphone_gsdc2023_upstream_mat_fallback_v2.py",
+      "cmake --build build --config Release -j2",
+      "env LD_LIBRARY_PATH=/home/sasaki/.local/lib:/opt/ros/jazzy/lib ctest --test-dir build --output-on-failure -j1",
+      "git diff --check"
+    ],
+    "release_build": {
+      "command": "cmake --build build --config Release -j2",
+      "status": "passed",
+      "binary_sha256": "a10d13da4614f7cdc8e24556f5a32f870aee6c7aa94c5d3e890429996d583b0c"
+    },
+    "focused_tests": {
+      "command": "python3 -m unittest -v tests/test_smartphone_gsdc2023_upstream_mat_fallback_v2.py",
+      "status": "7/7 passed",
+      "test_source_sha256": "3037cfa0756b959a7890defc9c79af421cd8f90f9c42a710d32cc3d310fdd1e"
+    },
+    "full_serial_ctest": {
+      "command": "env LD_LIBRARY_PATH=/home/sasaki/.local/lib:/opt/ros/jazzy/lib ctest --test-dir build --output-on-failure -j1",
+      "status": "132/132 passed"
+    },
+    "git_diff_check": "passed"
+  },
+  "limitations": [
+    "The candidate is a local truth-free artifact and has not been submitted to Kaggle.",
+    "The public dataset archive has no separate license file; the archive remains a local cache and is not redistributed.",
+    "v5 exact fallback is used only for the 601 keys left unresolved by both published MAT result lanes; no new estimator was run."
+  ]
+}

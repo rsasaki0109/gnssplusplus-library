@@ -1,0 +1,29 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-pdc-windowed-stitch.v1-freeze-manifest",
+  "status": "sealed-freeze-record",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_windowed_stitch_freeze_v1.json",
+    "sha256": "40ef733d28cebd7d72710a122a2ec5cfe72a6c97a93480eb41a582b4f990dac6",
+    "bytes": 5052
+  },
+  "candidate_source": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_windowed_stitch.py",
+    "sha256": "f0a1cb73020934db183d26308a7f5c6a6e8d28f0168b378f7cfb56e552ef8745"
+  },
+  "sealed_v1_manifest": {
+    "path": "output/smartphone-r5/native-fgo-pdc-windowed-v1/windowed_manifest.json",
+    "sha256": "48b019d36e1211caf6040e21b5d10bcf5352742170e7623712b153bb2d0d772f"
+  },
+  "sealed_v5_fallback": {
+    "path": "output/smartphone-r5/native-fgo-carrier-compatibility-v1/routes/2021-03-16-18-59-us-ca-mtv-a__pixel5/baseline8/fgo.pos",
+    "sha256": "2804f70688955c94a8c58bfef9863053251d6a9a59b5793cd9186f8d1babe8cd"
+  },
+  "truth_policy": {
+    "truth_opened": false,
+    "validation_opened": false,
+    "holdout_opened": false,
+    "test_data_used": false,
+    "leaderboard_used": false,
+    "solver_rerun": false
+  }
+}

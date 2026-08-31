@@ -1,0 +1,96 @@
+{
+  "schema_version": "smartphone-r5-wls-multi-phone-ensemble-holdout-freeze-manifest.v1.4",
+  "sealed": true,
+  "status": "frozen-before-holdout-payload-access",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_holdout_freeze_v1_4.json",
+    "sha256": "f154f638a992765b0b350aac0e8e63abfb2d7257335dcc0d907b5e576f42c7f3"
+  },
+  "selection_record": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_selection.json",
+    "sha256": "374d652f6f772a2bc929cfeb22403e00b3abc0794445cc7880a070ad590e21c6"
+  },
+  "alignment_evidence": {
+    "comparison_record": {
+      "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_alignment_v1_4_existing_comparison.json",
+      "sha256": "809a317e2ee29690a852fec7762ba5c583386ae29b673a88da1b7db91ed87554"
+    },
+    "one_ms_vs_ten_ms_submission_artifacts_identical": true,
+    "one_ms_vs_ten_ms_metrics_identical": true,
+    "all_four_diagnostics_identical": true,
+    "fresh_unused_multi_phone_route_count": 0,
+    "truth_open_count": 0
+  },
+  "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+  "inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+  "route": "2022-10-06-21-51-us-ca-mtv-n",
+  "phone_allowlist": [
+    "sm-a205u",
+    "sm-a217m",
+    "sm-a325f"
+  ],
+  "alignment_tolerance_ms": 10,
+  "algorithm_parameter_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb",
+  "algorithm_core_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb",
+  "candidate_coordinate_median_unchanged": true,
+  "candidate_methods_unchanged": true,
+  "numeric_parameters_unchanged": true,
+  "alignment_only_change": true,
+  "sparse_wls_contract": {
+    "allow_missing_wls_epochs": true,
+    "allow_timestamp_gaps_as_diagnostic": true,
+    "single_phone_default_fail_closed": true,
+    "partial_coordinate_triplet_policy": "fail-closed",
+    "nonfinite_coordinate_policy": "fail-closed",
+    "inconsistent_coordinate_policy": "fail-closed",
+    "extrapolation_policy": "forbidden"
+  },
+  "preflight": {
+    "archive_central_metadata_verified": true,
+    "archive_payload_read_before_freeze": false,
+    "holdout_device_materialized_before_freeze": false,
+    "holdout_truth_opened_before_freeze": false,
+    "truth_open_count_before_freeze": 0,
+    "reused_device_materialization_hashes_verified": true,
+    "fixture_v1_4_boundary_passed": true,
+    "source_hashes_verified": true,
+    "release_binary_hashes_verified": true,
+    "profile_hash_verified": true,
+    "no_post_holdout_tuning": true
+  },
+  "source_hashes": {
+    "apps/gnss.py": "c33aefbf0c45d334c49a3501b6868e1f161725f42dfe7ec3e44e4ad0852d20ba",
+    "apps/commands/benchmarks/gnss_smartphone_wls.py": "e1527350c19f8de11e9d9e475274e5a4769226403da0ad8b2c981c7008fba7c3",
+    "apps/commands/benchmarks/gnss_smartphone_wls_multi_phone_ensemble_holdout_eval.py": "82e5f9b985d89ee172566ccbb63993fca95d16f591fc17223a8382809e69f3c5",
+    "apps/commands/benchmarks/gnss_smartphone_wls_multi_phone_ensemble_eval.py": "d0b82d27e1bde9cda2c0c2510fc26fc0d608498d8a05ba3ac4babecca4f9bf2e",
+    "apps/commands/benchmarks/gnss_smartphone_kaggle.py": "d6c51335b2e607987392d3194e40746880651a9df6c6893742b249bed5503a6f",
+    "apps/commands/benchmarks/gnss_smartphone_trajectory_smoother.py": "2e95e96cd554cb8f78637e5f109c25e89801e4ae8958d6136124aa064e1191d4",
+    "tests/test_smartphone_wls.py": "ed5a1f82c2071729aaf585fd7b1f7b2187505500c12547ef47de709921a022d0",
+    "tests/test_smartphone_wls_multi_phone_ensemble.py": "9e7d3f7be972bb7f2bb0f0246237daf80cfe6a03eb0329bd540e8006fd9e0932",
+    "tests/test_smartphone_wls_multi_phone_ensemble_holdout_eval.py": "d32eeb6d3fe0c18bc81d445302ce4e818aa15018452d43b84401f9df022c7d96",
+    "tests/test_smartphone_wls_stability_selector_holdout_eval.py": "4a3f763fea952a9fc3ca3a055764e180570dfcb13b81eb4882e3b9d9fe3c7551"
+  },
+  "release_binaries": {
+    "gnss_spp": {
+      "path": "build/apps/gnss_spp",
+      "sha256": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12"
+    },
+    "gnss_solve": {
+      "path": "build/apps/gnss_solve",
+      "sha256": "7140d077213ef528b7366aa8c1b925dcea6096ec6e0711748cf4cf9428392eb0"
+    }
+  },
+  "profile": {
+    "path": "configs/benchmarks/smartphone_r5_gsdc2023.json",
+    "sha256": "d5add376f875f9b3f7b765c18e5946dfba6aae69f71869612b8ab757fbe4fce7",
+    "production_rtk_spp_default_changed": false
+  },
+  "truth_free_contract": {
+    "all_lane_artifacts_hash_fixed_before_truth": true,
+    "truth_open_after_seal_only": true,
+    "truth_open_count_before_truth_free_seal": 0,
+    "truth_evaluation_pass_count": 1,
+    "post_holdout_tuning": false,
+    "rerun_or_adjustment_permitted": false
+  }
+}

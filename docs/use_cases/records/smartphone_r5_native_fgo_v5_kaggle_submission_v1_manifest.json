@@ -1,0 +1,71 @@
+{
+  "schema_version": "smartphone-r5-native-fgo-v5-kaggle-submission-manifest.v1",
+  "status": "sealed-submitted-and-scored",
+  "record": {
+    "path": "docs/use_cases/records/smartphone_r5_native_fgo_v5_kaggle_submission_v1.json",
+    "sha256": "8bf5079e82b0ec00022a765dc6039fc9beb20bc9c8c4ff8d78c47ae0af1c4722"
+  },
+  "competition": {
+    "slug": "smartphone-decimeter-2023",
+    "id": 60095,
+    "submission_ref": 55900482,
+    "status": "COMPLETE",
+    "public_score": "3.952",
+    "private_score": "4.276"
+  },
+  "authorized_mutation": {
+    "user_explicitly_authorized": true,
+    "create_submission_api_calls": 1,
+    "start_upload_calls": 1,
+    "signed_upload_put_calls": 1,
+    "resubmission_calls": 0,
+    "no_other_file_submitted": true,
+    "no_retry_after_create": true
+  },
+  "submission": {
+    "path": "output/smartphone-r5/native-fgo-test-v5-source-seam-bridge/submission.csv",
+    "sha256": "89de0e03ff8eb687c9228ac19a1e62d160400b317352652cf8665b22591eef26",
+    "bytes": 6150020,
+    "rows": 71936,
+    "header": ["tripId", "UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
+    "download_sha256": "89de0e03ff8eb687c9228ac19a1e62d160400b317352652cf8665b22591eef26",
+    "download_bytes": 6150020,
+    "server_payload_matches_local": true
+  },
+  "v5_provenance": {
+    "source_seam_result_record_sha256": "ff90e3f9e2164765503a7a5c4ea2a794851db532e9e89a257b40e9dd6840ca8e",
+    "source_seam_freeze_record_sha256": "eef25620633cdd7086dbc78b22a6705f4e5043b81301ef7eea03528f8f794f48",
+    "source_seam_manifest_sha256": "dbba0ebe190d99aaeb1163405bd49f19bd7dc449be76241880f0d11f7e43c519",
+    "source_seam_run_manifest_sha256": "89330f31ec5bde1575c664f108c4a1c71744f24810c937051cdf440a4f768d1b",
+    "release_gnss_fgo_sha256": "9190455cb34a9e818b79ed2ed6b023af5711fbef545215d4588bfed87f5c03e4",
+    "release_gnss_spp_sha256": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12",
+    "profile_sha256": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776"
+  },
+  "read_only_follow_up": {
+    "status_poll_count": 2,
+    "leaderboard_public_entries": 280,
+    "leaderboard_private_entries": 280,
+    "public_hypothetical_rank": 172,
+    "private_hypothetical_rank": 167,
+    "official_rank_asserted": false,
+    "team_names_recorded": false,
+    "prior_submission_ref": 55886678,
+    "prior_public_score": "4.018",
+    "prior_private_score": "4.873"
+  },
+  "security": {
+    "token_value_recorded": false,
+    "token_value_printed": false,
+    "token_value_in_argv": false,
+    "token_value_in_artifact": false
+  },
+  "policy": {
+    "truth_used": false,
+    "algorithm_rerun": false,
+    "parameter_changed": false,
+    "production_default_changed": false,
+    "scores_used_for_tuning": false,
+    "rank_one_achieved": false,
+    "this_manifest_has_no_self_hash": true
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-optimizer-stop-freeze-manifest.v1",
+  "status": "frozen-before-optimizer-candidate-materialization",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_optimizer_stop_freeze_v1.json",
+  "freeze_record_sha256": "30285097322549612555d2dfc99d9c1a5e14613bda1b882dfa94e1e753263860",
+  "truth_use_inventory": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_optimizer_truth_use_inventory_v1.json",
+  "truth_use_inventory_sha256": "da10a5122f68e1ac4bd015949bdf3fa15dbb294e1938ebd6125691508e53eb1c",
+  "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+  "central_inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+  "central_metadata_canonical_sha256": "5f619be94a00c33c3067f13b1cd3351d96f2804f07fa04eda8fb027739fb0992",
+  "train": [
+    "2021-03-10-23-13-us-ca-mtv-h/pixel5",
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5"
+  ],
+  "fresh_validation": "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+  "future_holdout": "2023-05-16-19-54-us-ca-mtv-xe1/pixel5",
+  "future_holdout_materialized": false,
+  "future_holdout_truth_open_count": 0,
+  "candidate_materialization_root_absent_before_freeze": true,
+  "truth_open_count_before_freeze": 0,
+  "baseline_max_iterations": 8,
+  "candidate_max_iterations": 50,
+  "candidate_relative_cost_convergence_threshold": 1e-06,
+  "candidate_absolute_cost_convergence_threshold": 0.0,
+  "only_stopping_policy_changed": true,
+  "production_default_changed": false,
+  "leaderboard_scores_used_for_tuning": false,
+  "external_mutation": false,
+  "token_access": false,
+  "no_post_truth_tuning": true
+}

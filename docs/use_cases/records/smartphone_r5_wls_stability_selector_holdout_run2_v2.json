@@ -1,0 +1,63 @@
+{
+  "schema_version": "smartphone-r5-wls-stability-selector-holdout-evaluation.v2",
+  "status": "sealed-failed-one-shot",
+  "run": 2,
+  "dataset_id": "2023-09-06-22-49-us-ca-routebb1/pixel7pro",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_stability_selector_holdout_freeze_v2.json",
+    "sha256": "c99c44d7d59bc491cfbbb3337f842ef7a18570a3af465fdc32aed64282fa0f91"
+  },
+  "freeze_manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_stability_selector_holdout_freeze_v2_manifest.json",
+    "sha256": "5fd80750a6e3e4bc07917f8f0728cba96df74e01ee1a02a718ae763eb8ccfd58"
+  },
+  "v1_failure_provenance": {
+    "freeze_record_sha256": "49ec6a07ca770aac764f562abfa2d4823cd74aabbb948163250f7c3b5656783f",
+    "failure_artifact_sha256": "a4e804191315146eae3ffd8ec343dd0a1ca5d1007519f23a1f997e0e32663c3b",
+    "payload_open_count": 0,
+    "truth_open_count": 0
+  },
+  "v2_failure": {
+    "path": "output/smartphone-r5/wls-stability-selector-holdout-run2-v2/wls_stability_selector_holdout_run2_failure.json",
+    "sha256": "2748ddfbde15bd4cf36c5bc7e4e0304b45a51bad4d84d2b040b43c235bfb85ca",
+    "reason": "adapter sealed-freeze authorization expected basename source key while v2 freeze records full relative source paths",
+    "stage": "truth-free adapter preflight authorization",
+    "environment_or_io_failure": false
+  },
+  "algorithm_and_parameter_contract": {
+    "change_scope": "preflight-orchestration-only",
+    "algorithm_parameter_hash_v1": "c82fba6130c7d16c207213ab1e2ac542e02280db194949a300c68bebd412ca7e",
+    "algorithm_parameter_hash_v2": "c82fba6130c7d16c207213ab1e2ac542e02280db194949a300c68bebd412ca7e",
+    "parameters_equal": true,
+    "measurement_algorithm_changed": false,
+    "selector_changed": false,
+    "candidate_source_set_changed": false
+  },
+  "holdout_access": {
+    "central_directory_metadata_opened": true,
+    "device_gnss_payload_materialized": true,
+    "device_gnss_sha256": "f6c05015842cc0a389ed2c426b15aed980819a80a2baa828ca77bfa53aba245b",
+    "broadcast_nav_payload_materialized": true,
+    "broadcast_nav_sha256": "21236469a4048817d53bac9faaab04bd87558d100c56ebf8fec25740edc7f696",
+    "truth_payload_materialized": false,
+    "truth_open_count": 0,
+    "truth_free_lane_completed": false,
+    "selector_generated": false
+  },
+  "materialization_manifest": {
+    "path": "output/smartphone-r5/wls-stability-selector-holdout-run2-v2/materialized/materialization_manifest.json",
+    "sha256": "36deea5ffad04d48d495f31b484f7cf616edbeaa82a7a4d8b5ef7ea5beeea9ed",
+    "truth_opened": false
+  },
+  "timing": {
+    "total_wall_s": 2.572318478982197,
+    "process_peak_rss_kb": 124100
+  },
+  "post_run_policy": {
+    "post_holdout_tuning": false,
+    "post_holdout_code_change": false,
+    "post_holdout_parameter_change": false,
+    "rerun_permitted": false,
+    "production_rtk_spp_default_changed": false
+  }
+}

@@ -38,6 +38,30 @@ endif()
 if(GTSAM_FOUND)
     add_executable(gnss_fgo_parity ${GNSS_NATIVE_DIR}/gnss_fgo_parity.cpp)
     target_link_libraries(gnss_fgo_parity PRIVATE gnss_lib gnss_lib_solvers Threads::Threads)
+
+    # Opt-in no-base smartphone research entry point.  It is intentionally
+    # separate from gnss_fgo so production defaults cannot acquire the
+    # Android mounting/IMU contract by accident.
+    add_executable(gnss_fgo_imu_no_base ${GNSS_NATIVE_DIR}/gnss_fgo_imu_no_base.cpp)
+    target_compile_definitions(gnss_fgo_imu_no_base PRIVATE GNSS_WITH_GTSAM=1)
+    target_link_libraries(gnss_fgo_imu_no_base PRIVATE gnss_lib gnss_lib_solvers Threads::Threads gtsam)
+
+    # v2.1 keeps the v1 ordinary TDCP + position/clock motion graph while
+    # retaining the opt-in Pose3/velocity/bias CombinedImuFactor chain.  It is
+    # a separate binary so previously sealed v2.0/v5 artifacts remain intact.
+    add_executable(gnss_fgo_imu_v21 ${GNSS_NATIVE_DIR}/gnss_fgo_imu_v21.cpp)
+    target_compile_definitions(gnss_fgo_imu_v21 PRIVATE GNSS_WITH_GTSAM=1)
+    target_link_libraries(gnss_fgo_imu_v21 PRIVATE gnss_lib gnss_lib_solvers Threads::Threads gtsam)
+
+    # v3 keeps the v2.1 preserve-v1 graph but makes heading initialization
+    # optional: gravity-only leveling plus a finite broad yaw prior is allowed
+    # when a multi-epoch GNSS course is not observable.  This remains an opt-in
+    # research binary; production defaults and the frozen v2.1 binary are not
+    # changed.
+    add_executable(gnss_fgo_imu_v3_heading_optional
+                   ${GNSS_NATIVE_DIR}/gnss_fgo_imu_v3_heading_optional.cpp)
+    target_compile_definitions(gnss_fgo_imu_v3_heading_optional PRIVATE GNSS_WITH_GTSAM=1)
+    target_link_libraries(gnss_fgo_imu_v3_heading_optional PRIVATE gnss_lib gnss_lib_solvers Threads::Threads gtsam)
 endif()
 
 add_executable(gnss_fuse

@@ -1,0 +1,61 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-upstream-mat-train-score-gate-correction.v1",
+  "status": "schema-only-interpretation-addendum",
+  "purpose": "Resolve the distinction between raw upstream state rows and the official sample-key projection without changing the frozen converter, MAT inputs, parameters, or scored values.",
+  "original_score": {
+    "path": "output/smartphone-r5/gsdc2023-upstream-mat-v1/train/train_score.json",
+    "sha256": "5a3dbedef378d1889b886bf7ccad09eb7089701c4f947f24806a59a2dc53e8a1",
+    "manifest_sha256": "fb2e56cae77a8e1ceb447ed2b57d855c30f3853d06258b420e0b99bbb892ad9",
+    "raw_gate_result": "strict-exact-key-check-failed-only",
+    "truth_read_count": 1,
+    "metrics_unchanged": true
+  },
+  "frozen_contract": {
+    "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_freeze_v1.json",
+    "freeze_record_sha256": "9a10d2fd0a397287cc2501b23cef834d578d75ca62d17986880726efe2159c72",
+    "converter_sha256": "d26fdb9f639d198b708a6162fd9bd7328ed9019f5fc7ed5469af3e4bcc3852a4",
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "sample_key_sha256": "b0c4853076f715d6bdca46e5c8c99e575f7982d8ee4fc9c0fe417507badcb780"
+  },
+  "observed_raw_shape": {
+    "routes": 3,
+    "each_route": {
+      "truth_keys_covered": true,
+      "missing_truth_keys": 0,
+      "extra_raw_result_rows": 1,
+      "extra_row_kind": "leading-upstream-initialization-epoch"
+    },
+    "scores": {
+      "gnss_four_diagnostic_mean_m": 0.5859151854260619,
+      "gnss_imu_four_diagnostic_mean_m": 0.5067908808766828,
+      "gnss_imu_minus_gnss_four_diagnostic_mean_m": -0.07912430454937913
+    }
+  },
+  "upstream_projection_evidence": {
+    "source": "taroz/gsdc2023 functions/submission.m",
+    "source_sha256": "db97431c1da52b93b8903eb4c604141b3c8d6dfb7ad33b6df237e414a7e8c9ac",
+    "semantics": "sample tripId/UnixTimeMillis is authoritative; result positions are intersected to those keys before missing-key interpolation.",
+    "allowed_raw_extra": "A raw result initialization row outside the ground-truth key set is not a prediction row and is ignored for development scoring; no truth key may be missing.",
+    "sample_coordinates": "never read or used"
+  },
+  "corrected_gate_for_this_lane": {
+    "truth_key_coverage_all_routes": true,
+    "missing_truth_keys_all_routes": 0,
+    "raw_extra_initialization_rows_allowed": true,
+    "all_four_diagnostic_values_finite": true,
+    "continuity_bound_mps": 70.0,
+    "top_solution_scale_aggregate_four_diagnostic_mean_max_m": 1.8,
+    "primary_result": "result_gnss_imu.mat",
+    "parameter_or_lane_selection": "none; result_gnss is reported comparator and result_gnss_imu remains predeclared primary"
+  },
+  "decision": "train-pass-for-truth-free-test-conversion-under-official-key-projection",
+  "truth_policy": {
+    "train_truth_already_scored_once": true,
+    "validation_truth_open_count": 0,
+    "holdout_truth_open_count": 0,
+    "test_truth_open_count": 0,
+    "no_post_score_parameter_or_source_change": true,
+    "external_mutation": false
+  },
+  "note": "This addendum does not rewrite the original strict-gate report. It records a deterministic upstream submission-key projection correction, required before processing the public test MAT outputs."
+}

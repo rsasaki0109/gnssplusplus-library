@@ -1,0 +1,107 @@
+{
+  "schema_version": "smartphone-r5-wls-multi-phone-ensemble-holdout-evaluation-manifest.v1.4",
+  "sealed": true,
+  "status": "sealed-completed-one-shot",
+  "evaluation_record": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_holdout_evaluation_v1_4.json",
+    "sha256": "be5df08f6624a4721e9590506e652903d9c82ec4a4aef6cef48a570be7dc64cd"
+  },
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_holdout_freeze_v1_4.json",
+    "sha256": "f154f638a992765b0b350aac0e8e63abfb2d7257335dcc0d907b5e576f42c7f3"
+  },
+  "freeze_manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_holdout_freeze_v1_4_manifest.json",
+    "sha256": "0a7a643663856d521728bbde6e62efd110a1db2092dff35b7618302d4cbb4613"
+  },
+  "route": "2022-10-06-21-51-us-ca-mtv-n",
+  "phone_allowlist": [
+    "sm-a205u",
+    "sm-a217m",
+    "sm-a325f"
+  ],
+  "algorithm_parameter_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb",
+  "algorithm_core_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb",
+  "alignment_tolerance_ms": 10,
+  "candidate_coordinate_median_unchanged": true,
+  "numeric_parameters_unchanged": true,
+  "truth_free_contract": {
+    "device_inputs_reused_and_hash_verified": true,
+    "wls_to_median_to_submissions_completed": true,
+    "all_lane_artifacts_hash_fixed_before_truth": true,
+    "truth_open_count_before_artifact_seal": 0,
+    "truth_open_count": 3,
+    "evaluation_pass_count": 1,
+    "post_holdout_tuning": false,
+    "rerun_or_adjustment_permitted": false
+  },
+  "alignment_summary": {
+    "phone_count_histogram": {
+      "1": 15,
+      "2": 29,
+      "3": 3618
+    },
+    "fallback_one_phone_observations": 15,
+    "missing_phone_observations": 59,
+    "max_abs_alignment_offset_ms": 6.0,
+    "spread_p50_m": 11.760500555293326,
+    "spread_p95_m": 28.413394428774875,
+    "spread_max_m": 136.58388071005618,
+    "unresolved_target_epoch_count": 0,
+    "extrapolation_used": false
+  },
+  "aggregate_metrics": {
+    "baseline_single_phone_wls": {
+      "availability": 1.0,
+      "coverage": 0.9997267759562841,
+      "h_p50_m": 3.159289427346987,
+      "h_p95_m": 8.541508500619688,
+      "v_p95_m": 15.481314209371511,
+      "diagnostic_mean_m": 5.852804005572896
+    },
+    "selected_coordinate_wise_ecef_median": {
+      "availability": 1.0,
+      "coverage": 0.9997269997269997,
+      "h_p50_m": 2.7568873048621687,
+      "h_p95_m": 7.066663658515092,
+      "v_p95_m": 10.555718238975915,
+      "diagnostic_mean_m": 4.911481047272863
+    },
+    "all_four_diagnostics_non_regressed": true,
+    "horizontal_non_regressed": true,
+    "vertical_non_regressed": true,
+    "signoff_passed": true
+  },
+  "output_artifacts": {
+    "output_root": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.4",
+    "report": {
+      "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.4/wls_multi_phone_ensemble_holdout_report.json",
+      "sha256": "b348ac732db1c1c584fe44992acbf4e000c5577f47b8be762a3d20359fb9a961"
+    },
+    "run_manifest": {
+      "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.4/wls_multi_phone_ensemble_holdout_manifest.json",
+      "sha256": "63ad3247041c098ace95d9d52cf93b5948624fbc279d75d831aad3446b351f37"
+    },
+    "truth_free_manifest": {
+      "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.4/truth_free_manifest.json",
+      "sha256": "75921a3dfa5e915e56c8a1bd665d13e08fc92cd40859c7fe6bcc71ff4e7778a8"
+    },
+    "route_truth_free_manifest": {
+      "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.4/2022-10-06-21-51-us-ca-mtv-n/route_truth_free_manifest.json",
+      "sha256": "66a735249103114b587f85ee3bf915d1ff255ad82378a5eb6c781bb35fe4d7f4"
+    },
+    "single_phone_wls_submission_sha256": "06f97875f19769f8779a4cf7930f79d6729905fc2b847e4bc98fb752f9a425bd",
+    "selected_median_submission_sha256": "740369bdd4a0057c229f2841ba323b2349e136048f40eb909fb676f1282c4f38",
+    "selected_median_manifest_sha256": "4b325c36036829ecef3ad6710395ea56cca94ef1cfaa3f8d98be62cb84da72d7"
+  },
+  "timing": {
+    "wall_s": 8.290622854983667,
+    "peak_rss_kb": 198092
+  },
+  "promotion": {
+    "decision": "promote-development-only-full-submission-integration-candidate",
+    "production_rtk_spp_default_changed": false,
+    "profile_update_is_metadata_only": true,
+    "profile_sha256_after_holdout_annotation": "d6e8d95671c59a2aec9ee959f61b8b495a356bd875c28604ed6f955f53aa1117"
+  }
+}

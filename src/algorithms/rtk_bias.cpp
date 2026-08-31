@@ -44,7 +44,12 @@ bool RTKProcessor::initializeFilter(const ObservationData& rover_obs,
     filter_state_.n5_indices.clear();  // Phase 18 Step 2: clear L5 index map on filter init
     filter_state_.next_state_idx = REAL_STATES + IONO_STATES;
 
-    auto spp = spp_processor_.processEpoch(rover_obs, nav);
+    const auto spp_started = std::chrono::steady_clock::now();
+    const auto spp = spp_processor_.processEpoch(rover_obs, nav);
+    debug_telemetry_.stage_spp_ms +=
+        std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - spp_started)
+            .count();
     Vector3d rover_pos;
     if (rtk_config_.prefer_rover_position_seed && rover_obs.receiver_position.norm() > 1e6) {
         rover_pos = rover_obs.receiver_position;

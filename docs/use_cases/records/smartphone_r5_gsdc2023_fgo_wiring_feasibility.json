@@ -1,0 +1,42 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-fgo-wiring-feasibility.v1",
+  "status": "blocked-bounded-wiring-no-go",
+  "truth_free": true,
+  "external_mutation": false,
+  "scope": "inspect whether the existing factor-graph executable can be wired to Android raw observations without an estimator rewrite",
+  "source_hashes": {
+    "apps/native/gnss_fgo.cpp": "2d9e53485c427d1e0d43b07dd611aaf3644e2cd51d5e175c2977038ca05e3e32",
+    "include/libgnss++/algorithms/fgo.hpp": "67845f6365eb1f621afed19c52b82ad48d00ac1623e99b3bf7b96cd944263307",
+    "src/algorithms/fgo.cpp": "4805a30741e3bcc53a2a29d832429924a3cc46c0fac5aa530446cedd224af3b2",
+    "apps/commands/benchmarks/gnss_smartphone_gnss_adapter.py": "e740d42a5a3232775fef013c5f734a004f3aa4952add7415c1bcca0716ccaad0",
+    "build/apps/gnss_fgo": "5e1e22979a84b938352a2096e570bb1587d6eba7ebb0757431a8ebd9423b525f"
+  },
+  "smoke": {
+    "command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} build/apps/gnss_fgo --obs <frozen-mi8-rover.obs> --nav <frozen-mi8-brdc.nav> --out <feasibility.pos> --summary-json <summary.json> --debug-problem-only --max-epochs 2 --backend eigen --quiet",
+    "return_code": 0,
+    "backend": "eigen",
+    "input_epochs": 2,
+    "optimized_epochs": 2,
+    "valid_solutions": 2,
+    "pseudorange_factors": 22,
+    "tdcp_factors_discovered": 6,
+    "tdcp_factors_inserted": 0,
+    "single_difference_doppler_factors": 0,
+    "single_difference_tdcp_factors": 0,
+    "double_difference_carrier_factors": 0,
+    "position_sha256": "6c247ceddb978f89dd635b99bfef2d451c57ce7ebd23d805f89e139d91bec1ee",
+    "summary_sha256": "6a30da864d1bec0fc6e8f22c2bbd074bd7457d0448c1ed6d4a8af94b3627d7ee"
+  },
+  "observed_contract": {
+    "android_adapter": "exports single-handset RINEX with GPS L1/Galileo E1 validation and optional Hatch30; it does not provide an independent base or double-difference stream",
+    "existing_fgo": "accepts RINEX rover/base and has pseudorange, motion, Doppler/TDCP, and carrier factor switches, but the smartphone direct path is not exposed as a raw CSV adapter",
+    "runtime": "the GTSAM-linked binary needs /home/sasaki/.local/lib in LD_LIBRARY_PATH for libmetis-gtsam.so; Eigen smoke is available after Release build"
+  },
+  "decision": "do-not-rewrite-estimator-in-this-phase",
+  "blocker": "a coupled Android pseudorange/clock/quality factor adapter, observability contract, and validation are required before enabling FGO; this is materially larger than bounded wiring",
+  "production_default_changed": false,
+  "output_evidence": {
+    "path": "output/smartphone-r5/raw-quality-control-v1/fgo_wiring_feasibility.json",
+    "sha256": "3beccf2f42c41b2a9023f400a2c6901d690e7b937af56c736ba585cf3f282ad5"
+  }
+}

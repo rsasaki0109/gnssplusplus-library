@@ -1,0 +1,123 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-convergence-selector-truth-use-inventory.v2",
+  "status": "audited-before-convergence-selector-freeze",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "purpose": "Authoritative exact route/device truth-use inventory and metadata-only split selection for the independent convergence selector.",
+  "scope": {
+    "archive": "data/gsdc2023/cache/dataset_2023.zip",
+    "central_inventory": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+    "central_metadata_canonical_sha256": "5f619be94a00c33c3067f13b1cd3351d96f2804f07fa04eda8fb027739fb0992",
+    "inspection": "record/output metadata, path names, and ZIP central-directory metadata only; no new payload or truth member content was opened by this audit"
+  },
+  "evidence_sources": [
+    "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_optimizer_truth_use_inventory_v1.json",
+    "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_optimizer_stop_result.json",
+    "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_evaluation.json",
+    "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_validation.json",
+    "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_holdout_evaluation.json",
+    "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v3_heading_optional_evaluator_recovery_result.json",
+    "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_holdout_evaluation_v1_4.json",
+    "docs/use_cases/records/smartphone_r5_wls_stability_selector_holdout_run2_v4.json",
+    "docs/use_cases/records/smartphone_r5_wls_residual_release_evaluation_v2_1.json",
+    "docs/use_cases/records/smartphone_r5_tdcp_trajectory_evaluation.json",
+    "docs/use_cases/records/smartphone_r5_observable_error_correction_evaluation.json",
+    "docs/use_cases/records/smartphone_r5_raw_quality_control_evaluation.json",
+    "output/**/*.json metadata and existing ground_truth.csv path names"
+  ],
+  "classification_policy": {
+    "truth_used": "Exact identity is used if a positive truth counter, truth score, or scored ground_truth artifact is present in the evidence scope.",
+    "route_overlap_is_not_silent": "A selected exact identity is marked route-overlap when another phone on the same route has prior truth evidence; no prior truth payload is reused for selector generation or scoring.",
+    "truth_free_only": "truth_free=true and truth_opened=false artifacts are not truth evidence but remain listed.",
+    "uncertain_is_excluded": true,
+    "leaderboard_scores_are_not_evidence": true
+  },
+  "truth_opened_or_used_route_devices": [
+    "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8",
+    "2021-01-04-22-40-us-ca-mtv-a/mi8",
+    "2021-01-04-22-40-us-ca-mtv-a/pixel5",
+    "2021-01-05-21-12-us-ca-mtv-d/mi8",
+    "2021-03-10-23-13-us-ca-mtv-h/pixel5",
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2021-03-16-20-40-us-ca-mtv-b/pixel4xl",
+    "2021-07-14-20-50-us-ca-mtv-e/pixel4",
+    "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+    "2021-07-19-20-49-us-ca-mtv-a/pixel5",
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "2022-01-26-20-02-us-ca-mtv-pe1/mi8",
+    "2022-01-26-20-02-us-ca-mtv-pe1/pixel5",
+    "2022-02-24-18-29-us-ca-lax-o/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5",
+    "2022-05-13-20-57-us-ca-mtv-pe1/pixel6pro",
+    "2022-05-13-20-57-us-ca-mtv-pe1/sm-g988b",
+    "2022-07-26-21-01-us-ca-sjc-s/samsunga325g",
+    "2022-08-04-20-07-us-ca-sjc-q/pixel5",
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a205u",
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a217m",
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a325f",
+    "2022-11-15-00-53-us-ca-mtv-a/pixel7pro",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel6pro",
+    "2023-05-16-19-55-us-ca-mtv-xe1/pixel7pro",
+    "2023-05-23-19-56-us-ca-mtv-ie2/sm-a505g",
+    "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "2023-05-25-19-10-us-ca-sjc-be2/sm-s908b",
+    "2023-05-25-20-11-us-ca-sjc-he2/pixel7pro",
+    "2023-09-05-23-07-us-ca-routen/pixel5",
+    "2023-09-06-00-01-us-ca-routen/pixel6pro",
+    "2023-09-06-22-49-us-ca-routebb1/pixel7pro",
+    "2023-09-07-18-59-us-ca/pixel5"
+  ],
+  "truth_free_only_materialized_or_referenced": [
+    "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+    "2023-05-16-19-54-us-ca-mtv-xe1/pixel5"
+  ],
+  "prior_development_truth_reuse": {
+    "identities": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "2022-02-24-18-29-us-ca-lax-o/pixel5"
+    ],
+    "evidence": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_carrier_compatibility_result_v1.json and its sealed train_truth artifacts",
+    "classification": "development-train truth was already materialized/read by a prior experiment; this phase may reuse the exact file for scoring but must not call these identities never-opened",
+    "new_truth_read_before_current_bridge_freeze": 0
+  },
+  "selected_exact_identity_split": {
+    "train": [
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/pixel5",
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b"
+    ],
+    "fresh_validation": "2022-08-04-20-07-us-ca-sjc-q/sm-a325f",
+    "future_holdout": "2023-03-08-21-34-us-ca-mtv-u/pixel5",
+    "selection_basis": "Metadata-only availability of device_gnss.csv, route brdc.nav, ground_truth.csv, route/year/environment/device diversity, and absence from every exact identity in the truth-used inventory; no metric ranking.",
+    "exact_identity_truth_open_count_before_freeze": 0,
+    "future_holdout_materialized_before_freeze": false,
+    "future_holdout_truth_open_count_before_freeze": 0,
+    "selector_output_root_absent_before_freeze": true,
+    "route_overlap_with_prior_truth": {
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/pixel5": "same route has prior mi8 truth evidence",
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": "same route has prior pixel4 truth evidence",
+      "2022-08-04-20-07-us-ca-sjc-q/sm-a325f": "same route has prior pixel5 truth evidence",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": "same route has prior pixel6pro truth evidence"
+    },
+    "route_disjoint_complete_nav_alternative": "not available in the 41 train identities after incorporating optimizer-stop truth; route overlap is explicitly retained as a selection risk, never hidden"
+  },
+  "audit_result": {
+    "archive_train_identity_count": 41,
+    "truth_opened_or_used_exact_identity_count": 33,
+    "selected_train_count": 2,
+    "selected_exact_identity_count": 4,
+    "selected_device_models": ["pixel5", "sm-g988b", "sm-a325f"],
+    "fresh_validation_and_holdout_exact_identity_truth_free": true,
+    "old_holdout_or_leaderboard_used_for_selection": false,
+    "selector_split_frozen_separately_before_new_candidate_materialization": true
+  },
+  "safety": {
+    "truth_payload_read_by_this_audit": false,
+    "archive_member_content_read_by_this_audit": false,
+    "validation_or_holdout_materialized_by_this_audit": false,
+    "external_mutation": false,
+    "token_access": false,
+    "production_default_changed": false
+  }
+}

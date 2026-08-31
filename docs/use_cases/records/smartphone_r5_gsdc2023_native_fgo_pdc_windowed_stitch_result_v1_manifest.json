@@ -1,0 +1,38 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-pdc-windowed-stitch-result-manifest.v1",
+  "status": "sealed-no-go-development-train-gate",
+  "result_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_windowed_stitch_result_v1.json",
+    "sha256": "3dedbd06513cb6db3631809ac06e014579ce69084ce637478c94334554c52d71"
+  },
+  "authorization": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_windowed_stitch_train_score_authorization_v1.json",
+    "sha256": "9b6e3c040aefa938395d37774a08b7e361db71a6592633758a239d04cc00e767"
+  },
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_windowed_stitch_freeze_v1.json",
+    "sha256": "40ef733d28cebd7d72710a122a2ec5cfe72a6c97a93480eb41a582b4f990dac6"
+  },
+  "candidate_artifact": {
+    "path": "output/smartphone-r5/native-fgo-pdc-windowed-v2-stitch/windowed_v2.pos",
+    "sha256": "e9be773d6c7d10323f10c3ece4d4e1e5ed1edc7568c4b9a5221a6cb856a8105d"
+  },
+  "score_artifacts": {
+    "report": {
+      "path": "output/smartphone-r5/native-fgo-pdc-windowed-v2-stitch-score-v1/stitch_train_evaluation.json",
+      "sha256": "2a9747e9253c30fc49e9acdb3a46ed173609afe455af29cae0a5e193ae3dd04e"
+    },
+    "manifest": {
+      "path": "output/smartphone-r5/native-fgo-pdc-windowed-v2-stitch-score-v1/stitch_train_evaluation.manifest.json",
+      "sha256": "c6e783a3d108fcc68f83f49f1e08f6d89d7802af61b2e0a33944799882f1ab97"
+    }
+  },
+  "truth_policy": {
+    "truth_read_count": 1,
+    "fresh_validation_truth_read_count": 0,
+    "holdout_truth_read_count": 0,
+    "test_truth_read_count": 0,
+    "leaderboard_used_for_tuning": false,
+    "external_mutation": false
+  }
+}

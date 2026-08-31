@@ -1,0 +1,31 @@
+{
+  "schema_version": "smartphone-r5-wls-multi-phone-ensemble-holdout-failure-manifest.v1",
+  "sealed": true,
+  "failure_record": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_holdout_evaluation_failure.json",
+    "sha256": "73a3be4133876d3538bed7baade26bef5d295f9da2d38a152bb49419a8fc4494"
+  },
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_holdout_freeze.json",
+    "sha256": "3b12264c321c47f5dca01923b3f40fd02a7eddea60610ccfd344587fd76dbf33"
+  },
+  "freeze_manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_holdout_freeze_manifest.json",
+    "sha256": "bd2bf1cc4fee77a02b8116a9b9b064f0c0b1fafd6ef11ac6f6b0c6cadd8588e3"
+  },
+  "failure_artifact": {
+    "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1/wls_multi_phone_ensemble_holdout_failure.json",
+    "sha256": "992fc403d6961c853e94f7f6c2a687c80b26fe36db293fa29c58615dd5871abc"
+  },
+  "holdout": {
+    "route": "2022-10-06-21-51-us-ca-mtv-n",
+    "device_materialized_count": 3,
+    "truth_open_count": 0,
+    "wls_completed": false,
+    "submission_completed": false,
+    "rerun_permitted": false
+  },
+  "cause": "WLS helper role authorization rejected holdout execution after device-only materialization",
+  "production_rtk_spp_default_changed": false,
+  "post_holdout_tuning": false
+}

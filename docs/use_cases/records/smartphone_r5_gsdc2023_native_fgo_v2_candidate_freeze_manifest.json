@@ -1,0 +1,20 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-v2-candidate-freeze-manifest.v1",
+  "candidate_freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_candidate_freeze.json",
+  "candidate_freeze_record_sha256": "7ab9679a7eb691b7bd77a3c66ae8fd522e906de871330b5ab3cb7cfb9f8106d3",
+  "split_freeze_record_sha256": "7e7c8d29bc385cefef947e56a653c8a19e76ac4df36eb3999bf154899187a2a9",
+  "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+  "truth_open_count_before_freeze": 0,
+  "new_train_payload_materialized_before_freeze": false,
+  "fresh_validation_materialized": false,
+  "future_holdout_materialized": false,
+  "future_holdout_truth_open_count": 0,
+  "algorithm_numeric_parameters_frozen": true,
+  "production_default_changed": false,
+  "external_mutation": false,
+  "token_access": false,
+  "integrity": {
+    "hash_algorithm": "SHA-256",
+    "this_manifest_is_recomputed_after_record_hash": true
+  }
+}

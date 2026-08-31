@@ -1,0 +1,415 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-published-solution-reproducibility-audit.v1",
+  "audited_at_utc": "2026-08-30T12:42:30Z",
+  "status": "blocked-at-matlab-mex-wrapper",
+  "purpose": "Reproduce the smallest route of a published GSDC 2023 solution from public source and artifacts, without changing the production pipeline or tuning from leaderboard values.",
+  "policy": {
+    "external_mutation": false,
+    "kaggle_submission": false,
+    "token_access": false,
+    "leaderboard_scores_used_for_tuning": false,
+    "fresh_validation_opened": false,
+    "future_holdout_opened": false,
+    "production_default_changed": false,
+    "source_copied_into_production": false,
+    "unrelated_worktree_changes_preserved": true
+  },
+  "repository_snapshot": {
+    "local_repository": "gnssplusplus-library",
+    "git_head_at_audit": "a947409878fe78ca9234b20288cadd4d75baedea",
+    "worktree": "dirty shared worktree; pre-existing changes were not reset or overwritten",
+    "cache_root": "output/reproducibility-cache",
+    "cache_policy": "ignored, content-addressed research cache; no public source was vendored into tracked production code"
+  },
+  "primary_source_evidence": [
+    {
+      "url": "https://www.ion.org/gnss/googlecompetition.cfm",
+      "role": "official ION GSDC winners page",
+      "fact_status": "exact",
+      "evidence": [
+        "The page lists Norizumi Motooka (Mitsubishi Electric) as first place.",
+        "The page lists Taro Suzuki (Chiba Institute of Technology) as second place.",
+        "The page lists Jeonghyeon Yun (Sejong University) as third place."
+      ]
+    },
+    {
+      "url": "https://www.ion.org/publications/abstract.cfm?articleID=19924",
+      "role": "official first-place paper abstract",
+      "fact_status": "exact",
+      "evidence": [
+        "The abstract describes tightly coupled GNSS/INS integration.",
+        "It identifies an IMU timestamp mismatch and an IMU timestamp adjustment.",
+        "It describes adaptive GNSS measurement weighting across environments and phone models."
+      ],
+      "limitation": "No complete source repository, parameter file, or executable artifact is supplied by the abstract."
+    },
+    {
+      "url": "https://www.ion.org/publications/abstract.cfm?articleID=19922",
+      "role": "official third-place paper abstract",
+      "fact_status": "exact",
+      "evidence": [
+        "The abstract describes a two-step estimator using raw pseudorange, Doppler, and carrier phase.",
+        "Doppler velocity and TDCP velocity are used for position updates and measurement validation."
+      ],
+      "limitation": "No complete source repository or executable artifact is supplied by the abstract."
+    },
+    {
+      "url": "https://www.ion.org/gnss/upload/Smartphone-Decimeter-Challenge-2023-2024.pdf",
+      "role": "official ION workshop material",
+      "fact_status": "exact",
+      "evidence": [
+        "The material describes training/public/private trace separation and raw GNSS/IMU vetting.",
+        "Reported solution families include FGO, PPK float, and FGO plus TensorFlow.",
+        "Vetting examples include uncertainty, arrival time, constellation, ADR validity/reset/cycle slip, and clock discontinuity checks."
+      ],
+      "limitation": "The slides do not constitute a complete reproducible implementation."
+    },
+    {
+      "url": "https://www.kaggle.com/competitions/smartphone-decimeter-2023",
+      "role": "official competition page",
+      "fact_status": "source reference only",
+      "evidence": [
+        "The competition page is the authoritative external destination for the challenge and submission service.",
+        "No submission or authenticated API mutation was made in this phase."
+      ]
+    }
+  ],
+  "published_repository": {
+    "url": "https://github.com/taroz/gsdc2023",
+    "clone_url": "https://github.com/taroz/gsdc2023.git",
+    "branch": "main",
+    "commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "commit_date": "2025-01-15T16:36:16+09:00",
+    "commit_subject": "Factor input changed to match gtsam_gnss update",
+    "tracked_file_count": 30,
+    "git_tree_listing_sha256": "64939d3369edac1d908251a2e071dae56badff5eeaa6b1d0b367507930b9dc83",
+    "cache_path": "output/reproducibility-cache/gsdc2023",
+    "cache_clone_size_bytes": 5623731,
+    "license": "MIT",
+    "license_sha256": "f5b3bcb0ce8267e076b4dad74c67c02efab4161efd6c5ba208402a0f51fbea1b",
+    "readme_sha256": "8020c204ed3dd2cda975355c1d372945b6eb166a87976369fca6a6592aa7c5e9",
+    "readme_claim": "The README reports a public score of 0.789 m (1st) and private score of 0.928 m (2nd).",
+    "official_attribution_conflict": "The official ION winners page lists Taro Suzuki second place. The README self-report is retained as repository evidence but is not used to assign rank or tune this work.",
+    "public_output_sample": {
+      "path": "results/sample_submission.csv",
+      "sha256": "b0c4853076f715d6bdca46e5c8c99e575f7982d8ee4fc9c0fe417507badcb780",
+      "header": ["tripId", "UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
+      "data_rows": 71936,
+      "authoritative_for_kaggle": false,
+      "note": "This is a repository result/sample file, not an independently verified Kaggle sample artifact."
+    },
+    "entry_points": [
+      {
+        "path": "run_fgo.m",
+        "sha256": "02150849653b2e5c80609e971dbef41b010569de5dcc304782235b7fc96b9065",
+        "role": "final GNSS+IMU FGO and result/submission orchestration",
+        "hardcoded_dataset": "test",
+        "required_inputs": ["MATLAB R2024a", "GTSAM MATLAB toolbox", "gtsam_gnss MATLAB wrapper", "MatRTKLIB", "MatlabProgressBar", "dataset_2023 with precomputed result_gnss_imu.mat"]
+      },
+      {
+        "path": "run_preprocessing.m",
+        "sha256": "b350e0e2d6d4ab8f8c1a43128c73fd1ead00c2e01ea402502d2be35fec267528",
+        "role": "MATLAB raw-log preprocessing entry point",
+        "note": "The script states that the public dataset already contains phone_data.mat, so preprocessing is not needed for the supplied archive."
+      },
+      {
+        "path": "fgo_gnss.m",
+        "sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3",
+        "role": "GNSS-only initial FGO"
+      },
+      {
+        "path": "fgo_gnss_imu.m",
+        "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+        "role": "GNSS+IMU final FGO"
+      },
+      {
+        "path": "parameters.m",
+        "sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52",
+        "role": "published numeric parameter source"
+      }
+    ]
+  },
+  "dependency_repositories": [
+    {
+      "name": "gtsam-4.3a",
+      "url": "https://github.com/taroz/gtsam-4.3a",
+      "branch": "develop",
+      "commit": "88d94f517c39619c93087bf3611d4dee16751390",
+      "commit_date": "2024-09-30T15:35:00+09:00",
+      "commit_subject": "Fix GTWRAP_INCLUDE_NAME from wrap to gtwrap",
+      "tracked_file_count": 4988,
+      "git_tree_listing_sha256": "70800e7f101413d3e6a5bd7fa4bfa690a3423b20e0a029086a4f89f9fb8196be",
+      "cache_path": "output/reproducibility-cache/gtsam-4.3a",
+      "license": "Simplified BSD; repository also contains LICENSE.BSD",
+      "license_sha256": "798f8f25b01a3d5c1401bd81dce80c0433f0a50684ca29348a959cdfecee2b2c",
+      "license_bsd_sha256": "ec9746ecc24d4b36c4c8412ced73a9c7351238396d1fd17b70b3ba1e6a2e5bd0",
+      "retrievable_without_credentials": true,
+      "role": "GTSAM and MATLAB wrapper source"
+    },
+    {
+      "name": "gtsam_gnss",
+      "url": "https://github.com/taroz/gtsam_gnss",
+      "branch": "main",
+      "commit": "e679b72b620fc6800723578e4077dd157587d129",
+      "commit_date": "2026-05-23T22:55:47+09:00",
+      "commit_subject": "Add some switchable constraint-based factors",
+      "tracked_file_count": 54,
+      "git_tree_listing_sha256": "f246924fc6543e1681654632d3a2b1af4ad86ccb1f6b21d6b4ec4f4c80e379cd",
+      "cache_path": "output/reproducibility-cache/gtsam_gnss",
+      "license": "MIT",
+      "license_sha256": "f5b3bcb0ce8267e076b4dad74c67c02efab4161efd6c5ba208402a0f51fbea1b",
+      "readme_sha256": "5e40812ef51ff83edeffa803f2f810b6e16be91498b0184d7c2d456bd8beb2a6",
+      "retrievable_without_credentials": true,
+      "role": "custom GNSS factors and MATLAB wrapper generator"
+    },
+    {
+      "name": "MatRTKLIB",
+      "url": "https://github.com/taroz/MatRTKLIB",
+      "branch": "main",
+      "commit": "69bcbd3faebc39815adb03e4b329033a4a7deb4a",
+      "commit_date": "2025-03-08T20:44:35+09:00",
+      "commit_subject": "Update manual",
+      "tracked_file_count": 583,
+      "git_tree_listing_sha256": "673c4d59516c2791a28ad6c8df1c4278ec3f8bc69776a60f0a1ad1f3b6bd99c3",
+      "cache_path": "output/reproducibility-cache/MatRTKLIB",
+      "license": "MIT",
+      "license_sha256": "f9aab2708d854e6173965ac240e741222dbb33f3ae5a0731bcbcb1038d7e2145",
+      "readme_sha256": "9fcc4b8d517175658c865c7123d64965ac0aff4d402aa9d06b64d780e6738a8b",
+      "retrievable_without_credentials": true,
+      "role": "MATLAB RTKLIB wrapper"
+    },
+    {
+      "name": "MatlabProgressBar",
+      "url": "https://github.com/JAAdrian/MatlabProgressBar",
+      "branch": "master",
+      "commit": "0e4acf5f3656d4c772552fdd01c7a93043457586",
+      "commit_date": "2024-12-16T21:33:34+01:00",
+      "commit_subject": "Merge pull request #14 from JAAdrian/develop",
+      "tracked_file_count": 20,
+      "git_tree_listing_sha256": "1048e5379a3dc2751d3d550f5b4d37b71c8537c58d679aa24e3d02d152087611",
+      "cache_path": "output/reproducibility-cache/MatlabProgressBar",
+      "license": "BSD 3-Clause",
+      "license_sha256": "989812b4224151728539b4a6ee12f0b88fba4c2d59ab783eb5cd077a0bf5787a",
+      "readme_sha256": "19bb5bfd16d8096c4398e46b90ca27ee532c2d55a4cb2516ad008344a09493e3",
+      "retrievable_without_credentials": true,
+      "role": "MATLAB progress display dependency"
+    }
+  ],
+  "public_artifacts": {
+    "preprocessed_dataset": {
+      "source_url_as_published": "http://www.taroz.net/data/dataset_2023.zip",
+      "redirected_url_observed": "https://taroz.net/data/dataset_2023.zip",
+      "http_status": 200,
+      "credential_required": false,
+      "content_length_bytes": 2761355999,
+      "last_modified": "Thu, 19 Sep 2024 04:36:11 GMT",
+      "etag": "a496f2df-622717642c4c0",
+      "accept_ranges": true,
+      "local_cache_path": "data/gsdc2023/cache/dataset_2023.zip",
+      "local_size_bytes": 2761355999,
+      "local_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+      "contains_preprocessed_phone_data_mat": true,
+      "license_or_terms": "No separate license file was found in the archive; keep the downloaded artifact local and do not redistribute it."
+    },
+    "repository_sample": {
+      "source_url": "https://github.com/taroz/gsdc2023/blob/29923f9f370f09ebc00f96d8cca375007a18e7d5/results/sample_submission.csv",
+      "local_cache_path": "output/reproducibility-cache/gsdc2023/results/sample_submission.csv",
+      "sha256": "b0c4853076f715d6bdca46e5c8c99e575f7982d8ee4fc9c0fe417507badcb780",
+      "rows": 71936,
+      "authoritative_kaggle_sample": false
+    }
+  },
+  "source_surface_hashes": {
+    "gsdc2023/functions/GobsPhone.m": "11d43c1e76370b9d393075ec88071585efb3efb5d2fa97b3be58c0e1bd196986",
+    "gsdc2023/functions/gnsslog2obs.m": "665ce43d1fc3c5a9c3b3a6fd76f81539126e3ab897fbba484ab0ccd18964acff",
+    "gsdc2023/functions/submission.m": "db97431c1da52b93b8903eb4c604141b3c8d6dfb7ad33b6df237e414a7e8c9ac",
+    "gtsam_gnss/gtsam_gnss.i": "cc7dedf1cbb2b51b44e8cf468660427f6e41c02a80df978e337b6500a475e326",
+    "gtsam_gnss/src/PseudorangeFactor_X.h": "87d40197644cfe5c930fd7767930882eecafd965016237a40cbebfbbbffcd6ac",
+    "gtsam_gnss/src/DopplerFactor_VD.h": "de2c11d06ff860a95785c84620e5ed57dcfd5ca24995a0e642e9a5984fe093e1",
+    "gtsam_gnss/src/TDCPFactor_XXDD.h": "dc6b92e824f439df56286b2c2f81c0acb744f698c45648baaf5da67d6b239aed"
+  },
+  "route_materialization": {
+    "source_archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "cache_path": "output/reproducibility-cache/taroz-train-smoke-v2/dataset_2023",
+    "role": "train smoke only",
+    "route": "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8",
+    "settings_train_sha256": "cb868652632a90919d9b21decaa9b77627d75d16d75287a5430a92b6cf29e080",
+    "files": {
+      "course/brdc.nav": {
+        "size_bytes": 9700599,
+        "sha256": "3690f08f8f1c1c0e7e20eba6f6809acd0ae4d5a09f9e90b1176512c6520ae232"
+      },
+      "course/SLAC_rnx2.obs": {
+        "size_bytes": 579806,
+        "sha256": "285f08bbd07e8d224b8ee54ae98ddeb8d8a7ef0b8639bae4d379f0a6a953ef56"
+      },
+      "mi8/phone_data.mat": {
+        "size_bytes": 12228451,
+        "sha256": "7498870209743f32aa8aa1fe75d3f4047e17224463b5ddbc08ab096d40fc4fe8"
+      },
+      "mi8/device_gnss.csv": {
+        "size_bytes": 47572006,
+        "sha256": "3dcb29d9793384fd7e45930784a0b60fb909bebe4e5a83cd1924541df8880680"
+      },
+      "mi8/device_imu.csv": {
+        "size_bytes": 18482800,
+        "sha256": "8544e7ef2a1069d3ff78081a5174ae6bcb90a17faf71130bbd3c2bd60e6500d4"
+      },
+      "mi8/ground_truth.csv": {
+        "size_bytes": 195037,
+        "sha256": "a7eeb418bd8c8bb3beb37b166371b8fc3cf709b48a8f3ab5b84a422a8c440f97"
+      },
+      "mi8/gt.mat": {
+        "size_bytes": 260513,
+        "sha256": "0ad35d6c14655a1353613f07ee823fd685a2ff9036e5cec7b128c15554c717f8"
+      }
+    },
+    "train_ground_truth_materialized": true,
+    "train_ground_truth_parsed_by_this_phase": false,
+    "fresh_validation": {
+      "route": "2023-09-07-18-59-us-ca/pixel5",
+      "payload_materialized": false,
+      "truth_open_count": 0
+    },
+    "future_holdout": {
+      "route": "2023-09-06-00-01-us-ca-routen/pixel6pro",
+      "payload_materialized": false,
+      "truth_open_count": 0
+    }
+  },
+  "environment_and_dependency_checks": {
+    "python": "3.12.3",
+    "cmake": "3.28.3",
+    "git": "2.43.0",
+    "cxx": "g++ 13.3.0",
+    "numpy": "2.4.2",
+    "scipy": "1.17.0",
+    "pandas": "2.3.3",
+    "python_gtsam": false,
+    "python_matlabengine": false,
+    "python_oct2py": false,
+    "matlab": {
+      "available": false,
+      "probe_command": "command -v matlab",
+      "entrypoint_probe_return_code": 127,
+      "entrypoint_probe_stderr": "/bin/bash: line 26: matlab: command not found",
+      "stderr_sha256": "973daad1a1a89f2f6a90501688d285114fe8b53a51cd39ae92515f53f384c387"
+    },
+    "octave": false,
+    "mex": false,
+    "native_gtsam": {
+      "installed": true,
+      "cmake_package_version": "4.3.0",
+      "installed_extra_version": "4.3a2",
+      "prefix": "/home/sasaki/.local",
+      "matlab_toolbox_present": false
+    },
+    "gtwrap": {
+      "installed_for_probe": true,
+      "source_commit": "88d94f517c39619c93087bf3611d4dee16751390",
+      "venv": "output/reproducibility-cache/venv-gtwrap-v1",
+      "install_prefix": "output/reproducibility-cache/install-gtwrap-v1",
+      "pyparsing": "3.1.1",
+      "import_probe": "passed"
+    }
+  },
+  "execution_evidence": {
+    "gtsam_gnss_without_gtwrap": {
+      "command": "cmake -S output/reproducibility-cache/gtsam_gnss -B output/reproducibility-cache/build-gtsam_gnss-v1 -DCMAKE_BUILD_TYPE=Release -DGTSAM_DIR=/home/sasaki/.local/lib/cmake/GTSAM",
+      "return_code": 1,
+      "log_path": "output/reproducibility-cache/gtsam_gnss_cmake-v1.log",
+      "log_sha256": "9dc2a35924b64eda3d12317285b4b10976136c02d1fe0f0c54a8c0c207c6aca3",
+      "first_blocker": "gtwrapConfig.cmake was not found and gtwrap_get_python_version was unknown"
+    },
+    "gtsam_gnss_with_gtwrap": {
+      "command": "cmake -S output/reproducibility-cache/gtsam_gnss -B output/reproducibility-cache/build-gtsam_gnss-v3 -DCMAKE_BUILD_TYPE=Release -DGTSAM_DIR=/home/sasaki/.local/lib/cmake/GTSAM -DCMAKE_PREFIX_PATH=$PWD/output/reproducibility-cache/install-gtwrap-v1",
+      "return_code": 1,
+      "log_path": "output/reproducibility-cache/gtsam_gnss_cmake-v3.log",
+      "log_sha256": "be3dfdce4d005b33352b411a05e5cc007383ccd5fd348318252289fa1f3a21ae",
+      "first_blocker": "FindMatlab could not find Matlab_INCLUDE_DIRS, Matlab_MEX_LIBRARY, Matlab_MEX_EXTENSION, Matlab_ROOT_DIR, Matlab_MX_LIBRARY, or MEX_COMPILER"
+    },
+    "taroz_matlab_entrypoint": {
+      "command": "(cd output/reproducibility-cache/taroz-train-smoke-v2 && matlab -batch \\\"run('/abs/path/output/reproducibility-cache/gsdc2023/run_fgo.m')\\\")",
+      "return_code": 127,
+      "stdout_path": "output/reproducibility-cache/taroz-train-smoke-v2/matlab_run_fgo.stdout",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_path": "output/reproducibility-cache/taroz-train-smoke-v2/matlab_run_fgo.stderr",
+      "stderr_sha256": "973daad1a1a89f2f6a90501688d285114fe8b53a51cd39ae92515f53f384c387",
+      "status": "blocked-before-MATLAB-execution"
+    },
+    "local_native_factor_smoke": {
+      "status": "passed-bounded-smoke-not-taroz-reproduction",
+      "command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:$LD_LIBRARY_PATH build/apps/gnss_fgo --obs output/smartphone-r5/development-full/rover.obs --nav data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/brdc.nav --out output/reproducibility-cache/taroz-train-smoke-v1/native_fgo/fgo.pos --summary-json output/reproducibility-cache/taroz-train-smoke-v1/native_fgo/summary.json --debug-problem-only --max-epochs 2 --backend eigen --sd-doppler-factors --sd-tdcp-factors --quiet",
+      "return_code": 0,
+      "binary_sha256": "5e1e22979a84b938352a2096e570bb1587d6eba7ebb0757431a8ebd9423b525f",
+      "input_obs_sha256": "281f7b38c66ba6ddb1c4a004d0948c6fa2178345da3373dfbdd2567c8c66598d",
+      "input_nav_sha256": "16c859f8015c874398978bae6004172c355f7d3a3b06fa81b54aac88b6b78d33",
+      "summary_sha256": "bad038335b1188007387769905f222330d56917bfc0390ae2c9b5422ab9bebcb",
+      "position_sha256": "dda28db9e0a810834611668a895df20ed37f8cbd7340416455819906b1c67084",
+      "observed_summary": {
+        "input_epochs": 2,
+        "optimized_epochs": 2,
+        "valid_solutions": 2,
+        "pseudorange_factors": 14,
+        "tdcp_factors": 6,
+        "single_difference_doppler_factors": 0,
+        "single_difference_tdcp_factors": 0,
+        "motion_factors": 1,
+        "graph_factors": 21
+      },
+      "interpretation": "This proves the repository's existing C++ FGO can parse a bounded handset-derived RINEX smoke input. It does not reproduce taroz MATLAB output, does not score a route, and does not justify copying external code."
+    }
+  },
+  "published_factor_comparison": {
+    "external_files_inspected": [
+      "gtsam_gnss/src/PseudorangeFactor_X.h",
+      "gtsam_gnss/src/DopplerFactor_VD.h",
+      "gtsam_gnss/src/TDCPFactor_XXDD.h"
+    ],
+    "local_equivalent": "The existing libgnss++ FGO already contains native pseudorange and single-difference Doppler/TDCP factor paths; no external header was copied into production.",
+    "port_decision": "No new port: an additional header-only copy would add no train-level evidence while the MATLAB wrapper remains unavailable. The bounded native smoke above is retained as the reproducibility boundary."
+  },
+  "exact_first_and_third_place_repository_search": {
+    "official_first_place_author": "Norizumi Motooka",
+    "official_third_place_authors": ["Jeonghyeon Yun", "Suyeol Kim", "Taejin Youn", "Gyeongmin Kim", "Wonwoo Park", "Byungwoon Park"],
+    "first_place_public_repository_linked_by_primary_sources": null,
+    "third_place_public_repository_linked_by_primary_sources": null,
+    "search_boundary": "Official ION winners/abstract/workshop pages, the accessible public shell of the competition writeups, and public GitHub repository search were checked. No exact first-place or third-place 2023 source repository link was surfaced in this pass.",
+    "negative_result_strength": "This is a bounded search result, not proof that no private, unindexed, or later-published repository exists.",
+    "taroz_attribution": "taroz/gsdc2023 is publicly reproducible source by Taro Suzuki, officially listed second place; its README's first/private-second self-report is recorded as a conflict and not used for ranking."
+  },
+  "decision": {
+    "production_integration": "no-go",
+    "development_lane": "no new lane; existing production defaults and development lane remain unchanged",
+    "earliest_exact_blocker": "After supplying the public taroz GTSAM source and successfully installing its gtwrap CMake package, gtsam_gnss configuration stops at CMake FindMatlab because MATLAB R2024a, MEX headers/library/compiler, and the GTSAM MATLAB toolbox are absent.",
+    "full_reproduction": "not completed",
+    "data_artifact_status": "public source and preprocessed archive were retrieved without credentials; the MATLAB execution stage was not reached",
+    "required_recovery": "Provide a licensed MATLAB R2024a installation with MEX and the GTSAM MATLAB toolbox, then rerun the pinned train-route smoke. Do not retune parameters or use a fresh validation/holdout to overcome this environment blocker."
+  },
+  "reproduction_commands": [
+    "git clone --depth 1 https://github.com/taroz/gsdc2023.git output/reproducibility-cache/gsdc2023",
+    "curl -L http://www.taroz.net/data/dataset_2023.zip -o data/gsdc2023/cache/dataset_2023.zip",
+    "cmake -S output/reproducibility-cache/gtsam-4.3a/wrap -B output/reproducibility-cache/build-gtwrap-v1 -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PWD/output/reproducibility-cache/install-gtwrap-v1",
+    "cmake --build output/reproducibility-cache/build-gtwrap-v1 --target install -j2",
+    "cmake -S output/reproducibility-cache/gtsam_gnss -B output/reproducibility-cache/build-gtsam_gnss-v3 -DCMAKE_BUILD_TYPE=Release -DGTSAM_DIR=/home/sasaki/.local/lib/cmake/GTSAM -DCMAKE_PREFIX_PATH=$PWD/output/reproducibility-cache/install-gtwrap-v1",
+    "(cd output/reproducibility-cache/taroz-train-smoke-v2 && matlab -batch \\\"run('/abs/path/output/reproducibility-cache/gsdc2023/run_fgo.m')\\\")",
+    "LD_LIBRARY_PATH=/home/sasaki/.local/lib:$LD_LIBRARY_PATH build/apps/gnss_fgo --obs output/smartphone-r5/development-full/rover.obs --nav data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/brdc.nav --out output/reproducibility-cache/taroz-train-smoke-v1/native_fgo/fgo.pos --summary-json output/reproducibility-cache/taroz-train-smoke-v1/native_fgo/summary.json --debug-problem-only --max-epochs 2 --backend eigen --sd-doppler-factors --sd-tdcp-factors --quiet"
+  ],
+  "truth_and_leakage": {
+    "train_route_materialized": true,
+    "train_truth_parsed_by_this_phase": 0,
+    "fresh_validation_payload_materialized": 0,
+    "fresh_validation_truth_open_count": 0,
+    "future_holdout_payload_materialized": 0,
+    "future_holdout_truth_open_count": 0,
+    "old_holdout_used_for_selection": false,
+    "public_private_score_used_for_tuning": false
+  },
+  "reproducibility_limitations": [
+    "run_fgo.m hardcodes dataset=test and expects precomputed result_gnss_imu.mat for its final stage; a train route smoke needs a MATLAB wrapper or a controlled source edit, neither of which was performed.",
+    "The public archive contains preprocessed phone_data.mat, but no independent license file was present in the archive.",
+    "The taroz paper URLs cited in its README returned HTTP 404 after redirect during this audit; the official ION abstracts and workshop PDF remain the primary method evidence.",
+    "The local native FGO smoke is a separate implementation and must not be described as bit-equivalent or accuracy-equivalent to taroz/gsdc2023."
+  ],
+  "next_action": "Keep the pinned public caches and this audit. If MATLAB/MEX becomes available, rerun only the recorded train smoke and hash its outputs before considering a new frozen validation; no production default change is authorized by this record."
+}

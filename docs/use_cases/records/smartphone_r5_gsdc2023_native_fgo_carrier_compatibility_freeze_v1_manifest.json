@@ -1,0 +1,33 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-carrier-compatibility-freeze-manifest.v1",
+  "status": "sealed-before-carrier-compatibility-truth-free-run",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_carrier_compatibility_freeze_v1.json",
+  "freeze_record_sha256": "031e43d0fa478213d2a90e214668c4bae582e83309ee570a7c057568683fa123",
+  "role_inventory": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_carrier_compatibility_role_inventory_v1.json",
+  "role_inventory_sha256": "dc41e76bf4fa956d589af4675a44fee1be1c8bf54fdfe52cf437b02e07866cd1",
+  "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+  "central_inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+  "central_metadata_canonical_sha256": "5f619be94a00c33c3067f13b1cd3351d96f2804f07fa04eda8fb027739fb0992",
+  "profile_sha256": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776",
+  "binary_hashes": {
+    "build/apps/gnss_fgo": "9190455cb34a9e818b79ed2ed6b023af5711fbef545215d4588bfed87f5c03e4",
+    "build/apps/gnss_spp": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12"
+  },
+  "source_hashes": {
+    "apps/commands/benchmarks/gnss_smartphone_native_fgo_carrier_compatibility_eval.py": "d132f2b6863e00dba128985a22c3db70da4b668aff725106e195a783d5465939",
+    "tests/test_smartphone_native_fgo_carrier_compatibility_eval.py": "f6c707747746108fd08d988291c8271f643bd063c0b59a10d07bbcb42482ae5e",
+    "docs/use_cases/smartphone_native_fgo_carrier_compatibility.md": "39bfe21d447dc9cb976b077ce40982688e332d3fa51fe47f38202aef5e95a670",
+    "tests/CMakeLists.txt": "8352c07006036bb3da1e842a13fcaf0f9acbccd2093a4b57d9c4f06e0dbb9d36"
+  },
+  "truth_open_count_before_freeze": 0,
+  "new_payload_materialized_before_freeze": false,
+  "validation_or_holdout_materialized_before_freeze": false,
+  "test_truth_materialized_before_freeze": false,
+  "output_root_absent_before_freeze": true,
+  "one_shot_development_score": true,
+  "no_post_truth_tuning": true,
+  "all_device_carrier_no_go_preserved": true,
+  "production_rtk_spp_default_changed": false,
+  "external_mutation": false,
+  "token_access": false
+}

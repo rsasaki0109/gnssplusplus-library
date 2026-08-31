@@ -1,0 +1,49 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-v2-1-preserve-v1-run-manifest.v1",
+  "record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_1_preserve_v1_run.json",
+  "record_sha256": "79840492a5a2d1a89ea62c283ba2d1aa9a0eadb02d11554ff6365e6c1a7316a5",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_1_preserve_v1_freeze.json",
+  "freeze_record_sha256": "6c33400e97345cc7f966c3ff5ff7a946b4fb6f89bb4c35cf56bc95654f663eae",
+  "release_binary": {
+    "path": "build/apps/gnss_fgo_imu_v21",
+    "sha256": "8b978458735996ea571baa9975be70c37287f84fec029ced187b9f30fbb6d483"
+  },
+  "source_sha256": {
+    "apps/native/gnss_fgo_imu_v21.cpp": "c158cdd2fc6cfba37b7bb300b52c2c5b9cf760482ac46206895f0462da835883",
+    "src/algorithms/fgo_gtsam_internal.hpp": "aad937849b4ba1c9b9bec0cdaaaf270a66cb71b7d789e682d5ff571bb7f66621",
+    "src/algorithms/fgo_gtsam_backend.cpp": "08c7b82e9395fc3645fc75785849576f982ec6e6e91432e3a58d85bb396ec191",
+    "apps/CMakeLists.txt": "7db14842b85c363c88e93ad1fbd6f719a502b21bc2fd8ed28af3c96b6c1ae81f",
+    "tests/test_smartphone_native_fgo_v2_1_contract.py": "551ed2961d079d2c6612ee9bed37b2493edbd74fbab241b4f00ac2544518efef",
+    "tests/CMakeLists.txt": "46c02359ba264ef406142629cd831e8eff06326443cfb06456ba62310c5754ff"
+  },
+  "artifact_sha256": {
+    "smoke_submission": "68ac64943115058f63c7a906ba4386ccf0d5b127d736f1db30e0e601686e5fb5",
+    "smoke_summary": "7b39d23ee07d641886052848d3ac91c8807f1611e7092d0f869067cc05487326",
+    "smoke_stdout": "008e9df166df12d962b9206d0c7d747f1183286901755143241a45754e415dcd",
+    "train_submission": "81399c6fcff364d7cf668c4b455d9588356490681c205b1d861d78a78d107df6",
+    "train_summary": "495e38514b05755d5bf48c0d94dbe9358e461d5aad359704ea5b9ae7fcd99da6",
+    "train_stdout": "442927dafc437829ff4e181fa88a18f650a30f69516f89d1a8f02381aea1bafd"
+  },
+  "truth": {
+    "train_truth_path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv",
+    "train_truth_sha256": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a",
+    "score_read_count": 1,
+    "validation_or_holdout_open_count": 0
+  },
+  "status": "train-short-window-no-go-h-p50-regression",
+  "atomic_outputs": true,
+  "parameter_change_after_freeze": false,
+  "train_metrics": {
+    "candidate_horizontal_wgs84_p50_m": 1.5491171035815947,
+    "candidate_horizontal_wgs84_p95_m": 1.7039025051753798,
+    "candidate_availability": 1.0,
+    "v1_same_window_horizontal_wgs84_p50_m": 1.4609035197361018,
+    "v1_same_window_horizontal_wgs84_p95_m": 2.0009204942713765,
+    "diagnostic_mean_m": 1.6241914437300267,
+    "wall_time_s": 0.32,
+    "peak_rss_kb": 35000,
+    "gate": "No-Go: H P50 regression despite strict H P95 improvement"
+  },
+  "candidate_fallback": "exact v1 TDCP/motion graph only if IMU branch is invalid; observed smoke and train runs used the CombinedImu branch",
+  "official_submission": false
+}

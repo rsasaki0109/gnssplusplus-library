@@ -1,0 +1,250 @@
+{
+  "schema_version": "smartphone-r5-kaggle-official-sample-promotion.v1",
+  "status": "sealed-failed-strict-comparison",
+  "audited_at_utc": "2026-08-30T08:34:26Z",
+  "scope": {
+    "competition": "smartphone-decimeter-2023",
+    "purpose": "Authenticated official sample recovery and truth-free provisional submission promotion preflight",
+    "promotion_contract": "The official sample may supply only the authoritative key/order; positioning is never rerun.",
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "inventory_path": "output/smartphone-r5/wls-test-batch-v1/test_inventory.json",
+    "inventory_sha256": "dbf89222e6860d4fb31f12c9c46402033ed31e905f8fe3f6615e5131cb9e9495",
+    "truth_materialized_count": 0,
+    "truth_open_count": 0
+  },
+  "authentication": {
+    "token_source": "/home/sasaki/.kaggle/access_token",
+    "token_file_mode": "600",
+    "authorization_header_used": true,
+    "token_value_recorded": false,
+    "token_value_printed": false,
+    "token_value_in_argv": false
+  },
+  "official_source": {
+    "files_list": {
+      "url": "https://www.kaggle.com/api/v1/competitions/data/list/smartphone-decimeter-2023",
+      "http_status": 200,
+      "response_content_type": "application/json",
+      "response_body_bytes": 6641,
+      "response_body_sha256": "09c3e9503f737d6add14d4582cfabde529410b20f798fd71f99bad568c288ca0",
+      "entry_count": 20,
+      "exact_entry": {
+        "name": "sdc2023/sample_submission.csv",
+        "creationDate": "2023-09-12T20:07:44.819Z",
+        "totalBytes": 5286788
+      }
+    },
+    "download": {
+      "url": "https://www.kaggle.com/api/v1/competitions/data/download/smartphone-decimeter-2023/sdc2023%2Fsample_submission.csv",
+      "http_status": 200,
+      "response_content_type": "application/zip",
+      "content_disposition": "attachment; filename=sample_submission.csv.zip",
+      "declared_bytes": 193395,
+      "downloaded_bytes": 193395,
+      "response_sha256": "d71f762591aee14d6355a7f7ca2c8c2b7e4d5045e93d04e1fa22de701c388271",
+      "last_modified": "Tue, 12 Sep 2023 20:13:17 GMT"
+    },
+    "sample_artifact": {
+      "path": "data/gsdc2023/sample_submission.csv",
+      "manifest_path": "data/gsdc2023/sample_submission.manifest.json",
+      "manifest_sha256": "c7d74f59ce936d4141da16a7492b20e08f0a379788b83d9f9694c50170a30c49",
+      "sha256": "b0c4853076f715d6bdca46e5c8c99e575f7982d8ee4fc9c0fe417507badcb780",
+      "bytes": 5286788,
+      "zip_member": "sample_submission.csv",
+      "zip_member_count": 1,
+      "path_traversal_guard": "all ZIP members rejected if absolute, dot-dot, backslash, NUL, or empty component",
+      "atomic_publish": true,
+      "official_sample_verified": true
+    }
+  },
+  "provisional_input": {
+    "run_manifest": {
+      "path": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/test_batch_derived_run_manifest.json",
+      "sha256": "726a9c0b2141c567607701c97a544935f6500f0c59dd8054d06d08093ae37d35",
+      "status": "completed-truth-free-derived-submission",
+      "route_count": 40,
+      "completed_route_count": 40,
+      "failed_route_count": 0,
+      "truth_open_count": 0,
+      "algorithm_recomputed_for_promotion": false
+    },
+    "key_manifest": {
+      "path": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/provisional_key_manifest.json",
+      "sha256": "4783d74e378e829f01306a6ae28bff1ba631e9aa9ddfc1a7aa3172e21ffdd1f5",
+      "key_count": 72010,
+      "id_field": "phone",
+      "official_sample_verified": false
+    },
+    "submission": {
+      "path": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/submission_derived_unverified.csv",
+      "manifest_path": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/submission_derived_unverified.manifest.json",
+      "sha256": "62c569f1b6f61fff2cccef598444ebbb053d59d504eb8178f54b916b8af7f439",
+      "manifest_sha256": "ecf62b2b54f2472a219fcca279c42dfbeccbb413f78c0524e5a045f156646003",
+      "bytes": 6156483,
+      "row_count": 72010,
+      "header": ["phone", "UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
+      "duplicate_key_count": 0,
+      "nonfinite_coordinate_count": 0,
+      "official_sample_verified": false
+    }
+  },
+  "strict_comparison": {
+    "sample": {
+      "header": ["tripId", "UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
+      "id_field": "tripId",
+      "row_count": 71936,
+      "unique_key_count": 71936,
+      "duplicate_key_count": 0,
+      "trip_id_count": 40,
+      "coordinates_used": false
+    },
+    "provisional": {
+      "header": ["phone", "UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
+      "id_field": "phone",
+      "row_count": 72010,
+      "unique_key_count": 72010,
+      "duplicate_key_count": 0,
+      "trip_id_count": 40,
+      "coordinate_validation": {
+        "rows_with_two_finite_in_range_coordinates": 72010,
+        "blank_coordinate_fields": 0,
+        "nonfinite_or_invalid_coordinate_fields": 0,
+        "out_of_range_coordinate_fields": 0
+      }
+    },
+    "coordinate_validation": {
+      "official_sample_rows_with_two_finite_in_range_coordinates": 71936,
+      "official_sample_blank_coordinate_fields": 0,
+      "official_sample_nonfinite_or_invalid_coordinate_fields": 0,
+      "official_sample_out_of_range_coordinate_fields": 0,
+      "coordinates_used_for_promotion": false
+    },
+    "header_exact_equal": false,
+    "key_set_equal": false,
+    "sample_keys_missing_from_provisional": 24,
+    "provisional_keys_extra_vs_sample": 98,
+    "sample_missing_by_trip_id": {
+      "2020-12-11-19-30-us-ca-mtv-e/pixel4xl": 1,
+      "2021-08-17-20-37-us-ca-mtv-g/pixel5": 0,
+      "2021-08-31-20-37-us-ca-mtv-e/sm-g988b": 1,
+      "2021-09-14-20-32-us-ca-mtv-k/pixel4": 1,
+      "2021-09-20-19-03-us-ca-mtv-l/pixel4": 0,
+      "2021-09-28-21-56-us-ca-mtv-a/mi8": 1,
+      "2021-11-05-18-28-us-ca-mtv-m/pixel6pro": 1,
+      "2021-11-30-20-59-us-ca-mtv-m/mi8": 1,
+      "2022-02-08-22-04-us-ca-sjc-r/pixel4": 0,
+      "2022-02-23-17-46-us-ca-lax-n/pixel4": 0,
+      "2022-02-23-22-35-us-ca-lax-m/pixel5": 1,
+      "2022-02-24-15-10-us-ca-lax-p/pixel4": 0,
+      "2022-02-24-22-14-us-ca-lax-i/pixel4": 0,
+      "2022-03-14-19-57-us-ca-mtv-pe1/xiaomimi8": 1,
+      "2022-03-17-20-16-us-ca-sjc-q/sm-g988b": 1,
+      "2022-03-22-18-44-us-ca-mtv-pe1/xiaomimi8": 0,
+      "2022-04-04-16-31-us-ca-lax-x/pixel4": 0,
+      "2022-04-22-20-11-us-ca-ebf-y/mi8": 0,
+      "2022-04-25-21-04-us-ca-ebf-x/mi8": 1,
+      "2022-04-25-22-36-us-ca-ebf-z/mi8": 0,
+      "2022-04-27-18-16-us-ca-ebf-zz/pixel5": 1,
+      "2022-04-27-19-23-us-ca-ebf-xx/pixel5": 1,
+      "2022-04-27-21-55-us-ca-ebf-ww/mi8": 1,
+      "2022-05-12-20-19-us-ca-mtv-pe1/samsunga325g": 1,
+      "2022-06-22-20-12-us-ca-lax-hh/samsunga325g": 1,
+      "2022-06-28-20-56-us-ca-sjc-r/samsunga32": 1,
+      "2022-07-12-18-37-us-ca-mtv-b/sm-a325f": 1,
+      "2022-10-06-20-46-us-ca-sjc-r/sm-a205u": 1,
+      "2023-04-27-19-25-us-ca-mtv-pe1/pixel7pro": 0,
+      "2023-04-27-20-55-us-ca-sjc-q/pixel7pro": 0,
+      "2023-05-02-19-24-us-ca-sjc-we1/pixel7pro": 1,
+      "2023-05-02-20-33-us-ca-mtv-xe1/pixel7pro": 0,
+      "2023-05-09-23-10-us-ca-sjc-r/sm-a505u": 1,
+      "2023-05-23-21-06-us-ca-mtv-de1/pixel7pro": 0,
+      "2023-05-23-22-16-us-ca-mtv-ie2/pixel7pro": 0,
+      "2023-05-25-17-32-us-ca-pao-j/pixel7pro": 0,
+      "2023-05-25-21-50-us-ca-sjc-ke2/sm-s908b": 1,
+      "2023-05-26-21-23-us-ca-sjc-be2/pixel5": 1,
+      "2023-06-06-22-43-us-ca-sjc-he2/pixel5": 1,
+      "2023-06-15-18-49-us-ca-sjc-ce1/pixel7pro": 1
+    },
+    "provisional_extra_by_trip_id": {
+      "2021-11-05-18-28-us-ca-mtv-m/pixel6pro": 2,
+      "2022-03-14-19-57-us-ca-mtv-pe1/xiaomimi8": 46,
+      "2022-03-17-20-16-us-ca-sjc-q/sm-g988b": 1,
+      "2022-04-25-21-04-us-ca-ebf-x/mi8": 27,
+      "2022-05-12-20-19-us-ca-mtv-pe1/samsunga325g": 12,
+      "2022-06-22-20-12-us-ca-lax-hh/samsunga325g": 1,
+      "2022-06-28-20-56-us-ca-sjc-r/samsunga32": 9
+    },
+    "strict_promotion_eligible": false,
+    "blocking_reasons": [
+      "official sample header uses tripId while the frozen provisional contract uses phone",
+      "official sample has 24 keys absent from provisional output",
+      "provisional output has 98 keys absent from official sample"
+    ]
+  },
+  "promotion": {
+    "command": "python3 apps/gnss.py smartphone-wls-test-batch --archive data/gsdc2023/cache/dataset_2023.zip --inventory output/smartphone-r5/wls-test-batch-v1/test_inventory.json --sample-submission data/gsdc2023/sample_submission.csv --output-dir output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1 --promote-derived-with-sample",
+    "preflight_attempted": true,
+    "preflight_result": "fail-closed at frozen schema check before any output publish",
+    "formal_submission_published": false,
+    "formal_submission_path": null,
+    "formal_submission_manifest_path": null,
+    "algorithm_rerun": false,
+    "candidate_or_numeric_parameter_changed": false,
+    "external_kaggle_submission": false
+  },
+  "competition_status_read_only": {
+    "metadata_url": "https://www.kaggle.com/api/v1/competitions/get/60095",
+    "metadata_http_status": 200,
+    "metadata": {
+      "id": 60095,
+      "ref": "https://www.kaggle.com/competitions/smartphone-decimeter-2023",
+      "title": "Google Smartphone Decimeter Challenge 2023-2024",
+      "dateCreated": "2023-09-01T19:14:57.0355469Z",
+      "enabledDate": "2023-09-12T21:30:00Z",
+      "newEntrantDeadline": "2024-05-16T23:59:00Z",
+      "deadline": "2024-05-23T23:59:00Z",
+      "mergerDeadline": null,
+      "submissionsDisabled": false,
+      "maxDailySubmissions": 5,
+      "isKernelsSubmissionsOnly": false,
+      "teamCount": 279,
+      "userHasEntered": true,
+      "userRank": 0,
+      "evaluationMetric": "SmartphoneDecimeter"
+    },
+    "status_assessment": "deadline_passed_but_submissionsDisabled_false; late-eligibility-not-established",
+    "submission_list": {
+      "url": "https://www.kaggle.com/api/v1/competitions/submissions/list/smartphone-decimeter-2023",
+      "http_status": 200,
+      "returned_count": 50,
+      "read_only_get": true
+    },
+    "submission_limits_probe": {
+      "url": "https://www.kaggle.com/api/v1/competitions/submissions/limits/smartphone-decimeter-2023",
+      "http_status": 404,
+      "read_only_get": true,
+      "late_submission_eligibility": "not established"
+    },
+    "mutation_attempted": false,
+    "leaderboard_score_obtained": false
+  },
+  "source_and_release_integrity": {
+    "wls_test_batch_source_sha256": "ae6ecfd832f8e7ba76002178e3d366befe7c2940895832263bc720ad5984b909",
+    "kaggle_evaluator_source_sha256": "d6c51335b2e607987392d3194e40746880651a9df6c6893742b249bed5503a6f",
+    "profile_sha256": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776",
+    "algorithm_core_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb",
+    "release_binaries": {
+      "build/apps/gnss_spp": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12",
+      "build/apps/gnss_solve": "7140d077213ef528b7366aa8c1b925dcea6096ec6e0711748cf4cf9428392eb0"
+    },
+    "truth_free_before_comparison": true,
+    "no_algorithm_change": true
+  },
+  "decision": {
+    "status": "No-Go-official-promotion",
+    "reason": "Official sample schema and key set do not exactly match the frozen provisional artifact; no coordinate or key synthesis is authorized.",
+    "provisional_artifact_retained": true,
+    "official_sample_retained": true,
+    "future_allowed_action": "Only a separately reviewed schema/key-contract update may address tripId versus phone and timestamp coverage; this record forbids algorithm rerun or inferred key repair."
+  }
+}

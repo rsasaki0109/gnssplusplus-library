@@ -1,0 +1,244 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-top-solution-feasibility-audit.v1",
+  "status": "selection-frozen-before-new-implementation",
+  "purpose": "Rank reproducible, truth-free components suggested by GSDC 2023 top solutions without using public/private scores for tuning.",
+  "external_mutation": false,
+  "token_access": false,
+  "current_local_reference": {
+    "lane": "truth-free Android WLS with existing stability selector and median5 postprocess",
+    "public_private_scores": {
+      "public_m": 4.018,
+      "private_m": 4.873,
+      "use": "context-only; not used for candidate ranking, parameter choice, or gates"
+    },
+    "source_record": "docs/use_cases/records/rtk_smartphone_performance_release_audit.json",
+    "archive": "data/gsdc2023/cache/dataset_2023.zip",
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "inventory": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+    "inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7"
+  },
+  "primary_source_evidence": [
+    {
+      "url": "https://www.ion.org/publications/abstract.cfm?articleID=19924",
+      "kind": "official ION abstract, first-place work",
+      "exact_evidence": [
+        "tightly coupled GNSS/INS was used",
+        "GNSS and IMU timestamp mismatch was identified and an IMU timestamp adjustment was proposed",
+        "adaptive GNSS measurement weighting was used across environments and phone models"
+      ],
+      "inference_boundary": "The abstract does not publish the implementation or parameter values; local implementation feasibility is an inference from the raw fields and existing code."
+    },
+    {
+      "url": "https://www.ion.org/publications/abstract.cfm?articleID=19922",
+      "kind": "official ION abstract, third-place work",
+      "exact_evidence": [
+        "Doppler was used for time-synchronized position/velocity prediction",
+        "corrected pseudorange DGNSS and TDCP updated position/velocity",
+        "Doppler and TDCP validated or excluded invalid measurements"
+      ],
+      "inference_boundary": "The abstract does not establish that a Doppler-only postprocess matches the full two-stage estimator; the selected local candidate is deliberately smaller."
+    },
+    {
+      "url": "https://www.ion.org/gnss/upload/Smartphone-Decimeter-Challenge-2023-2024.pdf",
+      "kind": "official ION workshop material",
+      "exact_evidence": [
+        "vetting emphasized cross-track bias, GNSS/ADR validity, clock discontinuity, and measurement-quality checks",
+        "reported solution families included FGO, PPK float, and FGO plus TensorFlow",
+        "filter examples included ADR state validity/reset/cycle-slip and timing/uncertainty fields"
+      ],
+      "inference_boundary": "The slides describe examples and vetting, not a complete public reference implementation."
+    },
+    {
+      "url": "https://github.com/taroz/gsdc2023",
+      "kind": "top-solution author repository",
+      "exact_evidence": [
+        "FGO GNSS+IMU implementation is published",
+        "repository documents GTSAM, MATLAB, MatRTKLIB, and a preprocessed-data dependency"
+      ],
+      "inference_boundary": "GTSAM/MATLAB/preprocessed-data requirements are available locally only in part; this audit does not claim bit-reproducibility of that solution."
+    },
+    {
+      "url": "https://www.kaggle.com/competitions/smartphone-decimeter-2023/writeups/sejong-university-3rd-place-solution",
+      "kind": "competition author writeup",
+      "exact_evidence": [
+        "RINEX conversion, SDOM, Doppler-based updates, and TDCP-based updates were described",
+        "chipset/frequency-specific observation categories were used"
+      ],
+      "inference_boundary": "The writeup is used to identify physical signals and failure modes, never to tune against its reported score."
+    },
+    {
+      "url": "https://www.kaggle.com/competitions/google-smartphone-decimeter-challenge/writeups/taro-1st-place-solution",
+      "kind": "earlier competition author writeup, architecture evidence only",
+      "exact_evidence": [
+        "global factor-graph position/velocity estimation used pseudorange, Doppler/ADR, and motion factors",
+        "robust optimization and direct satellite position/velocity from navigation data were described"
+      ],
+      "inference_boundary": "This is a 2021 competition writeup, not a claim about the 2023 winning code."
+    }
+  ],
+  "local_capability_audit": {
+    "raw_device_gnss_fields_present": [
+      "PseudorangeRateMetersPerSecond",
+      "PseudorangeRateUncertaintyMetersPerSecond",
+      "AccumulatedDeltaRangeMeters",
+      "AccumulatedDeltaRangeState",
+      "SvPositionXEcefMeters",
+      "SvVelocityXEcefMetersPerSecond",
+      "WlsPositionXEcefMeters",
+      "HardwareClockDiscontinuityCount",
+      "RawPseudorangeMeters",
+      "RawPseudorangeUncertaintyMeters"
+    ],
+    "device_imu_present": true,
+    "broadcast_nav_present": true,
+    "python_dependencies_present": ["numpy", "scipy", "scikit-learn", "pandas", "networkx", "shapely"],
+    "unavailable_or_unverified": [
+      "Google FGO preprocessed data and MATLAB/GTSAM toolchain are not a reproducible local dependency",
+      "no local OSM road graph, route geometry, or map tile asset was found",
+      "no base-station observation stream is available in the handset archive"
+    ],
+    "truth_free_doppler_probe": {
+      "routes": 3,
+      "valid_epoch_fraction": 1.0,
+      "receiver_speed_p50_mps": [26.5212, 16.9373, 3.6448],
+      "doppler_fit_rms_p95_mps": [0.9638, 0.6828, 1.2175],
+      "interpretation": "finite, physically plausible Doppler velocity is observable from handset fields; this supports a small Doppler position-update candidate but does not establish accuracy"
+    }
+  },
+  "ranked_candidates": [
+    {
+      "rank": 1,
+      "id": "doppler_position_update_v1",
+      "component": "weighted Doppler receiver-velocity estimate with bounded position prediction/update",
+      "expected_impact": "high relative to WLS-only outlier tails; lower than full FGO/INS",
+      "data_availability": "adequate: pseudorange rate, satellite ECEF position/velocity, WLS position, clock state",
+      "leakage_risk": "low; only truth-free observable fields and declared physical bounds",
+      "compute_dependency_cost": "low/medium; NumPy only, no proprietary assets",
+      "known_risk": "Doppler prediction can drift or amplify a handset timing bias; fail closed to WLS on invalid geometry, clock transition, long gap, or large innovation",
+      "implementation_status": "selected and frozen below"
+    },
+    {
+      "rank": 2,
+      "id": "gnss_imu_timestamp_adaptive_weighting",
+      "component": "estimate GNSS/IMU timing offset and feed adaptive covariance to a tightly coupled filter",
+      "expected_impact": "very high if full coupled model is available",
+      "data_availability": "partial: IMU and GNSS are present, but orientation/lever-arm and a validated coupled handset solver are not",
+      "leakage_risk": "medium unless offset is estimated only from independent observable signals",
+      "compute_dependency_cost": "high; would require new deterministic coupled filter and calibration contract",
+      "known_risk": "existing motion-adaptive process-noise lane does not estimate offset and is development-only",
+      "implementation_status": "deferred until candidate 1 is either promoted or rejected"
+    },
+    {
+      "rank": 3,
+      "id": "raw_measurement_quality_filtering",
+      "component": "stricter ADR/timing/uncertainty and per-satellite robust measurement selection",
+      "expected_impact": "medium/high; likely removes catastrophic epochs",
+      "data_availability": "adequate fields; integrating a new raw solver is substantial",
+      "leakage_risk": "low if all thresholds are predeclared",
+      "compute_dependency_cost": "medium/high",
+      "known_risk": "existing adapter already enforces many validity contracts; duplicate filtering may remove useful observations",
+      "implementation_status": "fallback candidate if rank 1 is blocked"
+    },
+    {
+      "rank": 4,
+      "id": "observable_learned_residual_correction",
+      "component": "standardized observable-feature Ridge residual correction",
+      "expected_impact": "low",
+      "data_availability": "adequate",
+      "leakage_risk": "high without strict route/device separation",
+      "compute_dependency_cost": "low",
+      "known_risk": "fixed train leave-one-route-out gate already failed materially",
+      "implementation_status": "No-Go retained; no retuning"
+    },
+    {
+      "rank": 5,
+      "id": "road_map_matching",
+      "component": "truth-free road-network/map-matching constraint",
+      "expected_impact": "potentially high in road-constrained segments",
+      "data_availability": "blocked: no local map/route asset and fetched OSM would compromise sealed reproducibility",
+      "leakage_risk": "medium/high due map freshness and route-specific geometry",
+      "compute_dependency_cost": "medium",
+      "known_risk": "cannot be evaluated under the current offline artifact contract",
+      "implementation_status": "No-Go until an approved versioned map asset exists"
+    }
+  ],
+  "frozen_split": {
+    "train": [
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8",
+      "2022-08-04-20-07-us-ca-sjc-q/pixel5",
+      "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro"
+    ],
+    "fresh_validation": "2023-09-07-18-59-us-ca/pixel5",
+    "future_holdout": "2023-09-06-00-01-us-ca-routen/pixel6pro",
+    "selection_source": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+    "selection_source_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+    "selection_basis": "central-directory metadata only; route-disjoint roles; fresh validation and future holdout had no materialized payload or truth read at freeze",
+    "fresh_validation_metadata": {
+      "device_gnss_file_size": 29607276,
+      "device_gnss_crc32_hex": "45b3f5b1",
+      "device_imu_file_size": 26789545,
+      "device_imu_crc32_hex": "e7f5eed5",
+      "ground_truth_file_size": 114198,
+      "ground_truth_crc32_hex": "0ef06b3a",
+      "broadcast_nav_file_size": 11500369,
+      "broadcast_nav_crc32_hex": "3fd181c2"
+    },
+    "future_holdout_metadata": {
+      "device_gnss_file_size": 45443395,
+      "device_gnss_crc32_hex": "b2e75362",
+      "device_imu_file_size": 39048933,
+      "device_imu_crc32_hex": "a0efdc6a",
+      "ground_truth_file_size": 160373,
+      "ground_truth_crc32_hex": "36edc5d4",
+      "broadcast_nav_file_size": 11431617,
+      "broadcast_nav_crc32_hex": "af42659d"
+    },
+    "fresh_validation_materialized_at_freeze": false,
+    "fresh_validation_truth_open_count_at_freeze": 0,
+    "future_holdout_materialized_at_freeze": false,
+    "future_holdout_truth_open_count_at_freeze": 0,
+    "old_holdouts_used": false
+  },
+  "frozen_candidate": {
+    "id": "doppler_position_update_v1",
+    "algorithm": "weighted least-squares receiver velocity from pseudorange rate after subtracting line-of-sight satellite velocity; one-step ECEF prediction from prior selected position; position update by covariance-derived gain",
+    "observation_equation": "PseudorangeRate = LOS dot (satellite_velocity - receiver_velocity) + receiver_clock_range_rate; solve with A=[-LOS,1] and b=PseudorangeRate-LOS dot satellite_velocity",
+    "measurement_weight": "inverse square of finite PseudorangeRateUncertaintyMetersPerSecond, floored at 0.10 m/s",
+    "minimum_satellites": 4,
+    "robust_passes": 2,
+    "robust_residual_gate_mps": 3.0,
+    "maximum_fit_rms_mps": 3.0,
+    "maximum_receiver_speed_mps": 70.0,
+    "maximum_dt_s": 1.5,
+    "innovation_gate_m": 30.0,
+    "position_update": "prediction + gain*(WLS-prediction); gain uses finite WLS quality proxy and Doppler residual covariance; if the innovation exceeds the fixed gate, publish WLS and reset the prediction chain",
+    "first_epoch": "publish exact WLS position and initialize chain",
+    "invalid_policy": "finite WLS is always preferred; invalid Doppler, clock transition, timestamp gap, rank deficiency, nonfinite covariance, or out-of-range speed falls back to WLS and resets",
+    "no_extrapolation": true,
+    "truth_free_generation": true,
+    "candidate_search_after_freeze": false,
+    "production_default_changed": false
+  },
+  "frozen_gates": {
+    "train": "all three route-level H P50/P95, V P95, availability, truth coverage, and four diagnostics non-regressed versus exact WLS; require strict aggregate H P95 and diagnostic-mean improvement",
+    "fresh_validation": "open only after train artifact hashes are sealed; require per-route and aggregate non-regression on all metrics and strict aggregate H P95 improvement",
+    "future_holdout": "remain unopened unless fresh validation passes; one truth read only after truth-free artifacts are sealed; no post-holdout tuning or rerun",
+    "promotion": "development-only recommended lane; production RTK/SPP defaults unchanged"
+  },
+  "truth_access_policy": {
+    "truth_read_before_this_record": 0,
+    "fresh_validation_truth_read_before_this_record": 0,
+    "future_holdout_truth_read_before_this_record": 0,
+    "train_truth_allowed_after_freeze": true,
+    "fresh_validation_truth_allowed_after_train_pass": true,
+    "future_holdout_truth_allowed_after_validation_pass": true,
+    "public_private_scores_used_for_tuning": false,
+    "post_holdout_tuning": false
+  },
+  "commands_planned": {
+    "truth_free_candidate": "python3 apps/gnss.py smartphone-doppler-position --position <wls.pos> --device-gnss <device_gnss.csv> --output-dir <output>",
+    "evaluation": "python3 apps/gnss.py smartphone-doppler-position-eval --selection-record docs/use_cases/records/smartphone_r5_gsdc2023_top_solution_feasibility_audit.json --output-dir <output>",
+    "release_build": "cmake --build build --config Release -j$(nproc)",
+    "full_ctest": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} ctest --test-dir build -j1 --output-on-failure"
+  }
+}

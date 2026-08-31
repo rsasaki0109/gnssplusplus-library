@@ -1,0 +1,17 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-upstream-mat-freeze-manifest.v1",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_freeze_v1.json",
+  "freeze_record_sha256": "9a10d2fd0a397287cc2501b23cef834d578d75ca62d17986880726efe2159c72",
+  "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+  "mat_inventory": {
+    "path": "output/smartphone-r5/gsdc2023-upstream-mat-v1/mat_inventory.json",
+    "sha256": "a54d54305442bfc826a34a5e59debe12ebcb55caf03d6235fdf0e125c5bd609c"
+  },
+  "source_sha256": "d26fdb9f639d198b708a6162fd9bd7328ed9019f5fc7ed5469af3e4bcc3852a4",
+  "release_binary_sha256": "a10d13da4614f7cdc8e24556f5a32f870aee6c7aa94c5d3e890429996d583b0c",
+  "sample_key_sha256": "b0c4853076f715d6bdca46e5c8c99e575f7982d8ee4fc9c0fe417507badcb780",
+  "sealed_before_train_truth": true,
+  "no_post_truth_parameter_tuning": true,
+  "external_mutation": false,
+  "token_access": false
+}

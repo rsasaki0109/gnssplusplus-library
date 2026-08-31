@@ -1,0 +1,160 @@
+{
+  "schema_version": "smartphone-r5-kaggle-official-sample-blocker-audit.v2",
+  "status": "sealed-failed-authentication-required",
+  "audited_at_utc": "2026-08-30T07:22:00Z",
+  "scope": {
+    "competition_slug": "smartphone-decimeter-2023",
+    "policy": "official-primary-sources-only",
+    "non_official_sample_used": false,
+    "truth_materialized_or_opened": false,
+    "algorithm_or_candidate_changed": false,
+    "positioning_rerun": false
+  },
+  "official_primary_sources": [
+    {
+      "url": "https://www.kaggle.com/competitions/smartphone-decimeter-2023",
+      "role": "official competition overview and submission contract",
+      "http_status": 200,
+      "content_type": "text/html; charset=utf-8",
+      "finding": "The page states that predictions are required for each phone and UnixTimeMillis in the sample submission and gives the four required columns; it does not expose an unauthenticated sample payload.",
+      "competition_close_date": "2024-05-23"
+    },
+    {
+      "url": "https://www.kaggle.com/competitions/smartphone-decimeter-2023/data",
+      "role": "official competition data page",
+      "http_status": 200,
+      "content_type": "text/html; charset=utf-8",
+      "finding": "The unauthenticated response is an HTML application shell; no sample_submission.csv bytes or authoritative key manifest were obtained."
+    },
+    {
+      "url": "https://www.kaggle.com/docs/api",
+      "role": "official Kaggle API authentication documentation",
+      "http_status": 200,
+      "content_type": "text/html; charset=utf-8",
+      "finding": "Kaggle documents OAuth/API-token authentication for programmatic access."
+    },
+    {
+      "url": "https://www.kaggle.com/docs/competitions",
+      "role": "official competition access documentation",
+      "http_status": 200,
+      "content_type": "text/html; charset=utf-8",
+      "finding": "Kaggle documents accepting competition rules before downloading competition data or submitting."
+    },
+    {
+      "url": "https://developer.android.com/develop/sensors-and-location/sensors/gnss",
+      "role": "official Android/Google GNSS information",
+      "http_status": 200,
+      "content_type": "text/html; charset=utf-8",
+      "finding": "Google's Android GNSS page points participants to the Kaggle competition page and provides no alternate sample download."
+    },
+    {
+      "url": "https://www.ion.org/gnss/googlecompetition.cfm",
+      "role": "official ION competition information",
+      "http_status": 200,
+      "content_type": "text/html;charset=UTF-8",
+      "finding": "ION identifies Google, ION, and Kaggle as sponsors and describes the competition datasets, but provides no alternate sample_submission.csv or key manifest."
+    },
+    {
+      "url": "https://www.ion.org/gnss/upload/Smartphone-Decimeter-Challenge-2023-2024.pdf",
+      "role": "official Google/ION workshop material",
+      "http_status": 200,
+      "content_type": "application/pdf",
+      "finding": "The workshop material identifies Kaggle as the platform and distinguishes public/private test data; it is not an unauthenticated sample distribution."
+    }
+  ],
+  "anonymous_http_probes": {
+    "request_headers": {
+      "authorization": false,
+      "cookies": false,
+      "secrets_displayed": false
+    },
+    "files_list": {
+      "method": "GET",
+      "url": "https://www.kaggle.com/api/v1/competitions/data/list/smartphone-decimeter-2023",
+      "status_line": "HTTP/2 401",
+      "http_status": 401,
+      "response_headers": [
+        "content-type: application/json"
+      ],
+      "response_body": {
+        "code": 401,
+        "message": "Unauthenticated"
+      },
+      "response_body_sha256": "1220f87ab71c32b949db64ccdc5facafbbc7a077d3048721ecd9fdf5305381a6",
+      "sample_listing_obtained": false
+    },
+    "sample_download": {
+      "method": "GET",
+      "url": "https://www.kaggle.com/api/v1/competitions/data/download/smartphone-decimeter-2023/sample_submission.csv",
+      "status_line": "HTTP/2 401",
+      "http_status": 401,
+      "response_headers": [
+        "content-type: application/json"
+      ],
+      "response_body": {
+        "code": 401,
+        "message": "Unauthenticated"
+      },
+      "response_body_sha256": "1220f87ab71c32b949db64ccdc5facafbbc7a077d3048721ecd9fdf5305381a6",
+      "downloaded": false,
+      "sample_sha256": null
+    }
+  },
+  "local_authentication_probe": {
+    "kaggle_cli_present": false,
+    "python_kaggle_package_present": false,
+    "KAGGLE_USERNAME_set": false,
+    "KAGGLE_KEY_set": false,
+    "KAGGLE_API_TOKEN_set": false,
+    "credential_files": [
+      {
+        "path": "~/.kaggle/kaggle.json",
+        "exists": false,
+        "regular_file": false
+      },
+      {
+        "path": "~/.config/kaggle/kaggle.json",
+        "exists": false,
+        "regular_file": false
+      }
+    ],
+    "secrets_displayed": false
+  },
+  "sample_and_strict_promotion": {
+    "official_sample_name_checked": "sample_submission.csv",
+    "official_sample_verified": false,
+    "official_sample_downloaded": false,
+    "official_sample_sha256": null,
+    "authoritative_key_manifest_obtained": false,
+    "strict_key_order_promotion": "not_run",
+    "derived_key_order_artifact_remains_unpromoted": true,
+    "current_derived_submission": {
+      "path": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/submission_derived_unverified.csv",
+      "sha256": "62c569f1b6f61fff2cccef598444ebbb053d59d504eb8178f54b916b8af7f439",
+      "official_sample_verified": false,
+      "external_submission_forbidden": true
+    }
+  },
+  "minimum_user_action": {
+    "required": true,
+    "steps": [
+      "Use a Kaggle account authorized for smartphone-decimeter-2023 and accept the competition rules on the official Kaggle page.",
+      "Create or supply a Kaggle API token through the official Kaggle account/API-token flow; do not paste the secret into chat or commit it.",
+      "Install/configure the official Kaggle CLI or equivalent authenticated client, then list and download only sample_submission.csv.",
+      "Record the downloaded file's source URL, response headers, byte count, and SHA256 before any strict key-set/order promotion."
+    ],
+    "reference_commands": [
+      "kaggle competitions files -c smartphone-decimeter-2023",
+      "kaggle competitions download -c smartphone-decimeter-2023 -f sample_submission.csv -p <authorized-output-dir>"
+    ],
+    "important_boundary": "The official competition page lists a 2024-05-23 close date; authentication may not restore submission or leaderboard access after closure, so account-level access and submission feasibility must be confirmed by the user."
+  },
+  "completion_boundary": {
+    "official_sample_access": false,
+    "kaggle_authenticated": false,
+    "strict_promotion_completed": false,
+    "leaderboard_evaluated": false,
+    "rank_one_claim_permitted": false,
+    "blocker": "Official sample/key manifest requires authenticated Kaggle access; no official unauthenticated mirror was found."
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-upstream-mat-promotion-result-manifest.v1",
+  "record": "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_promotion_result_v1.json",
+  "record_sha256": "b6ccb2d8c6f051938bb972df98cfc9ca844c43e482ec9e8ad7e1b8bb96ecfc64",
+  "freeze_record_sha256": "9a10d2fd0a397287cc2501b23cef834d578d75ca62d17986880726efe2159c72",
+  "converter_sha256": "d26fdb9f639d198b708a6162fd9bd7328ed9019f5fc7ed5469af3e4bcc3852a4",
+  "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+  "train_score_sha256": "5a3dbedef378d1889b886bf7ccad09eb7089701c4f947f24806a59a2dc53e8a1",
+  "test_batch_manifest_sha256": "3c29d25fee11125fc6e644b52ea8e52b8b10c8d3308d73f84c74835e894885e7",
+  "test_submission_published": false,
+  "test_truth_open_count": 0,
+  "validation_truth_open_count": 0,
+  "holdout_truth_open_count": 0,
+  "release_binary_sha256": "a10d13da4614f7cdc8e24556f5a32f870aee6c7aa94c5d3e890429996d583b0c",
+  "verification": {
+    "converter_fixture_tests": "6/6",
+    "full_serial_ctest": "131/131",
+    "git_diff_check": "pass"
+  },
+  "no_token_or_external_mutation": true
+}

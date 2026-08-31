@@ -1,0 +1,150 @@
+{
+  "schema_version": "rtk-spp-epoch-reuse.v1",
+  "variant": "same-epoch-spp-result-reuse",
+  "role": "development-only",
+  "decision": "no-go-removed",
+  "status": "implementation-cli-telemetry-tests-removed",
+  "reason": "The guarded cache was a substantial throughput improvement, but stateful iterative SPP convergence changed three rounded RTK update NIS fields and the unrounded ratio stream. The strict POS byte-identity requirement was therefore not met. The experiment, its CLI, dedicated telemetry, and dedicated tests were removed after the audit; no production or holdout evaluation was performed.",
+  "implementation": {
+    "config_field": "RTKProcessor::RTKConfig::reuse_spp_result_within_epoch (removed)",
+    "cli_flag": "--reuse-rtk-spp-epoch (removed)",
+    "cache_scope": "stack lifetime of one processRTKEpochInternal() call",
+    "consumers": [
+      "initializeFilter",
+      "resetPositionToSPP"
+    ],
+    "key_guards": [
+      "rover ObservationData object identity",
+      "exact epoch time and full deterministic rover observation/tracking fingerprint",
+      "NavigationData object identity and supported mutation revision",
+      "navigation satellite/ephemeris counts and broadcast atmospheric model",
+      "complete SPPConfig fingerprint",
+      "precise/IONEX/DCB/SSR loaded flags and population counts",
+      "valid finite SPP PositionSolution with matching timestamp"
+    ],
+    "fail_closed": [
+      "revision-zero navigation fixture",
+      "invalid/non-finite SPP",
+      "changed input, time, navigation, SPP option, or correction-product state"
+    ],
+    "side_effect_contract": "No cross-epoch or cross-thread cache; a guard miss executes the existing processEpoch call. SPP standalone path is not changed."
+  },
+  "build": {
+    "build_type": "Release",
+    "compiler": "/usr/bin/c++",
+    "optimization": "-O3 -DNDEBUG",
+    "binary": "build/apps/gnss_solve",
+    "binary_sha256": "6df8ebe738afce7825e8599ab0bb149df4308e9343cc1e2b88be41a0e8fe0959",
+    "source_revision": "a947409878fe78ca9234b20288cadd4d75baedea",
+    "host": "11th Gen Intel(R) Core(TM) i5-1145G7 @ 2.60GHz, 8 CPUs",
+    "cpu_affinity": "taskset -c 0"
+  },
+  "input": {
+    "dataset": "PPC-Dataset/tokyo/run1",
+    "epochs": 120,
+    "rover_obs_sha256": "97e7b370d381a64760cd07d251bcf5df2dc2b3b6dd2444323ff8d6f35e4689e5",
+    "base_obs_sha256": "2624939cd82cdbd839a32ccb4d22f9f846e7613a934b45539b5f98e8c31e37f8",
+    "base_nav_sha256": "6a8fcef262ae62854f971cf383ee17c19fddd7d49071effc0f94c156b923d4b7",
+    "reference_csv_sha256": "8e468a6a959cd47144f4ad1f1dc0129e7ee160011f4d236e4ffdb63b203373e9",
+    "command_off": "gnss_solve --rover rover.obs --base base.obs --nav base.nav --no-kml --max-epochs 120 --out solution.pos --timing-csv epoch_timing.csv",
+    "command_on_before_removal": "gnss_solve --rover rover.obs --base base.obs --nav base.nav --no-kml --max-epochs 120 --reuse-rtk-spp-epoch --out solution.pos --timing-csv epoch_timing.csv"
+  },
+  "measurement": {
+    "warmup_runs_excluded_per_variant": 1,
+    "measured_runs_per_variant": 5,
+    "holdout_used": false,
+    "timing_artifact_off": "output/rtk-cache-reuse/runs/off-1.csv",
+    "timing_artifact_off_sha256": "980390000bd3e15a9bc9fc5b38a75cc1614f81eebddcb049c48082e1ac654e82",
+    "timing_artifact_on": "output/rtk-cache-reuse/runs/on-1.csv",
+    "timing_artifact_on_sha256": "c158a590ff186aba73a0007bd95cd14663cd77d24da99bb7ba8252405b05f6b9",
+    "performance_summary_off": "output/rtk-cache-reuse/runs/off-1_performance_summary.json",
+    "performance_summary_off_sha256": "8584e3cba19fd2f4ba2d0f5a4efb34e25dfe69df4582b830ade5baee0def7867",
+    "performance_summary_on": "output/rtk-cache-reuse/runs/on-1_performance_summary.json",
+    "performance_summary_on_sha256": "bc6edd1c11907f374f0d520fa97a0778b60863f8d189a3da300f6f73394f035c",
+    "run_summary": "output/rtk-cache-reuse/runs_summary.json",
+    "run_summary_sha256": "a3fd4fd8411b5bedd9e9c0ff66417b8fb5d4f5d5d85b8420a2a261771604adb7"
+  },
+  "results_median": {
+    "feature_off": {
+      "solver_wall_s": 1.289213692,
+      "solver_wall_p95_across_runs_s": 1.291719047,
+      "epoch_mean_ms": 10.743447433,
+      "epoch_p50_ms": 10.748177,
+      "epoch_p95_ms": 11.93793,
+      "stage_spp_mean_ms": 8.454762383,
+      "stage_reset_position_mean_ms": 4.157265633,
+      "stage_filter_update_mean_ms": 1.212782075,
+      "peak_rss_kb": 30524,
+      "valid_epochs": 120,
+      "fixed_epochs": 116,
+      "reuse_attempts": 0,
+      "reuse_hits": 0,
+      "reuse_misses": 0,
+      "ratio_p50": 21.875584088,
+      "ratio_p95": 62.925597958
+    },
+    "feature_on": {
+      "solver_wall_s": 0.798001907,
+      "solver_wall_p95_across_runs_s": 0.799452693,
+      "epoch_mean_ms": 6.650015892,
+      "epoch_p50_ms": 6.586365,
+      "epoch_p95_ms": 7.485596,
+      "stage_spp_mean_ms": 4.28572485,
+      "stage_reset_position_mean_ms": 0.085793917,
+      "stage_filter_update_mean_ms": 1.197452067,
+      "peak_rss_kb": 30468,
+      "valid_epochs": 120,
+      "fixed_epochs": 116,
+      "reuse_attempts": 121,
+      "reuse_hits": 121,
+      "reuse_misses": 0,
+      "ratio_p50": 21.875583982,
+      "ratio_p95": 62.925590514
+    },
+    "relative": {
+      "solver_wall_median_change_pct": -38.104,
+      "epoch_mean_change_pct": -38.108,
+      "stage_spp_mean_change_pct": -49.309,
+      "stage_reset_position_mean_change_pct": -97.936,
+      "peak_rss_change_kb": -56
+    }
+  },
+  "quality_signoff": {
+    "off_and_on": {
+      "valid_epochs": 120,
+      "fixed_epochs": 116,
+      "fix_rate_pct": 96.666667,
+      "wrong_fix_epochs": 0,
+      "horizontal_median_m": 0.045861,
+      "horizontal_p95_m": 0.128737,
+      "vertical_p95_abs_m": 0.037212,
+      "local_ppc_distance_score_pct": 0.286866
+    },
+    "unrounded_stream": {
+      "ratio_changed_epoch_count": 71,
+      "status_changed_epoch_count": 0,
+      "valid_changed_epoch_count": 0,
+      "observation_count_changed_epoch_count": 0
+    },
+    "pos_output": {
+      "off_sha256": "bae93b2cec6d273e30fba54bf3709c2bc69e1eccfdf9ba35cf44887b4b6e2bdd",
+      "on_sha256": "964315056dd61fc6aaa37a557a04629f4b17ea5502c5f993904808ed9d7872f5",
+      "cross_variant_byte_identical": false,
+      "within_variant_byte_identical_across_five_runs": true,
+      "differing_rows": 3,
+      "differences": [
+        {"tow": 187484.6, "field": "RTKUpdateNIS", "off": 9.5017, "on": 9.5018},
+        {"tow": 187488.6, "field": "RTKUpdateNIS", "off": 62.2881, "on": 62.288},
+        {"tow": 187490.2, "field": "RTKUpdateNIS", "off": 21.2628, "on": 21.2627}
+      ]
+    }
+  },
+  "tests": {
+    "rtk_spp_reuse_gtest": "6/6 passed before experiment removal",
+    "performance_report_unittest": "8/8 passed before experiment removal",
+    "release_build": "passed",
+    "full_ctest": "82/82 passed"
+  },
+  "current_status": "Historical result retained for audit; no production API, CLI, telemetry, or dedicated test remains. The process-internal SPP measurement cache is retained.",
+  "next_priority": "Do not reintroduce full SPP-result reuse unless SPP state/iteration equivalence is established and the exact-output gate passes; profile the independent KF update stage next."
+}

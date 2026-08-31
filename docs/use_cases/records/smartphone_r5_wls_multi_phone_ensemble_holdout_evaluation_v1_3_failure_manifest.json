@@ -1,0 +1,28 @@
+{
+  "schema_version": "smartphone-r5-wls-multi-phone-ensemble-holdout-run-manifest.v1.3",
+  "sealed": true,
+  "status": "sealed-failed-one-shot",
+  "record": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_holdout_evaluation_v1_3_failure.json",
+    "sha256": "77ca0f74dc0b1cae7781511ab547ca88c7b3fe6ae4bdce18dda09f2311cd33b7"
+  },
+  "failure_artifact": {
+    "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.3/wls_multi_phone_ensemble_holdout_failure.json",
+    "sha256": "b420ad26007d46bb40a1ede789f3909722a100a3d29994ef512984c8504f5647"
+  },
+  "freeze_record_sha256": "ec4dafb215fcc9c47b5ae373677fdd0f4850dbc0c5555b29bfd65bbc21f50389",
+  "freeze_manifest_sha256": "c5392c1b9015bc7dad318a0c0c092d24f37a743b5e31ee1f05111e341cef9945",
+  "route": "2022-10-06-21-51-us-ca-mtv-n",
+  "phones": [
+    "sm-a205u",
+    "sm-a217m",
+    "sm-a325f"
+  ],
+  "algorithm_core_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb",
+  "truth_open_count": 0,
+  "evaluation_pass_count": 0,
+  "selected_method_generated": false,
+  "post_holdout_tuning": false,
+  "rerun_or_adjustment_permitted": false,
+  "sealed_artifacts_truth_free": true
+}

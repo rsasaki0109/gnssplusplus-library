@@ -1,0 +1,44 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-evaluation-manifest.v1",
+  "status": "sealed-validation-pass",
+  "evaluation_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_evaluation.json",
+    "sha256": "114c0357f33fe5d7355d43f26cf7b8ea2540d7f84703d523d658eef5c4b6726b"
+  },
+  "selection_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_selection.json",
+    "sha256": "9a31c3341a0c8a0d7ce8ea25ba787d917a20f25c30895044664c6bf9a79b6f92"
+  },
+  "validation_authorization": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_validation.json",
+    "sha256": "ff70a6d2e90f2937efc94d227faaaa7eedbee4ad69882c00aab79196db9d633d"
+  },
+  "reports": {
+    "train": {
+      "path": "output/smartphone-r5/native-fgo-v1/train_evaluation.json",
+      "sha256": "a9fdc3bcad3dd1207bd138f78756c4c9cdeab08a75d39143b92c7d7d3fdaf61f",
+      "manifest_sha256": "8529b59b0cde919591e23f924488dcfe928f548a548da35586a1f77a64a49aee"
+    },
+    "validation": {
+      "path": "output/smartphone-r5/native-fgo-v1/validation/validation_evaluation.json",
+      "sha256": "05e9cccbdb43aa0db323dda38a446ee1ffc286b38ab443dd9e8f3ef8c3efc133",
+      "manifest_sha256": "4506edd44cd2af4302190b73e9199800f7af741f29a5385581f542f75c508e8c"
+    }
+  },
+  "run_manifest_sha256": {
+    "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8": "4db67cebeeda2fa0a2b132e2b4dc173385eb96a83a18e226f22ff37b0bbe3899",
+    "2022-08-04-20-07-us-ca-sjc-q/pixel5": "d8f14121535719b543f14d3f95f20d80b8de155b5d935a62cff8888e036a1d64",
+    "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro": "24e8e322c13674176fa16d70ab3913b8ce3e39b38d7cab7289a340b30d133e70",
+    "2023-09-07-18-59-us-ca/pixel5": "408b12fb77671b79526e3d2770170504cf670fea5263cec0ea0e7827aae98dad"
+  },
+  "truth_access": {
+    "train_open_count": 3,
+    "fresh_validation_open_count": 1,
+    "future_holdout_open_count": 0,
+    "future_holdout_materialized": false
+  },
+  "external_mutation": false,
+  "production_default_changed": false,
+  "source_script_sha256": "688c56f015ebfe54dfc2358c470f3b57acb98a5fcd2bd1ea81d5166c11a0494b",
+  "test_source_sha256": "dee2853e759264c30bdb82ac1c61c7b709523f5f01fc6157f673f9029dfd3ae2"
+}

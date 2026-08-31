@@ -1,0 +1,23 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-test-batch-record-manifest.v1",
+  "status": "completed-truth-free-test-batch",
+  "record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_test_batch.json",
+    "sha256": "cd8b55862685d758a5c1a6d0f798299e334c6ed7d043a9b460edc8d91a8aa629"
+  },
+  "authorization_record_sha256": "0f912cfcdf448aee8694e65247a8eab159bb6b5dc8b3f74d28aab00b2a904311",
+  "authorization_manifest_sha256": "b32f1e6c514e5e971e567907dd7c0240614f26e7a1610edc018de95cb7b8a214",
+  "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+  "inventory_sha256": "dbf89222e6860d4fb31f12c9c46402033ed31e905f8fe3f6615e5131cb9e9495",
+  "sample_sha256": "b0c4853076f715d6bdca46e5c8c99e575f7982d8ee4fc9c0fe417507badcb780",
+  "run_manifest_sha256": "0808082ed8c81d24e5b5403812cca50651d493f39ea2c70ff6a91b6df556518c",
+  "submission_sha256": "d15065f394fac7b6d268d59aa35369813b7bd2f63d7b523cf192e7a2473a5975",
+  "submission_manifest_sha256": "e72c6e150d09c72300e1229a036b9d8db5fa9d83269b1c0a3bcace6c837507c3",
+  "route_count": 40,
+  "native_fgo_count": 35,
+  "wls_fallback_count": 5,
+  "truth_open_count": 0,
+  "official_sample_verified": true,
+  "external_submission": false,
+  "no_post_test_tuning": true
+}

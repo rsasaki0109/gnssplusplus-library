@@ -1,0 +1,47 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-test-submission-continuity-freeze-manifest.v1",
+  "status": "sealed-before-continuity-generation",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_test_submission_continuity_freeze_v1.json",
+    "sha256": "d622c6662b3244254b03b565f56f989ba33d565e58046d50e88b2696513234c1"
+  },
+  "source_hashes": {
+    "v3_recovery_record": "d1ae3b9c0713b4351954810003d0821cd92ca4593cfc2eac7c2d804a5434ed9b",
+    "v3_recovery_manifest": "ed5375224b1768fe9de6fa83738d55f636f900cb5ced104a1f348db96ac635cf",
+    "v3_submission": "8581cf40a4e8ae81448df4e87b381431dce4c290b6b738fc5e6b9c03c3c41a29",
+    "v3_submission_manifest": "4f68714fd8783b9c2a588c8a1b7097fac872bf09ae5f13a17dc4d6eeb17c2778",
+    "v3_position_manifest": "716a2c331cf588983182c098b3bed26e3a9cdab9929f196ec39b9b1ee3ae28dd",
+    "v3_run_manifest": "635569e5b978d96f3f20df7fb8e06b9dee326dc9dbf3bca42b812e4a62e7c5ed",
+    "receiver_speed_bound_evidence": "7f4587851c9e9fbd5e5a1af46af54eac3ee8a96230dec5414f9a7a87c6d73ee9"
+  },
+  "continuity_contract": {
+    "maximum_speed_mps": 70.0,
+    "interpolation_window_ms": 2500,
+    "same_trip_only": true,
+    "interior_only": true,
+    "both_incident_edges_strictly_above_bound": true,
+    "direct_neighbor_edge_at_or_below_bound": true,
+    "adjacent_candidate_spikes_not_repaired": true,
+    "timestamp_weighted_ecef_interpolation": true,
+    "no_velocity_extrapolation": true,
+    "sample_coordinates_forbidden": true,
+    "unresolved_policy": "fail-closed",
+    "atomic_publish": true,
+    "algorithm_or_numeric_parameter_change": false,
+    "fgo_wls_rerun": false
+  },
+  "diagnosis": {
+    "candidate_trip_id": "2022-02-23-22-35-us-ca-lax-m/pixel5",
+    "candidate_timestamp_ms": 1645656530438,
+    "source_seam": true,
+    "isolated_two_sided_spike": false,
+    "preserve_candidate": true
+  },
+  "truth_policy": {
+    "truth_open_count": 0,
+    "truth_materialized_count": 0,
+    "ground_truth_members_read": false,
+    "holdout_or_test_truth_used": false
+  },
+  "no_post_freeze_tuning": true
+}

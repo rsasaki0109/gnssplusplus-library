@@ -370,6 +370,44 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
             Point3(factor.satellite_position_ecef), 0.0, noise);
     }
 
+    // --- Ordinary (single-receiver) TDCP factors ---
+    // Keep the exact v1 temporal carrier constraint in the IMU-coupled Pose3
+    // graph.  This is deliberately separate from the base-dependent
+    // single/double-difference paths: a no-base smartphone run has one
+    // receiver clock per epoch and one undifferenced carrier delta per
+    // satellite.  The factor uses the same sigma/Huber contract as the Eigen
+    // backend; invalid epoch indices are skipped and counted as not inserted.
+    std::size_t ordinary_tdcp_inserted = 0;
+    if (use_pose3 && config.use_tdcp_factors) {
+        for (const auto& factor : problem.tdcp_factors) {
+            if (factor.previous_epoch_index >= num_epochs ||
+                factor.current_epoch_index >= num_epochs ||
+                factor.current_epoch_index <= factor.previous_epoch_index) {
+                continue;
+            }
+            if (!std::isfinite(factor.delta_carrier_m) ||
+                !factor.previous_satellite_position_ecef.allFinite() ||
+                !factor.current_satellite_position_ecef.allFinite()) {
+                continue;
+            }
+            const gtsam::Key previous_clock =
+                ensureBaseClock(factor.previous_epoch_index);
+            const gtsam::Key current_clock =
+                ensureBaseClock(factor.current_epoch_index);
+            const auto noise = makeNoise(
+                factor.sigma_m, config.use_robust_loss,
+                config.tdcp_huber_threshold_sigma);
+            graph.emplace_shared<TimeDifferencedCarrierFactorArm>(
+                positionKey(factor.previous_epoch_index), previous_clock,
+                positionKey(factor.current_epoch_index), current_clock,
+                Point3(factor.previous_satellite_position_ecef),
+                Point3(factor.current_satellite_position_ecef),
+                factor.delta_carrier_m, gnss_lever_arm, noise);
+            ++ordinary_tdcp_inserted;
+        }
+    }
+    result.diagnostics.tdcp_factors_inserted = ordinary_tdcp_inserted;
+
     // --- Double-difference pseudorange factors ---
     for (const auto& factor : problem.double_difference_pseudorange_factors) {
         const gtsam::gnss::DoubleDifferenceData dd{
@@ -517,6 +555,32 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
             }
         }
     }
+
+    // The native v1 motion graph also contains an independent receiver-clock
+    // random-walk row for each adjacent epoch.  Pose3's BetweenFactor above
+    // only constrains pose translation/rotation, so retain the clock part
+    // explicitly in seconds (the public configuration is in meters, matching
+    // the native clock state and v1 profile).  A detected common GPS code jump
+    // receives the same loose 1e6 m gate used by the Eigen backend.
+    if (need_clock_states && config.use_motion_factors && config.use_clock_motion_factors &&
+        config.clock_motion_sigma_m > 0.0 && num_epochs >= 2) {
+        for (std::size_t i = 1; i < num_epochs; ++i) {
+            const gtsam::Key previous_clock = ensureBaseClock(i - 1);
+            const gtsam::Key current_clock = ensureBaseClock(i);
+            const bool clock_jump =
+                i < problem.clock_jumps.size() && problem.clock_jumps[i];
+            const double sigma_m = clock_jump ? 1.0e6 : config.clock_motion_sigma_m;
+            graph.emplace_shared<gtsam::BetweenFactor<double>>(
+                previous_clock, current_clock, 0.0,
+                gtsam::noiseModel::Isotropic::Sigma(
+                    1, sigma_m / gtsam::gnss::C_LIGHT));
+        }
+    }
+
+    result.diagnostics.motion_factors =
+        (config.use_motion_factors && num_epochs >= 2)
+            ? num_epochs - 1
+            : 0;
 
     // --- Optional absolute priors (disabled by default: sigma <= 0) ---
     if (config.position_prior_sigma_m > 0.0) {

@@ -1,6 +1,7 @@
 #include <libgnss++/algorithms/fgo.hpp>
 
 #include <libgnss++/algorithms/lambda.hpp>
+#include <libgnss++/algorithms/doppler_contract.hpp>
 #include <libgnss++/algorithms/spp.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
@@ -126,6 +127,10 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
 
         std::vector<PseudorangeFactor> epoch_factors;
         epoch_factors.reserve(epoch.observations.size());
+        std::vector<UndifferencedDopplerFactor> epoch_doppler_factors;
+        if (config_.use_undifferenced_doppler_factors) {
+            epoch_doppler_factors.reserve(epoch.observations.size());
+        }
         std::map<std::pair<SatelliteId, SignalType>, PreparedCarrierObservation> epoch_carriers;
         std::map<std::pair<SatelliteId, SignalType>, PreparedCarrierObservation>
             epoch_dd_pseudorange_observations;
@@ -309,33 +314,94 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                          config_.single_difference_doppler_sigma_mps /
                              std::sqrt(sin_el));
             if (observation.has_doppler && wavelength > 0.0) {
-                const Vector3d doppler_delta =
-                    satellite_position - seed.position_ecef;
-                const double doppler_range = doppler_delta.norm();
-                if (doppler_range > 0.0) {
-                    const Vector3d ex = doppler_delta / doppler_range;
-                    const double sagnac_rate =
-                        constants::OMEGA_E / constants::SPEED_OF_LIGHT *
-                        (satellite_velocity(1) * seed.position_ecef(0) -
-                         satellite_velocity(0) * seed.position_ecef(1));
-                    const double modeled_range_rate =
-                        satellite_velocity.dot(ex) + sagnac_rate;
+                Vector3d doppler_los = Vector3d::Zero();
+                double modeled_range_rate = 0.0;
+                bool doppler_geometry_valid = false;
+                if (config_.use_corrected_undifferenced_doppler_factors) {
+                    // Android reports an uncorrected pseudorange rate.  Use
+                    // the same transmit-time Earth-rotation correction for
+                    // satellite position and velocity; the receiver clock
+                    // drift is added later as a difference of graph clock
+                    // bias states (see fgo.cpp).
+                    doppler_geometry_valid =
+                        doppler_contract::knownSatelliteRangeRate(
+                            satellite_position, satellite_velocity,
+                            seed.position_ecef, true, doppler_los,
+                            modeled_range_rate);
+                } else {
+                    const Vector3d doppler_delta =
+                        satellite_position - seed.position_ecef;
+                    const double doppler_range = doppler_delta.norm();
+                    if (doppler_range > 0.0 && doppler_delta.allFinite()) {
+                        doppler_los = doppler_delta / doppler_range;
+                        const double sagnac_rate =
+                            constants::OMEGA_E / constants::SPEED_OF_LIGHT *
+                            (satellite_velocity(1) * seed.position_ecef(0) -
+                             satellite_velocity(0) * seed.position_ecef(1));
+                        modeled_range_rate =
+                            satellite_velocity.dot(doppler_los) + sagnac_rate;
+                        doppler_geometry_valid =
+                            std::isfinite(modeled_range_rate);
+                    }
+                }
+                if (doppler_geometry_valid) {
                     const double satellite_clock_drift_mps =
                         satellite_clock_drift * constants::SPEED_OF_LIGHT;
                     const double measured_range_rate =
-                        -observation.doppler * wavelength;
+                        doppler_contract::rinexDopplerToRangeRate(
+                            observation.doppler,
+                            constants::SPEED_OF_LIGHT / wavelength);
                     carrier.doppler_residual_mps =
-                        measured_range_rate -
-                        (modeled_range_rate - satellite_clock_drift_mps);
+                        doppler_contract::receiverOnlyResidual(
+                            measured_range_rate, modeled_range_rate,
+                            satellite_clock_drift);
                     carrier.has_doppler_residual =
-                        std::isfinite(carrier.doppler_residual_mps);
+                        std::isfinite(carrier.doppler_residual_mps) &&
+                        std::isfinite(measured_range_rate);
                     model_debug.has_doppler_residual =
                         carrier.has_doppler_residual;
                     model_debug.doppler_residual_mps =
                         carrier.doppler_residual_mps;
+                    model_debug.doppler_measured_range_rate_mps =
+                        measured_range_rate;
+                    model_debug.doppler_satellite_range_rate_mps =
+                        modeled_range_rate;
+                    model_debug.doppler_satellite_clock_drift_mps =
+                        satellite_clock_drift_mps;
+                    model_debug.doppler_uses_rotated_satellite_state =
+                        config_.use_corrected_undifferenced_doppler_factors;
+                    if (config_.use_corrected_undifferenced_doppler_factors) {
+                        // Keep all receiver-only factors on the corrected
+                        // state geometry.  The legacy branch intentionally
+                        // retains carrier.los from the existing PR geometry.
+                        carrier.los = -doppler_los;
+                    }
                 }
             }
             carrier.model_debug = model_debug;
+            if (config_.use_undifferenced_doppler_factors &&
+                carrier.has_doppler_residual && passes_snr_mask &&
+                passes_elevation_mask) {
+                UndifferencedDopplerFactor factor;
+                factor.satellite = observation.satellite;
+                factor.signal = observation.signal;
+                factor.los = carrier.los;
+                factor.residual_mps = carrier.doppler_residual_mps;
+                factor.sigma_mps = std::max(
+                    1e-4,
+                        config_.undifferenced_doppler_sigma_mps /
+                            std::sqrt(sin_el));
+                factor.elevation_rad = carrier.elevation_rad;
+                factor.measured_range_rate_mps =
+                    model_debug.doppler_measured_range_rate_mps;
+                factor.satellite_range_rate_mps =
+                    model_debug.doppler_satellite_range_rate_mps;
+                factor.satellite_clock_drift_mps =
+                    model_debug.doppler_satellite_clock_drift_mps;
+                factor.uses_rotated_satellite_state =
+                    model_debug.doppler_uses_rotated_satellite_state;
+                epoch_doppler_factors.push_back(factor);
+            }
             if (passes_dd_reference_snr_mask) {
                 epoch_dd_reference_carriers[
                     {observation.satellite, observation.signal}] = carrier;
@@ -399,6 +465,172 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
             for (auto& factor : epoch_factors) {
                 factor.epoch_index = epoch_index;
                 problem.pseudorange_factors.push_back(factor);
+            }
+        }
+        for (auto& factor : epoch_doppler_factors) {
+            factor.epoch_index = epoch_index;
+            if (config_.use_corrected_undifferenced_doppler_factors) {
+                if (epoch_index == 0) {
+                    // A single epoch cannot identify receiver clock drift;
+                    // do not silently absorb it into velocity.
+                    continue;
+                }
+                factor.previous_epoch_index = epoch_index - 1;
+                factor.dt_s = problem.epochs[epoch_index].time -
+                              problem.epochs[epoch_index - 1].time;
+                if (!(factor.dt_s > 0.0) ||
+                    (config_.max_tdcp_gap_s > 0.0 &&
+                     factor.dt_s > config_.max_tdcp_gap_s)) {
+                    continue;
+                }
+                factor.includes_receiver_clock_drift = true;
+            }
+            problem.undifferenced_doppler_factors.push_back(factor);
+        }
+    }
+
+    if (config_.use_doppler_velocity_wls_initialization) {
+        // Build the initializer only from the corrected receiver-only rows.
+        // The grouping is deliberately performed after factor construction so
+        // the WLS and graph consume the exact same LOS, known-satellite term,
+        // and uncertainty values.
+        problem.doppler_velocity_wls_estimates.resize(problem.epochs.size());
+        doppler_velocity_wls::Options wls_options;
+        wls_options.min_rows = config_.doppler_velocity_wls_min_rows;
+        wls_options.max_condition_number =
+            config_.doppler_velocity_wls_max_condition_number;
+        wls_options.huber_threshold_sigma =
+            config_.doppler_velocity_wls_huber_threshold_sigma;
+        wls_options.max_irls_iterations =
+            config_.doppler_velocity_wls_max_irls_iterations;
+        wls_options.max_velocity_mps =
+            config_.doppler_velocity_wls_max_velocity_mps;
+        wls_options.max_clock_rate_mps =
+            config_.doppler_velocity_wls_max_clock_rate_mps;
+        wls_options.max_normalized_rms =
+            config_.doppler_velocity_wls_max_normalized_rms;
+        wls_options.max_abs_normalized_residual =
+            config_.doppler_velocity_wls_max_abs_normalized_residual;
+
+        std::vector<std::vector<doppler_velocity_wls::ObservationRow>> rows_by_epoch(
+            problem.epochs.size());
+        for (const auto& factor : problem.undifferenced_doppler_factors) {
+            if (!factor.includes_receiver_clock_drift ||
+                factor.epoch_index >= rows_by_epoch.size()) {
+                continue;
+            }
+            rows_by_epoch[factor.epoch_index].push_back({
+                factor.los, factor.residual_mps, factor.sigma_mps});
+        }
+        for (std::size_t epoch_index = 0;
+             epoch_index < problem.epochs.size(); ++epoch_index) {
+            auto& estimate = problem.doppler_velocity_wls_estimates[epoch_index];
+            if (epoch_index < problem.clock_jumps.size() &&
+                problem.clock_jumps[epoch_index]) {
+                estimate.reset = true;
+                estimate.reason = "clock-discontinuity-reset";
+                continue;
+            }
+            estimate = doppler_velocity_wls::solve(rows_by_epoch[epoch_index],
+                                                   wls_options);
+        }
+
+        // A missing row set is never replaced with zero.  Complete only short
+        // same-lane gaps using already-valid estimates: first try a bounded
+        // two-sided interpolation, then a one-sided constant hold.  A clock
+        // jump or a gap beyond max_tdcp_gap_s blocks both operations.
+        std::vector<GNSSTime> times;
+        times.reserve(problem.epochs.size());
+        for (const auto& epoch : problem.epochs) {
+            times.push_back(epoch.time);
+        }
+        const double max_gap = std::max(0.0, config_.max_tdcp_gap_s);
+        const double edge_hold =
+            std::max(0.0, config_.doppler_velocity_wls_edge_hold_max_s);
+        auto has_clock_jump_between = [&](std::size_t first,
+                                          std::size_t last) {
+            if (first > last) {
+                std::swap(first, last);
+            }
+            for (std::size_t i = first + 1; i <= last &&
+                                             i < problem.clock_jumps.size();
+                 ++i) {
+                if (problem.clock_jumps[i]) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        for (std::size_t i = 0; i < problem.doppler_velocity_wls_estimates.size();
+             ++i) {
+            auto& estimate = problem.doppler_velocity_wls_estimates[i];
+            if (estimate.valid) {
+                continue;
+            }
+            std::size_t previous = i;
+            while (previous > 0) {
+                --previous;
+                if (problem.doppler_velocity_wls_estimates[previous].valid) {
+                    break;
+                }
+            }
+            const bool have_previous =
+                problem.doppler_velocity_wls_estimates[previous].valid;
+            std::size_t next = i;
+            while (next + 1 < problem.doppler_velocity_wls_estimates.size()) {
+                ++next;
+                if (problem.doppler_velocity_wls_estimates[next].valid) {
+                    break;
+                }
+            }
+            const bool have_next =
+                problem.doppler_velocity_wls_estimates[next].valid;
+
+            const double previous_dt =
+                have_previous ? times[i] - times[previous] : 0.0;
+            const double next_dt = have_next ? times[next] - times[i] : 0.0;
+            if (have_previous && have_next && previous < i && i < next &&
+                previous_dt > 0.0 && next_dt > 0.0 &&
+                (max_gap <= 0.0 ||
+                 (previous_dt <= max_gap && next_dt <= max_gap)) &&
+                !has_clock_jump_between(previous, next)) {
+                const auto& before =
+                    problem.doppler_velocity_wls_estimates[previous];
+                const auto& after = problem.doppler_velocity_wls_estimates[next];
+                const double alpha = previous_dt / (previous_dt + next_dt);
+                estimate = before;
+                estimate.direct = false;
+                estimate.propagated = true;
+                estimate.reason = "bounded-interpolation";
+                estimate.velocity_ecef_mps =
+                    (1.0 - alpha) * before.velocity_ecef_mps +
+                    alpha * after.velocity_ecef_mps;
+                estimate.clock_rate_mps =
+                    (1.0 - alpha) * before.clock_rate_mps +
+                    alpha * after.clock_rate_mps;
+                estimate.covariance =
+                    (1.0 - alpha) * before.covariance + alpha * after.covariance;
+                continue;
+            }
+            if (have_previous && previous_dt > 0.0 && previous_dt <= edge_hold &&
+                (max_gap <= 0.0 || previous_dt <= max_gap) &&
+                !has_clock_jump_between(previous, i)) {
+                const auto& before =
+                    problem.doppler_velocity_wls_estimates[previous];
+                estimate = before;
+                estimate.direct = false;
+                estimate.propagated = true;
+                estimate.reason = "bounded-edge-hold";
+                continue;
+            }
+            if (have_next && next_dt > 0.0 && next_dt <= edge_hold &&
+                (max_gap <= 0.0 || next_dt <= max_gap) &&
+                !has_clock_jump_between(i, next)) {
+                const auto& after = problem.doppler_velocity_wls_estimates[next];
+                estimate = after;
+                estimate.direct = false;
+                estimate.propagated = true;
+                estimate.reason = "bounded-edge-hold";
             }
         }
     }

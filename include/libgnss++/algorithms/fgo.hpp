@@ -1,6 +1,7 @@
 #pragma once
 
 #include <libgnss++/algorithms/fgo_config.hpp>
+#include <libgnss++/algorithms/doppler_velocity_wls.hpp>
 #include <libgnss++/core/navigation.hpp>
 #include <libgnss++/core/observation.hpp>
 #include <libgnss++/core/solution.hpp>
@@ -53,6 +54,10 @@ public:
         double azimuth_rad = 0.0;
         bool has_doppler_residual = false;
         double doppler_residual_mps = 0.0;
+        double doppler_measured_range_rate_mps = 0.0;
+        double doppler_satellite_range_rate_mps = 0.0;
+        double doppler_satellite_clock_drift_mps = 0.0;
+        bool doppler_uses_rotated_satellite_state = false;
         // Raw rover-receiver SNR/CN0 [dB-Hz] for this observation (Observation::snr
         // at the point this model_debug was built). Added for the sat-badness
         // EWMA down-weighting port's elevation/SNR penalty terms (see
@@ -92,6 +97,32 @@ public:
         double residual_mps = 0.0;
         double sigma_mps = 0.2;
         double elevation_rad = 0.0;
+    };
+
+    /**
+     * @brief Receiver-only (undifferenced) Doppler factor.
+     *
+     * The measured range-rate residual is prepared from the rover
+     * observation and broadcast satellite state.  Unlike the
+     * SingleDifferenceDopplerFactor this row has no base/reference satellite
+     * and therefore remains usable in a no-base phone graph.
+     */
+    struct UndifferencedDopplerFactor {
+        std::size_t epoch_index = 0;
+        std::size_t previous_epoch_index =
+            std::numeric_limits<std::size_t>::max();
+        SatelliteId satellite;
+        SignalType signal = SignalType::GPS_L1CA;
+        Vector3d los = Vector3d::Zero();
+        double residual_mps = 0.0;
+        double sigma_mps = 0.2;
+        double elevation_rad = 0.0;
+        double dt_s = 0.0;
+        double measured_range_rate_mps = 0.0;
+        double satellite_range_rate_mps = 0.0;
+        double satellite_clock_drift_mps = 0.0;
+        bool includes_receiver_clock_drift = false;
+        bool uses_rotated_satellite_state = false;
     };
 
     struct SingleDifferenceTdcpFactor {
@@ -277,6 +308,9 @@ public:
         std::vector<int> gps_common_pseudorange_delta_satellites;
         std::vector<PseudorangeFactor> pseudorange_factors;
         std::vector<TimeDifferencedCarrierFactor> tdcp_factors;
+        std::vector<UndifferencedDopplerFactor> undifferenced_doppler_factors;
+        std::vector<doppler_velocity_wls::Estimate>
+            doppler_velocity_wls_estimates;
         std::vector<SingleDifferenceDopplerFactor> single_difference_doppler_factors;
         std::vector<SingleDifferenceTdcpFactor> single_difference_tdcp_factors;
         std::vector<AmbiguityState> ambiguity_states;
@@ -435,6 +469,15 @@ public:
         std::size_t tdcp_factors = 0;
         /// TDCP residual rows/factors actually inserted by the selected backend.
         std::size_t tdcp_factors_inserted = 0;
+        std::size_t undifferenced_doppler_factors = 0;
+        // Truth-free per-epoch Doppler WLS initialization diagnostics.
+        std::size_t doppler_velocity_wls_valid_epochs = 0;
+        std::size_t doppler_velocity_wls_propagated_epochs = 0;
+        std::size_t doppler_velocity_wls_rejected_epochs = 0;
+        double doppler_velocity_wls_max_condition_number = 0.0;
+        double doppler_velocity_wls_max_normalized_rms = 0.0;
+        double doppler_velocity_wls_max_velocity_norm_mps = 0.0;
+        double doppler_velocity_wls_max_clock_rate_abs_mps = 0.0;
         std::size_t single_difference_doppler_factors = 0;
         /// Satellite-single-difference TDCP measurements present in the problem.
         std::size_t single_difference_tdcp_factors = 0;
@@ -600,6 +643,7 @@ public:
         double last_update_norm_m = 0.0;
         double residual_rms_m = 0.0;
         double tdcp_residual_rms_m = 0.0;
+        double undifferenced_doppler_residual_rms_mps = 0.0;
         double single_difference_doppler_residual_rms_mps = 0.0;
         double single_difference_tdcp_residual_rms_m = 0.0;
         double carrier_phase_residual_rms_m = 0.0;

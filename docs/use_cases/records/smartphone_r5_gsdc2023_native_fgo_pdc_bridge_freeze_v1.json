@@ -1,0 +1,146 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-pdc-bridge-freeze.v1",
+  "status": "frozen-before-bridge-implementation",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "purpose": "Freeze a truth-free, no-base native factor-graph bridge before adding the missing undifferenced Doppler factor path.",
+  "policy": {
+    "local_only": true,
+    "external_mutation": false,
+    "token_access": false,
+    "leaderboard_used_for_tuning": false,
+    "truth_opened_before_freeze": 0,
+    "validation_or_holdout_materialized": false,
+    "test_data_used": false,
+    "production_default_changed": false,
+    "no_post_holdout_tuning": true
+  },
+  "authoritative_inputs": {
+    "archive": "data/gsdc2023/cache/dataset_2023.zip",
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "archive_size_bytes": 2761355999,
+    "central_inventory": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+    "central_inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+    "central_metadata_canonical_sha256": "5f619be94a00c33c3067f13b1cd3351d96f2804f07fa04eda8fb027739fb0992",
+    "profile": "configs/benchmarks/smartphone_r5_gsdc2023.json",
+    "profile_sha256": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776",
+    "truth_use_inventory": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_convergence_selector_truth_use_inventory_v2.json",
+    "truth_use_inventory_sha256": "aa57c85d9befdceb088c6eba75f23560e33d5cdde76bdbfa48a32eadbdbd3c30",
+    "selection_method": "Existing truth-free route artifacts and the already frozen v2 split; no ZIP payload or ground_truth content was opened by this freeze.",
+    "preexisting_release_binary": {
+      "path": "build/apps/gnss_fgo",
+      "sha256": "9190455cb34a9e818b79ed2ed6b023af5711fbef545215d4588bfed87f5c03e4",
+      "role": "pre-bridge executable identity; the post-implementation run manifest must pin the rebuilt executable"
+    }
+  },
+  "upstream_contract_evidence": {
+    "repository": "https://github.com/taroz/gsdc2023",
+    "cache": "output/reproducibility-cache/gsdc2023",
+    "commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "license": "MIT",
+    "license_sha256": "f5b3bcb0ce8267e076b4dad74c67c02efab4161efd6c5ba208402a0f51fbea1b",
+    "files": {
+      "fgo_gnss.m": {"sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3", "evidence_lines": "77-84,101-117,120-151,154-200,203-218"},
+      "fgo_gnss_imu.m": {"sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3", "evidence_lines": "129-143,169-220,252+"},
+      "parameters.m": {"sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52", "evidence_lines": "22-51,62-128,130-142,176-202"},
+      "README.md": {"sha256": "8020c204ed3dd2cda975355c1d372945b6eb166a87976369fca6a6592aa7c5e9"}
+    },
+    "mapping_note": "The upstream MATLAB phone_data.mat preprocessing is not a local CLI input. The local adapter supplies phone RINEX rover.obs, broadcast nav, and timestamp-keyed device metadata. Upstream fgo_gnss has raw P/D, motion/clock and TDCP contracts; the local no-base graph already has P, carrier/float arcs, ordinary TDCP, position/clock motion and optional velocity motion, but its Doppler rows were previously restricted to base-dependent single differences."
+  },
+  "frozen_split": {
+    "train": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "2022-02-24-18-29-us-ca-lax-o/pixel5"
+    ],
+    "fresh_validation": "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+    "future_holdout": "2023-05-16-19-54-us-ca-mtv-xe1/pixel5",
+    "route_disjoint_from_truth_use_inventory": true,
+    "train_artifact_root": "output/smartphone-r5/native-fgo-v2-processed/routes",
+    "train_artifacts": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "route_directory": "2021-03-16-18-59-us-ca-mtv-a__pixel5",
+        "route_manifest_sha256": "06b0a327a17a3bf2674e36ba1f7dccbd1b763600905e67360f8d2948057e3d3c",
+        "rover_obs_sha256": "50fc974321b19e99f7080e63faa859a4ee0dd951d7f5d0f943f8a1318216fe38",
+        "device_gnss_sha256": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863",
+        "brdc_nav_sha256": "6adfaf7fe4452a4faeb94a7b607c15e05f578c46a028a030b94aa6f79de194cd",
+        "paths": ["adapter/rover.obs", "inputs/device_gnss.csv", "inputs/device_imu.csv", "inputs/brdc.nav"]
+      },
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4": {
+        "route_directory": "2021-07-27-19-49-us-ca-mtv-b__pixel4",
+        "route_manifest_sha256": "3405e1b45ba1342e9c61bba0502415c2644f56a99b12d2cf2a6b66b6700a9268",
+        "rover_obs_sha256": "c29b1ef2729e90b8c7bc226166eba452227eaa2df98f6984b78769e3e427dc40",
+        "device_gnss_sha256": "b7c192323455c36e76ea44831dc21a0cb661e5ca160e6072bd0d3682c907e594",
+        "brdc_nav_sha256": "cf48ab5fe78edd49a182655ed4b99f1938972c40ab95bea3c78939d3eb98b5c5",
+        "paths": ["adapter/rover.obs", "inputs/device_gnss.csv", "inputs/device_imu.csv", "inputs/brdc.nav"]
+      },
+      "2022-02-24-18-29-us-ca-lax-o/pixel5": {
+        "route_directory": "2022-02-24-18-29-us-ca-lax-o__pixel5",
+        "route_manifest_sha256": "57016f9df7b5879d73238bc143ae555dc138fd54100fe05b540528f3dd1086b1",
+        "rover_obs_sha256": "5f63fe6feb080249480422735cd38f0cf44effd4ad925af124fd4bae92efbbbb",
+        "device_gnss_sha256": "fe342d7ef0ff5bfc09a573dd27faac1761391d1f8fcc5526e215682f58ff1dae",
+        "brdc_nav_sha256": "f0cd31bc0a124691a954cef8736ddc59336852b3674b8dcae369f612349aa79a",
+        "paths": ["adapter/rover.obs", "inputs/device_gnss.csv", "inputs/device_imu.csv", "inputs/brdc.nav"]
+      }
+    }
+  },
+  "frozen_candidate": {
+    "name": "native-fgo-pdc-bridge-v1",
+    "backend": "eigen",
+    "base_required": false,
+    "double_difference_factors": false,
+    "ordinary_factors": ["pseudorange", "carrier_phase_float", "ordinary_tdcp", "position_motion", "clock_motion", "velocity_state", "velocity_motion", "ambiguity_between"],
+    "new_missing_factor": "undifferenced raw Doppler factor: residual = measured_range_rate - (satellite_range_rate - satellite_clock_drift), row predicts LOS dot receiver velocity",
+    "factor_flags": {
+      "pseudorange": true,
+      "undifferenced_doppler": true,
+      "ordinary_tdcp": true,
+      "carrier_phase_float": true,
+      "velocity_states": true,
+      "velocity_motion": true,
+      "position_clock_motion": true,
+      "ambiguity_between": true,
+      "single_difference_doppler": false,
+      "single_difference_tdcp": false,
+      "double_difference": false,
+      "integer_fix": false
+    },
+    "numeric_parameters": {
+      "max_iterations": 8,
+      "pseudorange_sigma_m": 3.0,
+      "pseudorange_elevation_sigma_power": 1.0,
+      "motion_sigma_m": 50.0,
+      "clock_motion_sigma_m": 300.0,
+      "velocity_prior_sigma_mps": 100.0,
+      "velocity_motion_sigma_m": 0.01,
+      "tdcp_sigma_m": 0.03,
+      "carrier_phase_sigma_m": 0.01,
+      "undifferenced_doppler_sigma_mps": 0.2,
+      "ambiguity_between_sigma_cycles": 0.001,
+      "ambiguity_prior_sigma_m": 1000.0,
+      "pseudorange_huber_threshold_sigma": 4.0,
+      "carrier_phase_huber_threshold_sigma": 4.0,
+      "tdcp_huber_threshold_sigma": 4.0,
+      "max_tdcp_gap_s": 2.0,
+      "min_elevation_deg": 10.0,
+      "min_snr_dbhz": 0.0,
+      "min_satellites_per_epoch": 4,
+      "seed_match_tolerance_s": 0.01,
+      "seed_interpolation_max_gap_s": 0.0
+    },
+    "arc_contract": "Float ambiguity state per (satellite, signal, continuous arc); start/reset on loss-of-lock, nonpositive time, or gap > 2 s. Ordinary TDCP rejects gap/slip according to the existing frozen v1 contract.",
+    "runtime_safety": "Finite ECEF/clock/velocity states, finite keyed output and factor summary required; no-base/backend mismatch, schema failure, solver failure, or conditioning failure is fail-closed. An explicit hash-authorized v5/native-FGO baseline may be selected as fallback and must be labeled in the manifest.",
+    "fallback": "Exact frozen native-FGO v5/v1 artifact supplied by caller only; no silent seed or truth-derived fallback.",
+    "source_change_at_freeze": "The bridge source is intentionally not yet present. After implementation, the run manifest must pin all changed source/config hashes and prove defaults remain false for the new option."
+  },
+  "commands": {
+    "planned_bridge": "python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_bridge.py --freeze-record docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_bridge_freeze_v1.json --route ... --out ...",
+    "planned_native": "build/apps/gnss_fgo --backend eigen --no-dd-factors --carrier-phase-factors --undifferenced-doppler-factors --velocity-states --velocity-motion-factors --ambiguity-between-factors",
+    "truth_free_first": true,
+    "truth_score_after_seal": "Only after the three train route artifacts are sealed; no validation/holdout in this phase."
+  },
+  "pre_truth_gate": {
+    "structural": ["nonzero pseudorange", "nonzero undifferenced Doppler", "nonzero ordinary TDCP", "nonzero carrier/ambiguity", "nonzero motion and velocity-motion", "finite output", "finite/converged solver", "no base/DD factors"],
+    "score": ["all four official diagnostic variants and mean route-wise and aggregate non-regression plus strict aggregate improvement", "availability and truth coverage non-regression", "vertical P95 inside existing physical threshold", "no new isolated >70 m/s continuity spike", "runtime and RSS recorded"],
+    "failure_policy": "Seal No-Go and do not open fresh validation or future holdout. Production default and v5 bytes remain unchanged."
+  }
+}

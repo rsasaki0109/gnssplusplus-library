@@ -477,7 +477,9 @@ bool SPPProcessor::initialize(const ProcessorConfig& config) {
     return true;
 }
 
-PositionSolution SPPProcessor::processEpoch(const ObservationData& obs, const NavigationData& nav) {
+PositionSolution SPPProcessor::processEpoch(
+    const ObservationData& obs,
+    const NavigationData& nav) {
     auto start_time = std::chrono::high_resolution_clock::now();
 
     PositionSolution solution;
@@ -692,6 +694,31 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
         bool dcb_applied = false;
     };
 
+    // Broadcast state and ephemeris selection depend on the observation and
+    // epoch, but not on the receiver position, in the ordinary SPP path.
+    // Reusing them across the three/four position iterations avoids repeated
+    // navigation-map lookups while preserving the exact first-iteration
+    // calculation order.  Precise products, SSR orbit corrections, and the
+    // literal MRTKLIB path all have position/selection-dependent branches and
+    // deliberately stay on the uncached path.
+    struct BroadcastMeasurementCache {
+        bool state_attempted = false;
+        bool state_valid = false;
+        Vector3d satellite_position = Vector3d::Zero();
+        Vector3d satellite_velocity = Vector3d::Zero();
+        double satellite_clock_bias = 0.0;
+        double satellite_clock_drift = 0.0;
+        GNSSTime corrected_transmit_time;
+        bool ephemeris_lookup_attempted = false;
+        const Ephemeris* ephemeris = nullptr;
+    };
+
+    const bool cache_broadcast_measurements =
+        !spp_config_.mrtklib_iflc_code_bias &&
+        !(spp_config_.use_precise_products && precise_products_loaded_) &&
+        !(spp_config_.use_ssr_corrections && ssr_products_loaded_);
+    std::vector<BroadcastMeasurementCache> broadcast_cache(valid_obs.size());
+
     auto buildMeasurements = [&](const Vector3d& current_position) {
         std::vector<MeasurementModel> measurements;
         measurements.reserve(valid_obs.size());
@@ -711,7 +738,9 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
         double rcv_h = 0.0;
         ecef2geodetic(current_position, rcv_lat, rcv_lon, rcv_h);
 
-        for (const auto& spp_obs : valid_obs) {
+        for (size_t observation_index = 0;
+             observation_index < valid_obs.size(); ++observation_index) {
+            const auto& spp_obs = valid_obs[observation_index];
             const Observation& obs = spp_obs.observation;
             Vector3d sat_pos;
             Vector3d sat_vel;
@@ -839,17 +868,62 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
                     continue;
                 }
             } else if (!precise_orbit_clock) {
-                if (!nav.calculateSatelliteState(obs.satellite, tx_time,
-                                                 sat_pos, sat_vel, sat_clk, sat_clk_drift,
-                                                 ssr_orbit_iode)) {
-                    continue;
-                }
+                auto& cached = broadcast_cache[observation_index];
+                if (cache_broadcast_measurements) {
+                    if (!cached.state_attempted) {
+                        cached.state_attempted = true;
+                        cached.state_valid = nav.calculateSatelliteState(
+                            obs.satellite,
+                            tx_time,
+                            sat_pos,
+                            sat_vel,
+                            sat_clk,
+                            sat_clk_drift,
+                            ssr_orbit_iode);
+                        if (cached.state_valid) {
+                            tx_time = tx_time - sat_clk;
+                            cached.state_valid = nav.calculateSatelliteState(
+                                obs.satellite,
+                                tx_time,
+                                sat_pos,
+                                sat_vel,
+                                sat_clk,
+                                sat_clk_drift,
+                                ssr_orbit_iode);
+                            if (cached.state_valid) {
+                                cached.corrected_transmit_time = tx_time;
+                            }
+                        }
+                        cached.satellite_position = sat_pos;
+                        cached.satellite_velocity = sat_vel;
+                        cached.satellite_clock_bias = sat_clk;
+                        cached.satellite_clock_drift = sat_clk_drift;
+                    } else {
+                        if (!cached.state_valid) {
+                            continue;
+                        }
+                        sat_pos = cached.satellite_position;
+                        sat_vel = cached.satellite_velocity;
+                        sat_clk = cached.satellite_clock_bias;
+                        sat_clk_drift = cached.satellite_clock_drift;
+                        tx_time = cached.corrected_transmit_time;
+                    }
+                    if (!cached.state_valid) {
+                        continue;
+                    }
+                } else {
+                    if (!nav.calculateSatelliteState(obs.satellite, tx_time,
+                                                     sat_pos, sat_vel, sat_clk, sat_clk_drift,
+                                                     ssr_orbit_iode)) {
+                        continue;
+                    }
 
-                tx_time = tx_time - sat_clk;
-                if (!nav.calculateSatelliteState(obs.satellite, tx_time,
-                                                 sat_pos, sat_vel, sat_clk, sat_clk_drift,
-                                                 ssr_orbit_iode)) {
-                    continue;
+                    tx_time = tx_time - sat_clk;
+                    if (!nav.calculateSatelliteState(obs.satellite, tx_time,
+                                                     sat_pos, sat_vel, sat_clk, sat_clk_drift,
+                                                     ssr_orbit_iode)) {
+                        continue;
+                    }
                 }
             }
 
@@ -935,7 +1009,17 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
                 trop_delay = models::tropDelaySaastamoinen(current_position, geom.elevation);
             }
 
-            const Ephemeris* eph = nav.getEphemeris(obs.satellite, tx_time);
+            const Ephemeris* eph = nullptr;
+            if (cache_broadcast_measurements) {
+                auto& cached = broadcast_cache[observation_index];
+                if (!cached.ephemeris_lookup_attempted) {
+                    cached.ephemeris_lookup_attempted = true;
+                    cached.ephemeris = nav.getEphemeris(obs.satellite, tx_time);
+                }
+                eph = cached.ephemeris;
+            } else {
+                eph = nav.getEphemeris(obs.satellite, tx_time);
+            }
             if (!eph) {
                 continue;
             }
@@ -1483,7 +1567,8 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
             detectOutliers(final_observations, final_residuals, spp_config_.outlier_threshold_sigma);
         if (inlier_observations.size() < final_observations.size() &&
             inlier_observations.size() >= 4U) {
-            auto filtered_solution = solvePositionLS(inlier_observations, nav, time, false);
+            auto filtered_solution = solvePositionLS(
+                inlier_observations, nav, time, false);
             if (filtered_solution.isValid()) {
                 filtered_solution.spp_pre_qc_measurements =
                     static_cast<int>(final_observations.size());
@@ -1540,7 +1625,8 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
             estimated_position_ = position;
             receiver_clock_bias_ = clock_bias;
             system_biases_ = saved_system_biases;
-            auto candidate_solution = solvePositionLS(candidate_observations, nav, time, false);
+            auto candidate_solution = solvePositionLS(
+                candidate_observations, nav, time, false);
             ++raim_attempts;
             if (candidate_solution.isValid() &&
                 std::isfinite(candidate_solution.residual_rms)) {
@@ -1973,18 +2059,16 @@ std::map<SatelliteId, SPPProcessor::SatelliteState> SPPProcessor::calculateSatel
         }
 
         // First: get satellite clock at approximate tx time
-        state.valid = nav.calculateSatelliteState(obs.satellite, tx_time,
-                                                state.position, state.velocity,
-                                                state.clock_bias, state.clock_drift,
-                                                ssr_orbit_iode);
+        state.valid = nav.calculateSatelliteState(
+            obs.satellite, tx_time, state.position, state.velocity,
+            state.clock_bias, state.clock_drift, ssr_orbit_iode);
         if (state.valid) {
             // Correct tx time for satellite clock bias
             tx_time = tx_time - state.clock_bias;
             // Recompute at corrected tx time
-            state.valid = nav.calculateSatelliteState(obs.satellite, tx_time,
-                                                    state.position, state.velocity,
-                                                    state.clock_bias, state.clock_drift,
-                                                    ssr_orbit_iode);
+            state.valid = nav.calculateSatelliteState(
+                obs.satellite, tx_time, state.position, state.velocity,
+                state.clock_bias, state.clock_drift, ssr_orbit_iode);
             if (state.valid && ssr_ok) {
                 if (ssr_products_.orbitCorrectionsAreRac()) {
                     ssr_orbit_correction =

@@ -1,0 +1,96 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-imu-motion-q-selection.v1",
+  "status": "selection-frozen-before-new-truth-evaluation",
+  "purpose": "Second, independently frozen alternative after the Doppler position-update train No-Go; evaluate only a causal observable IMU process-noise lane.",
+  "external_mutation": false,
+  "kaggle_token_access": false,
+  "public_private_scores_used_for_tuning": false,
+  "candidate": {
+    "id": "causal_imu_motion_adaptive_q_v1",
+    "ranked_source": "GSDC top-solution feasibility audit rank 2 physical GNSS/IMU direction; this is a smaller fallback and is not claimed to reproduce the published tightly coupled estimator.",
+    "truth_free": true,
+    "production_default_changed": false,
+    "implementation": "causal gyro vector norm and robust acceleration-norm dynamics adjust only the process-noise multiplier of the existing constant-velocity Kalman/RTS smoother; no absolute acceleration integration, orientation, lever-arm, or future IMU sample is used",
+    "parameters": {
+      "smoother_process_noise": 1.0,
+      "measurement_floor_m": 1.0,
+      "outlier_gate_sigma": 5.0,
+      "segment_gap_s": 10.0,
+      "motion_window_s": 1.0,
+      "motion_max_sample_gap_s": 0.25,
+      "motion_max_sample_age_s": 0.25,
+      "motion_gyro_threshold": 0.25,
+      "motion_accel_dynamic_threshold": 1.0,
+      "motion_q_multiplier": 2.0,
+      "skip_epochs": 1,
+      "split_reset": "none within each route; routes are independently processed"
+    },
+    "selection_reason": "The fixed candidate was already observable-only and unit-tested; its existing single-route development result makes it the least-cost second physical alternative after Doppler, while the timing/orientation-complete coupled filter remains unavailable.",
+    "candidate_search_after_freeze": false
+  },
+  "frozen_split": {
+    "train": [
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8",
+      "2022-08-04-20-07-us-ca-sjc-q/pixel5",
+      "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro"
+    ],
+    "fresh_validation": "2023-09-07-18-59-us-ca/pixel5",
+    "future_holdout": "2023-09-06-00-01-us-ca-routen/pixel6pro",
+    "selection_source": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+    "selection_source_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+    "route_disjoint_roles": true,
+    "fresh_validation_payload_materialized_before_freeze": false,
+    "fresh_validation_truth_open_count_before_freeze": 0,
+    "future_holdout_payload_materialized_before_freeze": false,
+    "future_holdout_truth_open_count_before_freeze": 0,
+    "old_holdout_or_public_score_used_for_selection": false
+  },
+  "frozen_gate": {
+    "truth_scored_role_order": ["train", "fresh_validation", "future_holdout"],
+    "train_required": "each route availability, truth coverage, H WGS84 P50/P95, V P95, and all four local diagnostics must be non-regressed versus exact WLS; aggregate H P95 and four-diagnostic mean must both strictly improve",
+    "fresh_validation_required": "open only when train passes; same per-route non-regression and aggregate strict improvements",
+    "future_holdout_required": "open only when fresh validation passes; one truth read, no post-holdout tuning or rerun",
+    "tolerance_m": 1.0e-9,
+    "diagnostic_formula_status": "four local public-spec variants only; official hidden distance/percentile details remain undetermined"
+  },
+  "implementation_sources": {
+    "imu": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_imu.py",
+      "sha256": "19aac6dfae976fdf29106f2ea12c40cbf774c768d57690e50f24d5e4910a8afe"
+    },
+    "smoother": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_trajectory_smoother.py",
+      "sha256": "2e95e96cd554cb8f78637e5f109c25e89801e4ae8958d6136124aa064e1191d4"
+    },
+    "existing_evaluator_reference": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_trajectory_imu_eval.py",
+      "sha256": "446b74be5865f53a84d361f8c7b60638dc5734a43b6088f3f7636aadea10b592"
+    },
+    "imu_test": {
+      "path": "tests/test_smartphone_trajectory_imu.py",
+      "sha256": "0cafba12ad7cac1610702709c442035910846437dade73775f813036921ce828"
+    },
+    "smoother_test": {
+      "path": "tests/test_smartphone_trajectory_smoother.py",
+      "sha256": "218aee9b31e407b0725a22720393218b99a1afd547ab2f0535e3130a6fd5073f"
+    }
+  },
+  "truth_access": {
+    "new_truth_access_before_freeze": 0,
+    "new_fresh_validation_truth_open_count": 0,
+    "new_future_holdout_truth_open_count": 0,
+    "prior_candidate_truth_not_reused_for_ranking": true,
+    "no_holdout_truth": true,
+    "no_post_holdout_tuning": true
+  },
+  "commands": {
+    "truth_free_candidate": "python3 apps/gnss.py smartphone-trajectory-smoother --experimental-truth-free-kalman-rts --experimental-motion-adaptive-q --position <wls.pos> --device-gnss <device_gnss.csv> --device-imu <device_imu.csv> --process-noise 1.0 --measurement-floor-m 1.0 --outlier-gate-sigma 5.0 --segment-gap-s 10.0 --motion-window-s 1.0 --motion-max-sample-gap-s 0.25 --motion-max-sample-age-s 0.25 --motion-gyro-threshold 0.25 --motion-accel-dynamic-threshold 1.0 --motion-q-multiplier 2.0 --output-dir <output>",
+    "truth_scoring": "existing smoother metric implementation, replayed only after all train truth-free artifacts are hash sealed",
+    "unit_tests": "PYTHONPATH=apps/commands:apps/commands/benchmarks python3 tests/test_smartphone_trajectory_imu.py && PYTHONPATH=apps/commands:apps/commands/benchmarks python3 tests/test_smartphone_trajectory_smoother.py"
+  },
+  "limitations": [
+    "This fallback adjusts smoother covariance but does not estimate GNSS/IMU timestamp offset or solve a tightly coupled factor graph.",
+    "No map asset, orientation calibration, lever-arm calibration, or base-station stream is introduced.",
+    "If train gate fails, fresh validation and future holdout remain unopened."
+  ]
+}

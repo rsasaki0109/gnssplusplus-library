@@ -1,0 +1,57 @@
+{
+  "schema_version": "smartphone-r5-wls-stability-selector-holdout-freeze-manifest.v4",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_stability_selector_holdout_freeze_v4.json",
+    "sha256": "ee1e3f6a19205503d8dd4f9fd71f4e9769d3c6dd3534026d76bf8d1ff7016b90"
+  },
+  "freeze_record_hash_not_embedded": true,
+  "algorithm_parameter_hash": "c82fba6130c7d16c207213ab1e2ac542e02280db194949a300c68bebd412ca7e",
+  "candidate": {
+    "id": "median5_shift_0",
+    "robust_window_epochs": 5,
+    "along_track_shift_m": 0.0,
+    "search_after_freeze": false
+  },
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_directory_inventory": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+    "central_directory_inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7"
+  },
+  "profile": {
+    "path": "configs/benchmarks/smartphone_r5_gsdc2023.json",
+    "sha256": "ed50bb5f8a661c566e4cada09b0debefc44a9d4ba65460a87d214c646470db8e"
+  },
+  "release_build": {
+    "binary": "build/apps/gnss_spp",
+    "sha256": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12"
+  },
+  "holdout": {
+    "id": "2023-05-25-19-10-us-ca-sjc-be2/sm-s908b",
+    "payload_sha256_deferred": true,
+    "payload_materialization_before_freeze": false,
+    "truth_open_count_before_freeze": 0,
+    "central_metadata_sealed": true
+  },
+  "source_files": {
+    "apps/gnss.py": "348dcd346a4bd622226c01a9473756946241676eb7db11fb91a103e3a52fe83d",
+    "apps/commands/benchmarks/gnss_smartphone_gnss_adapter.py": "e740d42a5a3232775fef013c5f734a004f3aa4952add7415c1bcca0716ccaad0",
+    "apps/commands/benchmarks/gnss_smartphone_wls.py": "9fac3b562d8b43c4fdfaab19a871fee1c1d710199b27bfdcdbb1c090fab5007a",
+    "apps/commands/benchmarks/gnss_smartphone_wls_residual.py": "33c7d6fb831e7a559d2ccf051d2109e4c3c3a1d947f33f132b31872ee6d2a175",
+    "apps/commands/benchmarks/gnss_smartphone_wls_residual_v2_eval.py": "fb4c9edc2fdc0fc388f5a4d45e381c21d0ec12b5a6391e53fcef657bbb608197",
+    "apps/commands/benchmarks/gnss_smartphone_wls_stability_selector.py": "0a9a7e50bd8bee78460eb57929aa690c75de0ce81af5e07215c1845ee6136cb2",
+    "apps/commands/benchmarks/gnss_smartphone_wls_stability_selector_eval.py": "235ade902fb7339f994f765efec7e0b52814d825d0551cb95cced92cb10ad72d",
+    "apps/commands/benchmarks/gnss_smartphone_wls_stability_selector_holdout_eval.py": "cc726bb97ab5f7e5457ba57a8cbb70b736822ac113287a7736ba481494ca6d51",
+    "tests/test_smartphone_wls.py": "686fe6ccd8469e8b1d1c2fb2859ad4d3b9a91fd503a5c32c8c01a66d22bf2ef5",
+    "tests/test_smartphone_wls_residual_v2.py": "bf3f766c32bd79366782b0c3c975acf35eff816965c4896b047b7206457141dc",
+    "tests/test_smartphone_wls_stability_selector_holdout_eval.py": "4a3f763fea952a9fc3ca3a055764e180dfcb13b81eb4882e3b9d9fe3c7551"
+  },
+  "preflight": {
+    "fixture": "python3 -m unittest tests.test_smartphone_wls_stability_selector_holdout_eval",
+    "actual": "python3 apps/gnss.py smartphone-wls-stability-selector-holdout-eval --archive data/gsdc2023/cache/dataset_2023.zip --profile configs/benchmarks/smartphone_r5_gsdc2023.json --freeze docs/use_cases/records/smartphone_r5_wls_stability_selector_holdout_freeze_v4.json --freeze-manifest docs/use_cases/records/smartphone_r5_wls_stability_selector_holdout_freeze_v4_manifest.json --preflight-only",
+    "truth_open_count": 0,
+    "payload_materialization_count": 0,
+    "central_directory_only": true
+  },
+  "sealed_before_holdout": true
+}

@@ -1,0 +1,29 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-upstream-mat-fallback-freeze-manifest.v2",
+  "status": "sealed-before-test-candidate-generation",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_fallback_v2_freeze.json",
+    "sha256": "4b815827140e217fe9c05a3b1ab1c086f3c5433fe9a92c47c519c36eb561988a"
+  },
+  "source": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_gsdc2023_upstream_mat_fallback_v2.py",
+    "sha256": "a47acae7d12205b984d6b310290d676e6a1d57ae16a070818293c1083584f4a8"
+  },
+  "fixture_test": {
+    "path": "tests/test_smartphone_gsdc2023_upstream_mat_fallback_v2.py",
+    "sha256": "3037cfa0756b959a7890defc9c79af421cd8f90f9c42a710d32cc3d310fdd1e"
+  },
+  "frozen_inputs": {
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "sample_key_sha256": "b0c4853076f715d6bdca46e5c8c99e575f7982d8ee4fc9c0fe417507badcb780",
+    "v1_failure_sha256": "64b787f3b9e110e6fc889c7df16819eac480401c4bb3d1183999f7122c413c84",
+    "v1_diagnostic_sha256": "1a5a91d2c87a384af59bedf5d0a1611151eb577dd13482ad039d2e4ccbac5093",
+    "v5_submission_sha256": "89de0e03ff8eb687c9228ac19a1e62d160400b317352652cf8665b22591eef26"
+  },
+  "truth_policy": {
+    "test_truth_open_count": 0,
+    "sample_coordinates_read": false,
+    "external_mutation": false
+  },
+  "contract_hash": "sha256 of this manifest is recorded in the post-generation run record; no values may be changed after output generation begins"
+}

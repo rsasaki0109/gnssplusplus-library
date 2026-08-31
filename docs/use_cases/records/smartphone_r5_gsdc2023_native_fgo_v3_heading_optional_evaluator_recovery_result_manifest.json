@@ -1,0 +1,20 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-v3-heading-optional-evaluator-recovery-result-manifest.v1",
+  "status": "no-go-train-gate",
+  "result_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v3_heading_optional_evaluator_recovery_result.json",
+  "result_record_sha256": "07dbdef3316c7268668cda39cae28effc50201a3e01f2ac981f79cb8f13471c6",
+  "report_path": "output/smartphone-r5/native-fgo-v3-heading-optional-v1/evaluator-recovery-v1/train_evaluation_recovery.json",
+  "report_sha256": "c9364ae970c1d1ebbe322ce1de36593d3fa0c78dad24e17dfd468f8e4ddc1145",
+  "report_manifest_path": "output/smartphone-r5/native-fgo-v3-heading-optional-v1/evaluator-recovery-v1/train_evaluation_recovery.manifest.json",
+  "report_manifest_sha256": "c30b6e1ea17a0b530169f6baaa8d9a1562a73040f6db74e552dd125ad06b6a87",
+  "authorization_record_sha256": "a0a8a470403a6a9abf11070156813885be578d9951b1f29a939c3f26f412bf90",
+  "candidate_source_sha256": "3d72bff440fad0c4a9d614bad74b97f19b6ed40d1c8be099756d64035d1b225d",
+  "candidate_release_binary_sha256": "482cd0a7641eaaa29ee212d6cd664558d9160d02ac5975507f3832bc4fb32dd3",
+  "recovery_truth_payload_read_count": 2,
+  "truth_hashes_equal_before_after": true,
+  "validation_truth_open_count": 0,
+  "future_holdout_truth_open_count": 0,
+  "solver_rerun": false,
+  "candidate_outputs_unchanged": true,
+  "no_post_recovery_tuning": true
+}

@@ -1,0 +1,84 @@
+{
+  "schema_version": "smartphone-r5-wls-test-edge-completeness-fallback-failure.v2",
+  "status": "no-go-truth-free-development-gate-failed",
+  "candidate": {
+    "edge_hold": "constant nearest finite selected-source ECEF",
+    "scope": "leading/trailing unresolved edge keys only",
+    "max_gap_s": 10.0,
+    "continuity": "HardwareClockDiscontinuityCount constant across the edge span",
+    "velocity_extrapolation": false,
+    "long_gap_or_clock_break": "fail-closed",
+    "parameter_search": false
+  },
+  "algorithm": {
+    "core_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb",
+    "parameter_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb",
+    "wls_source_sha256": "f8a1da02265f73e4c50b526f60b2da90d1461c8d7891871b57818a6b9ca604e2",
+    "batch_source_sha256": "eab09b661ba4704d800e048f63b3dbd8c524a1b4e2c42b9d7d388882b1ca720a",
+    "evaluation_source_sha256": "9d1dd33f876c6711f73d29a7dc66b4d576310546bffd08213348901bad719917"
+  },
+  "truth_free_gate": {
+    "evaluation": "output/smartphone-r5/wls-test-edge-completeness-fallback-v2/evaluation/evaluation.json",
+    "evaluation_sha256": "e633c665dc80b287a32fb98af356b0bd7c60913fd1b45e96f313e694d318ef0e",
+    "truth_free_manifest": "output/smartphone-r5/wls-test-edge-completeness-fallback-v2/evaluation/truth_free_artifacts_manifest.json",
+    "truth_free_manifest_sha256": "9644a4e684c37cb05f12669daec9614c5ddbb82bb4313bbeb683969d62fe3797",
+    "development_route_count": 3,
+    "scenario_count": 27,
+    "mask_durations_s": [1, 2, 5, 10],
+    "directions": ["leading", "trailing"],
+    "truth_free_artifacts_hashed_before_truth": true,
+    "truth_open_count": 3,
+    "gate_failures": [
+      "2023-05-23-19-56-us-ca-mtv-ie2/sm-a505g:leading_mask_10s:h_p50_upper_bound"
+    ],
+    "signoff": {
+      "availability_non_regression": true,
+      "truth_coverage_non_regression": true,
+      "h_p50_max_regression_m": 0.01,
+      "h_p95_max_regression_m": 5.0,
+      "v_p95_max_regression_m": 5.0,
+      "diagnostic_max_regression_m": 5.0,
+      "passed": false
+    },
+    "failed_metric": {
+      "route": "2023-05-23-19-56-us-ca-mtv-ie2/sm-a505g",
+      "scenario": "leading_mask_10s",
+      "baseline_h_p50_m": 3.7015211774165677,
+      "candidate_h_p50_m": 3.72015849046919,
+      "regression_m": 0.01863731305262228,
+      "allowed_regression_m": 0.01
+    },
+    "edge_hold_counts": {
+      "per_route_total_masked_epochs": 36,
+      "all_route_masked_epochs": 108,
+      "max_edge_gap_ms": 10000,
+      "velocity_extrapolation_count": 0,
+      "clock_segment_continuity_failures": 0
+    }
+  },
+  "prior_v1_reference": {
+    "freeze_record": "docs/use_cases/records/smartphone_r5_wls_test_completeness_fallback_freeze_v1.json",
+    "freeze_record_sha256": "ab8a86eb2d211a58289aaedaf6adc329ba25abedc8993f9da14b3bd128ab0bcd",
+    "run_record": "docs/use_cases/records/smartphone_r5_wls_test_completeness_fallback_v1_run.json",
+    "run_record_sha256": "79d1be0d00b76a1abed081f276e849ba8fe17560cd0e04a4c19037cdd684a754",
+    "completed_cache_routes": 39,
+    "byte_identity_required": true,
+    "truth_open_count": 0
+  },
+  "decision": {
+    "freeze_created": false,
+    "resume_performed": false,
+    "sm_a205u_materialized_or_processed": false,
+    "completed_40_of_40_submission": false,
+    "production_default_changed": false,
+    "official_sample_verified": false,
+    "kaggle_external_submission": false,
+    "reason": "Fixed H P50 signoff failed; no threshold or candidate relaxation is permitted."
+  },
+  "truth_policy": {
+    "test_truth_open_count": 0,
+    "test_truth_materialized_count": 0,
+    "holdout_or_test_truth_used": false,
+    "development_truth_read_after_artifact_seal": true
+  }
+}

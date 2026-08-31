@@ -843,6 +843,18 @@ public:
     }
 
     struct EpochDebugTelemetry {
+        // Optional per-epoch stage timing. These fields are telemetry only;
+        // they do not participate in any RTK decision or state update. SPP
+        // time is accumulated from PositionSolution::processing_time_ms so
+        // nested SPP calls (initialization/reset/fallback) are included.
+        double stage_spp_ms = 0.0;
+        double stage_satellite_collection_ms = 0.0;
+        double stage_initialize_filter_ms = 0.0;
+        double stage_reset_position_ms = 0.0;
+        double stage_bias_update_ms = 0.0;
+        double stage_filter_update_ms = 0.0;
+        double stage_ambiguity_ms = 0.0;
+        double stage_velocity_ms = 0.0;
         bool ar_attempted = false;
         int input_pair_count = 0;
         int pair_count = 0;

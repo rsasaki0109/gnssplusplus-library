@@ -1,0 +1,68 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-v2-1-independent-confirmation-result-manifest.v1",
+  "result_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_1_confirmation_result.json",
+  "result_record_sha256": "f009b234e122047edaa6d34b8ec6461b53e9fcfef4487f973fb1cf5f7f308f5b",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_1_confirmation_freeze.json",
+  "freeze_record_sha256": "a6c1dff74f8ec0eb28985cb595976231bac7869ccddebc3d10fc725fd31f52c3",
+  "freeze_manifest": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_1_confirmation_freeze_manifest.json",
+  "freeze_manifest_sha256": "8845fa0a5d05e0340174de6957b0fa0647322c14337d4daca44579f58724cf2d",
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_metadata_sha256": "5f619be94a00c33c3067f13b1cd3351d96f2804f07fa04eda8fb027739fb0992"
+  },
+  "source_sha256": {
+    "apps/native/gnss_fgo_imu_v21.cpp": "c158cdd2fc6cfba37b7bb300b52c2c5b9cf760482ac46206895f0462da835883",
+    "src/algorithms/fgo_gtsam_internal.hpp": "aad937849b4ba1c9b9bec0cdaaaf270a66cb71b7d789e682d5ff571bb7f66621",
+    "src/algorithms/fgo_gtsam_backend.cpp": "08c7b82e9395fc3645fc75785849576f982ec6e6e91432e3a58d85bb396ec191",
+    "apps/CMakeLists.txt": "7db14842b85c363c88e93ad1fbd6f719a502b21bc2fd8ed28af3c96b6c1ae81f",
+    "configs/benchmarks/smartphone_r5_gsdc2023.json": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776",
+    "apps/native/gnss_fgo.cpp": "2d9e53485c427d1e0d43b07dd611aaf3644e2cd51d5e175c2977038ca05e3e32"
+  },
+  "binary_sha256": {
+    "build/apps/gnss_fgo_imu_v21": "8b978458735996ea571baa9975be70c37287f84fec029ced187b9f30fbb6d483",
+    "build/apps/gnss_fgo": "5e1e22979a84b938352a2096e570bb1587d6eba7ebb0757431a8ebd9423b525f"
+  },
+  "route_artifacts": {
+    "2021-03-10-23-13-us-ca-mtv-h/pixel5": {
+      "materialization_manifest_sha256": "8d371f40d88258afa91792fddd471f449e653af665cec2601e672836c52ed5ea",
+      "materialization_manifest_marker_sha256": "f4c3c48a9014780a2cd378302c7f3438a12a7c21852eeecb4cc07848af6006de",
+      "imu_conversion_summary_sha256": "28a50f6fcfff8edbe28923110a67931e209ea557b8edd87307ccdb02b3ed0bce",
+      "adapter_summary_sha256": "6371f25765434739332c295f9876f756d00a9e678eb2d141a47265f31d4744c7",
+      "adapter_rover_obs_sha256": "eb3cce0c51e9fd5096a6174fef6450d856358030af22089462f007cc079baf26",
+      "adapter_stdout_sha256": "ffe06241f5c2a2e3487b8725f1b29f625b68120ddb8a21957dd0f543dd6fc668",
+      "adapter_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "candidate_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "candidate_failure_log_sha256": "dcf00ca93f88267e08c61d49d5fcb53674bfcb1f4de686b6b6bd824055af31d8",
+      "candidate_output_published": false,
+      "truth_materialized": false
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "materialization_manifest_sha256": "8e92552d0a4f1b27bc6fd8c7d43f3929b58d5c0ef323c5156b68dfcd1e732529",
+      "materialization_manifest_marker_sha256": "b851cb6fefbafd2c1546a9ec8d69de35800748b9af47ea958a98bbcbe370abab",
+      "imu_conversion_summary_sha256": "fcbb7c7259ab47ea5a86a6fa5d017844c449f1f13e73f076fa93e773f5df5d7f",
+      "adapter_summary_sha256": "8f8f9bb31c7e57d92c99acdc8400d0ed8386b2a8cd0d5104fcaa3209f2d6db86",
+      "adapter_rover_obs_sha256": "4e4d8ef2535e15b1c002fb5e75c2e5bcae3c8b52d17948ad3deb9b861f1ecec2",
+      "adapter_stdout_sha256": "577f8c05f916b714612a94af84d8488b362714a063cc5c4af633bd0b7524864b",
+      "adapter_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "candidate_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "candidate_failure_log_sha256": "3b237e484ed2d6d26de75262646270bb72ec818183fa174a13f0f1183b1d8df4",
+      "candidate_output_published": false,
+      "truth_materialized": false
+    }
+  },
+  "truth": {
+    "confirmation_truth_materialized": false,
+    "confirmation_truth_open_count": 0,
+    "validation_truth_open_count": 0,
+    "holdout_truth_open_count": 0
+  },
+  "decision": {
+    "status": "No-Go",
+    "reason": "Both fixed confirmation identities failed the unchanged v2.1 heading observability gate before valid graph construction.",
+    "fresh_validation_allowed": false,
+    "future_holdout_allowed": false,
+    "production_default_changed": false
+  },
+  "manifest_hash_pinned_after_result_record": true
+}

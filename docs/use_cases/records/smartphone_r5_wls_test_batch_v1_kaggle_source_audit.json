@@ -1,0 +1,90 @@
+{
+  "schema_version": "smartphone-r5-wls-test-batch-kaggle-source-audit.v1",
+  "status": "sealed-failed-official-sample-unavailable",
+  "audited_at_utc": "2026-08-30T05:35:51Z",
+  "competition": {
+    "slug": "smartphone-decimeter-2023",
+    "official_overview_url": "https://www.kaggle.com/competitions/smartphone-decimeter-2023",
+    "official_data_url": "https://www.kaggle.com/competitions/smartphone-decimeter-2023/data",
+    "official_evaluation_url": "https://www.kaggle.com/competitions/smartphone-decimeter-2023#evaluation"
+  },
+  "local_authentication_probe": {
+    "kaggle_cli_present": false,
+    "python_kaggle_package_present": false,
+    "matching_environment_variable_names": [],
+    "credential_files": [
+      {
+        "path": "~/.kaggle/kaggle.json",
+        "exists": false,
+        "regular_file": false
+      },
+      {
+        "path": "~/.config/kaggle/kaggle.json",
+        "exists": false,
+        "regular_file": false
+      }
+    ],
+    "secrets_displayed": false
+  },
+  "official_api_probe": {
+    "files_list_endpoint": "https://www.kaggle.com/api/v1/competitions/data/list/smartphone-decimeter-2023",
+    "http_status": 401,
+    "authenticated": false,
+    "response_body_saved": false,
+    "sample_download_attempted": false,
+    "error_class": "HTTPError Unauthorized"
+  },
+  "official_spec_audit": {
+    "source": "official competition overview Evaluation and Submission File sections",
+    "required_fields": [
+      "phone",
+      "UnixTimeMillis",
+      "LatitudeDegrees",
+      "LongitudeDegrees"
+    ],
+    "key_semantics": "For each phone and UnixTimeMillis in the sample submission, predict latitude and longitude.",
+    "row_order_requirement": "not_explicitly_specified",
+    "key_set_requirement": "the sample submission defines the phone/UnixTimeMillis rows to predict",
+    "order_independence_proven": false,
+    "derived_key_order_authorized": false,
+    "conclusion": "The official text does not prove that row order is irrelevant, and raw test inputs do not prove the sample's once-per-second subset. Keep the authoritative sample preflight fail-closed."
+  },
+  "sample_submission": {
+    "official_names_checked": [
+      "sample_submission.csv",
+      "SampleSubmission.csv",
+      "sampleSubmission.csv"
+    ],
+    "official_files_listing_obtained": false,
+    "downloaded": false,
+    "sha256": null,
+    "provenance": null,
+    "local_present": false,
+    "derived_key_order_artifact_generated": false
+  },
+  "existing_test_batch_failure": {
+    "record": "output/smartphone-r5/wls-test-batch-v1/test_batch_failure.json",
+    "record_sha256": "60dca554c2cbcc2f2126746a342b572af6f35ee7ed3586efb62798e0e61251e5",
+    "truth_open_count": 0,
+    "truth_materialized_count": 0,
+    "route_attempt_count": 0,
+    "post_failure_tuning": false,
+    "external_kaggle_submission": false
+  },
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "test_route_phone_count": 40,
+    "device_gnss_count": 40,
+    "brdc_nav_count": 40,
+    "truth_payload_opened": false
+  },
+  "policy": {
+    "algorithm_parameters_changed": false,
+    "candidate_changed": false,
+    "truth_used": false,
+    "full_test_batch_resumed": false,
+    "kaggle_external_submission": false,
+    "next_action": "obtain the official sample_submission.csv with authorized Kaggle credentials, verify its hash, then resume the sealed batch without changing the frozen algorithm"
+  }
+}

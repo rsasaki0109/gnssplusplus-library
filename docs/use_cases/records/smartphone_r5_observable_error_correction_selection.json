@@ -1,0 +1,172 @@
+{
+  "schema_version": "smartphone-r5-observable-error-correction-selection.v1",
+  "status": "selection-frozen-before-candidate-implementation",
+  "decision": "select-b-after-a-no-go",
+  "objective": "truth-free smartphone trajectory correction using only observable GNSS features",
+  "feasibility_audit": {
+    "road_network_map_matching": {
+      "decision": "no-go",
+      "reason": "No local OSM, road graph, map tile, or route geometry asset was found. External acquisition is outside this local-only phase and would make the experiment non-reproducible.",
+      "truth_used": false,
+      "search_scope": [
+        "data/gsdc2023",
+        "output/smartphone-r5",
+        "repository files for osm, road, map, graph, tile"
+      ]
+    },
+    "observable_feature_model": {
+      "decision": "predeclared",
+      "reason": "device_gnss.csv contains handset WLS ECEF, satellite ECEF/quality, carrier-state, clock, and epoch observables; NumPy is available locally.",
+      "dependencies": {
+        "python": "3.x",
+        "numpy": "available",
+        "scikit_learn": "not required by the frozen implementation"
+      }
+    },
+    "audit_truth_open_count": 0,
+    "audit_holdout_materialized": false
+  },
+  "candidate": {
+    "id": "observable_ridge_residual_v1",
+    "lane": "development-only",
+    "base_lane": "truth-free handset WLS ECEF, exact device epochs",
+    "model": "three-output standardized ridge residual model",
+    "implementation": "NumPy closed-form ridge; no random state, no learned route/device identifiers, no interpolation",
+    "alpha": 100.0,
+    "skip_epochs": 1,
+    "leap_seconds": 18,
+    "standardization": "training-column mean and population standard deviation; zero scale replaced by 1.0; statistics are fit only on the other train routes in each LOO fold",
+    "fit": "solve((X'X + alpha I) beta = X'Y) after standardized features; intercept is the training residual mean",
+    "target": "truth ECEF minus handset WLS ECEF, one residual vector per exact timestamp",
+    "features_in_order": [
+      "wls_ecef_x_m",
+      "wls_ecef_y_m",
+      "wls_ecef_z_m",
+      "wls_ecef_delta_prev_x_m",
+      "wls_ecef_delta_prev_y_m",
+      "wls_ecef_delta_prev_z_m",
+      "epoch_dt_s",
+      "raw_row_count",
+      "eligible_gps_l1_count",
+      "eligible_galileo_e1_count",
+      "cn0_mean_dbhz",
+      "cn0_median_dbhz",
+      "cn0_std_dbhz",
+      "cn0_max_dbhz",
+      "pseudorange_rate_uncertainty_mps_median",
+      "adr_valid_count",
+      "satellite_geometry_trace_m2",
+      "satellite_geometry_min_eigenvalue_m2",
+      "satellite_geometry_max_eigenvalue_m2",
+      "clock_discontinuity_count",
+      "time_of_day_sin",
+      "time_of_day_cos"
+    ],
+    "observable_feature_contract": {
+      "raw_fields": [
+        "utcTimeMillis",
+        "HardwareClockDiscontinuityCount",
+        "Svid",
+        "State",
+        "Cn0DbHz",
+        "PseudorangeRateUncertaintyMetersPerSecond",
+        "AccumulatedDeltaRangeState",
+        "ConstellationType",
+        "SignalType",
+        "SvPositionXEcefMeters",
+        "SvPositionYEcefMeters",
+        "SvPositionZEcefMeters",
+        "WlsPositionXEcefMeters",
+        "WlsPositionYEcefMeters",
+        "WlsPositionZEcefMeters"
+      ],
+      "missing_observable_policy": "finite aggregate only; absent aggregate uses fixed zero plus no separate learned state; an invalid WLS epoch is omitted by the existing WLS integrity contract",
+      "output_contract": "same finite timestamp key set as the base WLS lane; candidate failure falls back to the base WLS row and never synthesizes a key"
+    },
+    "candidate_parameters_immutable": true,
+    "truth_free_inference": true,
+    "production_default_changed": false
+  },
+  "fixed_split": {
+    "candidate_train": [
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8",
+      "2021-03-16-20-40-us-ca-mtv-b/pixel4xl",
+      "2021-07-14-20-50-us-ca-mtv-e/pixel4",
+      "2022-08-04-20-07-us-ca-sjc-q/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel6pro",
+      "2022-11-15-00-53-us-ca-mtv-a/pixel7pro",
+      "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro"
+    ],
+    "fresh_validation": "2023-09-07-18-59-us-ca/pixel5",
+    "future_holdout": "2023-09-06-00-01-us-ca-routen/pixel6pro",
+    "excluded_previously_opened_holdout": "2023-09-06-22-49-us-ca-routebb1/pixel7pro",
+    "unused_split_policy": "fresh validation and future holdout are selected from central metadata only; neither payload nor truth is read before the preceding gate",
+    "train_evaluation": "leave-one-route-out; each held-out train route is scored only by a model fit on the other six train routes",
+    "validation_order": "seal truth-free validation artifact before opening fresh-validation truth once",
+    "holdout_order": "materialize/open future holdout only after a passed frozen fresh-validation gate; no post-holdout tuning or rerun"
+  },
+  "promotion_gate": {
+    "train_loo": [
+      "all seven held-out route availability and truth coverage non-regression",
+      "all seven held-out route horizontal P50, horizontal P95, vertical P95, and each of four official diagnostic variants non-regression within 1e-6 m",
+      "strict aggregate horizontal P95 improvement and strict aggregate four-diagnostic mean improvement"
+    ],
+    "fresh_validation": [
+      "availability and truth coverage non-regression within 1e-6",
+      "horizontal P50 regression <= 0.01 m",
+      "horizontal P95 and each diagnostic variant non-regression within 1e-6 m",
+      "vertical P95 non-regression and fixed existing profile threshold",
+      "strict horizontal P95 or diagnostic mean improvement"
+    ],
+    "holdout": "same sealed gate is evaluative only; no code/parameter change is allowed after opening",
+    "fail_action": "record No-Go and retain no production integration"
+  },
+  "data_leakage_policy": {
+    "truth_free_feature_phase": true,
+    "truth_opened_before_this_record": 0,
+    "future_holdout_payload_opened": false,
+    "public_private_kaggle_scores_used_for_tuning": false,
+    "route_or_device_identifier_feature": false,
+    "training_truth_allowed_only": "ground truth for the seven fixed train routes after feature artifacts are sealed",
+    "no_post_holdout_tuning": true
+  },
+  "inventory_provenance": {
+    "path": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+    "sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+    "archive_path": "data/gsdc2023/cache/dataset_2023.zip",
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "archive_central_directory_only": true,
+    "member_content_read_at_selection": false,
+    "member_sha256_computed_at_selection": false,
+    "selected_central_metadata": {
+      "fresh_validation": {
+        "dataset_id": "2023-09-07-18-59-us-ca/pixel5",
+        "device_gnss": {"name": "dataset_2023/train/2023-09-07-18-59-us-ca/pixel5/device_gnss.csv", "file_size": 29607276, "compressed_size": 6791514, "crc32_hex": "45b3f5b1"},
+        "ground_truth": {"name": "dataset_2023/train/2023-09-07-18-59-us-ca/pixel5/ground_truth.csv", "file_size": 114198, "compressed_size": 31328, "crc32_hex": "0ef06b3a"},
+        "broadcast_nav": {"name": "dataset_2023/train/2023-09-07-18-59-us-ca/brdc.nav", "file_size": 11500369, "compressed_size": 1085201, "crc32_hex": "3fd181c2"}
+      },
+      "future_holdout": {
+        "dataset_id": "2023-09-06-00-01-us-ca-routen/pixel6pro",
+        "device_gnss": {"name": "dataset_2023/train/2023-09-06-00-01-us-ca-routen/pixel6pro/device_gnss.csv", "file_size": 45443395, "compressed_size": 10843003, "crc32_hex": "b2e75362"},
+        "ground_truth": {"name": "dataset_2023/train/2023-09-06-00-01-us-ca-routen/pixel6pro/ground_truth.csv", "file_size": 160373, "compressed_size": 39994, "crc32_hex": "36edc5d4"},
+        "broadcast_nav": {"name": "dataset_2023/train/2023-09-06-00-01-us-ca-routen/brdc.nav", "file_size": 11431617, "compressed_size": 1091266, "crc32_hex": "af42659d"}
+      }
+    }
+  },
+  "implementation_artifact": {
+    "source_sha256": "sealed-after-implementation",
+    "model_artifact_sha256": "sealed-after-train-gate",
+    "truth_free_manifest_sha256": "sealed-after-train-gate"
+  },
+  "commands": {
+    "planned_module_test": "python3 tests/test_smartphone_observable_error_correction.py",
+    "planned_train_eval": "python3 apps/commands/benchmarks/gnss_smartphone_observable_error_correction_eval.py --frozen-selection docs/use_cases/records/smartphone_r5_observable_error_correction_selection.json",
+    "planned_release_build": "cmake --build build --config Release -j2",
+    "planned_ctest": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:$LD_LIBRARY_PATH ctest --test-dir build -j1 --output-on-failure"
+  },
+  "notes": [
+    "This record is created before implementation and before any new truth file is opened.",
+    "The previous TDCP candidate is retained as a recorded No-Go and is not used for tuning.",
+    "The previous public/private leaderboard values are not used for selection, fitting, or ranking."
+  ]
+}

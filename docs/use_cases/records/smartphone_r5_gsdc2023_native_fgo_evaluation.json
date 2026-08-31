@@ -1,0 +1,102 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-evaluation.v1",
+  "status": "validation-pass-development-only",
+  "candidate_id": "native_fgo_pseudorange_tdcp_motion_v1",
+  "selection_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_selection.json",
+    "sha256": "9a31c3341a0c8a0d7ce8ea25ba787d917a20f25c30895044664c6bf9a79b6f92"
+  },
+  "selection_record_sha256_actual": "9a31c3341a0c8a0d7ce8ea25ba787d917a20f25c30895044664c6bf9a79b6f92",
+  "validation_authorization": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_validation.json",
+    "sha256": "ff70a6d2e90f2937efc94d227faaaa7eedbee4ad69882c00aab79196db9d633d"
+  },
+  "source_hashes": {
+    "apps/commands/benchmarks/gnss_smartphone_native_fgo_eval.py": "688c56f015ebfe54dfc2358c470f3b57acb98a5fcd2bd1ea81d5166c11a0494b",
+    "tests/test_smartphone_native_fgo_eval.py": "dee2853e759264c30bdb82ac1c61c7b709523f5f01fc6157f673f9029dfd3ae2",
+    "build/apps/gnss_fgo": "5e1e22979a84b938352a2096e570bb1587d6eba7ebb0757431a8ebd9423b525f"
+  },
+  "truth_access": {
+    "train_truth_open_count": 3,
+    "fresh_validation_truth_open_count": 1,
+    "future_holdout_truth_open_count": 0,
+    "future_holdout_materialized": false,
+    "leaderboard_scores_used_for_tuning": false,
+    "external_mutation": false,
+    "post_validation_tuning": false
+  },
+  "train_report": {
+    "path": "output/smartphone-r5/native-fgo-v1/train_evaluation.json",
+    "sha256": "a9fdc3bcad3dd1207bd138f78756c4c9cdeab08a75d39143b92c7d7d3fdaf61f",
+    "manifest_sha256": "8529b59b0cde919591e23f924488dcfe928f548a548da35586a1f77a64a49aee",
+    "route_count": 3,
+    "baseline": {
+      "mean_h_p50_m": 2.928727334508121,
+      "mean_h_p95_m": 7.926979240321494,
+      "mean_v_p95_m": 15.80583943014924,
+      "mean_diagnostic_m": 5.42670534730747,
+      "mean_availability_ratio": 1.0,
+      "mean_truth_coverage_ratio": 0.9956291695422129
+    },
+    "native_fgo": {
+      "mean_h_p50_m": 1.9808697683159993,
+      "mean_h_p95_m": 4.160381685586436,
+      "mean_v_p95_m": 7.8714570563237345,
+      "mean_diagnostic_m": 3.0692742466140275,
+      "mean_availability_ratio": 1.0,
+      "mean_truth_coverage_ratio": 0.9956291695422129
+    },
+    "gate": {
+      "route_level_non_regression": true,
+      "strict_aggregate_h_p95_improvement": true,
+      "strict_aggregate_four_diagnostic_improvement": true
+    }
+  },
+  "validation_report": {
+    "path": "output/smartphone-r5/native-fgo-v1/validation/validation_evaluation.json",
+    "sha256": "05e9cccbdb43aa0db323dda38a446ee1ffc286b38ab443dd9e8f3ef8c3efc133",
+    "manifest_sha256": "4506edd44cd2af4302190b73e9199800f7af741f29a5385581f542f75c508e8c",
+    "dataset_id": "2023-09-07-18-59-us-ca/pixel5",
+    "baseline": {
+      "h_p50_m": 3.5089165720730886,
+      "h_p95_m": 10.051409410865762,
+      "v_p95_m": 14.82135239489742,
+      "diagnostic_m": 6.788790193725092,
+      "availability_ratio": 1.0,
+      "truth_coverage_ratio": 1.0
+    },
+    "native_fgo": {
+      "h_p50_m": 2.6732079482099045,
+      "h_p95_m": 3.6497327497164758,
+      "v_p95_m": 10.52557420594471,
+      "diagnostic_m": 3.1635273754676385,
+      "availability_ratio": 1.0,
+      "truth_coverage_ratio": 1.0
+    },
+    "gate": {
+      "route_non_regression": true,
+      "strict_h_p95_improvement": true,
+      "passed": true
+    }
+  },
+  "promotion": {
+    "decision": "promote-development-only-recommended-native-fgo-lane",
+    "production_rtk_spp_default_changed": false,
+    "fresh_validation_pass_required_for_future_holdout": true,
+    "future_holdout_remains_sealed": true,
+    "no_post_holdout_tuning": true,
+    "limitations": [
+      "Only one fresh validation route was evaluated.",
+      "The native Eigen FGO result is not a bit-reproduction of the published MATLAB/taroz pipeline.",
+      "Official Kaggle distance implementation remains separately documented and no submission was made in this phase."
+    ]
+  },
+  "artifacts": {
+    "train_route_manifests": {
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8": "4db67cebeeda2fa0a2b132e2b4dc173385eb96a83a18e226f22ff37b0bbe3899",
+      "2022-08-04-20-07-us-ca-sjc-q/pixel5": "d8f14121535719b543f14d3f95f20d80b8de155b5d935a62cff8888e036a1d64",
+      "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro": "24e8e322c13674176fa16d70ab3913b8ce3e39b38d7cab7289a340b30d133e70"
+    },
+    "validation_run_manifest": "408b12fb77671b79526e3d2770170504cf670fea5263cec0ea0e7827aae98dad"
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-pdc-windowed-stitch-train-score-authorization.v1",
+  "status": "frozen-before-development-truth-score",
+  "candidate": "native_fgo_pdc_triangular_ecef_overlap_stitch_v1",
+  "baseline": "sealed_v5_native_fgo_route_position",
+  "route_cohort": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5"
+  ],
+  "cohort_policy": {
+    "role": "existing development train",
+    "route_already_truth_materialized": true,
+    "fresh_validation_included": false,
+    "holdout_included": false,
+    "test_included": false,
+    "old_holdout_or_leaderboard_used_for_tuning": false,
+    "score_count": 1,
+    "no_post_score_tuning": true
+  },
+  "truth_policy": {
+    "truth_free_artifacts_verified_before_truth": true,
+    "truth_path": "output/smartphone-r5/native-fgo-carrier-compatibility-v1/train_truth/2021-03-16-18-59-us-ca-mtv-a__pixel5/ground_truth.csv",
+    "truth_sha256_from_prior_development_record": "7c84ed6a80b1bbb08c0ffad57493513833b9d5474e22a43c5a44da82824ee22d",
+    "planned_truth_read_count": 1,
+    "validation_truth_read_count": 0,
+    "holdout_truth_read_count": 0,
+    "test_truth_read_count": 0,
+    "truth_passed_to_solver": false
+  },
+  "sealed_inputs": {
+    "stitch_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_windowed_stitch_freeze_v1.json",
+      "sha256": "40ef733d28cebd7d72710a122a2ec5cfe72a6c97a93480eb41a582b4f990dac6"
+    },
+    "stitch_manifest": {
+      "path": "output/smartphone-r5/native-fgo-pdc-windowed-v2-stitch/stitch_manifest.json",
+      "sha256": "39e4c99681c604e37e41c0443f397a451875245156f42e10c95e60f369e6dbdb"
+    },
+    "candidate_position": {
+      "path": "output/smartphone-r5/native-fgo-pdc-windowed-v2-stitch/windowed_v2.pos",
+      "sha256": "e9be773d6c7d10323f10c3ece4d4e1e5ed1edc7568c4b9a5221a6cb856a8105d",
+      "rows": 2159
+    },
+    "baseline_position": {
+      "path": "output/smartphone-r5/native-fgo-carrier-compatibility-v1/routes/2021-03-16-18-59-us-ca-mtv-a__pixel5/baseline8/fgo.pos",
+      "sha256": "2804f70688955c94a8c58bfef9863053251d6a9a59b5793cd9186f8d1babe8cd",
+      "rows": 2159
+    },
+    "device_gnss": {
+      "path": "output/smartphone-r5/native-fgo-v2-processed/routes/2021-03-16-18-59-us-ca-mtv-a__pixel5/inputs/device_gnss.csv",
+      "sha256": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863"
+    },
+    "release_binary": {
+      "path": "build/apps/gnss_fgo",
+      "sha256": "a10d13da4614f7cdc8e24556f5a32f870aee6c7aa94c5d3e890429996d583b0c"
+    }
+  },
+  "scoring_contract": {
+    "official_diagnostic_variants": [
+      "wgs84_vincenty__linear_n_minus_1",
+      "wgs84_vincenty__nearest_rank_ceiling",
+      "haversine_sphere__linear_n_minus_1",
+      "haversine_sphere__nearest_rank_ceiling"
+    ],
+    "match_tolerance_ms": 100,
+    "candidate_and_baseline_same_truth_buffer": true,
+    "gate": "All four candidate diagnostic variants strictly improve over v5, H P50/P95 and V P95 do not regress, availability/truth coverage do not regress, and no tuning follows the score.",
+    "failure_action": "Seal No-Go; do not open fresh validation, holdout, or test truth."
+  },
+  "evaluator": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_windowed_stitch_eval.py",
+    "sha256": "b76ae981aa623f288df6df6cdec1c674314ea27f745e5350cad23efcdad8547e",
+    "command": "python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_windowed_stitch_eval.py"
+  },
+  "external_policy": {
+    "kaggle_submission": false,
+    "token_access": false,
+    "external_mutation": false,
+    "production_default_changed": false,
+    "v5_artifact_changed": false
+  }
+}

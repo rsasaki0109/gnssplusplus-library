@@ -856,6 +856,89 @@ class PseudorangeFactorISBArm : public gtsam::NoiseModelFactorN<Pose3, double, d
     }
 };
 
+// Ordinary (single-receiver) time-differenced carrier-phase factor for a
+// Pose3/IMU graph.  The native Eigen v1 path uses this same undifferenced
+// range-difference model, including the per-epoch receiver-clock states and
+// the existing Huber noise wrapper.  GTSAM previously omitted this factor in
+// its Pose3 path, so enabling IMU silently replaced the v1 temporal carrier
+// constraint with pseudorange + IMU only.  Keep the factor local to the
+// backend: no base, ambiguity, or double-difference state is required.
+//
+// `LeverArm` maps each body-in-nav Pose3 to the antenna ECEF position.  The
+// error convention is predicted-minus-measured (the sign is immaterial to a
+// squared robust cost, while the Jacobians below are consistent with it):
+//
+//   e = (rho_k + c*b_k) - (rho_j + c*b_j) - delta_carrier.
+class TimeDifferencedCarrierFactorArm
+    : public gtsam::NoiseModelFactorN<Pose3, double, Pose3, double> {
+    Point3 previous_satellite_position_{0, 0, 0};
+    Point3 current_satellite_position_{0, 0, 0};
+    double delta_carrier_m_ = 0.0;
+    gtsam::gnss::LeverArm arm_;
+
+ public:
+    using Base = gtsam::NoiseModelFactorN<Pose3, double, Pose3, double>;
+    using Base::evaluateError;
+
+    TimeDifferencedCarrierFactorArm(
+        gtsam::Key previous_pose, gtsam::Key previous_clock,
+        gtsam::Key current_pose, gtsam::Key current_clock,
+        const Point3& previous_satellite_position,
+        const Point3& current_satellite_position, double delta_carrier_m,
+        const gtsam::gnss::LeverArm& arm,
+        const gtsam::SharedNoiseModel& model)
+        : Base(model, previous_pose, previous_clock, current_pose, current_clock),
+          previous_satellite_position_(previous_satellite_position),
+          current_satellite_position_(current_satellite_position),
+          delta_carrier_m_(delta_carrier_m),
+          arm_(arm) {}
+
+    gtsam::Vector evaluateError(
+        const Pose3& previous_pose, const double& previous_clock,
+        const Pose3& current_pose, const double& current_clock,
+        gtsam::OptionalMatrixType H_previous_pose,
+        gtsam::OptionalMatrixType H_previous_clock,
+        gtsam::OptionalMatrixType H_current_pose,
+        gtsam::OptionalMatrixType H_current_clock) const override {
+        gtsam::gnss::LeverArm::PoseFrame previous_frame;
+        gtsam::gnss::LeverArm::PoseFrame current_frame;
+        const Point3 previous_antenna = arm_.antennaPosition(
+            previous_pose, H_previous_pose ? &previous_frame : nullptr);
+        const Point3 current_antenna = arm_.antennaPosition(
+            current_pose, H_current_pose ? &current_frame : nullptr);
+
+        gtsam::Matrix13 H_previous_range;
+        gtsam::Matrix13 H_current_range;
+        const double previous_range = plainRange(
+            previous_satellite_position_, previous_antenna,
+            H_previous_pose ? &H_previous_range : nullptr);
+        const double current_range = plainRange(
+            current_satellite_position_, current_antenna,
+            H_current_pose ? &H_current_range : nullptr);
+        const double error = current_range + gtsam::gnss::C_LIGHT * current_clock -
+                             previous_range - gtsam::gnss::C_LIGHT * previous_clock -
+                             delta_carrier_m_;
+
+        if (H_previous_pose) {
+            *H_previous_pose =
+                -arm_.antennaPoseJacobian(H_previous_range, previous_frame);
+        }
+        if (H_previous_clock) {
+            *H_previous_clock =
+                (gtsam::Matrix(1, 1) << -gtsam::gnss::C_LIGHT).finished();
+        }
+        if (H_current_pose) {
+            *H_current_pose =
+                arm_.antennaPoseJacobian(H_current_range, current_frame);
+        }
+        if (H_current_clock) {
+            *H_current_clock =
+                (gtsam::Matrix(1, 1) << gtsam::gnss::C_LIGHT).finished();
+        }
+        return (gtsam::Vector(1) << error).finished();
+    }
+};
+
 // Rotation-only gauge-fixing prior for a Pose3 state. Needed because the
 // DD/undifferenced '...Arm' factors only observe the ANTENNA position
 // (translation + R*leverArm): for a lever arm != 0 that is a rank<=3

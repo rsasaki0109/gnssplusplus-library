@@ -76,6 +76,7 @@ double Ephemeris::getAge(const GNSSTime& time) const {
 void NavigationData::addEphemeris(const Ephemeris& eph) {
     ephemeris_data[eph.satellite].push_back(eph);
     satellite_state_cache_.clear();
+    ++revision_;
     
     // Sort by time of ephemeris
     auto& eph_list = ephemeris_data[eph.satellite];
@@ -378,13 +379,12 @@ std::vector<SatelliteId> NavigationData::getAvailableSatellites(const GNSSTime& 
     return satellites;
 }
 
-NavigationData::NavigationData() {
-    clear();
-}
+NavigationData::NavigationData() = default;
 
 void NavigationData::clear() {
     ephemeris_data.clear();
     satellite_state_cache_.clear();
+    ++revision_;
 }
 
 bool NavigationData::isEmpty() const {

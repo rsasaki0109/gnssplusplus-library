@@ -133,6 +133,23 @@ struct Config {
         // from 47% to 29%). Kept as an opt-in knob for a future partial-AR
         // scheme that fixes independent satellites first, then adds bands.
         bool double_difference_lambda_one_band_per_satellite = false;
+        // Receiver-only raw Doppler factors for no-base graphs.  This is
+        // deliberately separate from the base-dependent single-difference
+        // switch below: enabling it must never manufacture a base/reference
+        // observation or change the default production graph.
+        bool use_undifferenced_doppler_factors = false;
+        // Correct Android/RINEX undifferenced Doppler contract.  Android's
+        // pseudorange rate is uncorrected for receiver clock frequency error;
+        // when this opt-in is enabled, the existing per-epoch clock-bias
+        // states provide receiver clock drift through their finite difference
+        // and satellite position/velocity are Earth-rotation corrected as a
+        // pair.  The historical row remains the default for compatibility.
+        bool use_corrected_undifferenced_doppler_factors = false;
+        // Opt-in deterministic per-epoch linear WLS initializer for the
+        // corrected undifferenced-Doppler rows.  The solve is truth-free and
+        // fail-closed; production/default graphs remain byte-compatible when
+        // this switch is false.
+        bool use_doppler_velocity_wls_initialization = false;
         bool use_single_difference_doppler_factors = false;
         bool use_single_difference_tdcp_factors = false;
         bool use_velocity_states = false;
@@ -186,6 +203,16 @@ struct Config {
         double clock_prior_sigma_m = 0.0;
         double tdcp_sigma_m = 0.03;
         double carrier_phase_sigma_m = 0.01;
+        double undifferenced_doppler_sigma_mps = 0.2;
+        int doppler_velocity_wls_min_rows = 4;
+        double doppler_velocity_wls_max_condition_number = 1.0e8;
+        double doppler_velocity_wls_huber_threshold_sigma = 4.0;
+        int doppler_velocity_wls_max_irls_iterations = 3;
+        double doppler_velocity_wls_max_velocity_mps = 70.0;
+        double doppler_velocity_wls_max_clock_rate_mps = 2000.0;
+        double doppler_velocity_wls_max_normalized_rms = 4.0;
+        double doppler_velocity_wls_max_abs_normalized_residual = 25.0;
+        double doppler_velocity_wls_edge_hold_max_s = 1.0;
         double single_difference_doppler_sigma_mps = 0.2;
         double single_difference_tdcp_sigma_m = 0.003;
         double double_difference_pseudorange_sigma_m = 1.0;
