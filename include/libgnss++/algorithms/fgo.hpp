@@ -289,6 +289,12 @@ public:
         std::size_t upstream_ld_pair_rejections = 0;
         std::size_t upstream_doppler_residual_rejections = 0;
         std::size_t upstream_pseudorange_residual_rejections = 0;
+        // Source-specific Galileo E1 group-delay selection diagnostics. These
+        // remain zero for the legacy/default path.
+        std::size_t galileo_e1_fnav_group_delay_rows = 0;
+        std::size_t galileo_e1_inav_group_delay_rows = 0;
+        std::size_t galileo_e1_group_delay_source_fallback_rows = 0;
+        std::size_t galileo_e1_group_delay_invalid_rows = 0;
     };
 
     // --- Phase 2 milestone 2b: IMU preintegration inputs ---

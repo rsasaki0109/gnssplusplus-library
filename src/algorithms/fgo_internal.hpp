@@ -5,6 +5,7 @@
 // helper is inline and internal to the fgo_internal namespace.
 
 #include <libgnss++/algorithms/fgo.hpp>
+#include <libgnss++/algorithms/galileo_group_delay.hpp>
 #include <libgnss++/algorithms/doppler_contract.hpp>
 
 namespace libgnss {
@@ -238,11 +239,17 @@ inline bool usesSeparateClockBias(GNSSSystem group) {
     return group != GNSSSystem::UNKNOWN && group != GNSSSystem::GPS;
 }
 
-inline double groupDelayCorrectionMeters(const Observation& observation, const Ephemeris& eph) {
+inline double groupDelayCorrectionMeters(
+    const Observation& observation,
+    const Ephemeris& eph,
+    bool use_signal_specific_galileo_group_delay = false) {
+    if (observation.satellite.system == GNSSSystem::Galileo) {
+        return galileo_group_delay::correctionMeters(
+            observation, eph, use_signal_specific_galileo_group_delay);
+    }
     switch (observation.satellite.system) {
         case GNSSSystem::GPS:
         case GNSSSystem::QZSS:
-        case GNSSSystem::Galileo:
             return eph.tgd * constants::SPEED_OF_LIGHT;
         case GNSSSystem::BeiDou:
             switch (observation.signal) {
@@ -683,7 +690,9 @@ inline std::map<CarrierKey, PreparedCarrierObservation> prepareCarrierObservatio
 
         const double satellite_clock_m =
             satellite_clock_bias * constants::SPEED_OF_LIGHT;
-        const double group_delay_m = groupDelayCorrectionMeters(observation, *eph);
+        const double group_delay_m = groupDelayCorrectionMeters(
+            observation, *eph,
+            config.use_signal_specific_galileo_group_delay);
         const double corrected_pseudorange =
             observation.pseudorange +
             satellite_clock_m -

@@ -704,6 +704,10 @@ struct Config {
         bool use_ionosphere_model = true;
         bool use_troposphere_model = true;
         bool use_multi_constellation = true;
+        // Raw-only opt-in: select the Galileo E1 broadcast group-delay field
+        // from the RINEX clock-reference source bits.  False preserves the
+        // established tgd-only correction and all production defaults.
+        bool use_signal_specific_galileo_group_delay = false;
         bool collect_lambda_debug = false;
 
         // --- Phase 2 milestone 2a (docs/gtsam_backend_design.md) ---

@@ -70,6 +70,8 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
         config_.use_ionosphere_model || config_.use_troposphere_model;
     spp_config.use_multi_constellation = config_.use_multi_constellation;
     spp_config.model_intersystem_bias = config_.spp_model_intersystem_bias;
+    spp_config.use_signal_specific_galileo_group_delay =
+        config_.use_signal_specific_galileo_group_delay;
 
     SPPProcessor spp_processor(spp_config);
     spp_processor.initialize(spp_processor_config);
@@ -311,8 +313,30 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
 
             const double satellite_clock_m =
                 satellite_clock_bias * constants::SPEED_OF_LIGHT;
-            const double group_delay_m =
-                groupDelayCorrectionMeters(observation, *eph);
+            galileo_group_delay::Selection group_delay_selection;
+            const double group_delay_m = groupDelayCorrectionMeters(
+                observation, *eph,
+                config_.use_signal_specific_galileo_group_delay);
+            if (config_.use_signal_specific_galileo_group_delay &&
+                observation.satellite.system == GNSSSystem::Galileo &&
+                observation.signal == SignalType::GAL_E1) {
+                group_delay_selection = galileo_group_delay::select(
+                    observation, *eph, true);
+                if (!group_delay_selection.valid) {
+                    ++problem.diagnostics.galileo_e1_group_delay_invalid_rows;
+                    continue;
+                }
+                if (group_delay_selection.reference ==
+                    galileo_group_delay::Reference::FNavE1E5a) {
+                    ++problem.diagnostics.galileo_e1_fnav_group_delay_rows;
+                } else if (group_delay_selection.reference ==
+                           galileo_group_delay::Reference::INavE1E5b) {
+                    ++problem.diagnostics.galileo_e1_inav_group_delay_rows;
+                } else if (group_delay_selection.reference ==
+                           galileo_group_delay::Reference::Ambiguous) {
+                    ++problem.diagnostics.galileo_e1_group_delay_source_fallback_rows;
+                }
+            }
             const double corrected_pseudorange =
                 observation.pseudorange +
                 satellite_clock_m -

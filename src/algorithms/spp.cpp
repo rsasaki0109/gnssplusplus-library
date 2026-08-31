@@ -1,4 +1,5 @@
 #include <libgnss++/algorithms/spp.hpp>
+#include <libgnss++/algorithms/galileo_group_delay.hpp>
 #include <libgnss++/algorithms/ppp_utils.hpp>
 #include <libgnss++/algorithms/spp_velocity.hpp>
 #include <libgnss++/core/constants.hpp>
@@ -155,11 +156,17 @@ GNSSSystem selectReferenceClockGroup(const std::map<GNSSSystem, int>& group_coun
     return best_group;
 }
 
-double groupDelayCorrectionMeters(const Observation& observation, const Ephemeris& eph) {
+double groupDelayCorrectionMeters(
+    const Observation& observation,
+    const Ephemeris& eph,
+    bool use_signal_specific_galileo_group_delay) {
+    if (observation.satellite.system == GNSSSystem::Galileo) {
+        return galileo_group_delay::correctionMeters(
+            observation, eph, use_signal_specific_galileo_group_delay);
+    }
     switch (observation.satellite.system) {
         case GNSSSystem::GPS:
         case GNSSSystem::QZSS:
-        case GNSSSystem::Galileo:
             return eph.tgd * constants::SPEED_OF_LIGHT;
         case GNSSSystem::BeiDou:
             switch (observation.signal) {
@@ -1099,15 +1106,20 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
                 }
             }
 
-            double group_delay = groupDelayCorrectionMeters(obs, *eph);
+            double group_delay = groupDelayCorrectionMeters(
+                obs, *eph, spp_config_.use_signal_specific_galileo_group_delay);
             if (spp_obs.ionosphere_free) {
                 Observation primary_obs = obs;
                 primary_obs.signal = spp_obs.primary_signal;
                 Observation secondary_obs = obs;
                 secondary_obs.signal = spp_obs.secondary_signal;
                 group_delay =
-                    spp_obs.primary_coeff * groupDelayCorrectionMeters(primary_obs, *eph) +
-                    spp_obs.secondary_coeff * groupDelayCorrectionMeters(secondary_obs, *eph);
+                    spp_obs.primary_coeff * groupDelayCorrectionMeters(
+                        primary_obs, *eph,
+                        spp_config_.use_signal_specific_galileo_group_delay) +
+                    spp_obs.secondary_coeff * groupDelayCorrectionMeters(
+                        secondary_obs, *eph,
+                        spp_config_.use_signal_specific_galileo_group_delay);
                 // MRTKLIB prange() forms GPS/QZSS IFLC directly from P1/P2;
                 // broadcast TGD is only removed on its single-frequency
                 // branch. Galileo I/NAV follows the same direct-combination
@@ -2498,15 +2510,20 @@ SPPProcessor::preprocessEpoch(const ObservationData& obs, const NavigationData& 
             }
         }
 
-        double group_delay = eph ? groupDelayCorrectionMeters(o, *eph) : 0.0;
+        double group_delay = eph ? groupDelayCorrectionMeters(
+            o, *eph, spp_config_.use_signal_specific_galileo_group_delay) : 0.0;
         if (eph && spp_obs.ionosphere_free) {
             Observation primary_obs = o;
             primary_obs.signal = spp_obs.primary_signal;
             Observation secondary_obs = o;
             secondary_obs.signal = spp_obs.secondary_signal;
             group_delay =
-                spp_obs.primary_coeff * groupDelayCorrectionMeters(primary_obs, *eph) +
-                spp_obs.secondary_coeff * groupDelayCorrectionMeters(secondary_obs, *eph);
+                    spp_obs.primary_coeff * groupDelayCorrectionMeters(
+                        primary_obs, *eph,
+                        spp_config_.use_signal_specific_galileo_group_delay) +
+                    spp_obs.secondary_coeff * groupDelayCorrectionMeters(
+                        secondary_obs, *eph,
+                        spp_config_.use_signal_specific_galileo_group_delay);
         }
 
         double corrected_pr = o.pseudorange

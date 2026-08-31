@@ -89,6 +89,7 @@ struct Options {
     bool native_carrier_code_gal_e1_e5a = false;
     bool native_upstream_stop_constraints = false;
     bool native_upstream_position_offset = false;
+    bool native_signal_specific_galileo_tgd = false;
 };
 
 const char* carrierSignalName(libgnss::SignalType signal) {
@@ -117,7 +118,8 @@ void usage(const char* program) {
                  " [--native-carrier-code-primary-l1-e1]"
                  " [--native-carrier-code-gal-e1-e5a]"
                  " [--native-upstream-stop-constraints]"
-                 " [--native-upstream-position-offset]\n";
+                 " [--native-upstream-position-offset]"
+                 " [--native-signal-specific-galileo-tgd]\n";
 }
 
 bool requireValue(int argc, char** argv, int& index, std::string& value) {
@@ -223,6 +225,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
             options.native_upstream_stop_constraints = true;
         } else if (arg == "--native-upstream-position-offset") {
             options.native_upstream_position_offset = true;
+        } else if (arg == "--native-signal-specific-galileo-tgd") {
+            options.native_signal_specific_galileo_tgd = true;
         } else {
             std::cerr << "Unknown argument: " << arg << "\n";
             return false;
@@ -363,6 +367,11 @@ bool parseArguments(int argc, char** argv, Options& options) {
          !options.all_epochs || options.skip_epochs != 0)) {
         std::cerr << "--native-upstream-position-offset requires Android raw input, "
                      "--android-raw-utc-keys, --all-epochs, and no skipped epochs\n";
+        return false;
+    }
+    if (options.native_signal_specific_galileo_tgd && !android_raw) {
+        std::cerr << "--native-signal-specific-galileo-tgd requires Android raw "
+                     "GNSS/IMU input\n";
         return false;
     }
     if (options.native_carrier_code_primary_l1_e1 &&
@@ -1143,6 +1152,9 @@ std::string makeSummary(const Options& options,
         << "  \"native_upstream_position_offset\": "
         << (options.native_upstream_position_offset ? "true" : "false")
         << ",\n"
+        << "  \"native_signal_specific_galileo_tgd\": "
+        << (options.native_signal_specific_galileo_tgd ? "true" : "false")
+        << ",\n"
         ;
     if (options.native_carrier_code_primary_l1_e1) {
         out << "  \"native_carrier_code_primary_l1_e1\": true,\n";
@@ -1250,6 +1262,22 @@ std::string makeSummary(const Options& options,
         << problem.double_difference_pseudorange_factors.size() << ",\n"
         << "    \"double_difference_carrier_factors\": "
         << problem.double_difference_carrier_factors.size() << "\n"
+        << "  },\n"
+        << "  \"galileo_e1_group_delay\": {\n"
+        << "    \"enabled\": "
+        << (options.native_signal_specific_galileo_tgd ? "true" : "false")
+        << ",\n"
+        << "    \"fnav_rows\": "
+        << problem.diagnostics.galileo_e1_fnav_group_delay_rows << ",\n"
+        << "    \"inav_rows\": "
+        << problem.diagnostics.galileo_e1_inav_group_delay_rows << ",\n"
+        << "    \"source_fallback_rows\": "
+        << problem.diagnostics.galileo_e1_group_delay_source_fallback_rows
+        << ",\n"
+        << "    \"invalid_rows\": "
+        << problem.diagnostics.galileo_e1_group_delay_invalid_rows << ",\n"
+        << "    \"source_bits\": {\"fnav_clock\": 256, \"inav_clock\": 512},\n"
+        << "    \"correction_contract\": \"F/NAV=tgd(BGD E1/E5a), I/NAV=tgd_secondary(BGD E1/E5b), ambiguous=tgd\"\n"
         << "  },\n"
         << "  \"upstream_observable_quality\": {\n"
         << "    \"enabled\": "
@@ -1949,6 +1977,8 @@ int main(int argc, char** argv) {
         config.upstream_stop_pose_huber_k_sigma = 0.5;
     }
     config.pose3_lever_arm_body_m = libgnss::Vector3d::Zero();
+    config.use_signal_specific_galileo_group_delay =
+        options.native_signal_specific_galileo_tgd;
     if (android_raw) {
         // The raw path starts SPP from the route-independent Earth-surface
         // initializer above.  Applying a nonzero elevation mask at that

@@ -28,6 +28,7 @@ if(GTest_FOUND)
         test_fusion_nhc.cpp
         test_upstream_stop_constraints.cpp
         test_upstream_position_offset.cpp
+        test_galileo_group_delay.cpp
         test_fusion_initialization.cpp
         test_fusion_processor_synthetic.cpp
         test_dd_imu_bridge.cpp
