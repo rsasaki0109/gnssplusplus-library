@@ -90,6 +90,11 @@ See the [v0.2.0 release highlights](docs/releases/v0.2.0.md) and
 | SPP | PPC SPP adaptive robust + policy gate | No P95 regression with <=1 pp positioning drop |
 | Smartphone GSDC 2023 | Galileo E1/Hatch/WLS and native FGO lanes | Native best observed server score 3.952 public / 4.276 private; 0.782-class native target not yet achieved |
 
+The Phase 14 native E1 carrier-code-leveling experiment is a raw-only,
+opt-in structural No-Go: the only unused identity available for a smoke lacks
+the GNSS elapsed-time anchor required by the native IMU contract, so no truth
+was opened and no accuracy claim was made.  See the [phase 14 record](docs/use_cases/records/smartphone_r5_phase14_carrier_code_leveling_structural_blocker_v1.json).
+
 ### RTK runtime and smartphone GSDC 2023
 
 The Release RTK broadcast-state cache preserves the position stream and

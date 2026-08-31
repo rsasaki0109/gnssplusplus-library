@@ -9,6 +9,7 @@
 // stream alignment.
 
 #include <libgnss++/algorithms/fgo.hpp>
+#include <libgnss++/algorithms/carrier_code_leveling.hpp>
 #include <libgnss++/algorithms/pdc_state_bridge.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
@@ -80,6 +81,7 @@ struct Options {
     bool native_signal_bias_states = false;
     bool native_residual_ionosphere = false;
     bool native_upstream_quality = false;
+    bool native_carrier_code_leveling = false;
 };
 
 void usage(const char* program) {
@@ -93,7 +95,7 @@ void usage(const char* program) {
                  " [--android-raw-utc-keys] [--fgo-imu-sparse-recovery]"
                  " [--native-pdc-state-bridge] [--native-pdc-imu-tdcp]"
                  " [--native-signal-bias-states] [--native-residual-ionosphere]"
-                 " [--native-upstream-quality]\n";
+                 " [--native-upstream-quality] [--native-carrier-code-leveling]\n";
 }
 
 bool requireValue(int argc, char** argv, int& index, std::string& value) {
@@ -180,6 +182,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
             options.native_residual_ionosphere = true;
         } else if (arg == "--native-upstream-quality") {
             options.native_upstream_quality = true;
+        } else if (arg == "--native-carrier-code-leveling") {
+            options.native_carrier_code_leveling = true;
         } else {
             std::cerr << "Unknown argument: " << arg << "\n";
             return false;
@@ -267,6 +271,16 @@ bool parseArguments(int argc, char** argv, Options& options) {
          !options.native_signal_bias_states || !options.native_pdc_imu_tdcp)) {
         std::cerr << "--native-upstream-quality requires the frozen Android raw "
                      "Phase12 base recipe and all epochs\n";
+        return false;
+    }
+    if (options.native_carrier_code_leveling &&
+        (!android_raw || !options.android_raw_utc_key_contract ||
+         !options.all_epochs || options.skip_epochs != 0 ||
+         !options.native_residual_ionosphere ||
+         !options.native_signal_bias_states || !options.native_pdc_imu_tdcp ||
+         options.native_upstream_quality)) {
+        std::cerr << "--native-carrier-code-leveling requires the frozen Android "
+                     "Phase12 base recipe, all epochs, and Phase13 off\n";
         return false;
     }
     return true;
@@ -981,7 +995,10 @@ std::string makeSummary(const Options& options,
                         const NativePdcBridgeReport& pdc_bridge_report =
                             NativePdcBridgeReport{},
                         const RawUtcOutputReport& raw_utc_report = RawUtcOutputReport{},
-                        const TdcpRuntimeReport& tdcp_report = TdcpRuntimeReport{}) {
+                        const TdcpRuntimeReport& tdcp_report = TdcpRuntimeReport{},
+                        const libgnss::carrier_code_leveling::Diagnostics&
+                            carrier_code_leveling_report =
+                                libgnss::carrier_code_leveling::Diagnostics{}) {
     std::ostringstream out;
     out << std::setprecision(17);
     out << "{\n"
@@ -1006,6 +1023,8 @@ std::string makeSummary(const Options& options,
         << (options.native_residual_ionosphere ? "true" : "false") << ",\n"
         << "  \"native_upstream_quality\": "
         << (options.native_upstream_quality ? "true" : "false") << ",\n"
+        << "  \"native_carrier_code_leveling\": "
+        << (options.native_carrier_code_leveling ? "true" : "false") << ",\n"
         << "  \"native_pdc_state_bridge_report\": {\n"
         << "    \"enabled\": "
         << (pdc_bridge_report.enabled ? "true" : "false") << ",\n"
@@ -1236,6 +1255,42 @@ std::string makeSummary(const Options& options,
         << "    \"initial_cost\": " << result.diagnostics.initial_cost << ",\n"
         << "    \"final_cost\": " << result.diagnostics.final_cost << "\n"
         << "  },\n"
+        << "  \"carrier_code_leveling\": {\n"
+        << "    \"enabled\": "
+        << (carrier_code_leveling_report.enabled ? "true" : "false") << ",\n"
+        << "    \"signal\": \"Galileo E1\",\n"
+        << "    \"window_samples\": 30,\n"
+        << "    \"max_gap_s\": 1.5,\n"
+        << "    \"target_rows\": "
+        << carrier_code_leveling_report.target_rows << ",\n"
+        << "    \"eligible_rows\": "
+        << carrier_code_leveling_report.eligible_rows << ",\n"
+        << "    \"smoothed_rows\": "
+        << carrier_code_leveling_report.smoothed_rows << ",\n"
+        << "    \"arcs_started\": "
+        << carrier_code_leveling_report.arcs_started << ",\n"
+        << "    \"updates\": " << carrier_code_leveling_report.updates << ",\n"
+        << "    \"reset_invalid_code\": "
+        << carrier_code_leveling_report.reset_invalid_code << ",\n"
+        << "    \"reset_invalid_adr\": "
+        << carrier_code_leveling_report.reset_invalid_adr << ",\n"
+        << "    \"reset_adr\": "
+        << carrier_code_leveling_report.reset_adr << ",\n"
+        << "    \"reset_cycle_slip\": "
+        << carrier_code_leveling_report.reset_cycle_slip << ",\n"
+        << "    \"reset_missing_or_nonfinite_adr\": "
+        << carrier_code_leveling_report.reset_missing_or_nonfinite_adr << ",\n"
+        << "    \"reset_gap\": "
+        << carrier_code_leveling_report.reset_gap << ",\n"
+        << "    \"reset_clock_discontinuity\": "
+        << carrier_code_leveling_report.reset_clock_discontinuity << ",\n"
+        << "    \"max_abs_level_adjustment_m\": "
+        << carrier_code_leveling_report.max_abs_level_adjustment_m << ",\n"
+        << "    \"max_abs_phase_increment_m\": "
+        << carrier_code_leveling_report.max_abs_phase_increment_m << ",\n"
+        << "    \"no_new_graph_state\": true,\n"
+        << "    \"truth_free\": true\n"
+        << "  },\n"
         << "  \"gnss_first\": {\n"
         << "    \"attempted\": " << (imu_report.gnss_first_attempted ? "true" : "false") << ",\n"
         << "    \"converged\": " << (imu_report.gnss_first_converged ? "true" : "false") << ",\n"
@@ -1455,6 +1510,25 @@ int main(int argc, char** argv) {
     if (epochs.size() < 2) {
         std::cerr << "fewer than two observation epochs\n";
         return 1;
+    }
+
+    libgnss::carrier_code_leveling::Diagnostics carrier_code_leveling_report;
+    if (options.native_carrier_code_leveling) {
+        // Keep the leveling transform in the same process and before the FGO
+        // problem builder.  Only raw P is changed for Galileo E1; carrier,
+        // Doppler, timestamps, nav, and all other signals remain untouched.
+        libgnss::ObservationSeries raw_series;
+        raw_series.epochs = epochs;
+        const auto leveling = libgnss::carrier_code_leveling::apply(
+            raw_series, android_gnss.epoch_utc_time_millis,
+            android_gnss.epoch_hardware_clock_discontinuity_count);
+        if (!leveling.ok) {
+            std::cerr << "carrier-code leveling failed closed: "
+                      << leveling.error << "\n";
+            return 1;
+        }
+        epochs = leveling.observations.epochs;
+        carrier_code_leveling_report = leveling.diagnostics;
     }
 
     libgnss::FGOProcessor::FGOConfig config;
@@ -1889,7 +1963,8 @@ int main(int argc, char** argv) {
     }
     const std::string summary = makeSummary(options, problem, result, imu_report,
                                             fallback, pdc_bridge_report,
-                                            raw_utc_report, tdcp_report);
+                                            raw_utc_report, tdcp_report,
+                                            carrier_code_leveling_report);
     if (!atomicWrite(options.summary_path, summary)) {
         std::cerr << "failed to atomically publish summary\n";
         return 1;

@@ -83,6 +83,10 @@ struct AndroidRawGnssResult {
     // from) GNSSTime prevents a GPST/UTC floating-point round trip from
     // changing the official phone timestamp key.
     std::vector<std::int64_t> epoch_utc_time_millis;
+    // HardwareClockDiscontinuityCount captured from the first raw row in each
+    // selected epoch. Raw-only temporal preprocessors use this parallel
+    // vector to reset an arc rather than smoothing across a clock jump.
+    std::vector<int> epoch_hardware_clock_discontinuity_count;
 };
 
 struct AndroidRawGnssSolutionPoint {

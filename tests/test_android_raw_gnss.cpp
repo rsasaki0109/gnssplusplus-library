@@ -110,6 +110,41 @@ TEST(AndroidRawGnssTest, ReconstructsRawClockAndObservableSigns) {
     std::filesystem::remove(path);
 }
 
+TEST(AndroidRawGnssTest, DropsNonPositiveRawClockRangeLikeUpstreamCodeMask) {
+    const auto path = fixturePath("non_positive_range");
+    constexpr std::int64_t full_bias = -1'300'000'000'000'000'000LL;
+    constexpr int week = 2200;
+    constexpr double tow = 100'000.123;
+    const auto time_nanos = static_cast<std::int64_t>(
+        static_cast<long double>(full_bias) +
+        (static_cast<long double>(week) * 604'800.0L + tow) * 1.0e9L);
+    const auto valid_tx = static_cast<std::int64_t>((tow - 0.070) * 1.0e9);
+    const auto invalid_tx = static_cast<std::int64_t>((tow + 0.070) * 1.0e9);
+    {
+        std::ofstream output(path);
+        ASSERT_TRUE(output.is_open());
+        output << kHeader;
+        writeRow(output, 1'700'000'000'000LL, time_nanos, full_bias,
+                  valid_tx, 3, 1, 0.0, 1, 42.0,
+                  constants::GPS_L1_FREQ, 40.0, "GPS_L1_CA");
+        // The upstream exobs.m P<1e7 mask removes this row after conversion;
+        // the native adapter must retain the valid epoch instead of aborting.
+        writeRow(output, 1'700'000'000'000LL, time_nanos, full_bias,
+                  invalid_tx, 4, 1, 0.0, 1, 42.0,
+                  constants::GPS_L1_FREQ, 40.0, "GPS_L1_CA");
+    }
+
+    AndroidRawGnssResult result;
+    std::string error;
+    ASSERT_TRUE(loadAndroidRawGnssCsv(path.string(), AndroidRawGnssConfig{},
+                                      result, error))
+        << error;
+    ASSERT_EQ(result.observations.epochs.size(), 1U);
+    EXPECT_EQ(result.observations.epochs.front().observations.size(), 1U);
+    EXPECT_GE(result.diagnostics.skipped_invalid_quality_rows, 1U);
+    std::filesystem::remove(path);
+}
+
 TEST(AndroidRawGnssTest, KeepsGpsAndGalileoE1AndSkipsOtherSignals) {
     const auto path = fixturePath("signals");
     constexpr std::int64_t full_bias = -1'300'000'000'000'000'000LL;

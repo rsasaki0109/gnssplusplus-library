@@ -14,6 +14,7 @@ if(GTest_FOUND)
     add_executable(gnss_run_tests
         test_imu_csv.cpp
         test_android_raw_gnss.cpp
+        test_carrier_code_leveling.cpp
         test_smartphone_upstream_preprocessing.cpp
         test_smartphone_upstream_state_contract.cpp
         test_attitude.cpp

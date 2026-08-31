@@ -3032,3 +3032,38 @@ and its companion manifest.  The candidate remains development-only and
 opt-in; Phase 12 defaults and bytes are unchanged.  Validation, holdout, test,
 Kaggle, token, and MAT access remained zero, the native `0.782`-class target
 remains unachieved, and no post-score tuning or rerun is allowed.
+
+### Native carrier-code leveling candidate (phase 14, structural No-Go)
+
+Phase 14 investigated whether a per-satellite/per-signal pseudorange nuisance
+state could absorb Android multipath without truth.  A free constant bias was
+rejected before implementation: its direction is confounded with the epoch
+receiver clock and signal/constellation bias, so a weak prior would choose a
+gauge rather than measure an identifiable quantity.  The fixed opt-in
+candidate is instead causal Galileo E1 carrier-code leveling using the existing
+30-sample Hatch recursion.  It changes only E1 pseudorange values; carrier,
+Doppler, TDCP, timestamps, navigation, and all other signals are untouched.
+Arcs reset on invalid ADR/LLI, loss of lock, a gap over 1.5 s, or a change in
+`HardwareClockDiscontinuityCount`.  The helper rejects non-monotonic target
+timestamps and a missing clock-count vector, and has no new graph state.
+
+The candidate was frozen before raw materialization, with the exact unused
+identity `2022-08-04-20-07-us-ca-sjc-q/mi8` selected only for a structural
+smoke.  It cannot serve as a fresh validation asset because the same route has
+prior truth evidence for another phone; consequently no `ground_truth.csv`
+was opened and no accuracy score or promotion decision was authorized.  The
+raw-only smoke used only `device_gnss.csv`, `device_imu.csv`, and `brdc.nav`.
+The adapter correctly dropped non-positive raw-clock code rows under the
+upstream `P<1e7` code mask, but the route then failed closed before FGO because
+its raw GNSS CSV has no `ChipsetElapsedRealtimeNanos` anchor.  The prohibited
+enriched arrival timestamp and direct-UTC fallback were not used.  Thus no
+candidate trajectory was emitted and the lane is a structural No-Go, not an
+accuracy result.
+
+The pre-materialization freeze is
+`docs/use_cases/records/smartphone_r5_phase14_carrier_code_leveling_freeze_v1.json`;
+the sealed blocker report and source/binary/input hashes are
+`docs/use_cases/records/smartphone_r5_phase14_carrier_code_leveling_structural_blocker_v1.json`.
+The focused raw/helper tests passed 14/14.  Phase 12 remains the promoted
+baseline, production defaults are unchanged, and a genuinely route-disjoint
+validation asset is required before any truth comparison.

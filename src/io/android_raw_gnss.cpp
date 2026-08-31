@@ -534,6 +534,7 @@ bool validReceiverPosition(const RawRow& row, Vector3d& position) {
 struct EpochAccumulator {
     GNSSTime time;
     double clock_bias_seconds = 0.0;
+    int hardware_clock_discontinuity_count = 0;
     Vector3d receiver_position = Vector3d::Zero();
     bool have_receiver_position = false;
     std::map<std::pair<SatelliteId, SignalType>, Observation> observations;
@@ -559,6 +560,8 @@ bool appendEpoch(EpochAccumulator& accumulator,
     }
     result.observations.addEpoch(epoch);
     result.epoch_utc_time_millis.push_back(accumulator.utc_millis);
+    result.epoch_hardware_clock_discontinuity_count.push_back(
+        accumulator.hardware_clock_discontinuity_count);
     ++result.diagnostics.selected_epochs;
     result.diagnostics.last_gps_tow = accumulator.time.tow;
     return true;
@@ -716,6 +719,8 @@ bool loadAndroidRawGnssCsv(const std::string& path,
             accumulator.utc_millis = raw.utc_millis;
             accumulator.time = epoch_time;
             accumulator.clock_bias_seconds = clock_bias_seconds;
+            accumulator.hardware_clock_discontinuity_count =
+                raw.hardware_clock_discontinuity_count;
             have_epoch = true;
             if (result.diagnostics.selected_epochs == 0U) {
                 result.diagnostics.first_gps_week = epoch_time.week;
@@ -752,8 +757,13 @@ bool loadAndroidRawGnssCsv(const std::string& path,
         }
         double pseudorange_m = 0.0;
         if (!rawPseudorange(raw, base_full_bias_nanos, system, pseudorange_m)) {
-            error = "raw Android row produced a non-positive pseudorange";
-            return false;
+            // taroz/gsdc2023 keeps these rows through gnsslog2obs.m and
+            // removes them in exobs.m's P<1e7 mask.  A non-positive raw-clock
+            // range is the same invalid code observation at this boundary;
+            // drop only this row so a bad satellite cannot discard an entire
+            // route.  No carrier/coordinate is synthesized for it.
+            ++result.diagnostics.skipped_invalid_quality_rows;
+            continue;
         }
         if (std::isfinite(raw.raw_pseudorange_m)) {
             ++result.diagnostics.enriched_pseudorange_checks;
@@ -913,6 +923,11 @@ bool loadAndroidRawGnssCsv(const std::string& path,
     if (result.epoch_utc_time_millis.size() !=
         result.observations.epochs.size()) {
         error = "raw Android UTC epoch-key alignment invariant failed";
+        return false;
+    }
+    if (result.epoch_hardware_clock_discontinuity_count.size() !=
+        result.observations.epochs.size()) {
+        error = "raw Android hardware-clock epoch alignment invariant failed";
         return false;
     }
     return true;
