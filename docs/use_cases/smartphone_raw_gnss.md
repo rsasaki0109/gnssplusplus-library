@@ -3511,3 +3511,28 @@ post-score tuning was used.
 After the Release build was reconfigured, the full serial CTest suite passed
 132/132 (84.27 s); the Phase 29 evaluator unit suite passed 5/5.  These are
 recorded separately so the immutable score artifact is not rewritten.
+
+### Phase 30 Samsung tail chronology (diagnostic only)
+
+The Phase30 freeze authorized one additional read of the already-materialized
+Samsung development truth, in one process, after the sealed Phase29 lanes were
+verified.  The chronology artifact is
+`docs/use_cases/records/smartphone_r5_phase30_samsung_chronology_result_v1.json`.
+Pixel, validation, and future-holdout truth remained unopened; no solver was
+rerun and no lane was changed.
+
+The >500 m horizontal-error run spans the first 175 post-warm-up keys
+(`1626295842999`–`1626296016999`).  It starts at 502.625 m candidate error,
+peaks at 1082.286 m, and is still 506.062 m at its end.  The candidate has
+four early transitions above the fixed 70 m/s diagnostic bound (control has
+three).  This same initial transient is present in both lanes and then decays;
+it is not interpolation-dominated (25/175 keys are inferred interpolation).
+
+Raw evidence does not support an HCDC or clock-seam explanation: HCDC is 55
+for all epochs, the tail is in raw clock segment 0, and the only segment
+boundary is the later 1001 ms gap at `1626296265000`.  The >50 m report also
+records the later segment-1 interval.  Both graphs and GNSS-first passes
+converged, with 1130 problem epochs, 1129 exact and 35 interpolated output
+epochs, and zero unresolved keys.  No generic truth-free recovery rule was
+therefore authorized; prefix trimming, translation, or initial-state changes
+would be a new estimator decision rather than a demonstrated raw anomaly.
