@@ -43,6 +43,19 @@ Observation makeL1(double code_m, double adr_m, uint8_t lli = 0U) {
     return observation;
 }
 
+Observation makeE5a(double code_m, double adr_m, uint8_t lli = 0U) {
+    Observation observation(SatelliteId(GNSSSystem::Galileo, 5),
+                            SignalType::GAL_E5A);
+    const double wavelength = libgnss::signalWavelengthMeters(observation);
+    observation.pseudorange = code_m;
+    observation.has_pseudorange = true;
+    observation.carrier_phase = adr_m / wavelength;
+    observation.has_carrier_phase = true;
+    observation.lli = lli;
+    observation.valid = true;
+    return observation;
+}
+
 ObservationSeries threeEpochSeries() {
     ObservationSeries series;
     for (int i = 0; i < 3; ++i) {
@@ -62,6 +75,17 @@ ObservationSeries twoEpochCodeSeries(double current_code_m) {
     // Keeping ADR constant makes the innovation equal to the hand-chosen
     // raw-code step, which exercises the exact upstream 40 m boundary.
     second.addObservation(makeE1(current_code_m, 100.0));
+    series.addEpoch(first);
+    series.addEpoch(second);
+    return series;
+}
+
+ObservationSeries twoEpochE5aCodeSeries(double current_code_m) {
+    ObservationSeries series;
+    ObservationData first(GNSSTime(2200, 100.0));
+    first.addObservation(makeE5a(20'000'000.0, 100.0));
+    ObservationData second(GNSSTime(2200, 101.0));
+    second.addObservation(makeE5a(current_code_m, 100.0));
     series.addEpoch(first);
     series.addEpoch(second);
     return series;
@@ -263,6 +287,92 @@ TEST(CarrierCodeLevelingTest, ExplicitPrimarySetRejectsUnsupportedBand) {
         twoEpochCodeSeries(20'000'000.0), {1'000, 2'000}, {0, 0}, config);
     EXPECT_FALSE(result.ok);
     EXPECT_NE(result.error.find("GPS_L1CA and GAL_E1"), std::string::npos);
+}
+
+TEST(CarrierCodeLevelingTest, GalileoE5aInnovationResetUsesTwentyMeterBoundary) {
+    Config config;
+    config.include_gal_e5a = true;
+    config.enable_innovation_reset = true;
+
+    const auto below = libgnss::carrier_code_leveling::apply(
+        twoEpochE5aCodeSeries(20'000'019.9), {1'000, 2'000}, {0, 0}, config);
+    ASSERT_TRUE(below.ok) << below.error;
+    ASSERT_EQ(below.diagnostics.per_signal.size(), 2U);
+    EXPECT_EQ(below.diagnostics.per_signal[1].signal, SignalType::GAL_E5A);
+    EXPECT_DOUBLE_EQ(below.diagnostics.per_signal[1].innovation_reset_threshold_m,
+                     20.0);
+    EXPECT_EQ(below.diagnostics.per_signal[1].reset_innovation, 0U);
+    EXPECT_EQ(below.diagnostics.per_signal[1].updates, 1U);
+    EXPECT_NEAR(below.observations.epochs[1].observations.front().pseudorange,
+                20'000'009.95, 1.0e-9);
+
+    const auto exact = libgnss::carrier_code_leveling::apply(
+        twoEpochE5aCodeSeries(20'000'020.0), {1'000, 2'000}, {0, 0}, config);
+    ASSERT_TRUE(exact.ok) << exact.error;
+    EXPECT_EQ(exact.diagnostics.per_signal[1].reset_innovation, 0U);
+    EXPECT_EQ(exact.diagnostics.per_signal[1].updates, 1U);
+    EXPECT_DOUBLE_EQ(exact.diagnostics.per_signal[1].max_abs_innovation_accepted_m,
+                     20.0);
+    EXPECT_NEAR(exact.observations.epochs[1].observations.front().pseudorange,
+                20'000'010.0, 1.0e-9);
+
+    const auto over = libgnss::carrier_code_leveling::apply(
+        twoEpochE5aCodeSeries(20'000'020.1), {1'000, 2'000}, {0, 0}, config);
+    ASSERT_TRUE(over.ok) << over.error;
+    EXPECT_EQ(over.diagnostics.per_signal[1].reset_innovation, 1U);
+    EXPECT_EQ(over.diagnostics.per_signal[1].updates, 0U);
+    EXPECT_DOUBLE_EQ(over.observations.epochs[1].observations.front().pseudorange,
+                     20'000'020.1);
+    EXPECT_NEAR(over.diagnostics.per_signal[1].max_abs_innovation_rejected_m,
+                20.1, 1.0e-8);
+}
+
+TEST(CarrierCodeLevelingTest, GalileoE1E5aCandidateKeepsArcsAndGPSL1Separate) {
+    Config config;
+    config.include_gal_e5a = true;
+    config.enable_innovation_reset = true;
+
+    ObservationSeries series;
+    ObservationData first(GNSSTime(2200, 100.0));
+    first.addObservation(makeE1(21'000'000.0, 100.0));
+    first.addObservation(makeE5a(22'000'000.0, 200.0));
+    first.addObservation(makeL1(23'000'000.0, 300.0));
+    ObservationData second(GNSSTime(2200, 101.0));
+    second.addObservation(makeE1(21'000'000.4, 100.2));
+    // The E5a reset must not affect the E1 arc, and GPS L1 is not selected by
+    // the Phase 19 candidate at all.
+    second.addObservation(makeE5a(22'000'020.1, 200.0));
+    second.addObservation(makeL1(23'000'040.0, 300.0));
+    series.addEpoch(first);
+    series.addEpoch(second);
+
+    const auto result = libgnss::carrier_code_leveling::apply(
+        series, {1'000, 2'000}, {0, 0}, config);
+    ASSERT_TRUE(result.ok) << result.error;
+    ASSERT_EQ(result.diagnostics.per_signal.size(), 2U);
+    EXPECT_EQ(result.diagnostics.per_signal[0].signal, SignalType::GAL_E1);
+    EXPECT_EQ(result.diagnostics.per_signal[1].signal, SignalType::GAL_E5A);
+    EXPECT_EQ(result.diagnostics.per_signal[0].updates, 1U);
+    EXPECT_EQ(result.diagnostics.per_signal[0].reset_innovation, 0U);
+    EXPECT_EQ(result.diagnostics.per_signal[1].updates, 0U);
+    EXPECT_EQ(result.diagnostics.per_signal[1].reset_innovation, 1U);
+    EXPECT_DOUBLE_EQ(result.observations.epochs[1].observations[0].pseudorange,
+                     21'000'000.3);
+    EXPECT_DOUBLE_EQ(result.observations.epochs[1].observations[1].pseudorange,
+                     22'000'020.1);
+    EXPECT_DOUBLE_EQ(result.observations.epochs[1].observations[2].pseudorange,
+                     23'000'040.0);
+    EXPECT_EQ(result.diagnostics.target_rows, 4U);
+}
+
+TEST(CarrierCodeLevelingTest, GalileoE5aExtensionRejectsExplicitMixedSet) {
+    Config config;
+    config.include_gal_e5a = true;
+    config.signals = {SignalType::GAL_E1};
+    const auto result = libgnss::carrier_code_leveling::apply(
+        twoEpochCodeSeries(20'000'000.0), {1'000, 2'000}, {0, 0}, config);
+    EXPECT_FALSE(result.ok);
+    EXPECT_NE(result.error.find("single GAL_E1"), std::string::npos);
 }
 
 }  // namespace

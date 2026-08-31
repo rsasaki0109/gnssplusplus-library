@@ -41,6 +41,11 @@ struct Config {
     // multi-signal set is deliberately limited to GPS L1 C/A and Galileo E1;
     // an empty set preserves the historical single `signal` contract.
     std::vector<SignalType> signals;
+    // Phase 19's Galileo-only extension.  This is intentionally separate from
+    // `signals` so the historical GPS_L1CA+GAL_E1 API cannot silently acquire
+    // an L5 signal.  The candidate requires the single-signal base to be
+    // GAL_E1 and appends GAL_E5A with its own arc and threshold.
+    bool include_gal_e5a = false;
 };
 
 struct SignalDiagnostics {
@@ -164,7 +169,14 @@ inline Result apply(const ObservationSeries& input,
     }
 
     std::vector<SignalType> selected_signals;
-    if (config.signals.empty()) {
+    if (config.include_gal_e5a) {
+        if (config.signal != SignalType::GAL_E1 || !config.signals.empty()) {
+            result.error =
+                "GAL_E5A extension requires the single GAL_E1 base signal";
+            return result;
+        }
+        selected_signals = {SignalType::GAL_E1, SignalType::GAL_E5A};
+    } else if (config.signals.empty()) {
         selected_signals.push_back(config.signal);
     } else {
         for (const SignalType signal : config.signals) {

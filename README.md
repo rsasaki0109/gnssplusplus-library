@@ -154,6 +154,21 @@ changed afterward.  See the [Phase 18 policy freeze](docs/use_cases/records/smar
 [implementation seal](docs/use_cases/records/smartphone_r5_phase18_intersection_metric_manifest_v1.json),
 and [sealed result](docs/use_cases/records/smartphone_r5_phase18_intersection_metric_score_result_v1.json).
 
+Phase 19 evaluates a GPS-L1-free Galileo extension: the frozen Galileo E1
+safe-Hatch control versus an opt-in E1 + Galileo E5a safe-Hatch candidate.
+E1 keeps the upstream-derived 40 m innovation boundary; E5a uses the L5
+20 m boundary, with independent `(satellite, signal)` arcs and diagnostics.
+The raw-only mi8 and Pixel7 structural runs were finite, converged,
+deterministic, and had no >70 m/s transition.  After sealing those artifacts,
+the candidate improved all four local diagnostics on both development
+comparisons: mi8 WGS84-linear `2.043565555 -> 2.000224284 m` (intersection
+coverage 1,399/1,400), and Pixel7 `3.146250666 -> 3.143874942 m`
+(exact coverage 1,383/1,383).  This is development-only evidence, not a
+validation/holdout or generalization claim; native 0.782-class remains
+unachieved and no Kaggle submission was made.  See the [Phase 19 freeze](docs/use_cases/records/smartphone_r5_phase19_gal_e1_e5a_freeze_v1.json),
+[sealed raw manifest](docs/use_cases/records/smartphone_r5_phase19_gal_e1_e5a_manifest_v1.json),
+and [sealed score result](docs/use_cases/records/smartphone_r5_phase19_gal_e1_e5a_score_result_v1.json).
+
 ### RTK runtime and smartphone GSDC 2023
 
 The Release RTK broadcast-state cache preserves the position stream and

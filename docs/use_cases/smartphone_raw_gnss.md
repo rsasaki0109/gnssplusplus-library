@@ -3196,3 +3196,59 @@ truth reads are explicitly recorded as two (the failed Phase 17 read plus
 this recovery read); no further truth read, rerun, or tuning is permitted.
 See the Phase 18 policy freeze, implementation manifest, and score result in
 `docs/use_cases/records/`.
+
+### Galileo E1 + E5a safe Hatch (phase 19, development-only Go)
+
+Phase 19 keeps the Phase 16 Galileo E1 innovation-reset Hatch as the control
+and adds only Galileo E5a as an explicit opt-in candidate.  GPS L1 is
+deliberately excluded.  E1 uses the upstream-derived 40 m P-vs-ADR boundary;
+E5a is an L5-band signal and uses the pinned upstream 20 m P pair threshold.
+The candidate flag is
+`--native-carrier-code-gal-e1-e5a`; it requires the existing raw Android
+recipe, innovation reset, and carrier leveling flags.  The old
+`Config.signal`/`Config.signals` APIs and their byte behavior are unchanged.
+
+The implementation keeps separate `(satellite, signal)` arc state and
+per-signal counters.  The fixed E5a boundary fixtures accept 19.9 m and
+20.0 m innovations and reset at 20.1 m; E1 and E5a cannot share an arc, and
+GPS L1 rows are untouched.  No graph state, interpolation, truth, MAT,
+enriched satellite fields, WLS coordinates, or parameter search is used.
+
+Truth-free Release runs used only raw `device_gnss.csv`, `device_imu.csv`,
+and `brdc.nav`.  Both control and candidate produced finite ordered keys and
+converged graphs; candidate reruns were byte-identical.  The candidate
+processed 5,194 E5a eligible / 4,466 update rows on mi8 and 6,528 / 5,854 on
+Pixel7.  Maximum structural transition speeds were 35.3003 m/s and 19.6019
+m/s, below the fixed 70 m/s safety bound.
+
+After artifact sealing, each route was scored once in one evaluator process
+with control and candidate held in the same in-memory truth comparison.  The
+Pixel7 exact comparison scored 1,383/1,383 keys and improved WGS84-linear
+`3.146250666 -> 3.143874942 m`; the mi8 Phase 18 intersection policy scored
+1,399/1,400 keys (17 surplus, one missing) and improved
+`2.043565555 -> 2.000224284 m`.  All four WGS84/Haversine × linear/nearest
+variants improved on both routes, so this is a development-only promotion;
+it does not establish validation/holdout generalization or the native
+0.782-class target.  Cumulative truth reads are explicitly recorded as
+three for each identity, including earlier historical reads; no truth was
+read after this result and no Kaggle submission was made.
+
+Reproduction and hashes are sealed in
+`docs/use_cases/records/smartphone_r5_phase19_gal_e1_e5a_freeze_v1.json`,
+`docs/use_cases/records/smartphone_r5_phase19_gal_e1_e5a_manifest_v1.json`,
+and
+`docs/use_cases/records/smartphone_r5_phase19_gal_e1_e5a_score_result_v1.json`.
+The raw structural recipe is:
+
+```bash
+LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} \
+  build/apps/gnss_fgo_imu_no_base \
+  --android-gnss <device_gnss.csv> --android-imu <device_imu.csv> \
+  --nav <brdc.nav> --out <candidate/submission.csv> \
+  --summary-json <candidate/summary.json> --dataset-id <route/phone> \
+  --all-epochs --android-raw-utc-keys \
+  --native-pdc-imu-tdcp --native-signal-bias-states \
+  --native-residual-ionosphere --native-carrier-code-leveling \
+  --native-carrier-code-innovation-reset \
+  --native-carrier-code-gal-e1-e5a
+```
