@@ -1,0 +1,135 @@
+{
+  "schema_version": "smartphone-r5-phase33-quality-anchor-validation-freeze.v1",
+  "phase": 33,
+  "status": "frozen-before-validation-raw-materialization",
+  "purpose": "Fresh-validation check of the unchanged Phase31 quality-anchor recipe after the Phase32 development gate passed.",
+  "train_authorization": {
+    "result_path": "docs/use_cases/records/smartphone_r5_phase32_quality_anchor_train_eval_result_v1.json",
+    "result_sha256": "e79109441a7643ab8bb4399678d950102b943608a302ca00e2a2deb03cb45124",
+    "status": "train-pass",
+    "candidate_control_artifacts_changed": false,
+    "solver_rerun_for_train": false
+  },
+  "split": {
+    "fresh_validation": "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+    "route": "2023-05-09-21-32-us-ca-mtv-pe1",
+    "phone": "pixel5",
+    "future_holdout": "2023-05-16-19-54-us-ca-mtv-xe1/pixel5",
+    "future_holdout_remains_sealed": true,
+    "route_disjoint_from_phase32_train": true
+  },
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "phase24_split_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase24_route_group_split_freeze_v1.json",
+      "sha256": "a20fb65524648fab76c5494d2f28b1846e48fae821296bbdfc212cf6519e4a62"
+    },
+    "members": {
+      "device_gnss": {
+        "name": "dataset_2023/train/2023-05-09-21-32-us-ca-mtv-pe1/pixel5/device_gnss.csv",
+        "file_size": 45632470,
+        "compressed_size": 10517233,
+        "crc32_hex": "8ad53587"
+      },
+      "device_imu": {
+        "name": "dataset_2023/train/2023-05-09-21-32-us-ca-mtv-pe1/pixel5/device_imu.csv",
+        "file_size": 48760450,
+        "compressed_size": 10519466,
+        "crc32_hex": "f3a38083"
+      },
+      "broadcast_nav": {
+        "name": "dataset_2023/train/2023-05-09-21-32-us-ca-mtv-pe1/brdc.nav",
+        "file_size": 11083341,
+        "compressed_size": 1069563,
+        "crc32_hex": "26fc8565"
+      },
+      "ground_truth": {
+        "name": "dataset_2023/train/2023-05-09-21-32-us-ca-mtv-pe1/pixel5/ground_truth.csv",
+        "file_size": 206062,
+        "compressed_size": 58798,
+        "crc32_hex": "015842bb",
+        "materialize_before_artifact_seal": false
+      }
+    }
+  },
+  "recipe": {
+    "binary": "build/apps/gnss_fgo_imu_no_base",
+    "control_id": "phase28_tdcp_no_bridge_sealed_recipe",
+    "candidate_id": "native_fgo_raw_quality_anchor_spp_replay_v1",
+    "control_flags": [
+      "--native-pdc-imu-tdcp-no-bridge",
+      "--android-raw-clock-only",
+      "--android-utc-wall-clock-fallback",
+      "--android-raw-utc-keys"
+    ],
+    "candidate_flags": [
+      "--native-pdc-imu-tdcp-no-bridge",
+      "--android-raw-clock-only",
+      "--android-utc-wall-clock-fallback",
+      "--android-raw-utc-keys",
+      "--native-quality-anchor"
+    ],
+    "model_and_numeric_parameters_changed": false,
+    "production_default_changed": false,
+    "inputs": [
+      "raw device_gnss.csv",
+      "raw device_imu.csv",
+      "broadcast brdc.nav"
+    ],
+    "forbidden_inputs": [
+      "ground_truth.csv before artifact sealing",
+      "any .mat file",
+      "device WLS or enriched coordinate fields",
+      "sample/submission/precomputed coordinates",
+      "validation truth before truth phase",
+      "future holdout",
+      "Kaggle/token"
+    ]
+  },
+  "artifact_contract": {
+    "output_root": "output/smartphone-r5/phase33-quality-anchor-validation-v1",
+    "raw_input_root": "output/smartphone-r5/phase33-quality-anchor-validation-v1/inputs/2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+    "control_root": "output/smartphone-r5/phase33-quality-anchor-validation-v1/control",
+    "candidate_root": "output/smartphone-r5/phase33-quality-anchor-validation-v1/candidate",
+    "repeat_required": true,
+    "truth_free_structural_seal_required": true,
+    "atomic_publish_required": true,
+    "exact_key_and_finite_coordinates_required": true,
+    "no_unresolved_or_unbounded_continuity_transition": true
+  },
+  "evaluation_gate": {
+    "truth_read_after_seal_authorized": true,
+    "truth_read_count": 1,
+    "control_and_candidate_same_truth_key_set": true,
+    "all_four_horizontal_variants_non_regressed": true,
+    "horizontal_p50_p95_non_regressed": true,
+    "availability_coverage_non_regressed": true,
+    "continuity_non_regressed": true,
+    "vertical": "informational-unavailable",
+    "post_score_tuning": false,
+    "rerun_after_truth": false
+  },
+  "truth_access": {
+    "validation_truth_open_count_before_freeze": 0,
+    "validation_truth_materialized_before_freeze": false,
+    "phase32_train_truth_reads": 3,
+    "fresh_validation_truth_read_allowed_only_after_seal": true,
+    "future_holdout_truth_open_count": 0,
+    "mat_read_or_generated": false,
+    "token_or_kaggle_access": false
+  },
+  "source_and_binary_hashes_before_validation": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "00ad0c2a155a5a4c9ddccdd2339c9ef26e0162c4f66c958ee06240f06e7c705e",
+    "include/libgnss++/algorithms/fgo_quality_anchor.hpp": "dc8a7174534a089ba3bcfc478ece3c9307088090104cd539359fbc90ef151e44",
+    "include/libgnss++/algorithms/fgo_config.hpp": "c1bfdfec388ac6ff91112917cb33ba344d81479a9f22e38819dd9af38f052cab",
+    "src/algorithms/fgo_problems.cpp": "931f6d42a050b70d13daad2df21c689e8962a6030b1b3ce268730c1e20c43c44",
+    "build/apps/gnss_fgo_imu_no_base": "883701ef34606af4be84a44181f6b3616b2559ee4031982fff98d73dbbbbe7bd"
+  },
+  "integrity": {
+    "freeze_hash": "computed-after-commit",
+    "candidate_and_control_immutable": true,
+    "truth_hash_and_bytes_must_be_recorded": true,
+    "no_post_validation_tuning": true
+  }
+}
