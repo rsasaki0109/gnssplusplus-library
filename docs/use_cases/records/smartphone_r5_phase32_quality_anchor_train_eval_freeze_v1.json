@@ -3,6 +3,8 @@
   "phase": 32,
   "status": "frozen-before-development-truth-reread",
   "purpose": "One-shot development-only evaluation of the already sealed Phase31 quality-anchor lane against the already sealed Phase28 TDCP/no-bridge control.",
+  "candidate_control_mutation": false,
+  "solver_rerun": false,
   "candidate": {
     "id": "native_fgo_raw_quality_anchor_spp_replay_v1",
     "phase31_freeze": {
