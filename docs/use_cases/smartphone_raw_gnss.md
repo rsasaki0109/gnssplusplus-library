@@ -3573,3 +3573,44 @@ python3 apps/commands/benchmarks/gnss_smartphone_phase31_quality_anchor_structur
 
 The raw solver commands use only `device_gnss.csv`, `device_imu.csv`, and
 `brdc.nav`; validation, holdout, MAT, token, and Kaggle inputs remain sealed.
+
+### Phase 32 quality-anchor development evaluation
+
+After the Phase 31 structural pass, the already sealed Phase 31 candidate and
+Phase 28 `tdcp_no_bridge` control were evaluated together in one process.  Each
+of the three previously opened development truth files was read exactly once;
+no solver was rerun and no candidate/control artifact was changed.  The
+route-wise gate required non-regression for all four horizontal diagnostic
+variants, H P50/P95, coverage, availability, and the fixed 70 m/s continuity
+count.  The macro gate additionally required strict improvement in every
+horizontal variant.  Height remains informational because these submissions
+contain no predicted altitude column.
+
+The candidate passed the frozen development gate.  Pixel5 and Pixel4 were
+byte-identical to the control at the scored keys.  On the Samsung route, H P50
+changed from 5.846 m to 1.041 m, H P95 from 669.324 m to 2.056 m, and the
+over-70 m/s transition count from 4 to 0.  Macro diagnostic means changed
+from 113.666/113.672/113.823/113.830 m to
+1.811/1.811/1.811/1.811 m (Haversine-linear, Haversine-nearest,
+WGS84-linear, WGS84-nearest); mean coverage and availability stayed
+0.9995594845.  This is development evidence, not a fresh-validation or
+holdout result, and it does not establish the 0.782-class target.
+
+The immutable pre-truth contract, evaluator manifest, result, and sealed
+artifact manifest are recorded in:
+
+- `docs/use_cases/records/smartphone_r5_phase32_quality_anchor_train_eval_freeze_v1.json`;
+- `docs/use_cases/records/smartphone_r5_phase32_quality_anchor_train_eval_evaluator_manifest_v1.json`;
+- `docs/use_cases/records/smartphone_r5_phase32_quality_anchor_train_eval_result_v1.json`.
+
+The pure evaluator checks are reproducible with the first command below.  The
+second command is the recorded one-shot score command and must not be rerun
+after this sealed truth read:
+
+```text
+python3 tests/test_smartphone_phase32_quality_anchor_eval.py
+python3 apps/commands/benchmarks/gnss_smartphone_phase32_quality_anchor_eval.py score
+```
+
+Fresh validation and the future holdout remain sealed.  No MAT, token, Kaggle
+submission, or post-score tuning was used.

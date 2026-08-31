@@ -1,0 +1,45 @@
+{
+  "schema_version": "smartphone-r5-phase32-quality-anchor-train-evaluation-result-manifest.v1",
+  "phase": 32,
+  "status": "sealed-train-pass",
+  "result": {
+    "path": "docs/use_cases/records/smartphone_r5_phase32_quality_anchor_train_eval_result_v1.json",
+    "sha256": "e79109441a7643ab8bb4399678d950102b943608a302ca00e2a2deb03cb45124"
+  },
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase32_quality_anchor_train_eval_freeze_v1.json",
+    "sha256": "fa6ff8545d9b9a6c1dd83e4c952964b4193d3d4dd822bb41df17d5f2be35322a"
+  },
+  "evaluator_manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase32_quality_anchor_train_eval_evaluator_manifest_v1.json",
+    "sha256": "08fd3d9f1e57bba3c9d6be22e28e6b1d96fa9ca99dcb5c7ce314515d5856a7c4"
+  },
+  "output_manifest": {
+    "path": "output/smartphone-r5/phase32-quality-anchor-train-eval-v1/train_evaluation.manifest.json",
+    "sha256": "4130d4ec29885bf6f7105ef1af40e99cb7db833b986dae1dc45cf6f04cb64b41"
+  },
+  "truth_access": {
+    "phase32_truth_open_count": 3,
+    "truth_read_count_per_route": 1,
+    "fresh_validation_truth_open_count": 0,
+    "future_holdout_truth_open_count": 0,
+    "mat_read_or_generated": false,
+    "token_or_kaggle_access": false,
+    "post_score_tuning": false
+  },
+  "decision": {
+    "routewise_horizontal_gate": "passed",
+    "aggregate_all_four_variant_strict_gate": "passed",
+    "availability_coverage_continuity": "non-regressed",
+    "vertical": "informational-unavailable",
+    "fresh_validation": "eligible only under a separately frozen unchanged protocol",
+    "future_holdout": "sealed",
+    "kaggle_submission": false
+  },
+  "integrity": {
+    "candidate_control_artifacts_reused_without_mutation": true,
+    "solver_rerun": false,
+    "truth_used_for_inference_or_selection": false,
+    "atomic_result_and_manifest": true
+  }
+}
