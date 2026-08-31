@@ -1,0 +1,113 @@
+{
+  "schema": "smartphone-phase26-pdc-bridge-wls-handoff-freeze-v1",
+  "status": "frozen-before-correction",
+  "purpose": "Authorize one raw-only semantic handoff correction after Phase26 diagnostics showed that the bridge requested the existing Doppler WLS initializer but always initialized its velocity and clock-rate state to zero.",
+  "inputs": {
+    "allowed": [
+      "device_gnss.csv raw timing/observables",
+      "device_imu.csv raw sensors",
+      "brdc.nav broadcast ephemeris"
+    ],
+    "forbidden": [
+      "MAT files",
+      "ground truth",
+      "device-provided WLS or coordinates",
+      "precomputed trajectories",
+      "sample coordinates",
+      "Kaggle scores"
+    ],
+    "truth_open_count": 0
+  },
+  "frozen_recipe": {
+    "candidate": "native_raw_pdc_state_bridge_existing_wls_handoff",
+    "production_default": "unchanged",
+    "correction": "When a finite, already-computed raw-observable Doppler WLS estimate is valid for an epoch, pass its ECEF velocity and receiver clock-rate into the bridge state initializer; invalid estimates retain the existing zero initializer.",
+    "unchanged": [
+      "P+D+temporal state equations",
+      "all sigmas and Huber thresholds",
+      "max_iterations=1000",
+      "max_velocity_mps=70",
+      "max_clock_rate_mps=2000",
+      "max_normalized_rms=25",
+      "raw Android clock/timestamp contract",
+      "satellite geometry and Doppler sign/units contract",
+      "quality gates and fail-closed behavior"
+    ],
+    "no_parameter_search": true,
+    "no_gate_relaxation": true,
+    "no_score_authorization": true
+  },
+  "pre_correction_source_hashes": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "a02b70acd35f4a86fae1c227b7b7135d68e58311b004d9c582e21e72e7014d06",
+    "src/algorithms/pdc_state_bridge.cpp": "f06cbff6c8c034ca37e163dae3ee27d24b57a9ddff313abccfe356ef81fdfdc8",
+    "include/libgnss++/algorithms/pdc_state_bridge.hpp": "99cf61cbb66afce7c43303e640a260676220237b73d5e9eda680553685cfc662",
+    "include/libgnss++/algorithms/doppler_velocity_wls.hpp": "ef888b3e6c2f15d0dd035c0905bafdee463e346c549f81cf892ec30c1c4dcde0"
+  },
+  "diagnostic_evidence": [
+    {
+      "route": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "bridge_log_sha256": "16e8226d983688a4cead7c775c9d0eccc24bfc13affb6e7db52fee0bb5c6e90d",
+      "bridge_failure": "epoch-quality-gate-rejected",
+      "pseudorange_rows": 61754,
+      "doppler_rows": 61726,
+      "first_epoch_doppler_rows": 0,
+      "later_epoch_doppler_rows": 61726,
+      "epochs_with_doppler": 2158,
+      "wls_valid_epochs": 2159,
+      "wls_rejected_epochs": 0,
+      "wls_max_velocity_norm_mps": 44.3203,
+      "wls_max_clock_rate_abs_mps": 28.4474,
+      "bridge_state_max_velocity_norm_mps": 2135.61,
+      "bridge_state_velocity_over_bound": 1,
+      "initial_pseudorange_rms_m": 626.965,
+      "seed_position_step_max_mps": 2181.5
+    },
+    {
+      "route": "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "bridge_log_sha256": "39334f8f8a61a2825d51a6c03eb9fe073005bc5990074ecdb6640eead72e726e",
+      "bridge_failure": "optimizer-did-not-converge",
+      "pseudorange_rows": 53214,
+      "doppler_rows": 53184,
+      "first_epoch_doppler_rows": 0,
+      "later_epoch_doppler_rows": 53184,
+      "epochs_with_doppler": 1677,
+      "wls_valid_epochs": 1637,
+      "wls_rejected_epochs": 41,
+      "wls_max_velocity_norm_mps": 36.4159,
+      "wls_max_clock_rate_abs_mps": 21.1407,
+      "bridge_state_max_velocity_norm_mps": 65.4645,
+      "bridge_state_velocity_over_bound": 0,
+      "initial_pseudorange_rms_m": 642.466,
+      "seed_position_step_max_mps": 1330.68
+    },
+    {
+      "route": "2021-07-14-20-50-us-ca-mtv-e/sm-g988b",
+      "bridge_log_sha256": "59eb92e33c473c1b48c82bd6731bea57252fdfabad8df7b6ed3939855eae8e59",
+      "bridge_failure": "epoch-quality-gate-rejected",
+      "pseudorange_rows": 17620,
+      "doppler_rows": 29130,
+      "first_epoch_doppler_rows": 0,
+      "later_epoch_doppler_rows": 29130,
+      "epochs_with_doppler": 1164,
+      "wls_valid_epochs": 1165,
+      "wls_rejected_epochs": 0,
+      "wls_max_velocity_norm_mps": 36.5271,
+      "wls_max_clock_rate_abs_mps": 113.047,
+      "bridge_state_max_velocity_norm_mps": 36111.6,
+      "bridge_state_velocity_over_bound": 1122,
+      "initial_pseudorange_rms_m": 7.09825,
+      "seed_position_step_max_mps": 63.0611
+    }
+  ],
+  "interpretation": {
+    "first_epoch_doppler_zero": "Expected: corrected receiver clock drift requires an adjacent epoch and the first epoch is intentionally skipped.",
+    "doppler_unit_sign_failure": "Not supported by this evidence: the same corrected rows feed the passing standalone Doppler WLS and existing contract tests.",
+    "state_handoff_issue": "Supported: all three routes have finite raw WLS estimates with physical velocity bounds, while the bridge state starts at zero and can leave the bound under its coupled temporal solve.",
+    "remaining_blocker": "The bridge still has a frozen tight temporal model and may fail after the handoff correction; no claim of solver success is made here."
+  },
+  "evaluation": {
+    "truth_free_only": true,
+    "validation_or_holdout": "sealed",
+    "next_step": "apply only the existing-WLS velocity/clock-rate initializer handoff, then rerun the same three raw routes structurally; do not score truth or rerun the Phase24 matrix until all three pass structural gates"
+  }
+}

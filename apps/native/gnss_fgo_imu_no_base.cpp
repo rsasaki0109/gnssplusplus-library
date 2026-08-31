@@ -564,6 +564,34 @@ struct NativePdcBridgeReport {
     double max_velocity_norm_mps = 0.0;
     double max_clock_rate_abs_mps = 0.0;
     double max_normalized_rms = 0.0;
+    std::size_t first_epoch_doppler_rows = 0;
+    std::size_t later_epoch_doppler_rows = 0;
+    std::size_t epochs_with_doppler = 0;
+    std::size_t finite_raw_clock_drift_epochs = 0;
+    double min_epoch_dt_s = std::numeric_limits<double>::infinity();
+    double max_epoch_dt_s = 0.0;
+    std::size_t invalid_or_large_epoch_intervals = 0;
+    double doppler_residual_rms_mps = 0.0;
+    double doppler_abs_p50_mps = 0.0;
+    double doppler_abs_max_mps = 0.0;
+    double doppler_sigma_min_mps = std::numeric_limits<double>::infinity();
+    double doppler_sigma_max_mps = 0.0;
+    double initial_pseudorange_rms_m = 0.0;
+    double initial_pseudorange_max_m = 0.0;
+    double seed_position_step_max_mps = 0.0;
+    double all_state_max_velocity_norm_mps = 0.0;
+    double all_state_max_clock_rate_abs_mps = 0.0;
+    std::size_t all_state_velocity_over_bound = 0;
+    std::size_t all_state_clock_rate_over_bound = 0;
+    std::size_t wls_valid_epochs = 0;
+    std::size_t wls_rejected_epochs = 0;
+    std::size_t wls_propagated_epochs = 0;
+    double wls_max_velocity_norm_mps = 0.0;
+    double wls_max_clock_rate_abs_mps = 0.0;
+    double wls_max_normalized_rms = 0.0;
+    double wls_first_velocity_norm_mps = 0.0;
+    double wls_first_clock_rate_mps = 0.0;
+    std::string wls_first_reason;
     std::size_t fgo_seed_displacement_count = 0;
     double fgo_seed_displacement_p50_m = 0.0;
     double fgo_seed_displacement_max_m = 0.0;
@@ -784,6 +812,115 @@ bool populateNativePdcStateBridge(
                                 factor.sigma_mps});
     }
 
+    // Capture the bridge input contract before solving.  These are diagnostics
+    // only: they do not gate, reweight, or select a state.  In particular, the
+    // first corrected-Doppler epoch is intentionally empty because receiver
+    // clock drift is defined by an adjacent epoch difference in the native
+    // contract.  Keeping that distinction visible prevents a harmless first
+    // row count of zero from being mistaken for a global Doppler unit failure.
+    std::vector<double> absolute_doppler_residuals;
+    absolute_doppler_residuals.reserve(doppler_rows.size());
+    double doppler_residual_square_sum = 0.0;
+    std::size_t doppler_residual_count = 0;
+    for (std::size_t epoch_index = 0; epoch_index < epochs.size(); ++epoch_index) {
+        if (epoch_index > 0U) {
+            const double dt = epochs[epoch_index].time -
+                              epochs[epoch_index - 1U].time;
+            if (std::isfinite(dt) && dt > 0.0) {
+                report.min_epoch_dt_s = std::min(report.min_epoch_dt_s, dt);
+                report.max_epoch_dt_s = std::max(report.max_epoch_dt_s, dt);
+            } else {
+                ++report.invalid_or_large_epoch_intervals;
+            }
+            const double seed_speed =
+                (epochs[epoch_index].seed_position_ecef -
+                 epochs[epoch_index - 1U].seed_position_ecef).norm() /
+                (std::isfinite(dt) && dt > 0.0 ? dt : 1.0);
+            if (std::isfinite(seed_speed)) {
+                report.seed_position_step_max_mps =
+                    std::max(report.seed_position_step_max_mps, seed_speed);
+            }
+        }
+        if (std::isfinite(epochs[epoch_index].seed_clock_bias_m)) {
+            report.initial_pseudorange_max_m = std::max(
+                report.initial_pseudorange_max_m,
+                std::abs(epochs[epoch_index].seed_clock_bias_m));
+        }
+        if (std::isfinite(problem.epochs[epoch_index].receiver_clock_drift_mps)) {
+            ++report.finite_raw_clock_drift_epochs;
+        }
+    }
+    if (!std::isfinite(report.min_epoch_dt_s)) {
+        report.min_epoch_dt_s = 0.0;
+    }
+    std::vector<double> initial_pseudorange_residuals;
+    initial_pseudorange_residuals.reserve(pseudorange_rows.size());
+    for (const auto& row : pseudorange_rows) {
+        if (row.epoch_index >= epochs.size()) continue;
+        const double residual =
+            (row.satellite_position_ecef - epochs[row.epoch_index].seed_position_ecef).norm() +
+            epochs[row.epoch_index].seed_clock_bias_m - row.corrected_pseudorange_m;
+        if (std::isfinite(residual)) {
+            initial_pseudorange_residuals.push_back(std::abs(residual));
+        }
+    }
+    if (!initial_pseudorange_residuals.empty()) {
+        std::sort(initial_pseudorange_residuals.begin(),
+                  initial_pseudorange_residuals.end());
+        double sum = 0.0;
+        for (const double value : initial_pseudorange_residuals) {
+            sum += value * value;
+        }
+        report.initial_pseudorange_rms_m =
+            std::sqrt(sum / static_cast<double>(initial_pseudorange_residuals.size()));
+        report.initial_pseudorange_max_m = initial_pseudorange_residuals.back();
+    }
+    for (const auto& row : doppler_rows) {
+        if (row.epoch_index == 0U) {
+            ++report.first_epoch_doppler_rows;
+        } else {
+            ++report.later_epoch_doppler_rows;
+        }
+        if (row.epoch_index < epochs.size()) {
+            // The row's LOS and residual are already the shared corrected
+            // contract used by the standalone Doppler WLS and FGO factor.
+            if (std::isfinite(row.residual_mps) &&
+                std::isfinite(row.sigma_mps) && row.sigma_mps > 0.0) {
+                const double absolute = std::abs(row.residual_mps);
+                absolute_doppler_residuals.push_back(absolute);
+                doppler_residual_square_sum += row.residual_mps * row.residual_mps;
+                ++doppler_residual_count;
+                report.doppler_sigma_min_mps =
+                    std::min(report.doppler_sigma_min_mps, row.sigma_mps);
+                report.doppler_sigma_max_mps =
+                    std::max(report.doppler_sigma_max_mps, row.sigma_mps);
+            }
+        }
+    }
+    report.epochs_with_doppler = 0U;
+    for (std::size_t epoch_index = 0; epoch_index < epochs.size(); ++epoch_index) {
+        if (std::any_of(doppler_rows.begin(), doppler_rows.end(),
+                        [epoch_index](const auto& row) {
+                            return row.epoch_index == epoch_index;
+                        })) {
+            ++report.epochs_with_doppler;
+        }
+    }
+    if (doppler_residual_count > 0U) {
+        report.doppler_residual_rms_mps = std::sqrt(
+            doppler_residual_square_sum /
+            static_cast<double>(doppler_residual_count));
+        std::sort(absolute_doppler_residuals.begin(),
+                  absolute_doppler_residuals.end());
+        const std::size_t middle = absolute_doppler_residuals.size() / 2U;
+        report.doppler_abs_p50_mps =
+            absolute_doppler_residuals.size() % 2U == 0U
+                ? 0.5 * (absolute_doppler_residuals[middle - 1U] +
+                         absolute_doppler_residuals[middle])
+                : absolute_doppler_residuals[middle];
+        report.doppler_abs_max_mps = absolute_doppler_residuals.back();
+    }
+
     libgnss::pdc_state_bridge::Options bridge_options;
     // Match the dedicated native PDC recipe. These values are physical/config
     // defaults fixed before truth; this bridge does not learn from the route.
@@ -806,6 +943,45 @@ bool populateNativePdcStateBridge(
     bridge_options.max_normalized_rms = 25.0;
     bridge_options.max_position_norm_m = 1.0e7;
 
+    // The bridge is intentionally diagnosed against the already-built
+    // raw-observable Doppler WLS initializer.  This does not select or alter
+    // the bridge solve; it records whether the requested initializer exists
+    // and what the later FGO handoff would have received.  A zero bridge
+    // velocity is therefore distinguishable from a physically gated WLS
+    // estimate rather than being mistaken for a Doppler-unit failure.
+    for (std::size_t epoch_index = 0;
+         epoch_index < problem.doppler_velocity_wls_estimates.size();
+         ++epoch_index) {
+        const auto& estimate = problem.doppler_velocity_wls_estimates[epoch_index];
+        if (!estimate.valid) {
+            ++report.wls_rejected_epochs;
+            if (epoch_index == 0U) report.wls_first_reason = estimate.reason;
+            continue;
+        }
+        ++report.wls_valid_epochs;
+        if (estimate.propagated) ++report.wls_propagated_epochs;
+        if (estimate.velocity_ecef_mps.allFinite()) {
+            report.wls_max_velocity_norm_mps = std::max(
+                report.wls_max_velocity_norm_mps,
+                estimate.velocity_ecef_mps.norm());
+        }
+        if (std::isfinite(estimate.clock_rate_mps)) {
+            report.wls_max_clock_rate_abs_mps = std::max(
+                report.wls_max_clock_rate_abs_mps,
+                std::abs(estimate.clock_rate_mps));
+        }
+        if (std::isfinite(estimate.normalized_rms)) {
+            report.wls_max_normalized_rms = std::max(
+                report.wls_max_normalized_rms, estimate.normalized_rms);
+        }
+        if (epoch_index == 0U) {
+            report.wls_first_velocity_norm_mps =
+                estimate.velocity_ecef_mps.norm();
+            report.wls_first_clock_rate_mps = estimate.clock_rate_mps;
+            report.wls_first_reason = estimate.reason;
+        }
+    }
+
     const auto solve = libgnss::pdc_state_bridge::solve(
         epochs, pseudorange_rows, doppler_rows, bridge_options);
     report.motion_intervals = solve.motion_intervals;
@@ -815,6 +991,24 @@ bool populateNativePdcStateBridge(
     report.max_velocity_norm_mps = solve.max_velocity_norm_mps;
     report.max_clock_rate_abs_mps = solve.max_clock_rate_abs_mps;
     for (const auto& estimate : solve.epochs) {
+        if (estimate.state.velocity_ecef_mps.allFinite()) {
+            const double velocity_norm = estimate.state.velocity_ecef_mps.norm();
+            if (std::isfinite(velocity_norm)) {
+                report.all_state_max_velocity_norm_mps = std::max(
+                    report.all_state_max_velocity_norm_mps, velocity_norm);
+                if (velocity_norm > bridge_options.max_velocity_mps) {
+                    ++report.all_state_velocity_over_bound;
+                }
+            }
+        }
+        if (std::isfinite(estimate.state.clock_rate_mps)) {
+            const double clock_rate_abs = std::abs(estimate.state.clock_rate_mps);
+            report.all_state_max_clock_rate_abs_mps = std::max(
+                report.all_state_max_clock_rate_abs_mps, clock_rate_abs);
+            if (clock_rate_abs > bridge_options.max_clock_rate_mps) {
+                ++report.all_state_clock_rate_over_bound;
+            }
+        }
         if (estimate.valid) {
             ++report.valid_position_states;
             ++report.valid_velocity_states;
@@ -861,7 +1055,44 @@ bool populateNativePdcStateBridge(
                 << "; final_cost=" << solve.final_cost
                 << "; max_velocity_mps=" << solve.max_velocity_norm_mps
                 << "; max_clock_rate_mps=" << solve.max_clock_rate_abs_mps
-                << "; max_normalized_rms=" << report.max_normalized_rms;
+                << "; max_normalized_rms=" << report.max_normalized_rms
+                << "; total_d_rows=" << report.doppler_rows
+                << "; first_d_rows=" << report.first_epoch_doppler_rows
+                << "; later_d_rows=" << report.later_epoch_doppler_rows
+                << "; epochs_with_d=" << report.epochs_with_doppler
+                << "; raw_clock_drift_epochs="
+                << report.finite_raw_clock_drift_epochs
+                << "; dt_s=" << report.min_epoch_dt_s << ".."
+                << report.max_epoch_dt_s
+                << "; d_abs_p50_mps=" << report.doppler_abs_p50_mps
+                << "; d_abs_max_mps=" << report.doppler_abs_max_mps
+                << "; d_sigma_mps=" << report.doppler_sigma_min_mps << ".."
+                << report.doppler_sigma_max_mps
+                << "; p_seed_rms_m=" << report.initial_pseudorange_rms_m
+                << "; p_seed_max_m=" << report.initial_pseudorange_max_m
+                << "; seed_step_max_mps=" << report.seed_position_step_max_mps
+                << "; state_vel_max_mps="
+                << report.all_state_max_velocity_norm_mps
+                << "; state_clock_rate_max_mps="
+                << report.all_state_max_clock_rate_abs_mps
+                << "; state_vel_over_bound="
+                << report.all_state_velocity_over_bound
+                << "; state_clock_over_bound="
+                << report.all_state_clock_rate_over_bound
+                << "; wls_valid_epochs=" << report.wls_valid_epochs
+                << "; wls_rejected_epochs=" << report.wls_rejected_epochs
+                << "; wls_propagated_epochs=" << report.wls_propagated_epochs
+                << "; wls_max_velocity_mps="
+                << report.wls_max_velocity_norm_mps
+                << "; wls_max_clock_rate_mps="
+                << report.wls_max_clock_rate_abs_mps
+                << "; wls_max_normalized_rms="
+                << report.wls_max_normalized_rms
+                << "; wls_first_velocity_mps="
+                << report.wls_first_velocity_norm_mps
+                << "; wls_first_clock_rate_mps="
+                << report.wls_first_clock_rate_mps
+                << "; wls_first_reason=" << report.wls_first_reason;
         if (!solve.epochs.empty()) {
             const auto& first = solve.epochs.front();
             double initial_sum_squared = 0.0;
@@ -1218,6 +1449,63 @@ std::string makeSummary(const Options& options,
         << pdc_bridge_report.max_clock_rate_abs_mps << ",\n"
         << "    \"max_normalized_rms\": "
         << pdc_bridge_report.max_normalized_rms << ",\n"
+        << "    \"first_epoch_doppler_rows\": "
+        << pdc_bridge_report.first_epoch_doppler_rows << ",\n"
+        << "    \"later_epoch_doppler_rows\": "
+        << pdc_bridge_report.later_epoch_doppler_rows << ",\n"
+        << "    \"epochs_with_doppler\": "
+        << pdc_bridge_report.epochs_with_doppler << ",\n"
+        << "    \"finite_raw_clock_drift_epochs\": "
+        << pdc_bridge_report.finite_raw_clock_drift_epochs << ",\n"
+        << "    \"min_epoch_dt_s\": "
+        << pdc_bridge_report.min_epoch_dt_s << ",\n"
+        << "    \"max_epoch_dt_s\": "
+        << pdc_bridge_report.max_epoch_dt_s << ",\n"
+        << "    \"invalid_or_large_epoch_intervals\": "
+        << pdc_bridge_report.invalid_or_large_epoch_intervals << ",\n"
+        << "    \"doppler_residual_rms_mps\": "
+        << pdc_bridge_report.doppler_residual_rms_mps << ",\n"
+        << "    \"doppler_abs_p50_mps\": "
+        << pdc_bridge_report.doppler_abs_p50_mps << ",\n"
+        << "    \"doppler_abs_max_mps\": "
+        << pdc_bridge_report.doppler_abs_max_mps << ",\n"
+        << "    \"doppler_sigma_min_mps\": "
+        << pdc_bridge_report.doppler_sigma_min_mps << ",\n"
+        << "    \"doppler_sigma_max_mps\": "
+        << pdc_bridge_report.doppler_sigma_max_mps << ",\n"
+        << "    \"initial_pseudorange_rms_m\": "
+        << pdc_bridge_report.initial_pseudorange_rms_m << ",\n"
+        << "    \"initial_pseudorange_max_m\": "
+        << pdc_bridge_report.initial_pseudorange_max_m << ",\n"
+        << "    \"seed_position_step_max_mps\": "
+        << pdc_bridge_report.seed_position_step_max_mps << ",\n"
+        << "    \"all_state_max_velocity_norm_mps\": "
+        << pdc_bridge_report.all_state_max_velocity_norm_mps << ",\n"
+        << "    \"all_state_max_clock_rate_abs_mps\": "
+        << pdc_bridge_report.all_state_max_clock_rate_abs_mps << ",\n"
+        << "    \"all_state_velocity_over_bound\": "
+        << pdc_bridge_report.all_state_velocity_over_bound << ",\n"
+        << "    \"all_state_clock_rate_over_bound\": "
+        << pdc_bridge_report.all_state_clock_rate_over_bound << ",\n"
+        << "    \"wls_valid_epochs\": "
+        << pdc_bridge_report.wls_valid_epochs << ",\n"
+        << "    \"wls_rejected_epochs\": "
+        << pdc_bridge_report.wls_rejected_epochs << ",\n"
+        << "    \"wls_propagated_epochs\": "
+        << pdc_bridge_report.wls_propagated_epochs << ",\n"
+        << "    \"wls_max_velocity_norm_mps\": "
+        << pdc_bridge_report.wls_max_velocity_norm_mps << ",\n"
+        << "    \"wls_max_clock_rate_abs_mps\": "
+        << pdc_bridge_report.wls_max_clock_rate_abs_mps << ",\n"
+        << "    \"wls_max_normalized_rms\": "
+        << pdc_bridge_report.wls_max_normalized_rms << ",\n"
+        << "    \"wls_first_velocity_norm_mps\": "
+        << pdc_bridge_report.wls_first_velocity_norm_mps << ",\n"
+        << "    \"wls_first_clock_rate_mps\": "
+        << pdc_bridge_report.wls_first_clock_rate_mps << ",\n"
+        << "    \"wls_first_reason\": ";
+    writeJsonString(out, pdc_bridge_report.wls_first_reason);
+    out << ",\n"
         << "    \"fgo_seed_displacement_count\": "
         << pdc_bridge_report.fgo_seed_displacement_count << ",\n"
         << "    \"fgo_seed_displacement_p50_m\": "
