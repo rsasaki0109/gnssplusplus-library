@@ -370,6 +370,10 @@ inline gtsam::Key dummyAmbiguityKey() { return Symbol('z', 0); }
 // Milestone 2b IMU states: 'v' body velocity in nav (ENU), 'b' IMU bias, per epoch.
 inline gtsam::Key velocityKey(std::size_t epoch) { return Symbol('v', epoch); }
 inline gtsam::Key biasKey(std::size_t epoch) { return Symbol('b', epoch); }
+// GNSS-only P+D states: 'd' is receiver clock range-rate [m/s] per epoch.
+// This key space is used only when the opt-in GNSS velocity-state path is
+// active, so it cannot collide with the Pose3 IMU bias keys above.
+inline gtsam::Key dopplerClockDriftKey(std::size_t epoch) { return Symbol('d', epoch); }
 
 struct IntegerConstrainedGraphCostOutcome {
     bool evaluated = false;
@@ -1044,6 +1048,41 @@ class SingleDifferenceDopplerVelocityFactor
             *H = los_nav_.transpose();
         }
         return (gtsam::Vector(1) << los_nav_.dot(velocity_nav) - measured_mps_).finished();
+    }
+};
+
+// Receiver-only undifferenced Doppler factor for the upstream GNSS-first
+// graph.  The prepared `los` follows the existing native contract (satellite
+// to receiver, i.e. `-doppler_los`), so the prediction is `los dot v + d`.
+// `los_nav` is that vector in the local ENU frame and
+// `residual_mps` is the known-satellite-terms-removed Android/RINEX range-rate
+// residual prepared by fgo_problems.cpp.  The factor estimates ENU velocity
+// and receiver clock range-rate in metres/second, matching
+// taroz/gsdc2023's DopplerFactor_VD contract.
+class UndifferencedDopplerVelocityFactor
+    : public gtsam::NoiseModelFactorN<gtsam::Vector3, double> {
+    gtsam::Vector3 los_nav_;
+    double measured_mps_ = 0.0;
+
+ public:
+    using Base = gtsam::NoiseModelFactorN<gtsam::Vector3, double>;
+    using Base::evaluateError;
+    UndifferencedDopplerVelocityFactor(
+        gtsam::Key velocity, gtsam::Key clock_drift,
+        const gtsam::Vector3& los_nav, double measured_mps,
+        const gtsam::SharedNoiseModel& model)
+        : Base(model, velocity, clock_drift),
+          los_nav_(los_nav), measured_mps_(measured_mps) {}
+
+    gtsam::Vector evaluateError(const gtsam::Vector3& velocity_nav,
+                                const double& clock_drift_mps,
+                                gtsam::OptionalMatrixType H_velocity,
+                                gtsam::OptionalMatrixType H_clock_drift) const override {
+        if (H_velocity) *H_velocity = los_nav_.transpose();
+        if (H_clock_drift) *H_clock_drift = gtsam::Matrix::Constant(1, 1, 1.0);
+        return (gtsam::Vector(1) << los_nav_.dot(velocity_nav) +
+                                      clock_drift_mps - measured_mps_)
+            .finished();
     }
 };
 

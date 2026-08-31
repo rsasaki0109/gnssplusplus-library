@@ -6,6 +6,8 @@
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/io/imu.hpp>
 
+#include "../src/algorithms/fgo_gtsam_internal.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -4069,6 +4071,45 @@ TEST(FGOSurplusValidationTest, EnabledWithoutExclusionsReportsInsufficientSurplu
     for (const auto& sol : on_result.solution.solutions) {
         EXPECT_TRUE(sol.position_ecef.allFinite());
     }
+}
+
+TEST(FGOGtsamUndifferencedDopplerFactorTest, MatchesNativeSignAndJacobian) {
+    using libgnss::fgo_gtsam_internal::UndifferencedDopplerVelocityFactor;
+
+    // The raw adapter stores los as the satellite-to-receiver vector.  This
+    // is the same convention consumed by doppler_velocity_wls::predict:
+    // los dot v + receiver_clock_drift.  Keep the values non-axis-aligned so
+    // a sign or column-order mistake cannot pass an axis-only fixture.
+    const gtsam::Vector3 los(0.6, -0.8, 0.0);
+    const gtsam::Vector3 velocity(5.0, -2.0, 1.0);
+    constexpr double clock_drift_mps = 1.5;
+    const double measured_mps = los.dot(velocity) + clock_drift_mps;
+    const auto noise = gtsam::noiseModel::Isotropic::Sigma(1, 1.0);
+    const UndifferencedDopplerVelocityFactor factor(
+        gtsam::Symbol('v', 0), gtsam::Symbol('d', 0), los,
+        measured_mps, noise);
+
+    gtsam::Matrix H_velocity;
+    gtsam::Matrix H_clock;
+    const gtsam::Vector zero_error = factor.evaluateError(
+        velocity, clock_drift_mps, &H_velocity, &H_clock);
+    ASSERT_EQ(zero_error.size(), 1);
+    EXPECT_NEAR(zero_error(0), 0.0, 1e-12);
+    ASSERT_EQ(H_velocity.rows(), 1);
+    ASSERT_EQ(H_velocity.cols(), 3);
+    EXPECT_NEAR(H_velocity(0, 0), 0.6, 1e-12);
+    EXPECT_NEAR(H_velocity(0, 1), -0.8, 1e-12);
+    EXPECT_NEAR(H_velocity(0, 2), 0.0, 1e-12);
+    ASSERT_EQ(H_clock.rows(), 1);
+    ASSERT_EQ(H_clock.cols(), 1);
+    EXPECT_NEAR(H_clock(0, 0), 1.0, 1e-12);
+
+    // A positive velocity perturbation along the first component must produce
+    // the positive native-contract residual, not its negation.
+    const gtsam::Vector perturbed_error = factor.evaluateError(
+        velocity + gtsam::Vector3(2.0, 0.0, 0.0), clock_drift_mps, nullptr, nullptr);
+    ASSERT_EQ(perturbed_error.size(), 1);
+    EXPECT_NEAR(perturbed_error(0), 1.2, 1e-12);
 }
 
 #endif  // GNSSPP_HAS_GTSAM

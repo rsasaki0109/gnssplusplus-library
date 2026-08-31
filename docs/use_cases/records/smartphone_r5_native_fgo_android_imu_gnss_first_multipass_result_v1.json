@@ -1,0 +1,65 @@
+{
+  "schema_version": "smartphone-r5-native-fgo-android-imu-gnss-first-multipass-result.v1",
+  "status": "no-go-evaluation-input-contract",
+  "candidate_id": "native-fgo-android-gnss-first-vel2rpy-combined-imu-v1",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_native_fgo_android_imu_gnss_first_multipass_freeze_v1.json",
+    "sha256": "55d389de48284b5ef482daaa72bcbba403a878465528fc43e57167dd90d55e3f"
+  },
+  "freeze_manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_native_fgo_android_imu_gnss_first_multipass_freeze_v1_manifest.json",
+    "sha256": "17f522f8ad2fe0a4d385506015a963f310e99f23e4eb2f73e99ce33953e41f22"
+  },
+  "truth_policy": {
+    "truth_free_artifacts_sealed_before_evaluation": true,
+    "truth_open_count": 1,
+    "fresh_validation_truth_open_count": 0,
+    "holdout_truth_open_count": 0,
+    "second_truth_read_or_recovery": false,
+    "candidate_regenerated_after_truth": false,
+    "parameter_tuning_after_truth": false,
+    "external_mutation": false
+  },
+  "truth": {
+    "role": "permitted development train",
+    "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv",
+    "sha256": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a",
+    "hash_provenance": "previously sealed development-train truth artifact; not reread for this record"
+  },
+  "candidate_artifacts": {
+    "submission": {
+      "path": "output/smartphone-r5/phase7-gtsam-full-v2/submission.csv",
+      "sha256": "740d896087822c07b44df7b8c2c1a87a61953765c4845495b14423ae42685f4b",
+      "rows": 1097
+    },
+    "summary": {
+      "path": "output/smartphone-r5/phase7-gtsam-full-v2/summary.json",
+      "sha256": "eb60f945bda8c9e004fbc8224fa43a99f4c825aecc99fb2a158fc66325fe472e"
+    }
+  },
+  "evaluation_attempt": {
+    "command": "PYTHONPATH=apps/commands:apps/commands/benchmarks python3 apps/commands/benchmarks/gnss_smartphone_kaggle_evaluate.py --submission output/smartphone-r5/phase7-gtsam-full-v2/submission.csv --ground-truth data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv --output-json output/smartphone-r5/phase7-gtsam-full-v2/train_score.json --phone 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro --allow-gaps",
+    "result": "failed before metric publication",
+    "error_class": "submission-key-set-mismatch",
+    "error": "submission contains 1097 keys absent from ground truth; first extra key is ('2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro', 1684960018000)",
+    "score_variants": null,
+    "score_not_inferred": true
+  },
+  "gate": {
+    "baseline_reference_m": 68.0475838937948,
+    "metric_variant": "haversine_sphere__linear_n_minus_1",
+    "passed": false,
+    "reason": "No metric was published because the strict evaluator rejected the candidate key set; the candidate also has only 1,097 output rows and cannot satisfy the frozen coverage gate against the 1,383-row development route artifact."
+  },
+  "structural_evidence": {
+    "gnss_first_converged": true,
+    "gnss_first_iterations": 1000,
+    "gnss_first_doppler_factors": 4695,
+    "gnss_first_velocity_states": 1097,
+    "imu_combined_factors": 1096,
+    "fallback": false,
+    "finite_output": true,
+    "continuity_diagnostic_transitions_over_70mps": 3
+  },
+  "decision": "No-Go; retain production/default and prior v5 artifacts unchanged; do not open validation or holdout and do not retry evaluation."
+}

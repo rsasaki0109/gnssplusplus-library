@@ -48,6 +48,122 @@ NominalState alignStatic(const std::vector<ImuSample>& stationary_window_body_fl
     return state;
 }
 
+namespace {
+
+double wrapHeadingDegrees(double degrees) {
+    while (degrees > 180.0) degrees -= 360.0;
+    while (degrees < -180.0) degrees += 360.0;
+    return degrees;
+}
+
+}  // namespace
+
+VelocityHeadingResult velocityToRpy(
+    const std::vector<Eigen::Vector3d>& velocities_enu,
+    const VelocityHeadingConfig& config) {
+    VelocityHeadingResult result;
+    if (velocities_enu.empty()) {
+        result.error = "empty GNSS velocity sequence";
+        return result;
+    }
+    if (config.smooth_window == 0) {
+        result.error = "velocity smoothing window must be positive";
+        return result;
+    }
+    if (!std::isfinite(config.velocity_threshold_mps) ||
+        config.velocity_threshold_mps < 0.0 ||
+        !std::isfinite(config.heading_offset_deg)) {
+        result.error = "non-finite or negative velocity-heading parameter";
+        return result;
+    }
+    for (const auto& velocity : velocities_enu) {
+        if (!velocity.allFinite()) {
+            result.error = "non-finite GNSS velocity";
+            return result;
+        }
+    }
+
+    // MATLAB smoothdata(..., "movmean", k) uses a centered window and shrinks
+    // it at both endpoints.  For even k the window is centered about the
+    // current and previous elements: k=20 therefore means 10 preceding and 9
+    // following samples (the current sample is included in both descriptions).
+    const std::size_t samples_before = config.smooth_window / 2;
+    const std::size_t samples_after = config.smooth_window - 1 - samples_before;
+    result.smoothed_velocity_enu.resize(velocities_enu.size());
+    std::vector<bool> valid_heading(velocities_enu.size(), false);
+    // Keep the raw atan2 course in degrees until after missing-value filling.
+    // This is important at the +/-180 degree branch: MATLAB interpolates the
+    // unwrapped atan2 output first and only then applies wrapTo180 to
+    // `head+180`.
+    std::vector<double> courses_deg(velocities_enu.size(), 0.0);
+    for (std::size_t i = 0; i < velocities_enu.size(); ++i) {
+        const std::size_t first = i > samples_before ? i - samples_before : 0;
+        const std::size_t last = std::min(
+            velocities_enu.size() - 1,
+            i + samples_after);
+        Eigen::Vector3d sum = Eigen::Vector3d::Zero();
+        for (std::size_t j = first; j <= last; ++j) sum += velocities_enu[j];
+        result.smoothed_velocity_enu[i] =
+            sum / static_cast<double>(last - first + 1);
+
+        const double speed = result.smoothed_velocity_enu[i].norm();
+        if (speed >= config.velocity_threshold_mps) {
+            courses_deg[i] = std::atan2(
+                result.smoothed_velocity_enu[i].y(),
+                result.smoothed_velocity_enu[i].x()) * 180.0 / M_PI;
+            valid_heading[i] = std::isfinite(courses_deg[i]);
+        } else {
+            ++result.low_speed_count;
+        }
+    }
+
+    std::vector<std::size_t> valid_indices;
+    valid_indices.reserve(velocities_enu.size());
+    for (std::size_t i = 0; i < valid_heading.size(); ++i) {
+        if (valid_heading[i]) valid_indices.push_back(i);
+    }
+    if (valid_indices.empty()) {
+        result.error = "all smoothed GNSS velocities are below heading threshold";
+        return result;
+    }
+
+    result.rpy_rad.resize(velocities_enu.size(), Eigen::Vector3d::Zero());
+    for (std::size_t i = 0; i < velocities_enu.size(); ++i) {
+        double course_deg = courses_deg[i];
+        if (!valid_heading[i]) {
+            const auto upper = std::lower_bound(valid_indices.begin(), valid_indices.end(), i);
+            if (upper != valid_indices.begin() && upper != valid_indices.end()) {
+                // The two-stage upstream contract is linear interior fill
+                // followed by nearest endpoint fill.  Do not wrap the course
+                // before interpolation (e.g. +179/-179 must pass through 0).
+                const std::size_t previous = *(upper - 1);
+                const std::size_t next = *upper;
+                const double fraction = static_cast<double>(i - previous) /
+                                        static_cast<double>(next - previous);
+                course_deg = courses_deg[previous] +
+                             fraction * (courses_deg[next] - courses_deg[previous]);
+                ++result.linear_fill_count;
+            } else {
+                // Leading/trailing gaps have no pair of brackets and are
+                // filled from the nearest finite course.  A preceding sample
+                // wins only in the (non-endpoint) tie case; endpoints are
+                // unambiguous here.
+                const std::size_t source = upper == valid_indices.end()
+                                               ? valid_indices.back()
+                                               : valid_indices.front();
+                course_deg = courses_deg[source];
+                ++result.nearest_fill_count;
+            }
+        }
+        result.rpy_rad[i] = Eigen::Vector3d(
+            0.0, 0.0,
+            wrapHeadingDegrees(course_deg + config.heading_offset_deg) * M_PI / 180.0);
+    }
+
+    result.ok = true;
+    return result;
+}
+
 bool tryAlignHeading(FusionState& state, const Eigen::Vector3d& gnss_velocity_enu,
                     double min_speed_mps, double heading_sigma_deg) {
     const double horizontal_speed =

@@ -61,6 +61,26 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
     const bool use_pose3 = config.use_pose3_state;
     const bool use_imu =
         use_pose3 && config.use_imu && problem.imu.valid && num_epochs >= 2;
+    // The upstream GNSS-first pass uses explicit ENU velocity and receiver
+    // clock-range-rate states.  Keep this path separate from the Pose3 IMU
+    // velocity states so the established IMU graph and all production
+    // defaults remain unchanged.
+    const bool use_gnss_velocity_states =
+        !use_imu && !use_pose3 && config.use_velocity_states &&
+        !problem.undifferenced_doppler_factors.empty();
+    double gnss_velocity_origin_lat_rad = 0.0;
+    double gnss_velocity_origin_lon_rad = 0.0;
+    if (use_gnss_velocity_states) {
+        double origin_height = 0.0;
+        ecef2geodetic(problem.epochs.front().position_ecef,
+                      gnss_velocity_origin_lat_rad,
+                      gnss_velocity_origin_lon_rad,
+                      origin_height);
+        if (!std::isfinite(gnss_velocity_origin_lat_rad) ||
+            !std::isfinite(gnss_velocity_origin_lon_rad)) {
+            return result;
+        }
+    }
     const Point3 lever_arm_body(config.pose3_lever_arm_body_m.x(),
                                 config.pose3_lever_arm_body_m.y(),
                                 config.pose3_lever_arm_body_m.z());
@@ -107,6 +127,17 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
                            Pose3(Rot3(), Point3(problem.epochs[i].position_ecef) - lever_arm_body));
         } else {
             initial.insert(positionKey(i), Point3(problem.epochs[i].position_ecef));
+        }
+    }
+
+    if (use_gnss_velocity_states) {
+        // Materialize the Eigen expression before putting it in Values.  A
+        // direct Vector3::Zero() insert is an expression-template type and
+        // is not a concrete GTSAM value on all supported Eigen versions.
+        const gtsam::Vector3 zero_velocity = gtsam::Vector3::Zero();
+        for (std::size_t i = 0; i < num_epochs; ++i) {
+            initial.insert(velocityKey(i), zero_velocity);
+            initial.insert(dopplerClockDriftKey(i), 0.0);
         }
     }
 
@@ -341,6 +372,27 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
                 positionKey(factor.epoch_index), base_clock, isbKey(ordinal),
                 factor.corrected_pseudorange_m, Point3(factor.satellite_position_ecef),
                 noise);
+        }
+    }
+
+    // --- Upstream GNSS-only P+D velocity/clock-drift factors ---
+    if (use_gnss_velocity_states) {
+        for (const auto& factor : problem.undifferenced_doppler_factors) {
+            if (factor.epoch_index >= num_epochs || !factor.los.allFinite() ||
+                !std::isfinite(factor.residual_mps) ||
+                !std::isfinite(factor.sigma_mps)) {
+                continue;
+            }
+            const gtsam::Vector3 los_nav(ecef2enu(
+                factor.los, gnss_velocity_origin_lat_rad,
+                gnss_velocity_origin_lon_rad));
+            if (!los_nav.allFinite() || los_nav.norm() <= 0.0) continue;
+            graph.emplace_shared<UndifferencedDopplerVelocityFactor>(
+                velocityKey(factor.epoch_index),
+                dopplerClockDriftKey(factor.epoch_index),
+                los_nav, factor.residual_mps,
+                makeNoise(factor.sigma_mps, config.use_robust_loss,
+                          config.tdcp_huber_threshold_sigma));
         }
     }
     // Undifferenced carrier phase (rare here: use_carrier_phase_factors is off
@@ -608,6 +660,22 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
             1, config.clock_prior_sigma_m / constants::SPEED_OF_LIGHT);
         for (const gtsam::Key key : inserted_clock_keys) {
             graph.addPrior(key, initial.at<double>(key), noise);
+        }
+    }
+    if (use_gnss_velocity_states) {
+        // The Doppler rows normally provide full rank per epoch; this very
+        // broad prior is only a numerical gauge guard for a sparse/degenerate
+        // epoch and is not a motion or truth-derived constraint.
+        constexpr double kBroadVelocityPriorSigmaMps = 1.0e6;
+        constexpr double kBroadClockRatePriorSigmaMps = 1.0e6;
+        const gtsam::Vector3 zero_velocity = gtsam::Vector3::Zero();
+        for (std::size_t i = 0; i < num_epochs; ++i) {
+            graph.addPrior(velocityKey(i), zero_velocity,
+                           gtsam::noiseModel::Isotropic::Sigma(
+                               3, kBroadVelocityPriorSigmaMps));
+            graph.addPrior(dopplerClockDriftKey(i), 0.0,
+                           gtsam::noiseModel::Isotropic::Sigma(
+                               1, kBroadClockRatePriorSigmaMps));
         }
     }
 
@@ -912,6 +980,15 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
             result.epoch_attitude_rpy_deg[i] = Vector3d(roll, pitch, heading);
             result.epoch_velocity_nav_mps[i] =
                 Vector3d(optimized.at<gtsam::Vector3>(velocityKey(i)));
+        }
+    } else if (use_gnss_velocity_states) {
+        result.epoch_velocities_ecef_mps.resize(num_epochs);
+        for (std::size_t i = 0; i < num_epochs; ++i) {
+            const Vector3d velocity_nav(
+                optimized.at<gtsam::Vector3>(velocityKey(i)));
+            result.epoch_velocities_ecef_mps[i] = enu2ecef(
+                velocity_nav, gnss_velocity_origin_lat_rad,
+                gnss_velocity_origin_lon_rad);
         }
     }
 

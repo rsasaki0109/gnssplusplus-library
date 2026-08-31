@@ -46,6 +46,7 @@ class NativeFgoPdcFactorHypothesisTests(unittest.TestCase):
         accepted_binary_sha256 = {
             self.manifest["release_binary_sha256"],
             self.manifest.get("post_phase5_compatible_release_binary_sha256"),
+            self.manifest.get("post_phase7_compatible_release_binary_sha256"),
         }
         self.assertIn(current_binary_sha256, accepted_binary_sha256)
 

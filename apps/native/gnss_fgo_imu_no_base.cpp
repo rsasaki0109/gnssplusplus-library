@@ -223,9 +223,76 @@ Eigen::Matrix3d tarozMountingRotation() {
         .toRotationMatrix();
 }
 
+Eigen::Matrix3d rpyToBodyToNav(const Eigen::Vector3d& rpy_rad) {
+    return (Eigen::AngleAxisd(rpy_rad.z(), Eigen::Vector3d::UnitZ()) *
+            Eigen::AngleAxisd(rpy_rad.y(), Eigen::Vector3d::UnitY()) *
+            Eigen::AngleAxisd(rpy_rad.x(), Eigen::Vector3d::UnitX()))
+        .toRotationMatrix();
+}
+
+bool deriveGnssFirstVelocities(
+    const libgnss::FGOProcessor::FGOProblem& problem,
+    const libgnss::FGOProcessor::FGOResult& gnss_first_result,
+    std::vector<libgnss::Vector3d>& velocities_enu,
+    std::string& error) {
+    const auto& solutions = gnss_first_result.solution.solutions;
+    const auto& optimized_velocities = gnss_first_result.epoch_velocities_ecef_mps;
+    if (problem.epochs.size() < 2 || solutions.size() != problem.epochs.size() ||
+        optimized_velocities.size() != problem.epochs.size()) {
+        error = "GNSS-first optimized velocity state count does not match observation epochs";
+        return false;
+    }
+    const libgnss::Vector3d origin = solutions.front().position_ecef;
+    if (!origin.allFinite() || origin.norm() < 1.0e6) {
+        error = "GNSS-first solution has invalid ENU origin";
+        return false;
+    }
+    double lat = 0.0;
+    double lon = 0.0;
+    double height = 0.0;
+    libgnss::ecef2geodetic(origin, lat, lon, height);
+    if (!std::isfinite(lat) || !std::isfinite(lon) || !std::isfinite(height)) {
+        error = "GNSS-first solution has invalid geodetic origin";
+        return false;
+    }
+    velocities_enu.resize(solutions.size());
+    for (std::size_t i = 0; i < solutions.size(); ++i) {
+        if (!solutions[i].position_ecef.allFinite()) {
+            error = "GNSS-first solution contains non-finite position";
+            return false;
+        }
+        // The upstream GNSS pass optimizes a velocity state from P+D.  Use
+        // that state directly; a position-difference proxy would hide a
+        // missing Doppler graph and is therefore not accepted by this mode.
+        // Convert the ECEF velocity with the same linear ENU basis as the
+        // position frame.
+        const libgnss::Vector3d velocity_enu = libgnss::ecef2enu(
+            optimized_velocities[i], lat, lon);
+        if (!optimized_velocities[i].allFinite() || !velocity_enu.allFinite()) {
+            error = "GNSS-first optimized velocity state is non-finite";
+            return false;
+        }
+        velocities_enu[i] = velocity_enu;
+    }
+    return true;
+}
+
 struct ImuBuildReport {
     bool ok = false;
     bool heading_latched = false;
+    std::string heading_initialization_mode;
+    std::size_t velocity_heading_low_speed_count = 0;
+    std::size_t velocity_heading_linear_fill_count = 0;
+    std::size_t velocity_heading_nearest_fill_count = 0;
+    bool gnss_first_attempted = false;
+    bool gnss_first_converged = false;
+    std::size_t gnss_first_epochs = 0;
+    std::size_t gnss_first_doppler_factors = 0;
+    std::size_t gnss_first_velocity_states = 0;
+    int gnss_first_iterations = 0;
+    double gnss_first_initial_cost = 0.0;
+    double gnss_first_final_cost = 0.0;
+    std::string gnss_first_failure;
     std::string failure;
     std::size_t loaded_samples = 0;
     std::size_t stationary_samples = 0;
@@ -242,7 +309,8 @@ bool buildImuInput(const std::string& path,
                    libgnss::FGOProcessor::FGOProblem& problem,
                    ImuBuildReport& report,
                    bool android_raw = false,
-                   const std::vector<libgnss::AndroidGnssTimeAnchor>& gnss_time_anchors = {}) {
+                   const std::vector<libgnss::AndroidGnssTimeAnchor>& gnss_time_anchors = {},
+                   const std::vector<libgnss::Vector3d>* gnss_first_velocities_enu = nullptr) {
     if (problem.epochs.size() < 2) {
         report.failure = "fewer than two GNSS epochs";
         return false;
@@ -332,55 +400,87 @@ bool buildImuInput(const std::string& path,
     state.nominal = aligned;
     state.covariance.setIdentity();
     libgnss::Vector3d initial_velocity = libgnss::Vector3d::Zero();
-    libgnss::Vector3d previous_velocity = libgnss::Vector3d::Zero();
-    libgnss::Vector3d velocity_sum = libgnss::Vector3d::Zero();
-    int consistent = 0;
-    int windows = 0;
-    for (std::size_t i = 0; i + kHeadingWindowEpochs < problem.epochs.size(); ++i) {
-        const std::size_t j = i + kHeadingWindowEpochs;
-        const double dt = problem.epochs[j].time - problem.epochs[i].time;
-        if (dt <= 1e-3) continue;
-        const Eigen::Vector3d p0 = libgnss::ecef2enu(
-            problem.epochs[i].position_ecef - origin_ecef, lat, lon);
-        const Eigen::Vector3d p1 = libgnss::ecef2enu(
-            problem.epochs[j].position_ecef - origin_ecef, lat, lon);
-        const libgnss::Vector3d velocity = (p1 - p0) / dt;
-        const double speed = std::hypot(velocity.x(), velocity.y());
-        if (!std::isfinite(speed) || speed < kHeadingSpeedMinMps ||
-            speed > kHeadingSpeedMaxMps || std::abs(velocity.z()) > kHeadingVerticalSpeedMaxMps) {
-            consistent = 0;
-            velocity_sum.setZero();
-            continue;
+    if (android_raw) {
+        // The upstream Android pass obtains attitude from the GNSS-only
+        // velocity sequence (`vel2rpy.m`) before constructing the IMU graph.
+        // Do not reuse the legacy multi-window latch here: it can reject a
+        // perfectly usable route before the joint optimizer gets a chance to
+        // estimate yaw.  The GNSS-first sequence itself is truth-free and is
+        // required by the raw contract, so a missing/invalid sequence fails
+        // closed instead of silently falling back to a guessed heading.
+        if (gnss_first_velocities_enu == nullptr ||
+            gnss_first_velocities_enu->size() != problem.epochs.size()) {
+            report.failure = "Android upstream mode requires GNSS-first velocity sequence";
+            return false;
         }
-        ++windows;
-        bool direction_consistent = true;
-        if (consistent > 0) {
-            const double previous_speed = std::hypot(previous_velocity.x(), previous_velocity.y());
-            const double cosine = velocity.x() * previous_velocity.x() +
-                                  velocity.y() * previous_velocity.y();
-            direction_consistent = cosine /
-                std::max(1e-9, speed * previous_speed) >= std::cos(kHeadingConsistencyRad);
+        const auto velocity_heading = libgnss::fusion_initialization::velocityToRpy(
+            *gnss_first_velocities_enu);
+        if (!velocity_heading.ok || velocity_heading.rpy_rad.empty() ||
+            velocity_heading.smoothed_velocity_enu.size() != problem.epochs.size()) {
+            report.failure = velocity_heading.error.empty()
+                                 ? "GNSS-first velocity heading initialization failed"
+                                 : velocity_heading.error;
+            return false;
         }
-        if (!direction_consistent) {
-            consistent = 0;
-            velocity_sum.setZero();
-        }
-        previous_velocity = velocity;
-        velocity_sum += velocity;
-        ++consistent;
-        if (consistent >= kRequiredHeadingWindows) {
-            const libgnss::Vector3d course = velocity_sum / static_cast<double>(consistent);
-            if (libgnss::fusion_initialization::tryAlignHeading(state, course, 1.0, 5.0)) {
-                initial_velocity = course;
-                report.heading_latched = true;
-                break;
+        report.heading_initialization_mode = "upstream-vel2rpy";
+        report.velocity_heading_low_speed_count = velocity_heading.low_speed_count;
+        report.velocity_heading_linear_fill_count = velocity_heading.linear_fill_count;
+        report.velocity_heading_nearest_fill_count = velocity_heading.nearest_fill_count;
+        state.nominal.attitude_body_to_enu = Eigen::Quaterniond(
+            rpyToBodyToNav(velocity_heading.rpy_rad.front()));
+        initial_velocity = velocity_heading.smoothed_velocity_enu.front();
+    } else {
+        libgnss::Vector3d previous_velocity = libgnss::Vector3d::Zero();
+        libgnss::Vector3d velocity_sum = libgnss::Vector3d::Zero();
+        int consistent = 0;
+        int windows = 0;
+        for (std::size_t i = 0; i + kHeadingWindowEpochs < problem.epochs.size(); ++i) {
+            const std::size_t j = i + kHeadingWindowEpochs;
+            const double dt = problem.epochs[j].time - problem.epochs[i].time;
+            if (dt <= 1e-3) continue;
+            const Eigen::Vector3d p0 = libgnss::ecef2enu(
+                problem.epochs[i].position_ecef - origin_ecef, lat, lon);
+            const Eigen::Vector3d p1 = libgnss::ecef2enu(
+                problem.epochs[j].position_ecef - origin_ecef, lat, lon);
+            const libgnss::Vector3d velocity = (p1 - p0) / dt;
+            const double speed = std::hypot(velocity.x(), velocity.y());
+            if (!std::isfinite(speed) || speed < kHeadingSpeedMinMps ||
+                speed > kHeadingSpeedMaxMps || std::abs(velocity.z()) > kHeadingVerticalSpeedMaxMps) {
+                consistent = 0;
+                velocity_sum.setZero();
+                continue;
+            }
+            ++windows;
+            bool direction_consistent = true;
+            if (consistent > 0) {
+                const double previous_speed = std::hypot(previous_velocity.x(), previous_velocity.y());
+                const double cosine = velocity.x() * previous_velocity.x() +
+                                      velocity.y() * previous_velocity.y();
+                direction_consistent = cosine /
+                    std::max(1e-9, speed * previous_speed) >= std::cos(kHeadingConsistencyRad);
+            }
+            if (!direction_consistent) {
+                consistent = 0;
+                velocity_sum.setZero();
+            }
+            previous_velocity = velocity;
+            velocity_sum += velocity;
+            ++consistent;
+            if (consistent >= kRequiredHeadingWindows) {
+                const libgnss::Vector3d course = velocity_sum / static_cast<double>(consistent);
+                if (libgnss::fusion_initialization::tryAlignHeading(state, course, 1.0, 5.0)) {
+                    initial_velocity = course;
+                    report.heading_latched = true;
+                    break;
+                }
             }
         }
-    }
-    report.heading_windows = windows;
-    if (!report.heading_latched) {
-        report.failure = "GNSS course did not make heading observable under frozen gate";
-        return false;
+        report.heading_windows = windows;
+        report.heading_initialization_mode = "legacy-consistency-latch";
+        if (!report.heading_latched) {
+            report.failure = "GNSS course did not make heading observable under frozen gate";
+            return false;
+        }
     }
 
     auto& imu = problem.imu;
@@ -499,6 +599,20 @@ std::string makeSummary(const Options& options,
         << "    \"initial_cost\": " << result.diagnostics.initial_cost << ",\n"
         << "    \"final_cost\": " << result.diagnostics.final_cost << "\n"
         << "  },\n"
+        << "  \"gnss_first\": {\n"
+        << "    \"attempted\": " << (imu_report.gnss_first_attempted ? "true" : "false") << ",\n"
+        << "    \"converged\": " << (imu_report.gnss_first_converged ? "true" : "false") << ",\n"
+        << "    \"epochs\": " << imu_report.gnss_first_epochs << ",\n"
+        << "    \"undifferenced_doppler_factors\": "
+        << imu_report.gnss_first_doppler_factors << ",\n"
+        << "    \"velocity_states_exported\": "
+        << imu_report.gnss_first_velocity_states << ",\n"
+        << "    \"iterations\": " << imu_report.gnss_first_iterations << ",\n"
+        << "    \"initial_cost\": " << imu_report.gnss_first_initial_cost << ",\n"
+        << "    \"final_cost\": " << imu_report.gnss_first_final_cost << ",\n"
+        << "    \"failure\": ";
+    writeJsonString(out, imu_report.gnss_first_failure);
+    out << "\n  },\n"
         << "  \"imu_initialization\": {\n"
         << "    \"input_format\": ";
     writeJsonString(out, imu_report.android_raw ? "android-device_imu.csv"
@@ -510,6 +624,15 @@ std::string makeSummary(const Options& options,
         << "    \"gravity_norm_std_mps2\": " << imu_report.gravity_norm_std << ",\n"
         << "    \"heading_windows\": " << imu_report.heading_windows << ",\n"
         << "    \"heading_latched\": " << (imu_report.heading_latched ? "true" : "false") << ",\n"
+        << "    \"heading_initialization_mode\": ";
+    writeJsonString(out, imu_report.heading_initialization_mode);
+    out << ",\n"
+        << "    \"velocity_heading_low_speed_count\": "
+        << imu_report.velocity_heading_low_speed_count << ",\n"
+        << "    \"velocity_heading_linear_fill_count\": "
+        << imu_report.velocity_heading_linear_fill_count << ",\n"
+        << "    \"velocity_heading_nearest_fill_count\": "
+        << imu_report.velocity_heading_nearest_fill_count << ",\n"
         << "    \"axis_contract\": \"identity raw-axis selection + explicit RzRyRx mounting\",\n"
         << "    \"mounting_rpy_deg_xyz\": [-85.0, 178.0, -94.0],\n"
         << "    \"timestamp_contract\": ";
@@ -682,6 +805,13 @@ int main(int argc, char** argv) {
     config.use_tdcp_factors = false;
     config.use_single_difference_doppler_factors = false;
     config.use_single_difference_tdcp_factors = false;
+    if (android_raw) {
+        // Upstream's first GNSS pass is P+D with an explicit velocity state.
+        // The corrected Android Doppler contract is already validated by the
+        // raw adapter; keep it opt-in to this research entry point only.
+        config.use_undifferenced_doppler_factors = true;
+        config.use_corrected_undifferenced_doppler_factors = true;
+    }
     config.pose3_lever_arm_body_m = libgnss::Vector3d::Zero();
     if (android_raw) {
         // The raw path starts SPP from the route-independent Earth-surface
@@ -705,6 +835,64 @@ int main(int argc, char** argv) {
     if (android_raw) {
         imu_report.android_gnss_diagnostics = android_gnss.diagnostics;
     }
+    std::vector<libgnss::Vector3d> gnss_first_velocities_enu;
+    bool gnss_first_ok = !android_raw;
+    if (android_raw) {
+        // Upstream run_fgo.m performs a GNSS-only pass before the IMU pass.
+        // Keep that handoff in memory: no device-WLS, result file, or truth
+        // position can enter the Android initialization path.
+        imu_report.gnss_first_attempted = true;
+        libgnss::FGOProcessor::FGOConfig gnss_first_config = config;
+        gnss_first_config.backend = libgnss::FGOBackend::GTSAM;
+        gnss_first_config.use_imu = false;
+        gnss_first_config.use_pose3_state = false;
+        gnss_first_config.use_velocity_states = true;
+        gnss_first_config.use_velocity_motion_factors = false;
+        gnss_first_config.use_doppler_velocity_wls_initialization = false;
+        // Upstream fgo_gnss.m permits up to 1000 LM iterations.  The raw
+        // GNSS-first pass is a separate initializer, so use that published
+        // bound without changing the frozen 12-iteration IMU pass.
+        gnss_first_config.max_iterations = 1000;
+        const libgnss::FGOProcessor gnss_first_processor(gnss_first_config);
+        const libgnss::FGOProcessor::FGOResult gnss_first_result =
+            gnss_first_processor.optimizeProblem(problem);
+        imu_report.gnss_first_converged = gnss_first_result.diagnostics.converged;
+        imu_report.gnss_first_epochs = gnss_first_result.solution.solutions.size();
+        imu_report.gnss_first_doppler_factors =
+            problem.undifferenced_doppler_factors.size();
+        imu_report.gnss_first_velocity_states =
+            gnss_first_result.epoch_velocities_ecef_mps.size();
+        imu_report.gnss_first_iterations = gnss_first_result.diagnostics.iterations;
+        imu_report.gnss_first_initial_cost = gnss_first_result.diagnostics.initial_cost;
+        imu_report.gnss_first_final_cost = gnss_first_result.diagnostics.final_cost;
+        std::string gnss_first_error;
+        gnss_first_ok = !gnss_first_result.solution.isEmpty() &&
+                        gnss_first_result.diagnostics.converged &&
+                        deriveGnssFirstVelocities(problem, gnss_first_result,
+                                                  gnss_first_velocities_enu,
+                                                  gnss_first_error);
+        if (!gnss_first_ok) {
+            imu_report.gnss_first_failure = gnss_first_error.empty()
+                                                 ? "GNSS-first optimizer did not converge"
+                                                 : gnss_first_error;
+            std::cerr << "GNSS-first initialization unavailable: "
+                      << imu_report.gnss_first_failure << "\n";
+        } else {
+            // Seed the following in-memory problem with the GNSS-only result,
+            // including its receiver clock in the internal metre convention.
+            // This is the exact raw-observation handoff; the output is never
+            // published as a separate lane.
+            const auto& gnss_solutions = gnss_first_result.solution.solutions;
+            for (std::size_t i = 0; i < gnss_solutions.size(); ++i) {
+                problem.epochs[i].position_ecef = gnss_solutions[i].position_ecef;
+                if (std::isfinite(gnss_solutions[i].receiver_clock_bias)) {
+                    problem.epochs[i].receiver_clock_bias_m =
+                        gnss_solutions[i].receiver_clock_bias *
+                        libgnss::constants::SPEED_OF_LIGHT;
+                }
+            }
+        }
+    }
     const std::string imu_path = android_raw ? options.android_imu_path : options.imu_path;
     std::vector<libgnss::AndroidGnssTimeAnchor> gnss_time_anchors;
     if (android_raw) {
@@ -718,7 +906,10 @@ int main(int argc, char** argv) {
         }
     }
     bool use_imu = buildImuInput(imu_path, problem, imu_report, android_raw,
-                                 gnss_time_anchors);
+                                 gnss_time_anchors,
+                                 android_raw && gnss_first_ok
+                                     ? &gnss_first_velocities_enu
+                                     : nullptr);
     bool fallback = false;
     libgnss::FGOProcessor::FGOResult result;
     if (use_imu) {
