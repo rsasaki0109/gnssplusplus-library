@@ -15,6 +15,7 @@
   "post_phase7_compatible_release_binary_sha256": "e32877287b54c1b2304cee19e9a6367ad7129f5940587256e6dd1375698a3b06",
   "post_phase9_compatible_release_binary_sha256": "e1c97ba2fc5f83154ab1603789e66ea682b6ae934d9b493c071f541f7fc53d75",
   "post_phase10_compatible_release_binary_sha256": "cb7097a0c865e14392d8a5e8881218be491e4fdeafaaf8cf4561dbc57d9d1fc8",
+  "post_phase11_compatible_release_binary_sha256": "028705f43786c7c4deeb430a22295cdea23b36d0bce63380c3598edbf987c08b",
   "post_phase9_compatible_source_hashes": {
     "src/algorithms/fgo.cpp": "e45d4c1fde8f7e3bf3fb86e89fdda880cd4459b9523797d868f0596dade81025",
     "src/algorithms/fgo_problems.cpp": "2732c1a064267046b721bf7585560d91550069f65c34b698cd57d31eb9ece0a3"
@@ -22,6 +23,11 @@
   "post_phase10_compatible_source_hashes": {
     "src/algorithms/fgo_problems.cpp": "430908f5ed66fd8b1d8689578b340048e4a1ddcc2b71d786cb29cc5bbcfa4365"
   },
+  "post_phase11_compatible_source_hashes": {
+    "src/algorithms/fgo.cpp": "b5394832a449706af6de93ccd4716d538cd35e07eaeb9d41e927b27f83d88b0e",
+    "src/algorithms/fgo_problems.cpp": "0e62d27a84bfcb0e4008f453d25daf582bca6dcc3eb82688f68aa2e8274adbb4"
+  },
+  "post_phase11_compatibility_note": "Phase 11 adds opt-in receiver signal-bias diagnostics and preserves the historical PDC hypothesis audit as a source-level regression contract; these exact current hashes are accepted only as compatibility pins.",
   "post_phase10_compatibility_note": "Phase 10 centralizes the existing raw ordinary-TDCP pair gates and adds fail-closed clock-discontinuity/finite-measurement rejection; the historical hypothesis artifact remains immutable.",
   "post_phase9_compatibility_note": "Phase 9 adds the opt-in in-process raw P+D+temporal native PDC state bridge and explicit SPP clock-unit tagging. The historical factor-hypothesis source pins remain immutable; the exact current hashes are accepted only as compatibility pins for this source-level regression test.",
   "post_phase7_compatibility_note": "Phase 7 adds the opt-in GNSS-first GTSAM velocity/clock-drift factor and relinks the shared solver archive; the historical hypothesis artifact and source pins remain unchanged.",

@@ -165,6 +165,16 @@ struct Config {
         // clock seeds supplied on FGOProblem::native_pdc_state_seeds. No
         // additional P/D factors are added and the default graph is unchanged.
         bool use_native_pdc_state_bridge = false;
+        // Research-only receiver inter-frequency code-bias states.  When
+        // enabled, each eligible secondary (system, signal) gets one static
+        // meter-valued state relative to that system's primary code.  The
+        // state is attached to raw undifferenced pseudorange factors only;
+        // no observation is combined or discarded.  Default OFF preserves
+        // the established graph and output byte-for-byte.
+        bool use_receiver_signal_bias_states = false;
+        // Weak zero-mean gauge prior for a signal-bias state [m].  This is a
+        // fixed physical regularizer, not a truth-trained correction.
+        double receiver_signal_bias_prior_sigma_m = 1000.0;
         bool use_single_difference_doppler_factors = false;
         bool use_single_difference_tdcp_factors = false;
         bool use_velocity_states = false;

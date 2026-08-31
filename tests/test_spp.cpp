@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <libgnss++/algorithms/dual_frequency_code.hpp>
 #include <libgnss++/algorithms/spp.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/io/rinex.hpp>
@@ -308,6 +309,52 @@ TEST(SPPUtilsTest, IonosphereFreePseudorangeCancelsFirstOrderIonosphere) {
     const double iflc = spp_utils::calculateIonosphereFreePseudorange(p1, p2, f1, f2);
 
     EXPECT_NEAR(iflc, true_range, 1e-8);
+}
+
+TEST(DualFrequencyCodeContractTest, CancelsFirstOrderIonosphere) {
+    constexpr double range_m = 20'200'000.0;
+    constexpr double ionosphere_l1_m = 5.0;
+    const double f1 = constants::GPS_L1_FREQ;
+    const double f2 = constants::GPS_L5_FREQ;
+    const double ionosphere_l5_m = ionosphere_l1_m * (f1 / f2) * (f1 / f2);
+    const auto result = dual_frequency::combine(
+        range_m + ionosphere_l1_m, 2.0, f1,
+        range_m + ionosphere_l5_m, 3.0, f2);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_NEAR(result->value_m, range_m, 1e-8);
+    EXPECT_GT(result->alpha, 1.0);
+    EXPECT_LT(result->beta, 0.0);
+}
+
+TEST(DualFrequencyCodeContractTest, PropagatesNoiseAndRejectsMissingOrInvalidPairs) {
+    const double f1 = constants::GAL_E1_FREQ;
+    const double f2 = constants::GAL_E5A_FREQ;
+    const auto result = dual_frequency::combine(100.0, 2.0, f1, 101.0, 3.0, f2);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_NEAR(result->alpha + result->beta, 1.0, 1e-12);
+    EXPECT_NEAR(result->sigma_m,
+                std::sqrt(result->alpha * result->alpha * 4.0 +
+                          result->beta * result->beta * 9.0),
+                1e-12);
+    EXPECT_FALSE(dual_frequency::combine(100.0, 2.0, f1, 101.0, 3.0, f1));
+    EXPECT_FALSE(dual_frequency::combine(100.0, 0.0, f1, 101.0, 3.0, f2));
+    EXPECT_FALSE(dual_frequency::combine(
+        std::numeric_limits<double>::quiet_NaN(), 2.0, f1, 101.0, 3.0, f2));
+}
+
+TEST(DualFrequencyCodeContractTest, MapsOnlyDeclaredGpsAndGalileoPairs) {
+    EXPECT_EQ(dual_frequency::pairKind(
+                  GNSSSystem::GPS, SignalType::GPS_L1CA, SignalType::GPS_L5),
+              dual_frequency::PairKind::GpsL1L5);
+    EXPECT_EQ(dual_frequency::pairKind(
+                  GNSSSystem::Galileo, SignalType::GAL_E1, SignalType::GAL_E5A),
+              dual_frequency::PairKind::GalileoE1E5a);
+    EXPECT_EQ(dual_frequency::pairKind(
+                  GNSSSystem::GPS, SignalType::GPS_L5, SignalType::GPS_L1CA),
+              dual_frequency::PairKind::Unsupported);
+    EXPECT_EQ(dual_frequency::pairKind(
+                  GNSSSystem::Galileo, SignalType::GAL_E1, SignalType::GAL_E5B),
+              dual_frequency::PairKind::Unsupported);
 }
 
 TEST(SPPProductTest, ProcessorLoadsIonexAndDcbProducts) {

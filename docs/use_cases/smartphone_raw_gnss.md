@@ -2881,3 +2881,49 @@ The current native best remains the separately recorded v5 result
 (public/private `3.952/4.276`), and the native 0.782-class target remains
 unachieved.  Continue from the raw-only bridge and gap matrix above; do not
 reinterpret the historical imported score as a native improvement.
+
+### Raw dual-frequency receiver-bias candidate (phase 11, development-only pass)
+
+The next raw-only candidate used a single predeclared signal model: one static,
+meter-valued receiver bias for each eligible secondary signal family (GPS L5
+and Galileo E5a), with a weak zero prior of `1000 m`.  The existing per-signal
+Klobuchar/TGD correction, P/D/ordinary-TDCP/IMU graph, ADR gates, GTSAM
+parameters, raw UTC key contract, and production defaults were left unchanged.
+The existing secondary-observation eligibility gate was enabled only by the
+opt-in flag so that the raw L5/E5a rows could reach these states; no
+ionosphere-free average, base/double-difference factor, integer fix, WLS
+coordinate, MAT file, or precomputed trajectory was used.
+
+The truth-free structural run had 1,384 problem epochs and 1,383 exact raw
+target keys, with no interpolation or edge hold.  It admitted 39,539 code
+factors, including 12,077 signal-bias factors and two finite bias states;
+ordinary TDCP had 23,399 built/inserted factors across 2,750 arcs.  The graph
+had 67,092 factors and 5,540 values, converged in 11 iterations, and reduced
+cost from `1.778065277e9` to `65006.84`.  GNSS-first exported velocity for all
+1,384 epochs, all 1,383 IMU intervals were used without fallback, and the
+maximum output transition was `19.60 m/s` (zero transitions over the fixed
+`70 m/s` bound).  Estimated secondary biases were `-167.5969 m` (GPS L5) and
+`-167.5521 m` (Galileo E5a), consistent with the raw paired-code separation
+screen but not a claim of universal hardware calibration.
+
+After the freeze and structural artifact seal, the declared development truth
+was read once.  The candidate matched all 1,383 keys and improved every local
+diagnostic versus Phase10: WGS84/Vincenty linear/nearest `3.215582/3.216006 m`
+versus `3.913768/3.914159 m`, and Haversine linear/nearest
+`3.217859/3.218284 m` versus `3.913807/3.914203 m`.  H P50 was `2.358741 m`
+and H P95 `4.072424 m`; the evaluator's official formula remains
+undetermined because Kaggle does not publish the earth model or percentile
+interpolation.  This is therefore a development-only candidate pass on one
+route, not a validation/holdout promotion and not a 0.782-class result.
+
+The immutable freeze, structural seal, and score records are
+`docs/use_cases/records/smartphone_r5_phase11_signal_bias_freeze_v1_1.json`,
+`docs/use_cases/records/smartphone_r5_phase11_signal_bias_structural_seal_v1.json`,
+and
+`docs/use_cases/records/smartphone_r5_phase11_signal_bias_score_result_v1.json`.
+Their companion manifests pin the source/binary, input, summary, score, and
+submission hashes.  The raw truth-free artifacts are under
+`output/smartphone-r5/phase11-signal-bias-gtsam-v1_1/`; the submission SHA is
+`d8da69a0cfea3e12d78c072ac76b5c0ac108ed5f7210fb1d3d8bce872d906a70`.
+The candidate is not enabled by the normal CLI defaults and no validation,
+holdout, test, Kaggle, or token access occurred.

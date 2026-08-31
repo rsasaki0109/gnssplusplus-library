@@ -77,6 +77,7 @@ struct Options {
     bool fgo_imu_sparse_recovery = false;
     bool native_pdc_state_bridge = false;
     bool native_pdc_imu_tdcp = false;
+    bool native_signal_bias_states = false;
 };
 
 void usage(const char* program) {
@@ -88,7 +89,8 @@ void usage(const char* program) {
                  " [--dataset-id <id>] [--skip-epochs <n>]"
                  " [--max-epochs 10..30 | --all-epochs]"
                  " [--android-raw-utc-keys] [--fgo-imu-sparse-recovery]"
-                 " [--native-pdc-state-bridge] [--native-pdc-imu-tdcp]\n";
+                 " [--native-pdc-state-bridge] [--native-pdc-imu-tdcp]"
+                 " [--native-signal-bias-states]\n";
 }
 
 bool requireValue(int argc, char** argv, int& index, std::string& value) {
@@ -169,6 +171,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
             options.native_pdc_state_bridge = true;
         } else if (arg == "--native-pdc-imu-tdcp") {
             options.native_pdc_imu_tdcp = true;
+        } else if (arg == "--native-signal-bias-states") {
+            options.native_signal_bias_states = true;
         } else {
             std::cerr << "Unknown argument: " << arg << "\n";
             return false;
@@ -230,6 +234,10 @@ bool parseArguments(int argc, char** argv, Options& options) {
          !options.all_epochs || options.skip_epochs != 0)) {
         std::cerr << "--native-pdc-imu-tdcp requires Android raw input, "
                      "--android-raw-utc-keys, --all-epochs, and no skipped epochs\n";
+        return false;
+    }
+    if (options.native_signal_bias_states && !android_raw) {
+        std::cerr << "--native-signal-bias-states requires Android raw GNSS/IMU input\n";
         return false;
     }
     return true;
@@ -963,6 +971,8 @@ std::string makeSummary(const Options& options,
         << (options.native_pdc_state_bridge ? "true" : "false") << ",\n"
         << "  \"native_pdc_imu_tdcp\": "
         << (options.native_pdc_imu_tdcp ? "true" : "false") << ",\n"
+        << "  \"native_signal_bias_states\": "
+        << (options.native_signal_bias_states ? "true" : "false") << ",\n"
         << "  \"native_pdc_state_bridge_report\": {\n"
         << "    \"enabled\": "
         << (pdc_bridge_report.enabled ? "true" : "false") << ",\n"
@@ -1042,12 +1052,26 @@ std::string makeSummary(const Options& options,
         << "    \"sparse_empty_epochs_retained\": "
         << result.diagnostics.sparse_empty_epochs_retained << ",\n"
         << "    \"pseudorange_factors\": " << problem.pseudorange_factors.size() << ",\n"
+        << "    \"receiver_signal_bias_factors\": "
+        << result.diagnostics.receiver_signal_bias_factors << ",\n"
+        << "    \"receiver_signal_bias_states\": "
+        << result.diagnostics.receiver_signal_bias_states << ",\n"
         << "    \"tdcp_factors_built\": " << problem.tdcp_factors.size() << ",\n"
         << "    \"double_difference_pseudorange_factors\": "
         << problem.double_difference_pseudorange_factors.size() << ",\n"
         << "    \"double_difference_carrier_factors\": "
         << problem.double_difference_carrier_factors.size() << "\n"
         << "  },\n"
+        << "  \"receiver_signal_bias_estimates_m\": {";
+    bool first_signal_bias = true;
+    for (const auto& [key, value] : result.receiver_signal_bias_estimates_m) {
+        if (!first_signal_bias) out << ",";
+        first_signal_bias = false;
+        out << "\"" << static_cast<int>(static_cast<unsigned char>(key.first))
+            << ":" << static_cast<int>(static_cast<unsigned char>(key.second))
+            << "\": " << value;
+    }
+    out << "},\n"
         << "  \"tdcp_contract\": {\n"
         << "    \"enabled\": " << (tdcp_report.enabled ? "true" : "false") << ",\n"
         << "    \"factors_built\": " << tdcp_report.factors_built << ",\n"
@@ -1328,7 +1352,7 @@ int main(int argc, char** argv) {
     // Phase10 candidate enables the already audited same-satellite/same-signal
     // ADR path only through its explicit opt-in, with no standalone ambiguity
     // or base/double-difference factors.
-    config.use_tdcp_factors = options.native_pdc_imu_tdcp;
+        config.use_tdcp_factors = options.native_pdc_imu_tdcp;
     config.use_single_difference_doppler_factors = false;
     config.use_single_difference_tdcp_factors = false;
     if (android_raw) {
@@ -1372,6 +1396,19 @@ int main(int argc, char** argv) {
         config.reject_tdcp_code_phase_jump = true;
         config.tdcp_code_phase_jump_threshold_m =
             kNativeTdcpCodePhaseJumpThresholdM;
+    }
+    if (options.native_signal_bias_states) {
+        // Phase11 candidate: attach static meter-valued receiver secondary
+        // signal-bias states to raw undifferenced code factors.  The prior is
+        // frozen by the phase record and only regularizes the global gauge;
+        // all Phase10 P/D/TDCP/IMU settings remain unchanged.  The common
+        // FGO eligibility gate admits secondary raw observations only when
+        // multi-frequency mode is enabled; enabling that gate here is what
+        // makes the declared GPS L5/Galileo E5a bias states observable.  It
+        // does not form a DD/IFLC combination or alter the primary factors.
+        config.use_multi_frequency_double_difference = true;
+        config.use_receiver_signal_bias_states = true;
+        config.receiver_signal_bias_prior_sigma_m = 1000.0;
     }
     config.pose3_lever_arm_body_m = libgnss::Vector3d::Zero();
     if (android_raw) {

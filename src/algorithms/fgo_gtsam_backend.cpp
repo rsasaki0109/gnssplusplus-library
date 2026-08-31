@@ -353,6 +353,7 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
         !problem.pseudorange_factors.empty() || !problem.carrier_phase_factors.empty();
     std::set<gtsam::Key> inserted_clock_keys;
     std::set<int> inserted_isb_ordinals;
+    std::set<int> inserted_signal_bias_ordinals;
     auto ensureBaseClock = [&](std::size_t epoch) -> gtsam::Key {
         const gtsam::Key key = clockKey(epoch);
         if (inserted_clock_keys.insert(key).second) {
@@ -376,6 +377,17 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
             clockGroupOrdinal(clockBiasGroup(system), config.use_inter_system_biases);
         if (ordinal != 0 && inserted_isb_ordinals.insert(ordinal).second) {
             initial.insert(isbKey(ordinal), 0.0);
+        }
+        return ordinal;
+    };
+    auto ensureSignalBias = [&](GNSSSystem system, SignalType signal) -> int {
+        if (!config.use_receiver_signal_bias_states ||
+            !signal_bias::isEligible(system, signal)) {
+            return -1;
+        }
+        const int ordinal = signal_bias::ordinal(system, signal);
+        if (ordinal > 0 && inserted_signal_bias_ordinals.insert(ordinal).second) {
+            initial.insert(signalBiasKey(ordinal), 0.0);
         }
         return ordinal;
     };
@@ -415,9 +427,39 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
     for (const auto& factor : problem.pseudorange_factors) {
         const gtsam::Key base_clock = ensureBaseClock(factor.epoch_index);
         const int ordinal = ensureIsb(factor.satellite.system);
+        const int signal_bias_ordinal =
+            ensureSignalBias(factor.satellite.system, factor.signal);
         const auto noise = makeNoise(factor.sigma_m, config.use_robust_loss,
                                      config.pseudorange_huber_threshold_sigma);
-        if (use_pose3) {
+        if (signal_bias_ordinal > 0) {
+            const gtsam::Key signal_bias = signalBiasKey(signal_bias_ordinal);
+            if (use_pose3) {
+                if (ordinal == 0) {
+                    graph.emplace_shared<PseudorangeFactorPlainSignalBiasArm>(
+                        positionKey(factor.epoch_index), base_clock, signal_bias,
+                        factor.corrected_pseudorange_m,
+                        Point3(factor.satellite_position_ecef), gnss_lever_arm,
+                        noise);
+                } else {
+                    graph.emplace_shared<PseudorangeFactorISBSignalBiasArm>(
+                        positionKey(factor.epoch_index), base_clock,
+                        isbKey(ordinal), signal_bias,
+                        factor.corrected_pseudorange_m,
+                        Point3(factor.satellite_position_ecef), gnss_lever_arm,
+                        noise);
+                }
+            } else if (ordinal == 0) {
+                graph.emplace_shared<PseudorangeFactorPlainSignalBias>(
+                    positionKey(factor.epoch_index), base_clock, signal_bias,
+                    factor.corrected_pseudorange_m,
+                    Point3(factor.satellite_position_ecef), noise);
+            } else {
+                graph.emplace_shared<PseudorangeFactorISBSignalBias>(
+                    positionKey(factor.epoch_index), base_clock, isbKey(ordinal),
+                    signal_bias, factor.corrected_pseudorange_m,
+                    Point3(factor.satellite_position_ecef), noise);
+            }
+        } else if (use_pose3) {
             if (ordinal == 0) {
                 graph.emplace_shared<PseudorangeFactorPlainArm>(
                     positionKey(factor.epoch_index), base_clock,
@@ -729,6 +771,14 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
             graph.addPrior(key, initial.at<double>(key), noise);
         }
     }
+    if (config.use_receiver_signal_bias_states &&
+        config.receiver_signal_bias_prior_sigma_m > 0.0) {
+        const auto noise = gtsam::noiseModel::Isotropic::Sigma(
+            1, config.receiver_signal_bias_prior_sigma_m);
+        for (const int ordinal : inserted_signal_bias_ordinals) {
+            graph.addPrior(signalBiasKey(ordinal), 0.0, noise);
+        }
+    }
     if (use_gnss_velocity_states) {
         // The Doppler rows normally provide full rank per epoch; this very
         // broad prior is only a numerical gauge guard for a sparse/degenerate
@@ -994,6 +1044,24 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
     }
 
     // --- Map per-epoch solutions ---
+    if (config.use_receiver_signal_bias_states) {
+        for (const int ordinal : inserted_signal_bias_ordinals) {
+            const gtsam::Key key = signalBiasKey(ordinal);
+            if (!optimized.exists(key)) continue;
+            for (const auto& factor : problem.pseudorange_factors) {
+                if (!signal_bias::isEligible(factor.satellite.system, factor.signal) ||
+                    signal_bias::ordinal(factor.satellite.system, factor.signal) != ordinal) {
+                    continue;
+                }
+                result.receiver_signal_bias_estimates_m.emplace(
+                    std::make_pair(factor.satellite.system, factor.signal),
+                    optimized.at<double>(key));
+                break;
+            }
+        }
+    }
+
+    // --- Map per-epoch solutions ---
     const bool have_ambiguities = !problem.ambiguity_states.empty();
     for (std::size_t i = 0; i < num_epochs; ++i) {
         PositionSolution solution;
@@ -1127,12 +1195,24 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
             if (ordinal != 0 && optimized.exists(isbKey(ordinal))) {
                 clock_s += optimized.at<double>(isbKey(ordinal));
             }
+            double signal_bias_m = 0.0;
+            if (config.use_receiver_signal_bias_states &&
+                signal_bias::isEligible(factor.satellite.system, factor.signal)) {
+                const int signal_bias_ordinal =
+                    signal_bias::ordinal(factor.satellite.system, factor.signal);
+                if (signal_bias_ordinal > 0 &&
+                    optimized.exists(signalBiasKey(signal_bias_ordinal))) {
+                    signal_bias_m = optimized.at<double>(
+                        signalBiasKey(signal_bias_ordinal));
+                }
+            }
             // Plain Euclidean range to match the native backend and the factor
             // model above (satellite positions are already earth-rotation
             // corrected; no additional Sagnac term).
             const double range =
                 (Point3(factor.satellite_position_ecef) - position).norm();
-            const double predicted = range + constants::SPEED_OF_LIGHT * clock_s;
+            const double predicted = range + constants::SPEED_OF_LIGHT * clock_s +
+                                     signal_bias_m;
             const double residual = factor.corrected_pseudorange_m - predicted;
             sum += residual * residual;
             ++count;

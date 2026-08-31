@@ -13,6 +13,7 @@
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/core/signal_policy.hpp>
 #include <libgnss++/core/signals.hpp>
+#include <libgnss++/algorithms/signal_bias_contract.hpp>
 
 #include <gtsam/geometry/Point3.h>
 #include <gtsam/geometry/Pose3.h>
@@ -365,6 +366,11 @@ inline GNSSSystem clockBiasGroup(GNSSSystem system) {
 inline gtsam::Key positionKey(std::size_t epoch) { return Symbol('x', epoch); }
 inline gtsam::Key clockKey(std::size_t epoch) { return Symbol('c', epoch); }
 inline gtsam::Key isbKey(int group_ordinal) { return Symbol('i', group_ordinal); }
+// Static receiver secondary-signal code-bias states, in metres.  The sparse
+// ordinal is derived from (GNSSSystem, SignalType), not input order.
+inline gtsam::Key signalBiasKey(int signal_bias_ordinal) {
+    return Symbol('f', static_cast<std::size_t>(signal_bias_ordinal));
+}
 inline gtsam::Key ambiguityKey(std::size_t index) { return Symbol('a', index); }
 inline gtsam::Key dummyAmbiguityKey() { return Symbol('z', 0); }
 // Milestone 2b IMU states: 'v' body velocity in nav (ENU), 'b' IMU bias, per epoch.
@@ -773,6 +779,93 @@ class PseudorangeFactorPlain : public gtsam::NoiseModelFactorN<Point3, double> {
     }
 };
 
+// Secondary-signal analogue of PseudorangeFactorPlain.  The third state is a
+// static receiver signal bias in metres; it is deliberately separate from
+// the epoch clock and from the constellation ISB so a primary/secondary pair
+// can identify a receiver inter-frequency delay without silently changing the
+// clock-group contract.
+class PseudorangeFactorPlainSignalBias
+    : public gtsam::NoiseModelFactorN<Point3, double, double> {
+    double measurement_ = 0.0;
+    Point3 satellite_position_{0, 0, 0};
+
+ public:
+    using Base = gtsam::NoiseModelFactorN<Point3, double, double>;
+    using Base::evaluateError;
+    PseudorangeFactorPlainSignalBias(
+        gtsam::Key position, gtsam::Key base_clock, gtsam::Key signal_bias,
+        double measured_pseudorange, const Point3& satellite_position,
+        const gtsam::SharedNoiseModel& model)
+        : Base(model, position, base_clock, signal_bias),
+          measurement_(measured_pseudorange),
+          satellite_position_(satellite_position) {}
+
+    gtsam::Vector evaluateError(
+        const Point3& position, const double& base_clock,
+        const double& signal_bias, gtsam::OptionalMatrixType H_position,
+        gtsam::OptionalMatrixType H_base_clock,
+        gtsam::OptionalMatrixType H_signal_bias) const override {
+        gtsam::Matrix13 H_range;
+        const double range = plainRange(
+            satellite_position_, position, H_position ? &H_range : nullptr);
+        const double error = range + gtsam::gnss::C_LIGHT * base_clock +
+                             signal_bias - measurement_;
+        if (H_position) *H_position = H_range;
+        if (H_base_clock) {
+            *H_base_clock =
+                (gtsam::Matrix(1, 1) << gtsam::gnss::C_LIGHT).finished();
+        }
+        if (H_signal_bias) {
+            *H_signal_bias = (gtsam::Matrix(1, 1) << 1.0).finished();
+        }
+        return (gtsam::Vector(1) << error).finished();
+    }
+};
+
+// Secondary-signal factor with both the constellation ISB (seconds) and the
+// receiver signal bias (metres).
+class PseudorangeFactorISBSignalBias
+    : public gtsam::NoiseModelFactorN<Point3, double, double, double> {
+    double measurement_ = 0.0;
+    Point3 satellite_position_{0, 0, 0};
+
+ public:
+    using Base = gtsam::NoiseModelFactorN<Point3, double, double, double>;
+    using Base::evaluateError;
+    PseudorangeFactorISBSignalBias(
+        gtsam::Key position, gtsam::Key base_clock, gtsam::Key isb,
+        gtsam::Key signal_bias, double measured_pseudorange,
+        const Point3& satellite_position, const gtsam::SharedNoiseModel& model)
+        : Base(model, position, base_clock, isb, signal_bias),
+          measurement_(measured_pseudorange),
+          satellite_position_(satellite_position) {}
+
+    gtsam::Vector evaluateError(
+        const Point3& position, const double& base_clock, const double& isb,
+        const double& signal_bias, gtsam::OptionalMatrixType H_position,
+        gtsam::OptionalMatrixType H_base_clock,
+        gtsam::OptionalMatrixType H_isb,
+        gtsam::OptionalMatrixType H_signal_bias) const override {
+        gtsam::Matrix13 H_range;
+        const double range = plainRange(
+            satellite_position_, position, H_position ? &H_range : nullptr);
+        const double error = range + gtsam::gnss::C_LIGHT * (base_clock + isb) +
+                             signal_bias - measurement_;
+        if (H_position) *H_position = H_range;
+        if (H_base_clock) {
+            *H_base_clock =
+                (gtsam::Matrix(1, 1) << gtsam::gnss::C_LIGHT).finished();
+        }
+        if (H_isb) {
+            *H_isb = (gtsam::Matrix(1, 1) << gtsam::gnss::C_LIGHT).finished();
+        }
+        if (H_signal_bias) {
+            *H_signal_bias = (gtsam::Matrix(1, 1) << 1.0).finished();
+        }
+        return (gtsam::Vector(1) << error).finished();
+    }
+};
+
 // --- Milestone 2a: Pose3 + lever-arm plumbing (docs/gtsam_backend_design.md) ---
 //
 // Undifferenced plain-norm pseudorange factors are Pose3 analogs of
@@ -855,6 +948,97 @@ class PseudorangeFactorISBArm : public gtsam::NoiseModelFactorN<Pose3, double, d
         }
         if (H_isb) {
             *H_isb = (gtsam::Matrix(1, 1) << gtsam::gnss::C_LIGHT).finished();
+        }
+        return (gtsam::Vector(1) << error).finished();
+    }
+};
+
+class PseudorangeFactorPlainSignalBiasArm
+    : public gtsam::NoiseModelFactorN<Pose3, double, double> {
+    double measurement_ = 0.0;
+    Point3 satellite_position_{0, 0, 0};
+    gtsam::gnss::LeverArm arm_;
+
+ public:
+    using Base = gtsam::NoiseModelFactorN<Pose3, double, double>;
+    using Base::evaluateError;
+    PseudorangeFactorPlainSignalBiasArm(
+        gtsam::Key pose, gtsam::Key base_clock, gtsam::Key signal_bias,
+        double measured_pseudorange, const Point3& satellite_position,
+        const gtsam::gnss::LeverArm& arm, const gtsam::SharedNoiseModel& model)
+        : Base(model, pose, base_clock, signal_bias),
+          measurement_(measured_pseudorange),
+          satellite_position_(satellite_position),
+          arm_(arm) {}
+
+    gtsam::Vector evaluateError(
+        const Pose3& pose, const double& base_clock, const double& signal_bias,
+        gtsam::OptionalMatrixType H_pose,
+        gtsam::OptionalMatrixType H_base_clock,
+        gtsam::OptionalMatrixType H_signal_bias) const override {
+        gtsam::gnss::LeverArm::PoseFrame frame;
+        const Point3 antenna = arm_.antennaPosition(
+            pose, H_pose ? &frame : nullptr);
+        gtsam::Matrix13 H_range;
+        const double range = plainRange(
+            satellite_position_, antenna, H_pose ? &H_range : nullptr);
+        const double error = range + gtsam::gnss::C_LIGHT * base_clock +
+                             signal_bias - measurement_;
+        if (H_pose) *H_pose = arm_.antennaPoseJacobian(H_range, frame);
+        if (H_base_clock) {
+            *H_base_clock =
+                (gtsam::Matrix(1, 1) << gtsam::gnss::C_LIGHT).finished();
+        }
+        if (H_signal_bias) {
+            *H_signal_bias = (gtsam::Matrix(1, 1) << 1.0).finished();
+        }
+        return (gtsam::Vector(1) << error).finished();
+    }
+};
+
+class PseudorangeFactorISBSignalBiasArm
+    : public gtsam::NoiseModelFactorN<Pose3, double, double, double> {
+    double measurement_ = 0.0;
+    Point3 satellite_position_{0, 0, 0};
+    gtsam::gnss::LeverArm arm_;
+
+ public:
+    using Base = gtsam::NoiseModelFactorN<Pose3, double, double, double>;
+    using Base::evaluateError;
+    PseudorangeFactorISBSignalBiasArm(
+        gtsam::Key pose, gtsam::Key base_clock, gtsam::Key isb,
+        gtsam::Key signal_bias, double measured_pseudorange,
+        const Point3& satellite_position, const gtsam::gnss::LeverArm& arm,
+        const gtsam::SharedNoiseModel& model)
+        : Base(model, pose, base_clock, isb, signal_bias),
+          measurement_(measured_pseudorange),
+          satellite_position_(satellite_position),
+          arm_(arm) {}
+
+    gtsam::Vector evaluateError(
+        const Pose3& pose, const double& base_clock, const double& isb,
+        const double& signal_bias, gtsam::OptionalMatrixType H_pose,
+        gtsam::OptionalMatrixType H_base_clock,
+        gtsam::OptionalMatrixType H_isb,
+        gtsam::OptionalMatrixType H_signal_bias) const override {
+        gtsam::gnss::LeverArm::PoseFrame frame;
+        const Point3 antenna = arm_.antennaPosition(
+            pose, H_pose ? &frame : nullptr);
+        gtsam::Matrix13 H_range;
+        const double range = plainRange(
+            satellite_position_, antenna, H_pose ? &H_range : nullptr);
+        const double error = range + gtsam::gnss::C_LIGHT * (base_clock + isb) +
+                             signal_bias - measurement_;
+        if (H_pose) *H_pose = arm_.antennaPoseJacobian(H_range, frame);
+        if (H_base_clock) {
+            *H_base_clock =
+                (gtsam::Matrix(1, 1) << gtsam::gnss::C_LIGHT).finished();
+        }
+        if (H_isb) {
+            *H_isb = (gtsam::Matrix(1, 1) << gtsam::gnss::C_LIGHT).finished();
+        }
+        if (H_signal_bias) {
+            *H_signal_bias = (gtsam::Matrix(1, 1) << 1.0).finished();
         }
         return (gtsam::Vector(1) << error).finished();
     }

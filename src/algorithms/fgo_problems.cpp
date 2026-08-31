@@ -3,6 +3,7 @@
 #include <libgnss++/algorithms/lambda.hpp>
 #include <libgnss++/algorithms/doppler_contract.hpp>
 #include <libgnss++/algorithms/tdcp_contract.hpp>
+#include <libgnss++/algorithms/signal_bias_contract.hpp>
 #include <libgnss++/algorithms/spp.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
@@ -252,6 +253,7 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
             if (passes_snr_mask && passes_elevation_mask) {
                 PseudorangeFactor factor;
                 factor.satellite = observation.satellite;
+                factor.signal = observation.signal;
                 factor.clock_group = clockBiasGroup(observation.satellite.system);
                 factor.satellite_position_ecef = corrected_satellite_position;
                 factor.corrected_pseudorange_m = corrected_pseudorange;

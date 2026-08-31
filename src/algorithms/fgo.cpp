@@ -1,6 +1,7 @@
 #include <libgnss++/algorithms/fgo.hpp>
 
 #include <libgnss++/algorithms/lambda.hpp>
+#include <libgnss++/algorithms/signal_bias_contract.hpp>
 #include <libgnss++/algorithms/spp.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
@@ -54,6 +55,16 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
     FGOResult result;
     result.diagnostics.epochs = problem.epochs.size();
     result.diagnostics.pseudorange_factors = problem.pseudorange_factors.size();
+    if (config_.use_receiver_signal_bias_states) {
+        std::set<std::pair<GNSSSystem, SignalType>> signal_bias_groups;
+        for (const auto& factor : problem.pseudorange_factors) {
+            if (signal_bias::isEligible(factor.satellite.system, factor.signal)) {
+                ++result.diagnostics.receiver_signal_bias_factors;
+                signal_bias_groups.emplace(factor.satellite.system, factor.signal);
+            }
+        }
+        result.diagnostics.receiver_signal_bias_states = signal_bias_groups.size();
+    }
     result.diagnostics.tdcp_factors = problem.tdcp_factors.size();
     result.diagnostics.undifferenced_doppler_factors =
         problem.undifferenced_doppler_factors.size();

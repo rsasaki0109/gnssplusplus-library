@@ -4112,4 +4112,58 @@ TEST(FGOGtsamUndifferencedDopplerFactorTest, MatchesNativeSignAndJacobian) {
     EXPECT_NEAR(perturbed_error(0), 1.2, 1e-12);
 }
 
+TEST(FGOGtsamSignalBiasFactorTest, UsesMeterBiasAndAnalyticJacobians) {
+    using libgnss::fgo_gtsam_internal::PseudorangeFactorPlainSignalBias;
+    using libgnss::fgo_gtsam_internal::PseudorangeFactorISBSignalBias;
+
+    const gtsam::Point3 receiver(6'370'000.0, 1'000.0, 2'000.0);
+    const gtsam::Point3 satellite = receiver + gtsam::Point3(20'000'000.0,
+                                                               1'000'000.0,
+                                                               -500'000.0);
+    const double range = (satellite - receiver).norm();
+    constexpr double clock_s = 2.0e-6;
+    constexpr double isb_s = -1.0e-6;
+    constexpr double signal_bias_m = -160.0;
+    const auto noise = gtsam::noiseModel::Isotropic::Sigma(1, 1.0);
+
+    const PseudorangeFactorPlainSignalBias plain(
+        gtsam::Symbol('x', 0), gtsam::Symbol('c', 0), gtsam::Symbol('f', 1),
+        range + gtsam::gnss::C_LIGHT * clock_s + signal_bias_m, satellite,
+        noise);
+    gtsam::Matrix H_position;
+    gtsam::Matrix H_clock;
+    gtsam::Matrix H_signal;
+    const gtsam::Vector plain_error = plain.evaluateError(
+        receiver, clock_s, signal_bias_m, &H_position, &H_clock, &H_signal);
+    ASSERT_EQ(plain_error.size(), 1);
+    EXPECT_NEAR(plain_error(0), 0.0, 1e-9);
+    ASSERT_EQ(H_position.rows(), 1);
+    ASSERT_EQ(H_position.cols(), 3);
+    EXPECT_NEAR(H_position.norm(), 1.0, 1e-12);
+    EXPECT_NEAR(H_clock(0, 0), gtsam::gnss::C_LIGHT, 1e-6);
+    EXPECT_DOUBLE_EQ(H_signal(0, 0), 1.0);
+
+    const PseudorangeFactorISBSignalBias with_isb(
+        gtsam::Symbol('x', 0), gtsam::Symbol('c', 0), gtsam::Symbol('i', 1),
+        gtsam::Symbol('f', 2),
+        range + gtsam::gnss::C_LIGHT * (clock_s + isb_s) + signal_bias_m,
+        satellite, noise);
+    gtsam::Matrix H_isb;
+    const gtsam::Vector isb_error = with_isb.evaluateError(
+        receiver, clock_s, isb_s, signal_bias_m, nullptr, nullptr, &H_isb,
+        nullptr);
+    ASSERT_EQ(isb_error.size(), 1);
+    EXPECT_NEAR(isb_error(0), 0.0, 1e-9);
+    EXPECT_NEAR(H_isb(0, 0), gtsam::gnss::C_LIGHT, 1e-6);
+}
+
+TEST(FGOGtsamSignalBiasFactorTest, KeyOrdinalIsStableForSecondarySignalsOnly) {
+    EXPECT_GT(signal_bias::ordinal(GNSSSystem::GPS, SignalType::GPS_L5), 0);
+    EXPECT_GT(signal_bias::ordinal(GNSSSystem::Galileo, SignalType::GAL_E5A), 0);
+    EXPECT_NE(signal_bias::ordinal(GNSSSystem::GPS, SignalType::GPS_L5),
+              signal_bias::ordinal(GNSSSystem::Galileo, SignalType::GAL_E5A));
+    EXPECT_EQ(signal_bias::ordinal(GNSSSystem::GPS, SignalType::GPS_L1CA), -1);
+    EXPECT_EQ(signal_bias::ordinal(GNSSSystem::Galileo, SignalType::GAL_E1), -1);
+}
+
 #endif  // GNSSPP_HAS_GTSAM

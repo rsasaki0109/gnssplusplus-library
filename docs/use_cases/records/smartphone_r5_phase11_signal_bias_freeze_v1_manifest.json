@@ -1,0 +1,19 @@
+{
+  "schema_version": "smartphone-r5-phase11-signal-bias-freeze-manifest.v1",
+  "record": "docs/use_cases/records/smartphone_r5_phase11_signal_bias_freeze_v1.json",
+  "record_sha256": "7db07e0066d9b407e699296a52e51042c139860436eb7c46291fbf190e054d87",
+  "status": "freeze-authority",
+  "algorithm_hash_scope": [
+    "src/algorithms/fgo_problems.cpp",
+    "include/libgnss++/algorithms/fgo.hpp",
+    "include/libgnss++/algorithms/fgo_config.hpp",
+    "src/algorithms/fgo_gtsam_internal.hpp",
+    "src/algorithms/fgo_gtsam_backend.cpp",
+    "apps/native/gnss_fgo_imu_no_base.cpp"
+  ],
+  "truth_free": true,
+  "truth_open_count": 0,
+  "holdout_open_count": 0,
+  "candidate_parameters_frozen": true,
+  "manifest_hash": "computed after record hash is finalized"
+}

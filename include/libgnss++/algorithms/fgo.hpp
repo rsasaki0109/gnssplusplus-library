@@ -74,6 +74,7 @@ public:
     struct PseudorangeFactor {
         std::size_t epoch_index = 0;
         SatelliteId satellite;
+        SignalType signal = SignalType::GPS_L1CA;
         GNSSSystem clock_group = GNSSSystem::GPS;
         Vector3d satellite_position_ecef = Vector3d::Zero();
         double corrected_pseudorange_m = 0.0;
@@ -514,6 +515,8 @@ public:
         std::size_t sparse_epochs_retained = 0;
         std::size_t sparse_empty_epochs_retained = 0;
         std::size_t pseudorange_factors = 0;
+        std::size_t receiver_signal_bias_factors = 0;
+        std::size_t receiver_signal_bias_states = 0;
         /// TDCP measurements present in the backend-independent problem.
         std::size_t tdcp_factors = 0;
         /// TDCP residual rows/factors actually inserted by the selected backend.
@@ -1131,6 +1134,10 @@ public:
         std::vector<std::set<SatelliteId>> ambiguity_reference_satellites_by_epoch;
         std::vector<std::map<SatelliteId, double>> ambiguity_estimate_cycles_by_epoch;
         std::vector<Vector3d> epoch_velocities_ecef_mps;
+        // Static receiver secondary-signal code-bias estimates [m], populated
+        // only by the opt-in signal-bias backend path.
+        std::map<std::pair<GNSSSystem, SignalType>, double>
+            receiver_signal_bias_estimates_m;
         std::vector<LambdaDebugEntry> lambda_debug_entries;
         std::vector<CostTraceEntry> cost_trace_entries;
         std::vector<FGOEpochDiagnostics> epoch_diagnostics;
