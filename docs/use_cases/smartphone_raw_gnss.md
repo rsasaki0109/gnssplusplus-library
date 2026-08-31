@@ -3284,3 +3284,41 @@ and
 `docs/use_cases/records/smartphone_r5_phase20_upstream_stop_constraints_score_result_v1.json`.
 The exact raw-only command and artifact hashes are recorded there; the
 candidate remains development-only and production defaults are unchanged.
+
+### Upstream phone-position offset (phase 21, development-only Go)
+
+Phase 21 ports the remaining raw-compatible `add_position_offset.m` step from
+the pinned upstream specification.  The opt-in
+`--native-upstream-position-offset` flag applies the fixed phone-family
+antenna-to-body offset through the optimized native GTSAM `Rot3::rpy()` and
+the exact upstream `Rx*Ry*Rz(rpy-[0,0,pi])` transform.  It is applied in
+memory, after the native raw GNSS/IMU solution and before UTC-key alignment;
+no graph factor, optimizer setting, height/reference correction, truth, MAT,
+enriched satellite field, WLS coordinate, or sample coordinate is used.
+Unknown phone families, nonfinite attitudes, and out-of-Earth corrected
+positions fail closed.  The default and all previous lanes remain unchanged.
+
+Truth-free Release runs on the already-used Pixel7 development route and a
+supplemental mi8 structural route produced exact finite keys with zero
+interpolation or edge holds and converged graphs.  Pixel7 processed 1,384
+native epochs for 1,383 target keys with a maximum fixed offset norm of
+0.223607 m; the candidate repeat was byte-identical.  The baseline CSV was
+byte-identical to the frozen Phase 12 submission (`3069f149...d5a26`).
+
+After the raw artifacts were sealed, one evaluator process read the existing
+Pixel7 development truth once.  The candidate improved all four aggregate
+local score variants from WGS84/Vincenty-linear `3.192248964` to
+`3.138544251 m` (nearest `3.138981069 m`; Haversine linear/nearest
+`3.142160582/3.142602475 m`) with 1,383/1,383 coverage.  H P50 improved, but
+H P95 increased slightly (`4.014364` to `4.034253 m`), so this is a
+development-only result rather than a uniform tail-quality claim.  It does
+not establish route-disjoint validation or the native 0.782-class target, and
+no Kaggle submission was made.
+
+The freeze, raw structural manifest, and score record are
+`docs/use_cases/records/smartphone_r5_phase21_position_offset_freeze_v1.json`,
+`docs/use_cases/records/smartphone_r5_phase21_position_offset_manifest_v1.json`,
+and
+`docs/use_cases/records/smartphone_r5_phase21_position_offset_score_result_v1.json`.
+The source hashes, raw-only commands, one-shot truth policy, and the explicit
+P95 caveat are sealed in those records.

@@ -180,6 +180,18 @@ made.  See the [Phase 20 freeze](docs/use_cases/records/smartphone_r5_phase20_up
 [raw structural manifest](docs/use_cases/records/smartphone_r5_phase20_upstream_stop_constraints_manifest_v1.json),
 and [one-shot score](docs/use_cases/records/smartphone_r5_phase20_upstream_stop_constraints_score_result_v1.json).
 
+Phase 21 ports the pinned upstream phone-specific antenna-to-body position
+offset as an opt-in raw-only post-processing step using the optimized native
+GTSAM `Rot3::rpy()` and the exact `Rx*Ry*Rz(rpy-[0,0,pi])` transform.  The
+Pixel7 candidate improved the four local diagnostic scores from
+`3.192248964` to `3.138544251 m` (WGS84/Vincenty-linear), with 1,383/1,383
+keys and a byte-identical repeat; H P50 improved while H P95 increased
+slightly.  This is already-used development evidence only, not validation or
+holdout generalization, and native 0.782-class remains unachieved.  The
+default solver and prior lanes are unchanged.  See the [Phase 21 freeze](docs/use_cases/records/smartphone_r5_phase21_position_offset_freeze_v1.json),
+[raw structural manifest](docs/use_cases/records/smartphone_r5_phase21_position_offset_manifest_v1.json),
+and [one-shot score](docs/use_cases/records/smartphone_r5_phase21_position_offset_score_result_v1.json).
+
 ### RTK runtime and smartphone GSDC 2023
 
 The Release RTK broadcast-state cache preserves the position stream and
