@@ -3170,3 +3170,29 @@ truth-open count, central archive metadata, and failure status are sealed in
 `docs/use_cases/records/smartphone_r5_phase17_primary_l1_e1_score_result_v1.json`.
 This is same-route cross-device development evidence only; Pixel7 truth was
 not reread and validation/holdout/test truth remained unopened.
+
+### Intersection metric recovery (phase 18, development-only No-Go)
+
+The Phase 17 key-check failure is handled by
+`apps/commands/benchmarks/gnss_smartphone_kaggle_intersection_eval.py`.  The
+policy was frozen before implementation and scores only
+`truth ∩ prediction`: surplus prediction keys are ignored for distances but
+counted and hashed, missing truth keys are counted without interpolation or
+edge hold, and every compared submission must have the same matched-key set.
+Duplicate, nonfinite, and phone-mismatched inputs fail closed.  The fixed
+gate is coverage at least 0.999, at most one missing truth key, and strict
+improvement in all WGS84/Haversine × linear/nearest diagnostic variants.
+
+After the implementation and test hashes were sealed, one Phase 18 process
+opened the materialized mi8 truth once and scored the frozen Phase 17 E1
+control and GPS L1 C/A + E1 candidate from that same in-memory truth set.
+Both matched 1,399 of 1,400 truth keys (coverage 0.9992857143), with 17
+surplus prediction keys and one missing key.  The candidate scores were
+2.068162879 m (WGS84-linear), 2.069805771 m (WGS84-nearest), 2.069385266 m
+(Haversine-linear), and 2.071126712 m (Haversine-nearest), versus control
+2.043565555, 2.044104512, 2.045288782, and 2.047222498 m.  Thus all four
+variants regressed and the development-only decision is No-Go.  Cumulative
+truth reads are explicitly recorded as two (the failed Phase 17 read plus
+this recovery read); no further truth read, rerun, or tuning is permitted.
+See the Phase 18 policy freeze, implementation manifest, and score result in
+`docs/use_cases/records/`.

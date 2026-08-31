@@ -20,6 +20,18 @@ KAGGLE = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = KAGGLE
 SPEC.loader.exec_module(KAGGLE)
 
+INTERSECTION_MODULE_PATH = (
+    ROOT / "apps" / "commands" / "benchmarks" /
+    "gnss_smartphone_kaggle_intersection_eval.py"
+)
+INTERSECTION_SPEC = importlib.util.spec_from_file_location(
+    "gnss_smartphone_kaggle_intersection_eval", INTERSECTION_MODULE_PATH
+)
+assert INTERSECTION_SPEC is not None and INTERSECTION_SPEC.loader is not None
+INTERSECTION = importlib.util.module_from_spec(INTERSECTION_SPEC)
+sys.modules[INTERSECTION_SPEC.name] = INTERSECTION
+INTERSECTION_SPEC.loader.exec_module(INTERSECTION)
+
 
 SUBMISSION_FIELDS = [
     "phone",
@@ -401,6 +413,126 @@ class SmartphoneKaggleTests(unittest.TestCase):
             )
             with self.assertRaisesRegex(ValueError, "must be finite"):
                 KAGGLE.evaluate_submission(nonfinite, truth, root / "nonfinite.json")
+
+    def test_intersection_scores_common_keys_and_tracks_extra_missing(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_smartphone_kaggle_intersection_") as temp_dir:
+            root = Path(temp_dir)
+            truth = root / "ground_truth.csv"
+            control = root / "control.csv"
+            candidate = root / "candidate.csv"
+            truth_rows = [
+                {
+                    "phone": "phone-a",
+                    "UnixTimeMillis": index,
+                    "LatitudeDegrees": 35.0,
+                    "LongitudeDegrees": 139.0,
+                }
+                for index in range(1000)
+            ]
+            common = [
+                {
+                    "phone": "phone-a",
+                    "UnixTimeMillis": index,
+                    "LatitudeDegrees": 35.0 + 0.00002,
+                    "LongitudeDegrees": 139.0,
+                }
+                for index in range(999)
+            ]
+            candidate_common = [dict(row, LatitudeDegrees=35.0 + 0.00001) for row in common]
+            extra = {
+                "phone": "phone-a",
+                "UnixTimeMillis": 10000,
+                "LatitudeDegrees": 35.0,
+                "LongitudeDegrees": 139.0,
+            }
+            write_rows(truth, TRUTH_FIELDS, truth_rows)
+            write_rows(control, SUBMISSION_FIELDS, common + [extra])
+            write_rows(candidate, SUBMISSION_FIELDS, candidate_common + [extra])
+
+            report = INTERSECTION.evaluate_submissions(
+                truth,
+                {"control": control, "candidate": candidate},
+                root / "intersection.json",
+            )
+            self.assertEqual(report["truth"]["open_count"], 1)
+            self.assertEqual(report["matched_key_set"]["count"], 999)
+            self.assertEqual(report["matched_key_set"]["missing_truth_keys"], 1)
+            self.assertAlmostEqual(report["matched_key_set"]["coverage"], 0.999)
+            self.assertTrue(report["matched_key_set"]["gate"])
+            self.assertEqual(report["submissions"]["control"]["extra_prediction_keys"], 1)
+            self.assertEqual(report["submissions"]["candidate"]["extra_prediction_keys"], 1)
+            self.assertTrue(report["comparisons"]["candidate"]["all_four_strictly_improved"])
+            self.assertTrue(report["comparisons"]["candidate"]["accept"])
+            self.assertEqual(
+                json.loads((root / "intersection.json").read_text(encoding="utf-8"))["schema_version"],
+                INTERSECTION.SCHEMA_VERSION,
+            )
+
+    def test_intersection_rejects_matched_key_set_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_smartphone_kaggle_intersection_") as temp_dir:
+            root = Path(temp_dir)
+            truth = root / "ground_truth.csv"
+            control = root / "control.csv"
+            candidate = root / "candidate.csv"
+            rows = [
+                {"phone": "phone-a", "UnixTimeMillis": 1000, "LatitudeDegrees": 0, "LongitudeDegrees": 0},
+                {"phone": "phone-a", "UnixTimeMillis": 2000, "LatitudeDegrees": 0, "LongitudeDegrees": 0},
+            ]
+            write_rows(truth, TRUTH_FIELDS, rows)
+            write_rows(control, SUBMISSION_FIELDS, rows)
+            write_rows(candidate, SUBMISSION_FIELDS, [rows[0], dict(rows[1], UnixTimeMillis=3000)])
+            with self.assertRaisesRegex(ValueError, "matched-key-set mismatch"):
+                INTERSECTION.evaluate_submissions(
+                    truth,
+                    {"control": control, "candidate": candidate},
+                    root / "mismatch.json",
+                )
+
+    def test_intersection_fails_closed_for_duplicate_nonfinite_and_phone_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_smartphone_kaggle_intersection_") as temp_dir:
+            root = Path(temp_dir)
+            truth = root / "ground_truth.csv"
+            control = root / "control.csv"
+            duplicate = root / "duplicate.csv"
+            nonfinite = root / "nonfinite.csv"
+            wrong_phone = root / "wrong_phone.csv"
+            rows = [
+                {"phone": "phone-a", "UnixTimeMillis": 1000, "LatitudeDegrees": 0, "LongitudeDegrees": 0},
+                {"phone": "phone-a", "UnixTimeMillis": 2000, "LatitudeDegrees": 0, "LongitudeDegrees": 0},
+            ]
+            write_rows(truth, TRUTH_FIELDS, rows)
+            write_rows(control, SUBMISSION_FIELDS, rows)
+            write_rows(duplicate, SUBMISSION_FIELDS, rows + [rows[0]])
+            with self.assertRaisesRegex(ValueError, "duplicate submission key"):
+                INTERSECTION.evaluate_submissions(
+                    truth,
+                    {"control": control, "candidate": duplicate},
+                    root / "duplicate.json",
+                )
+
+            write_rows(
+                nonfinite,
+                SUBMISSION_FIELDS,
+                [dict(rows[0], LatitudeDegrees="nan"), rows[1]],
+            )
+            with self.assertRaisesRegex(ValueError, "must be finite"):
+                INTERSECTION.evaluate_submissions(
+                    truth,
+                    {"control": control, "candidate": nonfinite},
+                    root / "nonfinite.json",
+                )
+
+            write_rows(
+                wrong_phone,
+                SUBMISSION_FIELDS,
+                [dict(rows[0], phone="phone-b"), dict(rows[1], phone="phone-b")],
+            )
+            with self.assertRaisesRegex(ValueError, "phone mismatch"):
+                INTERSECTION.evaluate_submissions(
+                    truth,
+                    {"control": control, "candidate": wrong_phone},
+                    root / "phone.json",
+                )
 
 
 if __name__ == "__main__":

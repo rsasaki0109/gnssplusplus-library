@@ -139,6 +139,21 @@ result record](docs/use_cases/records/smartphone_r5_phase17_primary_l1_e1_score_
 Pixel7 truth was not reread, and validation/holdout/test truth remained
 unopened.  Native 0.782-class remains unachieved.
 
+Phase 18 adds a reusable intersection evaluator for recovery of a failed
+multi-submission key check.  Its policy was frozen before implementation:
+surplus prediction keys are counted/hashed but ignored for scoring, missing
+truth keys are counted without filling, and control/candidate must share the
+same matched-key set.  The fixed acceptance floor is 99.9% coverage with at
+most one missing key, plus strict improvement in all four local diagnostics.
+On the sealed mi8 artifacts, one Phase 18 process read the already
+materialized truth once (cumulative truth reads: two including Phase 17),
+matched 1,399/1,400 keys, and found 17 surplus and one missing key.  The
+candidate was worse than control on all four variants (2.068163 vs 2.043566 m
+WGS84-linear), so the result is No-Go; no artifact, policy, or parameter was
+changed afterward.  See the [Phase 18 policy freeze](docs/use_cases/records/smartphone_r5_phase18_intersection_metric_freeze_v1.json),
+[implementation seal](docs/use_cases/records/smartphone_r5_phase18_intersection_metric_manifest_v1.json),
+and [sealed result](docs/use_cases/records/smartphone_r5_phase18_intersection_metric_score_result_v1.json).
+
 ### RTK runtime and smartphone GSDC 2023
 
 The Release RTK broadcast-state cache preserves the position stream and

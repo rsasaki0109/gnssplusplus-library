@@ -1,0 +1,68 @@
+{
+  "schema_version": "smartphone-r5-phase18-intersection-metric-manifest.v1",
+  "status": "evaluator-sealed-before-truth-recovery-read",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_phase18_intersection_metric_freeze_v1.json",
+  "freeze_record_sha256": "63672a482015426b1840989fae5f4f2c18b4f09f590539424d15b5f13d2bb622",
+  "base_commit": "beda6ae",
+  "implementation": {
+    "module": "apps/commands/benchmarks/gnss_smartphone_kaggle_intersection_eval.py",
+    "module_sha256": "d27603952e317ac27ff9fc3bee177a338eabce15a7d67377bdbac6a402d77155",
+    "tests": "tests/test_smartphone_kaggle.py",
+    "tests_sha256": "84fb8dff6c67bbfd87d01c2994a8a46c4b31a23a5616919b78ffac2cda5088fa",
+    "existing_metric_module": "apps/commands/benchmarks/gnss_smartphone_kaggle.py",
+    "existing_metric_module_sha256": "1b0a978bf89dc2adeb8c61a7b5d0c204cd91aafadb721a75075d85d7da9d30ce",
+    "unit_tests": "9/9 passed",
+    "algorithm_or_candidate_changed": false
+  },
+  "frozen_policy": {
+    "policy_record_sha256": "63672a482015426b1840989fae5f4f2c18b4f09f590539424d15b5f13d2bb622",
+    "truth_intersection_only": true,
+    "surplus_prediction_keys": "ignored_for_score_counted_and_hashed",
+    "missing_truth_keys": "counted_as_uncovered_without_interpolation_or_hold",
+    "coverage": "matched_key_count / truth_key_count",
+    "same_control_candidate_matched_key_set_required": true,
+    "coverage_minimum": 0.999,
+    "missing_maximum": 1,
+    "all_four_diagnostics_strict_improvement_required": true,
+    "duplicate_nonfinite_phone_mismatch": "fail_closed",
+    "distance_variants": ["wgs84_vincenty", "haversine_sphere"],
+    "percentile_variants": ["linear_n_minus_1", "nearest_rank_ceiling"]
+  },
+  "sealed_inputs": {
+    "truth": {
+      "path": "output/smartphone-r5/phase17-primary-l1-e1-v1/mi8/truth_materialized/ground_truth.csv",
+      "archive": "data/gsdc2023/cache/dataset_2023.zip",
+      "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+      "central_member": "dataset_2023/train/2022-08-04-20-07-us-ca-sjc-q/mi8/ground_truth.csv",
+      "central_member_size": 135916,
+      "central_member_compress_size": 35730,
+      "central_member_crc32": "ba473cd6",
+      "truth_reads_before_phase18": 1,
+      "truth_reads_reserved_phase18": 1,
+      "truth_reads_after_phase18": "sealed in result record"
+    },
+    "control": {
+      "path": "output/smartphone-r5/phase17-primary-l1-e1-v1/mi8/control/submission.csv",
+      "sha256": "f1ddbfa14dc8dbe179e2eaf896e31a3f69b216fc3cb2a0c24de429877d35e272",
+      "rows": 1416
+    },
+    "candidate": {
+      "path": "output/smartphone-r5/phase17-primary-l1-e1-v1/mi8/candidate/submission.csv",
+      "sha256": "c419d5335ac6f07ec55c84d40a886b6292009826e308a36d4077a679e9962832",
+      "rows": 1416
+    }
+  },
+  "truth_read_contract": {
+    "one_process": true,
+    "one_truth_open_in_this_phase": true,
+    "all_submissions_scored_from_same_in_memory_truth": true,
+    "no_truth_reopen_after_process": true,
+    "validation_truth_open_count": 0,
+    "holdout_truth_open_count": 0,
+    "test_truth_open_count": 0,
+    "mat_read_count": 0,
+    "token_or_kaggle_access": false,
+    "post_score_tuning": false
+  },
+  "manifest_sha256": "excluded-from-self-hash"
+}
