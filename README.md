@@ -88,7 +88,7 @@ See the [v0.2.0 release highlights](docs/releases/v0.2.0.md) and
 | CLAS PPP | Six PPC Tokyo/Nagoya runs vs MRTKLIB CLAS | 24.851% aggregate FIX, 0.377 m FIX RMS2D (lower than MRTKLIB on all six runs), 36.523 m all-solution RMS2D across 58,259 scored epochs; 19 FIX epochs (0.03%) exceed 3 m, all in one pre-existing 4 s Nagoya 2 burst |
 | Urban RTK | UrbanNav Tokyo Odaiba vs RTKLIB `demo5` | More fixes, lower Hp95/Vp95; `--preset odaiba` closes Hmed |
 | SPP | PPC SPP adaptive robust + policy gate | No P95 regression with <=1 pp positioning drop |
-| Smartphone GSDC 2023 | Galileo E1/Hatch/WLS/FGO and upstream-MAT lanes | 40-route/71,936-key test candidate; server private 0.782 (late/unofficial) |
+| Smartphone GSDC 2023 | Galileo E1/Hatch/WLS and native FGO lanes | Native best observed server score 3.952 public / 4.276 private; 0.782-class native target not yet achieved |
 
 ### RTK runtime and smartphone GSDC 2023
 
@@ -106,22 +106,30 @@ in the [RTK cache record](docs/use_cases/records/rtk_ppc_tokyo_spp_cache_prepost
 | Wrong fixes | 0 | 0 |
 | Position output | byte-identical reference | byte-identical reference |
 
-The smartphone lane comparison below reports the server values from three
-single authorized submissions; they are evidence, not tuning targets.
+The native libgnss++ lane comparison below reports the server values from two
+native submissions; they are evidence, not tuning targets. Native FGO v5 is
+the current best at 3.952 public / 4.276 private, so the native 0.782-class
+target has not yet been achieved.
 
-| Kaggle lane | Public | Private |
+| Native libgnss++ lane | Public | Private |
 |---|---:|---:|
 | WLS | 4.018 | 4.873 |
 | Native FGO v5 | 3.952 | 4.276 |
-| Upstream GNSS+IMU MAT v2 | 1.235 | **0.782** |
 
-The current upstream-MAT v2 payload is SHA256
+#### External precomputed oracle/import baseline (not native libgnss++ performance)
+
+For gap analysis only, the separately imported public precomputed upstream
+GNSS+IMU MAT result scored 1.235 public / 0.782 private. This is an external
+oracle/import baseline, not a libgnss++ native inference result and is not
+counted as native performance or native target completion.
+
+The external upstream-MAT v2 payload is SHA256
 `ded15a2a92349b06accfe18bc2afa12c35f7a282497d70ab9fcedf15471fc1f3`, with
 40 routes and 71,936 official keys. Its local train four-diagnostic mean is
-`0.506790881 m`, and no test truth was materialized or read. The submission
-was late, so it has no official rank; score-order insertion gives hypothetical
-public rank 4 and private rank 1, with private `0.782` below the frozen winner
-snapshot `0.883`. See the [smartphone pipeline notes](docs/use_cases/smartphone_raw_gnss.md),
+`0.506790881 m`, and no test truth was materialized or read. The external
+submission was late, so it has no official rank; score-order insertion gives
+hypothetical public rank 4 and private rank 1, with private `0.782` below the
+frozen winner snapshot `0.883`. See the [smartphone pipeline notes](docs/use_cases/smartphone_raw_gnss.md),
 [metric audit](docs/use_cases/records/smartphone_r5_kaggle_metric_primary_source_audit_v1.json),
 [submission record](docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_v2_kaggle_submission_v1.json),
 and [final completion audit](docs/use_cases/records/rtk_smartphone_performance_final_completion_audit.json).
