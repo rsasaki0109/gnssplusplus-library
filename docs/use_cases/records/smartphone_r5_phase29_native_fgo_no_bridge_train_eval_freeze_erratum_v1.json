@@ -1,0 +1,31 @@
+{
+  "schema_version": "smartphone-r5-phase29-native-fgo-no-bridge-train-evaluation-freeze-erratum.v1",
+  "status": "sealed-pre-truth-orchestration-erratum",
+  "purpose": "Correct one control-summary path typo in the already committed Phase29 freeze without changing any candidate, control artifact, algorithm, parameter, or evaluation rule.",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_phase29_native_fgo_no_bridge_train_eval_freeze_v1.json",
+    "sha256": "96a9dbded706d25681737d6d569d0bbac2bf893839a08e78973167204a100d5c",
+    "immutable": true
+  },
+  "correction": {
+    "field": "sealed_route_artifacts.2021-07-14-20-50-us-ca-mtv-e/sm-g988b.control.summary",
+    "recorded_value": "output/smartphone-r5/phase25-raw-clock-eval-v1/no_bridge/2021-07-14-us-ca-mtv-e/sm-g988b/summary.json",
+    "corrected_value": "output/smartphone-r5/phase25-raw-clock-eval-v1/no_bridge/2021-07-14-20-50-us-ca-mtv-e/sm-g988b/summary.json",
+    "reason": "The committed freeze omitted the route's 20-50 time component in this one summary path; the submission path, route key, summary SHA, and actual artifact are otherwise unchanged.",
+    "corrected_summary_sha256": "1c1a1be54b325ded505ff54740aa0ab5d516c89ea05eae54f7cb12d451e98ed3",
+    "algorithm_or_parameter_change": false,
+    "candidate_artifact_change": false,
+    "control_artifact_change": false
+  },
+  "authorization": {
+    "truth_open_count_before_erratum": 0,
+    "truth_materialized_before_erratum": false,
+    "fresh_validation_truth_open_count_before_erratum": 0,
+    "future_holdout_truth_open_count_before_erratum": 0,
+    "mat_read_or_generated": false,
+    "token_access": false,
+    "external_mutation": false,
+    "post_truth_tuning": false
+  },
+  "application": "The Phase29 evaluator may apply this path-only correction in memory after verifying the immutable freeze hash and before any truth materialization or read. No other freeze field may be overridden."
+}
