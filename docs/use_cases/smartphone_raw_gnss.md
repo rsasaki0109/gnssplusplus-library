@@ -2921,6 +2921,8 @@ The immutable freeze, structural seal, and score records are
 `docs/use_cases/records/smartphone_r5_phase11_signal_bias_structural_seal_v1.json`,
 and
 `docs/use_cases/records/smartphone_r5_phase11_signal_bias_score_result_v1.json`.
+The raw signal/SNR/elevation/pair and ADR audit is sealed in
+`docs/use_cases/records/smartphone_r5_phase11_signal_bias_raw_audit_v1.json`.
 Their companion manifests pin the source/binary, input, summary, score, and
 submission hashes.  The raw truth-free artifacts are under
 `output/smartphone-r5/phase11-signal-bias-gtsam-v1_1/`; the submission SHA is

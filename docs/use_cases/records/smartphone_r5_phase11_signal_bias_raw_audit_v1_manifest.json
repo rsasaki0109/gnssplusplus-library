@@ -1,0 +1,11 @@
+{
+  "schema_version": "smartphone-r5-phase11-signal-bias-raw-audit-manifest.v1",
+  "audit_record": "docs/use_cases/records/smartphone_r5_phase11_signal_bias_raw_audit_v1.json",
+  "audit_record_sha256": "e3b218eac16575b1bd4707996193177c1df18e1fa3f73d86afd271982f5c905c",
+  "device_gnss_sha256": "c5af6cc3aeae6ab29a2a10d975d291b8fba4fab15273c0729163cd639ff10e42",
+  "candidate_summary_sha256": "b1535a896c3e25cec1a756971bf6a58b26817801661745268eee8b7a8da2c46b",
+  "truth_read_count": 0,
+  "mat_read_count": 0,
+  "post_score_tuning": false,
+  "manifest_hash": "computed after audit record hash is finalized"
+}
