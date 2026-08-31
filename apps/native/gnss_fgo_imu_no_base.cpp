@@ -79,6 +79,7 @@ struct Options {
     bool native_pdc_imu_tdcp = false;
     bool native_signal_bias_states = false;
     bool native_residual_ionosphere = false;
+    bool native_upstream_quality = false;
 };
 
 void usage(const char* program) {
@@ -91,7 +92,8 @@ void usage(const char* program) {
                  " [--max-epochs 10..30 | --all-epochs]"
                  " [--android-raw-utc-keys] [--fgo-imu-sparse-recovery]"
                  " [--native-pdc-state-bridge] [--native-pdc-imu-tdcp]"
-                 " [--native-signal-bias-states] [--native-residual-ionosphere]\n";
+                 " [--native-signal-bias-states] [--native-residual-ionosphere]"
+                 " [--native-upstream-quality]\n";
 }
 
 bool requireValue(int argc, char** argv, int& index, std::string& value) {
@@ -176,6 +178,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
             options.native_signal_bias_states = true;
         } else if (arg == "--native-residual-ionosphere") {
             options.native_residual_ionosphere = true;
+        } else if (arg == "--native-upstream-quality") {
+            options.native_upstream_quality = true;
         } else {
             std::cerr << "Unknown argument: " << arg << "\n";
             return false;
@@ -254,6 +258,15 @@ bool parseArguments(int argc, char** argv, Options& options) {
         (!options.native_signal_bias_states || !options.native_pdc_imu_tdcp)) {
         std::cerr << "--native-residual-ionosphere requires the frozen "
                      "--native-signal-bias-states and --native-pdc-imu-tdcp base recipe\n";
+        return false;
+    }
+    if (options.native_upstream_quality &&
+        (!android_raw || !options.android_raw_utc_key_contract ||
+         !options.all_epochs || options.skip_epochs != 0 ||
+         !options.native_residual_ionosphere ||
+         !options.native_signal_bias_states || !options.native_pdc_imu_tdcp)) {
+        std::cerr << "--native-upstream-quality requires the frozen Android raw "
+                     "Phase12 base recipe and all epochs\n";
         return false;
     }
     return true;
@@ -991,6 +1004,8 @@ std::string makeSummary(const Options& options,
         << (options.native_signal_bias_states ? "true" : "false") << ",\n"
         << "  \"native_residual_ionosphere\": "
         << (options.native_residual_ionosphere ? "true" : "false") << ",\n"
+        << "  \"native_upstream_quality\": "
+        << (options.native_upstream_quality ? "true" : "false") << ",\n"
         << "  \"native_pdc_state_bridge_report\": {\n"
         << "    \"enabled\": "
         << (pdc_bridge_report.enabled ? "true" : "false") << ",\n"
@@ -1085,6 +1100,60 @@ std::string makeSummary(const Options& options,
         << problem.double_difference_pseudorange_factors.size() << ",\n"
         << "    \"double_difference_carrier_factors\": "
         << problem.double_difference_carrier_factors.size() << "\n"
+        << "  },\n"
+        << "  \"upstream_observable_quality\": {\n"
+        << "    \"enabled\": "
+        << (options.native_upstream_quality ? "true" : "false") << ",\n"
+        << "    \"snr_percentile\": 85.0,\n"
+        << "    \"snr_denominator_db\": 20.0,\n"
+        << "    \"min_snr_dbhz\": 20.0,\n"
+        << "    \"min_elevation_deg\": 5.0,\n"
+        << "    \"max_adjacent_gap_s\": 1.5,\n"
+        << "    \"tdcp_sigma_m_unchanged\": 0.03,\n"
+        << "    \"snr_l1_dbhz\": ";
+    if (options.native_upstream_quality &&
+        std::isfinite(problem.diagnostics.upstream_snr_l1_dbhz)) {
+        out << problem.diagnostics.upstream_snr_l1_dbhz;
+    } else {
+        out << "null";
+    }
+    out << ",\n    \"snr_l5_dbhz\": ";
+    if (options.native_upstream_quality &&
+        std::isfinite(problem.diagnostics.upstream_snr_l5_dbhz)) {
+        out << problem.diagnostics.upstream_snr_l5_dbhz;
+    } else {
+        out << "null";
+    }
+    out << ",\n"
+        << "    \"pseudorange_candidates\": "
+        << problem.diagnostics.upstream_pseudorange_candidates << ",\n"
+        << "    \"pseudorange_factors\": "
+        << problem.diagnostics.upstream_pseudorange_factors << ",\n"
+        << "    \"doppler_candidates\": "
+        << problem.diagnostics.upstream_doppler_candidates << ",\n"
+        << "    \"doppler_factors\": "
+        << problem.diagnostics.upstream_doppler_factors << ",\n"
+        << "    \"doppler_graph_factors\": "
+        << result.diagnostics.undifferenced_doppler_factors_inserted << ",\n"
+        << "    \"pd_pair_rejections\": "
+        << problem.diagnostics.upstream_pd_pair_rejections << ",\n"
+        << "    \"ld_pair_rejections\": "
+        << problem.diagnostics.upstream_ld_pair_rejections << ",\n"
+        << "    \"doppler_residual_rejections\": "
+        << problem.diagnostics.upstream_doppler_residual_rejections << ",\n"
+        << "    \"pseudorange_residual_rejections\": "
+        << problem.diagnostics.upstream_pseudorange_residual_rejections << ",\n"
+        << "    \"pseudorange_postfit_rms_m\": "
+        << result.diagnostics.residual_rms_m << ",\n"
+        << "    \"pseudorange_postfit_normalized_rms\": "
+        << result.diagnostics.upstream_pseudorange_normalized_rms << ",\n"
+        << "    \"doppler_postfit_rms_mps\": "
+        << result.diagnostics.undifferenced_doppler_residual_rms_mps << ",\n"
+        << "    \"doppler_postfit_normalized_rms\": "
+        << result.diagnostics.upstream_doppler_normalized_rms << ",\n"
+        << "    \"pseudorange_sigma_contract\": \"snr_scale*signal_type_factor\",\n"
+        << "    \"doppler_sigma_contract\": \"snr_scale/12\",\n"
+        << "    \"carrier_tdcp_contract\": \"Phase12 frozen sigma 0.03; upstream L weighting not enabled\"\n"
         << "  },\n"
         << "  \"receiver_signal_bias_estimates_m\": {";
     bool first_signal_bias = true;
@@ -1470,6 +1539,20 @@ int main(int argc, char** argv) {
         config.residual_ionosphere_max_abs_m = 30.0;
         config.residual_ionosphere_max_gap_s = 2.0;
     }
+    if (options.native_upstream_quality) {
+        // Phase13 fixed raw-observable contract.  This is deliberately kept
+        // separate from the frozen Phase12 TDCP sigma: only code and
+        // receiver-only Doppler factors receive the upstream SNR model.
+        config.use_upstream_observable_quality = true;
+        config.upstream_snr_percentile = 85.0;
+        config.upstream_min_snr_dbhz = 20.0;
+        config.upstream_min_elevation_deg = 5.0;
+        config.upstream_max_adjacent_gap_s = 1.5;
+        // Pixel devices in the declared development recipe do not use the
+        // legacy carrier sign-offset list.  An empty model is intentional:
+        // it prevents device identity from selecting a quality mask.
+        config.upstream_device_model.clear();
+    }
     config.pose3_lever_arm_body_m = libgnss::Vector3d::Zero();
     if (android_raw) {
         // The raw path starts SPP from the route-independent Earth-surface
@@ -1482,15 +1565,51 @@ int main(int argc, char** argv) {
         config.min_snr_dbhz = 0.0;
     }
     const libgnss::FGOProcessor processor(config);
-    libgnss::FGOProcessor::FGOProblem problem =
-        processor.buildPseudorangeProblem(epochs, nav);
+    libgnss::FGOProcessor::FGOProblem problem;
+    NativePdcBridgeReport pdc_bridge_report;
+    bool pdc_bridge_prepopulated = false;
+    if (options.native_upstream_quality) {
+        // Keep the frozen Phase12 PDC initializer independent of the new
+        // residual/SNR masks.  The initializer is not a second output lane:
+        // its finite state is passed in-memory into the quality-enabled graph,
+        // while every final P/D factor is built from the quality problem below.
+        // This prevents the upstream SNR sigma (which is intentionally much
+        // smaller than the PDC bridge's broad physical gate) from making the
+        // unchanged initializer fail before the candidate graph is tested.
+        libgnss::FGOProcessor::FGOConfig bridge_config = config;
+        bridge_config.use_upstream_observable_quality = false;
+        const libgnss::FGOProcessor bridge_processor(bridge_config);
+        auto bridge_problem =
+            bridge_processor.buildPseudorangeProblem(epochs, nav);
+        if (bridge_problem.epochs.size() != epochs.size() ||
+            !populateNativePdcStateBridge(bridge_problem, pdc_bridge_report)) {
+            if (pdc_bridge_report.failure.empty()) {
+                pdc_bridge_report.failure =
+                    "unfiltered Phase12 PDC initializer epoch alignment failed";
+            }
+            std::cerr << "native PDC state bridge failed closed: "
+                      << pdc_bridge_report.failure << "\n";
+            return 1;
+        }
+        problem = processor.buildPseudorangeProblem(epochs, nav);
+        if (problem.epochs.size() != bridge_problem.epochs.size()) {
+            std::cerr << "quality candidate changed epoch indexing relative to the "
+                         "frozen PDC initializer\n";
+            return 1;
+        }
+        problem.native_pdc_state_seeds =
+            std::move(bridge_problem.native_pdc_state_seeds);
+        pdc_bridge_prepopulated = true;
+    } else {
+        problem = processor.buildPseudorangeProblem(epochs, nav);
+    }
     if (problem.epochs.size() < 2 || problem.pseudorange_factors.empty()) {
         std::cerr << "no-base problem has insufficient seeded pseudorange factors\n";
         return 1;
     }
 
-    NativePdcBridgeReport pdc_bridge_report;
     if (options.native_pdc_state_bridge &&
+        !pdc_bridge_prepopulated &&
         !populateNativePdcStateBridge(problem, pdc_bridge_report)) {
         std::cerr << "native PDC state bridge failed closed: "
                   << pdc_bridge_report.failure << "\n";

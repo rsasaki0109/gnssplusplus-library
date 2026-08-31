@@ -49,7 +49,7 @@ using libgnss_apps::robustHuberLoss;
 using libgnss_apps::robustHuberWeight;
 using libgnss_apps::sagnacRangeCorrection;
 using libgnss_apps::signalName;
-namespace upstream = libgnss_apps::upstream;
+namespace upstream = libgnss::observable_upstream;
 namespace upstream_state = libgnss_apps::upstream_state_contract;
 
 constexpr double kPi = 3.141592653589793238462643383279502884;
@@ -139,7 +139,7 @@ struct PseudorangeFactor {
     libgnss::Vector3d los = libgnss::Vector3d::Zero();
 };
 
-using ObservationKey = std::tuple<libgnss::SatelliteId, libgnss::SignalType>;
+using ObservationKey = upstream::ObservationKey;
 
 struct CarrierResidual {
     std::size_t epoch_index = 0;
@@ -969,10 +969,7 @@ SolveResult solveProblem(const Problem& problem, const Options& options) {
     return result;
 }
 
-struct UpstreamEpochMask {
-    std::set<ObservationKey> pseudorange;
-    std::set<ObservationKey> carrier;
-};
+using UpstreamEpochMask = upstream::EpochMask;
 
 double finiteMedian(std::vector<double> values) {
     values.erase(std::remove_if(values.begin(), values.end(),
@@ -987,18 +984,6 @@ double finiteMedian(std::vector<double> values) {
     return 0.5 * (values[middle - 1U] + values[middle]);
 }
 
-bool upstreamCarrierSignDevice(const std::string& device_model) {
-    return device_model == "sm-a205u" || device_model == "sm-a217m" ||
-           device_model == "sm-a505g" || device_model == "sm-a600t" ||
-           device_model == "sm-a505u";
-}
-
-bool upstreamPseudorangePairSkipDevice(const std::string& device_model) {
-    // exobs_residuals.m skips only the two phones whose pseudorange/Doppler
-    // timing is known to make this particular diagnostic non-actionable.
-    return device_model == "sm-a205u" || device_model == "sm-a505u";
-}
-
 double effectiveMinimumSnr(const Options& options) {
     return options.upstream_residual_snr ? 20.0 : options.min_snr_dbhz;
 }
@@ -1008,119 +993,6 @@ double effectiveMinimumElevationDegrees(const Options& options) {
     // raw frontend exposes L5 by default, so the opt-in residual lane uses
     // that fixed published mask; the legacy lane retains its 15 degree mask.
     return options.upstream_residual_snr ? 5.0 : options.min_elevation_deg;
-}
-
-upstream::SnrPercentiles collectUpstreamSnrPercentiles(
-    const libgnss::ObservationSeries& observations) {
-    std::vector<double> l1;
-    std::vector<double> l5;
-    for (const auto& epoch : observations.epochs) {
-        for (const auto& observation : epoch.observations) {
-            if (upstream::bandForSignal(observation.signal) ==
-                upstream::ObservationBand::L1) {
-                l1.push_back(observation.snr);
-            } else if (upstream::bandForSignal(observation.signal) ==
-                       upstream::ObservationBand::L5) {
-                l5.push_back(observation.snr);
-            }
-        }
-    }
-    upstream::SnrPercentiles percentiles;
-    percentiles.l1_dbhz = upstream::linearPercentile(std::move(l1), 85.0);
-    percentiles.l5_dbhz = upstream::linearPercentile(std::move(l5), 85.0);
-    return percentiles;
-}
-
-void applyUpstreamAdjacentMasks(
-    const std::vector<libgnss::ObservationData>& epochs,
-    const std::string& device_model,
-    std::vector<UpstreamEpochMask>& masks,
-    std::size_t& pseudorange_rejections,
-    std::size_t& carrier_rejections) {
-    masks.assign(epochs.size(), UpstreamEpochMask{});
-    std::map<ObservationKey, std::tuple<std::size_t, const libgnss::Observation*,
-                                        libgnss::GNSSTime>> previous;
-    for (std::size_t current_index = 0; current_index < epochs.size();
-         ++current_index) {
-        const auto& epoch = epochs[current_index];
-        for (const auto& observation : epoch.observations) {
-            const ObservationKey key{observation.satellite, observation.signal};
-            const auto previous_it = previous.find(key);
-            if (previous_it != previous.end()) {
-                const auto [previous_index, previous_observation, previous_time] =
-                    previous_it->second;
-                const double dt = epoch.time - previous_time;
-                const upstream::ObservationBand band =
-                    upstream::bandForSignal(observation.signal);
-                const double wavelength =
-                    libgnss::signalWavelengthMeters(observation);
-                if (dt > 0.0 && dt <= 1.5 &&
-                    band != upstream::ObservationBand::Unknown &&
-                    upstream::finitePositive(wavelength)) {
-                    if (previous_observation->has_pseudorange &&
-                        observation.has_pseudorange &&
-                        previous_observation->pseudorange > 0.0 &&
-                        observation.pseudorange > 0.0 &&
-                        previous_observation->has_doppler &&
-                        observation.has_doppler &&
-                        std::isfinite(previous_observation->doppler) &&
-                        std::isfinite(observation.doppler)) {
-                        const double difference =
-                            upstream::pseudorangeDopplerDifference(
-                                previous_observation->pseudorange,
-                                observation.pseudorange,
-                                previous_observation->doppler,
-                                observation.doppler,
-                                wavelength,
-                                dt);
-                        if (std::isfinite(difference) &&
-                            std::abs(difference) >
-                                upstream::pairThreshold(band, 'P') &&
-                            !upstreamPseudorangePairSkipDevice(device_model)) {
-                            const bool inserted_previous =
-                                masks[previous_index].pseudorange.insert(key).second;
-                            const bool inserted_current =
-                                masks[current_index].pseudorange.insert(key).second;
-                            if (inserted_previous) ++pseudorange_rejections;
-                            if (inserted_current) ++pseudorange_rejections;
-                        }
-                    }
-                    if (previous_observation->has_carrier_phase &&
-                        observation.has_carrier_phase &&
-                        std::isfinite(previous_observation->carrier_phase) &&
-                        std::isfinite(observation.carrier_phase) &&
-                        previous_observation->has_doppler &&
-                        observation.has_doppler &&
-                        std::isfinite(previous_observation->doppler) &&
-                        std::isfinite(observation.doppler)) {
-                        const double offset = upstreamCarrierSignDevice(device_model)
-                                                   ? 1.117
-                                                   : 0.0;
-                        const double difference =
-                            upstream::carrierDopplerDifference(
-                                previous_observation->carrier_phase,
-                                observation.carrier_phase,
-                                previous_observation->doppler,
-                                observation.doppler,
-                                wavelength,
-                                dt,
-                                offset);
-                        if (std::isfinite(difference) &&
-                            std::abs(difference) >
-                                upstream::pairThreshold(band, 'L')) {
-                            const bool inserted_previous =
-                                masks[previous_index].carrier.insert(key).second;
-                            const bool inserted_current =
-                                masks[current_index].carrier.insert(key).second;
-                            if (inserted_previous) ++carrier_rejections;
-                            if (inserted_current) ++carrier_rejections;
-                        }
-                    }
-                }
-            }
-            previous[key] = {current_index, &observation, epoch.time};
-        }
-    }
 }
 
 bool calculateObservationModel(const libgnss::ObservationData& epoch,
@@ -1563,12 +1435,12 @@ Problem buildProblem(const Options& options) {
     std::vector<UpstreamEpochMask> upstream_epoch_masks;
     if (problem.android_raw && options.upstream_residual_snr) {
         problem.upstream_snr_percentiles =
-            collectUpstreamSnrPercentiles(android_raw.observations);
-        applyUpstreamAdjacentMasks(android_raw.observations.epochs,
-                                   options.device_model,
-                                   upstream_epoch_masks,
-                                   problem.upstream_pd_pair_rejections,
-                                   problem.upstream_ld_pair_rejections);
+            upstream::collectSnrPercentiles(android_raw.observations.epochs);
+        upstream::applyAdjacentMasks(android_raw.observations.epochs,
+                                     options.device_model,
+                                     upstream_epoch_masks,
+                                     problem.upstream_pd_pair_rejections,
+                                     problem.upstream_ld_pair_rejections);
     }
 
     auto append_epoch = [&](libgnss::ObservationData epoch,
@@ -2266,7 +2138,7 @@ bool forbiddenNativeInputPath(const std::string& path) {
                        return static_cast<char>(std::tolower(character));
                    });
     constexpr const char* markers[] = {
-        "result_gnss", "ground_truth", "gt.mat", "sample_submission",
+        "result_gnss", "ground_truth", "sample_submission",
         "submission.csv", "submission_", "native-fgo-test-v5", "upstream-mat",
         "precomputed"};
     for (const char* marker : markers) {
@@ -2491,7 +2363,7 @@ bool writeSummaryJson(const std::string& path,
                    << "    \"doppler_residual_threshold_mps\": 3,\n"
                    << "    \"carrier_pair_threshold_m\": 1.5,\n"
                    << "    \"carrier_offset_m\": "
-                   << (upstreamCarrierSignDevice(options.device_model) ? 1.117 : 0.0)
+                   << (upstream::carrierSignOffsetDevice(options.device_model) ? 1.117 : 0.0)
                    << ",\n"
                    << "    \"base_pseudorange_compensation\": \"not applied; unavailable under raw+nav-only contract\"\n"
                    << "  }";

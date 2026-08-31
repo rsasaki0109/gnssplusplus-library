@@ -35,6 +35,7 @@
 namespace libgnss {
 
 using namespace fgo_internal;
+namespace upstream = observable_upstream;
 
 FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
     const std::vector<ObservationData>& input_epochs,
@@ -73,11 +74,45 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
     SPPProcessor spp_processor(spp_config);
     spp_processor.initialize(spp_processor_config);
 
-    const double min_elevation_rad = config_.min_elevation_deg * M_PI / 180.0;
+    const double effective_min_elevation_deg =
+        config_.use_upstream_observable_quality
+            ? config_.upstream_min_elevation_deg
+            : config_.min_elevation_deg;
+    const double min_elevation_rad = effective_min_elevation_deg * M_PI / 180.0;
     const double dd_reference_min_snr_dbhz =
         config_.double_difference_reference_min_snr_dbhz >= 0.0
             ? config_.double_difference_reference_min_snr_dbhz
             : config_.min_snr_dbhz;
+    upstream::SnrPercentiles upstream_snr_percentiles;
+    std::vector<upstream::EpochMask> upstream_epoch_masks;
+    if (config_.use_upstream_observable_quality) {
+        upstream_snr_percentiles = upstream::collectSnrPercentiles(
+            input_epochs, config_.upstream_snr_percentile);
+        problem.diagnostics.upstream_snr_l1_dbhz =
+            upstream_snr_percentiles.l1_dbhz;
+        problem.diagnostics.upstream_snr_l5_dbhz =
+            upstream_snr_percentiles.l5_dbhz;
+        upstream::applyAdjacentMasks(
+            input_epochs, config_.upstream_device_model, upstream_epoch_masks,
+            problem.diagnostics.upstream_pd_pair_rejections,
+            problem.diagnostics.upstream_ld_pair_rejections,
+            config_.upstream_max_adjacent_gap_s);
+    }
+    const auto finiteMedian = [](std::vector<double> values) {
+        values.erase(std::remove_if(values.begin(), values.end(),
+                                    [](double value) {
+                                        return !std::isfinite(value);
+                                    }),
+                      values.end());
+        if (values.empty()) {
+            return std::numeric_limits<double>::quiet_NaN();
+        }
+        std::sort(values.begin(), values.end());
+        const std::size_t middle = values.size() / 2U;
+        return (values.size() & 1U) != 0U
+                   ? values[middle]
+                   : 0.5 * (values[middle - 1U] + values[middle]);
+    };
     std::vector<std::map<std::pair<SatelliteId, SignalType>, PreparedCarrierObservation>>
         carrier_by_problem_epoch;
     std::vector<std::map<std::pair<SatelliteId, SignalType>, PreparedCarrierObservation>>
@@ -102,7 +137,14 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
     double last_valid_seed_clock_bias_m = 0.0;
     bool have_last_valid_seed = false;
 
-    for (const auto& epoch : input_epochs) {
+    for (std::size_t input_epoch_index = 0;
+         input_epoch_index < input_epochs.size(); ++input_epoch_index) {
+        const auto& epoch = input_epochs[input_epoch_index];
+        const upstream::EpochMask* upstream_mask =
+            config_.use_upstream_observable_quality &&
+                    input_epoch_index < upstream_epoch_masks.size()
+                ? &upstream_epoch_masks[input_epoch_index]
+                : nullptr;
         EpochSeed seed;
         seed.time = epoch.time;
 
@@ -169,7 +211,38 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                 observation.pseudorange <= 0.0) {
                 continue;
             }
-            const bool passes_snr_mask = observation.snr >= config_.min_snr_dbhz;
+            const std::pair<SatelliteId, SignalType> observation_key{
+                observation.satellite, observation.signal};
+            const bool upstream_pseudorange_masked =
+                upstream_mask != nullptr &&
+                upstream_mask->pseudorange.count(observation_key) != 0U;
+            const bool upstream_carrier_masked =
+                upstream_mask != nullptr &&
+                upstream_mask->carrier.count(observation_key) != 0U;
+            const upstream::ObservationBand upstream_band =
+                upstream::bandForSignal(observation.signal);
+            const double upstream_pseudorange_sigma =
+                config_.use_upstream_observable_quality
+                    ? upstream::snrPercentileSigma(
+                          observation.signal, observation.snr,
+                          upstream_snr_percentiles, 'P')
+                    : std::numeric_limits<double>::quiet_NaN();
+            const double upstream_doppler_sigma =
+                config_.use_upstream_observable_quality
+                    ? upstream::snrPercentileSigma(
+                          observation.signal, observation.snr,
+                          upstream_snr_percentiles, 'D')
+                    : std::numeric_limits<double>::quiet_NaN();
+            const bool upstream_snr_ok =
+                !config_.use_upstream_observable_quality ||
+                (std::isfinite(observation.snr) &&
+                 observation.snr >= config_.upstream_min_snr_dbhz &&
+                 upstream_band != upstream::ObservationBand::Unknown &&
+                 upstream::finitePositive(upstream_pseudorange_sigma) &&
+                 upstream::finitePositive(upstream_doppler_sigma));
+            const bool passes_snr_mask = config_.use_upstream_observable_quality
+                                             ? upstream_snr_ok
+                                             : observation.snr >= config_.min_snr_dbhz;
             const bool passes_dd_reference_snr_mask =
                 dd_reference_min_snr_dbhz <= 0.0 ||
                 observation.snr >= dd_reference_min_snr_dbhz;
@@ -251,17 +324,30 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
             const double pseudorange_elevation_scale = std::pow(
                 sin_el,
                 std::max(0.0, config_.pseudorange_elevation_sigma_power));
-            if (passes_snr_mask && passes_elevation_mask) {
+            if (passes_snr_mask && passes_elevation_mask &&
+                !upstream_pseudorange_masked) {
                 PseudorangeFactor factor;
                 factor.satellite = observation.satellite;
                 factor.signal = observation.signal;
                 factor.clock_group = clockBiasGroup(observation.satellite.system);
                 factor.satellite_position_ecef = corrected_satellite_position;
                 factor.corrected_pseudorange_m = corrected_pseudorange;
-                factor.sigma_m =
-                    std::max(1e-3,
-                             config_.pseudorange_sigma_m /
-                                 std::max(1e-6, pseudorange_elevation_scale));
+                factor.sigma_m = config_.use_upstream_observable_quality
+                                     ? upstream_pseudorange_sigma
+                                     : std::max(
+                                           1e-3,
+                                           config_.pseudorange_sigma_m /
+                                               std::max(1e-6,
+                                                        pseudorange_elevation_scale));
+                if (!upstream::finitePositive(factor.sigma_m)) {
+                    continue;
+                }
+                factor.snr_dbhz = observation.snr;
+                const double seed_range =
+                    (corrected_satellite_position - seed.position_ecef).norm();
+                factor.upstream_seed_residual_m =
+                    corrected_pseudorange - seed_range -
+                    seed.receiver_clock_bias_m;
                 factor.elevation_rad = geometry.elevation;
                 factor.residual_ionosphere_coefficient =
                     residual_ionosphere::signalCoefficient(
@@ -275,6 +361,9 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                     }
                 }
                 epoch_factors.push_back(factor);
+                if (config_.use_upstream_observable_quality) {
+                    ++problem.diagnostics.upstream_pseudorange_factors;
+                }
                 if (observation.satellite.system == GNSSSystem::GPS) {
                     gps_pseudorange_by_satellite[observation.satellite] =
                         observation.pseudorange;
@@ -410,10 +499,15 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                 factor.signal = observation.signal;
                 factor.los = carrier.los;
                 factor.residual_mps = carrier.doppler_residual_mps;
-                factor.sigma_mps = std::max(
-                    1e-4,
-                        config_.undifferenced_doppler_sigma_mps /
-                            std::sqrt(sin_el));
+                factor.sigma_mps = config_.use_upstream_observable_quality
+                                       ? upstream_doppler_sigma
+                                       : std::max(
+                                             1e-4,
+                                             config_.undifferenced_doppler_sigma_mps /
+                                                 std::sqrt(sin_el));
+                if (!upstream::finitePositive(factor.sigma_mps)) {
+                    continue;
+                }
                 factor.elevation_rad = carrier.elevation_rad;
                 factor.measured_range_rate_mps =
                     model_debug.doppler_measured_range_rate_mps;
@@ -425,21 +519,57 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                     model_debug.doppler_uses_rotated_satellite_state;
                 epoch_doppler_factors.push_back(factor);
             }
-            if (passes_dd_reference_snr_mask) {
+            if (passes_dd_reference_snr_mask && !upstream_carrier_masked) {
                 epoch_dd_reference_carriers[
                     {observation.satellite, observation.signal}] = carrier;
             }
-            if (passes_snr_mask && passes_elevation_mask) {
+            if (passes_snr_mask && passes_elevation_mask &&
+                !upstream_pseudorange_masked) {
                 epoch_dd_pseudorange_observations[
                     {observation.satellite, observation.signal}] = carrier;
             }
-            if (usable_carrier && passes_snr_mask && passes_elevation_mask) {
+            if (usable_carrier && passes_snr_mask && passes_elevation_mask &&
+                !upstream_carrier_masked) {
                 if (!(config_.reject_rover_carrier_loss_of_lock &&
                       carrier_loss_of_lock)) {
                     epoch_carriers[{observation.satellite, observation.signal}] =
                         carrier;
                 }
             }
+        }
+
+        if (config_.use_upstream_observable_quality) {
+            // exobs_residuals.m removes Doppler rows whose modeled residual
+            // differs from the epoch median by more than 3 m/s.  Apply this
+            // only to the receiver-only D factors; TDCP keeps the frozen
+            // Phase12 0.03 m contract and is screened by its own arc rules.
+            problem.diagnostics.upstream_doppler_candidates +=
+                epoch_doppler_factors.size();
+            const std::vector<double> residuals = [&]() {
+                std::vector<double> values;
+                values.reserve(epoch_doppler_factors.size());
+                for (const auto& factor : epoch_doppler_factors) {
+                    values.push_back(factor.residual_mps);
+                }
+                return values;
+            }();
+            const double median = finiteMedian(residuals);
+            std::vector<UndifferencedDopplerFactor> filtered_doppler;
+            filtered_doppler.reserve(epoch_doppler_factors.size());
+            for (const auto& factor : epoch_doppler_factors) {
+                const double threshold = upstream::residualThreshold(
+                    upstream::bandForSignal(factor.signal), 'D');
+                if (std::isfinite(median) && std::isfinite(threshold) &&
+                    std::isfinite(factor.residual_mps) &&
+                    std::abs(factor.residual_mps - median) <= threshold) {
+                    filtered_doppler.push_back(factor);
+                } else {
+                    ++problem.diagnostics.upstream_doppler_residual_rejections;
+                }
+            }
+            epoch_doppler_factors.swap(filtered_doppler);
+            problem.diagnostics.upstream_doppler_factors +=
+                epoch_doppler_factors.size();
         }
 
         const std::size_t usable_epoch_measurements =
@@ -516,6 +646,52 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
             }
             problem.undifferenced_doppler_factors.push_back(factor);
         }
+    }
+
+    if (config_.use_upstream_observable_quality) {
+        // The published residual mask uses one median per system/frequency
+        // over the whole observation matrix.  Reconstruct the same
+        // truth-free center from native SPP-seed residuals; no enriched
+        // receiver/satellite coordinate is consulted.
+        using ResidualGroup =
+            std::pair<GNSSSystem, upstream::ObservationBand>;
+        std::map<ResidualGroup, std::vector<double>> residuals_by_group;
+        for (const auto& factor : problem.pseudorange_factors) {
+            const ResidualGroup group{
+                factor.clock_group, upstream::bandForSignal(factor.signal)};
+            if (group.second == upstream::ObservationBand::Unknown ||
+                !std::isfinite(factor.upstream_seed_residual_m)) {
+                continue;
+            }
+            residuals_by_group[group].push_back(factor.upstream_seed_residual_m);
+        }
+        std::map<ResidualGroup, double> residual_medians;
+        for (const auto& [group, values] : residuals_by_group) {
+            residual_medians[group] = finiteMedian(values);
+        }
+        problem.diagnostics.upstream_pseudorange_candidates =
+            problem.pseudorange_factors.size();
+        std::vector<PseudorangeFactor> filtered_pseudorange;
+        filtered_pseudorange.reserve(problem.pseudorange_factors.size());
+        for (const auto& factor : problem.pseudorange_factors) {
+            const ResidualGroup group{
+                factor.clock_group, upstream::bandForSignal(factor.signal)};
+            const auto median_it = residual_medians.find(group);
+            const double median = median_it == residual_medians.end()
+                                      ? std::numeric_limits<double>::quiet_NaN()
+                                      : median_it->second;
+            const double threshold = upstream::residualThreshold(group.second, 'P');
+            if (std::isfinite(median) && std::isfinite(threshold) &&
+                std::isfinite(factor.upstream_seed_residual_m) &&
+                std::abs(factor.upstream_seed_residual_m - median) <= threshold) {
+                filtered_pseudorange.push_back(factor);
+            } else {
+                ++problem.diagnostics.upstream_pseudorange_residual_rejections;
+            }
+        }
+        problem.pseudorange_factors.swap(filtered_pseudorange);
+        problem.diagnostics.upstream_pseudorange_factors =
+            problem.pseudorange_factors.size();
     }
 
     if (config_.use_doppler_velocity_wls_initialization) {

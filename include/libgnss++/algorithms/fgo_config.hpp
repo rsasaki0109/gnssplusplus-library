@@ -194,6 +194,18 @@ struct Config {
         // closed; it is not used to clip or select a solution.
         double residual_ionosphere_max_abs_m = 30.0;
         double residual_ionosphere_max_gap_s = 2.0;
+        // Research-only raw-observable quality contract.  When enabled, the
+        // problem builder computes the MATLAB-compatible global SNR p85 from
+        // Observation::snr, applies the published adjacent P-D/L-D masks,
+        // and uses the resulting P/D SNR sigmas.  TDCP keeps its caller's
+        // sigma (the smartphone Phase12 contract is 0.03 m); no file,
+        // coordinate, or truth input is consulted.  All defaults remain off.
+        bool use_upstream_observable_quality = false;
+        double upstream_snr_percentile = 85.0;
+        double upstream_min_snr_dbhz = 20.0;
+        double upstream_min_elevation_deg = 5.0;
+        double upstream_max_adjacent_gap_s = 1.5;
+        std::string upstream_device_model;
         bool use_single_difference_doppler_factors = false;
         bool use_single_difference_tdcp_factors = false;
         bool use_velocity_states = false;

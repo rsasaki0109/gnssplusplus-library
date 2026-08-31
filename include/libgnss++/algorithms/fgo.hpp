@@ -2,6 +2,7 @@
 
 #include <libgnss++/algorithms/fgo_config.hpp>
 #include <libgnss++/algorithms/doppler_velocity_wls.hpp>
+#include <libgnss++/algorithms/observable_upstream_preprocessing.hpp>
 #include <libgnss++/core/navigation.hpp>
 #include <libgnss++/core/observation.hpp>
 #include <libgnss++/core/solution.hpp>
@@ -79,6 +80,14 @@ public:
         Vector3d satellite_position_ecef = Vector3d::Zero();
         double corrected_pseudorange_m = 0.0;
         double sigma_m = 1.0;
+        // Raw CN0/SNR carried with the factor for truth-free quality
+        // diagnostics.  The value is never populated from enriched
+        // receiver/satellite coordinate columns.
+        double snr_dbhz = 0.0;
+        // Truth-free pre-fit residual against the native SPP seed, used only
+        // by the opt-in upstream global residual mask.  It is not an
+        // optimizer state and remains zero for legacy factors.
+        double upstream_seed_residual_m = 0.0;
         double elevation_rad = 0.0;
         // Coefficient for the optional shared vertical L1 residual-ionosphere
         // state [m].  It is precomputed from the raw-row signal frequency and
@@ -265,6 +274,21 @@ public:
         std::size_t geometry_free_cycle_slip_resets = 0;      ///< confirmed geometry-free band resets
         std::size_t code_minus_carrier_level_exclusions = 0;  ///< CMC screening: (sat,signal) epochs excluded
         std::size_t cmc_ref_avoided_count = 0;  ///< cmc_aware_reference_selection: references changed away from a CMC-excluded candidate
+        // Raw upstream residual/SNR quality contract diagnostics.  These are
+        // populated only when FGOConfig::use_upstream_observable_quality is
+        // enabled and are otherwise zero, preserving the default graph.
+        double upstream_snr_l1_dbhz =
+            std::numeric_limits<double>::quiet_NaN();
+        double upstream_snr_l5_dbhz =
+            std::numeric_limits<double>::quiet_NaN();
+        std::size_t upstream_pseudorange_candidates = 0;
+        std::size_t upstream_doppler_candidates = 0;
+        std::size_t upstream_pseudorange_factors = 0;
+        std::size_t upstream_doppler_factors = 0;
+        std::size_t upstream_pd_pair_rejections = 0;
+        std::size_t upstream_ld_pair_rejections = 0;
+        std::size_t upstream_doppler_residual_rejections = 0;
+        std::size_t upstream_pseudorange_residual_rejections = 0;
     };
 
     // --- Phase 2 milestone 2b: IMU preintegration inputs ---
@@ -538,6 +562,13 @@ public:
         /// TDCP residual rows/factors actually inserted by the selected backend.
         std::size_t tdcp_factors_inserted = 0;
         std::size_t undifferenced_doppler_factors = 0;
+        /// Undifferenced Doppler rows actually inserted by the selected backend.
+        /// This can differ from undifferenced_doppler_factors when a backend
+        /// rejects a non-finite/invalid row or when a feature path is disabled.
+        std::size_t undifferenced_doppler_factors_inserted = 0;
+        /// Raw-observable quality residual diagnostics (candidate-only).
+        double upstream_pseudorange_normalized_rms = 0.0;
+        double upstream_doppler_normalized_rms = 0.0;
         // Truth-free per-epoch Doppler WLS initialization diagnostics.
         std::size_t doppler_velocity_wls_valid_epochs = 0;
         std::size_t doppler_velocity_wls_propagated_epochs = 0;

@@ -9,15 +9,17 @@
 namespace {
 
 using libgnss::SignalType;
-using libgnss_apps::upstream::ObservationBand;
-using libgnss_apps::upstream::carrierDopplerDifference;
-using libgnss_apps::upstream::linearPercentile;
-using libgnss_apps::upstream::pairThreshold;
-using libgnss_apps::upstream::pseudorangeDopplerDifference;
-using libgnss_apps::upstream::signalTypeFactor;
-using libgnss_apps::upstream::snrPercentileSigma;
-using libgnss_apps::upstream::snrScale;
-using libgnss_apps::upstream::SnrPercentiles;
+using libgnss::observable_upstream::ObservationBand;
+using libgnss::observable_upstream::carrierDopplerDifference;
+using libgnss::observable_upstream::linearPercentile;
+using libgnss::observable_upstream::pairThreshold;
+using libgnss::observable_upstream::pseudorangeDopplerDifference;
+using libgnss::observable_upstream::signalTypeFactor;
+using libgnss::observable_upstream::snrPercentileSigma;
+using libgnss::observable_upstream::snrScale;
+using libgnss::observable_upstream::SnrPercentiles;
+using libgnss::observable_upstream::EpochMask;
+using libgnss::observable_upstream::applyAdjacentMasks;
 
 TEST(UpstreamObservablePreprocessingTest, MatchesMatlabPrctileMidpointRanks) {
     const std::vector<double> values{0.0, 10.0};
@@ -71,6 +73,40 @@ TEST(UpstreamObservablePreprocessingTest, PortsHandComputablePairEquations) {
     EXPECT_DOUBLE_EQ(pairThreshold(ObservationBand::L1, 'P'), 40.0);
     EXPECT_DOUBLE_EQ(pairThreshold(ObservationBand::L5, 'P'), 20.0);
     EXPECT_DOUBLE_EQ(pairThreshold(ObservationBand::L1, 'L'), 1.5);
+}
+
+TEST(UpstreamObservablePreprocessingTest, AppliesTwoSidedAdjacentMasksAndGapGate) {
+    const libgnss::SatelliteId sat(libgnss::GNSSSystem::GPS, 7);
+    libgnss::Observation first(sat, SignalType::GPS_L1CA);
+    first.valid = true;
+    first.has_pseudorange = true;
+    first.has_doppler = true;
+    first.pseudorange = 20'000'000.0;
+    first.doppler = 0.0;
+    first.snr = 40.0;
+    libgnss::Observation second = first;
+    second.pseudorange += 100.0;  // |dDP| = 100 m > the 40 m L1 bound.
+    libgnss::ObservationData epoch0(libgnss::GNSSTime(1, 10.0));
+    epoch0.addObservation(first);
+    libgnss::ObservationData epoch1(libgnss::GNSSTime(1, 11.0));
+    epoch1.addObservation(second);
+    std::vector<EpochMask> masks;
+    std::size_t pd_rejections = 0;
+    std::size_t ld_rejections = 0;
+    applyAdjacentMasks({epoch0, epoch1}, "pixel7pro", masks,
+                       pd_rejections, ld_rejections);
+    ASSERT_EQ(masks.size(), 2U);
+    EXPECT_EQ(pd_rejections, 2U);
+    EXPECT_EQ(masks[0].pseudorange.size(), 1U);
+    EXPECT_EQ(masks[1].pseudorange.size(), 1U);
+
+    // The exact 1.5 s continuity contract does not compare across a gap.
+    epoch1.time = libgnss::GNSSTime(1, 11.501);
+    applyAdjacentMasks({epoch0, epoch1}, "pixel7pro", masks,
+                       pd_rejections, ld_rejections);
+    EXPECT_EQ(pd_rejections, 0U);
+    EXPECT_TRUE(masks[0].pseudorange.empty());
+    EXPECT_TRUE(masks[1].pseudorange.empty());
 }
 
 }  // namespace

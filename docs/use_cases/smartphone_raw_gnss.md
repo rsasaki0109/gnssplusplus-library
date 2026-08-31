@@ -2987,3 +2987,48 @@ are:
 The candidate remains opt-in through
 `--native-residual-ionosphere` and requires the frozen Phase 11 signal-bias
 and PDC/IMU/TDCP flags.  No post-score candidate change is permitted.
+
+### Raw upstream-observable quality candidate (phase 13, truth-free seal)
+
+Phase 13 adds an opt-in, raw-only quality contract to the Phase 12 graph.  It
+uses the pinned upstream SNR model (MATLAB `prctile` midpoint convention at
+`p85`, denominator `20 dB`) and the published signal factors for GPS L1/L5
+and Galileo E1/E5a.  It also applies the two-sided adjacent P-D and L-D
+consistency masks with the fixed `1.5 s` gap and upstream thresholds before
+factor construction.  The native SPP-seed residual center is explicitly a
+truth-free proxy; no base compensation is used because that dependency is
+outside the raw Android GNSS+nav contract.  Enriched `SvPosition*` and
+`SvElevationDegrees` columns are ignored; elevation is computed from
+broadcast navigation and native geometry.
+
+The frozen structural run on
+`2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro` used raw GNSS, raw IMU, and
+broadcast navigation only.  It retained all `1,383/1,383` raw UTC target
+keys, had no interpolation/fallback, no nonfinite coordinates, and no
+transition over `70 m/s` (maximum `19.616 m/s`).  It admitted `37,164`
+pseudorange factors and `26,294` quality Doppler graph factors from `39,539`
+candidates; `2,153` P residuals, `13,216` D residuals, and `222` P-D pairs
+were rejected by the fixed raw-observable gates.  Ordinary TDCP remained
+`23,399/23,399`, IMU intervals `1,383`, and GTSAM converged in 12 iterations.
+Post-fit P/D RMS was `5.3767 m`/`0.4378 m/s`, with normalized RMS
+`2.6066`/`1.5380`; the residual-ionosphere state range was
+`-3.644..2.276 m`.  Runtime was `18.70 s` with maximum RSS `222,552 kB`.
+The repeat run was byte-identical.
+
+The raw audit, freeze, manifest, and structural seal are
+`docs/use_cases/records/smartphone_r5_phase13_upstream_quality_raw_audit_v1.json`,
+`docs/use_cases/records/smartphone_r5_phase13_upstream_quality_freeze_v1.json`,
+`docs/use_cases/records/smartphone_r5_phase13_upstream_quality_freeze_v1_manifest.json`,
+and
+`docs/use_cases/records/smartphone_r5_phase13_upstream_quality_structural_seal_v1.json`.
+Their truth-free policy records zero ground-truth, validation, holdout, test,
+and MAT reads before scoring.  The single permitted development-train truth
+read then produced `3.787497678 m` WGS84/Vincenty-linear, versus the frozen
+Phase 12 `3.192248964 m`; H P50/P95 were `2.594247/4.980748 m` versus
+`2.370134/4.014364 m`.  All four local diagnostic variants regressed, so the
+candidate is a sealed No-Go recorded in
+`docs/use_cases/records/smartphone_r5_phase13_upstream_quality_score_result_v1.json`
+and its companion manifest.  The candidate remains development-only and
+opt-in; Phase 12 defaults and bytes are unchanged.  Validation, holdout, test,
+Kaggle, token, and MAT access remained zero, the native `0.782`-class target
+remains unachieved, and no post-score tuning or rerun is allowed.

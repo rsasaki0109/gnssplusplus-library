@@ -73,12 +73,27 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
         config.use_residual_ionosphere_states && !problem.epochs.empty();
     double gnss_velocity_origin_lat_rad = 0.0;
     double gnss_velocity_origin_lon_rad = 0.0;
+    // The opt-in raw-observable quality candidate uses the same receiver-only
+    // Doppler rows in the IMU graph.  Its velocity state is already in the
+    // IMU's ENU frame, so use that exact nav origin for the ECEF->ENU LOS
+    // conversion.  Legacy IMU graphs keep this path disabled.
+    const bool use_imu_doppler_factors =
+        use_imu && config.use_upstream_observable_quality &&
+        config.use_undifferenced_doppler_factors &&
+        !problem.undifferenced_doppler_factors.empty();
     if (use_gnss_velocity_states) {
         double origin_height = 0.0;
         ecef2geodetic(problem.epochs.front().position_ecef,
                       gnss_velocity_origin_lat_rad,
                       gnss_velocity_origin_lon_rad,
                       origin_height);
+        if (!std::isfinite(gnss_velocity_origin_lat_rad) ||
+            !std::isfinite(gnss_velocity_origin_lon_rad)) {
+            return result;
+        }
+    } else if (use_imu_doppler_factors) {
+        gnss_velocity_origin_lat_rad = problem.imu.nav_origin_lat_rad;
+        gnss_velocity_origin_lon_rad = problem.imu.nav_origin_lon_rad;
         if (!std::isfinite(gnss_velocity_origin_lat_rad) ||
             !std::isfinite(gnss_velocity_origin_lon_rad)) {
             return result;
@@ -191,6 +206,22 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
             }
             initial.insert(velocityKey(i), zero_velocity);
             initial.insert(dopplerClockDriftKey(i), 0.0);
+        }
+    }
+
+    if (use_imu_doppler_factors) {
+        // IMU velocity states are initialized above from the IMU/GNSS-first
+        // handoff.  Receiver clock drift is a separate metre-per-second state;
+        // a broad prior below prevents a sparse Doppler set from becoming an
+        // unconstrained gauge while preserving the raw D measurement.
+        for (std::size_t i = 0; i < num_epochs; ++i) {
+            const auto* pdc_seed = nativePdcSeedFor(i);
+            const double clock_rate =
+                pdc_seed != nullptr && pdc_seed->has_clock_rate &&
+                        std::isfinite(pdc_seed->clock_rate_mps)
+                    ? pdc_seed->clock_rate_mps
+                    : 0.0;
+            initial.insert(dopplerClockDriftKey(i), clock_rate);
         }
     }
 
@@ -579,8 +610,13 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
         }
     }
 
-    // --- Upstream GNSS-only P+D velocity/clock-drift factors ---
-    if (use_gnss_velocity_states) {
+    // --- Receiver-only P+D velocity/clock-drift factors ---
+    // In the historical GNSS-only path these are the explicit velocity-state
+    // graph.  The raw upstream-quality candidate also inserts the same rows
+    // into the IMU Pose3 graph, where velocityKey is the already-existing ENU
+    // kinematic state and dKey is a separate receiver clock-rate state.
+    std::size_t undifferenced_doppler_inserted = 0;
+    if (use_gnss_velocity_states || use_imu_doppler_factors) {
         for (const auto& factor : problem.undifferenced_doppler_factors) {
             if (factor.epoch_index >= num_epochs || !factor.los.allFinite() ||
                 !std::isfinite(factor.residual_mps) ||
@@ -597,8 +633,11 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
                 los_nav, factor.residual_mps,
                 makeNoise(factor.sigma_mps, config.use_robust_loss,
                           config.tdcp_huber_threshold_sigma));
+            ++undifferenced_doppler_inserted;
         }
     }
+    result.diagnostics.undifferenced_doppler_factors_inserted =
+        undifferenced_doppler_inserted;
     // Undifferenced carrier phase (rare here: use_carrier_phase_factors is off
     // in the DD RTK config) uses only the base clock; the ISB affects code and
     // phase identically and cancels in the DD path, so this is adequate for the
@@ -904,7 +943,7 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
             }
         }
     }
-    if (use_gnss_velocity_states) {
+    if (use_gnss_velocity_states || use_imu_doppler_factors) {
         // The Doppler rows normally provide full rank per epoch; this very
         // broad prior is only a numerical gauge guard for a sparse/degenerate
         // epoch and is not a motion or truth-derived constraint.
@@ -1341,6 +1380,8 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
     {
         double sum = 0.0;
         std::size_t count = 0;
+        double normalized_sum = 0.0;
+        std::size_t normalized_count = 0;
         for (const auto& factor : problem.pseudorange_factors) {
             const Point3 position = antennaPositionOf(optimized, factor.epoch_index);
             const int ordinal = clockGroupOrdinal(
@@ -1378,8 +1419,65 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
             const double residual = factor.corrected_pseudorange_m - predicted;
             sum += residual * residual;
             ++count;
+            if (config.use_upstream_observable_quality &&
+                std::isfinite(factor.sigma_m) && factor.sigma_m > 0.0) {
+                const double normalized = residual / factor.sigma_m;
+                if (std::isfinite(normalized)) {
+                    normalized_sum += normalized * normalized;
+                    ++normalized_count;
+                }
+            }
         }
         result.diagnostics.residual_rms_m = accumulate_rms(sum, count);
+        if (config.use_upstream_observable_quality && normalized_count > 0) {
+            result.diagnostics.upstream_pseudorange_normalized_rms = std::sqrt(
+                normalized_sum / static_cast<double>(normalized_count));
+        }
+    }
+
+    // Receiver-only Doppler post-fit diagnostics use the same native sign
+    // contract as UndifferencedDopplerVelocityFactor.  This is evaluated for
+    // both the explicit GNSS velocity-state graph and the opt-in IMU graph;
+    // the latter's velocity is already in the IMU ENU frame.
+    if (use_gnss_velocity_states || use_imu_doppler_factors) {
+        double sum = 0.0;
+        std::size_t count = 0;
+        double normalized_sum = 0.0;
+        std::size_t normalized_count = 0;
+        for (const auto& factor : problem.undifferenced_doppler_factors) {
+            if (factor.epoch_index >= num_epochs ||
+                !optimized.exists(velocityKey(factor.epoch_index)) ||
+                !optimized.exists(dopplerClockDriftKey(factor.epoch_index)) ||
+                !factor.los.allFinite() || !std::isfinite(factor.residual_mps) ||
+                !std::isfinite(factor.sigma_mps) || factor.sigma_mps <= 0.0) {
+                continue;
+            }
+            const gtsam::Vector3 los_nav(ecef2enu(
+                factor.los, gnss_velocity_origin_lat_rad,
+                gnss_velocity_origin_lon_rad));
+            const gtsam::Vector3 velocity_nav =
+                optimized.at<gtsam::Vector3>(velocityKey(factor.epoch_index));
+            const double clock_drift = optimized.at<double>(
+                dopplerClockDriftKey(factor.epoch_index));
+            const double residual =
+                los_nav.dot(velocity_nav) + clock_drift - factor.residual_mps;
+            if (!std::isfinite(residual)) continue;
+            sum += residual * residual;
+            ++count;
+            if (config.use_upstream_observable_quality) {
+                const double normalized = residual / factor.sigma_mps;
+                if (std::isfinite(normalized)) {
+                    normalized_sum += normalized * normalized;
+                    ++normalized_count;
+                }
+            }
+        }
+        result.diagnostics.undifferenced_doppler_residual_rms_mps =
+            accumulate_rms(sum, count);
+        if (config.use_upstream_observable_quality && normalized_count > 0) {
+            result.diagnostics.upstream_doppler_normalized_rms = std::sqrt(
+                normalized_sum / static_cast<double>(normalized_count));
+        }
     }
 
     const auto end_time = std::chrono::high_resolution_clock::now();

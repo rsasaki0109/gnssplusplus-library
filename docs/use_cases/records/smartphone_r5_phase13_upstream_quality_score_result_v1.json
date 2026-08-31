@@ -1,0 +1,94 @@
+{
+  "schema_version": "smartphone-r5-phase13-upstream-quality-score-result.v1",
+  "status": "development-train-gate-failed-no-go",
+  "candidate_id": "native-upstream-observable-quality-gtsam-v1",
+  "route": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_phase13_upstream_quality_freeze_v1.json",
+  "freeze_record_sha256": "a7891d8cec1b34372de9501e65683888eaed1994e84d1ea2b75492a3be9fa85f",
+  "freeze_manifest": "docs/use_cases/records/smartphone_r5_phase13_upstream_quality_freeze_v1_manifest.json",
+  "freeze_manifest_sha256": "ccc2385f9293b3aff358c4309f44f38f93539e3ee7f1041f85cccd77bea8f332",
+  "structural_seal": "docs/use_cases/records/smartphone_r5_phase13_upstream_quality_structural_seal_v1.json",
+  "structural_seal_sha256": "6cfbdb90be4d6ceb81e6a14554769b0f051d5c8c3cee520169a0c45be5ff0dbb",
+  "evaluation": {
+    "command": "PYTHONPATH=apps/commands:apps/commands/benchmarks python3 apps/commands/benchmarks/gnss_smartphone_kaggle_evaluate.py --submission output/smartphone-r5/phase13-upstream-quality-gtsam-v1e/submission.csv --ground-truth data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv --output-json output/smartphone-r5/phase13-upstream-quality-gtsam-v1e/train_score.json --phone 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro --profile configs/benchmarks/smartphone_r5_gsdc2023.json --role development --dataset-id 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "truth_read_count_after_structural_seal": 1,
+    "evaluation_passes": 1,
+    "truth_free_generation_before_truth": true,
+    "ground_truth_sha256": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a",
+    "score_sha256": "0bdc7c93ecfc4799b2e62cbd248d2a9dd51304b53ea751706b991e937be4f7ad",
+    "score_log_sha256": "e6dbae3cbf7287d8340adf0a26f9a23ff662883949696f518f7338f89c502f3",
+    "score_time_sha256": "deb276abad6776545d94fdc0d17423b5587e996740554dc5353508df690b19c3",
+    "wall_seconds": 0.07,
+    "max_rss_kib": 21448
+  },
+  "artifacts": {
+    "truth_free_summary": "output/smartphone-r5/phase13-upstream-quality-gtsam-v1e/summary.json",
+    "truth_free_summary_sha256": "300e90c83e87d6d9698d6de65f9d2c6a12bc2fbc6563377fc349927c36034efe",
+    "truth_free_submission": "output/smartphone-r5/phase13-upstream-quality-gtsam-v1e/submission.csv",
+    "truth_free_submission_sha256": "6ace3ffc7a9e2f05dc48e4cb745cf6ec342bc8d021ef0f19aa8411fb3b8ff25f",
+    "truth_free_submission_rows": 1383
+  },
+  "metrics": {
+    "availability_ratio": 1.0,
+    "truth_coverage_ratio": 1.0,
+    "candidate": {
+      "haversine_sphere__linear_n_minus_1_m": 3.7920110043893027,
+      "haversine_sphere__nearest_rank_ceiling_m": 3.7922594866688,
+      "wgs84_vincenty__linear_n_minus_1_m": 3.7874976780010363,
+      "wgs84_vincenty__nearest_rank_ceiling_m": 3.7877432702134897,
+      "wgs84_p50_m": 2.5942469603225913,
+      "wgs84_p95_m": 4.980748395679481
+    },
+    "phase12_reference": {
+      "record": "docs/use_cases/records/smartphone_r5_phase12_residual_ionosphere_score_result_v1.json",
+      "submission_sha256": "3069f149bc98b0383d008d5f20cc80cd4ada9f9eb1b5d09f05353895a2d5a26",
+      "haversine_sphere__linear_n_minus_1_m": 3.19550488592491,
+      "haversine_sphere__nearest_rank_ceiling_m": 3.195826163862037,
+      "wgs84_vincenty__linear_n_minus_1_m": 3.1922489635126103,
+      "wgs84_vincenty__nearest_rank_ceiling_m": 3.192568555787111,
+      "wgs84_p50_m": 2.3701343323397306,
+      "wgs84_p95_m": 4.0143635946854905
+    },
+    "candidate_minus_phase12_m": {
+      "haversine_sphere__linear_n_minus_1": 0.5965061184643927,
+      "haversine_sphere__nearest_rank_ceiling": 0.596433322806763,
+      "wgs84_vincenty__linear_n_minus_1": 0.595248714488426,
+      "wgs84_vincenty__nearest_rank_ceiling": 0.5951747144263787
+    },
+    "all_four_variants_non_regressed": false,
+    "promotion_gate": "failed: every diagnostic variant regressed against the frozen Phase12 reference"
+  },
+  "truth_policy": {
+    "validation_truth_open_count": 0,
+    "holdout_truth_open_count": 0,
+    "test_truth_open_count": 0,
+    "mat_members_read": false,
+    "enriched_coordinate_or_elevation_columns_read": false,
+    "token_or_kaggle_access": false,
+    "leaderboard_used_for_tuning": false,
+    "post_score_algorithm_or_parameter_changes": false,
+    "production_default_changed": false
+  },
+  "decision": {
+    "go": false,
+    "promotion": "no-go; retain as opt-in historical development experiment only",
+    "validation_authorized": false,
+    "holdout_authorized": false,
+    "next_action": "do not tune or rerun this candidate; keep Phase12/default lane unchanged"
+  },
+  "verification_after_score": {
+    "release_build_command": "cmake --build build --config Release --parallel 4",
+    "release_build_status": "passed",
+    "focused_tests": "8/8 passed",
+    "full_serial_ctest_command": "env LD_LIBRARY_PATH=/home/sasaki/.local/lib:$LD_LIBRARY_PATH:/opt/ros/jazzy/lib:/opt/ros/jazzy/lib/x86_64-linux-gnu ctest --test-dir build --output-on-failure --progress --parallel 1",
+    "full_serial_ctest_status": "131/131 passed",
+    "full_serial_ctest_exit_code": 0,
+    "full_serial_ctest_wall_seconds": 84.98,
+    "full_serial_ctest_log_sha256": "3ecbbe419061164d74ac90e55b8e41683a6452da1503320566af8bc8549a19b5",
+    "full_serial_ctest_time_sha256": "fd849777dad774d6740cefd1efbebbaeef68a5a7d5505ffcb428f05c4bde55ef",
+    "git_diff_check": "passed",
+    "credential_scan": "no credential-pattern additions detected",
+    "mat_forbidden_input_scan": "no active MAT read/generation; native paths fail closed"
+  },
+  "score_record_sha256": "excluded from self-hash; the companion score manifest fixes this file SHA256"
+}

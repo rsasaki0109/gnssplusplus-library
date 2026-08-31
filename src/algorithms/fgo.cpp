@@ -68,6 +68,12 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
     result.diagnostics.tdcp_factors = problem.tdcp_factors.size();
     result.diagnostics.undifferenced_doppler_factors =
         problem.undifferenced_doppler_factors.size();
+    // The Eigen backend consumes the backend-independent rows directly.  The
+    // GTSAM backend overwrites this with its actual insertion count after
+    // validity checks, so diagnostics distinguish candidate rows from graph
+    // factors without changing the legacy default recipe.
+    result.diagnostics.undifferenced_doppler_factors_inserted =
+        problem.undifferenced_doppler_factors.size();
     if (config_.use_doppler_velocity_wls_initialization) {
         for (const auto& estimate : problem.doppler_velocity_wls_estimates) {
             if (estimate.valid) {
