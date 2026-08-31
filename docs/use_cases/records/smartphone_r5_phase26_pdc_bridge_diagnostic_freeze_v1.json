@@ -1,0 +1,95 @@
+{
+  "schema_version": "smartphone-r5-phase26-pdc-bridge-diagnostic-freeze.v1",
+  "status": "frozen-before-diagnostic-instrumentation",
+  "created_at_utc": "2026-09-01T00:00:00Z",
+  "purpose": "Truth-free diagnosis of the native PDC bridge failure using the same raw epoch/problem boundary as the finite no-bridge native FGO smoke.",
+  "policy": {
+    "local_only": true,
+    "external_mutation": false,
+    "kaggle_or_token_access": false,
+    "mat_open_count": 0,
+    "truth_open_count": 0,
+    "validation_or_holdout_opened": false,
+    "production_default_changed": false,
+    "score_or_leaderboard_used_for_tuning": false,
+    "no_quality_gate_relaxation": true,
+    "no_numeric_parameter_search": true
+  },
+  "identities": {
+    "raw_train_routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b"
+    ],
+    "raw_inputs": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "raw_archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "phase25_structural_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase25_raw_clock_structural_result_v1.json",
+      "sha256": "ffe737069bad363951a82fb79f4d25252e0b31150690e993825612379c65df9f"
+    }
+  },
+  "immutable_contract": {
+    "raw_clock": "Phase25 frozen raw-clock-only segment/week/system rules; no derived RawPseudorangeMeters input",
+    "geometry": "native broadcast-nav satellite state and the same in-memory FGO problem for both paths",
+    "doppler": "Android rate -> RINEX D -> known satellite range-rate/clock-drift removal; receiver row is los dot velocity plus clock-rate",
+    "state_units": "ECEF position metres, receiver clock bias metres, ECEF velocity m/s, receiver clock rate m/s",
+    "bridge": "P+D+temporal state solve supplies initializer values only; no extra P/D factor or coordinate-file handoff",
+    "allowed_changes": [
+      "truth-free diagnostics of raw epoch timing and problem rows",
+      "hand-computed/unit/sign/finite-difference contract tests",
+      "a correctness-only fix for a demonstrated physical or unit error"
+    ],
+    "forbidden_changes": [
+      "quality-gate or max-velocity relaxation",
+      "truth-derived thresholds or parameter search",
+      "device WLS/enriched satellite fields/precomputed coordinates",
+      "MAT/result/sample/ground-truth inputs",
+      "production default or Phase25 artifact changes"
+    ]
+  },
+  "diagnostic_order": [
+    "raw epoch time mapping and dt/gap/discontinuity",
+    "Doppler sign, wavelength, and m/s units",
+    "broadcast satellite position/velocity/Sagnac and satellite clock drift",
+    "receiver clock bias/rate units and adjacent-epoch relation",
+    "same-epoch SPP/native problem state handoff",
+    "PDC state solve residual/cost/conditioning and quality gate"
+  ],
+  "source_hashes_before_diagnostic_change": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "deb36bbda344d18e49b6857b89034ec0f09f37f9b78f4d8c3364c628cf20716e",
+    "src/algorithms/pdc_state_bridge.cpp": "f06cbff6c8c034ca37e163dae3ee27d24b57a9ddff313abccfe356ef81fdfdc8",
+    "include/libgnss++/algorithms/pdc_state_bridge.hpp": "99cf61cbb66afce7c43303e640a260676220237b73d5e9eda680553685cfc662",
+    "src/algorithms/fgo_problems.cpp": "d4dad5f9bd93b77817f0bc6d9274af2fc35175a9f9bc80f2e2b178f0f1b6f259",
+    "include/libgnss++/algorithms/doppler_contract.hpp": "66d97c9ca2cc474247464d8af782cc3ca1837195967e601576ee25b6f8e1f56d",
+    "include/libgnss++/algorithms/doppler_velocity_wls.hpp": "ef888b3e6c2f15d0dd035c0905bafdee463e346c549f81cf892ec30c1c4dcde0",
+    "src/algorithms/fgo_gtsam_backend.cpp": "36be22bbf9d2c5c95b53978a693f2278dbb1c175d53a2e40081c6d7883297ac8"
+  },
+  "baseline_artifacts": {
+    "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/no_bridge",
+    "role": "truth-free finite native FGO comparison only",
+    "summary_sha256": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": "98139a1138d8bc3084ad66f008266adece7dc5ed6c58a58f1ae32b002fbd4e38",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4": "a47b66286a1814358cefee1645cb8a50e31104706e1ca98f699572e19603d14f",
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": "1c1a1be54b325ded505ff54740aa0ab5d516c89ea05eae54f7cb12d451e98ed3"
+    },
+    "bridge_artifacts": "Phase25 candidate logs only; no bridge output was sealed because every recipe failed closed"
+  },
+  "predeclared_outcome": {
+    "physical_fix_gate": "Only a source-level sign/unit/time/state correctness defect proven by raw-only diagnostics may be changed; otherwise seal No-Go.",
+    "structural_gate_after_any_fix": [
+      "all three raw routes produce finite native bridge state or fail closed with an explicit reason",
+      "Doppler row counts, units, residuals, and clock-rate states are finite and physically bounded",
+      "bridge cost is finite and non-increasing when accepted",
+      "no bridge quality gate is weakened",
+      "no truth, MAT, validation, holdout, test, sample, WLS, or precomputed trajectory is opened"
+    ],
+    "score_authorization": "none in Phase26; do not open development truth even if a structural diagnostic improves",
+    "phase25_candidate_matrix": "do not rerun until all three bridge routes pass the structural gate; retain its 12/12 fail-closed result immutable"
+  },
+  "reproduction": {
+    "diagnostic_input_contract": "Use only the already materialized Phase25 raw/device_gnss.csv, device_imu.csv, and brdc.nav files; raw fields only.",
+    "required_library_path": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}",
+    "truth_free": true,
+    "no_post_score_tuning": true
+  }
+}
