@@ -38,6 +38,7 @@ class NativeGnssPdcBridgeTests(unittest.TestCase):
             "loadAndroidRawGnssCsv",
             "forbiddenMatPath",
             "--upstream-residual-snr",
+            "--upstream-state-contract",
             "exobs_residuals.m",
             "obserrmodel.m",
         ):

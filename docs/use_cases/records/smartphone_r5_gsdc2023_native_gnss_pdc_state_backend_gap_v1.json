@@ -1,0 +1,159 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-gnss-pdc-state-backend-gap.v1",
+  "status": "audit-only-no-mat-inputs",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "purpose": "Freeze the exact state, temporal-factor, coordinate-frame, clock-dimension, and optimizer differences before any opt-in change or new truth read.",
+  "policy": {
+    "mat_files_read": false,
+    "mat_files_generated": false,
+    "matlab_m_source": "read-only-written-specification",
+    "allowed_inference_inputs": ["raw device_gnss.csv", "broadcast RINEX navigation"],
+    "ground_truth": "development-train only, after a candidate freeze and sealed truth-free output",
+    "validation_or_holdout_opened": false,
+    "production_default_changed": false,
+    "kaggle_or_token_access": false,
+    "base_compensation": "forbidden; no base observation dependency is inferred"
+  },
+  "upstream_evidence": {
+    "repository": "taroz/gsdc2023",
+    "commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "license": "MIT",
+    "source_root": "output/reproducibility-cache/gsdc2023",
+    "matlab_sources": {
+      "fgo_gnss.m": {
+        "sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3",
+        "lines": "89-121,123-152,154-201,203-218,220-234",
+        "facts": [
+          "state initialization is ENU position and ENU velocity",
+          "clock state is a seven-element vector and drift is one element",
+          "PseudorangeFactor_XC and DopplerFactor_VD receive initial ENU state values",
+          "MotionFactor_XXVV and ClockFactor_CCDD receive dtgps",
+          "ordinary TDCP factors use the declared dt/initial-position contract",
+          "GTSAM Levenberg-Marquardt maxIterations is 1000"
+        ]
+      },
+      "parameters.m": {
+        "sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52",
+        "lines": "42-47,62-108,110-142",
+        "facts": [
+          "time_diff_th is 1.5 seconds",
+          "P/D/L masks and signal factors are setting-dependent",
+          "motion and clock sigmas are published parameters"
+        ]
+      }
+    },
+    "factor_headers": {
+      "PseudorangeFactor_XC.h": {
+        "sha256": "7f467698f2239818724eba4485b830fbc543586bbee06a21b8b2c03ae5b56415",
+        "lines": "48-64",
+        "contract": "los transpose times (x-inix) plus hc transpose times c minus residual; Jacobian is [los,hc]"
+      },
+      "DopplerFactor_VD.h": {
+        "sha256": "de2c11d06ff860a95785c84620e5ed57dcfd5ca24995a0e642e9a5984fe093e1",
+        "lines": "45-54",
+        "contract": "los transpose times (v-iniv) plus d minus residual; Jacobian is [los,1]"
+      },
+      "MotionFactor_XXVV.h": {
+        "sha256": "0ca60daded389edfc2619350ca7fae89ccc8c3186624db1a96aa3ef5e3b1858f",
+        "lines": "44-60",
+        "contract": "(x2-x1) minus (v1+v2)*dt/2"
+      },
+      "ClockFactor_CCDD.h": {
+        "sha256": "7c174217218aa0059155e1e5a7182c69d56a3cd389d0ebd95c242d6d8c65b9fc",
+        "lines": "39-61",
+        "contract": "c2-c1 with only clock component zero coupled to (d1+d2)*dt/2; seven-dimensional clock vector"
+      },
+      "TDCPFactor_XXDD.h": {
+        "sha256": "dc6b92e824f439df56286b2c2f81c0acb744f698c45648baaf5da67d6b239aed",
+        "lines": "55-74",
+        "contract": "position increments relative to each initial position plus dt-scaled drift"
+      },
+      "TDCPFactor_XXCC.h": {
+        "sha256": "cc8f5acabd43db25b5b4aca48f6c8ae6a0e2a399820fb950de9004555c9cd4b2",
+        "lines": "52-76",
+        "contract": "position increments relative to each initial position plus clock-vector difference"
+      }
+    }
+  },
+  "current_native_evidence": {
+    "source": "apps/native/gnss_pos_vel_pdc.cpp",
+    "source_sha256_before_candidate": "cc9c3cb18a9014b71bcc966a32049fc1a1416b951426e1380c481258fc0e74f3",
+    "symbols": ["kClockGroups", "kStateStride", "pseudorangePrediction", "dopplerPrediction", "tdcpPrediction", "computeCost", "buildNormalEquation", "solveProblem"],
+    "state_contract": {
+      "stride": 12,
+      "order": ["ECEF position delta x/y/z", "GPS/GLO/Galileo/QZSS/BeiDou clock groups", "ECEF velocity x/y/z", "clock drift"],
+      "clock_groups": 5,
+      "coordinate_frame": "ECEF local corrections around each epoch native SPP seed",
+      "temporal_position_residual": "seed_delta + position_delta_i - position_delta_prev - (velocity_prev+velocity_i)/2",
+      "temporal_clock_residual": "clock_i-clock_prev - (drift_prev+drift_i)/2",
+      "temporal_dt": "implicitly 1 second in computeCost and buildNormalEquation",
+      "measurement_initial_state_subtraction": "not represented as an explicit upstream iniv/orgv contract; raw residuals are modeled around SPP seeds",
+      "backend": "custom deterministic Eigen sparse normal-equation IRLS/line-search solver",
+      "max_iterations_default": 1000,
+      "robust_loss": "local Huber loss; not GTSAM m-estimator parity"
+    },
+    "raw_route_structural_evidence": {
+      "route_device": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+      "epochs": 1384,
+      "truth_free": true,
+      "finite_and_converged": true,
+      "factor_families": ["pseudorange", "Doppler", "ordinary TDCP", "position/clock/velocity temporal terms"]
+    }
+  },
+  "gap_matrix": [
+    {
+      "area": "temporal_motion_and_clock",
+      "upstream": "MotionFactor_XXVV and ClockFactor_CCDD scale midpoint velocity/drift by actual dtgps and omit factors when dtgps >= 1.5 s",
+      "native": "motion and clock residuals use an implicit unit interval for every adjacent stored epoch",
+      "exact_gap": "actual epoch spacing is not represented in the native temporal residual/Jacobian",
+      "safe_candidate": "opt-in actual-dt temporal contract; default path remains byte-compatible",
+      "risk": "low on exactly 1 Hz data; changes physics on jitter/gap data",
+      "evidence": ["fgo_gnss.m:163-176", "MotionFactor_XXVV.h:44-60", "ClockFactor_CCDD.h:39-61", "gnss_pos_vel_pdc.cpp:504-558,644-708"]
+    },
+    {
+      "area": "coordinate_frame_and_initial_state",
+      "upstream": "states and LOS are ENU relative to one initial origin; P/D/TDCP factors subtract initial ENU position/velocity",
+      "native": "state is ECEF correction around each epoch seed; LOS is ECEF and no explicit initial-velocity subtraction is stored",
+      "exact_gap": "a full ENU/global-origin rewrite and factor-level initial-state contract are required for equivalence",
+      "safe_candidate": "not attempted in this small phase; requires separate factor parity proof",
+      "risk": "high; frame/state rewrite can change every output",
+      "evidence": ["fgo_gnss.m:63-70,89-93,129-130", "PseudorangeFactor_XC.h:48-64", "DopplerFactor_VD.h:45-54", "gnss_pos_vel_pdc.cpp:445-478"]
+    },
+    {
+      "area": "receiver_clock_dimension",
+      "upstream": "seven-element c vector, with component zero as receiver clock and system-specific index selected by sigtype",
+      "native": "five constellation clock groups selected by clockGroup(system)",
+      "exact_gap": "signal/frequency clock indexing and seven-column state are not represented",
+      "safe_candidate": "not attempted; raw supported constellation coverage does not prove all upstream sigtype columns",
+      "risk": "high; requires state-size and factor-index migration",
+      "evidence": ["fgo_gnss.m:39,92,119,223", "PseudorangeFactor_XC.h:53-64", "ClockFactor_CCDD.h:48-61", "gnss_pos_vel_pdc.cpp:56-57,1207"]
+    },
+    {
+      "area": "measurement_factor_backend",
+      "upstream": "GTSAM nonlinear factors with published robust diagonal noise and Levenberg-Marquardt",
+      "native": "custom Eigen sparse IRLS with local Huber and line-search acceptance",
+      "exact_gap": "backend damping, robust cost, factor Jacobian/state semantics, and termination are not equivalent",
+      "safe_candidate": "not replaced without a factor-by-factor parity harness",
+      "risk": "high; backend substitution can mask model errors",
+      "evidence": ["fgo_gnss.m:203-218", "gnss_pos_vel_pdc.cpp:820-918"]
+    },
+    {
+      "area": "base_compensation",
+      "upstream": "correct_pseudorange.m applies base-observation compensation before graph construction",
+      "native": "base inputs are forbidden by the raw-only contract",
+      "exact_gap": "the upstream correction cannot be derived from raw phone GNSS and broadcast nav alone",
+      "safe_candidate": "remain unavailable; no substitute or truth-derived correction",
+      "risk": "high; importing base/result coordinates would violate the no-MAT/raw-only contract",
+      "evidence": ["fgo_gnss.m:72-79", "functions/correct_pseudorange.m:1-54"]
+    }
+  ],
+  "decision_before_scoring": {
+    "candidate": "actual-dt temporal motion/clock contract only",
+    "parameters_changed": ["none; dt is read from raw epoch timestamps"],
+    "numeric_parameter_search": false,
+    "truth_free_structural_gate": ["finite residual/cost", "monotonic accepted cost", "finite keyed output", "no new >70 m/s isolated transition", "repeatable output"],
+    "development_score_gate": "all four diagnostic variants must be <= retained v1 proxy (68.05 m best variant); no route/aggregate regression is promotable",
+    "validation_or_holdout": "not authorized by this record",
+    "promotion": "development-only opt-in only if gate passes; production default remains unchanged"
+  }
+}

@@ -34,6 +34,7 @@
 #include "observable_upstream_preprocessing.hpp"
 #include "observable_robust_loss.hpp"
 #include "observable_seed_positions.hpp"
+#include "upstream_state_contract.hpp"
 
 namespace {
 
@@ -49,6 +50,7 @@ using libgnss_apps::robustHuberWeight;
 using libgnss_apps::sagnacRangeCorrection;
 using libgnss_apps::signalName;
 namespace upstream = libgnss_apps::upstream;
+namespace upstream_state = libgnss_apps::upstream_state_contract;
 
 constexpr double kPi = 3.141592653589793238462643383279502884;
 constexpr double kDegreesToRadians = kPi / 180.0;
@@ -96,6 +98,10 @@ struct Options {
     // The default remains false so existing RINEX and raw artifacts retain
     // their byte-compatible behavior.
     bool upstream_residual_snr = false;
+    // Opt-in, partial port of the upstream temporal state contract.  It uses
+    // actual raw epoch intervals in the midpoint motion/clock equations and
+    // keeps the historical ECEF/five-clock Eigen state otherwise unchanged.
+    bool upstream_state_contract = false;
 };
 
 struct DopplerFactor {
@@ -244,6 +250,7 @@ struct SolveResult {
               << "  --skip-epochs N                Skip leading observation epochs.\n"
               << "  --max-iterations N             IRLS iteration limit.\n"
               << "  --tdcp-sigma-zenith M          TDCP zenith sigma in meters.\n"
+              << "  --upstream-state-contract     Use raw epoch dt in temporal factors (opt-in).\n"
               << "  --debug-problem-only           Build factors and skip optimization.\n"
               << "  --quiet                        Suppress human-readable summary.\n";
     throw std::invalid_argument(message);
@@ -355,6 +362,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.include_l5 = false;
         } else if (arg == "--upstream-residual-snr") {
             options.upstream_residual_snr = true;
+        } else if (arg == "--upstream-state-contract") {
+            options.upstream_state_contract = true;
         } else if (arg == "--quiet") {
             options.quiet = true;
         } else if (arg == "--help" || arg == "-h") {
@@ -381,6 +390,9 @@ Options parseArguments(int argc, char* argv[]) {
     }
     if (options.upstream_residual_snr && options.android_raw_path.empty()) {
         usageError("--upstream-residual-snr requires --android-raw", argv[0]);
+    }
+    if (options.upstream_state_contract && options.android_raw_path.empty()) {
+        usageError("--upstream-state-contract requires --android-raw", argv[0]);
     }
     if (options.obs_path.empty() && options.keyed_out_csv_path.empty()) {
         usageError("--keyed-out-csv is required with --android-raw", argv[0]);
@@ -436,6 +448,37 @@ int velocityColumn(std::size_t epoch_index, int component) {
 
 int driftColumn(std::size_t epoch_index) {
     return static_cast<int>(kStateStride * epoch_index + 11U);
+}
+
+double temporalInterval(const Problem& problem,
+                        const Options& options,
+                        std::size_t epoch_index) {
+    if (epoch_index == 0U || !options.upstream_state_contract) {
+        return 1.0;
+    }
+    const double dt = problem.epochs[epoch_index].time -
+                      problem.epochs[epoch_index - 1U].time;
+    return upstream_state::validTemporalInterval(dt)
+               ? dt
+               : std::numeric_limits<double>::quiet_NaN();
+}
+
+bool hasTemporalTransition(const Problem& problem,
+                           const Options& options,
+                           std::size_t epoch_index) {
+    return epoch_index > 0U &&
+           std::isfinite(temporalInterval(problem, options, epoch_index));
+}
+
+std::size_t temporalTransitionCount(const Problem& problem,
+                                    const Options& options) {
+    std::size_t count = 0U;
+    for (std::size_t i = 1U; i < problem.epochs.size(); ++i) {
+        if (hasTemporalTransition(problem, options, i)) {
+            ++count;
+        }
+    }
+    return count;
 }
 
 double pseudorangePrediction(const Eigen::VectorXd& state,
@@ -501,7 +544,8 @@ double computeCost(const Problem& problem,
         const double d_prior =
             state(driftColumn(i)) / options.clock_drift_prior_sigma_mps;
         cost += 0.5 * d_prior * d_prior;
-        if (i > 0) {
+        if (hasTemporalTransition(problem, options, i)) {
+            const double dt = temporalInterval(problem, options, i);
             for (std::size_t group = 0; group < kClockGroups; ++group) {
                 const double sigma =
                     group == 0U
@@ -509,13 +553,16 @@ double computeCost(const Problem& problem,
                                ? options.clock_jump_sigma_m
                                : options.clock_motion_sigma_m)
                         : options.inter_system_clock_motion_sigma_m;
-                double prediction =
+                const double clock_difference =
                     state(clockColumn(i, group)) -
                     state(clockColumn(i - 1U, group));
+                double prediction = clock_difference;
                 if (group == 0U) {
-                    prediction -= 0.5 *
-                                  (state(driftColumn(i - 1U)) +
-                                   state(driftColumn(i)));
+                    prediction = upstream_state::clockResidual(
+                        clock_difference,
+                        state(driftColumn(i - 1U)),
+                        state(driftColumn(i)),
+                        dt);
                 }
                 const double e = prediction / sigma;
                 cost += 0.5 * e * e;
@@ -525,12 +572,14 @@ double computeCost(const Problem& problem,
                 const double seed_delta =
                     problem.seed_positions[i](component) -
                     problem.seed_positions[i - 1U](component);
-                const double prediction =
-                    seed_delta +
-                    state(positionColumn(i, component)) -
-                    state(positionColumn(i - 1U, component)) -
-                    0.5 * (state(velocityColumn(i - 1U, component)) +
-                           state(velocityColumn(i, component)));
+                const double position_difference =
+                    seed_delta + state(positionColumn(i, component)) -
+                    state(positionColumn(i - 1U, component));
+                const double prediction = upstream_state::motionResidual(
+                    position_difference,
+                    state(velocityColumn(i - 1U, component)),
+                    state(velocityColumn(i, component)),
+                    dt);
                 const double e = prediction / options.motion_sigma_m;
                 cost += 0.5 * e * e;
             }
@@ -640,7 +689,8 @@ NormalEquation buildNormalEquation(const Problem& problem,
                        options.clock_drift_prior_sigma_mps,
                        1.0);
 
-        if (i > 0) {
+        if (hasTemporalTransition(problem, options, i)) {
+            const double dt = temporalInterval(problem, options, i);
             for (std::size_t group = 0; group < kClockGroups; ++group) {
                 const int previous = clockColumn(i - 1U, group);
                 const int current = clockColumn(i, group);
@@ -652,16 +702,20 @@ NormalEquation buildNormalEquation(const Problem& problem,
                         : options.inter_system_clock_motion_sigma_m;
                 std::vector<int> columns{previous, current};
                 std::vector<double> coeffs{-1.0, 1.0};
-                double prediction = state(current) - state(previous);
+                const double clock_difference = state(current) - state(previous);
+                double prediction = clock_difference;
                 if (group == 0U) {
                     const int previous_drift = driftColumn(i - 1U);
                     const int current_drift = driftColumn(i);
                     columns.push_back(previous_drift);
                     columns.push_back(current_drift);
-                    coeffs.push_back(-0.5);
-                    coeffs.push_back(-0.5);
-                    prediction -= 0.5 *
-                                  (state(previous_drift) + state(current_drift));
+                    coeffs.push_back(-0.5 * dt);
+                    coeffs.push_back(-0.5 * dt);
+                    prediction = upstream_state::clockResidual(
+                        clock_difference,
+                        state(previous_drift),
+                        state(current_drift),
+                        dt);
                 }
                 addWeightedRow(triplets,
                                rhs,
@@ -680,18 +734,21 @@ NormalEquation buildNormalEquation(const Problem& problem,
                 const double seed_delta =
                     problem.seed_positions[i](component) -
                     problem.seed_positions[i - 1U](component);
-                const double prediction =
-                    seed_delta +
-                    state(current_position) -
-                    state(previous_position) -
-                    0.5 * (state(previous_velocity) + state(current_velocity));
+                const double position_difference =
+                    seed_delta + state(current_position) -
+                    state(previous_position);
+                const double prediction = upstream_state::motionResidual(
+                    position_difference,
+                    state(previous_velocity),
+                    state(current_velocity),
+                    dt);
                 addWeightedRow(triplets,
                                rhs,
                                {previous_position,
                                 current_position,
                                 previous_velocity,
                                 current_velocity},
-                               {-1.0, 1.0, -0.5, -0.5},
+                               {-1.0, 1.0, -0.5 * dt, -0.5 * dt},
                                -prediction,
                                options.motion_sigma_m,
                                1.0);
@@ -2147,21 +2204,24 @@ bool writeFactorDebugCsv(const std::string& path,
     return true;
 }
 
-std::size_t graphFactorCount(const Problem& problem) {
+std::size_t graphFactorCount(const Problem& problem, const Options& options) {
     if (problem.epochs.empty()) {
         return problem.pseudorange_factors.size() +
                problem.factors.size() +
                problem.tdcp_factors.size();
     }
+    const std::size_t temporal_transitions =
+        temporalTransitionCount(problem, options);
     return problem.pseudorange_factors.size() +
            problem.factors.size() +
            problem.tdcp_factors.size() +
            4U * problem.epochs.size() +
-           3U * (problem.epochs.size() - 1U);
+           3U * temporal_transitions;
 }
 
 bool writeGraphCsv(const std::string& path,
                    const Problem& problem,
+                   const Options& options,
                    const SolveResult& result) {
     if (path.empty()) {
         return true;
@@ -2176,7 +2236,7 @@ bool writeGraphCsv(const std::string& path,
     output << std::fixed << std::setprecision(15)
            << problem.epochs.size() << ','
            << problem.nsat << ','
-           << graphFactorCount(problem) << ','
+           << graphFactorCount(problem, options) << ','
            << 4U * problem.epochs.size() << ','
            << result.initial_cost << ','
            << result.final_cost << ','
@@ -2243,6 +2303,8 @@ bool writeSummaryJson(const std::string& path,
     if (problem.android_raw) {
         output << "  \"input_mode\": \"android_raw\",\n";
     }
+    const std::size_t temporal_transitions =
+        temporalTransitionCount(problem, options);
     output
            << "  \"debug_problem_only\": " << jsonBool(options.debug_problem_only) << ",\n"
            << "  \"optimized_epochs\": " << epoch_count << ",\n"
@@ -2298,12 +2360,26 @@ bool writeSummaryJson(const std::string& path,
            << "  \"velocity_prior_factors\": " << epoch_count << ",\n"
            << "  \"clock_drift_prior_factors\": " << epoch_count << ",\n"
            << "  \"motion_factors\": "
-           << (epoch_count > 0 ? epoch_count - 1U : 0U) << ",\n"
+           << temporal_transitions << ",\n"
            << "  \"clock_motion_factors\": "
-           << (epoch_count > 0 ? epoch_count - 1U : 0U) << ",\n"
+           << temporal_transitions << ",\n"
            << "  \"clock_drift_between_factors\": "
-           << (epoch_count > 0 ? epoch_count - 1U : 0U) << ",\n"
-           << "  \"graph_factors\": " << graphFactorCount(problem) << ",\n"
+           << temporal_transitions << ",\n"
+           << "  \"state_backend_contract\": \""
+           << (options.upstream_state_contract
+                   ? "upstream-temporal-dt-partial"
+                   : "legacy-ecef-unit-interval")
+           << "\",\n"
+           << "  \"temporal_dt_source\": \""
+           << (options.upstream_state_contract
+                   ? "raw_epoch_time_difference_seconds"
+                   : "fixed_unit_interval")
+           << "\",\n"
+           << "  \"temporal_dt_threshold_seconds\": "
+           << upstream_state::kTimeDifferenceThresholdSeconds << ",\n"
+           << "  \"temporal_transitions_enabled\": "
+           << temporal_transitions << ",\n"
+           << "  \"graph_factors\": " << graphFactorCount(problem, options) << ",\n"
            << "  \"graph_values\": " << 4U * epoch_count << ",\n";
     if (problem.android_raw) {
         output << "  \"include_galileo_e1\": " << jsonBool(options.include_galileo_e1) << ",\n"
@@ -2426,7 +2502,9 @@ bool writeSummaryJson(const std::string& path,
     return true;
 }
 
-void printSummary(const Problem& problem, const SolveResult& result) {
+void printSummary(const Problem& problem,
+                  const Options& options,
+                  const SolveResult& result) {
     std::cout << "Taroz PDC position/velocity batch complete\n"
               << "  epochs: " << problem.epochs.size() << "\n"
               << "  satellites: " << problem.nsat << "\n"
@@ -2434,7 +2512,7 @@ void printSummary(const Problem& problem, const SolveResult& result) {
               << problem.pseudorange_factors.size() << "\n"
               << "  doppler_factors: " << problem.factors.size() << "\n"
               << "  tdcp_factors: " << problem.tdcp_factors.size() << "\n"
-              << "  graph_factors: " << graphFactorCount(problem) << "\n"
+              << "  graph_factors: " << graphFactorCount(problem, options) << "\n"
               << "  iterations: " << result.iterations << "\n"
               << "  converged: " << (result.converged ? "true" : "false") << "\n"
               << std::fixed << std::setprecision(6)
@@ -2495,7 +2573,7 @@ int main(int argc, char* argv[]) {
                       << options.factor_debug_csv_path << "\n";
             return 1;
         }
-        if (!writeGraphCsv(options.graph_csv_path, problem, result)) {
+        if (!writeGraphCsv(options.graph_csv_path, problem, options, result)) {
             std::cerr << "Error: failed to write graph CSV: "
                       << options.graph_csv_path << "\n";
             return 1;
@@ -2506,7 +2584,7 @@ int main(int argc, char* argv[]) {
             return 1;
         }
         if (!options.quiet) {
-            printSummary(problem, result);
+            printSummary(problem, options, result);
         }
         return 0;
     } catch (const std::invalid_argument&) {

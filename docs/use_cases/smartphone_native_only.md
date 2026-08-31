@@ -171,3 +171,25 @@ explicit train authorization; no validation, holdout, test truth, `.mat` data,
 or external mutation is allowed. The D center remains a documented raw-only
 proxy because the upstream `dclk` state is not available without prohibited
 precomputed state.
+
+### Opt-in upstream temporal state contract (2026-08-31)
+
+The dedicated PDC audit found a small, exact temporal-factor mismatch: pinned
+taroz `MotionFactor_XXVV` and `ClockFactor_CCDD` multiply midpoint
+velocity/drift by measured `dtgps` and omit an edge at or above 1.5 s, while
+the historical native PDC used an implicit one-second edge. The opt-in
+`--upstream-state-contract` port applies only this rule to raw epoch times.
+It intentionally leaves the native ECEF/five-clock state, Eigen backend,
+factors, and numeric parameters unchanged; it is not full ENU/seven-clock/
+GTSAM equivalence. The implementation and synthetic parity fixture are
+`apps/native/upstream_state_contract.hpp` and
+`tests/test_smartphone_upstream_state_contract.cpp`.
+
+On the frozen development route, the raw stream is effectively 1 Hz, so the
+truth-free keyed coordinates are byte-identical to the preceding global-ISB
+candidate. Its one authorized train read scored 76.978 m WGS84/Vincenty and
+76.819 m Haversine (all four variants), versus the retained 68.048 m best
+proxy. It is therefore a No-Go and is not promoted; the freeze, gap audit,
+score authorization, result, and hash manifests are the
+`records/smartphone_r5_gsdc2023_native_gnss_pdc_state_backend_*` files. No
+validation or holdout truth was opened.

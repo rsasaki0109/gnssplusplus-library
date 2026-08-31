@@ -1,0 +1,107 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-gnss-pdc-state-backend-freeze.v1",
+  "status": "frozen-before-development-truth-read",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "candidate": {
+    "id": "native-gnss-pdc-state-contract-v1",
+    "route_device": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "truth_free_run_manifest": "output/smartphone-r5/native-gnss-pdc-state-contract-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/run_manifest.json",
+    "truth_free_run_manifest_sha256": "1563029a3ad3eb1e72c5336464979c68dae2796b86840b1ead50ab7a77d06191",
+    "keyed_output": "output/smartphone-r5/native-gnss-pdc-state-contract-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/keyed.csv",
+    "keyed_output_sha256": "26930dcf9814626f9b6a1413e3932ce20ca9a7abe1b31ec4781c47f139c9dcec",
+    "summary": "output/smartphone-r5/native-gnss-pdc-state-contract-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/summary.json",
+    "summary_sha256": "2d9cb337ce2c98fefd103d2135fd7130032dfa75ab432f25a41e554d4608ec25",
+    "factor_debug": "output/smartphone-r5/native-gnss-pdc-state-contract-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/factor.csv",
+    "factor_debug_sha256": "0064aa86108b93a6b601f183dae8b58a573087e6977d1d7ccb12e57f804a911d",
+    "per_epoch": "output/smartphone-r5/native-gnss-pdc-state-contract-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/per_epoch.csv",
+    "per_epoch_sha256": "130c0381ab62e89966d1820080b70c4fddf62ba9ea1df1fe72cedd290b7fad6a",
+    "graph": "output/smartphone-r5/native-gnss-pdc-state-contract-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/graph.csv",
+    "graph_sha256": "9e43fd31521964d3396f84c2274b15ebd6b1f13c97a04230b75177a9e1d47d1b"
+  },
+  "source_and_binary": {
+    "apps/native/gnss_pos_vel_pdc.cpp": "c8022b80ef16197b876e298719d112e9c8e114ae5681f3c2dec99f1922fb101b",
+    "apps/native/upstream_state_contract.hpp": "ed2437cd6f4e927c59979abc9552ddea7ead80943a3aec478e5e1c32a8c7087f",
+    "apps/commands/benchmarks/gnss_smartphone_native_gnss_pdc.py": "e01e129267a066a4079a57245b6fb769f399508e1ed8209bd214e61ab0c6c868",
+    "tests/test_smartphone_upstream_state_contract.cpp": "79d6076f0ac201d7c88e362bf682ae57045872e6cd35c0c95ce5684f2cf73bf8",
+    "tests/CMakeLists.txt": "b9088ab67ffc8bd01f0937e7558efa19667cc9f5f4b3a2e493fc15ba0500c852",
+    "release_binary": {
+      "path": "build/apps/gnss_pos_vel_pdc",
+      "sha256": "ec2ca27e0cf07000a849e7293b407b8052b2b12f2dde83a86a3996d3e0db5d80"
+    },
+    "gap_audit": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_state_backend_gap_v1.json",
+      "sha256": "dcbbaf989918d349964ae9a511b49474c620d6b42b38a3215771b685986d46e1"
+    }
+  },
+  "inputs": {
+    "device_gnss": {
+      "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_gnss.csv",
+      "sha256": "c5af6cc3aeae6ab29a2a10d975d291b8fba4fab15273c0729163cd639ff10e42"
+    },
+    "broadcast_nav": {
+      "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/brdc.nav",
+      "sha256": "16c859f8015c874398978bae6004172c355f7d3a3b06fa81b54aac88b6b78d33"
+    },
+    "truth": {
+      "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv",
+      "opened_before_freeze": false,
+      "role": "development-train-only"
+    },
+    "forbidden": ["*.mat", "result coordinates", "sample coordinates", "v5 output", "validation truth", "holdout truth", "test truth"]
+  },
+  "recipe": {
+    "cli": "python3 apps/commands/benchmarks/gnss_smartphone_native_gnss_pdc.py --android-raw <device_gnss.csv> --nav <brdc.nav> --trip-id 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro --device-model pixel7pro --output-dir <new-dir> --upstream-residual-snr --upstream-state-contract",
+    "algorithm": "existing raw-only P+D+ordinary-TDCP+float-carrier Eigen PDC; no base/DD factors",
+    "state_backend_change": "actual raw epoch dt in temporal midpoint motion/clock terms only",
+    "state_layout_unchanged": "ECEF position delta + five clock groups + ECEF velocity + drift, stride 12",
+    "temporal_rule": "use 0 < dt < 1.5 s; skip temporal edge at or above 1.5 s; legacy path remains unit interval",
+    "numeric_parameters": {
+      "max_iterations": 1000,
+      "min_snr_dbhz": 35.0,
+      "min_elevation_deg": 15.0,
+      "pseudorange_sigma_zenith_m": 3.0,
+      "doppler_sigma_zenith_mps": 0.2,
+      "tdcp_sigma_zenith_m": 0.05,
+      "position_prior_sigma_m": 1000.0,
+      "clock_prior_sigma_m": 1000000.0,
+      "velocity_prior_sigma_mps": 1000.0,
+      "clock_drift_prior_sigma_mps": 1000.0,
+      "motion_sigma_m": 0.1,
+      "clock_motion_sigma_m": 0.1,
+      "clock_jump_sigma_m": 1000000.0,
+      "isb_motion_sigma_m": 0.000001,
+      "clock_drift_between_sigma_mps": 0.1,
+      "huber_threshold_sigma": 1.234,
+      "include_galileo_e1": true,
+      "include_l5": true,
+      "upstream_residual_snr": true,
+      "upstream_snr_percentile": 85,
+      "upstream_pseudorange_center": "global all-epoch per system and frequency after receiver clock subtraction"
+    }
+  },
+  "predeclared_gate": {
+    "baseline_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_upstream_residual_snr_score_result_v1.json",
+    "baseline_best_variant_m": 68.0475838937948,
+    "baseline_variants_m": {
+      "wgs84_vincenty__linear_n_minus_1": 68.20249565105695,
+      "wgs84_vincenty__nearest_rank_ceiling": 68.20263285883483,
+      "haversine_sphere__linear_n_minus_1": 68.0475838937948,
+      "haversine_sphere__nearest_rank_ceiling": 68.04768377355857
+    },
+    "must_pass": [
+      "all four diagnostic variants non-regress against the retained v1 proxy",
+      "best diagnostic <= 68.0475838937948 m",
+      "availability and matched truth coverage non-regress",
+      "finite keyed output and monotonic accepted cost",
+      "no new isolated transition over 70 m/s",
+      "repeatable truth-free artifact"
+    ],
+    "truth_use": "one development-train read after this freeze only; never used by solver or parameter selection",
+    "fresh_validation": false,
+    "holdout": false,
+    "promotion": "development-only opt-in if every gate passes; production default remains unchanged"
+  },
+  "no_post_score_tuning": true,
+  "external_mutation": false,
+  "mat_inputs_used": false
+}

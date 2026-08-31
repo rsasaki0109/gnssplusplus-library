@@ -1,0 +1,42 @@
+{
+  "schema_version": "smartphone-r5-native-gnss-pdc-train-score-recovery.v1",
+  "status": "authorized-evaluation-recovery-v2",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "candidate": {
+    "id": "native-gnss-pdc-state-contract-v1",
+    "route_device": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "keyed_output": "output/smartphone-r5/native-gnss-pdc-state-contract-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/keyed.csv",
+    "keyed_output_sha256": "26930dcf9814626f9b6a1413e3932ce20ca9a7abe1b31ec4781c47f139c9dcec",
+    "run_manifest": "output/smartphone-r5/native-gnss-pdc-state-contract-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/run_manifest.json",
+    "run_manifest_sha256": "1563029a3ad3eb1e72c5336464979c68dae2796b86840b1ead50ab7a77d06191",
+    "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_state_backend_freeze_v1.json",
+    "freeze_record_sha256": "a7cc67fffdec34a8320694d86ff39a17be680b2a75b4bfb743c814bd21fac9db"
+  },
+  "truth": {
+    "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv",
+    "role": "development-train",
+    "open_count_before_authorization": 0,
+    "open_count_authorized_after_seal": 1,
+    "validation_opened": false,
+    "holdout_opened": false,
+    "test_opened": false
+  },
+  "contract": {
+    "candidate_unchanged": true,
+    "parameter_selection": false,
+    "solver_rerun_after_seal": false,
+    "mat_inputs_used": false,
+    "upstream_result_oracle_used": false,
+    "external_mutation": false,
+    "score_used_for_tuning": false,
+    "no_post_score_tuning": true
+  },
+  "exact_failure": "state-backend candidate has a dedicated pre-score freeze; this authorization permits one development-train score only",
+  "gate": {
+    "baseline_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_upstream_residual_snr_score_result_v1.json",
+    "baseline_best_variant_m": 68.0475838937948,
+    "all_four_variants_must_be_non_regressive": true,
+    "promotion_if_pass": "development-only opt-in; production default unchanged",
+    "no_validation_or_holdout": true
+  }
+}

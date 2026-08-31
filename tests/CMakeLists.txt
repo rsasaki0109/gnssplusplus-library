@@ -15,6 +15,7 @@ if(GTest_FOUND)
         test_imu_csv.cpp
         test_android_raw_gnss.cpp
         test_smartphone_upstream_preprocessing.cpp
+        test_smartphone_upstream_state_contract.cpp
         test_attitude.cpp
         test_mechanization.cpp
         test_preintegration.cpp

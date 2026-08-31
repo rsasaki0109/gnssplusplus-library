@@ -1,0 +1,19 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-gnss-pdc-state-backend-score-result-manifest.v1",
+  "result_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_state_backend_score_result_v1.json",
+  "result_record_sha256": "3d2a89e98d0b66824fc75044e27e805b8a28efd4ae375c3096d7c7529c6de1f5",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_state_backend_freeze_v1.json",
+  "freeze_record_sha256": "a7cc67fffdec34a8320694d86ff39a17be680b2a75b4bfb743c814bd21fac9db",
+  "score_authorization": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_state_backend_score_authorization_v1.json",
+  "score_authorization_sha256": "344da904dc94a83b9f160b772a322c000f20baecc33a37118b1c68d93e8cb4ea",
+  "score_report": "output/smartphone-r5/native-gnss-pdc-state-contract-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/train_score.json",
+  "score_report_sha256": "5ced12e12c5182a5823df0a104b6f6cb2f5667ee6d3c5245cc537581273e7e84",
+  "candidate_keyed_sha256": "26930dcf9814626f9b6a1413e3932ce20ca9a7abe1b31ec4781c47f139c9dcec",
+  "truth_sha256": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a",
+  "evaluation_reads_for_this_candidate": 1,
+  "validation_truth_opened": false,
+  "holdout_truth_opened": false,
+  "test_truth_opened": false,
+  "mat_inputs_used": false,
+  "promotion": "no-go"
+}

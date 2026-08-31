@@ -153,6 +153,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         command[trip_flag_index:trip_flag_index] = ["--device-model", args.device_model]
     if args.upstream_residual_snr:
         command.append("--upstream-residual-snr")
+    if args.upstream_state_contract:
+        command.append("--upstream-state-contract")
     environment = os.environ.copy()
     try:
         completed = subprocess.run(
@@ -209,6 +211,17 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             else "legacy native PDC weighting and masks",
             "base_compensation": "not applied; base observations are forbidden",
         },
+        "state_backend": {
+            "upstream_state_contract_opt_in": args.upstream_state_contract,
+            "contract": (
+                "actual raw epoch dt in midpoint motion/clock terms; "
+                "temporal edges require 0 < dt < 1.5 s; ECEF/five-clock "
+                "Eigen state remains unchanged"
+            )
+            if args.upstream_state_contract
+            else "legacy ECEF/five-clock Eigen state with unit-interval temporal terms",
+            "full_upstream_equivalence": False,
+        },
         "forbidden_input_policy": {
             "mat_paths_rejected_before_open": True,
             "result_coordinates_read": False,
@@ -250,6 +263,14 @@ def _parse_args() -> argparse.Namespace:
         help=(
             "opt in to the raw-only taroz exobs_residuals/obserrmodel port; "
             "the default lane is unchanged"
+        ),
+    )
+    parser.add_argument(
+        "--upstream-state-contract",
+        action="store_true",
+        help=(
+            "opt in to actual raw epoch intervals for temporal motion/clock "
+            "terms; the legacy ECEF/five-clock state remains unchanged"
         ),
     )
     parser.add_argument("--timeout-seconds", type=float, default=900.0)
