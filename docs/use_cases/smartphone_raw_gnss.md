@@ -3614,3 +3614,25 @@ python3 apps/commands/benchmarks/gnss_smartphone_phase32_quality_anchor_eval.py 
 
 Fresh validation and the future holdout remain sealed.  No MAT, token, Kaggle
 submission, or post-score tuning was used.
+
+### Phase 33 fresh-validation structural gate (No-Go)
+
+The Phase 32 train gate authorized a fresh-validation check, so the frozen
+route `2023-05-09-21-32-us-ca-mtv-pe1/pixel5` was materialized with only
+`device_gnss.csv`, `device_imu.csv`, and `brdc.nav`.  Control and quality-anchor
+candidate runs both converged, produced 2131/2131 post-warm-up keys, and were
+byte-identical on repeat.  The candidate had no >70 m/s transitions (maximum
+32.909 m/s), but the unchanged control had three initial >70 m/s transitions
+(maximum 145.344 m/s).  Because the predeclared structural contract requires
+both lanes to pass continuity before truth access, this is a sealed No-Go;
+the validation `ground_truth.csv` was neither materialized nor read.
+
+The freeze, truth-free structural result, and evaluator-manifest v2 are:
+
+- `docs/use_cases/records/smartphone_r5_phase33_quality_anchor_validation_freeze_v1.json`;
+- `docs/use_cases/records/smartphone_r5_phase33_quality_anchor_validation_structural_result_v1.json`;
+- `docs/use_cases/records/smartphone_r5_phase33_quality_anchor_validation_evaluator_manifest_v2.json`.
+
+Do not repair or retune this frozen phase after its structural failure.  The
+future holdout remains sealed and no validation accuracy/generalization claim
+is made.

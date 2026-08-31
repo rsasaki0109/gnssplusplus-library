@@ -467,6 +467,7 @@ def seal_truth_free(output_root: Path) -> dict[str, Any]:
     if not isinstance(lanes, dict) or set(lanes) != {"control", "candidate"}:
         raise Phase33Error("truth-free lanes are incomplete")
     sealed: dict[str, Any] = {}
+    structural_failures: list[str] = []
     for lane, candidate in (("control", False), ("candidate", True)):
         row = lanes[lane]
         if row.get("repeat_byte_identical") is not True:
@@ -478,8 +479,10 @@ def seal_truth_free(output_root: Path) -> dict[str, Any]:
         # verification.  This is not a truth operation.
         artifact = _validate_run_artifact(ROOT / first["submission"]["path"].rsplit("/", 1)[0], target_keys, candidate=candidate)
         speed = artifact["speed"]
-        if speed["over_70_mps_count"] != 0 or not speed["finite"]:
-            raise Phase33Error(f"{lane} continuity gate failed")
+        if not speed["finite"]:
+            structural_failures.append(f"{lane}_nonfinite_transition_speed")
+        if speed["over_70_mps_count"] != 0:
+            structural_failures.append(f"{lane}_over_70_mps_count={speed['over_70_mps_count']}")
         sealed[lane] = {
             "submission": artifact["submission"],
             "summary": artifact["summary"],
@@ -487,10 +490,11 @@ def seal_truth_free(output_root: Path) -> dict[str, Any]:
             "projection": artifact["projection"],
             "repeat_byte_identical": True,
         }
+    passed = not structural_failures
     seal = {
         "schema_version": SEAL_SCHEMA,
-        "status": "sealed-truth-free-structural-pass",
-        "decision": "validation-truth-read-authorized",
+        "status": "sealed-truth-free-structural-pass" if passed else "sealed-truth-free-structural-no-go",
+        "decision": "validation-truth-read-authorized" if passed else "do-not-open-validation-truth",
         "freeze": {"path": str(FREEZE.relative_to(ROOT)), "sha256": sha256(FREEZE)},
         "raw_materialization": {"path": str((output_root / "raw_materialization.json").relative_to(ROOT)), "sha256": sha256(output_root / "raw_materialization.json")},
         "truth_free_run": {"path": str((output_root / "truth_free_run.json").relative_to(ROOT)), "sha256": sha256(output_root / "truth_free_run.json")},
@@ -502,10 +506,12 @@ def seal_truth_free(output_root: Path) -> dict[str, Any]:
             "candidate_finite_converged": True,
             "exact_raw_target_keys": True,
             "repeat_byte_identical": True,
-            "continuity_over_70_mps": 0,
+            "continuity_over_70_mps": sum(row["speed"]["over_70_mps_count"] for row in sealed.values()),
+            "failures": structural_failures,
+            "passed": passed,
             "truth_open_count": 0,
             "mat_read_or_generated": False,
-            "validation_truth_read_authorized_next": True,
+            "validation_truth_read_authorized_next": passed,
         },
         "candidate_control_unchanged": True,
         "solver_rerun_after_truth": False,

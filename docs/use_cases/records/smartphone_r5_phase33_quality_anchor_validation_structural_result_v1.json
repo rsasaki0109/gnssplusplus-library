@@ -1,0 +1,94 @@
+{
+  "schema_version": "smartphone-r5-phase33-quality-anchor-validation-structural-result.v1",
+  "phase": 33,
+  "status": "sealed-truth-free-structural-no-go",
+  "decision": "No-Go; do not open fresh-validation truth",
+  "purpose": "Truth-free structural check of the unchanged Phase31 quality-anchor candidate and Phase28 no-bridge control on the frozen fresh-validation raw route.",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase33_quality_anchor_validation_freeze_v1.json",
+    "sha256": "683611c00f65e93f2daf186dbfbcba9a3a4bb190f814b61e5cd1625b1b1ebd7d"
+  },
+  "raw_materialization": {
+    "path": "output/smartphone-r5/phase33-quality-anchor-validation-v1/raw_materialization.json",
+    "sha256": "24ebc000ae8f266a799ea4f354f1b3cac3b591fd98914ab8bdc3cb5d27dd4fb9",
+    "manifest": "output/smartphone-r5/phase33-quality-anchor-validation-v1/inputs/2023-05-09-21-32-us-ca-mtv-pe1/pixel5/materialization_manifest.json",
+    "manifest_sha256": "923cca1a27fc3f4f00188e3d7dd63b6f4a9a5064c31d6432a2fe9fc5ef8aaf91",
+    "truth_open_count": 0,
+    "mat_read_or_generated": false,
+    "inputs": {
+      "device_gnss_sha256": "aedcf32a4c9402a5c970aa800c6191048b1998370932378fa51eca1d5155a95a",
+      "device_imu_sha256": "17a33dca49fae9fe8688fa5b3c47efdb013a09ac8467abe0d66a37f93ccecd57",
+      "broadcast_nav_sha256": "5cd8f6bfba4ac02ebfa0cc276a4a49d1601d3c7749637d9dae71263423d355cc"
+    }
+  },
+  "truth_free_run": {
+    "path": "output/smartphone-r5/phase33-quality-anchor-validation-v1/truth_free_run.json",
+    "sha256": "44f5d1f98ebccf88297cbf3e4a7e5088458982843eff9737652506591b439d6a",
+    "solver_runs": 4,
+    "candidate_control_changed": false,
+    "truth_open_count": 0
+  },
+  "truth_free_seal": {
+    "path": "output/smartphone-r5/phase33-quality-anchor-validation-v1/truth_free_seal.json",
+    "sha256": "e6d9750c5005d12d11cdb0f91003a2720a85644e4159e67c3c44482c5473d171",
+    "manifest": "output/smartphone-r5/phase33-quality-anchor-validation-v1/truth_free_seal.manifest.json",
+    "manifest_sha256": "d00e3194571783486b5ee488512a14f7fd5e7cd8b70914b817870dba6d3f1254"
+  },
+  "dataset_id": "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+  "target_epoch_count": 2131,
+  "lanes": {
+    "control": {
+      "first_submission_sha256": "af725435a049e88ad8c3934e3899b703d8207d5fc9c972465ea9bcf9804ca58d",
+      "first_summary_sha256": "5ecc88b2a3a6cb872078318cc00779ce335c50c97d2c1e80af08100420ceccc1",
+      "rows": 2131,
+      "exact_solution_epochs": 2129,
+      "interpolated_epochs": 2,
+      "graph_factors": 76883,
+      "graph_values": 8522,
+      "converged": true,
+      "repeat_byte_identical": true,
+      "max_speed_mps": 145.34423607027355,
+      "initial_30_transition_max_speed_mps": 145.34423607027355,
+      "over_70_mps_count": 3,
+      "continuity_gate": "failed"
+    },
+    "candidate": {
+      "first_submission_sha256": "181c5512d1fcd3bed6e46d08251c63edc7e03a72b5f451c4cbce091fc06edd77",
+      "first_summary_sha256": "2c74925d42a0b39f6f9d7fe1cbe6afcba4020eb8f3bb6e83e0e423b6a14dcc73",
+      "rows": 2131,
+      "exact_solution_epochs": 2129,
+      "interpolated_epochs": 2,
+      "graph_factors": 77314,
+      "graph_values": 8522,
+      "converged": true,
+      "repeat_byte_identical": true,
+      "max_speed_mps": 32.90938404295541,
+      "initial_30_transition_max_speed_mps": 2.9211733790155576,
+      "over_70_mps_count": 0,
+      "continuity_gate": "passed"
+    }
+  },
+  "structural_gate": {
+    "raw_members_only": true,
+    "finite_converged_control": true,
+    "finite_converged_candidate": true,
+    "exact_raw_target_keys_both_lanes": true,
+    "repeat_byte_identical_both_lanes": true,
+    "both_lane_continuity_required": true,
+    "control_continuity_passed": false,
+    "candidate_continuity_passed": true,
+    "passed": false,
+    "failure_reasons": ["control_over_70_mps_count=3", "control_initial_30_transition_max_mps=145.34423607027355"]
+  },
+  "truth_access": {
+    "validation_truth_materialized": false,
+    "validation_truth_open_count": 0,
+    "fresh_validation_score_skipped_due_to_structural_no_go": true,
+    "future_holdout_truth_open_count": 0,
+    "mat_read_or_generated": false,
+    "token_or_kaggle_access": false,
+    "post_score_tuning": false
+  },
+  "interpretation": "The quality-anchor candidate is finite, converged, deterministic, exact-keyed, and physically continuous on this raw route. The frozen control has three initial >70 m/s transitions, so the predeclared both-lane structural gate fails. No fresh-validation truth was materialized or read; no accuracy or generalization claim is made.",
+  "next_action": "Keep validation truth sealed. A new estimator candidate would require a separately frozen protocol; do not repair or retune Phase33 after this No-Go."
+}

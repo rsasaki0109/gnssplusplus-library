@@ -52,6 +52,11 @@ class Phase33QualityAnchorValidationTests(unittest.TestCase):
         ][MODULE.DIAGNOSTIC_KEYS[0]]
         self.assertFalse(MODULE._aggregate_compare(candidate, control)["passed"])
 
+    def test_structural_continuity_failure_is_fail_closed(self) -> None:
+        gate = MODULE._horizontal_compare(metric(1.0, over_70=1), metric(1.0))
+        self.assertFalse(gate["passed"])
+        self.assertIn("continuity_regression", gate["failures"])
+
 
 if __name__ == "__main__":
     unittest.main()
