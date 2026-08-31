@@ -114,7 +114,7 @@ class NativeOnlyContractTests(unittest.TestCase):
             self.assertEqual(first["approved_inputs"], second["approved_inputs"])
             self.assertNotIn(str(poison), second["read_members"])
             with self.assertRaises(native_only.NativeOnlyInputError):
-                native_only.inspect_phone_data_mat(poison)
+                native_only.inspect_raw_gnss(poison)
 
     def test_coordinate_and_submission_inputs_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory(prefix="native_only_forbidden_") as directory:
@@ -149,25 +149,20 @@ class NativeOnlyContractTests(unittest.TestCase):
             with self.assertRaises(native_only.NativeOnlyInputError):
                 native_only.inspect_raw_gnss(source)
 
-    def test_raw_phone_mat_requires_sensor_and_observation_container(self) -> None:
-        try:
-            import numpy as np
-            from scipy.io import savemat
-        except ImportError as exc:  # pragma: no cover - optional dependency
-            self.skipTest(f"SciPy unavailable: {exc}")
+    def test_any_mat_path_is_rejected_before_open(self) -> None:
         with tempfile.TemporaryDirectory(prefix="native_only_mat_") as directory:
             source = Path(directory) / "phone_data.mat"
-            savemat(
-                source,
-                {
-                    "obs": np.array([1.0]),
-                    "acc": np.array([[0.0, 0.0, 9.8]]),
-                    "gyro": np.array([[0.0, 0.0, 0.0]]),
-                },
-            )
-            report = native_only.inspect_phone_data_mat(source)
-            self.assertEqual(report["raw_gnss_container"], "obs")
-            self.assertEqual(set(report["raw_sensor_fields"]), {"acc", "gyro"})
+            source.write_bytes(b"poisoned MAT must never be opened")
+            with self.assertRaises(native_only.NativeOnlyInputError):
+                native_only.inspect_raw_gnss(source)
+            with self.assertRaises(native_only.NativeOnlyInputError):
+                native_only.inspect_raw_imu(source)
+            with self.assertRaises(native_only.NativeOnlyInputError):
+                native_only.inspect_broadcast_nav(source)
+
+            missing_result = Path(directory) / "result_gnss.mat"
+            with self.assertRaises(native_only.NativeOnlyInputError):
+                native_only.inspect_raw_gnss(missing_result)
 
 
 if __name__ == "__main__":

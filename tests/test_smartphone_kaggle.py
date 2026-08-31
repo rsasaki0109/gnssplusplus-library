@@ -140,6 +140,70 @@ class SmartphoneKaggleTests(unittest.TestCase):
                 hashlib.sha256(output.read_bytes()).hexdigest(),
             )
 
+    def test_native_pdc_run_manifest_is_a_truth_free_submission_boundary(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_smartphone_native_pdc_manifest_") as temp_dir:
+            root = Path(temp_dir)
+            submission = root / "keyed.csv"
+            submission.write_text(
+                "phone,UnixTimeMillis,LatitudeDegrees,LongitudeDegrees\n"
+                "fixture/phone,1700000000000,35.0,139.0\n",
+                encoding="ascii",
+            )
+            manifest_path = root / "run_manifest.json"
+            policy = {
+                "mat_paths_rejected_before_open": True,
+                "result_coordinates_read": False,
+                "ground_truth_read": False,
+                "sample_coordinates_read": False,
+                "v5_output_read": False,
+                "python_coordinate_or_rinex_stage": False,
+                "base_or_double_difference_factors": False,
+            }
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": KAGGLE.NATIVE_PDC_RUN_MANIFEST_SCHEMA,
+                        "status": "truth-free-artifacts-sealed",
+                        "truth_free": True,
+                        "forbidden_input_policy": policy,
+                        "artifacts": {
+                            "keyed.csv": {
+                                "path": "keyed.csv",
+                                "sha256": hashlib.sha256(submission.read_bytes()).hexdigest(),
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            parsed = KAGGLE._manifest_for_submission(submission, manifest_path)
+            self.assertIsNotNone(parsed)
+            assert parsed is not None
+            self.assertEqual(
+                parsed["schema_version"], KAGGLE.NATIVE_PDC_RUN_MANIFEST_SCHEMA
+            )
+
+            policy["ground_truth_read"] = True
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": KAGGLE.NATIVE_PDC_RUN_MANIFEST_SCHEMA,
+                        "status": "truth-free-artifacts-sealed",
+                        "truth_free": True,
+                        "forbidden_input_policy": policy,
+                        "artifacts": {
+                            "keyed.csv": {
+                                "path": "keyed.csv",
+                                "sha256": hashlib.sha256(submission.read_bytes()).hexdigest(),
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaises(ValueError):
+                KAGGLE._manifest_for_submission(submission, manifest_path)
+
     def test_metric_scores_each_phone_with_declared_linear_percentiles(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_smartphone_kaggle_") as temp_dir:
             root = Path(temp_dir)

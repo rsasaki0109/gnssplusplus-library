@@ -170,7 +170,10 @@ LEAP_SECONDS = 18
 SAMPLE_FIELDS = tuple(kaggle.SUBMISSION_FIELDS)
 REQUIRED_PHONE_MEMBERS = ("device_gnss.csv",)
 REQUIRED_ROUTE_MEMBERS = ("brdc.nav",)
-TRUTH_BASENAMES = frozenset({"ground_truth.csv", "gt.mat", "ref_hight.mat"})
+# The native-only contract has no MATLAB inputs.  Keep only the raw CSV truth
+# member name for metadata classification; any other extension (including
+# ``.mat``) is rejected by the native/test authorization boundary before open.
+TRUTH_BASENAMES = frozenset({"ground_truth.csv"})
 
 
 class TestBatchError(ValueError):

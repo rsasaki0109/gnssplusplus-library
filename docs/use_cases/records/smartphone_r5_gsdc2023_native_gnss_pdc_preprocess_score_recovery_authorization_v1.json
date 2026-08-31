@@ -1,0 +1,41 @@
+{
+  "schema_version": "smartphone-r5-native-gnss-pdc-train-score-recovery.v1",
+  "status": "authorized-evaluation-recovery-v2",
+  "created_at_utc": "2026-08-31T06:27:00Z",
+  "purpose": "Permit one report-only development score of the newly frozen exact raw-status/multipath preprocessing candidate.",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_preprocess_freeze_v1.json",
+    "sha256": "94d407c3913449e4061dea1e0a324481ff4ffac765b3c8ec23cf2214ac482b63"
+  },
+  "candidate": {
+    "route_device": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "keyed_output_sha256": "dc279b30445e32132fbc8ee75410af61be023759701cdd99cdbed9ba37c2e3d4",
+    "run_manifest_sha256": "7013910d7c75b835f3b0dd9bf006254cc407917e0f2663137fbb4a5b7020521e",
+    "candidate_unchanged": true,
+    "solver_rerun_after_freeze": false
+  },
+  "exact_failure": "The earlier exact-key evaluator rejected the same route's Android/truth millisecond phase; the fixed recovery adapter is authorized to report one-to-one nearest matches within 1000 ms and explicit unmatched rows.",
+  "contract": {
+    "candidate_unchanged": true,
+    "algorithm_or_numeric_parameter_change": false,
+    "parameter_selection": false,
+    "solver_rerun": false,
+    "mat_inputs_used": false,
+    "timestamp_alignment": "deterministic one-to-one nearest truth timestamp with absolute delta <= 1000 ms; equal-distance ties fail closed; unmatched finite predictions are counted; no coordinate interpolation",
+    "truth_read_after_freeze_only": true,
+    "validation_truth_read_count": 0,
+    "holdout_truth_read_count": 0,
+    "test_truth_read_count": 0,
+    "external_mutation": false
+  },
+  "recovery_evaluator": {
+    "source": "apps/commands/benchmarks/gnss_smartphone_native_gnss_pdc_eval.py",
+    "source_sha256": "2992d29d4dd77c49e319b9b86bc4580ab90b8a39864a4931782bbacc57f0852c",
+    "test": "tests/test_smartphone_native_gnss_pdc_eval.py",
+    "test_sha256": "3c9e4a8f48e74005a32715cae7e45da89e68caff16daf5067d9e6d5ce8ea62dc",
+    "fixed_window_ms": 1000,
+    "four_variants": true,
+    "official_score_claim": false
+  },
+  "allowed_action": "Read the already declared development ground_truth.csv once after the freeze hash, publish a report regardless of score, and perform no post-score tuning or candidate regeneration."
+}

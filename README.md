@@ -116,29 +116,10 @@ target has not yet been achieved.
 | WLS | 4.018 | 4.873 |
 | Native FGO v5 | 3.952 | 4.276 |
 
-#### External precomputed oracle/import baseline (not native libgnss++ performance)
-
-For gap analysis only, the separately imported public precomputed upstream
-GNSS+IMU MAT result scored 1.235 public / 0.782 private. This is an external
-oracle/import baseline, not a libgnss++ native inference result and is not
-counted as native performance or native target completion.
-
-The external upstream-MAT v2 payload is SHA256
-`ded15a2a92349b06accfe18bc2afa12c35f7a282497d70ab9fcedf15471fc1f3`, with
-40 routes and 71,936 official keys. Its local train four-diagnostic mean is
-`0.506790881 m`, and no test truth was materialized or read. The external
-submission was late, so it has no official rank; score-order insertion gives
-hypothetical public rank 4 and private rank 1, with private `0.782` below the
-frozen winner snapshot `0.883`. See the [smartphone pipeline notes](docs/use_cases/smartphone_raw_gnss.md),
-[metric audit](docs/use_cases/records/smartphone_r5_kaggle_metric_primary_source_audit_v1.json),
-[submission record](docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_v2_kaggle_submission_v1.json),
-and [final completion audit](docs/use_cases/records/rtk_smartphone_performance_final_completion_audit.json).
-
-The upstream result MAT files are public precomputed artifacts from the
-MIT-licensed `taroz/gsdc2023` reproduction path; the competition dataset terms
-still apply, and downloaded MAT/CSV payloads are not vendored here. Experimental
-smartphone lanes and all No-Go alternatives remain development-only; RTK/SPP
-production defaults are unchanged.
+An earlier external/precomputed-MAT experiment is deliberately excluded from
+the native result summary: it was not a libgnss++ inference run and cannot
+establish the native 0.782-class target. Native smartphone experiments remain
+development-only, and RTK/SPP production defaults are unchanged.
 
 ### PPC 2024 goal matrix vs Kaiyodai and gici-open
 

@@ -118,6 +118,10 @@ bool forbiddenPath(const std::string& path) {
                    [](unsigned char character) {
                        return static_cast<char>(std::tolower(character));
                    });
+    // This entry point is another native-only smartphone binary.  Reject
+    // every MATLAB container before the regular-file check or any loader can
+    // open it; `.m` source is specification-only and is never runtime data.
+    if (lowered.find(".mat") != std::string::npos) return true;
     constexpr const char* markers[] = {
         "result_gnss", "ground_truth", "gt.mat", "sample_submission",
         "submission.csv", "submission_", "native-fgo-test-v5", "upstream-mat",
@@ -248,7 +252,8 @@ int main(int argc, char** argv) {
     Options options;
     if (!parseOptions(argc, argv, options)) return 2;
     if (forbiddenPath(options.device_gnss) || forbiddenPath(options.device_imu) ||
-        forbiddenPath(options.nav)) {
+        forbiddenPath(options.nav) || forbiddenPath(options.output) ||
+        forbiddenPath(options.summary)) {
         std::cerr << "native-only input contract rejected a forbidden path\n";
         return 2;
     }

@@ -1,0 +1,299 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-gnss-pdc-freeze.v1",
+  "status": "frozen-before-train-truth-score",
+  "created_at_utc": "2026-08-31T06:00:00Z",
+  "candidate_id": "native-raw-android-gnss-pdc-v1",
+  "purpose": "Freeze the dedicated native raw Android GNSS/PDC route before its single declared development-train truth read.",
+  "policy": {
+    "inference_inputs": [
+      "raw device_gnss.csv",
+      "broadcast RINEX navigation"
+    ],
+    "optional_future_inputs": [
+      "raw device_imu.csv for a separate opt-in IMU candidate"
+    ],
+    "truth_policy": "No truth is read during generation. The one declared train ground_truth.csv may be read only after this record, its companion seal, and the truth-free run manifest are hash-verified.",
+    "matlab_data_files": "forbidden_before_open_and_not_used",
+    "matlab_source": "pinned .m source is specification-only; no data file is read, loaded, hashed, or used as an oracle",
+    "forbidden_inference": [
+      "saved estimator result files",
+      "ground truth",
+      "sample/submission coordinates",
+      "prior v5 output",
+      "Python-generated coordinates or RINEX",
+      "base/double-difference observations"
+    ],
+    "mat_open_count": 0,
+    "truth_open_count_before_freeze": 0,
+    "validation_or_holdout_open_count": 0,
+    "test_truth_open_count": 0,
+    "kaggle_or_token_access": false,
+    "external_mutation": false,
+    "production_default_changed": false,
+    "no_post_score_parameter_tuning": true
+  },
+  "split": {
+    "role": "development_train",
+    "route_device": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "fresh_validation": "sealed and not materialized/opened",
+    "future_holdout": "sealed and not materialized/opened",
+    "selection_method": "previously declared development identity; no score or saved-result artifact used for this freeze",
+    "truth_path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv",
+    "truth_read_before_freeze": false,
+    "truth_read_after_freeze": "one scoring read permitted only after artifact seal"
+  },
+  "inputs": {
+    "device_gnss": {
+      "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_gnss.csv",
+      "sha256": "c5af6cc3aeae6ab29a2a10d975d291b8fba4fab15273c0729163cd639ff10e42",
+      "rows": 48000,
+      "raw_rows": 48000,
+      "header_sha256": "d1c55b2199a1c3734e5f2da5b31e7e08a6e97c627cdd07d3bfa53ddbe66b8b6f"
+    },
+    "broadcast_nav": {
+      "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/brdc.nav",
+      "sha256": "16c859f8015c874398978bae6004172c355f7d3a3b06fa81b54aac88b6b78d33"
+    },
+    "archive_inventory": {
+      "path": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+      "sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+      "use": "metadata provenance only; no archived data member is opened by this route"
+    },
+    "profile": {
+      "path": "configs/benchmarks/smartphone_r5_gsdc2023.json",
+      "sha256": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776"
+    }
+  },
+  "source_hashes": {
+    "apps/native/gnss_pos_vel_pdc.cpp": "22c794c7c32923003f3d5e3b2f0a92d5ee7f266b634ebbc6fcaacde61f1ce0c5",
+    "apps/native/observable_measurement_helpers.hpp": "a23ffd70ac2c3a5da4900044d1f55ae5a2812c9e02b7892db58e9800b93d5625",
+    "include/libgnss++/io/android_raw_gnss.hpp": "117c7f81c3052f2ae95ec683a60290b03c0703c3a57f1487338930f4e3902a22",
+    "src/io/android_raw_gnss.cpp": "262d1e289b4dccdf6356b1ea07af92731b8df4600de52a9059b29f5bee31dda9",
+    "apps/commands/benchmarks/gnss_smartphone_native_only.py": "c649c4d1b40b61a26a88cb38c49e7f5671a714ad33fff4b26d4c96c703790561",
+    "apps/commands/benchmarks/gnss_smartphone_native_gnss_pdc.py": "09e7ab071ad6d1bb2f6a9b146cfed69e19f7739c25b308521fb099a57c38386d",
+    "apps/gnss.py": "0cd27d1afc4520cf0825dc97c17deb0d29f83e60626d36114e65680597815396",
+    "tests/test_android_raw_gnss.cpp": "af7ea7802875dae2aef9c604352048357234703cf8153640ec939a703bdf4d0d",
+    "tests/test_smartphone_native_only.py": "1e2028205eca27418967faee71a77179b6e12bc5b401c84c3196bcf31e68d7da",
+    "tests/test_smartphone_native_gnss_pdc_bridge.py": "99df89e73f1d01530416183ac28aaae3b843939b64241d0953ac15433215622e",
+    "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_gap_matrix_v1.json": "9f5e9caa74d3232c10f4a93103613fa239f2f834cf94eb0618c52e8db0d7c97f"
+  },
+  "release_binary": {
+    "path": "build/apps/gnss_pos_vel_pdc",
+    "sha256": "5f43e5f542323a44e379e9fbf6e544ae07d6680afe5f32f305e28de393180ff0",
+    "build_command": "cmake --build build --target gnss_pos_vel_pdc -j2",
+    "runtime_library_path": "/home/sasaki/.local/lib:/opt/ros/jazzy/lib"
+  },
+  "upstream_specification": {
+    "repository": "taroz/gsdc2023",
+    "commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "license": "MIT",
+    "source_only": true,
+    "files": {
+      "functions/gnsslog2obs.m": {
+        "sha256": "665ce43d1fc3c5a9c3b3a6fd76f81539126e3ab897fbba484ab0ccd18964acff",
+        "lines": "19-36,43-89,103-121,158-202,254-316"
+      },
+      "functions/sysfreq2sigtype.m": {
+        "sha256": "5ec1d299e04b45f604921cbae3b1fac8f78f3f76a0152496d86011a32f1d0079",
+        "lines": "1-61"
+      },
+      "functions/exobs.m": {
+        "sha256": "e22db383f372f26597333d674a12ee1e2adfdc97b00828fbbc5470903947f456",
+        "lines": "1-123"
+      },
+      "functions/exobs_residuals.m": {
+        "sha256": "50c954a825edbdeaf5c9884486aff56c058f51d47610a06722d4f42b33095324",
+        "lines": "1-109"
+      },
+      "functions/correct_pseudorange.m": {
+        "sha256": "b0536ccff478b0aff253448ffb7a203c715b8064dd8dc85898e38f1f05d0441e",
+        "lines": "1-54",
+        "raw_only_status": "unavailable; requires a base observation and base_position/base_offset inputs"
+      },
+      "functions/obserrmodel.m": {
+        "sha256": "43d0671a25c81fa6d7df0e1fbe81bf48a14eb3a35c8399600200b44961a7f9ef",
+        "lines": "1-43"
+      },
+      "fgo_gnss.m": {
+        "sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3",
+        "lines": "18-23,26-82,89-121,123-218,220-253"
+      },
+      "parameters.m": {
+        "sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52",
+        "lines": "22-47,62-83,85-108,110-128,130-203"
+      },
+      "functions/write_results.m": {
+        "sha256": "d08c2097585d67d460694164b019d4be78e5d70218fa5d14776966b62a71900c",
+        "lines": "1-80"
+      },
+      "functions/submission.m": {
+        "sha256": "db97431c1da52b93b8903eb4c604141b3c8d6dfb7ad33b6df237e414a7e8c9ac",
+        "lines": "1-52"
+      },
+      "functions/score.m": {
+        "sha256": "4c88f3f775e4f8caca22bb8c5f5747309f32b190df230346179381feb1f572c4",
+        "lines": "1-80"
+      }
+    }
+  },
+  "numeric_parameters": {
+    "include_galileo_e1": true,
+    "include_l5_family": true,
+    "max_iterations": 1000,
+    "seed_match_tolerance_s": 0.51,
+    "seed_interpolation_max_gap_s": 60.0,
+    "min_snr_dbhz": 35.0,
+    "min_elevation_deg": 15.0,
+    "pseudorange_sigma_zenith_m": 3.0,
+    "doppler_sigma_zenith_mps": 0.2,
+    "tdcp_sigma_zenith_m": 0.05,
+    "position_prior_sigma_m": 1000.0,
+    "clock_prior_sigma_m": 1000000.0,
+    "velocity_prior_sigma_mps": 1000.0,
+    "clock_drift_prior_sigma_mps": 1000.0,
+    "motion_sigma_m": 0.1,
+    "clock_motion_sigma_m": 0.1,
+    "clock_jump_sigma_m": 1000000.0,
+    "inter_system_clock_motion_sigma_m": 0.000001,
+    "clock_drift_between_sigma_mps": 0.1,
+    "huber_threshold_sigma": 1.234,
+    "spp_seed": {
+      "elevation_mask_deg": 0.0,
+      "snr_mask_dbhz": 0.0,
+      "use_ionosphere_model": true,
+      "use_troposphere_model": true,
+      "use_precise_products": false,
+      "use_ssr_corrections": false,
+      "use_ionex_corrections": false,
+      "use_dcb_corrections": false,
+      "enable_position_jump_gate": false,
+      "enable_robust_weighting": false,
+      "enable_outlier_detection": false,
+      "enable_raim_fde": false,
+      "max_gdop": 0.0,
+      "model_intersystem_bias": false,
+      "invalid_solution_policy": "reset once and retry; otherwise previous finite native SPP seed or fail closed"
+    }
+  },
+  "signal_and_time_contract": {
+    "receiver_time": "week=floor((TimeNanos-baseFullBiasNanos)/1e9/604800); tow_rx=(TimeNanos-baseFullBiasNanos-week*604800e9)/1e9-BiasNanos/1e9",
+    "pseudorange": "nearest-week-unwrapped (tow_rx-tow_tx)*speed_of_light",
+    "glonass_time": "raw GLONASS transmit time mapped to GPST with receiver day reference",
+    "beidou_time": "transmit time plus 14 seconds",
+    "carrier": "AccumulatedDeltaRangeMeters / wavelength; five-device ADR sign policy copied from gnsslog2obs.m",
+    "doppler": "-PseudorangeRateMetersPerSecond / wavelength",
+    "clock_break": "hardware discontinuity count or >1 second TimeNanos jump resets clock/TDCP continuity",
+    "supported_signals": [
+      "GPS L1 C/A",
+      "GPS L5",
+      "GLONASS G1 channel -7..6",
+      "Galileo E1",
+      "Galileo E5a",
+      "BeiDou B1I",
+      "BeiDou B1C",
+      "BeiDou B2a"
+    ],
+    "unsupported_constellations": ["QZSS", "SBAS", "IRNSS"],
+    "malformed_or_nonfinite_policy": "fail closed; duplicate handset rows are rejected except the two documented repeated-block devices"
+  },
+  "graph_contract": {
+    "backend": "Eigen sparse normal equations with deterministic Huber IRLS",
+    "state_order": "per epoch [ECEF dx, ECEF dy, ECEF dz, five receiver-system clock groups, ECEF vx, ECEF vy, ECEF vz, clock drift]",
+    "factor_families": [
+      "undifferenced pseudorange",
+      "undifferenced Doppler",
+      "ordinary same-key TDCP/ADR difference",
+      "float carrier residual diagnostics",
+      "position/clock/velocity/drift priors",
+      "position/clock/clock-drift temporal motion"
+    ],
+    "base_observation_compensation": {
+      "status": "not_available_under_raw_nav_only",
+      "reason": "upstream correct_pseudorange.m reads a base observation and base_position.csv/base_offset.csv; the native route has neither and does not synthesize a correction",
+      "substitute": "none"
+    },
+    "double_difference_factors": 0,
+    "single_difference_factors": 0,
+    "wls_seed_consumed": false,
+    "output": "atomic phone,UnixTimeMillis,LatitudeDegrees,LongitudeDegrees CSV"
+  },
+  "truth_free_gates": {
+    "required": [
+      "raw-only preflight succeeds before solver",
+      "mat_paths_rejected_before_open",
+      "result/truth/sample/v5 paths rejected",
+      "native_spp_seed_epochs == optimized_epochs or explicit fail-closed propagation",
+      "finite in-Earth keyed coordinates",
+      "nonzero pseudorange, Doppler and ordinary TDCP factors",
+      "final_cost < initial_cost",
+      "converged == true",
+      "no forbidden factors",
+      "deterministic repeat has byte-identical artifacts"
+    ],
+    "train_score_gate": "report four local diagnostic variants, availability, coverage, H P50/P95 and residual/factor telemetry after the single ground_truth.csv read; no parameter selection follows the score",
+    "validation_or_holdout_gate": "not authorized by this freeze"
+  },
+  "truth_free_artifact": {
+    "run_manifest": "output/smartphone-r5/native-gnss-pdc-direct-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/run_manifest.json",
+    "run_manifest_sha256": "32dd2cd0efae415dc26f2f50c880e07d5fc675b1f0e04ada29be7236af1006f5",
+    "run_manifest_seal_sha256": "7a4af3ba8e2b0b04564db7aad76486159ed946cc57cc4285257c23a642509c5c",
+    "artifacts": {
+      "factor.csv": "a0e605a7981535a73a24b1de452a8c5d77b34bbf773b1d7b3cd5526e862cfba2",
+      "graph.csv": "ef4ab44910409bf25a02cd9072420efbceec59ee99cda3ce16315aac54d2c2bd",
+      "keyed.csv": "16aff40056611a5404c29bfb63f1de506f78df6016480ff9b15cb69f3779fa3a",
+      "per_epoch.csv": "cfd0354b4b14f2484fb8897b2d5a21891d7c1c61227444931d677a7ea2f15c41",
+      "summary.json": "dd3d6011ca23deffdb1ccc6f165c5ac85198f888d8d56e9085d12d669e104cf0"
+    },
+    "telemetry": {
+      "optimized_epochs": 1384,
+      "native_spp_seed_epochs": 1384,
+      "native_spp_attempts": 1384,
+      "native_spp_valid_solutions": 1384,
+      "native_spp_failures": 0,
+      "pseudorange_factors": 16025,
+      "doppler_factors": 16025,
+      "ordinary_tdcp_factors": 13806,
+      "graph_factors": 55541,
+      "graph_values": 5536,
+      "iterations": 158,
+      "converged": true,
+      "initial_cost": 47200383.00689548,
+      "final_cost": 197981.06739692797,
+      "factor_residual_rms_mps": 43.104559182885005,
+      "wall_seconds": 5.26528542599408,
+      "peak_rss_kb": 81492
+    },
+    "raw_diagnostics": {
+      "input_rows": 48000,
+      "selected_rows": 47998,
+      "selected_epochs": 1384,
+      "gps_l1_rows": 11509,
+      "gps_l5_rows": 4589,
+      "glonass_l1_rows": 11008,
+      "galileo_e1_rows": 10446,
+      "galileo_e5_rows": 10446,
+      "beidou_l1_rows": 0,
+      "beidou_l5_rows": 0,
+      "carrier_rows": 30682,
+      "doppler_rows": 47998,
+      "carrier_loss_rows": 989,
+      "clock_discontinuities": 0,
+      "skipped_invalid_timing_rows": 2,
+      "skipped_invalid_quality_rows": 0,
+      "skipped_unsupported_signal_rows": 0,
+      "deduplicated_rows": 0
+    }
+  },
+  "commands": {
+    "preflight_and_run": "PYTHONHASHSEED=0 python3 apps/commands/benchmarks/gnss_smartphone_native_gnss_pdc.py --android-raw data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_gnss.csv --nav data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/brdc.nav --device-model pixel7pro --trip-id 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro --output-dir output/smartphone-r5/native-gnss-pdc-direct-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro",
+    "train_score": "after verifying this freeze, read only the declared train ground_truth.csv once and write a separate score record; do not change source, parameters, or truth-free artifacts",
+    "release_build": "cmake --build build --config Release -j2",
+    "full_serial_ctest": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:/opt/ros/jazzy/lib ctest --test-dir build --output-on-failure -j1",
+    "diff_check": "git diff --check"
+  },
+  "freeze_record_seal": {
+    "companion_manifest": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_freeze_manifest.json",
+    "record_sha256": "pinned in the companion manifest; self-hash is intentionally excluded from this JSON",
+    "algorithm_hash_status": "all source and binary hashes above are fixed before the permitted train truth read"
+  }
+}

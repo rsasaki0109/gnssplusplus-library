@@ -29,6 +29,7 @@ from typing import Any
 
 SCHEMA_VERSION = "smartphone-kaggle-metric.v2"
 MANIFEST_SCHEMA_VERSION = "smartphone-kaggle-submission-manifest.v2"
+NATIVE_PDC_RUN_MANIFEST_SCHEMA = "smartphone-r5-native-gnss-pdc-run-manifest.v1"
 COMPETITION_SLUG = "smartphone-decimeter-2023"
 COMPATIBILITY = "public-spec-compatible-distance-undetermined"
 PRIMARY_SCORE_STATUS = "undetermined-from-public-primary-sources"
@@ -822,6 +823,38 @@ def _manifest_for_submission(
     if path is None:
         return None
     manifest = _load_json(path, "submission manifest")
+    if manifest.get("schema_version") == NATIVE_PDC_RUN_MANIFEST_SCHEMA:
+        if manifest.get("status") != "truth-free-artifacts-sealed" or manifest.get(
+            "truth_free"
+        ) is not True:
+            raise _error("native PDC run manifest is not truth-free and sealed")
+        policy = manifest.get("forbidden_input_policy")
+        if not isinstance(policy, dict) or any(
+            policy.get(field) is not expected
+            for field, expected in (
+                ("mat_paths_rejected_before_open", True),
+                ("result_coordinates_read", False),
+                ("ground_truth_read", False),
+                ("sample_coordinates_read", False),
+                ("v5_output_read", False),
+                ("python_coordinate_or_rinex_stage", False),
+                ("base_or_double_difference_factors", False),
+            )
+        ):
+            raise _error("native PDC run manifest violates the forbidden-input contract")
+        artifacts = manifest.get("artifacts")
+        keyed = dict(artifacts or {}).get("keyed.csv")
+        if not isinstance(keyed, dict) or not isinstance(keyed.get("sha256"), str):
+            raise _error("native PDC run manifest has no keyed CSV artifact")
+        expected_hash = keyed["sha256"]
+        actual_hash = _sha256(submission_path)
+        if expected_hash != actual_hash:
+            raise _error("native PDC keyed CSV does not match its run manifest")
+        return {
+            "path": str(path),
+            "sha256": _sha256(path),
+            "schema_version": NATIVE_PDC_RUN_MANIFEST_SCHEMA,
+        }
     if manifest.get("schema_version") != MANIFEST_SCHEMA_VERSION:
         raise _error("submission manifest schema is invalid")
     if manifest.get("compatibility") != COMPATIBILITY:

@@ -14,6 +14,7 @@ if(GTest_FOUND)
     add_executable(gnss_run_tests
         test_imu_csv.cpp
         test_android_raw_gnss.cpp
+        test_smartphone_upstream_preprocessing.cpp
         test_attitude.cpp
         test_mechanization.cpp
         test_preintegration.cpp
@@ -210,10 +211,6 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_fgo_external_dr_witness.py
     )
     add_test(
-        NAME python_smartphone_native_fgo_v2_mat_tests
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_fgo_v2_mat.py
-    )
-    add_test(
         NAME python_smartphone_native_fgo_v2_1_contract_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_fgo_v2_1_contract.py
     )
@@ -228,6 +225,14 @@ if(GTest_FOUND)
     add_test(
         NAME python_smartphone_native_only_contract_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_only.py
+    )
+    add_test(
+        NAME python_smartphone_native_gnss_pdc_bridge_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_gnss_pdc_bridge.py
+    )
+    add_test(
+        NAME python_smartphone_native_gnss_pdc_eval_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_gnss_pdc_eval.py
     )
     add_test(
         NAME python_ppc_integrity_policy_tests
@@ -456,18 +461,6 @@ if(GTest_FOUND)
     add_test(
         NAME python_smartphone_wls_test_batch_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_wls_test_batch.py
-    )
-    add_test(
-        NAME python_smartphone_published_solution_reproducibility_tests
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_published_solution_reproducibility.py
-    )
-    add_test(
-        NAME python_smartphone_gsdc2023_upstream_mat_tests
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_gsdc2023_upstream_mat.py
-    )
-    add_test(
-        NAME python_smartphone_gsdc2023_upstream_mat_fallback_v2_tests
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_gsdc2023_upstream_mat_fallback_v2.py
     )
     add_test(
         NAME python_smartphone_native_fgo_eval_tests
@@ -784,11 +777,12 @@ if(GTest_FOUND)
         python_smartphone_wls_stability_selector_holdout_eval_tests
         python_smartphone_wls_multi_phone_ensemble_tests
         python_smartphone_wls_multi_phone_ensemble_holdout_tests
-        python_smartphone_published_solution_reproducibility_tests
         python_smartphone_native_fgo_eval_tests
         python_smartphone_native_fgo_holdout_tests
         python_smartphone_native_fgo_test_batch_tests
         python_smartphone_native_fgo_v2_smoke_tests
+        python_smartphone_native_gnss_pdc_bridge_tests
+        python_smartphone_native_gnss_pdc_eval_tests
         python_smartphone_native_fgo_test_submission_recovery_tests
         python_smartphone_native_fgo_test_submission_continuity_tests
         python_smartphone_native_fgo_test_submission_source_seam_bridge_tests

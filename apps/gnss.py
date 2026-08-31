@@ -609,6 +609,16 @@ COMMANDS = {
         "target": python_target("gnss_smartphone_raw_quality_control_eval.py"),
         "summary": "Evaluate the frozen raw-quality robust SPP candidate on development routes before any validation or holdout access.",
     },
+    "smartphone-native-gnss-pdc": {
+        "kind": "python",
+        "target": python_target("gnss_smartphone_native_gnss_pdc.py"),
+        "summary": "Run the native raw-Android GNSS/PDC executable with an atomic raw/nav/binary provenance manifest.",
+    },
+    "smartphone-native-gnss-pdc-evaluate": {
+        "kind": "python",
+        "target": python_target("gnss_smartphone_native_gnss_pdc_eval.py"),
+        "summary": "Score one sealed raw-only native GNSS/PDC route with fixed development timestamp alignment.",
+    },
     "smartphone-kaggle-submit": {
         "kind": "python",
         "target": python_target("gnss_smartphone_kaggle_submit.py"),
@@ -618,16 +628,6 @@ COMMANDS = {
         "kind": "python",
         "target": python_target("gnss_smartphone_kaggle_evaluate.py"),
         "summary": "Audit GSDC 2023 submissions with WGS84/Vincenty and spherical/Haversine P50/P95 variants.",
-    },
-    "smartphone-gsdc2023-upstream-mat": {
-        "kind": "python",
-        "target": python_target("gnss_smartphone_gsdc2023_upstream_mat.py"),
-        "summary": "Decode pinned public taroz result MAT files and build a truth-free upstream-result GSDC lane.",
-    },
-    "smartphone-gsdc2023-upstream-mat-fallback-v2": {
-        "kind": "python",
-        "target": python_target("gnss_smartphone_gsdc2023_upstream_mat_fallback_v2.py"),
-        "summary": "Complete the truth-free upstream MAT test lane using bounded published-result/v5/WLS fallback precedence.",
     },
     "smartphone-trajectory-smoother": {
         "kind": "python",

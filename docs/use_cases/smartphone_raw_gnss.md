@@ -2158,87 +2158,45 @@ are under `output/smartphone-r5/raw-quality-control-v1/`.  No validation,
 holdout, token, leaderboard, or external submission was used in this phase.
 
 
-### Published-solution reproducibility audit (2026-08-30)
+### Published-source GNSS specification audit (MAT-free, 2026-08-30)
 
-The next research phase checked the public implementation and artifacts of
+The pinned MIT source tree
 [taroz/gsdc2023](https://github.com/taroz/gsdc2023) at commit
-'29923f9f370f09ebc00f96d8cca375007a18e7d5'. The repository is MIT-licensed
-and its pinned tree, README, license, entry-point, and factor-file hashes are
-recorded in
-'docs/use_cases/records/smartphone_r5_gsdc2023_published_solution_reproducibility_audit.json'.
-The checkout is isolated under the ignored
-'output/reproducibility-cache/gsdc2023'; no source was copied into production.
-The separate
-'docs/use_cases/records/smartphone_r5_gsdc2023_published_solution_reproducibility_manifest.json'
-pins the audit record hash and the materialized source/log hashes.
+`29923f9f370f09ebc00f96d8cca375007a18e7d5` was read only as an algorithm
+specification.  No MATLAB data file, saved result, sample coordinate, or
+MATLAB-generated artifact is an input to the native lane.  Exact source
+hashes, line ranges, and the current native symbols are in
+`docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_gap_matrix_v1.json`.
 
-The public repository has a useful, credential-free preprocessed artifact:
-'http://www.taroz.net/data/dataset_2023.zip' redirected to
-'https://taroz.net/data/dataset_2023.zip' with HTTP 200, 2,761,355,999 bytes,
-and local SHA-256
-'bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408'.
-A single train route was materialized from that hash-verified archive into
-'output/reproducibility-cache/taroz-train-smoke-v2'; all file hashes are in
-the record. The archive includes preprocessed 'phone_data.mat', so the
-published preprocessing script is not the first missing stage.
-
-The authoritative [ION winners page](https://www.ion.org/gnss/googlecompetition.cfm)
-lists Norizumi Motooka first, Taro Suzuki second, and Jeonghyeon Yun third.
-This matters because the taroz README self-reports first place publicly and
-second place privately; that claim is retained as source evidence but is not
-used to assign rank or tune a parameter. The official first-place
-[abstract](https://www.ion.org/publications/abstract.cfm?articleID=19924)
-describes tightly coupled GNSS/INS, timestamp adjustment, and adaptive
-weighting. The official third-place
-[abstract](https://www.ion.org/publications/abstract.cfm?articleID=19922)
-describes a two-step pseudorange/Doppler/TDCP estimator. The official
-[workshop material](https://www.ion.org/gnss/upload/Smartphone-Decimeter-Challenge-2023-2024.pdf)
-and the competition's public source links did not expose an exact public
-first- or third-place 2023 repository during this bounded search; this is not
-a claim that an unindexed or private repository cannot exist.
-
-The published entry point is MATLAB-only:
+The audit covers `gnsslog2obs.m`, `sysfreq2sigtype.m`, `exobs.m`,
+`exobs_residuals.m`, `correct_pseudorange.m`, `obserrmodel.m`,
+`fgo_gnss.m`, `parameters.m`, `write_results.m`, `submission.m`, and
+`score.m`.  The useful raw contracts—Android clock reconstruction,
+GPS/GLONASS/Galileo/BeiDou signal mapping, ADR/wavelength conversion, and
+negative pseudorange-rate Doppler mapping—are ported to
+`src/io/android_raw_gnss.cpp`.  The dedicated executable consumes raw
+`device_gnss.csv` and broadcast navigation directly:
 
 ~~~bash
-(cd output/reproducibility-cache/taroz-train-smoke-v2 && \
-  matlab -batch "run('/abs/path/output/reproducibility-cache/gsdc2023/run_fgo.m')")
-~~~
-
-'run_fgo.m' hardcodes dataset="test" and expects precomputed
-'result_gnss_imu.mat' for its final stage. The exact probe returned 127 with
-'matlab: command not found'. The dependency path was tested farther than a
-missing-package assertion: the pinned 'gtsam-4.3a' source and 'gtwrap' were
-built locally, then 'gtsam_gnss' configured until CMake's first remaining
-blocker was missing MATLAB/MEX headers, libraries, compiler, and MATLAB root.
-The environment has native GTSAM 4.3a2 but no MATLAB, MEX, or GTSAM MATLAB
-toolbox. Dependency commits, licenses, configure logs, and hashes are in the
-record.
-
-A bounded native smoke was also run with the repository's existing
-'build/apps/gnss_fgo' on handset-derived RINEX and broadcast navigation:
-two epochs, 14 pseudorange factors, 6 TDCP candidates, 1 motion factor, and
-21 graph factors completed with return code 0. This is explicitly a local
-C++ factor smoke, not taroz reproduction or an accuracy evaluation. The
-local FGO already has analogous pseudorange and single-difference
-Doppler/TDCP paths, so copying permissively licensed external header-only
-factors would add no evidence and was intentionally not done.
-
-Reproduce the audit-only checks with:
-
-~~~bash
-PYTHONPATH=apps/commands \
-  python3 tests/test_smartphone_published_solution_reproducibility.py -v
-cmake --build build --config Release -j$(nproc)
 LD_LIBRARY_PATH=/home/sasaki/.local/lib:$LD_LIBRARY_PATH \
-  ctest --test-dir build -j1 --output-on-failure
-git diff --check
+  build/apps/gnss_pos_vel_pdc \
+  --android-raw <route>/device_gnss.csv --nav <route>/brdc.nav \
+  --device-model <phone> --trip-id <route>/<phone> \
+  --keyed-out-csv <output>.csv --summary-json <summary>.json
 ~~~
 
-No fresh validation or holdout payload was materialized or opened, no Kaggle
-token or leaderboard value was used, no external mutation was made, and
-production RTK/SPP defaults remain unchanged. MATLAB R2024a with MEX and the
-GTSAM MATLAB toolbox is the next exact recovery requirement; it does not
-authorize retuning or a new validation run.
+The current native graph is a deterministic Eigen P+D+ordinary-TDCP/float
+carrier route with native SPP initialization.  It is intentionally not
+described as an exact taroz/GTSAM reproduction: upstream base-station
+pseudorange compensation is unavailable in a raw/nav-only contract, the
+published SNR/error and residual masks are incomplete, and the state/backend
+contracts differ.  These are the first high-impact missing components and
+are recorded as gaps rather than hidden behind a heuristic.
+
+The structural raw run and parser fixtures are truth-free.  A declared
+development score may read only `ground_truth.csv` after the raw output is
+sealed; validation, holdout, test truth, credentials, and all `.mat` paths
+remain forbidden.  Production RTK/SPP defaults are unchanged.
 
 ### Native Android-RINEX FGO train gate (frozen, truth-free first)
 
@@ -2907,184 +2865,19 @@ remained `1.0`.  Every diagnostic regressed, so the result is a sealed No-Go:
 The lane is not promoted, production defaults and v5 are unchanged, and no
 validation/holdout/test batch is authorized.
 
-### Public upstream MAT-result promotion lane (truth-free test conversion)
+### Historical precomputed-result experiment rejected from native lane
 
-The pinned public archive also contains the published taroz result files, so a
-separate converter can reproduce their saved `gt.Gpos.llh` coordinates without
-running MATLAB.  The archive and complete MAT-member inventory are pinned by
-`docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_freeze_v1.json`
-(archive SHA256
-`bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408`; inventory
-SHA256
-`a54d54305442bfc826a34a5e59debe12ebcb55caf03d6235fdf0e125c5bd609c`).  The
-converter is
-`apps/commands/benchmarks/gnss_smartphone_gsdc2023_upstream_mat.py` (SHA256
-`d26fdb9f639d198b708a6162fd9bd7328ed9019f5fc7ed5469af3e4bcc3852a4`) and
-decodes the MATLAB v5 MCOS `FileWrapper__` property table with bounds checks.
-It uses `phone_data.mat` `obs.utcms` as the upstream epoch authority, keeps
-the stored LLH/offset result unchanged, and uses the official sample only for
-`tripId,UnixTimeMillis` keys and order.  Sample coordinates, ground truth,
-the v5 lane, and estimator reruns are forbidden fallbacks.
+An earlier branch contained a converter, fallback, and one external submission
+based on saved upstream result artifacts.  That experiment is not a
+libgnss++ inference result and cannot establish the native 0.782-class target.
+Its implementation, test registrations, and active command aliases have been
+removed from this branch.  Historical records may remain in repository history
+for auditability, but they are not runtime dependencies, are not native
+evidence, and must not be used as an inference input.  The native contract
+rejects any `.mat` path before opening it; no conversion, oracle comparison,
+test batch, or resubmission is permitted.
 
-The frozen three-route development score is recorded at
-`output/smartphone-r5/gsdc2023-upstream-mat-v1/train/train_score.json` (SHA256
-`5a3dbedef378d1889b886bf7ccad09eb7089701c4f947f24806a59a2dc53e8a1`).  The
-predeclared `result_gnss_imu.mat` lane scored a four-diagnostic mean of
-`0.506790881 m`, compared with `0.585915185 m` for `result_gnss.mat`; every
-declared ground-truth key was covered and all saved route transitions stayed
-under the fixed 70 m/s bound.  Each raw upstream result has one leading
-initialization row outside the ground-truth key set.  The gate correction
-record explains why that row is projected out by upstream `submission.m`
-semantics rather than treated as a missing truth key; no score-selected
-parameter or source was changed.
-
-The one authorized test conversion was truth-free and processed all 40
-precomputed `result_gnss_imu.mat` members, producing 40 route artifacts.  It
-was sealed failed-closed at
-`output/smartphone-r5/gsdc2023-upstream-mat-v1/test-batch/test_batch.manifest.json`
-(SHA256
-`3c29d25fee11125fc6e644b52ea8e52b8b10c8d3308d73f84c74835e894885e7`) because
-two routes left 601 sample keys unresolved under the frozen bounded rules:
-598 on `2022-04-25-21-04-us-ca-ebf-x/mi8` (long leading non-finite interval)
-and 3 on `2022-10-06-20-46-us-ca-sjc-r/sm-a205u`.  The batch generated 40
-finite route artifacts, with 71,334 exact keys and one bounded edge hold, but
-published no 71,936-row submission.  The failure artifact is
-`output/smartphone-r5/gsdc2023-upstream-mat-v1/test-batch/batch_failure.json`
-(SHA256
-`64b787f3b9e110e6fc889c7df16819eac480401c4bb3d1183999f7122c413c84`).  The
-machine-readable outcome, including the archive-license caveat, is
-`docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_promotion_result_v1.json`
-(SHA256
-`b6ccb2d8c6f051938bb972df98cfc9ca844c43e482ec9e8ad7e1b8bb96ecfc64`), with
-its hash manifest at
-`docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_promotion_result_v1_manifest.json`.
-The frozen Release build and all 131 serial CTest cases passed; the converter
-fixture suite passed 6/6 and `git diff --check` passed.
-
-Reproduce the inventory and single-result conversion with:
-
-~~~bash
-python3 apps/commands/benchmarks/gnss_smartphone_gsdc2023_upstream_mat.py \
-  inventory --archive data/gsdc2023/cache/dataset_2023.zip \
-  --output output/smartphone-r5/gsdc2023-upstream-mat-v1/mat_inventory.json
-python3 apps/commands/benchmarks/gnss_smartphone_gsdc2023_upstream_mat.py \
-  convert --mat <result_gnss_imu.mat> --phone-data <phone_data.mat> \
-  --trip-id <route/phone> --output <route.csv> --manifest <route.manifest.json>
-~~~
-
-The public archive is a local cache only: the upstream repository is MIT, but
-the dataset archive has no separate license file and is not vendored or
-redistributed.  No Kaggle submission, token access, validation/holdout/test
-truth read, or production RTK/SPP default change occurred in this lane.
-
-### Upstream MAT test completeness recovery v2 (truth-free, local only)
-
-The v1 failure is retained as an immutable fail-closed artifact. Its coverage
-diagnostic identified 599 leading keys missing from both published MAT result
-lanes on `2022-04-25-21-04-us-ca-ebf-x/mi8` and three leading keys missing
-from both lanes on `2022-10-06-20-46-us-ca-sjc-r/sm-a205u`. The full timestamp
-ranges and phone-data/raw-WLS coverage are recorded in
-`docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_fallback_v2_freeze.json`
-(SHA256
-`4b815827140e217fe9c05a3b1ab1c086f3c5433fe9a92c47c519c36eb561988a`) and the
-earlier diagnostic
-`output/smartphone-r5/gsdc2023-upstream-mat-v1/test-batch/fallback_diagnostic_v2.json`
-(SHA256
-`1a5a91d2c87a384af59bedf5d0a1611151eb577dd13482ad039d2e4ccbac5093`).
-
-After that freeze, the isolated fallback command
-`apps/commands/benchmarks/gnss_smartphone_gsdc2023_upstream_mat_fallback_v2.py`
-(SHA256
-`a47acae7d12205b984d6b310290d676e6a1d57ae16a070818293c1083584f4a8`) applied
-the source-only hierarchy `result_gnss_imu` bounded projection, `result_gnss`
-bounded projection, exact frozen v5, then approved truth-free WLS bounded
-projection. It allows only same-trip interpolation across at most 10,000 ms
-or a one-sided constant hold at most 1,000 ms; long gaps are never bridged
-across trips. The upstream `submission.m` semantics are pinned at lines
-21--38 (SHA256
-`db97431c1da52b93b8903eb4c604141b3c8d6dfb7ad33b6df237e414a7e8c9ac`), while
-the local contract removes its unbounded extrapolation. The sample file is
-used only for header, key, and row order; its coordinates and all test truth
-remain unread.
-
-The resulting 40-route candidate is atomically sealed at
-`output/smartphone-r5/gsdc2023-upstream-mat-v2/test-batch/submission.csv`
-(SHA256
-`ded15a2a92349b06accfe18bc2afa12c35f7a282497d70ab9fcedf15471fc1f3`,
-6,150,020 bytes). It has exactly 71,936 ordered unique keys and exact header
-`tripId,UnixTimeMillis,LatitudeDegrees,LongitudeDegrees`; duplicate, missing,
-extra, non-finite, dummy, and out-of-Earth counts are all zero. Source counts
-are 71,334 `result_gnss_imu` exact rows, one bounded MAT edge hold, and 601
-exact coordinates from the already sealed v5 truth-free output; no
-`result_gnss` or WLS fallback was needed. The complete per-route manifest is
-`output/smartphone-r5/gsdc2023-upstream-mat-v2/test-batch/fallback_v2_run_manifest.json`
-(SHA256
-`c99d2ac3419ac98ac80fa49dbda49ca349b11e28668a8c873c7294f5c6723efa`), and
-the compact result record is
-`docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_fallback_v2_result.json`
-(SHA256
-`2c1945fb2d751f6647fadcf7d6f0db79064669cc6d95961786554512e7b6b78c`). The
-final ECEF continuity check has maximum 42.527 m/s against the fixed 70 m/s
-bound; all three source changes are below that bound. A separate truth-free
-generation produced the identical submission SHA, establishing deterministic
-output bytes.
-
-The fallback fixture suite passed 7/7, the Release build retained binary
-SHA256 `a10d13da4614f7cdc8e24556f5a32f870aee6c7aa94c5d3e890429996d583b0c`,
-and the complete serial CTest suite passed 132/132 with the pinned GTSAM
-library path. `git diff --check` also passed.
-
-Reproduce after verifying the freeze record with:
-
-~~~bash
-PYTHONHASHSEED=0 python3 apps/commands/benchmarks/gnss_smartphone_gsdc2023_upstream_mat_fallback_v2.py \
-  test-batch --archive data/gsdc2023/cache/dataset_2023.zip \
-  --sample data/gsdc2023/sample_submission.csv \
-  --inventory output/smartphone-r5/gsdc2023-upstream-mat-v1/mat_inventory.json \
-  --v1-batch-dir output/smartphone-r5/gsdc2023-upstream-mat-v1/test-batch \
-  --v5 output/smartphone-r5/native-fgo-test-v5-source-seam-bridge/submission.csv \
-  --v5-record docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_test_submission_source_seam_bridge_v1.json \
-  --diagnostic output/smartphone-r5/gsdc2023-upstream-mat-v1/test-batch/fallback_diagnostic_v2.json \
-  --freeze-record docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_fallback_v2_freeze.json \
-  --output-dir output/smartphone-r5/gsdc2023-upstream-mat-v2/test-batch
-~~~
-
-This remains a local development artifact: no Kaggle submission, token
-access, solver rerun, test-truth read, sample-coordinate fallback, or
-production RTK/SPP default change occurred. The public MAT archive has no
-separate license and remains a local cache only.
-
-### Single authorized upstream-MAT v2 Kaggle submission
-
-The user explicitly authorized exactly one submission of the frozen upstream
-MAT v2 candidate.  Before upload, the official header and key order, 71,936
-rows, zero duplicate/missing/extra/non-finite keys, 6,150,020 bytes, and SHA256
-`ded15a2a92349b06accfe18bc2afa12c35f7a282497d70ab9fcedf15471fc1f3` were
-rechecked.  The candidate was not regenerated or tuned: it is the public
-precomputed `result_gnss_imu.mat` lane, with 601 keys supplied by the already
-sealed truth-free v5 output after the MAT lane's bounded gaps.  The three-route
-development result had a predeclared four-diagnostic mean of
-`0.506790881 m`; no test truth was used.
-
-The official `kagglesdk` `CompetitionApiService` protocol made one
-`StartSubmissionUpload`, one signed file PUT, and exactly one
-`CreateSubmission` call, with description `libgnss++ upstream GNSS IMU MAT v2`.
-Kaggle returned ref `55905742`, reached `COMPLETE` on the second read-only
-`GetSubmission` poll, and reported public score `1.235` and private score
-`0.782`.  A read-only `DownloadSubmission` response was 6,150,020 bytes and
-matched the local candidate SHA256.  The authenticated score-order snapshots
-contained 280 entries each; insertion gives hypothetical positions 4 (public)
-and 1 (private), not official ranks.  Team names were not recorded, and no
-score was used for tuning or another submission.
-
-The token-safe one-shot protocol, provenance, public-MAT license caveat,
-601-key v5 fallback, polling, read-back, scores, and hypothetical leaderboard
-positions are sealed in
-`docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_v2_kaggle_submission_v1.json`
-(SHA256
-`8dab4eb4d9dafeba2bab320a32f5d8dfe84a40c2e9a0da9c6dd215a0f846af43`) and its
-companion manifest
-`docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_v2_kaggle_submission_v1_manifest.json`.
-No token value was printed or persisted, no test/validation/holdout truth was
-opened, production defaults and prior artifacts remain unchanged, and no
-additional submission is authorized by this phase.
+The current native best remains the separately recorded v5 result
+(public/private `3.952/4.276`), and the native 0.782-class target remains
+unachieved.  Continue from the raw-only bridge and gap matrix above; do not
+reinterpret the historical imported score as a native improvement.

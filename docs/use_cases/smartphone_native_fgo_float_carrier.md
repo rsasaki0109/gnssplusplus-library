@@ -62,3 +62,8 @@ adjustment, while the third-place abstract mentions raw pseudorange, Doppler,
 carrier phase, and TDCP validation. The local implementation audit confirms
 that the required float no-base path already exists in `src/algorithms` and is
 activated only by the explicit CLI switches above.
+
+The referenced reproduction audit is historical context only. Its earlier
+MAT-related experiment is classified as a rejected external experiment by
+`records/smartphone_r5_gsdc2023_native_only_cleanup_v1.json`; no MAT artifact
+is accepted by the current native lane.

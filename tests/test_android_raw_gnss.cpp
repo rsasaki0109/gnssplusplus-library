@@ -16,7 +16,7 @@ namespace {
 
 constexpr const char* kHeader =
     "MessageType,utcTimeMillis,TimeNanos,FullBiasNanos,BiasNanos,"
-    "HardwareClockDiscontinuityCount,Svid,ConstellationType,"
+    "BiasUncertaintyNanos,TimeOffsetNanos,HardwareClockDiscontinuityCount,Svid,ConstellationType,"
     "ReceivedSvTimeNanos,PseudorangeRateMetersPerSecond,"
     "AccumulatedDeltaRangeState,AccumulatedDeltaRangeMeters,"
     "CarrierFrequencyHz,Cn0DbHz,SignalType,RawPseudorangeMeters\n";
@@ -41,10 +41,13 @@ void writeRow(std::ostream& output,
               double cn0,
               const char* signal,
               double raw_pseudorange = 0.0,
-              bool include_raw_pseudorange = false) {
+              bool include_raw_pseudorange = false,
+              double time_offset_nanos = 0.0,
+              double bias_uncertainty_nanos = 0.0) {
     output << std::setprecision(17)
            << "Raw," << utc_millis << ',' << time_nanos << ',' << full_bias_nanos
-           << ",0,7," << svid << ',' << constellation << ','
+           << ",0," << bias_uncertainty_nanos << ',' << time_offset_nanos
+           << ",7," << svid << ',' << constellation << ','
            << received_sv_time_nanos << ',' << pseudorange_rate << ','
            << adr_state << ',' << adr_m << ',' << frequency_hz << ',' << cn0 << ','
            << signal;
@@ -137,6 +140,160 @@ TEST(AndroidRawGnssTest, KeepsGpsAndGalileoE1AndSkipsOtherSignals) {
     std::filesystem::remove(path);
 }
 
+TEST(AndroidRawGnssTest, MapsUpstreamL1AndL5ConstellationSignals) {
+    const auto path = fixturePath("l1_l5_mapping");
+    constexpr std::int64_t full_bias = -1'300'000'000'000'000'000LL;
+    constexpr std::int64_t time_nanos = 30'660'000'070'000'000LL;
+    constexpr std::int64_t transmit_nanos = 100'000'000'000'000LL;
+    {
+        std::ofstream output(path);
+        ASSERT_TRUE(output.is_open());
+        output << kHeader;
+        writeRow(output, 1'700'000'000'000LL, time_nanos, full_bias,
+                 transmit_nanos, 3, 1, 0.0, 1, 42.0,
+                 constants::GPS_L5_FREQ, 40.0, "GPS_L5_Q");
+        // For GLONASS the transmit field is a time-of-day value.  24,382 s
+        // maps to the receiver's 100,000 s GPST reference in the upstream
+        // glot2gpst conversion.
+        writeRow(output, 1'700'000'000'000LL, time_nanos, full_bias,
+                 24'382'000'000'000LL, 7, 3, 0.0, 1, 42.0,
+                 constants::GLO_L1_BASE_FREQ + 2.0 * constants::GLO_L1_STEP_FREQ,
+                 40.0, "GLO_G1_CA");
+        writeRow(output, 1'700'000'000'000LL, time_nanos, full_bias,
+                 transmit_nanos, 5, 6, 0.0, 1, 42.0,
+                 constants::GAL_E5A_FREQ, 40.0, "GAL_E5A_Q");
+        writeRow(output, 1'700'000'000'000LL, time_nanos, full_bias,
+                 transmit_nanos - 14'000'000'000LL, 8, 5, 0.0, 1, 42.0,
+                 constants::BDS_B1I_FREQ, 40.0, "BDS_B1I");
+        writeRow(output, 1'700'000'000'000LL, time_nanos, full_bias,
+                 transmit_nanos - 14'000'000'000LL, 9, 5, 0.0, 1, 42.0,
+                 constants::BDS_B2A_FREQ, 40.0, "BDS_B2A");
+    }
+
+    AndroidRawGnssResult result;
+    std::string error;
+    ASSERT_TRUE(loadAndroidRawGnssCsv(path.string(), AndroidRawGnssConfig{}, result, error))
+        << error;
+    ASSERT_EQ(result.observations.epochs.size(), 1u);
+    const auto& epoch = result.observations.epochs.front();
+    EXPECT_NE(epoch.getObservation(SatelliteId(GNSSSystem::GPS, 3), SignalType::GPS_L5), nullptr);
+    const auto* glo = epoch.getObservation(
+        SatelliteId(GNSSSystem::GLONASS, 7), SignalType::GLO_L1CA);
+    ASSERT_NE(glo, nullptr);
+    EXPECT_TRUE(glo->has_glonass_frequency_channel);
+    EXPECT_EQ(glo->glonass_frequency_channel, 2);
+    EXPECT_NE(epoch.getObservation(SatelliteId(GNSSSystem::Galileo, 5), SignalType::GAL_E5A), nullptr);
+    EXPECT_NE(epoch.getObservation(SatelliteId(GNSSSystem::BeiDou, 8), SignalType::BDS_B1I), nullptr);
+    EXPECT_NE(epoch.getObservation(SatelliteId(GNSSSystem::BeiDou, 9), SignalType::BDS_B2A), nullptr);
+    EXPECT_EQ(result.diagnostics.gps_l5_rows, 1u);
+    EXPECT_EQ(result.diagnostics.glonass_l1_rows, 1u);
+    EXPECT_EQ(result.diagnostics.galileo_e5_rows, 1u);
+    EXPECT_EQ(result.diagnostics.beidou_l1_rows, 1u);
+    EXPECT_EQ(result.diagnostics.beidou_l5_rows, 1u);
+    std::filesystem::remove(path);
+}
+
+TEST(AndroidRawGnssTest, AppliesTimeOffsetAndUpstreamBiasQualityGate) {
+    const auto path = fixturePath("raw_quality");
+    constexpr std::int64_t full_bias = -1'300'000'000'000'000'000LL;
+    constexpr int week = 2200;
+    constexpr double tow = 100'000.123;
+    const auto time_nanos = static_cast<std::int64_t>(
+        static_cast<long double>(full_bias) +
+        (static_cast<long double>(week) * 604'800.0L + tow) * 1.0e9L);
+    constexpr double transmit_delay = 0.070;
+    const auto transmit_nanos = static_cast<std::int64_t>(
+        (tow - transmit_delay) * 1.0e9);
+    constexpr double time_offset_nanos = 1'000'000.0;
+    const long double gps_seconds =
+        (static_cast<long double>(time_nanos) -
+         static_cast<long double>(full_bias)) / 1.0e9L;
+    const long double week_start =
+        std::floor(gps_seconds / 604'800.0L) * 604'800.0L;
+    const double pseudorange = static_cast<double>(
+        (gps_seconds - week_start -
+         static_cast<long double>(transmit_nanos) / 1.0e9L -
+         static_cast<long double>(time_offset_nanos) / 1.0e9L) *
+        constants::SPEED_OF_LIGHT);
+    {
+        std::ofstream output(path);
+        ASSERT_TRUE(output.is_open());
+        output << kHeader;
+        writeRow(output, 1'700'000'000'000LL, time_nanos, full_bias,
+                 transmit_nanos, 3, 1, 25.0, 1, 42.0,
+                 constants::GPS_L1_FREQ, 42.0, "GPS_L1_CA", pseudorange, true,
+                 time_offset_nanos, 0.0);
+        writeRow(output, 1'700'000'000'000LL, time_nanos, full_bias,
+                 transmit_nanos, 4, 1, 25.0, 1, 42.0,
+                 constants::GPS_L1_FREQ, 42.0, "GPS_L1_CA", 0.0, false,
+                 0.0, 10'001.0);
+    }
+    AndroidRawGnssResult result;
+    std::string error;
+    ASSERT_TRUE(loadAndroidRawGnssCsv(path.string(), AndroidRawGnssConfig{}, result, error))
+        << error;
+    ASSERT_EQ(result.observations.epochs.size(), 1u);
+    ASSERT_EQ(result.observations.epochs.front().observations.size(), 1u);
+    EXPECT_NEAR(result.observations.epochs.front().observations.front().pseudorange,
+                pseudorange, 1e-5);
+    EXPECT_EQ(result.diagnostics.skipped_invalid_quality_rows, 1u);
+    EXPECT_EQ(result.diagnostics.selected_rows, 1u);
+    EXPECT_EQ(result.diagnostics.enriched_pseudorange_mismatches, 0u);
+    std::filesystem::remove(path);
+}
+
+TEST(AndroidRawGnssTest, AppliesPublishedStateAndMultipathMasks) {
+    const auto path = fixturePath("status_masks");
+    constexpr std::int64_t full_bias = -1'300'000'000'000'000'000LL;
+    constexpr int week = 2200;
+    constexpr double tow = 100'000.123;
+    const auto time_nanos = static_cast<std::int64_t>(
+        static_cast<long double>(full_bias) +
+        (static_cast<long double>(week) * 604'800.0L + tow) * 1.0e9L);
+    constexpr auto transmit_nanos = static_cast<std::int64_t>(
+        (tow - 0.070) * 1.0e9);
+    {
+        std::ofstream output(path);
+        ASSERT_TRUE(output.is_open());
+        output << "MessageType,utcTimeMillis,TimeNanos,FullBiasNanos,BiasNanos,"
+                  "BiasUncertaintyNanos,TimeOffsetNanos,HardwareClockDiscontinuityCount,"
+                  "Svid,ConstellationType,ReceivedSvTimeNanos,PseudorangeRateMetersPerSecond,"
+                  "AccumulatedDeltaRangeState,AccumulatedDeltaRangeMeters,CarrierFrequencyHz,"
+                  "Cn0DbHz,SignalType,State,MultipathIndicator\n";
+        auto row = [&](int svid, int state, int multipath) {
+            output << "Raw,1700000000000," << time_nanos << ',' << full_bias
+                   << ",0,0,0,7," << svid << ",1," << transmit_nanos
+                   << ",0,1,42," << constants::GPS_L1_FREQ << ",40,GPS_L1_CA,"
+                   << state << ',' << multipath << '\n';
+        };
+        // 0x402f has GPS code lock and TOW-valid bits from exobs.m.
+        row(3, 0x402f, 0);
+        row(4, 0x402f, 1);
+    }
+
+    AndroidRawGnssResult result;
+    std::string error;
+    ASSERT_TRUE(loadAndroidRawGnssCsv(path.string(), AndroidRawGnssConfig{}, result, error))
+        << error;
+    ASSERT_EQ(result.observations.epochs.size(), 1u);
+    const auto* valid = result.observations.epochs.front().getObservation(
+        SatelliteId(GNSSSystem::GPS, 3), SignalType::GPS_L1CA);
+    const auto* multipath = result.observations.epochs.front().getObservation(
+        SatelliteId(GNSSSystem::GPS, 4), SignalType::GPS_L1CA);
+    ASSERT_NE(valid, nullptr);
+    ASSERT_NE(multipath, nullptr);
+    EXPECT_TRUE(valid->has_pseudorange);
+    EXPECT_TRUE(valid->has_doppler);
+    EXPECT_TRUE(valid->has_carrier_phase);
+    EXPECT_FALSE(multipath->has_pseudorange);
+    EXPECT_FALSE(multipath->has_doppler);
+    EXPECT_FALSE(multipath->has_carrier_phase);
+    EXPECT_EQ(result.diagnostics.masked_code_rows, 1u);
+    EXPECT_EQ(result.diagnostics.masked_doppler_rows, 1u);
+    EXPECT_EQ(result.diagnostics.masked_carrier_rows, 1u);
+    std::filesystem::remove(path);
+}
+
 TEST(AndroidRawGnssTest, DuplicateSupportedRowsFailClosed) {
     const auto path = fixturePath("duplicate");
     constexpr std::int64_t full_bias = -1'300'000'000'000'000'000LL;
@@ -157,6 +314,16 @@ TEST(AndroidRawGnssTest, DuplicateSupportedRowsFailClosed) {
     EXPECT_FALSE(loadAndroidRawGnssCsv(path.string(), AndroidRawGnssConfig{}, result, error));
     EXPECT_NE(error.find("duplicate"), std::string::npos);
     std::filesystem::remove(path);
+}
+
+TEST(AndroidRawGnssTest, MatlabPathsFailClosedBeforeOpening) {
+    AndroidRawGnssResult result;
+    AndroidRawGnssConfig config;
+    std::string error;
+    EXPECT_FALSE(loadAndroidRawGnssCsv(
+        (std::filesystem::temp_directory_path() / "poisoned.MaT").string(),
+        config, result, error));
+    EXPECT_NE(error.find("MATLAB"), std::string::npos);
 }
 
 }  // namespace

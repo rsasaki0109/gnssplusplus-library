@@ -2,8 +2,7 @@
 """Enforce the native-only smartphone inference input contract.
 
 This module is deliberately a small provenance boundary.  It accepts raw
-Android GNSS/IMU observations (or a raw ``phone_data.mat`` containing the
-observation and sensor streams) and broadcast navigation, and hashes only
+Android GNSS/IMU CSV observations and broadcast navigation, and hashes only
 those approved inputs.  Published optimizer results, truth, sample
 coordinates, and prior submissions are never opened as inference inputs.
 
@@ -26,12 +25,13 @@ import tempfile
 from typing import Any, Iterable
 
 
-SCHEMA_VERSION = "smartphone-r5-native-only-input-contract.v1"
+SCHEMA_VERSION = "smartphone-r5-native-only-input-contract.v2"
 
 # Match path components as well as basenames.  The broad result/submission
 # markers are intentional: an inference command must fail closed even when a
 # caller renames a published result file but leaves it under a result cache.
 FORBIDDEN_PATH_MARKERS = (
+    ".mat",
     "result_gnss",
     "ground_truth",
     "gt.mat",
@@ -57,9 +57,6 @@ RAW_IMU_FIELDS = (
     "measurementy",
     "measurementz",
 )
-MAT_IMU_ALIASES = {"acc", "gyro", "accelerometer", "gyroscope", "uncalaccel", "uncalgyro"}
-
-
 class NativeOnlyInputError(ValueError):
     """Raised when an inference input cannot be proven raw and approved."""
 
@@ -96,6 +93,10 @@ def atomic_json(path: Path, payload: dict[str, Any]) -> None:
 
 def _reject_path(path: Path, label: str) -> None:
     lowered = "/".join(path.parts).lower()
+    if ".mat" in lowered:
+        raise NativeOnlyInputError(
+            f"{label} is forbidden for native inference: MATLAB .mat inputs are disabled"
+        )
     for marker in FORBIDDEN_PATH_MARKERS:
         if marker in lowered:
             raise NativeOnlyInputError(
@@ -226,53 +227,6 @@ def inspect_raw_imu(path: Path) -> dict[str, Any]:
     }
 
 
-def inspect_phone_data_mat(path: Path) -> dict[str, Any]:
-    """Validate a raw MAT sensor/observation container.
-
-    SciPy's normal ``whosmat`` cannot list the MATLAB MCOS FileWrapper used by
-    the public dataset.  ``loadmat`` still exposes the numeric ``acc`` and
-    ``gyro`` streams, while the opaque ``None`` variable is retained as the
-    raw-observation container.  We intentionally do not decode result MAT
-    workspaces here.
-    """
-
-    _reject_path(path, "phone_data.mat")
-    if path.name.lower() != "phone_data.mat":
-        raise NativeOnlyInputError("MAT input must be named phone_data.mat")
-    try:
-        from scipy.io import loadmat
-
-        parsed = loadmat(path, squeeze_me=True, struct_as_record=False)
-    except Exception as exc:  # pragma: no cover - SciPy is optional for CSV use
-        raise NativeOnlyInputError(f"phone_data.mat is not a supported raw MAT container: {exc}") from exc
-    keys = sorted(key for key in parsed if not key.startswith("__"))
-    lowered = {key.lower() for key in keys}
-    if any(any(marker in key for marker in FORBIDDEN_PATH_MARKERS) for key in lowered):
-        raise NativeOnlyInputError("phone_data.mat exposes a forbidden result/submission variable")
-    imu_fields = sorted(lowered & MAT_IMU_ALIASES)
-    if not ({"acc", "gyro"} <= lowered or {"accelerometer", "gyroscope"} <= lowered):
-        raise NativeOnlyInputError(
-            "phone_data.mat must expose raw accelerometer and gyroscope streams"
-        )
-    # The MCOS observation object is represented by the opaque None workspace
-    # in the public taroz format.  Plain fixtures may use an explicit obs key.
-    has_raw_observation_container = "obs" in lowered or "none" in lowered
-    if not has_raw_observation_container:
-        raise NativeOnlyInputError(
-            "phone_data.mat lacks a raw GNSS observation container (obs/MCOS None)"
-        )
-    return {
-        "kind": "raw_phone_data_mat",
-        "path": str(path),
-        "sha256": sha256_file(path),
-        "mat_keys": keys,
-        "raw_sensor_fields": imu_fields,
-        "raw_gnss_container": "obs" if "obs" in lowered else "MCOS:None",
-        "truth_or_result_read": False,
-        "result_workspace_decoded": False,
-    }
-
-
 def inspect_broadcast_nav(path: Path) -> dict[str, Any]:
     """Hash a declared broadcast navigation file without reading truth."""
 
@@ -289,21 +243,14 @@ def inspect_broadcast_nav(path: Path) -> dict[str, Any]:
 
 def validate_native_inputs(
     *,
-    device_gnss: Path | None = None,
-    phone_data: Path | None = None,
+    device_gnss: Path,
     device_imu: Path | None = None,
     broadcast_nav: Path,
     output_manifest: Path | None = None,
 ) -> dict[str, Any]:
     """Validate and optionally atomically publish a native-only manifest."""
 
-    if (device_gnss is None) == (phone_data is None):
-        raise NativeOnlyInputError("provide exactly one of device_gnss or phone_data")
-    approved: dict[str, Any] = {}
-    if device_gnss is not None:
-        approved["gnss"] = inspect_raw_gnss(device_gnss)
-    else:
-        approved["phone_data"] = inspect_phone_data_mat(phone_data)  # type: ignore[arg-type]
+    approved: dict[str, Any] = {"gnss": inspect_raw_gnss(device_gnss)}
     if device_imu is None:
         raise NativeOnlyInputError(
             "native-only contract requires a separate raw device_imu.csv for this recipe"
@@ -314,8 +261,9 @@ def validate_native_inputs(
         "schema_version": SCHEMA_VERSION,
         "contract": {
             "native_inference_only": True,
-            "approved_gnss_inputs": ["raw device_gnss.csv", "raw phone_data.mat"],
+            "approved_gnss_inputs": ["raw device_gnss.csv"],
             "required_companions": ["raw device_imu.csv", "broadcast RINEX navigation"],
+            "mat_inputs": "rejected_before_open_anywhere",
             "forbidden_inputs": [
                 "result_gnss.mat",
                 "result_gnss_imu.mat",
@@ -349,9 +297,7 @@ def validate_native_inputs(
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    source = parser.add_mutually_exclusive_group(required=True)
-    source.add_argument("--device-gnss", type=Path)
-    source.add_argument("--phone-data", type=Path)
+    parser.add_argument("--device-gnss", type=Path, required=True)
     parser.add_argument("--device-imu", type=Path, required=True)
     parser.add_argument("--broadcast-nav", type=Path, required=True)
     parser.add_argument("--manifest", type=Path, required=True)
@@ -363,7 +309,6 @@ def main() -> int:
     try:
         manifest = validate_native_inputs(
             device_gnss=args.device_gnss,
-            phone_data=args.phone_data,
             device_imu=args.device_imu,
             broadcast_nav=args.broadcast_nav,
             output_manifest=args.manifest,

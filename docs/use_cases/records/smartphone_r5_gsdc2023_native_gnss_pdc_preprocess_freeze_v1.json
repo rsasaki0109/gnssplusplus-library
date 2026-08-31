@@ -1,0 +1,96 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-gnss-pdc-preprocess-freeze.v1",
+  "status": "frozen-before-development-truth-score",
+  "created_at_utc": "2026-08-31T06:24:00Z",
+  "purpose": "Freeze the first exact raw-stage exobs status/multipath port before scoring a new native GNSS-only route artifact.",
+  "candidate": {
+    "id": "native-gnss-pdc-preprocess-v1",
+    "route_device": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "raw_gnss": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_gnss.csv",
+    "raw_gnss_sha256": "c5af6cc3aeae6ab29a2a10d975d291b8fba4fab15273c0729163cd639ff10e42",
+    "broadcast_nav": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/brdc.nav",
+    "broadcast_nav_sha256": "16c859f8015c874398978bae6004172c355f7d3a3b06fa81b54aac88b6b78d33",
+    "output_root": "output/smartphone-r5/native-gnss-pdc-preprocess-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro",
+    "artifacts": {
+      "keyed.csv": "dc279b30445e32132fbc8ee75410af61be023759701cdd99cdbed9ba37c2e3d4",
+      "per_epoch.csv": "73d7bc53010187e73ddbea86f3877f0bbb6d092a1c5854d2ad9f54e1eb0c05b6",
+      "factor.csv": "0f4f0ed3e8d8b0943f66b57ebdb8d987b22ae46c47b72631825ff9b2f94e3e33",
+      "graph.csv": "f13629639cc3fc884afbc4dffb8221c593510e9708f178be80168e673ab31b4a",
+      "summary.json": "6c2717963023fc47abdb3eb6a6838e6f1bf379c9873f5d7b49b3615172b8dc99",
+      "run_manifest.json": "7013910d7c75b835f3b0dd9bf006254cc407917e0f2663137fbb4a5b7020521e",
+      "run_manifest.sha256": "acfad9ec3ef5d99473e9c76ffb39ee82bd35d79becb6b6fdd9f63871326866fc"
+    }
+  },
+  "preprocessing_contract": {
+    "upstream_source": "taroz/gsdc2023/functions/exobs.m",
+    "upstream_commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "upstream_source_sha256": "e22db383f372f26597333d674a12ee1e2adfdc97b00828fbbc5470903947f456",
+    "ported_rules": {
+      "code": "when raw State is present: code-lock bits 0|10, TOW bits 3|14 for non-GLONASS, TOD bits 7|15 for GLONASS; multipath=1; pseudorange in [1e7,4e7] m; SNR>=20",
+      "doppler": "multipath=1 or SNR<20 masks Doppler",
+      "carrier": "multipath=1, SNR<20, ADR valid bit absent, ADR slip bits set, or published GLONASS-phone exclusion masks carrier",
+      "missing_status_compatibility": "legacy synthetic CSVs without State/MultipathIndicator retain the previous parser behavior; present columns are never ignored"
+    },
+    "not_yet_ported": [
+      "exobs_residuals P-D and L-D residual masks",
+      "SNR-percentile obserrmodel weights",
+      "base-station pseudorange compensation",
+      "upstream ENU/GTSAM state and factor implementation"
+    ],
+    "base_compensation": {
+      "status": "unavailable_under_raw_nav_only",
+      "reason": "correct_pseudorange.m requires base observation and base_position/base_offset assets, which are forbidden inference inputs",
+      "substitute": "none"
+    }
+  },
+  "algorithm_contract": {
+    "backend": "existing deterministic Eigen IRLS native PDC executable",
+    "state_and_factors_unchanged": true,
+    "numeric_parameters_unchanged": true,
+    "native_spp_seed_only": true,
+    "factors": ["pseudorange", "undifferenced Doppler", "ordinary TDCP/ADR", "position/clock/velocity/drift priors", "temporal motion"],
+    "forbidden_factors": ["base", "single-difference", "double-difference"],
+    "mat_inputs_used": false,
+    "truth_used_before_freeze": false,
+    "validation_or_holdout_opened": false,
+    "test_truth_opened": false,
+    "parameter_selection_after_truth": false,
+    "production_default_changed": false
+  },
+  "structural_evidence": {
+    "epochs": 1384,
+    "selected_raw_rows": 47998,
+    "masked_code_rows": 7212,
+    "masked_doppler_rows": 6379,
+    "masked_carrier_rows": 19128,
+    "pseudorange_factors": 15704,
+    "doppler_factors": 15704,
+    "ordinary_tdcp_factors": 13464,
+    "initial_cost": 48673624.51968581,
+    "final_cost": 197242.58642495953,
+    "iterations": 162,
+    "converged": true,
+    "wall_seconds": 6.571060239017243,
+    "child_max_rss_kib": 78960
+  },
+  "source_hashes": {
+    "build/apps/gnss_pos_vel_pdc": "b79b2ae25aca2725f88d8990443243b923bf6a511aa3354fa1b9b92bd9ed82b0",
+    "apps/native/gnss_pos_vel_pdc.cpp": "14ac3b8450f1d776170d3568e1fa9a1f3d80d763f093ee0a5c58f7f3bf115fd4",
+    "include/libgnss++/io/android_raw_gnss.hpp": "d9166dc871f2ed7fca0e8b501c62bd27012dd26b1991b8be9ec961076968f9cc",
+    "src/io/android_raw_gnss.cpp": "7cd94d0f7607c1672705354e0e4e0eddfcbc830481c0becb6bb13ecdc79db6a3",
+    "apps/native/observable_measurement_helpers.hpp": "a23ffd70ac2c3a5da4900044d1f55ae5a2812c9e02b7892db58e9800b93d5625",
+    "apps/commands/benchmarks/gnss_smartphone_native_gnss_pdc.py": "09e7ab071ad6d1bb2f6a9b146cfed69e19f7739c25b308521fb099a57c38386d",
+    "apps/commands/benchmarks/gnss_smartphone_native_only.py": "c649c4d1b40b61a26a88cb38c49e7f5671a714ad33fff4b26d4c96c703790561",
+    "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_gap_matrix_v1.json": "541535e616bb3b995acb3c772899beb876093c9a454b2a5ecde43382898ccc04"
+  },
+  "commands": {
+    "build": "cmake --build build --target gnss_pos_vel_pdc -j2",
+    "truth_free": "python3 apps/commands/benchmarks/gnss_smartphone_native_gnss_pdc.py --android-raw data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_gnss.csv --nav data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/brdc.nav --trip-id 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro --device-model pixel7pro --output-dir output/smartphone-r5/native-gnss-pdc-preprocess-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro",
+    "score_after_freeze": "python3 apps/gnss.py smartphone-native-gnss-pdc-evaluate --candidate <sealed keyed.csv> --run-manifest <sealed run_manifest.json> --ground-truth <development ground_truth.csv> --recovery-authorization docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_train_score_recovery_v2.json --phone 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro --output-json <score.json>"
+  },
+  "gate": {
+    "score_is_report_only": true,
+    "promotion_requires": "all four local diagnostics, availability/coverage, vertical and continuity to be reviewed against the frozen native lane; no post-score tuning",
+    "native_target_0_782_class": "not achieved by this freeze"
+  }
+}

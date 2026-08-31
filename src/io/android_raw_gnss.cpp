@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <climits>
+#include <initializer_list>
 #include <limits>
 #include <map>
 #include <set>
@@ -27,7 +28,14 @@ constexpr long double kHalfWeek = 302400.0L;
 constexpr std::int64_t kTimeJumpNanoseconds = 1'000'000'000LL;
 constexpr std::int64_t kMaxReasonableTimeNanoseconds = 4'000'000'000'000'000'000LL;
 constexpr double kGpsL1FrequencyHz = constants::GPS_L1_FREQ;
+constexpr double kGpsL5FrequencyHz = constants::GPS_L5_FREQ;
+constexpr double kGlonassL1BaseFrequencyHz = constants::GLO_L1_BASE_FREQ;
+constexpr double kGlonassL1StepFrequencyHz = constants::GLO_L1_STEP_FREQ;
 constexpr double kGalileoE1FrequencyHz = constants::GAL_E1_FREQ;
+constexpr double kGalileoE5aFrequencyHz = constants::GAL_E5A_FREQ;
+constexpr double kBeiDouB1iFrequencyHz = constants::BDS_B1I_FREQ;
+constexpr double kBeiDouB1cFrequencyHz = constants::BDS_B1C_FREQ;
+constexpr double kBeiDouB2aFrequencyHz = constants::BDS_B2A_FREQ;
 
 struct ColumnMap {
     std::map<std::string, std::size_t> index;
@@ -175,27 +183,132 @@ bool supportedDeviceAdrSign(const std::string& model) {
            model == "sm-a600t";
 }
 
+bool publishedGlonassCarrierExcluded(const std::string& model) {
+    return model == "sm-a205u" || model == "sm-a217m" ||
+           model == "samsungs22ultra" || model == "sm-s908b" ||
+           model == "sm-a505g" || model == "sm-a600t" ||
+           model == "sm-a505u";
+}
+
+bool signalTokenIs(const std::string& token,
+                   std::initializer_list<const char*> candidates) {
+    for (const char* candidate : candidates) {
+        if (token == candidate) return true;
+    }
+    return false;
+}
+
 bool parseSignal(const std::string& signal_token,
                  int constellation,
                  double frequency_hz,
                  bool include_galileo,
+                 bool include_l5,
                  SignalType& signal,
-                 GNSSSystem& system) {
-    const std::string signal_name = trim(signal_token);
-    if (signal_name == "GPS_L1_CA" ||
-        (signal_name.empty() && constellation == 1 &&
-         closeEnough(frequency_hz, kGpsL1FrequencyHz, 1000.0))) {
+                 GNSSSystem& system,
+                 int& glonass_frequency_channel) {
+    std::string signal_name = trim(signal_token);
+    std::transform(signal_name.begin(), signal_name.end(), signal_name.begin(),
+                   [](unsigned char character) {
+                       return static_cast<char>(std::toupper(character));
+                   });
+    glonass_frequency_channel = 0;
+    const double frequency_tolerance = 1000.0;
+    if (constellation == 1 &&
+        (signalTokenIs(signal_name, {"GPS_L1_CA", "GPS_L1C", "L1"}) ||
+         (signal_name.empty() &&
+          closeEnough(frequency_hz, kGpsL1FrequencyHz, frequency_tolerance)))) {
+        if (!closeEnough(frequency_hz, kGpsL1FrequencyHz, frequency_tolerance)) {
+            return false;
+        }
         signal = SignalType::GPS_L1CA;
         system = GNSSSystem::GPS;
-        return closeEnough(frequency_hz, kGpsL1FrequencyHz, 1000.0);
+        return true;
     }
-    if (signal_name == "GAL_E1_C_P" ||
-        (signal_name.empty() && constellation == 6 &&
-         closeEnough(frequency_hz, kGalileoE1FrequencyHz, 1000.0))) {
+    if (constellation == 1 && include_l5 &&
+        (signalTokenIs(signal_name, {"GPS_L5_Q", "GPS_L5", "L5"}) ||
+         (signal_name.empty() &&
+          closeEnough(frequency_hz, kGpsL5FrequencyHz, frequency_tolerance)))) {
+        if (!closeEnough(frequency_hz, kGpsL5FrequencyHz, frequency_tolerance)) {
+            return false;
+        }
+        signal = SignalType::GPS_L5;
+        system = GNSSSystem::GPS;
+        return true;
+    }
+    if (constellation == 3 &&
+        (signalTokenIs(signal_name, {"GLO_G1_CA", "GLO_G1C", "GLO_L1", "L1"}) ||
+         signal_name.empty())) {
+        const double channel_value =
+            (frequency_hz - kGlonassL1BaseFrequencyHz) /
+            kGlonassL1StepFrequencyHz;
+        const int channel = static_cast<int>(std::llround(channel_value));
+        if (channel < -7 || channel > 6 ||
+            !closeEnough(frequency_hz,
+                         kGlonassL1BaseFrequencyHz +
+                             static_cast<double>(channel) * kGlonassL1StepFrequencyHz,
+                         frequency_tolerance)) {
+            return false;
+        }
+        signal = SignalType::GLO_L1CA;
+        system = GNSSSystem::GLONASS;
+        glonass_frequency_channel = channel;
+        return true;
+    }
+    if (constellation == 6 &&
+        (signalTokenIs(signal_name, {"GAL_E1_C_P", "GAL_E1_C", "GAL_E1", "L1"}) ||
+         (signal_name.empty() &&
+          closeEnough(frequency_hz, kGalileoE1FrequencyHz, frequency_tolerance)))) {
+        if (!closeEnough(frequency_hz, kGalileoE1FrequencyHz, frequency_tolerance)) {
+            return false;
+        }
         if (!include_galileo) return false;
         signal = SignalType::GAL_E1;
         system = GNSSSystem::Galileo;
-        return closeEnough(frequency_hz, kGalileoE1FrequencyHz, 1000.0);
+        return true;
+    }
+    if (constellation == 6 && include_galileo && include_l5 &&
+        (signalTokenIs(signal_name, {"GAL_E5A_Q", "GAL_E5A", "GAL_E5", "L5"}) ||
+         (signal_name.empty() &&
+          closeEnough(frequency_hz, kGalileoE5aFrequencyHz, frequency_tolerance)))) {
+        if (!closeEnough(frequency_hz, kGalileoE5aFrequencyHz, frequency_tolerance)) {
+            return false;
+        }
+        signal = SignalType::GAL_E5A;
+        system = GNSSSystem::Galileo;
+        return true;
+    }
+    if (constellation == 5 &&
+        (signalTokenIs(signal_name, {"BDS_B1I", "BDS_B1_I", "BDS_B1", "B1I"}) ||
+         (signal_name.empty() &&
+          closeEnough(frequency_hz, kBeiDouB1iFrequencyHz, frequency_tolerance)))) {
+        if (!closeEnough(frequency_hz, kBeiDouB1iFrequencyHz, frequency_tolerance)) {
+            return false;
+        }
+        signal = SignalType::BDS_B1I;
+        system = GNSSSystem::BeiDou;
+        return true;
+    }
+    if (constellation == 5 &&
+        (signalTokenIs(signal_name, {"BDS_B1C", "BDS_B1_C"}) ||
+         (signal_name.empty() &&
+          closeEnough(frequency_hz, kBeiDouB1cFrequencyHz, frequency_tolerance)))) {
+        if (!closeEnough(frequency_hz, kBeiDouB1cFrequencyHz, frequency_tolerance)) {
+            return false;
+        }
+        signal = SignalType::BDS_B1C;
+        system = GNSSSystem::BeiDou;
+        return true;
+    }
+    if (constellation == 5 && include_l5 &&
+        (signalTokenIs(signal_name, {"BDS_B2A", "BDS_B2A_Q", "BDS_B2A_I", "L5"}) ||
+         (signal_name.empty() &&
+          closeEnough(frequency_hz, kBeiDouB2aFrequencyHz, frequency_tolerance)))) {
+        if (!closeEnough(frequency_hz, kBeiDouB2aFrequencyHz, frequency_tolerance)) {
+            return false;
+        }
+        signal = SignalType::BDS_B2A;
+        system = GNSSSystem::BeiDou;
+        return true;
     }
     return false;
 }
@@ -205,14 +318,21 @@ struct RawRow {
     std::int64_t time_nanos = 0;
     std::int64_t full_bias_nanos = 0;
     double bias_nanos = 0.0;
+    double bias_uncertainty_nanos = std::numeric_limits<double>::quiet_NaN();
     std::int64_t received_sv_time_nanos = 0;
+    double time_offset_nanos = 0.0;
     int hardware_clock_discontinuity_count = 0;
     int svid = 0;
     int constellation = 0;
     int adr_state = 0;
+    int state = 0;
+    bool has_state = false;
+    int multipath_indicator = 0;
+    bool has_multipath_indicator = false;
     double pseudorange_rate_mps = 0.0;
     double adr_m = std::numeric_limits<double>::quiet_NaN();
     double cn0_dbhz = 0.0;
+    bool has_cn0_dbhz = false;
     double carrier_frequency_hz = 0.0;
     double raw_pseudorange_m = std::numeric_limits<double>::quiet_NaN();
     double receiver_x = std::numeric_limits<double>::quiet_NaN();
@@ -255,11 +375,38 @@ bool parseRawRow(const std::vector<std::string>& row,
         error = "invalid or missing raw Android measurement field";
         return false;
     }
+    if (columns.has("biasuncertaintynanos") &&
+        !parseFiniteDouble(columns.value(row, "biasuncertaintynanos"),
+                           output.bias_uncertainty_nanos, true)) {
+        error = "invalid BiasUncertaintyNanos";
+        return false;
+    }
+    if (columns.has("timeoffsetnanos") &&
+        !parseFiniteDouble(columns.value(row, "timeoffsetnanos"),
+                           output.time_offset_nanos, true)) {
+        error = "invalid TimeOffsetNanos";
+        return false;
+    }
     if (columns.has("hardwareclockdiscontinuitycount") &&
         !parseInt(columns.value(row, "hardwareclockdiscontinuitycount"),
                   output.hardware_clock_discontinuity_count, true)) {
         error = "invalid HardwareClockDiscontinuityCount";
         return false;
+    }
+    if (columns.has("state")) {
+        if (!parseInt(columns.value(row, "state"), output.state, true)) {
+            error = "invalid State";
+            return false;
+        }
+        output.has_state = true;
+    }
+    if (columns.has("multipathindicator")) {
+        if (!parseInt(columns.value(row, "multipathindicator"),
+                      output.multipath_indicator, true)) {
+            error = "invalid MultipathIndicator";
+            return false;
+        }
+        output.has_multipath_indicator = true;
     }
     if (columns.has("accumulateddeltarangemeters") &&
         !parseFiniteDouble(columns.value(row, "accumulateddeltarangemeters"),
@@ -272,6 +419,7 @@ bool parseRawRow(const std::vector<std::string>& row,
         error = "invalid Cn0DbHz";
         return false;
     }
+    output.has_cn0_dbhz = columns.has("cn0dbhz");
     if (columns.has("rawpseudorangemeters") &&
         !parseFiniteDouble(columns.value(row, "rawpseudorangemeters"),
                            output.raw_pseudorange_m, true)) {
@@ -324,8 +472,24 @@ bool rawClockToGpsTime(const RawRow& row,
     return std::isfinite(clock_bias_seconds);
 }
 
+double glonassTowToGps(double glonass_tow, long double gps_tow_reference) {
+    // Port of gnsslog2obs.m: GLONASS transmit time is a time-of-day value,
+    // while the receiver epoch is GPST.  The day wrap is resolved against the
+    // receiver GPST reference before the common nearest-week unwrap.
+    constexpr long double seconds_per_day = 86400.0L;
+    const long double day_of_week =
+        std::floor(gps_tow_reference / seconds_per_day);
+    long double gpst = static_cast<long double>(glonass_tow) +
+                       day_of_week * seconds_per_day - 3.0L * 3600.0L + 18.0L;
+    const long double day_offset =
+        day_of_week - std::floor(gpst / seconds_per_day);
+    gpst += day_offset * seconds_per_day;
+    return static_cast<double>(gpst);
+}
+
 bool rawPseudorange(const RawRow& row,
                     std::int64_t base_full_bias_nanos,
+                    GNSSSystem system,
                     double& pseudorange_m) {
     const long double clock_ns =
         static_cast<long double>(row.time_nanos) -
@@ -335,8 +499,17 @@ bool rawPseudorange(const RawRow& row,
     long double tow_rx = gps_seconds - week_value * kSecondsPerWeek -
                          static_cast<long double>(row.bias_nanos) /
                              kNanosecondsPerSecond;
+    tow_rx -= static_cast<long double>(row.time_offset_nanos) /
+              kNanosecondsPerSecond;
     long double tow_tx = static_cast<long double>(row.received_sv_time_nanos) /
                          kNanosecondsPerSecond;
+    if (system == GNSSSystem::GLONASS) {
+        tow_tx = static_cast<long double>(
+            glonassTowToGps(static_cast<double>(tow_tx), tow_rx));
+    } else if (system == GNSSSystem::BeiDou) {
+        // BeiDou time is GPST+14 seconds in the upstream converter.
+        tow_tx += 14.0L;
+    }
     long double delta = tow_rx - tow_tx;
     while (delta > kHalfWeek) {
         delta -= kSecondsPerWeek;
@@ -397,6 +570,15 @@ bool loadAndroidRawGnssCsv(const std::string& path,
                            AndroidRawGnssResult& result,
                            std::string& error) {
     result = AndroidRawGnssResult{};
+    std::string lowered_path = path;
+    std::transform(lowered_path.begin(), lowered_path.end(), lowered_path.begin(),
+                   [](unsigned char character) {
+                       return static_cast<char>(std::tolower(character));
+                   });
+    if (lowered_path.find(".mat") != std::string::npos) {
+        error = "MATLAB .mat inputs are disabled by the native-only contract";
+        return false;
+    }
     result.diagnostics.timing_formula =
         "week=floor((TimeNanos-baseFullBiasNanos)/1e9/604800); "
         "tow_rx=(TimeNanos-baseFullBiasNanos-week*604800e9)/1e9-BiasNanos/1e9";
@@ -491,6 +673,15 @@ bool loadAndroidRawGnssCsv(const std::string& path,
             ++result.diagnostics.skipped_invalid_timing_rows;
             continue;
         }
+        // This is the same quality gate as gnsslog2obs.m: rows with an
+        // unusable receiver-clock uncertainty are removed before frequency
+        // grouping and epoch construction.  Older synthetic fixtures may not
+        // carry the optional column, in which case no extra gate is applied.
+        if (std::isfinite(raw.bias_uncertainty_nanos) &&
+            raw.bias_uncertainty_nanos > 1.0e4) {
+            ++result.diagnostics.skipped_invalid_quality_rows;
+            continue;
+        }
         if (raw.utc_millis < 0 ||
             (have_previous && raw.utc_millis < previous_utc_millis)) {
             error = "raw Android utcTimeMillis is not monotonic";
@@ -536,18 +727,30 @@ bool loadAndroidRawGnssCsv(const std::string& path,
 
         SignalType signal;
         GNSSSystem system;
+        int glonass_frequency_channel = 0;
         if (!parseSignal(raw.signal, raw.constellation, raw.carrier_frequency_hz,
-                         config.include_galileo_e1, signal, system)) {
+                         config.include_galileo_e1, config.include_l5, signal,
+                         system, glonass_frequency_channel)) {
             ++result.diagnostics.skipped_unsupported_signal_rows;
             continue;
         }
-        const int prn_max = system == GNSSSystem::GPS ? 32 : 36;
+        // gnsslog2obs.m drops QZSS/SBAS/IRNSS and unknown GLONASS SVIDs.
+        // parseSignal already rejects the former; retain the GLONASS bound
+        // here instead of accidentally accepting a synthetic PRN.
+        const int prn_max = system == GNSSSystem::GPS
+                                ? 32
+                                : (system == GNSSSystem::GLONASS ? 24
+                                                                 : (system == GNSSSystem::BeiDou ? 63 : 36));
         if (raw.svid < 1 || raw.svid > prn_max) {
+            if (system == GNSSSystem::GLONASS) {
+                ++result.diagnostics.skipped_unsupported_signal_rows;
+                continue;
+            }
             error = "supported raw Android row has an invalid SVID";
             return false;
         }
         double pseudorange_m = 0.0;
-        if (!rawPseudorange(raw, base_full_bias_nanos, pseudorange_m)) {
+        if (!rawPseudorange(raw, base_full_bias_nanos, system, pseudorange_m)) {
             error = "raw Android row produced a non-positive pseudorange";
             return false;
         }
@@ -562,27 +765,83 @@ bool loadAndroidRawGnssCsv(const std::string& path,
                 }
             }
         }
+
+        // Port the raw-status part of taroz's exobs.m before constructing the
+        // native observation.  The MATLAB constants are:
+        //   PSTATE_CODE_LOCK=2^0|2^10,
+        //   PSTATE_TOD_OK=2^7|2^15, PSTATE_TOW_OK=2^3|2^14,
+        //   LSTATE_SLIP=2^1|2^2, LSTATE_VALID=2^0, and MultipathIndicator=1.
+        // A missing optional status column is kept compatible with older
+        // Android exports; a present column is never silently ignored.
+        const bool multipath = raw.has_multipath_indicator &&
+                               raw.multipath_indicator == 1;
+        const bool low_snr = raw.has_cn0_dbhz && raw.cn0_dbhz < 20.0;
+        const int code_lock_mask = (1 << 0) | (1 << 10);
+        const int transmit_time_mask =
+            system == GNSSSystem::GLONASS ? ((1 << 7) | (1 << 15))
+                                          : ((1 << 3) | (1 << 14));
+        const bool status_code_invalid =
+            raw.has_state && ((raw.state & code_lock_mask) == 0 ||
+                              (raw.state & transmit_time_mask) == 0);
+        const bool code_masked = low_snr || multipath ||
+                                 pseudorange_m < 1.0e7 ||
+                                 pseudorange_m > 4.0e7 || status_code_invalid;
+        const bool doppler_masked = low_snr || multipath;
+        const bool carrier_masked =
+            low_snr || multipath || (raw.adr_state & ((1 << 1) | (1 << 2))) != 0 ||
+            (raw.adr_state & (1 << 0)) == 0 ||
+            (system == GNSSSystem::GLONASS &&
+             publishedGlonassCarrierExcluded(config.device_model));
+        if (code_masked) ++result.diagnostics.masked_code_rows;
+        if (doppler_masked) ++result.diagnostics.masked_doppler_rows;
+        if (carrier_masked) ++result.diagnostics.masked_carrier_rows;
         const double wavelength =
             constants::SPEED_OF_LIGHT / raw.carrier_frequency_hz;
         Observation observation(SatelliteId(system, static_cast<uint8_t>(raw.svid)),
                                  signal);
         observation.pseudorange = pseudorange_m;
         observation.has_pseudorange = true;
-        observation.pseudorange_observation_type = "C1C";
+        switch (signal) {
+            case SignalType::GPS_L5:
+                observation.pseudorange_observation_type = "C5I";
+                break;
+            case SignalType::GAL_E5A:
+                observation.pseudorange_observation_type = "C5I";
+                break;
+            case SignalType::BDS_B1I:
+                observation.pseudorange_observation_type = "C2I";
+                break;
+            case SignalType::BDS_B2A:
+                observation.pseudorange_observation_type = "C5P";
+                break;
+            default:
+                observation.pseudorange_observation_type = "C1C";
+                break;
+        }
         observation.snr = std::isfinite(raw.cn0_dbhz) ? raw.cn0_dbhz : 0.0;
         observation.valid = true;
+        if (system == GNSSSystem::GLONASS) {
+            observation.has_glonass_frequency_channel = true;
+            observation.glonass_frequency_channel = glonass_frequency_channel;
+        }
         observation.signal_strength =
             static_cast<int>(std::clamp(std::round(observation.snr / 6.0), 0.0, 9.0));
         observation.doppler = -raw.pseudorange_rate_mps / wavelength;
-        observation.has_doppler = std::isfinite(observation.doppler);
+        observation.has_doppler = !doppler_masked &&
+                                  std::isfinite(observation.doppler);
         if (observation.has_doppler) ++result.diagnostics.doppler_rows;
-        if (std::isfinite(raw.adr_m) && std::abs(raw.adr_m) < 1.0e9 &&
-            (raw.adr_state & 0x01) != 0) {
+        observation.has_pseudorange = !code_masked;
+        if (std::isfinite(raw.adr_m) && raw.adr_m != 0.0 &&
+            std::abs(raw.adr_m) < 1.0e9 && !carrier_masked) {
             double carrier_m = raw.adr_m;
             if (supportedDeviceAdrSign(config.device_model)) carrier_m = -carrier_m;
             observation.carrier_phase = carrier_m / wavelength;
             observation.has_carrier_phase = std::isfinite(observation.carrier_phase);
-            observation.carrier_phase_observation_type = "L1C";
+            observation.carrier_phase_observation_type =
+                signal == SignalType::GPS_L5 || signal == SignalType::GAL_E5A ||
+                        signal == SignalType::BDS_B2A
+                    ? "L5I"
+                    : "L1C";
             if (observation.has_carrier_phase) ++result.diagnostics.carrier_rows;
         }
         if ((raw.adr_state & (0x02 | 0x04)) != 0) {
@@ -593,6 +852,14 @@ bool loadAndroidRawGnssCsv(const std::string& path,
         const SatelliteId satellite(system, static_cast<uint8_t>(raw.svid));
         const auto key = std::make_pair(satellite, signal);
         if (accumulator.observations.count(key) != 0U) {
+            if ((config.device_model == "sm-a205u" ||
+                 config.device_model == "sm-a600t")) {
+                // The published converter keeps one half of these phones'
+                // repeated blocks.  At the per-epoch boundary an identical
+                // key is equivalent; drop the duplicate deterministically.
+                ++result.diagnostics.deduplicated_rows;
+                continue;
+            }
             error = "duplicate supported satellite/signal row in one raw epoch";
             return false;
         }
@@ -608,10 +875,33 @@ bool loadAndroidRawGnssCsv(const std::string& path,
             accumulator.have_receiver_position = true;
         }
         ++result.diagnostics.selected_rows;
-        if (system == GNSSSystem::GPS) {
-            ++result.diagnostics.gps_rows;
-        } else {
-            ++result.diagnostics.galileo_e1_rows;
+        switch (signal) {
+            case SignalType::GPS_L1CA:
+                ++result.diagnostics.gps_rows;
+                ++result.diagnostics.gps_l1_rows;
+                break;
+            case SignalType::GPS_L5:
+                ++result.diagnostics.gps_rows;
+                ++result.diagnostics.gps_l5_rows;
+                break;
+            case SignalType::GLO_L1CA:
+                ++result.diagnostics.glonass_l1_rows;
+                break;
+            case SignalType::GAL_E1:
+                ++result.diagnostics.galileo_e1_rows;
+                break;
+            case SignalType::GAL_E5A:
+                ++result.diagnostics.galileo_e5_rows;
+                break;
+            case SignalType::BDS_B1I:
+            case SignalType::BDS_B1C:
+                ++result.diagnostics.beidou_l1_rows;
+                break;
+            case SignalType::BDS_B2A:
+                ++result.diagnostics.beidou_l5_rows;
+                break;
+            default:
+                break;
         }
     }
     if (have_epoch && !appendEpoch(accumulator, result, error)) return false;

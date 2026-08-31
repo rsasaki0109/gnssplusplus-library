@@ -1,0 +1,46 @@
+{
+  "schema_version": "smartphone-r5-native-gnss-pdc-train-score-recovery.v1",
+  "status": "authorized-evaluation-recovery-v2",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "purpose": "Authorize one report-only development-train truth read after the v2.1 raw-only global-ISB candidate was frozen and its truth-free artifacts sealed.",
+  "exact_failure": "The preceding v2 truth-free artifact was sealed as a no-go because its first global center omitted receiver clk(t); v2.1 corrects only that unit/contract mapping before this score.",
+  "candidate": {
+    "route_device": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "keyed_output": "output/smartphone-r5/native-gnss-pdc-upstream-residual-snr-global-isb-v2.1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/keyed.csv",
+    "keyed_output_sha256": "26930dcf9814626f9b6a1413e3932ce20ca9a7abe1b31ec4781c47f139c9dcec",
+    "run_manifest": "output/smartphone-r5/native-gnss-pdc-upstream-residual-snr-global-isb-v2.1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/run_manifest.json",
+    "run_manifest_sha256": "8141eb0af3eeebe8276336ddd48fa75c7b41edf61e0c8bc4ab798c2e1884cea3",
+    "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_upstream_residual_snr_freeze_v2_1.json",
+    "freeze_record_sha256": "bf035ec5555ed3e9943b972782e4506512689548c1fd6d1cafd54b78d26ba635",
+    "candidate_unchanged": true,
+    "solver_rerun": false
+  },
+  "truth_access": {
+    "role": "development-train",
+    "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv",
+    "validation_truth_read_count": 0,
+    "holdout_truth_read_count": 0,
+    "test_truth_read_count": 0,
+    "mat_inputs_used": false,
+    "single_read_after_freeze": true
+  },
+  "contract": {
+    "algorithm_or_numeric_parameter_change": false,
+    "candidate_unchanged": true,
+    "solver_rerun": false,
+    "parameter_selection": false,
+    "timestamp_alignment": "fixed one-to-one nearest truth timestamp within 1000 ms; no coordinate modification",
+    "result_coordinates_read": false,
+    "sample_coordinates_read": false,
+    "v5_output_read": false,
+    "base_or_double_difference_factors": false,
+    "external_mutation": false,
+    "no_post_score_tuning": true
+  },
+  "gate": {
+    "baseline_score_m": 93.50510102387848,
+    "promotion_requires": "horizontal score/P95 and availability/vertical/continuity non-regression; report only",
+    "fresh_validation_authorized": false,
+    "holdout_authorized": false
+  }
+}
