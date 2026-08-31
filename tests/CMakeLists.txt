@@ -27,6 +27,7 @@ if(GTest_FOUND)
         test_fusion_zupt.cpp
         test_fusion_nhc.cpp
         test_upstream_stop_constraints.cpp
+        test_upstream_position_offset.cpp
         test_fusion_initialization.cpp
         test_fusion_processor_synthetic.cpp
         test_dd_imu_bridge.cpp

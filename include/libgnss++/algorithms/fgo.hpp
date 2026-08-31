@@ -1216,6 +1216,10 @@ public:
         // (body FLU -> nav ENU; heading is clockwise from North) and estimated
         // velocity in the ENU nav frame [m/s].
         std::vector<Vector3d> epoch_attitude_rpy_deg;
+        // Exact GTSAM Rot3::rpy() values [roll, pitch, yaw] in radians.  This
+        // is kept separate from the display/course convention above so raw
+        // post-processing ports cannot accidentally use a heading remap.
+        std::vector<Vector3d> epoch_attitude_rpy_rad;
         std::vector<Vector3d> epoch_velocity_nav_mps;
     };
 

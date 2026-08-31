@@ -1394,10 +1394,12 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
     // and ENU velocity so callers can confirm attitude is now observable. ---
     if (use_imu) {
         result.epoch_attitude_rpy_deg.resize(num_epochs);
+        result.epoch_attitude_rpy_rad.resize(num_epochs);
         result.epoch_velocity_nav_mps.resize(num_epochs);
         constexpr double kRadToDeg = 180.0 / 3.14159265358979323846;
         for (std::size_t i = 0; i < num_epochs; ++i) {
             const Rot3 R_body_to_nav = optimized.at<Pose3>(positionKey(i)).rotation();
+            const gtsam::Vector3 rpy = R_body_to_nav.rpy();
             const gtsam::Matrix3 R = R_body_to_nav.matrix();
             const Eigen::Vector3d fwd = R.col(0);   // body forward in ENU
             const Eigen::Vector3d left = R.col(1);  // body left in ENU
@@ -1410,6 +1412,8 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
                 std::asin(std::max(-1.0, std::min(1.0, fwd.z()))) * kRadToDeg;
             const double roll = std::atan2(left.z(), R.col(2).z()) * kRadToDeg;
             result.epoch_attitude_rpy_deg[i] = Vector3d(roll, pitch, heading);
+            result.epoch_attitude_rpy_rad[i] =
+                Vector3d(rpy.x(), rpy.y(), rpy.z());
             result.epoch_velocity_nav_mps[i] =
                 Vector3d(optimized.at<gtsam::Vector3>(velocityKey(i)));
         }

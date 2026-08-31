@@ -1,0 +1,134 @@
+{
+  "schema_version": "smartphone-r5-phase21-upstream-position-offset-manifest.v1",
+  "status": "truth-free-artifacts-sealed-before-development-score",
+  "candidate_id": "native-fgo-upstream-position-offset-v1",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_phase21_position_offset_freeze_v1.json",
+    "sha256": "aeff90b9ddda713ab4cce9f4564f0418c3f1d269bf9d0c32aea0e78d622c4928"
+  },
+  "raw_only_policy": {
+    "mat_read_count": 0,
+    "truth_read_count": 0,
+    "enriched_satellite_columns_used": false,
+    "device_wls_or_precomputed_coordinates_used": false,
+    "leaderboard_or_token_access": false,
+    "allowed_inputs": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "forbidden_inputs": ["*.mat", "ground_truth.csv", "sample_submission.csv", "result coordinates", "device WLS coordinates"],
+    "position_source": "in-memory native raw GNSS/nav GTSAM result",
+    "attitude_source": "in-memory GTSAM Rot3::rpy()",
+    "production_default_changed": false
+  },
+  "source_hashes_after_implementation": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "9d1dc9ebb5dd59d762d28dc5847a99aca0d9ecf674e04a820042e542d128586f",
+    "include/libgnss++/algorithms/fgo.hpp": "08bb9d612f891c6c346ee5366890c4e6680bcc131f35a8212ccfa5225a47ccd1",
+    "src/algorithms/fgo_gtsam_backend.cpp": "36be22bbf9d2c5c95b53978a693f2278dbb1c175d53a2e40081c6d7883297ac8",
+    "include/libgnss++/algorithms/upstream_position_offset.hpp": "a37fc5d93f2f32cf9e9c6d684b38d9ce855db3acaca743d765d870530ebb2fce",
+    "tests/test_upstream_position_offset.cpp": "37476a58ffdd03d3a27bb5566a4b76db8e747dec2e0e153d419da4ef1246d356",
+    "tests/CMakeLists.txt": "3e2a8341134164b153c60c129ae1915e2dfb227ddbfdb3b5924ada6af299722a",
+    "build/apps/gnss_fgo_imu_no_base": "d517a2c0825d2faf7b351720333d0cabf063d7b1b075800feffe5dd1516f130e"
+  },
+  "upstream_spec_hashes": {
+    "output/reproducibility-cache/gsdc2023/functions/add_position_offset.m": "2308b612b6aab9816ddcf3c1efef621b8ebe15a1bdae5d167df2783e6c831797",
+    "output/reproducibility-cache/gsdc2023/functions/eul2rotm.m": "0214826c3a1dd662330acb034ab25756ea772961f0063092c887e535013c3da8",
+    "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+    "output/reproducibility-cache/gsdc2023/parameters.m": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52"
+  },
+  "contract": {
+    "flag": "--native-upstream-position-offset",
+    "rotation": "Rx*Ry*Rz(rpy-[0,0,pi])",
+    "local_vector": "[offsetUD, offsetRL, 0] metres",
+    "phone_offsets": {
+      "pixel7pro": {"offsetRL_m": -0.1, "offsetUD_m": -0.2},
+      "mi8": {"offsetRL_m": 0.25, "offsetUD_m": -0.35}
+    },
+    "application": "correct every finite optimized Pose3 epoch in ECEF via native ENU origin before raw UTC key alignment",
+    "fail_closed": true,
+    "no_solver_or_parameter_change": true
+  },
+  "truth_free_runs": {
+    "pixel7pro": {
+      "route_device": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+      "raw_inputs": {
+        "device_gnss_sha256": "c5af6cc3aeae6ab29a2a10d975d291b8fba4fab15273c0729163cd639ff10e42",
+        "device_imu_sha256": "8f1c582bdad545d11e68349b221001b69e2a9d43f9257e60038c193276fa1804",
+        "brdc_nav_sha256": "16c859f8015c874398978bae6004172c355f7d3a3b06fa81b54aac88b6b78d33"
+      },
+      "baseline": {
+        "submission": "output/smartphone-r5/phase21-upstream-position-offset-v1/pixel7pro/baseline/submission.csv",
+        "submission_sha256": "3069f149bc98b0383d008d5f20cc80cd4ada9f9eb1b5d09f05353895a2d5a26",
+        "summary": "output/smartphone-r5/phase21-upstream-position-offset-v1/pixel7pro/baseline/summary.json",
+        "summary_sha256": "b51785dd3b223e4b0d0e51dde696465552dfa2f6ba8dd56e83612c6e19376eb9",
+        "rows": 1383,
+        "target_epochs": 1383,
+        "interpolated_epochs": 0,
+        "edge_hold_epochs": 0,
+        "graph_factors": 68476,
+        "converged": true,
+        "wall_seconds": 22.32,
+        "rss_kb": 195020
+      },
+      "candidate": {
+        "submission": "output/smartphone-r5/phase21-upstream-position-offset-v1/pixel7pro/candidate/submission.csv",
+        "submission_sha256": "ff5fbbc4ed03e2bcd43e69679f7fe8fff61fe16a1949a842e6eeda5624fc804a",
+        "summary": "output/smartphone-r5/phase21-upstream-position-offset-v1/pixel7pro/candidate/summary.json",
+        "summary_sha256": "bb4df27aef780f295136947f753c6a0aefda895b14c16a456826a2c2b08b818f",
+        "rows": 1383,
+        "target_epochs": 1383,
+        "interpolated_epochs": 0,
+        "edge_hold_epochs": 0,
+        "graph_factors": 68476,
+        "converged": true,
+        "corrected_epochs": 1384,
+        "max_offset_enu_m": 0.22360679774997905,
+        "max_horizontal_speed_mps": 19.6021182370283,
+        "wall_seconds": 21.89,
+        "rss_kb": 195048
+      },
+      "candidate_repeat_submission_sha256": "ff5fbbc4ed03e2bcd43e69679f7fe8fff61fe16a1949a842e6eeda5624fc804a",
+      "candidate_repeat_summary_sha256": "bb4df27aef780f295136947f753c6a0aefda895b14c16a456826a2c2b08b818f",
+      "candidate_repeat_byte_identical": true,
+      "candidate_minus_baseline_max_ecef_displacement_m": 0.22360679774997905
+    },
+    "mi8": {
+      "route_device": "2022-08-04-20-07-us-ca-sjc-q/mi8",
+      "raw_inputs": {
+        "device_gnss_sha256": "ccf143cf8b156e507599090e0a5eedc1009244899ea3b1b3b8b01842a35a9ea4",
+        "device_imu_sha256": "6e32cba3e0086b7a9c34ab5bd34cd86879b0581fe8314c5819214f1e66ec32d3",
+        "brdc_nav_sha256": "5f2e67a87eca95c77d04f72184fd615a7858ff3c948c2e5a681957791219a4c3"
+      },
+      "baseline_submission_sha256": "1cfb0ac4147a02d4d03e93da1dc906118d7c5258f00462bbc41dd8ce66e75d94",
+      "candidate_submission_sha256": "0e40f0a7af6b90fa90dca45726024e8aacf305233b522b716fe2dfa1d6722467",
+      "baseline_summary_sha256": "313dd73cc7541bd375b024ab4d421b157260ccfcf1fb96ea58341d600d063eb3",
+      "candidate_summary_sha256": "b8168055d67fc1727b4c5d1e18ccd6c9b953cf00487f0dd33bbd42828eff6b73",
+      "rows": 1416,
+      "target_epochs": 1416,
+      "interpolated_epochs": 0,
+      "edge_hold_epochs": 0,
+      "graph_factors": 78027,
+      "converged": true,
+      "corrected_epochs": 1417,
+      "max_offset_enu_m": 0.43011626335213143,
+      "wall_seconds": 27.61,
+      "rss_kb": 202524,
+      "role": "supplemental cross-device truth-free structural evidence; no accuracy score"
+    }
+  },
+  "commands": {
+    "pixel_baseline": "build/apps/gnss_fgo_imu_no_base --android-gnss <pixel7/device_gnss.csv> --android-imu <pixel7/device_imu.csv> --nav <route/brdc.nav> --out <baseline/submission.csv> --summary-json <baseline/summary.json> --dataset-id 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro --all-epochs --android-raw-utc-keys --native-pdc-imu-tdcp --native-signal-bias-states --native-residual-ionosphere",
+    "pixel_candidate": "pixel_baseline plus --native-upstream-position-offset",
+    "mi8_baseline": "build/apps/gnss_fgo_imu_no_base --android-gnss <mi8/device_gnss.csv> --android-imu <mi8/device_imu.csv> --nav <mi8/brdc.nav> --out <baseline/submission.csv> --summary-json <baseline/summary.json> --dataset-id 2022-08-04-20-07-us-ca-sjc-q/mi8 --all-epochs --android-raw-utc-keys --android-utc-wall-clock-fallback --native-pdc-imu-tdcp --native-signal-bias-states --native-residual-ionosphere",
+    "mi8_candidate": "mi8_baseline plus --native-upstream-position-offset"
+  },
+  "structural_gate": {
+    "passed": true,
+    "finite_and_in_earth": true,
+    "exact_target_coverage": true,
+    "interpolation_or_edge_hold": false,
+    "candidate_deterministic_repeat": true,
+    "correction_is_bounded_by_declared_phone_offset": true,
+    "no_new_continuity_violation": true,
+    "truth_free": true
+  },
+  "next_action": "After this manifest is committed and hashed, one development evaluator process may read the already-used Pixel7 ground_truth.csv once and compare the frozen baseline and candidate. No validation/holdout/test truth, retuning, or external mutation is permitted.",
+  "manifest_sha256": "excluded-from-self-hash; compute from the committed file"
+}

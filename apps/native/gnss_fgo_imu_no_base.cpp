@@ -11,6 +11,7 @@
 #include <libgnss++/algorithms/fgo.hpp>
 #include <libgnss++/algorithms/carrier_code_leveling.hpp>
 #include <libgnss++/algorithms/pdc_state_bridge.hpp>
+#include <libgnss++/algorithms/upstream_position_offset.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/fusion/fusion_initialization.hpp>
@@ -87,6 +88,7 @@ struct Options {
     bool native_carrier_code_primary_l1_e1 = false;
     bool native_carrier_code_gal_e1_e5a = false;
     bool native_upstream_stop_constraints = false;
+    bool native_upstream_position_offset = false;
 };
 
 const char* carrierSignalName(libgnss::SignalType signal) {
@@ -114,7 +116,8 @@ void usage(const char* program) {
                  " [--native-carrier-code-innovation-reset]"
                  " [--native-carrier-code-primary-l1-e1]"
                  " [--native-carrier-code-gal-e1-e5a]"
-                 " [--native-upstream-stop-constraints]\n";
+                 " [--native-upstream-stop-constraints]"
+                 " [--native-upstream-position-offset]\n";
 }
 
 bool requireValue(int argc, char** argv, int& index, std::string& value) {
@@ -123,6 +126,11 @@ bool requireValue(int argc, char** argv, int& index, std::string& value) {
     }
     value = argv[++index];
     return !value.empty();
+}
+
+std::string phoneFromDatasetId(const std::string& dataset_id) {
+    const std::size_t slash = dataset_id.find_last_of("/\\");
+    return slash == std::string::npos ? dataset_id : dataset_id.substr(slash + 1U);
 }
 
 bool hasMatExtension(const std::string& path) {
@@ -213,6 +221,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
             options.native_carrier_code_gal_e1_e5a = true;
         } else if (arg == "--native-upstream-stop-constraints") {
             options.native_upstream_stop_constraints = true;
+        } else if (arg == "--native-upstream-position-offset") {
+            options.native_upstream_position_offset = true;
         } else {
             std::cerr << "Unknown argument: " << arg << "\n";
             return false;
@@ -345,6 +355,13 @@ bool parseArguments(int argc, char** argv, Options& options) {
         (!android_raw || !options.android_raw_utc_key_contract ||
          !options.all_epochs || options.skip_epochs != 0)) {
         std::cerr << "--native-upstream-stop-constraints requires Android raw input, "
+                     "--android-raw-utc-keys, --all-epochs, and no skipped epochs\n";
+        return false;
+    }
+    if (options.native_upstream_position_offset &&
+        (!android_raw || !options.android_raw_utc_key_contract ||
+         !options.all_epochs || options.skip_epochs != 0)) {
+        std::cerr << "--native-upstream-position-offset requires Android raw input, "
                      "--android-raw-utc-keys, --all-epochs, and no skipped epochs\n";
         return false;
     }
@@ -549,6 +566,17 @@ struct TdcpRuntimeReport {
 struct OutputPosition {
     std::int64_t utc_time_millis = 0;
     libgnss::Vector3d position_ecef = libgnss::Vector3d::Zero();
+};
+
+struct UpstreamPositionOffsetReport {
+    bool enabled = false;
+    bool applied = false;
+    std::string phone;
+    std::size_t corrected_epochs = 0U;
+    double offset_rl_m = 0.0;
+    double offset_ud_m = 0.0;
+    double max_offset_enu_m = 0.0;
+    std::string failure;
 };
 
 TdcpRuntimeReport evaluateTdcpRuntime(
@@ -1077,7 +1105,9 @@ std::string makeSummary(const Options& options,
                         const TdcpRuntimeReport& tdcp_report = TdcpRuntimeReport{},
                         const libgnss::carrier_code_leveling::Diagnostics&
                             carrier_code_leveling_report =
-                                libgnss::carrier_code_leveling::Diagnostics{}) {
+                                libgnss::carrier_code_leveling::Diagnostics{},
+                        const UpstreamPositionOffsetReport& position_offset_report =
+                            UpstreamPositionOffsetReport{}) {
     std::ostringstream out;
     out << std::setprecision(17);
     out << "{\n"
@@ -1109,6 +1139,9 @@ std::string makeSummary(const Options& options,
         << ",\n"
         << "  \"native_upstream_stop_constraints\": "
         << (options.native_upstream_stop_constraints ? "true" : "false")
+        << ",\n"
+        << "  \"native_upstream_position_offset\": "
+        << (options.native_upstream_position_offset ? "true" : "false")
         << ",\n"
         ;
     if (options.native_carrier_code_primary_l1_e1) {
@@ -1373,6 +1406,25 @@ std::string makeSummary(const Options& options,
         << "    \"gyro_std_threshold_radps\": "
         << result.diagnostics.upstream_stop_gyro_std_threshold_radps << "\n"
         << "  },\n"
+        << "  \"upstream_position_offset\": {\n"
+        << "    \"enabled\": "
+        << (position_offset_report.enabled ? "true" : "false") << ",\n"
+        << "    \"applied\": "
+        << (position_offset_report.applied ? "true" : "false") << ",\n"
+        << "    \"phone\": ";
+    writeJsonString(out, position_offset_report.phone);
+    out << ",\n"
+        << "    \"corrected_epochs\": "
+        << position_offset_report.corrected_epochs << ",\n"
+        << "    \"offset_rl_m\": " << position_offset_report.offset_rl_m << ",\n"
+        << "    \"offset_ud_m\": " << position_offset_report.offset_ud_m << ",\n"
+        << "    \"max_offset_enu_m\": "
+        << position_offset_report.max_offset_enu_m << ",\n"
+        << "    \"rotation_contract\": \"Rx*Ry*Rz(rpy-[0,0,pi])\",\n"
+        << "    \"source\": \"in-memory optimized GTSAM Rot3::rpy; raw-only\",\n"
+        << "    \"failure\": ";
+    writeJsonString(out, position_offset_report.failure);
+    out << "\n  },\n"
         << "  \"graph\": {\n"
         << "    \"factors\": " << result.diagnostics.graph_factors << ",\n"
         << "    \"values\": " << result.diagnostics.graph_values << ",\n"
@@ -2183,6 +2235,91 @@ int main(int argc, char** argv) {
         }
     }
 
+    UpstreamPositionOffsetReport position_offset_report;
+    position_offset_report.enabled = options.native_upstream_position_offset;
+    if (options.native_upstream_position_offset) {
+        position_offset_report.phone = phoneFromDatasetId(options.dataset_id);
+        libgnss::upstream_position_offset::PhoneOffset phone_offset;
+        if (!libgnss::upstream_position_offset::phoneOffset(
+                position_offset_report.phone, phone_offset)) {
+            position_offset_report.failure = "unknown phone family";
+            std::cerr << "upstream position offset failed closed: "
+                      << position_offset_report.failure << "\n";
+            return 1;
+        }
+        position_offset_report.offset_rl_m = phone_offset.offset_rl_m;
+        position_offset_report.offset_ud_m = phone_offset.offset_ud_m;
+        if (fallback || !problem.imu.valid ||
+            result.epoch_attitude_rpy_rad.size() !=
+                result.solution.solutions.size()) {
+            position_offset_report.failure =
+                "candidate requires a finite native IMU Pose3 rpy for every output epoch";
+            std::cerr << "upstream position offset failed closed: "
+                      << position_offset_report.failure << "\n";
+            return 1;
+        }
+        const double origin_lat = problem.imu.nav_origin_lat_rad;
+        const double origin_lon = problem.imu.nav_origin_lon_rad;
+        if (!std::isfinite(origin_lat) || !std::isfinite(origin_lon)) {
+            position_offset_report.failure = "native ENU origin is non-finite";
+            std::cerr << "upstream position offset failed closed: "
+                      << position_offset_report.failure << "\n";
+            return 1;
+        }
+        for (std::size_t index = 0; index < result.solution.solutions.size();
+             ++index) {
+            auto& solution = result.solution.solutions[index];
+            const auto offset = libgnss::upstream_position_offset::offsetFromRpy(
+                position_offset_report.phone,
+                result.epoch_attitude_rpy_rad[index]);
+            if (!offset.ok || !solution.position_ecef.allFinite()) {
+                position_offset_report.failure =
+                    "non-finite native attitude or position";
+                std::cerr << "upstream position offset failed closed: "
+                          << position_offset_report.failure << "\n";
+                return 1;
+            }
+            const double offset_norm = offset.offset_enu_m.norm();
+            const libgnss::Vector3d corrected =
+                solution.position_ecef +
+                libgnss::enu2ecef(offset.offset_enu_m, origin_lat, origin_lon);
+            if (!corrected.allFinite() || corrected.norm() < 6.0e6 ||
+                corrected.norm() > 7.0e6 || !std::isfinite(offset_norm)) {
+                position_offset_report.failure =
+                    "corrected position or offset is non-finite/out-of-Earth";
+                std::cerr << "upstream position offset failed closed: "
+                          << position_offset_report.failure << "\n";
+                return 1;
+            }
+            solution.position_ecef = corrected;
+            double lat = 0.0;
+            double lon = 0.0;
+            double height = 0.0;
+            libgnss::ecef2geodetic(corrected, lat, lon, height);
+            if (!std::isfinite(lat) || !std::isfinite(lon) ||
+                !std::isfinite(height)) {
+                position_offset_report.failure =
+                    "corrected geodetic position is non-finite";
+                std::cerr << "upstream position offset failed closed: "
+                          << position_offset_report.failure << "\n";
+                return 1;
+            }
+            solution.position_geodetic = libgnss::GeodeticCoord(lat, lon, height);
+            position_offset_report.max_offset_enu_m =
+                std::max(position_offset_report.max_offset_enu_m, offset_norm);
+            ++position_offset_report.corrected_epochs;
+        }
+        position_offset_report.applied =
+            position_offset_report.corrected_epochs ==
+            result.solution.solutions.size();
+        if (!position_offset_report.applied) {
+            position_offset_report.failure = "not every native solution was corrected";
+            std::cerr << "upstream position offset failed closed: "
+                      << position_offset_report.failure << "\n";
+            return 1;
+        }
+    }
+
     RawUtcOutputReport raw_utc_report;
     std::vector<OutputPosition> output_positions;
     if (options.android_raw_utc_key_contract) {
@@ -2263,7 +2400,8 @@ int main(int argc, char** argv) {
     const std::string summary = makeSummary(options, problem, result, imu_report,
                                             fallback, pdc_bridge_report,
                                             raw_utc_report, tdcp_report,
-                                            carrier_code_leveling_report);
+                                            carrier_code_leveling_report,
+                                            position_offset_report);
     if (!atomicWrite(options.summary_path, summary)) {
         std::cerr << "failed to atomically publish summary\n";
         return 1;
