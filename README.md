@@ -169,6 +169,17 @@ unachieved and no Kaggle submission was made.  See the [Phase 19 freeze](docs/us
 [sealed raw manifest](docs/use_cases/records/smartphone_r5_phase19_gal_e1_e5a_manifest_v1.json),
 and [sealed score result](docs/use_cases/records/smartphone_r5_phase19_gal_e1_e5a_score_result_v1.json).
 
+Phase 20 adds an opt-in translation of the upstream stationary stop
+constraints to the native raw Android GNSS+IMU graph: robust zero-velocity
+priors and consecutive-stop `Pose3` identity factors.  On the already-used
+Pixel7 development route, the sealed candidate improved all four local
+diagnostics, WGS84-linear `3.192248964 -> 3.188229554 m`, with 1,383/1,383
+keys and a byte-identical repeat.  This is reused development evidence only;
+the native 0.782-class target remains unachieved, so no Kaggle submission was
+made.  See the [Phase 20 freeze](docs/use_cases/records/smartphone_r5_phase20_upstream_stop_constraints_freeze_v1.json),
+[raw structural manifest](docs/use_cases/records/smartphone_r5_phase20_upstream_stop_constraints_manifest_v1.json),
+and [one-shot score](docs/use_cases/records/smartphone_r5_phase20_upstream_stop_constraints_score_result_v1.json).
+
 ### RTK runtime and smartphone GSDC 2023
 
 The Release RTK broadcast-state cache preserves the position stream and

@@ -328,6 +328,11 @@ public:
         // the body->nav rotation from Stage-1 static leveling + heading align.
         Matrix3d init_attitude_body_to_nav = Matrix3d::Identity();
         Vector3d init_velocity_nav = Vector3d::Zero();
+        // Optional raw GNSS-first ENU velocity sequence used by the upstream
+        // stationary-stop gate.  It is populated only by the Android
+        // GNSS-first handoff; an empty vector makes the backend use its normal
+        // per-epoch graph seeds.  This is not a truth or file-derived state.
+        std::vector<Vector3d> stop_velocity_seeds_nav;
         Vector3d init_accel_bias = Vector3d::Zero();
         Vector3d init_gyro_bias = Vector3d::Zero();
         // First-state prior sigmas (gauge/anchor for the IMU chain).
@@ -670,6 +675,12 @@ public:
         std::size_t smoother_recovery_epochs = 0;  ///< 2e: epochs re-anchored after an indeterminate update
         std::size_t nhc_epochs = 0;   ///< 2d: epochs an NHC factor was applied
         std::size_t zupt_epochs = 0;  ///< 2d: epochs a ZUPT prior was applied
+        std::size_t upstream_stop_epochs = 0;
+        std::size_t upstream_stop_velocity_factors = 0;
+        std::size_t upstream_stop_pose_factors = 0;
+        std::size_t upstream_stop_imu_samples = 0;
+        double upstream_stop_acceleration_std_threshold_mps2 = 0.0;
+        double upstream_stop_gyro_std_threshold_radps = 0.0;
         std::size_t ambiguity_hold_epochs = 0;  ///< 2e: epochs FIXED via held (not fresh) integers
         std::size_t ambiguity_hold_arcs = 0;    ///< 2e: distinct arcs pinned at their integer
         std::size_t quality_gated_epochs = 0;   ///< epochs where the quality gates suppressed fixing

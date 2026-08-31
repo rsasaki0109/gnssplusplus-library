@@ -3252,3 +3252,35 @@ LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} \
   --native-carrier-code-innovation-reset \
   --native-carrier-code-gal-e1-e5a
 ```
+
+### Upstream stop constraints (phase 20, development-only Go)
+
+Phase 20 adds an opt-in raw-IMU translation of the pinned upstream stationary
+constraints: a robust zero-velocity prior at detected stops and a robust
+identity `Pose3` between consecutive stopped epochs.  Detection uses only
+finite raw accelerometer/gyro norm statistics and the GNSS-first velocity
+seeds; it does not read truth, WLS coordinates, enriched satellite fields, or
+precomputed trajectories.  Height constraints remain unavailable in the
+raw-only contract, so they are deliberately not ported.  The default graph
+and all Phase 12/19 flags are unchanged; use
+`--native-upstream-stop-constraints` only with the full Android raw recipe.
+
+The truth-free Pixel7 structural run retained 1,383/1,383 raw UTC keys with
+zero interpolation or edge holds, converged, and admitted 489 stop-velocity
+and 475 consecutive-stop `Pose3` factors from 500 detected stop epochs.  A
+repeat run was byte-identical.  After sealing the raw artifacts, one
+intersection-evaluator process read the already-used development truth once
+and scored the frozen baseline and candidate together.  WGS84/Vincenty-linear
+improved `3.192248964 -> 3.188229554 m`; the other three local variants also
+improved strictly, with 100% matched-key coverage.  This is reused
+development evidence only, not route-disjoint validation or holdout evidence;
+the native 0.782-class target remains unachieved and no Kaggle submission was
+made.
+
+The freeze, raw structural manifest, and one-shot score are sealed in
+`docs/use_cases/records/smartphone_r5_phase20_upstream_stop_constraints_freeze_v1.json`,
+`docs/use_cases/records/smartphone_r5_phase20_upstream_stop_constraints_manifest_v1.json`,
+and
+`docs/use_cases/records/smartphone_r5_phase20_upstream_stop_constraints_score_result_v1.json`.
+The exact raw-only command and artifact hashes are recorded there; the
+candidate remains development-only and production defaults are unchanged.

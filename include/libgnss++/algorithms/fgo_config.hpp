@@ -854,6 +854,25 @@ struct Config {
         double zupt_max_gyro_median = 0.020;     ///< stationary gate: gyro deviation median [rad/s]
         int zupt_min_samples = 5;                ///< minimum IMU samples in window to test
 
+        // --- Upstream stationary-stop constraints (smartphone research) ---
+        // The batch GTSAM path normally leaves these disabled.  When enabled,
+        // the backend ports fgo_gnss_imu.m's raw-IMU stop velocity prior and
+        // consecutive-stop Pose3 identity factor.  Detection uses only the
+        // aligned raw IMU stream; no trajectory, truth, or height reference is
+        // consulted.  This is separate from the fixed-lag ZUPT/NHC knobs above
+        // so the historical batch graph remains byte-compatible by default.
+        bool use_upstream_stop_constraints = false;
+        int upstream_stop_window_samples = 500;
+        double upstream_stop_acceleration_std_offset_mps2 = 0.08;
+        double upstream_stop_gyro_std_offset_radps = 0.005;
+        double upstream_stop_gyro_norm_max_radps = 0.05;
+        double upstream_stop_velocity_threshold_mps = 0.5;
+        double upstream_stop_velocity_sigma_mps = 0.01;
+        double upstream_stop_velocity_huber_k_sigma = 0.5;
+        double upstream_stop_pose_rotation_sigma_rad = 0.0017453292519943296;
+        double upstream_stop_pose_translation_sigma_m = 0.02;
+        double upstream_stop_pose_huber_k_sigma = 0.5;
+
         // --- Phase 2 milestone 2e: fix-and-hold ambiguity resolution ---
         // In the fixed-lag path, once an arc's DD ambiguity is validated-fixed
         // (LAMBDA ratio above ambiguity_hold_ratio_threshold), pin it in the

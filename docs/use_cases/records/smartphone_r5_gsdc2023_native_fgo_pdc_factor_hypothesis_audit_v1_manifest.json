@@ -37,6 +37,8 @@
     "src/algorithms/fgo_problems.cpp": "3452d2b252d1a38624011f4af968809594d2b03b6a410c5b16b2675f74461dd8"
   },
   "post_phase13_compatible_release_binary_sha256": "3e7825ec4eece3039b52c8b9ee51f3d7026c733aa10ebc73e19be13bd5927663",
+  "post_phase20_compatible_release_binary_sha256": "4a2dcf653be3963695f69afc5a1ac4df9dec301523dfd3d2280d8a2e555de836",
+  "post_phase20_compatibility_note": "Phase 20 adds opt-in upstream stop velocity and consecutive-stop Pose3 constraints to the shared solver; this historical factor audit remains unchanged and accepts the relinked Release binary only as a compatibility pin.",
   "post_phase12_compatibility_note": "Phase 12 adds opt-in residual-ionosphere coefficients to pseudorange problem rows; the historical PDC factor audit remains immutable and accepts this exact source/binary only as a compatibility pin.",
   "post_phase11_compatibility_note": "Phase 11 adds opt-in receiver signal-bias diagnostics and preserves the historical PDC hypothesis audit as a source-level regression contract; these exact current hashes are accepted only as compatibility pins.",
   "post_phase10_compatibility_note": "Phase 10 centralizes the existing raw ordinary-TDCP pair gates and adds fail-closed clock-discontinuity/finite-measurement rejection; the historical hypothesis artifact remains immutable.",

@@ -86,6 +86,7 @@ struct Options {
     bool native_carrier_code_innovation_reset = false;
     bool native_carrier_code_primary_l1_e1 = false;
     bool native_carrier_code_gal_e1_e5a = false;
+    bool native_upstream_stop_constraints = false;
 };
 
 const char* carrierSignalName(libgnss::SignalType signal) {
@@ -112,7 +113,8 @@ void usage(const char* program) {
                  " [--native-upstream-quality] [--native-carrier-code-leveling]"
                  " [--native-carrier-code-innovation-reset]"
                  " [--native-carrier-code-primary-l1-e1]"
-                 " [--native-carrier-code-gal-e1-e5a]\n";
+                 " [--native-carrier-code-gal-e1-e5a]"
+                 " [--native-upstream-stop-constraints]\n";
 }
 
 bool requireValue(int argc, char** argv, int& index, std::string& value) {
@@ -209,6 +211,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
             options.native_carrier_code_primary_l1_e1 = true;
         } else if (arg == "--native-carrier-code-gal-e1-e5a") {
             options.native_carrier_code_gal_e1_e5a = true;
+        } else if (arg == "--native-upstream-stop-constraints") {
+            options.native_upstream_stop_constraints = true;
         } else {
             std::cerr << "Unknown argument: " << arg << "\n";
             return false;
@@ -335,6 +339,13 @@ bool parseArguments(int argc, char** argv, Options& options) {
         std::cerr << "--native-carrier-code-gal-e1-e5a requires "
                      "--native-carrier-code-leveling and "
                      "--native-carrier-code-innovation-reset\n";
+        return false;
+    }
+    if (options.native_upstream_stop_constraints &&
+        (!android_raw || !options.android_raw_utc_key_contract ||
+         !options.all_epochs || options.skip_epochs != 0)) {
+        std::cerr << "--native-upstream-stop-constraints requires Android raw input, "
+                     "--android-raw-utc-keys, --all-epochs, and no skipped epochs\n";
         return false;
     }
     if (options.native_carrier_code_primary_l1_e1 &&
@@ -1017,6 +1028,10 @@ bool buildImuInput(const std::string& path,
     imu.samples_body_flu = std::move(samples);
     imu.init_attitude_body_to_nav = state.nominal.attitude_body_to_enu.toRotationMatrix();
     imu.init_velocity_nav = initial_velocity;
+    if (gnss_first_velocities_enu != nullptr &&
+        gnss_first_velocities_enu->size() == problem.epochs.size()) {
+        imu.stop_velocity_seeds_nav = *gnss_first_velocities_enu;
+    }
     imu.init_accel_bias = aligned.accel_bias;
     imu.init_gyro_bias = aligned.gyro_bias;
     // The values are the public taroz pixel preset after the 0.5 synchronization
@@ -1091,6 +1106,9 @@ std::string makeSummary(const Options& options,
         << (options.native_carrier_code_leveling ? "true" : "false") << ",\n"
         << "  \"native_carrier_code_innovation_reset\": "
         << (options.native_carrier_code_innovation_reset ? "true" : "false")
+        << ",\n"
+        << "  \"native_upstream_stop_constraints\": "
+        << (options.native_upstream_stop_constraints ? "true" : "false")
         << ",\n"
         ;
     if (options.native_carrier_code_primary_l1_e1) {
@@ -1326,10 +1344,51 @@ std::string makeSummary(const Options& options,
         << "    \"standalone_carrier_ambiguity_factors\": false,\n"
         << "    \"base_or_double_difference_factors\": false\n"
         << "  },\n"
+        << "  \"upstream_stop_constraints\": {\n"
+        << "    \"enabled\": "
+        << (options.native_upstream_stop_constraints ? "true" : "false") << ",\n"
+        << "    \"window_samples\": 500,\n"
+        << "    \"acceleration_std_offset_mps2\": 0.08,\n"
+        << "    \"gyro_std_offset_radps\": 0.005,\n"
+        << "    \"gyro_norm_max_radps\": 0.05,\n"
+        << "    \"velocity_threshold_mps\": 0.5,\n"
+        << "    \"velocity_sigma_mps\": 0.01,\n"
+        << "    \"velocity_huber_k_sigma\": 0.5,\n"
+        << "    \"pose_rotation_sigma_rad\": 0.0017453292519943296,\n"
+        << "    \"pose_translation_sigma_m\": 0.02,\n"
+        << "    \"pose_huber_k_sigma\": 0.5,\n"
+        << "    \"detection_source\": \"aligned raw IMU acceleration/gyro only\",\n"
+        << "    \"epoch_mapping\": \"nearest with endpoint hold\",\n"
+        << "    \"no_height_or_truth_factor\": true,\n"
+        << "    \"detected_epochs\": "
+        << result.diagnostics.upstream_stop_epochs << ",\n"
+        << "    \"velocity_factors\": "
+        << result.diagnostics.upstream_stop_velocity_factors << ",\n"
+        << "    \"pose_factors\": "
+        << result.diagnostics.upstream_stop_pose_factors << ",\n"
+        << "    \"imu_samples\": "
+        << result.diagnostics.upstream_stop_imu_samples << ",\n"
+        << "    \"acceleration_std_threshold_mps2\": "
+        << result.diagnostics.upstream_stop_acceleration_std_threshold_mps2 << ",\n"
+        << "    \"gyro_std_threshold_radps\": "
+        << result.diagnostics.upstream_stop_gyro_std_threshold_radps << "\n"
+        << "  },\n"
         << "  \"graph\": {\n"
         << "    \"factors\": " << result.diagnostics.graph_factors << ",\n"
         << "    \"values\": " << result.diagnostics.graph_values << ",\n"
         << "    \"imu_intervals\": " << result.diagnostics.imu_intervals << ",\n"
+        << "    \"upstream_stop_epochs\": "
+        << result.diagnostics.upstream_stop_epochs << ",\n"
+        << "    \"upstream_stop_velocity_factors\": "
+        << result.diagnostics.upstream_stop_velocity_factors << ",\n"
+        << "    \"upstream_stop_pose_factors\": "
+        << result.diagnostics.upstream_stop_pose_factors << ",\n"
+        << "    \"upstream_stop_imu_samples\": "
+        << result.diagnostics.upstream_stop_imu_samples << ",\n"
+        << "    \"upstream_stop_acceleration_std_threshold_mps2\": "
+        << result.diagnostics.upstream_stop_acceleration_std_threshold_mps2 << ",\n"
+        << "    \"upstream_stop_gyro_std_threshold_radps\": "
+        << result.diagnostics.upstream_stop_gyro_std_threshold_radps << ",\n"
         << "    \"iterations\": " << result.diagnostics.iterations << ",\n"
         << "    \"converged\": " << (result.diagnostics.converged ? "true" : "false") << ",\n"
         << "    \"initial_cost\": " << result.diagnostics.initial_cost << ",\n"
@@ -1819,6 +1878,24 @@ int main(int argc, char** argv) {
         // it prevents device identity from selecting a quality mask.
         config.upstream_device_model.clear();
     }
+    if (options.native_upstream_stop_constraints) {
+        // These values are the pinned upstream parameters; they are not
+        // selected from a truth file or from a route score.  Keep them in the
+        // config object so the backend and its structural diagnostics expose
+        // the complete candidate contract.
+        config.use_upstream_stop_constraints = true;
+        config.upstream_stop_window_samples = 500;
+        config.upstream_stop_acceleration_std_offset_mps2 = 0.08;
+        config.upstream_stop_gyro_std_offset_radps = 0.005;
+        config.upstream_stop_gyro_norm_max_radps = 0.05;
+        config.upstream_stop_velocity_threshold_mps = 0.5;
+        config.upstream_stop_velocity_sigma_mps = 0.01;
+        config.upstream_stop_velocity_huber_k_sigma = 0.5;
+        config.upstream_stop_pose_rotation_sigma_rad =
+            0.1 * kPi / 180.0;
+        config.upstream_stop_pose_translation_sigma_m = 0.02;
+        config.upstream_stop_pose_huber_k_sigma = 0.5;
+    }
     config.pose3_lever_arm_body_m = libgnss::Vector3d::Zero();
     if (android_raw) {
         // The raw path starts SPP from the route-independent Earth-surface
@@ -1993,6 +2070,11 @@ int main(int argc, char** argv) {
         result = processor.optimizeProblem(problem);
         if (result.solution.isEmpty() || !result.diagnostics.converged ||
             result.diagnostics.imu_intervals == 0) {
+            if (options.native_upstream_stop_constraints) {
+                std::cerr << "upstream stop-constraint candidate failed closed; "
+                             "fallback is forbidden for candidate evaluation\n";
+                return 1;
+            }
             use_imu = false;
             fallback = true;
         }

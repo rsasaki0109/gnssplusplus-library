@@ -14,6 +14,7 @@
 #include <libgnss++/core/signal_policy.hpp>
 #include <libgnss++/core/signals.hpp>
 #include <libgnss++/algorithms/signal_bias_contract.hpp>
+#include <libgnss++/algorithms/upstream_stop_constraints.hpp>
 
 #include <gtsam/geometry/Point3.h>
 #include <gtsam/geometry/Pose3.h>

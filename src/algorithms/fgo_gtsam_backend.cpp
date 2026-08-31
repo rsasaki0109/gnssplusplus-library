@@ -62,6 +62,42 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
     const bool use_pose3 = config.use_pose3_state;
     const bool use_imu =
         use_pose3 && config.use_imu && problem.imu.valid && num_epochs >= 2;
+    const bool use_upstream_stop_constraints =
+        use_imu && config.use_upstream_stop_constraints;
+    upstream_stop::Detection upstream_stop_detection;
+    if (use_upstream_stop_constraints) {
+        std::vector<GNSSTime> epoch_times;
+        epoch_times.reserve(problem.epochs.size());
+        for (const auto& epoch : problem.epochs) epoch_times.push_back(epoch.time);
+        upstream_stop::Config stop_config;
+        stop_config.window_samples = static_cast<std::size_t>(
+            std::max(2, config.upstream_stop_window_samples));
+        stop_config.acceleration_std_offset_mps2 =
+            config.upstream_stop_acceleration_std_offset_mps2;
+        stop_config.gyro_std_offset_radps =
+            config.upstream_stop_gyro_std_offset_radps;
+        stop_config.gyro_norm_max_radps = config.upstream_stop_gyro_norm_max_radps;
+        upstream_stop_detection = upstream_stop::detect(
+            problem.imu.samples_body_flu, epoch_times, stop_config);
+        if (!upstream_stop_detection.ok ||
+            upstream_stop_detection.epoch_stop.size() != num_epochs) {
+            // A malformed or incomplete raw stop stream must not turn into a
+            // silently weakened graph.  Returning an unsolved result lets the
+            // raw-only caller fail closed rather than selecting a fallback lane.
+            result.diagnostics.upstream_stop_imu_samples =
+                upstream_stop_detection.finite_samples;
+            result.diagnostics.converged = false;
+            return result;
+        }
+        result.diagnostics.upstream_stop_epochs =
+            upstream_stop_detection.stop_epochs;
+        result.diagnostics.upstream_stop_imu_samples =
+            upstream_stop_detection.finite_samples;
+        result.diagnostics.upstream_stop_acceleration_std_threshold_mps2 =
+            upstream_stop_detection.acceleration_std_threshold_mps2;
+        result.diagnostics.upstream_stop_gyro_std_threshold_radps =
+            upstream_stop_detection.gyro_std_threshold_radps;
+    }
     // The upstream GNSS-first pass uses explicit ENU velocity and receiver
     // clock-range-rate states.  Keep this path separate from the Pose3 IMU
     // velocity states so the established IMU graph and all production
@@ -876,6 +912,74 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
         (config.use_motion_factors && num_epochs >= 2)
             ? num_epochs - 1
             : 0;
+
+    // --- Upstream stationary-stop constraints -----------------------------
+    // fgo_gnss_imu.m adds a robust zero-velocity prior when the raw IMU stop
+    // flag and the preceding GNSS velocity gate both pass, and an identity
+    // Pose3 between-factor across two consecutive stops.  The batch path did
+    // not previously carry these constraints (the fixed-lag ZUPT knob is a
+    // separate contract), so keep this explicitly opt-in and raw-only.
+    if (use_upstream_stop_constraints) {
+        const auto velocity_noise = gtsam::noiseModel::Robust::Create(
+            gtsam::noiseModel::mEstimator::Huber::Create(
+                config.upstream_stop_velocity_huber_k_sigma),
+            gtsam::noiseModel::Isotropic::Sigma(
+                3, config.upstream_stop_velocity_sigma_mps));
+        for (std::size_t i = 0; i < num_epochs; ++i) {
+            if (!upstream_stop_detection.epoch_stop[i] ||
+                !initial.exists(velocityKey(i))) {
+                continue;
+            }
+            const gtsam::Vector3 graph_velocity =
+                initial.at<gtsam::Vector3>(velocityKey(i));
+            const bool have_upstream_seed =
+                problem.imu.stop_velocity_seeds_nav.size() == num_epochs &&
+                problem.imu.stop_velocity_seeds_nav[i].allFinite();
+            const double stop_speed = have_upstream_seed
+                ? problem.imu.stop_velocity_seeds_nav[i].norm()
+                : graph_velocity.norm();
+            if (!graph_velocity.allFinite() || !std::isfinite(stop_speed) ||
+                stop_speed >= config.upstream_stop_velocity_threshold_mps) {
+                continue;
+            }
+            graph.addPrior<gtsam::Vector3>(
+                velocityKey(i), gtsam::Vector3::Zero(), velocity_noise);
+            ++result.diagnostics.upstream_stop_velocity_factors;
+        }
+        gtsam::Vector6 pose_sigmas;
+        pose_sigmas << config.upstream_stop_pose_rotation_sigma_rad,
+            config.upstream_stop_pose_rotation_sigma_rad,
+            config.upstream_stop_pose_rotation_sigma_rad,
+            config.upstream_stop_pose_translation_sigma_m,
+            config.upstream_stop_pose_translation_sigma_m,
+            config.upstream_stop_pose_translation_sigma_m;
+        const auto pose_noise = gtsam::noiseModel::Robust::Create(
+            gtsam::noiseModel::mEstimator::Huber::Create(
+                config.upstream_stop_pose_huber_k_sigma),
+            gtsam::noiseModel::Diagonal::Sigmas(pose_sigmas));
+        for (std::size_t i = 0; i + 1U < num_epochs; ++i) {
+            if (!upstream_stop_detection.epoch_stop[i] ||
+                !upstream_stop_detection.epoch_stop[i + 1U] ||
+                !initial.exists(velocityKey(i))) {
+                continue;
+            }
+            const gtsam::Vector3 graph_velocity =
+                initial.at<gtsam::Vector3>(velocityKey(i));
+            const bool have_upstream_seed =
+                problem.imu.stop_velocity_seeds_nav.size() == num_epochs &&
+                problem.imu.stop_velocity_seeds_nav[i].allFinite();
+            const double stop_speed = have_upstream_seed
+                ? problem.imu.stop_velocity_seeds_nav[i].norm()
+                : graph_velocity.norm();
+            if (!graph_velocity.allFinite() || !std::isfinite(stop_speed) ||
+                stop_speed >= config.upstream_stop_velocity_threshold_mps) {
+                continue;
+            }
+            graph.emplace_shared<gtsam::BetweenFactor<Pose3>>(
+                positionKey(i), positionKey(i + 1U), Pose3(), pose_noise);
+            ++result.diagnostics.upstream_stop_pose_factors;
+        }
+    }
 
     // --- Optional absolute priors (disabled by default: sigma <= 0) ---
     if (config.position_prior_sigma_m > 0.0) {
