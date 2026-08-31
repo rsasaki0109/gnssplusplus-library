@@ -5,7 +5,8 @@
 // supplies the real Pose3/velocity/bias chain and CombinedImuFactor.  The
 // production gnss_fgo defaults are not changed.  Android raw axes are never
 // silently treated as body axes: the frozen taroz mounting rotation is
-// applied explicitly to the already schema-converted IMU CSV.
+// applied explicitly after the raw adapter has converted only timestamps and
+// stream alignment.
 
 #include <libgnss++/algorithms/fgo.hpp>
 #include <libgnss++/core/constants.hpp>
@@ -16,7 +17,9 @@
 
 #include <Eigen/Geometry>
 
+#include <array>
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
@@ -54,6 +57,7 @@ struct Options {
     std::string obs_path;
     std::string nav_path;
     std::string imu_path;
+    std::string android_imu_path;
     std::string out_path;
     std::string summary_path;
     std::string dataset_id = "native-fgo-v2-imu-no-base";
@@ -63,7 +67,8 @@ struct Options {
 
 void usage(const char* program) {
     std::cout << "Usage: " << program
-              << " --obs <rover.obs> --nav <brdc.nav> --imu <imu.csv>"
+              << " --obs <rover.obs> --nav <brdc.nav>"
+                 " (--imu <imu.csv> | --android-imu <device_imu.csv>)"
                  " --out <submission.csv> --summary-json <summary.json>"
                  " [--dataset-id <id>] [--skip-epochs <n>] [--max-epochs 10..30]\n";
 }
@@ -74,6 +79,18 @@ bool requireValue(int argc, char** argv, int& index, std::string& value) {
     }
     value = argv[++index];
     return !value.empty();
+}
+
+bool hasMatExtension(const std::string& path) {
+    const std::size_t slash = path.find_last_of("/\\");
+    const std::size_t dot = path.find_last_of('.');
+    if (dot == std::string::npos || (slash != std::string::npos && dot < slash)) {
+        return false;
+    }
+    std::string extension = path.substr(dot);
+    std::transform(extension.begin(), extension.end(), extension.begin(),
+                   [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    return extension == ".mat";
 }
 
 bool parseArguments(int argc, char** argv, Options& options) {
@@ -89,6 +106,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
             if (!requireValue(argc, argv, i, options.nav_path)) return false;
         } else if (arg == "--imu") {
             if (!requireValue(argc, argv, i, options.imu_path)) return false;
+        } else if (arg == "--android-imu") {
+            if (!requireValue(argc, argv, i, options.android_imu_path)) return false;
         } else if (arg == "--out") {
             if (!requireValue(argc, argv, i, options.out_path)) return false;
         } else if (arg == "--summary-json") {
@@ -125,9 +144,23 @@ bool parseArguments(int argc, char** argv, Options& options) {
             return false;
         }
     }
-    if (options.obs_path.empty() || options.nav_path.empty() || options.imu_path.empty() ||
+    if (options.obs_path.empty() || options.nav_path.empty() ||
+        (options.imu_path.empty() == options.android_imu_path.empty()) ||
         options.out_path.empty() || options.summary_path.empty()) {
         usage(argv[0]);
+        return false;
+    }
+    const std::array<const std::string*, 5> file_paths = {
+        &options.obs_path, &options.nav_path, &options.imu_path,
+        &options.android_imu_path, &options.out_path};
+    for (const std::string* path : file_paths) {
+        if (path != nullptr && !path->empty() && hasMatExtension(*path)) {
+            std::cerr << "MATLAB .mat paths are forbidden by the native/raw contract\n";
+            return false;
+        }
+    }
+    if (hasMatExtension(options.summary_path)) {
+        std::cerr << "MATLAB .mat paths are forbidden by the native/raw contract\n";
         return false;
     }
     return true;
@@ -185,21 +218,37 @@ struct ImuBuildReport {
     double gravity_mean_norm = 0.0;
     double gravity_norm_std = 0.0;
     int heading_windows = 0;
+    bool android_raw = false;
+    libgnss::AndroidImuCsvLoadResult android_load;
 };
 
 bool buildImuInput(const std::string& path,
                    libgnss::FGOProcessor::FGOProblem& problem,
-                   ImuBuildReport& report) {
+                   ImuBuildReport& report,
+                   bool android_raw = false) {
     if (problem.epochs.size() < 2) {
         report.failure = "fewer than two GNSS epochs";
         return false;
     }
 
     libgnss::ImuSeries series;
-    const auto load = libgnss::loadImuCsv(path, series);
-    if (!load.ok || series.isEmpty()) {
-        report.failure = load.error.empty() ? "empty IMU series" : load.error;
-        return false;
+    report.android_raw = android_raw;
+    if (android_raw) {
+        report.android_load = libgnss::loadAndroidImuCsv(path, series);
+        if (!report.android_load.ok || series.isEmpty()) {
+            report.failure = report.android_load.error.empty()
+                                 ? "empty Android IMU series"
+                                 : report.android_load.error;
+            return false;
+        }
+    } else {
+        const libgnss::ImuCsvLoadResult processed_load =
+            libgnss::loadImuCsv(path, series);
+        if (!processed_load.ok || series.isEmpty()) {
+            report.failure = processed_load.error.empty() ? "empty IMU series"
+                                                           : processed_load.error;
+            return false;
+        }
     }
     series.sortByTime();
     const Eigen::Matrix3d mounting = tarozMountingRotation();
@@ -379,7 +428,9 @@ std::string makeSummary(const Options& options,
     out << ",\n    \"navigation\": ";
     writeJsonString(out, options.nav_path);
     out << ",\n    \"imu\": ";
-    writeJsonString(out, options.imu_path);
+    writeJsonString(out, options.android_imu_path.empty()
+                            ? options.imu_path
+                            : options.android_imu_path);
     out << "\n  },\n"
         << "  \"epochs\": {\n"
         << "    \"problem\": " << problem.epochs.size() << ",\n"
@@ -401,6 +452,10 @@ std::string makeSummary(const Options& options,
         << "    \"final_cost\": " << result.diagnostics.final_cost << "\n"
         << "  },\n"
         << "  \"imu_initialization\": {\n"
+        << "    \"input_format\": ";
+    writeJsonString(out, imu_report.android_raw ? "android-device_imu.csv"
+                                                : "gpst-metric-imu.csv");
+    out << ",\n"
         << "    \"loaded_samples\": " << imu_report.loaded_samples << ",\n"
         << "    \"stationary_samples\": " << imu_report.stationary_samples << ",\n"
         << "    \"gravity_mean_norm_mps2\": " << imu_report.gravity_mean_norm << ",\n"
@@ -409,8 +464,47 @@ std::string makeSummary(const Options& options,
         << "    \"heading_latched\": " << (imu_report.heading_latched ? "true" : "false") << ",\n"
         << "    \"axis_contract\": \"identity raw-axis selection + explicit RzRyRx mounting\",\n"
         << "    \"mounting_rpy_deg_xyz\": [-85.0, 178.0, -94.0],\n"
-        << "    \"timestamp_contract\": \"GPST CSV; no runtime offset\",\n"
-        << "    \"failure\": ";
+        << "    \"timestamp_contract\": ";
+    writeJsonString(out, imu_report.android_raw
+                           ? "UTC milliseconds + 18 s -> GPST; elapsedRealtimeNanos gyro anchors"
+                           : "GPST week/TOW CSV; no runtime offset");
+    out << ",\n"
+        << "    \"android_alignment\": ";
+    if (!imu_report.android_raw) {
+        out << "null,\n";
+    } else {
+        const auto& alignment = imu_report.android_load;
+        out << "{\n"
+            << "      \"total_rows\": " << alignment.total_rows << ",\n"
+            << "      \"accel_rows\": " << alignment.accel_rows << ",\n"
+            << "      \"gyro_rows\": " << alignment.gyro_rows << ",\n"
+            << "      \"unsupported_rows\": " << alignment.unsupported_rows << ",\n"
+            << "      \"duplicate_accel_timestamps\": "
+            << alignment.duplicate_accel_timestamps << ",\n"
+            << "      \"duplicate_gyro_timestamps\": "
+            << alignment.duplicate_gyro_timestamps << ",\n"
+            << "      \"paired_rows\": " << alignment.paired_rows << ",\n"
+            << "      \"exact_elapsed_matches\": "
+            << alignment.exact_elapsed_matches << ",\n"
+            << "      \"interpolated_rows\": " << alignment.interpolated_rows << ",\n"
+            << "      \"endpoint_nearest_rows\": "
+            << alignment.endpoint_nearest_rows << ",\n"
+            << "      \"omitted_rows\": " << alignment.omitted_rows << ",\n"
+            << "      \"median_abs_pair_offset_ms\": "
+            << alignment.median_abs_pair_offset_ms << ",\n"
+            << "      \"maximum_abs_pair_offset_ms\": "
+            << alignment.maximum_abs_pair_offset_ms << ",\n"
+            << "      \"first_gyro_elapsed_ns\": "
+            << alignment.first_gyro_elapsed_ns << ",\n"
+            << "      \"last_gyro_elapsed_ns\": "
+            << alignment.last_gyro_elapsed_ns << ",\n"
+            << "      \"elapsed_clock_preserved\": "
+            << (alignment.elapsed_clock_preserved ? "true" : "false") << ",\n"
+            << "      \"gnss_elapsed_anchor_applied\": "
+            << (alignment.gnss_elapsed_anchor_applied ? "true" : "false") << "\n"
+            << "    },\n";
+    }
+    out << "    \"failure\": ";
     writeJsonString(out, imu_report.failure);
     out << "\n  },\n"
         << "  \"output_contract\": {\n"
@@ -487,7 +581,9 @@ int main(int argc, char** argv) {
     }
 
     ImuBuildReport imu_report;
-    bool use_imu = buildImuInput(options.imu_path, problem, imu_report);
+    const bool android_raw = !options.android_imu_path.empty();
+    const std::string imu_path = android_raw ? options.android_imu_path : options.imu_path;
+    bool use_imu = buildImuInput(imu_path, problem, imu_report, android_raw);
     bool fallback = false;
     libgnss::FGOProcessor::FGOResult result;
     if (use_imu) {

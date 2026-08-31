@@ -1,6 +1,8 @@
 #pragma once
 
 #include <array>
+#include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -20,6 +22,11 @@ struct ImuSample {
     GNSSTime time;                    ///< GPS week + time-of-week, seconds
     Eigen::Vector3d accel_raw = Eigen::Vector3d::Zero();       ///< m/s^2, raw sensor axes
     Eigen::Vector3d gyro_raw_radps = Eigen::Vector3d::Zero();  ///< rad/s (deg/s converted at load), raw sensor axes
+    // Android-only provenance. A negative value means that the source did
+    // not expose a monotonic elapsedRealtimeNanos clock. Keeping this value
+    // alongside the converted GPST timestamp lets a later GNSS-anchor sync
+    // stage use the original clock without reverse-engineering it.
+    std::int64_t elapsed_realtime_nanos = -1;
 };
 
 /**
@@ -93,6 +100,55 @@ struct ImuCsvLoadResult {
 };
 
 /**
+ * @brief Contract for loading the raw Android ``device_imu.csv`` streams.
+ *
+ * Android timestamps are retained as two distinct clocks: ``utcTimeMillis``
+ * identifies the GNSS epoch and ``elapsedRealtimeNanos`` is the monotonic
+ * clock used to align accelerometer samples to gyro anchors.  The raw
+ * UncalGyro measurements are already radians/second and UncalAccel is
+ * metres/second^2; neither is silently re-scaled.  The GPS-UTC offset is
+ * explicit because the GSDC 2023 data is UTC and the native time type is
+ * GPST.  Alignment never extrapolates: interior acceleration samples are
+ * linearly interpolated in elapsed time, while an endpoint uses a nearest
+ * sample only when it is within the fixed bound.
+ */
+struct AndroidImuCsvConfig {
+    double gps_utc_leap_seconds = 18.0;
+    double maximum_accel_pair_offset_s = 0.025;
+    bool allow_endpoint_nearest = true;
+};
+
+/**
+ * @brief Diagnostics returned by loadAndroidImuCsv().
+ */
+struct AndroidImuCsvLoadResult {
+    bool ok = false;
+    std::string error;
+    std::size_t total_rows = 0;
+    std::size_t accel_rows = 0;
+    std::size_t gyro_rows = 0;
+    std::size_t unsupported_rows = 0;
+    std::size_t duplicate_accel_timestamps = 0;
+    std::size_t duplicate_gyro_timestamps = 0;
+    std::size_t paired_rows = 0;
+    std::size_t exact_elapsed_matches = 0;
+    std::size_t interpolated_rows = 0;
+    std::size_t endpoint_nearest_rows = 0;
+    std::size_t omitted_rows = 0;
+    std::int64_t first_gyro_utc_ms = 0;
+    std::int64_t last_gyro_utc_ms = 0;
+    std::int64_t first_gyro_elapsed_ns = 0;
+    std::int64_t last_gyro_elapsed_ns = 0;
+    double median_abs_pair_offset_ms = 0.0;
+    double maximum_abs_pair_offset_ms = 0.0;
+    bool elapsed_clock_preserved = false;
+    // The raw adapter intentionally does not claim the upstream GNSS
+    // elapsed->UTC interpolation. It uses Android UTC for GPST conversion
+    // and preserves elapsedRealtimeNanos for a later anchor stage.
+    bool gnss_elapsed_anchor_applied = false;
+};
+
+/**
  * @brief Load a PPC-Dataset-style imu.csv file via header-name matching.
  *
  * Direct C++ port of scripts/analysis/analyze_ppc_imu_coverage.py's
@@ -109,6 +165,27 @@ struct ImuCsvLoadResult {
  * @return      Load result: ok/error, resolved column names, row count
  */
 ImuCsvLoadResult loadImuCsv(const std::string& path, ImuSeries& out);
+
+/**
+ * @brief Load and align raw Android UncalAccel/UncalGyro measurements.
+ *
+ * This is a raw-only adapter for the GSDC Android schema.  It mirrors the
+ * upstream gyro-anchored synchronization shape while keeping the native path
+ * fail-closed at file boundaries: duplicate UTC timestamps retain the first
+ * row (the MATLAB ``unique`` behavior), acceleration is interpolated on the
+ * common elapsedRealtimeNanos clock, and unbracketed samples are only
+ * nearest-held within AndroidImuCsvConfig::maximum_accel_pair_offset_s.
+ * Output samples contain the gyro UTC time converted to GPST, the preserved
+ * elapsedRealtimeNanos anchor, and raw sensor axes; mounting is an explicit
+ * caller operation via ImuAxisConvention or a documented mounting matrix.
+ * The GNSS-observation elapsed->UTC interpolation and sync_coefficient from
+ * upstream imuprocessing.m are not silently inferred by this loader; its
+ * diagnostic explicitly reports that gap for a later synchronization stage.
+ */
+AndroidImuCsvLoadResult loadAndroidImuCsv(
+    const std::string& path,
+    ImuSeries& out,
+    const AndroidImuCsvConfig& config = {});
 
 /**
  * @brief Load rtklibexplorer/GNSS_IMU's cleaned `imu_*_sf.csv` format.

@@ -90,6 +90,147 @@ TEST(ImuCsvTest, MissingFileProducesError) {
     EXPECT_FALSE(result.error.empty());
 }
 
+TEST(ImuCsvTest, RejectsMatInputsBeforeOpeningAnyFile) {
+    const auto path =
+        std::filesystem::temp_directory_path() / "libgnss_forbidden_input.MAT";
+    // The path does not need to exist: the extension guard must fire before
+    // attempting an open, and no MATLAB container is part of this contract.
+    ImuSeries series;
+    const auto result = loadImuCsv(path.string(), series);
+    EXPECT_FALSE(result.ok);
+    EXPECT_NE(result.error.find("MATLAB .mat inputs are forbidden"), std::string::npos);
+    EXPECT_TRUE(series.samples.empty());
+}
+
+TEST(AndroidImuCsvTest, ConvertsUtcAndAlignsAccelOnElapsedClock) {
+    constexpr std::int64_t kUtc0 = 1'700'000'000'000;
+    const std::string header =
+        "MessageType,utcTimeMillis,elapsedRealtimeNanos,MeasurementX,MeasurementY,"
+        "MeasurementZ,BiasX,BiasY,BiasZ";
+    const auto path =
+        std::filesystem::temp_directory_path() / "libgnss_android_imu_alignment_test.csv";
+    writeFile(
+        path,
+        header + "\n" +
+            "UncalAccel," + std::to_string(kUtc0) + ",1000000000,1,2,3,0,0,0\n" +
+            "UncalAccel," + std::to_string(kUtc0 + 20) + ",1020000000,3,4,5,0,0,0\n" +
+            // MATLAB unique() retains the first row for duplicate UTC keys.
+            "UncalAccel," + std::to_string(kUtc0 + 20) + ",1030000000,99,99,99,0,0,0\n" +
+            "UncalGyro," + std::to_string(kUtc0 + 10) + ",1010000000,0.1,0.2,0.3,0,0,0\n" +
+            "UncalGyro," + std::to_string(kUtc0 - 10) + ",990000000,0.4,0.5,0.6,0,0,0\n" +
+            "UncalGyro," + std::to_string(kUtc0 + 30) + ",1030000000,0.7,0.8,0.9,0,0,0\n" +
+            "UncalMag," + std::to_string(kUtc0) + ",1000000000,10,11,12,1,1,1\n");
+
+    ImuSeries series;
+    const auto result = loadAndroidImuCsv(path.string(), series);
+    std::filesystem::remove(path);
+
+    ASSERT_TRUE(result.ok) << result.error;
+    EXPECT_EQ(result.total_rows, 7u);
+    EXPECT_EQ(result.accel_rows, 2u);
+    EXPECT_EQ(result.gyro_rows, 3u);
+    EXPECT_EQ(result.unsupported_rows, 1u);
+    EXPECT_EQ(result.duplicate_accel_timestamps, 1u);
+    EXPECT_EQ(result.paired_rows, 3u);
+    EXPECT_EQ(result.interpolated_rows, 1u);
+    EXPECT_EQ(result.endpoint_nearest_rows, 2u);
+    EXPECT_EQ(result.omitted_rows, 0u);
+    EXPECT_TRUE(result.elapsed_clock_preserved);
+    EXPECT_FALSE(result.gnss_elapsed_anchor_applied);
+    EXPECT_EQ(result.first_gyro_elapsed_ns, 990000000);
+    EXPECT_EQ(result.last_gyro_elapsed_ns, 1030000000);
+    EXPECT_NEAR(result.median_abs_pair_offset_ms, 10.0, 1e-12);
+    EXPECT_NEAR(result.maximum_abs_pair_offset_ms, 10.0, 1e-12);
+    ASSERT_EQ(series.samples.size(), 3u);
+    EXPECT_NEAR(series.samples[0].accel_raw.x(), 1.0, 1e-12);
+    EXPECT_NEAR(series.samples[0].accel_raw.y(), 2.0, 1e-12);
+    EXPECT_NEAR(series.samples[0].accel_raw.z(), 3.0, 1e-12);
+    EXPECT_NEAR(series.samples[1].accel_raw.x(), 2.0, 1e-12);
+    EXPECT_NEAR(series.samples[1].accel_raw.y(), 3.0, 1e-12);
+    EXPECT_NEAR(series.samples[1].accel_raw.z(), 4.0, 1e-12);
+    EXPECT_NEAR(series.samples[2].accel_raw.x(), 3.0, 1e-12);
+    EXPECT_NEAR(series.samples[2].accel_raw.y(), 4.0, 1e-12);
+    EXPECT_NEAR(series.samples[2].accel_raw.z(), 5.0, 1e-12);
+    // UncalGyro is already rad/s; the raw C++ adapter does not convert twice.
+    EXPECT_NEAR(series.samples[1].gyro_raw_radps.x(), 0.1, 1e-12);
+    EXPECT_NEAR(series.samples[1].gyro_raw_radps.y(), 0.2, 1e-12);
+    EXPECT_NEAR(series.samples[1].gyro_raw_radps.z(), 0.3, 1e-12);
+    EXPECT_EQ(series.samples[1].elapsed_realtime_nanos, 1010000000);
+    EXPECT_LT(series.samples[0].time, series.samples[1].time);
+    EXPECT_LT(series.samples[1].time, series.samples[2].time);
+}
+
+TEST(AndroidImuCsvTest, AppliesPairBoundAtBoundaryAndOmitsBeyondIt) {
+    const std::string header =
+        "MessageType,utcTimeMillis,elapsedRealtimeNanos,MeasurementX,MeasurementY,"
+        "MeasurementZ,BiasX,BiasY,BiasZ";
+    const auto path =
+        std::filesystem::temp_directory_path() / "libgnss_android_imu_pair_bound_test.csv";
+    writeFile(
+        path,
+        header + "\n"
+                 "UncalAccel,1700000000000,1000000000,1,2,3,0,0,0\n"
+                 "UncalAccel,1700000000100,1100000000,4,5,6,0,0,0\n"
+                 // 25 ms is accepted by the frozen default bound.
+                 "UncalGyro,1700000000025,1025000000,0,0,0,0,0,0\n"
+                 // 26 ms is omitted, while the loader remains successful.
+                 "UncalGyro,1700000000126,1126000000,0,0,0,0,0,0\n");
+
+    ImuSeries series;
+    const auto result = loadAndroidImuCsv(path.string(), series);
+    std::filesystem::remove(path);
+
+    ASSERT_TRUE(result.ok) << result.error;
+    EXPECT_EQ(result.gyro_rows, 2u);
+    EXPECT_EQ(result.paired_rows, 1u);
+    EXPECT_EQ(result.interpolated_rows, 1u);
+    EXPECT_EQ(result.omitted_rows, 1u);
+    ASSERT_EQ(series.samples.size(), 1u);
+    EXPECT_NEAR(series.samples.front().accel_raw.x(), 1.75, 1e-12);
+}
+
+TEST(AndroidImuCsvTest, RejectsNonFiniteAndNonMonotonicSupportedRows) {
+    const std::string header =
+        "MessageType,utcTimeMillis,elapsedRealtimeNanos,MeasurementX,MeasurementY,"
+        "MeasurementZ,BiasX,BiasY,BiasZ";
+    const auto nonfinite_path =
+        std::filesystem::temp_directory_path() / "libgnss_android_imu_nonfinite_test.csv";
+    writeFile(
+        nonfinite_path,
+        header + "\n"
+                 "UncalAccel,1700000000000,1000000000,nan,2,3,0,0,0\n"
+                 "UncalGyro,1700000000000,1000000000,0,0,0,0,0,0\n");
+    ImuSeries series;
+    auto result = loadAndroidImuCsv(nonfinite_path.string(), series);
+    std::filesystem::remove(nonfinite_path);
+    EXPECT_FALSE(result.ok);
+    EXPECT_NE(result.error.find("non-finite"), std::string::npos);
+    EXPECT_TRUE(series.samples.empty());
+
+    const auto ordering_path =
+        std::filesystem::temp_directory_path() / "libgnss_android_imu_ordering_test.csv";
+    writeFile(
+        ordering_path,
+        header + "\n"
+                 "UncalAccel,1700000000000,1000000000,1,2,3,0,0,0\n"
+                 "UncalAccel,1700000000010,1000000000,1,2,3,0,0,0\n"
+                 "UncalGyro,1700000000000,1000000000,0,0,0,0,0,0\n");
+    result = loadAndroidImuCsv(ordering_path.string(), series);
+    std::filesystem::remove(ordering_path);
+    EXPECT_FALSE(result.ok);
+    EXPECT_NE(result.error.find("strictly increasing"), std::string::npos);
+    EXPECT_TRUE(series.samples.empty());
+}
+
+TEST(AndroidImuCsvTest, RejectsMatInputsBeforeOpeningAnyFile) {
+    ImuSeries series;
+    const auto result = loadAndroidImuCsv(
+        (std::filesystem::temp_directory_path() / "android_input.mat").string(), series);
+    EXPECT_FALSE(result.ok);
+    EXPECT_NE(result.error.find("MATLAB .mat inputs are forbidden"), std::string::npos);
+    EXPECT_TRUE(series.samples.empty());
+}
+
 TEST(ImuCsvTest, ParsesRtklibExplorerSelfFormattedCsv) {
     const auto path =
         std::filesystem::temp_directory_path() / "libgnss_imu_rtklibexplorer_test.csv";

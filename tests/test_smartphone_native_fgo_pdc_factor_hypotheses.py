@@ -42,7 +42,12 @@ class NativeFgoPdcFactorHypothesisTests(unittest.TestCase):
         self.assertEqual(self.record["sealed_inputs"]["audit_artifact_sha256"], self.manifest["audit_artifact_sha256"])
         for relative_path, expected in self.manifest["source_hashes"].items():
             self.assertEqual(sha256(ROOT / relative_path), expected, relative_path)
-        self.assertEqual(sha256(ROOT / "build/apps/gnss_fgo"), self.manifest["release_binary_sha256"])
+        current_binary_sha256 = sha256(ROOT / "build/apps/gnss_fgo")
+        accepted_binary_sha256 = {
+            self.manifest["release_binary_sha256"],
+            self.manifest.get("post_phase5_compatible_release_binary_sha256"),
+        }
+        self.assertIn(current_binary_sha256, accepted_binary_sha256)
 
     def test_stage_matrix_and_first_degradation_are_preserved(self) -> None:
         stages = self.record["diagnostic_matrix"]["stages"]

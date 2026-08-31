@@ -3,7 +3,10 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdint>
+#include <cstdlib>
 #include <fstream>
+#include <map>
 #include <sstream>
 #include <unordered_map>
 
@@ -85,6 +88,56 @@ double parseDouble(const std::string& text, bool& ok) {
     }
 }
 
+std::string trimWhitespace(const std::string& text) {
+    size_t begin = 0;
+    size_t end = text.size();
+    while (begin < end && std::isspace(static_cast<unsigned char>(text[begin]))) ++begin;
+    while (end > begin && std::isspace(static_cast<unsigned char>(text[end - 1]))) --end;
+    return text.substr(begin, end - begin);
+}
+
+bool hasMatExtension(const std::string& path) {
+    const std::size_t slash = path.find_last_of("/\\");
+    const std::size_t dot = path.find_last_of('.');
+    if (dot == std::string::npos || (slash != std::string::npos && dot < slash)) {
+        return false;
+    }
+    std::string extension = path.substr(dot);
+    std::transform(extension.begin(), extension.end(), extension.begin(),
+                   [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    return extension == ".mat";
+}
+
+bool parseInt64(const std::string& text, std::int64_t& value) {
+    const std::string trimmed = trimWhitespace(text);
+    if (trimmed.empty()) return false;
+    try {
+        size_t consumed = 0;
+        const long long parsed = std::stoll(trimmed, &consumed);
+        if (consumed != trimmed.size()) return false;
+        value = static_cast<std::int64_t>(parsed);
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
+struct AndroidRawImuSample {
+    std::int64_t utc_time_ms = 0;
+    std::int64_t elapsed_time_ns = 0;
+    Eigen::Vector3d measurement = Eigen::Vector3d::Zero();
+    Eigen::Vector3d bias = Eigen::Vector3d::Zero();
+};
+
+GNSSTime androidUtcToGpsTime(std::int64_t utc_time_ms, double leap_seconds) {
+    constexpr double kUnixSecondsAtGpsEpoch = 315964800.0;
+    constexpr double kSecondsPerGpsWeek = 604800.0;
+    const double gps_seconds = static_cast<double>(utc_time_ms) / 1000.0 -
+                               kUnixSecondsAtGpsEpoch + leap_seconds;
+    const int week = static_cast<int>(std::floor(gps_seconds / kSecondsPerGpsWeek));
+    return GNSSTime(week, gps_seconds - static_cast<double>(week) * kSecondsPerGpsWeek);
+}
+
 }  // namespace
 
 std::vector<ImuSample> ImuSeries::getSamples(const GNSSTime& start, const GNSSTime& end) const {
@@ -121,6 +174,10 @@ ImuCsvLoadResult loadImuCsv(const std::string& path, ImuSeries& out) {
     ImuCsvLoadResult result;
     out.samples.clear();
 
+    if (hasMatExtension(path)) {
+        result.error = "MATLAB .mat inputs are forbidden by the raw/native IMU contract";
+        return result;
+    }
     std::ifstream file(path);
     if (!file.is_open()) {
         result.error = "could not open IMU CSV file: " + path;
@@ -250,10 +307,312 @@ ImuCsvLoadResult loadImuCsv(const std::string& path, ImuSeries& out) {
     return result;
 }
 
+AndroidImuCsvLoadResult loadAndroidImuCsv(
+    const std::string& path,
+    ImuSeries& out,
+    const AndroidImuCsvConfig& config) {
+    AndroidImuCsvLoadResult result;
+    out.samples.clear();
+
+    if (hasMatExtension(path)) {
+        result.error = "MATLAB .mat inputs are forbidden by the raw/native IMU contract";
+        return result;
+    }
+    if (!std::isfinite(config.gps_utc_leap_seconds) ||
+        config.gps_utc_leap_seconds < 0.0 || config.gps_utc_leap_seconds > 60.0) {
+        result.error = "invalid GPS-UTC leap-second configuration";
+        return result;
+    }
+    if (!std::isfinite(config.maximum_accel_pair_offset_s) ||
+        config.maximum_accel_pair_offset_s <= 0.0) {
+        result.error = "invalid Android IMU pairing bound";
+        return result;
+    }
+
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        result.error = "could not open Android IMU CSV file: " + path;
+        return result;
+    }
+
+    std::string header_line;
+    if (!std::getline(file, header_line)) {
+        result.error = "Android IMU CSV file is empty: " + path;
+        return result;
+    }
+    if (!header_line.empty() && header_line.back() == '\r') header_line.pop_back();
+    const std::vector<std::string> raw_headers = splitCsvLine(header_line);
+    HeaderLookup lookup;
+    for (size_t i = 0; i < raw_headers.size(); ++i) {
+        const std::string normalized = normalizeHeader(raw_headers[i]);
+        if (normalized.empty() || !lookup.emplace(normalized, i).second) {
+            result.error = "Android IMU CSV has duplicate or empty header fields";
+            return result;
+        }
+    }
+
+    const auto requiredColumn = [&](const char* name, size_t& index) -> bool {
+        const auto it = lookup.find(name);
+        if (it == lookup.end()) return false;
+        index = it->second;
+        return true;
+    };
+    size_t message_index = 0;
+    size_t utc_index = 0;
+    size_t elapsed_index = 0;
+    std::array<size_t, 3> measurement_index{};
+    std::array<size_t, 3> bias_index{};
+    if (!requiredColumn("messagetype", message_index) ||
+        !requiredColumn("utctimemillis", utc_index) ||
+        !requiredColumn("elapsedrealtimenanos", elapsed_index)) {
+        result.error = "Android IMU CSV requires MessageType, utcTimeMillis, and "
+                       "elapsedRealtimeNanos";
+        return result;
+    }
+    const char* const measurement_names[3] = {
+        "measurementx", "measurementy", "measurementz"};
+    const char* const bias_names[3] = {"biasx", "biasy", "biasz"};
+    for (int axis = 0; axis < 3; ++axis) {
+        if (!requiredColumn(measurement_names[axis], measurement_index[axis]) ||
+            !requiredColumn(bias_names[axis], bias_index[axis])) {
+            result.error = "Android IMU CSV requires MeasurementX/Y/Z and BiasX/Y/Z";
+            return result;
+        }
+    }
+
+    std::map<std::int64_t, AndroidRawImuSample> accel_by_utc;
+    std::map<std::int64_t, AndroidRawImuSample> gyro_by_utc;
+    std::string line;
+    std::size_t row_number = 1;
+    while (std::getline(file, line)) {
+        ++row_number;
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (trimWhitespace(line).empty()) continue;
+        ++result.total_rows;
+        const std::vector<std::string> fields = splitCsvLine(line);
+        if (fields.size() != raw_headers.size()) {
+            result.error = "Android IMU row " + std::to_string(row_number) +
+                           ": expected " + std::to_string(raw_headers.size()) +
+                           " columns, got " + std::to_string(fields.size());
+            out.samples.clear();
+            return result;
+        }
+        const std::string message_type = trimWhitespace(fields[message_index]);
+        const bool is_accel = message_type == "UncalAccel";
+        const bool is_gyro = message_type == "UncalGyro";
+        if (!is_accel && !is_gyro) {
+            ++result.unsupported_rows;
+            continue;
+        }
+
+        AndroidRawImuSample sample;
+        if (!parseInt64(fields[utc_index], sample.utc_time_ms) ||
+            !parseInt64(fields[elapsed_index], sample.elapsed_time_ns) ||
+            sample.utc_time_ms < 0 || sample.elapsed_time_ns < 0) {
+            result.error = "Android IMU row " + std::to_string(row_number) +
+                           ": invalid integer timestamp";
+            out.samples.clear();
+            return result;
+        }
+        bool ok = true;
+        for (int axis = 0; axis < 3; ++axis) {
+            sample.measurement(axis) = parseDouble(fields[measurement_index[axis]], ok);
+            if (!ok || !std::isfinite(sample.measurement(axis))) {
+                result.error = "Android IMU row " + std::to_string(row_number) +
+                               ": non-finite measurement";
+                out.samples.clear();
+                return result;
+            }
+            sample.bias(axis) = parseDouble(fields[bias_index[axis]], ok);
+            if (!ok || !std::isfinite(sample.bias(axis))) {
+                result.error = "Android IMU row " + std::to_string(row_number) +
+                               ": non-finite bias";
+                out.samples.clear();
+                return result;
+            }
+        }
+
+        auto& stream = is_accel ? accel_by_utc : gyro_by_utc;
+        auto [it, inserted] = stream.emplace(sample.utc_time_ms, sample);
+        if (!inserted) {
+            if (is_accel) {
+                ++result.duplicate_accel_timestamps;
+            } else {
+                ++result.duplicate_gyro_timestamps;
+            }
+            // Match deviceimu2imu.m's unique(utcTimeMillis) contract: retain
+            // the first source row, then sort by the unique timestamp.
+            (void)it;
+        }
+    }
+
+    result.accel_rows = accel_by_utc.size();
+    result.gyro_rows = gyro_by_utc.size();
+    if (accel_by_utc.empty() || gyro_by_utc.empty()) {
+        result.error = "Android IMU CSV must contain finite UncalAccel and UncalGyro rows";
+        return result;
+    }
+
+    std::vector<AndroidRawImuSample> accel;
+    std::vector<AndroidRawImuSample> gyro;
+    accel.reserve(accel_by_utc.size());
+    gyro.reserve(gyro_by_utc.size());
+    for (const auto& [unused, sample] : accel_by_utc) {
+        (void)unused;
+        accel.push_back(sample);
+    }
+    for (const auto& [unused, sample] : gyro_by_utc) {
+        (void)unused;
+        gyro.push_back(sample);
+    }
+    const auto elapsed_order = [](const AndroidRawImuSample& lhs,
+                                  const AndroidRawImuSample& rhs) {
+        if (lhs.elapsed_time_ns != rhs.elapsed_time_ns) {
+            return lhs.elapsed_time_ns < rhs.elapsed_time_ns;
+        }
+        return lhs.utc_time_ms < rhs.utc_time_ms;
+    };
+    std::sort(accel.begin(), accel.end(), elapsed_order);
+    std::sort(gyro.begin(), gyro.end(), elapsed_order);
+    for (size_t i = 1; i < accel.size(); ++i) {
+        if (accel[i - 1].elapsed_time_ns >= accel[i].elapsed_time_ns) {
+            result.error = "Android accelerometer elapsedRealtimeNanos is not strictly increasing";
+            return result;
+        }
+    }
+    for (size_t i = 1; i < gyro.size(); ++i) {
+        if (gyro[i - 1].elapsed_time_ns >= gyro[i].elapsed_time_ns) {
+            result.error = "Android gyroscope elapsedRealtimeNanos is not strictly increasing";
+            return result;
+        }
+    }
+
+    std::vector<double> pair_offsets_ms;
+    pair_offsets_ms.reserve(gyro.size());
+    const std::int64_t maximum_offset_ns = static_cast<std::int64_t>(std::llround(
+        config.maximum_accel_pair_offset_s * 1.0e9));
+    const auto accel_by_elapsed = [](const AndroidRawImuSample& sample) {
+        return sample.elapsed_time_ns;
+    };
+    for (const auto& gyro_sample : gyro) {
+        const auto upper = std::lower_bound(
+            accel.begin(), accel.end(), gyro_sample.elapsed_time_ns,
+            [&](const AndroidRawImuSample& sample, std::int64_t elapsed) {
+                return accel_by_elapsed(sample) < elapsed;
+            });
+        const AndroidRawImuSample* nearest = nullptr;
+        if (upper != accel.end()) nearest = &*upper;
+        if (upper != accel.begin()) {
+            const auto previous = upper - 1;
+            if (nearest == nullptr ||
+                std::llabs(previous->elapsed_time_ns - gyro_sample.elapsed_time_ns) <=
+                    std::llabs(nearest->elapsed_time_ns - gyro_sample.elapsed_time_ns)) {
+                nearest = &*previous;
+            }
+        }
+        if (nearest == nullptr ||
+            std::llabs(nearest->elapsed_time_ns - gyro_sample.elapsed_time_ns) >
+                maximum_offset_ns) {
+            ++result.omitted_rows;
+            continue;
+        }
+
+        Eigen::Vector3d acceleration;
+        if (upper != accel.end() &&
+            upper->elapsed_time_ns == gyro_sample.elapsed_time_ns) {
+            acceleration = upper->measurement;
+            ++result.exact_elapsed_matches;
+        } else if (upper != accel.end() && upper != accel.begin() &&
+                   (upper - 1)->elapsed_time_ns < gyro_sample.elapsed_time_ns &&
+                   upper->elapsed_time_ns > gyro_sample.elapsed_time_ns) {
+            const auto& lower_sample = *(upper - 1);
+            const double denominator = static_cast<double>(
+                upper->elapsed_time_ns - lower_sample.elapsed_time_ns);
+            const double alpha = static_cast<double>(
+                gyro_sample.elapsed_time_ns - lower_sample.elapsed_time_ns) / denominator;
+            acceleration = (1.0 - alpha) * lower_sample.measurement +
+                           alpha * upper->measurement;
+            ++result.interpolated_rows;
+        } else {
+            if (!config.allow_endpoint_nearest) {
+                ++result.omitted_rows;
+                continue;
+            }
+            acceleration = nearest->measurement;
+            ++result.endpoint_nearest_rows;
+        }
+        if (!acceleration.allFinite()) {
+            result.error = "Android IMU acceleration alignment produced a non-finite sample";
+            out.samples.clear();
+            return result;
+        }
+
+        ImuSample output_sample;
+        output_sample.time = androidUtcToGpsTime(
+            gyro_sample.utc_time_ms, config.gps_utc_leap_seconds);
+        output_sample.elapsed_realtime_nanos = gyro_sample.elapsed_time_ns;
+        output_sample.accel_raw = acceleration;
+        // Android UncalGyro is already rad/s.  Bias is intentionally not
+        // folded into the measurement: the upstream deviceimu2imu.m path
+        // exports xyz and leaves bias for the estimator state/contract.
+        output_sample.gyro_raw_radps = gyro_sample.measurement;
+        if (!std::isfinite(output_sample.time.tow) ||
+            !output_sample.accel_raw.allFinite() ||
+            !output_sample.gyro_raw_radps.allFinite()) {
+            result.error = "Android IMU conversion produced a non-finite GPST sample";
+            out.samples.clear();
+            return result;
+        }
+        out.samples.push_back(output_sample);
+        ++result.paired_rows;
+        pair_offsets_ms.push_back(
+            static_cast<double>(std::llabs(nearest->elapsed_time_ns -
+                                           gyro_sample.elapsed_time_ns)) /
+            1.0e6);
+    }
+
+    if (out.samples.empty()) {
+        result.error = "Android IMU streams have no pair within the fixed elapsed-time bound";
+        return result;
+    }
+    std::sort(out.samples.begin(), out.samples.end(),
+              [](const ImuSample& lhs, const ImuSample& rhs) {
+                  return lhs.time < rhs.time;
+              });
+    for (size_t i = 1; i < out.samples.size(); ++i) {
+        if (out.samples[i - 1].time >= out.samples[i].time) {
+            result.error = "Android gyro UTC timestamps are not strictly increasing";
+            out.samples.clear();
+            return result;
+        }
+    }
+
+    result.first_gyro_utc_ms = gyro.front().utc_time_ms;
+    result.last_gyro_utc_ms = gyro.back().utc_time_ms;
+    result.first_gyro_elapsed_ns = gyro.front().elapsed_time_ns;
+    result.last_gyro_elapsed_ns = gyro.back().elapsed_time_ns;
+    result.elapsed_clock_preserved = true;
+    if (!pair_offsets_ms.empty()) {
+        std::sort(pair_offsets_ms.begin(), pair_offsets_ms.end());
+        const size_t middle = pair_offsets_ms.size() / 2U;
+        result.median_abs_pair_offset_ms =
+            pair_offsets_ms.size() % 2U == 0U
+                ? 0.5 * (pair_offsets_ms[middle - 1U] + pair_offsets_ms[middle])
+                : pair_offsets_ms[middle];
+        result.maximum_abs_pair_offset_ms = pair_offsets_ms.back();
+    }
+    result.ok = true;
+    return result;
+}
+
 ImuCsvLoadResult loadRtklibExplorerImuCsv(const std::string& path, ImuSeries& out) {
     ImuCsvLoadResult result;
     out.samples.clear();
 
+    if (hasMatExtension(path)) {
+        result.error = "MATLAB .mat inputs are forbidden by the raw/native IMU contract";
+        return result;
+    }
     std::ifstream file(path);
     if (!file.is_open()) {
         result.error = "could not open IMU CSV file: " + path;

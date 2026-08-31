@@ -1,0 +1,148 @@
+{
+  "schema_version": "smartphone-r5-native-fgo-android-imu-gap-audit.v1",
+  "status": "raw-only-vertical-slice",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "purpose": "Audit the smallest exact raw Android IMU bridge before any truth score. This record contains no MATLAB container input and no truth-derived candidate choice.",
+  "policy": {
+    "local_only": true,
+    "external_mutation": false,
+    "token_access": false,
+    "matlab_container_read": false,
+    "matlab_container_generated": false,
+    "matlab_source_used_as_specification_only": true,
+    "truth_opened_for_this_phase": 0,
+    "validation_or_holdout_touched": false,
+    "production_default_changed": false,
+    "score_or_leaderboard_used_for_tuning": false
+  },
+  "identities": {
+    "development_route": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "future_validation_or_holdout": "sealed and untouched",
+    "raw_inputs": {
+      "device_gnss.csv": {
+        "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_gnss.csv",
+        "sha256": "c5af6cc3aeae6ab29a2a10d975d291b8fba4fab15273c0729163cd639ff10e42"
+      },
+      "device_imu.csv": {
+        "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_imu.csv",
+        "sha256": "8f1c582bdad545d11e68349b221001b69e2a9d43f9257e60038c193276fa1804"
+      },
+      "brdc.nav": {
+        "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/brdc.nav",
+        "sha256": "16c859f8015c874398978bae6004172c355f7d3a3b06fa81b54aac88b6b78d33"
+      }
+    }
+  },
+  "upstream_specification": {
+    "repository": "https://github.com/taroz/gsdc2023",
+    "commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "license": "MIT",
+    "files": {
+      "functions/deviceimu2imu.m": {
+        "sha256": "9aff2984b0aa1709bbb1b397b48216ab46c213a1e3cbcfa99c0546a48a6df632",
+        "evidence_lines": "6-17,20-28",
+        "semantics": "Read UncalAccel and UncalGyro rows, retain one row per utcTimeMillis with unique(), expose UTC, elapsedRealtimeNanos, xyz, and bias."
+      },
+      "functions/imuprocessing.m": {
+        "sha256": "d942df6fe046841d69f6a30290e7878679359f5015b13c805c86e8aa5c91f7ae",
+        "evidence_lines": "7-20,23-40,42-58",
+        "semantics": "Map IMU elapsed clock to GNSS UTC when observation elapsed data exists, use gyro anchors, interpolate acceleration, compute dt/std, and detect stops."
+      },
+      "fgo_gnss_imu.m": {
+        "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+        "evidence_lines": "129-149,169-218,252-299,325-356",
+        "semantics": "Use gravity/mounting preintegration parameters, Pose3/velocity/bias states, P/D factors, motion/clock factors, ordinary TDCP, IMU and bias-between factors, then LM maxIterations=1000."
+      },
+      "parameters.m": {
+        "sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52",
+        "evidence_lines": "176-203",
+        "semantics": "imu_sync=gyro, sync_coefficient=0.5, gravity=9.80665, Pixel AccSigma=.05, GyroSigma=.001, bias random walks, integration sigma=.05, mounting [-85,178,-94] degrees."
+      }
+    }
+  },
+  "current_native_contract": {
+    "source_symbols": {
+      "raw_loader": "libgnss::loadAndroidImuCsv in src/io/imu.cpp",
+      "raw_types": "libgnss::AndroidImuCsvConfig/AndroidImuCsvLoadResult in include/libgnss++/io/imu.hpp",
+      "native_entrypoint": "buildImuInput and main in apps/native/gnss_fgo_imu_no_base.cpp",
+      "mounting": "tarozMountingRotation in apps/native/gnss_fgo_imu_no_base.cpp",
+      "optimizer": "libgnss::FGOProcessor::optimizeProblem"
+    },
+    "fixed_parameters": {
+      "gps_utc_leap_seconds": 18.0,
+      "maximum_accel_pair_offset_s": 0.025,
+      "pairing_anchor": "UncalGyro elapsedRealtimeNanos",
+      "interior_accel_pairing": "linear interpolation on elapsedRealtimeNanos",
+      "endpoint_pairing": "nearest sample only within 25 ms; no extrapolation",
+      "duplicate_timestamp_policy": "retain first UTC row per stream, matching upstream unique source-row behavior",
+      "mounting_rpy_deg_xyz": [-85.0, 178.0, -94.0],
+      "raw_measurement_units": {
+        "UncalAccel": "m/s^2",
+        "UncalGyro": "rad/s",
+        "bias_fields": "parsed finite and retained for estimator provenance; not silently subtracted"
+      },
+      "finite_and_ordering": "finite supported rows, strictly increasing elapsed clocks and converted gyro GPST"
+    },
+    "upstream_gap": {
+      "status": "explicitly-unimplemented",
+      "description": "The current raw adapter converts Android utcTimeMillis directly to GPST and preserves elapsedRealtimeNanos on each ImuSample. It does not yet map IMU elapsed time through GNSS obs.elapsedns -> obs.utcms with upstream sync_coefficient=0.5. The output diagnostic sets gnss_elapsed_anchor_applied=false; no exact synchronization claim is made.",
+      "safe_behavior": "Use the direct UTC conversion only for this raw parser vertical slice; future GNSS-anchor integration must consume the preserved elapsed_realtime_nanos field and be separately frozen."
+    }
+  },
+  "gap_matrix": [
+    {"component": "Android CSV selection and duplicate UTC handling", "upstream": "deviceimu2imu.m:6-28", "native": "loadAndroidImuCsv", "status": "ported", "risk": "low"},
+    {"component": "UTC to GPST conversion", "upstream": "deviceimu2imu.m:13,24 plus utcms2gtime", "native": "androidUtcToGpsTime; fixed 18 s", "status": "ported-for-GSDC-2023", "risk": "leap-second policy is explicit"},
+    {"component": "GNSS elapsed-clock anchoring and sync coefficient", "upstream": "imuprocessing.m:7-20", "native": "elapsed_realtime_nanos preserved; no GNSS anchor", "status": "gap", "risk": "timestamp offset/scale can bias preintegration"},
+    {"component": "Gyro-anchor acceleration alignment", "upstream": "imuprocessing.m:23-40", "native": "bounded elapsed-clock interpolation/nearest endpoint", "status": "safe subset", "risk": "upstream allows extrapolation; native fails closed"},
+    {"component": "Moving-window stop detection", "upstream": "imuprocessing.m:42-58", "native": "static gravity and GNSS course initialization gate", "status": "gap", "risk": "stop factors are not yet sourced from raw motion"},
+    {"component": "Sensor mounting and axis convention", "upstream": "fgo_gnss_imu.m:138-143; parameters.m:202", "native": "explicit RzRyRx([-85,178,-94]) after raw loader", "status": "ported", "risk": "mounting is fixed and opt-in entrypoint only"},
+    {"component": "Pose3, velocity, bias states and CombinedImuFactor", "upstream": "fgo_gnss_imu.m:169-187,280-299", "native": "FGOProblem IMU state/backend path", "status": "existing and exercised", "risk": "native short-window graph uses existing defaults"},
+    {"component": "GNSS-first -> IMU-first -> final IMU multi-pass", "upstream": "fgo_gnss_imu.m:145-187 and initialization flow", "native": "single existing buildImuInput pass", "status": "gap", "risk": "initialization robustness"},
+    {"component": "Published optimizer and full-route handoff", "upstream": "fgo_gnss_imu.m:325-335", "native": "existing FGOProcessor optimizer, short-window entrypoint max 10..30", "status": "gap", "risk": "not a full-route score candidate"},
+    {"component": "Truth/postprocessing", "upstream": "result generation and score path", "native": "not used in this raw-only slice", "status": "sealed", "risk": "no promotion evidence yet"}
+  ],
+  "raw_observation_audit": {
+    "device_imu_rows": {
+      "total": 401835,
+      "uncal_accel_unique_utc": 166305,
+      "uncal_gyro_unique_utc": 166363,
+      "unsupported_rows": 69161,
+      "duplicate_accel_utc": 0,
+      "duplicate_gyro_utc": 6,
+      "paired_rows": 166363,
+      "exact_elapsed_matches": 79975,
+      "interpolated_rows": 86387,
+      "endpoint_nearest_rows": 1,
+      "omitted_rows": 0,
+      "median_abs_pair_offset_ms": 4.138795,
+      "maximum_abs_pair_offset_ms": 4.695516,
+      "gravity_mean_norm_mps2": 9.803858358503808,
+      "gravity_norm_std_mps2": 0.06157345557449459
+    },
+    "raw_only_inputs": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "forbidden_inputs": ["truth", "MATLAB container files", "precomputed result coordinates", "sample coordinates"]
+  },
+  "implementation_evidence": {
+    "source_hashes": {
+      "include/libgnss++/io/imu.hpp": "547bfeea7f81e231e3d4c69406ce37a7bdc9ba09ed10125710748bc939d93c21",
+      "src/io/imu.cpp": "cdbe5b6f6fefa098182d796e1fa331ce67ff4420a647076480037cb99b8e0d6c",
+      "apps/native/gnss_fgo_imu_no_base.cpp": "58fd24c9ec132c4a4bb55a97013a7a5c64d375ab3757a169c6c49a44a207451a",
+      "tests/test_imu_csv.cpp": "84902ddd0a450e158d30d07cd21e098a68d7692c5adb61e051a0609e525868f1"
+    },
+    "release_binary": {
+      "path": "build/apps/gnss_fgo_imu_no_base",
+      "sha256": "f0bffcd3e8f915d1a735407a33100b3587c4e47b2a639a0959d22f5b9fde7da3"
+    },
+    "tests": {
+      "focused": "12/12 GoogleTest tests passed, including finite/nonmonotonic rejection, 25 ms boundary, axis mapping, and pre-open MATLAB path rejection",
+      "full_ctest_pending": false,
+      "full_ctest": "131/131 passed; LD_LIBRARY_PATH=/home/sasaki/.local/lib plus preserved ROS path; serial -j1"
+    }
+  },
+  "decision": {
+    "candidate": "raw Android IMU adapter + existing native no-base CombinedImuFactor short-window path",
+    "promotion": "not yet scored or promoted",
+    "next_step": "freeze raw-only truth-free smoke output, then decide whether an explicitly authorized development score is meaningful; do not treat the 30-epoch smoke as a full-route quality claim",
+    "production_default": "unchanged"
+  }
+}
