@@ -555,6 +555,10 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase74_phase73_miss_mask_accuracy.py
     )
     add_test(
+        NAME python_smartphone_phase75_phase74_accuracy_integrity_recovery_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase75_phase74_accuracy_integrity_recovery.py
+    )
+    add_test(
         NAME python_smartphone_phase32_quality_anchor_eval_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase32_quality_anchor_eval.py
     )
