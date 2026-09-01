@@ -14,6 +14,7 @@ SOURCE = ROOT / "src/algorithms/fgo_problems.cpp"
 APP = ROOT / "apps/native/gnss_fgo_imu_no_base.cpp"
 CONFIG = ROOT / "include/libgnss++/algorithms/fgo_config.hpp"
 HEADER = ROOT / "include/libgnss++/algorithms/fgo.hpp"
+RUNNER = ROOT / "apps/commands/benchmarks/gnss_smartphone_phase43_fallback_seed_quality_anchor_recovery.py"
 
 
 class SmartphonePhase43FallbackSeedQualityAnchorRecoveryTest(unittest.TestCase):
@@ -24,6 +25,7 @@ class SmartphonePhase43FallbackSeedQualityAnchorRecoveryTest(unittest.TestCase):
         cls.app = APP.read_text(encoding="utf-8")
         cls.config = CONFIG.read_text(encoding="utf-8")
         cls.header = HEADER.read_text(encoding="utf-8")
+        cls.runner = RUNNER.read_text(encoding="utf-8")
 
     def test_freeze_is_phase43_raw_truth_free_and_precedes_source_changes(self) -> None:
         self.assertEqual(self.freeze["phase"], 43)
@@ -110,6 +112,18 @@ class SmartphonePhase43FallbackSeedQualityAnchorRecoveryTest(unittest.TestCase):
         # The freeze is committed before candidate source/tests.  This test
         # guards accidental edits without pinning a future result artifact.
         self.assertEqual(len(digest), 64)
+
+    def test_runner_pins_all_safe_flag_off_baselines_and_path_spellings(self) -> None:
+        for digest in (
+            "d4d7652e5d12389466e586fe2d8e85d34977a7e11036cee2f591a89293c5426c",
+            "18d90461883f9b51dc5e235ff2fda2e535d31678bb47b232a6aec12662faacdc",
+            "65b44029a90e75a6b11e96b6ae9344020dee55bb8b5ea9b8bee79f2c765bca47",
+            "4eb2b566708a87db4903610a41cd648c7ff065d35710d358894a78eaa8e116e3",
+            "524769cdf67aa857eefaafdadf943dd76586ec3ae73ec8b6d1df4a707d7699f71",
+        ):
+            self.assertIn(digest, self.runner)
+        self.assertIn("def invocation_path(path: Path) -> str:", self.runner)
+        self.assertIn("if PHASE37_RAW_ROOT in path.parents:", self.runner)
 
 
 if __name__ == "__main__":
