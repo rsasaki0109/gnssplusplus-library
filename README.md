@@ -464,6 +464,29 @@ propagation/multipath residual.  See the [Phase 46 contract](docs/use_cases/smar
 [evaluator manifest](docs/use_cases/records/smartphone_r5_phase46_pixel5_raw_clock_timing_evaluator_manifest_v1.json),
 and [result](docs/use_cases/records/smartphone_r5_phase46_pixel5_raw_clock_timing_result_v1.json).
 
+Phase 47 audited that factor truth-free from the same four Pixel5 raw
+`device_gnss.csv` files.  Each file was read once in one process; truth,
+Phase45/46 payloads, navigation, solver, archive, validation/holdout, MAT,
+WLS, `SvPosition`/`SvElevation`, precomputed coordinates, and Kaggle/token
+inputs remained sealed.  Same-epoch dual-frequency code differences and
+median-centered ADR CMC arcs were reported with raw C/N0, state,
+`MultipathIndicator`, `ReceivedSvTimeUncertaintyNanos`, rate-uncertainty, and
+ADR buckets.  Pair coverage, flagged-vs-clean p95, non-common-mode,
+satellite-dispersion, FGO signal adoption, and LOO threshold observations
+were emitted, but the descriptive route metric varied from **20.686 m** to
+**64.815 m** (route MAD **7.570 m** vs frozen **2.0 m**).  More importantly,
+the one-shot route output exposed a stale-loop CMC group-summary defect and a
+collapsed aggregate route-median presentation field.  Phase 47 is therefore
+**no-go-evaluator-integrity-failure**; no correction, weighting, or mask was
+implemented and no raw payload was reopened.  The exact one next factor is
+raw Android per-satellite `ReceivedSvTimeUncertaintyNanos`/code-tracking
+residual.  The [Phase 47 contract](docs/use_cases/smartphone_native_fgo_phase47_pixel5_raw_code_multipath.md),
+[freeze](docs/use_cases/records/smartphone_r5_phase47_pixel5_raw_code_multipath_freeze_v1.json),
+[evaluator manifest](docs/use_cases/records/smartphone_r5_phase47_pixel5_raw_code_multipath_evaluator_manifest_v1.json),
+and [result](docs/use_cases/records/smartphone_r5_phase47_pixel5_raw_code_multipath_result_v1.json)
+record the fixed gates, source/static adoption audit, read accounting, and
+output hashes.
+
 ### PPC 2024 goal matrix vs Kaiyodai and gici-open
 
 The audited KF/FGO selected profile clears the distance-weighted PPC public

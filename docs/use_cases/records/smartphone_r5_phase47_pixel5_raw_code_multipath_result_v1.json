@@ -1,0 +1,201 @@
+{
+  "schema_version": "smartphone-r5-phase47-pixel5-raw-code-multipath-result.v1",
+  "phase": 47,
+  "status": "no-go-evaluator-integrity-failure",
+  "decision": "no-go-evaluator-integrity-no-correction-no-new-weighting",
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase47_pixel5_raw_code_multipath_freeze_v1.json",
+      "sha256": "bd9c3b0649b2068286de44bfd36171d09b46ff3e6e760d02067e225f5a13d5f9",
+      "commit": "1a9cb50"
+    },
+    "evaluator_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase47_pixel5_raw_code_multipath_evaluator_manifest_v1.json",
+      "sha256": "9648fbd2e058445725c95ff6e8044a8af870a5f5e40128ddcb9218dfd6736e4c",
+      "commit": "bbb934f"
+    },
+    "evaluator_source": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase47_pixel5_raw_code_multipath_audit.py",
+      "sha256": "dba0adc17fbdc04c3ce6031fece8a28d4218a680a719cfffcbe6366c2b8f5b72"
+    },
+    "focused_test": {
+      "path": "tests/test_smartphone_phase47_pixel5_raw_code_multipath_audit.py",
+      "sha256": "e08da5015619280fa139bc59fa290b12262182f36803ccbbae8e181b69e1f7df"
+    },
+    "phase46_policy_pin": {
+      "path": "docs/use_cases/records/smartphone_r5_phase46_pixel5_raw_clock_timing_result_v1.json",
+      "sha256": "d183bc8630a06545c4cb46dd4d061bb4d819fc48414b9557c5dfcad097e3e5c1",
+      "payload_used_as_diagnostic_input": false
+    },
+    "phase25_raw_clock_contract": {
+      "path": "docs/use_cases/records/smartphone_r5_phase25_raw_clock_contract_freeze_v1.json",
+      "sha256": "a65b22ed348067d2787f0369d6139708572679fbe49cd943d2eb7677d4675889"
+    },
+    "phase13_no_go_policy_pin": {
+      "freeze_path": "docs/use_cases/records/smartphone_r5_phase13_upstream_quality_freeze_v1.json",
+      "freeze_sha256": "a7891d8cec1b34372de9501e65683888eaed1994e84d1ea2b75492a3be9fa85f",
+      "result_path": "docs/use_cases/records/smartphone_r5_phase13_upstream_quality_score_result_v1.json",
+      "result_sha256": "9b216ea542aef39fc769682ef9e615a9af911863a71a72edc7a3b67a638406d7",
+      "candidate_reproposed": false
+    }
+  },
+  "route_order": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+  ],
+  "evaluator_integrity": {
+    "passed": false,
+    "decision_authoritative": false,
+    "raw_inputs_reopened": false,
+    "raw_read_count_changed": false,
+    "defects": [
+      "routes[*].cmc_diagnostics.groups reused the final inner arc values for group raw_cmc_m and reported count 39 instead of each group's stored CMC count",
+      "aggregate.pair_code_difference_route_medians_m collapsed four route medians to one aggregate value"
+    ],
+    "scope": "The defects affect required CMC per-signal raw distributions and one aggregate presentation field; the already-emitted pair coverage, flagged/clean p95, non-common-mode, satellite-dispersion, FGO static-adoption, and LOO observations remain readable but are not promoted to a deployable mechanism under this integrity no-go.",
+    "fail_closed_reason": "Phase47 cannot claim a trustworthy full diagnostic result after the single raw read, and the evaluator cannot be rerun without violating the one-read contract."
+  },
+  "raw_input_hashes": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "bytes": 57715495,
+      "sha256": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863"
+    },
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "bytes": 74299283,
+      "sha256": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7"
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "bytes": 33837317,
+      "sha256": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1"
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "bytes": 23385520,
+      "sha256": "a0fc8e71bdfc03be61b99efcd7d41fbba8ffec126df78b55243f681fd211f204"
+    }
+  },
+  "coverage": {
+    "raw_rows": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": 87705,
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": 112833,
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": 51243,
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": 35810
+    },
+    "epochs": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": 2159,
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": 3140,
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": 1466,
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": 1102
+    },
+    "raw_domain_coverage_all_routes": 1.0,
+    "dual_frequency_pair_map": ["GPS_L1CA-GPS_L5", "GAL_E1-GAL_E5A", "BDS_B1I-BDS_B2A"],
+    "pair_satellites_max_by_route": [7, 7, 11, 11],
+    "pair_epochs_max_by_route": [12855, 19488, 11081, 7731],
+    "pair_clean_retention_by_route": [0.993855094555328, 0.9951952299632406, 0.9921149688414092, 0.9961200923787529]
+  },
+  "canonical_factor": {
+    "selection": "largest route aggregate flagged-minus-clean pair p95 excess",
+    "usable_for_deployment_decision": false,
+    "pair": "GAL_E1-GAL_E5A",
+    "route_metric_excess_m": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": 35.82519873008128,
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": 64.81512942016121,
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": 22.424475858360523,
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": 20.685679603368044
+    },
+    "route_metric_median_m": 29.124837294220903,
+    "route_metric_mad_m": 7.5697595633566195,
+    "route_metric_range_m": 44.12944981679317,
+    "flagged_p95_m_by_route": [45.41855738833543, 77.40641265586015, 21.884849433228357, 35.07571758702397],
+    "clean_p95_m_by_route": [9.593358658254147, 12.591283235698938, 12.891075693070889, 14.39003798365593],
+    "flagged_clean_ratio_by_route": [4.73437499902677, 6.1476190477867005, 1.6976744186671506, 2.43750000012944],
+    "satellite_median_range_m_by_route": [4.197094410657883, 4.197094410657883, 11.092320945113897, 24.882774014025927],
+    "same_epoch_noncommon_evidence_all_routes": true,
+    "loo_threshold_decision_all_folds": true,
+    "multipath_indicator_one_row_count_all_routes": 0
+  },
+  "quality_population": {
+    "existing_adapter_masks_only": true,
+    "clean_raw_retention_by_route": [0.9533321931474831, 0.9638580911612737, 0.9895205198758855, 0.988299357721307],
+    "received_sv_time_uncertainty_buckets_reported": true,
+    "cn0_state_rate_uncertainty_adr_buckets_reported": true,
+    "cmc_arc_jumps_and_resets_reported": true,
+    "new_exclusion_or_weighting": false
+  },
+  "gates": {
+    "route_count": {"required": 4, "observed": 4, "passed": true},
+    "raw_input_identity": {"required": true, "observed": true, "passed": true},
+    "raw_domain_coverage": {"required": 1.0, "observed": 1.0, "passed": true},
+    "all_finite_raw_pseudorange": {"required": true, "observed": true, "passed": true},
+    "dual_frequency_satellites": {"required": 3, "observed_min": 7, "passed": true},
+    "dual_frequency_pair_epochs": {"required": 100, "observed_min": 7731, "passed": true},
+    "route_metric_same_direction": {"required": "same sign and abs >=0.5m", "observed": [35.82519873008128, 64.81512942016121, 22.424475858360523, 20.685679603368044], "passed": true},
+    "route_center_dispersion": {"required_mad_max_m": 2.0, "observed_mad_m": 7.5697595633566195, "passed": false},
+    "flagged_p95_material": {"required_m": 2.0, "observed_min_m": 21.884849433228357, "passed": true},
+    "flagged_clean_p95_ratio": {"required": 1.5, "observed_min": 1.6976744186671506, "passed": true},
+    "clean_retention": {"required": 0.8, "observed_min": 0.9921149688414092, "passed": true},
+    "leave_one_route_out_stability": {"required": true, "observed": true, "passed": true},
+    "current_fgo_used_rows_impacted": {"required": true, "observed": true, "passed": true},
+    "same_epoch_noncommon_mode": {"required": true, "observed": true, "passed": true},
+    "satellite_dispersion": {"required_min_m": 0.5, "observed_min_m": 4.197094410657883, "passed": true},
+    "leave_one_satellite_out_stability": {"required": true, "observed": true, "passed": true},
+    "all_hard_gates_passed": false
+  },
+  "strongest_finding": {
+    "name": "evaluator_output_integrity_failure",
+    "description": "The raw-only one-shot output has a stale-loop CMC group summary defect and a collapsed aggregate route-median presentation field. The audit therefore fails closed before any satellite-specific mechanism can be authorized; the observed flagged-vs-clean route excess remains descriptive only.",
+    "evidence": {
+      "route_metric_excess_m": [35.82519873008128, 64.81512942016121, 22.424475858360523, 20.685679603368044],
+      "route_metric_mad_m": 7.5697595633566195,
+      "route_center_gate_mad_limit_m": 2.0
+    }
+  },
+  "next_raw_physical_factor": {
+    "exactly_one": true,
+    "name": "raw Android per-satellite ReceivedSvTimeUncertaintyNanos/code-tracking residual",
+    "source_supported_by": "Android GnssMeasurement per-measurement received satellite time uncertainty and the repository raw adapter field",
+    "implementation_or_deployment": false
+  },
+  "read_accounting": {
+    "single_process": true,
+    "raw_device_gnss_reads_per_route": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": 1,
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": 1,
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": 1,
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": 1
+    },
+    "raw_device_gnss_read_count_total": 4,
+    "truth_reads": 0,
+    "phase45_truth_payload_reads": 0,
+    "phase46_payload_reads": 0,
+    "brdc_nav_reads": 0,
+    "solver_reruns": 0,
+    "correction_implementations": 0,
+    "archive_reopens": 0,
+    "rematerializations": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_token_access": 0,
+    "mat_reads_or_generated": 0,
+    "device_wls_or_precomputed_coordinates": 0,
+    "SvPosition_or_SvElevation": 0
+  },
+  "output_artifacts": {
+    "result": {"path": "output/smartphone-r5/phase47-pixel5-raw-code-multipath-v1/phase47_pixel5_raw_code_multipath.json", "bytes": 255498, "sha256": "a060ca1ed8f5316111f610af5bd7b3d324e44581ea05d334de0ba3d6e636a802"},
+    "routes": {"path": "output/smartphone-r5/phase47-pixel5-raw-code-multipath-v1/phase47_pixel5_raw_code_multipath.routes.json", "bytes": 242714, "sha256": "d2ba58672cd5525a235f45986a5c13743a801e442d5a52ed9fc24e1564b91fdc"},
+    "events": {"path": "output/smartphone-r5/phase47-pixel5-raw-code-multipath-v1/phase47_pixel5_raw_code_multipath.events.json", "bytes": 35295759, "sha256": "e61bf8ab26e823c3797752755de8ac9d7921fc483efd03ca53fb6da4b02bd55d"},
+    "output_manifest": {"path": "output/smartphone-r5/phase47-pixel5-raw-code-multipath-v1/phase47_pixel5_raw_code_multipath.manifest.json", "bytes": 1578, "sha256": "2cb86fcf0a4dc24291dc292ed9226504cad0a30249f5009db89c5162f0e0fcd5"}
+  },
+  "policy": {
+    "truth_free": true,
+    "truth_derived_correction_fit_or_application": false,
+    "solver_rerun": false,
+    "new_mask_weighting_or_correction": false,
+    "phase13_candidate_reproposed": false,
+    "multipath_indicator_mask_duplicated": false,
+    "zero_point_782_evaluated": false,
+    "evaluator_integrity_failure": true,
+    "next_factor_exactly_one": true
+  }
+}
