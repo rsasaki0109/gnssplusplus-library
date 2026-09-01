@@ -12,6 +12,7 @@
 #include <libgnss++/algorithms/doppler_contract.hpp>
 #include <libgnss++/algorithms/fgo.hpp>
 #include <libgnss++/core/constants.hpp>
+#include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/core/signals.hpp>
 #include <libgnss++/io/android_raw_gnss.hpp>
 #include <libgnss++/io/rinex.hpp>
@@ -89,6 +90,7 @@ struct RowAudit {
     bool ephemeris_present = false;
     bool ephemeris_healthy = false;
     bool geometry_valid = false;
+    double elevation_rad = std::numeric_limits<double>::quiet_NaN();
     bool snr_mask_pass = false;
     bool elevation_mask_pass = false;
     bool clock_jump = false;
@@ -230,6 +232,14 @@ std::string jsonEscape(const std::string& value) {
 
 std::string csvNumber(double value) {
     if (!std::isfinite(value)) return "";
+    std::ostringstream output;
+    output << std::setprecision(std::numeric_limits<double>::max_digits10)
+           << value;
+    return output.str();
+}
+
+std::string jsonNumber(double value) {
+    if (!std::isfinite(value)) return "null";
     std::ostringstream output;
     output << std::setprecision(std::numeric_limits<double>::max_digits10)
            << value;
@@ -426,6 +436,41 @@ void emitJsonCounts(std::ostringstream& output, const Counts& counts,
     output << indent << "}\n";
 }
 
+struct ElevationSummary {
+    std::size_t rows = 0;
+    std::size_t below_zero_rows = 0;
+    double min_deg = std::numeric_limits<double>::quiet_NaN();
+    double median_deg = std::numeric_limits<double>::quiet_NaN();
+    double max_deg = std::numeric_limits<double>::quiet_NaN();
+};
+
+ElevationSummary summarizeFirstEpochElevations(
+    const std::vector<RowAudit>& rows, std::size_t first_raw_epoch) {
+    ElevationSummary summary;
+    std::vector<double> elevations_deg;
+    for (const auto& row : rows) {
+        if (row.raw_epoch_index != first_raw_epoch || !row.geometry_valid ||
+            !std::isfinite(row.elevation_rad)) {
+            continue;
+        }
+        const double elevation_deg = row.elevation_rad * 180.0 / M_PI;
+        elevations_deg.push_back(elevation_deg);
+        if (elevation_deg < 0.0) ++summary.below_zero_rows;
+    }
+    if (elevations_deg.empty()) return summary;
+    std::sort(elevations_deg.begin(), elevations_deg.end());
+    summary.rows = elevations_deg.size();
+    summary.min_deg = elevations_deg.front();
+    summary.max_deg = elevations_deg.back();
+    const std::size_t middle = elevations_deg.size() / 2U;
+    summary.median_deg = elevations_deg.size() % 2U != 0U
+                             ? elevations_deg[middle]
+                             : (elevations_deg[middle - 1U] +
+                                elevations_deg[middle]) /
+                                   2.0;
+    return summary;
+}
+
 std::string makeSummary(
     const Options& options,
     const libgnss::io::AndroidRawGnssResult& converted,
@@ -439,9 +484,21 @@ std::string makeSummary(
     std::size_t first_selected_rows,
     std::size_t first_factor_rows,
     std::size_t clock_jump_epochs,
-    std::size_t mapping_mismatches) {
+    std::size_t mapping_mismatches,
+    const ElevationSummary& elevation) {
     std::ostringstream output;
     output << std::setprecision(std::numeric_limits<double>::max_digits10);
+    const auto& first_seed = problem.epochs[first_problem_epoch];
+    double seed_lat_rad = std::numeric_limits<double>::quiet_NaN();
+    double seed_lon_rad = std::numeric_limits<double>::quiet_NaN();
+    double seed_height_m = std::numeric_limits<double>::quiet_NaN();
+    libgnss::ecef2geodetic(first_seed.position_ecef, seed_lat_rad,
+                           seed_lon_rad, seed_height_m);
+    const char* seed_source = first_seed.fresh_spp_solution
+                                  ? "fresh_spp"
+                                  : (first_seed.last_valid_spp_hold
+                                         ? "last_valid_spp_hold"
+                                         : "raw_receiver_seed_fallback");
     output << "{\n"
            << "  \"schema_version\": \"smartphone-r5-phase42-doppler-row-attrition-audit.v1\",\n"
            << "  \"phase\": 42,\n"
@@ -499,6 +556,50 @@ std::string makeSummary(
            << ",\n"
            << "    \"factor_rows\": " << first_factor_rows << ",\n"
            << "    \"clock_jump_epochs_in_problem\": " << clock_jump_epochs << ",\n"
+           << "    \"quality_anchor\": {\n"
+           << "      \"initialization_enabled\": "
+           << (problem.diagnostics.quality_anchor_initialization_enabled ? "true" : "false")
+           << ",\n"
+           << "      \"selected\": "
+           << (problem.diagnostics.quality_anchor_selected ? "true" : "false")
+           << ",\n"
+           << "      \"index\": "
+           << (problem.diagnostics.quality_anchor_index == kNoIndex
+                   ? std::string("null")
+                   : std::to_string(problem.diagnostics.quality_anchor_index))
+           << ",\n"
+           << "      \"satellites\": "
+           << problem.diagnostics.quality_anchor_satellites << ",\n"
+           << "      \"gdop\": "
+           << jsonNumber(problem.diagnostics.quality_anchor_gdop) << "\n"
+           << "    },\n"
+           << "    \"spp_seed\": {\n"
+           << "      \"coordinate_source\": \"raw_observation_pseudorange_plus_broadcast_nav_spp\",\n"
+           << "      \"device_wls_used\": false,\n"
+           << "      \"source\": \"" << seed_source << "\",\n"
+           << "      \"fresh_spp_solution\": "
+           << (first_seed.fresh_spp_solution ? "true" : "false") << ",\n"
+           << "      \"last_valid_spp_hold\": "
+           << (first_seed.last_valid_spp_hold ? "true" : "false") << ",\n"
+           << "      \"position_ecef_m\": ["
+           << jsonNumber(first_seed.position_ecef(0)) << ", "
+           << jsonNumber(first_seed.position_ecef(1)) << ", "
+           << jsonNumber(first_seed.position_ecef(2)) << "],\n"
+           << "      \"earth_norm_m\": "
+           << jsonNumber(first_seed.position_ecef.norm()) << ",\n"
+           << "      \"latitude_deg\": "
+           << jsonNumber(seed_lat_rad * 180.0 / M_PI) << ",\n"
+           << "      \"longitude_deg\": "
+           << jsonNumber(seed_lon_rad * 180.0 / M_PI) << ",\n"
+           << "      \"height_m\": " << jsonNumber(seed_height_m) << "\n"
+           << "    },\n"
+           << "    \"elevation_diagnostics\": {\n"
+           << "      \"geometry_valid_rows\": " << elevation.rows << ",\n"
+           << "      \"min_deg\": " << jsonNumber(elevation.min_deg) << ",\n"
+           << "      \"median_deg\": " << jsonNumber(elevation.median_deg) << ",\n"
+           << "      \"max_deg\": " << jsonNumber(elevation.max_deg) << ",\n"
+           << "      \"below_zero_rows\": " << elevation.below_zero_rows << "\n"
+           << "    },\n"
            << "    \"stage_counts\": {\n";
     emitJsonCounts(output, first_epoch, "      ");
     output << "    }\n"
@@ -828,6 +929,7 @@ int main(int argc, char** argv) {
                             } else {
                                 const auto geometry = nav.calculateGeometry(
                                     seed, corrected_position);
+                                row.elevation_rad = geometry.elevation;
                                 row.snr_mask_pass = std::isfinite(observation.snr) &&
                                                      observation.snr >= 0.0;
                                 row.elevation_mask_pass =
@@ -939,6 +1041,8 @@ int main(int argc, char** argv) {
         std::cerr << "parsed raw-row provenance count does not match loader raw count\n";
         return 1;
     }
+    const ElevationSummary first_elevation =
+        summarizeFirstEpochElevations(rows, first_raw_epoch);
 
     std::ostringstream csv;
     csv << std::setprecision(std::numeric_limits<double>::max_digits10);
@@ -948,7 +1052,7 @@ int main(int argc, char** argv) {
            "code_masked,doppler_masked,selected,valid,doppler,raw_pseudorange_valid,"
            "supported_signal,frequency_valid,transmit_time_valid,nav_state_call1,"
            "nav_state_call2,ephemeris_present,ephemeris_healthy,geometry_valid,"
-           "snr_mask_pass,elevation_mask_pass,clock_jump,dt_s,dt_valid,"
+           "elevation_deg,snr_mask_pass,elevation_mask_pass,clock_jump,dt_s,dt_valid,"
            "includes_receiver_clock_drift,fgo_factor_present,first_reason\n";
     for (const auto& row : rows) {
         const RawDiagnostic& raw = *row.raw;
@@ -987,6 +1091,7 @@ int main(int argc, char** argv) {
             << (row.ephemeris_present ? 1 : 0) << ','
             << (row.ephemeris_healthy ? 1 : 0) << ','
             << (row.geometry_valid ? 1 : 0) << ','
+            << csvNumber(row.elevation_rad * 180.0 / M_PI) << ','
             << (row.snr_mask_pass ? 1 : 0) << ','
             << (row.elevation_mask_pass ? 1 : 0) << ','
             << (row.clock_jump ? 1 : 0) << ',' << csvNumber(row.dt_s) << ','
@@ -1002,7 +1107,7 @@ int main(int argc, char** argv) {
         options, converted, problem, first_problem_epoch, first_raw_epoch,
         aggregate, first_epoch, problem.epochs[first_problem_epoch].time,
         converted.epoch_utc_time_millis[first_raw_epoch], first_selected_rows,
-        first_factor_rows, clock_jump_epochs, mapping_mismatches);
+        first_factor_rows, clock_jump_epochs, mapping_mismatches, first_elevation);
     if (!atomicWrite(options.summary_json, summary)) {
         std::cerr << "failed to publish row attrition summary\n";
         return 1;

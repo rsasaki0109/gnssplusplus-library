@@ -50,6 +50,9 @@ public:
         // True only when position_ecef came from a valid SPP solve at this
         // epoch; false for last-valid/header fallbacks.
         bool fresh_spp_solution = false;
+        // True when position_ecef was held from the most recent valid SPP
+        // solve.  This remains false for the raw receiver-seed fallback.
+        bool last_valid_spp_hold = false;
     };
 
     struct ObservationModelDebug {

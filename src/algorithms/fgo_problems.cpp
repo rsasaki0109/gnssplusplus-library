@@ -296,6 +296,7 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
             // explicitly so the opt-in PDC bridge cannot multiply it by c.
             seed.receiver_clock_bias_is_meters = true;
             seed.fresh_spp_solution = true;
+            seed.last_valid_spp_hold = false;
             last_valid_seed_position_ecef = seed.position_ecef;
             last_valid_seed_clock_bias_m = seed.receiver_clock_bias_m;
             have_last_valid_seed = true;
@@ -303,10 +304,12 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
             seed.position_ecef = last_valid_seed_position_ecef;
             seed.receiver_clock_bias_m = last_valid_seed_clock_bias_m;
             seed.receiver_clock_bias_is_meters = true;
+            seed.last_valid_spp_hold = true;
         } else if (epoch.receiver_position.norm() > 1e6) {
             seed.position_ecef = epoch.receiver_position;
             seed.receiver_clock_bias_m = epoch.receiver_clock_bias * constants::SPEED_OF_LIGHT;
             seed.receiver_clock_bias_is_meters = true;
+            seed.last_valid_spp_hold = false;
         } else {
             ++problem.diagnostics.skipped_epochs_without_seed;
             continue;
