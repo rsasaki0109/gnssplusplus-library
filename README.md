@@ -887,6 +887,24 @@ single raw factor is `AccumulatedDeltaRangeUncertaintyMeters`.  See the
 [evaluator manifest](docs/use_cases/records/smartphone_r5_phase53_pixel5_carrier_frequency_antenna_phase_bias_evaluator_manifest_v1.json),
 and [result](docs/use_cases/records/smartphone_r5_phase53_pixel5_carrier_frequency_antenna_phase_bias_result_v1.json).
 
+Phase54 is a scorer-only integrity recovery for Phase53.  It read only the
+sealed Phase53 output manifest, result, routes, and empty event table once
+each; Phase53 raw files, truth, navigation, solver, coordinates, and prior
+metric payloads were not reopened.  The Phase53 `raw_input_integrity` gate
+had incorrectly included `unsupported_signal_rows == 0`, although the frozen
+contract made those rows informational/excluded.  Phase54 corrected only that
+presentation mismatch: exact SHA/bytes, finite core fields, duplicate epochs,
+nonmonotonic epochs, all group sums, route medians, aggregate, LOO, event,
+header, and artifact-map checks all pass.  The physical no-go remains
+immutable: no Android antenna phase-center/bias field, one GAL E1 group per
+route, approximately `1e-11 m` frequency leakage, and zero routewise
+frequency/residual Spearman.  No correction or accuracy scoring was performed;
+Phase43 remains champion, Phase51 remains experimental, and the next factor
+remains `AccumulatedDeltaRangeUncertaintyMeters`.  See the [Phase54 contract](docs/use_cases/smartphone_native_fgo_phase54_phase53_integrity_recovery.md),
+[freeze](docs/use_cases/records/smartphone_r5_phase54_phase53_integrity_recovery_freeze_v1.json),
+[evaluator manifest](docs/use_cases/records/smartphone_r5_phase54_phase53_integrity_recovery_manifest_v1.json),
+and [result](docs/use_cases/records/smartphone_r5_phase54_phase53_integrity_recovery_result_v1.json).
+
 ## Docs
 
 - <https://rsasaki0109.github.io/gnssplusplus-library/>
