@@ -273,6 +273,7 @@
     "any_fail": "No correction, mask, weighting, solver rerun, or truth read. Record the strongest raw-only structure and exactly one next source-supported factor.",
     "antenna_field_absent": "Do not invent an antenna phase-center/bias term. Report the exact per-route header absence and evaluate only raw CarrierFrequencyHz/ADR relationships; native correction remains unauthorized.",
     "phase52_champion": "Preserve Phase43 champion and Phase51 experimental option regardless of Phase53 outcome.",
-    "zero_point_782": "not evaluated without truth"
+    "zero_point_782": "not evaluated without truth",
+    "next_single_raw_physical_factor_if_no_go": "raw Android per-satellite accumulated-delta-range uncertainty (AccumulatedDeltaRangeUncertaintyMeters)"
   }
 }
