@@ -428,6 +428,10 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase35_matrix.py
     )
     add_test(
+        NAME python_smartphone_phase35_matrix_eval_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase35_matrix_eval.py
+    )
+    add_test(
         NAME python_smartphone_phase32_quality_anchor_eval_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase32_quality_anchor_eval.py
     )
