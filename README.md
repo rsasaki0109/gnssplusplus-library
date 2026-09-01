@@ -962,6 +962,22 @@ the [Phase57 contract](docs/use_cases/smartphone_native_fgo_phase57_pixel5_rate_
 [evaluator manifest](docs/use_cases/records/smartphone_r5_phase57_pixel5_rate_uncertainty_evaluator_manifest_v1.json),
 and [result](docs/use_cases/records/smartphone_r5_phase57_pixel5_rate_uncertainty_result_v1.json).
 
+Phase58 audited the next raw factor, Android per-satellite `Cn0DbHz`/Doppler
+residual calibration, across the same four route-disjoint Pixel5 recordings.
+All frozen truth-free identifiability gates passed: 9,612--15,630 transitions
+per route, 7--11 satellites, five populated C/N0 bins, routewise Spearman
+**-0.453578 / -0.473135 / -0.494119 / -0.512975**, and stable LOO scales.  The
+exact pooled scale is **alpha = 0.7586783350728457 m/s at 40 dB-Hz**, the median
+of the four sealed LOO fits.  The audit made no native change and read no truth;
+the `0.782` target remains unevaluated.  A separately frozen implementation
+stage is authorized for an explicit opt-in FGO-Doppler-only floor
+`max(existing_sigma, alpha*10^(-(Cn0-40)/20))`, with coefficient one, no cap,
+and no SPP application; the existing p85/12 path is not changed.  Phase43
+remains champion and Phase51 remains experimental.  See the [Phase58 contract](docs/use_cases/smartphone_native_fgo_phase58_pixel5_cn0_doppler_calibration.md),
+[freeze](docs/use_cases/records/smartphone_r5_phase58_pixel5_cn0_doppler_calibration_freeze_v1.json),
+[evaluator manifest](docs/use_cases/records/smartphone_r5_phase58_pixel5_cn0_doppler_calibration_evaluator_manifest_v1.json),
+and [result](docs/use_cases/records/smartphone_r5_phase58_pixel5_cn0_doppler_calibration_result_v1.json).
+
 ## Docs
 
 - <https://rsasaki0109.github.io/gnssplusplus-library/>
