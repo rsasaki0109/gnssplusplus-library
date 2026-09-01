@@ -225,7 +225,7 @@ def _verify_structural_seal() -> dict[str, Any]:
             repeat_rows = phase29._prediction_rows(repeat_submission, dataset_id)
             if [row.timestamp for row in rows] != target_keys or [row.timestamp for row in repeat_rows] != target_keys:
                 raise Phase35EvaluationError(f"exact raw target keys failed: {dataset_id}/{lane}")
-            speed = phase31.speed_report(rows)
+            speed = phase31.speed_report([(row.timestamp, row.latitude, row.longitude) for row in rows])
             if not speed.get("finite") or speed.get("over_70_mps_count") != 0:
                 raise Phase35EvaluationError(f"structural continuity failed: {dataset_id}/{lane}")
             summary_payload = load_json(summary, f"{dataset_id}/{lane} summary")
