@@ -296,6 +296,23 @@ occurred; no common/body-frame fit was made and the Phase 31 champion is
 unchanged.  See the [fail-closed record](docs/use_cases/records/smartphone_r5_phase37_pixel5_repeatability_structural_failure_v1.json)
 and [failure manifest](docs/use_cases/records/smartphone_r5_phase37_pixel5_repeatability_structural_failure_manifest_v1.json).
 
+Phase 38 diagnosed the MTV-h Pixel5 failure under a new truth-free freeze,
+using only the already-materialized raw GNSS/IMU streams and broadcast
+navigation.  The first existing-binary attempt returned rc=127 because the
+Phase 37 runtime `LD_LIBRARY_PATH` was missing; this environment failure is
+recorded transparently.  With the existing runtime environment restored, the
+unchanged binary returned rc=1 before UTC key projection because its native
+GNSS-first states included out-of-Earth ECEF positions (GDB: 1325 states,
+611 invalid, first invalid index 0, norm 7,432,673.743891388 m).  The original
+raw-only graph seeds were 1325/1325 Earth-valid epochs.  A bounded exploratory
+handoff rejection retained those in-memory raw-only seeds, but the existing
+Android heading gate then failed and the TDCP contract stopped at built=2085,
+inserted=0 on both attempts.  It was therefore sealed **diagnosis No-Go**:
+the opt-in candidate was not committed, no six-route matrix or truth access
+was authorized, and the Phase 31/default binary and outputs remain unchanged.
+See the [Phase 38 diagnosis](docs/use_cases/smartphone_native_fgo_phase38_mtvh_failure_diagnosis.md)
+and [No-Go result](docs/use_cases/records/smartphone_r5_phase38_mtvh_failure_diagnosis_result_v1.json).
+
 ### PPC 2024 goal matrix vs Kaiyodai and gici-open
 
 The audited KF/FGO selected profile clears the distance-weighted PPC public
