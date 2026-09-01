@@ -1115,6 +1115,20 @@ Phase43 remains champion and no `0.782` claim is made. See the
 [freeze](docs/use_cases/records/smartphone_r5_phase66_phase65_structural_integrity_recovery_freeze_v1.json),
 and [manifest](docs/use_cases/records/smartphone_r5_phase66_phase65_structural_integrity_recovery_manifest_v1.json).
 
+Phase67 recovered the Phase66 report-schema check by hashing newly emitted
+artifacts directly, and the MTV-a control matched Phase43 exactly. The first
+base-compensation candidate then failed the frozen coverage gate: 46,556 of
+61,754 adopted pseudorange rows were corrected (`0.7538944845678013`, required
+at least `0.99`), with 15,198 interpolation misses. No candidate repeat or
+other route ran, and no truth/MAT/validation/Kaggle read occurred. This is
+sealed fail-closed; Phase43 remains champion, no accuracy or `0.782` claim was
+made, and a new evidence-only freeze would be required before investigating
+the matching misses. See the
+[Phase67 recovery record](docs/use_cases/records/smartphone_r5_phase67_phase66_structural_integrity_recovery_failure_v1.json),
+[contract](docs/use_cases/smartphone_native_fgo_phase67_phase66_structural_integrity_recovery.md),
+[freeze](docs/use_cases/records/smartphone_r5_phase67_phase66_structural_integrity_recovery_freeze_v1.json),
+and [manifest](docs/use_cases/records/smartphone_r5_phase67_phase66_structural_integrity_recovery_manifest_v1.json).
+
 ## Docs
 
 - <https://rsasaki0109.github.io/gnssplusplus-library/>
