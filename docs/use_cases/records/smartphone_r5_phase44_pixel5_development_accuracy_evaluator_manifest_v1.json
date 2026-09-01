@@ -4,7 +4,7 @@
   "status": "evaluator-frozen-before-phase44-truth",
   "freeze": {
     "path": "docs/use_cases/records/smartphone_r5_phase44_pixel5_development_accuracy_freeze_v1.json",
-    "sha256": "4033fb1de6c8a5a22afad436bdccd526672be7b0faeb57acf454d9cb1ff15b6f"
+    "sha256": "95c0990af0015b7cb5fcf736aefbcff6fc97356093edcf03094b31b4083b28bc"
   },
   "authority": {
     "branch": "feat/rtk-smartphone-performance-pr",
@@ -20,7 +20,7 @@
   "evaluator": {
     "source": {
       "path": "apps/commands/benchmarks/gnss_smartphone_phase44_pixel5_development_accuracy.py",
-      "sha256": "3b515aa5013a7890b2379469b3c7dfb9950a695565766f03d0371ad8bb0777b5"
+      "sha256": "09e551022e034d1a42f18ded2b16aa317b9670d63f94f11bcca987544b2d2ad4"
     },
     "test": {
       "path": "tests/test_smartphone_phase44_pixel5_development_accuracy.py",
