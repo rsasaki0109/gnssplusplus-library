@@ -1,0 +1,57 @@
+{
+  "schema_version": "smartphone-r5-phase34-quality-anchor-validation-evaluator-manifest.v1",
+  "status": "evaluator-frozen-before-validation-truth",
+  "phase": 34,
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase34_quality_anchor_validation_freeze_v1.json",
+    "sha256": "18fd075f30699d0213a1cca3a9eac25d24d3765d75df8d770380dfa7fbeeb43b"
+  },
+  "evaluator": {
+    "source": "apps/commands/benchmarks/gnss_smartphone_phase34_quality_anchor_validation_eval.py",
+    "sha256": "ee4eff1ff40bcb1efdc3f29a6d8b9b968a843ccf01890dfc1ee3102f4003e2b7",
+    "test": "tests/test_smartphone_phase34_quality_anchor_validation_eval.py",
+    "test_sha256": "18ed5d270290f63ef7869d41795add3abc1066a2f0f6b9ed14481329b3bc622d",
+    "cmake": "tests/CMakeLists.txt",
+    "cmake_sha256": "0e2616f2dcc2f3a12e17063bf9034f241d47fe9f0d38713d47273a10a047ae10"
+  },
+  "inputs": {
+    "phase33_truth_free_seal": {
+      "path": "output/smartphone-r5/phase33-quality-anchor-validation-v1/truth_free_seal.json",
+      "sha256": "e6d9750c5005d12d11cdb0f91003a2720a85644e4159e67c3c44482c5473d171"
+    },
+    "phase33_truth_free_run": {
+      "path": "output/smartphone-r5/phase33-quality-anchor-validation-v1/truth_free_run.json",
+      "sha256": "44f5d1f98ebccf88297cbf3e4a7e5088458982843eff9737652506591b439d6a"
+    },
+    "phase33_raw_materialization": {
+      "path": "output/smartphone-r5/phase33-quality-anchor-validation-v1/raw_materialization.json",
+      "sha256": "24ebc000ae8f266a799ea4f354f1b3cac3b591fd98914ab8bdc3cb5d27dd4fb9"
+    },
+    "control_submission": {
+      "path": "output/smartphone-r5/phase33-quality-anchor-validation-v1/control/run1/submission.csv",
+      "sha256": "af725435a049e88ad8c3934e3899b703d8207d5fc9c972465ea9bcf9804ca58d"
+    },
+    "candidate_submission": {
+      "path": "output/smartphone-r5/phase33-quality-anchor-validation-v1/candidate/run1/submission.csv",
+      "sha256": "181c5512d1fcd3bed6e46d08251c63edc7e03a72b5f451c4cbce091fc06edd77"
+    }
+  },
+  "contract": {
+    "solver_rerun": false,
+    "truth_free_verification_command": "python3 apps/commands/benchmarks/gnss_smartphone_phase34_quality_anchor_validation_eval.py verify-truth-free --output-root output/smartphone-r5/phase34-quality-anchor-validation-v1",
+    "truth_open_count_before_manifest": 0,
+    "truth_materialized_before_manifest": false,
+    "candidate_finite_converged_exact_repeat_over70_zero_required": true,
+    "control_continuity_safety": "diagnostic-only; known baseline violations do not veto candidate scoring",
+    "same_truth_matched_key_set_required": true,
+    "candidate_all_four_diagnostics_strictly_improved_required": true,
+    "horizontal_p50_p95_and_coverage_non_regression_required": true,
+    "vertical": "informational-unavailable-four-column-prediction",
+    "future_holdout_remains_sealed": true,
+    "post_score_tuning": false,
+    "rerun_after_truth": false,
+    "mat_read_or_generated": false,
+    "token_or_kaggle_access": false
+  },
+  "atomic_publish": true
+}

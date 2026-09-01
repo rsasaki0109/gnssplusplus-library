@@ -420,6 +420,10 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase33_quality_anchor_validation.py
     )
     add_test(
+        NAME python_smartphone_phase34_quality_anchor_validation_eval_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase34_quality_anchor_validation_eval.py
+    )
+    add_test(
         NAME python_smartphone_phase32_quality_anchor_eval_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase32_quality_anchor_eval.py
     )
