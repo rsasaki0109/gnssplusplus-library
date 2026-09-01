@@ -1,0 +1,316 @@
+{
+  "schema_version": "smartphone-r5-phase44-pixel5-development-accuracy-freeze.v1",
+  "phase": 44,
+  "status": "frozen-before-truth-materialization-and-read",
+  "purpose": "Score the already sealed Phase43 fallback-seed candidate and its frozen flag-off controls on the four route-disjoint Pixel5 development identities without rerunning native inference.",
+  "objective": {
+    "candidate_id": "native_fallback_seed_quality_anchor_recovery_v1",
+    "candidate_flag": "--native-fallback-seed-quality-anchor-recovery",
+    "evaluation": "development accuracy and repeatability only",
+    "stretch_target_score_m": 0.782,
+    "stretch_target_policy": "report honestly when the target is not reached; it is not a substitute for the frozen absolute gates",
+    "solver_rerun": false,
+    "post_truth_tuning": false
+  },
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "phase43_structural_seal": {
+      "path": "output/smartphone-r5/phase43-native-fallback-seed-quality-anchor-recovery-v1/phase43_structural_seal.json",
+      "sha256": "fdeaf672b015cae99dfdf8351a5e7a92ca2d37bcdb0872c5c3fc5b937416b64d",
+      "status": "sealed-truth-free-structural-go"
+    },
+    "phase43_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase43_native_fallback_seed_quality_anchor_recovery_result_v1.json",
+      "sha256": "441c65ed8630ca2c48c329f440e8b54a772c0c062329cc5d89b297180bce2a22"
+    },
+    "phase43_evaluator_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase43_native_fallback_seed_quality_anchor_recovery_evaluator_manifest_v1.json",
+      "sha256": "1433249a9ddd1809a00535b33fc67e3267a8cab29e28f773dd148f0962c44d1a"
+    },
+    "phase37_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase37_pixel5_repeatability_freeze_v2.json",
+      "sha256": "61f46ac734d0c712bc317603570a0630234ee67ab642d12368eb5e3bf3962a3e"
+    }
+  },
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "ground_truth_member_policy": "Only the three added-route ground_truth.csv members below may be materialized/opened, exactly once each, after the evaluator manifest is committed. Central metadata is copied from the immutable Phase37 freeze; duplicate or missing members fail closed.",
+    "added_ground_truth_members": {
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+        "name": "dataset_2023/train/2021-08-24-20-32-us-ca-mtv-h/pixel5/ground_truth.csv",
+        "file_size": 305432,
+        "compressed_size": 65933,
+        "crc32_hex": "fe212a4d"
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "name": "dataset_2023/train/2022-04-01-18-22-us-ca-lax-t/pixel5/ground_truth.csv",
+        "file_size": 143441,
+        "compressed_size": 41011,
+        "crc32_hex": "49b239b2"
+      },
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+        "name": "dataset_2023/train/2023-03-08-21-34-us-ca-mtv-u/pixel5/ground_truth.csv",
+        "file_size": 108045,
+        "compressed_size": 30016,
+        "crc32_hex": "bc251725"
+      }
+    }
+  },
+  "cohort": {
+    "phone_model": "pixel5",
+    "route_disjoint": true,
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "existing_identity": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "added_identities": [
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "fresh_validation": {
+      "id": "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+      "opened": false,
+      "remains_sealed": true
+    },
+    "future_holdout": {
+      "id": "2023-05-16-19-54-us-ca-mtv-xe1/pixel5",
+      "opened": false,
+      "remains_sealed": true
+    }
+  },
+  "sealed_artifacts": {
+    "source": "Phase43 structural seal run1 artifacts; no candidate or control artifact is regenerated or rewritten",
+    "candidate_and_control_read_count": 1,
+    "routes": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "role": "existing",
+        "candidate": {
+          "return_code": 0,
+          "submission": {
+            "path": "output/smartphone-r5/phase43-native-fallback-seed-quality-anchor-recovery-v1/candidate/2021-03-16-18-59-us-ca-mtv-a/pixel5/run1/submission.csv",
+            "sha256": "d4d7652e5d12389466e586fe2d8e85d34977a7e11036cee2f591a89293c5426c",
+            "bytes": 172694,
+            "rows": 2158
+          },
+          "summary": {
+            "path": "output/smartphone-r5/phase43-native-fallback-seed-quality-anchor-recovery-v1/candidate/2021-03-16-18-59-us-ca-mtv-a/pixel5/run1/summary.json",
+            "sha256": "d4980260e257c92d7e2fb716f900501fd55c3eb9278f9b38a4f72ac2e62303fe",
+            "bytes": 14534
+          }
+        },
+        "control": {
+          "return_code": 0,
+          "submission": {
+            "path": "output/smartphone-r5/phase43-native-fallback-seed-quality-anchor-recovery-v1/flag-off/2021-03-16-18-59-us-ca-mtv-a/pixel5/run1/submission.csv",
+            "sha256": "d4d7652e5d12389466e586fe2d8e85d34977a7e11036cee2f591a89293c5426c",
+            "bytes": 172694,
+            "rows": 2158
+          },
+          "summary": {
+            "path": "output/smartphone-r5/phase43-native-fallback-seed-quality-anchor-recovery-v1/flag-off/2021-03-16-18-59-us-ca-mtv-a/pixel5/run1/summary.json",
+            "sha256": "b0ecd9c0eb931b11908a4e19ea54cb21a7a530492ac6fee245086dff93722460",
+            "bytes": 13978
+          }
+        }
+      },
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+        "role": "added",
+        "candidate": {
+          "return_code": 0,
+          "submission": {
+            "path": "output/smartphone-r5/phase43-native-fallback-seed-quality-anchor-recovery-v1/candidate/2021-08-24-20-32-us-ca-mtv-h/pixel5/run1/submission.csv",
+            "sha256": "3cfe97750927fa268f71bbe7393754ce7a1eb39d937e085b177c50a71eec10ae",
+            "bytes": 251174,
+            "rows": 3139
+          },
+          "summary": {
+            "path": "output/smartphone-r5/phase43-native-fallback-seed-quality-anchor-recovery-v1/candidate/2021-08-24-20-32-us-ca-mtv-h/pixel5/run1/summary.json",
+            "sha256": "23f409e5708dc547bc86b156e07a6fb305732cb9ce8eb3da57f26fd487e4404e",
+            "bytes": 14623
+          }
+        },
+        "control": {
+          "return_code": 1,
+          "status": "phase43-structural-fail-closed-no-output",
+          "submission": null,
+          "summary": null
+        }
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "role": "added",
+        "candidate": {
+          "return_code": 0,
+          "submission": {
+            "path": "output/smartphone-r5/phase43-native-fallback-seed-quality-anchor-recovery-v1/candidate/2022-04-01-18-22-us-ca-lax-t/pixel5/run1/submission.csv",
+            "sha256": "4eb2b566708a87db4903610a41cd648c7ff065d35710d358894a78eaa8e116e3",
+            "bytes": 117254,
+            "rows": 1465
+          },
+          "summary": {
+            "path": "output/smartphone-r5/phase43-native-fallback-seed-quality-anchor-recovery-v1/candidate/2022-04-01-18-22-us-ca-lax-t/pixel5/run1/summary.json",
+            "sha256": "f4fb3bc2b09d44700ee83772d4b23ad93b68d07eff6743b9525626f805264eb8",
+            "bytes": 14576
+          }
+        },
+        "control": {
+          "return_code": 0,
+          "submission": {
+            "path": "output/smartphone-r5/phase43-native-fallback-seed-quality-anchor-recovery-v1/flag-off/2022-04-01-18-22-us-ca-lax-t/pixel5/run1/submission.csv",
+            "sha256": "4eb2b566708a87db4903610a41cd648c7ff065d35710d358894a78eaa8e116e3",
+            "bytes": 117254,
+            "rows": 1465
+          },
+          "summary": {
+            "path": "output/smartphone-r5/phase43-native-fallback-seed-quality-anchor-recovery-v1/flag-off/2022-04-01-18-22-us-ca-lax-t/pixel5/run1/summary.json",
+            "sha256": "67a13efd5705c79a4ba8f9f9b539494a6aceb0b2ee5820d2223043d9f605a2f",
+            "bytes": 14020
+          }
+        }
+      },
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+        "role": "added",
+        "candidate": {
+          "return_code": 0,
+          "submission": {
+            "path": "output/smartphone-r5/phase43-native-fallback-seed-quality-anchor-recovery-v1/candidate/2023-03-08-21-34-us-ca-mtv-u/pixel5/run1/submission.csv",
+            "sha256": "524769cdf67aa857eefaafdadf943dd76586ec3ae73ec8b6d1df4a707d7699f71",
+            "bytes": 88134,
+            "rows": 1101
+          },
+          "summary": {
+            "path": "output/smartphone-r5/phase43-native-fallback-seed-quality-anchor-recovery-v1/candidate/2023-03-08-21-34-us-ca-mtv-u/pixel5/run1/summary.json",
+            "sha256": "eeb4f60e352ea00277604516b432673317ab035daa601135c6e9f989cb118926",
+            "bytes": 14571
+          }
+        },
+        "control": {
+          "return_code": 0,
+          "submission": {
+            "path": "output/smartphone-r5/phase43-native-fallback-seed-quality-anchor-recovery-v1/flag-off/2023-03-08-21-34-us-ca-mtv-u/pixel5/run1/submission.csv",
+            "sha256": "524769cdf67aa857eefaafdadf943dd76586ec3ae73ec8b6d1df4a707d7699f71",
+            "bytes": 88134,
+            "rows": 1101
+          },
+          "summary": {
+            "path": "output/smartphone-r5/phase43-native-fallback-seed-quality-anchor-recovery-v1/flag-off/2023-03-08-21-34-us-ca-mtv-u/pixel5/run1/summary.json",
+            "sha256": "724ed0ff8074832fa235361bad6a6ab85ebab49eab86d5554c8caff13ad3d997",
+            "bytes": 14016
+          }
+        }
+      }
+    }
+  },
+  "existing_truth": {
+    "source": "already materialized Phase29 development truth reused by Phase36/37",
+    "path": "output/smartphone-r5/phase29-no-bridge-train-eval-v1/truth/2021-03-16-18-59-us-ca-mtv-a/pixel5/ground_truth.csv",
+    "sha256": "7c84ed6a80b1bbb08c0ffad57493513833b9d5474e22a43c5a44da82824ee22d",
+    "bytes": 210009,
+    "materialization_before_phase44": true,
+    "phase44_read_count": 1
+  },
+  "timestamp_contract": {
+    "key": "(phone, UnixTimeMillis)",
+    "truth_required_fields": ["UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
+    "prediction_header": ["phone", "UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
+    "matching": "exact integer UnixTimeMillis key intersection only",
+    "interpolation": {
+      "enabled": false,
+      "bracketed_linear": false,
+      "edge_hold": false,
+      "extrapolation": false,
+      "unmatched_truth_keys": "remain uncovered and are not synthesized"
+    },
+    "coverage": "exact_matched_truth_keys / truth_keys",
+    "ordering": "input rows must be strictly increasing by UnixTimeMillis for each phone; no duplicate key",
+    "no_rounding_or_nearest_timestamp": true
+  },
+  "metric_contract": {
+    "distance": {
+      "name": "haversine_sphere",
+      "per_row": true,
+      "earth_model": "sphere",
+      "earth_radius_m": 6371008.8,
+      "formula": "2 * R * asin(sqrt(sin(dlat/2)^2 + cos(lat0)*cos(lat1)*sin(dlon/2)^2))"
+    },
+    "errors": "Haversine horizontal distance for every exact matched truth/prediction key",
+    "summary": ["mean_m", "p50_m", "p95_m", "max_m", "coverage_ratio", "over_70_mps_count"],
+    "percentile": {
+      "method": "linear interpolation at rank (n - 1) * q",
+      "quantiles": [0.5, 0.95],
+      "no_rounding_before_comparison": true
+    },
+    "kaggle_score": "(p50_m + p95_m) / 2",
+    "continuity": {
+      "source": "sealed prediction rows",
+      "speed_distance": "same Haversine formula",
+      "transition_time": "positive UnixTimeMillis delta in seconds",
+      "over_70_mps": "count of transitions with speed strictly greater than 70.0 m/s"
+    },
+    "aggregation": {
+      "pixel5_macro_score": "arithmetic mean of the four Pixel5 candidate route Kaggle scores",
+      "control_macro_score": "arithmetic mean over the three valid control routes; MTV-h control is invalid and excluded",
+      "mean_metric": "arithmetic mean of route metrics; no row pooling",
+      "max_metric": "maximum per-row Haversine error within each route"
+    }
+  },
+  "absolute_gates": {
+    "all_candidate_rows_finite": true,
+    "all_candidate_routes_full_coverage": true,
+    "target_route": {
+      "route": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "kaggle_score_max_m": 3.0,
+      "p95_max_m": 5.0,
+      "over_70_mps_count": 0
+    },
+    "pixel5_macro_score_max_m": 2.0,
+    "individual_route_score_max_m": 3.0,
+    "stretch_target_score_m": 0.782,
+    "control_policy": "MTV-h flag-off control is structurally invalid and does not block candidate absolute scoring; valid controls are scored once for comparison only",
+    "logic": "all applicable candidate conditions are ANDed; any failed condition is no-go"
+  },
+  "truth_budget": {
+    "existing_truth_materializations": 0,
+    "existing_truth_opens_after_manifest": 1,
+    "added_truth_member_materializations": 3,
+    "added_truth_member_opens": 3,
+    "added_truth_reads": 3,
+    "total_route_truth_reads": 4,
+    "single_process": true,
+    "candidate_reads_per_route": 1,
+    "control_reads_per_valid_route": 1,
+    "validation_truth_reads": 0,
+    "holdout_truth_reads": 0,
+    "mat_inputs_or_outputs": 0,
+    "device_wls_coordinates_used": 0,
+    "precomputed_coordinates_used_for_inference": 0,
+    "kaggle_or_token_access": 0
+  },
+  "forbidden_actions": [
+    "rerun solver or native binary",
+    "rewrite or tune candidate/control artifacts",
+    "open validation or holdout truth",
+    "read or create MATLAB .mat",
+    "use device WLS, precomputed result/submission coordinates, or inferred coordinates for inference",
+    "use Kaggle service or tokens",
+    "materialize any archive member other than the three declared added ground_truth.csv members",
+    "read a declared truth route more than once",
+    "open truth before evaluator source and manifest are committed and pushed",
+    "open validation even if the Phase44 development gate passes"
+  ],
+  "execution_order": [
+    "commit and push this immutable freeze JSON",
+    "commit and push evaluator source, tests, and evaluator manifest",
+    "verify sealed Phase43 candidate/control artifacts and hashes",
+    "in one process read existing truth once and materialize/open/read each added ground_truth member once",
+    "score candidate and valid controls without solver/native execution",
+    "publish result, README/docs, and result manifest",
+    "run focused tests and leave worktree clean",
+    "do not open validation or holdout in Phase44"
+  ],
+  "decision_rule": "The Phase43 candidate bytes and the timestamp, distance, percentile, coverage, continuity, and absolute gates above are immutable before any Phase44 truth payload is opened. A score below the 0.782 stretch target is recorded as-is; no post-truth adjustment is authorized."
+}
