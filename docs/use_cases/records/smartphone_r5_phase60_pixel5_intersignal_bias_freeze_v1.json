@@ -1,0 +1,284 @@
+{
+  "schema_version": "smartphone-r5-phase60-pixel5-intersignal-bias-freeze.v1",
+  "phase": 60,
+  "execution_label": "Luna Max",
+  "status": "frozen-before-phase60-raw-read",
+  "purpose": "Truth-free raw Android inter-signal-bias consumption and sign audit for FullInterSignalBiasNanos and SatelliteInterSignalBiasNanos on four route-disjoint Pixel5 recordings. No implementation or estimator rerun is authorized until every fixed identifiability gate passes.",
+  "objective": {
+    "factor": "raw Android FullInterSignalBiasNanos + SatelliteInterSignalBiasNanos current consumption/sign",
+    "route_count_required": 4,
+    "phone_model": "pixel5",
+    "truth_free": true,
+    "audit_only_until_all_gates_pass": true,
+    "solver_rerun": false,
+    "correction_before_gate": false,
+    "truth_or_metric_payload_input": false,
+    "navigation_or_coordinates_input": false,
+    "zero_point_782_evaluation": false
+  },
+  "authority_pins": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "phase59_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase59_native_cn0_doppler_calibration_accuracy_result_v1.json",
+      "sha256": "44c891592726d680d205c77d59882bc87f5cd7dc6f81534d6e967bcb274ddd8e",
+      "use": "factor selection and policy metadata only; no Phase59 metric payload is an audit input"
+    },
+    "phase58_structural_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase58_native_cn0_doppler_calibration_structural_result_v1.json",
+      "sha256": "ec74b3c64cbc77d8cbeed93b9faa062d865521f879b3446590da88f0179a111e",
+      "use": "route/input provenance and prior structural policy only; no Phase58 metric payload is an audit input"
+    },
+    "phase25_raw_contract": {
+      "path": "docs/use_cases/records/smartphone_r5_phase25_raw_clock_audit_v1.json",
+      "use": "raw-clock pseudorange proxy contract only; no Phase25 metric payload or enriched coordinates"
+    },
+    "android_api_reference": {
+      "url": "https://developer.android.com/reference/android/location/GnssMeasurement",
+      "api_level": 30,
+      "methods": [
+        "getFullInterSignalBiasNanos()",
+        "getSatelliteInterSignalBiasNanos()",
+        "hasFullInterSignalBiasNanos()",
+        "hasSatelliteInterSignalBiasNanos()"
+      ],
+      "source_semantics_sealed": true
+    },
+    "source_contracts": {
+      "android_raw_gnss_cpp": {
+        "path": "src/io/android_raw_gnss.cpp",
+        "sha256": "1bb9369e7db651e53fddab2a92c2f217512667bb349f70aa52934aeb80cbf387"
+      },
+      "android_raw_gnss_header": {
+        "path": "include/libgnss++/io/android_raw_gnss.hpp",
+        "sha256": "e833570103a521b9e051086b6ea75192ae3a575b83eee33d978143eaf279c52c"
+      },
+      "observation_header": {
+        "path": "include/libgnss++/core/observation.hpp",
+        "sha256": "9ba79a44fd1f8c4f4f7b7f8707a119c350174bf850b226ff89e587c55f8abd2c"
+      },
+      "fgo_problems_cpp": {
+        "path": "src/algorithms/fgo_problems.cpp",
+        "sha256": "725167ccc21a62e61c4da9852726ed5cafbfc05ab794eaa76c4641676f576245"
+      },
+      "fgo_header": {
+        "path": "include/libgnss++/algorithms/fgo.hpp",
+        "sha256": "90efe485b2c50eb56535a7eb0709a1b7daa29e4f7a9bd3878acf527dc624ab36"
+      },
+      "fgo_config_header": {
+        "path": "include/libgnss++/algorithms/fgo_config.hpp",
+        "sha256": "e7a72c89475d0edf1da3a767ea7d1702d76b8b52dc90a4bd5db225826875ffbe"
+      },
+      "native_fgo_cli": {
+        "path": "apps/native/gnss_fgo_imu_no_base.cpp",
+        "sha256": "2a924ddd681ce43e1bf08fc4155b3fa62569a9c7694a1550c28f153af4db5218"
+      }
+    }
+  },
+  "cohort": {
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "route_disjoint": true,
+    "same_pixel5_model": true
+  },
+  "exact_raw_inputs": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv",
+      "member": "dataset_2023/train/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv",
+      "bytes": 57715495,
+      "sha256": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863"
+    },
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+      "member": "dataset_2023/train/2021-08-24-20-32-us-ca-mtv-h/pixel5/device_gnss.csv",
+      "bytes": 74299283,
+      "sha256": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7"
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_gnss.csv",
+      "member": "dataset_2023/train/2022-04-01-18-22-us-ca-lax-t/pixel5/device_gnss.csv",
+      "bytes": 33837317,
+      "sha256": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1"
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2023-03-08-21-34-us-ca-mtv-u/pixel5/inputs/device_gnss.csv",
+      "member": "dataset_2023/train/2023-03-08-21-34-us-ca-mtv-u/pixel5/device_gnss.csv",
+      "bytes": 23385520,
+      "sha256": "a0fc8e71bdfc03be61b99efcd7d41fbba8ffec126df78b55243f681fd211f204"
+    }
+  },
+  "source_semantics": {
+    "full_inter_signal_bias": {
+      "field": "FullInterSignalBiasNanos",
+      "owner": "Android GnssMeasurement",
+      "units": "nanoseconds",
+      "type": "double",
+      "api_added": 30,
+      "meaning": "sum of estimated receiver-side and space-segment-side inter-system, inter-frequency, and inter-code biases relative to GnssClock reference constellation; inter-frequency ionospheric bias is excluded",
+      "sign_equation": "corrected pseudorange = raw pseudorange - FullInterSignalBiasNanos",
+      "availability": "only when hasFullInterSignalBiasNanos() is true"
+    },
+    "satellite_inter_signal_bias": {
+      "field": "SatelliteInterSignalBiasNanos",
+      "owner": "Android GnssMeasurement",
+      "units": "nanoseconds",
+      "type": "double",
+      "api_added": 30,
+      "meaning": "space-segment-side inter-system, inter-frequency, and inter-code bias including master-clock/group-delay/DCB components relative to GnssClock reference constellation",
+      "sign_equation": "corrected pseudorange = raw pseudorange - SatelliteInterSignalBiasNanos",
+      "availability": "only when hasSatelliteInterSignalBiasNanos() is true"
+    },
+    "composition_rule": "FullInterSignalBiasNanos already includes the space-segment terms represented by SatelliteInterSignalBiasNanos; Full minus Satellite is the receiver-side remainder. Full plus Satellite is not a source-defined correction and must never be applied.",
+    "metres_conversion": "bias_m = c * bias_nanos * 1e-9, c=299792458 m/s; parse decimal text exactly before conversion and retain signed value",
+    "raw_pseudorange_proxy": "segment_base=first valid FullBiasNanos; receiver GPST nanoseconds=TimeNanos-segment_base; week=floor(clock_ns/1e9/604800); tow_rx=(clock_ns-week*604800e9)/1e9-BiasNanos/1e9-TimeOffsetNanos/1e9; tow_tx=ReceivedSvTimeNanos/1e9 with the existing constellation day/offset contract; P_raw=(tow_rx-tow_tx)*c after nearest-week unwrap",
+    "proxy_scope": "current adopted pseudorange proxy rows means Raw rows with supported signal/frequency, finite Phase25 raw-clock P in (10000000,40000000) m, existing code/CN0/multipath/status masks clear, and no enriched RawPseudorangeMeters, WLS, SvPosition, SvElevation, nav, or coordinate input",
+    "pair_observable": "same utcTimeMillis epoch and same constellation/Svid with two distinct supported signal tokens/frequency groups; no nearest-time/interpolation",
+    "pair_raw_delta_m": "P_raw_a-P_raw_b",
+    "pair_full_corrected_delta_m": "(P_raw_a-c*FullISB_a*1e-9)-(P_raw_b-c*FullISB_b*1e-9)",
+    "pair_satellite_corrected_delta_m": "(P_raw_a-c*SatelliteISB_a*1e-9)-(P_raw_b-c*SatelliteISB_b*1e-9)",
+    "pair_bias_difference_m": "c*(bias_a-bias_b)*1e-9",
+    "common_mode": "within each utcTimeMillis plus HardwareClockDiscontinuityCount group, subtract the finite row median of each signed bias and retain the raw signed value, centered value, and non-common residual",
+    "time_stability": "within each route and field, sort finite adopted rows by raw UTC key and report adjacent signed-bias changes only when the field exists at both endpoints; a discontinuity is a finite adjacent change above the predeclared jump gate, not a fitted correction",
+    "sign_policy": "use Android's documented subtraction sign exactly; opposite sign is a fixed diagnostic control only and cannot be selected from route data",
+    "implementation_candidate_if_authorized": "FGO undifferenced pseudorange only: P_corrected=P_raw-c*FullInterSignalBiasNanos*1e-9; SatelliteInterSignalBiasNanos is retained as provenance/decomposition and is not added; coefficient=1, no cap, no SPP/TDCP/Doppler",
+    "source_reference": "https://developer.android.com/reference/android/location/GnssMeasurement"
+  },
+  "current_source_plumbing_expected": {
+    "adapter_parses_full_intersignal_bias": false,
+    "adapter_parses_satellite_intersignal_bias": false,
+    "observation_retains_full_or_satellite_intersignal_bias": false,
+    "fgo_consumes_raw_intersignal_bias": false,
+    "existing_signal_bias_states_are_not_raw_android_field_consumption": true,
+    "static_source_hashes_must_be_verified_before_raw": true
+  },
+  "controls_and_repeats": {
+    "control": "uncorrected raw pair delta and opposite-sign diagnostic; no data-selected sign, threshold, or factor is fitted",
+    "primary": "Android-source-sign Full and Satellite corrected pair deltas plus signed per-row bias distributions",
+    "full_vs_satellite_decomposition": "report Full, Satellite, and Full-minus-Satellite receiver-side remainder separately; never report Full-plus-Satellite as a candidate",
+    "common_mode_control": "same-epoch median-centered signed bias and pair residual; route-level common offsets are not treated as geometry evidence",
+    "route_leave_one_out": "recompute pooled medians, materiality, pair consistency, and non-common direction after omitting each route from already-held in-memory rows; no second raw read",
+    "repeat_policy": "one raw read per route in one process; deterministic summaries and aggregate invariants are recomputed from that in-memory parse only"
+  },
+  "numeric_gates": {
+    "logic": "AND; all thresholds, formulas, field-availability rules, and sign policy are immutable after this freeze and before the first Phase60 raw read",
+    "route_count": 4,
+    "raw_input_integrity": {
+      "exact_sha256_and_bytes": true,
+      "core_raw_fields_finite": true,
+      "utc_epoch_nonmonotonic_count": 0,
+      "duplicate_epoch_key_count": 0,
+      "unsupported_rows_are_informational_not_a_gate": true
+    },
+    "adopted_proxy_coverage": {
+      "min_rows_per_route": 1000,
+      "min_distinct_satellites_per_route": 5,
+      "full_field_finite_fraction_min": 0.80,
+      "satellite_field_finite_fraction_min": 0.80,
+      "field_header_presence_required_for_authorization": true,
+      "no_imputation": true
+    },
+    "multi_signal_pair": {
+      "min_pairs_per_route": 100,
+      "min_distinct_satellites_with_pairs_per_route": 3,
+      "min_distinct_signal_frequency_groups_per_route": 2,
+      "min_signal_families_per_route": 2,
+      "same_epoch_only": true,
+      "same_satellite_only": true
+    },
+    "bias_materiality": {
+      "signed_field_p95_abs_min_m": 0.03,
+      "full_minus_satellite_receiver_remainder_p95_abs_min_m": 0.03,
+      "pair_bias_difference_p95_abs_min_m": 0.03,
+      "pair_corrected_vs_raw_p95_excess_min_m": 0.02,
+      "same_direction_all_routes": true,
+      "not_pure_common_mode": true
+    },
+    "pair_consistency": {
+      "full_corrected_pair_median_abs_max_m": 10.0,
+      "satellite_corrected_pair_median_abs_max_m": 10.0,
+      "full_minus_satellite_pair_relation_spearman_min": 0.35,
+      "routewise_relation_required": true,
+      "pair_field_sign_consistency_fraction_min": 0.70
+    },
+    "temporal_and_loo": {
+      "finite_adjacent_field_fraction_min": 0.80,
+      "unexplained_jump_threshold_m": 1.0,
+      "max_unexplained_jump_fraction": 0.05,
+      "loo_route_count_exact": 4,
+      "loo_direction_stable": true,
+      "loo_materiality_retained_fraction_min": 0.75
+    },
+    "retention_and_presentation": {
+      "all_reported_values_finite": true,
+      "route_row_counts_sum": true,
+      "field_availability_counts_sum": true,
+      "pair_counts_sum": true,
+      "same_epoch_group_counts_sum": true,
+      "four_route_medians_retained_in_order": true,
+      "aggregate_recomputed_exact": true,
+      "full_satellite_decomposition_retained": true,
+      "raw_and_centered_sign_values_retained": true,
+      "read_accounting_exact": true
+    }
+  },
+  "input_policy": {
+    "single_evaluator_process": true,
+    "raw_device_gnss_read_count_per_route": 1,
+    "raw_device_gnss_read_count_total": 4,
+    "raw_device_imu_read_count": 0,
+    "truth_read_count": 0,
+    "prior_metric_payload_reads": 0,
+    "brdc_nav_read_count": 0,
+    "solver_or_trajectory_reruns": 0,
+    "coordinate_or_wls_inputs": 0,
+    "SvPosition_or_SvElevation": 0,
+    "mat_reads_or_generated": 0,
+    "validation_holdout_reads": 0,
+    "archive_reopens": 0,
+    "rematerialization_count": 0,
+    "kaggle_or_token_access": 0,
+    "correction_fit_or_application_before_gate": false,
+    "raw_rows_kept_in_memory_only_until_route_summary": true
+  },
+  "forbidden": [
+    "ground truth",
+    "Phase45/Phase59 truth or score payload",
+    "navigation or broadcast ephemeris",
+    "solver/trajectory rerun",
+    "device_imu.csv",
+    "RawPseudorange enriched coordinate inputs",
+    "device WLS",
+    "SvPosition",
+    "SvElevation",
+    "MAT",
+    "validation",
+    "holdout",
+    "archive",
+    "Kaggle",
+    "token",
+    "SPP",
+    "TDCP",
+    "Doppler correction"
+  ],
+  "failure_policy": {
+    "any_gate_failure": "record fail-closed raw-only no-go, do not implement or rerun solver, preserve all route/read/hash accounting, and name exactly one next source-supported raw physical factor",
+    "missing_or_ambiguous_fields": "hard no-go for correction; report header presence, finite availability, and ambiguity without zero-filling",
+    "source_sign": "never fit or reverse sign from observed route data; use the Android subtraction equation",
+    "full_satellite_double_count": "Full plus Satellite is prohibited; if an implementation stage is authorized it may apply Full only and retain Satellite as provenance",
+    "if_all_gates_pass": "freeze a separate native implementation contract before source edits, then run only truth-free focused tests and structural matrix; stop before any accuracy truth",
+    "next_single_factor_if_no_go": "raw Android pseudorange code tracking / multipath residual calibration not already masked by the current adapter"
+  },
+  "pre_read_assertions": {
+    "phase60_raw_device_gnss_opened": false,
+    "phase60_truth_opened": false,
+    "phase60_nav_opened": false,
+    "phase60_solver_invoked": false,
+    "phase60_coordinates_opened": false,
+    "phase60_imu_opened": false,
+    "phase60_evaluator_started": false,
+    "phase60_implementation_started": false
+  }
+}
