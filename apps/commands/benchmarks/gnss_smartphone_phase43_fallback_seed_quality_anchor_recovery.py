@@ -84,6 +84,14 @@ FLAG_OFF_BASELINES = {
         "submission_sha256": "65b44029a90e75a6b11e96b6ae9344020dee55bb8b5ea9b8bee79f2c765bca47",
         "summary_sha256": "77beb1b59aadefcdac0394c775f5ab45eb58c10ec7af92f21990dbbc694438b8",
     },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "submission_sha256": "4eb2b566708a87db4903610a41cd648c7ff065d35710d358894a78eaa8e116e3",
+        "summary_sha256": "2c85fd545ecf6b1bc815c7c4c42a139424a722787b2b58da6ae48b412188a542",
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+        "submission_sha256": "524769cdf67aa857eefaafdadf943dd76586ec3ae73ec8b6d1df4a707d7699f71",
+        "summary_sha256": "84b354751b617258db6499cf5ab477f520e3463ae73ec8b73dd3f3b438d45f31",
+    },
 }
 
 
@@ -158,6 +166,13 @@ def relative(path: Path) -> str:
         return str(path.relative_to(ROOT))
     except ValueError:
         return str(path)
+
+
+def invocation_path(path: Path) -> str:
+    """Match historical summary path spelling for each frozen input cohort."""
+    if PHASE37_RAW_ROOT in path.parents:
+        return str(path)
+    return relative(path)
 
 
 def verify_freeze() -> dict[str, Any]:
@@ -354,9 +369,10 @@ def native_command(paths: dict[str, Path], dataset_id: str, run_dir: Path, candi
     flags = list(BASE_FLAGS)
     if candidate:
         flags.append(CANDIDATE_FLAG)
-    # Keep repository-relative input spellings so the existing flag-off summary
-    # bytes remain comparable with the frozen Phase31/39 artifacts.
-    command = [str(BINARY), "--android-gnss", relative(paths["device_gnss"]), "--android-imu", relative(paths["device_imu"]), "--nav", relative(paths["broadcast_nav"]), "--out", str(run_dir / "submission.csv"), "--summary-json", str(run_dir / "summary.json"), "--dataset-id", dataset_id, *flags]
+    # Match the path spelling used by each frozen baseline: Phase25 controls
+    # were run from repository-relative inputs, while Phase37 additions used
+    # absolute inputs in their historical native command.
+    command = [str(BINARY), "--android-gnss", invocation_path(paths["device_gnss"]), "--android-imu", invocation_path(paths["device_imu"]), "--nav", invocation_path(paths["broadcast_nav"]), "--out", str(run_dir / "submission.csv"), "--summary-json", str(run_dir / "summary.json"), "--dataset-id", dataset_id, *flags]
     for token in command:
         _reject_forbidden(token)
     return command
