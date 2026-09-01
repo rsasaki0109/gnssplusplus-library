@@ -45,3 +45,13 @@ safe2 routes twice with the candidate and checks flag-off identity on the same
 cohort.  It publishes a structural seal only when every route, repeat,
 convergence, finite-output, <=70 m/s, raw-key, TDCP, and flag-off gate passes;
 truth remains sealed in either outcome.
+
+The frozen run stopped at the MTV-h candidate run 1: all 1325 final optimizer
+velocity states were finite, but 1181 exceeded 70 m/s (maximum 8919.75 m/s).
+It therefore published a fail-closed structural failure and did not start the
+remaining route repeats or flag-off controls.  The result is recorded in the
+[Phase 39 No-Go result](records/smartphone_r5_phase39_gnss_first_velocity_only_handoff_result_v1.json)
+and [failure manifest](records/smartphone_r5_phase39_gnss_first_velocity_only_handoff_structural_failure_manifest_v1.json).
+The candidate remains an unpromoted development diagnostic; production defaults
+and the Phase 31 champion are unchanged, and truth/MAT/validation/holdout/
+Kaggle inputs remained unopened.

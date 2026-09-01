@@ -13,9 +13,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 BENCHMARKS = ROOT / "apps" / "commands" / "benchmarks"
 SOURCE = ROOT / "apps" / "native" / "gnss_fgo_imu_no_base.cpp"
-FREEZE = ROOT / "docs" / "use_cases" / "records" / "smartphone_r5_gnss_first_velocity_only_handoff_freeze_v1.json"
-if not FREEZE.exists():
-    FREEZE = ROOT / "docs" / "use_cases" / "records" / "smartphone_r5_phase39_gnss_first_velocity_only_handoff_freeze_v1.json"
+RESULT = ROOT / "docs" / "use_cases" / "records" / "smartphone_r5_phase39_gnss_first_velocity_only_handoff_result_v1.json"
+FREEZE = ROOT / "docs" / "use_cases" / "records" / "smartphone_r5_phase39_gnss_first_velocity_only_handoff_freeze_v1.json"
 sys.path.insert(0, str(BENCHMARKS))
 
 import gnss_smartphone_phase39_velocity_only_handoff as phase39  # noqa: E402
@@ -26,6 +25,7 @@ class SmartphonePhase39VelocityOnlyHandoffTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.freeze = json.loads(FREEZE.read_text(encoding="utf-8"))
         cls.source = SOURCE.read_text(encoding="utf-8")
+        cls.result = json.loads(RESULT.read_text(encoding="utf-8"))
 
     def test_freeze_routes_and_gates_are_predeclared(self) -> None:
         freeze = phase39.verify_freeze()
@@ -126,6 +126,20 @@ class SmartphonePhase39VelocityOnlyHandoffTest(unittest.TestCase):
             path.write_text(json.dumps(summary), encoding="utf-8")
             with self.assertRaises(phase39.Phase39Error):
                 phase39.validate_candidate_summary(path, "route/pixel5", 2)
+
+    def test_sealed_result_records_fail_closed_velocity_gate_without_truth(self) -> None:
+        self.assertEqual(self.result["status"], "sealed-structural-no-go")
+        self.assertFalse(self.result["decision"]["passed"])
+        gnss = self.result["candidate_probe"]["gnss_first"]
+        self.assertEqual(gnss["epochs"], 1325)
+        self.assertEqual(gnss["velocity_states_exported"], 1325)
+        self.assertEqual(gnss["velocity_nonfinite_count"], 0)
+        self.assertEqual(gnss["velocity_over_70_mps_count"], 1181)
+        self.assertEqual(gnss["positions_clocks_copied"], 0)
+        self.assertEqual(gnss["original_raw_seed_position_invalid_count"], 0)
+        self.assertEqual(self.result["truth_accounting"]["truth_open_count"], 0)
+        self.assertFalse(self.result["truth_accounting"]["mat_read_or_generated"])
+        self.assertFalse(self.result["native_policy"]["production_default_changed"])
 
 
 if __name__ == "__main__":

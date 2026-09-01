@@ -326,6 +326,11 @@ Phase 31 champion are unchanged.  The fixed six-route, two-run structural
 matrix and flag-off identity contract are frozen before execution.  See the
 [Phase 39 handoff contract](docs/use_cases/smartphone_native_fgo_phase39_velocity_only_handoff.md)
 and [freeze record](docs/use_cases/records/smartphone_r5_phase39_gnss_first_velocity_only_handoff_freeze_v1.json).
+The frozen MTV-h candidate run failed closed because 1,181 of 1,325 final
+optimizer Doppler velocity states exceeded 70 m/s (maximum 8,919.75 m/s); no
+candidate output or flag-off control was promoted.  See the [Phase 39 No-Go
+result](docs/use_cases/records/smartphone_r5_phase39_gnss_first_velocity_only_handoff_result_v1.json)
+and [failure manifest](docs/use_cases/records/smartphone_r5_phase39_gnss_first_velocity_only_handoff_structural_failure_manifest_v1.json).
 
 ### PPC 2024 goal matrix vs Kaiyodai and gici-open
 
