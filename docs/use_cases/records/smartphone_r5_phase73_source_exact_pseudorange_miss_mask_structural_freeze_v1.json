@@ -1,0 +1,139 @@
+{
+  "schema_version": "smartphone-r5-phase73-source-exact-pseudorange-miss-mask-structural-freeze.v1",
+  "status": "frozen-before-phase73-structural-reads",
+  "created_at_utc": "2026-09-02T00:00:00Z",
+  "phase": 73,
+  "execution_label": "Luna Max",
+  "purpose": "Evaluate the already implemented source-exact finite-pc pseudorange factor miss mask with one control and two candidate runs per Pixel5 route, without development truth.",
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "implementation_commit": "fda746f79a7bb88d9c24c7637d75b228350af838",
+    "source_freeze_path": "docs/use_cases/records/smartphone_r5_phase73_source_exact_pseudorange_miss_mask_freeze_v1.json",
+    "source_freeze_sha256": "cd38928123f75e0ff71a42c1486e5bb5998bd506f0ccee3b830aa60c2d696b33",
+    "prior_phase72_structural_no_go": "docs/use_cases/records/smartphone_r5_phase72_base_additional_frequency_bands_recovery_structural_failure_v1.json",
+    "prior_phase72_no_go_sha256": "6ae74389e21ea9690122662bbe991cedef6385620b0d9fef7a7b349f87bb29a3",
+    "phase72_candidate_not_reused": true
+  },
+  "implementation_artifacts": {
+    "binary": {
+      "path": "build/apps/gnss_fgo_imu_no_base",
+      "sha256": "941eec7044775dbc0b0c1f512a3afbc6821f1997ef299a56f3018ce0747c279d"
+    },
+    "native_driver_sha256": "80020ca783ec246bf4844c0c62babf4762d7278dc4d20ee254790aacd5776fd0",
+    "miss_mask_header_sha256": "0fc470feeffa7a223dace8c5b4119760a26805325070acda22f786d5379e58b5",
+    "miss_mask_source_sha256": "5f89b471ea4c1753901f396eedb04baeef1b8811d33f270eadb38620fe13094e",
+    "cmake_sha256": "de237306a98cccf760501f30a508989b8382375b39a3deb478724b50615028a5",
+    "cpp_focused_test_source_sha256": "61e01191da51b253967c2df85d5b895af3dbbefda7fd82492c999d23c26b4c94",
+    "source_focused_test_source_sha256": "b76f528d3f62d87f51f53bed5ac42ed7a7ac3216a6852e11c68205c7a16da85b5"
+  },
+  "candidate": {
+    "flag": "--native-base-pseudorange-source-miss-mask",
+    "required_flags": [
+      "--native-base-pseudorange-compensation",
+      "--native-base-rinex",
+      "--native-base-rinex-sha256"
+    ],
+    "scope": "already adopted undifferenced FGO pseudorange factors only",
+    "operation": "Retain and subtract the same-satellite/same-signal base pc only when correctionAt returns one finite in-domain value; omit that pseudorange factor otherwise.",
+    "source_sign": "P_rover_corrected_m=P_rover_raw_m-pc_m",
+    "coefficient": 1.0,
+    "preserve_additional_frequency_bands": false,
+    "no_fill_or_extrapolation": true,
+    "no_new_rows_or_factors": true,
+    "tdcp_doppler_imu_spp_unchanged": true,
+    "default_off": true
+  },
+  "routes_and_inputs": {
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "raw_contract": "Use only the exact Phase64/65-pinned device_gnss.csv, device_imu.csv, brdc.nav, and base.obs paths and hashes supplied by the sealed runner helper.",
+    "base_contract": "Use the exact Phase64-pinned base member and SHA/byte pin; no archive reopen or rematerialization.",
+    "forbidden": [
+      "ground truth or Phase45 truth-derived payload",
+      "MAT/MATLAB products",
+      "validation/holdout/Kaggle/token data",
+      "base_position.csv or base_offset.csv",
+      "WLS/SvPosition/SvElevation/precomputed coordinates",
+      "solver invocation after any truth read"
+    ]
+  },
+  "telemetry_gates": {
+    "required_candidate_summary_block": "native_base_pseudorange_source_miss_mask",
+    "required_fields": [
+      "original_adopted_pseudorange_rows",
+      "retained_finite_pc_pseudorange_rows",
+      "dropped_missing_exact_stream_rows",
+      "dropped_out_of_domain_rows",
+      "dropped_nonfinite_correction_rows",
+      "retained_finite_pc_fraction",
+      "retained_over_original_fraction",
+      "pseudorange_factors_inserted",
+      "pseudorange_factor_count_consistent",
+      "correction_abs_p50_m",
+      "correction_abs_p95_m",
+      "correction_abs_max_m"
+    ],
+    "invariants": [
+      "original = retained + mutually exclusive drop reasons",
+      "retained finite pc fraction is exactly 1.0",
+      "inserted pseudorange factors equal retained finite-pc rows",
+      "retained factor epoch indices remain original indices",
+      "correction absolute statistics describe retained factors and are finite when retained rows are nonzero"
+    ],
+    "retention_is_descriptive": true
+  },
+  "fixed_structural_gates": {
+    "route_count": 4,
+    "raw_and_base_hash_bytes_exact": true,
+    "all_core_values_finite": true,
+    "prediction_domain_coverage_exact": 1.0,
+    "exact_key_duplicates_and_extras": 0,
+    "candidate_retained_finite_pc_fraction_each_route": 1.0,
+    "factor_count_consistency_each_route": true,
+    "tdcp_built_equals_inserted": true,
+    "control_flag_off_phase43_identity": true,
+    "candidate_repeat_identity": true,
+    "no_non_pseudorange_population_change": true,
+    "over_70_mps_count": 0,
+    "no_unexpected_exception": true,
+    "truth_free": true,
+    "no_accuracy_truth_in_this_stage": true,
+    "fail_closed_on_any_mismatch": true
+  },
+  "matrix": {
+    "control_runs_per_route": 1,
+    "candidate_runs_per_route": 2,
+    "native_solver_invocations": 12,
+    "raw_device_gnss_process_reads": 12,
+    "raw_device_imu_process_reads": 12,
+    "broadcast_nav_process_reads": 12,
+    "base_rinex_process_reads": 12,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_token_reads": 0,
+    "archive_reopens": 0,
+    "new_output_root": "output/smartphone-r5/phase73-source-exact-pseudorange-miss-mask-structural-v1"
+  },
+  "accuracy": {
+    "authorized": false,
+    "separate_freeze_required_after_structural_pass": true,
+    "zero_point_782": "not evaluated in this truth-free structural stage"
+  },
+  "read_accounting_at_freeze": {
+    "raw_device_gnss": 0,
+    "raw_device_imu": 0,
+    "broadcast_nav": 0,
+    "base_rinex": 0,
+    "truth": 0,
+    "mat": 0,
+    "validation_holdout": 0,
+    "kaggle_token": 0,
+    "archive_reopen": 0,
+    "solver_invocation": 0
+  }
+}
