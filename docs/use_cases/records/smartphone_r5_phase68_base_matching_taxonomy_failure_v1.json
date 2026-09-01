@@ -1,0 +1,31 @@
+{
+  "schema_version": "smartphone-r5-phase68-base-matching-taxonomy-failure.v1",
+  "phase": 68,
+  "status": "evaluator-integrity-no-go",
+  "failure": {
+    "kind": "RINEX3-record-boundary-parser",
+    "message": "unsupported RINEX system '>'",
+    "output_path": "output/smartphone-r5/phase68-base-matching-taxonomy-v1/phase68_base_matching_taxonomy_failure.json",
+    "output_sha256": "8217027f0aa6bd7e809f9b93cd5d2080ebdfe231ff989c7b68be5ced62514a14",
+    "raw_device_gnss_reads": 1,
+    "base_rinex_reads": 1,
+    "truth_reads": 0,
+    "solver_invocations": 0
+  },
+  "cause": "The pinned RINEX3 base member stores a satellite observation record on one long line, while the Phase68 parser unconditionally consumed ceil(observation_type_count/5) physical lines and then interpreted the next epoch marker as a satellite record.",
+  "integrity_policy": {
+    "phase68_raw_reread": false,
+    "partial_output_reused": false,
+    "physical_matching_finding": "not evaluated",
+    "phase67_coverage_gate_changed": false
+  },
+  "recovery": {
+    "phase": 69,
+    "new_output_required": true,
+    "fixture_requirements": [
+      "long single-line RINEX3 satellite record",
+      "standard 80-column continuation satellite record",
+      "epoch marker cannot be consumed as satellite data"
+    ]
+  }
+}
