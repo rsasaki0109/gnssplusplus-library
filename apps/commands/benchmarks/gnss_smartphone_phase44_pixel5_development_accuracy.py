@@ -32,7 +32,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[3]
 FREEZE = ROOT / "docs/use_cases/records/smartphone_r5_phase44_pixel5_development_accuracy_freeze_v1.json"
-FREEZE_SHA256 = "ec68888d210fb2eb1a43211ebef92fab582bf136ed16b8f105204d22673afa47"
+FREEZE_SHA256 = "4033fb1de6c8a5a22afad436bdccd526672be7b0faeb57acf454d9cb1ff15b6f"
 EVALUATOR_MANIFEST = ROOT / "docs/use_cases/records/smartphone_r5_phase44_pixel5_development_accuracy_evaluator_manifest_v1.json"
 STRUCTURAL_SEAL = ROOT / "output/smartphone-r5/phase43-native-fallback-seed-quality-anchor-recovery-v1/phase43_structural_seal.json"
 STRUCTURAL_SEAL_SHA256 = "fdeaf672b015cae99dfdf8351a5e7a92ca2d37bcdb0872c5c3fc5b937416b64d"
