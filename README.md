@@ -487,6 +487,26 @@ and [result](docs/use_cases/records/smartphone_r5_phase47_pixel5_raw_code_multip
 record the fixed gates, source/static adoption audit, read accounting, and
 output hashes.
 
+Phase 48 audited the one raw factor selected by Phase 47: per-satellite
+`ReceivedSvTimeUncertaintyNanos`/code-tracking residual.  The four pinned
+Pixel5 raw files were each read once in one process, with no truth, Phase45 or
+Phase47 metric input, navigation, solver, coordinates, validation, or
+correction implementation.  The raw code-increment versus trapezoidal
+`PseudorangeRateMetersPerSecond` association was positive in every route
+(Spearman **0.444–0.498**, `>10 ns` p95 excess **6.034–9.315 m**, ratio
+**3.104–4.036x**) and the presentation-integrity checks passed.  The audit is
+**no-go**: only two ordered uncertainty buckets were populated, low/base
+retention was **0.124–0.225** against the frozen 0.30 minimum, only one signal
+family was available per route, and the pinned adapter/observation/FGO path
+does not parse, retain, or consume this field as sigma.  No sigma floor or
+weighting was implemented; `0.782` reachability was not evaluated without
+truth.  The exactly one next raw physical factor is Android per-satellite
+carrier-phase ADR cycle-slip/lock-loss residual.  See the [Phase 48
+contract](docs/use_cases/smartphone_native_fgo_phase48_pixel5_raw_code_rate_uncertainty.md),
+[freeze](docs/use_cases/records/smartphone_r5_phase48_pixel5_raw_code_rate_uncertainty_freeze_v1.json),
+[evaluator manifest](docs/use_cases/records/smartphone_r5_phase48_pixel5_raw_code_rate_uncertainty_evaluator_manifest_v1.json),
+and [result](docs/use_cases/records/smartphone_r5_phase48_pixel5_raw_code_rate_uncertainty_result_v1.json).
+
 ### PPC 2024 goal matrix vs Kaiyodai and gici-open
 
 The audited KF/FGO selected profile clears the distance-weighted PPC public
