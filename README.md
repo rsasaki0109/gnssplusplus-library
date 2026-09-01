@@ -863,6 +863,30 @@ the 0.782 target were not pursued.  See the [Phase52 result record](docs/use_cas
 [freeze](docs/use_cases/records/smartphone_r5_phase52_android_sv_time_uncertainty_integrity_recovery_freeze_v1.json),
 and [evaluator manifest v2](docs/use_cases/records/smartphone_r5_phase52_android_sv_time_uncertainty_integrity_recovery_evaluator_manifest_v2.json).
 
+Phase53 audited the one raw factor selected by Phase52: Android per-satellite
+carrier-phase ADR carrier-frequency/antenna phase-bias residual.  The same
+four frozen Pixel5 raw files were each read once in one process; truth, prior
+metric payloads, navigation, solver/trajectory, coordinates, validation,
+holdout, archive, MAT, WLS, and correction paths remained sealed.  The fixed
+Android ADR sign and frequency-aware relation were tested against a
+constant-frequency ADR/rate control.  Ordinary pairs were **7,508 / 8,763 /
+4,176 / 3,728**, with **6–11** satellites, but every route had only one
+`GALILEO:GAL_E1:1575420000Hz` group, no finite antenna phase-center/bias
+field, and zero direct phase pairs.  Frequency leakage p95 was only
+**5.54e-12–1.07e-11 m**, frequency-vs-control p95 excess was approximately
+**-6.54e-13–1.04e-12 m**, and routewise Spearman was **0.0**.  The audit is
+therefore **no-go-carrier-frequency-antenna-phase-bias-not-identifiable**;
+no native correction was implemented or authorized and `0.782` was not
+evaluated without truth.  The result also preserves a transparent secondary
+raw-integrity failure: unsupported signal rows were **266 / 435 / 247 / 137**
+and the evaluator's AND gate explicitly includes zero unsupported rows, while
+hash, finite-core, duplicate-epoch, and monotonicity checks passed.  The next
+single raw factor is `AccumulatedDeltaRangeUncertaintyMeters`.  See the
+[Phase53 contract](docs/use_cases/smartphone_native_fgo_phase53_pixel5_carrier_frequency_antenna_phase_bias.md),
+[freeze](docs/use_cases/records/smartphone_r5_phase53_pixel5_carrier_frequency_antenna_phase_bias_freeze_v1.json),
+[evaluator manifest](docs/use_cases/records/smartphone_r5_phase53_pixel5_carrier_frequency_antenna_phase_bias_evaluator_manifest_v1.json),
+and [result](docs/use_cases/records/smartphone_r5_phase53_pixel5_carrier_frequency_antenna_phase_bias_result_v1.json).
+
 ## Docs
 
 - <https://rsasaki0109.github.io/gnssplusplus-library/>
