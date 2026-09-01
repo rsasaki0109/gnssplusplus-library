@@ -346,6 +346,24 @@ champion are unchanged.  See the [Phase 40 contract](docs/use_cases/smartphone_n
 [freeze](docs/use_cases/records/smartphone_r5_phase40_direct_doppler_wls_handoff_freeze_v1.json),
 and [No-Go result](docs/use_cases/records/smartphone_r5_phase40_direct_doppler_wls_handoff_result_v1.json).
 
+Phase 41 audits the raw Android Doppler measurement contract without truth,
+MAT files, precomputed coordinates, threshold changes, or estimator-model
+changes.  On the same first solvable epoch it compares raw
+`PseudorangeRateMetersPerSecond` (m/s), adapter Doppler (Hz), source/FGO
+wavelengths, measured range rate, broadcast satellite state and clock drift,
+Earth rotation, LOS, known satellite range rate, and independent receiver
+residuals with the unchanged FGO factor fields.  All six frozen routes pass
+the unit/sign/known-term identities; MTV-h has 33 raw candidate rows versus 4
+FGO rows, and its public SPP solve returns `ok=false` without exposing the
+post-fit reason.  The source-frequency versus nominal GLONASS conversion
+delta is recorded but is not a proven contract bug.  Phase 41 is therefore a
+diagnosis No-Go: no correction or gate relaxation was made, and the next
+measurement is raw-row attrition by signal, broadcast-nav availability/health,
+masks, and geometry.  See the [Phase 41 contract](docs/use_cases/smartphone_native_fgo_phase41_doppler_measurement_contract_audit.md),
+[freeze](docs/use_cases/records/smartphone_r5_phase41_doppler_measurement_contract_audit_freeze_v1.json),
+[result](docs/use_cases/records/smartphone_r5_phase41_doppler_measurement_contract_audit_result_v2.json),
+and [six-route structural manifest](docs/use_cases/records/smartphone_r5_phase41_doppler_measurement_contract_audit_structural_manifest_v2.json).
+
 ### PPC 2024 goal matrix vs Kaiyodai and gici-open
 
 The audited KF/FGO selected profile clears the distance-weighted PPC public
