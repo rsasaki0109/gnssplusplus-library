@@ -507,6 +507,29 @@ contract](docs/use_cases/smartphone_native_fgo_phase48_pixel5_raw_code_rate_unce
 [evaluator manifest](docs/use_cases/records/smartphone_r5_phase48_pixel5_raw_code_rate_uncertainty_evaluator_manifest_v1.json),
 and [result](docs/use_cases/records/smartphone_r5_phase48_pixel5_raw_code_rate_uncertainty_result_v1.json).
 
+Phase 49 audited the one raw factor selected by Phase 48: per-satellite
+Android carrier-phase ADR cycle-slip/lock-loss residual.  The same four
+Pixel5 raw files were each read once by one evaluator process; truth, prior
+truth/metric payloads, navigation, solver/trajectory, coordinates,
+validation/holdout, archive, MAT, WLS, and correction paths remained sealed.
+The fixed Pixel5 ADR sign, state-bit, HCDC, 1.5 s pair, existing mask, and
+Phase 25 raw-time contracts were statically pinned.  Ordinary unflagged clean
+residual p95 was **0.038575–0.062970 m**, but ordinary coverage was only
+**3,728–8,763** pairs per route against the frozen 10,000 minimum; all routes
+contained only **GAL_E1**, and the fixed 1.5 m two-sided jump score found
+**zero candidates**.  Large tails were confined to the separately reported
+reset/cycle-slip/invalid/mask/gap transitions.  Phase 49 is therefore
+**no-go-adr-insufficient-ordinary-tdcp-coverage**; presentation integrity and
+fixed-threshold LOO consistency passed, but coverage, candidate population /
+materiality, event reproducibility, route direction, signal composition, and
+current-TDCP impact failed.  No reset, mask, weighting, or correction was
+implemented, and `0.782` was not evaluated without truth.  The exactly one
+next source-supported raw factor is per-satellite carrier-phase half-cycle
+ambiguity/resolution residual.  See the [Phase 49 contract](docs/use_cases/smartphone_native_fgo_phase49_pixel5_adr_cycle_slip_lock_loss.md),
+[freeze](docs/use_cases/records/smartphone_r5_phase49_pixel5_adr_cycle_slip_lock_loss_freeze_v1.json),
+[evaluator manifest](docs/use_cases/records/smartphone_r5_phase49_pixel5_adr_cycle_slip_lock_loss_evaluator_manifest_v1.json),
+and [result](docs/use_cases/records/smartphone_r5_phase49_pixel5_adr_cycle_slip_lock_loss_result_v1.json).
+
 ### PPC 2024 goal matrix vs Kaiyodai and gici-open
 
 The audited KF/FGO selected profile clears the distance-weighted PPC public
