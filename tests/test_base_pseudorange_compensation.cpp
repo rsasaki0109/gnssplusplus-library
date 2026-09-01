@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <libgnss++/algorithms/base_pseudorange_compensation.hpp>
+#include <libgnss++/algorithms/source_pseudorange_miss_mask.hpp>
 #include <libgnss++/io/rinex.hpp>
 
 #include <cmath>
@@ -131,4 +132,82 @@ TEST(BasePseudorangeCompensationTest, AdditionalBandFixtureAddsGpsL5OnlyWhenEnab
               nullptr);
     preserved_reader.close();
     std::filesystem::remove(path);
+}
+
+TEST(BasePseudorangeCompensationTest,
+     SourceExactMissMaskDropsOnlyNonfinitePcRowsAndPreservesEpochIndices) {
+    using namespace libgnss::source_pseudorange_miss_mask;
+    std::vector<FGOProcessor::EpochSeed> epochs(3);
+    epochs[0].time = GNSSTime(2200, 100.0);
+    epochs[1].time = GNSSTime(2200, 101.0);
+    epochs[2].time = GNSSTime(2200, 102.0);
+
+    const SatelliteId gps1(GNSSSystem::GPS, 1);
+    const SatelliteId gps2(GNSSSystem::GPS, 2);
+    FGOProcessor::PseudorangeFactor retained;
+    retained.epoch_index = 2U;
+    retained.satellite = gps1;
+    retained.signal = SignalType::GPS_L1CA;
+    retained.corrected_pseudorange_m = 100.0;
+    FGOProcessor::PseudorangeFactor missing = retained;
+    missing.epoch_index = 0U;
+    missing.satellite = gps2;
+    FGOProcessor::PseudorangeFactor outside = retained;
+    outside.epoch_index = 1U;
+    FGOProcessor::PseudorangeFactor nonfinite = retained;
+    nonfinite.epoch_index = 0U;
+    nonfinite.signal = SignalType::GPS_L5;
+    std::vector<FGOProcessor::PseudorangeFactor> factors = {
+        retained, missing, outside, nonfinite};
+
+    Report report;
+    ASSERT_TRUE(apply(
+        factors, epochs,
+        [gps1](const SatelliteId& satellite, SignalType) {
+            return satellite == gps1;
+        },
+        [](const GNSSTime& time, const SatelliteId&, SignalType signal,
+           double& correction) {
+            if (time.tow == 101.0) return false;
+            if (signal == SignalType::GPS_L5) {
+                correction = std::numeric_limits<double>::quiet_NaN();
+                return true;
+            }
+            correction = 2.0;
+            return true;
+        },
+        report));
+
+    ASSERT_EQ(factors.size(), 1U);
+    EXPECT_EQ(factors.front().epoch_index, 2U);
+    EXPECT_DOUBLE_EQ(factors.front().corrected_pseudorange_m, 98.0);
+    EXPECT_EQ(report.original_adopted_rows, 4U);
+    EXPECT_EQ(report.retained_finite_pc_rows, 1U);
+    EXPECT_EQ(report.matched_exact_stream_rows, 3U);
+    EXPECT_EQ(report.finite_correction_rows_among_matched, 1U);
+    EXPECT_EQ(report.dropped_missing_exact_stream_rows, 1U);
+    EXPECT_EQ(report.dropped_out_of_domain_rows, 1U);
+    EXPECT_EQ(report.dropped_nonfinite_correction_rows, 1U);
+    EXPECT_TRUE(report.factor_count_consistent);
+    EXPECT_DOUBLE_EQ(report.retained_finite_pc_fraction, 1.0);
+    EXPECT_DOUBLE_EQ(report.retained_over_original_fraction, 0.25);
+    EXPECT_DOUBLE_EQ(report.correction_abs_p50_m, 2.0);
+    EXPECT_DOUBLE_EQ(report.correction_abs_p95_m, 2.0);
+    EXPECT_DOUBLE_EQ(report.correction_abs_max_m, 2.0);
+}
+
+TEST(BasePseudorangeCompensationTest, SourceExactMissMaskRejectsMissingCallbacksWithoutMutation) {
+    using namespace libgnss::source_pseudorange_miss_mask;
+    std::vector<FGOProcessor::EpochSeed> epochs(1);
+    epochs[0].time = GNSSTime(2200, 100.0);
+    FGOProcessor::PseudorangeFactor factor;
+    factor.epoch_index = 0U;
+    factor.corrected_pseudorange_m = 100.0;
+    std::vector<FGOProcessor::PseudorangeFactor> factors = {factor};
+    Report report;
+    EXPECT_FALSE(apply(factors, epochs, HasStream{}, CorrectionAt{}, report));
+    ASSERT_EQ(factors.size(), 1U);
+    EXPECT_DOUBLE_EQ(factors.front().corrected_pseudorange_m, 100.0);
+    EXPECT_FALSE(report.callback_contract_valid);
+    EXPECT_EQ(report.original_adopted_rows, 1U);
 }

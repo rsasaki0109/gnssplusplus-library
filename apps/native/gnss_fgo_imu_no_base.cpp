@@ -10,6 +10,7 @@
 
 #include <libgnss++/algorithms/fgo.hpp>
 #include <libgnss++/algorithms/base_pseudorange_compensation.hpp>
+#include <libgnss++/algorithms/source_pseudorange_miss_mask.hpp>
 #include <libgnss++/algorithms/carrier_code_leveling.hpp>
 #include <libgnss++/algorithms/cn0_doppler_calibration.hpp>
 #include <libgnss++/algorithms/pdc_state_bridge.hpp>
@@ -114,6 +115,9 @@ struct Options {
     // deliberately scoped to the base reader and does not alter rover/nav
     // observation selection or any factor population.
     bool native_base_pseudorange_preserve_additional_frequency_bands = false;
+    // Phase73 opt-in: match the published graph's finite-pc miss mask by
+    // retaining only adopted pseudorange factors with an in-domain correction.
+    bool native_base_pseudorange_source_miss_mask = false;
     // Phase43 candidate: when the normal quality-anchor reconnaissance has no
     // eligible raw/nav solution, retry that same SPP reconnaissance with an
     // explicit -90 degree elevation gate and replay the selected anchor via
@@ -193,6 +197,7 @@ void usage(const char* program) {
                  " [--native-base-pseudorange-compensation --native-base-rinex <base.obs>"
                  " --native-base-rinex-sha256 <sha256>]"
                  " [--native-base-pseudorange-preserve-additional-frequency-bands]"
+                 " [--native-base-pseudorange-source-miss-mask]"
                  " [--native-gnss-first-velocity-only-handoff]"
                  " [--native-direct-doppler-wls-handoff]\n";
 }
@@ -324,6 +329,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
             options.native_base_pseudorange_compensation = true;
         } else if (arg == "--native-base-pseudorange-preserve-additional-frequency-bands") {
             options.native_base_pseudorange_preserve_additional_frequency_bands = true;
+        } else if (arg == "--native-base-pseudorange-source-miss-mask") {
+            options.native_base_pseudorange_source_miss_mask = true;
         } else if (arg == "--native-gnss-first-velocity-only-handoff") {
             options.native_gnss_first_velocity_only_handoff = true;
         } else if (arg == "--native-direct-doppler-wls-handoff") {
@@ -391,10 +398,27 @@ bool parseArguments(int argc, char** argv, Options& options) {
                      "GNSS/IMU input\n";
         return false;
     }
+    if (options.native_base_pseudorange_source_miss_mask && !android_raw) {
+        std::cerr << "--native-base-pseudorange-source-miss-mask requires Android "
+                     "raw GNSS/IMU input\n";
+        return false;
+    }
+    if (options.native_base_pseudorange_source_miss_mask &&
+        !options.native_base_pseudorange_compensation) {
+        std::cerr << "--native-base-pseudorange-source-miss-mask requires "
+                     "--native-base-pseudorange-compensation\n";
+        return false;
+    }
     if (options.native_base_pseudorange_preserve_additional_frequency_bands &&
         !options.native_base_pseudorange_compensation) {
         std::cerr << "--native-base-pseudorange-preserve-additional-frequency-bands "
                      "requires --native-base-pseudorange-compensation\n";
+        return false;
+    }
+    if (options.native_base_pseudorange_source_miss_mask &&
+        options.native_base_pseudorange_preserve_additional_frequency_bands) {
+        std::cerr << "--native-base-pseudorange-source-miss-mask cannot be combined "
+                     "with --native-base-pseudorange-preserve-additional-frequency-bands\n";
         return false;
     }
     if (options.native_base_pseudorange_compensation &&
@@ -1222,6 +1246,18 @@ struct BasePseudorangeCompensationReport {
     std::map<std::string, std::size_t> selected_band_streams_by_signal;
     std::size_t matched_factor_rows = 0U;
     std::size_t finite_correction_rows_among_matched = 0U;
+    // Phase73 source-exact graph miss-mask accounting.  These fields are
+    // populated only when the new opt-in is enabled; legacy base-compensation
+    // summaries retain their historical semantics and bytes.
+    bool source_miss_mask_enabled = false;
+    std::size_t original_adopted_pseudorange_rows = 0U;
+    std::size_t retained_finite_pc_pseudorange_rows = 0U;
+    std::size_t dropped_missing_exact_stream_rows = 0U;
+    std::size_t dropped_out_of_domain_rows = 0U;
+    std::size_t dropped_nonfinite_correction_rows = 0U;
+    double retained_finite_pc_fraction = 0.0;
+    double retained_over_original_fraction = 0.0;
+    bool pseudorange_factor_count_consistent = false;
     double correction_abs_p50_m = std::numeric_limits<double>::quiet_NaN();
     double correction_abs_p95_m = std::numeric_limits<double>::quiet_NaN();
     double correction_abs_max_m = std::numeric_limits<double>::quiet_NaN();
@@ -2356,6 +2392,44 @@ std::string makeSummary(const Options& options,
             << "    \"tdcp_applied\": false,\n"
             << "    \"doppler_applied\": false,\n"
             << "    \"no_extrapolation_or_endpoint_hold\": true,\n"
+            << "    \"failure\": ";
+        writeJsonString(out, base_report.failure);
+        out << "\n  },\n";
+    }
+    if (options.native_base_pseudorange_source_miss_mask) {
+        out << "  \"native_base_pseudorange_source_miss_mask\": {\n"
+            << "    \"enabled\": true,\n"
+            << "    \"source_contract\": \"finite in-domain pc only; missing/out-of-domain pc is a pseudorange-factor miss\",\n"
+            << "    \"scope\": \"adopted undifferenced FGO pseudorange factors only\",\n"
+            << "    \"original_adopted_pseudorange_rows\": "
+            << base_report.original_adopted_pseudorange_rows << ",\n"
+            << "    \"retained_finite_pc_pseudorange_rows\": "
+            << base_report.retained_finite_pc_pseudorange_rows << ",\n"
+            << "    \"dropped_missing_exact_stream_rows\": "
+            << base_report.dropped_missing_exact_stream_rows << ",\n"
+            << "    \"dropped_out_of_domain_rows\": "
+            << base_report.dropped_out_of_domain_rows << ",\n"
+            << "    \"dropped_nonfinite_correction_rows\": "
+            << base_report.dropped_nonfinite_correction_rows << ",\n"
+            << "    \"retained_finite_pc_fraction\": "
+            << base_report.retained_finite_pc_fraction << ",\n"
+            << "    \"retained_over_original_fraction\": "
+            << base_report.retained_over_original_fraction << ",\n"
+            << "    \"pseudorange_factors_inserted\": "
+            << problem.pseudorange_factors.size() << ",\n"
+            << "    \"pseudorange_factor_count_consistent\": "
+            << (base_report.pseudorange_factor_count_consistent ? "true" : "false")
+            << ",\n"
+            << "    \"correction_abs_p50_m\": "
+            << base_report.correction_abs_p50_m << ",\n"
+            << "    \"correction_abs_p95_m\": "
+            << base_report.correction_abs_p95_m << ",\n"
+            << "    \"correction_abs_max_m\": "
+            << base_report.correction_abs_max_m << ",\n"
+            << "    \"retained_factor_epoch_indices_unchanged\": true,\n"
+            << "    \"tdcp_doppler_imu_spp_unchanged\": true,\n"
+            << "    \"no_extrapolation_or_endpoint_hold\": true,\n"
+            << "    \"sign\": \"P_rover_corrected_m=P_rover_raw_m-pc_m\",\n"
             << "    \"failure\": ";
         writeJsonString(out, base_report.failure);
         out << "\n  },\n";
@@ -3670,60 +3744,125 @@ int main(int argc, char** argv) {
         problem = processor.buildPseudorangeProblem(epochs, nav);
     }
     if (options.native_base_pseudorange_compensation) {
-        std::vector<double> absolute_corrections;
-        absolute_corrections.reserve(problem.pseudorange_factors.size());
         base_pseudorange_report.adopted_pseudorange_rows =
             problem.pseudorange_factors.size();
-        for (auto& factor : problem.pseudorange_factors) {
-            const bool exact_stream_matched = base_pseudorange_model.hasStream(
-                factor.satellite, factor.signal);
-            if (exact_stream_matched) {
-                ++base_pseudorange_report.matched_factor_rows;
+        if (options.native_base_pseudorange_source_miss_mask) {
+            base_pseudorange_report.source_miss_mask_enabled = true;
+            libgnss::source_pseudorange_miss_mask::Report miss_mask_report;
+            const bool mask_ok =
+                libgnss::source_pseudorange_miss_mask::apply(
+                    problem.pseudorange_factors, problem.epochs,
+                    [&base_pseudorange_model](const libgnss::SatelliteId& satellite,
+                                              libgnss::SignalType signal) {
+                        return base_pseudorange_model.hasStream(satellite, signal);
+                    },
+                    [&base_pseudorange_model](const libgnss::GNSSTime& time,
+                                              const libgnss::SatelliteId& satellite,
+                                              libgnss::SignalType signal,
+                                              double& correction_m) {
+                        return base_pseudorange_model.correctionAt(
+                            time, satellite, signal, correction_m);
+                    },
+                    miss_mask_report);
+            base_pseudorange_report.original_adopted_pseudorange_rows =
+                miss_mask_report.original_adopted_rows;
+            base_pseudorange_report.retained_finite_pc_pseudorange_rows =
+                miss_mask_report.retained_finite_pc_rows;
+            base_pseudorange_report.dropped_missing_exact_stream_rows =
+                miss_mask_report.dropped_missing_exact_stream_rows;
+            base_pseudorange_report.dropped_out_of_domain_rows =
+                miss_mask_report.dropped_out_of_domain_rows;
+            base_pseudorange_report.dropped_nonfinite_correction_rows =
+                miss_mask_report.dropped_nonfinite_correction_rows;
+            base_pseudorange_report.retained_finite_pc_fraction =
+                miss_mask_report.retained_finite_pc_fraction;
+            base_pseudorange_report.retained_over_original_fraction =
+                miss_mask_report.retained_over_original_fraction;
+            base_pseudorange_report.pseudorange_factor_count_consistent =
+                miss_mask_report.factor_count_consistent;
+            base_pseudorange_report.adopted_rows_corrected =
+                miss_mask_report.retained_finite_pc_rows;
+            base_pseudorange_report.interpolated_rows =
+                miss_mask_report.retained_finite_pc_rows;
+            base_pseudorange_report.interpolation_misses =
+                miss_mask_report.dropped_missing_exact_stream_rows +
+                miss_mask_report.dropped_out_of_domain_rows +
+                miss_mask_report.dropped_nonfinite_correction_rows;
+            base_pseudorange_report.matched_factor_rows =
+                miss_mask_report.matched_exact_stream_rows;
+            base_pseudorange_report.finite_correction_rows_among_matched =
+                miss_mask_report.finite_correction_rows_among_matched;
+            base_pseudorange_report.correction_abs_p50_m =
+                miss_mask_report.correction_abs_p50_m;
+            base_pseudorange_report.correction_abs_p95_m =
+                miss_mask_report.correction_abs_p95_m;
+            base_pseudorange_report.correction_abs_max_m =
+                miss_mask_report.correction_abs_max_m;
+            base_pseudorange_report.applied =
+                mask_ok && miss_mask_report.factor_count_consistent &&
+                miss_mask_report.retained_finite_pc_rows > 0U;
+            if (!mask_ok || !base_pseudorange_report.applied) {
+                base_pseudorange_report.failure = miss_mask_report.failure.empty()
+                    ? "source-exact finite-pc miss mask retained no usable factor"
+                    : miss_mask_report.failure;
+                std::cerr << "source-exact pseudorange miss mask failed closed: "
+                          << base_pseudorange_report.failure << "\n";
+                return 1;
             }
-            if (factor.epoch_index >= problem.epochs.size()) {
-                ++base_pseudorange_report.interpolation_misses;
-                continue;
+        } else {
+            std::vector<double> absolute_corrections;
+            absolute_corrections.reserve(problem.pseudorange_factors.size());
+            for (auto& factor : problem.pseudorange_factors) {
+                const bool exact_stream_matched = base_pseudorange_model.hasStream(
+                    factor.satellite, factor.signal);
+                if (exact_stream_matched) {
+                    ++base_pseudorange_report.matched_factor_rows;
+                }
+                if (factor.epoch_index >= problem.epochs.size()) {
+                    ++base_pseudorange_report.interpolation_misses;
+                    continue;
+                }
+                double correction_m = std::numeric_limits<double>::quiet_NaN();
+                if (!base_pseudorange_model.correctionAt(
+                        problem.epochs[factor.epoch_index].time, factor.satellite,
+                        factor.signal, correction_m)) {
+                    ++base_pseudorange_report.interpolation_misses;
+                    continue;
+                }
+                const double corrected =
+                    libgnss::base_pseudorange_compensation::subtractCorrection(
+                        factor.corrected_pseudorange_m, correction_m);
+                if (!std::isfinite(corrected)) {
+                    ++base_pseudorange_report.interpolation_misses;
+                    continue;
+                }
+                if (exact_stream_matched) {
+                    ++base_pseudorange_report.finite_correction_rows_among_matched;
+                }
+                factor.corrected_pseudorange_m = corrected;
+                ++base_pseudorange_report.adopted_rows_corrected;
+                ++base_pseudorange_report.interpolated_rows;
+                absolute_corrections.push_back(std::abs(correction_m));
             }
-            double correction_m = std::numeric_limits<double>::quiet_NaN();
-            if (!base_pseudorange_model.correctionAt(
-                    problem.epochs[factor.epoch_index].time, factor.satellite,
-                    factor.signal, correction_m)) {
-                ++base_pseudorange_report.interpolation_misses;
-                continue;
+            base_pseudorange_report.correction_abs_p50_m =
+                finiteMedian(absolute_corrections);
+            base_pseudorange_report.correction_abs_p95_m =
+                finitePercentile(absolute_corrections, 95.0);
+            base_pseudorange_report.correction_abs_max_m =
+                absolute_corrections.empty()
+                    ? std::numeric_limits<double>::quiet_NaN()
+                    : *std::max_element(absolute_corrections.begin(),
+                                        absolute_corrections.end());
+            base_pseudorange_report.applied =
+                base_pseudorange_report.adopted_pseudorange_rows > 0U &&
+                base_pseudorange_report.adopted_rows_corrected > 0U;
+            if (!base_pseudorange_report.applied) {
+                base_pseudorange_report.failure =
+                    "no adopted pseudorange factor had an in-domain base correction";
+                std::cerr << "base pseudorange compensation failed closed: "
+                          << base_pseudorange_report.failure << "\n";
+                return 1;
             }
-            const double corrected =
-                libgnss::base_pseudorange_compensation::subtractCorrection(
-                    factor.corrected_pseudorange_m, correction_m);
-            if (!std::isfinite(corrected)) {
-                ++base_pseudorange_report.interpolation_misses;
-                continue;
-            }
-            if (exact_stream_matched) {
-                ++base_pseudorange_report.finite_correction_rows_among_matched;
-            }
-            factor.corrected_pseudorange_m = corrected;
-            ++base_pseudorange_report.adopted_rows_corrected;
-            ++base_pseudorange_report.interpolated_rows;
-            absolute_corrections.push_back(std::abs(correction_m));
-        }
-        base_pseudorange_report.correction_abs_p50_m =
-            finiteMedian(absolute_corrections);
-        base_pseudorange_report.correction_abs_p95_m =
-            finitePercentile(absolute_corrections, 95.0);
-        base_pseudorange_report.correction_abs_max_m =
-            absolute_corrections.empty()
-                ? std::numeric_limits<double>::quiet_NaN()
-                : *std::max_element(absolute_corrections.begin(),
-                                    absolute_corrections.end());
-        base_pseudorange_report.applied =
-            base_pseudorange_report.adopted_pseudorange_rows > 0U &&
-            base_pseudorange_report.adopted_rows_corrected > 0U;
-        if (!base_pseudorange_report.applied) {
-            base_pseudorange_report.failure =
-                "no adopted pseudorange factor had an in-domain base correction";
-            std::cerr << "base pseudorange compensation failed closed: "
-                      << base_pseudorange_report.failure << "\n";
-            return 1;
         }
     }
     if (options.native_fallback_seed_quality_anchor_recovery &&
