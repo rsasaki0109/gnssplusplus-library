@@ -563,6 +563,10 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase75_phase74_accuracy_integrity_recovery.py
     )
     add_test(
+        NAME python_smartphone_phase78_phase77_structural_reclassification_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase78_phase77_structural_reclassification.py
+    )
+    add_test(
         NAME python_smartphone_phase32_quality_anchor_eval_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase32_quality_anchor_eval.py
     )
@@ -934,6 +938,7 @@ if(GTest_FOUND)
         python_smartphone_phase49_pixel5_adr_cycle_slip_lock_loss_audit_tests
         python_smartphone_phase50_pixel5_adr_half_cycle_audit_tests
         python_smartphone_phase77_phase73_signal_bias_composition_structural_tests
+        python_smartphone_phase78_phase77_structural_reclassification_tests
         python_smartphone_phase61_pixel5_cn0_pseudorange_calibration_tests
         python_smartphone_phase59_native_cn0_doppler_calibration_accuracy_tests
         python_smartphone_kaggle_tests
