@@ -474,6 +474,10 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase46_pixel5_raw_clock_timing_audit.py
     )
     add_test(
+        NAME python_smartphone_phase47_pixel5_raw_code_multipath_audit_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase47_pixel5_raw_code_multipath_audit.py
+    )
+    add_test(
         NAME python_smartphone_phase32_quality_anchor_eval_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase32_quality_anchor_eval.py
     )
@@ -840,6 +844,7 @@ if(GTest_FOUND)
         python_smartphone_phase44_pixel5_development_accuracy_tests
         python_smartphone_phase45_pixel5_residual_diagnostic_tests
         python_smartphone_phase46_pixel5_raw_clock_timing_audit_tests
+        python_smartphone_phase47_pixel5_raw_code_multipath_audit_tests
         python_smartphone_kaggle_tests
         python_smartphone_trajectory_smoother_tests
         python_smartphone_trajectory_imu_tests
