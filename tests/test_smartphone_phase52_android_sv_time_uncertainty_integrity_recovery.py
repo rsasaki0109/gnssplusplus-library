@@ -51,6 +51,9 @@ class Phase52IntegrityRecoveryTest(unittest.TestCase):
         self.assertEqual(freeze["accuracy_gates"]["macro_improvement_min_m"], 0.10)
         self.assertEqual(freeze["accuracy_gates"]["mtv_h_improvement_min_m"], 0.10)
 
+    def test_phase51_structural_pass_pin_is_in_evaluator_record(self) -> None:
+        self.assertIn('output.get("evaluator", {}).get("structural_pass")', SOURCE)
+
 
 if __name__ == "__main__":
     unittest.main()

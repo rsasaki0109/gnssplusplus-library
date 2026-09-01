@@ -32,7 +32,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[3]
 FREEZE = ROOT / "docs/use_cases/records/smartphone_r5_phase52_android_sv_time_uncertainty_integrity_recovery_freeze_v1.json"
 FREEZE_SHA256 = "e88de17ba1dff7e915e365b34d9fcdf3da769d8113b38b15b21b8bb7923c41d3"
-MANIFEST = ROOT / "docs/use_cases/records/smartphone_r5_phase52_android_sv_time_uncertainty_integrity_recovery_evaluator_manifest_v1.json"
+MANIFEST = ROOT / "docs/use_cases/records/smartphone_r5_phase52_android_sv_time_uncertainty_integrity_recovery_evaluator_manifest_v2.json"
 DEFAULT_OUTPUT = ROOT / "output/smartphone-r5/phase52-android-sv-time-uncertainty-integrity-recovery-v1"
 RESULT_NAME = "phase52_integrity_recovery_result.json"
 ARTIFACT_MANIFEST_NAME = "phase52_integrity_recovery.manifest.json"
@@ -43,7 +43,7 @@ PHASE51_OUTPUT = ROOT / "output/smartphone-r5/phase51-android-sv-time-uncertaint
 PHASE44_RESULT = ROOT / "docs/use_cases/records/smartphone_r5_phase44_pixel5_development_accuracy_result_v1.json"
 
 SCHEMA = "smartphone-r5-phase52-android-sv-time-uncertainty-integrity-recovery.v1"
-MANIFEST_SCHEMA = "smartphone-r5-phase52-android-sv-time-uncertainty-integrity-recovery-manifest.v1"
+MANIFEST_SCHEMA = "smartphone-r5-phase52-android-sv-time-uncertainty-integrity-recovery-manifest.v2"
 FREEZE_SCHEMA = "smartphone-r5-phase52-android-sv-time-uncertainty-integrity-recovery-freeze.v1"
 ROUTES = (
     "2021-03-16-18-59-us-ca-mtv-a/pixel5",
@@ -222,7 +222,7 @@ def verify_historical_pins(freeze: dict[str, Any]) -> dict[str, Any]:
     if result_hash != expected_hash or result.get("status") != "evaluator-integrity-no-go" or result.get("evaluator", {}).get("structural_pass") is not True or result.get("truth_accounting", {}).get("truth_reads_after_structural_pass") != 4:
         raise fail("Phase51 result integrity pin failed")
     output, output_hash, _ = load_json_once(PHASE51_OUTPUT, "Phase51 output result")
-    if output_hash != freeze["authority"]["phase51_output_result"]["sha256"] or output.get("structural", {}).get("passed") is not True:
+    if output_hash != freeze["authority"]["phase51_output_result"]["sha256"] or output.get("evaluator", {}).get("structural_pass") is not True:
         raise fail("Phase51 structural output pin failed")
     p44, p44_hash, _ = load_json_once(PHASE44_RESULT, "Phase44 result")
     if p44_hash != freeze["authority"]["phase44_result"]["sha256"] or p44.get("metric_contract", {}).get("earth_radius_m") != HAVERSINE_RADIUS_M or p44.get("metric_contract", {}).get("kaggle_score") != "(P50 + P95) / 2":
