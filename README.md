@@ -978,6 +978,21 @@ remains champion and Phase51 remains experimental.  See the [Phase58 contract](d
 [evaluator manifest](docs/use_cases/records/smartphone_r5_phase58_pixel5_cn0_doppler_calibration_evaluator_manifest_v1.json),
 and [result](docs/use_cases/records/smartphone_r5_phase58_pixel5_cn0_doppler_calibration_result_v1.json).
 
+The Phase58 native opt-in structural matrix then ran the fixed
+`--native-cn0-doppler-calibration` floor across the same four Pixel5 routes.
+Control ran once and candidate twice per route; all structural gates passed,
+candidate repeats were byte-identical, and every control summary/submission
+matched the Phase43 flag-off artifact.  Candidate adopted-factor counts were
+**61,726 / 73,264 / 34,293 / 24,373** (MTV-a / MTV-h / LAX-t / MTV-u), with
+**61,722 / 73,264 / 34,293 / 24,372** factors affected.  The matrix used 12
+native solver invocations and 12 one-process reads per pinned GNSS, IMU, and
+navigation input; truth, validation/holdout, MAT, WLS, precomputed
+coordinates, and Kaggle/token access remained zero.  This is structural only:
+no accuracy truth or `0.782` evaluation was made.  Phase43 remains champion and
+Phase51 remains experimental.  See the [native structural result](docs/use_cases/records/smartphone_r5_phase58_native_cn0_doppler_calibration_structural_result_v1.json),
+[native freeze](docs/use_cases/records/smartphone_r5_phase58_native_cn0_doppler_calibration_freeze_v1.json),
+and [native evaluator manifest](docs/use_cases/records/smartphone_r5_phase58_native_cn0_doppler_calibration_evaluator_manifest_v1.json).
+
 ## Docs
 
 - <https://rsasaki0109.github.io/gnssplusplus-library/>
