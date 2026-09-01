@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import inspect
 from pathlib import Path
 import sys
 import unittest
@@ -66,6 +67,19 @@ class Phase35MatrixTests(unittest.TestCase):
         self.assertEqual(MODULE.RAW_NAMES, {"gnss": "device_gnss.csv", "imu": "device_imu.csv", "nav": "brdc.nav"})
         self.assertNotIn("ground_truth.csv", MODULE.RAW_NAMES.values())
         self.assertNotIn(".mat", " ".join(MODULE.RAW_NAMES.values()).lower())
+
+    def test_resume_is_truth_free_and_byte_preserving(self) -> None:
+        self.assertIn("resume", inspect.signature(MODULE.run_matrix).parameters)
+        source = inspect.getsource(MODULE._ensure_run)
+        self.assertIn("private staging directory", source)
+        self.assertIn("os.replace", source)
+        self.assertIn("sha256(existing) != sha256(staged)", source)
+        self.assertIn("truth_open_count", inspect.getsource(MODULE._new_matrix_report))
+
+    def test_cli_exposes_separate_resume_operation(self) -> None:
+        source = inspect.getsource(MODULE.main)
+        self.assertIn('choices=("run", "resume", "seal")', source)
+        self.assertIn('args.operation == "resume"', source)
 
 
 if __name__ == "__main__":
