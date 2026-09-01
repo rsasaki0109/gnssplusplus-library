@@ -313,6 +313,19 @@ was authorized, and the Phase 31/default binary and outputs remain unchanged.
 See the [Phase 38 diagnosis](docs/use_cases/smartphone_native_fgo_phase38_mtvh_failure_diagnosis.md)
 and [No-Go result](docs/use_cases/records/smartphone_r5_phase38_mtvh_failure_diagnosis_result_v1.json).
 
+Phase 39 adds a truth-free, native opt-in candidate that hands off only the
+GNSS-first optimizer's independently optimized Doppler velocity/heading
+sequence.  Its ECEF-to-ENU origin is the first original raw SPP seed, while
+GNSS-first position and receiver-clock states are never copied.  Every epoch
+must have a finite velocity with norm <=70 m/s; the summary exposes GNSS-first
+out-of-Earth/invalid-position counts and the position/clock copy count.  The
+candidate flag is
+`--native-gnss-first-velocity-only-handoff`; absent the flag, defaults and the
+Phase 31 champion are unchanged.  The fixed six-route, two-run structural
+matrix and flag-off identity contract are frozen before execution.  See the
+[Phase 39 handoff contract](docs/use_cases/smartphone_native_fgo_phase39_velocity_only_handoff.md)
+and [freeze record](docs/use_cases/records/smartphone_r5_phase39_gnss_first_velocity_only_handoff_freeze_v1.json).
+
 ### PPC 2024 goal matrix vs Kaiyodai and gici-open
 
 The audited KF/FGO selected profile clears the distance-weighted PPC public

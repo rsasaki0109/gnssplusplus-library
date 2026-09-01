@@ -94,6 +94,10 @@ struct Options {
     bool native_upstream_position_offset = false;
     bool native_signal_specific_galileo_tgd = false;
     bool native_quality_anchor = false;
+    // Phase39 candidate: use the GNSS-first pass only for its independently
+    // optimized Doppler velocity/heading seeds.  Position and receiver-clock
+    // states remain the original raw SPP seeds.
+    bool native_gnss_first_velocity_only_handoff = false;
 };
 
 const char* carrierSignalName(libgnss::SignalType signal) {
@@ -127,7 +131,8 @@ void usage(const char* program) {
                  " [--native-upstream-stop-constraints]"
                  " [--native-upstream-position-offset]"
                  " [--native-signal-specific-galileo-tgd]"
-                 " [--native-quality-anchor]\n";
+                 " [--native-quality-anchor]"
+                 " [--native-gnss-first-velocity-only-handoff]\n";
 }
 
 bool requireValue(int argc, char** argv, int& index, std::string& value) {
@@ -243,6 +248,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
             options.native_signal_specific_galileo_tgd = true;
         } else if (arg == "--native-quality-anchor") {
             options.native_quality_anchor = true;
+        } else if (arg == "--native-gnss-first-velocity-only-handoff") {
+            options.native_gnss_first_velocity_only_handoff = true;
         } else {
             std::cerr << "Unknown argument: " << arg << "\n";
             return false;
@@ -427,6 +434,21 @@ bool parseArguments(int argc, char** argv, Options& options) {
                      "Phase 19 excludes GPS L1\n";
         return false;
     }
+    if (options.native_gnss_first_velocity_only_handoff &&
+        (!android_raw || !options.android_raw_utc_key_contract ||
+         !options.all_epochs || options.skip_epochs != 0)) {
+        std::cerr << "--native-gnss-first-velocity-only-handoff requires Android "
+                     "raw input, --android-raw-utc-keys, --all-epochs, and no "
+                     "skipped epochs\n";
+        return false;
+    }
+    if (options.native_gnss_first_velocity_only_handoff &&
+        options.native_pdc_state_bridge) {
+        std::cerr << "--native-gnss-first-velocity-only-handoff is incompatible "
+                     "with --native-pdc-state-bridge; position/clock seeds must "
+                     "remain the original raw SPP seeds\n";
+        return false;
+    }
     return true;
 }
 
@@ -539,6 +561,20 @@ struct ImuBuildReport {
     std::size_t gnss_first_epochs = 0;
     std::size_t gnss_first_doppler_factors = 0;
     std::size_t gnss_first_velocity_states = 0;
+    std::size_t gnss_first_position_invalid_count = 0;
+    std::size_t gnss_first_position_nonfinite_count = 0;
+    std::size_t gnss_first_position_out_of_earth_count = 0;
+    std::size_t gnss_first_clock_invalid_count = 0;
+    std::size_t gnss_first_velocity_nonfinite_count = 0;
+    std::size_t gnss_first_velocity_over_bound_count = 0;
+    std::size_t gnss_first_velocity_valid_count = 0;
+    double gnss_first_max_velocity_norm_mps = 0.0;
+    double gnss_first_first_invalid_position_norm_m =
+        std::numeric_limits<double>::quiet_NaN();
+    std::size_t original_raw_seed_position_count = 0;
+    std::size_t original_raw_seed_position_invalid_count = 0;
+    std::size_t gnss_first_positions_clocks_copied = 0;
+    bool gnss_first_velocity_only_handoff = false;
     int gnss_first_iterations = 0;
     double gnss_first_initial_cost = 0.0;
     double gnss_first_final_cost = 0.0;
@@ -555,6 +591,119 @@ struct ImuBuildReport {
     libgnss::AndroidGnssTimeAnchorLoadResult android_gnss_anchor_load;
     libgnss::AndroidGnssUtcGpsMappingLoadResult android_gnss_utc_mapping_load;
 };
+
+bool earthValidEcef(const libgnss::Vector3d& position) {
+    if (!position.allFinite()) return false;
+    const double norm = position.norm();
+    return std::isfinite(norm) && norm >= 6.0e6 && norm <= 7.0e6;
+}
+
+bool validateGnssFirstVelocityOnlyHandoff(
+    const libgnss::FGOProcessor::FGOProblem& problem,
+    const libgnss::FGOProcessor::FGOResult& gnss_first_result,
+    std::vector<libgnss::Vector3d>& velocities_enu,
+    ImuBuildReport& report,
+    std::string& error) {
+    report.gnss_first_velocity_only_handoff = true;
+
+    report.original_raw_seed_position_count = problem.epochs.size();
+    for (const auto& epoch : problem.epochs) {
+        if (!earthValidEcef(epoch.position_ecef)) {
+            ++report.original_raw_seed_position_invalid_count;
+        }
+    }
+    if (report.original_raw_seed_position_invalid_count != 0U) {
+        error = "original raw SPP seed positions are not all Earth-valid";
+        return false;
+    }
+
+    const auto& solutions = gnss_first_result.solution.solutions;
+    const auto& velocities = gnss_first_result.epoch_velocities_ecef_mps;
+    for (const auto& solution : solutions) {
+        const bool finite_position = solution.position_ecef.allFinite();
+        const bool earth_position = earthValidEcef(solution.position_ecef);
+        if (!finite_position) ++report.gnss_first_position_nonfinite_count;
+        if (finite_position && !earth_position) {
+            ++report.gnss_first_position_out_of_earth_count;
+        }
+        if (!earth_position) {
+            ++report.gnss_first_position_invalid_count;
+            if (!std::isfinite(report.gnss_first_first_invalid_position_norm_m)) {
+                report.gnss_first_first_invalid_position_norm_m =
+                    finite_position ? solution.position_ecef.norm()
+                                    : std::numeric_limits<double>::quiet_NaN();
+            }
+        }
+        if (!std::isfinite(solution.receiver_clock_bias)) {
+            ++report.gnss_first_clock_invalid_count;
+        }
+    }
+
+    if (solutions.size() != problem.epochs.size() ||
+        velocities.size() != problem.epochs.size()) {
+        error = "GNSS-first velocity count does not match observation epochs";
+        return false;
+    }
+    for (const auto& velocity : velocities) {
+        if (!velocity.allFinite()) {
+            ++report.gnss_first_velocity_nonfinite_count;
+            continue;
+        }
+        const double norm = velocity.norm();
+        if (!std::isfinite(norm)) {
+            ++report.gnss_first_velocity_nonfinite_count;
+            continue;
+        }
+        report.gnss_first_max_velocity_norm_mps =
+            std::max(report.gnss_first_max_velocity_norm_mps, norm);
+        if (norm > 70.0) {
+            ++report.gnss_first_velocity_over_bound_count;
+        } else {
+            ++report.gnss_first_velocity_valid_count;
+        }
+    }
+    // Convert the independently optimized ECEF velocity states at the
+    // original raw SPP origin.  Do not call deriveGnssFirstVelocities here:
+    // that historical helper takes its ENU origin from the GNSS-first
+    // position result, which is precisely the state this candidate diagnoses
+    // and deliberately refuses to hand off.
+    const libgnss::Vector3d raw_origin = problem.epochs.front().position_ecef;
+    double raw_lat = 0.0;
+    double raw_lon = 0.0;
+    double raw_height = 0.0;
+    libgnss::ecef2geodetic(raw_origin, raw_lat, raw_lon, raw_height);
+    if (!earthValidEcef(raw_origin) || !std::isfinite(raw_lat) ||
+        !std::isfinite(raw_lon) || !std::isfinite(raw_height)) {
+        error = "original raw SPP seed has invalid ENU origin";
+        return false;
+    }
+    velocities_enu.resize(velocities.size());
+    for (std::size_t index = 0; index < velocities.size(); ++index) {
+        velocities_enu[index] = libgnss::ecef2enu(
+            velocities[index], raw_lat, raw_lon);
+        if (!velocities_enu[index].allFinite() ||
+            !std::isfinite(velocities_enu[index].norm())) {
+            error = "GNSS-first ENU velocity sequence is non-finite";
+            return false;
+        }
+    }
+    if (report.gnss_first_velocity_nonfinite_count != 0U ||
+        report.gnss_first_velocity_over_bound_count != 0U ||
+        report.gnss_first_velocity_valid_count != problem.epochs.size()) {
+        std::ostringstream detail;
+        detail << "GNSS-first optimized Doppler velocity gate failed: count="
+               << velocities.size() << "/" << problem.epochs.size()
+               << " nonfinite=" << report.gnss_first_velocity_nonfinite_count
+               << " over_70_mps=" << report.gnss_first_velocity_over_bound_count
+               << " max_mps=" << report.gnss_first_max_velocity_norm_mps;
+        error = detail.str();
+        return false;
+    }
+    // This helper is deliberately the only candidate handoff boundary.  The
+    // caller does not copy GNSS-first position or clock values in this mode.
+    report.gnss_first_positions_clocks_copied = 0U;
+    return true;
+}
 
 struct RawUtcOutputReport {
     bool enabled = false;
@@ -2094,6 +2243,39 @@ std::string makeSummary(const Options& options,
         << "    \"final_cost\": " << imu_report.gnss_first_final_cost << ",\n"
         << "    \"failure\": ";
     writeJsonString(out, imu_report.gnss_first_failure);
+    if (options.native_gnss_first_velocity_only_handoff) {
+        out << ",\n"
+            << "    \"handoff_mode\": \"velocity-only\",\n"
+            << "    \"position_invalid_count\": "
+            << imu_report.gnss_first_position_invalid_count << ",\n"
+            << "    \"position_nonfinite_count\": "
+            << imu_report.gnss_first_position_nonfinite_count << ",\n"
+            << "    \"position_out_of_earth_count\": "
+            << imu_report.gnss_first_position_out_of_earth_count << ",\n"
+            << "    \"first_invalid_position_norm_m\": ";
+        if (std::isfinite(imu_report.gnss_first_first_invalid_position_norm_m)) {
+            out << imu_report.gnss_first_first_invalid_position_norm_m;
+        } else {
+            out << "null";
+        }
+        out << ",\n"
+            << "    \"clock_invalid_count\": "
+            << imu_report.gnss_first_clock_invalid_count << ",\n"
+            << "    \"velocity_valid_count\": "
+            << imu_report.gnss_first_velocity_valid_count << ",\n"
+            << "    \"velocity_nonfinite_count\": "
+            << imu_report.gnss_first_velocity_nonfinite_count << ",\n"
+            << "    \"velocity_over_70_mps_count\": "
+            << imu_report.gnss_first_velocity_over_bound_count << ",\n"
+            << "    \"max_velocity_norm_mps\": "
+            << imu_report.gnss_first_max_velocity_norm_mps << ",\n"
+            << "    \"original_raw_seed_position_count\": "
+            << imu_report.original_raw_seed_position_count << ",\n"
+            << "    \"original_raw_seed_position_invalid_count\": "
+            << imu_report.original_raw_seed_position_invalid_count << ",\n"
+            << "    \"positions_clocks_copied\": "
+            << imu_report.gnss_first_positions_clocks_copied << "\n";
+    }
     out << "\n  },\n"
         << "  \"imu_initialization\": {\n"
         << "    \"input_format\": ";
@@ -2589,28 +2771,44 @@ int main(int argc, char** argv) {
         std::string gnss_first_error;
         gnss_first_ok = !gnss_first_result.solution.isEmpty() &&
                         gnss_first_result.diagnostics.converged &&
-                        deriveGnssFirstVelocities(problem, gnss_first_result,
-                                                  gnss_first_velocities_enu,
-                                                  gnss_first_error);
+                        (options.native_gnss_first_velocity_only_handoff
+                             ? validateGnssFirstVelocityOnlyHandoff(
+                                   problem, gnss_first_result,
+                                   gnss_first_velocities_enu, imu_report,
+                                   gnss_first_error)
+                             : deriveGnssFirstVelocities(
+                                   problem, gnss_first_result,
+                                   gnss_first_velocities_enu, gnss_first_error));
         if (!gnss_first_ok) {
             imu_report.gnss_first_failure = gnss_first_error.empty()
                                                  ? "GNSS-first optimizer did not converge"
                                                  : gnss_first_error;
             std::cerr << "GNSS-first initialization unavailable: "
                       << imu_report.gnss_first_failure << "\n";
+            if (options.native_gnss_first_velocity_only_handoff) {
+                std::cerr << "native GNSS-first velocity-only handoff failed closed\n";
+                return 1;
+            }
         } else {
-            // Seed the following in-memory problem with the GNSS-only result,
-            // including its receiver clock in the internal metre convention.
-            // This is the exact raw-observation handoff; the output is never
-            // published as a separate lane.
-            const auto& gnss_solutions = gnss_first_result.solution.solutions;
-            for (std::size_t i = 0; i < gnss_solutions.size(); ++i) {
-                problem.epochs[i].position_ecef = gnss_solutions[i].position_ecef;
-                if (std::isfinite(gnss_solutions[i].receiver_clock_bias)) {
-                    problem.epochs[i].receiver_clock_bias_m =
-                        gnss_solutions[i].receiver_clock_bias *
-                        libgnss::constants::SPEED_OF_LIGHT;
-                    problem.epochs[i].receiver_clock_bias_is_meters = true;
+            if (options.native_gnss_first_velocity_only_handoff) {
+                // Position and receiver-clock states intentionally remain the
+                // original raw SPP seeds.  Only the independently optimized
+                // Doppler velocity sequence reaches buildImuInput below.
+                imu_report.gnss_first_positions_clocks_copied = 0U;
+            } else {
+                // Seed the following in-memory problem with the GNSS-only
+                // result, including its receiver clock in the internal metre
+                // convention. This is the historical handoff and is retained
+                // byte-for-byte when the Phase39 flag is off.
+                const auto& gnss_solutions = gnss_first_result.solution.solutions;
+                for (std::size_t i = 0; i < gnss_solutions.size(); ++i) {
+                    problem.epochs[i].position_ecef = gnss_solutions[i].position_ecef;
+                    if (std::isfinite(gnss_solutions[i].receiver_clock_bias)) {
+                        problem.epochs[i].receiver_clock_bias_m =
+                            gnss_solutions[i].receiver_clock_bias *
+                            libgnss::constants::SPEED_OF_LIGHT;
+                        problem.epochs[i].receiver_clock_bias_is_meters = true;
+                    }
                 }
             }
         }

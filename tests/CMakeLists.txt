@@ -440,6 +440,10 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase38_mtvh_failure_diagnosis.py
     )
     add_test(
+        NAME python_smartphone_phase39_velocity_only_handoff_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase39_velocity_only_handoff.py
+    )
+    add_test(
         NAME python_smartphone_phase32_quality_anchor_eval_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase32_quality_anchor_eval.py
     )
@@ -800,6 +804,7 @@ if(GTest_FOUND)
         python_smartphone_quality_report_tests
         python_smartphone_raw_quality_control_tests
         python_smartphone_raw_quality_control_eval_tests
+        python_smartphone_phase39_velocity_only_handoff_tests
         python_smartphone_kaggle_tests
         python_smartphone_trajectory_smoother_tests
         python_smartphone_trajectory_imu_tests
