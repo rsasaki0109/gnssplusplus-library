@@ -7,14 +7,14 @@
     "freeze_path": "docs/use_cases/records/smartphone_r5_phase42_doppler_row_attrition_freeze_v1.json",
     "freeze_sha256": "f80865dc9db3d87c310e064df1afe687833225a1b0d1b6027dac6435492f8123",
     "freeze_commit": "ba7a501",
-    "source_commit": "3ee951e86aff6af1dbc0e27164ce1aa1daf85266",
+    "source_commit": "45b8df1b921f0d98d5d4d2e86b85558771b69c62",
     "freeze_is_immutable": true
   },
   "evaluator": {
     "binary_path": "build/apps/gnss_doppler_row_attrition_audit",
     "source_path": "apps/native/gnss_doppler_row_attrition_audit.cpp",
-    "source_sha256": "8e7a8d4a30c6895c4b97ab72774609154edca42688571ada25e10ea27d47dab4",
-    "binary_sha256": "6df6e59804fc86a1e9926ad6e2a2fa747dc328067c55e160583dd1b89cfa1bf2",
+    "source_sha256": "3a4e163564a27baafba2e45a84729a9606f15e286fb3ebacafaf935ea57ac42b",
+    "binary_sha256": "760e7dca0e2a2fe529f851cac79107a6580c6533c7cfd80ea6f1579ee40c0e89",
     "command": "gnss_doppler_row_attrition_audit --android-gnss <device_gnss.csv> --nav <brdc.nav> --rows-csv <audit_rows.csv> --summary-json <audit.json> --dataset-id <route/phone>",
     "raw_loader_call": "loadAndroidRawGnssCsv exactly once per process with verify_enriched_pseudorange=false",
     "nav_loader_call": "RINEXReader::open/readNavigationData exactly once per process",
