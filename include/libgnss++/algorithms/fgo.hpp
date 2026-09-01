@@ -166,6 +166,12 @@ public:
         double satellite_clock_drift_mps = 0.0;
         bool includes_receiver_clock_drift = false;
         bool uses_rotated_satellite_state = false;
+        // Phase58 C/N0 model provenance.  These fields are populated only
+        // when the opt-in calibration is enabled and are diagnostic; the
+        // factor equation still uses residual_mps and sigma_mps.
+        double cn0_doppler_model_sigma_mps = 0.0;
+        bool cn0_doppler_model_sigma_available = false;
+        bool cn0_doppler_sigma_floor_applied = false;
     };
 
     struct SingleDifferenceTdcpFactor {
@@ -367,6 +373,20 @@ public:
         double native_android_sv_time_uncertainty_floor_median_m = 0.0;
         double native_android_sv_time_uncertainty_floor_p95_m = 0.0;
         double native_android_sv_time_uncertainty_floor_max_m = 0.0;
+        // Phase58 raw Android C/N0/Doppler calibration telemetry over the
+        // final adopted undifferenced FGO Doppler population.  These remain
+        // zero/false when the explicit opt-in is disabled.
+        bool native_cn0_doppler_calibration_enabled = false;
+        std::size_t native_cn0_doppler_calibration_candidate_rows = 0;
+        std::size_t native_cn0_doppler_calibration_finite_cn0_rows = 0;
+        std::size_t native_cn0_doppler_calibration_fallback_rows = 0;
+        std::size_t native_cn0_doppler_calibration_factors_affected = 0;
+        double native_cn0_doppler_calibration_alpha_mps = 0.0;
+        double native_cn0_doppler_calibration_reference_cn0_dbhz = 0.0;
+        double native_cn0_doppler_calibration_model_sigma_min_mps = 0.0;
+        double native_cn0_doppler_calibration_model_sigma_median_mps = 0.0;
+        double native_cn0_doppler_calibration_model_sigma_p95_mps = 0.0;
+        double native_cn0_doppler_calibration_model_sigma_max_mps = 0.0;
     };
 
     // --- Phase 2 milestone 2b: IMU preintegration inputs ---

@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <libgnss++/algorithms/doppler_contract.hpp>
 #include <libgnss++/algorithms/android_sv_time_uncertainty.hpp>
+#include <libgnss++/algorithms/cn0_doppler_calibration.hpp>
 #include <libgnss++/algorithms/doppler_velocity_wls.hpp>
 #include <libgnss++/algorithms/fgo.hpp>
 #include <libgnss++/algorithms/fgo_quality_anchor.hpp>
@@ -102,6 +103,42 @@ TEST(AndroidSvTimeUncertaintyTest, FloorsOnlyWhenEnabledAndNeverClips) {
     // There is no upper clip: an intentionally large source uncertainty is
     // retained exactly as the source-derived floor.
     EXPECT_DOUBLE_EQ(sigmaWithFloor(3.0, 1.0e9, true), 1.0e9);
+}
+
+TEST(Cn0DopplerCalibrationTest, UsesFrozenAlphaAndTwentyDbShape) {
+    using namespace cn0_doppler_calibration;
+    EXPECT_DOUBLE_EQ(kReferenceCn0DbHz, 40.0);
+    EXPECT_DOUBLE_EQ(kAlphaMpsAtReference, 0.7586783350728457);
+    EXPECT_DOUBLE_EQ(modelSigmaMps(40.0), kAlphaMpsAtReference);
+    EXPECT_DOUBLE_EQ(modelSigmaMps(20.0),
+                     kAlphaMpsAtReference * 10.0);
+    EXPECT_DOUBLE_EQ(modelSigmaMps(60.0),
+                     kAlphaMpsAtReference * 0.1);
+}
+
+TEST(Cn0DopplerCalibrationTest, FloorsOnlyWhenEnabledAndFallsBackExactly) {
+    using namespace cn0_doppler_calibration;
+    EXPECT_DOUBLE_EQ(sigmaWithFloor(0.2, 40.0, true),
+                     kAlphaMpsAtReference);
+    EXPECT_DOUBLE_EQ(sigmaWithFloor(2.0, 40.0, true), 2.0);
+    EXPECT_DOUBLE_EQ(sigmaWithFloor(0.2, 40.0, false), 0.2);
+    EXPECT_DOUBLE_EQ(sigmaWithFloor(0.2, 0.0, true), 0.2);
+    EXPECT_DOUBLE_EQ(sigmaWithFloor(0.2,
+                                    std::numeric_limits<double>::quiet_NaN(),
+                                    true),
+                     0.2);
+    // No upper clip: a very low finite C/N0 retains the source-shaped floor.
+    EXPECT_DOUBLE_EQ(sigmaWithFloor(0.2, 1.0, true),
+                     modelSigmaMps(1.0));
+}
+
+TEST(Cn0DopplerCalibrationTest, ConfigIsExplicitlyOptIn) {
+    FGOProcessor::FGOConfig config;
+    EXPECT_FALSE(config.use_native_cn0_doppler_calibration);
+    FGOProcessor::UndifferencedDopplerFactor factor;
+    EXPECT_DOUBLE_EQ(factor.cn0_doppler_model_sigma_mps, 0.0);
+    EXPECT_FALSE(factor.cn0_doppler_model_sigma_available);
+    EXPECT_FALSE(factor.cn0_doppler_sigma_floor_applied);
 }
 
 TEST(ResidualIonosphereContractTest, UsesFiniteThinShellAndFrequencyScale) {

@@ -1,6 +1,7 @@
 #include <libgnss++/algorithms/fgo.hpp>
 #include <libgnss++/algorithms/fgo_quality_anchor.hpp>
 #include <libgnss++/algorithms/android_sv_time_uncertainty.hpp>
+#include <libgnss++/algorithms/cn0_doppler_calibration.hpp>
 
 #include <libgnss++/algorithms/lambda.hpp>
 #include <libgnss++/algorithms/doppler_contract.hpp>
@@ -754,6 +755,19 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                                              1e-4,
                                              config_.undifferenced_doppler_sigma_mps /
                                                  std::sqrt(sin_el));
+                if (config_.use_native_cn0_doppler_calibration) {
+                    factor.cn0_doppler_model_sigma_mps =
+                        cn0_doppler_calibration::modelSigmaMps(observation.snr);
+                    factor.cn0_doppler_model_sigma_available =
+                        std::isfinite(factor.cn0_doppler_model_sigma_mps) &&
+                        factor.cn0_doppler_model_sigma_mps > 0.0;
+                    const double existing_sigma = factor.sigma_mps;
+                    factor.sigma_mps = cn0_doppler_calibration::sigmaWithFloor(
+                        existing_sigma, observation.snr, true);
+                    factor.cn0_doppler_sigma_floor_applied =
+                        factor.cn0_doppler_model_sigma_available &&
+                        factor.sigma_mps > existing_sigma;
+                }
                 if (!upstream::finitePositive(factor.sigma_mps)) {
                     continue;
                 }
@@ -1041,6 +1055,51 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                 .native_android_sv_time_uncertainty_floor_p95_m = percentile(0.95);
             problem.diagnostics
                 .native_android_sv_time_uncertainty_floor_max_m = floors.back();
+        }
+    }
+
+    if (config_.use_native_cn0_doppler_calibration) {
+        problem.diagnostics.native_cn0_doppler_calibration_enabled = true;
+        problem.diagnostics.native_cn0_doppler_calibration_alpha_mps =
+            cn0_doppler_calibration::kAlphaMpsAtReference;
+        problem.diagnostics.native_cn0_doppler_calibration_reference_cn0_dbhz =
+            cn0_doppler_calibration::kReferenceCn0DbHz;
+        std::vector<double> model_sigmas;
+        model_sigmas.reserve(problem.undifferenced_doppler_factors.size());
+        for (const auto& factor : problem.undifferenced_doppler_factors) {
+            ++problem.diagnostics.native_cn0_doppler_calibration_candidate_rows;
+            if (!factor.cn0_doppler_model_sigma_available ||
+                !std::isfinite(factor.cn0_doppler_model_sigma_mps) ||
+                factor.cn0_doppler_model_sigma_mps <= 0.0) {
+                ++problem.diagnostics.native_cn0_doppler_calibration_fallback_rows;
+                continue;
+            }
+            ++problem.diagnostics.native_cn0_doppler_calibration_finite_cn0_rows;
+            if (factor.cn0_doppler_sigma_floor_applied) {
+                ++problem.diagnostics.native_cn0_doppler_calibration_factors_affected;
+            }
+            model_sigmas.push_back(factor.cn0_doppler_model_sigma_mps);
+        }
+        if (!model_sigmas.empty()) {
+            std::sort(model_sigmas.begin(), model_sigmas.end());
+            const auto percentile = [&](double q) {
+                const double index =
+                    q * static_cast<double>(model_sigmas.size() - 1U);
+                const std::size_t lower = static_cast<std::size_t>(index);
+                const std::size_t upper =
+                    std::min(model_sigmas.size() - 1U, lower + 1U);
+                const double alpha = index - static_cast<double>(lower);
+                return model_sigmas[lower] * (1.0 - alpha) +
+                       model_sigmas[upper] * alpha;
+            };
+            problem.diagnostics.native_cn0_doppler_calibration_model_sigma_min_mps =
+                model_sigmas.front();
+            problem.diagnostics.native_cn0_doppler_calibration_model_sigma_median_mps =
+                percentile(0.5);
+            problem.diagnostics.native_cn0_doppler_calibration_model_sigma_p95_mps =
+                percentile(0.95);
+            problem.diagnostics.native_cn0_doppler_calibration_model_sigma_max_mps =
+                model_sigmas.back();
         }
     }
 

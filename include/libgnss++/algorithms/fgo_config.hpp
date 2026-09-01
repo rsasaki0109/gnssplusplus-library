@@ -233,6 +233,12 @@ struct Config {
         // the historical upstream-quality proxy above.
         bool use_upstream_absolute_doppler_residual_screen = false;
         double upstream_absolute_doppler_residual_threshold_mps = 3.0;
+        // Phase58 opt-in raw Android C/N0/Doppler calibration.  The fixed
+        // source-supported shape and pooled closure-residual scale are
+        // implemented in cn0_doppler_calibration.hpp.  This floors only the
+        // existing undifferenced FGO Doppler sigma; defaults stay disabled so
+        // the Phase43/champion graph remains byte-compatible.
+        bool use_native_cn0_doppler_calibration = false;
         bool use_single_difference_doppler_factors = false;
         bool use_single_difference_tdcp_factors = false;
         bool use_velocity_states = false;
