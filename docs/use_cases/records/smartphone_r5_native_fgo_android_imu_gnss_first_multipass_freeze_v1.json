@@ -1,0 +1,163 @@
+{
+  "schema_version": "smartphone-r5-native-fgo-android-imu-gnss-first-multipass-freeze.v1",
+  "status": "frozen-before-permitted-train-truth-score",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "candidate_id": "native-fgo-android-gnss-first-vel2rpy-combined-imu-v1",
+  "purpose": "Use a raw-observation GNSS-first P+D velocity solution for the upstream-compatible attitude initialization, then run the existing no-base Pose3/velocity/bias CombinedImuFactor graph.",
+  "external_mutation": false,
+  "token_access": false,
+  "leaderboard_or_holdout_used_for_tuning": false,
+  "input_contract": {
+    "allowed": [
+      "raw device_gnss.csv",
+      "raw device_imu.csv",
+      "broadcast brdc.nav"
+    ],
+    "forbidden": [
+      "truth or ground-truth coordinates",
+      "device-WLS/result coordinates",
+      "precomputed result files",
+      "sample coordinates",
+      "MATLAB MAT inputs"
+    ],
+    "handoff": "GNSS-first optimized positions, receiver clock bias, and velocity states remain in memory; no intermediate coordinate file is consumed."
+  },
+  "split": {
+    "structural_smoke": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "permitted_train_score_after_freeze": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "fresh_validation": "sealed and unopened",
+    "holdout": "sealed and unopened",
+    "test": "not used"
+  },
+  "raw_inputs": {
+    "device_gnss.csv": {
+      "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_gnss.csv",
+      "sha256": "c5af6cc3aeae6ab29a2a10d975d291b8fba4fab15273c0729163cd639ff10e42"
+    },
+    "device_imu.csv": {
+      "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_imu.csv",
+      "sha256": "8f1c582bdad545d11e68349b221001b69e2a9d43f9257e60038c193276fa1804"
+    },
+    "brdc.nav": {
+      "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/brdc.nav",
+      "sha256": "16c859f8015c874398978bae6004172c355f7d3a3b06fa81b54aac88b6b78d33"
+    }
+  },
+  "source_hashes": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "f1a74b48e96a7804e19a2f4677f3fb45c845139832450c20cb78914d1ee4966d",
+    "include/libgnss++/fusion/fusion_initialization.hpp": "b5254cbcc1166a653112c223e62891a02fe98e9732569f1e32d50db187d9efb8",
+    "src/fusion/fusion_initialization.cpp": "c1f7d6bb00179afd471f4287c296da0c8718e23b146ea9518d8a002f70dfd6aa",
+    "src/algorithms/fgo_gtsam_internal.hpp": "c9be5de4160fcf048f4102a2abe1ed155e00e72fe79de19892e2982b78e7e2cd",
+    "src/algorithms/fgo_gtsam_backend.cpp": "53a43a22fd63561b131645e3840ec66a8caa85bbadecd5229a5804bd4218c1e5",
+    "tests/test_fusion_initialization.cpp": "110e3cc489e0b513fdf78ee0fce68dc488ae03013fc1f117737389175c3fe28a",
+    "tests/test_fgo_gtsam_backend.cpp": "6f6155051b92ad9e44615c6f6b5cbd1b143025bfce9515510bb2b052861f3125"
+  },
+  "release_binary": {
+    "path": "build/apps/gnss_fgo_imu_no_base",
+    "sha256": "e7028175ece727738ddd3b6b3b25efa3a4737ebfd35358849bf6dd966138e5cf",
+    "build_type": "Release"
+  },
+  "upstream_spec_hashes": {
+    "output/reproducibility-cache/gsdc2023/fgo_gnss.m": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3",
+    "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+    "output/reproducibility-cache/gsdc2023/parameters.m": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52",
+    "output/reproducibility-cache/gsdc2023/functions/vel2rpy.m": "1fc09b66f3e6548174e0eb6777d42becd0fa131b821013864e4fbfa9ff6e6a31"
+  },
+  "numeric_parameters": {
+    "gnss_first_backend": "GTSAM batch Levenberg-Marquardt",
+    "gnss_first_max_iterations": 1000,
+    "final_imu_backend": "GTSAM batch Levenberg-Marquardt",
+    "final_imu_max_iterations": 12,
+    "velocity_heading_smooth_window_epochs": 20,
+    "velocity_heading_threshold_mps": 0.5,
+    "velocity_heading_offset_deg": 180.0,
+    "stationary_samples": 250,
+    "gravity_mps2": 9.80665,
+    "gravity_norm_bounds_fraction": [0.7, 1.3],
+    "gravity_norm_std_max_mps2": 1.5,
+    "mounting_rpy_deg_xyz": [-85.0, 178.0, -94.0],
+    "imu_sync_coefficient": 0.5,
+    "accel_noise_sigma_mps2_sqrt_hz": 0.025,
+    "gyro_noise_sigma_radps_sqrt_hz": 0.0005,
+    "accel_bias_rw_sigma_mps3_sqrt_hz": 0.00025,
+    "gyro_bias_rw_sigma_radps2_sqrt_hz": 0.0000005,
+    "integration_sigma": 0.05,
+    "initial_velocity_sigma_mps": 0.5,
+    "initial_accel_bias_sigma_mps2": 0.1,
+    "initial_gyro_bias_sigma_radps": 0.01,
+    "pseudorange_sigma_m": 3.0,
+    "pseudorange_huber_threshold_sigma": 4.0,
+    "motion_sigma_m": 50.0,
+    "clock_motion_sigma_m": 300.0,
+    "undifferenced_doppler_enabled_for_gnss_first": true,
+    "undifferenced_doppler_factor_sigma_source": "existing raw-adapter/config sigma; no truth-derived change",
+    "ordinary_tdcp_in_final_android_graph": false,
+    "double_difference_factors": false,
+    "single_difference_factors": false
+  },
+  "algorithm_contract": {
+    "gnss_first": "Raw Android P+D graph with explicit ENU velocity and receiver clock-range-rate states. The optimized ECEF velocity state is exported and converted to ENU for vel2rpy.",
+    "vel2rpy": "Centered MATLAB-compatible movmean (window 20), 3-D speed threshold 0.5 m/s, raw atan2 course, interior linear fill by sample index, endpoint nearest fill, then +180 degrees and wrap to [-180,180].",
+    "imu_pass": "Existing no-base Pose3 body-to-ENU + velocity + ConstantBias graph with CombinedImuFactor for every valid adjacent interval and bias-between factors; GNSS-first position/clock/velocity handoff is in-memory.",
+    "android_time": "GNSS ChipsetElapsedRealtimeNanos anchors are mapped to UTC milliseconds by piecewise linear interpolation/extrapolation; gyro anchors, sync coefficient 0.5, then UTC to GPST.",
+    "android_frame": "Raw-axis selection followed by explicit RzRyRx mounting [-85,178,-94] degrees; ENU is Z-up with gravity -Z.",
+    "doppler_sign": "Prepared native los is satellite-to-receiver and the factor prediction is los dot velocity + receiver clock drift; H_velocity=los and H_clock=1.",
+    "failure_policy": "Nonfinite states, missing GNSS-first optimized velocity sequence, invalid gravity/alignment, solver failure, or empty output fail closed to the exact native-fgo-v1 no-IMU path."
+  },
+  "truth_free_structural_evidence": {
+    "truth_used": false,
+    "short_window": {
+      "output": "output/smartphone-r5/phase7-gtsam-30-v2/submission.csv",
+      "output_sha256": "abe45c4f29b1e99171de938f3d55558f8e4b03e09106c6dd96808690314c2893",
+      "summary": "output/smartphone-r5/phase7-gtsam-30-v2/summary.json",
+      "summary_sha256": "91c7bdc6a19dd2f63b06d8a40a415c313fae2a785ecbac522d8b8b7c4c3eb244",
+      "epochs": 30,
+      "imu_intervals": 29,
+      "gnss_first_doppler_factors": 4695,
+      "gnss_first_velocity_states": 30,
+      "fallback": false,
+      "wall_seconds": 2.66,
+      "max_rss_kib": 105828
+    },
+    "full_route": {
+      "output": "output/smartphone-r5/phase7-gtsam-full-v2/submission.csv",
+      "output_sha256": "740d896087822c07b44df7b8c2c1a87a61953765c4845495b14423ae42685f4b",
+      "summary": "output/smartphone-r5/phase7-gtsam-full-v2/summary.json",
+      "summary_sha256": "eb60f945bda8c9e004fbc8224fa43a99f4c825aecc99fb2a158fc66325fe472e",
+      "epochs": 1097,
+      "imu_intervals": 1096,
+      "gnss_first_doppler_factors": 4695,
+      "gnss_first_velocity_states": 1097,
+      "fallback": false,
+      "finite_output": true,
+      "wall_seconds": 50.43,
+      "max_rss_kib": 117148,
+      "continuity_diagnostic_transitions_over_70mps": 3,
+      "continuity_diagnostic_policy": "reported only; no truth-driven repair or parameter change before scoring"
+    }
+  },
+  "predeclared_score_gate": {
+    "baseline_reference_m": 68.0475838937948,
+    "metric_variant": "haversine_sphere__linear_n_minus_1",
+    "decision": "candidate must be strictly below the retained v1 baseline on the permitted train route; otherwise No-Go",
+    "coverage": "non-regression",
+    "finite_and_physical": "finite keyed output required; continuity anomalies remain diagnostic unless a generic predeclared rule is separately frozen",
+    "validation_or_holdout_after_train_pass": "not authorized by this record"
+  },
+  "commands": {
+    "release_build": "cmake --build build --config Release -j2",
+    "short_truth_free": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} build/apps/gnss_fgo_imu_no_base --android-gnss <route>/pixel7pro/device_gnss.csv --android-imu <route>/pixel7pro/device_imu.csv --nav <route>/brdc.nav --out <output>/submission.csv --summary-json <output>/summary.json --dataset-id <route>/pixel7pro --max-epochs 30",
+    "full_truth_free": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} build/apps/gnss_fgo_imu_no_base --android-gnss <route>/pixel7pro/device_gnss.csv --android-imu <route>/pixel7pro/device_imu.csv --nav <route>/brdc.nav --out <output>/submission.csv --summary-json <output>/summary.json --dataset-id <route>/pixel7pro --all-epochs",
+    "focused_tests": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} build/tests/run_tests --gtest_filter='FusionInitializationTest.*:FGOGtsamUndifferencedDopplerFactorTest.*' --gtest_color=no",
+    "full_tests": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} ctest --test-dir build -j1 --output-on-failure",
+    "diff_check": "git diff --check"
+  },
+  "freeze_rules": {
+    "truth_read_order": "This record and its companion manifest must be hash-verified before the single permitted development-train truth evaluation.",
+    "no_post_freeze_tuning": true,
+    "no_post_truth_code_or_parameter_change": true,
+    "production_default_changed": false,
+    "fresh_validation_and_holdout": "remain sealed"
+  },
+  "companion_manifest": "smartphone_r5_native_fgo_android_imu_gnss_first_multipass_freeze_v1_manifest.json"
+}

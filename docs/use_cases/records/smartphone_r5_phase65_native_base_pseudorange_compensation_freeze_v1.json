@@ -1,0 +1,199 @@
+{
+  "schema_version": "smartphone-r5-phase65-native-base-pseudorange-compensation-freeze.v1",
+  "status": "frozen-before-phase65-source-edit-and-structural-read",
+  "created_at_utc": "2026-09-02T00:00:00Z",
+  "phase": 65,
+  "execution_label": "Luna Max",
+  "purpose": "Authorize one truth-free native implementation of the source-supported base-station pseudorange compensation after the Phase64 provenance policy recovery passed.",
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "base_commit": "6dc1c9d",
+    "phase64_result": "docs/use_cases/records/smartphone_r5_phase64_base_preflight_policy_recovery_result_v4.json",
+    "phase64_result_sha256": "70e620b6726c089b6ebc65d494d45405860e37e2a072b34239fb9c93673f8e80",
+    "phase64_freeze": "docs/use_cases/records/smartphone_r5_phase64_base_preflight_policy_recovery_freeze_v1.json",
+    "phase64_freeze_sha256": "94487186338d85d289c64d04805254f95568020664e37d4402f1f9b238aee993",
+    "phase64_manifest": "docs/use_cases/records/smartphone_r5_phase64_base_preflight_policy_recovery_manifest_v4.json",
+    "phase64_manifest_sha256": "744aa253056a012ad96ff92a01a41bd68e901084371038098b199d0f3daa36ab",
+    "phase64_policy_pass": true,
+    "source_only_before_this_freeze": {
+      "raw_device_reads": 0,
+      "base_rinex_reads": 0,
+      "archive_reopens": 0,
+      "broadcast_nav_reads": 0,
+      "truth_reads": 0,
+      "mat_reads": 0,
+      "solver_invocations": 0
+    }
+  },
+  "source_contract": {
+    "repository_url": "https://github.com/taroz/gsdc2023",
+    "repository_commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "preprocessing_m_sha256": "976629d187e7fab5868eb8e5676a4d40520eb23db1254f7320d3b4270d7dffcf",
+    "correct_pseudorange_m_sha256": "b0536ccff478b0aff253448ffb7a203c715b8064dd8dc85898e38f1f05d0441e",
+    "base_member_selection": "settings_train.csv Base1 selects the unique declared ${Base1}_rnx2.obs member for settings RINEX=V2",
+    "base_model": "For each matching base epoch/satellite/signal, evaluate the native broadcast-navigation pseudorange model at the finite RINEX-header APPROX POSITION XYZ; retain the source residual P_base - modeled_base with the receiver-clock term in the residual and no truth/WLS/precomputed coordinate.",
+    "same_satellite_signal": "match rover and base by the exact native satellite and signal identity; no cross-satellite, cross-constellation, cross-signal, or nearest-key fill",
+    "time": "use source observation timestamps and the native broadcast state/transmit-time contract; retain only finite base residual samples",
+    "moving_mean": {
+      "one_second_samples": 151,
+      "fifteen_second_samples": 11,
+      "selection": "exact observed base interval dt=1.0 s -> 151; dt=15.0 s -> 11",
+      "edge_behavior": "source smoothdata movmean centered windows with finite available samples at the boundaries; no endpoint hold or extrapolation"
+    },
+    "interpolation": "linearly interpolate the smoothed same-satellite/signal base residual at rover timestamps only inside the finite base time domain; no extrapolation, nearest fill, or endpoint hold",
+    "sign": "subtract the correction exactly: P_rover_corrected = P_rover - pc(t_rover), matching obsr.(f).resPc = obsr.(f).resPc - pc",
+    "units": "pseudorange, model, residual, and correction in metres; timestamps in native GNSS seconds",
+    "coefficient": 1.0,
+    "fitted_parameters": false
+  },
+  "implementation_scope": {
+    "target": "FGO undifferenced pseudorange factors adopted by the existing native problem builder",
+    "allowed_inputs": [
+      "raw Android device_gnss.csv",
+      "raw Android device_imu.csv only for the unchanged FGO structural route",
+      "the route-declared broadcast brdc.nav",
+      "the exact Phase64-materialized base RINEX member",
+      "the finite base RINEX-header APPROX POSITION XYZ pinned below"
+    ],
+    "operation": "build the base residual stream before native FGO pseudorange factor construction, then subtract the interpolated correction from adopted rover pseudorange only",
+    "opt_in_flag": "--native-base-pseudorange-compensation",
+    "base_path_argument": "--native-base-rinex",
+    "default": "false; Phase43 no-base behavior and bytes remain unchanged when the flag is absent",
+    "no_new_rows": true,
+    "no_new_factors": true,
+    "no_spp_change": true,
+    "no_tdcp_change": true,
+    "no_doppler_change": true,
+    "no_imu_change": true,
+    "no_base_position_csv": true,
+    "no_base_offset_csv": true,
+    "telemetry_required": {
+      "enabled_only_when_opt_in": true,
+      "fields": [
+        "base_member_sha256",
+        "base_member_bytes",
+        "base_coordinate_xyz_m",
+        "base_dt_s",
+        "moving_mean_samples",
+        "matching_base_rows",
+        "finite_base_residual_rows",
+        "interpolated_correction_rows",
+        "correction_finite_fraction",
+        "correction_abs_p50_m",
+        "correction_abs_p95_m",
+        "correction_abs_max_m",
+        "adopted_pseudorange_rows",
+        "adopted_rows_corrected"
+      ],
+      "population": "final adopted FGO undifferenced pseudorange factors only"
+    }
+  },
+  "route_order": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+  ],
+  "sealed_base_inputs_from_phase64": {
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "settings_sha256": "3e6ae65388b2809088b16732b87744e673f860c24a1fe0f709ef903a87397f39",
+    "routes": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "Base1": "SLAC",
+        "RINEX": "V2",
+        "member": "dataset_2023/train/2021-03-16-18-59-us-ca-mtv-a/SLAC_rnx2.obs",
+        "sha256": "380b8ff9091344fb756697e27f0983d9a0ba2cf0c201b96849bfc1ecc1af0e52",
+        "bytes": 10708536,
+        "approx_position_xyz_m": [-2703115.921, -4291767.2078, 3854247.9066],
+        "observed_dt_s": 1.0
+      },
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+        "Base1": "P221",
+        "RINEX": "V2",
+        "member": "dataset_2023/train/2021-08-24-20-32-us-ca-mtv-h/P221_rnx2.obs",
+        "sha256": "4d3e37cbe0347fa56216db54ede9e0f30731885f337f1653ab5a86afb2bb2150",
+        "bytes": 11854125,
+        "approx_position_xyz_m": [-2698116.8365, -4301328.0461, 3847285.9307],
+        "observed_dt_s": 1.0
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "Base1": "LBCH",
+        "RINEX": "V2",
+        "member": "dataset_2023/train/2022-04-01-18-22-us-ca-lax-t/LBCH_rnx2.obs",
+        "sha256": "d731e0e8a7ba4396d62340c85b6238e66c50c6a349621f9dcea0ea6885fd4cfe",
+        "bytes": 719969,
+        "approx_position_xyz_m": [-2507798.7984, -4676369.6918, 3526890.8008],
+        "observed_dt_s": 15.0
+      },
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+        "Base1": "P221",
+        "RINEX": "V2",
+        "member": "dataset_2023/train/2023-03-08-21-34-us-ca-mtv-u/P221_rnx2.obs",
+        "sha256": "aedb7a39e7b6612ea97964b363c74cd2c10318255b7f2287f4720d18e71803e6",
+        "bytes": 5950275,
+        "approx_position_xyz_m": [-2698116.8365, -4301328.0461, 3847285.9307],
+        "observed_dt_s": 1.0
+      }
+    }
+  },
+  "structural_matrix": {
+    "control": "Phase43 base flags, no --native-base-pseudorange-compensation and no base RINEX argument; exact flag-off champion recipe",
+    "candidate": "same control flags plus --native-base-pseudorange-compensation and the route's pinned base RINEX",
+    "control_runs_per_route": 1,
+    "candidate_runs_per_route": 2,
+    "route_count": 4,
+    "expected_solver_invocations": 12,
+    "expected_raw_device_gnss_reads": 12,
+    "expected_raw_device_imu_reads": 12,
+    "expected_broadcast_nav_reads": 12,
+    "expected_base_rinex_reads": 12,
+    "truth_reads": 0,
+    "mat_reads": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_token_reads": 0,
+    "candidate_repeat_identity": "candidate run1/run2 key rows, coordinate fields, factor counts, correction telemetry, and canonical summaries are byte-identical except explicitly excluded timing fields",
+    "control_identity": "control output/summary/submission is byte-identical to the pinned Phase43 flag-off artifact after canonical path normalization",
+    "flag_off_identity": "omitting the candidate flag does not parse/open a base file and preserves Phase43 defaults/graph",
+    "no_solver_after_truth": true
+  },
+  "fixed_structural_gates": {
+    "all_four_routes": true,
+    "base_hash_and_bytes_exact": true,
+    "base_coordinate_finite_exact": true,
+    "observed_dt_exactly_1_or_15_s": true,
+    "same_satellite_signal_only": true,
+    "finite_correction_fraction_per_route_min": 0.99,
+    "adopted_pseudorange_coverage_per_route": 1.0,
+    "matching_adopted_factor_fraction_min": 0.80,
+    "correction_materiality_each_route": "abs(pc) p50 >= 0.10 m and p95 >= 0.30 m",
+    "no_new_rows_or_factors": true,
+    "linear_interpolation_in_domain_only": true,
+    "finite_output_and_earth_valid_coordinates": true,
+    "converged_graph": true,
+    "tdcp_built_equals_inserted": true,
+    "over_70_mps": 0,
+    "candidate_repeat_identity": true,
+    "control_phase43_identity": true,
+    "sign_synthetic": "positive pc reduces corrected P by subtraction; opposite sign fails closed",
+    "read_accounting_exact": true,
+    "any_failure": "fail closed; stop before truth/accuracy and preserve Phase43 champion"
+  },
+  "forbidden_inputs": [
+    "ground_truth.csv",
+    "MAT/MATLAB products",
+    "base_position.csv",
+    "base_offset.csv",
+    "WLS/SvPosition/SvElevation/precomputed coordinates",
+    "validation/holdout/test truth",
+    "Kaggle/token data",
+    "post-truth tuning",
+    "solver rerun after any truth read"
+  ],
+  "decision_rule": "This freeze authorizes source/tests implementation and a truth-free structural matrix only. It does not authorize accuracy truth. Any source drift, archive/materialized hash mismatch, nonfinite model/correction, out-of-domain interpolation, candidate/control identity failure, repeat mismatch, missing telemetry, default mutation, or structural gate failure is a no-go with no truth read.",
+  "phase_policy": {
+    "phase43_champion": "preserve exact no-base default and flag-off artifact",
+    "phase51_experimental": "not combined or changed",
+    "phase58_experimental": "not combined or changed",
+    "accuracy": "requires a new immutable scorer freeze after structural pass; 0.782 is not evaluated in Phase65"
+  }
+}

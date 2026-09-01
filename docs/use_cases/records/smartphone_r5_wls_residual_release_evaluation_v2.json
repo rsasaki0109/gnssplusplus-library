@@ -1,0 +1,145 @@
+{
+  "schema_version": "smartphone-r5-wls-residual-release-evaluation.v2",
+  "status": "sealed-no-go-before-truth",
+  "scope": "development-only truth-free WLS residual median5/zero-shift postprocess",
+  "promotion_decision": "no-go-wls-integrity",
+  "selection_record": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_residual_release_candidate_selection_v2.json",
+    "sha256": "55f8290c66b37c689e236ee2a2a88b4a9ac5818f30ab07a9e679c0ed82d9ad8a"
+  },
+  "selection_and_data_roles": {
+    "fresh_validation": "2023-05-23-19-56-us-ca-mtv-ie2/sm-a505g",
+    "fresh_validation_phone": "sm-a505g",
+    "fresh_validation_route_new": true,
+    "old_holdout": "2023-09-06-22-49-us-ca-routebb1/pixel7pro",
+    "old_holdout_metrics_used_for_ranking": false,
+    "next_holdout": "2023-05-25-19-10-us-ca-sjc-be2/sm-s908b",
+    "next_holdout_materialized": false,
+    "next_holdout_truth_opened": false,
+    "archive_inventory_central_directory_only": true
+  },
+  "audit_of_v1": {
+    "report": "output/smartphone-r5/wls-residual-v1/wls_residual_release_report.json",
+    "report_sha256": "dbc990e87d4ed2868b643f2a52780d2a48c4c20493f9119d975b702f43e59064",
+    "observed_diagnostic_mean_order": [
+      "median5=3.8641713244101785",
+      "v3_selector=3.8901677249152584",
+      "wls_only=4.12182904960396",
+      "native_only=4.764214020096558"
+    ],
+    "known_seven_route_gate_failure": [
+      "not_strictly_better_than_native_only",
+      "not_strictly_better_than_wls_only"
+    ],
+    "root_cause": "aggregate comparator read route-level horizontal_wgs84_m and kaggle_diagnostic_score_variants_m paths from mean_* aggregate records, yielding inf comparisons and an untrusted eligibility result",
+    "correction": "comparison helper maps route metric paths to mean_* aggregate paths; regression fixture covers aggregate and route forms",
+    "algorithm_or_numeric_parameter_changed": false
+  },
+  "frozen_candidate": {
+    "candidate_id": "median5_shift_0",
+    "robust_estimator": "component-wise centered median",
+    "robust_window_epochs": 5,
+    "along_track_shift_m": 0.0,
+    "search_performed": false,
+    "truth_free": true,
+    "device_model_free": true
+  },
+  "promotion_gate_frozen_before_truth": {
+    "all_four_diagnostics_non_regressing": true,
+    "maximum_diagnostic_regression_m": 0.000001,
+    "horizontal_p95": "strict improvement versus v3 selector baseline",
+    "horizontal_p50_maximum_regression_m": 0.01,
+    "availability_non_regression": true,
+    "truth_coverage_non_regression": true,
+    "vertical_p95_profile_threshold_m": 45.0,
+    "vertical_p95_major_regression_tolerance_m": 5.0,
+    "selection_and_ranking_truth_free": true
+  },
+  "fresh_validation_execution": {
+    "archive": {
+      "path": "data/gsdc2023/cache/dataset_2023.zip",
+      "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408"
+    },
+    "inventory": {
+      "path": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+      "sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7"
+    },
+    "materialized_members": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "truth_materialized": false,
+    "truth_open_count": 0,
+    "truth_free_adapter_and_spp_completed": true,
+    "native_segment_stability": {
+      "manifest": "output/smartphone-r5/wls-residual-v2/validation/routes/2023-05-23-19-56-us-ca-mtv-ie2__sm-a505g/native-segment-stability/segment_stability.json",
+      "sha256": "f9efae91d4bb0e887f215c99b54ed018498b071a8b9cc6581a00c797e493c614",
+      "segment_count": 1,
+      "stable_segment_count": 0,
+      "unstable_segment_count": 1,
+      "decision": "unstable_raw_fallback"
+    },
+    "wls_integrity": {
+      "manifest": "output/smartphone-r5/wls-residual-v2/validation/routes/2023-05-23-19-56-us-ca-mtv-ie2__sm-a505g/wls/wls_manifest.json",
+      "manifest_sha256": "fdf2543fafd12a222b2e04bdea7beb4f7ac13a74db94d29def168599e1644426",
+      "summary": "output/smartphone-r5/wls-residual-v2/validation/routes/2023-05-23-19-56-us-ca-mtv-ie2__sm-a505g/wls/wls_summary.json",
+      "summary_sha256": "ccf57d3dc48cecdb545ed318cf872b5c57d44c8498d77175559121fad27d512c",
+      "classification_counts": {
+        "clock_discontinuity_transition": 0,
+        "ecef_out_of_range": 0,
+        "inconsistent_epoch_wls": 0,
+        "missing_wls_epoch": 0,
+        "nonfinite_wls_ecef": 0,
+        "partial_wls_epoch": 0,
+        "timestamp_gap": 115
+      },
+      "max_timestamp_gap_s": 1.001,
+      "selector_action": "reject-fail-closed"
+    },
+    "selector_decision": "not-published-wls-integrity-rejected",
+    "candidate_artifact": "not-published",
+    "submission_artifact": "not-published",
+    "timing": {
+      "wls_extraction_wall_s": 0.022153386002002,
+      "native_smoothing_wall_s": 0.08654197698342614,
+      "adapter_peak_rss_kb": 24648,
+      "spp_peak_rss_kb": 18276,
+      "total_wall_s": null,
+      "total_wall_unavailable_because_selector_failed_closed": true
+    }
+  },
+  "failure_and_sealing": {
+    "failure": "WLS integrity classification is non-zero: timestamp_gap",
+    "failure_stage": "selector.wls_integrity_verification",
+    "failure_report": {
+      "path": "output/smartphone-r5/wls-residual-v2/wls_residual_release_v2_failure_report.json",
+      "sha256": "d2a6e4c2a8d955ce1d5f4b072e9a59b52ed6cc2d074697b0cd7fb5f42e7ef553"
+    },
+    "failure_manifest": {
+      "path": "output/smartphone-r5/wls-residual-v2/wls_residual_release_v2_failure_manifest.json",
+      "sha256": "1af831b02c4d79fff8599e0cd092c86f2ae7dc26fce088b2fc044015d8ad0356"
+    },
+    "truth_free_artifacts_sealed_before_truth": false,
+    "post_failure_tuning": false,
+    "retry_permitted": false,
+    "production_rtk_spp_default_changed": false
+  },
+  "known_aggregate_reference": {
+    "v3_selector_h_p50_m": 2.6201507470372944,
+    "v3_selector_h_p95_m": 5.159886876751061,
+    "v3_selector_v_p95_m": 11.204835296590469,
+    "v3_selector_diagnostic_mean_m": 3.8901677249152584,
+    "wls_only_h_p50_m": 2.7527311470282965,
+    "wls_only_h_p95_m": 5.490771644349414,
+    "wls_only_v_p95_m": 10.36412436912988,
+    "wls_only_diagnostic_mean_m": 4.12182904960396,
+    "median5_candidate_h_p50_m": 2.6202360209802293,
+    "median5_candidate_h_p95_m": 5.108817881053853,
+    "median5_candidate_v_p95_m": 10.976978675314495,
+    "median5_candidate_diagnostic_mean_m": 3.8641713244101785,
+    "v2_aggregate_promotion": "not-evaluated-after-fail-closed-validation-integrity"
+  },
+  "source_hashes": {
+    "candidate_module": "33c7d6fb831e7a559d2ccf051d2109e4c3c3a1d947f33f132b31872ee6d2a175",
+    "v1_evaluator": "fafc995900625e6cd6097cb45bd7f7b2568d8f7a124ff74e8d330b7f0be87db5",
+    "v2_evaluator": "fb4c9edc2fdc0fc388f5a4d45e381c21d0ec12b5a6391e53fcef657bbb608197"
+  },
+  "scope_after_failure": "No-Go; retain only the existing v3 selector recommendation; production RTK/SPP default unchanged"
+}

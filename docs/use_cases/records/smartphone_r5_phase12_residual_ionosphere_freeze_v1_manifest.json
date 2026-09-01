@@ -1,0 +1,18 @@
+{
+  "schema_version": "smartphone-r5-phase12-residual-ionosphere-freeze-manifest.v1",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_phase12_residual_ionosphere_freeze_v1.json",
+  "freeze_record_sha256": "416b56c7bc13fa969a4f2397fe70bc01ecb78198612c341e41ecee731ff908fd",
+  "raw_audit": "docs/use_cases/records/smartphone_r5_phase12_residual_ionosphere_raw_audit_v1.json",
+  "raw_audit_sha256": "b8c2791149f1524e07fc01f2e2f634e3fa4a5e2271ca1804dcf81321772be8cd",
+  "candidate_id": "native-residual-ionosphere-gtsam-v1",
+  "route": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+  "truth_free_before_run": true,
+  "ground_truth_read_count_before_run": 0,
+  "mat_read_count": 0,
+  "holdout_read_count": 0,
+  "validation_read_count": 0,
+  "test_read_count": 0,
+  "algorithm_parameter_hash_basis": "freeze_record_sha256 plus source_sha256_at_freeze and binary_sha256_at_freeze",
+  "no_post_holdout_tuning": true,
+  "manifest_sha256": "computed after apply_patch"
+}

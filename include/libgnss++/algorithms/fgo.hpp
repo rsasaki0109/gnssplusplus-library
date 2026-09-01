@@ -1,6 +1,8 @@
 #pragma once
 
 #include <libgnss++/algorithms/fgo_config.hpp>
+#include <libgnss++/algorithms/doppler_velocity_wls.hpp>
+#include <libgnss++/algorithms/observable_upstream_preprocessing.hpp>
 #include <libgnss++/core/navigation.hpp>
 #include <libgnss++/core/observation.hpp>
 #include <libgnss++/core/solution.hpp>
@@ -9,6 +11,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <array>
 #include <limits>
 #include <map>
 #include <set>
@@ -34,9 +37,22 @@ public:
         GNSSTime time;
         Vector3d position_ecef = Vector3d::Zero();
         double receiver_clock_bias_m = 0.0;
+        // The historical SPP seed stores receiver_clock_bias_m in seconds
+        // until an opt-in raw bridge normalizes it.  Keep the marker explicit
+        // so a bridge never guesses units from magnitude.
+        bool receiver_clock_bias_is_meters = false;
+        // Optional raw Android receiver clock drift [m/s], copied from the
+        // input epoch when DriftNanosPerSecond is available.  NaN means that
+        // no raw drift was supplied; no estimator may infer it from a
+        // coordinate for an upstream residual-screen candidate.
+        double receiver_clock_drift_mps =
+            std::numeric_limits<double>::quiet_NaN();
         // True only when position_ecef came from a valid SPP solve at this
         // epoch; false for last-valid/header fallbacks.
         bool fresh_spp_solution = false;
+        // True when position_ecef was held from the most recent valid SPP
+        // solve.  This remains false for the raw receiver-seed fallback.
+        bool last_valid_spp_hold = false;
     };
 
     struct ObservationModelDebug {
@@ -53,6 +69,10 @@ public:
         double azimuth_rad = 0.0;
         bool has_doppler_residual = false;
         double doppler_residual_mps = 0.0;
+        double doppler_measured_range_rate_mps = 0.0;
+        double doppler_satellite_range_rate_mps = 0.0;
+        double doppler_satellite_clock_drift_mps = 0.0;
+        bool doppler_uses_rotated_satellite_state = false;
         // Raw rover-receiver SNR/CN0 [dB-Hz] for this observation (Observation::snr
         // at the point this model_debug was built). Added for the sat-badness
         // EWMA down-weighting port's elevation/SNR penalty terms (see
@@ -64,11 +84,32 @@ public:
     struct PseudorangeFactor {
         std::size_t epoch_index = 0;
         SatelliteId satellite;
+        SignalType signal = SignalType::GPS_L1CA;
         GNSSSystem clock_group = GNSSSystem::GPS;
         Vector3d satellite_position_ecef = Vector3d::Zero();
         double corrected_pseudorange_m = 0.0;
         double sigma_m = 1.0;
+        // Raw CN0/SNR carried with the factor for truth-free quality
+        // diagnostics.  The value is never populated from enriched
+        // receiver/satellite coordinate columns.
+        double snr_dbhz = 0.0;
+        // Truth-free pre-fit residual against the native SPP seed, used only
+        // by the opt-in upstream global residual mask.  It is not an
+        // optimizer state and remains zero for legacy factors.
+        double upstream_seed_residual_m = 0.0;
         double elevation_rad = 0.0;
+        // Coefficient for the optional shared vertical L1 residual-ionosphere
+        // state [m].  It is precomputed from the raw-row signal frequency and
+        // seed elevation; zero means the row cannot participate in that
+        // opt-in candidate.  The field is diagnostic-only when the candidate
+        // is disabled.
+        double residual_ionosphere_coefficient = 0.0;
+        // Source-exact Android ReceivedSvTimeUncertaintyNanos provenance.
+        // The floor is applied only when the corresponding opt-in config is
+        // enabled; these fields are never populated from truth or WLS data.
+        double android_sv_time_uncertainty_floor_m = 0.0;
+        bool android_sv_time_uncertainty_available = false;
+        bool android_sv_time_uncertainty_floor_applied = false;
     };
 
     struct TimeDifferencedCarrierFactor {
@@ -92,6 +133,45 @@ public:
         double residual_mps = 0.0;
         double sigma_mps = 0.2;
         double elevation_rad = 0.0;
+    };
+
+    /**
+     * @brief Receiver-only (undifferenced) Doppler factor.
+     *
+     * The measured range-rate residual is prepared from the rover
+     * observation and broadcast satellite state.  Unlike the
+     * SingleDifferenceDopplerFactor this row has no base/reference satellite
+     * and therefore remains usable in a no-base phone graph.
+     */
+    struct UndifferencedDopplerFactor {
+        std::size_t epoch_index = 0;
+        std::size_t previous_epoch_index =
+            std::numeric_limits<std::size_t>::max();
+        SatelliteId satellite;
+        SignalType signal = SignalType::GPS_L1CA;
+        Vector3d los = Vector3d::Zero();
+        double residual_mps = 0.0;
+        double sigma_mps = 0.2;
+        double elevation_rad = 0.0;
+        double dt_s = 0.0;
+        // Broadcast satellite state and carrier wavelength used to prepare
+        // this row.  These fields are diagnostic provenance for the raw
+        // measurement-contract audit; the factor equation continues to use
+        // only LOS, residual, and the known range-rate/clock terms below.
+        Vector3d satellite_position_ecef = Vector3d::Zero();
+        Vector3d satellite_velocity_ecef = Vector3d::Zero();
+        double wavelength_m = 0.0;
+        double measured_range_rate_mps = 0.0;
+        double satellite_range_rate_mps = 0.0;
+        double satellite_clock_drift_mps = 0.0;
+        bool includes_receiver_clock_drift = false;
+        bool uses_rotated_satellite_state = false;
+        // Phase58 C/N0 model provenance.  These fields are populated only
+        // when the opt-in calibration is enabled and are diagnostic; the
+        // factor equation still uses residual_mps and sigma_mps.
+        double cn0_doppler_model_sigma_mps = 0.0;
+        bool cn0_doppler_model_sigma_available = false;
+        bool cn0_doppler_sigma_floor_applied = false;
     };
 
     struct SingleDifferenceTdcpFactor {
@@ -202,6 +282,42 @@ public:
         std::size_t input_epochs = 0;
         std::size_t seeded_epochs = 0;
         std::size_t skipped_epochs_without_seed = 0;
+        // Truth-free SPP anchor replay diagnostics.  These are populated only
+        // for FGOConfig::use_quality_anchor_initialization.
+        bool quality_anchor_initialization_enabled = false;
+        bool quality_anchor_selected = false;
+        std::size_t quality_anchor_index = std::numeric_limits<std::size_t>::max();
+        std::size_t quality_anchor_candidates = 0;
+        std::size_t quality_anchor_forward_valid_epochs = 0;
+        std::size_t quality_anchor_backward_valid_epochs = 0;
+        std::size_t quality_anchor_fallback_epochs = 0;
+        int quality_anchor_satellites = 0;
+        double quality_anchor_gdop = std::numeric_limits<double>::quiet_NaN();
+        double quality_anchor_normalized_residual_rms =
+            std::numeric_limits<double>::quiet_NaN();
+        // Truth-free fallback-seed quality-anchor recovery diagnostics.  The
+        // normal quality-anchor reconnaissance is authoritative and always
+        // precedes this opt-in retry; these fields are zero/false when the
+        // recovery flag is disabled or not triggered.
+        bool quality_anchor_recovery_enabled = false;
+        bool quality_anchor_recovery_triggered = false;
+        bool quality_anchor_recovery_selected = false;
+        std::size_t quality_anchor_normal_candidates = 0;
+        std::size_t quality_anchor_recovery_candidates = 0;
+        std::size_t quality_anchor_recovery_anchor_index =
+            std::numeric_limits<std::size_t>::max();
+        int quality_anchor_recovery_anchor_satellites = 0;
+        double quality_anchor_recovery_anchor_gdop =
+            std::numeric_limits<double>::quiet_NaN();
+        double quality_anchor_recovery_anchor_normalized_residual_rms =
+            std::numeric_limits<double>::quiet_NaN();
+        std::size_t quality_anchor_recovery_replay_valid_epochs = 0;
+        std::size_t quality_anchor_recovery_replay_invalid_epochs = 0;
+        // Deliberately fixed false: recovery is an initializer only and does
+        // not bypass factor-level elevation/geometry selection globally.
+        bool sentinel_factor_bypass = false;
+        std::size_t sparse_epochs_retained = 0;
+        std::size_t sparse_empty_epochs_retained = 0;
         std::size_t double_difference_matched_base_epochs = 0;
         std::size_t double_difference_interpolated_base_epochs = 0;
         std::size_t double_difference_candidate_pairs = 0;
@@ -209,13 +325,68 @@ public:
         std::size_t double_difference_rejected_no_reference = 0;
         std::size_t tdcp_candidate_pairs = 0;
         std::size_t tdcp_rejected_gap = 0;
+        std::size_t tdcp_rejected_clock_discontinuity = 0;
         std::size_t tdcp_rejected_missing_previous = 0;
         std::size_t tdcp_rejected_loss_of_lock = 0;
+        std::size_t tdcp_rejected_invalid_measurement = 0;
         std::size_t tdcp_rejected_code_phase_jump = 0;
+        std::size_t residual_ionosphere_invalid_coefficients = 0;
+        std::size_t residual_ionosphere_candidate_rows = 0;
         std::size_t code_minus_carrier_jump_resets = 0;       ///< CMC screening: arc breaks forced
         std::size_t geometry_free_cycle_slip_resets = 0;      ///< confirmed geometry-free band resets
         std::size_t code_minus_carrier_level_exclusions = 0;  ///< CMC screening: (sat,signal) epochs excluded
         std::size_t cmc_ref_avoided_count = 0;  ///< cmc_aware_reference_selection: references changed away from a CMC-excluded candidate
+        // Raw upstream residual/SNR quality contract diagnostics.  These are
+        // populated only when FGOConfig::use_upstream_observable_quality is
+        // enabled and are otherwise zero, preserving the default graph.
+        double upstream_snr_l1_dbhz =
+            std::numeric_limits<double>::quiet_NaN();
+        double upstream_snr_l5_dbhz =
+            std::numeric_limits<double>::quiet_NaN();
+        std::size_t upstream_pseudorange_candidates = 0;
+        std::size_t upstream_doppler_candidates = 0;
+        std::size_t upstream_pseudorange_factors = 0;
+        std::size_t upstream_doppler_factors = 0;
+        std::size_t upstream_pd_pair_rejections = 0;
+        std::size_t upstream_ld_pair_rejections = 0;
+        std::size_t upstream_doppler_residual_rejections = 0;
+        std::size_t upstream_pseudorange_residual_rejections = 0;
+        std::size_t upstream_absolute_doppler_candidates = 0;
+        std::size_t upstream_absolute_doppler_factors = 0;
+        std::size_t upstream_absolute_doppler_rejections = 0;
+        std::size_t upstream_absolute_doppler_missing_clock = 0;
+        double upstream_absolute_doppler_max_abs_corrected_residual = 0.0;
+        // Source-specific Galileo E1 group-delay selection diagnostics. These
+        // remain zero for the legacy/default path.
+        std::size_t galileo_e1_fnav_group_delay_rows = 0;
+        std::size_t galileo_e1_inav_group_delay_rows = 0;
+        std::size_t galileo_e1_group_delay_source_fallback_rows = 0;
+        std::size_t galileo_e1_group_delay_invalid_rows = 0;
+        // Native Android ReceivedSvTimeUncertaintyNanos sigma-floor telemetry
+        // over the final FGO pseudorange-factor population after existing
+        // masks.  These remain zero/false when the option is disabled.
+        bool native_android_sv_time_uncertainty_sigma_floor_enabled = false;
+        std::size_t native_android_sv_time_uncertainty_rows_applied = 0;
+        std::size_t native_android_sv_time_uncertainty_rows_fallback = 0;
+        std::size_t native_android_sv_time_uncertainty_factors_affected = 0;
+        double native_android_sv_time_uncertainty_floor_min_m = 0.0;
+        double native_android_sv_time_uncertainty_floor_median_m = 0.0;
+        double native_android_sv_time_uncertainty_floor_p95_m = 0.0;
+        double native_android_sv_time_uncertainty_floor_max_m = 0.0;
+        // Phase58 raw Android C/N0/Doppler calibration telemetry over the
+        // final adopted undifferenced FGO Doppler population.  These remain
+        // zero/false when the explicit opt-in is disabled.
+        bool native_cn0_doppler_calibration_enabled = false;
+        std::size_t native_cn0_doppler_calibration_candidate_rows = 0;
+        std::size_t native_cn0_doppler_calibration_finite_cn0_rows = 0;
+        std::size_t native_cn0_doppler_calibration_fallback_rows = 0;
+        std::size_t native_cn0_doppler_calibration_factors_affected = 0;
+        double native_cn0_doppler_calibration_alpha_mps = 0.0;
+        double native_cn0_doppler_calibration_reference_cn0_dbhz = 0.0;
+        double native_cn0_doppler_calibration_model_sigma_min_mps = 0.0;
+        double native_cn0_doppler_calibration_model_sigma_median_mps = 0.0;
+        double native_cn0_doppler_calibration_model_sigma_p95_mps = 0.0;
+        double native_cn0_doppler_calibration_model_sigma_max_mps = 0.0;
     };
 
     // --- Phase 2 milestone 2b: IMU preintegration inputs ---
@@ -255,6 +426,11 @@ public:
         // the body->nav rotation from Stage-1 static leveling + heading align.
         Matrix3d init_attitude_body_to_nav = Matrix3d::Identity();
         Vector3d init_velocity_nav = Vector3d::Zero();
+        // Optional raw GNSS-first ENU velocity sequence used by the upstream
+        // stationary-stop gate.  It is populated only by the Android
+        // GNSS-first handoff; an empty vector makes the backend use its normal
+        // per-epoch graph seeds.  This is not a truth or file-derived state.
+        std::vector<Vector3d> stop_velocity_seeds_nav;
         Vector3d init_accel_bias = Vector3d::Zero();
         Vector3d init_gyro_bias = Vector3d::Zero();
         // First-state prior sigmas (gauge/anchor for the IMU chain).
@@ -264,6 +440,41 @@ public:
         double init_accel_bias_sigma = 0.05;
         double init_gyro_bias_sigma = 0.01;
         ImuNoiseParams noise;
+    };
+
+    /**
+     * @brief A truth-free native PDC state used as an optional initializer.
+     *
+     * This is intentionally a value object, not a coordinate-file interface.
+     * The smartphone bridge constructs it in memory from the same
+     * PseudorangeFactor/UndifferencedDopplerFactor rows consumed by FGO.  A
+     * backend may reject an individual component by its `has_*` flag. The
+     * P/D measurements are not duplicated as priors; the production/default
+     * graph remains unchanged when the bridge config flag is false.
+     */
+    // State-only handoff from the in-process native PDC solve. This is an
+    // initializer/diagnostic record, not an additional graph factor: the same
+    // raw P/D observations remain owned by the normal FGO graph.
+    struct NativePdcStateSeed {
+        std::size_t epoch_index = 0;
+        Vector3d position_ecef = Vector3d::Zero();
+        Vector3d velocity_ecef_mps = Vector3d::Zero();
+        std::array<double, 5> clock_bias_m = {0.0, 0.0, 0.0, 0.0, 0.0};
+        double clock_rate_mps = 0.0;
+        double position_sigma_m = 0.0;
+        double velocity_sigma_mps = 0.0;
+        double clock_sigma_m = 0.0;
+        double clock_rate_sigma_mps = 0.0;
+        int pseudorange_rows = 0;
+        int doppler_rows = 0;
+        int rank = 0;
+        double condition_number = std::numeric_limits<double>::infinity();
+        double normalized_pseudorange_rms =
+            std::numeric_limits<double>::infinity();
+        bool has_position = false;
+        bool has_velocity = false;
+        bool has_clock = false;
+        bool has_clock_rate = false;
     };
 
     struct FGOProblem {
@@ -277,6 +488,9 @@ public:
         std::vector<int> gps_common_pseudorange_delta_satellites;
         std::vector<PseudorangeFactor> pseudorange_factors;
         std::vector<TimeDifferencedCarrierFactor> tdcp_factors;
+        std::vector<UndifferencedDopplerFactor> undifferenced_doppler_factors;
+        std::vector<doppler_velocity_wls::Estimate>
+            doppler_velocity_wls_estimates;
         std::vector<SingleDifferenceDopplerFactor> single_difference_doppler_factors;
         std::vector<SingleDifferenceTdcpFactor> single_difference_tdcp_factors;
         std::vector<AmbiguityState> ambiguity_states;
@@ -301,6 +515,9 @@ public:
         // validator looks up wavelength from `signal` instead.
         std::vector<DoubleDifferenceCarrierFactor> excluded_double_difference_carrier_factors;
         std::vector<AmbiguityBetweenFactor> ambiguity_between_factors;
+        // Optional in-memory PDC state bridge.  Empty unless a caller has
+        // explicitly enabled and populated the research-only bridge.
+        std::vector<NativePdcStateSeed> native_pdc_state_seeds;
         FGOProblemDiagnostics diagnostics;
     };
 
@@ -430,11 +647,39 @@ public:
         int iterations = 0;
         bool converged = false;
         std::size_t epochs = 0;
+        std::size_t sparse_epochs_retained = 0;
+        std::size_t sparse_empty_epochs_retained = 0;
         std::size_t pseudorange_factors = 0;
+        std::size_t receiver_signal_bias_factors = 0;
+        std::size_t receiver_signal_bias_states = 0;
+        std::size_t residual_ionosphere_factors = 0;
+        std::size_t residual_ionosphere_states = 0;
+        std::size_t residual_ionosphere_resets = 0;
+        std::size_t residual_ionosphere_invalid_coefficients = 0;
+        double residual_ionosphere_max_abs_m = 0.0;
+        double residual_ionosphere_rms_m = 0.0;
+        double residual_ionosphere_min_coefficient = 0.0;
+        double residual_ionosphere_max_coefficient = 0.0;
         /// TDCP measurements present in the backend-independent problem.
         std::size_t tdcp_factors = 0;
         /// TDCP residual rows/factors actually inserted by the selected backend.
         std::size_t tdcp_factors_inserted = 0;
+        std::size_t undifferenced_doppler_factors = 0;
+        /// Undifferenced Doppler rows actually inserted by the selected backend.
+        /// This can differ from undifferenced_doppler_factors when a backend
+        /// rejects a non-finite/invalid row or when a feature path is disabled.
+        std::size_t undifferenced_doppler_factors_inserted = 0;
+        /// Raw-observable quality residual diagnostics (candidate-only).
+        double upstream_pseudorange_normalized_rms = 0.0;
+        double upstream_doppler_normalized_rms = 0.0;
+        // Truth-free per-epoch Doppler WLS initialization diagnostics.
+        std::size_t doppler_velocity_wls_valid_epochs = 0;
+        std::size_t doppler_velocity_wls_propagated_epochs = 0;
+        std::size_t doppler_velocity_wls_rejected_epochs = 0;
+        double doppler_velocity_wls_max_condition_number = 0.0;
+        double doppler_velocity_wls_max_normalized_rms = 0.0;
+        double doppler_velocity_wls_max_velocity_norm_mps = 0.0;
+        double doppler_velocity_wls_max_clock_rate_abs_mps = 0.0;
         std::size_t single_difference_doppler_factors = 0;
         /// Satellite-single-difference TDCP measurements present in the problem.
         std::size_t single_difference_tdcp_factors = 0;
@@ -518,12 +763,22 @@ public:
         std::size_t selective_arc_restart_skipped_no_arc = 0;
         std::size_t graph_factors = 0;
         std::size_t graph_values = 0;
+        std::size_t native_pdc_position_seeds = 0;
+        std::size_t native_pdc_velocity_seeds = 0;
+        std::size_t native_pdc_clock_seeds = 0;
+        std::size_t native_pdc_clock_rate_seeds = 0;
         std::size_t imu_intervals = 0;  ///< 2b: CombinedImuFactors added between epochs
         std::size_t smoother_max_window_vars = 0;  ///< 2c: peak in-window variable count
         std::size_t smoother_updates = 0;          ///< 2c: number of smoother.update() calls
         std::size_t smoother_recovery_epochs = 0;  ///< 2e: epochs re-anchored after an indeterminate update
         std::size_t nhc_epochs = 0;   ///< 2d: epochs an NHC factor was applied
         std::size_t zupt_epochs = 0;  ///< 2d: epochs a ZUPT prior was applied
+        std::size_t upstream_stop_epochs = 0;
+        std::size_t upstream_stop_velocity_factors = 0;
+        std::size_t upstream_stop_pose_factors = 0;
+        std::size_t upstream_stop_imu_samples = 0;
+        double upstream_stop_acceleration_std_threshold_mps2 = 0.0;
+        double upstream_stop_gyro_std_threshold_radps = 0.0;
         std::size_t ambiguity_hold_epochs = 0;  ///< 2e: epochs FIXED via held (not fresh) integers
         std::size_t ambiguity_hold_arcs = 0;    ///< 2e: distinct arcs pinned at their integer
         std::size_t quality_gated_epochs = 0;   ///< epochs where the quality gates suppressed fixing
@@ -600,6 +855,7 @@ public:
         double last_update_norm_m = 0.0;
         double residual_rms_m = 0.0;
         double tdcp_residual_rms_m = 0.0;
+        double undifferenced_doppler_residual_rms_mps = 0.0;
         double single_difference_doppler_residual_rms_mps = 0.0;
         double single_difference_tdcp_residual_rms_m = 0.0;
         double carrier_phase_residual_rms_m = 0.0;
@@ -1034,6 +1290,13 @@ public:
         std::vector<std::set<SatelliteId>> ambiguity_reference_satellites_by_epoch;
         std::vector<std::map<SatelliteId, double>> ambiguity_estimate_cycles_by_epoch;
         std::vector<Vector3d> epoch_velocities_ecef_mps;
+        // Static receiver secondary-signal code-bias estimates [m], populated
+        // only by the opt-in signal-bias backend path.
+        std::map<std::pair<GNSSSystem, SignalType>, double>
+            receiver_signal_bias_estimates_m;
+        // Per-epoch vertical L1 residual-ionosphere estimates [m], populated
+        // only by the opt-in raw candidate.
+        std::vector<double> residual_ionosphere_estimates_m;
         std::vector<LambdaDebugEntry> lambda_debug_entries;
         std::vector<CostTraceEntry> cost_trace_entries;
         std::vector<FGOEpochDiagnostics> epoch_diagnostics;
@@ -1051,6 +1314,10 @@ public:
         // (body FLU -> nav ENU; heading is clockwise from North) and estimated
         // velocity in the ENU nav frame [m/s].
         std::vector<Vector3d> epoch_attitude_rpy_deg;
+        // Exact GTSAM Rot3::rpy() values [roll, pitch, yaw] in radians.  This
+        // is kept separate from the display/course convention above so raw
+        // post-processing ports cannot accidentally use a heading remap.
+        std::vector<Vector3d> epoch_attitude_rpy_rad;
         std::vector<Vector3d> epoch_velocity_nav_mps;
     };
 

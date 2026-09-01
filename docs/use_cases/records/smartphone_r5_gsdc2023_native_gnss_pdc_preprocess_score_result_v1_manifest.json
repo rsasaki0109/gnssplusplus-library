@@ -1,0 +1,37 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-gnss-pdc-preprocess-score-result-manifest.v1",
+  "status": "sealed-no-go",
+  "result_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_preprocess_score_result_v1.json",
+    "sha256": "6608dbfa494d757aa85d215ab9e9692dfdf152daf80eb52b154fbf8be204246a"
+  },
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_preprocess_freeze_v1.json",
+    "sha256": "94d407c3913449e4061dea1e0a324481ff4ffac765b3c8ec23cf2214ac482b63"
+  },
+  "score_report": {
+    "path": "output/smartphone-r5/native-gnss-pdc-preprocess-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/train_score_recovery.json",
+    "sha256": "d1645255a11c4be473218c3c49b8ee2fd66a420d72f30ab619861453b37ca34c"
+  },
+  "candidate_artifacts": {
+    "keyed.csv": "dc279b30445e32132fbc8ee75410af61be023759701cdd99cdbed9ba37c2e3d4",
+    "factor.csv": "0f4f0ed3e8d8b0943f66b57ebdb8d987b22ae46c47b72631825ff9b2f94e3e33",
+    "summary.json": "6c2717963023fc47abdb3eb6a6838e6f1bf379c9873f5d7b49b3615172b8dc99",
+    "run_manifest.json": "7013910d7c75b835f3b0dd9bf006254cc407917e0f2663137fbb4a5b7020521e"
+  },
+  "source_hashes": {
+    "binary": "b79b2ae25aca2725f88d8990443243b923bf6a511aa3354fa1b9b92bd9ed82b0",
+    "raw_loader": "7cd94d0f7607c1672705354e0e4e0eddfcbc830481c0becb6bb13ecdc79db6a3",
+    "solver": "14ac3b8450f1d776170d3568e1fa9a1f3d80d763f093ee0a5c58f7f3bf115fd4",
+    "evaluator": "2992d29d4dd77c49e319b9b86bc4580ab90b8a39864a4931782bbacc57f0852c"
+  },
+  "truth_policy": {
+    "development_train_only": true,
+    "mat_opened": false,
+    "validation_opened": false,
+    "holdout_opened": false,
+    "test_opened": false,
+    "score_used_for_tuning": false,
+    "promoted": false
+  }
+}

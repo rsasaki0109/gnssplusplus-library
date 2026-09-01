@@ -1,0 +1,80 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-upstream-mat-v2-kaggle-submission-manifest.v1",
+  "status": "sealed-submitted-and-scored",
+  "record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_v2_kaggle_submission_v1.json",
+    "sha256": "8dab4eb4d9dafeba2bab320a32f5d8dfe84a40c2e9a0da9c6dd215a0f846af43"
+  },
+  "competition": {
+    "slug": "smartphone-decimeter-2023",
+    "id": 60095,
+    "submission_ref": 55905742,
+    "status": "COMPLETE",
+    "public_score": "1.235",
+    "private_score": "0.782"
+  },
+  "authorized_mutation": {
+    "user_explicitly_authorized": true,
+    "create_submission_api_calls": 1,
+    "start_upload_calls": 1,
+    "signed_upload_put_calls": 1,
+    "resubmission_calls": 0,
+    "no_other_file_submitted": true,
+    "no_retry_after_create": true
+  },
+  "submission": {
+    "path": "output/smartphone-r5/gsdc2023-upstream-mat-v2/test-batch/submission.csv",
+    "sha256": "ded15a2a92349b06accfe18bc2afa12c35f7a282497d70ab9fcedf15471fc1f3",
+    "bytes": 6150020,
+    "rows": 71936,
+    "header": ["tripId", "UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
+    "download_sha256": "ded15a2a92349b06accfe18bc2afa12c35f7a282497d70ab9fcedf15471fc1f3",
+    "download_bytes": 6150020,
+    "server_payload_matches_local": true
+  },
+  "provenance": {
+    "fallback_v2_result_record_sha256": "2c1945fb2d751f6647fadcf7d6f0db79064669cc6d95961786554512e7b6b78c",
+    "fallback_v2_result_manifest_sha256": "a487e5dead349fabc49d46e772249d93e2ecbed8bf8cb08ce54a48b54a2438d7",
+    "freeze_record_sha256": "4b815827140e217fe9c05a3b1ab1c086f3c5433fe9a92c47c519c36eb561988a",
+    "freeze_manifest_sha256": "b5725f94efe9f4bb6d75b69d0de019512385e08628c988d937ed05522b4c4295",
+    "fallback_source_sha256": "a47acae7d12205b984d6b310290d676e6a1d57ae16a070818293c1083584f4a8",
+    "run_manifest_sha256": "c99d2ac3419ac98ac80fa49dbda49ca349b11e28668a8c873c7294f5c6723efa",
+    "submission_manifest_sha256": "b0a94f8ff2ac42358fda5dcbd11e9c82b9b95abe99a55460d0bd1e6390b1652e",
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "sample_key_sha256": "b0c4853076f715d6bdca46e5c8c99e575f7982d8ee4fc9c0fe417507badcb780",
+    "train_score_sha256": "5a3dbedef378d1889b886bf7ccad09eb7089701c4f947f24806a59a2dc53e8a1",
+    "train_four_diagnostic_mean_m": 0.5067908808766828,
+    "v5_fallback_key_count": 601,
+    "test_truth_open_count": 0
+  },
+  "read_only_follow_up": {
+    "status_poll_count": 2,
+    "status_sequence": ["PENDING", "COMPLETE"],
+    "public_leaderboard_entries": 280,
+    "private_leaderboard_entries": 280,
+    "public_hypothetical_rank": 4,
+    "private_hypothetical_rank": 1,
+    "official_rank_asserted": false,
+    "team_names_recorded": false,
+    "public_score_digest": "ea8ab221bdc10e06e9aab218d7cf39455e58b7464019c0b16113030985417b58",
+    "private_score_digest": "e1d3478213f3dbd6ffbf7151c3fd8a212390641e7f07576112cbe035dc5dd636"
+  },
+  "security": {
+    "token_value_recorded": false,
+    "token_value_printed": false,
+    "token_value_in_argv": false,
+    "token_value_in_artifact": false,
+    "signed_urls_or_blob_tokens_recorded": false
+  },
+  "policy": {
+    "test_truth_used": false,
+    "algorithm_rerun": false,
+    "parameter_changed": false,
+    "production_default_changed": false,
+    "scores_used_for_tuning": false,
+    "sample_coordinates_used": false,
+    "public_precomputed_mat_caveat_recorded": true,
+    "rank_one_achieved": false,
+    "this_manifest_has_no_self_hash": true
+  }
+}

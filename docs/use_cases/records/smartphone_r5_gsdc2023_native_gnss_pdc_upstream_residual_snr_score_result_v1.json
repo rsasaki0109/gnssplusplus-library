@@ -1,0 +1,104 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-gnss-pdc-upstream-residual-snr-score-result.v1",
+  "status": "scored-development-train-retained-opt-in",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "candidate": {
+    "id": "native-gnss-pdc-upstream-residual-snr-v1",
+    "route_device": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_upstream_residual_snr_freeze_v1.json",
+    "freeze_record_sha256": "0b08e620f36cb56e33c8742a4506e82bba75f8d8a09486ba3cf9bb010e014a65",
+    "freeze_manifest": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_upstream_residual_snr_freeze_v1_manifest.json",
+    "truth_free_run_manifest": "output/smartphone-r5/native-gnss-pdc-upstream-residual-snr-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/run_manifest.json",
+    "truth_free_run_manifest_sha256": "abd651af976dde93a26a9d4ae4c8504f72d384f78674dfbe4a9fce0e7c04f565",
+    "keyed_output": "output/smartphone-r5/native-gnss-pdc-upstream-residual-snr-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/keyed.csv",
+    "keyed_output_sha256": "601363954c9f0d1abc8c5cd118fb251779c6dc61c3b5a7f007863cb054324079",
+    "summary": "output/smartphone-r5/native-gnss-pdc-upstream-residual-snr-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/summary.json",
+    "summary_sha256": "f8fea30bb60f7d1bb8aa0797b2340fb2d7aca421eb5e530c6632a87d660bcc22",
+    "factor_debug": "output/smartphone-r5/native-gnss-pdc-upstream-residual-snr-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/factor.csv",
+    "factor_debug_sha256": "370933b775788eb8884f3ade33b5ab0fc9316f3d6b9db252a6fe162473306860",
+    "train_score": "output/smartphone-r5/native-gnss-pdc-upstream-residual-snr-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/train_score.json",
+    "train_score_sha256": "4381a90c825891df07bd1437924defda79e4ce3c6c080271adf2eecda7ed2aca"
+  },
+  "truth_access": {
+    "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv",
+    "sha256": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a",
+    "role": "development-train",
+    "truth_free_sealed_before_read": true,
+    "evaluation_reads": 2,
+    "read_recovery": "The first post-preflight scoring read reached truth parsing but failed to serialize a missing authorization exact_failure field; the second read used the same unchanged candidate and was required to publish metrics.",
+    "validation_opened": false,
+    "holdout_opened": false,
+    "test_opened": false,
+    "mat_inputs_used": false
+  },
+  "structural_evidence": {
+    "epochs": 1384,
+    "key_count": 1384,
+    "finite_coordinates": true,
+    "max_position_transition_speed_mps": 27.138828782109684,
+    "transitions_over_70mps": 0,
+    "pseudorange_factors": 36910,
+    "doppler_factors": 26175,
+    "ordinary_tdcp_factors": 24397,
+    "iterations": 253,
+    "converged": true,
+    "initial_cost": 366379825.49266785,
+    "final_cost": 2449888.2169691515,
+    "wall_seconds": 36.03828468901338,
+    "rss_kib": null,
+    "rss_note": "The existing raw orchestrator reports wall time but does not capture child RSS; no solver rerun was performed for this record."
+  },
+  "preprocessing_telemetry": {
+    "snr_p85_l1_dbhz": 40.392819213867185,
+    "snr_p85_l5_dbhz": 37.24450206756592,
+    "pd_pair_rejected_rows": 222,
+    "ld_pair_rejected_rows": 0,
+    "pseudorange_candidates": 39317,
+    "pseudorange_residual_rejected": 2407,
+    "doppler_candidates": 39317,
+    "doppler_residual_rejected": 13142,
+    "base_compensation": "not applied; unavailable under raw+nav-only contract"
+  },
+  "metrics": {
+    "prediction_rows": 1384,
+    "truth_rows": 1383,
+    "matched_rows": 1383,
+    "unmatched_prediction_rows": 1,
+    "timestamp_delta_ms": {"min": 999, "median": 999, "max": 999},
+    "four_diagnostic_variants_m": {
+      "wgs84_vincenty__linear_n_minus_1": 68.20249565105695,
+      "wgs84_vincenty__nearest_rank_ceiling": 68.20263285883483,
+      "haversine_sphere__linear_n_minus_1": 68.0475838937948,
+      "haversine_sphere__nearest_rank_ceiling": 68.04768377355857
+    },
+    "horizontal_p50_p95_m": {
+      "wgs84_vincenty": [62.832079348000924, 73.57291195411297],
+      "haversine_sphere": [62.688899629518374, 73.40626815807121]
+    },
+    "official_metric_m": null,
+    "official_metric_status": "undetermined-from-public-primary-sources"
+  },
+  "comparison_to_frozen_raw_pdc": {
+    "prior_candidate": "native-gnss-pdc-direct-v1",
+    "prior_wgs84_vincenty__linear_n_minus_1_m": 93.50510102387848,
+    "prior_wgs84_p50_p95_m": [6.513265251712395, 180.49693679604457],
+    "candidate_wgs84_vincenty__linear_n_minus_1_m": 68.20249565105695,
+    "candidate_wgs84_p50_p95_m": [62.832079348000924, 73.57291195411297],
+    "all_four_variants_improved_vs_prior": true,
+    "interpretation": "The fixed one-route development score improves the combined diagnostic and P95, while P50 increases; this is retained only as an opt-in development candidate pending route-disjoint confirmation. It is not a production-default promotion."
+  },
+  "decision": {
+    "promotion": "retain-development-only-opt-in",
+    "production_default_changed": false,
+    "fresh_validation_authorized": false,
+    "holdout_authorized": false,
+    "test_batch_authorized": false,
+    "score_used_for_tuning": false,
+    "parameter_search_after_freeze": false,
+    "mat_inputs_used": false,
+    "upstream_result_oracle_used": false,
+    "external_mutation": false,
+    "native_0_782_class_achieved": false,
+    "reason": "Raw-only upstream residual/SNR rules pass structural checks and improve all four local variants versus the 93.505 m raw bridge on the one frozen development route. Keep the exact candidate for future route-disjoint confirmation; do not broaden it or tune from this single route."
+  }
+}

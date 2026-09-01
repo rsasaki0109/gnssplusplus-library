@@ -1,0 +1,122 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-pdc-corrected-freeze.v1",
+  "status": "frozen-before-corrected-train-artifacts",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "purpose": "Freeze the opt-in Android/RINEX Doppler correctness recovery after a truth-free structural smoke and before any new sealed train artifacts or truth read.",
+  "policy": {
+    "local_only": true,
+    "external_mutation": false,
+    "token_access": false,
+    "leaderboard_used_for_tuning": false,
+    "validation_opened": false,
+    "holdout_opened": false,
+    "test_truth_opened": false,
+    "no_post_truth_tuning": true,
+    "production_default_changed": false,
+    "prior_pdc_v1_no_go_reinterpreted": false
+  },
+  "base_freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_bridge_freeze_v1.json",
+    "sha256": "a1d37b055951267c6a99fef771aeb0736ced70d09dbd2f1c098e60815aa2dbf0"
+  },
+  "correction_authorization": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_correctness_authorization_v1.json",
+    "sha256": "e45412ff7ee72781a0e59b8030032ec8158611b3343fc93ed83047cea8f63c28",
+    "scope": "mapping/contract correctness only; no numeric candidate search"
+  },
+  "authoritative_inventory": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_convergence_selector_truth_use_inventory_v2.json",
+    "sha256": "fc90e3a6e4182276cbfebc635085d367c18fe10d3f0c982ee8d2cfcc9eb1f3d4",
+    "role": "metadata/truth-use exclusion only; no validation/holdout/test payload is opened"
+  },
+  "fixed_split": {
+    "train": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "2022-02-24-18-29-us-ca-lax-o/pixel5"
+    ],
+    "fresh_validation": "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+    "future_holdout": "2023-05-16-19-54-us-ca-mtv-xe1/pixel5",
+    "truth_policy": "Only the already designated development train truth may be opened after all corrected artifacts and score gate are sealed; validation/holdout/test remain sealed."
+  },
+  "candidate": {
+    "id": "native-fgo-pdc-corrected-v1",
+    "backend": "eigen",
+    "base_required": false,
+    "forbidden_factors": ["single_difference_doppler", "single_difference_tdcp", "double_difference", "integer_fix"],
+    "factors": ["pseudorange", "carrier_phase_float", "ordinary_tdcp", "position_motion", "clock_motion", "velocity_state", "velocity_motion", "ambiguity_between", "undifferenced_doppler_corrected"],
+    "doppler_contract": {
+      "android_rate_unit": "m/s",
+      "android_rate_sign": "positive means satellite moving away",
+      "rinex_doppler_unit": "cycles/s (Hz)",
+      "android_to_rinex": "D = -pseudorange_rate_mps / wavelength_m",
+      "rinex_to_range_rate": "range_rate_mps = -D * wavelength_m",
+      "satellite_clock_drift_unit": "seconds/second, multiplied by c to m/s",
+      "receiver_clock_drift": "(clock_bias_current_m - clock_bias_previous_m) / dt_s",
+      "earth_rotation": "rotate satellite position and velocity by the same transmit-time Earth rotation matrix",
+      "first_epoch": "corrected Doppler is omitted because receiver clock drift is not identifiable from one epoch",
+      "gap": "corrected factor omitted when dt<=0 or dt>max_tdcp_gap_s; no silent legacy fallback"
+    },
+    "numeric_parameters_unchanged_from_v1": {
+      "max_iterations": 8,
+      "pseudorange_sigma_m": 3.0,
+      "pseudorange_elevation_sigma_power": 1.0,
+      "motion_sigma_m": 50.0,
+      "clock_motion_sigma_m": 300.0,
+      "velocity_prior_sigma_mps": 100.0,
+      "velocity_motion_sigma_m": 0.01,
+      "tdcp_sigma_m": 0.03,
+      "carrier_phase_sigma_m": 0.01,
+      "undifferenced_doppler_sigma_mps": 0.2,
+      "pseudorange_huber_threshold_sigma": 4.0,
+      "carrier_phase_huber_threshold_sigma": 4.0,
+      "tdcp_huber_threshold_sigma": 4.0,
+      "max_tdcp_gap_s": 2.0,
+      "min_elevation_deg": 10.0,
+      "min_snr_dbhz": 0.0,
+      "min_satellites_per_epoch": 4,
+      "seed_match_tolerance_s": 0.01,
+      "seed_interpolation_max_gap_s": 0.0
+    },
+    "numeric_parameter_change": false,
+    "truth_free_selection": true,
+    "short_smoke_evidence": {
+      "route": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "epochs": 30,
+      "observed": "finite output, finite decreasing cost, 430 corrected Doppler factors, 0.4057443385 m/s final Doppler residual RMS; convergence was not claimed because max_iterations=8 was reached"
+    }
+  },
+  "source_hashes_at_freeze": {
+    "apps/native/gnss_fgo.cpp": "4956f11d6b0c0f73dde42aac67f4be98702ee131d7ff0e6ccf1e10af21097b82",
+    "include/libgnss++/algorithms/fgo.hpp": "9633a67ae59994142fc2c5806b58619762562b4f45ee54a795dbf4730e3f4d89",
+    "include/libgnss++/algorithms/fgo_config.hpp": "b61de939cbb2c06634aaadb53532df97bbeca2f14fd0bbe932bdac2e5198fd96",
+    "include/libgnss++/algorithms/doppler_contract.hpp": "66d97c9ca2cc474247464d8af782cc3ca1837195967e601576ee25b6f8e1f56d",
+    "src/algorithms/fgo.cpp": "1a28c82dea117bec17ed4a29fefff3c613aa8bee0beee9d37516a1aca340e11f",
+    "src/algorithms/fgo_problems.cpp": "5c45176049970a33c132d1e97d18c41861d30499a81e0642dc59dddcfd659853",
+    "src/algorithms/fgo_internal.hpp": "1d4c5bbd7912bfc57a7b1ce5d1131ec853c1df3213a3fb6bbab066e447cf35e0",
+    "apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_bridge.py": "9519dfb5cf4e2205bd29052360f33383e725e909042735aa00d6c43b208a20a3",
+    "tests/test_fgo.cpp": "eb3e36ae6b8ccf1aaa5ecdf2fac1e0f99cef801baa01aa4ee66009fe2714b525",
+    "build/apps/gnss_fgo": "2cbff982954ad28453efdbb97987b169a0c325d94d180bf96815f94ff1d69bd0"
+  },
+  "commands": {
+    "structural_smoke": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:/opt/ros/jazzy/lib build/apps/gnss_fgo --backend eigen --carrier-phase-factors --undifferenced-doppler-factors --corrected-undifferenced-doppler-factors --velocity-states --velocity-motion-factors --ambiguity-between-factors --no-dd-factors --max-epochs 30",
+    "truth_free_train": "python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_bridge.py --freeze-record docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_bridge_freeze_v1.json --corrected-undifferenced-doppler --candidate-id native-fgo-pdc-corrected-v1 --route <fixed-train-route> --output-root output/smartphone-r5/native-fgo-pdc-corrected-v1",
+    "score_after_seal_only": "python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_bridge_train_score.py --gate-record docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_corrected_train_gate_v1.json --output-root output/smartphone-r5/native-fgo-pdc-corrected-v1"
+  },
+  "artifact_contract": {
+    "truth_free_before_truth": true,
+    "atomic_publish": true,
+    "required_hashes": ["route inputs", "source", "Release binary", "fgo.pos", "fgo_summary.json", "fgo_cost_trace.csv", "submission.csv", "run_manifest"],
+    "finite_and_keyed": true,
+    "no_hidden_fallback": true
+  },
+  "promotion_gate": {
+    "all_four_diagnostics_and_mean": "strictly improve route-wise and aggregate versus exact sealed native-fgo-pdc-v1",
+    "availability_and_truth_coverage": "non-regression",
+    "vertical_p95": "non-regression and within prior physical threshold",
+    "continuity": "no new isolated >70 m/s transition",
+    "structural": ["finite output", "finite decreasing cost", "corrected Doppler factor count > 0", "receiver clock drift represented", "convergence/termination telemetry valid", "no forbidden base factors"],
+    "failure": "record No-Go; do not open fresh validation, holdout, or test truth; production defaults remain unchanged"
+  },
+  "no_post_truth_tuning": true
+}

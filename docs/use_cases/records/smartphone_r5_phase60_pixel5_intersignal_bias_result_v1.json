@@ -1,0 +1,300 @@
+{
+  "schema_version": "smartphone-r5-phase60-pixel5-intersignal-bias-result.v1",
+  "phase": 60,
+  "execution_label": "Luna Max",
+  "status": "phase60-no-go-intersignal-bias-not-identifiable",
+  "decision": "preserve-phase43-champion; no-native-intersignal-bias-correction",
+  "operation": "truth-free raw Android FullInterSignalBiasNanos/SatelliteInterSignalBiasNanos consumption and sign audit",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase60_pixel5_intersignal_bias_freeze_v1.json",
+    "sha256": "d4c0a0ea383801b77cd96083a04dd15c79a6061e79be5e70f5e0859d2340e4a0",
+    "seal_commit": "d6e6773"
+  },
+  "evaluator_manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase60_pixel5_intersignal_bias_evaluator_manifest_v1.json",
+    "sha256": "e6da7fde7c4dd7cea460a0a314ec988add894ded6c1f6957dbda59e0f5575365",
+    "seal_commit": "b27a1e2"
+  },
+  "evaluator": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase60_pixel5_intersignal_bias_audit.py",
+    "sha256": "fcb2bcda7be8a14f83f7a6091101d762bb35a5436e531f6bc1380b07e6dce819",
+    "test_path": "tests/test_smartphone_phase60_pixel5_intersignal_bias_audit.py",
+    "test_sha256": "5df9ee7678317b43ad2b51d4eb07882ed5f31f5a5f97e3176a3b71a4599629a4",
+    "cmake_path": "tests/CMakeLists.txt",
+    "cmake_sha256": "0ef2cea3ba16edce172ed834ebb5e73e45e304b3bfcdc5978c3e9677a1ba39d6",
+    "single_process": true,
+    "raw_reads_per_route": 1,
+    "raw_read_total": 4,
+    "truth_reads": 0,
+    "solver_invocations": 0,
+    "trajectory_reruns": 0
+  },
+  "source_contract": {
+    "reference": "https://developer.android.com/reference/android/location/GnssMeasurement",
+    "api_level": 30,
+    "speed_of_light_mps": 299792458.0,
+    "full_field": {
+      "name": "FullInterSignalBiasNanos",
+      "units": "nanoseconds",
+      "type": "double",
+      "meaning": "Android's complete estimated receiver-plus-space-segment inter-system, inter-frequency, and inter-code bias relative to the GnssClock reference constellation; inter-frequency ionospheric bias is excluded.",
+      "source_sign": "corrected pseudorange = raw pseudorange - FullInterSignalBiasNanos"
+    },
+    "satellite_field": {
+      "name": "SatelliteInterSignalBiasNanos",
+      "units": "nanoseconds",
+      "type": "double",
+      "meaning": "Android's space-segment inter-system, inter-frequency, and inter-code component, including master-clock/group-delay/DCB terms.",
+      "source_sign": "corrected pseudorange = raw pseudorange - SatelliteInterSignalBiasNanos"
+    },
+    "decomposition": "Full already includes Satellite; Full minus Satellite is the receiver-side remainder. Full plus Satellite is prohibited and was not used.",
+    "metres_conversion": "bias_m = 299792458.0 * bias_nanos * 1e-9; signed decimal input is retained.",
+    "raw_proxy": "Phase25 segment-base Android-clock pseudorange proxy only; no enriched RawPseudorangeMeters, SvPosition, SvElevation, WLS, navigation, coordinates, IMU, or truth.",
+    "pair_key": "same utcTimeMillis epoch and same constellation/Svid with two distinct supported signal/frequency groups; no nearest-time or interpolation",
+    "source_sign_was_not_fit": true
+  },
+  "source_plumbing": {
+    "adapter_does_not_parse_full_intersignal_bias": true,
+    "adapter_does_not_parse_satellite_intersignal_bias": true,
+    "observation_does_not_retain_full_intersignal_bias": true,
+    "observation_does_not_retain_satellite_intersignal_bias": true,
+    "fgo_does_not_consume_full_intersignal_bias": true,
+    "fgo_does_not_consume_satellite_intersignal_bias": true,
+    "existing_signal_bias_state_not_raw_field": true,
+    "source_hashes": {
+      "src/io/android_raw_gnss.cpp": "1bb9369e7db651e53fddab2a92c2f217512667bb349f70aa52934aeb80cbf387",
+      "include/libgnss++/io/android_raw_gnss.hpp": "e833570103a521b9e051086b6ea75192ae3a575b83eee33d978143eaf279c52c",
+      "include/libgnss++/core/observation.hpp": "9ba79a44fd1f8c4f4f7b7f8707a119c350174bf850b226ff89e587c55f8abd2c",
+      "src/algorithms/fgo_problems.cpp": "725167ccc21a62e61c4da9852726ed5cafbfc05ab794eaa76c4641676f576245",
+      "include/libgnss++/algorithms/fgo.hpp": "90efe485b2c50eb56535a7eb0709a1b7daa29e4f7a9bd3878acf527dc624ab36",
+      "include/libgnss++/algorithms/fgo_config.hpp": "e7a72c89475d0edf1da3a767ea7d1702d76b8b52dc90a4bd5db225826875ffbe",
+      "apps/native/gnss_fgo_imu_no_base.cpp": "2a924ddd681ce43e1bf08fc4155b3fa62569a9c7694a1550c28f153af4db5218"
+    }
+  },
+  "cohort": {
+    "phone_model": "pixel5",
+    "route_disjoint": true,
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "raw_inputs": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv",
+        "bytes": 57715495,
+        "sha256": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863"
+      },
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+        "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+        "bytes": 74299283,
+        "sha256": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7"
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_gnss.csv",
+        "bytes": 33837317,
+        "sha256": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1"
+      },
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+        "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2023-03-08-21-34-us-ca-mtv-u/pixel5/inputs/device_gnss.csv",
+        "bytes": 23385520,
+        "sha256": "a0fc8e71bdfc03be61b99efcd7d41fbba8ffec126df78b55243f681fd211f204"
+      }
+    }
+  },
+  "routes": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "raw_rows": 87705,
+      "adopted_proxy_rows": 83612,
+      "distinct_satellites": 37,
+      "epoch_count": 2159,
+      "signal_frequency_group_count": 13,
+      "unsupported_signal_rows_informational": 3437,
+      "headers_present": ["FullInterSignalBiasNanos", "SatelliteInterSignalBiasNanos"],
+      "finite_full_rows": 0,
+      "finite_satellite_rows": 0,
+      "same_epoch_same_svid_pairs": 20864,
+      "paired_satellites": 12,
+      "finite_both_pairs": 0,
+      "signal_frequency_pair_counts": {
+        "GALILEO:GAL_E1__GALILEO:GAL_E5A": 12753,
+        "GPS:GPS_L1CA__GPS:GPS_L5": 8111
+      },
+      "gate_failures": ["full_finite_coverage", "satellite_finite_coverage", "signed_materiality", "pair_materiality", "temporal_stability"]
+    },
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "raw_rows": 112833,
+      "adopted_proxy_rows": 108722,
+      "distinct_satellites": 31,
+      "epoch_count": 3140,
+      "signal_frequency_group_count": 11,
+      "unsupported_signal_rows_informational": 3051,
+      "headers_present": ["FullInterSignalBiasNanos", "SatelliteInterSignalBiasNanos"],
+      "finite_full_rows": 0,
+      "finite_satellite_rows": 0,
+      "same_epoch_same_svid_pairs": 34383,
+      "paired_satellites": 14,
+      "finite_both_pairs": 0,
+      "signal_frequency_pair_counts": {
+        "GALILEO:GAL_E1__GALILEO:GAL_E5A": 14936,
+        "GPS:GPS_L1CA__GPS:GPS_L5": 19447
+      },
+      "gate_failures": ["full_finite_coverage", "satellite_finite_coverage", "signed_materiality", "pair_materiality", "temporal_stability"]
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "raw_rows": 51243,
+      "adopted_proxy_rows": 50706,
+      "distinct_satellites": 29,
+      "epoch_count": 1466,
+      "signal_frequency_group_count": 12,
+      "unsupported_signal_rows_informational": 0,
+      "headers_present": ["FullInterSignalBiasNanos", "SatelliteInterSignalBiasNanos"],
+      "finite_full_rows": 0,
+      "finite_satellite_rows": 0,
+      "same_epoch_same_svid_pairs": 15602,
+      "paired_satellites": 15,
+      "finite_both_pairs": 0,
+      "signal_frequency_pair_counts": {
+        "GALILEO:GAL_E1__GALILEO:GAL_E5A": 10962,
+        "GPS:GPS_L1CA__GPS:GPS_L5": 4640
+      },
+      "gate_failures": ["full_finite_coverage", "satellite_finite_coverage", "signed_materiality", "pair_materiality", "temporal_stability"]
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "raw_rows": 35810,
+      "adopted_proxy_rows": 35391,
+      "distinct_satellites": 26,
+      "epoch_count": 1102,
+      "signal_frequency_group_count": 10,
+      "unsupported_signal_rows_informational": 0,
+      "headers_present": ["FullInterSignalBiasNanos", "SatelliteInterSignalBiasNanos"],
+      "finite_full_rows": 0,
+      "finite_satellite_rows": 0,
+      "same_epoch_same_svid_pairs": 10783,
+      "paired_satellites": 15,
+      "finite_both_pairs": 0,
+      "signal_frequency_pair_counts": {
+        "GALILEO:GAL_E1__GALILEO:GAL_E5A": 7690,
+        "GPS:GPS_L1CA__GPS_L5": 3093
+      },
+      "gate_failures": ["full_finite_coverage", "satellite_finite_coverage", "signed_materiality", "pair_materiality", "temporal_stability"]
+    }
+  },
+  "aggregate": {
+    "headers_present_all_routes": true,
+    "finite_full_rows": 0,
+    "finite_satellite_rows": 0,
+    "finite_receiver_remainder_rows": 0,
+    "finite_both_pairs": 0,
+    "route_full_medians_m": [null, null, null, null],
+    "route_satellite_medians_m": [null, null, null, null],
+    "route_receiver_remainder_medians_m": [null, null, null, null],
+    "routewise_loo_folds": 4,
+    "routewise_loo_finite_evidence": false,
+    "same_epoch_pair_counts": [20864, 34383, 15602, 10783]
+  },
+  "numeric_gates": {
+    "logic": "AND; frozen before raw read",
+    "route_count_required": 4,
+    "adopted_proxy_rows_min_each_route": 1000,
+    "distinct_satellites_min_each_route": 5,
+    "full_finite_fraction_min": 0.8,
+    "satellite_finite_fraction_min": 0.8,
+    "same_epoch_same_svid_pairs_min_each_route": 100,
+    "paired_satellites_min_each_route": 3,
+    "signal_frequency_groups_min_each_route": 2,
+    "signal_families_min_each_route": 2,
+    "signed_field_p95_abs_min_m": 0.03,
+    "receiver_remainder_p95_abs_min_m": 0.03,
+    "pair_bias_difference_p95_abs_min_m": 0.03,
+    "pair_correction_shift_p95_abs_min_m": 0.02,
+    "finite_adjacent_fraction_min": 0.8,
+    "jump_threshold_m": 1.0,
+    "jump_fraction_max": 0.05,
+    "loo_fold_count": 4,
+    "loo_materiality_retained_fraction_min": 0.75,
+    "no_imputation": true,
+    "unsupported_signal_rows_informational_not_gate": true
+  },
+  "observed_gates": {
+    "route_count": true,
+    "raw_input_integrity": true,
+    "field_headers": true,
+    "adopted_proxy_coverage": true,
+    "same_satellite_multi_signal_pairs": true,
+    "signal_composition": true,
+    "source_sign_and_decomposition": true,
+    "field_finite_coverage": false,
+    "bias_materiality": false,
+    "temporal_stability": false,
+    "loo_route_count": true,
+    "presentation_integrity": true,
+    "all_passed": false
+  },
+  "read_accounting": {
+    "single_process": true,
+    "raw_device_gnss_reads_per_route": 1,
+    "raw_device_gnss_reads_total": 4,
+    "truth_reads": 0,
+    "prior_metric_payload_reads": 0,
+    "brdc_nav_reads": 0,
+    "solver_invocations": 0,
+    "trajectory_reruns": 0,
+    "raw_device_imu_reads": 0,
+    "coordinate_or_wls_inputs": 0,
+    "SvPosition_or_SvElevation": 0,
+    "enriched_RawPseudorange_inputs": 0,
+    "mat_reads_or_generated": 0,
+    "validation_holdout_reads": 0,
+    "archive_reopens": 0,
+    "rematerialization_count": 0,
+    "kaggle_or_token_access": 0,
+    "correction_fit_or_application": 0
+  },
+  "artifacts": {
+    "result": {
+      "path": "output/smartphone-r5/phase60-pixel5-intersignal-bias-v1/phase60_pixel5_intersignal_bias.json",
+      "bytes": 63637,
+      "sha256": "583671d40e58606587ca52fc8e42dda4a2371e953ddb8eb7e43313a77bc14742"
+    },
+    "routes": {
+      "path": "output/smartphone-r5/phase60-pixel5-intersignal-bias-v1/phase60_pixel5_intersignal_bias.routes.json",
+      "bytes": 49274,
+      "sha256": "f4fa9a77c842821e10bf7d7bf153a35bf0903719be9fc6ea85ee0b5c4d6cce3a"
+    },
+    "events": {
+      "path": "output/smartphone-r5/phase60-pixel5-intersignal-bias-v1/phase60_pixel5_intersignal_bias.events.json",
+      "bytes": 161,
+      "sha256": "d7582e786e2608ae8a9e8ca4083ccdce94c7624018e860bf977a189b8386a8a1"
+    },
+    "output_manifest": {
+      "path": "output/smartphone-r5/phase60-pixel5-intersignal-bias-v1/phase60_pixel5_intersignal_bias.manifest.json",
+      "bytes": 1698,
+      "sha256": "ba38d8e2e4aa37f1d56ca8ee6791857c798d59e9c1841561a80df0cbb60efc94"
+    },
+    "output_manifest_pins": {
+      "freeze_sha256": "d4c0a0ea383801b77cd96083a04dd15c79a6061e79be5e70f5e0859d2340e4a0",
+      "evaluator_manifest_sha256": "e6da7fde7c4dd7cea460a0a314ec988add894ded6c1f6957dbda59e0f5575365"
+    }
+  },
+  "decision_details": {
+    "failed_gates": ["field_finite_coverage", "bias_materiality", "temporal_stability"],
+    "strongest_finding": "All four raw CSV headers contain FullInterSignalBiasNanos and SatelliteInterSignalBiasNanos, but both fields have zero finite values in every adopted proxy row and every same-satellite multi-signal pair. Consequently no signed, route-stable, non-common bias or Full-minus-Satellite receiver remainder is identifiable.",
+    "native_correction_authorized": false,
+    "implementation_stage_authorized": false,
+    "accuracy_truth_read": false,
+    "zero_point_782_evaluated": false,
+    "next_single_factor": "raw Android pseudorange code tracking / multipath residual calibration not already masked by the current adapter",
+    "next_factor_is_not_started": true
+  },
+  "tests": {
+    "py_compile": true,
+    "focused_python_tests": {
+      "command": "python3 -m unittest tests/test_smartphone_phase60_pixel5_intersignal_bias_audit.py",
+      "passed": 7
+    },
+    "freeze_verification": true,
+    "cmake_registered_test": "python_smartphone_phase60_pixel5_intersignal_bias_audit_tests"
+  }
+}

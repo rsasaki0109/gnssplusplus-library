@@ -1,0 +1,75 @@
+{
+  "schema_version": "smartphone-r5-phase36-phone-bias-audit-evaluator-manifest.v1",
+  "status": "evaluator-frozen-before-phase36-residual-truth-read",
+  "phase": 36,
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase36_phone_bias_audit_freeze_v1.json",
+    "sha256": "e559f667d5200ac89b8be084b10ab684e770f2c3c437d259f5c79a44c29e102e"
+  },
+  "evaluator": {
+    "source": "apps/commands/benchmarks/gnss_smartphone_phase36_phone_bias_audit.py",
+    "sha256": "88979de3649c2e03e10abb1da20bea8d1e7439cd132bc029d21ca415165011ae",
+    "test": "tests/test_smartphone_phase36_phone_bias_audit.py",
+    "test_sha256": "4bdb9a1fd338c111c38db6055ada5f713d036bf33b669ef847636f7496238da7"
+  },
+  "cohort": {
+    "route_count": 3,
+    "route_ids": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b"
+    ],
+    "role": "already-opened Phase29 development train only",
+    "fresh_validation": "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+    "future_holdout": "2023-05-16-19-54-us-ca-mtv-xe1/pixel5"
+  },
+  "inputs": {
+    "candidate": "sealed Phase31 native quality-anchor TDCP/no-bridge submission.csv per route",
+    "truth": "already materialized Phase29 development ground_truth.csv per route",
+    "raw_orientation": "raw device_imu.csv per route; UncalAccel and UncalMag only",
+    "archive_open": false,
+    "allowed_inference_inputs": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "forbidden": [
+      "ground_truth.csv during inference",
+      "any .mat file",
+      "device WLS or enriched coordinates",
+      "sample/submission/result trajectory coordinates as inference input",
+      "validation/holdout truth",
+      "Kaggle scores"
+    ]
+  },
+  "read_contract": {
+    "one_process": true,
+    "truth_open_count_per_route": 1,
+    "candidate_open_count_per_route": 1,
+    "raw_imu_open_count_per_route": 1,
+    "truth_rematerialization": false,
+    "solver_rerun": false,
+    "candidate_regeneration": false,
+    "fit_or_correction_application": false,
+    "post_score_tuning": false,
+    "validation_truth_open_count": 0,
+    "future_holdout_truth_open_count": 0,
+    "mat_read_or_generated": false,
+    "token_or_kaggle_access": false
+  },
+  "residual_contract": {
+    "frame": "fixed local ENU at first chronological matched truth coordinate",
+    "sign": "prediction minus truth",
+    "observable_components": ["east", "north"],
+    "up": "unavailable because sealed submission has no altitude; never filled from a result artifact",
+    "robust_location": "component-wise median",
+    "robust_scale": "component-wise unscaled MAD",
+    "covariance": "ordinary and component-wise 3-MAD inlier covariance",
+    "prefix_tail": "first and last chronological 25 percent",
+    "orientation": "nearest preceding raw IMU sample within 250 ms; coarse gravity-axis/sign and tilt-compensated magnetic heading labels only"
+  },
+  "gates": {
+    "identifiable_constant_requires_repeated_exact_model_routes": true,
+    "body_frame_vector_requires_calibrated_device_to_antenna_pose": true,
+    "per_route_fit": false,
+    "per_timestamp_fit": false,
+    "validation_or_holdout_reuse": false,
+    "atomic_publish": true
+  }
+}

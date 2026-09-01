@@ -1,0 +1,211 @@
+{
+  "schema_version": "smartphone-r5-wls-stability-selector-selection.v1",
+  "status": "selection-frozen-before-evaluation",
+  "scope": "development-only truth-free native/WLS stability selector validation",
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256_from_frozen_profile": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_directory_inventory_path": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+    "central_directory_inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+    "selection_member_content_read": false,
+    "selection_truth_opened": false
+  },
+  "sealed_data_policy": {
+    "development_main_id": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "designated_holdout_id": "2023-09-06-22-49-us-ca-routebb1/pixel7pro",
+    "holdout_content_opened": false,
+    "holdout_truth_opened": false,
+    "holdout_materialized": false,
+    "holdout_evaluation_forbidden": true
+  },
+  "previously_used_ids_excluded": [
+    "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8",
+    "2021-03-16-20-40-us-ca-mtv-b/pixel4xl",
+    "2021-07-14-20-50-us-ca-mtv-e/pixel4",
+    "2022-08-04-20-07-us-ca-sjc-q/pixel5",
+    "2022-11-15-00-53-us-ca-mtv-a/pixel7pro",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel6pro",
+    "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "2023-09-06-22-49-us-ca-routebb1/pixel7pro"
+  ],
+  "selection_rule": {
+    "inventory_source": "ZIP central directory metadata only; no member payload is opened",
+    "device_preference": "exact pixel7pro after every used route/device and sealed holdout are excluded",
+    "required_members": [
+      "device_gnss.csv",
+      "device_imu.csv",
+      "ground_truth.csv",
+      "brdc.nav"
+    ],
+    "capability_screen_after_freeze": "selected device GNSS only; Galileo E1 and handset WLS fields; truth remains unopened",
+    "exclusions": "exclude designated holdout, development main, every previously used route/device, incomplete/duplicate members, and duplicate route IDs",
+    "tie_break": "ASCII lexicographic dataset ID",
+    "truth_free_generation_before_scoring": true
+  },
+  "eligible_exact_pixel7pro_metadata_candidates": [
+    "2023-05-16-19-55-us-ca-mtv-xe1/pixel7pro",
+    "2023-05-25-20-11-us-ca-sjc-he2/pixel7pro"
+  ],
+  "selected_candidate": {
+    "dataset_id": "2023-05-16-19-55-us-ca-mtv-xe1/pixel7pro",
+    "route": "2023-05-16-19-55-us-ca-mtv-xe1",
+    "phone": "pixel7pro",
+    "calendar_year": 2023,
+    "route_region": "mtv",
+    "required_files": {
+      "device_gnss.csv": 1,
+      "device_imu.csv": 1,
+      "ground_truth.csv": 1,
+      "brdc.nav": 1
+    },
+    "central_directory_members": {
+      "device_gnss.csv": {
+        "name": "dataset_2023/train/2023-05-16-19-55-us-ca-mtv-xe1/pixel7pro/device_gnss.csv",
+        "file_size": 39234516,
+        "compressed_size": 9966955,
+        "crc32_hex": "7cd11c33"
+      },
+      "device_imu.csv": {
+        "name": "dataset_2023/train/2023-05-16-19-55-us-ca-mtv-xe1/pixel7pro/device_imu.csv",
+        "file_size": 58750637,
+        "compressed_size": 13156824,
+        "crc32_hex": "c5f5c365"
+      },
+      "ground_truth.csv": {
+        "name": "dataset_2023/train/2023-05-16-19-55-us-ca-mtv-xe1/pixel7pro/ground_truth.csv",
+        "file_size": 225255,
+        "compressed_size": 65355,
+        "crc32_hex": "540a7ed0"
+      },
+      "brdc.nav": {
+        "name": "dataset_2023/train/2023-05-16-19-55-us-ca-mtv-xe1/brdc.nav",
+        "file_size": 11749347,
+        "compressed_size": 1123176,
+        "crc32_hex": "6e096015"
+      }
+    },
+    "broadcast_nav_unique": true,
+    "payload_opened_at_freeze": false,
+    "truth_opened_at_freeze": false
+  },
+  "capability_screen_expected": {
+    "valid_galileo_e1_rows": 11185,
+    "galileo_e1_rows": 11185,
+    "galileo_e1_epochs": 2323,
+    "galileo_e1_svid_count": 6,
+    "invalid_galileo_e1_rows": 0,
+    "wls_finite_rows": 63320,
+    "wls_invalid_rows": 0,
+    "truth_opened": false
+  },
+  "evaluation_contract": {
+    "native_lane": "Galileo E1 + Hatch C1C 30 s + truth-free segment stability report",
+    "wls_lane": "handset WLS ECEF extraction + WGS84/POS raw output",
+    "selector_rule": "all native segments stable selects native stable POS; any unstable segment selects WLS raw POS",
+    "selector_runtime_inputs": [
+      "native segment-stability report",
+      "WLS integrity manifest",
+      "exact device epoch keys"
+    ],
+    "truth_use": "truth is parsed exactly once only after both lane artifacts and the selector submission are published",
+    "known_aggregate": "seven already evaluated routes: native-only, WLS-only, and stability selector H P50/P95, four diagnostics, availability, and V P95",
+    "new_validation_gate": "selected lane must not worsen horizontal official-like diagnostic, H P50/P95, diagnostics, or availability versus the other lane; V P95 must remain within the frozen profile threshold",
+    "promotion_rule": "known seven-route selector must be strictly better horizontally than both single lanes and vertical must remain within the existing signoff threshold",
+    "holdout": "never opened or evaluated"
+  },
+  "post_evaluation": {
+    "status": "completed",
+    "output_root": "output/smartphone-r5/wls-stability-selector-v1",
+    "report": {
+      "path": "output/smartphone-r5/wls-stability-selector-v1/wls_stability_selector_report.json",
+      "sha256": "13d5639bc532a6f1ddfbd702174a3f1c84382b68566de530a2499a4e13ebe872"
+    },
+    "evaluation_manifest": {
+      "path": "output/smartphone-r5/wls-stability-selector-v1/wls_stability_selector_manifest.json",
+      "sha256": "276701ddc0ce380e709078fa59097a506fc24fdd8af58870a7d8a17bfc959d6b",
+      "hash_note": "manifest contains the frozen selection-record hash and all lane/selector artifact hashes; its own hash is recorded here for audit"
+    },
+    "inventory": {
+      "path": "output/smartphone-r5/wls-stability-selector-v1/archive_inventory.json",
+      "sha256": "6d6a03cebac822a3c27b1dd9c9d5998d00e4229ef034de3d1aac96ddeb71e3a0"
+    },
+    "materialization_manifest": {
+      "path": "output/smartphone-r5/wls-stability-selector-v1/materialized/routes/2023-05-16-19-55-us-ca-mtv-xe1/pixel7pro/materialization_manifest.json",
+      "sha256": "d9b353036dad06a0ee652910b7ad7b8f555468bef1984c9147663eedf86f8744"
+    },
+    "candidate_truth": {
+      "path": "output/smartphone-r5/wls-stability-selector-v1/materialized/routes/2023-05-16-19-55-us-ca-mtv-xe1/pixel7pro/inputs/ground_truth.csv",
+      "sha256": "8df14918056d511939e0c5001cdc78be79d95852e7c7594b92eae94aa61cf021",
+      "parsed_once_after_selector": true
+    },
+    "candidate_selector_manifest": {
+      "path": "output/smartphone-r5/wls-stability-selector-v1/routes/2023-05-16-19-55-us-ca-mtv-xe1__pixel7pro/selector/selector_manifest.json",
+      "sha256": "a83d4be708b754b731622a07f422bff10c9b17325a65223d2ea26d9e158fb465"
+    },
+    "capability_screen": {
+      "valid_galileo_e1_rows": 11185,
+      "galileo_e1_epochs": 2323,
+      "wls_finite_rows": 63320,
+      "truth_opened": false
+    },
+    "promotion_decision": "promote-development-only-recommended-selector",
+    "gates": {
+      "new_validation_selected_lane_non_regressive_horizontally": true,
+      "known_seven_selector_strictly_better_than_native_only_horizontally": true,
+      "known_seven_selector_strictly_better_than_wls_only_horizontally": true,
+      "known_seven_vertical_within_existing_signoff_threshold": true,
+      "recommended_profile_written": true,
+      "production_default_changed": false,
+      "holdout_opened": false,
+      "holdout_materialized": false,
+      "holdout_truth_opened": false
+    },
+    "new_route_score_summary_m": {
+      "native_stable": {
+        "horizontal_median": 2.742788130718506,
+        "horizontal_p95": 6.39856169787183,
+        "vertical_p95": 13.50276054315802,
+        "kaggle_diagnostic_mean": 4.569483745697277,
+        "availability": 1.0
+      },
+      "wls_raw": {
+        "horizontal_median": 2.3438624723917716,
+        "horizontal_p95": 4.495724550871015,
+        "vertical_p95": 6.540514567988546,
+        "kaggle_diagnostic_mean": 3.4198348187492993,
+        "availability": 1.0
+      },
+      "selector": {
+        "selected_lane": "wls_raw",
+        "horizontal_median": 2.3438624723917716,
+        "horizontal_p95": 4.495724550871015,
+        "vertical_p95": 6.540514567988546,
+        "kaggle_diagnostic_mean": 3.4198348187492993,
+        "availability": 1.0
+      }
+    },
+    "known_seven_aggregate_summary_m": {
+      "native_only": {
+        "horizontal_median": 2.6467896403808657,
+        "horizontal_p95": 6.882091113085112,
+        "vertical_p95": 14.823784763517178,
+        "kaggle_diagnostic_mean": 4.764213628156374,
+        "availability": 1.0
+      },
+      "wls_only": {
+        "horizontal_median": 2.7527311470282965,
+        "horizontal_p95": 5.490771644349414,
+        "vertical_p95": 10.36412436912988,
+        "kaggle_diagnostic_mean": 4.12182904960396,
+        "availability": 1.0
+      },
+      "selector": {
+        "horizontal_median": 2.6201468265075367,
+        "horizontal_p95": 5.159888792922871,
+        "vertical_p95": 11.204835347386277,
+        "kaggle_diagnostic_mean": 3.8901673329750737,
+        "availability": 1.0
+      }
+    }
+  }
+}

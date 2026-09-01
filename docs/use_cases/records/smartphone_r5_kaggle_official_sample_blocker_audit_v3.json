@@ -1,0 +1,183 @@
+{
+  "schema_version": "smartphone-r5-kaggle-official-sample-blocker-audit.v3",
+  "status": "sealed-auth-not-visible-to-process",
+  "audited_at_utc": "2026-08-30T07:30:41Z",
+  "supersedes": {
+    "record": "docs/use_cases/records/smartphone_r5_kaggle_official_sample_blocker_audit_v2.json",
+    "record_sha256": "7646fc89ac331907763a50630d3939424c453fa75e6f0653bbcf57c34345dc86",
+    "reason": "Rechecked modern Kaggle token locations, process injection, workspace env/direnv, and keyring availability without reading or displaying secret values."
+  },
+  "scope": {
+    "competition_slug": "smartphone-decimeter-2023",
+    "official_primary_sources_only": true,
+    "non_official_sample_used": false,
+    "truth_materialized_or_opened": false,
+    "algorithm_or_candidate_changed": false,
+    "positioning_rerun": false,
+    "secret_values_displayed": false
+  },
+  "re_detection": {
+    "current_process_environment_variable_names_checked": [
+      "KAGGLE_API_TOKEN",
+      "KAGGLE_USERNAME",
+      "KAGGLE_KEY",
+      "KAGGLE_CONFIG_DIR",
+      "XDG_CONFIG_HOME",
+      "KAGGLE_DATA_PROXY_TOKEN",
+      "KAGGLE_USER_SECRETS_TOKEN"
+    ],
+    "current_process_environment_values_present": {
+      "KAGGLE_API_TOKEN": false,
+      "KAGGLE_USERNAME": false,
+      "KAGGLE_KEY": false,
+      "KAGGLE_CONFIG_DIR": false,
+      "XDG_CONFIG_HOME": false,
+      "KAGGLE_DATA_PROXY_TOKEN": false,
+      "KAGGLE_USER_SECRETS_TOKEN": false
+    },
+    "accessible_user_processes_with_kaggle_variable_names": [],
+    "values_read_or_displayed": false,
+    "standard_kaggle_cli_locations": [
+      {
+        "path": "~/.kaggle/access_token",
+        "exists": false,
+        "regular_file": false
+      },
+      {
+        "path": "~/.kaggle/kaggle.json",
+        "exists": false,
+        "regular_file": false
+      },
+      {
+        "path": "~/.config/kaggle/access_token",
+        "exists": false,
+        "regular_file": false
+      },
+      {
+        "path": "~/.config/kaggle/kaggle.json",
+        "exists": false,
+        "regular_file": false
+      },
+      {
+        "path": "~/.config/kaggle/credentials.json",
+        "exists": false,
+        "regular_file": false
+      },
+      {
+        "path": "~/.config/kaggle/credentials",
+        "exists": false,
+        "regular_file": false
+      },
+      {
+        "path": "~/.config/kaggle/oauth.json",
+        "exists": false,
+        "regular_file": false
+      },
+      {
+        "path": "~/.config/kaggle/kaggle-cli.json",
+        "exists": false,
+        "regular_file": false
+      }
+    ],
+    "alternate_standard_directories": [
+      {
+        "path": "~/.local/share/kaggle",
+        "exists": false
+      },
+      {
+        "path": "~/.local/state/kaggle",
+        "exists": false
+      },
+      {
+        "path": "~/.cache/kaggle",
+        "exists": false
+      },
+      {
+        "path": "/root/.kaggle",
+        "exists": false
+      },
+      {
+        "path": "/root/.config/kaggle",
+        "exists": false
+      }
+    ],
+    "workspace_injection_scan": {
+      "workspace_env_or_envrc_files": [],
+      "workspace_secret_or_credential_named_files": [],
+      "workspace_direnv_directory": false,
+      "output_kaggle_json_artifacts": {
+        "count": 10,
+        "all_top_level_schema_is_metric_artifact": true,
+        "loaded_as_authentication": false
+      },
+      "content_displayed": false
+    },
+    "keyring": {
+      "secret_tool_cli_present": true,
+      "gnome_keyring_cli_present": true,
+      "python_keyring_package_present": false,
+      "attribute_only_probe_queries": [
+        "service=kaggle",
+        "application=kaggle",
+        "application=kaggle-cli"
+      ],
+      "probe_output_bytes_exposed": 0,
+      "usable_kaggle_token_exposed": false,
+      "secret_values_displayed": false
+    },
+    "client_packages": {
+      "kaggle": false,
+      "kagglehub": false,
+      "kagglesdk": false,
+      "python_dotenv": true
+    },
+    "cli": {
+      "kaggle_executable_present": false,
+      "direnv_executable_present": false
+    }
+  },
+  "official_api_probe_inherited_from_v2": {
+    "record": "docs/use_cases/records/smartphone_r5_kaggle_official_sample_blocker_audit_v2.json",
+    "record_sha256": "7646fc89ac331907763a50630d3939424c453fa75e6f0653bbcf57c34345dc86",
+    "files_list_http_status": 401,
+    "sample_download_http_status": 401,
+    "error": "Unauthenticated",
+    "official_sample_downloaded": false,
+    "official_sample_sha256": null
+  },
+  "sample_and_strict_promotion": {
+    "official_sample_verified": false,
+    "authoritative_key_manifest_obtained": false,
+    "strict_key_order_promotion": "not_run",
+    "derived_submission_remains_unpromoted": true,
+    "derived_submission": {
+      "path": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/submission_derived_unverified.csv",
+      "sha256": "62c569f1b6f61fff2cccef598444ebbb053d59d504eb8178f54b916b8af7f439",
+      "regenerated_by_this_audit": false,
+      "external_submission_forbidden": true
+    }
+  },
+  "minimum_user_action_in_same_process": {
+    "required": true,
+    "reason": "The user's configured token is not visible in this process, any accessible same-user process, standard Kaggle path, workspace injection file, or exposed keyring lookup result.",
+    "safe_options": [
+      "Install the official Kaggle CLI in the active environment and complete `kaggle auth login` through the browser flow.",
+      "Export KAGGLE_API_TOKEN in the exact process that will run the probe, without printing it or committing it.",
+      "Place the token at ~/.kaggle/access_token with restrictive permissions, without displaying its contents."
+    ],
+    "then_run_only": [
+      "kaggle competitions files -c smartphone-decimeter-2023",
+      "kaggle competitions download -c smartphone-decimeter-2023 -f sample_submission.csv -p <authorized-output-dir>"
+    ],
+    "post_download_contract": "Record source URL, response headers, byte count, and SHA256; strict key-set/order comparison is the only permitted promotion step."
+  },
+  "completion_boundary": {
+    "official_sample_access": false,
+    "kaggle_authenticated": false,
+    "strict_promotion_completed": false,
+    "leaderboard_evaluated": false,
+    "rank_one_claim_permitted": false,
+    "truth_open_count": 0,
+    "blocker": "Authentication is configured outside this process or unavailable to it; no authorized token source is visible."
+  }
+}

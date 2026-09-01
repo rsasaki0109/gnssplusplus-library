@@ -1,0 +1,75 @@
+{
+  "schema_version": "smartphone-r5-phase16-carrier-code-innovation-reset-freeze.v1",
+  "status": "frozen-before-structural-generation",
+  "created_at_utc": "2026-09-01T00:00:00Z",
+  "candidate_id": "native-carrier-code-leveling-e1-innovation-reset-v1",
+  "purpose": "Raw-only, opt-in innovation reset for the Phase 14 E1 Hatch lane; a suspected raw-code/ADR seam starts a new arc and emits the current raw code.",
+  "policy": {
+    "mat_read_count_before_freeze": 0,
+    "truth_read_count_before_freeze": 0,
+    "validation_truth_read_count_before_freeze": 0,
+    "holdout_truth_read_count_before_freeze": 0,
+    "test_truth_read_count_before_freeze": 0,
+    "enriched_satellite_columns_read": false,
+    "device_wls_or_precomputed_coordinates_read": false,
+    "leaderboard_or_token_access": false,
+    "external_mutation": false,
+    "production_default_changed": false,
+    "phase13_upstream_quality_enabled": false,
+    "post_truth_tuning": false
+  },
+  "immutable_baseline": {
+    "phase12_record": "docs/use_cases/records/smartphone_r5_phase12_residual_ionosphere_freeze_v1.json",
+    "phase12_wgs84_linear_m": 3.1922489635126103,
+    "phase12_comparison_submission": "output/smartphone-r5/phase12-residual-ionosphere-gtsam-v1/submission.csv",
+    "phase12_comparison_submission_sha256": "3069f149bc98b0383d008d5f20cc80cd4ada9f9eb1b5d09f05353895a2d5a26f",
+    "phase14_freeze_record": "docs/use_cases/records/smartphone_r5_phase14_carrier_code_leveling_freeze_v1.json",
+    "phase14_structural_blocker": "docs/use_cases/records/smartphone_r5_phase14_carrier_code_leveling_structural_blocker_v1.json",
+    "phase14_recipe": "Galileo E1, causal Hatch-30, max gap 1.5 s, clock/ADR/LLI resets, no added graph state",
+    "phase14_production_default": "unchanged"
+  },
+  "raw_contract": {
+    "inference_inputs": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "forbidden_inputs": ["*.mat", "ground_truth.csv", "sample_submission.csv", "result_gnss*.mat", "device WLS coordinates", "SvPosition*", "SvElevationDegrees", "precomputed trajectories"],
+    "native_only": true,
+    "same_process_graph": true,
+    "atomic_outputs": true,
+    "phase13_off": true
+  },
+  "candidate_contract": {
+    "signal_scope": "Galileo E1 only; all other signals and observables are unchanged",
+    "key": "(GNSSSystem, PRN, SignalType)",
+    "hatch_window_samples": 30,
+    "hatch_max_gap_s": 1.5,
+    "innovation_formula": "I_t = P_t - (S_(t-1) + ADR_t - ADR_(t-1))",
+    "threshold_source": "libgnss::observable_upstream::pairThreshold(libgnss::observable_upstream::bandForSignal(SignalType::GAL_E1), 'P')",
+    "innovation_reset_threshold_m": 40.0,
+    "boundary": "abs(I_t) <= 40.0 m is accepted; abs(I_t) > 40.0 m resets the arc",
+    "reset_output": "emit raw P_t, discard the previous arc, and start a new one at the current ADR/code",
+    "reset_conditions_preserved": ["invalid/nonfinite code", "missing/nonfinite ADR", "ADR loss/reset", "LLI cycle slip", "gap >1.5 s", "HardwareClockDiscontinuityCount change"],
+    "new_graph_state": false,
+    "default_enabled": false,
+    "parameter_search": false,
+    "truth_selection": false
+  },
+  "structural_gate": {
+    "must_hold": ["finite keyed output", "exact target coverage", "no MAT/enriched/WLS/truth read", "deterministic byte identity", "innovation threshold reports 40 m", "accepted innovation <=40 m", "all reset reasons reported", "no new >70 m/s isolated transition"],
+    "mi8_role": "raw-only structural smoke; route overlaps prior truth and must not be scored",
+    "pixel7_role": "already-used development evidence only; truth may be read once after both raw-only artifacts are sealed",
+    "pixel7_accuracy_comparator": "the frozen Phase12 submission hash 3069f149... and its recorded 3.1922489635126103 m score; the Phase16 Phase14-Hatch control is structural context only",
+    "accuracy_gate": "only if structural gates pass: all four diagnostics improve versus the frozen Phase 12/Phase 14 baseline, with coverage and safety non-regression",
+    "promotion": "false unless every predeclared gate passes; 0.782-class remains unachieved"
+  },
+  "commands": {
+    "mi8_baseline": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:$LD_LIBRARY_PATH build/apps/gnss_fgo_imu_no_base --android-gnss <mi8/device_gnss.csv> --android-imu <mi8/device_imu.csv> --nav <mi8/brdc.nav> --out <phase16/baseline/submission.csv> --summary-json <phase16/baseline/summary.json> --dataset-id 2022-08-04-20-07-us-ca-sjc-q/mi8 --all-epochs --android-raw-utc-keys --android-utc-wall-clock-fallback --native-pdc-imu-tdcp --native-signal-bias-states --native-residual-ionosphere --native-carrier-code-leveling",
+    "mi8_candidate": "same as mi8_baseline plus --native-carrier-code-innovation-reset",
+    "pixel7_baseline": "same frozen raw recipe on 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro without the innovation-reset flag",
+    "pixel7_candidate": "same frozen raw recipe with --native-carrier-code-innovation-reset",
+    "truth_evaluation": "not authorized until structural artifacts and hashes pass; one development reread only, no post-score changes",
+    "full_ctest": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} ctest --test-dir build -j1 --output-on-failure",
+    "diff_check": "git diff --check"
+  },
+  "source_and_binary_hashes": "sealed in the companion manifest after the Release build",
+  "companion_manifest": "docs/use_cases/records/smartphone_r5_phase16_carrier_code_innovation_reset_freeze_v1_manifest.json",
+  "freeze_record_sha256": "excluded from self-hash; companion manifest pins this record"
+}

@@ -13,6 +13,10 @@ if(GTest_FOUND)
     # Windows. OUTPUT_NAME keeps the binary named run_tests for scripts/CI.
     add_executable(gnss_run_tests
         test_imu_csv.cpp
+        test_android_raw_gnss.cpp
+        test_carrier_code_leveling.cpp
+        test_smartphone_upstream_preprocessing.cpp
+        test_smartphone_upstream_state_contract.cpp
         test_attitude.cpp
         test_mechanization.cpp
         test_preintegration.cpp
@@ -22,6 +26,9 @@ if(GTest_FOUND)
         test_fusion_measurement.cpp
         test_fusion_zupt.cpp
         test_fusion_nhc.cpp
+        test_upstream_stop_constraints.cpp
+        test_upstream_position_offset.cpp
+        test_galileo_group_delay.cpp
         test_fusion_initialization.cpp
         test_fusion_processor_synthetic.cpp
         test_dd_imu_bridge.cpp
@@ -56,6 +63,7 @@ if(GTest_FOUND)
         test_rtk_validation.cpp
         test_integrity_consensus.cpp
         test_fgo.cpp
+        test_base_pseudorange_compensation.cpp
         test_signal_policy.cpp
         test_types.cpp
         test_observation.cpp
@@ -139,6 +147,9 @@ if(GTest_FOUND)
         gnss_replay
         gnss_rinex_info
         gnss_solve
+        gnss_smartphone_fgo
+        gnss_doppler_contract_audit
+        gnss_doppler_row_attrition_audit
         gnss_stream
         gnss_ubx_info
         gnss_vel_d
@@ -206,6 +217,82 @@ if(GTest_FOUND)
     add_test(
         NAME python_fgo_external_dr_witness_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_fgo_external_dr_witness.py
+    )
+    add_test(
+        NAME python_smartphone_native_fgo_v2_1_contract_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_fgo_v2_1_contract.py
+    )
+    add_test(
+        NAME python_smartphone_phase51_android_sv_time_uncertainty_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase51_android_sv_time_uncertainty.py
+    )
+    add_test(
+        NAME python_smartphone_phase51_android_sv_time_uncertainty_evaluator_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase51_android_sv_time_uncertainty_evaluator.py
+    )
+    add_test(
+        NAME python_smartphone_phase52_android_sv_time_uncertainty_integrity_recovery_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase52_android_sv_time_uncertainty_integrity_recovery.py
+    )
+    add_test(
+        NAME python_smartphone_phase53_pixel5_carrier_frequency_antenna_phase_bias_audit_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase53_pixel5_carrier_frequency_antenna_phase_bias_audit.py
+    )
+    add_test(
+        NAME python_smartphone_phase54_phase53_integrity_recovery_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase54_phase53_integrity_recovery.py
+    )
+    add_test(
+        NAME python_smartphone_phase55_pixel5_adr_uncertainty_audit_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase55_pixel5_adr_uncertainty_audit.py
+    )
+    add_test(
+        NAME python_smartphone_phase56_bias_uncertainty_dedup_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase56_bias_uncertainty_dedup.py
+    )
+    add_test(
+        NAME python_smartphone_phase57_pixel5_rate_uncertainty_audit_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase57_pixel5_rate_uncertainty_audit.py
+    )
+    add_test(
+        NAME python_smartphone_phase58_pixel5_cn0_doppler_calibration_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase58_pixel5_cn0_doppler_calibration.py
+    )
+    add_test(
+        NAME python_smartphone_phase58_native_cn0_doppler_calibration_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase58_native_cn0_doppler_calibration.py
+    )
+    add_test(
+        NAME python_smartphone_phase59_native_cn0_doppler_calibration_accuracy_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase59_native_cn0_doppler_calibration_accuracy.py
+    )
+    add_test(
+        NAME python_smartphone_phase60_pixel5_intersignal_bias_audit_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase60_pixel5_intersignal_bias_audit.py
+    )
+    add_test(
+        NAME python_smartphone_phase61_pixel5_cn0_pseudorange_calibration_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase61_pixel5_cn0_pseudorange_calibration.py
+    )
+    add_test(
+        NAME python_smartphone_native_fgo_v2_1_confirmation_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_fgo_v2_1_confirmation.py
+    )
+    add_test(
+        NAME python_smartphone_native_fgo_v3_heading_optional_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_fgo_v3_heading_optional.py
+    )
+    add_test(
+        NAME python_smartphone_native_only_contract_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_only.py
+    )
+    add_test(
+        NAME python_smartphone_native_gnss_pdc_bridge_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_gnss_pdc_bridge.py
+    )
+    add_test(
+        NAME python_smartphone_native_gnss_pdc_eval_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_gnss_pdc_eval.py
     )
     add_test(
         NAME python_ppc_integrity_policy_tests
@@ -322,6 +409,302 @@ if(GTest_FOUND)
     add_test(
         NAME python_mode_compare_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_mode_compare.py
+    )
+    add_test(
+        NAME python_performance_report_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_gnss_performance_report.py
+    )
+    add_test(
+        NAME python_smartphone_quality_report_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_quality_report.py
+    )
+    add_test(
+        NAME python_smartphone_raw_quality_control_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_raw_quality_control.py
+    )
+    add_test(
+        NAME python_smartphone_raw_quality_control_eval_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_raw_quality_control_eval.py
+    )
+    add_test(
+        NAME python_smartphone_kaggle_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_kaggle.py
+    )
+    add_test(
+        NAME python_smartphone_trajectory_smoother_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_trajectory_smoother.py
+    )
+    add_test(
+        NAME python_smartphone_trajectory_imu_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_trajectory_imu.py
+    )
+    add_test(
+        NAME python_smartphone_imu_motion_q_eval_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_imu_motion_q_eval.py
+    )
+    add_test(
+        NAME python_smartphone_tdcp_trajectory_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_tdcp_trajectory.py
+    )
+    add_test(
+        NAME python_smartphone_tdcp_trajectory_eval_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_tdcp_trajectory_eval.py
+    )
+    add_test(
+        NAME python_smartphone_observable_error_correction_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_observable_error_correction.py
+    )
+    add_test(
+        NAME python_smartphone_doppler_position_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_doppler_position.py
+    )
+    add_test(
+        NAME python_smartphone_generalization_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_generalization.py
+    )
+    add_test(
+        NAME python_smartphone_phase24_route_group_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase24_route_group.py
+    )
+    add_test(
+        NAME python_smartphone_phase31_quality_anchor_structural_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase31_quality_anchor_structural.py
+    )
+    add_test(
+        NAME python_smartphone_phase33_quality_anchor_validation_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase33_quality_anchor_validation.py
+    )
+    add_test(
+        NAME python_smartphone_phase34_quality_anchor_validation_eval_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase34_quality_anchor_validation_eval.py
+    )
+    add_test(
+        NAME python_smartphone_phase35_matrix_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase35_matrix.py
+    )
+    add_test(
+        NAME python_smartphone_phase35_matrix_eval_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase35_matrix_eval.py
+    )
+    add_test(
+        NAME python_smartphone_phase37_pixel5_repeatability_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase37_pixel5_repeatability.py
+    )
+    add_test(
+        NAME python_smartphone_phase38_mtvh_failure_diagnosis_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase38_mtvh_failure_diagnosis.py
+    )
+    add_test(
+        NAME python_smartphone_phase39_velocity_only_handoff_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase39_velocity_only_handoff.py
+    )
+    add_test(
+        NAME python_smartphone_phase40_direct_doppler_wls_handoff_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase40_direct_doppler_wls_handoff.py
+    )
+    add_test(
+        NAME python_smartphone_phase41_doppler_contract_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase41_doppler_contract.py
+    )
+    add_test(
+        NAME python_smartphone_phase42_doppler_row_attrition_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase42_doppler_row_attrition.py
+    )
+    add_test(
+        NAME python_smartphone_phase43_fallback_seed_quality_anchor_recovery_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase43_fallback_seed_quality_anchor_recovery.py
+    )
+    add_test(
+        NAME python_smartphone_phase44_pixel5_development_accuracy_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase44_pixel5_development_accuracy.py
+    )
+    add_test(
+        NAME python_smartphone_phase45_pixel5_residual_diagnostic_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase45_pixel5_residual_diagnostic.py
+    )
+    add_test(
+        NAME python_smartphone_phase46_pixel5_raw_clock_timing_audit_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase46_pixel5_raw_clock_timing_audit.py
+    )
+    add_test(
+        NAME python_smartphone_phase47_pixel5_raw_code_multipath_audit_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase47_pixel5_raw_code_multipath_audit.py
+    )
+    add_test(
+        NAME python_smartphone_phase48_pixel5_raw_code_rate_uncertainty_audit_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase48_pixel5_raw_code_rate_uncertainty_audit.py
+    )
+    add_test(
+        NAME python_smartphone_phase49_pixel5_adr_cycle_slip_lock_loss_audit_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase49_pixel5_adr_cycle_slip_lock_loss_audit.py
+    )
+    add_test(
+        NAME python_smartphone_phase50_pixel5_adr_half_cycle_audit_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase50_pixel5_adr_half_cycle_audit.py
+    )
+    add_test(
+        NAME python_smartphone_phase73_source_exact_pseudorange_miss_mask_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase73_source_exact_pseudorange_miss_mask.py
+    )
+    add_test(
+        NAME python_smartphone_phase73_source_exact_pseudorange_miss_mask_structural_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase73_source_exact_pseudorange_miss_mask_structural.py
+    )
+    add_test(
+        NAME python_smartphone_phase77_phase73_signal_bias_composition_structural_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase77_phase73_signal_bias_composition_structural.py
+    )
+    add_test(
+        NAME python_smartphone_phase74_phase73_miss_mask_accuracy_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase74_phase73_miss_mask_accuracy.py
+    )
+    add_test(
+        NAME python_smartphone_phase75_phase74_accuracy_integrity_recovery_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase75_phase74_accuracy_integrity_recovery.py
+    )
+    add_test(
+        NAME python_smartphone_phase78_phase77_structural_reclassification_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase78_phase77_structural_reclassification.py
+    )
+    add_test(
+        NAME python_smartphone_phase79_phase78_signal_bias_accuracy_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase79_phase78_signal_bias_accuracy.py
+    )
+    add_test(
+        NAME python_smartphone_phase32_quality_anchor_eval_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase32_quality_anchor_eval.py
+    )
+    add_test(
+        NAME python_smartphone_reacquisition_eval_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_reacquisition_eval.py
+    )
+    add_test(
+        NAME python_smartphone_reacquisition_conservative_eval_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_reacquisition_conservative_eval.py
+    )
+    add_test(
+        NAME python_smartphone_segment_stability_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_segment_stability.py
+    )
+    add_test(
+        NAME python_smartphone_segment_stability_eval_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_segment_stability_eval.py
+    )
+    add_test(
+        NAME python_smartphone_wls_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_wls.py
+    )
+    add_test(
+        NAME python_smartphone_wls_eval_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_wls_eval.py
+    )
+    add_test(
+        NAME python_smartphone_wls_device_family_eval_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_wls_device_family_eval.py
+    )
+    add_test(
+        NAME python_smartphone_wls_stability_selector_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_wls_stability_selector.py
+    )
+    add_test(
+        NAME python_smartphone_wls_stability_selector_eval_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_wls_stability_selector_eval.py
+    )
+    add_test(
+        NAME python_smartphone_wls_residual_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_wls_residual.py
+    )
+    add_test(
+        NAME python_smartphone_wls_residual_v2_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_wls_residual_v2.py
+    )
+    add_test(
+        NAME python_smartphone_wls_stability_selector_holdout_eval_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_wls_stability_selector_holdout_eval.py
+    )
+    add_test(
+        NAME python_smartphone_wls_multi_phone_ensemble_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_wls_multi_phone_ensemble.py
+    )
+    add_test(
+        NAME python_smartphone_wls_multi_phone_ensemble_holdout_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_wls_multi_phone_ensemble_holdout_eval.py
+    )
+    add_test(
+        NAME python_smartphone_wls_test_batch_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_wls_test_batch.py
+    )
+    add_test(
+        NAME python_smartphone_native_fgo_eval_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_fgo_eval.py
+    )
+    add_test(
+        NAME python_smartphone_native_fgo_holdout_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_fgo_holdout_eval.py
+    )
+    add_test(
+        NAME python_smartphone_native_fgo_test_batch_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_fgo_test_batch.py
+    )
+    add_test(
+        NAME python_smartphone_native_fgo_v2_smoke_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_fgo_v2_smoke.py
+    )
+    add_test(
+        NAME python_smartphone_native_fgo_test_submission_recovery_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_fgo_test_submission_recovery.py
+    )
+    add_test(
+        NAME python_smartphone_native_fgo_test_submission_continuity_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_fgo_test_submission_continuity.py
+    )
+    add_test(
+        NAME python_smartphone_native_fgo_test_submission_source_seam_bridge_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_fgo_test_submission_source_seam_bridge.py
+    )
+    add_test(
+        NAME python_smartphone_native_fgo_optimizer_stop_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_fgo_optimizer_stop_eval.py
+    )
+    add_test(
+        NAME python_smartphone_native_fgo_convergence_selector_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_fgo_convergence_selector_eval.py
+    )
+    add_test(
+        NAME python_smartphone_native_fgo_float_carrier_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_fgo_float_carrier_eval.py
+    )
+    add_test(
+        NAME python_smartphone_native_fgo_carrier_compatibility_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_fgo_carrier_compatibility_eval.py
+    )
+    add_test(
+        NAME python_smartphone_native_fgo_pdc_bridge_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_fgo_pdc_bridge.py
+    )
+    add_test(
+        NAME python_smartphone_native_fgo_pdc_wls_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_fgo_pdc_wls.py
+    )
+    add_test(
+        NAME python_smartphone_native_fgo_pdc_factor_audit_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_fgo_pdc_factor_audit.py
+    )
+    add_test(
+        NAME python_smartphone_native_fgo_pdc_factor_hypotheses_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_fgo_pdc_factor_hypotheses.py
+    )
+    add_test(
+        NAME python_smartphone_native_fgo_pdc_witness_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_fgo_pdc_witness.py
+    )
+    add_test(
+        NAME python_smartphone_native_fgo_pdc_windowed_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_fgo_pdc_windowed.py
+    )
+    add_test(
+        NAME python_smartphone_native_fgo_pdc_windowed_stitch_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_fgo_pdc_windowed_stitch.py
     )
     add_test(
         NAME python_ppp_residual_row_set_diff_tests
@@ -544,6 +927,59 @@ if(GTest_FOUND)
         python_madoca_solution_diff_tests
         python_madoca_satellite_set_diff_tests
         python_mode_compare_tests
+        python_performance_report_tests
+        python_smartphone_quality_report_tests
+        python_smartphone_raw_quality_control_tests
+        python_smartphone_raw_quality_control_eval_tests
+        python_smartphone_phase39_velocity_only_handoff_tests
+        python_smartphone_phase40_direct_doppler_wls_handoff_tests
+        python_smartphone_phase41_doppler_contract_tests
+        python_smartphone_phase44_pixel5_development_accuracy_tests
+        python_smartphone_phase45_pixel5_residual_diagnostic_tests
+        python_smartphone_phase46_pixel5_raw_clock_timing_audit_tests
+        python_smartphone_phase47_pixel5_raw_code_multipath_audit_tests
+        python_smartphone_phase48_pixel5_raw_code_rate_uncertainty_audit_tests
+        python_smartphone_phase49_pixel5_adr_cycle_slip_lock_loss_audit_tests
+        python_smartphone_phase50_pixel5_adr_half_cycle_audit_tests
+        python_smartphone_phase77_phase73_signal_bias_composition_structural_tests
+        python_smartphone_phase78_phase77_structural_reclassification_tests
+        python_smartphone_phase79_phase78_signal_bias_accuracy_tests
+        python_smartphone_phase61_pixel5_cn0_pseudorange_calibration_tests
+        python_smartphone_phase59_native_cn0_doppler_calibration_accuracy_tests
+        python_smartphone_kaggle_tests
+        python_smartphone_trajectory_smoother_tests
+        python_smartphone_trajectory_imu_tests
+        python_smartphone_imu_motion_q_eval_tests
+        python_smartphone_observable_error_correction_tests
+        python_smartphone_doppler_position_tests
+        python_smartphone_reacquisition_eval_tests
+        python_smartphone_reacquisition_conservative_eval_tests
+        python_smartphone_segment_stability_tests
+        python_smartphone_segment_stability_eval_tests
+        python_smartphone_wls_tests
+        python_smartphone_wls_eval_tests
+        python_smartphone_wls_device_family_eval_tests
+        python_smartphone_wls_stability_selector_tests
+        python_smartphone_wls_stability_selector_eval_tests
+        python_smartphone_wls_stability_selector_holdout_eval_tests
+        python_smartphone_wls_multi_phone_ensemble_tests
+        python_smartphone_wls_multi_phone_ensemble_holdout_tests
+        python_smartphone_native_fgo_eval_tests
+        python_smartphone_native_fgo_holdout_tests
+        python_smartphone_native_fgo_test_batch_tests
+        python_smartphone_native_fgo_v2_smoke_tests
+        python_smartphone_native_gnss_pdc_bridge_tests
+        python_smartphone_native_gnss_pdc_eval_tests
+        python_smartphone_native_fgo_test_submission_recovery_tests
+        python_smartphone_native_fgo_test_submission_continuity_tests
+        python_smartphone_native_fgo_test_submission_source_seam_bridge_tests
+        python_smartphone_native_fgo_optimizer_stop_tests
+        python_smartphone_native_fgo_convergence_selector_tests
+        python_smartphone_native_fgo_float_carrier_tests
+        python_smartphone_native_fgo_carrier_compatibility_tests
+        python_smartphone_native_fgo_pdc_wls_tests
+        python_smartphone_native_fgo_pdc_windowed_tests
+        python_smartphone_native_fgo_pdc_windowed_stitch_tests
         python_optional_madoca_materialization_diff_tests
         python_optional_madoca_residual_component_diff_tests
         python_ppp_residual_row_set_diff_tests

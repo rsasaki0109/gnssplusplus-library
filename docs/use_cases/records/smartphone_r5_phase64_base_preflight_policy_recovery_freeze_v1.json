@@ -1,0 +1,90 @@
+{
+  "schema_version": "smartphone-r5-phase64-base-preflight-policy-recovery-freeze.v1",
+  "status": "source-only-frozen-before-phase64-result-read",
+  "created_at_utc": "2026-09-02T00:00:00Z",
+  "purpose": "Re-evaluate the Phase63 base-RINEX preflight using the source-defined Base1/filename and obsb.dt contracts, without reopening archive or base payloads.",
+  "prior_phase62_phase63": {
+    "phase62_freeze": "docs/use_cases/records/smartphone_r5_phase62_raw_base_pseudorange_compensation_freeze_v1.json",
+    "phase62_freeze_sha256": "4f12183845e5d22a3773e698182b3a4e8dc788e0dcfaa59ec0b28afcdf1b59b7",
+    "phase63_freeze": "docs/use_cases/records/smartphone_r5_phase63_settings_integrity_recovery_freeze_v1.json",
+    "phase63_freeze_sha256": "41f0218caf540ff4fb81efcc78f048de62e3a3953f1e16a8a04a838303c40bca",
+    "phase63_result": "docs/use_cases/records/smartphone_r5_phase63_settings_integrity_recovery_result_v1.json",
+    "phase63_result_sha256": "d6dc56c00c89ddd4e38624bbfe36567a76632aecae3f3f87f529ab0c8f93799b",
+    "phase63_materialized_base_artifacts_are_immutable": true
+  },
+  "source_semantics": {
+    "repository_url": "https://github.com/taroz/gsdc2023",
+    "repository_commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "preprocessing_m": {
+      "sha256": "976629d187e7fab5868eb8e5676a4d40520eb23db1254f7320d3b4270d7dffcf",
+      "selection": "settings.RINEX == V2 selects path + setting.Base1 + '_rnx2.obs'; V3 selects '_rnx3.obs'",
+      "time_trim": "rover observation span with +/-180 s margins",
+      "source_line_contract": "70-85"
+    },
+    "correct_pseudorange_m": {
+      "sha256": "b0536ccff478b0aff253448ffb7a203c715b8064dd8dc85898e38f1f05d0441e",
+      "dt_selection": "obsb.dt == 1.0 selects 151-sample movmean; obsb.dt == 15.0 selects 11-sample movmean",
+      "header_independence": "header INTERVAL and MARKER NAME are not read by this function",
+      "source_line_contract": "5-34"
+    },
+    "correction": "same satellite/frequency modeled base residual, linearly interpolated to rover time, subtracted from rover P"
+  },
+  "policy_recovery": {
+    "station_provenance": "settings_train Base1 + unique declared member basename + finite APPROX POSITION XYZ; MARKER NAME is informational and may be blank",
+    "rinex_version": "settings filename contract is authoritative for source selection; a valid payload header version may differ from the legacy _rnx2 basename and is reported, not used as a gate",
+    "interval": "observed epoch median interval is the source obsb.dt evidence; header INTERVAL is informational and may be absent",
+    "input": "Phase63 sealed result JSON and its recorded materialized base hashes/metrics only",
+    "no_reopen": "do not open archive, base.obs, raw device files, or any derived payload"
+  },
+  "route_order": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+  ],
+  "declared_base_members": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {"Base1": "SLAC", "RINEX": "V2", "member": "dataset_2023/train/2021-03-16-18-59-us-ca-mtv-a/SLAC_rnx2.obs", "materialized_sha256": "380b8ff9091344fb756697e27f0983d9a0ba2cf0c201b96849bfc1ecc1af0e52", "bytes": 10708536, "observed_dt_s": 1.0},
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {"Base1": "P221", "RINEX": "V2", "member": "dataset_2023/train/2021-08-24-20-32-us-ca-mtv-h/P221_rnx2.obs", "materialized_sha256": "4d3e37cbe0347fa56216db54ede9e0f30731885f337f1653ab5a86afb2bb2150", "bytes": 11854125, "observed_dt_s": 1.0},
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {"Base1": "LBCH", "RINEX": "V2", "member": "dataset_2023/train/2022-04-01-18-22-us-ca-lax-t/LBCH_rnx2.obs", "materialized_sha256": "d731e0e8a7ba4396d62340c85b6238e66c50c6a349621f9dcea0ea6885fd4cfe", "bytes": 719969, "observed_dt_s": 15.0},
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {"Base1": "P221", "RINEX": "V2", "member": "dataset_2023/train/2023-03-08-21-34-us-ca-mtv-u/P221_rnx2.obs", "materialized_sha256": "aedb7a39e7b6612ea97964b363c74cd2c10318255b7f2287f4720d18e71803e6", "bytes": 5950275, "observed_dt_s": 1.0}
+  },
+  "fixed_gates": {
+    "four_routes": true,
+    "settings_Base1_RINEX_unique_member_mapping": true,
+    "finite_APPROX_POSITION_XYZ": true,
+    "station_provenance": "Base1 + unique member basename + finite coordinates",
+    "observed_dt_allowed_s": [1.0, 15.0],
+    "observed_dt_exact_routewise": true,
+    "nonempty_epoch_span": true,
+    "course_window_overlap": true,
+    "materialized_hash_and_bytes_match": true,
+    "same_satellite_frequency": true,
+    "linear_interpolation_no_extrapolation": true,
+    "missing_or_ambiguous_result": "fail closed; no base/archive reopen"
+  },
+  "forbidden_inputs": [
+    "archive reopen",
+    "base RINEX reread",
+    "raw device_gnss.csv/device_imu.csv",
+    "ground_truth.csv",
+    "MAT/MATLAB products",
+    "broadcast navigation",
+    "WLS/SvPosition/SvElevation/precomputed coordinates",
+    "solver/trajectory rerun",
+    "Kaggle/token data",
+    "base_position.csv",
+    "base_offset.csv"
+  ],
+  "read_accounting_at_freeze": {
+    "phase64_result_json": 0,
+    "archive": 0,
+    "base_rinex": 0,
+    "raw_device": 0,
+    "truth": 0,
+    "mat": 0,
+    "nav": 0,
+    "solver": 0
+  },
+  "native_correction_authorized_before_recovery_pass": false,
+  "accuracy_evaluated": false
+}

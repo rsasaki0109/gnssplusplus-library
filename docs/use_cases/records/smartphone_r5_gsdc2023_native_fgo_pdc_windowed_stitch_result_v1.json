@@ -1,0 +1,147 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-pdc-windowed-stitch-result.v1",
+  "status": "sealed-no-go-development-train-gate",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "candidate": "native_fgo_pdc_triangular_ecef_overlap_stitch_v1",
+  "baseline": "sealed_v5_native_fgo_route_position",
+  "decision": "No-Go; the truth-free stitch passed structural checks but regressed every horizontal diagnostic and vertical P95 on the fixed development-train route. Retain v5 and do not open validation, holdout, or test truth for this lane.",
+  "authorization": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_windowed_stitch_train_score_authorization_v1.json",
+    "sha256": "9b6e3c040aefa938395d37774a08b7e361db71a6592633758a239d04cc00e767"
+  },
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_windowed_stitch_freeze_v1.json",
+    "sha256": "40ef733d28cebd7d72710a122a2ec5cfe72a6c97a93480eb41a582b4f990dac6",
+    "manifest_path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_windowed_stitch_freeze_v1_manifest.json"
+  },
+  "route": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+  "truth_policy": {
+    "truth_free_artifacts_verified_before_truth": true,
+    "development_truth_only": true,
+    "truth_path": "output/smartphone-r5/native-fgo-carrier-compatibility-v1/train_truth/2021-03-16-18-59-us-ca-mtv-a__pixel5/ground_truth.csv",
+    "truth_sha256": "7c84ed6a80b1bbb08c0ffad57493513833b9d5474e22a43c5a44da82824ee22d",
+    "truth_read_count": 1,
+    "fresh_validation_truth_read_count": 0,
+    "holdout_truth_read_count": 0,
+    "test_truth_read_count": 0,
+    "leaderboard_used_for_tuning": false,
+    "token_access": false,
+    "external_mutation": false,
+    "no_post_score_parameter_tuning": true
+  },
+  "sealed_artifacts": {
+    "stitch_manifest": {
+      "path": "output/smartphone-r5/native-fgo-pdc-windowed-v2-stitch/stitch_manifest.json",
+      "sha256": "39e4c99681c604e37e41c0443f397a451875245156f42e10c95e60f369e6dbdb"
+    },
+    "candidate_position": {
+      "path": "output/smartphone-r5/native-fgo-pdc-windowed-v2-stitch/windowed_v2.pos",
+      "sha256": "e9be773d6c7d10323f10c3ece4d4e1e5ed1edc7568c4b9a5221a6cb856a8105d",
+      "rows": 2159
+    },
+    "score_report": {
+      "path": "output/smartphone-r5/native-fgo-pdc-windowed-v2-stitch-score-v1/stitch_train_evaluation.json",
+      "sha256": "2a9747e9253c30fc49e9acdb3a46ed173609afe455af29cae0a5e193ae3dd04e"
+    },
+    "score_manifest": {
+      "path": "output/smartphone-r5/native-fgo-pdc-windowed-v2-stitch-score-v1/stitch_train_evaluation.manifest.json",
+      "sha256": "c6e783a3d108fcc68f83f49f1e08f6d89d7802af61b2e0a33944799882f1ab97"
+    },
+    "candidate_source": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_windowed_stitch.py",
+      "sha256": "f0a1cb73020934db183d26308a7f5c6a6e8d28f0168b378f7cfb56e552ef8745"
+    },
+    "release_binary": {
+      "path": "build/apps/gnss_fgo",
+      "sha256": "a10d13da4614f7cdc8e24556f5a32f870aee6c7aa94c5d3e890429996d583b0c"
+    }
+  },
+  "structural_result": {
+    "passed": true,
+    "row_count": 2159,
+    "exact_key_order": true,
+    "duplicate_keys": 0,
+    "missing_keys": 0,
+    "extra_keys": 0,
+    "nonfinite_coordinates": 0,
+    "out_of_earth_rows": 0,
+    "sample_coordinate_rows": 0,
+    "unsafe_transition_edges": 0,
+    "max_transition_speed_mps": 44.306169378165826,
+    "source_counts": {
+      "sealed_v5_fallback_missing_or_rejected": 120,
+      "single_window_unchanged": 359,
+      "triangular_ecef_blend": 1680
+    },
+    "rejected_overlap_windows": [12, 13],
+    "rejected_overlap_max_disagreement_m": 192.84473334365646,
+    "frozen_overlap_bound_m": 150.0,
+    "solver_rerun": false
+  },
+  "metrics": {
+    "baseline_v5": {
+      "horizontal_wgs84_p50_m": 1.9790896191655916,
+      "horizontal_wgs84_p95_m": 2.976939128051409,
+      "horizontal_haversine_p50_m": 1.9792932668659473,
+      "horizontal_haversine_p95_m": 2.9825454945527468,
+      "vertical_p95_abs_m": 6.3113074227073875,
+      "availability_ratio": 1.0,
+      "truth_coverage_ratio": 1.0,
+      "diagnostic_variants_m": {
+        "wgs84_vincenty__linear_n_minus_1": 2.4780143736085,
+        "wgs84_vincenty__nearest_rank_ceiling": 2.4883826503901654,
+        "haversine_sphere__linear_n_minus_1": 2.480919380709347,
+        "haversine_sphere__nearest_rank_ceiling": 2.49130593263983
+      },
+      "diagnostic_mean_m": 2.4846555843369607
+    },
+    "candidate_stitch": {
+      "horizontal_wgs84_p50_m": 3.043974041569778,
+      "horizontal_wgs84_p95_m": 8.127161930842618,
+      "horizontal_haversine_p50_m": 3.048973324784097,
+      "horizontal_haversine_p95_m": 8.140223289466592,
+      "vertical_p95_abs_m": 14.189095212909926,
+      "availability_ratio": 1.0,
+      "truth_coverage_ratio": 1.0,
+      "diagnostic_variants_m": {
+        "wgs84_vincenty__linear_n_minus_1": 5.585567986206198,
+        "wgs84_vincenty__nearest_rank_ceiling": 5.5883377576931474,
+        "haversine_sphere__linear_n_minus_1": 5.594598307125344,
+        "haversine_sphere__nearest_rank_ceiling": 5.5956317440610714
+      },
+      "diagnostic_mean_m": 5.59103394877144
+    }
+  },
+  "gate": {
+    "all_four_diagnostic_variants_strictly_improved": false,
+    "horizontal_p50_non_regression": false,
+    "horizontal_p95_non_regression": false,
+    "vertical_p95_non_regression": false,
+    "availability_non_regression": true,
+    "truth_coverage_non_regression": true,
+    "passed": false,
+    "failures": [
+      "h_p50_regression",
+      "h_p95_regression",
+      "v_p95_regression",
+      "wgs84_vincenty__linear_n_minus_1_not_strictly_better",
+      "wgs84_vincenty__nearest_rank_ceiling_not_strictly_better",
+      "haversine_sphere__linear_n_minus_1_not_strictly_better",
+      "haversine_sphere__nearest_rank_ceiling_not_strictly_better"
+    ]
+  },
+  "commands": {
+    "truth_free_stitch": "python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_windowed_stitch.py --no-truth",
+    "score_once": "python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_windowed_stitch_eval.py",
+    "fixture_tests": "python3 tests/test_smartphone_native_fgo_pdc_windowed_stitch.py"
+  },
+  "promotion": {
+    "development_only": true,
+    "recommended_for_production": false,
+    "validation_authorized": false,
+    "holdout_authorized": false,
+    "test_batch_authorized": false,
+    "production_rtk_spp_default_changed": false,
+    "v5_artifact_changed": false
+  }
+}

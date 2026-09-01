@@ -1,0 +1,69 @@
+{
+  "schema_version": "smartphone-r5-phase10-native-pdc-imu-tdcp-clock-gate-recovery.v1",
+  "status": "correctness-recovery-byte-identity",
+  "candidate_id": "native-pdc-imu-tdcp-v1",
+  "route": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+  "prior_freeze": "docs/use_cases/records/smartphone_r5_phase10_native_pdc_imu_tdcp_freeze_v1.json",
+  "prior_freeze_sha256": "f5f9cfce03c72d4d8fa1bd8297906110fc0caa7ae44475d0bd6da5306107a072",
+  "prior_score_record": "docs/use_cases/records/smartphone_r5_phase10_native_pdc_imu_tdcp_score_result_v1.json",
+  "prior_score_sha256": "7a80b755c5bf72097eba5f811d5c5550c5a8245f0eeb32272d3f5857b79d2798",
+  "reason": "The original TDCP builder gated dt, LLI/loss-of-lock, finiteness, and code-phase jump but did not consume the existing raw PDC clock-jump marker. Add a generic fail-closed clock-discontinuity rejection to the same pair contract.",
+  "scope": {
+    "algorithm_parameters_changed": false,
+    "measurement_selection_changed": false,
+    "solver_changed": false,
+    "candidate_source_changed": "contract-only clock-discontinuity gate",
+    "truth_read_after_prior_score": false,
+    "validation_open_count": 0,
+    "holdout_open_count": 0,
+    "test_open_count": 0,
+    "mat_read_count": 0,
+    "kaggle_or_token_access": false,
+    "post_score_truth_tuning": false
+  },
+  "contract_change": {
+    "previous_clock_jump": "reject adjacent TDCP pair",
+    "current_clock_jump": "reject adjacent TDCP pair",
+    "source": "FGOProblem::clock_jumps, existing positive common GPS pseudorange discontinuity detector",
+    "route_clock_discontinuities": 0,
+    "reason_code": "ClockDiscontinuity",
+    "other_gates_unchanged": true
+  },
+  "source_sha256_after_recovery": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "5ce23173cbac8b2fd592a881941ba323fefbabba053ea54f4d60a74c1ff697c9",
+    "include/libgnss++/algorithms/fgo.hpp": "af86945de6051d2aeb073570dc209c0168daf47ee2abf33ed3354a7bc6a6f0a1",
+    "include/libgnss++/algorithms/tdcp_contract.hpp": "1d56692d93f216703e2283b206b7bd0bca9c6593d51524d843fc6e385d96cbcf",
+    "src/algorithms/fgo_problems.cpp": "430908f5ed66fd8b1d8689578b340048e4a1ddcc2b71d786cb29cc5bbcfa4365",
+    "tests/test_fgo.cpp": "698ea926b5303a50cfa66fddd41f5c3fc6a2823ebe6959997e7449fa013de15c"
+  },
+  "binary_sha256_after_recovery": {
+    "build/apps/gnss_fgo_imu_no_base": "ea6a9c1ba4b036a63c23f6c0b385179838216a1f6c49a3f191f1ea50a57b4d35"
+  },
+  "raw_artifact_after_recovery": {
+    "submission": "output/smartphone-r5/phase10-native-pdc-imu-tdcp-v1-clock-gate/submission.csv",
+    "submission_sha256": "5a367a306123a4557f42e2b59a4760bc4eb2edfd1d36492bcab6ab2c88e240bb",
+    "prior_scored_submission_sha256": "5a367a306123a4557f42e2b59a4760bc4eb2edfd1d36492bcab6ab2c88e240bb",
+    "submission_byte_identical_to_scored_candidate": true,
+    "summary": "output/smartphone-r5/phase10-native-pdc-imu-tdcp-v1-clock-gate/summary.json",
+    "summary_sha256": "ca832e9f57f62f3d87db1c82e5c4ac206639823f9f963f56a991b9b28cc8074d",
+    "run_log_sha256": "13ea3533ea801a84ae4ed2462fe0a703cafe35d1bc3a2dade855b9e1600e7ba1",
+    "clock_rejected_pairs": 0,
+    "tdcp_factors_built": 15485,
+    "tdcp_factors_inserted": 15485,
+    "tdcp_residual_rms_m": 0.02514301226758668,
+    "raw_target_coverage": "1383/1383",
+    "interpolated_output_epochs": 0,
+    "edge_hold_output_epochs": 0,
+    "fallback": false,
+    "wall_seconds": 13.99,
+    "max_rss_kb": 157308
+  },
+  "verification": {
+    "focused_tdcp_contract_tests": "3/3 passed",
+    "truth_score_reused_without_reread": true,
+    "score_reference_wgs84_linear_m": 3.913768483524376,
+    "score_reference_all_four_mean_m": 3.9139843491840582,
+    "score_validity_basis": "byte-identical submission to the once-scored frozen candidate; no second truth read",
+    "production_default_changed": false
+  }
+}

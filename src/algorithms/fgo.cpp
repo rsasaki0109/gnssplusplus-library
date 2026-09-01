@@ -1,6 +1,7 @@
 #include <libgnss++/algorithms/fgo.hpp>
 
 #include <libgnss++/algorithms/lambda.hpp>
+#include <libgnss++/algorithms/signal_bias_contract.hpp>
 #include <libgnss++/algorithms/spp.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
@@ -54,9 +55,71 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
     FGOResult result;
     result.diagnostics.epochs = problem.epochs.size();
     result.diagnostics.pseudorange_factors = problem.pseudorange_factors.size();
+    if (config_.use_receiver_signal_bias_states) {
+        std::set<std::pair<GNSSSystem, SignalType>> signal_bias_groups;
+        for (const auto& factor : problem.pseudorange_factors) {
+            if (signal_bias::isEligible(factor.satellite.system, factor.signal)) {
+                ++result.diagnostics.receiver_signal_bias_factors;
+                signal_bias_groups.emplace(factor.satellite.system, factor.signal);
+            }
+        }
+        result.diagnostics.receiver_signal_bias_states = signal_bias_groups.size();
+    }
     result.diagnostics.tdcp_factors = problem.tdcp_factors.size();
+    result.diagnostics.undifferenced_doppler_factors =
+        problem.undifferenced_doppler_factors.size();
+    // The Eigen backend consumes the backend-independent rows directly.  The
+    // GTSAM backend overwrites this with its actual insertion count after
+    // validity checks, so diagnostics distinguish candidate rows from graph
+    // factors without changing the legacy default recipe.
+    result.diagnostics.undifferenced_doppler_factors_inserted =
+        problem.undifferenced_doppler_factors.size();
+    if (config_.use_doppler_velocity_wls_initialization) {
+        for (const auto& estimate : problem.doppler_velocity_wls_estimates) {
+            if (estimate.valid) {
+                ++result.diagnostics.doppler_velocity_wls_valid_epochs;
+                if (estimate.propagated) {
+                    ++result.diagnostics.doppler_velocity_wls_propagated_epochs;
+                }
+                result.diagnostics.doppler_velocity_wls_max_condition_number =
+                    std::max(result.diagnostics.doppler_velocity_wls_max_condition_number,
+                             estimate.condition_number);
+                result.diagnostics.doppler_velocity_wls_max_normalized_rms =
+                    std::max(result.diagnostics.doppler_velocity_wls_max_normalized_rms,
+                             estimate.normalized_rms);
+                result.diagnostics.doppler_velocity_wls_max_velocity_norm_mps =
+                    std::max(result.diagnostics.doppler_velocity_wls_max_velocity_norm_mps,
+                             estimate.velocity_ecef_mps.norm());
+                result.diagnostics.doppler_velocity_wls_max_clock_rate_abs_mps =
+                    std::max(result.diagnostics.doppler_velocity_wls_max_clock_rate_abs_mps,
+                             std::abs(estimate.clock_rate_mps));
+            } else {
+                ++result.diagnostics.doppler_velocity_wls_rejected_epochs;
+            }
+        }
+    }
     result.diagnostics.single_difference_doppler_factors =
         problem.single_difference_doppler_factors.size();
+    result.diagnostics.sparse_epochs_retained =
+        problem.diagnostics.sparse_epochs_retained;
+    result.diagnostics.sparse_empty_epochs_retained =
+        problem.diagnostics.sparse_empty_epochs_retained;
+    if (config_.use_native_pdc_state_bridge) {
+        for (const auto& seed : problem.native_pdc_state_seeds) {
+            if (seed.has_position) {
+                ++result.diagnostics.native_pdc_position_seeds;
+            }
+            if (seed.has_velocity) {
+                ++result.diagnostics.native_pdc_velocity_seeds;
+            }
+            if (seed.has_clock) {
+                ++result.diagnostics.native_pdc_clock_seeds;
+            }
+            if (seed.has_clock_rate) {
+                ++result.diagnostics.native_pdc_clock_rate_seeds;
+            }
+        }
+    }
     result.diagnostics.single_difference_tdcp_factors =
         problem.single_difference_tdcp_factors.size();
     result.diagnostics.carrier_phase_factors = problem.carrier_phase_factors.size();
@@ -100,6 +163,7 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
          problem.double_difference_pseudorange_factors.empty() &&
          problem.double_difference_carrier_factors.empty() &&
          problem.tdcp_factors.empty() &&
+         problem.undifferenced_doppler_factors.empty() &&
          problem.single_difference_doppler_factors.empty() &&
          problem.single_difference_tdcp_factors.empty())) {
         return result;
@@ -154,6 +218,21 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
     constexpr int kSparseNormalStateThreshold = 300;
     const bool use_sparse_normal = state_size > kSparseNormalStateThreshold;
     Eigen::VectorXd initial_state = Eigen::VectorXd::Zero(state_size);
+    const bool use_doppler_velocity_wls =
+        config_.use_doppler_velocity_wls_initialization;
+    if (use_doppler_velocity_wls &&
+        problem.doppler_velocity_wls_estimates.size() !=
+            static_cast<std::size_t>(num_epochs)) {
+        // A requested initializer must never silently fall back to zero
+        // velocity.  The caller can inspect the rejected-epoch diagnostics.
+        return result;
+    }
+    if (use_doppler_velocity_wls &&
+        std::any_of(problem.doppler_velocity_wls_estimates.begin(),
+                    problem.doppler_velocity_wls_estimates.end(),
+                    [](const auto& estimate) { return !estimate.valid; })) {
+        return result;
+    }
     for (int i = 0; i < num_epochs; ++i) {
         const int epoch_col = epoch_state_size * i;
         initial_state.segment<3>(epoch_col) = problem.epochs[i].position_ecef;
@@ -161,7 +240,14 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
     }
     if (use_velocity_states) {
         for (int i = 0; i < num_epochs; ++i) {
-            initial_state.segment<3>(velocity_state_offset + 3 * i).setZero();
+            if (use_doppler_velocity_wls) {
+                initial_state.segment<3>(velocity_state_offset + 3 * i) =
+                    problem.doppler_velocity_wls_estimates[
+                        static_cast<std::size_t>(i)]
+                        .velocity_ecef_mps;
+            } else {
+                initial_state.segment<3>(velocity_state_offset + 3 * i).setZero();
+            }
         }
     }
     for (int i = 0; i < ambiguity_count; ++i) {
@@ -229,7 +315,40 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
         if (!use_velocity_states || config_.velocity_prior_sigma_mps <= 0.0) {
             return 0;
         }
+        if (use_doppler_velocity_wls) {
+            return std::count_if(
+                       problem.doppler_velocity_wls_estimates.begin(),
+                       problem.doppler_velocity_wls_estimates.end(),
+                       [](const auto& estimate) { return estimate.valid; }) *
+                   3U;
+        }
         return static_cast<std::size_t>(num_epochs) * 3U;
+    };
+
+    auto doppler_wls_clock_prior_count = [&]() -> std::size_t {
+        if (!use_doppler_velocity_wls || num_epochs < 2) {
+            return 0;
+        }
+        std::size_t count = 0;
+        for (int i = 1; i < num_epochs; ++i) {
+            const auto& previous =
+                problem.doppler_velocity_wls_estimates[
+                    static_cast<std::size_t>(i - 1)];
+            const auto& current = problem.doppler_velocity_wls_estimates[
+                static_cast<std::size_t>(i)];
+            const double dt = problem.epochs[static_cast<std::size_t>(i)].time -
+                              problem.epochs[static_cast<std::size_t>(i - 1)].time;
+            const bool clock_jump =
+                static_cast<std::size_t>(i) < problem.clock_jumps.size() &&
+                problem.clock_jumps[static_cast<std::size_t>(i)];
+            if (previous.valid && current.valid && dt > 0.0 &&
+                (config_.max_tdcp_gap_s <= 0.0 ||
+                 dt <= config_.max_tdcp_gap_s) &&
+                !clock_jump) {
+                ++count;
+            }
+        }
+        return count;
     };
 
     struct OptimizationOutput {
@@ -283,6 +402,8 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
             const int ambiguity_between_rows =
                 static_cast<int>(problem.ambiguity_between_factors.size());
             const int tdcp_rows = static_cast<int>(problem.tdcp_factors.size());
+            const int undifferenced_doppler_rows = static_cast<int>(
+                problem.undifferenced_doppler_factors.size());
             const int single_difference_doppler_rows =
                 static_cast<int>(problem.single_difference_doppler_factors.size());
             const int single_difference_tdcp_rows =
@@ -294,8 +415,10 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
             const int estimated_rows =
                 pr_rows + carrier_phase_rows + double_difference_pseudorange_rows +
                 double_difference_carrier_rows + ambiguity_between_rows + tdcp_rows +
+                undifferenced_doppler_rows +
                 single_difference_doppler_rows + single_difference_tdcp_rows +
                 motion_rows + ambiguity_prior_rows + velocity_prior_rows +
+                static_cast<int>(doppler_wls_clock_prior_count()) +
                 fixed_ambiguity_rows;
             (void)estimated_rows;
             Eigen::MatrixXd normal_matrix;
@@ -385,19 +508,87 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
             }
 
             if (use_velocity_states && config_.velocity_prior_sigma_mps > 0.0) {
-                const double velocity_prior_weight =
-                    1.0 / std::max(1e-6, config_.velocity_prior_sigma_mps);
                 for (int i = 0; i < num_epochs; ++i) {
                     const int velocity_col =
                         velocity_state_col(static_cast<std::size_t>(i));
+                    const auto* wls_estimate =
+                        use_doppler_velocity_wls
+                            ? &problem.doppler_velocity_wls_estimates[
+                                  static_cast<std::size_t>(i)]
+                            : nullptr;
+                    if (wls_estimate != nullptr && !wls_estimate->valid) {
+                        // Never add a zero-centered prior for a rejected WLS
+                        // epoch.  The requested opt-in is fail-closed before
+                        // reaching this point, but retaining this guard keeps
+                        // manually constructed FGOProblem values safe.
+                        continue;
+                    }
                     for (int axis = 0; axis < 3; ++axis) {
+                        double sigma = config_.velocity_prior_sigma_mps;
+                        double target = 0.0;
+                        if (wls_estimate != nullptr) {
+                            target = wls_estimate->velocity_ecef_mps(axis);
+                            const double variance =
+                                wls_estimate->covariance(axis, axis);
+                            if (std::isfinite(variance) && variance > 0.0) {
+                                sigma = std::sqrt(variance);
+                            }
+                            sigma = std::max(
+                                0.2, std::min(sigma,
+                                              config_.velocity_prior_sigma_mps));
+                        }
+                        const double velocity_prior_weight =
+                            1.0 / std::max(1e-6, sigma);
                         const double weighted_residual =
-                            -output.state(velocity_col + axis) *
+                            (target - output.state(velocity_col + axis)) *
                             velocity_prior_weight;
                         add_weighted_row(
                             {{velocity_col + axis, velocity_prior_weight}},
                             weighted_residual);
                     }
+                }
+            }
+
+            if (use_doppler_velocity_wls && num_epochs >= 2) {
+                for (int i = 1; i < num_epochs; ++i) {
+                    const auto& previous =
+                        problem.doppler_velocity_wls_estimates[
+                            static_cast<std::size_t>(i - 1)];
+                    const auto& current = problem.doppler_velocity_wls_estimates[
+                        static_cast<std::size_t>(i)];
+                    const double dt =
+                        problem.epochs[static_cast<std::size_t>(i)].time -
+                        problem.epochs[static_cast<std::size_t>(i - 1)].time;
+                    const bool clock_jump =
+                        static_cast<std::size_t>(i) < problem.clock_jumps.size() &&
+                        problem.clock_jumps[static_cast<std::size_t>(i)];
+                    if (!previous.valid || !current.valid || !(dt > 0.0) ||
+                        (config_.max_tdcp_gap_s > 0.0 &&
+                         dt > config_.max_tdcp_gap_s) ||
+                        clock_jump) {
+                        continue;
+                    }
+                    double sigma = 1.0;
+                    const double variance = current.covariance(3, 3);
+                    if (std::isfinite(variance) && variance > 0.0) {
+                        sigma = std::sqrt(variance);
+                    }
+                    sigma = std::max(0.5, std::min(sigma, 1000.0));
+                    const double weight = 1.0 / sigma;
+                    const int previous_col =
+                        epoch_state_col(static_cast<std::size_t>(i - 1));
+                    const int current_col =
+                        epoch_state_col(static_cast<std::size_t>(i));
+                    const double desired_change = current.clock_rate_mps * dt;
+                    const double actual_change =
+                        output.state(current_col + 3) -
+                        output.state(previous_col + 3);
+                    const double weighted_residual =
+                        (desired_change - actual_change) * weight;
+                    add_weighted_row(
+                        {{previous_col + 3, -weight},
+                         {current_col + 3, weight}},
+                        weighted_residual);
                 }
             }
 
@@ -702,6 +893,132 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
                 if (current_bias_col >= 0 &&
                     previous_bias_col != current_bias_col) {
                     jacobian.emplace_back(current_bias_col, 1.0 * weight);
+                }
+                add_weighted_row(jacobian, raw_residual * weight);
+            }
+
+            // Receiver-only Doppler rows are deliberately kept separate from
+            // the base-dependent single-difference path below.  The legacy
+            // preparation leaves residual_mps - LOS*v_receiver.  The opt-in
+            // Android-corrected contract additionally models the uncorrected
+            // receiver clock frequency error as the finite difference of the
+            // existing per-epoch clock-bias states.  With velocity states this
+            // is a direct three-column row; the finite-difference fallback
+            // mirrors the existing SD contract.
+            for (const auto& factor : problem.undifferenced_doppler_factors) {
+                if (factor.epoch_index >= problem.epochs.size()) {
+                    continue;
+                }
+
+                std::size_t clock_previous_epoch =
+                    std::numeric_limits<std::size_t>::max();
+                double receiver_clock_drift_mps = 0.0;
+                if (factor.includes_receiver_clock_drift) {
+                    clock_previous_epoch = factor.previous_epoch_index;
+                    if (clock_previous_epoch >= problem.epochs.size() ||
+                        clock_previous_epoch >= factor.epoch_index) {
+                        continue;
+                    }
+                    const double clock_dt = factor.dt_s > 0.0
+                                                ? factor.dt_s
+                                                : problem.epochs[factor.epoch_index].time -
+                                                      problem.epochs[clock_previous_epoch].time;
+                    if (!(clock_dt > 0.0) ||
+                        (config_.max_tdcp_gap_s > 0.0 &&
+                         clock_dt > config_.max_tdcp_gap_s)) {
+                        continue;
+                    }
+                    receiver_clock_drift_mps =
+                        (output.state(epoch_state_col(factor.epoch_index) + 3) -
+                         output.state(epoch_state_col(clock_previous_epoch) + 3)) /
+                        clock_dt;
+                    if (!std::isfinite(receiver_clock_drift_mps)) {
+                        continue;
+                    }
+                }
+
+                int velocity_col = velocity_state_col(factor.epoch_index);
+                Vector3d velocity = Vector3d::Zero();
+                if (velocity_col >= 0) {
+                    velocity = output.state.segment<3>(velocity_col);
+                } else {
+                    if (factor.epoch_index == 0) {
+                        continue;
+                    }
+                    const std::size_t previous_epoch_index =
+                        factor.epoch_index - 1;
+                    const double dt =
+                        problem.epochs[factor.epoch_index].time -
+                        problem.epochs[previous_epoch_index].time;
+                    if (dt <= 0.0 ||
+                        (config_.max_tdcp_gap_s > 0.0 &&
+                         dt > config_.max_tdcp_gap_s)) {
+                        continue;
+                    }
+                    const int previous_col =
+                        epoch_state_col(previous_epoch_index);
+                    const int current_col = epoch_state_col(factor.epoch_index);
+                    velocity =
+                        (output.state.segment<3>(current_col) -
+                         output.state.segment<3>(previous_col)) /
+                        dt;
+                    velocity_col = current_col;
+                }
+
+                const double predicted = doppler_velocity_wls::predict(
+                    factor.los, velocity, receiver_clock_drift_mps);
+                const double sigma = std::max(1e-4, factor.sigma_mps);
+                const double raw_residual = factor.residual_mps - predicted;
+                const double scale =
+                    robust_scale(raw_residual / sigma,
+                                 config_.tdcp_huber_threshold_sigma);
+                const double weight = scale / sigma;
+
+                std::vector<std::pair<int, double>> jacobian;
+                if (use_velocity_states) {
+                    jacobian.reserve(factor.includes_receiver_clock_drift ? 5 : 3);
+                    for (int axis = 0; axis < 3; ++axis) {
+                        jacobian.emplace_back(velocity_col + axis,
+                                              factor.los(axis) * weight);
+                    }
+                } else {
+                    if (factor.epoch_index == 0) {
+                        continue;
+                    }
+                    const std::size_t previous_epoch_index =
+                        factor.epoch_index - 1;
+                    const double dt =
+                        problem.epochs[factor.epoch_index].time -
+                        problem.epochs[previous_epoch_index].time;
+                    if (dt <= 0.0 ||
+                        (config_.max_tdcp_gap_s > 0.0 &&
+                         dt > config_.max_tdcp_gap_s)) {
+                        continue;
+                    }
+                    const int previous_col =
+                        epoch_state_col(previous_epoch_index);
+                    const int current_col = epoch_state_col(factor.epoch_index);
+                    jacobian.reserve(6);
+                    for (int axis = 0; axis < 3; ++axis) {
+                        jacobian.emplace_back(previous_col + axis,
+                                              -factor.los(axis) / dt * weight);
+                        jacobian.emplace_back(current_col + axis,
+                                              factor.los(axis) / dt * weight);
+                    }
+                }
+                if (factor.includes_receiver_clock_drift) {
+                    const double clock_dt = factor.dt_s > 0.0
+                                                ? factor.dt_s
+                                                : problem.epochs[factor.epoch_index].time -
+                                                      problem.epochs[clock_previous_epoch].time;
+                    const int previous_clock_col =
+                        epoch_state_col(clock_previous_epoch) + 3;
+                    const int current_clock_col =
+                        epoch_state_col(factor.epoch_index) + 3;
+                    jacobian.emplace_back(previous_clock_col,
+                                          -1.0 / clock_dt * weight);
+                    jacobian.emplace_back(current_clock_col,
+                                          1.0 / clock_dt * weight);
                 }
                 add_weighted_row(jacobian, raw_residual * weight);
             }
@@ -1826,6 +2143,7 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
     result.diagnostics.graph_factors =
         result.diagnostics.pseudorange_factors +
         result.diagnostics.tdcp_factors +
+        result.diagnostics.undifferenced_doppler_factors +
         result.diagnostics.single_difference_doppler_factors +
         result.diagnostics.single_difference_tdcp_factors +
         result.diagnostics.carrier_phase_factors +
@@ -1907,6 +2225,8 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
     std::size_t double_difference_carrier_residual_count = 0;
     double tdcp_residual_square_sum = 0.0;
     std::size_t tdcp_residual_count = 0;
+    double undifferenced_doppler_residual_square_sum = 0.0;
+    std::size_t undifferenced_doppler_residual_count = 0;
     double single_difference_doppler_residual_square_sum = 0.0;
     std::size_t single_difference_doppler_residual_count = 0;
     double single_difference_tdcp_residual_square_sum = 0.0;
@@ -2241,6 +2561,69 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
         ++single_difference_doppler_residual_count;
     }
 
+    for (const auto& factor : problem.undifferenced_doppler_factors) {
+        if (factor.epoch_index >= problem.epochs.size()) {
+            continue;
+        }
+
+        std::size_t clock_previous_epoch =
+            std::numeric_limits<std::size_t>::max();
+        double receiver_clock_drift_mps = 0.0;
+        if (factor.includes_receiver_clock_drift) {
+            clock_previous_epoch = factor.previous_epoch_index;
+            if (clock_previous_epoch >= problem.epochs.size() ||
+                clock_previous_epoch >= factor.epoch_index) {
+                continue;
+            }
+            const double clock_dt = factor.dt_s > 0.0
+                                        ? factor.dt_s
+                                        : problem.epochs[factor.epoch_index].time -
+                                              problem.epochs[clock_previous_epoch].time;
+            if (!(clock_dt > 0.0) ||
+                (config_.max_tdcp_gap_s > 0.0 &&
+                 clock_dt > config_.max_tdcp_gap_s)) {
+                continue;
+            }
+            receiver_clock_drift_mps =
+                (state(epoch_state_col(factor.epoch_index) + 3) -
+                 state(epoch_state_col(clock_previous_epoch) + 3)) /
+                clock_dt;
+            if (!std::isfinite(receiver_clock_drift_mps)) {
+                continue;
+            }
+        }
+
+        Vector3d velocity = Vector3d::Zero();
+        const int velocity_col = velocity_state_col(factor.epoch_index);
+        if (velocity_col >= 0) {
+            velocity = state.segment<3>(velocity_col);
+        } else {
+            if (factor.epoch_index == 0) {
+                continue;
+            }
+            const std::size_t previous_epoch_index = factor.epoch_index - 1;
+            const double dt =
+                problem.epochs[factor.epoch_index].time -
+                problem.epochs[previous_epoch_index].time;
+            if (dt <= 0.0 ||
+                (config_.max_tdcp_gap_s > 0.0 && dt > config_.max_tdcp_gap_s)) {
+                continue;
+            }
+            const int previous_col = epoch_state_col(previous_epoch_index);
+            const int current_col = epoch_state_col(factor.epoch_index);
+            velocity =
+                (state.segment<3>(current_col) -
+                 state.segment<3>(previous_col)) /
+                dt;
+        }
+        const double residual =
+            factor.residual_mps - doppler_velocity_wls::predict(
+                                      factor.los, velocity,
+                                      receiver_clock_drift_mps);
+        undifferenced_doppler_residual_square_sum += residual * residual;
+        ++undifferenced_doppler_residual_count;
+    }
+
     for (const auto& factor : problem.single_difference_tdcp_factors) {
         if (factor.previous_epoch_index >= problem.epochs.size() ||
             factor.current_epoch_index >= problem.epochs.size()) {
@@ -2286,6 +2669,11 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
     if (tdcp_residual_count > 0) {
         result.diagnostics.tdcp_residual_rms_m =
             std::sqrt(tdcp_residual_square_sum / static_cast<double>(tdcp_residual_count));
+    }
+    if (undifferenced_doppler_residual_count > 0) {
+        result.diagnostics.undifferenced_doppler_residual_rms_mps =
+            std::sqrt(undifferenced_doppler_residual_square_sum /
+                      static_cast<double>(undifferenced_doppler_residual_count));
     }
     if (single_difference_doppler_residual_count > 0) {
         result.diagnostics.single_difference_doppler_residual_rms_mps =

@@ -1,6 +1,8 @@
 #pragma once
 
+#include <cstddef>
 #include <deque>
+#include <string>
 #include <vector>
 
 #include <Eigen/Dense>
@@ -39,6 +41,44 @@ namespace fusion_initialization {
 NominalState alignStatic(const std::vector<ImuSample>& stationary_window_body_flu,
                          const Eigen::Vector3d& initial_position_enu,
                          double gravity_mps2 = kStandardGravityMps2);
+
+/**
+ * @brief Parameters for the upstream GNSS-velocity attitude initializer.
+ *
+ * This is the direct, truth-free translation of taroz/gsdc2023's
+ * `vel2rpy.m`: a centered moving mean, a three-dimensional speed gate, linear
+ * interior/nearest endpoint fill for low-speed headings, and a 180-degree
+ * course offset.  It is kept in
+ * the shared initialization module so Android and future native callers do
+ * not grow subtly different copies of the MATLAB semantics.
+ */
+struct VelocityHeadingConfig {
+    std::size_t smooth_window = 20;
+    double velocity_threshold_mps = 0.5;
+    double heading_offset_deg = 180.0;
+};
+
+struct VelocityHeadingResult {
+    bool ok = false;
+    std::string error;
+    std::vector<Eigen::Vector3d> smoothed_velocity_enu;
+    std::vector<Eigen::Vector3d> rpy_rad;
+    std::size_t low_speed_count = 0;
+    std::size_t linear_fill_count = 0;
+    std::size_t nearest_fill_count = 0;
+};
+
+/**
+ * @brief Convert GNSS ENU velocities to upstream-compatible RPY seeds.
+ *
+ * Roll and pitch are zero by contract.  Raw `atan2(N,E)` courses are linearly
+ * interpolated across interior low-speed samples, nearest-filled only at the
+ * endpoints, then offset and wrapped to degrees [-180, 180] before conversion
+ * to radians.  Empty/all-low-speed/non-finite input fails closed.
+ */
+VelocityHeadingResult velocityToRpy(
+    const std::vector<Eigen::Vector3d>& velocities_enu,
+    const VelocityHeadingConfig& config = VelocityHeadingConfig{});
 
 /**
  * @brief Course-over-ground heading alignment: once GNSS speed exceeds

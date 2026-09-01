@@ -3,6 +3,7 @@
 #include <libgnss++/algorithms/rtk.hpp>
 #include <libgnss++/algorithms/spp.hpp>
 #include <libgnss++/io/rinex.hpp>
+#include "../src/algorithms/rtk_internal.hpp"
 #include <cmath>
 #include <filesystem>
 #include <fstream>

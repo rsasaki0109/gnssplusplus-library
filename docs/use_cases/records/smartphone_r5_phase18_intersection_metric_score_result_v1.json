@@ -1,0 +1,118 @@
+{
+  "schema_version": "smartphone-r5-phase18-intersection-metric-score-result.v1",
+  "status": "development-only-no-go",
+  "created_at_utc": "2026-08-31T17:34:00Z",
+  "candidate_id": "native-carrier-code-leveling-primary-l1-e1-innovation-reset-v1",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_phase18_intersection_metric_freeze_v1.json",
+  "freeze_record_sha256": "63672a482015426b1840989fae5f4f2c18b4f09f590539424d15b5f13d2bb622",
+  "implementation_manifest": "docs/use_cases/records/smartphone_r5_phase18_intersection_metric_manifest_v1.json",
+  "implementation_manifest_sha256": "40596ca96752d8aff615326d47c5ad06f373202fab48b10150f03eb9259849e7",
+  "dataset_id": "2022-08-04-20-07-us-ca-sjc-q/mi8",
+  "role": "same-route cross-device development recovery only",
+  "truth_policy": {
+    "truth_path": "output/smartphone-r5/phase17-primary-l1-e1-v1/mi8/truth_materialized/ground_truth.csv",
+    "truth_open_count_this_phase": 1,
+    "truth_open_count_cumulative": 2,
+    "cumulative_breakdown": {
+      "phase17_failed_key_check_open": 1,
+      "phase18_intersection_evaluation_open": 1
+    },
+    "one_process_this_phase": true,
+    "truth_read_once_in_process": true,
+    "truth_file_reopened_after_phase18": false,
+    "validation_truth_open_count": 0,
+    "holdout_truth_open_count": 0,
+    "test_truth_open_count": 0,
+    "mat_read_count": 0,
+    "enriched_columns_read": false,
+    "device_wls_or_precomputed_coordinates_read": false,
+    "token_or_kaggle_access": false
+  },
+  "policy_applied": {
+    "truth_intersection_scored": true,
+    "surplus_prediction_keys_ignored_and_counted": true,
+    "missing_truth_keys_counted_without_fill": true,
+    "coverage_definition": "matched_key_count / truth_key_count",
+    "control_candidate_matched_key_set_required": true,
+    "coverage_minimum": 0.999,
+    "missing_maximum": 1,
+    "duplicate_nonfinite_phone_mismatch": "fail_closed",
+    "distance_variants": ["wgs84_vincenty", "haversine_sphere"],
+    "percentile_variants": ["linear_n_minus_1", "nearest_rank_ceiling"],
+    "policy_was_not_changed_after_truth_read": true
+  },
+  "sealed_artifacts": {
+    "control": {
+      "path": "output/smartphone-r5/phase17-primary-l1-e1-v1/mi8/control/submission.csv",
+      "sha256": "f1ddbfa14dc8dbe179e2eaf896e31a3f69b216fc3cb2a0c24de429877d35e272",
+      "rows": 1416,
+      "extra_prediction_keys": 17,
+      "missing_truth_keys": 1,
+      "matched_keys": 1399,
+      "coverage": 0.9992857142857143,
+      "extra_keys_sha256": "4db33861ed9860c78695cbc1d02d40698d021fea14f03adeb520dc30903c013e",
+      "missing_keys_sha256": "b0bd96f3f8109c621271ac5e2b7fc33182ce4feed047df221b5d2a24cd805c2e"
+    },
+    "candidate": {
+      "path": "output/smartphone-r5/phase17-primary-l1-e1-v1/mi8/candidate/submission.csv",
+      "sha256": "c419d5335ac6f07ec55c84d40a886b6292009826e308a36d4077a679e9962832",
+      "rows": 1416,
+      "extra_prediction_keys": 17,
+      "missing_truth_keys": 1,
+      "matched_keys": 1399,
+      "coverage": 0.9992857142857143,
+      "extra_keys_sha256": "4db33861ed9860c78695cbc1d02d40698d021fea14f03adeb520dc30903c013e",
+      "missing_keys_sha256": "b0bd96f3f8109c621271ac5e2b7fc33182ce4feed047df221b5d2a24cd805c2e"
+    },
+    "control_candidate_matched_key_set_sha256": "d70a053487cf685bfbc69a463065acdc34639dffb73a67c6d5552264405e1082",
+    "evaluation_report": {
+      "path": "output/smartphone-r5/phase17-primary-l1-e1-v1/mi8/phase18_intersection_score.json",
+      "sha256": "7a9e0caf38c0a2eac5dd43d9146cf27d0d1f836857076cc5538caa841a21d721"
+    }
+  },
+  "metrics_m": {
+    "control": {
+      "wgs84_vincenty__linear_n_minus_1": 2.043565554658654,
+      "wgs84_vincenty__nearest_rank_ceiling": 2.0441045117978134,
+      "haversine_sphere__linear_n_minus_1": 2.0452887822731705,
+      "haversine_sphere__nearest_rank_ceiling": 2.047222498406381,
+      "wgs84_p50": 1.6028009187955734,
+      "wgs84_p95_linear": 2.4843301905217348
+    },
+    "candidate": {
+      "wgs84_vincenty__linear_n_minus_1": 2.0681628780314942,
+      "wgs84_vincenty__nearest_rank_ceiling": 2.069805770726414,
+      "haversine_sphere__linear_n_minus_1": 2.069385266420077,
+      "haversine_sphere__nearest_rank_ceiling": 2.0711267115173424,
+      "wgs84_p50": 1.5415366292863417,
+      "wgs84_p95_linear": 2.594789126776647
+    },
+    "candidate_minus_control": {
+      "wgs84_vincenty__linear_n_minus_1": 0.02459732337284004,
+      "wgs84_vincenty__nearest_rank_ceiling": 0.025701258928600534,
+      "haversine_sphere__linear_n_minus_1": 0.024096484146906683,
+      "haversine_sphere__nearest_rank_ceiling": 0.023904213110961248
+    }
+  },
+  "gate": {
+    "coverage_gate": true,
+    "matched_key_set_gate": true,
+    "all_four_strictly_improved": false,
+    "candidate_improved_variants": 0,
+    "promotion_decision": "no-go",
+    "reason": "The GPS L1 C/A plus Galileo E1 extension is worse than the sealed E1 control on every diagnostic variant over the common keys. No candidate or policy adjustment is allowed after this read.",
+    "native_0_782_class_target": "not achieved"
+  },
+  "verification": {
+    "module_sha256": "d27603952e317ac27ff9fc3bee177a338eabce15a7d67377bdbac6a402d77155",
+    "tests_sha256": "84fb8dff6c67bbfd87d01c2994a8a46c4b31a23a5616919b78ffac2cda5088fa",
+    "unit_tests": "9/9 passed",
+    "release_build": "cmake --build build --config Release -j2 passed",
+    "full_serial_ctest": "131/131 passed with LD_LIBRARY_PATH=/home/sasaki/.local/lib",
+    "diff_check": "passed",
+    "algorithm_or_candidate_changed_after_score": false,
+    "post_score_tuning": false,
+    "post_score_rerun": false,
+    "record_sha256": "excluded-from-self-hash"
+  }
+}

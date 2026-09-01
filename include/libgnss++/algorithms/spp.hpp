@@ -58,6 +58,10 @@ public:
         double max_position_jump_min_m = 0.0;         ///< Minimum allowed position step [m]
         bool use_ionosphere_free_combination = false; ///< Use dual-frequency code IFLC when available
         bool mrtklib_iflc_code_bias = false;          ///< Match MRTKLIB prange() IFLC TGD handling
+        // Raw-only opt-in: select Galileo E1 BGD from the RINEX navigation
+        // data-source clock reference (F/NAV -> tgd, I/NAV -> tgd_secondary).
+        // The default keeps the historical tgd-only behavior byte-for-byte.
+        bool use_signal_specific_galileo_group_delay = false;
         bool mrtklib_clas_snr_mask = false;           ///< Apply the CLAS rover elevation/SNR mask
         bool use_ionex_corrections = true;            ///< Prefer loaded IONEX TEC maps over broadcast ionosphere
         bool use_dcb_corrections = true;              ///< Apply loaded OSB/DCB code-bias products when available

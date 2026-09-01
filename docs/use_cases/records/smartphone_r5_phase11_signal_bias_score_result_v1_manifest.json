@@ -1,0 +1,16 @@
+{
+  "schema_version": "smartphone-r5-phase11-signal-bias-score-result-manifest.v1",
+  "result_record": "docs/use_cases/records/smartphone_r5_phase11_signal_bias_score_result_v1.json",
+  "result_record_sha256": "f37de7aa5b68a5d22832b550e38feafca74234051d3b27ce9e1adf01b99a9d34",
+  "freeze_record_sha256": "e4ff6aba34240250b55e5ca017809ea5fdca347aa03ab4dab5bc1507ec231e55",
+  "structural_seal_sha256": "ebc0316a9f84da76a398b87410c5d81a3ca3c3299ccdcbe2533a220de87bbb06",
+  "candidate_summary_sha256": "b1535a896c3e25cec1a756971bf6a58b26817801661745268eee8b7a8da2c46b",
+  "candidate_submission_sha256": "d8da69a0cfea3e12d78c072ac76b5c0ac108ed5f7210fb1d3d8bce872d906a70",
+  "train_truth_read_count": 1,
+  "validation_truth_read_count": 0,
+  "holdout_truth_read_count": 0,
+  "test_truth_read_count": 0,
+  "mat_read_count": 0,
+  "post_score_algorithm_changes": false,
+  "manifest_hash": "computed after result record hash is finalized"
+}

@@ -1,0 +1,31 @@
+{
+  "schema_version": "smartphone-r5-phase11-signal-bias-freeze-manifest.v1.1",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_phase11_signal_bias_freeze_v1_1.json",
+  "freeze_record_sha256": "e4ff6aba34240250b55e5ca017809ea5fdca347aa03ab4dab5bc1507ec231e55",
+  "status": "freeze-authority",
+  "route": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+  "truth_policy": {
+    "truth_free_artifact_sealed_before_score": true,
+    "ground_truth_members_read_before_freeze": false,
+    "truth_open_count_before_score": 0,
+    "validation_open_count": 0,
+    "holdout_open_count": 0,
+    "test_open_count": 0,
+    "kaggle_or_token_access": false,
+    "algorithm_parameters_frozen": true
+  },
+  "algorithm_hash_scope": "source_sha256_at_freeze in the companion freeze record plus the Release binary SHA256",
+  "artifact_contract": {
+    "raw_only": true,
+    "secondary_signal_biases": ["GPS_L5", "Galileo_E5a"],
+    "secondary_eligibility_gate_enabled_only_for_candidate": true,
+    "base_or_double_difference_factors": false,
+    "no_ionosphere_free_combination": true,
+    "deterministic_atomic_publish": true
+  },
+  "score_authorization": {
+    "allowed_next_action": "after structural candidate summary/submission hashes are sealed, read the declared development ground truth once and publish pass/fail",
+    "forbidden_next_actions": ["change algorithm or numeric parameters after score", "open validation or holdout", "read MAT/sample/result/device-WLS files", "Kaggle or token access"]
+  },
+  "manifest_hash": "computed after record hash is finalized"
+}

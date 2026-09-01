@@ -1,0 +1,59 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-pdc-corrected-structural-result-manifest.v1",
+  "result_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_corrected_structural_result_v1.json",
+    "sha256": "563db158e6df12a9503be85e493cf5b6ee02fb069e4c37458ac7bc3ac37f3221"
+  },
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_corrected_freeze_v1.json",
+    "sha256": "85856c369602042bff41cfedc8a01adcca4226e1396bdb484ba66877a3275d29"
+  },
+  "authorization_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_correctness_authorization_v1.json",
+    "sha256": "e45412ff7ee72781a0e59b8030032ec8158611b3343fc93ed83047cea8f63c28"
+  },
+  "binary": {
+    "path": "build/apps/gnss_fgo",
+    "sha256": "2cbff982954ad28453efdbb97987b169a0c325d94d180bf96815f94ff1d69bd0"
+  },
+  "route_run_manifests": [
+    {
+      "path": "output/smartphone-r5/native-fgo-pdc-corrected-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/epochs-all/run_manifest.json",
+      "sha256": "862d15ed9ede4955040360031cf6e52981ae3c3a93f82e5f3e74f3dd9d24614c"
+    },
+    {
+      "path": "output/smartphone-r5/native-fgo-pdc-corrected-v1/2021-07-27-19-49-us-ca-mtv-b__pixel4/epochs-all/run_manifest.json",
+      "sha256": "0baf5b00a1f9c57b3b514c698166dfe31a86786df9c3c9cc09dc0ead26a207ab"
+    },
+    {
+      "path": "output/smartphone-r5/native-fgo-pdc-corrected-v1/2022-02-24-18-29-us-ca-lax-o__pixel5/epochs-all/run_manifest.json",
+      "sha256": "92e28ac617a6ecfdfd716260b76637a27856add615fe6cb54bf208029f5ad152"
+    }
+  ],
+  "truth_free_witness_outputs": [
+    {
+      "path": "output/smartphone-r5/native-fgo-pdc-corrected-v1-witness/2021-03-16-18-59-us-ca-mtv-a__pixel5.json",
+      "sha256": "8d3d705ca7851204d5c448ddedc68a5a94dabc712ee070f331786dc587e33989"
+    },
+    {
+      "path": "output/smartphone-r5/native-fgo-pdc-corrected-v1-witness/2021-07-27-19-49-us-ca-mtv-b__pixel4.json",
+      "sha256": "5a8d2b1a56113ec7832568577329d3b028f481ecf7e7e6e8009aa4d595d4debc"
+    },
+    {
+      "path": "output/smartphone-r5/native-fgo-pdc-corrected-v1-witness/2022-02-24-18-29-us-ca-lax-o__pixel5.json",
+      "sha256": "98cf07569ea17b3bf9490546202b11bbb09682b3f40aa0f55013209f8ca97c4f"
+    }
+  ],
+  "witness_script": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_witness.py",
+    "sha256": "5add566b03d2c9132649454c70fe47ed688ce5e0f6de9f44875d7958dade56a4"
+  },
+  "policy": {
+    "truth_open_count": 0,
+    "validation_or_holdout_open": false,
+    "test_truth_open": false,
+    "token_or_kaggle_access": false,
+    "external_mutation": false,
+    "no_post_truth_tuning": true
+  }
+}

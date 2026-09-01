@@ -1,0 +1,186 @@
+{
+  "schema_version": "smartphone-r5-kaggle-official-sample-reconciliation.v2",
+  "status": "completed-truth-free-official-sample-reconciliation",
+  "audited_at_utc": "2026-08-30T08:48:00Z",
+  "scope": {
+    "competition": "smartphone-decimeter-2023",
+    "purpose": "Reconcile the frozen truth-free smartphone test artifact to the authenticated official sample schema and key order.",
+    "algorithm_rerun": false,
+    "candidate_or_numeric_parameter_changed": false,
+    "truth_materialized_count": 0,
+    "truth_open_count": 0,
+    "ground_truth_members_read": false,
+    "external_kaggle_submission": false
+  },
+  "official_authority": {
+    "source_manifest": {
+      "path": "data/gsdc2023/sample_submission.manifest.json",
+      "sha256": "c7d74f59ce936d4141da16a7492b20e08f0a379788b83d9f9694c50170a30c49"
+    },
+    "sample_submission": {
+      "path": "data/gsdc2023/sample_submission.csv",
+      "sha256": "b0c4853076f715d6bdca46e5c8c99e575f7982d8ee4fc9c0fe417507badcb780",
+      "bytes": 5286788,
+      "header": [
+        "tripId",
+        "UnixTimeMillis",
+        "LatitudeDegrees",
+        "LongitudeDegrees"
+      ],
+      "row_count": 71936,
+      "key_order_authority": true,
+      "coordinate_fallback_is_finite_and_in_range": true,
+      "download_url": "https://www.kaggle.com/api/v1/competitions/data/download/smartphone-decimeter-2023/sdc2023%2Fsample_submission.csv"
+    },
+    "source_download": {
+      "files_list_url": "https://www.kaggle.com/api/v1/competitions/data/list/smartphone-decimeter-2023",
+      "files_list_http_status": 200,
+      "download_http_status": 200,
+      "container_sha256": "d71f762591aee14d6355a7f7ca2c8c2b7e4d5045e93d04e1fa22de701c388271",
+      "container_member": "sample_submission.csv",
+      "member_count": 1,
+      "token_value_recorded": false,
+      "token_value_printed": false
+    }
+  },
+  "frozen_input": {
+    "archive": {
+      "path": "data/gsdc2023/cache/dataset_2023.zip",
+      "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408"
+    },
+    "inventory": {
+      "path": "output/smartphone-r5/wls-test-batch-v1/test_inventory.json",
+      "sha256": "dbf89222e6860d4fb31f12c9c46402033ed31e905f8fe3f6615e5131cb9e9495"
+    },
+    "profile": {
+      "path": "configs/benchmarks/smartphone_r5_gsdc2023.json",
+      "sha256": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776"
+    },
+    "algorithm_core_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb",
+    "algorithm_parameter_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb",
+    "release_binaries": {
+      "build/apps/gnss_solve": "7140d077213ef528b7366aa8c1b925dcea6096ec6e0711748cf4cf9428392eb0",
+      "build/apps/gnss_spp": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12"
+    },
+    "reconciliation_source_sha256": "dc91a63a1e2a66504295e43e5e3c68b1bfc55de1140a3e2449241a61389ecdb2",
+    "reconciliation_test_sha256": "453c60d3c26ef08f32f69f5cf7b156bc6d72d13a451631a2dbeafd8a8a43924a"
+  },
+  "provisional_input": {
+    "run_manifest": {
+      "path": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/test_batch_derived_run_manifest.json",
+      "sha256": "726a9c0b2141c567607701c97a544935f6500f0c59dd8054d06d08093ae37d35",
+      "status": "completed-truth-free-derived-submission",
+      "route_count": 40,
+      "truth_open_count": 0
+    },
+    "key_manifest": {
+      "path": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/provisional_key_manifest.json",
+      "sha256": "4783d74e378e829f01306a6ae28bff1ba631e9aa9ddfc1a7aa3172e21ffdd1f5",
+      "id_field": "phone",
+      "row_count": 72010,
+      "official_sample_verified": false
+    },
+    "submission": {
+      "path": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/submission_derived_unverified.csv",
+      "sha256": "62c569f1b6f61fff2cccef598444ebbb053d59d504eb8178f54b916b8af7f439",
+      "manifest_path": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/submission_derived_unverified.manifest.json",
+      "manifest_sha256": "ecf62b2b54f2472a219fcca279c42dfbeccbb413f78c0524e5a045f156646003",
+      "header": [
+        "phone",
+        "UnixTimeMillis",
+        "LatitudeDegrees",
+        "LongitudeDegrees"
+      ],
+      "row_count": 72010
+    }
+  },
+  "reconciliation_contract": {
+    "command": "python3 apps/gnss.py smartphone-wls-test-batch --archive data/gsdc2023/cache/dataset_2023.zip --inventory output/smartphone-r5/wls-test-batch-v1/test_inventory.json --sample-submission data/gsdc2023/sample_submission.csv --profile configs/benchmarks/smartphone_r5_gsdc2023.json --output-dir output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1 --reconcile-derived-with-sample-v2",
+    "official_sample_is_sole_schema_key_and_order_authority": true,
+    "exact_key_coordinates_preferred": true,
+    "missing_official_keys_use_sample_finite_in_range_coordinates": true,
+    "provisional_extra_keys_dropped": true,
+    "nearest_matching": false,
+    "key_remap": false,
+    "interpolation": false,
+    "key_synthesis": false,
+    "algorithm_rerun": false,
+    "truth_access": false,
+    "atomic_publish": true
+  },
+  "result": {
+    "submission": {
+      "path": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/submission.csv",
+      "sha256": "3da0009093cf0f53a4bb9919b5c5d3402a9f8c540a5eaa1300bd147ecdc2a803",
+      "bytes": 6150020,
+      "header": [
+        "tripId",
+        "UnixTimeMillis",
+        "LatitudeDegrees",
+        "LongitudeDegrees"
+      ],
+      "row_count": 71936
+    },
+    "submission_manifest": {
+      "path": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/submission.manifest.json",
+      "sha256": "50624f6647919409a0d523635daad0e45699aab2e64cb869627bafb0272ffff6",
+      "schema_version": "smartphone-r5-gsdc2023-sample-reconciliation-manifest.v2"
+    },
+    "run_manifest": {
+      "path": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/test_batch_reconciliation_v2_manifest.json",
+      "sha256": "9b611f1920bb48597eac518cf9f4a8e26f54f3719598ff9aaebea4839caa703a",
+      "schema_version": "smartphone-r5-wls-test-batch-reconciliation-run-manifest.v2"
+    },
+    "source_counts": {
+      "exact": 71912,
+      "sample_fallback": 24,
+      "drop_extra": 98
+    },
+    "route_analysis": {
+      "route_count": 40,
+      "per_route_counts": "See result.run_manifest route_analysis; this hash-checked manifest contains sample_rows, provisional_rows, exact, sample_fallback, and drop_extra for every route.",
+      "run_manifest_sha256": "9b611f1920bb48597eac518cf9f4a8e26f54f3719598ff9aaebea4839caa703a"
+    },
+    "offset_analysis": {
+      "exact_timestamp_offset_ms_count": 71912,
+      "exact_timestamp_offset_ms_min": 0,
+      "exact_timestamp_offset_ms_max": 0,
+      "nearest_matching": false,
+      "remap": false,
+      "interpolation": false
+    },
+    "independent_verification": {
+      "header_exact": true,
+      "key_order_byte_equivalent": true,
+      "duplicate_keys": 0,
+      "missing_keys": 0,
+      "extra_keys": 0,
+      "nonfinite_coordinates": 0,
+      "all_coordinates_finite_and_in_range": true,
+      "sample_row_count": 71936,
+      "output_row_count": 71936
+    },
+    "runtime": {
+      "wall_seconds": 9.66,
+      "user_seconds": 9.19,
+      "system_seconds": 1.07,
+      "peak_rss_kb": 174356
+    }
+  },
+  "competition_and_submission_boundary": {
+    "official_sample_verified": true,
+    "formal_local_submission_published": true,
+    "external_kaggle_submission": false,
+    "competition_metadata_read_only": true,
+    "leaderboard_score": null,
+    "leaderboard_rank": null,
+    "late_submission_eligibility": "not established; submission-list GET was read-only HTTP 200 and limits probe was HTTP 404",
+    "no_external_mutation": true
+  },
+  "supersedes": {
+    "record_path": "docs/use_cases/records/smartphone_r5_kaggle_official_sample_promotion_v1.json",
+    "record_sha256": "df48c38c184bc4d7b53880195834960c486d8fa549423262eb36b428eb6b6d16",
+    "prior_status": "No-Go-official-promotion",
+    "interpretation": "The prior strict path correctly failed closed on schema/key equality. This v2 path is a separately reviewed exact-key reconciliation that permits only official sample baseline coordinates for the 24 absent keys and drops 98 extras; it does not claim a leaderboard score."
+  }
+}

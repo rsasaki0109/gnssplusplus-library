@@ -1,0 +1,113 @@
+{
+  "schema_version": "smartphone-r5-phase35-interruption-recovery.v1",
+  "phase": 35,
+  "status": "truth-free-resume-in-progress",
+  "purpose": "Record the interrupted raw-only structural matrix and authorize deterministic resume before any truth access.",
+  "output_root": "output/smartphone-r5/phase35-matrix-v1",
+  "interruption": {
+    "previous_runner_pid": 1732539,
+    "previous_runner_pid_observed_absent": true,
+    "pre_resume_observed_at": "2026-09-01T09:58:56+09:00",
+    "pre_resume_existing_run_directory_count": 6,
+    "pre_resume_existing_run_directories": [
+      "A_anchor_signal_iono_hatch/2021-03-16-18-59-us-ca-mtv-a/pixel5/run1",
+      "A_anchor_signal_iono_hatch/2021-07-27-19-49-us-ca-mtv-b/pixel4/run1",
+      "B_A_plus_stop/2021-03-16-18-59-us-ca-mtv-a/pixel5/run1",
+      "C_A_plus_position_offset/2021-03-16-18-59-us-ca-mtv-a/pixel5/run1",
+      "control_quality_anchor_base/2021-03-16-18-59-us-ca-mtv-a/pixel5/run1",
+      "control_quality_anchor_base/2021-07-27-19-49-us-ca-mtv-b/pixel4/run1"
+    ],
+    "pre_resume_truth_free_matrix_report_present": false,
+    "pre_resume_truth_free_seal_present": false,
+    "pre_resume_truth_open_count": 0,
+    "pre_resume_mat_read_or_generated": false,
+    "pre_resume_existing_artifact_hashes_verified": true
+  },
+  "existing_artifacts_at_interruption": [
+    {
+      "run": "A_anchor_signal_iono_hatch/2021-03-16-18-59-us-ca-mtv-a/pixel5/run1",
+      "submission_sha256": "4d3a2003ad8c68d5f512810ee9a7dd574b5856f65a216b9ca3c61be11c7e69b8",
+      "submission_bytes": 172694,
+      "summary_sha256": "4086182c45a78b57328becf65a24586cdfcbbf46dfe812941409acb66335628a",
+      "summary_bytes": 15691,
+      "run_log_sha256": "a38a3e150a7141ce16f0d54d2814e5db0773e68a62e6333e1c1330de0c5e17c2",
+      "run_log_bytes": 115
+    },
+    {
+      "run": "A_anchor_signal_iono_hatch/2021-07-27-19-49-us-ca-mtv-b/pixel4/run1",
+      "submission_sha256": "c19524f37761e3b67c4e3af822b5dc42a408c924e8b3afb673764724be11ea12",
+      "submission_bytes": 134214,
+      "summary_sha256": "fa17841c48b7e5f7fdef3e36f35b84104360bad8a7e07f6a11c02915b0e930e0",
+      "summary_bytes": 15721,
+      "run_log_present_at_interruption": false
+    },
+    {
+      "run": "B_A_plus_stop/2021-03-16-18-59-us-ca-mtv-a/pixel5/run1",
+      "submission_sha256": "6d147afdf690d01469b66d9056d934a238b1563091b6e26316ea72406bad63a2",
+      "submission_bytes": 172694,
+      "summary_sha256": "2dc95488f0b2401f8f2d859098cb82cc00f1de241b648ea6a5ea218afa1d9fb2",
+      "summary_bytes": 15787,
+      "run_log_sha256": "8912e27915ecbcdbd6c3c5b3efe97f719a57f8b40b306b32f45f9d4465a4f22e",
+      "run_log_bytes": 115
+    },
+    {
+      "run": "C_A_plus_position_offset/2021-03-16-18-59-us-ca-mtv-a/pixel5/run1",
+      "submission_sha256": "8bc65bfc39c07621336cecd87b07a8f8e3a092f0789d772327b56f570ee4a06f",
+      "submission_bytes": 172694,
+      "summary_sha256": "67430a6f0e3d59cf3a97264a9fdac6e51ff501e4821385ba09e0deef467e3f17",
+      "summary_bytes": 15751,
+      "run_log_sha256": "a38a3e150a7141ce16f0d54d2814e5db0773e68a62e6333e1c1330de0c5e17c2",
+      "run_log_bytes": 115
+    },
+    {
+      "run": "control_quality_anchor_base/2021-03-16-18-59-us-ca-mtv-a/pixel5/run1",
+      "submission_sha256": "d4d7652e5d12389466e586fe2d8e85d34977a7e11036cee2f591a89293c5426c",
+      "submission_bytes": 172694,
+      "summary_sha256": "f219de7a012379c84117a3d08e3209d7a561e55fcaec324c0f889c0a0d2fb6c9",
+      "summary_bytes": 14155,
+      "run_log_sha256": "67fc4fe986a1ab61f38212163aa35fdb24caf78d9256a02774aa3c76f81d8c28",
+      "run_log_bytes": 113
+    },
+    {
+      "run": "control_quality_anchor_base/2021-07-27-19-49-us-ca-mtv-b/pixel4/run1",
+      "submission_sha256": "18d90461883f9b51dc5e235ff2fda2e535d31678bb47b232a6aec12662faacdc",
+      "submission_bytes": 134214,
+      "summary_sha256": "e5a0b725f8dc9907826b770536f8e5db8bf74ce9aa22734d99392108bd6af96b",
+      "summary_bytes": 14151,
+      "run_log_sha256": "04ef8607af6361aaf8db0b8fb95b4c530e0e842a8b2afad351be52f6b8f615d6",
+      "run_log_bytes": 113
+    }
+  ],
+  "frozen_contract": {
+    "freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase35_matrix_freeze_v1.json",
+      "sha256": "9be22fd18dd3f818a8c902dafde2aa7b5828ded13df98b138682863e8f14a92a"
+    },
+    "binary": {
+      "path": "build/apps/gnss_fgo_imu_no_base",
+      "sha256": "883701ef34606af4be84a44181f6b3616b2559ee4031982fff98d73dbbbbe7bd"
+    },
+    "matrix_flags_unchanged": true,
+    "solver_parameters_changed": false,
+    "production_default_changed": false,
+    "resume_runner_source_sha256": "12920acb60f6810e9f56ce2b7a50d5d1a06e7805823f77c689f0a1a4ea3cd48a"
+  },
+  "resume_contract": {
+    "operation": "resume",
+    "complete_run_policy": "validate and reuse without invoking native solver",
+    "partial_run_policy": "run in a private temporary staging directory; existing bytes must match before missing files are added",
+    "publish_policy": "atomic os.replace for each missing published file; no overwrite of existing bytes",
+    "checkpoint_policy": "truth_free_matrix.json is atomically checkpointed after each route",
+    "temporary_staging_dirs": true,
+    "rerun_after_truth": false,
+    "idempotent_on_complete_artifacts": true
+  },
+  "truth_policy": {
+    "truth_open_count": 0,
+    "mat_read_or_generated": false,
+    "ground_truth_used_for_inference_or_selection": false,
+    "kaggle_access": false,
+    "future_holdout_opened": false
+  },
+  "authorization": "resume truth-free structural matrix; truth evaluation remains forbidden until every route/lane repeat passes"
+}

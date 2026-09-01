@@ -1,0 +1,268 @@
+{
+  "schema_version": "smartphone-r5-wls-multi-phone-ensemble-evaluation-record.v1",
+  "status": "sealed-completed-validation-one-truth-evaluation-promote-development-only",
+  "sealed_at": "2026-08-30",
+  "scope": "development-only truth-free multi-phone handset-WLS trajectory ensemble",
+  "selection": {
+    "record": {
+      "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_selection.json",
+      "sha256": "374d652f6f772a2bc929cfeb22403e00b3abc0794445cc7880a070ad590e21c6"
+    },
+    "archive": {
+      "path": "data/gsdc2023/cache/dataset_2023.zip",
+      "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408"
+    },
+    "central_directory_inventory": {
+      "path": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+      "sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+      "payload_content_read_at_selection": false,
+      "truth_opened_at_selection": false
+    },
+    "train_routes": [
+      {
+        "route": "2021-01-04-22-40-us-ca-mtv-a",
+        "phones": ["mi8", "pixel5"]
+      },
+      {
+        "route": "2022-01-26-20-02-us-ca-mtv-pe1",
+        "phones": ["mi8", "pixel5"]
+      }
+    ],
+    "new_validation": {
+      "route": "2022-05-13-20-57-us-ca-mtv-pe1",
+      "phones": ["pixel6pro", "sm-g988b"]
+    },
+    "next_holdout": {
+      "route": "2022-10-06-21-51-us-ca-mtv-n",
+      "phones": ["sm-a205u", "sm-a217m", "sm-a325f"],
+      "materialized": false,
+      "truth_opened": false,
+      "used_for_ranking": false
+    },
+    "old_holdout_and_v4_results_used_for_ranking": false,
+    "excluded_route_policy": "all previously used routes plus v3/v4 holdouts were excluded before selection"
+  },
+  "initial_failure_preserved": {
+    "path": "output/smartphone-r5/wls-multi-phone-ensemble-v1/wls_multi_phone_ensemble_failure.json",
+    "sha256": "8394775b9eec345615e99179acfc487134f3c552c0afd9b9ce9c0410c621bad7",
+    "truth_open_count": 0,
+    "next_holdout_materialized": false,
+    "reason": "same-vehicle audit directly compared absolute truth timestamps although the two train logs had a stable 432-433 ms logger offset"
+  },
+  "fixed_contract": {
+    "candidate_methods": [
+      "coordinate_wise_ecef_median",
+      "geometric_median_ecef",
+      "trimmed_mean_ecef"
+    ],
+    "selected_method": "coordinate_wise_ecef_median",
+    "trimmed_mean_rule": "20 percent symmetric component trim when at least five phones; arithmetic mean fallback for the fixed two-phone routes",
+    "geometric_median": "Weiszfeld, maximum 64 iterations, 1e-6 m convergence tolerance",
+    "unix_time_alignment_tolerance_ms": 1,
+    "truth_same_vehicle_audit": {
+      "constant_offset_estimation": "median nearest timestamp offset per phone pair",
+      "residual_match_tolerance_ms": 100,
+      "minimum_pairwise_coverage_ratio": 0.95,
+      "maximum_pairwise_horizontal_p95_m": 50.0,
+      "maximum_pairwise_vertical_p95_m": 25.0,
+      "candidate_or_numeric_parameter_search_after_selection": false
+    },
+    "fail_closed": "non-finite ECEF or alignment result aborts; no partial fused output is published",
+    "truth_free_runtime_decision": true
+  },
+  "train_selection": {
+    "ranking_basis": "mean per-phone official-like four diagnostic scores, then aggregate H P95, H P50, V P95, fixed method order",
+    "report": {
+      "path": "output/smartphone-r5/wls-multi-phone-ensemble-v1-retry/train_report.json",
+      "sha256": "c2a4673a4fa79da84b67ac73a4544a908c217b6a8986350859f08b99096b0879"
+    },
+    "same_vehicle_audits": {
+      "2021-01-04-22-40-us-ca-mtv-a": {
+        "phones": ["mi8", "pixel5"],
+        "estimated_constant_time_offset_ms": 433,
+        "matched_epochs": 1853,
+        "coverage_ratio": 0.9983836206896551,
+        "horizontal_p95_m": 14.775596897518295,
+        "vertical_p95_m": 0.5570963975975274,
+        "passed": true
+      },
+      "2022-01-26-20-02-us-ca-mtv-pe1": {
+        "phones": ["mi8", "pixel5"],
+        "estimated_constant_time_offset_ms": 432,
+        "matched_epochs": 1698,
+        "coverage_ratio": 0.9994114184814596,
+        "horizontal_p95_m": 14.288541356097344,
+        "vertical_p95_m": 0.49217618041156325,
+        "passed": true
+      }
+    },
+    "aggregate_scores": {
+      "single_phone_wls": {
+        "horizontal_p50_m": 2.166406043112909,
+        "horizontal_p95_m": 3.870611009969701,
+        "vertical_p95_m": 6.062038298732464,
+        "availability": 1.0,
+        "truth_coverage": 1.0,
+        "diagnostic_mean_m": 3.019779848031448
+      },
+      "coordinate_wise_ecef_median": {
+        "horizontal_p50_m": 2.166413242027759,
+        "horizontal_p95_m": 3.8706053277395096,
+        "vertical_p95_m": 6.062038796314001,
+        "availability": 1.0,
+        "truth_coverage": 1.0,
+        "diagnostic_mean_m": 3.0197870667986617
+      }
+    }
+  },
+  "truth_free_validation": {
+    "manifest": {
+      "path": "output/smartphone-r5/wls-multi-phone-ensemble-v1-retry/validation_truth_free_manifest.json",
+      "sha256": "8d906737e83b91a3cdadef274d0182384cdfdc56f95f882f65fde7004a353e9e"
+    },
+    "route_manifest": {
+      "path": "output/smartphone-r5/wls-multi-phone-ensemble-v1-retry/validation/2022-05-13-20-57-us-ca-mtv-pe1/route_manifest.json",
+      "sha256": "0bd628e71fba0b0194aca905c42d2169c0f1ca6216c62045c0d1e769ad9c3a8c"
+    },
+    "all_candidate_lane_artifacts_hash_fixed_before_truth": true,
+    "device_members_materialized": 2,
+    "truth_members_materialized_before_manifest": 0,
+    "next_holdout_materialized": false,
+    "next_holdout_truth_opened": false,
+    "truth_used_for_method_decision": false
+  },
+  "truth_evaluation": {
+    "evaluation_pass_count": 1,
+    "truth_member_open_count": 2,
+    "truth_files": {
+      "pixel6pro": {
+        "sha256": "04fedc69d09899ca7d48481f38509bc7f0458ec8c788f285c2382926edbdaa65",
+        "rows": 2162
+      },
+      "sm-g988b": {
+        "sha256": "7b80114525dce5e73729ba29155b0fdd6abe0b807ffabafc18b7f872880a3af5",
+        "rows": 2163
+      }
+    },
+    "truth_used_after_truth_free_artifact_seal": true
+  },
+  "validation_metrics": {
+    "baseline_single_phone_wls_v3_branch_equivalent": {
+      "horizontal_p50_m": 3.307394118947654,
+      "horizontal_p95_m": 5.860343229858678,
+      "vertical_p95_m": 7.290318613865504,
+      "availability": 1.0,
+      "truth_coverage": 0.9915138648922366,
+      "diagnostic_mean_m": 4.586734933192988,
+      "diagnostic_scores_m": {
+        "haversine_sphere__linear_n_minus_1": 4.58961272847619,
+        "haversine_sphere__nearest_rank_ceiling": 4.589763184846806,
+        "wgs84_vincenty__linear_n_minus_1": 4.583868674403166,
+        "wgs84_vincenty__nearest_rank_ceiling": 4.583695145045789
+      }
+    },
+    "selected_coordinate_wise_ecef_median": {
+      "horizontal_p50_m": 3.154594781839649,
+      "horizontal_p95_m": 5.120038425990846,
+      "vertical_p95_m": 5.77731586016918,
+      "availability": 1.0,
+      "truth_coverage": 0.9915138648922366,
+      "diagnostic_mean_m": 4.140480486187539,
+      "diagnostic_scores_m": {
+        "haversine_sphere__linear_n_minus_1": 4.143739005960613,
+        "haversine_sphere__nearest_rank_ceiling": 4.143731210079188,
+        "wgs84_vincenty__linear_n_minus_1": 4.137316603915247,
+        "wgs84_vincenty__nearest_rank_ceiling": 4.13713512479511
+      }
+    },
+    "selected_per_phone": {
+      "pixel6pro": {
+        "horizontal_p50_m": 3.1547221114406803,
+        "horizontal_p95_m": 5.1668842725344435,
+        "vertical_p95_m": 5.767913749680986,
+        "availability": 1.0,
+        "truth_coverage": 0.9917393299678752
+      },
+      "sm-g988b": {
+        "horizontal_p50_m": 3.1544674522386176,
+        "horizontal_p95_m": 5.073192579447249,
+        "vertical_p95_m": 5.7867179706573735,
+        "availability": 1.0,
+        "truth_coverage": 0.9912883998165979
+      }
+    },
+    "deltas_selected_minus_single_phone_wls": {
+      "horizontal_p50_m": -0.15279933710800496,
+      "horizontal_p95_m": -0.740304803867832,
+      "vertical_p95_m": -1.513002753696324,
+      "availability": 0.0,
+      "truth_coverage": 0.0,
+      "diagnostic_scores_m": {
+        "haversine_sphere__linear_n_minus_1": -0.4458737225155769,
+        "haversine_sphere__nearest_rank_ceiling": -0.44603197476761824,
+        "wgs84_vincenty__linear_n_minus_1": -0.4465520704879191,
+        "wgs84_vincenty__nearest_rank_ceiling": -0.4465600202506792
+      }
+    }
+  },
+  "promotion_gate": {
+    "passed": true,
+    "conditions": {
+      "all_phone_availability_at_least": 0.98,
+      "all_phone_truth_coverage_at_least": 0.98,
+      "aggregate_horizontal_p50_max_m": 7.0,
+      "aggregate_horizontal_p95_max_m": 25.0,
+      "aggregate_vertical_p95_max_m": 45.0,
+      "no_regression_against_single_phone_wls_v3_branch_equivalent": true,
+      "at_least_one_strict_improvement": true
+    },
+    "failures": [],
+    "decision": "promote-development-only-recommended-multi-phone-lane",
+    "production_rtk_spp_default_changed": false
+  },
+  "artifacts": {
+    "profile_config": {
+      "path": "configs/benchmarks/smartphone_r5_gsdc2023.json",
+      "development_lane_integrated": true,
+      "production_default_changed": false
+    },
+    "evaluation_report": {
+      "path": "output/smartphone-r5/wls-multi-phone-ensemble-v1-retry/wls_multi_phone_ensemble_report.json",
+      "sha256": "2c3e661b2f89057b86a9e33b3b5207cb6186a24ef1c83a1c1417c763e51ab4a8"
+    },
+    "evaluation_manifest": {
+      "path": "output/smartphone-r5/wls-multi-phone-ensemble-v1-retry/wls_multi_phone_ensemble_manifest.json",
+      "sha256": "7cff3819ed24f1de587d9d67c8e17ca8b2dcbef00e7191a778b68a04c967aa3b"
+    },
+    "selection_use_manifest": {
+      "path": "output/smartphone-r5/wls-multi-phone-ensemble-v1-retry/selection_use_manifest.json",
+      "sha256": "01e1cd53e1fa8f17a3886507d165a857f87fd9160b478a606a43da222303598e"
+    },
+    "train_route_manifests": [
+      {
+        "path": "output/smartphone-r5/wls-multi-phone-ensemble-v1-retry/train/2021-01-04-22-40-us-ca-mtv-a/route_manifest.json",
+        "sha256": "754e1d0ba6f3c8afc2361a91375f7bdec360b3bf9eba7baeb148f4322b79d320"
+      },
+      {
+        "path": "output/smartphone-r5/wls-multi-phone-ensemble-v1-retry/train/2022-01-26-20-02-us-ca-mtv-pe1/route_manifest.json",
+        "sha256": "7c4e4c9af918f59a6e1abf4c768dcd38c778ec40a35d3536ffe14c508e2b1b16"
+      }
+    ],
+    "source_hashes": {
+      "ensemble_evaluator": "a1fdeab55f257f48423a9c1bfc19450024ac90ade6a0398978ba1129fe379d5b",
+      "ensemble_tests": "0744ac5fba37b842819add2a6f517cc967d74c4496b2fadec943be27d6021c21"
+    }
+  },
+  "timing": {
+    "total_wall_s": 47.121578904014314,
+    "process_peak_rss_kb": 156252,
+    "process_rss_unit": "kilobytes from getrusage ru_maxrss"
+  },
+  "decision": {
+    "development_only_recommended_lane": true,
+    "production_default_changed": false,
+    "post_validation_tuning": false,
+    "validation_reexecuted_after_truth": false,
+    "next_holdout_remains_sealed": true
+  }
+}

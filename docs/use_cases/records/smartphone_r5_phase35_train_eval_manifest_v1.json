@@ -1,0 +1,99 @@
+{
+  "schema_version": "smartphone-r5-phase35-train-eval-manifest.v1",
+  "status": "train-evaluator-contract-frozen-before-truth-read",
+  "phase": 35,
+  "purpose": "Freeze the one-process train selection and optional validation-reuse contract for the sealed Phase35 raw-only matrix.",
+  "published_for_audit_after_one_shot": true,
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase35_matrix_freeze_v1.json",
+    "sha256": "9be22fd18dd3f818a8c902dafde2aa7b5828ded13df98b138682863e8f14a92a"
+  },
+  "structural_seal": {
+    "path": "output/smartphone-r5/phase35-matrix-v1/truth_free_seal.json",
+    "sha256": "ba6f20c713408f94ffda9f0f6efa99d32ad93f4b364daf8b0c2c17fa5e351946",
+    "status": "sealed-truth-free-structural-pass",
+    "route_count": 4,
+    "lane_count": 4,
+    "run_count": 32,
+    "truth_open_count": 0,
+    "mat_read_or_generated": false
+  },
+  "evaluator": {
+    "source": "apps/commands/benchmarks/gnss_smartphone_phase35_matrix_eval.py",
+    "source_sha256": "c6bdf5e16206d2f90ea01777c3322827505ecc177453aeacbfd4c1398beb676f",
+    "test": "tests/test_smartphone_phase35_matrix_eval.py",
+    "test_sha256": "cafa2b40489709a00af610764bc736fb84696e9b1d1b7aaddb76aa7b8c8e5625",
+    "cmake": "tests/CMakeLists.txt",
+    "cmake_sha256": "97df0828bf1d471c4038f67c301289e2e77995f00d4fee12ea09d4ac7640966b",
+    "one_process": true,
+    "truth_read_order": "verify structural seal, read each train truth once, select one unchanged lane, then optionally read Phase34 validation truth once",
+    "solver_rerun": false,
+    "post_score_tuning": false
+  },
+  "lane_list": {
+    "control": "control_quality_anchor_base",
+    "candidates": [
+      "A_anchor_signal_iono_hatch",
+      "B_A_plus_stop",
+      "C_A_plus_position_offset"
+    ],
+    "fixed_flags_source": "docs/use_cases/records/smartphone_r5_phase35_matrix_freeze_v1.json",
+    "candidate_or_parameter_mutation": false
+  },
+  "train_cohort": {
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b"
+    ],
+    "truth_source": "existing Phase29 materialized ground_truth.csv; no re-materialization",
+    "truth_read_processes": 1,
+    "truth_read_count_per_route": 1,
+    "matched_key_set_equal_all_lanes_required": true
+  },
+  "route_gate": {
+    "all_four_horizontal_diagnostics_non_regression": true,
+    "horizontal_p50_p95_non_regression": true,
+    "coverage_non_regression": true,
+    "availability_non_regression": true,
+    "continuity_over_70_mps_non_regression": true,
+    "vertical": "informational-unavailable-four-column-prediction"
+  },
+  "macro_gate": {
+    "all_four_horizontal_diagnostics_strict_improvement": true,
+    "horizontal_p50_p95_non_regression": true,
+    "coverage_availability_non_regression": true,
+    "continuity_non_regression": true,
+    "selection": "only lanes passing every train route gate and macro gate; lowest macro diagnostic mean, fixed lane-order tie-break"
+  },
+  "validation_reuse": {
+    "route": "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+    "truth_source": "already-materialized Phase34 validation truth",
+    "truth_read_count": 1,
+    "opened_only_if_train_selection_passes": true,
+    "selected_lane_vs_control_all_four_strict_improvement": true,
+    "future_holdout_truth_open_count": 0
+  },
+  "raw_only_policy": {
+    "inference_inputs": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "forbidden": ["ground_truth.csv for inference", "*.mat", "sample_submission.csv", "precomputed coordinates", "previous trajectory", "device WLS"],
+    "mat_read_or_generated": false,
+    "token_or_kaggle_access": false
+  },
+  "observed_result": {
+    "result": "docs/use_cases/records/smartphone_r5_phase35_matrix_evaluation_result_v1.json",
+    "result_sha256": "982242cd23f2c3f730cefa49e211ae5476ec6cb4c1fbc2ef8dc58bb341650366",
+    "status": "no-go-train-or-validation-gate",
+    "truth_open_count": 3,
+    "selected_lane": null,
+    "validation_truth_open_count": 0,
+    "kaggle_submission": false
+  },
+  "authorization": {
+    "contract_frozen_before_train_truth_read": true,
+    "one_shot_after_truth": true,
+    "no_holdout": true,
+    "no_kaggle_submission": true
+  },
+  "atomic_publish": true
+}

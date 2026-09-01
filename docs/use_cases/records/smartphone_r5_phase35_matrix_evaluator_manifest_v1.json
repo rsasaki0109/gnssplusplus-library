@@ -1,0 +1,65 @@
+{
+  "schema_version": "smartphone-r5-phase35-matrix-evaluator-manifest.v1",
+  "status": "evaluator-frozen-before-structural-runs",
+  "phase": 35,
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase35_matrix_freeze_v1.json",
+    "sha256": "9be22fd18dd3f818a8c902dafde2aa7b5828ded13df98b138682863e8f14a92a"
+  },
+  "runner": {
+    "source": "apps/commands/benchmarks/gnss_smartphone_phase35_matrix.py",
+    "sha256": "6751e35f1bace593f10fce35c682186c2d5be05fda60329394600d8131fe31c0",
+    "test": "tests/test_smartphone_phase35_matrix.py",
+    "test_sha256": "66b2fd3baa49e75bd89ce9bc580d2c39d899a8b96808250014db02de4587be9d",
+    "cmake": "tests/CMakeLists.txt",
+    "cmake_sha256": "6a5b5e962e8152bd7893799cf6ef1c8f5f07ce30e7aebfa7c32b28c5e0397117"
+  },
+  "cohort": {
+    "train_route_count": 3,
+    "validation_route_count": 1,
+    "route_ids": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b",
+      "2023-05-09-21-32-us-ca-mtv-pe1/pixel5"
+    ],
+    "train_truth_reads_before_structural": 0,
+    "validation_truth_reads_before_structural": 0,
+    "future_holdout_truth_open_count": 0
+  },
+  "matrix": {
+    "control": "quality_anchor_base_control",
+    "candidates": ["A_anchor_signal_iono_hatch", "B_A_plus_stop", "C_A_plus_position_offset"],
+    "solver_runs": "each route/lane twice; no truth is read by the runner",
+    "raw_inputs_only": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "forbidden_inputs": ["ground_truth.csv", "*.mat", "sample coordinates", "previous trajectories", "device WLS"]
+  },
+  "structural_gate": {
+    "finite": true,
+    "converged": true,
+    "exact_raw_target_keys": true,
+    "repeat_byte_identical": true,
+    "over_70_mps_count": 0,
+    "unresolved_epochs": 0,
+    "all_routes_and_lanes_required": true,
+    "truth_before_gate": false
+  },
+  "post_structural_evaluation": {
+    "train_truth_one_process": true,
+    "train_truth_read_count_per_route": 1,
+    "routewise_and_macro_four_diagnostic_gate": true,
+    "horizontal_p50_p95_coverage_continuity_non_regression": true,
+    "selected_lane_only_validation_reuse": true,
+    "validation_truth_one_process_read_count": 1,
+    "vertical": "informational-unavailable-four-column-prediction",
+    "post_score_tuning": false,
+    "future_holdout_remains_sealed": true
+  },
+  "truth_policy": {
+    "truth_open_count_before_structural": 0,
+    "mat_read_or_generated": false,
+    "token_or_kaggle_access": false,
+    "ground_truth_used_for_inference_or_matrix_selection": false
+  },
+  "atomic_publish": true
+}

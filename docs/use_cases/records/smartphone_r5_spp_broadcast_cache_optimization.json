@@ -1,0 +1,121 @@
+{
+  "schema_version": "smartphone-r5-performance-record.v1",
+  "profile_id": "gsdc2023-pixel7pro-standalone-v1",
+  "dataset_id": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+  "variant": "spp-broadcast-state-ephemeris-cache",
+  "role": "development-only",
+  "decision": "promoted-development-only",
+  "reason": "The ordinary broadcast SPP path reuses epoch-local satellite state, corrected transmit time, and selected ephemeris across position iterations. The complete position output is byte-identical and the solver elapsed-time distribution improves.",
+  "implementation": {
+    "source": "src/algorithms/spp.cpp",
+    "stage": "SPPProcessor::solvePositionLS/buildMeasurements",
+    "identified_cost": "NavigationData already caches state by satellite/time, but each position iteration still repeated state calls and getEphemeris map scans.",
+    "cache_lifetime": "one solvePositionLS call (one epoch)",
+    "cache_values": [
+      "satellite position",
+      "satellite velocity",
+      "satellite clock bias and drift",
+      "corrected transmit time",
+      "selected ephemeris pointer"
+    ],
+    "safety_gates": {
+      "ordinary_broadcast_only": true,
+      "precise_products_uncached": true,
+      "ssr_corrections_uncached": true,
+      "mrtklib_literal_iflc_uncached": true,
+      "first_iteration_calculation_order_unchanged": true,
+      "matrix_construction_order_unchanged": true,
+      "outlier_and_raim_decisions_unchanged": true,
+      "cross_epoch_state_reuse": false
+    }
+  },
+  "development_full": {
+    "selected_epochs": 1383,
+    "baseline_pre_optimization": {
+      "artifact_dir": "output/smartphone-r5/development-galileo-e1-full",
+      "position_sha256": "22787632b59bbdfaa774adf6d359cc71bf60b4d8a7f3553b23ca93590eb3e30a",
+      "solver_summary_sha256": "64000df6e109837cb3c6e76cd31e5f007afa297032caeceb9aa97f642b24312e",
+      "timing_csv_sha256": "67aee6ba8ab67565a462322920e41f4bae160bd39c2dd627cf4d6c06e338d303",
+      "solver_wall_s": 1.24,
+      "solver_peak_rss_kb": 19760,
+      "elapsed_sum_ms": 1052.644037,
+      "elapsed_mean_ms": 0.7611309016630513,
+      "elapsed_p50_ms": 0.936163,
+      "elapsed_p95_ms": 1.205808,
+      "valid_solutions": 1383
+    },
+    "optimized": {
+      "artifact_dir": "output/smartphone-r5/development-galileo-e1-cache-opt",
+      "position_sha256": "22787632b59bbdfaa774adf6d359cc71bf60b4d8a7f3553b23ca93590eb3e30a",
+      "solver_summary_sha256": "cd13df63e6c529d528882c065023a7d84aab696c1604137f9877c3999a52617e",
+      "timing_csv_sha256": "64efb3a2435d5c6446e3c4390ce2a74a547c752e4a12f737d738560445681cde",
+      "solver_wall_s": 1.06,
+      "solver_peak_rss_kb": 19804,
+      "elapsed_sum_ms": 847.805742,
+      "elapsed_mean_ms": 0.6130193362255966,
+      "elapsed_p50_ms": 0.747631,
+      "elapsed_p95_ms": 0.973881,
+      "valid_solutions": 1383,
+      "position_byte_identical": true,
+      "signoff_metrics_non_regressed": true,
+      "kaggle_diagnostic_scores_m": {
+        "haversine_sphere__linear_n_minus_1": 5.910908316047448,
+        "haversine_sphere__nearest_rank_ceiling": 5.91158863174743,
+        "wgs84_vincenty__linear_n_minus_1": 5.921346759174058,
+        "wgs84_vincenty__nearest_rank_ceiling": 5.921857149904408
+      },
+      "kaggle_primary_score_status": "undetermined-from-public-primary-sources"
+    },
+    "delta": {
+      "solver_wall_s": -0.18,
+      "solver_wall_relative": -0.14516129032258063,
+      "elapsed_sum_ms_relative": -0.1947731395908136,
+      "elapsed_mean_ms_relative": -0.19477313959081355,
+      "elapsed_p50_ms_relative": -0.2013850241996153,
+      "elapsed_p95_ms_relative": -0.1920033383073372,
+      "peak_rss_kb": 44
+    }
+  },
+  "baseline_gps_control": {
+    "artifact_dir": "output/smartphone-r5/development-gps-l1-cache-opt",
+    "position_byte_identical_to_pre_optimization": true,
+    "purpose": "Control lane confirms the refactor does not alter the frozen GPS-only output."
+  },
+  "rtk_design_audit": {
+    "shared_spp_fallback": "RTKProcessor owns an SPPProcessor and invokes it only for SPP fallback/availability paths; ordinary broadcast mode receives the same safe cache gating.",
+    "primary_rtk_path": "RTKProcessor::processRTKEpochInternal and rtk_satellites.cpp collectSatelliteData retain their own rover/base state and geometry calls; no double-difference ordering or ambiguity decision was changed.",
+    "precise_ssr_mrtklib_policy": "Those branches remain uncached, so position/correction-dependent behavior is preserved."
+  },
+  "rtk_benchmark": {
+    "dataset": "PPC-Dataset tokyo run1",
+    "run_dir": "data/PPC-Dataset/tokyo/run1",
+    "epochs": 120,
+    "valid_solutions": 120,
+    "fixed_solutions": 116,
+    "fix_rate_pct": 96.666667,
+    "median_h_m": 0.046002,
+    "p95_h_m": 0.128737,
+    "max_h_m": 0.32185,
+    "p95_abs_up_m": 0.036753,
+    "mean_satellites": 29.983333,
+    "solver_wall_s": 1.373969,
+    "effective_epoch_rate_hz": 87.338233,
+    "realtime_factor": 17.322083,
+    "position_sha256": "31052f9b5e0f5cc742250f1aea6fdcce06d8caeeec6c27379b1381bee441a1a4",
+    "summary_sha256": "e26987dcf50d17dedee518e1fdaf11bb36fa8f1a1bf30a6f08aca937eba70b94",
+    "before_after_comparison": "not available; no pre-optimization RTK artifact was present. This run is a safety/throughput smoke benchmark, not a promotion score."
+  },
+  "artifacts": {
+    "profile_sha256": "678cb100bee2bc565ec130bd5c5075adf7166ca5c70b7805cbc036b1ded320f2",
+    "optimized_position_sha256": "22787632b59bbdfaa774adf6d359cc71bf60b4d8a7f3553b23ca93590eb3e30a",
+    "optimized_solver_summary_sha256": "cd13df63e6c529d528882c065023a7d84aab696c1604137f9877c3999a52617e",
+    "optimized_signoff_summary_sha256": "aeaa57646ee33725e1e779bda9d09b1e15faf6f0afe7eef0f6bfd38b777c94fd",
+    "optimized_submission_sha256": "fa1a9650bbaafa658a0ea05e9626985468003adc70373445c14a138246e5dc5b",
+    "optimized_kaggle_manifest_sha256": "58ae84404613a0b5e12c168521739a0445bf4735ecc7752db30c2be7979e41fe",
+    "optimized_kaggle_report_sha256": "6ac0fe44e8c3e0ef2d1db50eb00a0b39364228015dcb0718420e47550af1bb85"
+  },
+  "holdout": {
+    "status": "not-run",
+    "reason": "Development-only optimization; holdout remains sealed."
+  }
+}

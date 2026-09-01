@@ -1,0 +1,25 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-test-submission-source-seam-bridge-freeze-manifest.v1",
+  "status": "sealed-before-source-seam-bridge-decision",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_test_submission_source_seam_bridge_freeze_v1.json",
+    "sha256": "eef25620633cdd7086dbc78b22a6705f4e5043b81301ef7eea03528f8f794f48"
+  },
+  "contract_hashes": {
+    "continuity_result_record": "ee4f6b080baa2fbaf66a95ab5e6eb2de0b16fff62eac877d0364fd5ac791feae",
+    "continuity_result_manifest": "5af0cb7f55ab2778979b8498df1ff522f9ae91df4c3140df8a28e27052ee6704",
+    "continuity_script": "fdfaaa5f5a448d7e6ac2077c2b86c44f42d6018d84a17a8917c5e88fe48e15f0",
+    "release_binary": "5e1e22979a84b938352a2096e570bb1587d6eba7ebb0757431a8ebd9423b525f",
+    "receiver_speed_bound_evidence": "7f4587851c9e9fbd5e5a1af46af54eac3ee8a96230dec5414f9a7a87c6d73ee9"
+  },
+  "verification": {
+    "v4_row_count": 71936,
+    "v4_isolated_two_sided_spike_points_after": 0,
+    "truth_open_count": 0,
+    "official_sample_coordinates_read": false,
+    "algorithm_or_numeric_parameter_change": false,
+    "fgo_wls_rerun": false,
+    "no_post_holdout_or_test_tuning": true
+  },
+  "decision": "pending_sealed_read_only_audit"
+}

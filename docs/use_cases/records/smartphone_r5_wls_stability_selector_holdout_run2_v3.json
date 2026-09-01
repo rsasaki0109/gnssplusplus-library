@@ -1,0 +1,191 @@
+{
+  "algorithm_and_parameter_contract": {
+    "algorithm_parameter_hash_v1": "c82fba6130c7d16c207213ab1e2ac542e02280db194949a300c68bebd412ca7e",
+    "algorithm_parameter_hash_v2": "c82fba6130c7d16c207213ab1e2ac542e02280db194949a300c68bebd412ca7e",
+    "algorithm_parameter_hash_v3": "c82fba6130c7d16c207213ab1e2ac542e02280db194949a300c68bebd412ca7e",
+    "candidate_source_set_changed": false,
+    "change_scope": "preflight-orchestration-only",
+    "measurement_algorithm_changed": false,
+    "parameters_equal": true,
+    "selector_changed": false
+  },
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408"
+  },
+  "dataset_id": "2023-09-06-22-49-us-ca-routebb1/pixel7pro",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_stability_selector_holdout_freeze_v3.json",
+    "sha256": "62ffc9e45049dba60cd4bbf5c6b6c4f3a064c81e3c8ddfd425fc4a916e661bff"
+  },
+  "freeze_manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_stability_selector_holdout_freeze_v3_manifest.json",
+    "sha256": "4d0de39e3dbc823be932ea843051d69afc7573a553fd808de0c1639b75bd28d9"
+  },
+  "holdout_access": {
+    "archive_central_directory_metadata_opened": true,
+    "broadcast_nav_payload_materialized": true,
+    "broadcast_nav_sha256": "21236469a4048817d53bac9faaab04bd87558d100c56ebf8fec25740edc7f696",
+    "device_gnss_payload_materialized": true,
+    "device_gnss_sha256": "f6c05015842cc0a389ed2c426b15aed980819a80a2baa828ca77bfa53aba245b",
+    "truth_payload_materialized_after_truth_free_hashes": true,
+    "truth_sha256": "abb4076259100afa716cba5f845f285a719b19e17d16c6f2903355bbe58879a7",
+    "truth_open_count": 1,
+    "truth_read_order_verified": true
+  },
+  "metrics": {
+    "diagnostics": [
+      "haversine_sphere__linear_n_minus_1",
+      "haversine_sphere__nearest_rank_ceiling",
+      "wgs84_vincenty__linear_n_minus_1",
+      "wgs84_vincenty__nearest_rank_ceiling"
+    ],
+    "native_raw": {
+      "availability": 0.9987507807620237,
+      "h_p50_m": 2.1271174885929893,
+      "h_p95_m": 4.990592867958456,
+      "v_p95_m": 10.135474997875802,
+      "diagnostics_m": {
+        "haversine_sphere__linear_n_minus_1": 3.560719876211952,
+        "haversine_sphere__nearest_rank_ceiling": 3.563397895992539,
+        "wgs84_vincenty__linear_n_minus_1": 3.5588551782757225,
+        "wgs84_vincenty__nearest_rank_ceiling": 3.5605030112457454
+      }
+    },
+    "native_stable": {
+      "availability": 1.0,
+      "h_p50_m": 2.1285029924051657,
+      "h_p95_m": 5.0309506658303,
+      "v_p95_m": 10.214918837427863,
+      "diagnostics_m": {
+        "haversine_sphere__linear_n_minus_1": 3.585352631419936,
+        "haversine_sphere__nearest_rank_ceiling": 3.585352631419936,
+        "wgs84_vincenty__linear_n_minus_1": 3.5797268291177327,
+        "wgs84_vincenty__nearest_rank_ceiling": 3.5797268291177327
+      }
+    },
+    "selector": {
+      "availability": 1.0,
+      "h_p50_m": 2.639258909542504,
+      "h_p95_m": 5.086380434596802,
+      "v_p95_m": 5.36065672589884,
+      "diagnostics_m": {
+        "haversine_sphere__linear_n_minus_1": 3.8686374826914713,
+        "haversine_sphere__nearest_rank_ceiling": 3.8686374826914713,
+        "wgs84_vincenty__linear_n_minus_1": 3.8628196720696533,
+        "wgs84_vincenty__nearest_rank_ceiling": 3.8628196720696533
+      }
+    },
+    "wls_raw": {
+      "availability": 1.0,
+      "h_p50_m": 2.639258909542504,
+      "h_p95_m": 5.086380434596802,
+      "v_p95_m": 5.36065672589884,
+      "diagnostics_m": {
+        "haversine_sphere__linear_n_minus_1": 3.8686374826914713,
+        "haversine_sphere__nearest_rank_ceiling": 3.8686374826914713,
+        "wgs84_vincenty__linear_n_minus_1": 3.8628196720696533,
+        "wgs84_vincenty__nearest_rank_ceiling": 3.8628196720696533
+      }
+    }
+  },
+  "promotion": {
+    "all_selected_signoff_thresholds_pass": true,
+    "development_only_recommended_kaggle_submission_lane": true,
+    "new_validation_selector_horizontal_non_regression": true,
+    "production_rtk_spp_default_changed": false,
+    "known_seven_selector_horizontal_improvement_over_both_single_lanes": true,
+    "vertical_within_existing_signoff": true,
+    "decision": "sealed-holdout-result-only; development-only lane remains recommended"
+  },
+  "run": 2,
+  "schema_version": "smartphone-r5-wls-stability-selector-holdout-evaluation.v3",
+  "sealed_artifacts": {
+    "materialization_manifest": {
+      "path": "output/smartphone-r5/wls-stability-selector-holdout-run2-v3/materialized/materialization_manifest.json",
+      "sha256_after_truth": "50b2d3cc183a37348611aa7800fd379228de0aa5e1185dd639ff5ed6c8e6bee7"
+    },
+    "report": {
+      "path": "output/smartphone-r5/wls-stability-selector-holdout-run2-v3/wls_stability_selector_holdout_run2.json",
+      "sha256": "6f123f8f8b07ecd79fb17724f2bdb2a08fc7db353397452f0021e79cf99b8401"
+    },
+    "run_manifest": {
+      "path": "output/smartphone-r5/wls-stability-selector-holdout-run2-v3/wls_stability_selector_holdout_run2_manifest.json",
+      "sha256": "93e0a62050731878c7adda07bb73c8116aa7b0dbdc77aba1c81390a1f0db602b"
+    },
+    "truth_free_manifest": {
+      "path": "output/smartphone-r5/wls-stability-selector-holdout-run2-v3/truth_free_manifest.json",
+      "sha256": "14a6a5b0fd09650217419fe8ae04e32d920f8b1053b707cfc76fc6aa3feddbf3"
+    },
+    "selector_manifest": {
+      "path": "output/smartphone-r5/wls-stability-selector-holdout-run2-v3/route/2023-09-06-22-49-us-ca-routebb1__pixel7pro/selector/selector_manifest.json",
+      "sha256": "28af01bfbd9818d00e8ec631166c89b5a4972b5fdcc5b2ffd4ffc2c7c0510d1d"
+    },
+    "selected_position": {
+      "path": "output/smartphone-r5/wls-stability-selector-holdout-run2-v3/route/2023-09-06-22-49-us-ca-routebb1__pixel7pro/selector/selected.pos",
+      "sha256": "d9156d2c974ce78e01d5c7a4fdc945253107b3e3dbea7601f9ad37770ff6895b"
+    },
+    "selected_submission": {
+      "path": "output/smartphone-r5/wls-stability-selector-holdout-run2-v3/route/2023-09-06-22-49-us-ca-routebb1__pixel7pro/selector/submission.csv",
+      "sha256": "dc80876507f47c190c6ec0a9a1a48334e87a5f2e43c9d0b5999295f6cbb0a05f"
+    }
+  },
+  "selected_lane": "wls_raw",
+  "selector": {
+    "reason": "one_or_more_native_segments_unstable",
+    "native_segment_stats": {
+      "all_segments_stable": false,
+      "segment_count": 1,
+      "stable_segment_count": 0,
+      "unstable_segment_count": 1,
+      "max_consecutive_rejects": 48,
+      "max_prediction_duration_s": 48.0,
+      "reject_fraction": 0.13991255465334165
+    },
+    "device_model_used": false,
+    "truth_used": false,
+    "atomic_selected_pos_and_submission": true
+  },
+  "status": "sealed-completed-one-shot",
+  "timing": {
+    "total_wall_s": 15.361808753979858,
+    "process_peak_rss_kb": 125476,
+    "adapter_wall_s": 3.219840842008125,
+    "spp_wall_s": 2.0590940820111427,
+    "wls_wall_s": 1.2921083440014627,
+    "native_stability_wall_s": 1.2268229440087453,
+    "selector_wall_s": 2.8998237859923393
+  },
+  "comparison_to_existing_holdout_run1": {
+    "baseline_record_sha256": "b0822ef04cfb35b5eac9860f695c5f94b4f39c3bb67797f74e3016f2568abe2c",
+    "baseline": {
+      "availability": 0.9968769519050593,
+      "h_p50_m": 4.127134105903826,
+      "h_p95_m": 14.910236695744151,
+      "v_p95_m": 29.890210870321848
+    },
+    "selected_minus_baseline": {
+      "availability": 0.0031230480949406836,
+      "h_p50_m": -1.4878751963613221,
+      "h_p95_m": -9.823856261147348,
+      "v_p95_m": -24.52955414442301
+    },
+    "horizontal_non_regression": true
+  },
+  "post_run_policy": {
+    "post_holdout_code_change": false,
+    "post_holdout_parameter_change": false,
+    "post_holdout_tuning": false,
+    "rerun_permitted": false,
+    "production_rtk_spp_default_changed": false
+  },
+  "v1_v2_provenance": {
+    "v1_failure_sha256": "a4e804191315146eae3ffd8ec343dd0a1ca5d1007519f23a1f997e0e32663c3b",
+    "v1_payload_open_count": 0,
+    "v1_truth_open_count": 0,
+    "v2_failure_sha256": "2748ddfbde15bd4cf36c5bc7e4e0304b45a51bad4d84d2b040b43c235bfb85ca",
+    "v2_payload_open_count": 1,
+    "v2_truth_open_count": 0,
+    "v2_materialization_manifest_sha256": "36deea5ffad04d48d495f31b484f7cf616edbeaa82a7a4d8b5ef7ea5beeea9ed"
+  }
+}

@@ -1,0 +1,109 @@
+{
+  "schema_version": "smartphone-r5-phase54-phase53-integrity-recovery-freeze.v1",
+  "phase": 54,
+  "status": "frozen-before-phase54-scorer",
+  "execution_label": "Luna Max",
+  "purpose": "Scorer-only recovery of the Phase53 raw-input-integrity presentation contract from immutable Phase53 artifacts; no raw input, truth, navigation, solver, trajectory, or metric payload is reopened.",
+  "phase53_pins": {
+    "result": {
+      "path": "output/smartphone-r5/phase53-pixel5-carrier-frequency-antenna-phase-bias-v1/phase53_pixel5_carrier_frequency_antenna_phase_bias.json",
+      "bytes": 2427740,
+      "sha256": "d158cbc6f9a8591552bbb160bfc1c760fce831411fed5c4f0101476fac871d4e"
+    },
+    "routes": {
+      "path": "output/smartphone-r5/phase53-pixel5-carrier-frequency-antenna-phase-bias-v1/phase53_pixel5_carrier_frequency_antenna_phase_bias.routes.json",
+      "bytes": 2414155,
+      "sha256": "906ecd38d914fdb59da58294253eaeb1117e79a15d06d37762b7a06426ecabbc"
+    },
+    "events": {
+      "path": "output/smartphone-r5/phase53-pixel5-carrier-frequency-antenna-phase-bias-v1/phase53_pixel5_carrier_frequency_antenna_phase_bias.events.json",
+      "bytes": 147,
+      "sha256": "fe23e0dacf156bc5d512aec5a63ebc5f6c5c9c12b662d8192ac9187de32881b5"
+    },
+    "output_manifest": {
+      "path": "output/smartphone-r5/phase53-pixel5-carrier-frequency-antenna-phase-bias-v1/phase53_pixel5_carrier_frequency_antenna_phase_bias.manifest.json",
+      "bytes": 2135,
+      "sha256": "014a226274ce98a9825611dc6b8589c25f9d96fec40441d9c5ff9cffbaa312fd"
+    },
+    "result_record": {
+      "path": "docs/use_cases/records/smartphone_r5_phase53_pixel5_carrier_frequency_antenna_phase_bias_result_v1.json",
+      "bytes": 15866,
+      "sha256": "2cc5201fd7ba34e92a2e64df4ad5c710f35f13bfaece973259e7614f39e09612"
+    },
+    "contract_doc": {
+      "path": "docs/use_cases/smartphone_native_fgo_phase53_pixel5_carrier_frequency_antenna_phase_bias.md",
+      "bytes": 8095,
+      "sha256": "e67d69e643532537a76a09f133a67b71411a3b7e7a5909382eb17b6b8edbc9a6"
+    },
+    "evaluator_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase53_pixel5_carrier_frequency_antenna_phase_bias_evaluator_manifest_v1.json",
+      "bytes": 7721,
+      "sha256": "b810c13ad3696cea29511e47074b6621e71283c0b30ee058313894ed88198b2c"
+    }
+  },
+  "integrity_contract": {
+    "corrected_raw_input_integrity_definition": "exact frozen SHA/byte checks AND all core relation fields finite AND nonmonotonic epoch count equals zero AND duplicate epoch-key count equals zero",
+    "unsupported_signal_rows": {
+      "gate_role": "informational_only_excluded_from_raw_input_integrity",
+      "reason": "unsupported rows are excluded from the supported physical relation and were not a frozen raw-input-integrity gate",
+      "observed": {
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5": 266,
+        "2021-08-24-20-32-us-ca-mtv-h/pixel5": 435,
+        "2022-04-01-18-22-us-ca-lax-t/pixel5": 247,
+        "2023-03-08-21-34-us-ca-mtv-u/pixel5": 137
+      }
+    },
+    "expected_corrected_result": true,
+    "physical_no_go_is_immutable": true,
+    "physical_no_go_reasons": [
+      "no finite Android antenna phase-center/bias field",
+      "one GALILEO E1 signal/frequency group per route",
+      "frequency leakage approximately 1e-11 m and frequency-aware/control residuals identical",
+      "routewise Spearman equals zero and LOO material effect is false"
+    ]
+  },
+  "phase53_read_accounting_pin": {
+    "raw_device_gnss_reads": 4,
+    "raw_device_gnss_rereads_authorized": 0,
+    "truth_reads": 0,
+    "navigation_reads": 0,
+    "solver_reruns": 0,
+    "trajectory_reruns": 0,
+    "correction_implementations": 0
+  },
+  "phase54_input_policy": {
+    "single_process": true,
+    "phase53_output_manifest_reads": 1,
+    "phase53_result_reads": 1,
+    "phase53_routes_reads": 1,
+    "phase53_events_reads": 1,
+    "phase53_docs_or_record_reads": 0,
+    "raw_device_gnss_reads": 0,
+    "truth_reads": 0,
+    "navigation_reads": 0,
+    "solver_invocations": 0,
+    "trajectory_invocations": 0,
+    "validation_holdout_reads": 0,
+    "archive_reopens": 0,
+    "rematerializations": 0,
+    "kaggle_token_access": 0,
+    "mat_reads_or_generated": 0,
+    "device_wls_or_precomputed_coordinates": 0,
+    "SvPosition_or_SvElevation": 0,
+    "output_mutation": false
+  },
+  "pre_read_assertions": {
+    "phase54_raw_read": false,
+    "phase54_truth_read": false,
+    "phase53_raw_reopen": false,
+    "phase53_output_mutation": false,
+    "phase54_solver_invocation": false,
+    "phase54_truth_or_metric_scoring": false
+  },
+  "failure_policy": {
+    "hash_or_schema_mismatch": "fail closed without recomputation or any raw/truth read",
+    "presentation_mismatch": "record evaluator-integrity no-go and preserve immutable Phase53 physical no-go",
+    "corrected_integrity_pass": "correct only the presentation gate; do not revise physical gates, metrics, or authorization",
+    "next_factor": "raw Android per-satellite accumulated-delta-range uncertainty (AccumulatedDeltaRangeUncertaintyMeters)"
+  }
+}

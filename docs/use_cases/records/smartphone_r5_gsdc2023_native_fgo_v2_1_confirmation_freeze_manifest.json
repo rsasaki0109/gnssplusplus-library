@@ -1,0 +1,58 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-v2-1-independent-confirmation-freeze-manifest.v1",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_1_confirmation_freeze.json",
+  "freeze_record_sha256": "a6c1dff74f8ec0eb28985cb595976231bac7869ccddebc3d10fc725fd31f52c3",
+  "status": "pre-materialization-freeze-verified",
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_metadata_sha256": "5f619be94a00c33c3067f13b1cd3351d96f2804f07fa04eda8fb027739fb0992"
+  },
+  "split_inventory": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_split_inventory_freeze.json",
+    "sha256": "7e7c8d29bc385cefef947e56a653c8a19e76ac4df36eb3999bf154899187a2a9",
+    "selected_confirmation_set": [
+      "2021-03-10-23-13-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "selection_metadata_only": true,
+    "truth_open_count_before_freeze": 0,
+    "payload_materialized_before_freeze": false,
+    "validation_or_holdout_touched": false
+  },
+  "source_sha256": {
+    "apps/native/gnss_fgo_imu_v21.cpp": "c158cdd2fc6cfba37b7bb300b52c2c5b9cf760482ac46206895f0462da835883",
+    "src/algorithms/fgo_gtsam_internal.hpp": "aad937849b4ba1c9b9bec0cdaaaf270a66cb71b7d789e682d5ff571bb7f66621",
+    "src/algorithms/fgo_gtsam_backend.cpp": "08c7b82e9395fc3645fc75785849576f982ec6e6e91432e3a58d85bb396ec191",
+    "apps/CMakeLists.txt": "7db14842b85c363c88e93ad1fbd6f719a502b21bc2fd8ed28af3c96b6c1ae81f",
+    "configs/benchmarks/smartphone_r5_gsdc2023.json": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776",
+    "apps/native/gnss_fgo.cpp": "2d9e53485c427d1e0d43b07dd611aaf3644e2cd51d5e175c2977038ca05e3e32"
+  },
+  "release_binary_sha256": {
+    "build/apps/gnss_fgo_imu_v21": "8b978458735996ea571baa9975be70c37287f84fec029ced187b9f30fbb6d483",
+    "build/apps/gnss_fgo": "5e1e22979a84b938352a2096e570bb1587d6eba7ebb0757431a8ebd9423b525f"
+  },
+  "contract": {
+    "recipe_source": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_1_preserve_v1_freeze.json",
+    "recipe_source_sha256": "6c33400e97345cc7f966c3ff5ff7a946b4fb6f89bb4c35cf56bc95654f663eae",
+    "algorithm_parameter_identity": "exact; no candidate or parameter modification is permitted",
+    "truth_free_inputs": ["device_gnss.csv", "device_imu.csv", "brdc.nav", "reference.obs"],
+    "ground_truth_materialized_before_score": false,
+    "atomic_outputs": true,
+    "no_post_truth_tuning": true
+  },
+  "gate": {
+    "per_route_four_diagnostic_variants": "strictly lower than exact-v1 baseline",
+    "per_route_diagnostic_mean": "strictly lower than exact-v1 baseline",
+    "aggregate_four_diagnostic_variants": "strictly lower than exact-v1 aggregate",
+    "aggregate_diagnostic_mean": "strictly lower than exact-v1 aggregate",
+    "availability_and_truth_coverage": "non-regression",
+    "vertical_p95": "candidate <= exact-v1 + 100 m; missing altitude evidence fails promotion",
+    "finite_jump_factor_convergence": "must pass",
+    "promotion": "only all gates pass permits one unchanged fresh-validation evaluation; otherwise final No-Go and validation/holdout stay sealed"
+  },
+  "record_integrity": {
+    "payload_materialization_allowed_after_freeze_hash": true,
+    "manifest_hash_pinned_after_write": true
+  }
+}

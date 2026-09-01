@@ -1,0 +1,14 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-gnss-pdc-upstream-residual-snr-score-result-manifest.v1",
+  "result_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_upstream_residual_snr_score_result_v1.json",
+  "result_record_sha256": "ada3dab030c72b1b1846043a74453ad704d94aada8477aafedea8a9a5028ad48",
+  "authorization": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_upstream_residual_snr_score_authorization_v1.json",
+  "authorization_sha256": "0dfaca2598d647bde8b56051655c26d5282e8d7cdcc9ff0c6aca817260a69028",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_upstream_residual_snr_freeze_v1.json",
+  "freeze_record_sha256": "0b08e620f36cb56e33c8742a4506e82bba75f8d8a09486ba3cf9bb010e014a65",
+  "truth_free_candidate_hash": "601363954c9f0d1abc8c5cd118fb251779c6dc61c3b5a7f007863cb054324079",
+  "mat_inputs_used": false,
+  "validation_opened": false,
+  "holdout_opened": false,
+  "external_mutation": false
+}

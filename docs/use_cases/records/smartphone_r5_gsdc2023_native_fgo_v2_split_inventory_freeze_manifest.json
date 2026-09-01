@@ -1,0 +1,43 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-v2-split-inventory-freeze-manifest.v1",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_split_inventory_freeze.json",
+  "freeze_record_sha256": "7e7c8d29bc385cefef947e56a653c8a19e76ac4df36eb3999bf154899187a2a9",
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "size_bytes": 2761355999,
+    "central_metadata_canonical_sha256": "5f619be94a00c33c3067f13b1cd3351d96f2804f07fa04eda8fb027739fb0992"
+  },
+  "selection": {
+    "train_count": 3,
+    "train": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "2022-02-24-18-29-us-ca-lax-o/pixel5"
+    ],
+    "fresh_validation": "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+    "future_holdout": "2023-05-16-19-54-us-ca-mtv-xe1/pixel5",
+    "future_holdout_materialized": false,
+    "future_holdout_truth_open_count": 0,
+    "truth_use_inventory_count": 25,
+    "route_disjoint_from_truth_use_inventory": true,
+    "payload_materialized_before_freeze": false,
+    "truth_open_before_freeze": 0
+  },
+  "verification": {
+    "json_schema_validated": true,
+    "central_directory_only_selection": true,
+    "truth_csv_contents_read": false,
+    "device_gnss_contents_read": false,
+    "device_imu_contents_read": false,
+    "future_holdout_payload_or_truth_read": false,
+    "production_default_changed": false,
+    "external_mutation": false,
+    "token_access": false
+  },
+  "manifest_integrity": {
+    "hash_algorithm": "SHA-256",
+    "manifest_hash_is_computed_after_freeze_record_hash": true,
+    "freeze_is_immutable_for_v2_split": true
+  }
+}

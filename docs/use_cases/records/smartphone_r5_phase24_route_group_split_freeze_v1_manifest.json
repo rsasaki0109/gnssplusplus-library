@@ -1,0 +1,31 @@
+{
+  "schema_version": "smartphone-r5-phase24-route-group-split-freeze-manifest.v1",
+  "status": "sealed-before-phase24-payload-and-truth-access",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_phase24_route_group_split_freeze_v1.json",
+  "freeze_record_sha256": "a20fb65524648fab76c5494d2f28b1846e48fae821296bbdfc212cf6519e4a62",
+  "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+  "central_inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+  "split": {
+    "train_calibration_count": 3,
+    "fresh_validation": "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+    "future_holdout": "2023-05-16-19-54-us-ca-mtv-xe1/pixel5",
+    "route_disjoint_across_roles": true,
+    "holdout_materialized": false,
+    "holdout_truth_open_count": 0
+  },
+  "truth_policy": {
+    "truth_open_count_before_freeze": 0,
+    "truth_materialized_by_phase24_freeze": false,
+    "archive_member_content_read_by_phase24_freeze": false,
+    "mat_member_content_read": false,
+    "mat_generated": false,
+    "leaderboard_or_prior_holdout_used_for_selection": false
+  },
+  "verification": {
+    "json_parse": "pass",
+    "git_diff_check_before_commit": "pass",
+    "record_is_hash_pinned": true,
+    "hash_computed_after_record_write": true
+  },
+  "next_authorized_action": "Materialize only train device_gnss.csv, device_imu.csv, and route brdc.nav using the allowlist in the freeze record. Do not materialize/open validation or holdout truth until the unchanged train gate authorizes it."
+}

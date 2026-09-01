@@ -1,6 +1,14 @@
 #include <gtest/gtest.h>
+#include <libgnss++/algorithms/doppler_contract.hpp>
+#include <libgnss++/algorithms/android_sv_time_uncertainty.hpp>
+#include <libgnss++/algorithms/cn0_doppler_calibration.hpp>
+#include <libgnss++/algorithms/doppler_velocity_wls.hpp>
 #include <libgnss++/algorithms/fgo.hpp>
+#include <libgnss++/algorithms/fgo_quality_anchor.hpp>
 #include <libgnss++/algorithms/fgo_ddpr_gnc.hpp>
+#include <libgnss++/algorithms/pdc_state_bridge.hpp>
+#include <libgnss++/algorithms/residual_ionosphere_contract.hpp>
+#include <libgnss++/algorithms/tdcp_contract.hpp>
 #include <libgnss++/core/constants.hpp>
 
 #include <array>
@@ -10,6 +18,347 @@
 #include <vector>
 
 using namespace libgnss;
+
+TEST(FGOQualityAnchorTest, RankingIsDeterministicAndSatelliteFirst) {
+    using fgo_quality_anchor::Candidate;
+    const Candidate fewer_satellites{2, 9, 1.01, 0.1};
+    const Candidate more_satellites{7, 10, 9.0, 9.0};
+    EXPECT_TRUE(fgo_quality_anchor::better(more_satellites, fewer_satellites));
+    EXPECT_FALSE(fgo_quality_anchor::better(fewer_satellites, more_satellites));
+
+    const Candidate lower_gdop{4, 10, 1.1, 2.0};
+    const Candidate higher_gdop{3, 10, 1.2, 0.1};
+    EXPECT_TRUE(fgo_quality_anchor::better(lower_gdop, higher_gdop));
+
+    const Candidate lower_residual{5, 10, 1.1, 0.5};
+    const Candidate higher_residual{6, 10, 1.1, 0.6};
+    EXPECT_TRUE(fgo_quality_anchor::better(lower_residual, higher_residual));
+    const Candidate earlier{1, 10, 1.1, 0.5};
+    const Candidate later{8, 10, 1.1, 0.5};
+    EXPECT_TRUE(fgo_quality_anchor::better(earlier, later));
+}
+
+TEST(FGOQualityAnchorTest, NoEligibleEpochFailsClosedToHistoricalPass) {
+    EXPECT_FALSE(fgo_quality_anchor::eligible(
+        false, true, 6.4e6, 20, 1.0, 1.0));
+    EXPECT_FALSE(fgo_quality_anchor::eligible(
+        true, true, 6.4e6, 3, 1.0, 1.0));
+    EXPECT_FALSE(fgo_quality_anchor::eligible(
+        true, false, 6.4e6, 20, 1.0, 1.0));
+    const std::vector<fgo_quality_anchor::Candidate> no_candidates;
+    EXPECT_EQ(fgo_quality_anchor::choose(no_candidates), nullptr);
+}
+
+TEST(FGOQualityAnchorTest, ReplayOrdersAreAnchorOutwardAndGraphChronological) {
+    const auto forward = fgo_quality_anchor::outwardOrder(6, 2, true);
+    const auto backward = fgo_quality_anchor::outwardOrder(6, 2, false);
+    EXPECT_EQ(forward, (std::vector<std::size_t>{2, 3, 4, 5}));
+    EXPECT_EQ(backward, (std::vector<std::size_t>{2, 1, 0}));
+
+    // The replay order is allowed to decrease only while collecting seeds;
+    // the builder merges by input index before constructing graph factors.
+    std::vector<std::size_t> merged(6, 0);
+    for (std::size_t index = 0; index < backward.size(); ++index) {
+        merged[backward[index]] = backward[index];
+    }
+    for (std::size_t index = 0; index < forward.size(); ++index) {
+        merged[forward[index]] = forward[index];
+    }
+    EXPECT_EQ(merged, (std::vector<std::size_t>{0, 1, 2, 3, 4, 5}));
+    EXPECT_EQ(fgo_quality_anchor::graphOrder(6),
+              (std::vector<std::size_t>{0, 1, 2, 3, 4, 5}));
+
+    // The reverse SPP pass is seed collection only.  Graph construction is
+    // required to use the chronological input order, so no negative-dt graph
+    // factor can be introduced by the reverse traversal.
+    EXPECT_TRUE(std::is_sorted(merged.begin(), merged.end()));
+}
+
+TEST(FGOQualityAnchorTest, ConfigIsOptInOnly) {
+    FGOProcessor::FGOConfig config;
+    EXPECT_FALSE(config.use_quality_anchor_initialization);
+    EXPECT_FALSE(config.use_native_android_sv_time_uncertainty_sigma_floor);
+}
+
+TEST(AndroidSvTimeUncertaintyTest, ConvertsNanosecondsWithoutScaleOrClip) {
+    using namespace android_sv_time_uncertainty;
+    EXPECT_NEAR(metersFromNanoseconds(10.0),
+                10.0e-9 * constants::SPEED_OF_LIGHT, 1e-12);
+    EXPECT_TRUE(std::isnan(metersFromNanoseconds(0.0)));
+    EXPECT_TRUE(std::isnan(metersFromNanoseconds(-1.0)));
+    EXPECT_TRUE(std::isnan(metersFromNanoseconds(
+        std::numeric_limits<double>::quiet_NaN())));
+    EXPECT_TRUE(std::isnan(metersFromNanoseconds(
+        std::numeric_limits<double>::infinity())));
+}
+
+TEST(AndroidSvTimeUncertaintyTest, FloorsOnlyWhenEnabledAndNeverClips) {
+    using namespace android_sv_time_uncertainty;
+    EXPECT_DOUBLE_EQ(sigmaWithFloor(3.0, 1.0, true), 3.0);
+    EXPECT_DOUBLE_EQ(sigmaWithFloor(3.0, 10.0, true), 10.0);
+    EXPECT_DOUBLE_EQ(sigmaWithFloor(3.0, 10.0, false), 3.0);
+    EXPECT_DOUBLE_EQ(sigmaWithFloor(3.0, 0.0, true), 3.0);
+    EXPECT_DOUBLE_EQ(sigmaWithFloor(3.0, std::numeric_limits<double>::quiet_NaN(), true),
+                     3.0);
+    // There is no upper clip: an intentionally large source uncertainty is
+    // retained exactly as the source-derived floor.
+    EXPECT_DOUBLE_EQ(sigmaWithFloor(3.0, 1.0e9, true), 1.0e9);
+}
+
+TEST(Cn0DopplerCalibrationTest, UsesFrozenAlphaAndTwentyDbShape) {
+    using namespace cn0_doppler_calibration;
+    EXPECT_DOUBLE_EQ(kReferenceCn0DbHz, 40.0);
+    EXPECT_DOUBLE_EQ(kAlphaMpsAtReference, 0.7586783350728457);
+    EXPECT_DOUBLE_EQ(modelSigmaMps(40.0), kAlphaMpsAtReference);
+    EXPECT_DOUBLE_EQ(modelSigmaMps(20.0),
+                     kAlphaMpsAtReference * 10.0);
+    EXPECT_DOUBLE_EQ(modelSigmaMps(60.0),
+                     kAlphaMpsAtReference * 0.1);
+}
+
+TEST(Cn0DopplerCalibrationTest, FloorsOnlyWhenEnabledAndFallsBackExactly) {
+    using namespace cn0_doppler_calibration;
+    EXPECT_DOUBLE_EQ(sigmaWithFloor(0.2, 40.0, true),
+                     kAlphaMpsAtReference);
+    EXPECT_DOUBLE_EQ(sigmaWithFloor(2.0, 40.0, true), 2.0);
+    EXPECT_DOUBLE_EQ(sigmaWithFloor(0.2, 40.0, false), 0.2);
+    EXPECT_DOUBLE_EQ(sigmaWithFloor(0.2, 0.0, true), 0.2);
+    EXPECT_DOUBLE_EQ(sigmaWithFloor(0.2,
+                                    std::numeric_limits<double>::quiet_NaN(),
+                                    true),
+                     0.2);
+    // No upper clip: a very low finite C/N0 retains the source-shaped floor.
+    EXPECT_DOUBLE_EQ(sigmaWithFloor(0.2, 1.0, true),
+                     modelSigmaMps(1.0));
+}
+
+TEST(Cn0DopplerCalibrationTest, ConfigIsExplicitlyOptIn) {
+    FGOProcessor::FGOConfig config;
+    EXPECT_FALSE(config.use_native_cn0_doppler_calibration);
+    FGOProcessor::UndifferencedDopplerFactor factor;
+    EXPECT_DOUBLE_EQ(factor.cn0_doppler_model_sigma_mps, 0.0);
+    EXPECT_FALSE(factor.cn0_doppler_model_sigma_available);
+    EXPECT_FALSE(factor.cn0_doppler_sigma_floor_applied);
+}
+
+TEST(ResidualIonosphereContractTest, UsesFiniteThinShellAndFrequencyScale) {
+    using namespace residual_ionosphere;
+    constexpr double half_pi = 1.57079632679489661923;
+    EXPECT_NEAR(mappingFactor(half_pi), 1.0, 1e-12);
+    EXPECT_GT(mappingFactor(0.25), 1.0);
+    const double l1 = signalCoefficient(half_pi, constants::GPS_L1_FREQ);
+    const double l5 = signalCoefficient(half_pi, constants::GPS_L5_FREQ);
+    EXPECT_NEAR(l1, 1.0, 1e-12);
+    EXPECT_NEAR(l5, (constants::GPS_L1_FREQ / constants::GPS_L5_FREQ) *
+                         (constants::GPS_L1_FREQ / constants::GPS_L5_FREQ),
+                1e-12);
+    EXPECT_TRUE(finiteCoefficient(l5));
+    EXPECT_FALSE(finiteCoefficient(signalCoefficient(0.0, constants::GPS_L1_FREQ)));
+    EXPECT_FALSE(finiteCoefficient(signalCoefficient(0.5, 0.0)));
+    EXPECT_NEAR(randomWalkSigma(4.0, 0.5), 1.0, 1e-12);
+    EXPECT_FALSE(std::isfinite(randomWalkSigma(0.0, 0.5)));
+}
+
+TEST(ResidualIonosphereContractTest, DefaultConfigDoesNotEnableState) {
+    FGOProcessor::FGOConfig config;
+    EXPECT_FALSE(config.use_residual_ionosphere_states);
+    EXPECT_DOUBLE_EQ(config.residual_ionosphere_prior_sigma_m, 10.0);
+    FGOProcessor::PseudorangeFactor factor;
+    EXPECT_DOUBLE_EQ(factor.residual_ionosphere_coefficient, 0.0);
+}
+
+TEST(PdcStateBridgeTest, SolvesSyntheticNativePositionAndClock) {
+    const Vector3d seed(6'370'000.0, 1'000.0, 2'000.0);
+    const Vector3d target = seed + Vector3d(1.25, -2.0, 0.75);
+    constexpr double clock_bias_m = 12.5;
+    const Vector3d velocity(4.0, -2.0, 1.0);
+    constexpr double clock_rate_mps = 0.3;
+    const std::vector<Vector3d> satellites = {
+        {20'000'000.0, 0.0, 0.0},
+        {0.0, 20'000'000.0, 0.0},
+        {0.0, 0.0, 20'000'000.0},
+        {-20'000'000.0, -20'000'000.0, 20'000'000.0},
+        {20'000'000.0, -20'000'000.0, -20'000'000.0},
+    };
+    const std::vector<Vector3d> lines = {
+        {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0},
+        {-0.5773502691896258, -0.5773502691896258, 0.5773502691896258},
+        {0.5773502691896258, -0.5773502691896258, -0.5773502691896258}};
+    std::vector<pdc_state_bridge::PseudorangeRow> pseudorange;
+    std::vector<pdc_state_bridge::DopplerRow> doppler;
+    for (std::size_t i = 0; i < lines.size(); ++i) {
+        const Vector3d satellite = target + 20'000'000.0 * lines[i];
+        pseudorange.push_back({0, SatelliteId{}, GNSSSystem::GPS, satellite,
+                               (satellite - target).norm() + clock_bias_m, 0.5});
+        doppler.push_back({0, lines[i], lines[i].dot(velocity) + clock_rate_mps,
+                           0.05});
+    }
+    const std::vector<pdc_state_bridge::EpochInput> epochs = {
+        {GNSSTime(2200, 100.0), seed, 0.0, false}};
+    pdc_state_bridge::Options options;
+    options.max_iterations = 100;
+    const auto result = pdc_state_bridge::solve(epochs, pseudorange, doppler,
+                                                options);
+    ASSERT_TRUE(result.valid) << result.reason;
+    ASSERT_EQ(result.epochs.size(), 1U);
+    const auto& estimate = result.epochs.front();
+    ASSERT_TRUE(estimate.valid) << estimate.reason;
+    EXPECT_NEAR((estimate.state.position_ecef - target).norm(), 0.0, 1e-3);
+    EXPECT_NEAR(estimate.state.clock_bias_m[0], clock_bias_m, 1e-3);
+    EXPECT_NEAR((estimate.state.velocity_ecef_mps - velocity).norm(), 0.0,
+                1e-3);
+    EXPECT_NEAR(estimate.state.clock_rate_mps, clock_rate_mps, 1e-3);
+    EXPECT_LT(result.final_cost, result.initial_cost);
+}
+
+TEST(PdcStateBridgeTest, UsesFiniteRawWlsVelocityAndClockRateSeed) {
+    const Vector3d seed(6'370'000.0, 1'000.0, 2'000.0);
+    const Vector3d target = seed + Vector3d(1.25, -2.0, 0.75);
+    const Vector3d velocity(4.0, -2.0, 1.0);
+    constexpr double clock_rate_mps = 0.3;
+    const std::vector<Vector3d> lines = {
+        {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0},
+        {-0.5773502691896258, -0.5773502691896258, 0.5773502691896258},
+        {0.5773502691896258, -0.5773502691896258, -0.5773502691896258}};
+    std::vector<pdc_state_bridge::PseudorangeRow> pseudorange;
+    std::vector<pdc_state_bridge::DopplerRow> doppler;
+    for (std::size_t i = 0; i < lines.size(); ++i) {
+        const Vector3d satellite = target + 20'000'000.0 * lines[i];
+        pseudorange.push_back({0, SatelliteId{}, GNSSSystem::GPS, satellite,
+                               (satellite - target).norm() + 12.5, 0.5});
+        doppler.push_back({0, lines[i], lines[i].dot(velocity) + clock_rate_mps,
+                           0.05});
+    }
+    const std::vector<pdc_state_bridge::EpochInput> unseeded_epochs = {
+        {GNSSTime(2200, 100.0), seed, 0.0, false}};
+    auto seeded_epochs = unseeded_epochs;
+    seeded_epochs[0].seed_velocity_ecef_mps = velocity;
+    seeded_epochs[0].seed_clock_rate_mps = clock_rate_mps;
+    seeded_epochs[0].has_seed_velocity = true;
+    seeded_epochs[0].has_seed_clock_rate = true;
+
+    pdc_state_bridge::Options options;
+    options.max_iterations = 100;
+    const auto unseeded = pdc_state_bridge::solve(
+        unseeded_epochs, pseudorange, doppler, options);
+    const auto seeded = pdc_state_bridge::solve(
+        seeded_epochs, pseudorange, doppler, options);
+    ASSERT_TRUE(unseeded.valid) << unseeded.reason;
+    ASSERT_TRUE(seeded.valid) << seeded.reason;
+    EXPECT_LT(seeded.initial_cost, unseeded.initial_cost);
+    EXPECT_NEAR((seeded.epochs.front().state.velocity_ecef_mps - velocity).norm(),
+                0.0, 1e-3);
+    EXPECT_NEAR(seeded.epochs.front().state.clock_rate_mps, clock_rate_mps,
+                1e-3);
+
+    seeded_epochs[0].seed_velocity_ecef_mps =
+        Vector3d::Constant(std::numeric_limits<double>::quiet_NaN());
+    const auto invalid = pdc_state_bridge::solve(
+        seeded_epochs, pseudorange, doppler, options);
+    EXPECT_FALSE(invalid.valid);
+    EXPECT_EQ(invalid.reason, "invalid-velocity-seed");
+}
+
+TEST(PdcStateBridgeTest, IntegratesWlsPositionSeedsAndResetsAtClockJump) {
+    const Vector3d anchor(6'370'000.0, 1'000.0, 2'000.0);
+    const Vector3d velocity0(4.0, -2.0, 1.0);
+    const Vector3d velocity2(6.0, -1.0, 2.0);
+    const std::vector<pdc_state_bridge::EpochInput> epochs = {
+        {GNSSTime(2200, 100.0), anchor, 0.0, false},
+        {GNSSTime(2200, 101.0), anchor + Vector3d(100.0, 0.0, 0.0), 0.0,
+         false},
+        {GNSSTime(2200, 102.0), anchor + Vector3d(200.0, 0.0, 0.0), 0.0,
+         false}};
+    const std::vector<pdc_state_bridge::PositionSeedVelocity> velocities = {
+        {true, velocity0}, {false, Vector3d::Zero()}, {true, velocity2}};
+    const auto integrated = pdc_state_bridge::integratePositionSeeds(
+        epochs, velocities, {false, false, false});
+    ASSERT_TRUE(integrated.valid);
+    EXPECT_EQ(integrated.anchor_index, 0U);
+    EXPECT_EQ(integrated.integrated_epochs, 2U);
+    EXPECT_EQ(integrated.held_velocity_epochs, 1U);
+    EXPECT_EQ(integrated.per_epoch_spp_fallback_epochs, 0U);
+    EXPECT_EQ(integrated.reset_intervals, 0U);
+    EXPECT_NEAR((integrated.positions[1] - (anchor + velocity0)).norm(), 0.0,
+                1e-9);
+    EXPECT_NEAR((integrated.positions[2] -
+                 (anchor + velocity0 + 0.5 * (velocity0 + velocity2)))
+                    .norm(),
+                0.0, 1e-9);
+
+    const auto reset = pdc_state_bridge::integratePositionSeeds(
+        epochs, {{true, velocity0}, {true, velocity0}, {true, velocity2}},
+        {false, true, false});
+    ASSERT_TRUE(reset.valid);
+    EXPECT_EQ(reset.integrated_epochs, 1U);
+    EXPECT_EQ(reset.per_epoch_spp_fallback_epochs, 1U);
+    EXPECT_EQ(reset.reset_intervals, 1U);
+    EXPECT_NEAR((reset.positions[1] - epochs[1].seed_position_ecef).norm(),
+                0.0, 1e-9);
+}
+
+TEST(PdcStateBridgeTest, RejectsInvalidDopplerGeometryBeforeSolving) {
+    const Vector3d seed(6'370'000.0, 0.0, 0.0);
+    std::vector<pdc_state_bridge::PseudorangeRow> pseudorange;
+    const std::vector<Vector3d> lines = {
+        {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0},
+        {-0.5773502691896258, -0.5773502691896258, 0.5773502691896258}};
+    for (const auto& line : lines) {
+        const Vector3d satellite = seed + 20'000'000.0 * line;
+        pseudorange.push_back({0, SatelliteId{}, GNSSSystem::GPS, satellite,
+                               (satellite - seed).norm(), 1.0});
+    }
+    const std::vector<pdc_state_bridge::DopplerRow> invalid_doppler = {
+        {0, Vector3d::Zero(), 0.0, 0.2}};
+    const std::vector<pdc_state_bridge::EpochInput> epochs = {
+        {GNSSTime(2200, 100.0), seed, 0.0, false}};
+    const auto result = pdc_state_bridge::solve(epochs, pseudorange,
+                                                invalid_doppler);
+    EXPECT_FALSE(result.valid);
+    EXPECT_EQ(result.reason, "invalid-doppler-row");
+}
+
+TEST(PdcStateBridgeTest, SolvesTemporalStatesAndHonorsClockJumpBoundary) {
+    const Vector3d seed0(6'370'000.0, 1'000.0, 2'000.0);
+    const Vector3d velocity(4.0, -2.0, 1.0);
+    constexpr double clock0_m = 12.5;
+    constexpr double clock_rate_mps = 0.3;
+    const std::vector<Vector3d> lines = {
+        {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0},
+        {-0.5773502691896258, -0.5773502691896258, 0.5773502691896258},
+        {0.5773502691896258, -0.5773502691896258, -0.5773502691896258}};
+    const std::vector<pdc_state_bridge::EpochInput> epochs = {
+        {GNSSTime(2200, 100.0), seed0, 0.0, false},
+        {GNSSTime(2200, 101.0), seed0 + velocity, 0.0, true}};
+    std::vector<pdc_state_bridge::PseudorangeRow> pseudorange;
+    std::vector<pdc_state_bridge::DopplerRow> doppler;
+    for (std::size_t epoch = 0; epoch < epochs.size(); ++epoch) {
+        const Vector3d target = seed0 + static_cast<double>(epoch) * velocity;
+        const double clock = clock0_m + static_cast<double>(epoch) * clock_rate_mps;
+        for (const auto& line : lines) {
+            const Vector3d satellite = target + 20'000'000.0 * line;
+            pseudorange.push_back({epoch, SatelliteId{}, GNSSSystem::GPS,
+                                   satellite, (satellite - target).norm() + clock,
+                                   0.5});
+            doppler.push_back({epoch, line, line.dot(velocity) + clock_rate_mps,
+                               0.05});
+        }
+    }
+    pdc_state_bridge::Options options;
+    options.max_iterations = 100;
+    const auto result = pdc_state_bridge::solve(epochs, pseudorange, doppler,
+                                                options);
+    ASSERT_TRUE(result.valid) << result.reason;
+    EXPECT_EQ(result.motion_intervals, 1U);
+    EXPECT_EQ(result.valid_epochs, 2U);
+    ASSERT_EQ(result.epochs.size(), 2U);
+    EXPECT_NEAR((result.epochs[1].state.position_ecef -
+                 result.epochs[0].state.position_ecef - velocity).norm(),
+                0.0, 1e-3);
+    EXPECT_NEAR((result.epochs[1].state.velocity_ecef_mps - velocity).norm(),
+                0.0, 1e-3);
+    EXPECT_NEAR(result.epochs[1].state.clock_rate_mps, clock_rate_mps, 1e-3);
+}
 
 TEST(FgoDdprGncTest, GraduatesToRobustWeightsAndSuppressesGrossOutlier) {
     const std::vector<fgo_ddpr_gnc::Residual> residuals = {
@@ -49,6 +398,218 @@ TEST(FgoDdprGncTest, DefaultScheduleReachesFinalKernelForUrbanScaleResidual) {
 }
 
 namespace {
+
+TEST(TdcpContractTest, AcceptsFiniteAdjacentPairAtConfiguredGapBoundary) {
+    const auto decision = tdcp_contract::evaluateAdjacentPair(
+        2.0, false, false, 1.25, 1.20, 2.0, true, true, 10.0);
+    EXPECT_TRUE(decision.accepted());
+    EXPECT_EQ(decision.reason, tdcp_contract::PairRejectReason::Accepted);
+}
+
+TEST(TdcpContractTest, RejectsGapLossLockNonfiniteAndCodePhaseJump) {
+    const auto gap = tdcp_contract::evaluateAdjacentPair(
+        2.000001, false, false, 1.0, 1.0, 2.0, true, true, 10.0);
+    EXPECT_EQ(gap.reason, tdcp_contract::PairRejectReason::Gap);
+
+    const auto loss = tdcp_contract::evaluateAdjacentPair(
+        1.0, true, false, 1.0, 1.0, 2.0, true, true, 10.0);
+    EXPECT_EQ(loss.reason, tdcp_contract::PairRejectReason::LossOfLock);
+
+    const auto nonfinite = tdcp_contract::evaluateAdjacentPair(
+        1.0, false, false, std::numeric_limits<double>::quiet_NaN(), 1.0,
+        2.0, true, true, 10.0);
+    EXPECT_EQ(nonfinite.reason,
+              tdcp_contract::PairRejectReason::NonFiniteMeasurement);
+
+    const auto jump = tdcp_contract::evaluateAdjacentPair(
+        1.0, false, false, 11.000001, 1.0, 2.0, true, true, 10.0);
+    EXPECT_EQ(jump.reason, tdcp_contract::PairRejectReason::CodePhaseJump);
+
+    const auto clock = tdcp_contract::evaluateAdjacentPair(
+        1.0, false, false, 1.0, 1.0, 2.0, true, true, 10.0, false, true);
+    EXPECT_EQ(clock.reason,
+              tdcp_contract::PairRejectReason::ClockDiscontinuity);
+}
+
+TEST(DopplerContractTest, AndroidRinexRoundTripAndApproachSigns) {
+    const double frequency_hz = constants::GPS_L1_FREQ;
+    const double wavelength_m = constants::SPEED_OF_LIGHT / frequency_hz;
+
+    const double receding_rate_mps = 25.0;
+    const double receding_doppler =
+        doppler_contract::androidRateToRinexDoppler(
+            receding_rate_mps, frequency_hz);
+    EXPECT_NEAR(receding_doppler, -receding_rate_mps / wavelength_m, 1e-12);
+    EXPECT_NEAR(doppler_contract::rinexDopplerToRangeRate(
+                    receding_doppler, frequency_hz),
+                receding_rate_mps, 1e-12);
+
+    const double approaching_rate_mps = -12.5;
+    const double approaching_doppler =
+        doppler_contract::androidRateToRinexDoppler(
+            approaching_rate_mps, frequency_hz);
+    EXPECT_GT(approaching_doppler, 0.0);
+    EXPECT_NEAR(doppler_contract::rinexDopplerToRangeRate(
+                    approaching_doppler, frequency_hz),
+                approaching_rate_mps, 1e-12);
+
+    // A sign inversion must not be silently accepted as the same physical
+    // observation.
+    EXPECT_NEAR(doppler_contract::rinexDopplerToRangeRate(
+                    -receding_doppler, frequency_hz),
+                -receding_rate_mps, 1e-12);
+}
+
+TEST(DopplerContractTest, StationaryReceiverClockDriftIsExplicit) {
+    const Vector3d receiver = Vector3d::Zero();
+    const Vector3d satellite(20'000'000.0, 0.0, 0.0);
+    const Vector3d satellite_velocity = Vector3d::Zero();
+    Vector3d los = Vector3d::Zero();
+    double known_range_rate = 0.0;
+    ASSERT_TRUE(doppler_contract::knownSatelliteRangeRate(
+        satellite, satellite_velocity, receiver, false, los,
+        known_range_rate));
+    EXPECT_NEAR(los.x(), 1.0, 1e-12);
+    EXPECT_NEAR(known_range_rate, 0.0, 1e-12);
+
+    constexpr double receiver_clock_drift_mps = 3.0;
+    const double measured_range_rate = receiver_clock_drift_mps;
+    const double residual = doppler_contract::receiverOnlyResidual(
+        measured_range_rate, known_range_rate, 0.0);
+    EXPECT_NEAR(residual, receiver_clock_drift_mps, 1e-12);
+    EXPECT_NEAR(doppler_contract::receiverPrediction(
+                    los, Vector3d::Zero(), receiver_clock_drift_mps),
+                residual, 1e-12);
+}
+
+TEST(DopplerContractTest, ReceiverVelocityAndClockJacobianMatchesFiniteDifference) {
+    const Vector3d los = Vector3d(0.6, 0.8, 0.0);
+    const Vector3d velocity(3.0, -2.0, 0.5);
+    constexpr double clock_drift_mps = 0.7;
+    const double base = doppler_contract::receiverPrediction(
+        los, velocity, clock_drift_mps);
+    constexpr double epsilon = 1e-6;
+    for (int axis = 0; axis < 3; ++axis) {
+        Vector3d perturbed = velocity;
+        perturbed(axis) += epsilon;
+        const double derivative =
+            (doppler_contract::receiverPrediction(
+                 los, perturbed, clock_drift_mps) - base) /
+            epsilon;
+        EXPECT_NEAR(derivative, -los(axis), 1e-9);
+    }
+    const double clock_derivative =
+        (doppler_contract::receiverPrediction(
+             los, velocity, clock_drift_mps + epsilon) - base) /
+        epsilon;
+    EXPECT_NEAR(clock_derivative, 1.0, 1e-9);
+}
+
+TEST(DopplerContractTest, EarthRotationRotatesPositionAndVelocityTogether) {
+    const Vector3d receiver(4.2e6, 1.1e6, 4.7e6);
+    const Vector3d satellite(1.56e7, 7.54e6, 2.014e7);
+    const Vector3d velocity(1200.0, -2300.0, 900.0);
+    Vector3d corrected_position = Vector3d::Zero();
+    Vector3d corrected_velocity = Vector3d::Zero();
+    ASSERT_TRUE(doppler_contract::earthRotationCorrectedSatelliteState(
+        satellite, velocity, receiver, corrected_position,
+        corrected_velocity));
+    EXPECT_TRUE(corrected_position.allFinite());
+    EXPECT_TRUE(corrected_velocity.allFinite());
+    EXPECT_NEAR(corrected_position.norm(), satellite.norm(), 1e-6);
+    EXPECT_NEAR(corrected_velocity.norm(), velocity.norm(), 1e-9);
+    EXPECT_GT((corrected_position - satellite).norm(), 0.0);
+}
+
+TEST(DopplerVelocityWlsTest, ExactRowsRecoverVelocityAndClockRate) {
+    const Vector3d velocity(12.0, -4.0, 2.5);
+    constexpr double clock_rate = 1.7;
+    const double root_three = std::sqrt(3.0);
+    const std::vector<Vector3d> losses = {
+        Vector3d(1.0, 0.0, 0.0),
+        Vector3d(0.0, 1.0, 0.0),
+        Vector3d(0.0, 0.0, 1.0),
+        Vector3d(1.0 / root_three, 1.0 / root_three, 1.0 / root_three),
+        Vector3d(-1.0 / root_three, 1.0 / root_three, 1.0 / root_three),
+    };
+    std::vector<doppler_velocity_wls::ObservationRow> rows;
+    for (const auto& los : losses) {
+        rows.push_back({los,
+                        doppler_velocity_wls::predict(los, velocity, clock_rate),
+                        0.2});
+    }
+
+    const auto result = doppler_velocity_wls::solve(rows);
+    ASSERT_TRUE(result.valid) << result.reason;
+    EXPECT_EQ(result.rank, 4);
+    EXPECT_NEAR((result.velocity_ecef_mps - velocity).norm(), 0.0, 1e-9);
+    EXPECT_NEAR(result.clock_rate_mps, clock_rate, 1e-9);
+    EXPECT_TRUE(result.covariance.allFinite());
+    EXPECT_LT(result.normalized_rms, 1e-9);
+}
+
+TEST(DopplerVelocityWlsTest, HuberDownweightsOneNoisyObservation) {
+    const Vector3d velocity(8.0, -3.0, 1.5);
+    constexpr double clock_rate = -0.8;
+    const double root_three = std::sqrt(3.0);
+    const std::vector<Vector3d> losses = {
+        Vector3d(1.0, 0.0, 0.0),
+        Vector3d(0.0, 1.0, 0.0),
+        Vector3d(0.0, 0.0, 1.0),
+        Vector3d(1.0 / root_three, 1.0 / root_three, 1.0 / root_three),
+        Vector3d(-1.0 / root_three, 1.0 / root_three, 1.0 / root_three),
+        Vector3d(1.0 / root_three, -1.0 / root_three, 1.0 / root_three),
+        Vector3d(1.0 / root_three, 1.0 / root_three, -1.0 / root_three),
+        Vector3d(-1.0 / root_three, 1.0 / root_three, -1.0 / root_three),
+        Vector3d(1.0 / root_three, -1.0 / root_three, -1.0 / root_three),
+        Vector3d(-1.0 / root_three, -1.0 / root_three, 1.0 / root_three),
+        Vector3d(-1.0 / root_three, -1.0 / root_three, -1.0 / root_three),
+        Vector3d(1.0 / std::sqrt(2.0), 1.0 / std::sqrt(2.0), 0.0),
+    };
+    std::vector<doppler_velocity_wls::ObservationRow> rows;
+    for (std::size_t i = 0; i < losses.size(); ++i) {
+        double residual =
+            doppler_velocity_wls::predict(losses[i], velocity, clock_rate);
+        if (i == losses.size() - 1) {
+            residual += 4.0;  // 20 sigma: robust but physically bounded.
+        }
+        rows.push_back({losses[i], residual, 0.2});
+    }
+
+    const auto result = doppler_velocity_wls::solve(rows);
+    ASSERT_TRUE(result.valid) << result.reason;
+    EXPECT_LT(result.inlier_rows, static_cast<int>(rows.size()));
+    EXPECT_LT((result.velocity_ecef_mps - velocity).norm(), 0.5);
+    EXPECT_NEAR(result.clock_rate_mps, clock_rate, 0.5);
+    EXPECT_GT(result.max_abs_normalized_residual, 4.0);
+}
+
+TEST(DopplerVelocityWlsTest, RankDeficientRowsFailClosed) {
+    std::vector<doppler_velocity_wls::ObservationRow> rows;
+    for (int i = 0; i < 6; ++i) {
+        rows.push_back({Vector3d(1.0, 0.0, 0.0), 2.0, 0.2});
+    }
+    const auto result = doppler_velocity_wls::solve(rows);
+    EXPECT_FALSE(result.valid);
+    EXPECT_TRUE(result.reason == "rank-deficient" ||
+                result.reason == "rank-or-condition-gate");
+}
+
+TEST(DopplerVelocityWlsTest, SignAndDesignRowAreTheSameContract) {
+    const Vector3d factor_los(0.6, -0.8, 0.0);
+    const Vector3d velocity(5.0, 2.0, 0.0);
+    constexpr double clock_rate = 0.25;
+    const double predicted = doppler_velocity_wls::predict(
+        factor_los, velocity, clock_rate);
+    const auto row = doppler_velocity_wls::designRow(factor_los);
+    Eigen::Vector4d state;
+    state << velocity, clock_rate;
+    EXPECT_NEAR((row * state)(0), predicted, 1e-12);
+    EXPECT_NEAR(predicted,
+                doppler_contract::receiverPrediction(
+                    -factor_los, velocity, clock_rate),
+                1e-12);
+}
 
 std::vector<Vector3d> makeSatelliteGeometry() {
     return {
@@ -612,6 +1173,50 @@ TEST(FGOTest, EmptyProblemProducesNoSolutions) {
     EXPECT_EQ(result.diagnostics.pseudorange_factors, 0u);
 }
 
+TEST(FGOTest, SparseEpochRecoveryIsOptInAndRetainsBelowFloorEpochs) {
+    const NavigationData nav = makeSyntheticGpsNavigation(4);
+    const Vector3d receiver_position(1113194.0, -4841695.0, 3985350.0);
+    std::vector<ObservationData> epochs;
+    for (std::size_t epoch_index = 0; epoch_index < 2; ++epoch_index) {
+        ObservationData epoch(GNSSTime(2300, 100100.0 + epoch_index));
+        epoch.receiver_position = receiver_position;
+        const std::size_t satellite_count = epoch_index == 0 ? 4 : 3;
+        for (std::size_t prn = 1; prn <= satellite_count; ++prn) {
+            Observation observation;
+            ASSERT_TRUE(makeSyntheticGpsL1Observation(
+                nav, SatelliteId(GNSSSystem::GPS, static_cast<uint8_t>(prn)),
+                epoch.time, receiver_position, 0.0, observation));
+            epoch.addObservation(observation);
+        }
+        epochs.push_back(std::move(epoch));
+    }
+
+    FGOProcessor::FGOConfig default_config;
+    default_config.use_multi_constellation = false;
+    default_config.use_motion_factors = false;
+    default_config.use_tdcp_factors = false;
+    default_config.use_carrier_phase_factors = false;
+    default_config.use_ionosphere_model = false;
+    default_config.use_troposphere_model = false;
+    default_config.min_elevation_deg = -90.0;
+    default_config.min_snr_dbhz = 0.0;
+    default_config.min_satellites_per_epoch = 4;
+
+    const auto baseline = FGOProcessor(default_config).buildPseudorangeProblem(
+        epochs, nav);
+    EXPECT_EQ(baseline.epochs.size(), 1u);
+    EXPECT_EQ(baseline.diagnostics.sparse_epochs_retained, 0u);
+
+    auto recovery_config = default_config;
+    recovery_config.retain_sparse_epochs_for_imu = true;
+    const auto recovery = FGOProcessor(recovery_config).buildPseudorangeProblem(
+        epochs, nav);
+    EXPECT_EQ(recovery.epochs.size(), 2u);
+    EXPECT_EQ(recovery.diagnostics.sparse_epochs_retained, 1u);
+    EXPECT_EQ(recovery.diagnostics.sparse_empty_epochs_retained, 0u);
+    ASSERT_EQ(recovery.pseudorange_factors.size(), 7u);
+}
+
 TEST(FGOTest, BatchPseudorangeFactorsRecoverSyntheticTrajectory) {
     FGOProcessor::FGOConfig config;
     config.max_iterations = 10;
@@ -720,6 +1325,106 @@ TEST(FGOTest, SingleDifferenceDopplerAndTdcpFactorsConstrainMotion) {
               1e-5);
     EXPECT_LT(result.diagnostics.single_difference_tdcp_residual_rms_m,
               1e-5);
+}
+
+TEST(FGOTest, UndifferencedDopplerFactorsConstrainNoBaseVelocityStates) {
+    FGOProcessor::FGOProblem problem = makeSyntheticProblem();
+    const auto satellites = makeSatelliteGeometry();
+    const std::array<Vector3d, 2> true_positions = {
+        Vector3d(1113194.0, -4841695.0, 3985350.0),
+        Vector3d(1113196.5, -4841694.0, 3985349.4),
+    };
+    const double dt = problem.epochs[1].time - problem.epochs[0].time;
+    const Vector3d true_velocity = (true_positions[1] - true_positions[0]) / dt;
+
+    for (std::size_t sat = 0; sat < satellites.size(); ++sat) {
+        const Vector3d delta =
+            satellites[sat] - problem.epochs[1].position_ecef;
+        const Vector3d los = delta / delta.norm();
+        FGOProcessor::UndifferencedDopplerFactor factor;
+        factor.epoch_index = 1;
+        factor.satellite =
+            SatelliteId(GNSSSystem::GPS, static_cast<uint8_t>(sat + 1));
+        factor.signal = SignalType::GPS_L1CA;
+        factor.los = los;
+        factor.residual_mps = los.dot(true_velocity);
+        factor.sigma_mps = 0.2;
+        factor.elevation_rad = 0.7;
+        problem.undifferenced_doppler_factors.push_back(factor);
+    }
+
+    FGOProcessor::FGOConfig config;
+    config.max_iterations = 10;
+    config.convergence_threshold_m = 1e-8;
+    config.use_motion_factors = false;
+    config.use_velocity_states = true;
+    config.use_undifferenced_doppler_factors = true;
+    config.use_robust_loss = false;
+
+    FGOProcessor processor(config);
+    const auto result = processor.optimizeProblem(problem);
+
+    ASSERT_EQ(result.solution.size(), 2u);
+    EXPECT_TRUE(result.diagnostics.converged);
+    EXPECT_EQ(result.diagnostics.undifferenced_doppler_factors, 6u);
+    EXPECT_GE(result.diagnostics.graph_factors, 18u);
+    EXPECT_LT(result.diagnostics.undifferenced_doppler_residual_rms_mps,
+              1e-5);
+}
+
+TEST(FGOTest, CorrectedUndifferencedDopplerUsesClockBiasDifference) {
+    FGOProcessor::FGOProblem problem = makeSyntheticProblem();
+    const auto satellites = makeSatelliteGeometry();
+    const std::array<Vector3d, 2> true_positions = {
+        Vector3d(1113194.0, -4841695.0, 3985350.0),
+        Vector3d(1113196.5, -4841694.0, 3985349.4),
+    };
+    const double dt = problem.epochs[1].time - problem.epochs[0].time;
+    const Vector3d true_velocity = (true_positions[1] - true_positions[0]) / dt;
+    constexpr double true_receiver_clock_drift_mps = 2.5;
+
+    for (std::size_t sat = 0; sat < satellites.size(); ++sat) {
+        const Vector3d delta = satellites[sat] - true_positions[1];
+        const Vector3d los_receiver_to_satellite = delta.normalized();
+        FGOProcessor::UndifferencedDopplerFactor factor;
+        factor.epoch_index = 1;
+        factor.previous_epoch_index = 0;
+        factor.satellite =
+            SatelliteId(GNSSSystem::GPS, static_cast<uint8_t>(sat + 1));
+        factor.signal = SignalType::GPS_L1CA;
+        factor.los = -los_receiver_to_satellite;
+        factor.residual_mps =
+            factor.los.dot(true_velocity) + true_receiver_clock_drift_mps;
+        factor.sigma_mps = 0.2;
+        factor.elevation_rad = 0.7;
+        factor.dt_s = dt;
+        factor.includes_receiver_clock_drift = true;
+        factor.uses_rotated_satellite_state = true;
+        problem.undifferenced_doppler_factors.push_back(factor);
+    }
+
+    FGOProcessor::FGOConfig config;
+    config.max_iterations = 12;
+    config.convergence_threshold_m = 1e-8;
+    config.use_motion_factors = false;
+    config.use_velocity_states = true;
+    config.use_undifferenced_doppler_factors = true;
+    config.use_corrected_undifferenced_doppler_factors = true;
+    config.use_robust_loss = false;
+
+    FGOProcessor processor(config);
+    const auto result = processor.optimizeProblem(problem);
+
+    ASSERT_EQ(result.solution.size(), 2u);
+    EXPECT_TRUE(result.diagnostics.converged);
+    EXPECT_EQ(result.diagnostics.undifferenced_doppler_factors, 6u);
+    // The synthetic problem also contains the deliberately offset
+    // pseudorange seeds, so the coupled position/clock solve need not land
+    // at machine-zero in one batch.  The contract row must nevertheless
+    // converge to a small residual rather than the unmodelled clock-drift
+    // scale (2.5 m/s).
+    EXPECT_LT(result.diagnostics.undifferenced_doppler_residual_rms_mps,
+              0.05);
 }
 
 TEST(FGOTest, BuiltSingleDifferenceTdcpFactorsUseCurrentEpochLos) {

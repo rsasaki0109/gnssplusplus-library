@@ -1,0 +1,157 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-pdc-factor-audit-freeze.v1",
+  "status": "frozen-before-truth-free-factor-audit",
+  "created_for": "PDC factor-by-factor structural audit",
+  "policy": {
+    "local_only": true,
+    "external_mutation": false,
+    "token_access": false,
+    "truth_opened": 0,
+    "validation_opened": 0,
+    "holdout_opened": 0,
+    "test_data_used": false,
+    "leaderboard_used_for_tuning": false,
+    "production_default_changed": false,
+    "no_post_score_tuning": true
+  },
+  "sealed_route": {
+    "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "role": "development-train-already-materialized",
+    "route_directory": "output/smartphone-r5/native-fgo-v2-processed/routes/2021-03-16-18-59-us-ca-mtv-a__pixel5",
+    "route_manifest_sha256": "06b0a327a17a3bf2674e36ba1f7dccbd1b763600905e67360f8d2948057e3d3c",
+    "materialization_manifest_sha256": "9ede18927ded98cfd0cfcbe7aaddf721f3c41e694b6250ffa86eae57a53c72cc",
+    "members": {
+      "adapter/rover.obs": "50fc974321b19e99f7080e63faa859a4ee0dd951d7f5d0f943f8a1318216fe38",
+      "inputs/brdc.nav": "6adfaf7fe4452a4faeb94a7b607c15e05f578c46a028a030b94aa6f79de194cd",
+      "inputs/device_gnss.csv": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863",
+      "inputs/device_imu.csv": "afc540e7c4ce2ca66b442a1afbcd604e9f6b3d2cc4d3733183739901b5b97bd6"
+    },
+    "ground_truth_materialized_in_route": false
+  },
+  "upstream_freeze": {
+    "record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_wls_freeze_v1.json",
+    "sha256": "1569035091e5283f241ca8e921af74c81520bc7960d943fcc3335fd96ab65da5"
+  },
+  "source_hashes": {
+    "apps/native/gnss_fgo.cpp": "3f5382e760368c9232e68220f00dfa1dbdaf15863737f0990a694e29a9c8243c",
+    "include/libgnss++/algorithms/fgo.hpp": "672da09c391df0638149d77e1c7ed2d318bb08e4c64d686f08536b0c1745ddcc",
+    "include/libgnss++/algorithms/fgo_config.hpp": "f4d54044721951ce187809aac82bdd4d4c9c8661d52d8414b4e4d84a5981af09",
+    "include/libgnss++/algorithms/doppler_contract.hpp": "66d97c9ca2cc474247464d8af782cc3ca1837195967e601576ee25b6f8e1f56d",
+    "include/libgnss++/algorithms/doppler_velocity_wls.hpp": "ef888b3e6c2f15d0dd035c0905bafdee463e346c549f81cf892ec30c1c4dcde0",
+    "src/algorithms/fgo.cpp": "df098a258f4bcdbc9802f8b89617425b0521851a76a888ea0c9edd1cd3e9b1e2",
+    "src/algorithms/fgo_problems.cpp": "d24c88c331439b20f3a54580f584254d823d81332657c1a90996b620f32f6033",
+    "build/apps/gnss_fgo": "a10d13da4614f7cdc8e24556f5a32f870aee6c7aa94c5d3e890429996d583b0c"
+  },
+  "recipe": {
+    "backend": "eigen",
+    "preset": "default",
+    "max_iterations": 8,
+    "relative_cost_threshold": 0.0,
+    "absolute_cost_threshold": 0.0,
+    "pseudorange_sigma_m": 3.0,
+    "pseudorange_elevation_power": 1.0,
+    "motion_sigma_m": 50.0,
+    "clock_motion_sigma_m": 300.0,
+    "velocity_prior_sigma_mps": 100.0,
+    "velocity_motion_sigma_m": 0.01,
+    "tdcp_sigma_m": 0.03,
+    "carrier_phase_sigma_m": 0.01,
+    "undifferenced_doppler_sigma_mps": 0.2,
+    "pseudorange_huber_threshold_sigma": 4.0,
+    "tdcp_huber_threshold_sigma": 4.0,
+    "carrier_phase_huber_threshold_sigma": 4.0,
+    "max_tdcp_gap_s": 2.0,
+    "seed_match_tolerance_s": 0.01,
+    "seed_interpolation_max_gap_s": 0.0,
+    "tdcp_slip_threshold_m": 10.0,
+    "min_elevation_deg": 10.0,
+    "min_snr_dbhz": 0.0,
+    "min_satellites_per_epoch": 4,
+    "ionosphere_model": true,
+    "troposphere_model": true,
+    "robust_loss": true,
+    "no_base_or_double_difference": true,
+    "wls_initializer_contract": "only stage D/E/F; corrected undifferenced Doppler, finite gated per-epoch velocity and clock-rate estimates",
+    "stage_matrix": [
+      {
+        "id": "A_P_only_1",
+        "epochs": 1,
+        "factors": "P",
+        "flags": ["--no-motion-factors", "--no-tdcp-factors"]
+      },
+      {
+        "id": "B_P_D_no_temporal_2",
+        "epochs": 2,
+        "factors": "P+D+velocity/clock priors",
+        "flags": ["--undifferenced-doppler-factors", "--corrected-undifferenced-doppler-factors", "--velocity-states", "--no-motion-factors", "--no-tdcp-factors"]
+      },
+      {
+        "id": "C_P_motion_2",
+        "epochs": 2,
+        "factors": "P+position/clock motion",
+        "flags": ["--no-tdcp-factors"]
+      },
+      {
+        "id": "D_P_D_velocity_motion_2",
+        "epochs": 2,
+        "factors": "P+D+WLS velocity/clock priors+velocity/position/clock motion",
+        "flags": ["--undifferenced-doppler-factors", "--corrected-undifferenced-doppler-factors", "--doppler-velocity-wls-initialization", "--velocity-states", "--velocity-motion-factors", "--no-tdcp-factors"]
+      },
+      {
+        "id": "E_P_D_TDCP_2",
+        "epochs": 2,
+        "factors": "P+D+TDCP+motion",
+        "flags": ["--undifferenced-doppler-factors", "--corrected-undifferenced-doppler-factors", "--doppler-velocity-wls-initialization", "--velocity-states", "--velocity-motion-factors"]
+      },
+      {
+        "id": "F_P_D_TDCP_carrier_2",
+        "epochs": 2,
+        "factors": "P+D+TDCP+float carrier/ambiguity-between+motion",
+        "flags": ["--undifferenced-doppler-factors", "--corrected-undifferenced-doppler-factors", "--doppler-velocity-wls-initialization", "--velocity-states", "--velocity-motion-factors", "--carrier-phase-factors", "--ambiguity-between-factors"]
+      },
+      {
+        "id": "C_P_motion_30",
+        "epochs": 30,
+        "factors": "P+position/clock motion",
+        "flags": ["--no-tdcp-factors"]
+      },
+      {
+        "id": "D_P_D_velocity_motion_30",
+        "epochs": 30,
+        "factors": "P+D+WLS velocity/clock priors+velocity/position/clock motion",
+        "flags": ["--undifferenced-doppler-factors", "--corrected-undifferenced-doppler-factors", "--doppler-velocity-wls-initialization", "--velocity-states", "--velocity-motion-factors", "--no-tdcp-factors"]
+      },
+      {
+        "id": "E_P_D_TDCP_30",
+        "epochs": 30,
+        "factors": "P+D+TDCP+motion",
+        "flags": ["--undifferenced-doppler-factors", "--corrected-undifferenced-doppler-factors", "--doppler-velocity-wls-initialization", "--velocity-states", "--velocity-motion-factors"]
+      },
+      {
+        "id": "F_P_D_TDCP_carrier_30",
+        "epochs": 30,
+        "factors": "P+D+TDCP+float carrier/ambiguity-between+motion",
+        "flags": ["--undifferenced-doppler-factors", "--corrected-undifferenced-doppler-factors", "--doppler-velocity-wls-initialization", "--velocity-states", "--velocity-motion-factors", "--carrier-phase-factors", "--ambiguity-between-factors"]
+      }
+    ]
+  },
+  "diagnostic_contract": {
+    "truth_free_only": true,
+    "atomic_stage_outputs": true,
+    "record_initial_final_cost": true,
+    "record_factor_family_counts_and_residual_rms": true,
+    "record_state_delta_and_magnitudes": true,
+    "record_weighted_jacobian_rank_condition_column_norms": true,
+    "record_cost_trace_and_termination": true,
+    "doppler_rms_required_mps_range": [1.0, 4.0],
+    "position_ecef_fixture_scale_m": 6000000.0,
+    "clock_bias_fixture_scale_m": 100000.0,
+    "first_failure_is_diagnostic_only": true,
+    "no_parameter_or_algorithm_change": true
+  },
+  "parity_oracle": {
+    "source": "apps/commands/benchmarks/gnss_taroz_pos_vel_amb_pdc_dogfood.py and tests/test_taroz_pos_vel_amb_pdc_factor_parity.py",
+    "real_input_artifact_available_in_checkout": false,
+    "comparison_policy": "use exact same numeric row only when sealed taroz dogfood artifact is present; otherwise report unavailable, never synthesize parity"
+  }
+}

@@ -53,7 +53,7 @@ void RTKProcessor::handleConsecutiveFloatReset(const ObservationData& rover_obs,
         return;
     }
 
-    resetAmbiguityStatesForReacquisition(rover_obs, nav);
+    resetAmbiguityStatesForReacquisition(rover_obs, nav, false);
 }
 
 void RTKProcessor::resetAmbiguityStatesForReacquisition(const ObservationData& rover_obs,
@@ -251,7 +251,9 @@ void RTKProcessor::stabilizeFloatOutput(PositionSolution& solution) const {
         solution.position_geodetic.height);
 }
 
-void RTKProcessor::recordFloatEpoch(const ObservationData& rover_obs, const NavigationData& nav) {
+void RTKProcessor::recordFloatEpoch(
+    const ObservationData& rover_obs,
+    const NavigationData& nav) {
     consecutive_high_fixed_residual_count_ = 0;
     consecutive_float_count_++;
     consecutive_nonfix_count_++;
@@ -260,10 +262,12 @@ void RTKProcessor::recordFloatEpoch(const ObservationData& rover_obs, const Navi
         rtk_config_.ar_policy == RTKConfig::ARPolicy::DEMO5_CONTINUOUS) {
         return;
     }
-    resetAmbiguityStatesForReacquisition(rover_obs, nav);
+    resetAmbiguityStatesForReacquisition(rover_obs, nav, false);
 }
 
-void RTKProcessor::recordFallbackEpoch(const ObservationData& rover_obs, const NavigationData& nav) {
+void RTKProcessor::recordFallbackEpoch(
+    const ObservationData& rover_obs,
+    const NavigationData& nav) {
     consecutive_fix_count_ = 0;
     consecutive_float_count_ = 0;
     consecutive_high_float_residual_count_ = 0;
@@ -278,10 +282,12 @@ void RTKProcessor::recordFallbackEpoch(const ObservationData& rover_obs, const N
         rtk_config_.ar_policy == RTKConfig::ARPolicy::DEMO5_CONTINUOUS) {
         return;
     }
-    resetAmbiguityStatesForReacquisition(rover_obs, nav);
+    resetAmbiguityStatesForReacquisition(rover_obs, nav, false);
 }
 
-void RTKProcessor::resetPositionToSPP(const ObservationData& rover_obs, const NavigationData& nav) {
+void RTKProcessor::resetPositionToSPP(
+    const ObservationData& rover_obs,
+    const NavigationData& nav) {
     // M1 time updates are strictly single-use. Consume before any mode return
     // so STATIC/MOVING_BASE or a caller mode change cannot retain a stale IMU
     // increment for a later kinematic epoch.
@@ -367,7 +373,12 @@ void RTKProcessor::resetPositionToSPP(const ObservationData& rover_obs, const Na
     // relative baseline and only uses absolute rover hints when they exist.
     Vector3d rover_pos;
     double var_pos = moving_base_mode ? 25.0 : 900.0;
-    auto spp = spp_processor_.processEpoch(rover_obs, nav);
+    const auto spp_started = std::chrono::steady_clock::now();
+    const auto spp = spp_processor_.processEpoch(rover_obs, nav);
+    debug_telemetry_.stage_spp_ms +=
+        std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - spp_started)
+            .count();
     if (moving_base_mode) {
         if (rover_obs.receiver_position.norm() > 1e6) {
             rover_pos = rover_obs.receiver_position;

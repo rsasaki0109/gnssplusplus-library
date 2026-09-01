@@ -50,5 +50,12 @@ __pycache__/
 PLAN.md
 CLAUDE.md
 
+# Credentials (never commit local authentication material)
+.env
+.env.*
+!.env.example
+**/access_token
+**/kaggle.json
+
 # External reference checkouts (e.g. MADOCALIB oracle)
 /external/

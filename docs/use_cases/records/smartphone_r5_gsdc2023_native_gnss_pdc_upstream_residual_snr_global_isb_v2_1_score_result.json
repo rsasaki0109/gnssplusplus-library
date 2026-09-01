@@ -1,0 +1,111 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-gnss-pdc-upstream-residual-snr-score-result.v2.1",
+  "status": "scored-development-train-no-go-versus-v1",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "candidate": {
+    "id": "native-gnss-pdc-upstream-residual-snr-global-isb-v2.1",
+    "route_device": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_upstream_residual_snr_freeze_v2_1.json",
+    "freeze_record_sha256": "bf035ec5555ed3e9943b972782e4506512689548c1fd6d1cafd54b78d26ba635",
+    "freeze_manifest": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_upstream_residual_snr_freeze_v2_1_manifest.json",
+    "truth_free_run_manifest": "output/smartphone-r5/native-gnss-pdc-upstream-residual-snr-global-isb-v2.1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/run_manifest.json",
+    "truth_free_run_manifest_sha256": "8141eb0af3eeebe8276336ddd48fa75c7b41edf61e0c8bc4ab798c2e1884cea3",
+    "keyed_output": "output/smartphone-r5/native-gnss-pdc-upstream-residual-snr-global-isb-v2.1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/keyed.csv",
+    "keyed_output_sha256": "26930dcf9814626f9b6a1413e3932ce20ca9a7abe1b31ec4781c47f139c9dcec",
+    "summary": "output/smartphone-r5/native-gnss-pdc-upstream-residual-snr-global-isb-v2.1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/summary.json",
+    "summary_sha256": "72c977fc761a476c483a14b6f5d4522f2461663f56a613ec47dec84dcf8d768f",
+    "factor_debug": "output/smartphone-r5/native-gnss-pdc-upstream-residual-snr-global-isb-v2.1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/factor.csv",
+    "factor_debug_sha256": "0064aa86108b93a6b601f183dae8b58a573087e6977d1d7ccb12e57f804a911d",
+    "train_score": "output/smartphone-r5/native-gnss-pdc-upstream-residual-snr-global-isb-v2.1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/train_score.json",
+    "train_score_sha256": "b0c7c32b183aef538275ec3355860276194380577378065c6391e1819f8bb9ab"
+  },
+  "truth_access": {
+    "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv",
+    "sha256": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a",
+    "role": "development-train",
+    "truth_free_sealed_before_read": true,
+    "evaluation_reads_for_this_candidate": 1,
+    "validation_opened": false,
+    "holdout_opened": false,
+    "test_opened": false,
+    "mat_inputs_used": false,
+    "read_method": "single-open-bytes-parse-and-hash"
+  },
+  "structural_evidence": {
+    "epochs": 1384,
+    "key_count": 1384,
+    "finite_coordinates": true,
+    "max_position_transition_speed_mps": 27.138828782109684,
+    "transitions_over_70mps": 0,
+    "pseudorange_factors": 33510,
+    "doppler_factors": 26175,
+    "ordinary_tdcp_factors": 24397,
+    "iterations": 360,
+    "converged": true,
+    "initial_cost": 353082307.74871284,
+    "final_cost": 2234826.1487335693,
+    "wall_seconds": 38.10108637303347,
+    "rss_kib": null,
+    "rss_note": "The existing raw orchestrator reports wall time but does not capture child RSS."
+  },
+  "preprocessing_telemetry": {
+    "snr_p85_l1_dbhz": 40.392819213867185,
+    "snr_p85_l5_dbhz": 37.24450206756592,
+    "pd_pair_rejected_rows": 222,
+    "ld_pair_rejected_rows": 0,
+    "pseudorange_candidates": 39317,
+    "pseudorange_residual_rejected": 5807,
+    "pseudorange_center_scope": "global all-epoch by system and frequency after receiver clk(t) subtraction",
+    "pseudorange_global_groups": 5,
+    "doppler_candidates": 39317,
+    "doppler_residual_rejected": 13142,
+    "base_compensation": "not applied; unavailable under raw+nav-only contract"
+  },
+  "metrics": {
+    "prediction_rows": 1384,
+    "truth_rows": 1383,
+    "matched_rows": 1383,
+    "unmatched_prediction_rows": 1,
+    "timestamp_delta_ms": {"min": 999, "median": 999, "max": 999},
+    "four_diagnostic_variants_m": {
+      "wgs84_vincenty__linear_n_minus_1": 76.97819365337281,
+      "wgs84_vincenty__nearest_rank_ceiling": 76.98230451979411,
+      "haversine_sphere__linear_n_minus_1": 76.8192455321898,
+      "haversine_sphere__nearest_rank_ceiling": 76.82333529891469
+    },
+    "horizontal_p50_p95_m": {
+      "wgs84_vincenty": [72.10621365396428, 81.85017365278134],
+      "haversine_sphere": [71.95465574277434, 81.68383532160527]
+    },
+    "official_metric_m": null,
+    "official_metric_status": "undetermined-from-public-primary-sources"
+  },
+  "comparison": {
+    "frozen_raw_bridge_wgs84_linear_m": 93.50510102387848,
+    "prior_scored_proxy_v1_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_upstream_residual_snr_score_result_v1.json",
+    "prior_scored_proxy_v1_record_sha256": "ada3dab030c72b1b1846043a74453ad704d94aada8477aafedea8a9a5028ad48",
+    "prior_proxy_v1_four_variants_m": {
+      "wgs84_vincenty__linear_n_minus_1": 68.20249565105695,
+      "wgs84_vincenty__nearest_rank_ceiling": 68.20263285883483,
+      "haversine_sphere__linear_n_minus_1": 68.0475838937948,
+      "haversine_sphere__nearest_rank_ceiling": 68.04768377355857
+    },
+    "all_four_improved_vs_raw_bridge": true,
+    "all_four_improved_vs_v1_proxy": false,
+    "interpretation": "Global MATLAB-compatible ISB centering is more faithful to splitapply but scores worse than the earlier per-epoch proxy on this single route; it is not promoted. The earlier v1 remains the retained development-only opt-in historical candidate, while this exactness correction is recorded as a No-Go for promotion."
+  },
+  "decision": {
+    "promotion": "no-go-versus-retained-v1-proxy",
+    "production_default_changed": false,
+    "fresh_validation_authorized": false,
+    "holdout_authorized": false,
+    "test_batch_authorized": false,
+    "score_used_for_tuning": false,
+    "parameter_search_after_freeze": false,
+    "mat_inputs_used": false,
+    "upstream_result_oracle_used": false,
+    "external_mutation": false,
+    "native_0_782_class_achieved": false,
+    "reason": "The corrected global system-by-frequency ISB gate is structurally valid and improves the legacy raw bridge, but every diagnostic variant is worse than the already scored per-epoch proxy. Keep v2.1 as an auditable exactness experiment and do not broaden or tune it."
+  }
+}

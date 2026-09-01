@@ -1,0 +1,39 @@
+{
+  "algorithm_parameter_hash": "c82fba6130c7d16c207213ab1e2ac542e02280db194949a300c68bebd412ca7e",
+  "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+  "fixture_regression": {
+    "archive_access": false,
+    "materialization_to_adapter_smoke": true,
+    "test_path": "tests/test_smartphone_wls_stability_selector_holdout_eval.py",
+    "test_sha256": "6d23c8f9484e9d83995c9a58d68fd51c53648960a7a38177c84efd83e495bc3f"
+  },
+  "freeze_id": "smartphone-r5-wls-stability-selector-release-freeze-2026-08-30-v3",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_stability_selector_holdout_freeze_v3.json",
+    "sha256": "62ffc9e45049dba60cd4bbf5c6b6c4f3a064c81e3c8ddfd425fc4a916e661bff"
+  },
+  "holdout": {
+    "id": "2023-09-06-22-49-us-ca-routebb1/pixel7pro",
+    "payload_opened_before_v3_freeze": false,
+    "truth_opened_before_v3_freeze": false
+  },
+  "no_post_holdout_tuning": true,
+  "preflight_change_scope": "adapter/WLS authorization full-relative-source-key mapping and v3 schema guards only",
+  "release_binary_sha256": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12",
+  "rerun_after_v2_failure": false,
+  "schema_version": "smartphone-r5-wls-stability-selector-holdout-freeze-manifest.v3",
+  "status": "sealed-before-holdout-evaluation-v3",
+  "v1_provenance": {
+    "failure_artifact_sha256": "a4e804191315146eae3ffd8ec343dd0a1ca5d1007519f23a1f997e0e32663c3b",
+    "freeze_record_sha256": "49ec6a07ca770aac764f562abfa2d4823cd74aabbb948163250f7c3b5656783f",
+    "payload_open_count": 0,
+    "truth_open_count": 0
+  },
+  "v2_provenance": {
+    "failure_artifact_sha256": "2748ddfbde15bd4cf36c5bc7e4e0304b45a51bad4d84d2b040b43c235bfb85ca",
+    "freeze_record_sha256": "c99c44d7d59bc491cfbbb3337f842ef7a18570a3af465fdc32aed64282fa0f91",
+    "materialization_manifest_sha256": "36deea5ffad04d48d495f31b484f7cf616edbeaa82a7a4d8b5ef7ea5beeea9ed",
+    "payload_open_count": 1,
+    "truth_open_count": 0
+  }
+}

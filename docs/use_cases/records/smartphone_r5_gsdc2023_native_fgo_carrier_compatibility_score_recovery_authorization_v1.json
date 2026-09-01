@@ -1,0 +1,58 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-carrier-compatibility-score-recovery-authorization.v1",
+  "status": "authorized-scoring-only-recovery",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "purpose": "Recover the completed development scoring after a null/schema aggregation exception without rerunning the frozen estimator or changing any candidate parameter.",
+  "failure": {
+    "command": "PYTHONHASHSEED=0 python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_carrier_compatibility_eval.py train-score",
+    "exception": "KeyError: kaggle_diagnostic_score_variants_m while aggregating an object that correctly exposes mean_kaggle_diagnostic_score_variants_m",
+    "failure_stage": "after all eight declared development truth members were materialized and read; before train evaluation JSON publication",
+    "solver_rerun": false,
+    "truth_open_count": 8,
+    "validation_truth_open_count": 0,
+    "holdout_truth_open_count": 0,
+    "test_truth_open_count": 0
+  },
+  "frozen_candidate": {
+    "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_carrier_compatibility_freeze_v1.json",
+    "freeze_record_sha256": "031e43d0fa478213d2a90e214668c4bae582e83309ee570a7c057568683fa123",
+    "freeze_manifest": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_carrier_compatibility_freeze_v1_manifest.json",
+    "freeze_manifest_sha256": "d7b68a6d1abd747d9d9af01851b1604984e98723042c392c4c19a992f8514e82",
+    "truth_free_manifest": "output/smartphone-r5/native-fgo-carrier-compatibility-v1/truth_free_manifest.json",
+    "truth_free_manifest_sha256": "00b8eb49c7f215c68efa050ec460aaf460f5e659c85fb3492adb69509adc3a88",
+    "candidate_or_numeric_parameter_changed": false,
+    "candidate_artifacts_rerun": false,
+    "all_device_carrier_no_go_reinterpreted": false
+  },
+  "recovery_contract": {
+    "allowed_change": "schema-only scorer handling of route versus aggregate diagnostic field names (diagnostic variants plus mean availability/coverage/vertical fields)",
+    "truth_materialization": "forbidden; reuse the eight existing train_truth files",
+    "truth_read": "one explicit recovery read per existing file; hash before and after",
+    "algorithm": "unchanged",
+    "selector": "unchanged",
+    "parameters": "unchanged",
+    "validation_or_holdout": "forbidden",
+    "leaderboard_or_token": "forbidden",
+    "external_mutation": false,
+    "post_truth_tuning": false
+  },
+  "existing_train_truth_hashes": {
+    "2021-01-04-21-50-us-ca-e1highway280driveroutea/pixel5": "a5cdea300d0740cd6f93641cdc20b4a067a96231695f247703607f5009b5b803",
+    "2021-03-10-23-13-us-ca-mtv-h/pixel5": "bb41815fa086a1fd524f08da667210fe3537159b977de641519bc6067b9e9aa2",
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": "7c84ed6a80b1bbb08c0ffad57493513833b9d5474e22a43c5a44da82824ee22d",
+    "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": "164a434967f0eeefde2812a27281d39e858024fba6e82015a9dc26bdfb3ad1a8",
+    "2021-07-27-19-49-us-ca-mtv-b/pixel4": "cc7598498eb55937e9644ccf991b5ab478533363e732b3fb44c447fff6a566cd",
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": "a55f452e611426693677fbeacde227fc80e5f03f6040d04aef9d6a2baf08d249",
+    "2022-02-24-18-29-us-ca-lax-o/pixel5": "73875990485f43d36ce7608762b4071267d8361847ee5b9a171d3459ab2ba154",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": "29e0861dd1ecb8865c10adab69396d98ed96618e8877b09d04aa8d671edf79e8"
+  },
+  "authorization": {
+    "recovery_command": "PYTHONHASHSEED=0 python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_carrier_compatibility_score_recovery.py",
+    "output": "output/smartphone-r5/native-fgo-carrier-compatibility-v1/train_score_recovery.json",
+    "one_successful_recovery_score_only": true,
+    "recovery_process_attempts_before_success": 2,
+    "second_failure": "recovery scorer reached aggregate comparison and exposed the same route-versus-aggregate schema mismatch for availability/coverage/vertical; no result was published and no solver was rerun",
+    "no_validation_after_failure": true,
+    "no_holdout_after_failure": true
+  }
+}

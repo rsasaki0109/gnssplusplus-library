@@ -1,0 +1,182 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-test-authorization.v1",
+  "status": "sealed-before-test-payload-access",
+  "created_at_utc": "2026-08-30T00:00:00Z",
+  "purpose": "Truth-free full-test native Eigen FGO batch after the one authorized future-holdout gate.",
+  "test_execution_contract": {
+    "authorized": true,
+    "role": "test",
+    "truth_free_phase": true,
+    "truth_access_forbidden": true,
+    "no_post_test_tuning": true,
+    "no_external_mutation": true,
+    "skip_epochs": 1,
+    "dataset_allowlist": [
+      "2020-12-11-19-30-us-ca-mtv-e/pixel4xl",
+      "2021-08-17-20-37-us-ca-mtv-g/pixel5",
+      "2021-08-31-20-37-us-ca-mtv-e/sm-g988b",
+      "2021-09-14-20-32-us-ca-mtv-k/pixel4",
+      "2021-09-20-19-03-us-ca-mtv-l/pixel4",
+      "2021-09-28-21-56-us-ca-mtv-a/mi8",
+      "2021-11-05-18-28-us-ca-mtv-m/pixel6pro",
+      "2021-11-30-20-59-us-ca-mtv-m/mi8",
+      "2022-02-08-22-04-us-ca-sjc-r/pixel5",
+      "2022-02-23-17-46-us-ca-lax-n/pixel5",
+      "2022-02-23-22-35-us-ca-lax-m/pixel5",
+      "2022-02-24-15-10-us-ca-lax-p/pixel5",
+      "2022-02-24-22-14-us-ca-lax-i/pixel5",
+      "2022-03-14-19-57-us-ca-mtv-pe1/xiaomimi8",
+      "2022-03-17-20-16-us-ca-sjc-q/sm-g988b",
+      "2022-03-22-18-44-us-ca-mtv-pe1/pixel5",
+      "2022-04-04-16-31-us-ca-lax-x/pixel5",
+      "2022-04-22-20-11-us-ca-ebf-y/pixel5",
+      "2022-04-25-21-04-us-ca-ebf-x/mi8",
+      "2022-04-25-22-36-us-ca-ebf-z/pixel5",
+      "2022-04-27-18-16-us-ca-ebf-zz/pixel5",
+      "2022-04-27-19-23-us-ca-ebf-xx/pixel5",
+      "2022-04-27-21-55-us-ca-ebf-ww/mi8",
+      "2022-05-12-20-19-us-ca-mtv-pe1/samsunga325g",
+      "2022-06-22-20-12-us-ca-lax-hh/samsunga325g",
+      "2022-06-28-20-56-us-ca-sjc-r/samsunga32",
+      "2022-07-12-18-37-us-ca-mtv-b/sm-a325f",
+      "2022-10-06-20-46-us-ca-sjc-r/sm-a205u",
+      "2023-04-27-19-25-us-ca-mtv-pe1/pixel5",
+      "2023-04-27-20-55-us-ca-sjc-q/pixel5",
+      "2023-05-02-19-24-us-ca-sjc-we1/pixel7pro",
+      "2023-05-02-20-33-us-ca-mtv-xe1/pixel7pro",
+      "2023-05-09-23-10-us-ca-sjc-r/sm-a505u",
+      "2023-05-23-21-06-us-ca-mtv-de1/pixel5",
+      "2023-05-23-22-16-us-ca-mtv-ie2/pixel6pro",
+      "2023-05-25-17-32-us-ca-pao-j/pixel6pro",
+      "2023-05-25-21-50-us-ca-sjc-ke2/sm-s908b",
+      "2023-05-26-21-23-us-ca-sjc-be2/pixel5",
+      "2023-06-06-22-43-us-ca-sjc-he2/pixel5",
+      "2023-06-15-18-49-us-ca-sjc-ce1/pixel7pro"
+    ]
+  },
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_directory_only": true,
+    "central_directory_only_before_authorization": true,
+    "truth_members_materialization_forbidden": true
+  },
+  "inventory": {
+    "path": "output/smartphone-r5/wls-test-batch-v1/test_inventory.json",
+    "sha256": "dbf89222e6860d4fb31f12c9c46402033ed31e905f8fe3f6615e5131cb9e9495",
+    "route_count": 40,
+    "route_phone_count": 40,
+    "truth_payload_opened": false
+  },
+  "sample_submission": {
+    "path": "data/gsdc2023/sample_submission.csv",
+    "sha256": "b0c4853076f715d6bdca46e5c8c99e575f7982d8ee4fc9c0fe417507badcb780",
+    "header": ["tripId", "UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
+    "key_count": 71936,
+    "sole_key_order_authority": true,
+    "coordinates_are_not_truth": true,
+    "external_submission": false
+  },
+  "holdout_gate": {
+    "status": "holdout-pass-development-only",
+    "truth_open_count": 1,
+    "test_batch_authorized": true,
+    "evaluation_record": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_holdout_evaluation.json",
+      "sha256": "6df3cd038768b86f0c79dd01ae62884f1f73e7fa0a1d1a5bb9b4a12eb2036a44"
+    },
+    "evaluation_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_holdout_evaluation_manifest.json",
+      "sha256": "054453393938b997669b57b061f265c722990d1557333b45b8463f0891bdb7bc"
+    },
+    "evaluation_report": {
+      "path": "output/smartphone-r5/native-fgo-v1/holdout-v2/holdout_evaluation.json",
+      "sha256": "5e13704562e7958a930a600adb9a54092769bb5569e202d0de4196746a19a056"
+    },
+    "evaluation_output_manifest": {
+      "path": "output/smartphone-r5/native-fgo-v1/holdout-v2/holdout_evaluation.manifest.json",
+      "sha256": "74f1764de34afc49f6df4cb99900927482495fc1f2474494e8de4446a619c1a5"
+    },
+    "no_post_holdout_tuning": true,
+    "leaderboard_scores_used_for_tuning": false
+  },
+  "algorithm_parameter_hash": "4633bfd3a86cf34ebd86820ed59ee7192b3cbf23fc75ce9e72fc1f2c88fb39f6",
+  "algorithm_core_hash": "e27eb31f4fcb597a1c5b392d8b558f429b25cd5c5a4b39b6474491209649f7b1",
+  "fgo_parameters": {
+    "backend": "eigen",
+    "preset": "default",
+    "max_iterations": 8,
+    "pseudorange_sigma_m": 3.0,
+    "pseudorange_elevation_sigma_power": 1.0,
+    "tdcp_sigma_m": 0.03,
+    "motion_sigma_m": 50.0,
+    "clock_motion_sigma_m": 300.0,
+    "pseudorange_huber_threshold_sigma": 4.0,
+    "tdcp_huber_threshold_sigma": 4.0,
+    "max_tdcp_gap_s": 2.0,
+    "min_elevation_deg": 10.0,
+    "min_satellites_per_epoch": 4,
+    "use_spp_seed": true,
+    "use_pseudorange_factors": true,
+    "use_ordinary_tdcp_factors": true,
+    "use_position_motion_factors": true,
+    "use_clock_motion_factors": true,
+    "use_single_difference_doppler_factors": false,
+    "use_single_difference_tdcp_factors": false,
+    "use_double_difference_factors": false,
+    "use_carrier_phase_factors": false,
+    "use_velocity_states": false,
+    "no_truth_trained_thresholds": true
+  },
+  "commands": {
+    "adapter": "apps/gnss.py smartphone-gnss-adapter --role test --truth-free --experimental-galileo-e1 --skip-epochs 1 --sealed-test-authorization <record> --sealed-test-authorization-manifest <manifest>",
+    "spp": "build/apps/gnss_spp --obs <adapter/rover.obs> --nav <brdc.nav> --out <spp/libgnsspp_spp.pos> --summary-json <spp/libgnsspp_spp_summary.json> --clock-csv <spp/libgnsspp_spp_clock.csv> --timing-csv <spp/libgnsspp_spp_timing.csv> --quiet",
+    "native_fgo": "build/apps/gnss_fgo --backend eigen --preset default --max-iterations 8 --pseudorange-sigma 3 --tdcp-sigma 0.03 --motion-sigma 50 --clock-motion-sigma 300 --pseudorange-huber-threshold 4 --tdcp-huber-threshold 4 --max-tdcp-gap 2 --no-dd-factors --ionosphere-model --troposphere-model --quiet",
+    "wls_fallback": "gnss_smartphone_wls.extract_to_directory(... role=test, truth_free=true, allow_missing_wls_epochs=true, allow_invalid_wls_epochs=true) using the pre-sealed WLS test authorization",
+    "batch": "PYTHONPATH=apps/commands:apps/commands/benchmarks python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_test_batch.py"
+  },
+  "source_files": {
+    "apps/commands/benchmarks/gnss_smartphone_gnss_adapter.py": "4a26dbbef0d5eff4a4840c43b600d790d573accc9977a9993754386ad086466b",
+    "apps/commands/benchmarks/gnss_smartphone_native_fgo_eval.py": "688c56f015ebfe54dfc2358c470f3b57acb98a5fcd2bd1ea81d5166c11a0494b",
+    "apps/commands/benchmarks/gnss_smartphone_native_fgo_holdout_eval.py": "5ad3f7876a298bea49dd3588f96325818460020e567466009c19248d90fa3c4d",
+    "apps/commands/benchmarks/gnss_smartphone_native_fgo_test_batch.py": "3af4816b7b814d57e3d9a087ed8814f9956a05dfc17aa0b7e544a1798908c0db",
+    "apps/commands/benchmarks/gnss_smartphone_wls.py": "f8a1da02265f73e4c50b526f60b2da90d1461c8d7891871b57818a6b9ca604e2",
+    "apps/commands/benchmarks/gnss_smartphone_wls_test_batch.py": "dc91a63a1e2a66504295e43e5e3c68b1bfc55de1140a3e2449241a61389ecdb2",
+    "apps/native/gnss_fgo.cpp": "2d9e53485c427d1e0d43b07dd611aaf3644e2cd51d5e175c2977038ca05e3e32",
+    "include/libgnss++/algorithms/fgo.hpp": "67845f6365eb1f621afed19c52b82ad48d00ac1623e99b3bf7b96cd944263307",
+    "src/algorithms/fgo.cpp": "4805a30741e3bcc53a2a29d832429924a3cc46c0fac5aa530446cedd224af3b2",
+    "configs/benchmarks/smartphone_r5_gsdc2023.json": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776"
+  },
+  "release_binaries": {
+    "gnss_fgo": {
+      "path": "build/apps/gnss_fgo",
+      "sha256": "5e1e22979a84b938352a2096e570bb1587d6eba7ebb0757431a8ebd9423b525f"
+    },
+    "gnss_spp": {
+      "path": "build/apps/gnss_spp",
+      "sha256": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12"
+    }
+  },
+  "wls_fallback": {
+    "authorization_path": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/test_authorization.json",
+    "authorization_sha256": "12d1ae36377e94a0ee3a6b946dd7fcf4d35d3b8ade360e2d532cf96e97f19a43",
+    "manifest_path": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/test_authorization_manifest.json",
+    "manifest_sha256": "96fc259ccdfb4eb930f5b2b14387396d48b194772257b874cc0af8cf876a290d",
+    "truth_free": true,
+    "no_silent_fallback": true
+  },
+  "atomic_resume_contract": {
+    "content_addressed_route_cache": true,
+    "same_filesystem_atomic_publish": true,
+    "cache_reuse_requires_hash_validation": true,
+    "partial_or_nonfinite_output": "fail-closed",
+    "truth_member_materialization": "forbidden",
+    "production_default_changed": false,
+    "kaggle_submission": false
+  },
+  "truth_policy": {
+    "test_truth_payload_opened": false,
+    "test_truth_materialized": false,
+    "ground_truth_members_read": false
+  }
+}

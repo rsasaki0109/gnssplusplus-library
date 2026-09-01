@@ -1,0 +1,90 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-pdc-factor-audit-result.v1",
+  "status": "truth-free-structural-audit-sealed",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_factor_audit_freeze_v1.json",
+  "freeze_record_sha256": "a1d9a6f9d7018cb0bdf9736e9886d19865d3476ae1547281632833da90a3eac2",
+  "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+  "policy": {
+    "truth_opened": false,
+    "validation_opened": false,
+    "holdout_opened": false,
+    "test_data_used": false,
+    "kaggle_or_token_access": false,
+    "external_mutation": false,
+    "production_default_changed": false,
+    "candidate_parameter_changed": false,
+    "no_post_score_tuning": true
+  },
+  "audit_artifact": "output/smartphone-r5/native-fgo-pdc-factor-audit-v1/factor_audit.json",
+  "audit_artifact_sha256": "b0b18311ef253010240b3cfc7df4854b4f5ca81d79f217ee47522f02b63b0847",
+  "audit_manifest": "output/smartphone-r5/native-fgo-pdc-factor-audit-v1/factor_audit.manifest.json",
+  "audit_manifest_sha256": "257744c4cde33612d5d0574531662bb81b95c28749a77b24ddc4d24a15324f8e",
+  "stage_count": 10,
+  "stage_ids": [
+    "A_P_only_1",
+    "B_P_D_no_temporal_2",
+    "C_P_motion_2",
+    "D_P_D_velocity_motion_2",
+    "E_P_D_TDCP_2",
+    "F_P_D_TDCP_carrier_2",
+    "C_P_motion_30",
+    "D_P_D_velocity_motion_30",
+    "E_P_D_TDCP_30",
+    "F_P_D_TDCP_carrier_30"
+  ],
+  "structural_observations": {
+    "all_stages_finite_and_complete": true,
+    "all_cost_traces_monotonic_non_increasing": true,
+    "all_stages_over_70mps_neighbor_transitions": 0,
+    "first_velocity_clock_stage": {
+      "stage": "D_P_D_velocity_motion_2",
+      "iterations": 7,
+      "converged": true,
+      "wls_valid_epochs": 2,
+      "wls_rejected_epochs": 0,
+      "doppler_residual_rms_mps": 0.08286998489235357,
+      "max_velocity_norm_mps": 0.1287045431599056
+    },
+    "30_epoch_D": {
+      "pseudorange_factors": 445,
+      "undifferenced_doppler_factors": 430,
+      "motion_factors": 29,
+      "wls_valid_epochs": 30,
+      "wls_rejected_epochs": 0,
+      "iterations": 8,
+      "converged": true,
+      "doppler_residual_rms_mps": 0.13676483045297799,
+      "max_velocity_norm_mps": 0.4823064881120717
+    },
+    "30_epoch_E": {
+      "tdcp_factors": 337,
+      "tdcp_residual_rms_m": 0.026994867190352906,
+      "doppler_residual_rms_mps": 0.38071616154605836
+    },
+    "30_epoch_F": {
+      "carrier_phase_factors": 356,
+      "ambiguity_states": 14,
+      "carrier_phase_residual_rms_m": 0.021036526423466703,
+      "doppler_residual_rms_mps": 0.41047021381817733
+    },
+    "pseudorange_jacobian_30": {
+      "rows": 445,
+      "columns": 122,
+      "rank": 121,
+      "condition_number": 34.67040421347716,
+      "gauge_exposed": true
+    }
+  },
+  "decision": {
+    "first_failing_stage": null,
+    "candidate_promotion": "not evaluated",
+    "reason": "This is a structural factor audit only; no truth score was authorized. The prior full-route PDC/WLS train No-Go remains unchanged.",
+    "taroz_numeric_parity": "unavailable: no sealed dogfood artifact exists in this checkout; no surrogate comparison was used"
+  },
+  "limitations": [
+    "The frozen gnss_fgo epoch-debug/POS contract does not expose private receiver clock bias/drift or final ambiguity values; those fields are null in the machine-readable artifact rather than inferred.",
+    "The native no-base Doppler/TDCP/carrier factor rows are summarized by the native summary but are not emitted as a standalone Jacobian dump.",
+    "No new train, validation, holdout, or test truth was materialized or read."
+  ],
+  "reproduction": "python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_factor_audit.py --freeze-record docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_factor_audit_freeze_v1.json --output-root output/smartphone-r5/native-fgo-pdc-factor-audit-v1 --binary build/apps/gnss_fgo"
+}

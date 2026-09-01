@@ -1,5 +1,6 @@
 #include <Eigen/Dense>
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <exception>
@@ -104,6 +105,7 @@ struct SolveConfig {
     double doppler_float_seed_max_age_s = 6.0;
     std::string rover_seed_pos_path;
     std::string diagnostics_csv_path;
+    std::string timing_csv_path;
     double rtk_update_outlier_threshold = 0.0;
     bool student_t_rtk_front_end = false;
     double ratio_threshold = 3.0;
@@ -1925,6 +1927,7 @@ void printAdvancedUsage(const char* program_name) {
         << "                             Maximum trusted-anchor age (default: 6)\n"
         << "  --rover-seed-pos <file>    Inject ECEF seed positions from .pos file per epoch\n"
         << "  --diagnostics-csv <file>   Write per-epoch RTK candidate diagnostics CSV (PPC pipeline format)\n"
+        << "  --timing-csv <file>        Write per-epoch RTK solver processing timing CSV\n"
         << "  --realtime-fix-integrity   Gate FIX output with bounded-latency residual checks\n"
         << "                             (default: off; maximum latency: 7 epochs)\n"
         << "  --integrity-base-gate      Also enable the frozen offline low-satellite/ratio\n"
@@ -2800,6 +2803,8 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.rover_seed_pos_path = argv[++i];
         } else if (arg == "--diagnostics-csv" && i + 1 < argc) {
             config.diagnostics_csv_path = argv[++i];
+        } else if (arg == "--timing-csv" && i + 1 < argc) {
+            config.timing_csv_path = argv[++i];
         } else if (arg == "--rtk-update-outlier-threshold" && i + 1 < argc) {
             config.rtk_update_outlier_threshold = std::stod(argv[++i]);
         } else if (arg == "--student-t-rtk-front-end") {
@@ -3692,6 +3697,24 @@ int main(int argc, char* argv[]) {
             writeDiagnosticsHeader(diagnostics_csv);
         }
 
+        std::ofstream timing_csv;
+        if (!config.timing_csv_path.empty()) {
+            timing_csv.open(config.timing_csv_path);
+            if (!timing_csv.is_open()) {
+                std::cerr << "Error: failed to open timing CSV: "
+                          << config.timing_csv_path << std::endl;
+                return 1;
+            }
+            timing_csv
+                << "epoch_index,gps_week,gps_tow_s,elapsed_ms,status,valid,"
+                   "processor_time_ms,num_satellites,iterations,ratio,baseline_m,"
+                   "rtk_update_observations,stage_spp_ms,"
+                   "stage_satellite_collection_ms,stage_initialize_filter_ms,"
+                   "stage_reset_position_ms,stage_bias_update_ms,"
+                   "stage_filter_update_ms,stage_ambiguity_ms,stage_velocity_ms\n";
+            timing_csv << std::fixed << std::setprecision(9);
+        }
+
         std::unique_ptr<IntegrityShadowTimeline> integrity_shadow;
         if (!config.integrity_shadow_csv_path.empty()) {
             IntegrityShadowTimeline::Config shadow_config;
@@ -3964,7 +3987,38 @@ int main(int argc, char* argv[]) {
                 }
             }
 
+            const bool timing_enabled = timing_csv.is_open();
+            const auto epoch_start = timing_enabled
+                                         ? std::chrono::steady_clock::now()
+                                         : std::chrono::steady_clock::time_point{};
             auto pos_solution = rtk_processor.processRTKEpoch(rover_obs, aligned_base_obs, nav_data);
+            if (timing_enabled) {
+                const double elapsed_ms =
+                    std::chrono::duration<double, std::milli>(
+                        std::chrono::steady_clock::now() - epoch_start)
+                        .count();
+                const auto& stage_timing = rtk_processor.getLastDebugTelemetry();
+                timing_csv << processed_rover_epochs << ','
+                           << rover_obs.time.week << ','
+                           << rover_obs.time.tow << ','
+                           << elapsed_ms << ','
+                           << static_cast<int>(pos_solution.status) << ','
+                           << (pos_solution.isValid() ? 1 : 0) << ','
+                           << pos_solution.processing_time_ms << ','
+                           << pos_solution.num_satellites << ','
+                           << pos_solution.iterations << ','
+                           << pos_solution.ratio << ','
+                           << pos_solution.baseline_length << ','
+                           << pos_solution.rtk_update_observations << ','
+                           << stage_timing.stage_spp_ms << ','
+                           << stage_timing.stage_satellite_collection_ms << ','
+                           << stage_timing.stage_initialize_filter_ms << ','
+                           << stage_timing.stage_reset_position_ms << ','
+                           << stage_timing.stage_bias_update_ms << ','
+                           << stage_timing.stage_filter_update_ms << ','
+                           << stage_timing.stage_ambiguity_ms << ','
+                           << stage_timing.stage_velocity_ms << '\n';
+            }
             const libgnss::PositionSolution* last_output =
                 have_last_guard_output ? &last_guard_output : nullptr;
             const bool have_last_output = last_output != nullptr;

@@ -1,0 +1,31 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-upstream-mat-fallback-result-manifest.v2",
+  "record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_fallback_v2_result.json",
+    "sha256": "2c1945fb2d751f6647fadcf7d6f0db79064669cc6d95961786554512e7b6b78c"
+  },
+  "freeze_record_sha256": "4b815827140e217fe9c05a3b1ab1c086f3c5433fe9a92c47c519c36eb561988a",
+  "freeze_manifest_sha256": "b5725f94efe9f4bb6d75b69d0de019512385e08628c988d937ed05522b4c4295",
+  "fallback_source_sha256": "a47acae7d12205b984d6b310290d676e6a1d57ae16a070818293c1083584f4a8",
+  "submission_sha256": "ded15a2a92349b06accfe18bc2afa12c35f7a282497d70ab9fcedf15471fc1f3",
+  "submission_manifest_sha256": "b0a94f8ff2ac42358fda5dcbd11e9c82b9b95abe99a55460d0bd1e6390b1652e",
+  "run_manifest_sha256": "c99d2ac3419ac98ac80fa49dbda49ca349b11e28668a8c873c7294f5c6723efa",
+  "official_key_count": 71936,
+  "source_counts": {
+    "result_gnss_imu_exact": 71334,
+    "result_gnss_imu_edge_hold": 1,
+    "v5_exact": 601,
+    "unresolved": 0
+  },
+  "truth_policy": {
+    "test_truth_open_count": 0,
+    "validation_truth_open_count": 0,
+    "holdout_truth_open_count": 0,
+    "sample_coordinates_read": false,
+    "external_mutation": false
+  },
+  "byte_identity": {
+    "repeat_submission_sha256": "ded15a2a92349b06accfe18bc2afa12c35f7a282497d70ab9fcedf15471fc1f3",
+    "identical": true
+  }
+}

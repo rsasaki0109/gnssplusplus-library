@@ -1,0 +1,53 @@
+{
+  "schema_version": "smartphone-r5-phase29-train-evaluator-freeze.v1",
+  "status": "frozen-before-truth-materialization-or-open",
+  "purpose": "Freeze the one-process scorer and truth extractor after the Phase29 lane freeze and before any Phase29 ground-truth member is materialized or parsed.",
+  "phase29_freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase29_native_fgo_no_bridge_train_eval_freeze_v1.json",
+    "sha256": "96a9dbded706d25681737d6d569d0bbac2bf893839a08e78973167204a100d5c"
+  },
+  "orchestration_erratum": {
+    "path": "docs/use_cases/records/smartphone_r5_phase29_native_fgo_no_bridge_train_eval_freeze_erratum_v1.json",
+    "sha256": "7dc359ac08a8ff27abf8d3d58b47f41b11296f7ac7266a08adde3af2cb7776a8",
+    "scope": "one corrected control-summary path only"
+  },
+  "source_pins": {
+    "apps/commands/benchmarks/gnss_smartphone_phase29_train_eval.py": "b3890989a870c2c0db7ffd63e336d9c253d488c3e2d54e6859069eb105573337",
+    "tests/test_smartphone_phase29_train_eval.py": "b60bb1a6326446b8374ec0997544d0021233aec46257027b52f562baffe0a65e"
+  },
+  "truth_contract": {
+    "allowed_archive_members": [
+      "dataset_2023/train/2021-03-16-18-59-us-ca-mtv-a/pixel5/ground_truth.csv",
+      "dataset_2023/train/2021-07-27-19-49-us-ca-mtv-b/pixel4/ground_truth.csv",
+      "dataset_2023/train/2021-07-14-20-50-us-ca-mtv-e/sm-g988b/ground_truth.csv"
+    ],
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "materialization_reads_members_only": true,
+    "truth_parser_reads_each_file_once": true,
+    "truth_read_count_total": 3,
+    "validation_truth_materialized": false,
+    "holdout_truth_materialized": false,
+    "mat_read_or_generated": false
+  },
+  "scoring_contract": {
+    "one_process": true,
+    "lanes": ["phase25_raw_clock_no_bridge_control", "phase28_tdcp_no_bridge_candidate"],
+    "same_truth_matched_key_set": true,
+    "surplus_prediction_keys": "reported and ignored outside the shared truth-matched set",
+    "missing_prediction_keys": "reported through coverage and never filled",
+    "distance_variants": ["wgs84_vincenty", "haversine_sphere"],
+    "percentile_variants": ["linear_n_minus_1", "nearest_rank_ceiling"],
+    "vertical": "not-evaluable because the frozen four-column prediction has no height; vertical gate fails closed",
+    "continuity": "prediction-only transition speed with 70 m/s over-bound count",
+    "candidate_selection_from_truth": false,
+    "post_score_tuning": false
+  },
+  "authorization": {
+    "truth_open_count_before_freeze": 0,
+    "truth_materialized_before_freeze": false,
+    "token_access": false,
+    "kaggle_or_external_mutation": false,
+    "fresh_validation_open_count": 0,
+    "future_holdout_open_count": 0
+  }
+}

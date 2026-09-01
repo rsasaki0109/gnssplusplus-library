@@ -3,6 +3,7 @@
 #include <libgnss++/fusion/fusion_initialization.hpp>
 
 #include <cmath>
+#include <limits>
 
 namespace libgnss {
 namespace {
@@ -89,6 +90,100 @@ TEST(FusionInitializationTest, AlignStaticHandlesEmptyWindow) {
     const NominalState aligned =
         fusion_initialization::alignStatic({}, Eigen::Vector3d(4.0, 5.0, 6.0), 9.80665);
     EXPECT_TRUE(aligned.position_enu.isApprox(Eigen::Vector3d(4.0, 5.0, 6.0), 1e-12));
+}
+
+TEST(FusionInitializationTest, VelocityToRpyMatchesUpstreamOffsetAndFiniteOutput) {
+    const std::vector<Eigen::Vector3d> velocities = {
+        Eigen::Vector3d(0.0, 2.0, 0.0),  // North: 90 deg course + 180 = -90 deg
+        Eigen::Vector3d(2.0, 0.0, 0.0),  // East
+    };
+    fusion_initialization::VelocityHeadingConfig config;
+    config.smooth_window = 1;
+    const auto result = fusion_initialization::velocityToRpy(velocities, config);
+
+    ASSERT_TRUE(result.ok) << result.error;
+    ASSERT_EQ(result.rpy_rad.size(), velocities.size());
+    EXPECT_NEAR(result.rpy_rad[0].x(), 0.0, 1e-12);
+    EXPECT_NEAR(result.rpy_rad[0].y(), 0.0, 1e-12);
+    EXPECT_NEAR(result.rpy_rad[0].z(), -M_PI / 2.0, 1e-12);
+    EXPECT_NEAR(result.rpy_rad[1].z(), M_PI, 1e-12);
+    for (const auto& rpy : result.rpy_rad) EXPECT_TRUE(rpy.allFinite());
+}
+
+TEST(FusionInitializationTest, VelocityToRpyUsesMatlabEvenWindowAndShrunkEndpoints) {
+    std::vector<Eigen::Vector3d> velocities;
+    for (double east = 1.0; east <= 5.0; east += 1.0) {
+        velocities.emplace_back(east, 1.0, 0.0);
+    }
+    fusion_initialization::VelocityHeadingConfig config;
+    config.smooth_window = 4;
+    const auto result = fusion_initialization::velocityToRpy(velocities, config);
+
+    ASSERT_TRUE(result.ok) << result.error;
+    ASSERT_EQ(result.smoothed_velocity_enu.size(), 5u);
+    // MATLAB movmean centers an even window about the current and previous
+    // elements: [1,2] at the leading endpoint and [3,4,5] as the trailing
+    // three available samples.
+    EXPECT_NEAR(result.smoothed_velocity_enu[0].x(), 1.5, 1e-12);
+    EXPECT_NEAR(result.smoothed_velocity_enu[1].x(), 2.0, 1e-12);
+    EXPECT_NEAR(result.smoothed_velocity_enu[2].x(), 2.5, 1e-12);
+    EXPECT_NEAR(result.smoothed_velocity_enu[3].x(), 3.5, 1e-12);
+    EXPECT_NEAR(result.smoothed_velocity_enu[4].x(), 4.0, 1e-12);
+}
+
+TEST(FusionInitializationTest, VelocityToRpyLinearFillsInteriorAndNearestFillsEndpoints) {
+    const std::vector<Eigen::Vector3d> velocities = {
+        Eigen::Vector3d::Zero(),            // leading endpoint gap
+        Eigen::Vector3d(2.0, 0.0, 0.0),     // course 0 deg
+        Eigen::Vector3d::Zero(),            // interior gap
+        Eigen::Vector3d(0.0, 2.0, 0.0),     // course 90 deg
+        Eigen::Vector3d::Zero(),            // trailing endpoint gap
+    };
+    fusion_initialization::VelocityHeadingConfig config;
+    config.smooth_window = 1;
+    config.velocity_threshold_mps = 0.5;
+    const auto result = fusion_initialization::velocityToRpy(velocities, config);
+
+    ASSERT_TRUE(result.ok) << result.error;
+    EXPECT_EQ(result.low_speed_count, 3u);
+    EXPECT_EQ(result.linear_fill_count, 1u);
+    EXPECT_EQ(result.nearest_fill_count, 2u);
+    // Courses are filled before +180/wrap: the interior 45-degree course
+    // becomes -135 degrees, while both edge gaps use their nearest course.
+    EXPECT_NEAR(result.rpy_rad[0].z(), M_PI, 1e-12);
+    EXPECT_NEAR(result.rpy_rad[2].z(), -3.0 * M_PI / 4.0, 1e-12);
+    EXPECT_NEAR(result.rpy_rad[4].z(), -M_PI / 2.0, 1e-12);
+}
+
+TEST(FusionInitializationTest, VelocityToRpyInterpolatesRawCourseAcrossBranchBeforeWrap) {
+    const double one_degree = M_PI / 180.0;
+    const std::vector<Eigen::Vector3d> velocities = {
+        Eigen::Vector3d(-std::cos(one_degree), std::sin(one_degree), 0.0),
+        Eigen::Vector3d::Zero(),
+        Eigen::Vector3d(-std::cos(one_degree), -std::sin(one_degree), 0.0),
+    };
+    fusion_initialization::VelocityHeadingConfig config;
+    config.smooth_window = 1;
+    const auto result = fusion_initialization::velocityToRpy(velocities, config);
+
+    ASSERT_TRUE(result.ok) << result.error;
+    // +179 and -179 are interpolated as raw atan2 degrees through 0, then
+    // offset by 180 and wrapped, yielding the +180 boundary at the gap.
+    EXPECT_NEAR(result.rpy_rad[1].z(), M_PI, 1e-12);
+}
+
+TEST(FusionInitializationTest, VelocityToRpyFailsClosedForAllLowSpeedOrNonFiniteInput) {
+    fusion_initialization::VelocityHeadingConfig config;
+    config.smooth_window = 1;
+    auto all_low = fusion_initialization::velocityToRpy(
+        {Eigen::Vector3d::Zero(), Eigen::Vector3d(0.1, 0.0, 0.0)}, config);
+    EXPECT_FALSE(all_low.ok);
+    EXPECT_FALSE(all_low.error.empty());
+
+    auto nonfinite = fusion_initialization::velocityToRpy(
+        {Eigen::Vector3d(std::numeric_limits<double>::quiet_NaN(), 0.0, 0.0)}, config);
+    EXPECT_FALSE(nonfinite.ok);
+    EXPECT_FALSE(nonfinite.error.empty());
 }
 
 TEST(FusionInitializationTest, TryAlignHeadingBelowSpeedThresholdDoesNothing) {

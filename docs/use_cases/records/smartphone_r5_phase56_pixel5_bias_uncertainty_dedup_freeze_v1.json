@@ -1,0 +1,200 @@
+{
+  "schema_version": "smartphone-r5-phase56-pixel5-bias-uncertainty-dedup-freeze.v1",
+  "phase": 56,
+  "execution_label": "Luna Max",
+  "status": "frozen-before-phase56-new-raw-read",
+  "purpose": "Deduplicate the Phase55 next-factor proposal against the sealed Phase46 receiver-clock audit without opening any new raw input, then select exactly one nonduplicate source-supported factor.",
+  "scope": {
+    "allowed_inputs": "Only sealed Phase46 freeze/result/docs/output artifacts and pinned repository source files; Phase55 result is policy metadata only.",
+    "new_raw_reads": 0,
+    "truth_or_metric_payload_inputs": 0,
+    "solver_or_navigation_inputs": 0,
+    "semantic_dedup_rule": "BiasUncertaintyNanos is an Android GnssClock receiver-clock bias uncertainty, not a per-satellite observable. Treat it as covered by the Phase46 receiver-clock common-mode no-go; do not reopen raw to manufacture a second audit.",
+    "evidence_limit": "The Phase46 output's same-epoch spread table does not separately serialize BiasUncertaintyNanos dispersion. The dedup is therefore explicitly source-semantic plus sealed receiver-clock evidence, not an unreported per-row dispersion claim."
+  },
+  "authority_pins": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "phase46_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase46_pixel5_raw_clock_timing_freeze_v1.json",
+      "sha256": "b847826017ae7683d9fa91de7225301af682d778add210acd6f04fcce52e5196",
+      "use": "sealed contract and raw provenance only"
+    },
+    "phase46_evaluator_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase46_pixel5_raw_clock_timing_evaluator_manifest_v1.json",
+      "sha256": "54694dc6a3f389dd389c145e548c97db5fc859ffd8f619eaf6c6c31f57cd537f",
+      "use": "sealed evaluator/read policy only"
+    },
+    "phase46_result_record": {
+      "path": "docs/use_cases/records/smartphone_r5_phase46_pixel5_raw_clock_timing_result_v1.json",
+      "sha256": "d183bc8630a06545c4cb46dd4d061bb4d819fc48414b9557c5dfcad097e3e5c1",
+      "use": "sealed no-go/evidence map; no raw payload"
+    },
+    "phase46_output_manifest": {
+      "path": "output/smartphone-r5/phase46-pixel5-raw-clock-timing-v1/phase46_pixel5_raw_clock_timing.manifest.json",
+      "sha256": "df0425fb8f1e334cc6dd2d0f52d2c2ff5705617ef3490fe4316c6be501db3a06",
+      "use": "sealed artifact map/read accounting"
+    },
+    "phase46_output_result": {
+      "path": "output/smartphone-r5/phase46-pixel5-raw-clock-timing-v1/phase46_pixel5_raw_clock_timing.json",
+      "bytes": 65931,
+      "sha256": "98e77fee8ff0f3135f7ba0bdbefdd97709085c8ba26a2e1d5f54837cdae23eba"
+    },
+    "phase46_output_routes": {
+      "path": "output/smartphone-r5/phase46-pixel5-raw-clock-timing-v1/phase46_pixel5_raw_clock_timing.routes.json",
+      "bytes": 55650,
+      "sha256": "7e83aea173369019de9660392dbfcab87a619bf65b7fb71e56b7db2cd48c7b69"
+    },
+    "phase46_output_events": {
+      "path": "output/smartphone-r5/phase46-pixel5-raw-clock-timing-v1/phase46_pixel5_raw_clock_timing.events.json",
+      "bytes": 4866941,
+      "sha256": "8b887add559ebc1a47d3ce7fb5e3f5873098dad610355f7e810054180b44c00e"
+    },
+    "phase55_policy_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase55_pixel5_adr_uncertainty_result_v1.json",
+      "sha256": "40b7617f0eb13ab65b39dfb941fdd2bcc2ef80f91b1ddba2626e90240fec56a3",
+      "use": "next-factor policy metadata only; no Phase55 metric input"
+    }
+  },
+  "phase46_evidence_map": {
+    "cohort_route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "read_accounting_sealed": {
+      "single_evaluator_process": true,
+      "raw_device_gnss_reads_per_route": 1,
+      "truth_reads": 0,
+      "solver_reruns": 0,
+      "navigation_reads": 0,
+      "coordinates": 0,
+      "archive_reopens": 0,
+      "rematerialization": 0
+    },
+    "bias_uncertainty_source": {
+      "field": "BiasUncertaintyNanos",
+      "units": "nanoseconds",
+      "owner": "Android GnssClock receiver clock",
+      "phase46_freeze_role": "optional raw timing/clock field",
+      "phase46_route_counts": {
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5": 87705,
+        "2021-08-24-20-32-us-ca-mtv-h/pixel5": 112833,
+        "2022-04-01-18-22-us-ca-lax-t/pixel5": 51243,
+        "2023-03-08-21-34-us-ca-mtv-u/pixel5": 35810
+      },
+      "phase46_median_ns": [15.780498870299198, 17.20421641948633, 19.740919015021063, 18.550337699707597],
+      "phase46_p95_abs_ns": [22.86995731992647, 25.01974449842237, 34.437445719959214, 27.501059867063045],
+      "interpretation": "A receiver clock uncertainty cannot by itself provide satellite-specific or horizontal-geometry information; applying it to the Phase46 common receiver-clock lane would duplicate the rejected gauge."
+    },
+    "phase46_common_mode_evidence": {
+      "status": "no-go-clock-correction-common-mode-only",
+      "same_epoch_receiver_tow_spread_max_m_all_routes": 0.0,
+      "same_epoch_clock_field_inconsistency_count_all_routes": 0,
+      "same_epoch_signal_group_median_spread_max_ms_all_routes": 0.0,
+      "uncaptured_full_bias_changes": 7578,
+      "base_vs_row_identity_failures": 7863,
+      "geometry_changing_noncommon_tow_effect_max_m": 0.0,
+      "utc_detrended_max_abs_ms": 0.012085167700372802,
+      "clock_drift_max_abs_ppm": 0.04744418239642533,
+      "dedup_conclusion": "The large raw clock structure was common receiver mode, with no same-epoch satellite/signal spread and no geometry-changing component. BiasUncertaintyNanos is the uncertainty of that same receiver-clock bias, so the Phase55 proposal is a duplicate lane and receives no new raw audit."
+    }
+  },
+  "next_nonduplicate_factor": {
+    "field": "PseudorangeRateUncertaintyMetersPerSecond",
+    "source": "Android GnssMeasurement per-satellite/per-signal measurement field",
+    "units": "meters per second",
+    "physical_role": "satellite/signal Doppler or pseudorange-rate measurement uncertainty, not receiver clock bias uncertainty",
+    "candidate": "opt-in native FGO Doppler sigma floor max(existing_doppler_sigma_mps, raw_rate_uncertainty_mps), coefficient 1, no cap; implementation requires a separately frozen audit/contract and is not performed in Phase56",
+    "source_reference": "https://developer.android.com/reference/android/location/GnssMeasurement#getPseudorangeRateUncertaintyMetersPerSecond()",
+    "why_nonduplicate": "Per-satellite/signal measurement uncertainty can vary across observables and therefore is not the receiver-common BiasUncertaintyNanos gauge; it must still prove source availability, route stability, and estimator adoption before implementation."
+  },
+  "source_contracts": {
+    "android_raw_gnss_cpp": {
+      "path": "src/io/android_raw_gnss.cpp",
+      "sha256": "1bb9369e7db651e53fddab2a92c2f217512667bb349f70aa52934aeb80cbf387",
+      "parses_pseudorange_rate_uncertainty": false,
+      "parses_pseudorange_rate": true,
+      "parses_bias_uncertainty": true,
+      "retains_bias_uncertainty_in_observation": false
+    },
+    "android_raw_gnss_header": {
+      "path": "include/libgnss++/io/android_raw_gnss.hpp",
+      "sha256": "e833570103a521b9e051086b6ea75192ae3a575b83eee33d978143eaf279c52c",
+      "pseudorange_rate_uncertainty_field": false,
+      "bias_uncertainty_field": false
+    },
+    "observation_header": {
+      "path": "include/libgnss++/core/observation.hpp",
+      "sha256": "9ba79a44fd1f8c4f4f7b7f8707a119c350174bf850b226ff89e587c55f8abd2c",
+      "pseudorange_rate_mps": true,
+      "pseudorange_rate_uncertainty_mps": false,
+      "bias_uncertainty_nanos": false
+    },
+    "fgo_problems_cpp": {
+      "path": "src/algorithms/fgo_problems.cpp",
+      "sha256": "41c0fa5db6a745562342061c9cd6bcf08f74e02038580869a09294a325f05ca1",
+      "consumes_pseudorange_rate_uncertainty_as_sigma": false,
+      "uses_fixed_doppler_sigma": true,
+      "uses_snr_derived_upstream_doppler_sigma_when_enabled": true
+    },
+    "fgo_config_header": {
+      "path": "include/libgnss++/algorithms/fgo_config.hpp",
+      "sha256": "627fbc8585d6f6a384d9ea10b2670e4a9889dc20ba89a3427ed735eb61a6a358",
+      "fixed_undifferenced_doppler_sigma_mps": 0.2,
+      "fixed_single_difference_doppler_sigma_mps": 0.2
+    },
+    "gnss_fgo_cli": {
+      "path": "apps/native/gnss_fgo.cpp",
+      "sha256": "3f5382e760368c9232e68220f00dfa1dbdaf15863737f0990a694e29a9c8243c",
+      "raw_rate_uncertainty_cli": false,
+      "fixed_undifferenced_doppler_sigma_cli": true
+    },
+    "doppler_contract": {
+      "path": "include/libgnss++/algorithms/doppler_contract.hpp",
+      "sha256": "66d97c9ca2cc474247464d8af782cc3ca1837195967e601576ee25b6f8e1f56d",
+      "raw_rate_to_doppler_sign_contract": true
+    }
+  },
+  "dedup_gate": {
+    "phase46_artifact_hashes_exact": true,
+    "phase46_clock_field_semantics_receiver_common": true,
+    "phase46_geometry_changing_noncommon_component": false,
+    "bias_uncertainty_new_raw_audit_required": false,
+    "bias_uncertainty_no_go_without_raw": true,
+    "next_factor_exactly_one": true,
+    "next_factor_source_supported": true,
+    "next_factor_current_adapter_parses": false,
+    "next_factor_current_observation_retains": false,
+    "next_factor_current_fgo_consumes": false
+  },
+  "read_policy": {
+    "phase56_new_raw_device_gnss_reads": 0,
+    "phase56_new_truth_reads": 0,
+    "phase56_new_navigation_reads": 0,
+    "phase56_new_solver_invocations": 0,
+    "phase56_new_coordinate_inputs": 0,
+    "phase56_new_imu_reads": 0,
+    "phase46_sealed_artifact_reads_for_evidence_map": "only pinned non-raw artifacts; each once in the static evaluator",
+    "archive_reopen": 0,
+    "rematerialization": 0,
+    "validation_holdout": 0,
+    "MAT": 0,
+    "Kaggle_token": 0
+  },
+  "failure_policy": {
+    "hash_or_schema_mismatch": "fail closed without opening raw input",
+    "dedup_no_go": "record BiasUncertaintyNanos as duplicate receiver-clock common-mode lane; do not implement or audit it",
+    "next_factor": "only PseudorangeRateUncertaintyMetersPerSecond may be proposed; no Phase56 implementation",
+    "zero_point_782": "not evaluated without truth"
+  },
+  "pre_read_assertions": {
+    "phase56_new_raw_opened": false,
+    "phase56_truth_opened": false,
+    "phase56_solver_invoked": false,
+    "phase56_navigation_opened": false,
+    "phase56_coordinates_opened": false,
+    "phase56_imu_opened": false,
+    "phase56_bias_uncertainty_audit_started": false
+  }
+}

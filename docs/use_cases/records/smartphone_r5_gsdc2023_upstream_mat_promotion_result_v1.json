@@ -1,0 +1,115 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-upstream-mat-promotion-result.v1",
+  "status": "train-validated-test-conversion-failed-closed",
+  "purpose": "Record the immutable train score and the one truth-free conversion attempt over all public precomputed test result_gnss_imu.mat members.",
+  "freeze": {
+    "record": "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_freeze_v1.json",
+    "sha256": "9a10d2fd0a397287cc2501b23cef834d578d75ca62d17986880726efe2159c72",
+    "converter": "apps/commands/benchmarks/gnss_smartphone_gsdc2023_upstream_mat.py",
+    "converter_sha256": "d26fdb9f639d198b708a6162fd9bd7328ed9019f5fc7ed5469af3e4bcc3852a4",
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "inventory_sha256": "a54d54305442bfc826a34a5e59debe12ebcb55caf03d6235fdf0e125c5bd609c",
+    "sample_key_sha256": "b0c4853076f715d6bdca46e5c8c99e575f7982d8ee4fc9c0fe417507badcb780"
+  },
+  "published_upstream": {
+    "repository": "https://github.com/taroz/gsdc2023",
+    "commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "license": "MIT",
+    "archive_url": "https://taroz.net/data/dataset_2023.zip",
+    "archive_license_caveat": "The public dataset archive has no separate license file. It is retained as a local cache only; no MAT member is vendored or redistributed by this repository."
+  },
+  "train_score": {
+    "truth_free_manifest_sha256": "3388972b96e39125f3525f91a1d9df0ca16f4490f65daa821791213d363413e2",
+    "authorization_manifest_sha256": "9344aaa7fe6a62d244e8718d384d37448fa6a727b8a68a2db34957a189bd95aa",
+    "truth_materialization_manifest_sha256": "791dbb632d0b5646d8105435152ba1db51c82dcb8b5c22e9fadb1c8dcaea33cc",
+    "score": "output/smartphone-r5/gsdc2023-upstream-mat-v1/train/train_score.json",
+    "score_sha256": "5a3dbedef378d1889b886bf7ccad09eb7089701c4f947f24806a59a2dc53e8a1",
+    "score_manifest": "output/smartphone-r5/gsdc2023-upstream-mat-v1/train/train_score.manifest.json",
+    "score_manifest_sha256": "fb2e56cae77a8e1ceb447ed2b57d855c30f3853d06258b420e0b99bbb892ad9b",
+    "routes_scored": 3,
+    "truth_read_count_total": 3,
+    "truth_read_count_by_route": 1,
+    "diagnostic_mean_m": {
+      "result_gnss": 0.5859151854260619,
+      "result_gnss_imu": 0.5067908808766828,
+      "result_gnss_imu_minus_result_gnss": -0.07912430454937913
+    },
+    "all_four_variants_reported": true,
+    "truth_key_coverage": "all declared train truth keys covered; one leading upstream initialization row per raw route output is outside the truth key set",
+    "continuity_bound_mps": 70.0,
+    "validation_truth_open_count": 0,
+    "holdout_truth_open_count": 0,
+    "test_truth_open_count": 0,
+    "selection": "result_gnss_imu remained predeclared primary; result_gnss was reported comparator and no truth-selected parameter was changed",
+    "gate_correction": {
+      "record": "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_train_score_gate_correction_v1.json",
+      "sha256": "d6cef523e038905b1ecea2aa6a247a9f6f26066627ea36aeb8df73dd592dc9ac",
+      "reason": "official upstream submission.m projects result rows onto sample tripId/UnixTimeMillis keys; raw initialization extras are omitted, while missing truth keys remain a failure",
+      "fixed_top_solution_scale_limit_m": 1.8,
+      "corrected_gate_pass": true
+    }
+  },
+  "test_conversion": {
+    "authorization": "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_test_conversion_authorization_v1.json",
+    "authorization_sha256": "a5743d748956d4246823e5fa3c7c4e779d216f2d776da1d29f24240a93b98f27",
+    "run_manifest": "output/smartphone-r5/gsdc2023-upstream-mat-v1/test-batch/test_batch.manifest.json",
+    "run_manifest_sha256": "3c29d25fee11125fc6e644b52ea8e52b8b10c8d3308d73f84c74835e894885e7",
+    "failure_artifact": "output/smartphone-r5/gsdc2023-upstream-mat-v1/test-batch/batch_failure.json",
+    "failure_artifact_sha256": "64b787f3b9e110e6fc889c7df16819eac480401c4bb3d1183999f7122c413c84",
+    "route_count": 40,
+    "route_artifacts_generated": 40,
+    "total_upstream_finite_rows": 71448,
+    "sample_key_count": 71936,
+    "source_counts": {
+      "exact": 71334,
+      "same_trip_linear_interpolation": 0,
+      "same_trip_edge_hold": 1,
+      "unresolved": 601
+    },
+    "unresolved_routes": [
+      {
+        "trip_id": "2022-04-25-21-04-us-ca-ebf-x/mi8",
+        "unresolved_keys": 598,
+        "finite_upstream_rows": 1325,
+        "reason": "published result_gnss_imu.mat has a long leading non-finite interval beyond the bounded interpolation/edge contract"
+      },
+      {
+        "trip_id": "2022-10-06-20-46-us-ca-sjc-r/sm-a205u",
+        "unresolved_keys": 3,
+        "finite_upstream_rows": 1696,
+        "reason": "three sample timestamps have no bounded finite upstream position under the frozen contract"
+      }
+    ],
+    "submission_published": false,
+    "truth_used": false,
+    "test_truth_materialized": false,
+    "test_truth_open_count": 0,
+    "official_sample_coordinates_used": false,
+    "dummy_coordinates_emitted": false,
+    "external_mutation": false,
+    "decision": "No-Go for an exact 71936-key candidate until the two unresolved routes have a separately authorized, non-dummy source; do not loosen the frozen bounds or use sample coordinates."
+  },
+  "production": {
+    "rtk_spp_defaults_changed": false,
+    "v5_artifacts_changed": false,
+    "kaggle_submission": false,
+    "token_access": false,
+    "post_score_tuning": false
+  },
+  "verification": {
+    "release_build": "cmake --build build --config Release -j2",
+    "release_binary": "build/apps/gnss_fgo",
+    "release_binary_sha256": "a10d13da4614f7cdc8e24556f5a32f870aee6c7aa94c5d3e890429996d583b0c",
+    "converter_fixture_tests": "6/6 passed",
+    "full_serial_ctest": "131/131 passed",
+    "ctest_environment": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:/opt/ros/jazzy/lib",
+    "git_diff_check": "passed",
+    "converter_source_hash_after_run": "d26fdb9f639d198b708a6162fd9bd7328ed9019f5fc7ed5469af3e4bcc3852a4",
+    "production_defaults_changed": false
+  },
+  "reproducibility": {
+    "train_command": "PYTHONHASHSEED=0 python3 <single-process train scorer using the frozen converter and apps/commands/benchmarks/gnss_smartphone_kaggle.py helpers>",
+    "test_command": "PYTHONHASHSEED=0 python3 apps/commands/benchmarks/gnss_smartphone_gsdc2023_upstream_mat.py test-batch --archive data/gsdc2023/cache/dataset_2023.zip --sample data/gsdc2023/sample_submission.csv --output-dir output/smartphone-r5/gsdc2023-upstream-mat-v1/test-batch",
+    "recovery_policy": "The failure artifacts are retained. No second test conversion, solver rerun, test truth read, algorithm change, or sample-coordinate fallback is authorized by this record."
+  }
+}

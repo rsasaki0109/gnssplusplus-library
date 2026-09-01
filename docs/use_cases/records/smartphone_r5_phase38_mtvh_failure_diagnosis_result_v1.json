@@ -1,0 +1,161 @@
+{
+  "schema_version": "smartphone-r5-phase38-mtvh-failure-diagnosis-result.v1",
+  "status": "sealed-diagnosis-no-go",
+  "decision": {
+    "passed": false,
+    "classification": "native_solver_state_failure",
+    "promotion": "No-Go; do not materialize a candidate matrix or open validation/holdout",
+    "reason": "The native GNSS-first graph produced out-of-Earth ECEF states before UTC alignment. Rejecting that handoff in an exploratory opt-in probe left the existing raw-only Android heading gate unsatisfied and then failed the TDCP insertion contract. No generalized recovery was justified."
+  },
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "freeze_commit": "2f9c7dd1ca8088aa9724a836f8199a377c8d28a2",
+    "freeze_record": "docs/use_cases/records/smartphone_r5_phase38_mtvh_failure_diagnosis_freeze_v1.json",
+    "freeze_record_sha256": "99a559104dc053f3d6773a845d16104119e2600106f26d805074381aba6e8f0d",
+    "output_root": "output/smartphone-r5/phase38-mtvh-failure-diagnosis-v1"
+  },
+  "truth_accounting": {
+    "allowed_truth_reads": 0,
+    "ground_truth_materialized": 0,
+    "validation_truth_reads": 0,
+    "holdout_truth_reads": 0,
+    "mat_inputs_or_outputs": 0,
+    "precomputed_coordinates_used": 0,
+    "kaggle_or_token_access": 0
+  },
+  "input_contract": {
+    "route": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "inputs": {
+      "device_gnss.csv": {
+        "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+        "sha256": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7"
+      },
+      "device_imu.csv": {
+        "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_imu.csv",
+        "sha256": "fa3f17d07570fdbb8030f307130f33ca3613e8125475c2a907c48f7db3455480"
+      },
+      "brdc.nav": {
+        "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/brdc.nav",
+        "sha256": "147d948f0eba3bf09e295e7f67fbe8db60c25e236bc3c7d958dc933483f10909"
+      }
+    },
+    "other_inputs_opened": false
+  },
+  "native_baseline": {
+    "binary_path": "build/apps/gnss_fgo_imu_no_base",
+    "binary_sha256": "883701ef34606af4be84a44181f6b3616b2559ee4031982fff98d73dbbbbe7bd",
+    "flags_exact": [
+      "--all-epochs",
+      "--android-raw-utc-keys",
+      "--android-raw-clock-only",
+      "--android-utc-wall-clock-fallback",
+      "--native-pdc-imu-tdcp-no-bridge",
+      "--native-quality-anchor"
+    ],
+    "runtime_environment": {
+      "required_ld_library_path": "/home/sasaki/.local/lib",
+      "system_environment_changed": false
+    },
+    "runs": [
+      {
+        "run": "baseline-existing/run1",
+        "return_code": 127,
+        "command_environment": "LD_LIBRARY_PATH was not supplied",
+        "failure": "./build/apps/gnss_fgo_imu_no_base: error while loading shared libraries: libmetis-gtsam.so: cannot open shared object file: No such file or directory",
+        "classification": "environment_only_loader_failure",
+        "transparent_record": true
+      },
+      {
+        "run": "baseline-existing/run2",
+        "return_code": 1,
+        "command_environment": "LD_LIBRARY_PATH was not supplied",
+        "failure": "failed to align output to raw UTC keys: native solution has non-finite or out-of-Earth ECEF position",
+        "classification": "native_state_failure_observed_before_projection",
+        "transparent_record": true
+      },
+      {
+        "run": "baseline-existing/run3",
+        "return_code": 1,
+        "command_environment": "LD_LIBRARY_PATH=/home/sasaki/.local/lib",
+        "failure": "failed to align output to raw UTC keys: native solution has non-finite or out-of-Earth ECEF position",
+        "classification": "native_state_failure_observed_before_projection",
+        "transparent_record": true
+      }
+    ],
+    "outputs_preserved": true
+  },
+  "native_state_evidence": {
+    "stage": "graph_post_state_before_utc_alignment",
+    "alignment_guard_source": "src/io/android_raw_gnss.cpp",
+    "alignment_guard_behavior": "Every native solution ECEF state is checked for finiteness and the frozen 6e6..7e6 m Earth norm bounds before any raw UTC key matching or coordinate projection.",
+    "gnss_first": {
+      "converged": true,
+      "epochs": 1325,
+      "undifferenced_doppler_factors": 4724,
+      "velocity_states": 1325,
+      "iterations": 1000,
+      "primary_gdb_scan": {
+        "binary": "build/apps/gnss_fgo_imu_no_base",
+        "finite_states": 714,
+        "invalid_states": 611,
+        "first_invalid_index": 0,
+        "first_invalid_ecef_norm_m": 7432673.743891388
+      },
+      "independent_isolated_debug_scan": {
+        "binary": "isolated RelWithDebInfo probe build (not a committed candidate)",
+        "finite_states": 715,
+        "invalid_states": 610,
+        "first_invalid_index": 0,
+        "first_invalid_ecef_norm_m": 7440355.655858839
+      },
+      "scan_variation_does_not_change_classification": true
+    },
+    "original_raw_only_seeds_before_handoff": {
+      "states": 1325,
+      "invalid_states": 0,
+      "all_epochs_earth_valid": true,
+      "provenance": "GDB probe at the pre-IMU handoff boundary; these are the existing buildPseudorangeProblem in-memory seeds from the permitted raw GNSS plus broadcast navigation inputs.",
+      "alternate_trajectory_or_coordinate_substitution": false
+    },
+    "classification_basis": "The native solution state is already out-of-Earth when the alignment function scans it, so this is not a UTC-only projection failure. The original raw-only seeds are Earth-valid; the failure enters through the GNSS-first state handoff."
+  },
+  "candidate_probe": {
+    "flag": "--native-mtvh-failure-recovery",
+    "implementation_committed": false,
+    "source_after_probe_reverted_to_freeze": true,
+    "matrix_executed": false,
+    "exploratory_runs": [
+      {
+        "run": "candidate-handoff-rejection/run1",
+        "return_code": 1,
+        "failure": "GNSS-first initialization unavailable: GNSS-first solution contains out-of-Earth state(s); native PDC+IMU TDCP contract failed: built=2085 inserted=0 nonfinite_residuals=0"
+      },
+      {
+        "run": "candidate-handoff-rejection/run2",
+        "return_code": 1,
+        "failure": "GNSS-first initialization unavailable: GNSS-first solution contains out-of-Earth state(s); native PDC+IMU TDCP contract failed: built=2085 inserted=0 nonfinite_residuals=0"
+      }
+    ],
+    "handoff_rejection_scope": "The exploratory rejection discarded only the in-memory GNSS-first state handoff and retained the existing raw-only buildPseudorangeProblem seeds. It did not read an alternate trajectory, result file, truth coordinate, or external coordinate. This scope therefore does not itself violate the alternate-trajectory prohibition, but it is not a justified recovery because the unchanged raw-only Android heading gate then failed closed.",
+    "rejection_follow_on_failure": "GNSS course did not make heading observable under frozen gate; fallback was then unable to satisfy the required TDCP insertion contract.",
+    "flag_off_byte_identity": {
+      "status": "preserved-no-candidate-commit",
+      "frozen_binary_sha256": "883701ef34606af4be84a44181f6b3616b2559ee4031982fff98d73dbbbbe7bd",
+      "source_flag_materialized": false,
+      "production_default_changed": false,
+      "test_required_by_contract": true
+    },
+    "decision": "No-Go; no candidate source or six-route matrix promotion"
+  },
+  "structural_matrix": {
+    "executed": false,
+    "reason": "The freeze requires source and focused tests to be committed before matrix execution; the candidate was not justified and was not committed."
+  },
+  "artifact_policy": {
+    "phase37_outputs_modified": false,
+    "baseline_phase38_outputs_preserved": true,
+    "truth_or_mat_artifacts_created": false,
+    "validation_or_holdout_opened": false,
+    "kaggle_or_token_access": false
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "schema_version": "smartphone-r5-phase33-quality-anchor-validation-evaluator-manifest.v2",
+  "phase": 33,
+  "status": "sealed-after-truth-free-structural-no-go",
+  "supersedes": {
+    "path": "docs/use_cases/records/smartphone_r5_phase33_quality_anchor_validation_evaluator_manifest_v1.json",
+    "reason": "Only the structural seal reporting was corrected to record a fail-closed continuity No-Go; solver inputs, candidate, control, and all four raw solver outputs remain unchanged."
+  },
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase33_quality_anchor_validation_freeze_v1.json",
+    "sha256": "683611c00f65e93f2daf186dbfbcba9a3a4bb190f814b61e5cd1625b1b1ebd7d"
+  },
+  "evaluator": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase33_quality_anchor_validation.py",
+    "sha256": "4f5b467bdd74b6164b63beee39d40fdc981483d15beec88f675943555d360d6c",
+    "test_path": "tests/test_smartphone_phase33_quality_anchor_validation.py",
+    "test_sha256": "25644c6be652b6ef85917fa72c760f54e681a0cde51d56e4d2d9749241e43efa",
+    "cmake_path": "tests/CMakeLists.txt",
+    "cmake_sha256": "92894a453fe45e251981741c8377a040291ab3d9c72084ba01f07515d0a01df0",
+    "pure_tests": "4/4 passed",
+    "solver_rerun_for_seal_correction": false
+  },
+  "structural_artifacts": {
+    "raw_materialization_sha256": "24ebc000ae8f266a799ea4f354f1b3cac3b591fd98914ab8bdc3cb5d27dd4fb9",
+    "truth_free_run_sha256": "44f5d1f98ebccf88297cbf3e4a7e5088458982843eff9737652506591b439d6a",
+    "truth_free_seal_sha256": "e6d9750c5005d12d11cdb0f91003a2720a85644e4159e67c3c44482c5473d171",
+    "truth_open_count": 0,
+    "structural_gate": "no-go"
+  },
+  "truth_policy": {
+    "fresh_validation_truth_materialized": false,
+    "fresh_validation_truth_open_count": 0,
+    "future_holdout_truth_open_count": 0,
+    "mat_read_or_generated": false,
+    "token_or_kaggle_access": false,
+    "post_score_tuning": false,
+    "no_truth_after_structural_failure": true
+  }
+}

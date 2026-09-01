@@ -1,0 +1,77 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-doppler-position-evaluation-manifest.v1",
+  "record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_doppler_position_evaluation.json",
+    "sha256": "7f4587851c9e9fbd5e5a1af46af54eac3ee8a96230dec5414f9a7a87c6d73ee9"
+  },
+  "selection_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_top_solution_feasibility_audit.json",
+    "sha256": "8bc2e4a3965fb266652def07b91c17f58de5845cfaf84fd0e64c938b46144470"
+  },
+  "implementation_sources": {
+    "doppler_position": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_doppler_position.py",
+      "sha256": "5a42f786a8be6c75da78d177ebab562c4e7e2e9ca555def83884895192d51c3b"
+    },
+    "doppler_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_doppler_position_eval.py",
+      "sha256": "9549e249830f329e5fb7c4e215764d714f190d0ee4155a509ec5a4ffb0e0518d"
+    },
+    "unit_test": {
+      "path": "tests/test_smartphone_doppler_position.py",
+      "sha256": "01014704d5e5ca44892aac57aaf72eb8336019d08b388aaf405571f253a16ba4"
+    },
+    "dispatcher": {
+      "path": "apps/gnss.py",
+      "sha256": "d48b52e55ab7e30514e5af1e5692626facbdc3523243c46ce14b6650460dd907"
+    },
+    "cmake": {
+      "path": "tests/CMakeLists.txt",
+      "sha256": "53aa7cd644e965b9ec0ef258642c3f950198613209ae4a8c78ff9dd0b4f303ce"
+    }
+  },
+  "train_evaluation": {
+    "path": "output/smartphone-r5/doppler-position-v1/train_evaluation.json",
+    "sha256": "fd16544afb61d648c2e218a75550fcc5cd69ddf266570e27cc8586e04d16bf8b",
+    "manifest_path": "output/smartphone-r5/doppler-position-v1/train_evaluation_manifest.json",
+    "manifest_sha256": "29e81ee14fb38043986b690ec4537e75b48b8ffeee27d89e2e3d4da988443175",
+    "truth_open_count": 3,
+    "fresh_validation_truth_open_count": 0,
+    "future_holdout_truth_open_count": 0
+  },
+  "post_consensus_fix_truth_free_artifacts": {
+    "root": "output/smartphone-r5/doppler-position-v1-post-consensus-fix/train",
+    "truth_used": false,
+    "routes": {
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8": {
+        "manifest_sha256": "1431e06a765a94b1f151239e6619462f4c7cf8166274cfd4524c046c3e603c4c",
+        "position_sha256": "4da859fe469954043840d7a449fe54948bc33ee49fa762c0e4430a98fab3984c",
+        "trajectory_sha256": "bcdc186e1aed1ba6bf19663fd6dafff32bcd393dba468c040db8b40eba68d0ae",
+        "summary_sha256": "1ad70597708eb9767e4d4c2c23650ea40b5809c87056ca463e3ec660e9b41b73"
+      },
+      "2022-08-04-20-07-us-ca-sjc-q/pixel5": {
+        "manifest_sha256": "95a70b55df41ff787a2556f4afc299aaa70be6e9012366c9a3d843f2406ce1c0",
+        "position_sha256": "52104e6b3a37747a654a873708c31f271a6ee368eab3c2c1b6b49f748a979c91",
+        "trajectory_sha256": "b840dd4eb507fb3bd1a3a14fbad27e5362371fa2b22eab5324a9f2e131da7451",
+        "summary_sha256": "232dc979c1cc527ef55f7427c85e9347f13bf9301a45c5fa41d1bcc4889d5540"
+      },
+      "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro": {
+        "manifest_sha256": "a8688a80bf4a2bd6bc0357cc9ba6f9094201e097f1ec94cbcb086e45836735cf",
+        "position_sha256": "4e7ade4bb0d9708bb59712743353a96543adb5377333cd620b110681680713b7",
+        "trajectory_sha256": "a180c5c6fb7817b7279322e00b1559d71a4bbca396da6c40d83679dd71b48d88",
+        "summary_sha256": "1b71a14231363664dbd2daad7bc7a3f96f300cdcfaffd4d5eadc095ad879d815"
+      }
+    }
+  },
+  "truth_access": {
+    "train_routes_scored_once": 3,
+    "fresh_validation_opened": false,
+    "future_holdout_opened": false,
+    "holdout_open_count": 0,
+    "post_holdout_tuning": false,
+    "public_private_scores_used_for_tuning": false
+  },
+  "decision": "no-go-train-gate; retain only as development experiment",
+  "external_mutation": false,
+  "production_default_changed": false
+}

@@ -1,0 +1,89 @@
+{
+  "schema_version": "smartphone-r5-phase54-phase53-integrity-recovery-manifest.v1",
+  "status": "evaluator-frozen-before-phase54-scorer",
+  "phase": 54,
+  "execution_label": "Luna Max",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase54_phase53_integrity_recovery_freeze_v1.json",
+    "sha256": "82d4235b4b7cfc8d0536ecc615d92be535c3bf8b6ba4b1369e40994675e0ed00",
+    "seal_commit": "f716c32"
+  },
+  "evaluator": {
+    "operation": "integrity-recovery",
+    "source": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase54_phase53_integrity_recovery.py",
+      "sha256": "c1dd285e223516e1d8d5a643a1bd3f020e4fc00feb65ef3b5bd95db9a9336c1b"
+    },
+    "test": {
+      "path": "tests/test_smartphone_phase54_phase53_integrity_recovery.py",
+      "sha256": "987988278825c025c2bead60a1b451da19555401feef0666911ece1b38f7274e"
+    },
+    "cmake": {
+      "path": "tests/CMakeLists.txt",
+      "sha256": "c36e7f4f0d50266fc66c75b38414002bde5ab00a6149197fa0e109f401480c17"
+    },
+    "single_process": true,
+    "native_solver_invoked": false,
+    "phase53_raw_reopen": false,
+    "phase53_output_mutation": false,
+    "phase53_artifact_reads_per_file": 1,
+    "operation_description": "Read and hash only the sealed Phase53 output manifest, result, routes, and events; recompute corrected raw-input-integrity and presentation predicates in memory; publish a new Phase54 recovery record.",
+    "output_root": "output/smartphone-r5/phase54-phase53-integrity-recovery-v1"
+  },
+  "phase53_inputs": {
+    "result": {"sha256": "d158cbc6f9a8591552bbb160bfc1c760fce831411fed5c4f0101476fac871d4e", "bytes": 2427740},
+    "routes": {"sha256": "906ecd38d914fdb59da58294253eaeb1117e79a15d06d37762b7a06426ecabbc", "bytes": 2414155},
+    "events": {"sha256": "fe23e0dacf156bc5d512aec5a63ebc5f6c5c9c12b662d8192ac9187de32881b5", "bytes": 147},
+    "output_manifest": {"sha256": "014a226274ce98a9825611dc6b8589c25f9d96fec40441d9c5ff9cffbaa312fd", "bytes": 2135}
+  },
+  "corrected_contract": {
+    "raw_input_integrity": "exact frozen SHA/byte checks AND all core relation fields finite AND nonmonotonic epoch count equals zero AND duplicate epoch-key count equals zero",
+    "unsupported_signal_rows": "informational_only_excluded_from_raw_input_integrity",
+    "physical_phase53_no_go": "immutable and independently rechecked; no physical gate is relaxed",
+    "accuracy_or_truth_scoring": false,
+    "solver_or_algorithm_change": false
+  },
+  "read_policy": {
+    "phase53_output_manifest_reads": 1,
+    "phase53_result_reads": 1,
+    "phase53_routes_reads": 1,
+    "phase53_events_reads": 1,
+    "phase53_raw_device_gnss_rereads": 0,
+    "raw_device_gnss_reads": 0,
+    "truth_reads": 0,
+    "navigation_reads": 0,
+    "solver_invocations": 0,
+    "trajectory_invocations": 0,
+    "validation_holdout_reads": 0,
+    "archive_reopens": 0,
+    "rematerializations": 0,
+    "kaggle_token_access": 0,
+    "mat_reads_or_generated": 0,
+    "device_wls_or_precomputed_coordinates": 0,
+    "SvPosition_or_SvElevation": 0,
+    "output_mutation": 0
+  },
+  "forbidden": [
+    "raw device input",
+    "ground truth",
+    "navigation",
+    "solver",
+    "prior metric payload",
+    "output mutation",
+    "raw device_gnss.csv reread",
+    "truth-derived residual",
+    "validation",
+    "holdout",
+    "archive",
+    "Kaggle",
+    "token",
+    "MAT",
+    "WLS",
+    "coordinates"
+  ],
+  "failure_policy": {
+    "hash_or_schema_mismatch": "fail closed before any recomputation",
+    "presentation_mismatch": "record integrity no-go and do not reinterpret physical metrics",
+    "corrected_integrity_pass": "repair only the Phase53 gate presentation; preserve physical no-go, read accounting, and next-factor policy"
+  }
+}

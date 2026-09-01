@@ -1,0 +1,56 @@
+{
+  "schema_version": "smartphone-r5-native-gnss-pdc-train-score-recovery.v1",
+  "status": "authorized-evaluation-recovery-v2",
+  "created_at_utc": "2026-08-31T06:16:00Z",
+  "supersedes": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_train_score_recovery_v1.json",
+    "sha256": "6f42b47491b19bcc24be77f0b9fb59785b9ee11cd97b08677545b61f7e2f2c3d"
+  },
+  "purpose": "Authorize the same single development score after the recovery adapter correctly reports a trailing native epoch that has no truth row.",
+  "candidate": {
+    "route_device": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "keyed_output": "output/smartphone-r5/native-gnss-pdc-direct-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/keyed.csv",
+    "keyed_output_sha256": "16aff40056611a5404c29bfb63f1de506f78df6016480ff9b15cb69f3779fa3a",
+    "run_manifest": "output/smartphone-r5/native-gnss-pdc-direct-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/run_manifest.json",
+    "run_manifest_sha256": "32dd2cd0efae415dc26f2f50c880e07d5fc675b1f0e04ada29be7236af1006f5",
+    "candidate_unchanged": true,
+    "solver_rerun": false
+  },
+  "prior_failures": [
+    {
+      "kind": "exact-key-schema",
+      "error": "1384 native keys are absent from ground truth; first native key is 1684960018000 while truth begins at 1684960018999",
+      "truth_opened": true
+    },
+    {
+      "kind": "recovery-null-handling",
+      "error": "the first recovery implementation stopped at trailing native timestamp 1684961401000 after all 1383 truth rows were consumed",
+      "truth_opened": true
+    }
+  ],
+  "exact_failure": "The exact-key evaluator failed on the fixed Android/truth timestamp phase; the first recovery attempt then stopped after consuming the 1383 truth rows at the trailing native epoch. Both failures were schema/recovery handling only.",
+  "contract": {
+    "algorithm_or_numeric_parameter_change": false,
+    "candidate_unchanged": true,
+    "solver_rerun": false,
+    "parameter_selection": false,
+    "mat_inputs_used": false,
+    "timestamp_alignment": "deterministic one-to-one nearest truth timestamp with absolute delta <= 1000 ms; unmatched prediction rows are reported as coverage, equal-distance ties fail closed; no interpolation or coordinate modification",
+    "null_handling": "a finite native prediction with no unused truth row in the fixed window is omitted from the scored set and counted explicitly",
+    "validation_truth_read_count": 0,
+    "holdout_truth_read_count": 0,
+    "test_truth_read_count": 0,
+    "external_mutation": false
+  },
+  "recovery_evaluator": {
+    "source": "apps/commands/benchmarks/gnss_smartphone_native_gnss_pdc_eval.py",
+    "source_sha256": "2992d29d4dd77c49e319b9b86bc4580ab90b8a39864a4931782bbacc57f0852c",
+    "test": "tests/test_smartphone_native_gnss_pdc_eval.py",
+    "test_sha256": "3c9e4a8f48e74005a32715cae7e45da89e68caff16daf5067d9e6d5ce8ea62dc",
+    "fixed_window_ms": 1000,
+    "truth_read_method": "single-open-bytes-parse-and-hash",
+    "four_variants": true,
+    "official_score_claim": false
+  },
+  "allowed_action": "Run the recovery evaluator once against the already sealed development truth, publish a result regardless of metrics, and then make no candidate, solver, or numeric-parameter changes."
+}

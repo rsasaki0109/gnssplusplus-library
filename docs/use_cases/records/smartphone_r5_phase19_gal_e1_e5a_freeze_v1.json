@@ -1,0 +1,116 @@
+{
+  "schema_version": "smartphone-r5-phase19-gal-e1-e5a-freeze.v1",
+  "status": "policy-frozen-before-implementation-and-truth",
+  "created_at_utc": "2026-09-01T00:00:00Z",
+  "base_commit": "0833b66",
+  "candidate_id": "native-carrier-code-leveling-gal-e1-e5a-innovation-reset-v1",
+  "purpose": "Raw-only opt-in comparison of the frozen Galileo E1 Hatch control with the same safe Hatch contract extended to Galileo E5a.",
+  "policy": {
+    "mat_read_count_before_freeze": 0,
+    "truth_read_count_before_freeze": 0,
+    "validation_truth_read_count_before_freeze": 0,
+    "holdout_truth_read_count_before_freeze": 0,
+    "test_truth_read_count_before_freeze": 0,
+    "enriched_satellite_columns_read": false,
+    "device_wls_or_precomputed_coordinates_read": false,
+    "leaderboard_or_token_access": false,
+    "external_mutation": false,
+    "production_default_changed": false,
+    "gps_l1_included": false,
+    "parameter_search": false,
+    "truth_selection": false,
+    "post_score_tuning": false
+  },
+  "immutable_references": {
+    "phase16_freeze_record": "docs/use_cases/records/smartphone_r5_phase16_carrier_code_innovation_reset_freeze_v1.json",
+    "phase16_freeze_record_sha256": "44f3a1acd5164f87c6695ae196d69f0923e5e9f1f3a7b8af40a7169e4aa79c56",
+    "phase16_e1_mi8_submission_sha256": "f1ddbfa14dc8dbe179e2eaf896e31a3f69b216fc3cb2a0c24de429877d35e272",
+    "phase16_e1_pixel7_submission_sha256": "803f25689650df54e6d959605ca80b567d4ccdf28271b570fa0ad41d342532cd",
+    "phase17_freeze_record": "docs/use_cases/records/smartphone_r5_phase17_primary_l1_e1_freeze_v1.json",
+    "phase17_freeze_record_sha256": "55bddd265afd84b3d0baee7986d7de8ee75dc12ecdf69ce3b597d7564652548d",
+    "phase18_evaluator_freeze_record": "docs/use_cases/records/smartphone_r5_phase18_intersection_metric_freeze_v1.json",
+    "phase18_evaluator_freeze_record_sha256": "63672a482015426b1840989fae5f4f2c18b4f09f590539424d15b5f13d2bb622",
+    "phase18_result": "docs/use_cases/records/smartphone_r5_phase18_intersection_metric_score_result_v1.json",
+    "phase18_result_sha256": "dab083288c20e883c1a450231176d3751344a68827c60df568e666f7ee4f338d",
+    "phase18_status": "candidate-no-go; historical artifacts immutable and not retuned"
+  },
+  "raw_contract": {
+    "inference_inputs": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "forbidden_inputs": ["*.mat", "ground_truth.csv", "sample_submission.csv", "result_gnss*.mat", "device WLS coordinates", "SvPosition*", "SvElevationDegrees", "precomputed trajectories"],
+    "native_only": true,
+    "same_process_graph": true,
+    "atomic_outputs": true,
+    "phase13_upstream_quality": false,
+    "gps_l1_excluded": true,
+    "candidate_changes_only_selected_raw_pseudorange": true,
+    "non_target_signals_untouched": true
+  },
+  "candidate_contract": {
+    "control": {
+      "name": "galileo-e1-safe-hatch",
+      "selected_signals": ["GAL_E1"],
+      "innovation_reset": true,
+      "threshold_m": 40.0,
+      "threshold_source": "observable_upstream::pairThreshold(observable_upstream::bandForSignal(GAL_E1), 'P')"
+    },
+    "candidate": {
+      "name": "galileo-e1-plus-e5a-safe-hatch",
+      "selected_signals": ["GAL_E1", "GAL_E5A"],
+      "gps_l1_excluded": true,
+      "innovation_reset": true,
+      "thresholds_m": {
+        "GAL_E1": 40.0,
+        "GAL_E5A": 20.0
+      },
+      "threshold_source": "observable_upstream::pairThreshold(observable_upstream::bandForSignal(signal), 'P')",
+      "e5a_threshold_derivation": "bandForSignal(GAL_E5A)=L5 and the pinned upstream P pair threshold for L5 is 20 m"
+    },
+    "selection_api": "Explicit opt-in E1-plus-E5a flag; historical Config.signal and Config.signals behavior remains unchanged",
+    "key": "(GNSSSystem, PRN, SignalType)",
+    "hatch_window_samples": 30,
+    "hatch_max_gap_s": 1.5,
+    "innovation_formula": "I_t = P_t - (S_(t-1) + ADR_t - ADR_(t-1))",
+    "boundary": "abs(I_t) <= the selected signal threshold accepts the Hatch update; abs(I_t) > threshold resets only that satellite/signal arc and emits raw P",
+    "reset_state": "current raw P and ADR become the first state of the new arc",
+    "reset_conditions_preserved": ["invalid/nonfinite code", "missing/nonfinite ADR", "ADR loss/reset", "LLI cycle slip", "gap >1.5 s", "HardwareClockDiscontinuityCount change"],
+    "new_graph_state": false,
+    "default_enabled": false,
+    "phase16_byte_compatibility": "The empty Config.signals E1 call and the Phase16 E1 command remain byte-compatible",
+    "phase17_compatibility": "The historical GPS_L1CA+GAL_E1 explicit API remains available and byte-compatible; E5a is enabled only by the new explicit candidate flag"
+  },
+  "structural_gate": {
+    "must_hold": ["finite keyed output", "exact target coverage", "no MAT/enriched/WLS/truth read", "deterministic byte identity", "40 m E1 threshold", "20 m E5a threshold", "per-signal diagnostics", "independent satellite/signal arcs", "no new >70 m/s transition", "no fallback or interpolation introduced"],
+    "boundary_fixtures": ["19.9 m accepted", "20.0 m accepted", "20.1 m resets E5a arc", "E1 and E5a arcs do not share state", "GPS L1 is not selected by the Phase19 candidate"],
+    "routes": {
+      "mi8": "2022-08-04-20-07-us-ca-sjc-q/mi8",
+      "pixel7pro": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro"
+    },
+    "structural_evaluation_before_truth": true,
+    "truth_free_artifact_seal_before_accuracy": true
+  },
+  "accuracy_protocol": {
+    "evaluator": "existing Phase18 intersection evaluator; control and candidate are read from memory while each route truth file is opened once by one process",
+    "pixel7": {
+      "role": "already-used development identity, exact-key comparison only",
+      "truth_open_after_freeze": 1
+    },
+    "mi8": {
+      "role": "same-route cross-device development evidence; intersection policy retained from Phase18",
+      "truth_open_after_freeze": 1,
+      "cumulative_truth_read_note": "Phase17 and Phase18 already disclosed prior reads; this Phase19 read is an additional single evaluation-recovery read"
+    },
+    "distance_variants": ["wgs84_vincenty", "haversine_sphere"],
+    "percentile_variants": ["linear_n_minus_1", "nearest_rank_ceiling"],
+    "promotion_gate": "Both routes must show candidate strictly better than control in all four variants, with equal-or-better coverage and preserved finite/continuity safety; otherwise No-Go",
+    "native_0_782_class_target": "not achieved; no Kaggle submission authorized by this record"
+  },
+  "commands": {
+    "control": "build/apps/gnss_fgo_imu_no_base --android-gnss <device_gnss.csv> --android-imu <device_imu.csv> --nav <brdc.nav> --out <control/submission.csv> --summary-json <control/summary.json> --dataset-id <route/phone> --all-epochs --android-raw-utc-keys [--android-utc-wall-clock-fallback] --native-pdc-imu-tdcp --native-signal-bias-states --native-residual-ionosphere --native-carrier-code-leveling --native-carrier-code-innovation-reset",
+    "candidate": "control command plus --native-carrier-code-gal-e1-e5a",
+    "focused_tests": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} build/tests/run_tests --gtest_filter='CarrierCodeLevelingTest.*:UpstreamObservablePreprocessingTest.*'",
+    "full_ctest": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} ctest --test-dir build -j1 --output-on-failure",
+    "diff_check": "git diff --check",
+    "truth_evaluation": "Only after the source/binary/raw artifact manifest is sealed: one evaluator process per route opens that route's declared development ground_truth.csv once and scores sealed control/candidate together; no validation, holdout, test truth, rerun, or post-score change"
+  },
+  "freeze_record_sha256": "excluded-from-self-hash; computed after this record is written"
+}

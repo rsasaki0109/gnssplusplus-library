@@ -1,0 +1,179 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-convergence-selector-result.v1",
+  "status": "no-go-train-gate",
+  "candidate_id": "native-fgo-v1-convergence-selector-v1",
+  "evaluated_at_utc": "2026-08-31T00:00:00Z",
+  "purpose": "Closed train-only evaluation of a truth-free selector between exact native-FGO v1 baseline8 and candidate50 stopping policies.",
+  "freeze": {
+    "record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_convergence_selector_freeze_v1.json",
+    "record_sha256": "dd94186ee2f1509d1c45bcae60de4c40d8cd51a8c5298d2dbb51b36e6cc7801a",
+    "manifest": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_convergence_selector_freeze_v1_manifest.json",
+    "manifest_sha256": "4211c038911be86d7711b828e4689e8089cccf7bce494161b170d6207f2feb1e",
+    "truth_use_inventory": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_convergence_selector_truth_use_inventory_v2.json",
+    "truth_use_inventory_sha256": "aa57c85d9befdceb088c6eba75f23560e33d5cdde76bdbfa48a32eadbdbd3c30"
+  },
+  "split": {
+    "train": [
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/pixel5",
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b"
+    ],
+    "fresh_validation": "2022-08-04-20-07-us-ca-sjc-q/sm-a325f",
+    "future_holdout": "2023-03-08-21-34-us-ca-mtv-u/pixel5",
+    "route_overlap_risk": "The selected exact phone identities were unused before freeze, but each selected route has prior evidence on another phone; this risk was declared before materialization and is not treated as route-disjoint evidence."
+  },
+  "truth_access": {
+    "truth_free_artifacts_sealed_before_truth": true,
+    "train_truth_open_count": 2,
+    "train_truth_read_count": 2,
+    "train_truth_artifacts": {
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/pixel5": {
+        "path": "output/smartphone-r5/native-fgo-convergence-selector-v1/train_truth/2021-01-04-21-50-us-ca-e1highway280driveroutea__pixel5/ground_truth.csv",
+        "sha256": "a5cdea300d0740cd6f93641cdc20b4a067a96231695f247703607f5009b5b803"
+      },
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+        "path": "output/smartphone-r5/native-fgo-convergence-selector-v1/train_truth/2021-07-14-20-50-us-ca-mtv-e__sm-g988b/ground_truth.csv",
+        "sha256": "164a434967f0eeefde2812a27281d39e858024fba6e82015a9dc26bdfb3ad1a8"
+      }
+    },
+    "fresh_validation_truth_open_count": 0,
+    "future_holdout_truth_open_count": 0,
+    "future_holdout_materialized": false,
+    "old_optimizer_stop_gate_reinterpreted": false
+  },
+  "selector_decisions": {
+    "2021-01-04-21-50-us-ca-e1highway280driveroutea/pixel5": {
+      "selected_lane": "baseline8",
+      "reason": "candidate50 failed summary convergence, early-termination, convergence-row, and monotonic-cost checks",
+      "candidate_rejection_reasons": [
+        "candidate_summary_not_converged",
+        "candidate_did_not_terminate_before_max_iterations",
+        "candidate_trace_has_no_convergence_row",
+        "candidate_cost_not_monotonic_non_increasing"
+      ],
+      "baseline_total_processing_time_ms": 339.811896,
+      "candidate_total_processing_time_ms": 2017.628876,
+      "candidate_runtime_multiplier": 5.937487473952354,
+      "baseline_output_sha256": "b158b037c663d542624a92d90e922382af8cc006ca55988e92d0db26925e868e",
+      "selected_output_sha256": "b158b037c663d542624a92d90e922382af8cc006ca55988e92d0db26925e868e",
+      "candidate_cost_trace_max_increase": 0.7941618680779357,
+      "candidate_iterations": 50,
+      "candidate_converged": false
+    },
+    "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+      "selected_lane": "candidate50",
+      "reason": "candidate50 passed truth-free structural selector checks",
+      "candidate_rejection_reasons": [],
+      "baseline_total_processing_time_ms": 173.020879,
+      "candidate_total_processing_time_ms": 218.621046,
+      "candidate_runtime_multiplier": 1.2635529727022137,
+      "baseline_output_sha256": "eb8afeb99e41a0a866fdb60e4ece058582d025f1938f53ca5a03cc31960c195b",
+      "selected_output_sha256": "1c2da6c6b3ec9b34e09ddd15d4fe54acadace5654ce73408b15cc37e587cd1ad",
+      "candidate_iterations": 10,
+      "candidate_converged": true,
+      "candidate_cost_trace_rows": 11,
+      "candidate_cost_monotonic_non_increasing": true
+    }
+  },
+  "metrics": {
+    "diagnostic_keys": [
+      "haversine_sphere__linear_n_minus_1",
+      "haversine_sphere__nearest_rank_ceiling",
+      "wgs84_vincenty__linear_n_minus_1",
+      "wgs84_vincenty__nearest_rank_ceiling"
+    ],
+    "aggregate_baseline8": {
+      "diagnostic_variants_m": {
+        "haversine_sphere__linear_n_minus_1": 2.2406795848996746,
+        "haversine_sphere__nearest_rank_ceiling": 2.2449435616934674,
+        "wgs84_vincenty__linear_n_minus_1": 2.240520489963302,
+        "wgs84_vincenty__nearest_rank_ceiling": 2.244770336845842
+      },
+      "diagnostic_mean_m": 2.2427284933505716,
+      "horizontal_wgs84_p50_m": 1.719311412778916,
+      "horizontal_wgs84_p95_m": 2.7617295671476882,
+      "vertical_p95_abs_m": 3.374073488868819,
+      "availability_ratio": 1.0,
+      "truth_coverage_ratio": 0.9997502497502497
+    },
+    "aggregate_selector": {
+      "diagnostic_variants_m": {
+        "haversine_sphere__linear_n_minus_1": 2.2406795848996746,
+        "haversine_sphere__nearest_rank_ceiling": 2.2449435616934674,
+        "wgs84_vincenty__linear_n_minus_1": 2.240520489963302,
+        "wgs84_vincenty__nearest_rank_ceiling": 2.244770336845842
+      },
+      "diagnostic_mean_m": 2.2427284933505716,
+      "horizontal_wgs84_p50_m": 1.719311412778916,
+      "horizontal_wgs84_p95_m": 2.7617295671476882,
+      "vertical_p95_abs_m": 3.3741083888688217,
+      "availability_ratio": 1.0,
+      "truth_coverage_ratio": 0.9997502497502497
+    },
+    "aggregate_candidate50": {
+      "route1_diagnostic_mean_m": 1.9962445024783873,
+      "route2_diagnostic_mean_m": 2.6710633608284207,
+      "route1_horizontal_wgs84_p50_m": 1.4452125592485299,
+      "route1_horizontal_wgs84_p95_m": 2.5477266830877086,
+      "route2_horizontal_wgs84_p50_m": 2.011972174979294,
+      "route2_horizontal_wgs84_p95_m": 3.3236311246485695
+    }
+  },
+  "gate": {
+    "routewise_all_four_diagnostics_strictly_improve": false,
+    "aggregate_all_four_diagnostics_strictly_improve": false,
+    "routewise_diagnostic_mean_strictly_improves": false,
+    "aggregate_diagnostic_mean_strictly_improves": false,
+    "availability_non_regression": true,
+    "truth_coverage_non_regression": true,
+    "vertical_within_fixed_0_25m_margin": true,
+    "continuity_no_new_above_70mps_isolated_spikes": true,
+    "passed": false,
+    "failure_reason": "The selector is structurally safe but does not produce strict diagnostic improvement on either train route: baseline fallback is equal by definition on route 1 and candidate50 is equal to baseline across all four diagnostics on route 2."
+  },
+  "artifacts": {
+    "truth_free_manifest": {
+      "path": "output/smartphone-r5/native-fgo-convergence-selector-v1/truth_free_manifest.json",
+      "sha256": "c00ba9f2d98a4ecb77ee6348b257304430433197c2c89871489011dc468a652a"
+    },
+    "train_evaluation": {
+      "path": "output/smartphone-r5/native-fgo-convergence-selector-v1/train_evaluation.json",
+      "sha256": "c7b18e1f15a70a9a729200811336b1e1731bc9f13f62996d49a47220a464de6a"
+    },
+    "train_evaluation_manifest": {
+      "path": "output/smartphone-r5/native-fgo-convergence-selector-v1/train_evaluation.manifest.json",
+      "sha256": "bded85e8dc52dad7fba9e6e71a9c24bac75c6f42ce64d98c3d4c52f98b3d88d9"
+    },
+    "route_manifest_sha256": {
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/pixel5": "32db1751102fcd2167d127767f57017c9a71fbd13c070074f5251f15e6544e78",
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": "326b77fab2de3fdd17ecbfcf2ffb1be90bdf22718ccdc1025e72c747de6ad43c"
+    },
+    "selector_cli": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_native_fgo_convergence_selector_eval.py",
+      "sha256": "cdc9d23256c0ff8aa81b39961c5a25b485707e02ddda24d34ea55171a82b8740"
+    },
+    "selector_tests": {
+      "path": "tests/test_smartphone_native_fgo_convergence_selector_eval.py",
+      "sha256": "eaa3034f1608a85fcb9dfb98f107a5d8e68198b784f77dd8ed3be2420d6fa80d"
+    },
+    "release_binaries": {
+      "build/apps/gnss_fgo": "9190455cb34a9e818b79ed2ed6b023af5711fbef545215d4588bfed87f5c03e4",
+      "build/apps/gnss_spp": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12"
+    },
+    "prior_v5_submission": {
+      "path": "output/smartphone-r5/native-fgo-test-v5-source-seam-bridge/submission.csv",
+      "sha256": "89de0e03ff8eb687c9228ac19a1e62d160400b317352652cf8665b22591eef26"
+    }
+  },
+  "policy": {
+    "truth_features": false,
+    "leaderboard_used_for_tuning": false,
+    "old_holdout_used": false,
+    "fresh_validation_opened": false,
+    "future_holdout_opened": false,
+    "post_truth_tuning": false,
+    "kaggle_submission": false,
+    "token_access": false,
+    "production_rtk_spp_defaults_changed": false,
+    "promotion": "Do not promote convergence selector; retain as development-only sealed No-Go evidence."
+  }
+}

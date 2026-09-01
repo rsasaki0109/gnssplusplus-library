@@ -1,0 +1,100 @@
+{
+  "schema_version": "smartphone-r5-native-fgo-android-raw-utc-key-contract-result.v1",
+  "candidate_id": "native-fgo-android-gnss-first-vel2rpy-combined-imu-raw-utc-keys-v1",
+  "status": "no-go",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_native_fgo_android_raw_utc_key_contract_freeze_v1.json",
+    "sha256": "029054dfd4c100961a9847c66956d3ab97edae11149ab533778f2bf11bb32dfc"
+  },
+  "artifact_seal": {
+    "path": "docs/use_cases/records/smartphone_r5_native_fgo_android_raw_utc_key_artifact_seal_v1.json",
+    "sha256": "6510f976057707432b436fbd6867e1e49b5e0afd4d3a6d1a00187ece28fc2e6e",
+    "manifest": "docs/use_cases/records/smartphone_r5_native_fgo_android_raw_utc_key_artifact_seal_v1_manifest.json",
+    "manifest_sha256": "74d392a3799f058016d00c41c6757a3dca6b4621a1027222fd23de1253247b67"
+  },
+  "truth_policy": {
+    "truth_free_artifacts_sealed_before_truth": true,
+    "truth_open_count": 1,
+    "truth_role": "declared development train only",
+    "truth_hash": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a",
+    "truth_hash_provenance": "previously sealed development-train truth hash; no separate post-evaluation reread",
+    "fresh_validation_truth_open_count": 0,
+    "holdout_truth_open_count": 0,
+    "post_truth_regeneration": false,
+    "post_truth_parameter_tuning": false,
+    "kaggle_submission": false,
+    "token_access": false
+  },
+  "candidate_artifacts": {
+    "submission": {
+      "path": "output/smartphone-r5/phase8-raw-utc-keys-v1/submission.csv",
+      "sha256": "7ec90e4d9c20da7d7a4e441ddfe4019bc6ede7933cb311e5e15eca9c4f5391b4",
+      "rows": 1383
+    },
+    "summary": {
+      "path": "output/smartphone-r5/phase8-raw-utc-keys-v1/summary.json",
+      "sha256": "083decf3861ae8a5d571e0d0653c84a6bdba513d5415466978e4037a1961e563"
+    },
+    "run_log": {
+      "path": "output/smartphone-r5/phase8-raw-utc-keys-v1/run.log",
+      "sha256": "e67eecaff041b53a220f4b21bcb2b100ccc5b90f6a6949948f8c446bffe65759"
+    },
+    "evaluation": {
+      "score_json": "output/smartphone-r5/phase8-raw-utc-keys-v1/train_score.json",
+      "score_json_sha256": "03e191dd0dba9fcd92e7af7b87296f8476f5e820801bae75f8fe9f01da47027e",
+      "evaluation_log": "output/smartphone-r5/phase8-raw-utc-keys-v1/evaluation.log",
+      "evaluation_log_sha256": "ef02fd5a58c15de9c67f229c4aef388f2b542d25c3ab98b040b4d9a3ca7ca582"
+    }
+  },
+  "key_contract": {
+    "raw_epoch_keys": 1384,
+    "warmup_epoch_excluded": true,
+    "target_epochs": 1383,
+    "exact_solution_epochs": 1096,
+    "interpolated_epochs": 287,
+    "edge_hold_epochs": 0,
+    "unresolved_epochs": 0,
+    "max_interpolation_gap_ms": 49000,
+    "duplicate_keys": 0,
+    "missing_keys": 0,
+    "extra_keys": 0,
+    "nonfinite_coordinates": 0,
+    "sample_coordinate_fallbacks": 0,
+    "device_wls_coordinates_used": false,
+    "official_sample_verified": false
+  },
+  "development_evaluation": {
+    "baseline_gate_m": 68.0475838937948,
+    "coverage_ratio": 1.0,
+    "truth_rows": 1383,
+    "diagnostic_scores_m": {
+      "haversine_sphere__linear_n_minus_1": 248.98641429394468,
+      "haversine_sphere__nearest_rank_ceiling": 249.00000938280328,
+      "wgs84_vincenty__linear_n_minus_1": 249.47949218564213,
+      "wgs84_vincenty__nearest_rank_ceiling": 249.49078334815385
+    },
+    "primary_score": null,
+    "primary_score_status": "undetermined-from-public-primary-sources",
+    "gate_passed": false,
+    "failure": "All diagnostic variants are far above the frozen 68.0475838937948 m reference; the raw key contract was repaired but the 287 same-trip interpolations (maximum bracket 49 s) do not produce an acceptable trajectory.",
+    "algorithm_changed_after_truth": false
+  },
+  "runtime": {
+    "wall_seconds": 58.36,
+    "max_rss_kib": 116980
+  },
+  "verification": {
+    "focused_android_raw_gtest": "9/9 passed",
+    "release_build": "cmake --build build --config Release -j2; passed",
+    "full_serial_ctest": "131/131 passed",
+    "full_serial_ctest_command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} ctest --test-dir build -j1 --output-on-failure",
+    "diff_check": "passed",
+    "post_evaluation_compile_compatibility": {
+      "change": "Added a default empty raw-UTC report argument so existing included v21/v3 wrappers continue to compile.",
+      "algorithm_or_candidate_output_changed": false,
+      "release_binary_sha256_unchanged": "5a8d49c232e8c852fdf28f766a6755afe7eaa537d5d73c97c4f1562c455b1228",
+      "current_app_source_sha256": "a1204eb8e67a397b18dc7d91702d8f619c36e37beddbe14d19177de519b0b964"
+    }
+  },
+  "decision": "No-Go. Keep the raw UTC key contract opt-in only, retain production/default and Phase 7 artifacts unchanged, and do not open validation or holdout."
+}

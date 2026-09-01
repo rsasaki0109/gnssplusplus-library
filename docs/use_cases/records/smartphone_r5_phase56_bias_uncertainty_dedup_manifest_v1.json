@@ -1,0 +1,88 @@
+{
+  "schema_version": "smartphone-r5-phase56-pixel5-bias-uncertainty-dedup-manifest.v1",
+  "phase": 56,
+  "status": "evidence-map-evaluator-sealed-before-phase56-run",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase56_pixel5_bias_uncertainty_dedup_freeze_v1.json",
+    "sha256": "b6242ed176fbe124b523d635575572f12d25494082f5c57c837d3c3c5fe35567"
+  },
+  "evaluator": {
+    "operation": "sealed-artifact-and-source-evidence-map",
+    "new_raw_reads": 0,
+    "truth_reads": 0,
+    "single_process": true,
+    "source": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase56_bias_uncertainty_dedup.py",
+      "sha256": "69fb57e0bd8ca924cc4c96374f9daa3f4ff89b2bc15bd92d892eb375d6fd0cc4"
+    },
+    "test": {
+      "path": "tests/test_smartphone_phase56_bias_uncertainty_dedup.py",
+      "sha256": "195d2d27cad353e87488bd4e91db0c567a7880442bc9ecd8ef825b75947c6fef"
+    },
+    "cmake": {
+      "path": "tests/CMakeLists.txt",
+      "sha256": "ec0469d56aa85d4a0227c9eff7b56ad4a4f6c438fbf8121f11143ad37d752794"
+    }
+  },
+  "forbidden": [
+    "new raw device_gnss.csv",
+    "truth",
+    "navigation",
+    "solver",
+    "coordinates",
+    "IMU",
+    "MAT",
+    "validation",
+    "holdout",
+    "Kaggle",
+    "token",
+    "prior metric payload"
+  ],
+  "sealed_inputs": {
+    "phase46_freeze": "pinned in Phase56 freeze; each loaded once",
+    "phase46_evaluator_manifest": "pinned in Phase56 freeze; each loaded once",
+    "phase46_result_record": "policy view only; loaded once",
+    "phase46_output_manifest": "pinned artifact map; loaded once",
+    "phase46_output_result": "route evidence only; bytes/hash checked and loaded once",
+    "phase46_output_routes": "bytes/hash checked and loaded once",
+    "phase46_output_events": "bytes/hash checked and loaded once",
+    "phase55_policy_result": "next-factor policy metadata only; loaded once"
+  },
+  "source_contract_expectations": {
+    "BiasUncertaintyNanos": {
+      "owner": "Android GnssClock receiver clock",
+      "new_raw_audit": false,
+      "deduplication": "Phase46 receiver-clock common-mode lane"
+    },
+    "PseudorangeRateUncertaintyMetersPerSecond": {
+      "adapter_parsed": false,
+      "observation_retained": false,
+      "fgo_consumed": false,
+      "next_factor": true,
+      "candidate": "opt-in native FGO Doppler sigma floor max(existing_doppler_sigma_mps, raw_rate_uncertainty_mps), coefficient 1, no cap"
+    },
+    "doppler_sign": "Android pseudorange rate converted to RINEX Doppler with negative sign"
+  },
+  "read_accounting": {
+    "phase56_new_raw_device_gnss_reads": 0,
+    "phase56_new_truth_reads": 0,
+    "phase56_new_navigation_reads": 0,
+    "phase56_new_solver_invocations": 0,
+    "phase56_new_coordinate_inputs": 0,
+    "phase56_new_imu_reads": 0,
+    "phase46_sealed_artifacts_each_read_once": true,
+    "phase46_raw_rereads": 0,
+    "archive_reopens": 0,
+    "rematerialization": 0,
+    "validation_holdout": 0,
+    "MAT": 0,
+    "Kaggle_token": 0
+  },
+  "seal_policy": {
+    "fail_closed_on_any_hash_or_schema_mismatch": true,
+    "audit_command": "python3 apps/commands/benchmarks/gnss_smartphone_phase56_bias_uncertainty_dedup.py --audit",
+    "new_raw_audit_in_phase56": false,
+    "native_correction_in_phase56": false,
+    "zero_point_782": "not evaluated without truth"
+  }
+}

@@ -1,0 +1,151 @@
+{
+  "schema_version": "smartphone-r5-phase11-signal-bias-score-result.v1",
+  "status": "development-train-gate-pass",
+  "candidate_id": "native-signal-bias-gtsam-v1.1",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_phase11_signal_bias_freeze_v1_1.json",
+  "freeze_record_sha256": "e4ff6aba34240250b55e5ca017809ea5fdca347aa03ab4dab5bc1507ec231e55",
+  "freeze_manifest": "docs/use_cases/records/smartphone_r5_phase11_signal_bias_freeze_v1_1_manifest.json",
+  "freeze_manifest_sha256": "0e01004021e901b261bad4f8ef626d065f95da34f3623364be99a3cc9a0d6ed5",
+  "structural_seal": "docs/use_cases/records/smartphone_r5_phase11_signal_bias_structural_seal_v1.json",
+  "structural_seal_sha256": "ebc0316a9f84da76a398b87410c5d81a3ca3c3299ccdcbe2533a220de87bbb06",
+  "dataset_id": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+  "truth_policy": {
+    "truth_path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv",
+    "truth_sha256_from_evaluator": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a",
+    "truth_read_after_freeze_count": 1,
+    "truth_read_reason": "single frozen development-train metric evaluation after raw-only artifact and freeze/structural-seal hashes",
+    "score_evaluation_passes": 1,
+    "truth_free_generation_before_truth": true,
+    "validation_truth_open_count": 0,
+    "holdout_truth_open_count": 0,
+    "test_truth_open_count": 0,
+    "mat_members_read": false,
+    "token_or_kaggle_access": false,
+    "leaderboard_used_for_tuning": false,
+    "post_score_algorithm_or_parameter_changes": false
+  },
+  "source_sha256_unchanged_from_freeze": {
+    "src/algorithms/fgo_problems.cpp": "0e62d27a84bfcb0e4008f453d25daf582bca6dcc3eb82688f68aa2e8274adbb4",
+    "include/libgnss++/algorithms/fgo.hpp": "9498bc94a386ef4cb9001bca21bc73f810fa1e88f7c2024607f1fb97f571610b",
+    "include/libgnss++/algorithms/fgo_config.hpp": "19cc49f6fb0c11e8882377ec5e6d9411d2954ea7c5fea0f96e886bf158c6ea30",
+    "src/algorithms/fgo_gtsam_internal.hpp": "f2b44da9be98630cfd2bfb52403551e7674f2e446d3d940a322c1763eaf1c276",
+    "src/algorithms/fgo_gtsam_backend.cpp": "22f29b93102c3cc3e1fb0a5d5037d3ed5d48e53435dda528a124cc2dbcf37238",
+    "src/algorithms/fgo.cpp": "b5394832a449706af6de93ccd4716d538cd35e07eaeb9d41e927b27f83d88b0e",
+    "include/libgnss++/algorithms/signal_bias_contract.hpp": "cc54e29fe2c4cd14a243e9a16ec97c2767a9fb6c5ce96c57abebe7ee3b503af4",
+    "include/libgnss++/algorithms/dual_frequency_code.hpp": "e6082b41f1f366392605f8eb471e75cb7e89e8eebc35290718f12548ea1b5a35",
+    "apps/native/gnss_fgo_imu_no_base.cpp": "7f419bd61fb18dddc17e60ef0592d9ac991e2d4d70e96f9a9f614bba8c1ade67"
+  },
+  "binary_sha256": {
+    "build/apps/gnss_fgo_imu_no_base": "f21f0861a5d48ea6b2560fcec0aecf9d52ee84f27dc9128eda12e078eaa262bf"
+  },
+  "candidate_artifacts": {
+    "submission": "output/smartphone-r5/phase11-signal-bias-gtsam-v1_1/submission.csv",
+    "submission_sha256": "d8da69a0cfea3e12d78c072ac76b5c0ac108ed5f7210fb1d3d8bce872d906a70",
+    "summary": "output/smartphone-r5/phase11-signal-bias-gtsam-v1_1/summary.json",
+    "summary_sha256": "b1535a896c3e25cec1a756971bf6a58b26817801661745268eee8b7a8da2c46b",
+    "score": "output/smartphone-r5/phase11-signal-bias-gtsam-v1_1/train_score.json",
+    "score_sha256": "04ba8e40a7218ac4bb2b120a99770d56f374f97315e3a760737c488872ce9240",
+    "rows": 1383,
+    "truth_matched_rows": 1383,
+    "missing_extra_nonfinite": 0
+  },
+  "candidate_metrics": {
+    "availability_ratio": 1.0,
+    "truth_coverage_ratio": 1.0,
+    "primary_score_m": null,
+    "primary_score_status": "undetermined-from-public-primary-sources",
+    "diagnostic_variants_m": {
+      "wgs84_vincenty__linear_n_minus_1": 3.21558228095786,
+      "wgs84_vincenty__nearest_rank_ceiling": 3.216005729693874,
+      "haversine_sphere__linear_n_minus_1": 3.217859452313651,
+      "haversine_sphere__nearest_rank_ceiling": 3.218284146566745
+    },
+    "diagnostic_mean_m": 3.2169329023830326,
+    "p50_m": 2.3587407475349087,
+    "p95_m": 4.072423814380811,
+    "vertical_p95_abs_m": null,
+    "vertical_metric_note": "The raw native four-column submission emits latitude/longitude only; vertical is not scored by this evaluator."
+  },
+  "comparison_to_phase10": {
+    "reference_candidate": "Phase10 native-pdc-imu-tdcp-v1-clock-gate",
+    "reference_submission_sha256": "5a367a306123a4557f42e2b59a4760bc4eb2edfd1d36492bcab6ab2c88e240bb",
+    "reference_wgs84_vincenty__linear_n_minus_1_m": 3.913768483524376,
+    "reference_wgs84_vincenty__nearest_rank_ceiling_m": 3.914159024830025,
+    "reference_haversine_sphere__linear_n_minus_1_m": 3.913807299615721,
+    "reference_haversine_sphere__nearest_rank_ceiling_m": 3.914202588766112,
+    "all_four_variants_non_regressed": true,
+    "variant_deltas_m_candidate_minus_reference": {
+      "wgs84_vincenty__linear_n_minus_1": -0.698186202566516,
+      "wgs84_vincenty__nearest_rank_ceiling": -0.698153295136151,
+      "haversine_sphere__linear_n_minus_1": -0.69594784730207,
+      "haversine_sphere__nearest_rank_ceiling": -0.695918442199367
+    },
+    "reference_p50_m": 2.2863969335790113,
+    "candidate_p50_m": 2.3587407475349087,
+    "reference_p95_m": 5.54114003346974,
+    "candidate_p95_m": 4.072423814380811,
+    "p50_note": "P50 is reported for transparency; the frozen Phase11 promotion gate was the four diagnostic variants plus coverage/structural safety, not a hidden P50 veto."
+  },
+  "promotion_gate": {
+    "fixed_reference_wgs84_linear_m": 3.913768483524376,
+    "candidate_wgs84_linear_m": 3.21558228095786,
+    "fixed_gate_passed": true,
+    "all_four_variants_strictly_improved": true,
+    "coverage_non_regressed": true,
+    "structural_gate_passed": true,
+    "promotion_decision": "development-only candidate passes this single declared development route gate; no validation, holdout, test, or submission promotion is authorized"
+  },
+  "default_mode_noop_evidence": {
+    "phase10_reference_submission_sha256": "5a367a306123a4557f42e2b59a4760bc4eb2edfd1d36492bcab6ab2c88e240bb",
+    "phase11_default_run_submission_sha256": "5a367a306123a4557f42e2b59a4760bc4eb2edfd1d36492bcab6ab2c88e240bb",
+    "byte_identical": true,
+    "comparison_scope": "same raw route, rebuilt Release binary, no --native-signal-bias-states flag"
+  },
+  "truth_free_runtime": {
+    "problem_epochs": 1384,
+    "target_output_epochs": 1383,
+    "pseudorange_factors": 39539,
+    "receiver_signal_bias_factors": 12077,
+    "receiver_signal_bias_states": 2,
+    "receiver_signal_bias_estimates_m": {
+      "GPS:L5": -167.59691603289389,
+      "Galileo:E5a": -167.55207212672951
+    },
+    "tdcp_candidate_pairs": 24441,
+    "tdcp_factors_built": 23399,
+    "tdcp_factors_inserted": 23399,
+    "tdcp_rejected_missing_previous": 3339,
+    "tdcp_rejected_code_phase_jump": 1042,
+    "tdcp_arc_count": 2750,
+    "tdcp_residual_rms_m": 0.027359168666868303,
+    "tdcp_normalized_residual_rms": 0.9119722888956101,
+    "graph_factors": 67092,
+    "graph_values": 5540,
+    "graph_iterations": 11,
+    "graph_converged": true,
+    "graph_initial_cost": 1778065277.2783616,
+    "graph_final_cost": 65006.840594250243,
+    "gnss_first_velocity_states_exported": 1384,
+    "combined_imu_intervals": 1383,
+    "fallback": false,
+    "maximum_transition_speed_mps": 19.601319033053937,
+    "transitions_over_70mps": 0,
+    "generation_wall_seconds": 12.78,
+    "generation_max_rss_kb": 190476,
+    "score_wall_seconds": 0.08,
+    "score_max_rss_kb": 21408
+  },
+  "reproduction": {
+    "truth_free_command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:$LD_LIBRARY_PATH build/apps/gnss_fgo_imu_no_base --android-gnss <device_gnss.csv> --android-imu <device_imu.csv> --nav <brdc.nav> --out <submission.csv> --summary-json <summary.json> --dataset-id 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro --all-epochs --android-raw-utc-keys --native-pdc-imu-tdcp --native-signal-bias-states",
+    "score_command": "PYTHONPATH=apps/commands:apps/commands/benchmarks python3 apps/commands/benchmarks/gnss_smartphone_kaggle_evaluate.py --submission <sealed-submission.csv> --ground-truth <declared-development-ground_truth.csv> --output-json <train_score.json> --phone 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "no_solver_rerun_after_truth": true,
+    "no_parameter_tuning_after_truth": true
+  },
+  "limitations": {
+    "official_metric": "The public primary sources do not publish the distance earth model or percentile interpolation; four local variants are retained and the official primary score remains undetermined.",
+    "generalization": "This is one already-declared development route. It does not authorize validation or holdout promotion.",
+    "model_scope": "The state is a static receiver secondary-code bias, not a full ionosphere-free PPP/IFB calibration. Existing Klobuchar/TGD and ordinary TDCP semantics remain unchanged."
+  },
+  "no_post_score_change_declaration": true,
+  "result_record_hash": "computed after apply_patch and recorded by companion manifest"
+}

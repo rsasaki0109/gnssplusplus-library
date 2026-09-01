@@ -1,0 +1,35 @@
+{
+  "schema_version": "smartphone-kaggle-metric-parity-fixture.v1",
+  "purpose": "Independent hand-computed witness for the pinned taroz MATLAB score.m semantics; not an assertion about Kaggle's hidden implementation.",
+  "matlab_source": {
+    "repository": "https://github.com/taroz/gsdc2023",
+    "commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "score_path": "functions/score.m",
+    "score_sha256": "4c88f3f775e4f8caca22bb8c5f5747309f32b190df230346179381feb1f572c4",
+    "earth_constant_path": "../MatRTKLIB/+gt/C.m",
+    "earth_constant_sha256": "42cfdc2abb408159494de4e20bc2c2ba78c6e8267c459d42432fa374b070067a",
+    "score_lines": [11, 14],
+    "semantics": "Haversine with gt.C.RE_WGS84=6378137.0, then MATLAB prctile and mean of P50/P95"
+  },
+  "haversine_radius_m": 6378137.0,
+  "haversine_pairs": [
+    {
+      "prediction": [0.0, 1.0],
+      "truth": [0.0, 0.0],
+      "expected_distance_m": 111319.49079327357
+    },
+    {
+      "prediction": [35.0001, 139.0002],
+      "truth": [35.0, 139.0],
+      "expected_distance_m": 21.36649094655913
+    }
+  ],
+  "percentile_values_m": [1.0, 2.0, 3.0, 4.0],
+  "expected_linear_percentile_m": {
+    "0.50": 2.5,
+    "0.95": 3.85
+  },
+  "expected_phone_score_m": 3.175,
+  "numpy_contract": "numpy.percentile(method='linear')",
+  "official_primary": null
+}

@@ -5,6 +5,8 @@
 // helper is inline and internal to the fgo_internal namespace.
 
 #include <libgnss++/algorithms/fgo.hpp>
+#include <libgnss++/algorithms/galileo_group_delay.hpp>
+#include <libgnss++/algorithms/doppler_contract.hpp>
 
 namespace libgnss {
 
@@ -237,11 +239,17 @@ inline bool usesSeparateClockBias(GNSSSystem group) {
     return group != GNSSSystem::UNKNOWN && group != GNSSSystem::GPS;
 }
 
-inline double groupDelayCorrectionMeters(const Observation& observation, const Ephemeris& eph) {
+inline double groupDelayCorrectionMeters(
+    const Observation& observation,
+    const Ephemeris& eph,
+    bool use_signal_specific_galileo_group_delay = false) {
+    if (observation.satellite.system == GNSSSystem::Galileo) {
+        return galileo_group_delay::correctionMeters(
+            observation, eph, use_signal_specific_galileo_group_delay);
+    }
     switch (observation.satellite.system) {
         case GNSSSystem::GPS:
         case GNSSSystem::QZSS:
-        case GNSSSystem::Galileo:
             return eph.tgd * constants::SPEED_OF_LIGHT;
         case GNSSSystem::BeiDou:
             switch (observation.signal) {
@@ -682,7 +690,9 @@ inline std::map<CarrierKey, PreparedCarrierObservation> prepareCarrierObservatio
 
         const double satellite_clock_m =
             satellite_clock_bias * constants::SPEED_OF_LIGHT;
-        const double group_delay_m = groupDelayCorrectionMeters(observation, *eph);
+        const double group_delay_m = groupDelayCorrectionMeters(
+            observation, *eph,
+            config.use_signal_specific_galileo_group_delay);
         const double corrected_pseudorange =
             observation.pseudorange +
             satellite_clock_m -
@@ -736,29 +746,60 @@ inline std::map<CarrierKey, PreparedCarrierObservation> prepareCarrierObservatio
             std::max(1e-4, config.single_difference_doppler_sigma_mps /
                                std::sqrt(sin_el));
         if (observation.has_doppler && wavelength > 0.0) {
-            const Vector3d doppler_delta = satellite_position - receiver_position;
-            const double doppler_range = doppler_delta.norm();
-            if (doppler_range > 0.0) {
-                const Vector3d ex = doppler_delta / doppler_range;
-                const double sagnac_rate =
-                    constants::OMEGA_E / constants::SPEED_OF_LIGHT *
-                    (satellite_velocity(1) * receiver_position(0) -
-                     satellite_velocity(0) * receiver_position(1));
-                const double modeled_range_rate =
-                    satellite_velocity.dot(ex) + sagnac_rate;
+            Vector3d doppler_los = Vector3d::Zero();
+            double modeled_range_rate = 0.0;
+            bool doppler_geometry_valid = false;
+            if (config.use_corrected_undifferenced_doppler_factors) {
+                doppler_geometry_valid =
+                    doppler_contract::knownSatelliteRangeRate(
+                        satellite_position, satellite_velocity,
+                        receiver_position, true, doppler_los,
+                        modeled_range_rate);
+            } else {
+                const Vector3d doppler_delta =
+                    satellite_position - receiver_position;
+                const double doppler_range = doppler_delta.norm();
+                if (doppler_range > 0.0 && doppler_delta.allFinite()) {
+                    doppler_los = doppler_delta / doppler_range;
+                    const double sagnac_rate =
+                        constants::OMEGA_E / constants::SPEED_OF_LIGHT *
+                        (satellite_velocity(1) * receiver_position(0) -
+                         satellite_velocity(0) * receiver_position(1));
+                    modeled_range_rate =
+                        satellite_velocity.dot(doppler_los) + sagnac_rate;
+                    doppler_geometry_valid =
+                        std::isfinite(modeled_range_rate);
+                }
+            }
+            if (doppler_geometry_valid) {
                 const double satellite_clock_drift_mps =
                     satellite_clock_drift * constants::SPEED_OF_LIGHT;
                 const double measured_range_rate =
-                    -observation.doppler * wavelength;
+                    doppler_contract::rinexDopplerToRangeRate(
+                        observation.doppler,
+                        constants::SPEED_OF_LIGHT / wavelength);
                 carrier.doppler_residual_mps =
-                    measured_range_rate -
-                    (modeled_range_rate - satellite_clock_drift_mps);
+                    doppler_contract::receiverOnlyResidual(
+                        measured_range_rate, modeled_range_rate,
+                        satellite_clock_drift);
                 carrier.has_doppler_residual =
-                    std::isfinite(carrier.doppler_residual_mps);
+                    std::isfinite(carrier.doppler_residual_mps) &&
+                    std::isfinite(measured_range_rate);
                 model_debug.has_doppler_residual =
                     carrier.has_doppler_residual;
                 model_debug.doppler_residual_mps =
                     carrier.doppler_residual_mps;
+                model_debug.doppler_measured_range_rate_mps =
+                    measured_range_rate;
+                model_debug.doppler_satellite_range_rate_mps =
+                    modeled_range_rate;
+                model_debug.doppler_satellite_clock_drift_mps =
+                    satellite_clock_drift_mps;
+                model_debug.doppler_uses_rotated_satellite_state =
+                    config.use_corrected_undifferenced_doppler_factors;
+                if (config.use_corrected_undifferenced_doppler_factors) {
+                    carrier.los = -doppler_los;
+                }
             }
         }
         carrier.model_debug = model_debug;

@@ -85,6 +85,13 @@ class SmartphoneGnssWorkflowTests(unittest.TestCase):
             profile["precise_product_development_lane"]["status"],
             "evaluated-not-promoted",
         )
+        self.assertEqual(
+            profile["galileo_e1_development_lane"]["galileo_e1_hatch_development_lane"]["selected_window_s"],
+            30,
+        )
+        self.assertTrue(
+            profile["galileo_e1_development_lane"]["galileo_e1_hatch_development_lane"]["validation"]["passed"]
+        )
         self.assertEqual(profile["thresholds"]["horizontal_p95_max"], 25.0)
 
 

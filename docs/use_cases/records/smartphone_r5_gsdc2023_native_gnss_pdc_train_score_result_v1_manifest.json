@@ -1,0 +1,37 @@
+{
+  "schema_version": "smartphone-r5-native-gnss-pdc-train-score-result-manifest.v1",
+  "status": "sealed-no-go",
+  "result_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_train_score_result_v1.json",
+    "sha256": "dea4050fd2a3a2da5c0f299157955c8fd5217c10f472ba432f4624e9fdd2dc16"
+  },
+  "score_report": {
+    "path": "output/smartphone-r5/native-gnss-pdc-direct-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/train_score_recovery.json",
+    "sha256": "b8d2b94a768d51b8366767d692c9a846deedc922451baadf3b858d2f3576cc5b"
+  },
+  "candidate": {
+    "keyed_output_sha256": "16aff40056611a5404c29bfb63f1de506f78df6016480ff9b15cb69f3779fa3a",
+    "run_manifest_sha256": "32dd2cd0efae415dc26f2f50c880e07d5fc675b1f0e04ada29be7236af1006f5",
+    "factor_csv_sha256": "a0e605a7981535a73a24b1de452a8c5d77b34bbf773b1d7b3cd5526e862cfba2",
+    "summary_sha256": "dd3d6011ca23deffdb1ccc6f165c5ac85198f888d8d56e9085d12d669e104cf0"
+  },
+  "authorization": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_train_score_recovery_v2.json",
+    "sha256": "038af6bc805537526c00f80e88a9d2e5489a53a4b521efb09e3d770244be6495"
+  },
+  "truth": {
+    "role": "development-train",
+    "sha256": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a",
+    "mat_open_count": 0,
+    "validation_opened": false,
+    "holdout_opened": false,
+    "test_opened": false
+  },
+  "policy": {
+    "mat_inputs_used": false,
+    "solver_rerun_after_seal": false,
+    "score_used_for_tuning": false,
+    "external_mutation": false,
+    "candidate_promoted": false
+  }
+}

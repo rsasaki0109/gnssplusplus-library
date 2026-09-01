@@ -40,6 +40,11 @@ struct Config {
         double relative_cost_convergence_threshold = 0.0;
         double absolute_cost_convergence_threshold = 0.0;
         double pseudorange_sigma_m = 3.0;
+        // Opt-in native Android measurement-variance model.  A valid
+        // ReceivedSvTimeUncertaintyNanos value is converted to metres at the
+        // input boundary and floors the existing raw pseudorange sigma;
+        // disabled by default for byte-identical legacy behaviour.
+        bool use_native_android_sv_time_uncertainty_sigma_floor = false;
         double pseudorange_elevation_sigma_power = 1.0;
         double min_elevation_deg = 10.0;
         double min_snr_dbhz = 0.0;
@@ -51,6 +56,31 @@ struct Config {
         double max_float_position_jump_m = 0.0;
 
         bool use_spp_seed = true;
+        // Research-only, raw/nav-derived SPP initialization.  The builder
+        // first audits all finite per-epoch SPP solutions, chooses a
+        // deterministic quality anchor (satellite count, GDOP, normalized
+        // residual, then time), and replays the stateful SPP pass outward
+        // from that anchor.  The default remains the historical chronological
+        // pass so production and existing callers remain byte-compatible.
+        bool use_quality_anchor_initialization = false;
+        // Research-only extension of the quality-anchor initializer.  The
+        // normal elevation-gated reconnaissance always runs first.  Only
+        // when it has no eligible candidate does the builder retry the same
+        // raw pseudorange/broadcast-navigation SPP solve with an explicit
+        // -90 degree elevation gate, then replay the selected raw/nav anchor
+        // through the ordinary elevation-gated path.  This flag never
+        // changes factor-builder masks or enables a sentinel bypass.
+        bool use_fallback_seed_quality_anchor_recovery = false;
+        // Raw no-base research paths may use the dedicated receiver-only SPP
+        // seed contract. The historical default keeps inter-system clock
+        // states enabled for compatibility.
+        bool spp_model_intersystem_bias = true;
+        // Research-only raw Android recovery switch. When enabled, epochs
+        // with fewer than min_satellites_per_epoch usable measurements are
+        // retained so the IMU/temporal graph can carry state through short
+        // GNSS outages. The default remains false; this never invents
+        // coordinates or relaxes finite/solver checks.
+        bool retain_sparse_epochs_for_imu = false;
         bool use_pseudorange_factors = true;
         bool use_motion_factors = true;
         bool use_position_motion_factors = true;
@@ -133,6 +163,82 @@ struct Config {
         // from 47% to 29%). Kept as an opt-in knob for a future partial-AR
         // scheme that fixes independent satellites first, then adds bands.
         bool double_difference_lambda_one_band_per_satellite = false;
+        // Receiver-only raw Doppler factors for no-base graphs.  This is
+        // deliberately separate from the base-dependent single-difference
+        // switch below: enabling it must never manufacture a base/reference
+        // observation or change the default production graph.
+        bool use_undifferenced_doppler_factors = false;
+        // Correct Android/RINEX undifferenced Doppler contract.  Android's
+        // pseudorange rate is uncorrected for receiver clock frequency error;
+        // when this opt-in is enabled, the existing per-epoch clock-bias
+        // states provide receiver clock drift through their finite difference
+        // and satellite position/velocity are Earth-rotation corrected as a
+        // pair.  The historical row remains the default for compatibility.
+        bool use_corrected_undifferenced_doppler_factors = false;
+        // Opt-in deterministic per-epoch linear WLS initializer for the
+        // corrected undifferenced-Doppler rows.  The solve is truth-free and
+        // fail-closed; production/default graphs remain byte-compatible when
+        // this switch is false.
+        bool use_doppler_velocity_wls_initialization = false;
+        // Research-only in-memory native PDC state bridge. When enabled,
+        // FGO backends may use finite, quality-gated PDC position/velocity/
+        // clock seeds supplied on FGOProblem::native_pdc_state_seeds. No
+        // additional P/D factors are added and the default graph is unchanged.
+        bool use_native_pdc_state_bridge = false;
+        // Research-only receiver inter-frequency code-bias states.  When
+        // enabled, each eligible secondary (system, signal) gets one static
+        // meter-valued state relative to that system's primary code.  The
+        // state is attached to raw undifferenced pseudorange factors only;
+        // no observation is combined or discarded.  Default OFF preserves
+        // the established graph and output byte-for-byte.
+        bool use_receiver_signal_bias_states = false;
+        // Weak zero-mean gauge prior for a signal-bias state [m].  This is a
+        // fixed physical regularizer, not a truth-trained correction.
+        double receiver_signal_bias_prior_sigma_m = 1000.0;
+        // Research-only residual-ionosphere states.  The existing Klobuchar,
+        // troposphere, satellite-clock, and broadcast group-delay corrections
+        // remain applied exactly once by the problem builder.  When enabled,
+        // one vertical L1 residual state [m] is attached to each pseudorange
+        // epoch with a fixed thin-shell/elevation/frequency coefficient and
+        // connected by a random walk.  Default OFF preserves the established
+        // graph and output byte-for-byte.
+        bool use_residual_ionosphere_states = false;
+        // Weak zero-mean gauge prior for the first state in each continuous
+        // clock/time segment.  This is a physical regularizer, not a
+        // truth-trained offset.
+        double residual_ionosphere_prior_sigma_m = 10.0;
+        // Random-walk density in metres/sqrt(second), fixed before scoring.
+        double residual_ionosphere_random_walk_sigma_m_per_sqrt_s = 1.0;
+        // A structural sanity bound for the estimated residual state.  The
+        // backend records out-of-bound values and the raw candidate fails
+        // closed; it is not used to clip or select a solution.
+        double residual_ionosphere_max_abs_m = 30.0;
+        double residual_ionosphere_max_gap_s = 2.0;
+        // Research-only raw-observable quality contract.  When enabled, the
+        // problem builder computes the MATLAB-compatible global SNR p85 from
+        // Observation::snr, applies the published adjacent P-D/L-D masks,
+        // and uses the resulting P/D SNR sigmas.  TDCP keeps its caller's
+        // sigma (the smartphone Phase12 contract is 0.03 m); no file,
+        // coordinate, or truth input is consulted.  All defaults remain off.
+        bool use_upstream_observable_quality = false;
+        double upstream_snr_percentile = 85.0;
+        double upstream_min_snr_dbhz = 20.0;
+        double upstream_min_elevation_deg = 5.0;
+        double upstream_max_adjacent_gap_s = 1.5;
+        std::string upstream_device_model;
+        // Isolated raw-only port of exobs_residuals.m's absolute Doppler
+        // residual screen.  The Android adapter supplies the optional
+        // DriftNanosPerSecond field in m/s; rows without it are rejected by
+        // this opt-in screen.  This does not enable SNR weighting or alter
+        // the historical upstream-quality proxy above.
+        bool use_upstream_absolute_doppler_residual_screen = false;
+        double upstream_absolute_doppler_residual_threshold_mps = 3.0;
+        // Phase58 opt-in raw Android C/N0/Doppler calibration.  The fixed
+        // source-supported shape and pooled closure-residual scale are
+        // implemented in cn0_doppler_calibration.hpp.  This floors only the
+        // existing undifferenced FGO Doppler sigma; defaults stay disabled so
+        // the Phase43/champion graph remains byte-compatible.
+        bool use_native_cn0_doppler_calibration = false;
         bool use_single_difference_doppler_factors = false;
         bool use_single_difference_tdcp_factors = false;
         bool use_velocity_states = false;
@@ -186,6 +292,16 @@ struct Config {
         double clock_prior_sigma_m = 0.0;
         double tdcp_sigma_m = 0.03;
         double carrier_phase_sigma_m = 0.01;
+        double undifferenced_doppler_sigma_mps = 0.2;
+        int doppler_velocity_wls_min_rows = 4;
+        double doppler_velocity_wls_max_condition_number = 1.0e8;
+        double doppler_velocity_wls_huber_threshold_sigma = 4.0;
+        int doppler_velocity_wls_max_irls_iterations = 3;
+        double doppler_velocity_wls_max_velocity_mps = 70.0;
+        double doppler_velocity_wls_max_clock_rate_mps = 2000.0;
+        double doppler_velocity_wls_max_normalized_rms = 4.0;
+        double doppler_velocity_wls_max_abs_normalized_residual = 25.0;
+        double doppler_velocity_wls_edge_hold_max_s = 1.0;
         double single_difference_doppler_sigma_mps = 0.2;
         double single_difference_tdcp_sigma_m = 0.003;
         double double_difference_pseudorange_sigma_m = 1.0;
@@ -621,6 +737,10 @@ struct Config {
         bool use_ionosphere_model = true;
         bool use_troposphere_model = true;
         bool use_multi_constellation = true;
+        // Raw-only opt-in: select the Galileo E1 broadcast group-delay field
+        // from the RINEX clock-reference source bits.  False preserves the
+        // established tgd-only correction and all production defaults.
+        bool use_signal_specific_galileo_group_delay = false;
         bool collect_lambda_debug = false;
 
         // --- Phase 2 milestone 2a (docs/gtsam_backend_design.md) ---
@@ -770,6 +890,25 @@ struct Config {
         double zupt_max_gyro_std = 0.030;        ///< stationary gate: gyro deviation std [rad/s]
         double zupt_max_gyro_median = 0.020;     ///< stationary gate: gyro deviation median [rad/s]
         int zupt_min_samples = 5;                ///< minimum IMU samples in window to test
+
+        // --- Upstream stationary-stop constraints (smartphone research) ---
+        // The batch GTSAM path normally leaves these disabled.  When enabled,
+        // the backend ports fgo_gnss_imu.m's raw-IMU stop velocity prior and
+        // consecutive-stop Pose3 identity factor.  Detection uses only the
+        // aligned raw IMU stream; no trajectory, truth, or height reference is
+        // consulted.  This is separate from the fixed-lag ZUPT/NHC knobs above
+        // so the historical batch graph remains byte-compatible by default.
+        bool use_upstream_stop_constraints = false;
+        int upstream_stop_window_samples = 500;
+        double upstream_stop_acceleration_std_offset_mps2 = 0.08;
+        double upstream_stop_gyro_std_offset_radps = 0.005;
+        double upstream_stop_gyro_norm_max_radps = 0.05;
+        double upstream_stop_velocity_threshold_mps = 0.5;
+        double upstream_stop_velocity_sigma_mps = 0.01;
+        double upstream_stop_velocity_huber_k_sigma = 0.5;
+        double upstream_stop_pose_rotation_sigma_rad = 0.0017453292519943296;
+        double upstream_stop_pose_translation_sigma_m = 0.02;
+        double upstream_stop_pose_huber_k_sigma = 0.5;
 
         // --- Phase 2 milestone 2e: fix-and-hold ambiguity resolution ---
         // In the fixed-lag path, once an arc's DD ambiguity is validated-fixed

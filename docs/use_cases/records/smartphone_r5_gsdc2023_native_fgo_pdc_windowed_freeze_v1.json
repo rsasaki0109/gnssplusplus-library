@@ -1,0 +1,143 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-pdc-windowed-freeze.v1",
+  "status": "frozen-before-truth-free-structural-run",
+  "candidate": "native_fgo_pdc_independent_window_overlap_v1",
+  "purpose": "Reproduce the published independent-window shape with the existing corrected no-base native PDC graph; this is development-only and does not alter v5 or production defaults.",
+  "truth_policy": {
+    "truth_free": true,
+    "ground_truth_members_read": false,
+    "truth_materialized_count": 0,
+    "truth_open_count": 0,
+    "validation_opened": false,
+    "holdout_opened": false,
+    "test_data_used": false,
+    "leaderboard_used": false,
+    "no_post_truth_tuning": true
+  },
+  "route": {
+    "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "route_manifest": {
+      "path": "output/smartphone-r5/native-fgo-v2-processed/routes/2021-03-16-18-59-us-ca-mtv-a__pixel5/route_manifest.json",
+      "sha256": "06b0a327a17a3bf2674e36ba1f7dccbd1b763600905e67360f8d2948057e3d3c"
+    },
+    "materialization_manifest": {
+      "path": "output/smartphone-r5/native-fgo-v2-processed/routes/2021-03-16-18-59-us-ca-mtv-a__pixel5/materialization_manifest.json",
+      "sha256": "9ede18927ded98cfd0cfcbe7aaddf721f3c41e694b6250ffa86eae57a53c72cc"
+    },
+    "members": {
+      "adapter/rover.obs": {
+        "path": "output/smartphone-r5/native-fgo-v2-processed/routes/2021-03-16-18-59-us-ca-mtv-a__pixel5/adapter/rover.obs",
+        "sha256": "50fc974321b19e99f7080e63faa859a4ee0dd951d7f5d0f943f8a1318216fe38"
+      },
+      "inputs/brdc.nav": {
+        "path": "output/smartphone-r5/native-fgo-v2-processed/routes/2021-03-16-18-59-us-ca-mtv-a__pixel5/inputs/brdc.nav",
+        "sha256": "6adfaf7fe4452a4faeb94a7b607c15e05f578c46a028a030b94aa6f79de194cd"
+      }
+    },
+    "fallback_position": {
+      "path": "output/smartphone-r5/native-fgo-carrier-compatibility-v1/routes/2021-03-16-18-59-us-ca-mtv-a__pixel5/baseline8/fgo.pos",
+      "sha256": "2804f70688955c94a8c58bfef9863053251d6a9a59b5793cd9186f8d1babe8cd",
+      "route_manifest_sha256": "9d7a49a91e92d4fc8027d5f26155b4b7281485b593b3030c08e0b30b02d3b042",
+      "role": "exact sealed native-FGO fallback coordinates; never sample/truth"
+    }
+  },
+  "source_and_binary_hashes": {
+    "apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_windowed.py": "b2d5600799826b3d3b25b50851a3865e6e8e111f5cf9238e478a58adea5f26d4",
+    "apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_factor_audit.py": "62a24afa65eddbec65d873decb73a777624bc3d7f2831b3e3718d84d1f395719",
+    "apps/commands/benchmarks/gnss_taroz_pos_vel_amb_pdc_dogfood.py": "fa572d86e7db127b6f74289f8a7ce6b98c42e74894f90bf1248eef4591c85438",
+    "scripts/dump_taroz_pos_vel_ambiguity_pdc_debug.m": "b386f8b0ded4ec88248ff42e7cea6e014f869b58bff3144bc2e43ec0dbae2025",
+    "include/libgnss++/algorithms/fgo_config.hpp": "f4d54044721951ce187809aac82bdd4d4c9c8661d52d8414b4e4d84a5981af09",
+    "src/algorithms/fgo_gtsam_fixed_lag.cpp": "4299c88919991661c45a27e009908027368aa68462beca67ff584b70dbb295a5",
+    "src/algorithms/fgo_gtsam_backend.cpp": "7512b7fcb84a13960a800426b201aa2c325beff38db5784814d16e35cf2c24ef",
+    "apps/native/gnss_fgo.cpp": "3f5382e760368c9232e68220f00dfa1dbdaf15863737f0990a694e29a9c8243c",
+    "build/apps/gnss_fgo": "a10d13da4614f7cdc8e24556f5a32f870aee6c7aa94c5d3e890429996d583b0c"
+  },
+  "published_audit": {
+    "repository": "https://github.com/taroz/gsdc2023",
+    "commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "license": "MIT",
+    "run_fgo_m_lines": "1-71",
+    "fgo_gnss_m_lines": "103-215",
+    "fgo_gnss_imu_m_lines": "165-337",
+    "parameters_m_lines": "46-203",
+    "source_hashes": {
+      "output/reproducibility-cache/gsdc2023/run_fgo.m": "02150849653b2e5c80609e971dbef41b010569de5dcc304782235b7fc96b9065",
+      "output/reproducibility-cache/gsdc2023/fgo_gnss.m": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3",
+      "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+      "output/reproducibility-cache/gsdc2023/parameters.m": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52"
+    },
+    "observed_contract": [
+      "run_fgo invokes independent fgo_gnss_imu calls and has no stride, overlap, state handoff, or stitch logic",
+      "MATLAB fgo_gnss_imu uses a batch Levenberg-Marquardt optimizer with maxIterations=1000",
+      "P/D/TDCP factors use robust noise models; local native PDC retains its frozen Huber 4-sigma recipe",
+      "clock, velocity, and ambiguity states are initialized for each invocation; published code has no cross-window carry/reset API"
+    ]
+  },
+  "recipe": {
+    "factor_graph": "existing native Eigen no-base P+D(corrected undifferenced)+TDCP+float carrier+velocity/clock/position motion",
+    "base_or_double_difference": false,
+    "window_epochs": 120,
+    "overlap_epochs": 60,
+    "stride_epochs": 60,
+    "optimizer_max_iterations": 1000,
+    "relative_cost_threshold": 1e-6,
+    "absolute_cost_threshold": 1e-9,
+    "robust_loss": {
+      "pseudorange_huber_threshold_sigma": 4,
+      "tdcp_huber_threshold_sigma": 4,
+      "carrier_huber_threshold_sigma": 4
+    },
+    "noise_and_initialization": {
+      "pseudorange_sigma_m": 3.0,
+      "motion_sigma_m": 50.0,
+      "clock_motion_sigma_m": 300.0,
+      "velocity_prior_sigma_mps": 100.0,
+      "velocity_motion_sigma_mps": 0.01,
+      "tdcp_sigma_m": 0.03,
+      "carrier_phase_sigma_m": 0.01,
+      "undifferenced_doppler_sigma_mps": 0.2,
+      "doppler_velocity_wls_initialization": true,
+      "native_spp_initialization": true,
+      "seed_interpolation_max_gap_s": 0.0
+    },
+    "ambiguity_clock_velocity": {
+      "ambiguity_mode": "float",
+      "ambiguity_between_factors": true,
+      "ambiguity_prior": "native default",
+      "clock_handoff": "none; reset per independent window/segment",
+      "velocity_handoff": "none; native per-window Doppler-WLS initialization",
+      "carrier_arc_reset": "native window boundary; no cross-window ambiguity carry"
+    },
+    "segment_reset_gap_s": 2.0,
+    "stitch": "select the row with maximum distance from its window edge; lower window index deterministic tie-break"
+  },
+  "marginalization_decision": {
+    "native_fixed_lag_api_exists": true,
+    "native_fixed_lag_source_lines": "src/algorithms/fgo_gtsam_fixed_lag.cpp:12-29; backend dispatch: src/algorithms/fgo_gtsam_backend.cpp:38-43",
+    "fixed_lag_requirements": "use_fixed_lag_smoother + Pose3 + IMU + DD/IMU graph",
+    "used_for_this_lane": false,
+    "reason": "The existing API is an IMU-coupled DD-RTK graph and cannot marginalize this no-base Eigen PDC graph without a new estimator; independent windows match the observable published invocation contract."
+  },
+  "fallback_and_gate": {
+    "failed_window": "use exact sealed fallback rows for that window",
+    "unsafe_stitch": "use exact sealed fallback rows for the whole route",
+    "finite_ecef_norm_m": [6000000.0, 7500000.0],
+    "maximum_transition_speed_mps": 70.0,
+    "doppler_residual_rms_ceiling_mps": 4.0,
+    "required_per_window": ["finite positions", "P/D/TDCP/carrier factors", "float ambiguity state", "monotone cost", "optimizer convergence", "no SD/DD factors"],
+    "promotion": "structural truth-free pass is required before any development truth score; no validation or holdout may be opened in this turn"
+  },
+  "commands": {
+    "structural_run": "GNSSPP_WINDOWED_PDC_NO_TRUTH=1 python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_windowed.py --no-truth",
+    "repeat_check": "repeat the exact command only after the first sealed artifact is independently hash-checked; existing output is resume-safe",
+    "tests": "python3 tests/test_smartphone_native_fgo_pdc_windowed.py",
+    "release_build": "cmake --build build --config Release --target gnss_fgo"
+  },
+  "production_policy": {
+    "opt_in_only": true,
+    "production_rtk_spp_default_changed": false,
+    "v5_submission_changed": false,
+    "kaggle_submission": false,
+    "token_access": false
+  }
+}

@@ -1,0 +1,107 @@
+{
+  "schema_version": "smartphone-r5-phase66-phase65-structural-integrity-recovery-freeze.v1",
+  "phase": 66,
+  "execution_label": "Luna Max",
+  "status": "frozen-before-new-phase66-raw-read",
+  "purpose": "Recover only the Phase65 structural evaluator presentation error using a new full matrix; do not reuse the partial Phase65 output.",
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "base_commit": "1c637d4",
+    "phase65_failure_record": "docs/use_cases/records/smartphone_r5_phase65_native_base_pseudorange_compensation_structural_failure_v1.json",
+    "phase65_failure_record_sha256": "fd346e1289a3dca726f45da001972c37d4f54c4808af50d44dce6c9a94f2d669",
+    "phase65_freeze": "docs/use_cases/records/smartphone_r5_phase65_native_base_pseudorange_compensation_freeze_v1.json",
+    "phase65_freeze_sha256": "1f3cb0bedd9b64d08943ef14f87b6429ade367805ae28511ec56b78dd26033d7",
+    "phase65_implementation_commit": "f8cdf3b",
+    "phase65_runner": "apps/commands/benchmarks/gnss_smartphone_phase65_native_base_pseudorange_compensation.py",
+    "phase65_runner_sha256": "6be7dd346a1ff219c15036fcf194861ebeda700678d52e3d93b2f3c2b96a16ae",
+    "phase65_manifest": "docs/use_cases/records/smartphone_r5_phase65_native_base_pseudorange_compensation_manifest_v1.json",
+    "phase65_manifest_sha256": "1306480f6b7fb839e55309e9c2c77b41f2ac0a1baf9f6971949612fd485d2255",
+    "partial_phase65_control": {
+      "route": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "submission_sha256": "d4d7652e5d12389466e586fe2d8e85d34977a7e11036cee2f591a89293c5426c",
+      "summary_sha256": "d4980260e257c92d7e2fb716f900501fd55c3eb9278f9b38a4f72ac2e62303fe",
+      "reusable": false,
+      "identity_only": true
+    }
+  },
+  "exact_prior_failure": {
+    "class": "presentation-contract-bug-before-candidate",
+    "cause": "Phase65 phase43_control() returned {submission:{bytes,sha256},summary:{bytes,sha256}}, but run_matrix compared control_reference['submission']['sha256'] and control_reference['summary']['sha256'] at the wrong schema level; the first MTV-a control therefore raised KeyError: sha256.",
+    "recovery": "Use a new evaluator with a focused flat-schema fixture and compare control['submission']['sha256'] to reference['submission']['sha256']; do not patch or reuse the partial output."
+  },
+  "pinned_implementation_artifacts": {
+    "base_header_sha256": "11d6dfd8ea42d98fc0a9c3856d298379e584ff64392fc4a5ae5fd421ba95402f",
+    "base_source_sha256": "55b7a1fbb96b5e3d6599c311c229870d7c319163d43322c01a3881d85dcb25aa",
+    "native_app_sha256": "bad544d64dee176e4e38ed13c595ea10fba515cb2dd7dbd87a3bb2d2cab11f31",
+    "focused_cpp_test_sha256": "fb7d6d19f21376df58730f56be6ffea600af39bb3abc32ab6d7c8d848277af4b"
+  },
+  "route_order": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+  ],
+  "base_inputs": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2021-03-16-18-59-us-ca-mtv-a__pixel5/base.obs",
+      "sha256": "380b8ff9091344fb756697e27f0983d9a0ba2cf0c201b96849bfc1ecc1af0e52",
+      "bytes": 10708536,
+      "observed_dt_s": 1.0,
+      "moving_mean_samples": 151,
+      "approx_position_xyz_m": [-2703115.921, -4291767.2078, 3854247.9066]
+    },
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2021-08-24-20-32-us-ca-mtv-h__pixel5/base.obs",
+      "sha256": "4d3e37cbe0347fa56216db54ede9e0f30731885f337f1653ab5a86afb2bb2150",
+      "bytes": 11854125,
+      "observed_dt_s": 1.0,
+      "moving_mean_samples": 151,
+      "approx_position_xyz_m": [-2698116.8365, -4301328.0461, 3847285.9307]
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2022-04-01-18-22-us-ca-lax-t__pixel5/base.obs",
+      "sha256": "d731e0e8a7ba4396d62340c85b6238e66c50c6a349621f9dcea0ea6885fd4cfe",
+      "bytes": 719969,
+      "observed_dt_s": 15.0,
+      "moving_mean_samples": 11,
+      "approx_position_xyz_m": [-2507798.7984, -4676369.6918, 3526890.8008]
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2023-03-08-21-34-us-ca-mtv-u__pixel5/base.obs",
+      "sha256": "aedb7a39e7b6612ea97964b363c74cd2c10318255b7f2287f4720d18e71803e6",
+      "bytes": 5950275,
+      "observed_dt_s": 1.0,
+      "moving_mean_samples": 151,
+      "approx_position_xyz_m": [-2698116.8365, -4301328.0461, 3847285.9307]
+    }
+  },
+  "structural_matrix": {
+    "output_root": "output/smartphone-r5/phase66-phase65-structural-integrity-recovery-v1",
+    "control_runs_per_route": 1,
+    "candidate_runs_per_route": 2,
+    "native_solver_invocations": 12,
+    "raw_device_gnss_process_reads": 12,
+    "raw_device_imu_process_reads": 12,
+    "broadcast_nav_process_reads": 12,
+    "base_rinex_process_reads": 12,
+    "hash_verification_reads_per_input": 4,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_token_reads": 0,
+    "partial_phase65_output_reuse": false,
+    "new_output_required": true,
+    "candidate_repeat_identity": true,
+    "control_phase43_identity": true,
+    "fail_closed": true
+  },
+  "forbidden_inputs": [
+    "ground_truth.csv",
+    "MAT/MATLAB products",
+    "validation/holdout/test truth",
+    "Kaggle/token data",
+    "partial Phase65 output reuse",
+    "post-truth tuning"
+  ],
+  "decision_rule": "Only after this freeze and the separately sealed Phase66 evaluator/manifest may the new full 12-invocation truth-free matrix run. Any mismatch, candidate/control/repeat failure, missing base telemetry, or forbidden read is fail-closed; no accuracy truth is authorized here."
+}

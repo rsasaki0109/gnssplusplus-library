@@ -1,0 +1,276 @@
+{
+  "schema_version": "smartphone-r5-phase58-pixel5-cn0-doppler-calibration-freeze.v1",
+  "phase": 58,
+  "execution_label": "Luna Max",
+  "status": "frozen-before-phase58-raw-read",
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "base_commit": "7606e94",
+    "phase57_policy": {
+      "path": "docs/use_cases/records/smartphone_r5_phase57_pixel5_rate_uncertainty_result_v1.json",
+      "sha256": "836ed141b75683795bdcde9552677d61419b9733fe742568921b2078229d3897",
+      "used_as": "next-factor policy metadata only; no Phase57 metric payload is read"
+    },
+    "source_contracts": {
+      "android_raw_gnss_cpp": {
+        "path": "src/io/android_raw_gnss.cpp",
+        "sha256": "1bb9369e7db651e53fddab2a92c2f217512667bb349f70aa52934aeb80cbf387"
+      },
+      "android_raw_gnss_header": {
+        "path": "include/libgnss++/io/android_raw_gnss.hpp",
+        "sha256": "e833570103a521b9e051086b6ea75192ae3a575b83eee33d978143eaf279c52c"
+      },
+      "observation_header": {
+        "path": "include/libgnss++/core/observation.hpp",
+        "sha256": "9ba79a44fd1f8c4f4f7b7f8707a119c350174bf850b226ff89e587c55f8abd2c"
+      },
+      "fgo_problems_cpp": {
+        "path": "src/algorithms/fgo_problems.cpp",
+        "sha256": "41c0fa5db6a745562342061c9cd6bcf08f74e02038580869a09294a325f05ca1"
+      },
+      "fgo_config_header": {
+        "path": "include/libgnss++/algorithms/fgo_config.hpp",
+        "sha256": "627fbc8585d6f6a384d9ea10b2670e4a9889dc20ba89a3427ed735eb61a6a358"
+      },
+      "gnss_fgo_cli": {
+        "path": "apps/native/gnss_fgo.cpp",
+        "sha256": "3f5382e760368c9232e68220f00dfa1dbdaf15863737f0990a694e29a9c8243c"
+      },
+      "doppler_contract": {
+        "path": "include/libgnss++/algorithms/doppler_contract.hpp",
+        "sha256": "66d97c9ca2cc474247464d8af782cc3ca1837195967e601576ee25b6f8e1f56d"
+      },
+      "observable_upstream_preprocessing": {
+        "path": "include/libgnss++/algorithms/observable_upstream_preprocessing.hpp",
+        "sha256": "5d85cfd82519b6aa3492af8cffb8b895935db7eb50f3a4c6001ab72d8ce13f54"
+      }
+    },
+    "phase43_champion_config": {
+      "source_summary": "output/smartphone-r5/phase43-native-fallback-seed-quality-anchor-recovery-v1/candidate/<route>/run1/summary.json",
+      "summary_hashes": {
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5": "d4980260e257c92d7e2fb716f900501fd55c3eb9278f9b38a4f72ac2e62303fe",
+        "2021-08-24-20-32-us-ca-mtv-h/pixel5": "23f409e5708dc547bc86b156e07a6fb305732cb9ce8eb3da57f26fd487e4404e",
+        "2022-04-01-18-22-us-ca-lax-t/pixel5": "f4fb3bc2b09d44700ee83772d4b23ad93b68d07eff6743b9525626f805264eb8",
+        "2023-03-08-21-34-us-ca-mtv-u/pixel5": "eeb4f60e352ea00277604516b432673317ab035daa601135c6e9f989cb118926"
+      },
+      "flags": [
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--android-utc-wall-clock-fallback",
+        "--native-pdc-imu-tdcp-no-bridge",
+        "--native-quality-anchor"
+      ],
+      "native_upstream_quality": false,
+      "native_upstream_absolute_doppler_screen": false,
+      "undifferenced_doppler_sigma_mps": 0.2,
+      "interpretation": "Phase43 champion uses fixed configured Doppler sigma; the exact upstream C/N0 SNR model is present in source but disabled in the pinned champion. These fields are configuration metadata, not audit metric input."
+    }
+  },
+  "objective": {
+    "question": "Is a source-supported monotonic Android Cn0DbHz model identifiable as a nonduplicate Doppler residual calibration across four route-disjoint Pixel5 recordings?",
+    "factor": "raw Android per-satellite Cn0DbHz/Doppler residual calibration",
+    "truth_free": true,
+    "route_disjoint": true,
+    "no_native_change_before_gates": true
+  },
+  "cohort": {
+    "phone_model": "pixel5",
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "route_count": 4,
+    "route_order_fixed": true
+  },
+  "exact_raw_inputs": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv",
+      "member": "dataset_2023/train/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv",
+      "file_size": 57715495,
+      "sha256": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863",
+      "source_freeze": "Phase57 exact raw input pin"
+    },
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+      "member": "dataset_2023/train/2021-08-24-20-32-us-ca-mtv-h/pixel5/device_gnss.csv",
+      "file_size": 74299283,
+      "sha256": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7",
+      "source_freeze": "Phase57 exact raw input pin"
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_gnss.csv",
+      "member": "dataset_2023/train/2022-04-01-18-22-us-ca-lax-t/pixel5/device_gnss.csv",
+      "file_size": 33837317,
+      "sha256": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1",
+      "source_freeze": "Phase57 exact raw input pin"
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2023-03-08-21-34-us-ca-mtv-u/pixel5/inputs/device_gnss.csv",
+      "member": "dataset_2023/train/2023-03-08-21-34-us-ca-mtv-u/pixel5/device_gnss.csv",
+      "file_size": 23385520,
+      "sha256": "a0fc8e71bdfc03be61b99efcd7d41fbba8ffec126df78b55243f681fd211f204",
+      "source_freeze": "Phase57 exact raw input pin"
+    }
+  },
+  "raw_schema": {
+    "required_columns": [
+      "MessageType",
+      "utcTimeMillis",
+      "TimeNanos",
+      "FullBiasNanos",
+      "BiasNanos",
+      "ReceivedSvTimeNanos",
+      "Svid",
+      "ConstellationType",
+      "SignalType",
+      "CarrierFrequencyHz",
+      "PseudorangeRateMetersPerSecond",
+      "Cn0DbHz"
+    ],
+    "required_for_transition": ["State", "HardwareClockDiscontinuityCount"],
+    "optional_columns": [
+      "TimeOffsetNanos",
+      "MultipathIndicator",
+      "PseudorangeRateUncertaintyMetersPerSecond",
+      "ReceivedSvTimeUncertaintyNanos",
+      "AccumulatedDeltaRangeState",
+      "AccumulatedDeltaRangeMeters",
+      "DriftNanosPerSecond",
+      "BiasUncertaintyNanos",
+      "TimeUncertaintyNanos"
+    ],
+    "row_filter": "Only MessageType=Raw rows; unsupported signal rows are counted and excluded informationally; enriched coordinate fields are never parsed."
+  },
+  "existing_model_audit": {
+    "source_supported_monotonic_shape": "sigma_D(c)=scale*10^(-(c-c_ref)/20), from the source snrScale 20 dB denominator",
+    "reference_cn0_dbhz": 40.0,
+    "existing_exact_snr_formula": "snrScale=10^(-(Cn0DbHz-p85_band)/20); D sigma=snrScale/12",
+    "existing_p85_contract": "MATLAB linearPercentile at configured percentile 85 over source L1/L5 observations",
+    "current_champion_effective": false,
+    "current_champion_fixed_sigma_mps": 0.2,
+    "nonduplicate_candidate": "Do not reproduce p85/12. For audit only, fit one closure-residual scale alpha_mps on three routes and test held-out route with sigma_candidate_mps=max(existing_sigma_mps, alpha_mps*10^(-(Cn0DbHz-40)/20)). No native implementation is implied by this freeze.",
+    "scale_fit": "For each training transition with finite positive endpoint Cn0, v_mps=abs(centered code/rate residual_m)/dt_s and q=10^(-(pair_mean_Cn0_dbhz-40)/20); alpha=median(v_mps/q). Median is the sole fixed robust scale estimator; no truth, sweep, clip, or post-read tuning.",
+    "pair_cn0": "pair_mean_Cn0_dbhz=(previous Cn0DbHz+current Cn0DbHz)/2; pair relation requires both endpoints finite and positive",
+    "factor_cn0": "current endpoint Cn0DbHz drives candidate factor impact; no interpolation or nearest neighbor",
+    "closure": "e=(P_current-P_previous)-0.5*(rate_previous+rate_current)*dt_s; subtract same endpoint utcTimeMillis/HCDC median; raw P is Phase25 integer/Decimal segment-base reconstruction",
+    "candidate_scope_if_authorized": "All Android raw signals entering FGO Doppler factors, FGO only; no SPP. Coefficient 1, no cap, fixed source-exact exponent."
+  },
+  "eligibility": {
+    "same_key": "same supported system/SVID/signal consecutive Raw rows",
+    "dt_seconds": "0 < dt <= 1.5",
+    "clock": "unchanged HardwareClockDiscontinuityCount and Phase25 segment",
+    "state": "valid Android code-lock/transmit state",
+    "range": "finite Phase25 P in [1e7,4e7] metres",
+    "existing_masks": "MultipathIndicator==1, Cn0DbHz<20 dB-Hz, invalid state, or code-range rows excluded exactly as existing raw mask; no new mask",
+    "residual_metric": "absolute centered closure residual divided by dt for Doppler-rate calibration",
+    "cn0_metric": "both endpoint Cn0 finite and positive; endpoint pair mean for relation, current endpoint for factor-impact proxy"
+  },
+  "numeric_gates": {
+    "logic": "AND; all thresholds are immutable after this freeze and before the one-shot raw read",
+    "coverage": {
+      "min_transitions_per_route": 1000,
+      "min_satellites_per_route": 3,
+      "min_finite_positive_cn0_fraction": 0.5,
+      "min_finite_pair_cn0_fraction": 0.5,
+      "min_pairs_per_cn0_bin": 50,
+      "min_populated_cn0_bins_per_route": 4
+    },
+    "cn0_bins": {
+      "fixed_edges_dbhz": [20.0, 25.0, 30.0, 35.0, 40.0],
+      "labels": ["20_to_25", "25_to_30", "30_to_35", "35_to_40", ">=40"],
+      "ordering": "lower Cn0 must not have lower residual median or p95; exact equality allowed"
+    },
+    "routewise_monotonicity": {
+      "spearman_cn0_vs_abs_centered_rate_residual_max": -0.25,
+      "median_non_increasing_with_cn0": true,
+      "p95_non_increasing_with_cn0": true,
+      "allow_exact_equality": true
+    },
+    "loo_calibration": {
+      "folds": 4,
+      "fit_routes_per_fold": 3,
+      "heldout_normalized_median_range": [0.25, 4.0],
+      "heldout_normalized_le_one_fraction_range": [0.05, 0.95],
+      "alpha_max_over_min_ratio": 3.0,
+      "alpha_coefficient_of_variation_max": 0.5,
+      "direction_stable": true
+    },
+    "non_common_mode": {
+      "per_satellite_min_groups_each_route": 3,
+      "per_satellite_min_pairs": 50,
+      "within_satellite_spearman_max": -0.15,
+      "within_signal_min_groups_each_route": 1,
+      "within_signal_spearman_max": -0.15,
+      "same_direction_required": true,
+      "centered_rate_p95_min_mps": 0.01
+    },
+    "current_factor_impact": {
+      "actual_champion_sigma_mps": 0.2,
+      "candidate_above_configured_sigma_fraction_min": 0.10,
+      "candidate_p95_sigma_excess_mps_min": 0.05,
+      "snr_path_report_only": true,
+      "snr_existing_model_must_not_be_reimplemented": true
+    },
+    "presentation_integrity": {
+      "all_group_counts_sum": true,
+      "four_route_medians_retained": true,
+      "aggregate_recomputed_exact": true,
+      "loo_fold_count_exact": 4,
+      "raw_hash_bytes_exact": true,
+      "fit_scale_route_labels_exact": true
+    }
+  },
+  "controls_and_repeats": {
+    "control": "raw centered closure residual and existing champion sigma metadata; no weighting or correction applied",
+    "candidate": "diagnostic sigma only; no native factor or solver application during audit",
+    "repeat_count": 1,
+    "implementation_repeat_count_if_all_gates_pass": 2,
+    "solver_runs": 0,
+    "post_read_tuning": false,
+    "truth_reads": 0
+  },
+  "input_policy": {
+    "single_process": true,
+    "raw_device_gnss_read_count_per_route": 1,
+    "raw_device_imu_reads": 0,
+    "truth_reads": 0,
+    "navigation_reads": 0,
+    "solver_reruns": 0,
+    "trajectory_reruns": 0,
+    "mat_reads_or_generated": 0,
+    "validation_holdout_access": false,
+    "archive_reopens": 0,
+    "rematerialization_count": 0,
+    "kaggle_or_token_access": false,
+    "device_wls_or_precomputed_coordinates": false,
+    "SvPosition_or_SvElevation": false,
+    "phase45_payload_reads": 0,
+    "phase57_metric_payload_reads": 0,
+    "correction_fit_or_application": false
+  },
+  "pre_read_assertions": {
+    "raw_payload_opened": false,
+    "audit_executed": false,
+    "truth_opened": false,
+    "nav_opened": false,
+    "solver_invoked": false,
+    "native_source_changed": false,
+    "gates_changed": false
+  },
+  "decision_rule": "All gates are logically ANDed. Any missing/invalid Cn0, raw hash mismatch, parser inconsistency, nonfinite metric, insufficient route/satellite/bin coverage, nonmonotonic route or LOO relation, unstable fitted scale, lack of per-satellite/signal non-common relation, insufficient actual configured-factor impact, or presentation-integrity failure is fail-closed. If every gate passes, create a separately frozen implementation stage and stop before truth; otherwise record no-go and exactly one next raw physical factor.",
+  "forbidden_actions": [
+    "open or materialize ground_truth.csv",
+    "read Phase57 metric output as audit input",
+    "read validation or holdout truth",
+    "read or create MATLAB files",
+    "read navigation or invoke solver/trajectory",
+    "use coordinates, device WLS, SvPosition, SvElevation, IMU, or precomputed inference coordinates",
+    "apply or implement native C++ correction before all gates pass",
+    "reproduce the existing exact p85/12 SNR model as a new candidate",
+    "sweep thresholds or tune after reading raw data",
+    "use Kaggle or tokens"
+  ]
+}

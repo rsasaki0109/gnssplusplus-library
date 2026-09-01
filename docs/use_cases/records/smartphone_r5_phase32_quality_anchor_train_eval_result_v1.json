@@ -1,0 +1,212 @@
+{
+  "schema_version": "smartphone-r5-phase32-quality-anchor-train-evaluation-result.v1",
+  "phase": 32,
+  "status": "train-pass",
+  "decision": "development-go-fresh-validation-eligible",
+  "purpose": "One unchanged, one-process comparison of the sealed Phase31 quality-anchor candidate with the sealed Phase28 TDCP/no-bridge control on the three already-opened development identities.",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase32_quality_anchor_train_eval_freeze_v1.json",
+    "sha256": "fa6ff8545d9b9a6c1dd83e4c952964b4193d3d4dd822bb41df17d5f2be35322a"
+  },
+  "evaluator_manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase32_quality_anchor_train_eval_evaluator_manifest_v1.json",
+    "sha256": "08fd3d9f1e57bba3c9d6be22e28e6b1d96fa9ca99dcb5c7ce314515d5856a7c4"
+  },
+  "output": {
+    "report": "output/smartphone-r5/phase32-quality-anchor-train-eval-v1/train_evaluation.json",
+    "report_sha256": "eb8d8e67df0624b57d9743071cd5741d4a15ace6ca1895003ad73282ce1fe385",
+    "manifest": "output/smartphone-r5/phase32-quality-anchor-train-eval-v1/train_evaluation.manifest.json",
+    "manifest_sha256": "4130d4ec29885bf6f7105ef1af40e99cb7db833b986dae1dc45cf6f04cb64b41"
+  },
+  "truth_access": {
+    "phase32_truth_open_count": 3,
+    "truth_read_count_per_route": 1,
+    "cumulative_truth_reads_after_phase32": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": 2,
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4": 2,
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": 3
+    },
+    "truth_files_unchanged_from_sealed_materialization": true,
+    "fresh_validation_truth_open_count": 0,
+    "future_holdout_truth_open_count": 0,
+    "mat_read_or_generated": false,
+    "token_or_kaggle_access": false,
+    "truth_used_for_inference_or_selection": false,
+    "post_score_tuning": false
+  },
+  "route_results": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "truth_rows": 2159,
+      "shared_scored_rows": 2158,
+      "availability_ratio": 0.999536822603057,
+      "control": {
+        "horizontal_wgs84_p50_m": 1.2941746825035914,
+        "horizontal_wgs84_p95_m": 2.9449529584055973,
+        "diagnostic_variants_m": {
+          "haversine_sphere__linear_n_minus_1": 2.1200062765249656,
+          "haversine_sphere__nearest_rank_ceiling": 2.120366445648783,
+          "wgs84_vincenty__linear_n_minus_1": 2.1195638204545943,
+          "wgs84_vincenty__nearest_rank_ceiling": 2.1197502390423555
+        },
+        "over_70_mps_count": 0,
+        "max_speed_mps": 44.329234970139126
+      },
+      "candidate": {
+        "horizontal_wgs84_p50_m": 1.2941746825035914,
+        "horizontal_wgs84_p95_m": 2.9449529584055973,
+        "diagnostic_variants_m": {
+          "haversine_sphere__linear_n_minus_1": 2.1200062765249656,
+          "haversine_sphere__nearest_rank_ceiling": 2.120366445648783,
+          "wgs84_vincenty__linear_n_minus_1": 2.1195638204545943,
+          "wgs84_vincenty__nearest_rank_ceiling": 2.1197502390423555
+        },
+        "over_70_mps_count": 0,
+        "max_speed_mps": 44.329234970139126
+      },
+      "gate": {
+        "routewise_horizontal_nonregression": true,
+        "availability_nonregression": true,
+        "coverage_nonregression": true,
+        "continuity_nonregression": true,
+        "vertical": "informational-unavailable",
+        "passed": true
+      }
+    },
+    "2021-07-27-19-49-us-ca-mtv-b/pixel4": {
+      "truth_rows": 1677,
+      "shared_scored_rows": 1677,
+      "availability_ratio": 1.0,
+      "control": {
+        "horizontal_wgs84_p50_m": 1.1785830444062984,
+        "horizontal_wgs84_p95_m": 2.3508015936526294,
+        "diagnostic_variants_m": {
+          "haversine_sphere__linear_n_minus_1": 1.7630719676089086,
+          "haversine_sphere__nearest_rank_ceiling": 1.7636161792642513,
+          "wgs84_vincenty__linear_n_minus_1": 1.7646923190294639,
+          "wgs84_vincenty__nearest_rank_ceiling": 1.765185078087731
+        },
+        "over_70_mps_count": 0,
+        "max_speed_mps": 36.31727166197797
+      },
+      "candidate": {
+        "horizontal_wgs84_p50_m": 1.1785830444062984,
+        "horizontal_wgs84_p95_m": 2.3508015936526294,
+        "diagnostic_variants_m": {
+          "haversine_sphere__linear_n_minus_1": 1.7630719676089086,
+          "haversine_sphere__nearest_rank_ceiling": 1.7636161792642513,
+          "wgs84_vincenty__linear_n_minus_1": 1.7646923190294639,
+          "wgs84_vincenty__nearest_rank_ceiling": 1.765185078087731
+        },
+        "over_70_mps_count": 0,
+        "max_speed_mps": 36.31727166197797
+      },
+      "gate": {
+        "routewise_horizontal_nonregression": true,
+        "availability_nonregression": true,
+        "coverage_nonregression": true,
+        "continuity_nonregression": true,
+        "vertical": "informational-unavailable",
+        "passed": true
+      }
+    },
+    "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+      "truth_rows": 1165,
+      "shared_scored_rows": 1164,
+      "availability_ratio": 0.9991416309012876,
+      "control": {
+        "horizontal_wgs84_p50_m": 5.845914313178431,
+        "horizontal_wgs84_p95_m": 669.3244847566549,
+        "diagnostic_variants_m": {
+          "haversine_sphere__linear_n_minus_1": 337.1135910127684,
+          "haversine_sphere__nearest_rank_ceiling": 337.13158023745416,
+          "wgs84_vincenty__linear_n_minus_1": 337.5851995349167,
+          "wgs84_vincenty__nearest_rank_ceiling": 337.60365326159575
+        },
+        "over_70_mps_count": 4,
+        "max_speed_mps": 174.0838913634314
+      },
+      "candidate": {
+        "horizontal_wgs84_p50_m": 1.0409905303762694,
+        "horizontal_wgs84_p95_m": 2.055809326642303,
+        "diagnostic_variants_m": {
+          "haversine_sphere__linear_n_minus_1": 1.5485697232201212,
+          "haversine_sphere__nearest_rank_ceiling": 1.5488303383224766,
+          "wgs84_vincenty__linear_n_minus_1": 1.5483999285092862,
+          "wgs84_vincenty__nearest_rank_ceiling": 1.5483995581029784
+        },
+        "over_70_mps_count": 0,
+        "max_speed_mps": 36.68974817032869
+      },
+      "gate": {
+        "routewise_horizontal_nonregression": true,
+        "availability_nonregression": true,
+        "coverage_nonregression": true,
+        "continuity_nonregression": true,
+        "vertical": "informational-unavailable",
+        "passed": true
+      }
+    }
+  },
+  "aggregate": {
+    "control": {
+      "mean_availability_ratio": 0.9995594845014483,
+      "mean_truth_coverage_ratio": 0.9995594845014483,
+      "mean_horizontal_wgs84_p50_m": 2.7728906800294406,
+      "mean_horizontal_wgs84_p95_m": 224.87341310290438,
+      "mean_diagnostic_variants_m": {
+        "haversine_sphere__linear_n_minus_1": 113.66555641896741,
+        "haversine_sphere__nearest_rank_ceiling": 113.67185428745573,
+        "wgs84_vincenty__linear_n_minus_1": 113.82315189146692,
+        "wgs84_vincenty__nearest_rank_ceiling": 113.82952952624196
+      },
+      "sum_over_70_mps_count": 4
+    },
+    "candidate": {
+      "mean_availability_ratio": 0.9995594845014483,
+      "mean_truth_coverage_ratio": 0.9995594845014483,
+      "mean_horizontal_wgs84_p50_m": 1.1712494190953864,
+      "mean_horizontal_wgs84_p95_m": 2.4505212929001767,
+      "mean_diagnostic_variants_m": {
+        "haversine_sphere__linear_n_minus_1": 1.810549322451332,
+        "haversine_sphere__nearest_rank_ceiling": 1.810937654411837,
+        "wgs84_vincenty__linear_n_minus_1": 1.8108853559977813,
+        "wgs84_vincenty__nearest_rank_ceiling": 1.8111116250776884
+      },
+      "sum_over_70_mps_count": 0
+    },
+    "gate": {
+      "all_four_strict_improvement": true,
+      "horizontal_p50_p95_nonregression": true,
+      "availability_nonregression": true,
+      "coverage_nonregression": true,
+      "continuity_nonregression": true,
+      "vertical": "informational-unavailable",
+      "passed": true
+    }
+  },
+  "validation_policy": {
+    "fresh_validation": "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+    "future_holdout": "2023-05-16-19-54-us-ca-mtv-xe1/pixel5",
+    "fresh_validation_opened": false,
+    "future_holdout_opened": false,
+    "next_action": "A separate unchanged fresh-validation freeze is required before any validation materialization or solver run."
+  },
+  "policy": {
+    "development_only": true,
+    "no_post_score_tuning": true,
+    "solver_rerun": false,
+    "candidate_control_artifacts_byte_identical": true,
+    "vertical_not_a_gate": true,
+    "kaggle_submission": false,
+    "future_holdout_remains_sealed": true
+  },
+  "runtime": {
+    "score_wall_seconds": 0.1773383009713143
+  },
+  "integrity": {
+    "result_record_sha256": "computed-after-commit",
+    "truth_coordinates_not_used_for_inference": true,
+    "truth_hashes_verified_against_materialization": true,
+    "atomic_output": true
+  }
+}

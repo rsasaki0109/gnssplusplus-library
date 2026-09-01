@@ -1,0 +1,136 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-convergence-selector-freeze.v1",
+  "status": "frozen-before-selector-truth-free-materialization",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "candidate_id": "native-fgo-v1-convergence-selector-v1",
+  "purpose": "Truth-free selector between exact native-FGO v1 baseline8 and candidate50 outputs; select candidate only on genuine deterministic convergence and physical completeness, otherwise publish byte-exact baseline8.",
+  "truth_use_inventory": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_convergence_selector_truth_use_inventory_v2.json",
+    "sha256": "aa57c85d9befdceb088c6eba75f23560e33d5cdde76bdbfa48a32eadbdbd3c30",
+    "exact_selected_identity_truth_open_count_before_freeze": 0,
+    "route_overlap_risk_explicit": true
+  },
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_inventory_path": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+    "central_inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+    "central_metadata_canonical_sha256": "5f619be94a00c33c3067f13b1cd3351d96f2804f07fa04eda8fb027739fb0992",
+    "selection_method": "ZIP central-directory names, sizes, compressed sizes, and CRC32 only before payload materialization"
+  },
+  "split": {
+    "train": [
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/pixel5",
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b"
+    ],
+    "fresh_validation": "2022-08-04-20-07-us-ca-sjc-q/sm-a325f",
+    "future_holdout": "2023-03-08-21-34-us-ca-mtv-u/pixel5",
+    "selected_exact_identities_never_scored": true,
+    "fresh_validation_exact_identity_truth_open_count_before_freeze": 0,
+    "future_holdout_exact_identity_truth_open_count_before_freeze": 0,
+    "future_holdout_materialized_before_freeze": false,
+    "selector_output_root_absent_before_freeze": true,
+    "route_overlap_risk": {
+      "train_2021_01": "same route has prior mi8 truth evidence; selected pixel5 exact identity is unused",
+      "train_2021_07": "same route has prior pixel4 truth evidence; selected sm-g988b exact identity is unused",
+      "fresh_validation_2022_08": "same route has prior pixel5 truth evidence; selected sm-a325f exact identity is unused",
+      "future_holdout_2023_03": "same route has prior pixel6pro truth evidence; selected pixel5 exact identity is unused"
+    }
+  },
+  "central_directory_selection": {
+    "2021-01-04-21-50-us-ca-e1highway280driveroutea/pixel5": {
+      "device_gnss": {"name": "dataset_2023/train/2021-01-04-21-50-us-ca-e1highway280driveroutea/pixel5/device_gnss.csv", "file_size": 50133148, "compressed_size": 11812050, "crc32_hex": "f8fea3d5"},
+      "device_imu": {"name": "dataset_2023/train/2021-01-04-21-50-us-ca-e1highway280driveroutea/pixel5/device_imu.csv", "file_size": 31849715, "compressed_size": 5224076, "crc32_hex": "29d5acfb"},
+      "ground_truth": {"name": "dataset_2023/train/2021-01-04-21-50-us-ca-e1highway280driveroutea/pixel5/ground_truth.csv", "file_size": 194618, "compressed_size": 54894, "crc32_hex": "6f47906b"},
+      "broadcast_nav": {"name": "dataset_2023/train/2021-01-04-21-50-us-ca-e1highway280driveroutea/brdc.nav", "file_size": 9700599, "compressed_size": 971571, "crc32_hex": "ee36f42f"},
+      "reference_obs": {"name": "dataset_2023/train/2021-01-04-21-50-us-ca-e1highway280driveroutea/SLAC_rnx2.obs", "file_size": 579806, "compressed_size": 137221, "crc32_hex": "484cbd4b"}
+    },
+    "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+      "device_gnss": {"name": "dataset_2023/train/2021-07-14-20-50-us-ca-mtv-e/sm-g988b/device_gnss.csv", "file_size": 28421893, "compressed_size": 6939884, "crc32_hex": "05b8b5ab"},
+      "device_imu": {"name": "dataset_2023/train/2021-07-14-20-50-us-ca-mtv-e/sm-g988b/device_imu.csv", "file_size": 16733408, "compressed_size": 2836350, "crc32_hex": "89203bf8"},
+      "ground_truth": {"name": "dataset_2023/train/2021-07-14-20-50-us-ca-mtv-e/sm-g988b/ground_truth.csv", "file_size": 113328, "compressed_size": 34040, "crc32_hex": "944179f8"},
+      "broadcast_nav": {"name": "dataset_2023/train/2021-07-14-20-50-us-ca-mtv-e/brdc.nav", "file_size": 10577666, "compressed_size": 1041649, "crc32_hex": "7b4a5707"},
+      "reference_obs": {"name": "dataset_2023/train/2021-07-14-20-50-us-ca-mtv-e/P178_rnx2.obs", "file_size": 6166970, "compressed_size": 1325997, "crc32_hex": "821f4079"}
+    },
+    "2022-08-04-20-07-us-ca-sjc-q/sm-a325f": {
+      "device_gnss": {"name": "dataset_2023/train/2022-08-04-20-07-us-ca-sjc-q/sm-a325f/device_gnss.csv", "file_size": 20321047, "compressed_size": 4393529, "crc32_hex": "5aeefb31"},
+      "device_imu": {"name": "dataset_2023/train/2022-08-04-20-07-us-ca-sjc-q/sm-a325f/device_imu.csv", "file_size": 50968017, "compressed_size": 7982316, "crc32_hex": "b19eb1f9"},
+      "ground_truth": {"name": "dataset_2023/train/2022-08-04-20-07-us-ca-sjc-q/sm-a325f/ground_truth.csv", "file_size": 140276, "compressed_size": 34873, "crc32_hex": "25d53271"},
+      "broadcast_nav": {"name": "dataset_2023/train/2022-08-04-20-07-us-ca-sjc-q/brdc.nav", "file_size": 11114406, "compressed_size": 1074367, "crc32_hex": "7cf45e1d"},
+      "reference_obs": {"name": "dataset_2023/train/2022-08-04-20-07-us-ca-sjc-q/P226_rnx2.obs", "file_size": 9850954, "compressed_size": 2139440, "crc32_hex": "331fa7a2"}
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "device_gnss": {"name": "dataset_2023/train/2023-03-08-21-34-us-ca-mtv-u/pixel5/device_gnss.csv", "file_size": 23385520, "compressed_size": 5457833, "crc32_hex": "17dffb4e"},
+      "device_imu": {"name": "dataset_2023/train/2023-03-08-21-34-us-ca-mtv-u/pixel5/device_imu.csv", "file_size": 17453338, "compressed_size": 2881126, "crc32_hex": "187bf416"},
+      "ground_truth": {"name": "dataset_2023/train/2023-03-08-21-34-us-ca-mtv-u/pixel5/ground_truth.csv", "file_size": 108045, "compressed_size": 30016, "crc32_hex": "bc251725"},
+      "broadcast_nav": {"name": "dataset_2023/train/2023-03-08-21-34-us-ca-mtv-u/brdc.nav", "file_size": 11506619, "compressed_size": 1103827, "crc32_hex": "c2552e5c"},
+      "reference_obs": {"name": "dataset_2023/train/2023-03-08-21-34-us-ca-mtv-u/P221_rnx2.obs", "file_size": 5950275, "compressed_size": 1374018, "crc32_hex": "087ea99d"}
+    }
+  },
+  "algorithm_contract": {
+    "graph": "exact native-FGO v1 undifferenced pseudorange + ordinary TDCP + position/clock motion",
+    "initialization": "exact v1 per-epoch SPP seed and receiver clock state",
+    "robust_loss": "exact v1 Huber loss and thresholds",
+    "measurement_and_noise_parameters": "exact v1; no truth-trained values",
+    "baseline8": {"max_iterations": 8, "relative_cost_convergence_threshold": 0.0, "absolute_cost_convergence_threshold": 0.0},
+    "candidate50": {"max_iterations": 50, "relative_cost_convergence_threshold": 0.000001, "absolute_cost_convergence_threshold": 0.0},
+    "forbidden_changes": ["factor graph", "factor selection", "noise", "Huber", "initialization", "filtering", "TDCP/slip policy", "output postprocessing", "production defaults"]
+  },
+  "selector_contract": {
+    "candidate_requires": [
+      "summary.converged=true",
+      "0 < summary.iterations < 50",
+      "all cost-trace costs finite and monotonically non-increasing",
+      "finite complete output keyed to device epochs",
+      "positive pseudorange, ordinary TDCP, and motion factor counts",
+      "all forbidden SD/DD/carrier factor counts equal zero",
+      "no physical transition above 70 m/s"
+    ],
+    "otherwise": "publish byte-exact baseline8 output and record each failed reason",
+    "truth_free_features_only": true,
+    "truth_or_leaderboard_features": false,
+    "atomic_publish": true,
+    "runtime_multiplier_ceiling": 3.0,
+    "runtime_ceiling_is_score_veto_only_when_exceeded": true
+  },
+  "promotion_gate": {
+    "all_four_diagnostics_strictly_improve_routewise_and_aggregate": true,
+    "diagnostic_mean_strictly_improves_routewise_and_aggregate": true,
+    "availability_and_key_coverage_non_regress": true,
+    "vertical_p95_safety_margin_m": 0.25,
+    "continuity_no_new_above_70mps_isolated_spikes": true,
+    "validation_opened_only_after_train_gate": true,
+    "future_holdout_remains_sealed": true,
+    "no_post_truth_tuning": true
+  },
+  "source_hashes": {
+    "apps/native/gnss_fgo.cpp": "2d9e53485c427d1e0d43b07dd611aaf3644e2cd51d5e175c2977038ca05e3e32",
+    "src/algorithms/fgo.cpp": "4805a30741e3bcc53a2a29d832429924a3cc46c0fac5aa530446cedd224af3b2",
+    "include/libgnss++/algorithms/fgo.hpp": "67845f6365eb1f621afed19c52b82ad48d00ac1623e99b3bf7b96cd944263307",
+    "include/libgnss++/algorithms/fgo_config.hpp": "8a9390e6709f4c4a55ca4f9d4d43fd451465234d1aa55cd4dd662b06f0872d80",
+    "apps/commands/benchmarks/gnss_smartphone_gnss_adapter.py": "4a26dbbef0d5eff4a4840c43b600d790d573accc9977a9993754386ad086466b",
+    "configs/benchmarks/smartphone_r5_gsdc2023.json": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776",
+    "apps/commands/benchmarks/gnss_smartphone_native_fgo_optimizer_stop_eval.py": "86e4f7db8a0b0e5bcf8b30eb02b5f1bce7bc9b86528065803b5c68f0f83b3729"
+  },
+  "binary_hashes": {
+    "build/apps/gnss_fgo": "9190455cb34a9e818b79ed2ed6b023af5711fbef545215d4588bfed87f5c03e4",
+    "build/apps/gnss_spp": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12"
+  },
+  "commands": {
+    "truth_free": "PYTHONHASHSEED=0 LD_LIBRARY_PATH=/home/sasaki/.local/lib:/opt/ros/jazzy/lib python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_convergence_selector_eval.py truth-free-run --output-root output/smartphone-r5/native-fgo-convergence-selector-v1",
+    "train_score": "PYTHONHASHSEED=0 LD_LIBRARY_PATH=/home/sasaki/.local/lib:/opt/ros/jazzy/lib python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_convergence_selector_eval.py train-score --output-root output/smartphone-r5/native-fgo-convergence-selector-v1",
+    "fresh_validation": "not authorized unless every frozen train gate passes"
+  },
+  "authorization": {
+    "truth_free_dual_outputs_before_selector": true,
+    "truth_free_selector_before_truth": true,
+    "train_truth_open_count_before_freeze": 0,
+    "fresh_validation_truth_open_count_before_freeze": 0,
+    "future_holdout_truth_open_count_before_freeze": 0,
+    "old_optimizer_stop_gate_reinterpreted": false,
+    "leaderboard_used_for_tuning": false,
+    "kaggle_or_external_mutation": false,
+    "token_access": false,
+    "production_rtk_spp_defaults_changed": false
+  }
+}

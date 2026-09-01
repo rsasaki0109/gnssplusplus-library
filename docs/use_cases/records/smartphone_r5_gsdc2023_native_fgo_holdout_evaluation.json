@@ -1,0 +1,125 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-holdout-evaluation-record.v1",
+  "status": "sealed-holdout-pass-development-only",
+  "candidate_id": "native_fgo_pseudorange_tdcp_motion_v1",
+  "dataset_id": "2023-09-06-00-01-us-ca-routen/pixel6pro",
+  "authorization": {
+    "one_shot_truth_evaluation": true,
+    "truth_free_artifacts_sealed_before_truth": true,
+    "truth_open_count": 1,
+    "no_post_holdout_tuning": true,
+    "rerun_forbidden": true,
+    "external_mutation": false,
+    "token_access": false
+  },
+  "freeze": {
+    "record": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_holdout_freeze_recovery_v2.json",
+      "sha256": "bf3b524cd1301bc4129a95da40c66fa654e59cf93dfe934439c1aca0c14664ca"
+    },
+    "manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_holdout_freeze_recovery_v2_manifest.json",
+      "sha256": "9c55e83163583cab4ec4f745a3e6e8499ed2f39b274e68f91d108f0c43f65910"
+    },
+    "selection": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_selection.json",
+      "sha256": "9a31c3341a0c8a0d7ce8ea25ba787d917a20f25c30895044664c6bf9a79b6f92"
+    },
+    "archive": {
+      "path": "data/gsdc2023/cache/dataset_2023.zip",
+      "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408"
+    },
+    "central_directory_inventory": {
+      "path": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+      "sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7"
+    },
+    "algorithm_parameter_hash": "4633bfd3a86cf34ebd86820ed59ee7192b3cbf23fc75ce9e72fc1f2c88fb39f6",
+    "algorithm_core_hash": "e27eb31f4fcb597a1c5b392d8b558f429b25cd5c5a4b39b6474491209649f7b1"
+  },
+  "truth_free_artifacts": {
+    "manifest": {
+      "path": "output/smartphone-r5/native-fgo-v1/holdout-v2/truth_free_manifest.json",
+      "sha256": "02d121f5ebd27697fcb63672b7d27773c79d9f18c4c519c3f92e6d38f2ab0dd4"
+    },
+    "manifest_seal": {
+      "path": "output/smartphone-r5/native-fgo-v1/holdout-v2/truth_free_manifest.sha256",
+      "sha256": "73e9b3d1893ab402b818d4de1ec523408d603cc26c495da920177b5332538df1"
+    },
+    "truth_open_count": 0,
+    "truth_materialized": false,
+    "factor_coverage": {
+      "input_epochs": 1649,
+      "optimized_epochs": 1649,
+      "valid_solutions": 1649,
+      "pseudorange_factors": 24793,
+      "tdcp_factors": 13830,
+      "motion_factors": 1648,
+      "forbidden_factor_classes": 0
+    }
+  },
+  "evaluation": {
+    "report": {
+      "path": "output/smartphone-r5/native-fgo-v1/holdout-v2/holdout_evaluation.json",
+      "sha256": "5e13704562e7958a930a600adb9a54092769bb5569e202d0de4196746a19a056"
+    },
+    "manifest": {
+      "path": "output/smartphone-r5/native-fgo-v1/holdout-v2/holdout_evaluation.manifest.json",
+      "sha256": "74f1764de34afc49f6df4cb99900927482495fc1f2474494e8de4446a619c1a5"
+    },
+    "truth_open_count": 1,
+    "selected_lane": "native_fgo",
+    "status": "holdout-pass-development-only",
+    "baseline_wls": {
+      "horizontal_p50_m": 3.4665439750703992,
+      "horizontal_p95_m": 8.34039316435511,
+      "vertical_p95_m": 17.247626441779822,
+      "availability_ratio": 1.0,
+      "truth_coverage_ratio": 1.0,
+      "diagnostic_mean_m": 5.908185768928468,
+      "diagnostic_variants_m": {
+        "haversine_sphere__linear_n_minus_1": 5.9095081039439625,
+        "haversine_sphere__nearest_rank_ceiling": 5.913020275854968,
+        "wgs84_vincenty__linear_n_minus_1": 5.9034685697127545,
+        "wgs84_vincenty__nearest_rank_ceiling": 5.906746126202188
+      }
+    },
+    "candidate_native_fgo": {
+      "horizontal_p50_m": 2.124652717137768,
+      "horizontal_p95_m": 4.69647448236615,
+      "vertical_p95_m": 8.035759893800195,
+      "availability_ratio": 1.0,
+      "truth_coverage_ratio": 1.0,
+      "diagnostic_mean_m": 3.4100697563296554,
+      "diagnostic_variants_m": {
+        "haversine_sphere__linear_n_minus_1": 3.406575241045191,
+        "haversine_sphere__nearest_rank_ceiling": 3.4084756814202075,
+        "wgs84_vincenty__linear_n_minus_1": 3.410563599751959,
+        "wgs84_vincenty__nearest_rank_ceiling": 3.4146645031012635
+      }
+    },
+    "gate": {
+      "route_non_regression_passed": true,
+      "strict_h_p95_improvement": true,
+      "strict_four_diagnostic_mean_improvement": true,
+      "passed": true
+    },
+    "runtime_and_memory": {
+      "source": "sealed holdout evaluation report",
+      "child_max_rss_kib_recorded": true,
+      "scoring_process_max_rss_kib_recorded": true
+    }
+  },
+  "next_step": {
+    "test_batch_authorized": true,
+    "test_truth_access": false,
+    "test_batch_lane": "development-only native FGO with WLS fallback on route failure",
+    "production_rtk_spp_default_changed": false,
+    "kaggle_submission": false
+  },
+  "evidence_policy": {
+    "leaderboard_scores_used_for_tuning": false,
+    "future_holdout_truth_before_freeze": false,
+    "truth_content_hash_after_single_read": "intentionally omitted",
+    "recovery_note": "Two pre-truth orchestration failures were retained as sealed artifacts; recovery v2 changed only manifest/orchestration validation and reused the already verified device/nav payloads."
+  }
+}

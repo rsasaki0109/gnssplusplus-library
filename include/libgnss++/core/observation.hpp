@@ -1,9 +1,11 @@
 #pragma once
 
 #include <vector>
+#include <cstddef>
 #include <map>
 #include <memory>
 #include <string>
+#include <limits>
 #include "types.hpp"
 
 namespace libgnss {
@@ -18,6 +20,16 @@ struct Observation {
     double pseudorange = 0.0;       ///< Pseudorange in meters
     double carrier_phase = 0.0;     ///< Carrier phase in cycles
     double doppler = 0.0;           ///< Doppler frequency in Hz
+    // Optional source-domain Android raw measurement retained for
+    // truth-free contract audits.  Estimators continue to consume only
+    // `doppler` (the RINEX-convention Hz value) and never this diagnostic
+    // field; non-Android/RINEX observations leave it unset.
+    double pseudorange_rate_mps = 0.0; ///< Android PseudorangeRate [m/s]
+    double source_carrier_frequency_hz = 0.0; ///< Android CarrierFrequencyHz
+    // Optional Android ReceivedSvTimeUncertaintyNanos converted to a
+    // source-exact one-sigma range uncertainty [m].  Non-Android/RINEX rows
+    // and missing/non-finite/non-positive source values leave this unset.
+    double received_sv_time_uncertainty_m = 0.0;
     double snr = 0.0;               ///< Signal-to-noise ratio in dB-Hz
     std::string pseudorange_observation_type;   ///< RINEX code observation type, e.g. C1C
     std::string carrier_phase_observation_type; ///< RINEX carrier observation type, e.g. L1C
@@ -26,6 +38,18 @@ struct Observation {
     bool has_pseudorange = false;   ///< Pseudorange data available
     bool has_carrier_phase = false; ///< Carrier phase data available
     bool has_doppler = false;       ///< Doppler data available
+    bool has_pseudorange_rate_mps = false; ///< Source raw-rate diagnostic
+    bool has_source_carrier_frequency_hz = false; ///< Source frequency diagnostic
+    bool has_received_sv_time_uncertainty_m = false;
+
+    // Raw Android quality provenance retained for truth-free row-attrition
+    // audits.  These fields are metadata only; estimator code continues to
+    // consume the existing valid/has_* fields above.
+    std::size_t raw_row_index = std::numeric_limits<std::size_t>::max();
+    bool raw_snr_masked = false;
+    bool raw_multipath_masked = false;
+    bool raw_code_masked = false;
+    bool raw_doppler_masked = false;
 
     // Quality indicators
     uint8_t lli = 0;                ///< Loss of lock indicator
@@ -61,6 +85,13 @@ public:
     GNSSTime time;
     Vector3d receiver_position;     ///< Approximate receiver position (ECEF)
     double receiver_clock_bias = 0.0;
+    // Optional raw Android receiver clock rate in range metres/second.  This
+    // is populated only when the input explicitly carries
+    // DriftNanosPerSecond; NaN means that no rate was available.  Keeping the
+    // unit explicit prevents residual filters from estimating a rate from a
+    // coordinate or silently treating a bias [s] as a drift [m/s].
+    double receiver_clock_drift_mps =
+        std::numeric_limits<double>::quiet_NaN();
     
     std::vector<Observation> observations;
 
@@ -190,6 +221,7 @@ public:
         rinex_frequency_slots.clear();
         receiver_position.setZero();
         receiver_clock_bias = 0.0;
+        receiver_clock_drift_mps = std::numeric_limits<double>::quiet_NaN();
     }
     
     /**

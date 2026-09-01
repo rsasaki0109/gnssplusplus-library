@@ -1,0 +1,76 @@
+{
+  "schema_version": "smartphone-r5-phase25-raw-clock-contract-freeze.v1",
+  "status": "frozen-before-code-change-and-truth-access",
+  "purpose": "Separate the upstream raw Android clock pseudorange contract from the optional enriched-column consistency diagnostic.",
+  "scope": {
+    "phase24_split_freeze": "docs/use_cases/records/smartphone_r5_phase24_route_group_split_freeze_v1.json",
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "allowed_inference_inputs": [
+      "device_gnss.csv raw timing/status/measurement fields",
+      "device_imu.csv",
+      "brdc.nav"
+    ],
+    "forbidden_inputs": [
+      "any .mat member or path",
+      "ground_truth.csv before the post-seal train score",
+      "device WLS/SvPosition/SvElevation columns as estimator input",
+      "sample/submission/precomputed trajectory coordinates"
+    ],
+    "truth_open_count_before_freeze": 0,
+    "mat_open_count_before_freeze": 0
+  },
+  "source_hashes_before_change": {
+    "src/io/android_raw_gnss.cpp": "030c218f745fa3f3e98e87bd7126b6fab750c5ac8a909ea4a9a5a3093e12f54b",
+    "include/libgnss++/io/android_raw_gnss.hpp": "e78fe2096a93c1bae7c76f2195d3307c93e9fe0addf2c9a719580b0959564e52",
+    "apps/native/gnss_fgo_imu_no_base.cpp": "54036a55b6b0b9b9789e065c131920f517ff9b376f3ee19663e2259a0798d877",
+    "apps/commands/benchmarks/gnss_smartphone_phase24_route_group.py": "79053d3132028a44824403656f0de8cca240215b43aa3446ca630a0189a21114",
+    "phase24_split_freeze": "a20fb65524648fab76c5494d2f28b1846e48fae821296bbdfc212cf6519e4a62"
+  },
+  "fixed_raw_clock_rule": {
+    "receiver_epoch": "Use exact integer TimeNanos - segment_base_FullBiasNanos; segment base is the first valid raw row and is replaced only when successive TimeNanos differs by strictly more than 1 second (1000000000 ns), matching gnsslog2obs.m:103-121.",
+    "tow_receiver": "floor((TimeNanos-baseFullBiasNanos)/1e9/604800) determines the GPS week; TOW subtracts BiasNanos/1e9. Floating intermediate conversion is long double; no float64 subtraction of large nanosecond values.",
+    "tow_transmit": {
+      "GPS_Galileo_QZSS": "ReceivedSvTimeNanos/1e9 in the corresponding GPS-week frame; QZSS/SBAS/IRNSS rows are excluded by the frozen signal map.",
+      "GLONASS": "Treat ReceivedSvTimeNanos as time-of-day and map against receiver TOW with -3 hours + 18 seconds and nearest day, matching glot2gpst.",
+      "BeiDou": "Add 14 seconds to the transmit TOW before nearest-week unwrap."
+    },
+    "week_unwrap": "Adjust receiver-minus-transmit by integer 604800-second periods until it lies in [-302400,302400].",
+    "per_signal_time_offset": "Subtract TimeOffsetNanos/1e9 from the per-signal receiver TOW only; it does not alter the epoch key/TOW.",
+    "pseudorange": "(tow_receiver - tow_transmit) * SPEED_OF_LIGHT; reject non-finite/non-positive values and retain upstream 1e7..4e7 code mask.",
+    "leap_second": "LeapSecond is not applied to the GPS hardware-clock equation; utcTimeMillis is retained only as the integer output key. No guessed UTC/GPST offset is inserted into P.",
+    "hardware_clock_discontinuity": "Retain HardwareClockDiscontinuityCount for epoch/arc diagnostics and downstream transition gates; do not silently turn a count change into a different receiver-clock equation.",
+    "enriched_columns": "RawPseudorangeMeters, ArrivalTimeNanosSinceGpsEpoch, ReceivedSvTimeNanosSinceGpsEpoch, SvPosition*, SvElevation*, and WlsPosition* are never estimator inputs. RawPseudorangeMeters may be checked only in the legacy strict diagnostic mode; the explicit raw-clock-only mode does not parse or use it."
+  },
+  "raw_only_execution_contract": {
+    "native_flag": "--android-raw-clock-only",
+    "imu_clock_flag": "--android-utc-wall-clock-fallback when ChipsetElapsedRealtimeNanos is absent; this affine UTC/GPS mapping is an explicit portability fallback and never a pseudorange source",
+    "candidate_matrix": "Phase24's four fixed recipes, unchanged",
+    "production_default": "unchanged; strict enriched-column verification remains default unless the explicit raw-clock-only flag is supplied",
+    "fail_closed": [
+      "missing/malformed required raw timing",
+      "non-monotonic utcTimeMillis",
+      "invalid raw week/TOW or non-finite/non-positive raw-clock range",
+      "duplicate supported satellite/signal in an epoch",
+      "missing nav/solver convergence/output key contract"
+    ]
+  },
+  "synthetic_fixture_plan": [
+    "raw-clock-only ignores a malformed/large RawPseudorangeMeters diagnostic column while strict mode rejects it",
+    "exact 604800-second transmit-week boundary and nearest-week unwrap",
+    "GLONASS time-of-day day-wrap and BeiDou +14 second offset",
+    "TimeOffsetNanos affects only the per-signal P",
+    "strictly-more-than-1-second TimeNanos segment reset and HardwareClockDiscontinuity diagnostic"
+  ],
+  "evaluation_policy": {
+    "truth_free_first": true,
+    "train_routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b"
+    ],
+    "fresh_validation": "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+    "future_holdout": "2023-05-16-19-54-us-ca-mtv-xe1/pixel5",
+    "score_gate": "Do not open train truth until all three routes and all four raw-only candidate recipes produce finite, keyed, converged truth-free artifacts. No validation/holdout access in this recovery.",
+    "no_post_score_tuning": true
+  }
+}

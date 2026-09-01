@@ -1,0 +1,70 @@
+{
+  "schema_version": "smartphone-r5-phase12-residual-ionosphere-raw-audit.v1",
+  "status": "truth-free-before-candidate-freeze",
+  "candidate_id": "native-residual-ionosphere-gtsam-v1",
+  "route": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+  "source": {
+    "device_gnss": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_gnss.csv",
+    "device_gnss_sha256": "c5af6cc3aeae6ab29a2a10d975d291b8fba4fab15273c0729163cd639ff10e42",
+    "selection": "finite RawPseudorangeMeters rows grouped by (utcTimeMillis,Svid), GPS L1/L5 and Galileo E1/E5a only; no enriched SvPosition/SvElevation/Wls fields were read",
+    "forbidden_read": ["ground_truth.csv", "*.mat", "sample_submission.csv", "WLS coordinates", "precomputed trajectories"]
+  },
+  "truth_policy": {
+    "truth_read_count": 0,
+    "mat_read_count": 0,
+    "validation_read_count": 0,
+    "holdout_read_count": 0,
+    "test_read_count": 0,
+    "leaderboard_or_token_access": false,
+    "used_for_candidate_selection_after_score": false
+  },
+  "method": {
+    "raw_epochs": 1384,
+    "pair_key": "(utcTimeMillis,Svid)",
+    "raw_pair_value_m": "RawPseudorangeMeters(secondary)-RawPseudorangeMeters(primary)",
+    "fixed_phase11_bias_m": {
+      "GPS_L5": -167.59691603289389,
+      "Galileo_E5a": -167.55207212672951
+    },
+    "adjusted_pair_value_m": "raw_pair_value_m - fixed_phase11_secondary_bias_m; primary bias is zero",
+    "elevation_policy": "no elevation-derived statistic or parameter choice is made by this audit; the candidate obtains elevation only from native broadcast-nav geometry",
+    "percentile_convention": "linear interpolation at (n-1)p for the raw pair descriptive statistics only"
+  },
+  "families": {
+    "GPS_L1_L5": {
+      "primary_rows": 11007,
+      "secondary_rows": 4005,
+      "pairs": 3877,
+      "paired_epochs": 1384,
+      "frequency_ratio": 1.3391304347826087,
+      "iono_coefficient_delta": 0.7932703213610588,
+      "pair_residual_m": {"n": 3877, "min": -87.5264657233522, "p05": -3.284785026745567, "median": 7.50774346099638, "mad": 3.8973019532859325, "p95": 17.101102116270294, "max": 37.18719680414938, "mean": 7.351777149897967},
+      "per_epoch_residual_drift_m_per_s": -0.0009642112603916904,
+      "paired_satellites_per_epoch": {"min": 1, "median": 3, "max": 4, "mean": 2.8013005780346822}
+    },
+    "Galileo_E1_E5a": {
+      "primary_rows": 8750,
+      "secondary_rows": 8085,
+      "pairs": 7717,
+      "paired_epochs": 1384,
+      "frequency_ratio": 1.3391304347826087,
+      "iono_coefficient_delta": 0.7932703213610588,
+      "pair_residual_m": {"n": 7717, "min": -32.40949736131904, "p05": -0.6314968128370992, "median": 6.263729721618915, "mad": 2.398339666426182, "p95": 18.255428042573953, "max": 44.33737188608768, "mean": 7.032032876994192},
+      "per_epoch_residual_drift_m_per_s": -0.00045631653692056775,
+      "paired_satellites_per_epoch": {"min": 2, "median": 6, "max": 7, "mean": 5.5758670520231215}
+    }
+  },
+  "existing_correction_contract": {
+    "source": "src/algorithms/fgo_problems.cpp:214-247",
+    "klobuchar": "ionoDelayKlobuchar is evaluated at seed geometry and scaled by (GPS_L1_FREQ/frequency)^2 per signal",
+    "other_terms": "satellite clock meters are added; Saastamoinen troposphere and broadcast group delay are subtracted",
+    "carrier_contract": "carrier adds satellite clock and ionosphere with the existing phase sign; no residual-ionosphere state is currently applied",
+    "double_correction_guard": "the new candidate must not re-estimate or reapply the static Phase11 receiver IFB or the existing Klobuchar/TGD terms"
+  },
+  "interpretation": {
+    "identifiability": "The common adjusted raw residual is finite and repeatable across every epoch, but this audit deliberately does not consume enriched elevation/coordinate fields. Native broadcast-nav geometry will supply the mapping in the candidate; no universal ionosphere estimate is claimed and no parameter is fit to this audit.",
+    "candidate_rationale": "A shared state with coefficient mapping(elevation)*((f_L1/f_signal)^2) is the smallest raw-only extension that can model a post-Klobuchar first-order residual while retaining Phase11 static IFB states.",
+    "not_a_tuning_record": true
+  },
+  "audit_record_hash": "computed after apply_patch and recorded by the companion freeze manifest"
+}

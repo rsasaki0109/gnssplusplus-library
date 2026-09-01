@@ -1,0 +1,57 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-upstream-mat-train-score-authorization.v1",
+  "status": "authorized-after-truth-free-artifact-seal",
+  "authorized_at_utc": "2026-08-31T00:00:00Z",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_freeze_v1.json",
+  "freeze_record_sha256": "9a10d2fd0a397287cc2501b23cef834d578d75ca62d17986880726efe2159c72",
+  "truth_policy": {
+    "truth_free_outputs_sealed_before_read": true,
+    "matching_train_truth_only": true,
+    "fresh_validation_truth_open_count": 0,
+    "future_holdout_truth_open_count": 0,
+    "test_truth_open_count": 0,
+    "leaderboard_used_for_tuning": false,
+    "parameter_or_source_change_after_freeze": false,
+    "each_route_truth_read_once_by_scoring_process": true
+  },
+  "truth_free_run": {
+    "manifest": "output/smartphone-r5/gsdc2023-upstream-mat-v1/train/train_truth_free_manifest.json",
+    "manifest_sha256": "3388972b96e39125f3525f91a1d9df0ca16f4490f65daa821791213d363413e2",
+    "converter_sha256": "d26fdb9f639d198b708a6162fd9bd7328ed9019f5fc7ed5469af3e4bcc3852a4",
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408"
+  },
+  "routes": [
+    {
+      "trip_id": "2021-03-10-23-13-us-ca-mtv-h/pixel5",
+      "truth_member": "dataset_2023/train/2021-03-10-23-13-us-ca-mtv-h/pixel5/ground_truth.csv",
+      "truth_output": "output/smartphone-r5/gsdc2023-upstream-mat-v1/train/2021-03-10-23-13-us-ca-mtv-h__pixel5/truth/ground_truth.csv",
+      "gnss_prediction_sha256": "cbb04f83b5b0a6531f7ec558c907c391956417a98fe516cf8b7c2b85c493bcc6",
+      "gnss_imu_prediction_sha256": "a7be1265e55c60b7604fd0e85eca7612a6da0c8706410acfbaceb16e09687c95"
+    },
+    {
+      "trip_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "truth_member": "dataset_2023/train/2021-08-24-20-32-us-ca-mtv-h/pixel5/ground_truth.csv",
+      "truth_output": "output/smartphone-r5/gsdc2023-upstream-mat-v1/train/2021-08-24-20-32-us-ca-mtv-h__pixel5/truth/ground_truth.csv",
+      "gnss_prediction_sha256": "4fb7e2411ddbeab7e716428e80093936017747f68f0a7b4380d8bc5062904cfc",
+      "gnss_imu_prediction_sha256": "0588ce7906a3944f102f8fdf1205fcbfd03d8a60575f548eb2153cd3cb8063c9"
+    },
+    {
+      "trip_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "truth_member": "dataset_2023/train/2022-04-01-18-22-us-ca-lax-t/pixel5/ground_truth.csv",
+      "truth_output": "output/smartphone-r5/gsdc2023-upstream-mat-v1/train/2022-04-01-18-22-us-ca-lax-t__pixel5/truth/ground_truth.csv",
+      "gnss_prediction_sha256": "b49ecfeee2a9f0a2284fb4b6eeafb02f5e58bd9e4340f53c030d3f01675ad522",
+      "gnss_imu_prediction_sha256": "a697887f585ccf54fd6dab0a4b1a1ea37bdc4600d3a3bcd03c145a855d7db491"
+    }
+  ],
+  "scoring_contract": {
+    "evaluator": "apps/commands/benchmarks/gnss_smartphone_kaggle.py",
+    "diagnostic_variants": [
+      "wgs84_vincenty__linear_n_minus_1",
+      "wgs84_vincenty__nearest_rank_ceiling",
+      "haversine_sphere__linear_n_minus_1",
+      "haversine_sphere__nearest_rank_ceiling"
+    ],
+    "comparison": "result_gnss_imu is predeclared primary upstream final output; result_gnss is reported comparator, not a truth-selected parameter."
+  },
+  "authorization": "No validation/holdout/test truth may be read by this run; if train gate fails, validation remains sealed."
+}

@@ -1,0 +1,11 @@
+{
+  "schema_version": "smartphone-r5-native-fgo-imu-sparse-recovery-artifact-manifest.v1",
+  "artifact_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_imu_sparse_recovery_artifact_v1.json",
+  "artifact_record_sha256": "5d87f1011b2312c87f32d6ad189d73b24f965b0990d94642167231c7d1a405af",
+  "freeze_record_sha256": "b852c28124e397c1a9a5f303e2d5655ba85e463a1fceb35528004c7b6ff80879",
+  "truth_free": true,
+  "truth_open_count": 0,
+  "output_hash_sealed": true,
+  "candidate_mutation_after_seal": false,
+  "official_submission": false
+}

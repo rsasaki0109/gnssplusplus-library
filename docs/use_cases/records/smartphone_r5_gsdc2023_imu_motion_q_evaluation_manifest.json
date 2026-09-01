@@ -1,0 +1,32 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-imu-motion-q-evaluation-manifest.v1",
+  "record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_imu_motion_q_evaluation.json",
+    "sha256": "da223da53b9b0a81ebce967ef7924ef19a354a16f014d208820b75d9e027c6b6"
+  },
+  "selection_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_imu_motion_q_selection.json",
+    "sha256": "72735d45939eca465cc039fd56bfc5bb6a661be70b3bffb803943ea77f6b3efb"
+  },
+  "source_hashes": {
+    "apps/commands/benchmarks/gnss_smartphone_imu.py": "19aac6dfae976fdf29106f2ea12c40cbf774c768d57690e50f24d5e4910a8afe",
+    "apps/commands/benchmarks/gnss_smartphone_trajectory_smoother.py": "2e95e96cd554cb8f78637e5f109c25e89801e4ae8958d6136124aa064e1191d4",
+    "apps/commands/benchmarks/gnss_smartphone_imu_motion_q_eval.py": "9ad8c04a385d9a6bfb7536257f0271f4a1e34bdcfa88eeb501a57b24bf0a398a",
+    "tests/test_smartphone_imu_motion_q_eval.py": "8013d66c1c52d415926d5626675e110bbb4329f9f78131dfad1461c43a1b2ae9",
+    "apps/gnss.py": "113fa5f740a9da23c0b20e0f55f452657c6e2797e2da719e26b441d9627065fa",
+    "tests/CMakeLists.txt": "a6380aeaa190928387e4371d3ee138f89099536fd4687d116322fe50d0739672"
+  },
+  "train_evaluation": {
+    "path": "output/smartphone-r5/imu-motion-q-v1/train_evaluation.json",
+    "sha256": "5f29d7ed649d8148aca93ee5fc6687805050d9f88ea4cd412b9deb746340d0cc",
+    "manifest_path": "output/smartphone-r5/imu-motion-q-v1/train_evaluation_manifest.json",
+    "manifest_sha256": "4696b6a48dfc56636bc249e57a4f1ecba2db9e5bbb7b91efa518dc04fe4ecdfd",
+    "truth_open_unique_files": 3,
+    "fresh_validation_opened": false,
+    "future_holdout_opened": false
+  },
+  "decision": "no-go-train-gate",
+  "truth_free_artifacts": true,
+  "external_mutation": false,
+  "production_default_changed": false
+}

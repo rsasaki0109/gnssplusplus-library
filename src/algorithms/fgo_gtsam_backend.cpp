@@ -25,6 +25,7 @@
 // single shared dummy node pinned to 0 with a tight prior.
 
 #include <libgnss++/algorithms/disjoint_constellation_partition.hpp>
+#include <libgnss++/algorithms/residual_ionosphere_contract.hpp>
 #include "fgo_gtsam_internal.hpp"
 
 namespace libgnss {
@@ -61,6 +62,79 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
     const bool use_pose3 = config.use_pose3_state;
     const bool use_imu =
         use_pose3 && config.use_imu && problem.imu.valid && num_epochs >= 2;
+    const bool use_upstream_stop_constraints =
+        use_imu && config.use_upstream_stop_constraints;
+    upstream_stop::Detection upstream_stop_detection;
+    if (use_upstream_stop_constraints) {
+        std::vector<GNSSTime> epoch_times;
+        epoch_times.reserve(problem.epochs.size());
+        for (const auto& epoch : problem.epochs) epoch_times.push_back(epoch.time);
+        upstream_stop::Config stop_config;
+        stop_config.window_samples = static_cast<std::size_t>(
+            std::max(2, config.upstream_stop_window_samples));
+        stop_config.acceleration_std_offset_mps2 =
+            config.upstream_stop_acceleration_std_offset_mps2;
+        stop_config.gyro_std_offset_radps =
+            config.upstream_stop_gyro_std_offset_radps;
+        stop_config.gyro_norm_max_radps = config.upstream_stop_gyro_norm_max_radps;
+        upstream_stop_detection = upstream_stop::detect(
+            problem.imu.samples_body_flu, epoch_times, stop_config);
+        if (!upstream_stop_detection.ok ||
+            upstream_stop_detection.epoch_stop.size() != num_epochs) {
+            // A malformed or incomplete raw stop stream must not turn into a
+            // silently weakened graph.  Returning an unsolved result lets the
+            // raw-only caller fail closed rather than selecting a fallback lane.
+            result.diagnostics.upstream_stop_imu_samples =
+                upstream_stop_detection.finite_samples;
+            result.diagnostics.converged = false;
+            return result;
+        }
+        result.diagnostics.upstream_stop_epochs =
+            upstream_stop_detection.stop_epochs;
+        result.diagnostics.upstream_stop_imu_samples =
+            upstream_stop_detection.finite_samples;
+        result.diagnostics.upstream_stop_acceleration_std_threshold_mps2 =
+            upstream_stop_detection.acceleration_std_threshold_mps2;
+        result.diagnostics.upstream_stop_gyro_std_threshold_radps =
+            upstream_stop_detection.gyro_std_threshold_radps;
+    }
+    // The upstream GNSS-first pass uses explicit ENU velocity and receiver
+    // clock-range-rate states.  Keep this path separate from the Pose3 IMU
+    // velocity states so the established IMU graph and all production
+    // defaults remain unchanged.
+    const bool use_gnss_velocity_states =
+        !use_imu && !use_pose3 && config.use_velocity_states &&
+        !problem.undifferenced_doppler_factors.empty();
+    const bool use_residual_ionosphere =
+        config.use_residual_ionosphere_states && !problem.epochs.empty();
+    double gnss_velocity_origin_lat_rad = 0.0;
+    double gnss_velocity_origin_lon_rad = 0.0;
+    // The opt-in raw-observable quality candidate uses the same receiver-only
+    // Doppler rows in the IMU graph.  Its velocity state is already in the
+    // IMU's ENU frame, so use that exact nav origin for the ECEF->ENU LOS
+    // conversion.  Legacy IMU graphs keep this path disabled.
+    const bool use_imu_doppler_factors =
+        use_imu && config.use_upstream_observable_quality &&
+        config.use_undifferenced_doppler_factors &&
+        !problem.undifferenced_doppler_factors.empty();
+    if (use_gnss_velocity_states) {
+        double origin_height = 0.0;
+        ecef2geodetic(problem.epochs.front().position_ecef,
+                      gnss_velocity_origin_lat_rad,
+                      gnss_velocity_origin_lon_rad,
+                      origin_height);
+        if (!std::isfinite(gnss_velocity_origin_lat_rad) ||
+            !std::isfinite(gnss_velocity_origin_lon_rad)) {
+            return result;
+        }
+    } else if (use_imu_doppler_factors) {
+        gnss_velocity_origin_lat_rad = problem.imu.nav_origin_lat_rad;
+        gnss_velocity_origin_lon_rad = problem.imu.nav_origin_lon_rad;
+        if (!std::isfinite(gnss_velocity_origin_lat_rad) ||
+            !std::isfinite(gnss_velocity_origin_lon_rad)) {
+            return result;
+        }
+    }
     const Point3 lever_arm_body(config.pose3_lever_arm_body_m.x(),
                                 config.pose3_lever_arm_body_m.y(),
                                 config.pose3_lever_arm_body_m.z());
@@ -76,6 +150,25 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
         ecef_T_nav = Pose3(R_ecef_nav, Point3(problem.imu.nav_origin_ecef));
         gnss_lever_arm = gtsam::gnss::LeverArm(lever_arm_body, ecef_T_nav);
     }
+
+    // The native PDC bridge is solved in this process from the same raw P/D
+    // rows that are added below.  Use its finite state only as an initializer;
+    // never add a second PDC prior/factor for those already-owned rows.
+    auto nativePdcSeedFor = [&](std::size_t epoch)
+        -> const FGOProcessor::NativePdcStateSeed* {
+        if (!config.use_native_pdc_state_bridge) return nullptr;
+        for (const auto& seed : problem.native_pdc_state_seeds) {
+            if (seed.epoch_index == epoch) return &seed;
+        }
+        return nullptr;
+    };
+    auto positionSeedEcef = [&](std::size_t epoch) -> Vector3d {
+        const auto* seed = nativePdcSeedFor(epoch);
+        if (seed != nullptr && seed->has_position && seed->position_ecef.allFinite()) {
+            return seed->position_ecef;
+        }
+        return problem.epochs[epoch].position_ecef;
+    };
 
     // Initial body->nav (ENU) attitude from Stage-1 alignment; used as the
     // dead-reckoning start point for the 2b pose attitude seeds below.
@@ -104,9 +197,67 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
             // 2a: pose in ECEF, identity attitude (unobservable without IMU);
             // translation = antenna seed minus lever arm.
             initial.insert(positionKey(i),
-                           Pose3(Rot3(), Point3(problem.epochs[i].position_ecef) - lever_arm_body));
+                           Pose3(Rot3(), Point3(positionSeedEcef(i)) - lever_arm_body));
         } else {
-            initial.insert(positionKey(i), Point3(problem.epochs[i].position_ecef));
+            initial.insert(positionKey(i), Point3(positionSeedEcef(i)));
+        }
+    }
+
+    if (use_gnss_velocity_states) {
+        // Materialize the Eigen expression before putting it in Values.  A
+        // direct Vector3::Zero() insert is an expression-template type and
+        // is not a concrete GTSAM value on all supported Eigen versions.
+        const gtsam::Vector3 zero_velocity = gtsam::Vector3::Zero();
+        for (std::size_t i = 0; i < num_epochs; ++i) {
+            const auto* pdc_seed = nativePdcSeedFor(i);
+            if (pdc_seed != nullptr && pdc_seed->has_velocity &&
+                pdc_seed->velocity_ecef_mps.allFinite() &&
+                pdc_seed->has_clock_rate &&
+                std::isfinite(pdc_seed->clock_rate_mps)) {
+                const Vector3d velocity_nav = ecef2enu(
+                    pdc_seed->velocity_ecef_mps,
+                    gnss_velocity_origin_lat_rad,
+                    gnss_velocity_origin_lon_rad);
+                if (velocity_nav.allFinite()) {
+                    initial.insert(velocityKey(i), gtsam::Vector3(velocity_nav));
+                    initial.insert(dopplerClockDriftKey(i), pdc_seed->clock_rate_mps);
+                    continue;
+                }
+            }
+            if (config.use_doppler_velocity_wls_initialization &&
+                i < problem.doppler_velocity_wls_estimates.size() &&
+                problem.doppler_velocity_wls_estimates[i].valid) {
+                const auto& estimate = problem.doppler_velocity_wls_estimates[i];
+                const Vector3d velocity_nav = ecef2enu(
+                    estimate.velocity_ecef_mps,
+                    gnss_velocity_origin_lat_rad,
+                    gnss_velocity_origin_lon_rad);
+                if (velocity_nav.allFinite() &&
+                    std::isfinite(estimate.clock_rate_mps)) {
+                    initial.insert(velocityKey(i), gtsam::Vector3(velocity_nav));
+                    initial.insert(dopplerClockDriftKey(i),
+                                   estimate.clock_rate_mps);
+                    continue;
+                }
+            }
+            initial.insert(velocityKey(i), zero_velocity);
+            initial.insert(dopplerClockDriftKey(i), 0.0);
+        }
+    }
+
+    if (use_imu_doppler_factors) {
+        // IMU velocity states are initialized above from the IMU/GNSS-first
+        // handoff.  Receiver clock drift is a separate metre-per-second state;
+        // a broad prior below prevents a sparse Doppler set from becoming an
+        // unconstrained gauge while preserving the raw D measurement.
+        for (std::size_t i = 0; i < num_epochs; ++i) {
+            const auto* pdc_seed = nativePdcSeedFor(i);
+            const double clock_rate =
+                pdc_seed != nullptr && pdc_seed->has_clock_rate &&
+                        std::isfinite(pdc_seed->clock_rate_mps)
+                    ? pdc_seed->clock_rate_mps
+                    : 0.0;
+            initial.insert(dopplerClockDriftKey(i), clock_rate);
         }
     }
 
@@ -181,7 +332,7 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
         std::vector<Point3> antenna_nav(num_epochs);
         for (std::size_t i = 0; i < num_epochs; ++i) {
             antenna_nav[i] = Point3(ecef2enu(
-                problem.epochs[i].position_ecef - problem.imu.nav_origin_ecef,
+                positionSeedEcef(i) - problem.imu.nav_origin_ecef,
                 problem.imu.nav_origin_lat_rad, problem.imu.nav_origin_lon_rad));
         }
 
@@ -193,11 +344,46 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
             initial.insert(positionKey(i), Pose3(attitude_seed[i], body_nav));
 
             Vector3d vel = problem.imu.init_velocity_nav;
+            const auto* pdc_seed = nativePdcSeedFor(i);
+            bool have_velocity_seed = false;
+            if (pdc_seed != nullptr && pdc_seed->has_velocity &&
+                pdc_seed->velocity_ecef_mps.allFinite()) {
+                const Vector3d seed_velocity_nav = ecef2enu(
+                    pdc_seed->velocity_ecef_mps,
+                    problem.imu.nav_origin_lat_rad,
+                    problem.imu.nav_origin_lon_rad);
+                if (seed_velocity_nav.allFinite()) {
+                    vel = seed_velocity_nav;
+                    have_velocity_seed = true;
+                }
+            }
+            if (!have_velocity_seed && !config.use_native_pdc_state_bridge &&
+                config.use_doppler_velocity_wls_initialization &&
+                i < problem.doppler_velocity_wls_estimates.size()) {
+                const auto& estimate =
+                    problem.doppler_velocity_wls_estimates[i];
+                if (estimate.valid && estimate.velocity_ecef_mps.allFinite()) {
+                    const Vector3d seed_velocity_nav = ecef2enu(
+                        estimate.velocity_ecef_mps,
+                        problem.imu.nav_origin_lat_rad,
+                        problem.imu.nav_origin_lon_rad);
+                    if (seed_velocity_nav.allFinite()) {
+                        // Phase40 direct handoff: use the bounded raw WLS
+                        // estimate for every IMU velocity state, preserving
+                        // velocity-only semantics (clock/position states are
+                        // still initialized by their ordinary path).
+                        vel = seed_velocity_nav;
+                        have_velocity_seed = true;
+                    }
+                }
+            }
             if (num_epochs >= 2) {
                 const std::size_t a = (i + 1 < num_epochs) ? i : i - 1;
                 const double dt = problem.epochs[a + 1].time - problem.epochs[a].time;
-                if (dt > 1e-3) {
+                if (!have_velocity_seed) {
+                  if (dt > 1e-3) {
                     vel = (antenna_nav[a + 1] - antenna_nav[a]) / dt;
+                  }
                 }
             }
             initial.insert(velocityKey(i), gtsam::Vector3(vel));
@@ -261,12 +447,19 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
         !problem.pseudorange_factors.empty() || !problem.carrier_phase_factors.empty();
     std::set<gtsam::Key> inserted_clock_keys;
     std::set<int> inserted_isb_ordinals;
+    std::set<int> inserted_signal_bias_ordinals;
     auto ensureBaseClock = [&](std::size_t epoch) -> gtsam::Key {
         const gtsam::Key key = clockKey(epoch);
         if (inserted_clock_keys.insert(key).second) {
+            const auto* pdc_seed = nativePdcSeedFor(epoch);
+            const double clock_bias_m =
+                pdc_seed != nullptr && pdc_seed->has_clock &&
+                        std::isfinite(pdc_seed->clock_bias_m[0])
+                    ? pdc_seed->clock_bias_m[0]
+                    : (epoch < num_epochs ? problem.epochs[epoch].receiver_clock_bias_m
+                                           : 0.0);
             initial.insert(key, epoch < num_epochs
-                                    ? problem.epochs[epoch].receiver_clock_bias_m /
-                                          constants::SPEED_OF_LIGHT
+                                    ? clock_bias_m / constants::SPEED_OF_LIGHT
                                     : 0.0);
         }
         return key;
@@ -281,6 +474,32 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
         }
         return ordinal;
     };
+    auto ensureSignalBias = [&](GNSSSystem system, SignalType signal) -> int {
+        if (!config.use_receiver_signal_bias_states ||
+            !signal_bias::isEligible(system, signal)) {
+            return -1;
+        }
+        const int ordinal = signal_bias::ordinal(system, signal);
+        if (ordinal > 0 && inserted_signal_bias_ordinals.insert(ordinal).second) {
+            initial.insert(signalBiasKey(ordinal), 0.0);
+        }
+        return ordinal;
+    };
+
+    // One state per problem epoch keeps the residual ionosphere contract
+    // explicit even through a sparse GNSS epoch.  States are tied only within
+    // a continuous time/clock segment below; a detected clock jump or an
+    // invalid/long interval receives a fresh physical prior instead.
+    if (use_residual_ionosphere) {
+        result.diagnostics.residual_ionosphere_states = num_epochs;
+        result.diagnostics.residual_ionosphere_invalid_coefficients =
+            problem.diagnostics.residual_ionosphere_invalid_coefficients;
+        result.diagnostics.residual_ionosphere_min_coefficient =
+            std::numeric_limits<double>::infinity();
+        for (std::size_t i = 0; i < num_epochs; ++i) {
+            initial.insert(residualIonosphereKey(i), 0.0);
+        }
+    }
 
     // Ambiguity nodes: one per AmbiguityState, in the units that state's
     // consuming factor expects (cycles for DD, meters for undifferenced).
@@ -317,9 +536,116 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
     for (const auto& factor : problem.pseudorange_factors) {
         const gtsam::Key base_clock = ensureBaseClock(factor.epoch_index);
         const int ordinal = ensureIsb(factor.satellite.system);
+        const int signal_bias_ordinal =
+            ensureSignalBias(factor.satellite.system, factor.signal);
         const auto noise = makeNoise(factor.sigma_m, config.use_robust_loss,
                                      config.pseudorange_huber_threshold_sigma);
-        if (use_pose3) {
+        const bool valid_ionosphere_coefficient =
+            residual_ionosphere::finiteCoefficient(
+                factor.residual_ionosphere_coefficient);
+        if (use_residual_ionosphere && !valid_ionosphere_coefficient) {
+            ++result.diagnostics.residual_ionosphere_invalid_coefficients;
+            continue;
+        }
+        if (use_residual_ionosphere) {
+            const double coefficient = factor.residual_ionosphere_coefficient;
+            ++result.diagnostics.residual_ionosphere_factors;
+            result.diagnostics.residual_ionosphere_min_coefficient = std::min(
+                result.diagnostics.residual_ionosphere_min_coefficient,
+                coefficient);
+            result.diagnostics.residual_ionosphere_max_coefficient = std::max(
+                result.diagnostics.residual_ionosphere_max_coefficient,
+                coefficient);
+            const gtsam::Key ionosphere =
+                residualIonosphereKey(factor.epoch_index);
+            if (signal_bias_ordinal > 0) {
+                const gtsam::Key signal_bias = signalBiasKey(signal_bias_ordinal);
+                if (use_pose3) {
+                    if (ordinal == 0) {
+                        graph.emplace_shared<
+                            PseudorangeFactorPlainSignalBiasResidualIonosphereArm>(
+                            positionKey(factor.epoch_index), base_clock,
+                            signal_bias, ionosphere,
+                            factor.corrected_pseudorange_m,
+                            Point3(factor.satellite_position_ecef),
+                            gnss_lever_arm, coefficient, noise);
+                    } else {
+                        graph.emplace_shared<
+                            PseudorangeFactorISBSignalBiasResidualIonosphereArm>(
+                            positionKey(factor.epoch_index), base_clock,
+                            isbKey(ordinal), signal_bias, ionosphere,
+                            factor.corrected_pseudorange_m,
+                            Point3(factor.satellite_position_ecef),
+                            gnss_lever_arm, coefficient, noise);
+                    }
+                } else if (ordinal == 0) {
+                    graph.emplace_shared<
+                        PseudorangeFactorPlainSignalBiasResidualIonosphere>(
+                        positionKey(factor.epoch_index), base_clock, signal_bias,
+                        ionosphere, factor.corrected_pseudorange_m,
+                        Point3(factor.satellite_position_ecef), coefficient, noise);
+                } else {
+                    graph.emplace_shared<
+                        PseudorangeFactorISBSignalBiasResidualIonosphere>(
+                        positionKey(factor.epoch_index), base_clock,
+                        isbKey(ordinal), signal_bias, ionosphere,
+                        factor.corrected_pseudorange_m,
+                        Point3(factor.satellite_position_ecef), coefficient, noise);
+                }
+            } else if (use_pose3) {
+                if (ordinal == 0) {
+                    graph.emplace_shared<PseudorangeFactorPlainResidualIonosphereArm>(
+                        positionKey(factor.epoch_index), base_clock, ionosphere,
+                        factor.corrected_pseudorange_m,
+                        Point3(factor.satellite_position_ecef), gnss_lever_arm,
+                        coefficient, noise);
+                } else {
+                    graph.emplace_shared<PseudorangeFactorISBResidualIonosphereArm>(
+                        positionKey(factor.epoch_index), base_clock, isbKey(ordinal),
+                        ionosphere, factor.corrected_pseudorange_m,
+                        Point3(factor.satellite_position_ecef), gnss_lever_arm,
+                        coefficient, noise);
+                }
+            } else if (ordinal == 0) {
+                graph.emplace_shared<PseudorangeFactorPlainResidualIonosphere>(
+                    positionKey(factor.epoch_index), base_clock, ionosphere,
+                    factor.corrected_pseudorange_m,
+                    Point3(factor.satellite_position_ecef), coefficient, noise);
+            } else {
+                graph.emplace_shared<PseudorangeFactorISBResidualIonosphere>(
+                    positionKey(factor.epoch_index), base_clock, isbKey(ordinal),
+                    ionosphere, factor.corrected_pseudorange_m,
+                    Point3(factor.satellite_position_ecef), coefficient, noise);
+            }
+        } else if (signal_bias_ordinal > 0) {
+            const gtsam::Key signal_bias = signalBiasKey(signal_bias_ordinal);
+            if (use_pose3) {
+                if (ordinal == 0) {
+                    graph.emplace_shared<PseudorangeFactorPlainSignalBiasArm>(
+                        positionKey(factor.epoch_index), base_clock, signal_bias,
+                        factor.corrected_pseudorange_m,
+                        Point3(factor.satellite_position_ecef), gnss_lever_arm,
+                        noise);
+                } else {
+                    graph.emplace_shared<PseudorangeFactorISBSignalBiasArm>(
+                        positionKey(factor.epoch_index), base_clock,
+                        isbKey(ordinal), signal_bias,
+                        factor.corrected_pseudorange_m,
+                        Point3(factor.satellite_position_ecef), gnss_lever_arm,
+                        noise);
+                }
+            } else if (ordinal == 0) {
+                graph.emplace_shared<PseudorangeFactorPlainSignalBias>(
+                    positionKey(factor.epoch_index), base_clock, signal_bias,
+                    factor.corrected_pseudorange_m,
+                    Point3(factor.satellite_position_ecef), noise);
+            } else {
+                graph.emplace_shared<PseudorangeFactorISBSignalBias>(
+                    positionKey(factor.epoch_index), base_clock, isbKey(ordinal),
+                    signal_bias, factor.corrected_pseudorange_m,
+                    Point3(factor.satellite_position_ecef), noise);
+            }
+        } else if (use_pose3) {
             if (ordinal == 0) {
                 graph.emplace_shared<PseudorangeFactorPlainArm>(
                     positionKey(factor.epoch_index), base_clock,
@@ -343,6 +669,35 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
                 noise);
         }
     }
+
+    // --- Receiver-only P+D velocity/clock-drift factors ---
+    // In the historical GNSS-only path these are the explicit velocity-state
+    // graph.  The raw upstream-quality candidate also inserts the same rows
+    // into the IMU Pose3 graph, where velocityKey is the already-existing ENU
+    // kinematic state and dKey is a separate receiver clock-rate state.
+    std::size_t undifferenced_doppler_inserted = 0;
+    if (use_gnss_velocity_states || use_imu_doppler_factors) {
+        for (const auto& factor : problem.undifferenced_doppler_factors) {
+            if (factor.epoch_index >= num_epochs || !factor.los.allFinite() ||
+                !std::isfinite(factor.residual_mps) ||
+                !std::isfinite(factor.sigma_mps)) {
+                continue;
+            }
+            const gtsam::Vector3 los_nav(ecef2enu(
+                factor.los, gnss_velocity_origin_lat_rad,
+                gnss_velocity_origin_lon_rad));
+            if (!los_nav.allFinite() || los_nav.norm() <= 0.0) continue;
+            graph.emplace_shared<UndifferencedDopplerVelocityFactor>(
+                velocityKey(factor.epoch_index),
+                dopplerClockDriftKey(factor.epoch_index),
+                los_nav, factor.residual_mps,
+                makeNoise(factor.sigma_mps, config.use_robust_loss,
+                          config.tdcp_huber_threshold_sigma));
+            ++undifferenced_doppler_inserted;
+        }
+    }
+    result.diagnostics.undifferenced_doppler_factors_inserted =
+        undifferenced_doppler_inserted;
     // Undifferenced carrier phase (rare here: use_carrier_phase_factors is off
     // in the DD RTK config) uses only the base clock; the ISB affects code and
     // phase identically and cancels in the DD path, so this is adequate for the
@@ -369,6 +724,44 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
             ambiguityKey(factor.ambiguity_index), factor.corrected_carrier_m,
             Point3(factor.satellite_position_ecef), 0.0, noise);
     }
+
+    // --- Ordinary (single-receiver) TDCP factors ---
+    // Keep the exact v1 temporal carrier constraint in the IMU-coupled Pose3
+    // graph.  This is deliberately separate from the base-dependent
+    // single/double-difference paths: a no-base smartphone run has one
+    // receiver clock per epoch and one undifferenced carrier delta per
+    // satellite.  The factor uses the same sigma/Huber contract as the Eigen
+    // backend; invalid epoch indices are skipped and counted as not inserted.
+    std::size_t ordinary_tdcp_inserted = 0;
+    if (use_pose3 && config.use_tdcp_factors) {
+        for (const auto& factor : problem.tdcp_factors) {
+            if (factor.previous_epoch_index >= num_epochs ||
+                factor.current_epoch_index >= num_epochs ||
+                factor.current_epoch_index <= factor.previous_epoch_index) {
+                continue;
+            }
+            if (!std::isfinite(factor.delta_carrier_m) ||
+                !factor.previous_satellite_position_ecef.allFinite() ||
+                !factor.current_satellite_position_ecef.allFinite()) {
+                continue;
+            }
+            const gtsam::Key previous_clock =
+                ensureBaseClock(factor.previous_epoch_index);
+            const gtsam::Key current_clock =
+                ensureBaseClock(factor.current_epoch_index);
+            const auto noise = makeNoise(
+                factor.sigma_m, config.use_robust_loss,
+                config.tdcp_huber_threshold_sigma);
+            graph.emplace_shared<TimeDifferencedCarrierFactorArm>(
+                positionKey(factor.previous_epoch_index), previous_clock,
+                positionKey(factor.current_epoch_index), current_clock,
+                Point3(factor.previous_satellite_position_ecef),
+                Point3(factor.current_satellite_position_ecef),
+                factor.delta_carrier_m, gnss_lever_arm, noise);
+            ++ordinary_tdcp_inserted;
+        }
+    }
+    result.diagnostics.tdcp_factors_inserted = ordinary_tdcp_inserted;
 
     // --- Double-difference pseudorange factors ---
     for (const auto& factor : problem.double_difference_pseudorange_factors) {
@@ -518,6 +911,100 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
         }
     }
 
+    // The native v1 motion graph also contains an independent receiver-clock
+    // random-walk row for each adjacent epoch.  Pose3's BetweenFactor above
+    // only constrains pose translation/rotation, so retain the clock part
+    // explicitly in seconds (the public configuration is in meters, matching
+    // the native clock state and v1 profile).  A detected common GPS code jump
+    // receives the same loose 1e6 m gate used by the Eigen backend.
+    if (need_clock_states && config.use_motion_factors && config.use_clock_motion_factors &&
+        config.clock_motion_sigma_m > 0.0 && num_epochs >= 2) {
+        for (std::size_t i = 1; i < num_epochs; ++i) {
+            const gtsam::Key previous_clock = ensureBaseClock(i - 1);
+            const gtsam::Key current_clock = ensureBaseClock(i);
+            const bool clock_jump =
+                i < problem.clock_jumps.size() && problem.clock_jumps[i];
+            const double sigma_m = clock_jump ? 1.0e6 : config.clock_motion_sigma_m;
+            graph.emplace_shared<gtsam::BetweenFactor<double>>(
+                previous_clock, current_clock, 0.0,
+                gtsam::noiseModel::Isotropic::Sigma(
+                    1, sigma_m / gtsam::gnss::C_LIGHT));
+        }
+    }
+
+    result.diagnostics.motion_factors =
+        (config.use_motion_factors && num_epochs >= 2)
+            ? num_epochs - 1
+            : 0;
+
+    // --- Upstream stationary-stop constraints -----------------------------
+    // fgo_gnss_imu.m adds a robust zero-velocity prior when the raw IMU stop
+    // flag and the preceding GNSS velocity gate both pass, and an identity
+    // Pose3 between-factor across two consecutive stops.  The batch path did
+    // not previously carry these constraints (the fixed-lag ZUPT knob is a
+    // separate contract), so keep this explicitly opt-in and raw-only.
+    if (use_upstream_stop_constraints) {
+        const auto velocity_noise = gtsam::noiseModel::Robust::Create(
+            gtsam::noiseModel::mEstimator::Huber::Create(
+                config.upstream_stop_velocity_huber_k_sigma),
+            gtsam::noiseModel::Isotropic::Sigma(
+                3, config.upstream_stop_velocity_sigma_mps));
+        for (std::size_t i = 0; i < num_epochs; ++i) {
+            if (!upstream_stop_detection.epoch_stop[i] ||
+                !initial.exists(velocityKey(i))) {
+                continue;
+            }
+            const gtsam::Vector3 graph_velocity =
+                initial.at<gtsam::Vector3>(velocityKey(i));
+            const bool have_upstream_seed =
+                problem.imu.stop_velocity_seeds_nav.size() == num_epochs &&
+                problem.imu.stop_velocity_seeds_nav[i].allFinite();
+            const double stop_speed = have_upstream_seed
+                ? problem.imu.stop_velocity_seeds_nav[i].norm()
+                : graph_velocity.norm();
+            if (!graph_velocity.allFinite() || !std::isfinite(stop_speed) ||
+                stop_speed >= config.upstream_stop_velocity_threshold_mps) {
+                continue;
+            }
+            graph.addPrior<gtsam::Vector3>(
+                velocityKey(i), gtsam::Vector3::Zero(), velocity_noise);
+            ++result.diagnostics.upstream_stop_velocity_factors;
+        }
+        gtsam::Vector6 pose_sigmas;
+        pose_sigmas << config.upstream_stop_pose_rotation_sigma_rad,
+            config.upstream_stop_pose_rotation_sigma_rad,
+            config.upstream_stop_pose_rotation_sigma_rad,
+            config.upstream_stop_pose_translation_sigma_m,
+            config.upstream_stop_pose_translation_sigma_m,
+            config.upstream_stop_pose_translation_sigma_m;
+        const auto pose_noise = gtsam::noiseModel::Robust::Create(
+            gtsam::noiseModel::mEstimator::Huber::Create(
+                config.upstream_stop_pose_huber_k_sigma),
+            gtsam::noiseModel::Diagonal::Sigmas(pose_sigmas));
+        for (std::size_t i = 0; i + 1U < num_epochs; ++i) {
+            if (!upstream_stop_detection.epoch_stop[i] ||
+                !upstream_stop_detection.epoch_stop[i + 1U] ||
+                !initial.exists(velocityKey(i))) {
+                continue;
+            }
+            const gtsam::Vector3 graph_velocity =
+                initial.at<gtsam::Vector3>(velocityKey(i));
+            const bool have_upstream_seed =
+                problem.imu.stop_velocity_seeds_nav.size() == num_epochs &&
+                problem.imu.stop_velocity_seeds_nav[i].allFinite();
+            const double stop_speed = have_upstream_seed
+                ? problem.imu.stop_velocity_seeds_nav[i].norm()
+                : graph_velocity.norm();
+            if (!graph_velocity.allFinite() || !std::isfinite(stop_speed) ||
+                stop_speed >= config.upstream_stop_velocity_threshold_mps) {
+                continue;
+            }
+            graph.emplace_shared<gtsam::BetweenFactor<Pose3>>(
+                positionKey(i), positionKey(i + 1U), Pose3(), pose_noise);
+            ++result.diagnostics.upstream_stop_pose_factors;
+        }
+    }
+
     // --- Optional absolute priors (disabled by default: sigma <= 0) ---
     if (config.position_prior_sigma_m > 0.0) {
         if (use_pose3) {
@@ -544,6 +1031,60 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
             1, config.clock_prior_sigma_m / constants::SPEED_OF_LIGHT);
         for (const gtsam::Key key : inserted_clock_keys) {
             graph.addPrior(key, initial.at<double>(key), noise);
+        }
+    }
+    if (config.use_receiver_signal_bias_states &&
+        config.receiver_signal_bias_prior_sigma_m > 0.0) {
+        const auto noise = gtsam::noiseModel::Isotropic::Sigma(
+            1, config.receiver_signal_bias_prior_sigma_m);
+        for (const int ordinal : inserted_signal_bias_ordinals) {
+            graph.addPrior(signalBiasKey(ordinal), 0.0, noise);
+        }
+    }
+    if (use_residual_ionosphere &&
+        std::isfinite(config.residual_ionosphere_prior_sigma_m) &&
+        config.residual_ionosphere_prior_sigma_m > 0.0) {
+        const auto prior_noise = gtsam::noiseModel::Isotropic::Sigma(
+            1, config.residual_ionosphere_prior_sigma_m);
+        // The first state is a gauge anchor.  Additional segment starts get
+        // the same weak physical prior after a clock jump or an unusable
+        // interval so no state can drift through a discontinuity.
+        graph.addPrior(residualIonosphereKey(0), 0.0, prior_noise);
+        for (std::size_t i = 1; i < num_epochs; ++i) {
+            const double dt = problem.epochs[i].time - problem.epochs[i - 1].time;
+            const bool clock_jump =
+                i < problem.clock_jumps.size() && problem.clock_jumps[i];
+            const double rw_sigma = residual_ionosphere::randomWalkSigma(
+                dt, config.residual_ionosphere_random_walk_sigma_m_per_sqrt_s);
+            const bool continuous =
+                !clock_jump && std::isfinite(rw_sigma) &&
+                (config.residual_ionosphere_max_gap_s <= 0.0 ||
+                 (std::isfinite(dt) &&
+                  dt <= config.residual_ionosphere_max_gap_s));
+            if (continuous) {
+                graph.emplace_shared<gtsam::BetweenFactor<double>>(
+                    residualIonosphereKey(i - 1), residualIonosphereKey(i), 0.0,
+                    gtsam::noiseModel::Isotropic::Sigma(1, rw_sigma));
+            } else {
+                graph.addPrior(residualIonosphereKey(i), 0.0, prior_noise);
+                ++result.diagnostics.residual_ionosphere_resets;
+            }
+        }
+    }
+    if (use_gnss_velocity_states || use_imu_doppler_factors) {
+        // The Doppler rows normally provide full rank per epoch; this very
+        // broad prior is only a numerical gauge guard for a sparse/degenerate
+        // epoch and is not a motion or truth-derived constraint.
+        constexpr double kBroadVelocityPriorSigmaMps = 1.0e6;
+        constexpr double kBroadClockRatePriorSigmaMps = 1.0e6;
+        const gtsam::Vector3 zero_velocity = gtsam::Vector3::Zero();
+        for (std::size_t i = 0; i < num_epochs; ++i) {
+            graph.addPrior(velocityKey(i), zero_velocity,
+                           gtsam::noiseModel::Isotropic::Sigma(
+                               3, kBroadVelocityPriorSigmaMps));
+            graph.addPrior(dopplerClockDriftKey(i), 0.0,
+                           gtsam::noiseModel::Isotropic::Sigma(
+                               1, kBroadClockRatePriorSigmaMps));
         }
     }
 
@@ -795,6 +1336,53 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
     }
 
     // --- Map per-epoch solutions ---
+    if (config.use_receiver_signal_bias_states) {
+        for (const int ordinal : inserted_signal_bias_ordinals) {
+            const gtsam::Key key = signalBiasKey(ordinal);
+            if (!optimized.exists(key)) continue;
+            for (const auto& factor : problem.pseudorange_factors) {
+                if (!signal_bias::isEligible(factor.satellite.system, factor.signal) ||
+                    signal_bias::ordinal(factor.satellite.system, factor.signal) != ordinal) {
+                    continue;
+                }
+                result.receiver_signal_bias_estimates_m.emplace(
+                    std::make_pair(factor.satellite.system, factor.signal),
+                    optimized.at<double>(key));
+                break;
+            }
+        }
+    }
+
+    if (use_residual_ionosphere) {
+        result.residual_ionosphere_estimates_m.assign(
+            num_epochs, std::numeric_limits<double>::quiet_NaN());
+        double sum_squared = 0.0;
+        std::size_t finite_count = 0;
+        for (std::size_t i = 0; i < num_epochs; ++i) {
+            const gtsam::Key key = residualIonosphereKey(i);
+            if (!optimized.exists(key)) continue;
+            const double estimate = optimized.at<double>(key);
+            result.residual_ionosphere_estimates_m[i] = estimate;
+            if (!std::isfinite(estimate)) {
+                ++result.diagnostics.residual_ionosphere_invalid_coefficients;
+                continue;
+            }
+            result.diagnostics.residual_ionosphere_max_abs_m = std::max(
+                result.diagnostics.residual_ionosphere_max_abs_m,
+                std::abs(estimate));
+            sum_squared += estimate * estimate;
+            ++finite_count;
+        }
+        result.diagnostics.residual_ionosphere_rms_m =
+            finite_count > 0
+                ? std::sqrt(sum_squared / static_cast<double>(finite_count))
+                : std::numeric_limits<double>::infinity();
+        if (!std::isfinite(result.diagnostics.residual_ionosphere_min_coefficient)) {
+            result.diagnostics.residual_ionosphere_min_coefficient = 0.0;
+        }
+    }
+
+    // --- Map per-epoch solutions ---
     const bool have_ambiguities = !problem.ambiguity_states.empty();
     for (std::size_t i = 0; i < num_epochs; ++i) {
         PositionSolution solution;
@@ -830,10 +1418,12 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
     // and ENU velocity so callers can confirm attitude is now observable. ---
     if (use_imu) {
         result.epoch_attitude_rpy_deg.resize(num_epochs);
+        result.epoch_attitude_rpy_rad.resize(num_epochs);
         result.epoch_velocity_nav_mps.resize(num_epochs);
         constexpr double kRadToDeg = 180.0 / 3.14159265358979323846;
         for (std::size_t i = 0; i < num_epochs; ++i) {
             const Rot3 R_body_to_nav = optimized.at<Pose3>(positionKey(i)).rotation();
+            const gtsam::Vector3 rpy = R_body_to_nav.rpy();
             const gtsam::Matrix3 R = R_body_to_nav.matrix();
             const Eigen::Vector3d fwd = R.col(0);   // body forward in ENU
             const Eigen::Vector3d left = R.col(1);  // body left in ENU
@@ -846,8 +1436,19 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
                 std::asin(std::max(-1.0, std::min(1.0, fwd.z()))) * kRadToDeg;
             const double roll = std::atan2(left.z(), R.col(2).z()) * kRadToDeg;
             result.epoch_attitude_rpy_deg[i] = Vector3d(roll, pitch, heading);
+            result.epoch_attitude_rpy_rad[i] =
+                Vector3d(rpy.x(), rpy.y(), rpy.z());
             result.epoch_velocity_nav_mps[i] =
                 Vector3d(optimized.at<gtsam::Vector3>(velocityKey(i)));
+        }
+    } else if (use_gnss_velocity_states) {
+        result.epoch_velocities_ecef_mps.resize(num_epochs);
+        for (std::size_t i = 0; i < num_epochs; ++i) {
+            const Vector3d velocity_nav(
+                optimized.at<gtsam::Vector3>(velocityKey(i)));
+            result.epoch_velocities_ecef_mps[i] = enu2ecef(
+                velocity_nav, gnss_velocity_origin_lat_rad,
+                gnss_velocity_origin_lon_rad);
         }
     }
 
@@ -911,6 +1512,8 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
     {
         double sum = 0.0;
         std::size_t count = 0;
+        double normalized_sum = 0.0;
+        std::size_t normalized_count = 0;
         for (const auto& factor : problem.pseudorange_factors) {
             const Point3 position = antennaPositionOf(optimized, factor.epoch_index);
             const int ordinal = clockGroupOrdinal(
@@ -919,17 +1522,94 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
             if (ordinal != 0 && optimized.exists(isbKey(ordinal))) {
                 clock_s += optimized.at<double>(isbKey(ordinal));
             }
+            double signal_bias_m = 0.0;
+            if (config.use_receiver_signal_bias_states &&
+                signal_bias::isEligible(factor.satellite.system, factor.signal)) {
+                const int signal_bias_ordinal =
+                    signal_bias::ordinal(factor.satellite.system, factor.signal);
+                if (signal_bias_ordinal > 0 &&
+                    optimized.exists(signalBiasKey(signal_bias_ordinal))) {
+                    signal_bias_m = optimized.at<double>(
+                        signalBiasKey(signal_bias_ordinal));
+                }
+            }
+            double residual_ionosphere_m = 0.0;
+            if (use_residual_ionosphere &&
+                optimized.exists(residualIonosphereKey(factor.epoch_index))) {
+                residual_ionosphere_m =
+                    factor.residual_ionosphere_coefficient *
+                    optimized.at<double>(
+                        residualIonosphereKey(factor.epoch_index));
+            }
             // Plain Euclidean range to match the native backend and the factor
             // model above (satellite positions are already earth-rotation
             // corrected; no additional Sagnac term).
             const double range =
                 (Point3(factor.satellite_position_ecef) - position).norm();
-            const double predicted = range + constants::SPEED_OF_LIGHT * clock_s;
+            const double predicted = range + constants::SPEED_OF_LIGHT * clock_s +
+                                     signal_bias_m + residual_ionosphere_m;
             const double residual = factor.corrected_pseudorange_m - predicted;
             sum += residual * residual;
             ++count;
+            if (config.use_upstream_observable_quality &&
+                std::isfinite(factor.sigma_m) && factor.sigma_m > 0.0) {
+                const double normalized = residual / factor.sigma_m;
+                if (std::isfinite(normalized)) {
+                    normalized_sum += normalized * normalized;
+                    ++normalized_count;
+                }
+            }
         }
         result.diagnostics.residual_rms_m = accumulate_rms(sum, count);
+        if (config.use_upstream_observable_quality && normalized_count > 0) {
+            result.diagnostics.upstream_pseudorange_normalized_rms = std::sqrt(
+                normalized_sum / static_cast<double>(normalized_count));
+        }
+    }
+
+    // Receiver-only Doppler post-fit diagnostics use the same native sign
+    // contract as UndifferencedDopplerVelocityFactor.  This is evaluated for
+    // both the explicit GNSS velocity-state graph and the opt-in IMU graph;
+    // the latter's velocity is already in the IMU ENU frame.
+    if (use_gnss_velocity_states || use_imu_doppler_factors) {
+        double sum = 0.0;
+        std::size_t count = 0;
+        double normalized_sum = 0.0;
+        std::size_t normalized_count = 0;
+        for (const auto& factor : problem.undifferenced_doppler_factors) {
+            if (factor.epoch_index >= num_epochs ||
+                !optimized.exists(velocityKey(factor.epoch_index)) ||
+                !optimized.exists(dopplerClockDriftKey(factor.epoch_index)) ||
+                !factor.los.allFinite() || !std::isfinite(factor.residual_mps) ||
+                !std::isfinite(factor.sigma_mps) || factor.sigma_mps <= 0.0) {
+                continue;
+            }
+            const gtsam::Vector3 los_nav(ecef2enu(
+                factor.los, gnss_velocity_origin_lat_rad,
+                gnss_velocity_origin_lon_rad));
+            const gtsam::Vector3 velocity_nav =
+                optimized.at<gtsam::Vector3>(velocityKey(factor.epoch_index));
+            const double clock_drift = optimized.at<double>(
+                dopplerClockDriftKey(factor.epoch_index));
+            const double residual =
+                los_nav.dot(velocity_nav) + clock_drift - factor.residual_mps;
+            if (!std::isfinite(residual)) continue;
+            sum += residual * residual;
+            ++count;
+            if (config.use_upstream_observable_quality) {
+                const double normalized = residual / factor.sigma_mps;
+                if (std::isfinite(normalized)) {
+                    normalized_sum += normalized * normalized;
+                    ++normalized_count;
+                }
+            }
+        }
+        result.diagnostics.undifferenced_doppler_residual_rms_mps =
+            accumulate_rms(sum, count);
+        if (config.use_upstream_observable_quality && normalized_count > 0) {
+            result.diagnostics.upstream_doppler_normalized_rms = std::sqrt(
+                normalized_sum / static_cast<double>(normalized_count));
+        }
     }
 
     const auto end_time = std::chrono::high_resolution_clock::now();

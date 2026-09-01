@@ -1,0 +1,116 @@
+{
+  "schema_version": "smartphone-r5-variant-record.v1",
+  "profile_id": "gsdc2023-pixel7pro-standalone-v1",
+  "dataset_id": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+  "variant": "galileo-e1-mixed-rinex",
+  "role": "development-only",
+  "decision": "promoted-development-only",
+  "reason": "Exact source/RINEX/nav contracts passed and every frozen development accuracy and availability metric improved; runtime cost is retained as a follow-up optimization target.",
+  "source_contract": {
+    "signal_type": "GAL_E1_C_P",
+    "constellation_type": "6",
+    "carrier_frequency_hz": 1575420000,
+    "code_type": "empty-only",
+    "rinex_system": "E",
+    "rinex_observation_types": ["C1C", "L1C", "D1C", "S1C"],
+    "navigation": "native mixed RINEX Galileo records required per selected E1 observation; maximum nearest record age 14400 seconds",
+    "inter_system_bias": "native SPP separate Galileo clock-bias group; model_intersystem_bias=true",
+    "weighting": "native elevation/CN0 variance model unchanged"
+  },
+  "audit": {
+    "development_selected_epochs": 1383,
+    "galileo_e1_observation_rows": 8743,
+    "galileo_observed_prns": [2, 9, 11, 15, 25, 30, 34, 36],
+    "navigation_record_count": 11407,
+    "navigation_coverage": 1.0,
+    "gps_l5_rows_excluded": 8085,
+    "glonass_g1_rows_excluded": 10210,
+    "code_type_values": {"<empty>": 48000},
+    "holdout": "not-run"
+  },
+  "metrics": {
+    "development_600": {
+      "baseline": {
+        "rinex_rows": 4474,
+        "solution_epochs": 593,
+        "availability_ratio": 0.9883333333333333,
+        "horizontal_median_m": 5.621831263283005,
+        "horizontal_p95_m": 18.08141081793837,
+        "vertical_p95_abs_m": 33.584866287304685,
+        "max_solution_gap_s": 8.0,
+        "adapter_wall_s": 0.70,
+        "solver_wall_s": 0.31,
+        "adapter_peak_rss_kb": 23136,
+        "solver_peak_rss_kb": 14688
+      },
+      "candidate": {
+        "rinex_rows": 8111,
+        "galileo_e1_rows": 3637,
+        "solution_epochs": 600,
+        "availability_ratio": 1.0,
+        "horizontal_median_m": 3.3759208486190646,
+        "horizontal_p95_m": 8.92077044434862,
+        "vertical_p95_abs_m": 25.530466903344724,
+        "max_solution_gap_s": 1.0,
+        "adapter_wall_s": 1.04,
+        "solver_wall_s": 0.67,
+        "adapter_peak_rss_kb": 24040,
+        "solver_peak_rss_kb": 15592,
+        "navigation_coverage": 1.0
+      }
+    },
+    "development_full": {
+      "baseline": {
+        "rinex_rows": 11000,
+        "solution_epochs": 1376,
+        "availability_ratio": 0.9949385394070861,
+        "horizontal_median_m": 4.928490754936462,
+        "horizontal_p95_m": 16.353068947914387,
+        "vertical_p95_abs_m": 28.375588846435548,
+        "max_solution_gap_s": 8.0,
+        "adapter_wall_s": 1.11,
+        "solver_wall_s": 0.53,
+        "adapter_peak_rss_kb": 23348,
+        "solver_peak_rss_kb": 17140,
+        "kaggle_score_variants_m": {
+          "haversine_sphere__linear_n_minus_1": 10.628887725724038,
+          "haversine_sphere__nearest_rank_ceiling": 10.64398305494578,
+          "wgs84_vincenty__linear_n_minus_1": 10.625632743511524,
+          "wgs84_vincenty__nearest_rank_ceiling": 10.637965430826561
+        }
+      },
+      "candidate": {
+        "rinex_rows": 19743,
+        "galileo_e1_rows": 8743,
+        "solution_epochs": 1383,
+        "availability_ratio": 1.0,
+        "horizontal_median_m": 3.407342956477305,
+        "horizontal_p95_m": 8.42770050922664,
+        "vertical_p95_abs_m": 19.50174819776725,
+        "max_solution_gap_s": 1.0,
+        "adapter_wall_s": 1.89,
+        "solver_wall_s": 1.24,
+        "adapter_peak_rss_kb": 24800,
+        "solver_peak_rss_kb": 19760,
+        "navigation_coverage": 1.0,
+        "kaggle_primary_score": null,
+        "kaggle_primary_status": "undetermined-from-public-primary-sources",
+        "kaggle_score_variants_m": {
+          "haversine_sphere__linear_n_minus_1": 5.910908316047448,
+          "haversine_sphere__nearest_rank_ceiling": 5.91158863174743,
+          "wgs84_vincenty__linear_n_minus_1": 5.921346759174058,
+          "wgs84_vincenty__nearest_rank_ceiling": 5.921857149904408
+        }
+      }
+    }
+  },
+  "artifacts": {
+    "rover_obs_sha256": "e4e1dfc9395ce409caec82f86436661b60fe64364c33818da0a1f63c87c05212",
+    "adapter_summary_sha256": "c695c8220787de82cb6ac61593b2dafc70cff8d4d47bd7fb11e6b8a2f2dd4c8f",
+    "solver_summary_sha256": "64000df6e109837cb3c6e76cd31e5f007afa297032caeceb9aa97f642b24312e",
+    "position_sha256": "22787632b59bbdfaa774adf6d359cc71bf60b4d8a7f3553b23ca93590eb3e30a",
+    "kaggle_submission_sha256": "fa1a9650bbaafa658a0ea05e9626985468003adc70373445c14a138246e5dc5b",
+    "kaggle_report_sha256": "a57806d6ee3f485be1f6f2f637cbfd43f4a13829b12fef4c31a3bb13f86809c4"
+  },
+  "holdout_run": "not-run-for-development-only-variant"
+}

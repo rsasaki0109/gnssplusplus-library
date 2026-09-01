@@ -1,0 +1,138 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-upstream-mat-freeze.v1",
+  "status": "frozen-before-development-truth-score",
+  "frozen_at_utc": "2026-08-31T00:00:00Z",
+  "purpose": "Promote only the public taroz precomputed result MAT coordinates through a deterministic local converter; do not rerun MATLAB or alter production RTK/SPP defaults.",
+  "policy": {
+    "external_mutation": false,
+    "kaggle_submission": false,
+    "token_access": false,
+    "test_truth_materialized": false,
+    "test_truth_open_count": 0,
+    "fresh_validation_materialized": false,
+    "fresh_validation_truth_open_count": 0,
+    "future_holdout_materialized": false,
+    "future_holdout_truth_open_count": 0,
+    "leaderboard_used_for_tuning": false,
+    "source_vendored": false,
+    "production_default_changed": false,
+    "public_mat_redistributed": false,
+    "no_post_truth_parameter_tuning": true
+  },
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "size_bytes": 2761355999,
+    "central_directory_entry_count": 1048,
+    "license_caveat": "The public archive has no separate license file; it remains a local cache and is not vendored or redistributed."
+  },
+  "mat_inventory": {
+    "path": "output/smartphone-r5/gsdc2023-upstream-mat-v1/mat_inventory.json",
+    "sha256": "a54d54305442bfc826a34a5e59debe12ebcb55caf03d6235fdf0e125c5bd609c",
+    "member_count": 312,
+    "member_total_bytes": 1310651529,
+    "result_member_count": 160,
+    "result_route_phone_count": 80,
+    "train_members": 166,
+    "test_members": 146,
+    "hash_semantics": "CRC32 and SHA256 were computed from ZIP decompressed streams; the stream bytes are identical to an extracted member."
+  },
+  "published_source": {
+    "repository_url": "https://github.com/taroz/gsdc2023",
+    "commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "license": "MIT",
+    "archive_url": "https://taroz.net/data/dataset_2023.zip",
+    "source_files": {
+      "run_fgo.m": "02150849653b2e5c80609e971dbef41b010569de5dcc304782235b7fc96b9065",
+      "fgo_gnss.m": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3",
+      "fgo_gnss_imu.m": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+      "parameters.m": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52",
+      "functions/write_results.m": "d08c2097585d67d460694164b019d4be78e5d70218fa5d14776966b62a71900c",
+      "functions/submission.m": "db97431c1da52b93b8903eb4c604141b3c8d6dfb7ad33b6df237e414a7e8c9ac",
+      "functions/score.m": "4c88f3f775e4f8caca22bb8c5f5747309f32b190df230346179381feb1f572c4",
+      "functions/utcms2gtime.m": "f894eb217c5361b1e043f101eb15a58ed5b13bcefbabe8bf615a5f65e78b2069",
+      "functions/add_position_offset.m": "2308b612b6aab9816ddcf3c1efef621b8ebe15a1bdae5d167df2783e6c8317978",
+      "functions/gnsslog2obs.m": "665ce43d1fc3c5a9c3b3a6fd76f81539126e3ab897fbba484ab0ccd18964acff",
+      "functions/GobsPhone.m": "11d43c1e76370b9d393075ec88071585efb3efb5d2fa97b3be58c0e1bd196986"
+    },
+    "upstream_semantics": {
+      "run_fgo": "Final result_gnss_imu.mat is loaded for submission; result_gnss.mat is the GNSS-only comparison.",
+      "write_results": "MAT results are written after optimization; saved gt.Gpos already includes add_position_offset.",
+      "add_position_offset": "Phone-specific body offset is rotated and applied before saving gt.Gpos; converter does not apply it twice.",
+      "submission": "Official sample supplies tripId/UnixTimeMillis row order; upstream intersects obs.utcms and fills missing positions.",
+      "score": "Upstream score is Haversine with gt.C.RE_WGS84 and mean of P50/P95; this lane reports the repository's four explicit diagnostics separately."
+    }
+  },
+  "converter": {
+    "source_path": "apps/commands/benchmarks/gnss_smartphone_gsdc2023_upstream_mat.py",
+    "source_sha256": "d26fdb9f639d198b708a6162fd9bd7328ed9019f5fc7ed5469af3e4bcc3852a4",
+    "dispatcher_path": "apps/gnss.py",
+    "dispatcher_sha256": "220af767912eaadebb4ae16eda601ff62af42ce4803527bc70c17851357f91d1",
+    "runtime": {
+      "python": "3.12.3",
+      "numpy": "2.4.2",
+      "scipy": "1.17.0",
+      "mat_format": "MATLAB v5 MCOS FileWrapper__ workspace; little-endian IM marker"
+    },
+    "decode_contract": {
+      "object": "Only gt.Gpos.llh and gt.Gpos.n are decoded; opaque object class must be gt.Gpos.",
+      "workspace": "Segment tables, one-based string/property indices, object-table ordinal and heap cells are bounds-checked.",
+      "coordinates": "LLH latitude/longitude/height are used exactly as stored; no sample coordinate, truth, v5, nearest remap, or estimator rerun is used.",
+      "time": "Preferred source is GobsPhone.obs.utcms UTC milliseconds from phone_data.mat, matching upstream submission.m; direct conversion accepts unique monotonic device_gnss.utcTimeMillis only as an explicit fallback.",
+      "finite": "Finite LLH rows only; non-finite rows are omissions and are never silently converted to zeros.",
+      "interpolation": "Same-trip latitude/longitude/height linear interpolation only for a bracket gap <=10000 ms.",
+      "edge_hold": "Same-trip finite constant endpoint hold only for a one-sided gap <=1000 ms; no extrapolation beyond this bound.",
+      "continuity": "Published rows must have finite WGS84 ECEF transitions at <=70 m/s; otherwise fail closed.",
+      "dummy_guard": "Known sample sentinel (34.640195,-120.589642) is never emitted; sample coordinates are not read as a fallback."
+    },
+    "source_commands": [
+      "python3 apps/commands/benchmarks/gnss_smartphone_gsdc2023_upstream_mat.py inventory --archive data/gsdc2023/cache/dataset_2023.zip --output output/smartphone-r5/gsdc2023-upstream-mat-v1/mat_inventory.json",
+      "python3 apps/commands/benchmarks/gnss_smartphone_gsdc2023_upstream_mat.py convert --mat <result_gnss[_imu].mat> --phone-data <phone_data.mat> --trip-id <route/phone> --output <route.csv> --manifest <route.manifest.json>",
+      "python3 apps/commands/benchmarks/gnss_smartphone_gsdc2023_upstream_mat.py test-batch --archive data/gsdc2023/cache/dataset_2023.zip --sample data/gsdc2023/sample_submission.csv --output-dir output/smartphone-r5/gsdc2023-upstream-mat-v1/test-batch"
+    ]
+  },
+  "binary_and_config": {
+    "release_binary": {
+      "path": "build/apps/gnss_fgo",
+      "sha256": "a10d13da4614f7cdc8e24556f5a32f870aee6c7aa94c5d3e890429996d583b0c"
+    },
+    "profile": {
+      "path": "configs/benchmarks/smartphone_r5_gsdc2023.json",
+      "sha256": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776"
+    },
+    "converter_fixture_test": {
+      "path": "tests/test_smartphone_gsdc2023_upstream_mat.py",
+      "sha256": "762b496b9a5e80837deb8e638700b8282a8af316e77dd3322d82dcd7081507a3"
+    }
+  },
+  "development_cohort": {
+    "selection": "Existing train-role identities from the prior metadata-only split inventory; route-disjoint validation and future holdout remain sealed.",
+    "train": [
+      "2021-03-10-23-13-us-ca-mtv-h/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "fresh_validation": "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+    "future_holdout": "2023-05-16-19-54-us-ca-mtv-xe1/pixel5",
+    "primary_result": "result_gnss_imu.mat (predeclared upstream final output)",
+    "comparison_result": "result_gnss.mat (reported comparison only; no truth-based parameter selection)",
+    "truth_read_authorization": "After this freeze, matching train ground_truth.csv may be read once for four-diagnostic reporting; validation/holdout/test truth remain unopened."
+  },
+  "sample_key_authority": {
+    "path": "data/gsdc2023/sample_submission.csv",
+    "sha256": "b0c4853076f715d6bdca46e5c8c99e575f7982d8ee4fc9c0fe417507badcb780",
+    "provenance_manifest": "data/gsdc2023/sample_submission.manifest.json",
+    "provenance_manifest_sha256": "c7d74f59ce936d4141da16a7492b20e08f0a379788b83d9f9694c50170a30c49",
+    "rows": 71936,
+    "header": ["tripId", "UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
+    "use": "keys and order only; official sample coordinates are never a prediction fallback"
+  },
+  "pre_truth_checks": {
+    "synthetic_mcos_fixture": "passed",
+    "materialized_route_result_gnss": "decoded 1384x3 finite LLH",
+    "materialized_route_result_gnss_imu": "decoded 1384x3 finite LLH",
+    "materialized_route_epoch_source": "phone_data obs.utcms 1384 unique monotonic epochs",
+    "all_result_structural_decode": "77/80 strict finite; 3/80 contain published NaN rows and are reserved for bounded omission/fail-closed reporting",
+    "freeze_before_train_truth": true
+  }
+}

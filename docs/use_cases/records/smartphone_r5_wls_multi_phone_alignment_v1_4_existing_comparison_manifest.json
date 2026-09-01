@@ -1,0 +1,78 @@
+{
+  "schema_version": "smartphone-r5-wls-multi-phone-alignment-v1.4-comparison-manifest.v1",
+  "sealed": true,
+  "status": "sealed-no-go-no-fresh-validation",
+  "comparison_record": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_alignment_v1_4_existing_comparison.json",
+    "sha256": "809a317e2ee29690a852fec7762ba5c583386ae29b673a88da1b7db91ed87554"
+  },
+  "selection_record": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_alignment_v1_4_selection.json",
+    "sha256": "5029e6e872b7b12296056365d38812bfab62cda3ff052cdc3528dea34f4be35b"
+  },
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408"
+  },
+  "inventory": {
+    "path": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+    "sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+    "central_directory_only": true,
+    "member_content_read_for_selection": false
+  },
+  "alignment_contract": {
+    "default_tolerance_ms": 1,
+    "candidate_tolerance_ms": 10,
+    "pass_rule": "absolute source-target timestamp delta <= 10 ms",
+    "reject_rule": "absolute source-target timestamp delta >= 11 ms",
+    "tie_rule": "equal nearest deltas choose the earlier source timestamp",
+    "interpolation": false,
+    "extrapolation": false,
+    "candidate_methods_unchanged": true,
+    "algorithm_core_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb"
+  },
+  "existing_artifact_comparison": {
+    "output_root": "output/smartphone-r5/wls-multi-phone-ensemble-v1-retry",
+    "report_sha256": "2c3e661b2f89057b86a9e33b3b5207cb6186a24ef1c83a1c1417c763e51ab4a8",
+    "run_manifest_sha256": "7cff3819ed24f1de587d9d67c8e17ca8b2dcbef00e7191a778b68a04c967aa3b",
+    "one_ms_vs_ten_ms_submission_artifacts_equal": true,
+    "metrics_non_regressed": true,
+    "all_four_diagnostics_non_regressed": true,
+    "availability_non_regressed": true,
+    "coverage_non_regressed": true,
+    "extrapolation_used": false,
+    "truth_newly_opened": 0
+  },
+  "inventory_exclusion": {
+    "multi_phone_groups_with_required_files": 8,
+    "excluded_groups": 8,
+    "fresh_validation_count": 0,
+    "fresh_holdout_count": 0,
+    "exclusion_reasons": [
+      "previously used development/generalization route",
+      "previously used multi-phone train or validation route",
+      "reserved v1.3/v1.4 holdout route"
+    ]
+  },
+  "holdout_contract": {
+    "materialized": false,
+    "truth_opened": false,
+    "truth_open_count": 0,
+    "used_for_ranking": false,
+    "freeze_created": false
+  },
+  "source_hashes": {
+    "apps/commands/benchmarks/gnss_smartphone_wls_multi_phone_ensemble_eval.py": "d0b82d27e1bde9cda2c0c2510fc26fc0d608498d8a05ba3ac4babecca4f9bf2e",
+    "tests/test_smartphone_wls_multi_phone_ensemble.py": "9e7d3f7be972bb7f2bb0f0246237daf80cfe6a03eb0329bd540e8006fd9e0932",
+    "configs/benchmarks/smartphone_r5_gsdc2023.json": "d5add376f875f9b3f7b765c18e5946dfba6aae69f71869612b8ab757fbe4fce7"
+  },
+  "release_binaries": {
+    "gnss_spp": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12",
+    "gnss_solve": "7140d077213ef528b7366aa8c1b925dcea6096ec6e0711748cf4cf9428392eb0"
+  },
+  "decision": "no-go-no-fresh-multi-phone-route",
+  "profile_promotion": false,
+  "production_rtk_spp_default_changed": false,
+  "post_holdout_tuning": false,
+  "rerun_or_adjustment_permitted": false
+}

@@ -1,0 +1,20 @@
+{
+  "schema_version": "smartphone-r5-native-fgo-android-raw-utc-key-contract-freeze-manifest.v1",
+  "freeze_record": "smartphone_r5_native_fgo_android_raw_utc_key_contract_freeze_v1.json",
+  "freeze_record_sha256": "029054dfd4c100961a9847c66956d3ab97edae11149ab533778f2bf11bb32dfc",
+  "record_hash_is_sealed_before_truth_free_generation": true,
+  "candidate_id": "native-fgo-android-gnss-first-vel2rpy-combined-imu-raw-utc-keys-v1",
+  "truth_policy": {
+    "truth_open_count_before_manifest": 0,
+    "fresh_validation_open": false,
+    "holdout_open": false,
+    "no_post_freeze_algorithm_or_parameter_tuning": true
+  },
+  "artifact_contract": {
+    "must_use_only_raw_gnss_imu_nav": true,
+    "must_exclude_first_raw_epoch": true,
+    "target_raw_epoch_count": 1383,
+    "must_publish_atomic": true,
+    "must_fail_closed_on_unresolved_or_nonfinite": true
+  }
+}

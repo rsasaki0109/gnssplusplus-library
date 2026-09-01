@@ -1,0 +1,294 @@
+{
+  "schema_version": "smartphone-r5-trajectory-imu-development.v1",
+  "decision": "promote-development-only",
+  "role": "development",
+  "holdout_used": false,
+  "competition_primary_score": "undetermined; existing local four diagnostics are retained",
+  "scope": {
+    "dataset_id": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "phone": "pixel7pro",
+    "position_lane": "Galileo E1 + Hatch30 development POS",
+    "implementation": [
+      "apps/commands/benchmarks/gnss_smartphone_imu.py",
+      "apps/commands/benchmarks/gnss_smartphone_trajectory_smoother.py",
+      "apps/commands/benchmarks/gnss_smartphone_trajectory_imu_eval.py",
+      "apps/gnss.py"
+    ],
+    "selection_flag": "--experimental-motion-adaptive-q-selection",
+    "smoother_flag": "--experimental-motion-adaptive-q"
+  },
+  "imu_audit": {
+    "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_imu.csv",
+    "sha256": "8f1c582bdad545d11e68349b221001b69e2a9d43f9257e60038c193276fa1804",
+    "bytes": 35153166,
+    "observed_fields": [
+      "MessageType",
+      "utcTimeMillis",
+      "elapsedRealtimeNanos",
+      "MeasurementX",
+      "MeasurementY",
+      "MeasurementZ",
+      "BiasX",
+      "BiasY",
+      "BiasZ"
+    ],
+    "hardware_clock_discontinuity_count_field_present": false,
+    "message_type_counts": {
+      "UncalGyro": 166369,
+      "UncalAccel": 166305,
+      "UncalMag": 69161
+    },
+    "supported_types": ["UncalGyro", "UncalAccel"],
+    "unsupported_types": {
+      "UncalMag": {
+        "used_for_motion": false,
+        "sample_count": 69161,
+        "rate_hz_approx": 50.0,
+        "utc_interval_ms_median_p95": [20.0, 20.0],
+        "bias_nonzero_components": 207483,
+        "bias_min": -178.54547,
+        "bias_max": -23.551155
+      }
+    },
+    "streams": {
+      "UncalGyro": {
+        "sample_count": 166369,
+        "rate_hz_approx": 125.0,
+        "span_s": 1383.379,
+        "utc_interval_ms_median_p95": [8.0, 9.0],
+        "utc_interval_ms_min_max": [0, 16],
+        "utc_backward_count": 0,
+        "utc_zero_count": 6,
+        "elapsed_interval_ms_median_p95": [8.318298, 8.334809],
+        "elapsed_backward_count": 0,
+        "measurement_nonfinite_count": 0,
+        "bias_nonfinite_count": 0,
+        "bias_nonzero_count": 0,
+        "clock_discontinuity_count": 0
+      },
+      "UncalAccel": {
+        "sample_count": 166305,
+        "rate_hz_approx": 125.0,
+        "span_s": 1383.375,
+        "utc_interval_ms_median_p95": [8.0, 9.0],
+        "utc_interval_ms_min_max": [4, 19],
+        "utc_backward_count": 0,
+        "utc_zero_count": 0,
+        "elapsed_interval_ms_median_p95": [8.318266, 8.33499285],
+        "elapsed_backward_count": 0,
+        "measurement_nonfinite_count": 0,
+        "bias_nonfinite_count": 0,
+        "bias_nonzero_count": 0,
+        "clock_discontinuity_count": 0
+      }
+    },
+    "fail_safe": {
+      "invalid_or_nonfinite": "baseline multiplier 1.0",
+      "sample_gap_over_s": 0.25,
+      "stale_sample_over_s": 0.25,
+      "elapsed_or_utc_clock_discontinuity": "baseline multiplier 1.0",
+      "attitude_or_absolute_acceleration_integration": false
+    }
+  },
+  "inputs": {
+    "position": {
+      "path": "output/smartphone-r5/hatch-full-w30/libgnsspp_spp.pos",
+      "sha256": "6db761dd446b82fa978b8c4b6be3b04b8330ddcd3362aeea6c74729a63484ab7"
+    },
+    "device_gnss": {
+      "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_gnss.csv",
+      "sha256": "c5af6cc3aeae6ab29a2a10d975d291b8fba4fab15273c0729163cd639ff10e42"
+    },
+    "ground_truth": {
+      "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv",
+      "sha256": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a"
+    },
+    "profile": {
+      "path": "configs/benchmarks/smartphone_r5_gsdc2023.json",
+      "sha256": "fce1af1f6bf5bec10448b4131ea3fb130a1399a91caa6be30de30389f841de8e",
+      "role": "development"
+    }
+  },
+  "algorithm": {
+    "motion_features": "causal one-second gyro vector norm and robust acceleration-norm variation",
+    "process_noise": "base q=1.0; dynamic epochs multiply q by candidate gain",
+    "measurement_floor_m": 1.0,
+    "outlier_gate_sigma": 5.0,
+    "segment_gap_s": 10.0,
+    "absolute_acceleration_integration": false,
+    "orientation_estimation": false,
+    "future_imu_samples_used": false,
+    "split_reset": "filter covariance/velocity, RTS state, and causal feature window reset at index 830"
+  },
+  "split": {
+    "selected_device_epochs": 1383,
+    "train_epochs": 830,
+    "validation_epochs": 553,
+    "reset_indices": [830],
+    "holdout": "not opened"
+  },
+  "candidate_policy": {
+    "fixed_window_s": 1.0,
+    "fixed_max_sample_gap_s": 0.25,
+    "fixed_max_sample_age_s": 0.25,
+    "predeclared": [
+      {"id": "gyro0p25_accel1p0_gain2", "gyro_threshold": 0.25, "accel_dynamic_threshold": 1.0, "motion_q_multiplier": 2.0},
+      {"id": "gyro0p15_accel0p75_gain2", "gyro_threshold": 0.15, "accel_dynamic_threshold": 0.75, "motion_q_multiplier": 2.0},
+      {"id": "gyro0p10_accel0p50_gain2", "gyro_threshold": 0.1, "accel_dynamic_threshold": 0.5, "motion_q_multiplier": 2.0},
+      {"id": "gyro0p15_accel0p75_gain3", "gyro_threshold": 0.15, "accel_dynamic_threshold": 0.75, "motion_q_multiplier": 3.0},
+      {"id": "gyro0p25_accel1p0_gain3", "gyro_threshold": 0.25, "accel_dynamic_threshold": 1.0, "motion_q_multiplier": 3.0}
+    ],
+    "train_rank": "WGS84 H median, WGS84 H P95, V P95, then mean of four local diagnostics",
+    "validation_gate": "availability and H median/H P95/V P95/four diagnostics non-inferior, with at least one strict improvement",
+    "ranked_ids": [
+      "gyro0p25_accel1p0_gain2",
+      "gyro0p10_accel0p50_gain2",
+      "gyro0p15_accel0p75_gain2",
+      "gyro0p25_accel1p0_gain3",
+      "gyro0p15_accel0p75_gain3"
+    ],
+    "selected": "gyro0p25_accel1p0_gain2"
+  },
+  "metrics_m": {
+    "baseline": {
+      "train": {
+        "epochs": 830,
+        "availability": 1.0,
+        "h_wgs84_median": 3.0527750671042906,
+        "h_wgs84_p95": 7.789698386839392,
+        "v_p95": 22.35570926143798,
+        "kaggle_diagnostic_mean": 5.431792772781326,
+        "kaggle_diagnostics": [5.4231742871687505, 5.445297982159751, 5.421236726971841, 5.437462094824961]
+      },
+      "validation": {
+        "epochs": 553,
+        "availability": 1.0,
+        "h_wgs84_median": 3.4493713750190462,
+        "h_wgs84_p95": 8.24514153047127,
+        "v_p95": 16.353999999729155,
+        "kaggle_diagnostic_mean": 5.8507054176252495,
+        "kaggle_diagnostics": [5.834376336305937, 5.854114079286485, 5.8472564527451585, 5.86707480216342]
+      },
+      "full_development": {
+        "epochs": 1383,
+        "availability": 1.0,
+        "h_wgs84_median": 3.2142607094436784,
+        "h_wgs84_p95": 7.943556294558911,
+        "v_p95": 20.19201316727292,
+        "kaggle_diagnostic_mean": 5.579769086634116,
+        "kaggle_diagnostics": [5.579926456430132, 5.580951299089783, 5.578908502001294, 5.579290089015254]
+      }
+    },
+    "selected": {
+      "train": {
+        "epochs": 830,
+        "availability": 1.0,
+        "h_wgs84_median": 2.5299352150728547,
+        "h_wgs84_p95": 6.041431263189615,
+        "v_p95": 23.381853796308853,
+        "kaggle_diagnostic_mean": 4.286060398131129,
+        "kaggle_diagnostics": [4.28297277126215, 4.28823286335664, 4.2856832391312345, 4.287352718774491],
+        "source_counts": {"measured": 593, "outlier_rejected": 237}
+      },
+      "validation": {
+        "epochs": 553,
+        "availability": 1.0,
+        "h_wgs84_median": 3.1127857769958487,
+        "h_wgs84_p95": 6.630332881045055,
+        "v_p95": 13.270689829186992,
+        "kaggle_diagnostic_mean": 4.870872687380128,
+        "kaggle_diagnostics": [4.865101625950466, 4.872086242330127, 4.871559329020451, 4.874743552219467],
+        "source_counts": {"measured": 454, "outlier_rejected": 99},
+        "validation_gate": {"passed": true, "failures": []}
+      },
+      "full_development": {
+        "epochs": 1383,
+        "availability": 1.0,
+        "h_wgs84_median": 2.741669538164165,
+        "h_wgs84_p95": 6.270679594033373,
+        "v_p95": 19.28525226871805,
+        "kaggle_diagnostic_mean": 4.506679118165733,
+        "kaggle_diagnostics": [4.506916074240938, 4.507111320164228, 4.506174566098769, 4.506514512158996],
+        "source_counts": {"measured": 1047, "outlier_rejected": 336},
+        "segments": 2,
+        "numerical_fallbacks": 0
+      }
+    }
+  },
+  "motion_summary": {
+    "epochs": 1383,
+    "dynamic_epochs": 424,
+    "dynamic_ratio": 0.3065798987707881,
+    "fallback_epochs": 2,
+    "fallback_ratio": 0.0014461315979754157,
+    "gap_detected_epochs": 2,
+    "clock_discontinuity_epochs": 0,
+    "nonfinite_epochs": 0,
+    "max_latest_sample_age_ms": 8,
+    "selected_config": {
+      "window_s": 1.0,
+      "gyro_threshold": 0.25,
+      "accel_dynamic_threshold": 1.0,
+      "motion_q_multiplier": 2.0
+    }
+  },
+  "performance": {
+    "evaluation_wall_s": 6.33,
+    "evaluation_peak_rss_kb": 109680,
+    "selected_smoothing_wall_s": 0.11545380699681118,
+    "comparison_repeats": 1,
+    "note": "single Release-style development selection run; not a throughput claim"
+  },
+  "artifacts": {
+    "evaluation_report": {
+      "path": "output/smartphone-r5/trajectory-imu-development/evaluation_report.json",
+      "sha256": "843ec6f9dbd3335d18746af2f79d84ded43111f83ddae23f03c7ede10f68fbbd"
+    },
+    "selected_smoothed_pos": {
+      "path": "output/smartphone-r5/trajectory-imu-development/selected/smoothed.pos",
+      "bytes": 180992,
+      "sha256": "02d7193ad9427debbca6d6583a13578c40b55f08b1bd55b765b76514c9d76a19"
+    },
+    "selected_trajectory_csv": {
+      "path": "output/smartphone-r5/trajectory-imu-development/selected/trajectory.csv",
+      "bytes": 212683,
+      "sha256": "100e35091d87c242aea384d505c105ce55a39847b01547365c4250f5c63bbffb"
+    },
+    "selected_summary": {
+      "path": "output/smartphone-r5/trajectory-imu-development/selected/smoother_summary.json",
+      "bytes": 7787,
+      "sha256": "ee71918486e5ca7a60b85370d53d0dbe50d2cf9bdf9c7cace5a5fba5b608feb8"
+    },
+    "selected_manifest": {
+      "path": "output/smartphone-r5/trajectory-imu-development/selected/smoother_manifest.json",
+      "bytes": 19261,
+      "sha256": "2c72c368e8633da3078784612112022ccdcad89512a6c816c02f492811c56325"
+    },
+    "selected_motion_profile": {
+      "path": "output/smartphone-r5/trajectory-imu-development/selected/motion_profile.csv",
+      "bytes": 155431,
+      "sha256": "88e337574e79543d53ff131d9b196d7c2f7b4b65175460da618abe2aae065e5f"
+    },
+    "submission": {
+      "path": "output/smartphone-r5/trajectory-imu-development/submission.csv",
+      "bytes": 71688,
+      "sha256": "77ff4e991ea3ebb20d076309ea2fd204746ac903b91dee98f422ceacc2f03a86"
+    },
+    "submission_manifest": {
+      "path": "output/smartphone-r5/trajectory-imu-development/submission.csv.manifest.json",
+      "bytes": 1990,
+      "sha256": "3adef4edb99b23452d609ec93562a511e8268870d56d03b3b5a41de8709ee268"
+    },
+    "evaluation_time": {
+      "path": "output/smartphone-r5/trajectory-imu-development/evaluation_time.txt",
+      "sha256": "8d9ed8a33b71a39cd55b4ceabfbbec5337f045e648b29182f78c5dc74f806cc1"
+    }
+  },
+  "verification": {
+    "imu_unit_tests": "3/3 passed",
+    "trajectory_smoother_unit_tests": "4/4 passed",
+    "release_build": "cmake configure and gnss_run_tests target passed",
+    "full_ctest": "84/84 passed with ROS and GTSAM runtime paths appended",
+    "git_diff_check": "passed"
+  }
+}

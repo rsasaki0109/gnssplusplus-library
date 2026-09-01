@@ -1,0 +1,196 @@
+{
+  "schema_version": "smartphone-r5-phase78-phase77-structural-reclassification-freeze.v1",
+  "phase": 78,
+  "status": "frozen-before-phase78-sealed-artifact-read",
+  "created_at_utc": "2026-09-02T00:00:00Z",
+  "execution_label": "Luna Max",
+  "purpose": "Reclassify the already completed Phase77 holistic signal-bias/base-pc composition using immutable candidate artifacts only; no native rerun or raw/truth read is permitted.",
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "phase77_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase77_phase73_signal_bias_composition_structural_freeze_v1.json",
+      "sha256": "4f7bd6136180bb86a81031eaff38689db1b44451fb418d21cf6d796d27fb4e95"
+    },
+    "phase77_result_record": {
+      "path": "docs/use_cases/records/smartphone_r5_phase77_phase73_signal_bias_composition_structural_result_v1.json",
+      "sha256": "e88ee525466432e1ba39b966ae0700b05ae41938ecee131097912ddff94c6ded"
+    },
+    "phase77_failure_output": {
+      "path": "output/smartphone-r5/phase77-phase73-signal-bias-composition-structural-v1/phase77_phase73_signal_bias_composition_structural_failure.json",
+      "sha256": "54a11a86c1900c77e23ca07a32875912ba67033e635eda128e08a8ff4f9dc1ea",
+      "bytes": 437248,
+      "status": "sealed-fail-closed; read-only provenance"
+    },
+    "phase77_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase77_phase73_signal_bias_composition_structural.py",
+      "sha256": "c3fa161bcea308d3b1749d24ff535835a6e843719e7abb5fcd87647e28e3298d"
+    },
+    "phase77_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase77_phase73_signal_bias_composition_structural_manifest_v1.json",
+      "sha256": "5ff32bd81b42461c98925c2eb83d958b4c7c68d9c16c5fce0bb5948972b23ad7"
+    }
+  },
+  "scope": {
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "route_disjoint": true,
+    "phase77_candidate_artifacts_are_immutable": true,
+    "no_route_specific_selection": true,
+    "no_native_rerun": true,
+    "no_accuracy_truth": true
+  },
+  "candidate_artifact_pins": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "candidate_run1": {
+        "submission_sha256": "226070fca35b0aaa75b73dd4d758f10c79c2a565ee1495f0f1232b0e3fe1050f",
+        "summary_sha256": "54067e1573e4ef530dd1b05695f328736d2c4d473d2448e8dbc7e5cd4702d9ce"
+      },
+      "candidate_run2": {
+        "submission_sha256": "226070fca35b0aaa75b73dd4d758f10c79c2a565ee1495f0f1232b0e3fe1050f",
+        "summary_sha256": "54067e1573e4ef530dd1b05695f328736d2c4d473d2448e8dbc7e5cd4702d9ce"
+      }
+    },
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "candidate_run1": {
+        "submission_sha256": "23ef3270230d8c0b280f8cec6398d080f2ae40bdccc3ae6dc05065d92c809dee",
+        "summary_sha256": "697285c7922a41c456536188d04f586224f7d331f6033a8100d2c19d2cb6986a"
+      },
+      "candidate_run2": {
+        "submission_sha256": "23ef3270230d8c0b280f8cec6398d080f2ae40bdccc3ae6dc05065d92c809dee",
+        "summary_sha256": "697285c7922a41c456536188d04f586224f7d331f6033a8100d2c19d2cb6986a"
+      }
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "candidate_run1": {
+        "submission_sha256": "e98b40634e371d1270044aae77f6f828e1f5896991bcd715e9a1b7c89cf98895",
+        "summary_sha256": "d197e7089d1cacee309916c27e3f9c58ae5ae1b928d891e69675f5af87203294"
+      },
+      "candidate_run2": {
+        "submission_sha256": "e98b40634e371d1270044aae77f6f828e1f5896991bcd715e9a1b7c89cf98895",
+        "summary_sha256": "d197e7089d1cacee309916c27e3f9c58ae5ae1b928d891e69675f5af87203294"
+      }
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "candidate_run1": {
+        "submission_sha256": "23d9e082355d350cff258440e7136c801b24654fe366d1cb832c94b788cddf91",
+        "summary_sha256": "1b3582aff7926e99021f1e5cc15deff664a0cac7a7c9a945ff523ac8c66d6ac7"
+      },
+      "candidate_run2": {
+        "submission_sha256": "23d9e082355d350cff258440e7136c801b24654fe366d1cb832c94b788cddf91",
+        "summary_sha256": "1b3582aff7926e99021f1e5cc15deff664a0cac7a7c9a945ff523ac8c66d6ac7"
+      }
+    }
+  },
+  "candidate_telemetry_pins": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "original_adopted_pseudorange_rows": 83612,
+      "retained_finite_pc_pseudorange_rows": 59915,
+      "dropped_missing_exact_stream_rows": 21319,
+      "dropped_out_of_domain_rows": 2378,
+      "dropped_nonfinite_correction_rows": 0,
+      "retained_finite_pc_fraction": 1.0,
+      "pseudorange_factors": 59915,
+      "tdcp_factors_built": 46732,
+      "tdcp_factors_inserted": 46732,
+      "imu_intervals": 2158,
+      "output_epochs": 2159,
+      "over_70_mps_count": 0,
+      "receiver_signal_bias_states": 2,
+      "receiver_signal_bias_factors": 13359,
+      "receiver_signal_bias_estimates_m": {"1:4": -2362.8059835220542, "4:10": -1917.5530558273676}
+    },
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "original_adopted_pseudorange_rows": 108722,
+      "retained_finite_pc_pseudorange_rows": 66769,
+      "dropped_missing_exact_stream_rows": 40134,
+      "dropped_out_of_domain_rows": 1819,
+      "dropped_nonfinite_correction_rows": 0,
+      "retained_finite_pc_fraction": 1.0,
+      "pseudorange_factors": 66769,
+      "tdcp_factors_built": 69426,
+      "tdcp_factors_inserted": 69426,
+      "imu_intervals": 3139,
+      "output_epochs": 3140,
+      "over_70_mps_count": 0,
+      "receiver_signal_bias_states": 1,
+      "receiver_signal_bias_factors": 14879,
+      "receiver_signal_bias_estimates_m": {"4:10": -1917.129162200168}
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "original_adopted_pseudorange_rows": 50706,
+      "retained_finite_pc_pseudorange_rows": 45095,
+      "dropped_missing_exact_stream_rows": 4228,
+      "dropped_out_of_domain_rows": 1383,
+      "dropped_nonfinite_correction_rows": 0,
+      "retained_finite_pc_fraction": 1.0,
+      "pseudorange_factors": 45095,
+      "tdcp_factors_built": 25146,
+      "tdcp_factors_inserted": 25146,
+      "imu_intervals": 1465,
+      "output_epochs": 1466,
+      "over_70_mps_count": 0,
+      "receiver_signal_bias_states": 2,
+      "receiver_signal_bias_factors": 11543,
+      "receiver_signal_bias_estimates_m": {"1:4": -2353.720199828512, "4:10": -1913.7228134351574}
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "original_adopted_pseudorange_rows": 35391,
+      "retained_finite_pc_pseudorange_rows": 29881,
+      "dropped_missing_exact_stream_rows": 3194,
+      "dropped_out_of_domain_rows": 2316,
+      "dropped_nonfinite_correction_rows": 0,
+      "retained_finite_pc_fraction": 1.0,
+      "pseudorange_factors": 29881,
+      "tdcp_factors_built": 17406,
+      "tdcp_factors_inserted": 17406,
+      "imu_intervals": 1101,
+      "output_epochs": 1102,
+      "over_70_mps_count": 0,
+      "receiver_signal_bias_states": 1,
+      "receiver_signal_bias_factors": 7512,
+      "receiver_signal_bias_estimates_m": {"4:10": -1917.248523131997}
+    }
+  },
+  "fixed_reclassification_gates": {
+    "route_count": 4,
+    "candidate_artifact_hashes_exact": true,
+    "candidate_repeat_submission_and_summary_identity": true,
+    "candidate_prediction_domain_coverage": 1.0,
+    "retained_finite_pc_fraction_each_route": 1.0,
+    "pseudorange_factor_count_equals_retained": true,
+    "tdcp_built_equals_inserted": true,
+    "signal_bias_states_and_factors_material_each_route": true,
+    "signal_bias_estimates_all_finite": true,
+    "all_coordinates_finite_and_earth_valid": true,
+    "speed_over_70_count": 0,
+    "output_epoch_and_imu_repeat_identity": true,
+    "no_route_specific_selection": true,
+    "truth_free": true,
+    "native_reruns": 0,
+    "raw_reads": 0,
+    "all_gates_anded": true
+  },
+  "read_accounting_at_freeze": {
+    "phase78_sealed_artifact_reads": 0,
+    "raw_device_gnss": 0,
+    "raw_device_imu": 0,
+    "broadcast_nav": 0,
+    "base_rinex": 0,
+    "truth": 0,
+    "mat": 0,
+    "validation_holdout": 0,
+    "kaggle_token": 0,
+    "native_solver_invocations": 0,
+    "archive_reopen": 0
+  },
+  "next_stage": {
+    "if_all_gates_pass": "create a separate accuracy freeze using immutable Phase77 candidate run1 artifacts; no native rerun",
+    "if_any_gate_fails": "stop without truth; preserve Phase43 champion and Phase77 experimental composition",
+    "zero_point_782": "not evaluated by this sealed-artifact structural reclassification",
+    "validation_or_kaggle": false
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "schema_version": "smartphone-r5-wls-test-edge-completeness-fallback-freeze-manifest.v2.1",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_test_edge_completeness_fallback_freeze_v2_1.json",
+    "sha256": "823ad164fe4c4e85d0964e737d418aa85e36117104d67246cd4c9dddccf68c7c"
+  },
+  "algorithm_core_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb",
+  "algorithm_parameter_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb",
+  "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+  "inventory_sha256": "dbf89222e6860d4fb31f12c9c46402033ed31e905f8fe3f6615e5131cb9e9495",
+  "fallback_policy": {
+    "base_contract": {
+      "allow_out_of_range_wls_epochs_as_omission": true,
+      "out_of_range_policy": "finite out-of-earth-range epoch omission only",
+      "partial_coordinate_triplet_policy": "fail-closed",
+      "nonfinite_coordinate_policy": "fail-closed",
+      "inconsistent_coordinate_policy": "fail-closed",
+      "native_fallback": "nearest native Galileo E1/Hatch30 stable position",
+      "native_tolerance_ms": 10,
+      "tie_rule": "equal-distance native timestamps choose earlier timestamp",
+      "interpolation": "ECEF linear interpolation only between valid selected-source positions",
+      "interpolation_max_gap_ms": 10000,
+      "edge_extrapolation": "forbidden",
+      "long_gap_policy": "fail-closed"
+    },
+    "edge_hold": "constant nearest finite selected-source ECEF; no velocity extrapolation",
+    "edge_scope": "leading or trailing unresolved target keys only",
+    "edge_max_gap_ms": 1000,
+    "edge_gap_reference": "nearest valid selected-source timestamp",
+    "edge_continuity": "target-to-source epochs must share HardwareClockDiscontinuityCount segment; clock transitions fail-closed",
+    "edge_segment_identity": "HardwareClockDiscontinuityCount constant across the edge span",
+    "edge_source": "finite valid selected-source WLS ECEF",
+    "edge_no_valid_source": "fail-closed",
+    "edge_long_gap": "fail-closed when nearest valid source is more than 1 s away",
+    "velocity_extrapolation": "forbidden"
+  },
+  "truth_free": true,
+  "truth_open_count": 0,
+  "sealed_before_test_payload_access": true
+}

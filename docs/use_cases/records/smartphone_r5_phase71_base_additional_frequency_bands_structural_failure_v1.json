@@ -1,0 +1,64 @@
+{
+  "schema_version": "smartphone-r5-phase71-base-additional-frequency-bands-structural-failure.v1",
+  "phase": 71,
+  "status": "fail-closed-evaluator-integrity",
+  "execution_label": "Luna Max",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase71_base_additional_frequency_bands_freeze_v1.json",
+    "sha256": "c5a6b4499b6178db439479a18cc0668e14a1868369f35679a0d557846bc0e49a"
+  },
+  "manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase71_base_additional_frequency_bands_manifest_v1.json",
+    "sha256": "e0c61776fffdf4b3ed6c86fd0c8f9807bf4e4c6a3837fb6471c1eaecbf126904"
+  },
+  "evaluator": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase71_base_additional_frequency_bands.py",
+    "sha256": "7800541e3341b50718c6308ac3ef5262d916cefe7a050a3e3660da227c465485"
+  },
+  "source_commit": "1ee721ebb6d8adfd5ab65fa8f2243ad2926ac982",
+  "failure": {
+    "exception": "KeyError: sha256",
+    "stage": "after MTV-a flag-off control native process, before candidate launch",
+    "root_cause": "Phase71 artifact_report constructed summary artifact metadata and then expanded validate_summary diagnostics; the diagnostics summary payload overwrote the metadata summary key, so control summary sha256 lookup failed",
+    "partial_output_reuse": false,
+    "candidate_runs": 0,
+    "remaining_routes_unstarted": 3,
+    "truth_score_observed": false
+  },
+  "partial_route": {
+    "route": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "variant": "control",
+    "run": 1,
+    "submission": {
+      "path": "output/smartphone-r5/phase71-base-additional-frequency-bands-structural-v1/2021-03-16-18-59-us-ca-mtv-a/pixel5/control/run1/submission.csv",
+      "bytes": 172694,
+      "sha256": "d4d7652e5d12389466e586fe2d8e85d34977a7e11036cee2f591a89293c5426c",
+      "phase43_identity": true
+    },
+    "summary": {
+      "path": "output/smartphone-r5/phase71-base-additional-frequency-bands-structural-v1/2021-03-16-18-59-us-ca-mtv-a/pixel5/control/run1/summary.json",
+      "bytes": 14534,
+      "sha256": "d4980260e257c92d7e2fb716f900501fd55c3eb9278f9b38a4f72ac2e62303fe",
+      "phase43_identity": true
+    },
+    "run_log": {
+      "path": "output/smartphone-r5/phase71-base-additional-frequency-bands-structural-v1/2021-03-16-18-59-us-ca-mtv-a/pixel5/control/run1/run.log",
+      "sha256": "67fc4fe986a1ab61f38212163aa35fdb24caf78d9256a02774aa3c76f81d8c28"
+    }
+  },
+  "read_accounting": {
+    "input_hash_verification_reads_per_member": 4,
+    "native_solver_invocations_started": 1,
+    "raw_device_gnss_process_reads": 1,
+    "raw_device_imu_process_reads": 1,
+    "broadcast_nav_process_reads": 1,
+    "base_rinex_process_reads": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_token_reads": 0,
+    "archive_reopens": 0,
+    "candidate_or_accuracy_reads": 0
+  },
+  "policy": "This is an evaluator-integrity failure, not a physical or accuracy result. The partial output is immutable evidence only; no Phase71 rerun or candidate interpretation is authorized. Phase72 must use a new freeze, evaluator/manifest, and output root with distinct summary_artifact and summary_payload keys."
+}

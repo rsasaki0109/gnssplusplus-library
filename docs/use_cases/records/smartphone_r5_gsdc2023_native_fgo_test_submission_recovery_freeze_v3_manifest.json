@@ -1,0 +1,34 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-test-submission-recovery-freeze-manifest.v3",
+  "status": "sealed-before-recovery-generation",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_test_submission_recovery_freeze_v3.json",
+    "sha256": "d5da44973b264c720141b1978a033fba930c03492501fa0c88eefe2bf745bad2"
+  },
+  "source_hashes": {
+    "recovery_script": "f7e5499d2bf7e18c833fb181d7b57ebfee5a9b71b0e8c15ad1aa36cd2e8b6329",
+    "v2_native_fgo_run": "0808082ed8c81d24e5b5403812cca50651d493f39ea2c70ff6a91b6df556518c",
+    "prior_wls_run": "a89c5c3ac816289b6c6e5958d77fbc034f601869c3e64bd5191d87808fe74822",
+    "prior_reconciliation": "9b611f1920bb48597eac518cf9f4a8e26f54f3719598ff9aaebea4839caa703a"
+  },
+  "algorithm": {
+    "parameter_hash": "4633bfd3a86cf34ebd86820ed59ee7192b3cbf23fc75ce9e72fc1f2c88fb39f6",
+    "core_hash": "e27eb31f4fcb597a1c5b392d8b558f429b25cd5c5a4b39b6474491209649f7b1",
+    "rerun": false,
+    "numeric_parameter_change": false
+  },
+  "recovery_contract": {
+    "sample_coordinates_forbidden": true,
+    "same_trip_only": true,
+    "cross_trip_interpolation": false,
+    "max_interpolation_gap_ms": 2500,
+    "max_edge_hold_gap_ms": 2500,
+    "edge_velocity_extrapolation": false,
+    "unresolved_policy": "fail-closed",
+    "known_dummy_coordinate_rejection": true,
+    "atomic_publish": true
+  },
+  "truth_open_count": 0,
+  "holdout_or_test_truth_used": false,
+  "no_post_recovery_tuning": true
+}

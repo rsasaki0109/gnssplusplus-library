@@ -1,0 +1,266 @@
+{
+  "schema_version": "smartphone-r5-phase74-phase73-source-exact-miss-mask-accuracy-freeze.v1",
+  "phase": 74,
+  "status": "frozen-before-phase74-truth-read",
+  "created_at_utc": "2026-09-02T00:00:00Z",
+  "execution_label": "Luna Max",
+  "purpose": "Score the immutable Phase73 source-exact pseudorange miss-mask candidate against its immutable flag-off Phase43 control on the four declared Pixel5 development routes.",
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "phase73_structural_result_record": {
+      "path": "docs/use_cases/records/smartphone_r5_phase73_source_exact_pseudorange_miss_mask_structural_result_v1.json",
+      "sha256": "8493d16b3d2c5ce8b09b65ab0dada6903fcbac01257fb8db7977cb41c85577fd",
+      "status": "go-phase73-source-exact-pseudorange-miss-mask-structural",
+      "truth_reads": 0,
+      "native_solver_invocations": 12
+    },
+    "phase73_structural_output": {
+      "result_path": "output/smartphone-r5/phase73-source-exact-pseudorange-miss-mask-structural-v1/phase73_source_exact_pseudorange_miss_mask_structural_result.json",
+      "result_sha256": "ab1c93d3ce5125bd10fd76b515e96f99f7de59a373b44a203832800c027b9d7e",
+      "manifest_path": "output/smartphone-r5/phase73-source-exact-pseudorange-miss-mask-structural-v1/phase73_source_exact_pseudorange_miss_mask_structural_manifest.json",
+      "manifest_sha256": "bd623852f9d7ef33abba26edc2c2a6f604ed68a8c7809ab1a8ab84f7747f35ab"
+    },
+    "phase44_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase44_pixel5_development_accuracy_freeze_v1.json",
+      "sha256": "95c0990af0015b7cb5fcf736aefbcff6fc97356093edcf03094b31b4083b28bc"
+    },
+    "phase44_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase44_pixel5_development_accuracy_result_v1.json",
+      "sha256": "9e441c78f7c2bf8b3cf2cf9a7c9fe7e447fb2ff8eb6324fa5ef138c3b419e48a"
+    },
+    "phase51_historical_reference": {
+      "path": "docs/use_cases/records/smartphone_r5_phase51_android_sv_time_uncertainty_sigma_floor_result_v1.json",
+      "sha256": "b8f7ae93af72e147ef10b839e42a3bf52a51196cfecc2a4596dd76b7c55b78f3",
+      "scoring_input": false
+    },
+    "phase52_historical_recovery_reference": {
+      "path": "docs/use_cases/records/smartphone_r5_phase52_android_sv_time_uncertainty_integrity_recovery_result_v1.json",
+      "sha256": "ba0dc505ccfacf2595d9cee72086cb31b6fa764caebbe1dbf0abfa170f5a1ff6",
+      "scoring_input": false,
+      "historical_scores_m": {
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5": 1.5906251934656725,
+        "2021-08-24-20-32-us-ca-mtv-h/pixel5": 2.5185142868839065,
+        "2022-04-01-18-22-us-ca-lax-t/pixel5": 4.320206536654485,
+        "2023-03-08-21-34-us-ca-mtv-u/pixel5": 3.945431345873737,
+        "macro": 3.09369434071945
+      }
+    },
+    "phase44_baseline_reference": {
+      "scoring_input": false,
+      "scores_m": {
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5": 2.1200062765249656,
+        "2021-08-24-20-32-us-ca-mtv-h/pixel5": 3.6069657083098825,
+        "2022-04-01-18-22-us-ca-lax-t/pixel5": 4.511656202015395,
+        "2023-03-08-21-34-us-ca-mtv-u/pixel5": 3.9071587965102856,
+        "macro": 3.536446745840132
+      }
+    }
+  },
+  "metric_contract": {
+    "key": "(phone, UnixTimeMillis)",
+    "prediction_header": ["phone", "UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
+    "truth_required_fields": ["UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
+    "matching": "exact integer key intersection only",
+    "prediction_domain_coverage": "matched prediction keys / prediction keys; required exactly 1.0",
+    "truth_row_coverage": "informational only; warm-up exclusions are pinned below",
+    "duplicates": "duplicate prediction or truth keys fail closed",
+    "extras": "prediction keys not present in truth fail closed",
+    "missing_truth": "only the exact pinned leading raw-UTC warm-up key may be absent; no interpolation, nearest, edge hold, extrapolation, or fill",
+    "distance": "per-row spherical Haversine",
+    "earth_radius_m": 6371008.8,
+    "percentile": "linear interpolation at rank (n - 1) * q",
+    "score": "(P50 + P95) / 2",
+    "continuity": "sealed prediction Haversine transition speed; over_70_mps_count must equal 0"
+  },
+  "cohort": {
+    "phone_model": "pixel5",
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "route_disjoint": true,
+    "truth_source": "existing materialized Phase44 development truth; no archive reopen or rematerialization",
+    "truths": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "path": "output/smartphone-r5/phase29-no-bridge-train-eval-v1/truth/2021-03-16-18-59-us-ca-mtv-a/pixel5/ground_truth.csv",
+        "sha256": "7c84ed6a80b1bbb08c0ffad57493513833b9d5474e22a43c5a44da82824ee22d",
+        "bytes": 210009,
+        "rows": 2159,
+        "expected_missing_truth_rows": 1,
+        "expected_missing_key": ["2021-03-16-18-59-us-ca-mtv-a/pixel5", 1615921153434]
+      },
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+        "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2021-08-24-20-32-us-ca-mtv-h/pixel5/ground_truth.csv",
+        "sha256": "a55f452e611426693677fbeacde227fc80e5f03f6040d04aef9d6a2baf08d249",
+        "bytes": 305432,
+        "rows": 3139,
+        "expected_missing_truth_rows": 0,
+        "expected_missing_key": null
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2022-04-01-18-22-us-ca-lax-t/pixel5/ground_truth.csv",
+        "sha256": "29e0861dd1ecb8865c10adab69396d98ed96618e8877b09d04aa8d671edf79e8",
+        "bytes": 143441,
+        "rows": 1465,
+        "expected_missing_truth_rows": 0,
+        "expected_missing_key": null
+      },
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+        "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2023-03-08-21-34-us-ca-mtv-u/pixel5/ground_truth.csv",
+        "sha256": "7f27caff1f87f4e43821b8efdbbbc87b75b95c0820291cc906a21ea5aee4f080",
+        "bytes": 108045,
+        "rows": 1102,
+        "expected_missing_truth_rows": 1,
+        "expected_missing_key": ["2023-03-08-21-34-us-ca-mtv-u/pixel5", 1678311290448]
+      }
+    }
+  },
+  "sealed_phase73_artifacts": {
+    "source": "Phase73 structural output run1 artifacts only; no native rerun or artifact rewrite is allowed",
+    "candidate_read_count_per_route": 1,
+    "control_read_count_per_route": 1,
+    "routes": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "candidate": {
+          "submission_path": "output/smartphone-r5/phase73-source-exact-pseudorange-miss-mask-structural-v1/2021-03-16-18-59-us-ca-mtv-a/pixel5/candidate/run1/submission.csv",
+          "submission_sha256": "1bef00207e4c82a84590aa9a640546318fe28ff8a14a8e7264c40224536689c2",
+          "submission_bytes": 172694,
+          "submission_rows": 2158,
+          "summary_path": "output/smartphone-r5/phase73-source-exact-pseudorange-miss-mask-structural-v1/2021-03-16-18-59-us-ca-mtv-a/pixel5/candidate/run1/summary.json",
+          "summary_sha256": "ba744cf43f9b13bda356f1998653d18a9199640bfa0542e84bd3af24f7697c3f"
+        },
+        "control": {
+          "submission_path": "output/smartphone-r5/phase73-source-exact-pseudorange-miss-mask-structural-v1/2021-03-16-18-59-us-ca-mtv-a/pixel5/control/run1/submission.csv",
+          "submission_sha256": "d4d7652e5d12389466e586fe2d8e85d34977a7e11036cee2f591a89293c5426c",
+          "submission_bytes": 172694,
+          "submission_rows": 2158,
+          "summary_path": "output/smartphone-r5/phase73-source-exact-pseudorange-miss-mask-structural-v1/2021-03-16-18-59-us-ca-mtv-a/pixel5/control/run1/summary.json",
+          "summary_sha256": "d4980260e257c92d7e2fb716f900501fd55c3eb9278f9b38a4f72ac2e62303fe"
+        }
+      },
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+        "candidate": {
+          "submission_path": "output/smartphone-r5/phase73-source-exact-pseudorange-miss-mask-structural-v1/2021-08-24-20-32-us-ca-mtv-h/pixel5/candidate/run1/submission.csv",
+          "submission_sha256": "f3881bbb0820c378b103ec7b3d6fb8e696ba8047820fbff3d222657117e1e436",
+          "submission_bytes": 251174,
+          "submission_rows": 3139,
+          "summary_path": "output/smartphone-r5/phase73-source-exact-pseudorange-miss-mask-structural-v1/2021-08-24-20-32-us-ca-mtv-h/pixel5/candidate/run1/summary.json",
+          "summary_sha256": "9a193f42db502ce472d5220eafd99edd1ecfbb892fc9840b4b7803483b5348b0"
+        },
+        "control": {
+          "submission_path": "output/smartphone-r5/phase73-source-exact-pseudorange-miss-mask-structural-v1/2021-08-24-20-32-us-ca-mtv-h/pixel5/control/run1/submission.csv",
+          "submission_sha256": "3cfe97750927fa268f71bbe7393754ce7a1eb39d937e085b177c50a71eec10ae",
+          "submission_bytes": 251174,
+          "submission_rows": 3139,
+          "summary_path": "output/smartphone-r5/phase73-source-exact-pseudorange-miss-mask-structural-v1/2021-08-24-20-32-us-ca-mtv-h/pixel5/control/run1/summary.json",
+          "summary_sha256": "23f409e5708dc547bc86b156e07a6fb305732cb9ce8eb3da57f26fd487e4404e"
+        }
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "candidate": {
+          "submission_path": "output/smartphone-r5/phase73-source-exact-pseudorange-miss-mask-structural-v1/2022-04-01-18-22-us-ca-lax-t/pixel5/candidate/run1/submission.csv",
+          "submission_sha256": "329b452952c6e861998b443fff70440c770115eef0c29e71189ed78acbf6d0d2",
+          "submission_bytes": 117254,
+          "submission_rows": 1465,
+          "summary_path": "output/smartphone-r5/phase73-source-exact-pseudorange-miss-mask-structural-v1/2022-04-01-18-22-us-ca-lax-t/pixel5/candidate/run1/summary.json",
+          "summary_sha256": "f8fc287f1959d3b1baef580504680a93d0bc3abaf0c7cdd651eb383f72d7b6bc"
+        },
+        "control": {
+          "submission_path": "output/smartphone-r5/phase73-source-exact-pseudorange-miss-mask-structural-v1/2022-04-01-18-22-us-ca-lax-t/pixel5/control/run1/submission.csv",
+          "submission_sha256": "4eb2b566708a87db4903610a41cd648c7ff065d35710d358894a78eaa8e116e3",
+          "submission_bytes": 117254,
+          "submission_rows": 1465,
+          "summary_path": "output/smartphone-r5/phase73-source-exact-pseudorange-miss-mask-structural-v1/2022-04-01-18-22-us-ca-lax-t/pixel5/control/run1/summary.json",
+          "summary_sha256": "f4fb3bc2b09d44700ee83772d4b23ad93b68d07eff6743b9525626f805264eb8"
+        }
+      },
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+        "candidate": {
+          "submission_path": "output/smartphone-r5/phase73-source-exact-pseudorange-miss-mask-structural-v1/2023-03-08-21-34-us-ca-mtv-u/pixel5/candidate/run1/submission.csv",
+          "submission_sha256": "30570cb282cc5be4d77c7a40c5635b37238d396c0b70c208876eb23bf48ff7ca",
+          "submission_bytes": 88134,
+          "submission_rows": 1101,
+          "summary_path": "output/smartphone-r5/phase73-source-exact-pseudorange-miss-mask-structural-v1/2023-03-08-21-34-us-ca-mtv-u/pixel5/candidate/run1/summary.json",
+          "summary_sha256": "0c75635970218692e23af17f54f5b10bfffba5f50dc010f6a1e0c7ba08e6cc3d"
+        },
+        "control": {
+          "submission_path": "output/smartphone-r5/phase73-source-exact-pseudorange-miss-mask-structural-v1/2023-03-08-21-34-us-ca-mtv-u/pixel5/control/run1/submission.csv",
+          "submission_sha256": "524769cdf67aa857eefaafdadf943dd76586dda6a53e8b6d1df4a707d7699f71",
+          "submission_bytes": 88134,
+          "submission_rows": 1101,
+          "summary_path": "output/smartphone-r5/phase73-source-exact-pseudorange-miss-mask-structural-v1/2023-03-08-21-34-us-ca-mtv-u/pixel5/control/run1/summary.json",
+          "summary_sha256": "eeb4f60e352ea00277604516b432673317ab035daa601135c6e9f989cb118926"
+        }
+      }
+    }
+  },
+  "accuracy_gates": {
+    "declared_before_truth": true,
+    "candidate_improves_each_route_by_at_least_m": 0.05,
+    "candidate_no_route_regression": true,
+    "candidate_macro_improvement_at_least_m": 0.1,
+    "candidate_mtv_h_improvement_at_least_m": 0.1,
+    "candidate_prediction_domain_coverage": 1.0,
+    "candidate_macro_score_max_m": 2.0,
+    "candidate_route_score_max_m": 3.0,
+    "candidate_mtv_h_p95_max_m": 5.0,
+    "candidate_all_finite": true,
+    "candidate_over_70_mps_count": 0,
+    "logic": "all accuracy, domain, continuity, and absolute gates are ANDed; any failure is no-go",
+    "stretch_0_782": "report honestly only; not a gate and never a reason to relax thresholds",
+    "fresh_validation": "not permitted in Phase74; if and only if all absolute gates pass, a separately frozen phase may be considered"
+  },
+  "historical_reference_not_scoring_input": {
+    "phase51_result_path": "docs/use_cases/records/smartphone_r5_phase51_android_sv_time_uncertainty_sigma_floor_result_v1.json",
+    "phase51_result_sha256": "b8f7ae93af72e147ef10b839e42a3bf52a51196cfecc2a4596dd76b7c55b78f3",
+    "policy": "Phase51 is reported only as sealed historical context; it is not read as scoring input, selection input, or tuning input."
+  },
+  "read_policy": {
+    "truth_reads_before_freeze": 0,
+    "truth_reads_before_manifest": 0,
+    "truth_reads_after_manifest": 4,
+    "truth_reads_per_route": 1,
+    "candidate_artifact_reads_per_route": 1,
+    "control_artifact_reads_per_route": 1,
+    "single_scorer_process": true,
+    "native_or_solver_subprocess": false,
+    "raw_gnss_reads": 0,
+    "raw_imu_reads": 0,
+    "navigation_reads": 0,
+    "archive_reopen_or_rematerialize": false,
+    "validation_holdout_reads": 0,
+    "mat_reads_or_generated": 0,
+    "device_wls_or_precomputed_coordinates": 0,
+    "kaggle_or_token_access": 0,
+    "post_truth_tuning": false,
+    "solver_rerun_after_truth": false
+  },
+  "fail_closed": {
+    "freeze_or_manifest_hash_mismatch": true,
+    "candidate_or_control_artifact_hash_bytes_rows_mismatch": true,
+    "truth_hash_bytes_rows_mismatch": true,
+    "duplicate_or_extra_prediction_key": true,
+    "prediction_domain_coverage_not_one": true,
+    "unexpected_missing_truth_key": true,
+    "missing_key_not_exact_pinned_warmup": true,
+    "any_native_solver_subprocess": true,
+    "any_second_truth_read": true,
+    "any_validation_or_holdout_access": true,
+    "post_truth_gate_mutation": true,
+    "unexpected_exception": true
+  },
+  "read_accounting_at_freeze": {
+    "candidate_artifact_reads": 0,
+    "control_artifact_reads": 0,
+    "truth_reads": 0,
+    "raw_gnss": 0,
+    "raw_imu": 0,
+    "navigation": 0,
+    "mat": 0,
+    "validation_holdout": 0,
+    "archive_reopen": 0,
+    "native_solver_invocation": 0
+  }
+}

@@ -1,0 +1,107 @@
+{
+  "schema_version": "smartphone-r5-phase36-phone-bias-audit-freeze.v1",
+  "phase": 36,
+  "status": "frozen-before-phase36-residual-truth-read",
+  "purpose": "Audit whether a source-supported phone/model constant or body-frame lever-arm-like residual is identifiable from the sealed native Phase31 champion on the already-opened Phase29 development cohort. This is an offline development diagnostic; no correction is fitted or applied in this phase.",
+  "scope": {
+    "candidate_id": "phase31_native_fgo_quality_anchor_tdcp_no_bridge",
+    "candidate_artifacts_sealed": true,
+    "allowed_inference_inputs": [
+      "device_gnss.csv",
+      "device_imu.csv",
+      "brdc.nav"
+    ],
+    "forbidden_inference_inputs": [
+      "ground_truth.csv",
+      "any .mat file",
+      "device-provided WLS coordinates",
+      "sample/submission/result trajectory coordinates",
+      "validation truth",
+      "future holdout truth",
+      "Kaggle/public/private score"
+    ],
+    "truth_role": "post-run development-only residual labeling; never solver, inference, or candidate-selection input",
+    "development_only": true,
+    "validation_and_holdout_remain_sealed": true
+  },
+  "cohort": {
+    "source_record": "docs/use_cases/records/smartphone_r5_phase29_native_fgo_no_bridge_train_eval_freeze_v1.json",
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b"
+    ],
+    "route_disjoint": true,
+    "route_role": "already-opened historical development train only",
+    "fresh_validation": "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+    "future_holdout": "2023-05-16-19-54-us-ca-mtv-xe1/pixel5"
+  },
+  "sealed_inputs": {
+    "candidate_submissions": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "path": "output/smartphone-r5/phase31-quality-anchor-structural-v1/anchor/pixel5/submission.csv",
+        "sha256": "d4d7652e5d12389466e586fe2d8e85d34977a7e11036cee2f591a89293c5426c"
+      },
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4": {
+        "path": "output/smartphone-r5/phase31-quality-anchor-structural-v1/anchor/pixel4/submission.csv",
+        "sha256": "18d90461883f9b51dc5e235ff2fda2e535d31678bb47b232a6aec12662faacdc"
+      },
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+        "path": "output/smartphone-r5/phase31-quality-anchor-structural-v1/anchor/smg988b/submission.csv",
+        "sha256": "65b44029a90e75a6b11e96b6ae9344020dee55bb8b5ea9b8bee79f2c765bca47"
+      }
+    },
+    "phase29_materialized_truth": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "path": "output/smartphone-r5/phase29-no-bridge-train-eval-v1/truth/2021-03-16-18-59-us-ca-mtv-a/pixel5/ground_truth.csv",
+        "sha256": "7c84ed6a80b1bbb08c0ffad57493513833b9d5474e22a43c5a44da82824ee22d"
+      },
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4": {
+        "path": "output/smartphone-r5/phase29-no-bridge-train-eval-v1/truth/2021-07-27-19-49-us-ca-mtv-b/pixel4/ground_truth.csv",
+        "sha256": "cc7598498eb55937e9644ccf991b5ab478533363e732b3fb44c447fff6a566cd"
+      },
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+        "path": "output/smartphone-r5/phase29-no-bridge-train-eval-v1/truth/2021-07-14-20-50-us-ca-mtv-e/sm-g988b/ground_truth.csv",
+        "sha256": "164a434967f0eeefde2812a27281d39e858024fba6e82015a9dc26bdfb3ad1a8"
+      }
+    },
+    "raw_imu_root": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw"
+  },
+  "read_contract": {
+    "single_process": true,
+    "truth_read_count_per_route": 1,
+    "candidate_submission_read_count_per_route": 1,
+    "raw_imu_read_count_per_route": 1,
+    "archive_access": false,
+    "truth_rematerialization": false,
+    "solver_rerun": false,
+    "candidate_regeneration": false,
+    "post_score_tuning": false,
+    "mat_read_or_generated": false,
+    "token_or_kaggle_access": false,
+    "atomic_result_publish": true
+  },
+  "residual_definition": {
+    "key": "(phone, UnixTimeMillis)",
+    "alignment": "exact key intersection of sealed prediction and Phase29 truth; missing and extra keys are reported, never interpolated",
+    "frame": "local ENU at the first chronological matched truth coordinate; prediction minus truth in ECEF, then ECEF-to-ENU rotation at that fixed origin",
+    "units": "metres",
+    "sign": "positive east/north/up means predicted position is in that direction from truth",
+    "robust_location": "component-wise median",
+    "robust_scale": "component-wise median absolute deviation (MAD), unscaled; MAD-to-sigma factor is not assumed",
+    "covariance": "ordinary unbiased covariance over matched residual vectors and a reported component-wise 3-MAD inlier covariance; covariance is diagnostic only",
+    "outlier_rule": "inlier iff every ENU component is within 3 times its component MAD; if a component MAD is zero, exact equality is required",
+    "prefix_tail": "chronologically sorted matched rows; prefix is first 25 percent and tail is last 25 percent, each with at least one row",
+    "orientation": "raw-only nearest preceding UncalAccel and UncalMag sample within 250 ms; report availability and residual summaries by acceleration gravity-axis/sign and tilt-compensated magnetometer heading octant when estimable; no truth-derived heading or attitude",
+    "identifiability_gate": "A deployable constant requires cross-route agreement in ENU after accounting for route frame, stable prefix/tail residual, and raw-only orientation independence. One Pixel5 route is insufficient for a Pixel5-family calibration claim. No per-route or per-timestamp fit is allowed."
+  },
+  "promotion_policy": {
+    "default": "no-go-unless-source-supported-and-route-disjoint",
+    "fit_allowed_in_phase36": false,
+    "native_application_allowed_in_phase36": false,
+    "validation_truth_open_allowed": false,
+    "holdout_truth_open_allowed": false,
+    "kaggle_submission": false,
+    "next_action_on_no_go": "select the next raw physical factor only after recording the residual evidence; preserve Phase31 champion unchanged"
+  }
+}

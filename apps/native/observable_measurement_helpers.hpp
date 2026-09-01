@@ -13,10 +13,13 @@ namespace libgnss_apps {
 inline bool isPrimaryPdSignal(libgnss::SignalType signal) {
     switch (signal) {
         case libgnss::SignalType::GPS_L1CA:
+        case libgnss::SignalType::GPS_L5:
         case libgnss::SignalType::GLO_L1CA:
         case libgnss::SignalType::GAL_E1:
+        case libgnss::SignalType::GAL_E5A:
         case libgnss::SignalType::BDS_B1I:
         case libgnss::SignalType::BDS_B1C:
+        case libgnss::SignalType::BDS_B2A:
         case libgnss::SignalType::QZS_L1CA:
             return true;
         default:
@@ -27,10 +30,13 @@ inline bool isPrimaryPdSignal(libgnss::SignalType signal) {
 inline std::string signalName(libgnss::SignalType signal) {
     switch (signal) {
         case libgnss::SignalType::GPS_L1CA: return "GPS_L1CA";
+        case libgnss::SignalType::GPS_L5: return "GPS_L5";
         case libgnss::SignalType::GLO_L1CA: return "GLO_L1CA";
         case libgnss::SignalType::GAL_E1: return "GAL_E1";
+        case libgnss::SignalType::GAL_E5A: return "GAL_E5A";
         case libgnss::SignalType::BDS_B1I: return "BDS_B1I";
         case libgnss::SignalType::BDS_B1C: return "BDS_B1C";
+        case libgnss::SignalType::BDS_B2A: return "BDS_B2A";
         case libgnss::SignalType::QZS_L1CA: return "QZS_L1CA";
         default: return "UNKNOWN";
     }

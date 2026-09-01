@@ -1,0 +1,99 @@
+{
+  "schema_version": "smartphone-r5-phase20-upstream-stop-constraints-manifest.v1",
+  "candidate_id": "native-fgo-upstream-stop-constraints-v1",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_phase20_upstream_stop_constraints_freeze_v1.json",
+  "freeze_record_sha256": "3d571e8ac669e23580906cca429f11d984b3d53f3315caef51792f73c24b3d66",
+  "truth_free_artifacts_sealed_before_truth": true,
+  "truth_used_for_artifact_generation": false,
+  "inputs": {
+    "route_device": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "device_gnss": {
+      "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_gnss.csv",
+      "sha256": "c5af6cc3aeae6ab29a2a10d975d291b8fba4fab15273c0729163cd639ff10e42"
+    },
+    "device_imu": {
+      "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_imu.csv",
+      "sha256": "8f1c582bdad545d11e68349b221001b69e2a9d43f9257e60038c193276fa1804"
+    },
+    "broadcast_nav": {
+      "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/brdc.nav",
+      "sha256": "16c859f8015c874398978bae6004172c355f7d3a3b06fa81b54aac88b6b78d33"
+    },
+    "forbidden_inputs_opened": false,
+    "forbidden_input_classes": ["MAT", "ground truth", "sample coordinates", "device WLS/results", "leaderboard"]
+  },
+  "source_hashes": {
+    "upstream_stop_header": "c9903d5807c19661718172bbadaaf6622b9ab2505742d91ed6cc161335267097",
+    "fgo_header": "a00f05b54334bca7d3919b4d066b66db56bc7432fd20c8efef34b035b2111f29",
+    "fgo_config_header": "fa76822c8519ff935f69ce720908f91e0e2a75cfa13ece615537b1c5433f9eca",
+    "gtsam_backend": "a4d789db3b6a1006bec1c69739b1b23b50581ce69d9d4aa19cffa5bce8236fd3",
+    "gtsam_internal_header": "b0ee9f5659d701a658e8f88992e46aebd5ef9e5ca084c136cae4a6029659084b",
+    "native_app": "1d08b78190fd68e5f9f2a66c78d7f70a2fce02da2731b8cc722aff57826346aa",
+    "unit_test": "f3909cd7f2df2b54c03e7f76c9927bff565ecd8d3cbd7ae1a65a45392999f2be",
+    "tests_cmake": "5160263aa63a474e0aa16950afa93f7851d4fe50b986593b585f69ca127fdcf3",
+    "release_binary": "4c0553ab9a7104c0328cee62cbd5685eb3bfa683e603eb3e6a8cab78955cac2b"
+  },
+  "command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:$LD_LIBRARY_PATH build/apps/gnss_fgo_imu_no_base --android-gnss <device_gnss.csv> --android-imu <device_imu.csv> --nav <brdc.nav> --out <submission.csv> --summary-json <summary.json> --dataset-id 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro --all-epochs --android-raw-utc-keys --native-pdc-imu-tdcp --native-signal-bias-states --native-residual-ionosphere [--native-upstream-stop-constraints]",
+  "pixel7pro": {
+    "baseline": {
+      "submission_sha256": "3069f149bc98b0383d008d5f20cc80cd4ada9f9eb1b5d09f05353895a2d5a26f",
+      "summary_sha256": "112fc2954bf4a6a71311c3ae23a2e62e5f39da89515d090f275ce316851b1c94",
+      "output_rows": 1383,
+      "raw_target_keys": 1383,
+      "interpolated_rows": 0,
+      "edge_hold_rows": 0,
+      "graph_factors": 68476,
+      "graph_values": 6924,
+      "converged": true,
+      "final_cost": 64362.4132009474,
+      "wall_seconds": 20.83,
+      "maximum_rss_kb": 194768
+    },
+    "candidate": {
+      "submission_sha256": "2f90735087192490701e365af9d64b18732f3ed309322e4fd66e06680efa0c89",
+      "summary_sha256": "1b96c9973e35fffdb6251e57bae3174bdcbcfe977edd6fdf2518ebe5091e7d24",
+      "output_rows": 1383,
+      "raw_target_keys": 1383,
+      "interpolated_rows": 0,
+      "edge_hold_rows": 0,
+      "graph_factors": 69440,
+      "graph_values": 6924,
+      "converged": true,
+      "initial_cost": 1804976420.2428992,
+      "final_cost": 64568.95769617818,
+      "imu_samples": 166363,
+      "stop_epochs": 500,
+      "stop_velocity_factors": 489,
+      "stop_pose_factors": 475,
+      "acceleration_std_threshold_mps2": 0.12170704690983145,
+      "gyro_std_threshold_radps": 0.0070202506399605225,
+      "maximum_horizontal_speed_mps": 19.6021182370283,
+      "maximum_baseline_position_displacement_m": 0.1796003556689133,
+      "wall_seconds": 20.06,
+      "maximum_rss_kb": 196048
+    },
+    "candidate_repeat": {
+      "submission_sha256": "2f90735087192490701e365af9d64b18732f3ed309322e4fd66e06680efa0c89",
+      "summary_sha256": "1b96c9973e35fffdb6251e57bae3174bdcbcfe977edd6fdf2518ebe5091e7d24",
+      "byte_identical_to_candidate": true
+    }
+  },
+  "supplemental_mi8_structural": {
+    "route_device": "phase15-utc-wall-clock-fallback-structural/mi8",
+    "stop_epochs": 187,
+    "stop_velocity_factors": 0,
+    "stop_pose_factors": 0,
+    "reason": "GNSS-first velocity gate rejected every stop epoch; no candidate graph factor was inserted, so no accuracy claim is made"
+  },
+  "structural_gate": {
+    "passed": true,
+    "reason": "Pixel raw-only candidate converged with finite complete output, nonzero declared stop factors, no interpolation, bounded transitions, and byte-identical repeat",
+    "no_dummy_or_sample_coordinates": true,
+    "no_post_generation_truth_selection": true
+  },
+  "truth_evaluation_authorization": {
+    "allowed_next_action": "one development-only process may read the already-declared Pixel ground_truth.csv once to compare sealed baseline and candidate",
+    "candidate_or_parameter_changes_after_read": false,
+    "validation_holdout_test_truth": "not permitted"
+  }
+}

@@ -1,0 +1,201 @@
+{
+  "schema_version": "smartphone-r5-native-fgo-android-imu-gnss-anchor-freeze.v1",
+  "status": "frozen-before-full-route-structural-run",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "candidate_id": "native-fgo-android-imu-gnss-anchor-v1",
+  "purpose": "Freeze the exact raw Android GNSS/IMU clock bridge and direct raw observation entrypoint before any full-route generation or truth scoring.",
+  "policy": {
+    "local_only": true,
+    "external_mutation": false,
+    "token_access": false,
+    "matlab_container_read": false,
+    "matlab_container_generated": false,
+    "matlab_source_used_as_specification_only": true,
+    "truth_used_before_freeze": false,
+    "truth_free_generation": true,
+    "validation_or_holdout_touched": false,
+    "no_post_freeze_parameter_tuning": true,
+    "production_default_changed": false,
+    "existing_v5_bytes_modified": false
+  },
+  "split": {
+    "development_route": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "full_route_structural_run": "same development identity; truth remains unopened",
+    "fresh_validation": "sealed and untouched",
+    "future_holdout": "sealed and untouched"
+  },
+  "archive_and_inputs": {
+    "archive": {
+      "path": "data/gsdc2023/cache/dataset_2023.zip",
+      "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408"
+    },
+    "device_gnss.csv": {
+      "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_gnss.csv",
+      "sha256": "c5af6cc3aeae6ab29a2a10d975d291b8fba4fab15273c0729163cd639ff10e42",
+      "role": "raw Android observation epochs and ChipsetElapsedRealtimeNanos anchors"
+    },
+    "device_imu.csv": {
+      "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_imu.csv",
+      "sha256": "8f1c582bdad545d11e68349b221001b69e2a9d43f9257e60038c193276fa1804",
+      "role": "raw UncalAccel and UncalGyro only"
+    },
+    "brdc.nav": {
+      "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/brdc.nav",
+      "sha256": "16c859f8015c874398978bae6004172c355f7d3a3b06fa81b54aac88b6b78d33",
+      "role": "broadcast ephemeris"
+    },
+    "forbidden_inputs": [
+      "*.mat",
+      "ground_truth.csv",
+      "result_gnss*.mat",
+      "phone_data.mat",
+      "sample_submission.csv",
+      "device-provided WLS/result coordinates"
+    ]
+  },
+  "upstream_specification": {
+    "repository": "https://github.com/taroz/gsdc2023",
+    "commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "license": "MIT",
+    "files": {
+      "functions/imuprocessing.m": {
+        "sha256": "d942df6fe046841d69f6a30290e7878679359f5015b13c805c86e8aa5c91f7ae",
+        "evidence_lines": "7-20,23-40",
+        "contract": "interp1(obs.elapsedns, obs.utcms, sensor.elapsedns, linear, extrap); gyro common grid; linear accel interpolation; terminal dt duplication"
+      },
+      "functions/deviceimu2imu.m": {
+        "sha256": "9aff2984b0aa1709bbb1b397b48216ab46c213a1e3cbcfa99c0546a48a6df632",
+        "evidence_lines": "6-17,20-28",
+        "contract": "UncalAccel/UncalGyro selection, unique utcTimeMillis first row, raw elapsed/xyz/bias retention"
+      },
+      "functions/gnsslog2obs.m": {
+        "sha256": "665ce43d1fc3c5a9c3b3a6fd76f81539126e3ab897fbba484ab0ccd18964acff",
+        "evidence_lines": "97-128",
+        "contract": "Raw ChipsetElapsedRealtimeNanos is carried as obs.elapsedns alongside UTC milliseconds"
+      },
+      "fgo_gnss_imu.m": {
+        "sha256": "c70090ccb8b27fcac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3",
+        "evidence_lines": "129-149,169-187,252-299,325-335",
+        "contract": "sync-scaled IMU covariance, Pose3/velocity/bias states, CombinedImuFactor, ordinary GNSS factors and LM backend"
+      },
+      "parameters.m": {
+        "sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52",
+        "evidence_lines": "176-203",
+        "contract": "gravity 9.80665, imu_sync gyro, sync coefficient .5, Pixel noise, bias random walks, integration sigma .05, mounting [-85,178,-94] degrees"
+      }
+    }
+  },
+  "algorithm_contract": {
+    "entrypoint": "build/apps/gnss_fgo_imu_no_base",
+    "summary_schema": "smartphone-r5-native-fgo-android-imu-no-base-run.v2",
+    "raw_cli": [
+      "--android-gnss <device_gnss.csv>",
+      "--android-imu <device_imu.csv>",
+      "--nav <brdc.nav>",
+      "--out <atomic keyed CSV>",
+      "--summary-json <atomic JSON>",
+      "--dataset-id <route/phone>",
+      "--max-epochs 30 or --all-epochs"
+    ],
+    "input_boundary": {
+      "android_gnss_direct_epochs": true,
+      "rinex_observation_argument_in_raw_mode": "rejected",
+      "device_wls_coordinates": "cleared before FGO/SPP seed",
+      "generic_spp_initializer_ecef_m": [6378137.0, 0.0, 0.0],
+      "generic_spp_initializer_emitted": false,
+      "raw_adapter_rinex_generated": false,
+      "mat_path_rejected_before_open": true
+    },
+    "gnss_anchor_mapping": {
+      "source_columns": ["MessageType=Raw", "utcTimeMillis", "ChipsetElapsedRealtimeNanos"],
+      "unique_policy": "first row per UTC epoch, matching MATLAB unique source-row behavior",
+      "anchor_validation": "at least two; non-negative; strict UTC and elapsed monotonicity",
+      "mapping": "piecewise linear UTC milliseconds as a function of elapsedRealtimeNanos",
+      "outside_anchor_range": "linear extrapolation using the first/last pair, matching MATLAB interp1(...,extrap)",
+      "nonfinite_or_invalid": "fail closed before IMU acceptance"
+    },
+    "imu_alignment": {
+      "common_grid": "UncalGyro elapsedRealtimeNanos",
+      "accel": "linear elapsed-clock interpolation; endpoint nearest only within 25 ms",
+      "sync_coefficient": 0.5,
+      "gps_utc_leap_seconds": 18.0,
+      "terminal_dt": "duplicate last positive dt",
+      "raw_units": {
+        "UncalAccel": "m/s^2",
+        "UncalGyro": "rad/s"
+      },
+      "axis_policy": "raw axes retained; explicit Rz(-94 deg)*Ry(178 deg)*Rx(-85 deg) mounting"
+    },
+    "fgo": {
+      "backend": "GTSAM",
+      "pseudorange": true,
+      "ordinary_tdcp": false,
+      "carrier_phase": false,
+      "double_difference": false,
+      "base_factors": false,
+      "pose3_state": true,
+      "combined_imu_factor": true,
+      "max_iterations": 12,
+      "raw_startup_elevation_mask_deg": 0.0,
+      "raw_startup_snr_mask_dbhz": 0.0,
+      "fallback": "on leveling/heading/solver failure, exact native no-IMU FGO is run and summary labels fallback"
+    },
+    "numeric_parameters": {
+      "gravity_mps2": 9.80665,
+      "accel_noise_sigma_mps2_sqrt_hz": 0.025,
+      "gyro_noise_sigma_radps_sqrt_hz": 0.0005,
+      "accel_bias_rw_sigma": 0.00025,
+      "gyro_bias_rw_sigma": 5e-07,
+      "integration_sigma": 0.05,
+      "init_attitude_sigma_roll_pitch_rad": 0.05,
+      "init_attitude_sigma_yaw_rad": 0.08726646259971647,
+      "init_velocity_sigma_mps": 0.5,
+      "init_accel_bias_sigma": 0.1,
+      "init_gyro_bias_sigma": 0.01,
+      "stationary_samples": 250,
+      "gravity_norm_gate": [6.864655, 12.748645],
+      "gravity_norm_std_max_mps2": 1.5,
+      "heading_window_epochs": 25,
+      "required_heading_windows": 3,
+      "heading_speed_mps": [2.0, 50.0],
+      "heading_vertical_speed_max_mps": 3.0,
+      "heading_consistency_rad": 0.3490658503988659,
+      "maximum_accel_pair_offset_s": 0.025
+    }
+  },
+  "source_and_binary_hashes": {
+    "include/libgnss++/io/imu.hpp": "3fada449e6d2c94a9222150c673ff24e01f8b8bca2308702e6a02dd99e8fbd70",
+    "src/io/imu.cpp": "9c1553d2491f85090527507d8a8767a508e7e986e19347019ea8a6df82cb6f44",
+    "apps/native/gnss_fgo_imu_no_base.cpp": "76976e985d70669866663a05d1d08d5552567f292c5c5101d627bee7a1896f4a",
+    "tests/test_imu_csv.cpp": "95844abbfcf728fea2d783b04974df07e5f402511a17cd92969edfecddb0471f",
+    "configs/benchmarks/smartphone_r5_gsdc2023.json": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776",
+    "release_binary": {
+      "path": "build/apps/gnss_fgo_imu_no_base",
+      "sha256": "ed231618b12bdc11c1e8b15e13281940fbae1bab57c4102490c8e72e55d9c90c"
+    }
+  },
+  "pre_truth_structural_gate": {
+    "required": [
+      "direct raw GNSS epochs are used with no RINEX intermediate",
+      "GNSS elapsed anchors are present and applied",
+      "finite mapped IMU times and strict ordering",
+      "finite raw output and atomic publication",
+      "no base or double-difference factors",
+      "if IMU is accepted, nonzero CombinedImu intervals and finite converged graph",
+      "if IMU initialization is not observable, exact native no-IMU fallback is explicitly labeled"
+    ],
+    "quality_score": "not performed; no truth is opened by this freeze",
+    "quality_gate_if_authorized_later": "68.0475838937948 m baseline, no degradation; authorization and a separate post-freeze record required"
+  },
+  "commands": {
+    "short_structural_smoke": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:$LD_LIBRARY_PATH build/apps/gnss_fgo_imu_no_base --android-gnss <route>/device_gnss.csv --android-imu <route>/device_imu.csv --nav <route>/brdc.nav --out <run>/submission.csv --summary-json <run>/summary.json --dataset-id <route/phone> --max-epochs 30",
+    "full_route_structural_run": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:$LD_LIBRARY_PATH /usr/bin/time -v build/apps/gnss_fgo_imu_no_base --android-gnss <route>/device_gnss.csv --android-imu <route>/device_imu.csv --nav <route>/brdc.nav --out <run>/submission.csv --summary-json <run>/summary.json --dataset-id <route/phone> --all-epochs",
+    "focused_tests": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:$LD_LIBRARY_PATH build/tests/run_tests --gtest_filter='AndroidImuCsvTest.*:ImuAxisConventionTest.*:ImuCsvTest.*'"
+  },
+  "freeze_integrity": {
+    "record_sha256": "fixed in the separate freeze manifest; this record is not self-hashed",
+    "truth_free_artifact_generation": "must occur only after record_sha256 is fixed",
+    "post_holdout_tuning": "forbidden",
+    "record_mutation": "forbidden after manifest hash is published"
+  }
+}

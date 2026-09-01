@@ -1,0 +1,227 @@
+{
+  "schema_version": "smartphone-r5-phase48-pixel5-raw-code-rate-uncertainty-result.v1",
+  "phase": 48,
+  "execution_label": "Luna Max",
+  "status": "no-go-uncertainty-field-not-adopted-by-current-fgo",
+  "mode": "raw-device-gnss-code-rate-uncertainty-audit-only",
+  "audit_only": true,
+  "correction_or_weighting_implemented": false,
+  "zero_point_782": "not evaluated without truth",
+  "freeze": {
+    "commit": "4b7f6cb",
+    "path": "docs/use_cases/records/smartphone_r5_phase48_pixel5_raw_code_rate_uncertainty_freeze_v1.json",
+    "sha256": "e8bbfddda9670b492c3a938109c92333fd8432c564c7a6837874d9a11194b454"
+  },
+  "evaluator_seal": {
+    "commit": "cbab201",
+    "manifest_path": "docs/use_cases/records/smartphone_r5_phase48_pixel5_raw_code_rate_uncertainty_evaluator_manifest_v1.json",
+    "manifest_sha256": "93f68d54fba0288e2ff358e496bc2e2d300343548a74e5ab0e468d0ab12df053",
+    "source_sha256": "31ce6b4c342373bed95e4977523ace7e7df7e7f59b1469c78dd12ea5c504aaaf",
+    "test_sha256": "780e5ffe9dd99f333b55f0fe4250f56dc1fdca2223214f909e3fc92355b53e94",
+    "cmake_sha256": "4292450abf35401509b84cd6a83a1890f4e815e580801468b2622aac9ccc187b"
+  },
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "phase44_commit": "a323eb6",
+    "phase47_policy_bug_record": {
+      "path": "docs/use_cases/records/smartphone_r5_phase47_pixel5_raw_code_multipath_result_v1.json",
+      "sha256": "ce205dec44b776013b681be04e2ffd6a4f22a511359526e68d33147f730c62da",
+      "used_as_metric_input": false
+    },
+    "phase25_raw_clock_contract_sha256": "a65b22ed348067d2787f0369d6139708572679fbe49cd943d2eb7677d4675889",
+    "phase41_rate_contract_sha256": "5622099a9d7d37ee1e4de43385369e70c342acb515f8f83cf301964fc3c64758",
+    "phase13_policy_sha256": "a7891d8cec1b34372de9501e65683888eaed1994e84d1ea2b75492a3be9fa85f"
+  },
+  "read_accounting": {
+    "single_process": true,
+    "raw_device_gnss_read_count_total": 4,
+    "raw_device_gnss_reads": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": 1,
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": 1,
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": 1,
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": 1
+    },
+    "truth_reads": 0,
+    "phase45_payload_reads": 0,
+    "phase47_metric_payload_reads": 0,
+    "brdc_nav_reads": 0,
+    "solver_reruns": 0,
+    "trajectory_reruns": 0,
+    "correction_implementations": 0,
+    "validation_holdout_reads": 0,
+    "archive_reopens": 0,
+    "rematerializations": 0,
+    "kaggle_token_access": 0,
+    "mat_reads_or_generated": 0,
+    "device_wls_or_precomputed_coordinates": 0,
+    "source_static_reads": 4
+  },
+  "routes": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "input_sha256": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863",
+      "raw_rows": 87705,
+      "epochs": 2159,
+      "transitions": 13431,
+      "satellites": 7,
+      "residual_median_abs_m": 1.3461344093084335,
+      "residual_p50_abs_m": 1.3461344093084335,
+      "residual_p95_abs_m": 8.152000576257706,
+      "residual_max_abs_m": 56.917289327830076,
+      "spearman": 0.4439639485115684,
+      "ordered_bucket_counts": {"missing": 0, "<=10ns": 2625, "10_to_100ns": 10806, ">100ns": 0},
+      "uncertainty_quartiles_ns": {"q25": 11.0, "q50": 16.0, "q75": 24.0},
+      "high_gt10ns_p95_m": 8.902516804169863,
+      "low_le10ns_p95_m": 2.8680625066161096,
+      "high_gt10ns_p95_excess_m": 6.034454297553754,
+      "high_gt10ns_p95_ratio": 3.1040177065992607,
+      "low_base_fraction": 0.19544337726155908,
+      "within_signal_passing_groups": 1,
+      "all_finite": true
+    },
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "input_sha256": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7",
+      "raw_rows": 112833,
+      "epochs": 3140,
+      "transitions": 15630,
+      "satellites": 7,
+      "residual_median_abs_m": 1.3880830090492964,
+      "residual_p50_abs_m": 1.3880830090492964,
+      "residual_p95_abs_m": 9.729740006662903,
+      "residual_max_abs_m": 167.03828407265246,
+      "spearman": 0.4672032073226065,
+      "ordered_bucket_counts": {"missing": 0, "<=10ns": 3513, "10_to_100ns": 12117, ">100ns": 0},
+      "uncertainty_quartiles_ns": {"q25": 11.0, "q50": 16.0, "q75": 24.0},
+      "high_gt10ns_p95_m": 11.034630191326134,
+      "low_le10ns_p95_m": 3.01975144483149,
+      "high_gt10ns_p95_excess_m": 8.014878746494643,
+      "high_gt10ns_p95_ratio": 3.6541518045177703,
+      "low_base_fraction": 0.22476007677543186,
+      "within_signal_passing_groups": 1,
+      "all_finite": true
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "input_sha256": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1",
+      "raw_rows": 51243,
+      "epochs": 1466,
+      "transitions": 11732,
+      "satellites": 11,
+      "residual_median_abs_m": 1.8418421931564808,
+      "residual_p50_abs_m": 1.8418421931564808,
+      "residual_p95_abs_m": 11.581214432138946,
+      "residual_max_abs_m": 192.2536495476961,
+      "spearman": 0.47559867938484107,
+      "ordered_bucket_counts": {"missing": 0, "<=10ns": 1449, "10_to_100ns": 10283, ">100ns": 0},
+      "uncertainty_quartiles_ns": {"q25": 13.0, "q50": 19.0, "q75": 31.0},
+      "high_gt10ns_p95_m": 12.383619360812007,
+      "low_le10ns_p95_m": 3.0685181275010103,
+      "high_gt10ns_p95_excess_m": 9.315101233310997,
+      "high_gt10ns_p95_ratio": 4.035700245609167,
+      "low_base_fraction": 0.12350835322195704,
+      "within_signal_passing_groups": 1,
+      "all_finite": true
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "input_sha256": "a0fc8e71bdfc03be61b99efcd7d41fbba8ffec126df78b55243f681fd211f204",
+      "raw_rows": 35810,
+      "epochs": 1102,
+      "transitions": 9612,
+      "satellites": 11,
+      "residual_median_abs_m": 1.7463475596159697,
+      "residual_p50_abs_m": 1.7463475596159697,
+      "residual_p95_abs_m": 10.889279210474333,
+      "residual_max_abs_m": 168.63798721134663,
+      "spearman": 0.49767284139170576,
+      "ordered_bucket_counts": {"missing": 0, "<=10ns": 1836, "10_to_100ns": 7776, ">100ns": 0},
+      "uncertainty_quartiles_ns": {"q25": 12.0, "q50": 19.0, "q75": 31.0},
+      "high_gt10ns_p95_m": 12.00526615139097,
+      "low_le10ns_p95_m": 2.987156417686492,
+      "high_gt10ns_p95_excess_m": 9.018109733704478,
+      "high_gt10ns_p95_ratio": 4.018961337380809,
+      "low_base_fraction": 0.19101123595505617,
+      "within_signal_passing_groups": 1,
+      "all_finite": true
+    }
+  },
+  "aggregate": {
+    "route_count": 4,
+    "route_median_abs_residual_m": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": 1.3461344093084335,
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": 1.3880830090492964,
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": 1.8418421931564808,
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": 1.7463475596159697
+    },
+    "route_median_abs_residual_aggregate_m": 1.567215284332633,
+    "route_median_abs_residual_mad_m": 0.20010657515376806,
+    "pairwise_route_median_distances_m": [
+      {"route_a": "2021-03-16-18-59-us-ca-mtv-a/pixel5", "route_b": "2021-08-24-20-32-us-ca-mtv-h/pixel5", "distance_m": 0.041948599740862846},
+      {"route_a": "2021-03-16-18-59-us-ca-mtv-a/pixel5", "route_b": "2022-04-01-18-22-us-ca-lax-t/pixel5", "distance_m": 0.49570778384804726},
+      {"route_a": "2021-03-16-18-59-us-ca-mtv-a/pixel5", "route_b": "2023-03-08-21-34-us-ca-mtv-u/pixel5", "distance_m": 0.4002131503075361},
+      {"route_a": "2021-08-24-20-32-us-ca-mtv-h/pixel5", "route_b": "2022-04-01-18-22-us-ca-lax-t/pixel5", "distance_m": 0.4537591841071844},
+      {"route_a": "2021-08-24-20-32-us-ca-mtv-h/pixel5", "route_b": "2023-03-08-21-34-us-ca-mtv-u/pixel5", "distance_m": 0.3582645505666733},
+      {"route_a": "2022-04-01-18-22-us-ca-lax-t/pixel5", "route_b": "2023-03-08-21-34-us-ca-mtv-u/pixel5", "distance_m": 0.09549463354051113}
+    ]
+  },
+  "loo": {
+    "direction_stable": true,
+    "folds": [
+      {"omitted_route": "2021-03-16-18-59-us-ca-mtv-a/pixel5", "transition_count": 36974, "spearman": 0.48800618569874327, "high_low_excess_m": 8.686440198682249, "high_low_ratio": 3.8808960762450346, "direction_positive": true},
+      {"omitted_route": "2021-08-24-20-32-us-ca-mtv-h/pixel5", "transition_count": 34775, "spearman": 0.47843823120430873, "high_low_excess_m": 8.155946300923823, "high_low_ratio": 3.77624796578393, "direction_positive": true},
+      {"omitted_route": "2022-04-01-18-22-us-ca-lax-t/pixel5", "transition_count": 38673, "spearman": 0.47228557251886844, "high_low_excess_m": 7.674203621968626, "high_low_ratio": 3.589993357822102, "direction_positive": true},
+      {"omitted_route": "2023-03-08-21-34-us-ca-mtv-u/pixel5", "transition_count": 40793, "spearman": 0.47177710444052484, "high_low_excess_m": 7.840699166245759, "high_low_ratio": 3.6453110622239127, "direction_positive": true}
+    ]
+  },
+  "static_contract": {
+    "adapter_parses_received_sv_time_uncertainty": false,
+    "observation_retains_received_sv_time_uncertainty": false,
+    "fgo_consumes_received_sv_time_uncertainty_as_sigma": false,
+    "adapter_parses_pseudorange_rate_uncertainty": false,
+    "fgo_consumes_pseudorange_rate_uncertainty_as_sigma": false,
+    "existing_adapter_masks_pinned": true,
+    "source_hashes": {
+      "android_raw_gnss_cpp": "84b6864475c3d86c34c6740ec28ef7a54846aecf5c6c297d644e6deb1dad4390",
+      "android_raw_gnss_header": "e833570103a521b9e051086b6ea75192ae3a575b83eee33d978143eaf279c52c",
+      "observation_header": "d95f2bedca553b6474a4bc4e4600c91152d45fcaf350e31fce20fbfa65714419",
+      "fgo_problems_cpp": "5fb1dec8e7f23652eefecc9d8684586a66fecac07e109489792c8590aac76a03"
+    }
+  },
+  "gates": {
+    "route_count": {"observed": 4, "required": 4, "passed": true},
+    "residual_coverage": {"minimum_residuals": 9612, "minimum_satellites": 7, "required_residuals": 1000, "required_satellites": 3, "passed": true},
+    "uncertainty_population": {"minimum_populated_ordered_buckets": 2, "required": 3, "passed": false},
+    "spearman_each_route": {"observed": [0.4439639485115684, 0.4672032073226065, 0.47559867938484107, 0.49767284139170576], "required": 0.35, "passed": true},
+    "bucket_monotonicity": {"each_route_available_bucket_count": 2, "median_and_p95_non_decreasing": true, "required_bucket_count": 3, "passed": false},
+    "high_gt10ns_vs_low": {"p95_excess_m": [6.034454297553754, 8.014878746494643, 9.315101233310997, 9.018109733704478], "p95_ratio": [3.1040177065992607, 3.6541518045177703, 4.035700245609167, 4.018961337380809], "required_excess_m": 2.0, "required_ratio": 1.5, "passed": true},
+    "low_base_retention": {"minimum_fraction": 0.12350835322195704, "required": 0.30, "passed": false},
+    "current_fgo_used_rows_impacted": {"observed": false, "required": true, "passed": false},
+    "loo_mapping_direction": {"observed": true, "required": true, "passed": true},
+    "within_signal_composition_independence": {"observed_passing_groups": [1, 1, 1, 1], "required_families": 2, "passed": false},
+    "presentation_integrity": {"group_counts_sum_all": true, "four_route_medians_retained": true, "aggregate_recomputed_exact": true, "passed": true},
+    "all_finite_residuals": {"observed": true, "passed": true},
+    "all_passed": false
+  },
+  "presentation_integrity": {
+    "group_counts_sum_all": true,
+    "four_route_medians_retained": true,
+    "aggregate_recomputed_exact": true
+  },
+  "events": {
+    "count": 21246,
+    "path": "output/smartphone-r5/phase48-pixel5-raw-code-rate-uncertainty-v1/phase48_pixel5_raw_code_rate_uncertainty.events.json",
+    "sha256": "99fec40ea301de34cea28a570baa6e4ef02657e991b1f66ea13e108435eeca51"
+  },
+  "output_artifacts": {
+    "output/smartphone-r5/phase48-pixel5-raw-code-rate-uncertainty-v1/phase48_pixel5_raw_code_rate_uncertainty.json": {"bytes": 37455, "sha256": "4f2faef123f0770baf93004fb89bb7e9cfa8803be10d04ee8dc92d6df63f99e3"},
+    "output/smartphone-r5/phase48-pixel5-raw-code-rate-uncertainty-v1/phase48_pixel5_raw_code_rate_uncertainty.routes.json": {"bytes": 26050, "sha256": "6528a988ad27144f547785c580b97b7abff19d1dfe6f04ecbb71bf80761ebea1"},
+    "output/smartphone-r5/phase48-pixel5-raw-code-rate-uncertainty-v1/phase48_pixel5_raw_code_rate_uncertainty.events.json": {"bytes": 5754552, "sha256": "99fec40ea301de34cea28a570baa6e4ef02657e991b1f66ea13e108435eeca51"},
+    "output/smartphone-r5/phase48-pixel5-raw-code-rate-uncertainty-v1/phase48_pixel5_raw_code_rate_uncertainty.manifest.json": {"bytes": 1838, "sha256": "c7afaa9e329eb5a5e0bffa36d82f9f43eb2748bfd5636e62d630803468fd143c"}
+  },
+  "decision": {
+    "go": false,
+    "correction_authorized": false,
+    "strongest_finding": "ReceivedSvTimeUncertaintyNanos is present in the raw audit and its >10 ns code-rate residual association is positive in every route, but the pinned adapter, observation model, and current FGO contain no parser/retention/sigma-consumption path. Therefore the association cannot become a deployable estimator mechanism; the sparse ordered buckets, low/base fraction, and single-signal composition also fail frozen identification gates.",
+    "next_single_raw_physical_factor": "raw Android per-satellite carrier-phase ADR cycle-slip/lock-loss residual",
+    "sigma_floor_concept": null,
+    "truth_or_phase47_metric_used": false,
+    "phase47_integrity_record_used_as": "policy/bug metadata only"
+  }
+}

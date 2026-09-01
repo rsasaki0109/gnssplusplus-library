@@ -1,0 +1,141 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-only-raw-conversion-smoke.v1",
+  "status": "truth-free-structural-smoke",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "candidate": {
+    "id": "native-only-raw-android-conversion-v1",
+    "scope": "first exact raw Android clock/P/L/D conversion component plus existing native Eigen FGO entry point",
+    "native_0_782_class_achieved": false,
+    "production_default_changed": false,
+    "score_evaluation_performed": false
+  },
+  "audit_cross_references": {
+    "gap_matrix": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_only_gap_matrix_v1.json",
+      "sha256": "9cbfce80bdc53ca408ea3e08bcdb0c10969a77eb3f9129d254720ec0b8a91c2c"
+    },
+    "contract_document": {
+      "path": "docs/use_cases/smartphone_native_only.md",
+      "sha256": "3b557ccb67e0e156b1b8be28225c787470aa1e0dbf494d7472c519be4e53e771"
+    }
+  },
+  "policy": {
+    "local_only": true,
+    "truth_used": false,
+    "truth_open_count": 0,
+    "ground_truth_read": false,
+    "validation_opened": false,
+    "holdout_opened": false,
+    "test_truth_read": false,
+    "result_gnss_mat_read": false,
+    "result_gnss_imu_mat_read": false,
+    "sample_coordinates_read": false,
+    "v5_imported_output_read": false,
+    "kaggle_or_token_access": false,
+    "leaderboard_used_for_tuning": false,
+    "post_score_tuning": false
+  },
+  "authoritative_inputs": {
+    "route": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "device_gnss": {
+      "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_gnss.csv",
+      "sha256": "c5af6cc3aeae6ab29a2a10d975d291b8fba4fab15273c0729163cd639ff10e42",
+      "rows": 48000
+    },
+    "device_imu": {
+      "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_imu.csv",
+      "sha256": "8f1c582bdad545d11e68349b221001b69e2a9d43f9257e60038c193276fa1804",
+      "rows": 401835,
+      "role": "required and hashed by native-only preflight; IMU values are not yet consumed by this first conversion entry point"
+    },
+    "broadcast_nav": {
+      "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/brdc.nav",
+      "sha256": "16c859f8015c874398978bae6004172c355f7d3a3b06fa81b54aac88b6b78d33"
+    },
+    "native_only_preflight_manifest": {
+      "path": "output/smartphone-r5/native-only-raw-conversion-smoke-v1/ge2/native_only_inputs.json",
+      "sha256": "396a4173a14a404d72f0e6be4343e53ee831f4d81d938af326f8296eeddcba6e"
+    }
+  },
+  "source_hashes": {
+    "apps/commands/benchmarks/gnss_smartphone_native_only.py": "f50eda03344e07e5143c35b80c4b3008d7d3cffbc288e120445584ae33e7b72e",
+    "apps/native/gnss_smartphone_fgo.cpp": "f8ee8293ef841e3f47bc0b5db39d52d438a7fac6257ca3a4216518261441f5bf",
+    "include/libgnss++/io/android_raw_gnss.hpp": "3aced61499b83c277507a34aae160f0894d1c3e818490e8eb41333b4dad19992",
+    "src/io/android_raw_gnss.cpp": "ad57a4c4997f01a55d9c2464cb76931c600ed0b9b31fd810446fa87ab4934e4e",
+    "CMakeLists.txt": "366ec955ef88f27e33f82d2148c95729cba3040e4cf7c14745a5e75930583836",
+    "apps/CMakeLists.txt": "bdb5551b6236dd0c2198196dcd374ee06f9678b24dbe20d390a248d81cee0f59",
+    "tests/CMakeLists.txt": "c3b8dd599c81dbceedb1c0661a113b48a9889a605d4084519e29e9aa7c5112db"
+  },
+  "upstream_contract": {
+    "repository": "https://github.com/taroz/gsdc2023",
+    "commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "license": "MIT",
+    "gnsslog2obs_sha256": "665ce43d1fc3c5a9c3b3a6fd76f81539126e3ab897fbba484ab0ccd18964acff",
+    "evidence_lines": "functions/gnsslog2obs.m:103-121,158-202",
+    "mapping": {
+      "receiver_time": "week=floor((TimeNanos-baseFullBiasNanos)/1e9/604800); tow_rx=(TimeNanos-baseFullBiasNanos-week*604800e9)/1e9-BiasNanos/1e9",
+      "pseudorange": "(tow_rx-tow_tx)*c with nearest-week unwrap",
+      "carrier": "AccumulatedDeltaRangeMeters/(c/CarrierFrequencyHz), five-device ADR sign correction",
+      "doppler": "-PseudorangeRateMetersPerSecond/(c/CarrierFrequencyHz)"
+    }
+  },
+  "truth_free_conversion": {
+    "input_rows": 48000,
+    "selected_rows": 21955,
+    "selected_epochs": 1384,
+    "skipped_invalid_timing_rows": 2,
+    "gps_l1_rows": 11509,
+    "galileo_e1_rows": 10446,
+    "carrier_rows": 14847,
+    "doppler_rows": 21955,
+    "carrier_loss_rows": 474,
+    "device_wls_seed_rows": 1384,
+    "clock_discontinuities": 0
+  },
+  "truth_free_fgo": {
+    "backend": "eigen",
+    "recipe": {
+      "pseudorange": true,
+      "ordinary_tdcp": true,
+      "position_clock_motion": true,
+      "undifferenced_doppler": false,
+      "carrier_phase": false,
+      "double_difference": false,
+      "max_iterations": 8,
+      "requested_max_epochs": 30
+    },
+    "converted_epochs": 30,
+    "output_epochs": 30,
+    "pseudorange_factors": 420,
+    "tdcp_factors": 309,
+    "motion_factors": 29,
+    "iterations": 7,
+    "converged": true,
+    "residual_rms_m": 30.883136760876095,
+    "solver_wall_seconds": 0.037897207,
+    "process_wall_seconds": 0.50,
+    "max_rss_kb": 19940
+  },
+  "artifacts": {
+    "output_csv": {
+      "path": "output/smartphone-r5/native-only-raw-conversion-smoke-v1/ge2/native.csv",
+      "sha256": "451029ac86e19e514b869ba0d3209de404d719a053b41958d025196ad8d08f25",
+      "rows": 30,
+      "finite_latitude_longitude": true
+    },
+    "summary": {
+      "path": "output/smartphone-r5/native-only-raw-conversion-smoke-v1/ge2/native-summary.json",
+      "sha256": "0d9afea5c9c28093d22d93a06ff2b0d7eee0eb22c6b9735de63d226488015d1b"
+    }
+  },
+  "commands": [
+    "python3 apps/commands/benchmarks/gnss_smartphone_native_only.py --device-gnss <route>/pixel7pro/device_gnss.csv --device-imu <route>/pixel7pro/device_imu.csv --broadcast-nav <route>/brdc.nav --manifest output/smartphone-r5/native-only-raw-conversion-smoke-v1/ge2/native_only_inputs.json",
+    "LD_LIBRARY_PATH=/home/sasaki/.local/lib:${LD_LIBRARY_PATH:-} build/apps/gnss_smartphone_fgo --device-gnss <route>/pixel7pro/device_gnss.csv --device-imu <route>/pixel7pro/device_imu.csv --nav <route>/brdc.nav --trip-id 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro --device-model pixel7pro --max-epochs 30 --out output/smartphone-r5/native-only-raw-conversion-smoke-v1/ge2/native.csv --summary-json output/smartphone-r5/native-only-raw-conversion-smoke-v1/ge2/native-summary.json"
+  ],
+  "limitations": [
+    "This is a structural raw-conversion smoke, not a train score or validation result.",
+    "The current entry point hashes/authorizes device_imu but does not add upstream IMU preintegration factors; that remains a documented high-impact gap.",
+    "The existing device WLS ECEF field is used only as an approximate SPP seed when finite; result/truth/sample/v5 coordinates are never accepted.",
+    "No public/private score was used for implementation or parameter choice."
+  ]
+}

@@ -1,0 +1,104 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-gnss-pdc-state-backend-score-result.v1",
+  "status": "scored-development-train-no-go",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "candidate": {
+    "id": "native-gnss-pdc-state-contract-v1",
+    "route_device": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_state_backend_freeze_v1.json",
+    "freeze_record_sha256": "a7cc67fffdec34a8320694d86ff39a17be680b2a75b4bfb743c814bd21fac9db",
+    "freeze_manifest": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_state_backend_freeze_v1_manifest.json",
+    "freeze_manifest_sha256": "a50e9557cdb15342bb35de24d8099947d8e6ec8de31585d284721b005226946d",
+    "truth_free_run_manifest": "output/smartphone-r5/native-gnss-pdc-state-contract-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/run_manifest.json",
+    "truth_free_run_manifest_sha256": "1563029a3ad3eb1e72c5336464979c68dae2796b86840b1ead50ab7a77d06191",
+    "keyed_output": "output/smartphone-r5/native-gnss-pdc-state-contract-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/keyed.csv",
+    "keyed_output_sha256": "26930dcf9814626f9b6a1413e3932ce20ca9a7abe1b31ec4781c47f139c9dcec",
+    "summary": "output/smartphone-r5/native-gnss-pdc-state-contract-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/summary.json",
+    "summary_sha256": "2d9cb337ce2c98fefd103d2135fd7130032dfa75ab432f25a41e554d4608ec25",
+    "score_report": "output/smartphone-r5/native-gnss-pdc-state-contract-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/train_score.json",
+    "score_report_sha256": "5ced12e12c5182a5823df0a104b6f6cb2f5667ee6d3c5245cc537581273e7e84",
+    "score_authorization": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_state_backend_score_authorization_v1.json",
+    "score_authorization_sha256": "344da904dc94a83b9f160b772a322c000f20baecc33a37118b1c68d93e8cb4ea"
+  },
+  "truth_access": {
+    "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv",
+    "sha256": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a",
+    "role": "development-train",
+    "truth_free_sealed_before_read": true,
+    "evaluation_reads_for_this_candidate": 1,
+    "read_method": "single-open-bytes-parse-and-hash",
+    "validation_opened": false,
+    "holdout_opened": false,
+    "test_opened": false,
+    "mat_inputs_used": false,
+    "truth_used_for_solver_or_parameter_selection": false
+  },
+  "structural_evidence": {
+    "epochs": 1384,
+    "finite_keyed_output": true,
+    "converged": true,
+    "iterations": 360,
+    "initial_cost": 353082307.74871284,
+    "final_cost": 2234826.1487335693,
+    "pseudorange_factors": 33510,
+    "doppler_factors": 26175,
+    "ordinary_tdcp_factors": 24397,
+    "motion_factors": 1383,
+    "clock_motion_factors": 1383,
+    "temporal_dt_source": "raw_epoch_time_difference_seconds",
+    "temporal_dt_threshold_seconds": 1.5,
+    "native_spp_seed_epochs": 1384,
+    "wall_seconds": 32.24647135997657,
+    "coordinate_artifacts_byte_identical_to_global_isb_v2_1": true,
+    "summary_artifact_byte_identical_to_global_isb_v2_1": false
+  },
+  "metrics": {
+    "prediction_rows": 1384,
+    "truth_rows": 1383,
+    "matched_rows": 1383,
+    "unmatched_prediction_rows": 1,
+    "timestamp_delta_ms": {"min": 999, "median": 999, "max": 999},
+    "four_diagnostic_variants_m": {
+      "wgs84_vincenty__linear_n_minus_1": 76.97819365337281,
+      "wgs84_vincenty__nearest_rank_ceiling": 76.98230451979411,
+      "haversine_sphere__linear_n_minus_1": 76.8192455321898,
+      "haversine_sphere__nearest_rank_ceiling": 76.82333529891469
+    },
+    "horizontal_p50_p95_m": {
+      "wgs84_vincenty": [72.10621365396428, 81.85017365278134],
+      "haversine_sphere": [71.95465574277434, 81.68383532160527]
+    },
+    "official_metric_m": null,
+    "official_metric_status": "undetermined-from-public-primary-sources"
+  },
+  "comparison": {
+    "retained_v1_proxy_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_upstream_residual_snr_score_result_v1.json",
+    "retained_v1_proxy_best_variant_m": 68.0475838937948,
+    "retained_v1_proxy_variants_m": {
+      "wgs84_vincenty__linear_n_minus_1": 68.20249565105695,
+      "wgs84_vincenty__nearest_rank_ceiling": 68.20263285883483,
+      "haversine_sphere__linear_n_minus_1": 68.0475838937948,
+      "haversine_sphere__nearest_rank_ceiling": 68.04768377355857
+    },
+    "all_four_non_regressive_vs_retained_v1": false,
+    "interpretation": "At this route the raw timestamps are effectively 1 Hz, so replacing the implicit unit interval with the measured dt changes no coordinates; every score is the prior global-ISB candidate and remains above the retained v1 proxy."
+  },
+  "decision": {
+    "promotion": "no-go",
+    "reason": "The actual-dt temporal contract is an exact, low-risk partial upstream port, but it produces no accuracy improvement on this 1 Hz route and fails the predeclared 68.0475838937948 m gate.",
+    "fresh_validation_authorized": false,
+    "holdout_authorized": false,
+    "test_batch_authorized": false,
+    "production_default_changed": false,
+    "candidate_or_numeric_parameters_changed_after_freeze": false,
+    "score_used_for_tuning": false,
+    "external_mutation": false
+  },
+  "policy": {
+    "mat_inputs_used": false,
+    "upstream_result_oracle_used": false,
+    "base_compensation_applied": false,
+    "base_or_double_difference_factors": false,
+    "no_post_score_tuning": true
+  }
+}

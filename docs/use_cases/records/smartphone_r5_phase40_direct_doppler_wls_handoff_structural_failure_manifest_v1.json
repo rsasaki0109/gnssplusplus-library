@@ -1,0 +1,88 @@
+{
+  "schema_version": "smartphone-r5-phase40-direct-doppler-wls-handoff-structural-failure-manifest.v1",
+  "phase": 40,
+  "status": "sealed-fail-closed-before-truth",
+  "freeze": {
+    "commit": "bd22998",
+    "path": "docs/use_cases/records/smartphone_r5_phase40_direct_doppler_wls_handoff_freeze_v1.json",
+    "sha256": "544089e32a7f7c0ca96ee6cbbfd7634145aebe288fe32a947ef1f67d5c07f52e"
+  },
+  "result": {
+    "path": "docs/use_cases/records/smartphone_r5_phase40_direct_doppler_wls_handoff_result_v1.json",
+    "documentation_sha256": "ea1d92b2f69bf6810260e17d05ae4f3c0276e1ab7be6cec84a1f35b0fd5607b1",
+    "runtime_path": "output/smartphone-r5/phase40-direct-doppler-wls-handoff-v3/phase40_structural_failure.json",
+    "runtime_sha256": "d08d7ff67c3608a0ac193ad913c127af0d38fc47d0cb63979149066211d8c9fe"
+  },
+  "candidate": {
+    "source_commit": "4b60601d62a7c343bb3cdb4f8de48116b89052bb",
+    "source": "apps/native/gnss_fgo_imu_no_base.cpp",
+    "flag": "--native-direct-doppler-wls-handoff",
+    "failed_route": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "failed_gate": "0/1325 direct or propagated valid WLS estimates; 1181 four-row solves rejected by physical-gate",
+    "first_solved_reason": "physical-gate",
+    "first_solved_rows": 4,
+    "first_solved_velocity_norm_mps": 8919.7537472980548,
+    "first_solved_clock_rate_abs_mps": 7314.3850372387406,
+    "max_velocity_norm_mps": 8919.7537472980548,
+    "max_clock_rate_abs_mps": 7316.9109537785716,
+    "positions_clocks_copied": 0,
+    "gnss_first_optimizer_attempted": false,
+    "raw_seed_invalid_count": 0,
+    "output_published": false,
+    "production_default_changed": false
+  },
+  "execution": {
+    "raw_corrected_doppler_rows": 4724,
+    "epochs_with_at_least_four_rows": 1181,
+    "epochs_with_insufficient_rows": 144,
+    "direct_valid_count": 0,
+    "propagated_valid_count": 0,
+    "rejected_count": 1325,
+    "nonfinite_count": 0,
+    "over_70_mps_count": 1181,
+    "clock_rate_over_2000_mps_count": 577,
+    "matrix_route_order_fixed": true,
+    "candidate_run1_started": true,
+    "candidate_run2_started": false,
+    "candidate_routes_completed": 0,
+    "flag_off_controls_started": false,
+    "stopped_after_first_candidate_failure": true,
+    "runner_exit_code": 2,
+    "truth_open_count": 0,
+    "ground_truth_materialized": false,
+    "validation_truth_open_count": 0,
+    "holdout_truth_open_count": 0,
+    "mat_read_or_generated": false,
+    "token_or_kaggle_access": false
+  },
+  "flag_off_baseline": {
+    "status": "not_started_after_candidate-fail-closed",
+    "authoritative_record": "docs/use_cases/records/smartphone_r5_phase39_gnss_first_velocity_only_handoff_freeze_v1.json",
+    "authoritative_record_sha256": "17e75c367ae05e10ba5349b0db73cbfa048a27992286ae48b5cdf77346053580",
+    "historical_target_policy": "preserve native_solver_state_failure_before_utc_projection without publishing output",
+    "safe2_baseline_details": "Recorded in smartphone_r5_phase40_direct_doppler_wls_handoff_result_v1.json; the mtv-u submission SHA is the Phase37-corrected 524769cdf67aa857eefaafdadf943dd76586dda6a53e8b6d1df4a707d7699f71, not the stale Phase39 value."
+  },
+  "historical_binary_pins": {
+    "pre_phase40_binary_sha256": "778b15e45649ce2686b2c5459599c45fe7ff078e90d96b9796df183ef20b421a",
+    "rewritten": false,
+    "explanation": "Existing SHA pins remain historical records. The candidate binary was rebuilt after source/focused-test push and is recorded in the result."
+  },
+  "policy": {
+    "candidate_retained_as": "development-only diagnostic; not promoted",
+    "physical_limits_relaxed": false,
+    "measurement_model_changed": false,
+    "phase41_contract_correction_allowed": false,
+    "phase41_note": "A Doppler measurement-contract correction requires a separately frozen Phase41 and is outside this No-Go."
+  },
+  "verification": {
+    "focused_phase40_ctest_passed": true,
+    "full_ctest_passed": false,
+    "full_ctest_failed_tests": [
+      "python_cli_tests",
+      "python_smartphone_phase35_matrix_tests",
+      "python_smartphone_phase37_pixel5_repeatability_tests",
+      "python_smartphone_phase38_mtvh_failure_diagnosis_tests"
+    ],
+    "historical_pin_policy": "Phase35/37/38 binary SHA mismatches are retained as historical pin-test failures; they are not rewritten for Phase40."
+  }
+}

@@ -1,0 +1,177 @@
+{
+  "schema_version": "smartphone-r5-phase40-direct-doppler-wls-handoff-freeze.v1",
+  "phase": 40,
+  "status": "frozen-before-implementation-and-solver",
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "base_commit": "5543e03",
+    "phase39_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase39_gnss_first_velocity_only_handoff_freeze_v1.json",
+      "sha256": "17e75c367ae05e10ba5349b0db73cbfa048a27992286ae48b5cdf77346053580"
+    },
+    "starting_binary": {
+      "path": "build/apps/gnss_fgo_imu_no_base",
+      "sha256": "778b15e45649ce2686b2c5459599c45fe7ff078e90d96b9796df183ef20b421a"
+    },
+    "starting_source": {
+      "path": "apps/native/gnss_fgo_imu_no_base.cpp",
+      "sha256": "511769b0685a0f2914d485ce80e0d0a1079873ff4a74bc8f0734df3897e6e2a6"
+    }
+  },
+  "objective": {
+    "question": "Can the existing raw-observable Doppler WLS estimates seed the native Android IMU velocity and heading directly without running or handing off any GNSS-first optimizer state?",
+    "candidate_id": "native_direct_doppler_wls_handoff_v1",
+    "candidate_flag": "--native-direct-doppler-wls-handoff",
+    "target_route": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "structural_routes": [
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "route_order_is_fixed": true,
+    "truth_free": true
+  },
+  "input_contract": {
+    "raw_only": true,
+    "source_roots": {
+      "phase31_train3": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw",
+      "phase37_target_and_safe2": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes"
+    },
+    "sha256": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "device_gnss.csv": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863",
+        "device_imu.csv": "afc540e7c4ce2ca66b442a1afbcd604e9f6b3d2cc4d3733183739901b5b97bd6",
+        "brdc.nav": "6adfaf7fe4452a4faeb94a7b607c15e05f578c46a028a030b94aa6f79de194cd"
+      },
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4": {
+        "device_gnss.csv": "b7c192323455c36e76ea44831dc21a0cb661e5ca160e6072bd0d3682c907e594",
+        "device_imu.csv": "86b31f2ac9c4e80c675c01a8c86146efd7f67d1a5960ac58723605c1c2bf33a8",
+        "brdc.nav": "cf48ab5fe78edd49a182655ed4b99f1938972c40ab95bea3c78939d3eb98b5c5"
+      },
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+        "device_gnss.csv": "9bbc9f8d7809a0ef341796fe1276fc507de1c87ccf2598d607cd12e6b635a678",
+        "device_imu.csv": "cb7388be335d48eb7612025bc68a4ffb198bdddd2caa9f0a1b348fc06ef29c1d",
+        "brdc.nav": "357b8d05d2e9d9c0a2e1d5d9256120b288182d51109c2a4e01edcd0920f20440"
+      },
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+        "device_gnss.csv": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7",
+        "device_imu.csv": "fa3f17d07570fdbb8030f307130f33ca3613e8125475c2a907c48f7db3455480",
+        "brdc.nav": "147d948f0eba3bf09e295e7f67fbe8db60c25e236bc3c7d958dc933483f10909"
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "device_gnss.csv": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1",
+        "device_imu.csv": "2e39a3e9f294c64b8ecfd452d0960025d1013b97f2d7497e6e48a2a1997b38c5",
+        "brdc.nav": "443d3d5a73f4895b83e576e24a568f4658f869e79a480856de7f0717763dcbe6"
+      },
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+        "device_gnss.csv": "a0fc8e71bdfc03be61b99efcd7d41fbba8ffec126df78b55243f681fd211f204",
+        "device_imu.csv": "c7d726e1cc0dacc7a569bd8be9bc2333765bbb3b3010203a4aea2e49778101ab",
+        "brdc.nav": "8893ef62fecdd9986f6b2cf1b7b980defa6430da5801aafcab4ecf4c99a03b92"
+      }
+    }
+  },
+  "base_recipe": {
+    "flags": [
+      "--all-epochs",
+      "--android-raw-utc-keys",
+      "--android-raw-clock-only",
+      "--android-utc-wall-clock-fallback",
+      "--native-pdc-imu-tdcp-no-bridge",
+      "--native-quality-anchor"
+    ],
+    "candidate_addition": "--native-direct-doppler-wls-handoff",
+    "flag_off_default_unchanged": true,
+    "phase31_champion_unchanged": true
+  },
+  "algorithm_contract": {
+    "direct_source": "Use FGOProblem::doppler_velocity_wls_estimates built from raw Doppler rows, broadcast satellite state, and raw SPP seeds.",
+    "coverage": "Report direct-valid, propagated-valid, and rejected counts. Every problem epoch must have one valid finite estimate; otherwise fail closed before IMU initialization.",
+    "propagation": "Only existing bounded linear interpolation or one-sided edge hold is permitted, with the existing maximum edge hold of 1.0 seconds. No alternate trajectory or coordinate propagation is permitted.",
+    "velocity_handoff": "Hand off velocity-only ECEF estimates after conversion to ENU at the first original raw SPP seed. The same velocity sequence initializes IMU velocity states and the existing velocity-to-heading initializer.",
+    "position_clock_handoff": "Never run or copy GNSS-first optimizer positions, velocities, or receiver clocks. Original raw SPP position and clock seeds remain in the IMU problem.",
+    "gnss_first": "The GNSS-first optimizer is not attempted in this candidate; attempted=false is a mandatory summary gate.",
+    "failure_policy": "Any rejected, non-finite, over-bound, missing, or incomplete estimate fails closed. No partial sequence, zero fallback, edge hold beyond 1.0 seconds, truth input, or precomputed coordinate is allowed.",
+    "physical_gates": "Each direct or propagated estimate must be finite with velocity norm <=70 m/s and clock-rate magnitude <=2000 m/s; the native WLS residual, rank, condition, and normalized-RMS gates remain authoritative.",
+    "tdcp": "Existing ordinary TDCP graph remains enabled by the base recipe and must build and insert a positive equal count.",
+    "raw_keys": "Existing exact raw UTC-key alignment remains authoritative; no interpolated or edge-held output coordinate is accepted."
+  },
+  "predeclared_numeric_gates": {
+    "direct_valid_count_reported": true,
+    "propagated_valid_count_reported": true,
+    "rejected_count_reported": true,
+    "coverage_count_equals_epoch_count": true,
+    "all_estimates_valid": true,
+    "all_estimates_finite": true,
+    "velocity_norm_max_mps": 70.0,
+    "velocity_norm_comparison": "<=",
+    "clock_rate_abs_max_mps": 2000.0,
+    "edge_hold_max_s": 1.0,
+    "original_raw_seed_positions": {
+      "all_epochs_earth_valid": true,
+      "earth_norm_min_m": 6000000.0,
+      "earth_norm_max_m": 7000000.0
+    },
+    "gnss_first": {
+      "attempted": false,
+      "positions_clocks_copied": 0
+    },
+    "tdcp": {
+      "factors_built_positive": true,
+      "factors_inserted_equals_built": true,
+      "inserted_positive": true
+    },
+    "output": {
+      "finite": true,
+      "converged": true,
+      "raw_key_exact": true,
+      "unresolved_epochs": 0,
+      "edge_hold_epochs": 0,
+      "over_70_mps_count": 0
+    },
+    "repeat_runs": 2,
+    "byte_identical_submission_and_summary": true
+  },
+  "flag_off_identity_contract": {
+    "scope": "Run the frozen base recipe before and after candidate build on the Phase31 train3 and Phase37 safe2 raw routes.",
+    "expected_baselines": "The Phase39 freeze flag-off SHA-256 records remain authoritative; this candidate must not alter them.",
+    "production_default_changed": false
+  },
+  "execution_order": [
+    "freeze JSON commit and push",
+    "candidate source and focused tests commit and push",
+    "build candidate binary",
+    "run MTV-h plus Phase31 train3 plus Phase37 safe2 twice each with candidate flag",
+    "run flag-off frozen baseline identity checks",
+    "run full relevant CTest",
+    "publish truth-free structural result and manifest",
+    "seal only if every AND gate passes"
+  ],
+  "forbidden_actions": [
+    "open or materialize ground_truth.csv",
+    "open Phase34 validation 2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+    "open future holdout 2023-05-16-19-54-us-ca-mtv-xe1/pixel5",
+    "read or create any MATLAB .mat",
+    "use precomputed result/submission coordinates for inference",
+    "use an alternate trajectory or coordinate propagation",
+    "use edge hold beyond the existing 1.0 second bound",
+    "fit or apply a truth/common constant/body-frame correction",
+    "run the GNSS-first optimizer for the direct candidate",
+    "change production defaults or the Phase31 champion path",
+    "use Kaggle or tokens",
+    "execute matrix before source and focused-test push"
+  ],
+  "truth_accounting": {
+    "allowed_truth_reads": 0,
+    "ground_truth_materialized": 0,
+    "validation_truth_reads": 0,
+    "holdout_truth_reads": 0,
+    "mat_inputs_or_outputs": 0,
+    "precomputed_coordinates_used": 0,
+    "kaggle_or_token_access": 0
+  },
+  "historical_binary_pin_policy": "Any existing tests that pin a pre-Phase40 binary SHA remain historical records and are not rewritten. They are explained in the Phase40 result/manifest; new focused tests pin source/contract behavior and the candidate binary is rebuilt after the source push.",
+  "decision_rule": "All gates are logically ANDed. Any missing input, invalid state, solver failure, coverage gap, TDCP mismatch, output contract violation, flag-off mutation, or nondeterminism is a fail-closed No-Go; no truth is opened in Phase40."
+}

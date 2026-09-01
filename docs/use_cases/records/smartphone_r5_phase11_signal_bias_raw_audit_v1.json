@@ -1,0 +1,57 @@
+{
+  "schema_version": "smartphone-r5-phase11-signal-bias-raw-audit.v1",
+  "status": "truth-free-retrospective-audit",
+  "candidate_id": "native-signal-bias-gtsam-v1.1",
+  "route": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+  "source": {
+    "device_gnss": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_gnss.csv",
+    "device_gnss_sha256": "c5af6cc3aeae6ab29a2a10d975d291b8fba4fab15273c0729163cd639ff10e42",
+    "classification": "raw ConstellationType/CarrierFrequencyHz rows only; no truth, WLS, MAT, sample, or result member was opened"
+  },
+  "truth_policy": {
+    "truth_read_count": 0,
+    "mat_read_count": 0,
+    "validation_read_count": 0,
+    "holdout_read_count": 0,
+    "test_read_count": 0,
+    "leaderboard_or_token_access": false,
+    "used_for_candidate_selection_after_score": false
+  },
+  "method": {
+    "raw_rows": 48000,
+    "raw_epochs": 1384,
+    "families": "GPS L1/L5 and Galileo E1/E5a selected by finite CarrierFrequencyHz near 1575.42/1176.45 MHz; SNR is Cn0DbHz and elevation is SvElevationDegrees",
+    "pair_key": "(utcTimeMillis,Svid)",
+    "pair_value": "RawPseudorangeMeters(primary) - RawPseudorangeMeters(secondary)",
+    "pair_statistics_include_only": "finite paired RawPseudorangeMeters; no solver or truth coordinate"
+  },
+  "signal_populations": {
+    "GPS_L1": {"rows": 11509, "snr_dbhz": {"n": 11509, "min": 10.945188522338867, "p05": 23.293291091918945, "median": 36.11460494995117, "p95": 43.450191497802734, "max": 46.87527084350586}, "elevation_deg": {"n": 11007, "min": 9.524449250676689, "p05": 11.291996016246031, "median": 41.4790549805881, "p95": 64.73875841093069, "max": 67.99987992857368}},
+    "GPS_L5": {"rows": 4589, "snr_dbhz": {"n": 4589, "min": 10.760000228881836, "p05": 16.6224365234375, "median": 31.674823760986328, "p95": 43.710662841796875, "max": 46.21009826660156}, "elevation_deg": {"n": 4005, "min": 9.548071444745299, "p05": 10.597661953539284, "median": 27.586371552548332, "p95": 66.73647123176352, "max": 67.99987992857368}},
+    "Galileo_E1": {"rows": 10447, "snr_dbhz": {"n": 10447, "min": 10.90999984741211, "p05": 17.630756378173828, "median": 32.29135513305664, "p95": 41.43007278442383, "max": 45.51018142700195}, "elevation_deg": {"n": 8750, "min": 9.507592735765545, "p05": 10.744555373976233, "median": 50.48742664256523, "p95": 61.08938404135703, "max": 63.01499382613877}},
+    "Galileo_E5a": {"rows": 10447, "snr_dbhz": {"n": 10447, "min": 10.760000228881836, "p05": 15.018732070922852, "median": 31.161235809326172, "p95": 38.43367385864258, "max": 42.9186897277832}, "elevation_deg": {"n": 8085, "min": 9.511165553469866, "p05": 10.81054788065131, "median": 51.04318859015104, "p95": 61.13896990637267, "max": 63.01499382613877}}
+  },
+  "paired_code_statistics": {
+    "GPS_L1_L5": {"pairs": 3877, "difference_m": {"min": 130.4097192287445, "p05": 150.49581391364336, "median": 160.0891725718975, "p95": 170.88170105963945, "max": 255.1233817562461}, "paired_snr_dbhz": {"n": 7754, "min": 20.058164596557617, "p05": 23.76534652709961, "median": 33.780860900878906, "p95": 43.0743293762207, "max": 46.21009826660156}, "paired_elevation_deg": {"n": 7754, "min": 9.553953771541803, "p05": 10.584298623084328, "median": 27.75079261164207, "p95": 66.78035714029329, "max": 67.99987992857368}},
+    "Galileo_E1_E5a": {"pairs": 7717, "difference_m": {"min": 123.21470024064183, "p05": 149.29664408415556, "median": 161.2883424051106, "p95": 168.1835689395666, "max": 199.96156948804855}, "paired_snr_dbhz": {"n": 15434, "min": 20.001853942871094, "p05": 23.222793579101562, "median": 33.2066097257843, "p95": 40.991539001464844, "max": 45.51018142700195}, "paired_elevation_deg": {"n": 15434, "min": 9.518327362754528, "p05": 11.010643253028995, "median": 51.63003761607605, "p95": 61.173436469802, "max": 63.01499382239854}}
+  },
+  "adr_population": {
+    "GPS_L1": {"rows": 11007, "valid": 8114, "clean": 7839, "slip": 275, "reset": 0},
+    "GPS_L5": {"rows": 4005, "valid": 2971, "clean": 2968, "slip": 3, "reset": 0},
+    "Galileo_E1": {"rows": 8750, "valid": 6130, "clean": 6032, "slip": 98, "reset": 0},
+    "Galileo_E5a": {"rows": 8085, "valid": 5949, "clean": 5931, "slip": 18, "reset": 0}
+  },
+  "candidate_postfit_witness": {
+    "summary": "output/smartphone-r5/phase11-signal-bias-gtsam-v1_1/summary.json",
+    "summary_sha256": "b1535a896c3e25cec1a756971bf6a58b26817801661745268eee8b7a8da2c46b",
+    "tdcp_normalized_residual_rms": 0.9119722888956101,
+    "tdcp_residual_rms_m": 0.027359168666868303,
+    "per_signal_code_postfit_residual": "not exported by the current graph summary; no value is inferred",
+    "graph_initial_cost": 1778065277.2783616,
+    "graph_final_cost": 65006.840594250243,
+    "graph_converged": true
+  },
+  "interpretation": "Both paired signal families show a stable approximately 160 m raw separation across observed geometry. This supports the predeclared static receiver secondary-code bias model and explains why an uncorrected ionosphere-free combination would be unsafe; it does not establish a universal hardware bias or replace a full PPP ionosphere/IFB model.",
+  "not_a_tuning_record": true,
+  "audit_record_hash": "computed after apply_patch and recorded by companion manifest"
+}

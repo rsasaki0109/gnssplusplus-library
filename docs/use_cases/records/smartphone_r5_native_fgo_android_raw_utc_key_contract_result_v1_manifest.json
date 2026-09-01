@@ -1,0 +1,14 @@
+{
+  "schema_version": "smartphone-r5-native-fgo-android-raw-utc-key-contract-result-manifest.v1",
+  "result_record": "smartphone_r5_native_fgo_android_raw_utc_key_contract_result_v1.json",
+  "result_record_sha256": "ba96cd811eec44b0f2c9b79812217f7cfdeb5d5b4a24e50621bd2d35b4a1dd54",
+  "decision": "No-Go",
+  "truth_open_count": 1,
+  "fresh_validation_truth_open_count": 0,
+  "holdout_truth_open_count": 0,
+  "candidate_output_sha256": "7ec90e4d9c20da7d7a4e441ddfe4019bc6ede7933cb311e5e15eca9c4f5391b4",
+  "candidate_rows": 1383,
+  "metric_report_published": true,
+  "retry_or_tuning": false,
+  "reason": "Raw UTC key coverage was repaired, but the single permitted development-train evaluation failed the frozen quality gate; the 287 interpolated epochs include a 49-second maximum bracket."
+}

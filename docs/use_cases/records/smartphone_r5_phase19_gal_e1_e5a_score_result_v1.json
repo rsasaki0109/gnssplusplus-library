@@ -1,0 +1,181 @@
+{
+  "schema_version": "smartphone-r5-phase19-gal-e1-e5a-score-result.v1",
+  "status": "development-only-go-after-two-route-four-variant-evaluation",
+  "created_at_utc": "2026-09-01T00:35:00Z",
+  "candidate_id": "native-carrier-code-leveling-gal-e1-e5a-innovation-reset-v1",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_phase19_gal_e1_e5a_freeze_v1.json",
+  "freeze_record_sha256": "05c152f8be89c44204c54f2875ed24aec4dbe4f76fdc9ed112aa0808f2c7e6a1",
+  "implementation_manifest": "docs/use_cases/records/smartphone_r5_phase19_gal_e1_e5a_manifest_v1.json",
+  "implementation_manifest_sha256": "26549237fd2d2590eedaa4605be6f888121de2527cfd09658087a91ac2223aa5",
+  "base_commit": "0833b66",
+  "truth_policy": {
+    "mat_read_count_this_phase": 0,
+    "validation_truth_open_count_this_phase": 0,
+    "holdout_truth_open_count_this_phase": 0,
+    "test_truth_open_count_this_phase": 0,
+    "pixel7pro": {
+      "truth_path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv",
+      "role": "already-used development identity; exact-key comparison",
+      "open_count_this_phase": 1,
+      "cumulative_open_count": 3,
+      "cumulative_note": "Phase16 disclosed two earlier reads (one failed key-alias attempt and one scored recovery); Phase19 adds this single read",
+      "truth_rows": 1383,
+      "truth_sha256": null,
+      "truth_sha256_note": "not computed after the single read to preserve the one-open evaluation contract",
+      "evaluation_processes": 1,
+      "post_score_truth_read": false
+    },
+    "mi8": {
+      "truth_path": "output/smartphone-r5/phase17-primary-l1-e1-v1/mi8/truth_materialized/ground_truth.csv",
+      "role": "same-route cross-device development evidence; Phase18 intersection policy retained",
+      "open_count_this_phase": 1,
+      "cumulative_open_count": 3,
+      "cumulative_note": "Phase17 and Phase18 disclosed one read each; Phase19 adds this single read",
+      "truth_rows": 1400,
+      "truth_sha256": null,
+      "truth_sha256_note": "not computed after the single read to preserve the one-open evaluation contract",
+      "evaluation_processes": 1,
+      "post_score_truth_read": false
+    },
+    "no_truth_read_before_artifact_seal": true,
+    "no_post_score_tuning": true,
+    "no_candidate_rerun_after_score": true,
+    "no_validation_holdout_or_test_truth": true,
+    "token_or_kaggle_access": false
+  },
+  "sealed_artifacts": {
+    "mi8": {
+      "control": {
+        "submission": "output/smartphone-r5/phase19-gal-e1-e5a-v1/mi8/control/submission.csv",
+        "submission_sha256": "f1ddbfa14dc8dbe179e2eaf896e31a3f69b216fc3cb2a0c24de429877d35e272",
+        "summary": "output/smartphone-r5/phase19-gal-e1-e5a-v1/mi8/control/summary.json",
+        "summary_sha256": "84ea0782a23a212859558ae013bc71d2ca0aa45658b0e7f2a9b73e4d6d9aee9b",
+        "rows": 1416,
+        "extra_prediction_keys": 17,
+        "missing_truth_keys": 1,
+        "matched_keys": 1399,
+        "coverage": 0.9992857142857143
+      },
+      "candidate": {
+        "submission": "output/smartphone-r5/phase19-gal-e1-e5a-v1/mi8/candidate/submission.csv",
+        "submission_sha256": "281a1446185a04377a764fed6e380ae3394cfa6ee2e3733344c146d9a3f75f57",
+        "summary": "output/smartphone-r5/phase19-gal-e1-e5a-v1/mi8/candidate/summary.json",
+        "summary_sha256": "538229e82aa67374c1148d6b8daa67e6eba787067956a46ff956928501bb0376",
+        "rows": 1416,
+        "extra_prediction_keys": 17,
+        "missing_truth_keys": 1,
+        "matched_keys": 1399,
+        "coverage": 0.9992857142857143
+      },
+      "evaluation_report": "output/smartphone-r5/phase19-gal-e1-e5a-v1/mi8/phase19_score.json",
+      "evaluation_report_sha256": "3b1dab4451c91c22a3090d2ea0b45d84fbc3b64c060ad35b769e69595127d2b1",
+      "matched_key_set_sha256": "d70a053487cf685bfbc69a463065acdc34639dffb73a67c6d5552264405e1082"
+    },
+    "pixel7pro": {
+      "control": {
+        "submission": "output/smartphone-r5/phase19-gal-e1-e5a-v1/pixel7pro/control/submission.csv",
+        "submission_sha256": "803f25689650df54e6d959605ca80b567d4ccdf28271b570fa0ad41d342532cd",
+        "summary": "output/smartphone-r5/phase19-gal-e1-e5a-v1/pixel7pro/control/summary.json",
+        "summary_sha256": "b6e71bcd4951eabe034cd77c4f3762452f618943e5c9767a38dc37f19c923a7d",
+        "rows": 1383,
+        "extra_prediction_keys": 0,
+        "missing_truth_keys": 0,
+        "matched_keys": 1383,
+        "coverage": 1.0
+      },
+      "candidate": {
+        "submission": "output/smartphone-r5/phase19-gal-e1-e5a-v1/pixel7pro/candidate/submission.csv",
+        "submission_sha256": "0cc4859fbcaf81ce409eee5679c9af6eb2e6da52f9e7b053c10f94f0e5277960",
+        "summary": "output/smartphone-r5/phase19-gal-e1-e5a-v1/pixel7pro/candidate/summary.json",
+        "summary_sha256": "a23c808a751fe09351989dbed9aff915aafea1d8023781de291755ded7ab7b54",
+        "rows": 1383,
+        "extra_prediction_keys": 0,
+        "missing_truth_keys": 0,
+        "matched_keys": 1383,
+        "coverage": 1.0
+      },
+      "evaluation_report": "output/smartphone-r5/phase19-gal-e1-e5a-v1/pixel7pro/phase19_score.json",
+      "evaluation_report_sha256": "f8ca3c4bff2d9787f8d403a564eb8d51a406e71695e07d863396fb75345a2743",
+      "matched_key_set_sha256": "7bffc3887021a0379e2c56e1529bbd5d8d1fe02277636f28ea4287961ec28f9a"
+    }
+  },
+  "metrics_m": {
+    "mi8": {
+      "control": {
+        "wgs84_vincenty__linear_n_minus_1": 2.043565554658654,
+        "wgs84_vincenty__nearest_rank_ceiling": 2.0441045117978134,
+        "haversine_sphere__linear_n_minus_1": 2.0452887822731705,
+        "haversine_sphere__nearest_rank_ceiling": 2.047222498406381
+      },
+      "candidate": {
+        "wgs84_vincenty__linear_n_minus_1": 2.0002242844615883,
+        "wgs84_vincenty__nearest_rank_ceiling": 2.0007182807695814,
+        "haversine_sphere__linear_n_minus_1": 2.0013887648163826,
+        "haversine_sphere__nearest_rank_ceiling": 2.0018921676532337
+      },
+      "candidate_minus_control": {
+        "wgs84_vincenty__linear_n_minus_1": -0.043341270197065906,
+        "wgs84_vincenty__nearest_rank_ceiling": -0.043386231028232025,
+        "haversine_sphere__linear_n_minus_1": -0.04390001745678784,
+        "haversine_sphere__nearest_rank_ceiling": -0.04533033075314741
+      }
+    },
+    "pixel7pro": {
+      "control": {
+        "wgs84_vincenty__linear_n_minus_1": 3.146250665736974,
+        "wgs84_vincenty__nearest_rank_ceiling": 3.1465357983728337,
+        "haversine_sphere__linear_n_minus_1": 3.1495276482103556,
+        "haversine_sphere__nearest_rank_ceiling": 3.1498145071995935
+      },
+      "candidate": {
+        "wgs84_vincenty__linear_n_minus_1": 3.1438749418668936,
+        "wgs84_vincenty__nearest_rank_ceiling": 3.1442042059438977,
+        "haversine_sphere__linear_n_minus_1": 3.1470548410309407,
+        "haversine_sphere__nearest_rank_ceiling": 3.1473857558090033
+      },
+      "candidate_minus_control": {
+        "wgs84_vincenty__linear_n_minus_1": -0.0023757238700805594,
+        "wgs84_vincenty__nearest_rank_ceiling": -0.0023315924289359913,
+        "haversine_sphere__linear_n_minus_1": -0.002472807179414893,
+        "haversine_sphere__nearest_rank_ceiling": -0.002428751390590289
+      }
+    }
+  },
+  "gate": {
+    "required_routes": ["mi8", "pixel7pro"],
+    "required_four_variants": ["wgs84_vincenty__linear_n_minus_1", "wgs84_vincenty__nearest_rank_ceiling", "haversine_sphere__linear_n_minus_1", "haversine_sphere__nearest_rank_ceiling"],
+    "all_four_strictly_improved_on_mi8": true,
+    "all_four_strictly_improved_on_pixel7pro": true,
+    "coverage_non_regressed": true,
+    "finite_keyed_outputs": true,
+    "continuity_safety_gate": true,
+    "promotion_decision": "development-only Galileo E1+E5a safe Hatch candidate",
+    "generalization_claim": false,
+    "native_0_782_class_target": "not achieved; no Kaggle submission"
+  },
+  "verification": {
+    "focused_tests": "18/18 passed",
+    "release_binary_sha256": "51cf34714b5cf2b2a89a56a8de0486a81c71c6e352b6e58c3201108253c4f181",
+    "structural_repeatability": "mi8 and pixel7pro candidate submission and summary were byte-identical on repeat execution",
+    "structural_speed_max_mps": {"mi8": 35.30028871293221, "pixel7pro": 19.601917588805563},
+    "structural_speed_bound_mps": 70.0,
+    "mat_input_or_output_access": false,
+    "enriched_satellite_columns_read": false,
+    "device_wls_or_precomputed_coordinates_read": false,
+    "token_or_kaggle_access": false,
+    "post_score_algorithm_or_parameter_changes": false,
+    "post_score_truth_read": false
+  },
+  "commands": {
+    "evaluator": "python3 apps/commands/benchmarks/gnss_smartphone_kaggle_intersection_eval.py --truth <declared ground_truth.csv> --phone <route/phone> --submission control=<sealed control.csv> --submission candidate=<sealed candidate.csv> --output <phase19_score.json>",
+    "focused_tests": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} build/tests/run_tests --gtest_filter='CarrierCodeLevelingTest.*:UpstreamObservablePreprocessingTest.*'",
+    "full_ctest": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} ctest --test-dir build -j1 --output-on-failure",
+    "diff_check": "git diff --check"
+  },
+  "immutability": {
+    "control_and_candidate_artifacts_unchanged_after_score": true,
+    "freeze_and_implementation_manifest_unchanged_after_score": true,
+    "no_post_score_tuning": true,
+    "record_sha256": "excluded-from-self-hash"
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "schema_version": "smartphone-r5-phase72-base-additional-frequency-bands-recovery-freeze.v1",
+  "phase": 72,
+  "execution_label": "Luna Max",
+  "status": "frozen-before-phase72-native-structural-runs",
+  "purpose": "Integrity-only recovery of the Phase71 structural matrix. The native source candidate and all numerical gates are unchanged; only the evaluator's artifact return schema and exception capture are corrected.",
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "base_commit": "208b37f",
+    "phase71_failure_record": "docs/use_cases/records/smartphone_r5_phase71_base_additional_frequency_bands_structural_failure_v1.json",
+    "phase71_failure_record_sha256": "08429a52313eb0dc48d150a742b3f3a6c3c6968a5af07409180dc65d1f28d122",
+    "phase71_partial_output_reuse": false,
+    "phase71_failure_reason": "artifact_report summary metadata was overwritten by parsed summary payload before control hash comparison",
+    "phase71_truth_reads": 0,
+    "phase71_candidate_runs": 0
+  },
+  "pinned_phase71_contract": {
+    "freeze_path": "docs/use_cases/records/smartphone_r5_phase71_base_additional_frequency_bands_freeze_v1.json",
+    "freeze_sha256": "c5a6b4499b6178db439479a18cc0668e14a1868369f35679a0d557846bc0e49a",
+    "manifest_path": "docs/use_cases/records/smartphone_r5_phase71_base_additional_frequency_bands_manifest_v1.json",
+    "manifest_sha256": "e0c61776fffdf4b3ed6c86fd0c8f9807bf4e4c6a3837fb6471c1eaecbf126904",
+    "evaluator_path": "apps/commands/benchmarks/gnss_smartphone_phase71_base_additional_frequency_bands.py",
+    "evaluator_sha256": "7800541e3341b50718c6308ac3ef5262d916cefe7a050a3e3660da227c465485",
+    "binary_sha256": "04543eda588739ac3d3c22296e2bef8ed712b177fa4e47474eebd6eb84b4377a",
+    "source_commit": "1ee721ebb6d8adfd5ab65fa8f2243ad2926ac982"
+  },
+  "candidate": {
+    "flag": "--native-base-pseudorange-preserve-additional-frequency-bands",
+    "base_compensation_flag": "--native-base-pseudorange-compensation",
+    "matching_key": "exact (satellite,SignalType)",
+    "formula": "P_rover_corrected_m=P_rover_raw_m-pc_m",
+    "coefficient": 1.0,
+    "no_canonicalization": true,
+    "no_interpolation_change": true,
+    "no_extrapolation_or_endpoint_hold": true,
+    "no_new_rows_or_factors": true,
+    "spp_applied": false,
+    "tdcp_applied": false,
+    "doppler_applied": false
+  },
+  "evaluator_recovery_contract": {
+    "new_output_root": "output/smartphone-r5/phase72-base-additional-frequency-bands-structural-recovery-v1",
+    "summary_artifact_key": "summary_artifact",
+    "summary_payload_key": "summary_payload",
+    "summary_key_collision_forbidden": true,
+    "actual_run_case_shape_test_required": true,
+    "unexpected_exception_failure_artifact": true,
+    "phase71_partial_output_reuse": false,
+    "new_native_invocations_required": 12
+  },
+  "gates": {
+    "all_four_routes": true,
+    "prediction_domain_coverage_exact": 1.0,
+    "candidate_matched_factor_fraction_each_route_min": 0.8,
+    "candidate_finite_correction_fraction_among_matched_each_route_min": 0.99,
+    "candidate_selected_band_telemetry_finite_and_exact": true,
+    "candidate_repeat_byte_identity": true,
+    "control_phase43_byte_identity": true,
+    "finite_output_and_earth_valid": true,
+    "converged": true,
+    "tdcp_built_equals_inserted": true,
+    "over_70_mps": 0,
+    "no_new_graph_state": true,
+    "no_truth_or_solver_after_truth": true,
+    "fail_closed": true
+  },
+  "read_contract": {
+    "single_process_per_native_case": true,
+    "raw_device_gnss_process_reads": 12,
+    "raw_device_imu_process_reads": 12,
+    "broadcast_nav_process_reads": 12,
+    "base_rinex_process_reads": 12,
+    "hash_verification_reads_per_input": 4,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_token_reads": 0,
+    "archive_reopens": 0,
+    "post_truth_tuning": false
+  },
+  "decision_policy": "This phase only recovers evaluator integrity. It must not alter gates, source implementation, keys, matching, interpolation, or numerical thresholds. If structural gates pass, stop before accuracy truth and require a new accuracy freeze. If any gate fails, seal the new failure and preserve Phase43 champion; do not reuse Phase71 partial output."
+}

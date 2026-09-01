@@ -1,0 +1,117 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-validation.v1",
+  "status": "validation-frozen-after-train-pass-before-payload-and-truth",
+  "candidate_id": "native_fgo_pseudorange_tdcp_motion_v1",
+  "selection_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_selection.json",
+  "selection_record_sha256": "9a31c3341a0c8a0d7ce8ea25ba787d917a20f25c30895044664c6bf9a79b6f92",
+  "train_evaluation": "output/smartphone-r5/native-fgo-v1/train_evaluation.json",
+  "train_evaluation_sha256": "a9fdc3bcad3dd1207bd138f78756c4c9cdeab08a75d39143b92c7d7d3fdaf61f",
+  "train_gate": {
+    "status": "train-pass",
+    "route_level_non_regression": true,
+    "strict_aggregate_h_p95_improvement": true,
+    "strict_aggregate_four_diagnostic_improvement": true,
+    "truth_open_count": 3
+  },
+  "policy": {
+    "validation_truth_opened_before_this_record": 0,
+    "future_holdout_truth_opened_before_this_record": 0,
+    "future_holdout_payload_materialized_before_this_record": false,
+    "leaderboard_scores_used_for_tuning": false,
+    "external_mutation": false,
+    "candidate_recipe_changed_after_train": false,
+    "open_validation_truth_once_after_truth_free_seal": true,
+    "no_holdout_access": true
+  },
+  "frozen_validation": {
+    "dataset_id": "2023-09-07-18-59-us-ca/pixel5",
+    "route": "2023-09-07-18-59-us-ca",
+    "phone": "pixel5",
+    "device_model": "pixel5",
+    "archive": {
+      "path": "data/gsdc2023/cache/dataset_2023.zip",
+      "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408"
+    },
+    "central_directory_inventory": {
+      "path": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+      "sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7"
+    },
+    "members": {
+      "device_gnss": {
+        "name": "dataset_2023/train/2023-09-07-18-59-us-ca/pixel5/device_gnss.csv",
+        "file_size": 29607276,
+        "compressed_size": 6791514,
+        "crc32_hex": "45b3f5b1"
+      },
+      "broadcast_nav": {
+        "name": "dataset_2023/train/2023-09-07-18-59-us-ca/brdc.nav",
+        "file_size": 11500369,
+        "compressed_size": 1085201,
+        "crc32_hex": "3fd181c2"
+      },
+      "ground_truth": {
+        "name": "dataset_2023/train/2023-09-07-18-59-us-ca/pixel5/ground_truth.csv",
+        "file_size": 114198,
+        "compressed_size": 31328,
+        "crc32_hex": "0ef06b3a"
+      }
+    }
+  },
+  "source_hashes": {
+    "apps/native/gnss_fgo.cpp": "2d9e53485c427d1e0d43b07dd611aaf3644e2cd51d5e175c2977038ca05e3e32",
+    "include/libgnss++/algorithms/fgo.hpp": "67845f6365eb1f621afed19c52b82ad48d00ac1623e99b3bf7b96cd944263307",
+    "src/algorithms/fgo.cpp": "4805a30741e3bcc53a2a29d832429924a3cc46c0fac5aa530446cedd224af3b2",
+    "apps/commands/benchmarks/gnss_smartphone_gnss_adapter.py": "e740d42a5a3232775fef013c5f734a004f3aa4952add7415c1bcca0716ccaad0",
+    "build/apps/gnss_fgo": "5e1e22979a84b938352a2096e570bb1587d6eba7ebb0757431a8ebd9423b525f",
+    "build/apps/gnss_spp": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12",
+    "configs/benchmarks/smartphone_r5_gsdc2023.json": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776"
+  },
+  "recipe": {
+    "adapter": "truth-free Galileo E1 mapping using the frozen adapter contract; no ground-truth argument",
+    "solver": "existing Release gnss_spp on adapter rover.obs and frozen broadcast navigation",
+    "native_fgo": "exactly the recipe in the train selection record; no parameter or source change",
+    "fgo_backend": "eigen",
+    "fgo_max_iterations": 8,
+    "pseudorange_tdcp_motion": true,
+    "single_difference_or_double_difference": false,
+    "carrier_phase_ambiguity_factors": false,
+    "validation_truth_free_artifacts_sealed_before_truth": true
+  },
+  "truth_free_inputs": {
+    "obs": {
+      "path": "output/smartphone-r5/native-fgo-v1/validation-inputs/pixel5/adapter/rover.obs",
+      "sha256": "4f7f20478f6b62c1ee3ef5d81682b7cf5a55410e5d0a1e0d07e5ed74cb91b225"
+    },
+    "nav": {
+      "path": "output/smartphone-r5/native-fgo-v1/validation-inputs/pixel5/brdc.nav",
+      "sha256": "92266d673a4b5f4d7db4656b5a50c1835320d77e3e40d8d233f8ee95f3d7190a"
+    },
+    "seed_pos": {
+      "path": "output/smartphone-r5/native-fgo-v1/validation-inputs/pixel5/adapter/libgnsspp_spp.pos",
+      "sha256": "c9d037bc197b642833a68b2f5ada0b3922dc5556b05b2dcd2f07f54112236cca"
+    },
+    "device_gnss": {
+      "path": "output/smartphone-r5/native-fgo-v1/validation-inputs/pixel5/device_gnss.csv",
+      "sha256": "4f49ed6d4d636196512e12fbe4f08a98aab6f481b1da566e769c29dee089a368"
+    },
+    "truth": {
+      "path": "output/smartphone-r5/native-fgo-v1/validation-inputs/pixel5/ground_truth.csv",
+      "member": "dataset_2023/train/2023-09-07-18-59-us-ca/pixel5/ground_truth.csv",
+      "materialized": false,
+      "opened": false
+    }
+  },
+  "commands": {
+    "materialize_device_and_nav": "PYTHONPATH=apps/commands:apps/commands/benchmarks python3 -c '<central-directory-verified extraction of the three non-truth members only>'",
+    "adapter_truth_free": "PYTHONPATH=apps/commands python3 apps/gnss.py smartphone-gnss-adapter --device-gnss <device_gnss.csv> --output-dir <adapter> --dataset-id 2023-09-07-18-59-us-ca/pixel5 --device-model pixel5 --role development --skip-epochs 1 --truth-free --experimental-galileo-e1 --broadcast-nav <brdc.nav>",
+    "spp": "PYTHONPATH=apps/commands python3 apps/gnss.py spp --obs <adapter/rover.obs> --nav <brdc.nav> --out <adapter/libgnsspp_spp.pos> --summary-json <adapter/libgnsspp_spp_summary.json>",
+    "native_fgo": "PYTHONPATH=apps/commands:apps/commands/benchmarks python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_eval.py run --selection-record <validation-adapted-selection> --route '<validation route map>' --output-root output/smartphone-r5/native-fgo-v1/validation --binary build/apps/gnss_fgo"
+  },
+  "gate": {
+    "route_level": "H P50/H P95/V P95/availability/truth coverage/four diagnostic variants non-regressed versus exact WLS seed",
+    "strict": "H P95 strictly improved versus exact WLS seed",
+    "promotion": "development-only only; production RTK/SPP defaults remain unchanged",
+    "future_holdout": "remains unopened regardless of validation result",
+    "post_validation_tuning": false
+  }
+}

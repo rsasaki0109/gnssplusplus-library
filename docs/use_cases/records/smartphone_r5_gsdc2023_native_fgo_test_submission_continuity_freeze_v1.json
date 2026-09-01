@@ -1,0 +1,157 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-test-submission-continuity-freeze.v1",
+  "status": "sealed-before-continuity-generation",
+  "purpose": "Audit and, only when a truth-free isolated two-sided physical spike is proven, repair the already sealed v3 test coordinates.",
+  "candidate": "truth_free_ecef_physical_continuity_recovery_v1",
+  "inputs": {
+    "v3_recovery_record": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_test_submission_recovery_v3.json",
+      "sha256": "d1ae3b9c0713b4351954810003d0821cd92ca4593cfc2eac7c2d804a5434ed9b"
+    },
+    "v3_recovery_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_test_submission_recovery_v3_manifest.json",
+      "sha256": "ed5375224b1768fe9de6fa83738d55f636f900cb5ced104a1f348db96ac635cf"
+    },
+    "v3_submission": {
+      "path": "output/smartphone-r5/native-fgo-test-v3-recovered/submission.csv",
+      "sha256": "8581cf40a4e8ae81448df4e87b381431dce4c290b6b738fc5e6b9c03c3c41a29",
+      "row_count": 71936
+    },
+    "v3_submission_manifest": {
+      "path": "output/smartphone-r5/native-fgo-test-v3-recovered/submission.manifest.json",
+      "sha256": "4f68714fd8783b9c2a588c8a1b7097fac872bf09ae5f13a17dc4d6eeb17c2778"
+    },
+    "v3_position_manifest": {
+      "path": "output/smartphone-r5/native-fgo-test-v3-recovered/position_recovery_manifest.json",
+      "sha256": "716a2c331cf588983182c098b3bed26e3a9cdab9929f196ec39b9b1ee3ae28dd"
+    },
+    "v3_run_manifest": {
+      "path": "output/smartphone-r5/native-fgo-test-v3-recovered/recovery_run_manifest.json",
+      "sha256": "635569e5b978d96f3f20df7fb8e06b9dee326dc9dbf3bca42b812e4a62e7c5ed"
+    },
+    "receiver_speed_bound_evidence": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_doppler_position_evaluation.json",
+      "sha256": "7f4587851c9e9fbd5e5a1af46af54eac3ee8a96230dec5414f9a7a87c6d73ee9",
+      "field": "frozen_contract.algorithm_parameters.maximum_receiver_speed_mps",
+      "value_mps": 70.0
+    }
+  },
+  "continuity_contract": {
+    "speed_metric": "finite ECEF Euclidean displacement divided by elapsed seconds",
+    "maximum_speed_mps": 70.0,
+    "interpolation_window_ms": 2500,
+    "same_trip_only": true,
+    "cross_trip_interpolation": false,
+    "interior_only": true,
+    "finite_source_required": true,
+    "replacement_condition": {
+      "both_adjacent_gaps_within_window": true,
+      "both_incident_speeds_strictly_above_bound": true,
+      "direct_neighbor_to_neighbor_speed_at_or_below_bound": true,
+      "adjacent_candidate_spikes_are_not_repaired": true
+    },
+    "replacement": {
+      "method": "timestamp-weighted linear interpolation in ECEF between the two neighbors",
+      "conversion": "WGS84 ECEF-to-geodetic with finite/range validation",
+      "velocity_extrapolation": false
+    },
+    "preserve_policy": [
+      "one-sided or route-boundary events",
+      "plausible motion at or below 70 m/s",
+      "high-speed events whose direct neighbor speed exceeds 70 m/s",
+      "source seams that do not satisfy every isolated-spike condition",
+      "consecutive or adjacent candidate outliers"
+    ],
+    "unresolved_or_invalid_policy": "fail-closed",
+    "sample_coordinates_forbidden": true,
+    "known_dummy_rejection": {
+      "latitude_degrees": 34.640195,
+      "longitude_degrees": -120.589642,
+      "minimum_route_distance_m": 10000,
+      "emitted_rows_must_equal": 0
+    },
+    "physical_jump_audit": {
+      "all_consecutive_edges_are_reported": true,
+      "isolated_two_sided_spike_rows_must_equal": 0,
+      "one_sided_or_sequential_violations_are_reported_separately": true
+    },
+    "algorithm_or_numeric_parameter_change": false,
+    "fgo_wls_rerun": false,
+    "atomic_publish": true
+  },
+  "pre_generation_diagnosis": {
+    "trip_id": "2022-02-23-22-35-us-ca-lax-m/pixel5",
+    "candidate_timestamp_ms": 1645656530438,
+    "candidate_source": "native_fgo_exact",
+    "previous": {
+      "timestamp_ms": 1645656529438,
+      "source": "prior_wls_exact",
+      "latitude_degrees": 33.939997945,
+      "longitude_degrees": -118.396341975,
+      "ecef_m": [
+        -2519063.265438,
+        -4659621.075072,
+        3540913.018941
+      ]
+    },
+    "candidate": {
+      "timestamp_ms": 1645656530438,
+      "source": "native_fgo_exact",
+      "latitude_degrees": 33.934542,
+      "longitude_degrees": -118.396255,
+      "ecef_m": [
+        -2519229.333542,
+        -4659945.151732,
+        3540428.586965
+      ]
+    },
+    "next": {
+      "timestamp_ms": 1645656531438,
+      "source": "native_fgo_exact",
+      "latitude_degrees": 33.934428,
+      "longitude_degrees": -118.39622,
+      "ecef_m": [
+        -2519216.040963,
+        -4659927.335524,
+        3540398.568099
+      ]
+    },
+    "gaps_ms": {
+      "previous_to_candidate": 1000,
+      "candidate_to_next": 1000
+    },
+    "incident_edges": {
+      "previous_to_candidate": {
+        "distance_m": 606.0351772746234,
+        "speed_mps": 606.0351772746234
+      },
+      "candidate_to_next": {
+        "distance_m": 37.3529415154502,
+        "speed_mps": 37.3529415154502
+      }
+    },
+    "direct_neighbor_edge": {
+      "distance_m": 617.8960222667752,
+      "speed_mps": 308.9480111333876,
+      "gap_ms": 2000
+    },
+    "classification": {
+      "source_seam": true,
+      "isolated_two_sided_spike": false,
+      "reason": "Only the previous-to-candidate edge exceeds 70 m/s; the following edge is 37.353 m/s and the direct neighbor edge is 308.948 m/s. The generic rule therefore preserves this seam event."
+    }
+  },
+  "truth_policy": {
+    "ground_truth_members_read": false,
+    "truth_materialized_count": 0,
+    "truth_open_count": 0,
+    "holdout_or_test_truth_used": false
+  },
+  "publication_policy": {
+    "output": "output/smartphone-r5/native-fgo-test-v4-continuity-recovered/submission.csv",
+    "development_only": true,
+    "kaggle_external_submission": false,
+    "no_post_generation_tuning": true,
+    "production_rtk_spp_default_changed": false
+  }
+}

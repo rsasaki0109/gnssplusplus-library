@@ -78,6 +78,7 @@ add_subdirectory(third_party/ginan-iers2010)
 # List source files for the main library
 set(GNSS_SOURCES
     src/gnss.cpp
+    src/io/android_raw_gnss.cpp
     src/io/imu.cpp
     src/io/ntrip.cpp
     src/io/rinex.cpp
@@ -183,7 +184,10 @@ set(GNSS_SOLVER_SOURCES
     src/algorithms/fgo_ddpr_gnc.cpp
     src/algorithms/fgo.cpp
     src/algorithms/fgo_problems.cpp
+    src/algorithms/base_pseudorange_compensation.cpp
+    src/algorithms/source_pseudorange_miss_mask.cpp
     src/algorithms/fgo_shadows.cpp
+    src/algorithms/pdc_state_bridge.cpp
     src/algorithms/ppp_env_overrides.cpp
 )
 

@@ -1,0 +1,31 @@
+{
+  "schema_version": "smartphone-r5-wls-stability-selector-holdout-freeze-manifest.v2",
+  "freeze_id": "smartphone-r5-wls-stability-selector-release-freeze-2026-08-30-v2",
+  "status": "sealed-before-holdout-evaluation-v2",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_stability_selector_holdout_freeze_v2.json",
+    "sha256": "c99c44d7d59bc491cfbbb3337f842ef7a18570a3af465fdc32aed64282fa0f91"
+  },
+  "v1_failure_provenance": {
+    "freeze_record_sha256": "49ec6a07ca770aac764f562abfa2d4823cd74aabbb948163250f7c3b5656783f",
+    "failure_artifact_sha256": "a4e804191315146eae3ffd8ec343dd0a1ca5d1007519f23a1f997e0e32663c3b",
+    "payload_open_count": 0,
+    "truth_open_count": 0,
+    "change_scope": "preflight-orchestration-only"
+  },
+  "algorithm_parameter_hash_comparison": {
+    "v1_parameters_sha256": "c82fba6130c7d16c207213ab1e2ac542e02280db194949a300c68bebd412ca7e",
+    "v2_parameters_sha256": "c82fba6130c7d16c207213ab1e2ac542e02280db194949a300c68bebd412ca7e",
+    "equal": true,
+    "changed_fields": []
+  },
+  "release_binary_sha256": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12",
+  "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+  "holdout": {
+    "id": "2023-09-06-22-49-us-ca-routebb1/pixel7pro",
+    "payload_opened_before_v2_freeze": false,
+    "truth_opened_before_v2_freeze": false
+  },
+  "no_post_holdout_tuning": true,
+  "rerun_after_v2_failure": false
+}

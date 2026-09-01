@@ -1,0 +1,87 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-pdc-factor-hypothesis-audit-manifest.v1",
+  "status": "truth-free-hypothesis-audit-manifest-sealed",
+  "record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_factor_hypothesis_audit_v1.json",
+  "record_sha256": "6ae38af2440b2040144a241fb47715bcc5df8acae5cad9e8b0228c1dd619d698",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_factor_audit_freeze_v1.json",
+  "freeze_record_sha256": "a1d9a6f9d7018cb0bdf9736e9886d19865d3476ae1547281632833da90a3eac2",
+  "audit_artifact": "output/smartphone-r5/native-fgo-pdc-factor-audit-v1/factor_audit.json",
+  "audit_artifact_sha256": "b0b18311ef253010240b3cfc7df4854b4f5ca81d79f217ee47522f02b63b0847",
+  "audit_manifest": "output/smartphone-r5/native-fgo-pdc-factor-audit-v1/factor_audit.manifest.json",
+  "audit_manifest_sha256": "257744c4cde33612d5d0574531662bb81b95c28749a77b24ddc4d24a15324f8e",
+  "release_binary": "build/apps/gnss_fgo",
+  "release_binary_sha256": "a10d13da4614f7cdc8e24556f5a32f870aee6c7aa94c5d3e890429996d583b0c",
+  "post_phase5_compatible_release_binary_sha256": "5a33abd2ca01e305ef24bb813f65e14140e9395116ae6145dce219c017bbb6e2",
+  "post_phase7_compatible_release_binary_sha256": "e32877287b54c1b2304cee19e9a6367ad7129f5940587256e6dd1375698a3b06",
+  "post_phase9_compatible_release_binary_sha256": "e1c97ba2fc5f83154ab1603789e66ea682b6ae934d9b493c071f541f7fc53d75",
+  "post_phase10_compatible_release_binary_sha256": "cb7097a0c865e14392d8a5e8881218be491e4fdeafaaf8cf4561dbc57d9d1fc8",
+  "post_phase11_compatible_release_binary_sha256": "028705f43786c7c4deeb430a22295cdea23b36d0bce63380c3598edbf987c08b",
+  "post_phase12_compatible_release_binary_sha256": "9d423792d4f1d222665f18a4222bbefd7f976ddc17228d0ac0b35e46ea97e4e6",
+  "post_phase9_compatible_source_hashes": {
+    "src/algorithms/fgo.cpp": "e45d4c1fde8f7e3bf3fb86e89fdda880cd4459b9523797d868f0596dade81025",
+    "src/algorithms/fgo_problems.cpp": "2732c1a064267046b721bf7585560d91550069f65c34b698cd57d31eb9ece0a3"
+  },
+  "post_phase10_compatible_source_hashes": {
+    "src/algorithms/fgo_problems.cpp": "430908f5ed66fd8b1d8689578b340048e4a1ddcc2b71d786cb29cc5bbcfa4365"
+  },
+  "post_phase11_compatible_source_hashes": {
+    "src/algorithms/fgo.cpp": "b5394832a449706af6de93ccd4716d538cd35e07eaeb9d41e927b27f83d88b0e",
+    "src/algorithms/fgo_problems.cpp": "0e62d27a84bfcb0e4008f453d25daf582bca6dcc3eb82688f68aa2e8274adbb4"
+  },
+  "post_phase12_compatible_source_hashes": {
+    "src/algorithms/fgo.cpp": "b5394832a449706af6de93ccd4716d538cd35e07eaeb9d41e927b27f83d88b0e",
+    "src/algorithms/fgo_problems.cpp": "ed68e970f3160f0e4706bc4151908356be7403adcd65b3ad8873784aad56717d"
+  },
+  "post_phase13_compatible_source_hashes": {
+    "src/algorithms/fgo.cpp": "be5d6710a32bbb5037a93f20d14c6ba1c2f1a318eb859c865a7b027fe717ef38",
+    "src/algorithms/fgo_problems.cpp": "3452d2b252d1a38624011f4af968809594d2b03b6a410c5b16b2675f74461dd8"
+  },
+  "post_phase22_compatible_source_hashes": {
+    "src/algorithms/fgo_problems.cpp": "85173f6f87fc1bd45c4934abb0d889d81a49c6ba8d805549925abafacf3cba6c"
+  },
+  "post_phase23_compatible_source_hashes": {
+    "src/algorithms/fgo_problems.cpp": "d4dad5f9bd93b77817f0bc6d9274af2fc35175a9f9bc80f2e2b178f0f1b6f259"
+  },
+  "post_phase31_compatible_source_hashes": {
+    "src/algorithms/fgo_problems.cpp": "931f6d42a050b70d13daad2df21c689e8962a6030b1b3ce268730c1e20c43c44"
+  },
+  "post_phase13_compatible_release_binary_sha256": "3e7825ec4eece3039b52c8b9ee51f3d7026c733aa10ebc73e19be13bd5927663",
+  "post_phase20_compatible_release_binary_sha256": "4a2dcf653be3963695f69afc5a1ac4df9dec301523dfd3d2280d8a2e555de836",
+  "post_phase21_compatible_release_binary_sha256": "8d457372a27d7ac86f933294f7af8ab0e1b0d879f6ce80c3c4bbf8f57f82416b",
+  "post_phase22_compatible_release_binary_sha256": "8baf48e4291441ffcd040556ee1da22c392db95ac2f190a3c6bfd464e7319028",
+  "post_phase23_compatible_release_binary_sha256": "7b66a7729061b15d5cfbafb7b8eaa6e75c6a8cc41d2ddaa1b2dbdc257d20cfe5",
+  "post_phase31_compatible_release_binary_sha256": "a56f2d3d9dc221715b6381edc8d8293fcd5ea7cc001113ab9da962b3b7a726d1",
+  "post_phase22_compatibility_note": "Phase 22 adds an opt-in Galileo E1 source-specific broadcast group-delay helper; this historical factor audit remains unchanged and accepts the relinked source/binary only as a compatibility pin.",
+  "post_phase21_compatibility_note": "Phase 21 exports exact GTSAM Rot3::rpy values and adds an opt-in upstream phone-position offset helper; this historical factor audit remains unchanged and accepts the relinked Release binary only as a compatibility pin.",
+  "post_phase20_compatibility_note": "Phase 20 adds opt-in upstream stop velocity and consecutive-stop Pose3 constraints to the shared solver; this historical factor audit remains unchanged and accepts the relinked Release binary only as a compatibility pin.",
+  "post_phase12_compatibility_note": "Phase 12 adds opt-in residual-ionosphere coefficients to pseudorange problem rows; the historical PDC factor audit remains immutable and accepts this exact source/binary only as a compatibility pin.",
+  "post_phase11_compatibility_note": "Phase 11 adds opt-in receiver signal-bias diagnostics and preserves the historical PDC hypothesis audit as a source-level regression contract; these exact current hashes are accepted only as compatibility pins.",
+  "post_phase10_compatibility_note": "Phase 10 centralizes the existing raw ordinary-TDCP pair gates and adds fail-closed clock-discontinuity/finite-measurement rejection; the historical hypothesis artifact remains immutable.",
+  "post_phase9_compatibility_note": "Phase 9 adds the opt-in in-process raw P+D+temporal native PDC state bridge and explicit SPP clock-unit tagging. The historical factor-hypothesis source pins remain immutable; the exact current hashes are accepted only as compatibility pins for this source-level regression test.",
+  "post_phase7_compatibility_note": "Phase 7 adds the opt-in GNSS-first GTSAM velocity/clock-drift factor and relinks the shared solver archive; the historical hypothesis artifact and source pins remain unchanged.",
+  "post_phase5_compatibility_note": "The Phase 5 raw Android IMU API changes the shared static library ABI and therefore relinks this otherwise unchanged executable. The original release hash remains the historical sealed value; the exact current Release hash is accepted only as a compatibility pin for source-level regression tests.",
+  "source_hashes": {
+    "src/algorithms/fgo.cpp": "df098a258f4bcdbc9802f8b89617425b0521851a76a888ea0c9edd1cd3e9b1e2",
+    "src/algorithms/fgo_problems.cpp": "d24c88c331439b20f3a54580f584254d823d81332657c1a90996b620f32f6033",
+    "include/libgnss++/algorithms/doppler_contract.hpp": "66d97c9ca2cc474247464d8af782cc3ca1837195967e601576ee25b6f8e1f56d",
+    "include/libgnss++/algorithms/doppler_velocity_wls.hpp": "ef888b3e6c2f15d0dd035c0905bafdee463e346c549f81cf892ec30c1c4dcde0"
+  },
+  "stage_count": 10,
+  "stage_ids": [
+    "A_P_only_1",
+    "B_P_D_no_temporal_2",
+    "C_P_motion_2",
+    "D_P_D_velocity_motion_2",
+    "E_P_D_TDCP_2",
+    "F_P_D_TDCP_carrier_2",
+    "C_P_motion_30",
+    "D_P_D_velocity_motion_30",
+    "E_P_D_TDCP_30",
+    "F_P_D_TDCP_carrier_30"
+  ],
+  "truth_opened": false,
+  "validation_or_holdout_opened": false,
+  "test_data_used": false,
+  "external_mutation": false,
+  "candidate_changed": false
+}

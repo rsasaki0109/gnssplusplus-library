@@ -1,0 +1,13 @@
+{
+  "schema_version": "smartphone-r5-native-fgo-android-imu-gnss-first-multipass-result-manifest.v1",
+  "result_record": "smartphone_r5_native_fgo_android_imu_gnss_first_multipass_result_v1.json",
+  "result_record_sha256": "86e31af2cc5ab6551fd9823476a3981cbd5fef74f9b1ffea44e06d1581c6e441",
+  "decision": "No-Go",
+  "truth_open_count": 1,
+  "fresh_validation_truth_open_count": 0,
+  "holdout_truth_open_count": 0,
+  "candidate_output_sha256": "740d896087822c07b44df7b8c2c1a87a61953765c4845495b14423ae42685f4b",
+  "metric_report_published": false,
+  "retry_or_tuning": false,
+  "reason": "The single permitted evaluation attempt failed strict key-set validation before metrics were published; no second truth read or candidate change is allowed."
+}

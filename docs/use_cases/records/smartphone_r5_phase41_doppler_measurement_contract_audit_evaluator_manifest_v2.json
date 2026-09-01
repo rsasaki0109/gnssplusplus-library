@@ -1,0 +1,100 @@
+{
+  "schema_version": "smartphone-r5-phase41-doppler-contract-audit-evaluator.v2",
+  "phase": 41,
+  "status": "evaluator-supplement-frozen-before-phase41-v2-raw-read",
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "prior_manifest_path": "docs/use_cases/records/smartphone_r5_phase41_doppler_measurement_contract_audit_evaluator_manifest_v1.json",
+    "prior_manifest_sha256": "333139a96d2b09d97e7ceacfb8121b8b6ecc7e18bd13e932c0c3d02ed2bdfb42",
+    "freeze_path": "docs/use_cases/records/smartphone_r5_phase41_doppler_measurement_contract_audit_freeze_v1.json",
+    "freeze_sha256": "5622099a9d7d37ee1e4de43385369e70c342acb515f8f83cf301964fc3c64758",
+    "freeze_is_immutable": true,
+    "source_amendment_commit": "5531624da170ee7631863ee295917c1a6d6a488c"
+  },
+  "amendment": {
+    "purpose": "retain Android CarrierFrequencyHz so adapter wavelength and nominal FGO wavelength are auditable as separate fields",
+    "estimator_semantics_changed": false,
+    "estimator_raw_rate_or_source_frequency_reads": 0,
+    "prior_mtv_h_observation": "source frequency versus channel-nominal FGO wavelength produced at most 3.364207645972783e-5 m/s range-rate conversion difference on one GLONASS row; this is not treated as the cause because raw/adaptor and FGO factor identities otherwise pass",
+    "correction_flag_added": false
+  },
+  "evaluator": {
+    "binary_path": "build/apps/gnss_doppler_contract_audit",
+    "binary_sha256": "2469754f7bb38f6d3630efbec88d0613b56717b55ab4b868965d40470bf6253f",
+    "source_sha256": {
+      "apps/native/gnss_doppler_contract_audit.cpp": "78c8367ee543579c374f675f398917e50d9a278f7429879b00983a37acdf4aac",
+      "include/libgnss++/core/observation.hpp": "8563d4e3996cdec3de8fa8e4cc8d8de8970fa7f387da2dd379c47c54d571d680",
+      "src/io/android_raw_gnss.cpp": "7cec650cf3a7fe18fc19e8e16f82f052072ca7acf860c3d4f90e7e7ffcade2b6",
+      "include/libgnss++/algorithms/fgo.hpp": "67b5be0090647aa02934111d8d6c20eebe55bfd16b39e759a54325273d873868",
+      "src/algorithms/fgo_problems.cpp": "5a03367176ebb5ecb9119b8e5a321fc2bc40594a77f32d85d990d645c44f9234",
+      "apps/CMakeLists.txt": "31876c262efab41e1fd6802e5ad691455e73577a4d4ec84fe437196c947e98fb",
+      "tests/CMakeLists.txt": "3343890b1f5d965ae957d7f95c37d264869c442ce45474e01bb74cfa22a53145",
+      "tests/test_android_raw_gnss.cpp": "b78cf6da17864e1e1c18ffcafcbf11b149719ee87f8082f1928e8927471bc3d0",
+      "tests/test_smartphone_phase41_doppler_contract.py": "28443a168b2173fdf67f8c137b57c1a9b470ecf213e00508718ca6b9a0e8b8b6"
+    },
+    "command": "gnss_doppler_contract_audit --android-gnss <device_gnss.csv> --nav <brdc.nav> --rows-csv <audit_rows.csv> --summary-json <audit.json> --dataset-id <route/phone>",
+    "raw_loader_call": "loadAndroidRawGnssCsv exactly once per process with verify_enriched_pseudorange=false",
+    "nav_loader_call": "RINEXReader::open/readNavigationData exactly once per process",
+    "process_model": "one process per route; no subprocess, shell pipeline, or second estimator process"
+  },
+  "row_identity_tolerances": {
+    "raw_minus_neg_doppler_adapter_wavelength_mps": 1.0e-9,
+    "adapter_measured_minus_neg_doppler_adapter_wavelength_mps": 1.0e-9,
+    "fgo_measured_minus_neg_doppler_fgo_wavelength_mps": 1.0e-8,
+    "fgo_residual_minus_independent_adapter_receiver_residual_mps": 1.0e-8,
+    "fgo_residual_minus_fgo_wavelength_receiver_residual_mps": 1.0e-8,
+    "fgo_los_minus_negative_receiver_to_satellite_los": 1.0e-12,
+    "fgo_satellite_position_difference_m": 1.0e-6,
+    "fgo_satellite_velocity_difference_mps": 1.0e-9,
+    "fgo_satellite_range_rate_difference_mps": 1.0e-8,
+    "fgo_satellite_clock_drift_difference_mps": 1.0e-8
+  },
+  "row_identity_key": [
+    "dataset_id",
+    "raw_epoch_index",
+    "utc_time_millis",
+    "satellite",
+    "signal"
+  ],
+  "row_selection_contract": {
+    "report_every_valid_nonzero_adapter_doppler_row_at_first_solvable_epoch": true,
+    "spp_candidate_definition": "valid adapter Doppler, finite nonzero Hz, broadcast state, frequency and finite independent equation terms",
+    "fgo_factor_definition": "same row key present in unchanged corrected undifferenced FGO factor list",
+    "unreported_row_is_failure": true,
+    "selection_difference_is_not_silently_repaired": true,
+    "no_threshold_or_gate_relaxation": true
+  },
+  "read_accounting": {
+    "one_process_per_route": true,
+    "process_count_per_route": 1,
+    "raw_gnss_open_count_per_route": 1,
+    "broadcast_nav_open_count_per_route": 1,
+    "imu_open_count_per_route": 0,
+    "truth_open_count_per_route": 0,
+    "validation_open_count_per_route": 0,
+    "holdout_open_count_per_route": 0,
+    "mat_read_count_per_route": 0,
+    "precomputed_coordinate_read_count_per_route": 0,
+    "device_wls_coordinate_read_count_per_route": 0,
+    "result_or_submission_coordinate_read_count_per_route": 0,
+    "kaggle_or_token_access": false
+  },
+  "route_order": [
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+    "2021-07-14-20-50-us-ca-mtv-e/sm-g988b",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+  ],
+  "verdict_policy": {
+    "contract_bug_requires_code_and_numeric_identity_mismatch": true,
+    "source_frequency_nominal_difference_under_observed_3p36e_minus_5_mps_not_cause": true,
+    "implausible_velocity_is_not_bug_evidence": true,
+    "unproven_sign_flip_forbidden": true,
+    "threshold_relaxation_forbidden": true,
+    "correction_flag_required_if_go": true,
+    "default_path_unchanged": true,
+    "v2_contract_verdict_sealed_after_one_six_route_structure_run": true
+  }
+}

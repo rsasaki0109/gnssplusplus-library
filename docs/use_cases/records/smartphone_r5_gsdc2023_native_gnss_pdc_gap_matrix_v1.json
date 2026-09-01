@@ -1,0 +1,396 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-gnss-pdc-gap-matrix.v1",
+  "status": "audit_only_no_mat_inputs",
+  "purpose": "Exact raw-Android GNSS/PDC contract comparison against the pinned taroz MATLAB specification. This record does not claim full upstream equivalence.",
+  "policy": {
+    "inference_inputs": [
+      "raw device_gnss.csv",
+      "raw device_imu.csv only for a future IMU lane",
+      "broadcast RINEX navigation"
+    ],
+    "ground_truth": "ground_truth.csv may be opened only after a frozen native output is sealed for a declared development score.",
+    "matlab_files": "forbidden_before_open_and_not_used",
+    "upstream_m_source": "read_as_specification_only",
+    "result_oracle": "forbidden",
+    "production_default_changed": false,
+    "kaggle_or_token_access": false
+  },
+  "upstream": {
+    "repository": "taroz/gsdc2023",
+    "commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "license": "MIT",
+    "source_root": "output/reproducibility-cache/gsdc2023",
+    "files": {
+      "functions/gnsslog2obs.m": {
+        "sha256": "665ce43d1fc3c5a9c3b3a6fd76f81539126e3ab897fbba484ab0ccd18964acff",
+        "lines": "19-36,43-89,103-121,158-202,254-316"
+      },
+      "functions/sysfreq2sigtype.m": {
+        "sha256": "5ec1d299e04b45f604921cbae3b1fac8f78f3f76a0152496d86011a32f1d0079",
+        "lines": "1-61"
+      },
+      "functions/exobs.m": {
+        "sha256": "e22db383f372f26597333d674a12ee1e2adfdc97b00828fbbc5470903947f456",
+        "lines": "1-123"
+      },
+      "functions/exobs_residuals.m": {
+        "sha256": "50c954a825edbdeaf5c9884486aff56c058f51d47610a06722d4f42b33095324",
+        "lines": "1-109"
+      },
+      "functions/correct_pseudorange.m": {
+        "sha256": "b0536ccff478b0aff253448ffb7a203c715b8064dd8dc85898e38f1f05d0441e",
+        "lines": "1-54"
+      },
+      "functions/obserrmodel.m": {
+        "sha256": "43d0671a25c81fa6d7df0e1fbe81bf48a14eb3a35c8399600200b44961a7f9ef",
+        "lines": "1-43"
+      },
+      "fgo_gnss.m": {
+        "sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3",
+        "lines": "18-23,26-82,89-121,123-218,220-253"
+      },
+      "parameters.m": {
+        "sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52",
+        "lines": "22-47,62-83,85-108,110-128,130-203"
+      },
+      "run_fgo.m": {
+        "sha256": "02150849653b2e5c80609e971dbef41b010569de5dcc304782235b7fc96b9065",
+        "lines": "1-108"
+      },
+      "functions/write_results.m": {
+        "sha256": "d08c2097585d67d460694164b019d4be78e5d70218fa5d14776966b62a71900c",
+        "lines": "1-80"
+      },
+      "functions/submission.m": {
+        "sha256": "db97431c1da52b93b8903eb4c604141b3c8d6dfb7ad33b6df237e414a7e8c9ac",
+        "lines": "1-52"
+      },
+      "functions/score.m": {
+        "sha256": "4c88f3f775e4f8caca22bb8c5f5747309f32b190df230346179381feb1f572c4",
+        "lines": "1-80"
+      }
+    }
+  },
+  "current_native": {
+    "raw_loader": {
+      "header": "include/libgnss++/io/android_raw_gnss.hpp",
+      "implementation": "src/io/android_raw_gnss.cpp",
+      "contract": "Android TimeNanos/FullBiasNanos/ReceivedSvTimeNanos are required; any .mat path is rejected before open; raw rows only.",
+      "supported_signals": [
+        "GPS L1 C/A",
+        "GPS L5",
+        "GLONASS G1 with channel -7..6",
+        "Galileo E1",
+        "Galileo E5a",
+        "BeiDou B1I",
+        "BeiDou B1C",
+        "BeiDou B2a"
+      ],
+      "mapping": [
+        "raw receiver clock to GPST using integer nanosecond arithmetic",
+        "GLONASS transmit time converted to GPST",
+        "BeiDou transmit time shifted by 14 seconds",
+        "carrier ADR metres divided by observed wavelength",
+        "Doppler = -PseudorangeRateMetersPerSecond / wavelength",
+        "five-device ADR sign policy copied from gnsslog2obs.m"
+      ],
+      "source_symbols": [
+        "libgnss::io::loadAndroidRawGnssCsv",
+        "parseSignal",
+        "rawClockToGpsTime",
+        "rawPseudorange"
+      ]
+    },
+    "dedicated_solver": {
+      "source": "apps/native/gnss_pos_vel_pdc.cpp",
+      "cli": "--android-raw device_gnss.csv --nav brdc.nav --keyed-out-csv output.csv",
+      "input_boundary": "raw loader is called directly; optional WlsPosition* columns are ignored; native SPP supplies a truth-free seed",
+      "state": "per-epoch ECEF position delta, five clock groups, ECEF velocity, clock drift",
+      "factors": [
+        "pseudorange",
+        "undifferenced Doppler",
+        "ordinary TDCP/ADR differences",
+        "float carrier residuals",
+        "position, clock, velocity, drift priors",
+        "position/clock/clock-drift temporal motion"
+      ],
+      "backend": "deterministic Eigen sparse IRLS",
+      "default_max_iterations": 1000,
+      "robust_loss": "Huber implementation in apps/native/observable_robust_loss.hpp",
+      "base_or_double_difference": false,
+      "output": "atomic phone,UnixTimeMillis,LatitudeDegrees,LongitudeDegrees CSV"
+    }
+  },
+  "matrix": [
+    {
+      "area": "preprocessing_and_corrections",
+      "upstream_contract": "gnsslog2obs.m builds raw P/L/D and status matrices; exobs.m applies signal status, SNR, multipath, range and TDCP-jump masks; exobs_residuals.m applies elevation, residual, P-D and L-D masks; correct_pseudorange.m subtracts smoothed base residuals and antenna offset; obserrmodel.m derives SNR/elevation dependent sigmas.",
+      "upstream_evidence": [
+        "functions/gnsslog2obs.m:19-36,43-89,158-202",
+        "functions/exobs.m:1-123",
+        "functions/exobs_residuals.m:1-109",
+        "functions/correct_pseudorange.m:1-54",
+        "functions/obserrmodel.m:1-43"
+      ],
+      "native_status": "partial",
+      "native_symbols": [
+        "parseRawRow",
+        "preparePseudorangeFactor",
+        "prepareCarrierResidual",
+        "prepareDopplerFactor",
+        "robustHuberWeight"
+      ],
+      "implemented": [
+        "raw timing and status validity gates",
+        "SVID/constellation/signal gates",
+        "exobs code-lock/TOW/TOD status masks when State is present",
+        "exobs SNR>=20 and smartphone MultipathIndicator masks",
+        "exobs pseudorange physical range mask 1e7..4e7 m",
+        "exobs ADR valid/slip masks and published GLONASS carrier exclusions",
+        "finite geometry/health/elevation checks",
+        "Klobuchar/troposphere/satellite-clock/Sagnac/group-delay terms",
+        "Huber reweighting"
+      ],
+      "missing_or_mismatched": [
+        "residual-stage P-D and L-D prefilters remain outside the compact Observation API",
+        "P-D and L-D residual prefilters are not ported",
+        "SNR percentile and signal-specific published obserrmodel are not used",
+        "base compensation is unavailable under raw/nav-only contract because correct_pseudorange.m requires base_position.csv/base_offset.csv; no substitute is inferred"
+      ],
+      "impact": "high; this is the earliest substantive accuracy gap after raw decoding"
+    },
+    {
+      "area": "signals_and_frequency_mapping",
+      "upstream_contract": "gnsslog2obs.m estimates nearest supported frequencies and sysfreq2sigtype.m maps L1/L5 signal types; GPS, GLONASS, Galileo and BeiDou mappings are selected by constellation/frequency.",
+      "upstream_evidence": [
+        "functions/gnsslog2obs.m:103-121,158-202,254-316",
+        "functions/sysfreq2sigtype.m:1-61"
+      ],
+      "native_status": "implemented_with_explicit_scope",
+      "native_symbols": [
+        "parseSignal",
+        "signalWavelengthMeters",
+        "isPrimaryPdSignal"
+      ],
+      "implemented": [
+        "GPS L1/L5",
+        "GLONASS G1 channel",
+        "Galileo E1/E5a",
+        "BeiDou B1I/B1C/B2a",
+        "unsupported QZSS/SBAS/IRNSS rejection",
+        "wavelength-derived carrier/Doppler conversion"
+      ],
+      "missing_or_mismatched": [
+        "full upstream frequency matrix beyond the raw Android signals above",
+        "upstream per-signal sigtype factors are not yet wired into solver weights"
+      ],
+      "impact": "medium; raw route diagnostics prove nonzero L1/L5/Galileo/GLONASS coverage"
+    },
+    {
+      "area": "state_vector_and_factors",
+      "upstream_contract": "fgo_gnss.m:89-121 initializes ENU position/velocity, a seven-element clock vector and clock drift; lines 123-152 add PseudorangeFactor_XC and DopplerFactor_VD; lines 154-201 add motion, clock and ordinary TDCP factors.",
+      "upstream_evidence": [
+        "fgo_gnss.m:89-121",
+        "fgo_gnss.m:123-201",
+        "parameters.m:130-174"
+      ],
+      "native_status": "structurally_present_but_not_exact",
+      "native_symbols": [
+        "kStateStride",
+        "pseudorangePrediction",
+        "dopplerPrediction",
+        "tdcpPrediction",
+        "solveProblem"
+      ],
+      "implemented": [
+        "position/velocity/clock/drift per epoch",
+        "P+D+ordinary TDCP+float carrier residuals",
+        "temporal position/clock/drift constraints",
+        "satellite velocity and Sagnac rate terms in Doppler"
+      ],
+      "missing_or_mismatched": [
+        "native solver uses ECEF deltas rather than upstream ENU local states",
+        "native clock model has five groups rather than upstream seven-element vector",
+        "native float carrier residuals are retained for diagnostics but do not reproduce upstream gtsam_gnss ambiguity-state contracts",
+        "native graph is Eigen IRLS, not gtsam_gnss factor implementations"
+      ],
+      "impact": "high; state/factor contract mismatch limits direct score equivalence"
+    },
+    {
+      "area": "clock_and_ambiguity_arcs",
+      "upstream_contract": "gnsslog2obs.m tracks hardware clock discontinuities and carrier LLI/state; exobs_residuals.m resets/rejects carrier and TDCP inconsistencies; fgo_gnss.m suppresses TDCP at clock jumps and selects phone-specific TDCP factor clock states.",
+      "upstream_evidence": [
+        "functions/gnsslog2obs.m:103-121,158-202",
+        "functions/exobs.m:62-123",
+        "functions/exobs_residuals.m:70-109",
+        "fgo_gnss.m:154-201"
+      ],
+      "native_status": "partial",
+      "native_symbols": [
+        "clock_jumps",
+        "prepareCarrierResidual",
+        "carrier_residuals_by_epoch"
+      ],
+      "implemented": [
+        "hardware clock jump tracking",
+        "LLI/loss-of-lock rejection",
+        "same-key adjacent TDCP only"
+      ],
+      "missing_or_mismatched": [
+        "no explicit upstream per-arc ambiguity state in the state vector",
+        "no full P-D/L-D residual arc mask",
+        "phone-specific GLONASS carrier exclusions are not all represented"
+      ],
+      "impact": "high for carrier accuracy; no integer fixing is attempted"
+    },
+    {
+      "area": "robust_weights_and_masks",
+      "upstream_contract": "parameters.m:62-128 fixes masks, signal factors, Huber kernels, residual limits, and Loffset; fgo_gnss.m:123-152 wraps P/D factors with those robust kernels.",
+      "upstream_evidence": [
+        "parameters.m:62-128",
+        "fgo_gnss.m:123-152"
+      ],
+      "native_status": "partial",
+      "native_symbols": [
+        "Options::huber_threshold_sigma",
+        "robustHuberLoss",
+        "robustHuberWeight"
+      ],
+      "implemented": [
+        "finite positive sigma validation",
+        "deterministic Huber IRLS"
+      ],
+      "missing_or_mismatched": [
+        "published SNR-percentile sigma model",
+        "upstream signal factors and P/D/L residual thresholds",
+        "phone/setting-dependent kernel parameters"
+      ],
+      "impact": "medium/high; do not tune thresholds from truth until exact mapping is ported"
+    },
+    {
+      "area": "window_schedule_and_state_handoff",
+      "upstream_contract": "fgo_gnss.m optimizes the declared [IdxStart,IdxEnd] range as one graph and run_fgo.m controls route settings; no native equivalent of the MATLAB setting-table orchestration is currently exposed.",
+      "upstream_evidence": [
+        "fgo_gnss.m:26-32,89-121,203-218",
+        "run_fgo.m:1-108"
+      ],
+      "native_status": "not_equivalent",
+      "native_symbols": [
+        "Options::skip_epochs",
+        "Options::max_epochs",
+        "buildProblem"
+      ],
+      "implemented": [
+        "bounded single-route run",
+        "deterministic gap epoch handling"
+      ],
+      "missing_or_mismatched": [
+        "setting-table route schedule",
+        "upstream start/end and carry-over semantics",
+        "published window/postprocessing orchestration"
+      ],
+      "impact": "medium; structural portability gap rather than a raw parser bug"
+    },
+    {
+      "area": "initialization",
+      "upstream_contract": "fgo_gnss.m:34-48 initializes from posbl/gradient/clock state when initflag is true, otherwise loads the prior GNSS solution; fgo_gnss.m:63-70 computes ENU LOS around the initial origin.",
+      "upstream_evidence": [
+        "fgo_gnss.m:34-48",
+        "fgo_gnss.m:63-70"
+      ],
+      "native_status": "raw_only_safe_fallback",
+      "native_symbols": [
+        "SPPProcessor",
+        "native_spp_seed_epochs",
+        "device_wls_seed_consumed"
+      ],
+      "implemented": [
+        "native SPP truth-free seed",
+        "bounded retry and previous-native-fix propagation",
+        "explicit rejection of --seed-pos in raw mode"
+      ],
+      "missing_or_mismatched": [
+        "no upstream posbl/gradient setting-table path",
+        "no ENU-origin state initialization",
+        "native SPP fallback is intentionally not a claim of upstream equivalence"
+      ],
+      "impact": "high for convergence/linearization; current route structural run is finite and convergent"
+    },
+    {
+      "area": "imu_and_sensor_factors",
+      "upstream_contract": "parameters.m:176-203 declares IMU noise, offsets, mounting, stop and height parameters; fgo_gnss_imu.m adds IMU/preintegration factors.",
+      "upstream_evidence": [
+        "parameters.m:176-203",
+        "fgo_gnss_imu.m:1-260"
+      ],
+      "native_status": "not_in_gnss_only_route",
+      "native_symbols": [],
+      "implemented": [],
+      "missing_or_mismatched": [
+        "raw-only GNSS PDC app intentionally does not consume device_imu.csv",
+        "no attitude, preintegration, bias or mounting transform in this lane",
+        "must be a separate opt-in phase after GNSS contract is exact"
+      ],
+      "impact": "high potential upside but out of scope for this GNSS-only bridge"
+    },
+    {
+      "area": "optimizer_and_backend",
+      "upstream_contract": "fgo_gnss.m:203-218 uses GTSAM Levenberg-Marquardt with maxIterations=1000 and returns optimizer error/iterations.",
+      "upstream_evidence": [
+        "fgo_gnss.m:203-218"
+      ],
+      "native_status": "not_equivalent",
+      "native_symbols": [
+        "solveProblem",
+        "Options::max_iterations"
+      ],
+      "implemented": [
+        "bounded deterministic sparse Eigen solve",
+        "monotonic IRLS cost acceptance",
+        "finite-state fail-closed checks"
+      ],
+      "missing_or_mismatched": [
+        "GTSAM LM damping/linearization/stopping parity",
+        "upstream factor noise models and robust m-estimator semantics"
+      ],
+      "impact": "high; backend parity is required before claiming a native score near the imported external baseline"
+    },
+    {
+      "area": "postprocessing_and_submission",
+      "upstream_contract": "fgo_gnss.m:220-253 converts ENU output, applies add_position_offset.m, writes result; submission.m defines official key projection/order.",
+      "upstream_evidence": [
+        "fgo_gnss.m:220-253",
+        "functions/write_results.m:1-80",
+        "functions/submission.m:1-52"
+      ],
+      "native_status": "raw_keyed_output_only",
+      "native_symbols": [
+        "writeKeyedCsv",
+        "writeAtomicText",
+        "unixMillis"
+      ],
+      "implemented": [
+        "phone/timestamp keyed output",
+        "WGS84 finite range checks",
+        "atomic publish"
+      ],
+      "missing_or_mismatched": [
+        "upstream antenna position offset/attitude postprocessing",
+        "official sample-key reordering is deliberately outside the raw solver",
+        "no external submission is performed"
+      ],
+      "impact": "medium; output contract is sufficient for declared train raw evaluation"
+    }
+  ],
+  "conclusion": {
+    "earliest_high_impact_gap": "preprocessing_and_corrections",
+    "next_exact_component": "port the raw-status/mask and raw/nav-derived observation error contracts without base compensation; keep base correction explicitly unavailable under the no-MAT/raw-only contract",
+    "not_claimed": [
+      "full taroz equivalence",
+      "native 0.782-class performance",
+      "result-file oracle agreement",
+      "test/validation/holdout evidence"
+    ],
+    "structural_route_evidence": "A raw-only Release run on 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro completed 1,384 finite epochs with nonzero P/D/ordinary-TDCP factors and no native SPP failures; this is a plumbing result, not an accuracy claim."
+  }
+}

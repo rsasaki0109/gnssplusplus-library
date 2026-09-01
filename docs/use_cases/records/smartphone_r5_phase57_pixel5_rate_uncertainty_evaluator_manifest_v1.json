@@ -1,0 +1,182 @@
+{
+  "schema_version": "smartphone-r5-phase57-pixel5-rate-uncertainty-manifest.v1",
+  "phase": 57,
+  "status": "evaluator-frozen-before-phase57-raw-read",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase57_pixel5_rate_uncertainty_freeze_v1.json",
+    "sha256": "11501f4a03dd03cefecb3ff931a9ce8a1b4322953daacd84a95e62c19397fafd"
+  },
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "execution_label": "Luna Max",
+    "phase56_policy_payload_used": false,
+    "phase56_policy_metadata_only": true
+  },
+  "evaluator": {
+    "source": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase57_pixel5_rate_uncertainty_audit.py",
+      "sha256": "d70c20edfce81815b16aec059e996ec3c3c28a3e5a62e2167193588a06f372a8"
+    },
+    "test": {
+      "path": "tests/test_smartphone_phase57_pixel5_rate_uncertainty_audit.py",
+      "sha256": "cd76544e72e5302bf4ae9e3bd092f3155b32e2f25b2bb5ee15638ffbcfda58e5"
+    },
+    "cmake": {
+      "path": "tests/CMakeLists.txt",
+      "sha256": "41e26b3c3c1bfa96af13d1156ed14662cd681c1131476781a3d960820d1d0049"
+    },
+    "operation": "raw-device-gnss-rate-uncertainty-audit-only",
+    "native_solver_invoked": false,
+    "single_process": true,
+    "raw_reads_before_manifest": 0,
+    "truth_reads": 0,
+    "raw_csv_parser": "one byte-buffer read and one CSV parse per exact frozen route after manifest seal",
+    "output_root": "output/smartphone-r5/phase57-pixel5-rate-uncertainty-v1"
+  },
+  "cohort": {
+    "phone_model": "pixel5",
+    "route_disjoint": true,
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "raw_device_gnss_reads_per_route": 1,
+    "truth_reads_per_route": 0,
+    "phase45_payload_reads": 0,
+    "phase56_metric_payload_reads": 0,
+    "brdc_nav_reads": 0,
+    "solver_reruns": 0,
+    "trajectory_reruns": 0
+  },
+  "diagnostics": {
+    "phase25_long_double_raw_pseudorange": true,
+    "phase41_raw_rate_sign": "direct Android m/s rate in P increment; adapter D=-rate/wavelength",
+    "same_satellite_signal_consecutive_transitions": true,
+    "transition_dt_strictly_positive_and_at_most_1_5_seconds": true,
+    "same_hcdc_and_segment_required": true,
+    "valid_state_and_code_required": true,
+    "existing_multipath_and_cnr_masks": true,
+    "raw_code_increment_minus_trapezoidal_rate": true,
+    "epoch_hcdc_clock_median_center": true,
+    "pair_uncertainty": "sqrt(u_prev^2+u_current^2) m/s; integrated endpoint sigma=0.5*dt*pair uncertainty",
+    "fixed_sigma_impact": "u_current > 0.2 m/s lower-bound existing undifferenced sigma",
+    "snr_sigma_impact": "source-exact p85 band percentile and 10^(-(Cn0-p85)/20)/12 when SNR quality is enabled",
+    "displacement_potential_proxy": "p95(max(0,u_current-0.2)*1 s) in metres; not geometry or trajectory",
+    "route_signal_satellite_state_groups": true,
+    "fixed_log_bins_and_quartiles": true,
+    "spearman_quantile_calibration": true,
+    "loo_mapping": true,
+    "current_fgo_sigma_adoption_proxy": true,
+    "composition_independence": true,
+    "phase13_policy_pin": true,
+    "truth_validation_nav_solver_coordinates_imu": false,
+    "zero_point_782": "not evaluated without truth"
+  },
+  "numeric_gates": {
+    "logic": "AND; immutable after this manifest is sealed and before raw read",
+    "route_count": 4,
+    "residual_coverage": {
+      "min_transitions_per_route": 1000,
+      "min_satellites_per_route": 3,
+      "min_finite_positive_uncertainty_fraction": 0.5,
+      "min_pairs_per_populated_bin": 50
+    },
+    "uncertainty_population": {
+      "min_populated_fixed_bins_per_route": 3,
+      "quartiles_required": true,
+      "log_bins_reported": true
+    },
+    "routewise_relation": {
+      "spearman_min_each_route": 0.35,
+      "high_definition": ">0.5 m/s",
+      "low_definition": "<=0.1 m/s",
+      "high_vs_low_p95_excess_min_m": 0.05,
+      "high_vs_low_p95_ratio_min": 1.5,
+      "median_and_p95_non_decreasing": true,
+      "allow_exact_equality": true
+    },
+    "calibration": {
+      "normalized_pair_sigma_median_range": [0.25, 4.0],
+      "normalized_abs_residual_le_1_fraction_range": [0.05, 0.95]
+    },
+    "non_common_mode": {
+      "centered_abs_p95_min_m": 0.01,
+      "centered_to_raw_median_ratio_min": 0.1
+    },
+    "current_fgo_adoption": {
+      "actual_configured_lane_present": true,
+      "fixed_sigma_mps": 0.2,
+      "min_fixed_lower_bound_affected_fraction_each_route": 0.1,
+      "min_snr_enabled_affected_fraction_each_route": 0.1,
+      "candidate_scope": "actual raw-eligible Doppler factor proxy; no elevation/nav inference"
+    },
+    "displacement_potential_proxy": {
+      "one_second_proxy": true,
+      "min_p95_m_each_route": 0.05,
+      "not_horizontal_or_trajectory": true
+    },
+    "loo_mapping_stability": {
+      "all_omitted_route_directions_nonnegative": true,
+      "all_omitted_route_high_low_excess_nonnegative": true
+    },
+    "composition_independence": {
+      "min_signal_families_per_route": 2,
+      "within_signal_spearman_min": 0.2,
+      "single_family_fails": true
+    },
+    "presentation_integrity": {
+      "all_group_counts_sum": true,
+      "four_route_medians_retained": true,
+      "aggregate_recomputed_exact": true,
+      "loo_fold_count_exact": 4,
+      "raw_hash_bytes_exact": true
+    }
+  },
+  "forbidden": [
+    "ground_truth.csv",
+    "Phase45 truth-derived payload",
+    "Phase56 metric payload",
+    "navigation",
+    "solver rerun",
+    "trajectory rerun",
+    "coordinates",
+    "IMU",
+    "MAT",
+    "validation",
+    "holdout",
+    "archive reopen",
+    "Kaggle/token",
+    "precomputed inference coordinates",
+    "correction implementation during audit"
+  ],
+  "read_policy": {
+    "raw_device_gnss_read_count_before_manifest": 0,
+    "raw_device_gnss_read_count_after_manifest": "exactly one per route in one-shot evaluator",
+    "single_process": true,
+    "truth_open_count": 0,
+    "phase45_payload_used": false,
+    "phase56_metric_payload_used": false,
+    "brdc_nav_open_count": 0,
+    "solver_rerun": false,
+    "trajectory_rerun": false,
+    "correction_fit_or_application": false,
+    "validation_or_holdout_access": false,
+    "archive_reopen": false,
+    "rematerialization": false,
+    "kaggle_or_token_access": false,
+    "mat_read_or_generated": false,
+    "device_wls_coordinates_used": false,
+    "SvPosition_or_SvElevation_used": false,
+    "atomic_output_publish": true
+  },
+  "fail_closed": {
+    "hash_or_schema_mismatch": true,
+    "missing_candidate_field": true,
+    "nonfinite_core": true,
+    "presentation_integrity_failure": true,
+    "no_post_read_tuning": true,
+    "if_any_gate_fails": "no C++ change; report no-go and exactly one next raw physical factor"
+  }
+}

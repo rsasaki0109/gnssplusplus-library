@@ -1,0 +1,156 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-carrier-compatibility-freeze.v1",
+  "status": "frozen-before-carrier-compatibility-truth-free-run",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "candidate_id": "native-fgo-v1-carrier-compatibility-selector-v1",
+  "purpose": "Development-only truth-free selector for carrier-compatible Android routes. The prior all-device carrier lane remains sealed No-Go.",
+  "prior_all_device_carrier_no_go": {
+    "record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_float_carrier_freeze_v1.json",
+    "record_sha256": "ad0481e4833ed9299f3967dad4f30ea482ecf84f6f72ecd21978d09f84163b20",
+    "structural_smoke_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_float_carrier_structural_smoke_no_go_v1.json",
+    "structural_smoke_manifest_sha256": "c0280549335a782ee0eb430336ce34e6451d40a6a9e56dff100c78530c3ddb48",
+    "reinterpreted": false,
+    "production_default_changed": false
+  },
+  "role_inventory": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_carrier_compatibility_role_inventory_v1.json",
+    "sha256": "dc41e76bf4fa956d589af4675a44fee1be1c8bf54fdfe52cf437b02e07866cd1",
+    "cohort_count": 8,
+    "validation_holdout_test_excluded_before_freeze": true,
+    "truth_open_count_before_freeze": 0
+  },
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_inventory_path": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+    "central_inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+    "central_metadata_canonical_sha256": "5f619be94a00c33c3067f13b1cd3351d96f2804f07fa04eda8fb027739fb0992",
+    "payload_policy": "truth-free uses already materialized development inputs; train-score may open only the eight declared development ground_truth.csv members after artifact sealing"
+  },
+  "cohort": {
+    "identities": [
+      "2021-03-10-23-13-us-ca-mtv-h/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/pixel5",
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b",
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "2022-02-24-18-29-us-ca-lax-o/pixel5"
+    ],
+    "route_groups": ["mtv-h", "lax-t", "e1highway", "mtv-e", "mtv-a", "mtv-b", "lax-o"],
+    "phone_families": ["pixel4", "pixel5", "sm-g988b"],
+    "cv": "leave-one-route-group-out and leave-one-phone-family-out; no parameter fitting from truth",
+    "source_selection": "existing development/train materializations only; no new validation, holdout, or test identity"
+  },
+  "algorithm_contract": {
+    "baseline": "exact native Eigen FGO v1 undifferenced pseudorange + ordinary TDCP + position/clock motion",
+    "candidate": "baseline graph plus undifferenced float carrier phase factors keyed by constellation/PRN/signal with per-arc ambiguity states",
+    "initialization": "same SPP seed and receiver clock initialization as v1",
+    "backend": "Eigen native FGO",
+    "baseline_stopping": {"max_iterations": 8, "relative_cost_threshold": 0.0, "absolute_cost_threshold": 0.0},
+    "candidate_stopping": {"max_iterations": 50, "relative_cost_threshold": 0.000001, "absolute_cost_threshold": 0.0},
+    "noise_and_robust": {
+      "pseudorange_sigma_m": 3.0,
+      "tdcp_sigma_m": 0.03,
+      "carrier_phase_sigma_m": 0.01,
+      "pseudorange_huber_threshold_sigma": 4.0,
+      "tdcp_huber_threshold_sigma": 4.0,
+      "carrier_phase_huber_threshold_sigma": 4.0,
+      "min_elevation_deg": 10.0,
+      "max_tdcp_gap_s": 2.0,
+      "tdcp_slip_threshold_m": 10.0
+    },
+    "carrier_boundary_adapter_contract": {
+      "lane_local_only": true,
+      "raw_valid_bit": "AccumulatedDeltaRangeState bit 0",
+      "reset_bit": 2,
+      "cycle_slip_bit": 4,
+      "continuous_gap_ms": 1500,
+      "gap_rule": "<=1500 ms continuous; >1500 ms new arc",
+      "clock_counter_change": "new arc",
+      "boundary_encoding": "blank L1 carrier and set RINEX LLI=1 on boundary and next valid row",
+      "preserved_fields": ["pseudorange", "Doppler", "SNR", "satellite geometry", "all non-carrier RINEX fields"],
+      "original_adapter_modified": false
+    },
+    "forbidden": ["base observations", "single/double-difference factors", "integer fixing", "truth-trained thresholds", "postprocessing smoothing", "production default changes"]
+  },
+  "truth_free_selector_contract": {
+    "required": [
+      "positive ADR-valid carrier rows and ambiguity states",
+      "maximum valid carrier arc >= 5 s",
+      "finite initial/prefit ADR-rate RMS",
+      "finite postfit carrier RMS",
+      "prefit RMS <= 2*(carrier_sigma*Huber/sin(min_elevation))",
+      "postfit RMS <= carrier_sigma*Huber/sin(min_elevation)",
+      "finite monotonically non-increasing cost trace with convergence row",
+      "converged within max50",
+      "finite graph/ambiguity conditioning proxies",
+      "finite keyed output and no transition >70 m/s"
+    ],
+    "physical_bounds": {
+      "postfit_carrier_rms_bound_m": 0.23035081932574536,
+      "prefit_rate_rms_bound_mps": 0.4607016386514907,
+      "derivation": "carrier sigma 0.01 m * Huber gate 4 / sin(10 degrees); prefit bound is a fixed conservative factor of two",
+      "speed_bound_mps": 70.0,
+      "minimum_arc_duration_s": 5.0
+    },
+    "fallback": "if any candidate check fails, atomically publish byte-exact baseline8 output",
+    "covariance_note": "native summary has no covariance matrix; the manifest reports finite graph-factor/ambiguity-state conditioning proxies and does not call them a covariance estimate",
+    "truth_features": false,
+    "device_model_feature": false,
+    "leaderboard_feature": false
+  },
+  "promotion_gate": {
+    "all_four_official_diagnostic_variants_and_mean_strictly_improve_routewise": true,
+    "all_four_official_diagnostic_variants_and_mean_strictly_improve_each_cv_fold_and_aggregate": true,
+    "availability_and_truth_coverage_non_regression": true,
+    "vertical_p95_within_0_25m_safety_margin": true,
+    "continuity_no_new_above_70mps_transition": true,
+    "if_fail": "seal final No-Go; do not open any validation or holdout",
+    "if_pass": "development-only evidence only; require a genuinely new validation asset"
+  },
+  "source_hashes": {
+    "apps/native/gnss_fgo.cpp": "2d9e53485c427d1e0d43b07dd611aaf3644e2cd51d5e175c2977038ca05e3e32",
+    "src/algorithms/fgo.cpp": "4805a30741e3bcc53a2a29d832429924a3cc46c0fac5aa530446cedd224af3b2",
+    "include/libgnss++/algorithms/fgo.hpp": "67845f6365eb1f621afed19c52b82ad48d00ac1623e99b3bf7b96cd944263307",
+    "include/libgnss++/algorithms/fgo_config.hpp": "8a9390e6709f4c4a55ca4f9d4d43fd451465234d1aa55cd4dd662b06f0872d80",
+    "apps/commands/benchmarks/gnss_smartphone_gnss_adapter.py": "4a26dbbef0d5eff4a4840c43b600d790d573accc9977a9993754386ad086466b",
+    "configs/benchmarks/smartphone_r5_gsdc2023.json": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776"
+  },
+  "compatibility_lane_sources": {
+    "apps/commands/benchmarks/gnss_smartphone_native_fgo_carrier_compatibility_eval.py": "d132f2b6863e00dba128985a22c3db70da4b668aff725106e195a783d5465939",
+    "tests/test_smartphone_native_fgo_carrier_compatibility_eval.py": "f6c707747746108fd08d988291c8271f643bd063c0b59a10d07bbcb42482ae5e",
+    "docs/use_cases/smartphone_native_fgo_carrier_compatibility.md": "39bfe21d447dc9cb976b077ce40982688e332d3fa51fe47f38202aef5e95a670",
+    "tests/CMakeLists.txt": "8352c07006036bb3da1e842a13fcaf0f9acbccd2093a4b57d9c4f06e0dbb9d36"
+  },
+  "binary_hashes": {
+    "build/apps/gnss_fgo": "9190455cb34a9e818b79ed2ed6b023af5711fbef545215d4588bfed87f5c03e4",
+    "build/apps/gnss_spp": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12"
+  },
+  "commands": {
+    "verify_freeze": "PYTHONHASHSEED=0 python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_carrier_compatibility_eval.py verify-freeze",
+    "truth_free": "PYTHONHASHSEED=0 python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_carrier_compatibility_eval.py truth-free-run",
+    "development_score": "PYTHONHASHSEED=0 python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_carrier_compatibility_eval.py train-score",
+    "validation": "not authorized in this phase",
+    "holdout": "not authorized in this phase",
+    "full_ctest": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:/opt/ros/jazzy/lib ctest --test-dir build -j1 --output-on-failure",
+    "diff_check": "git diff --check"
+  },
+  "authorization": {
+    "truth_open_count_before_freeze": 0,
+    "new_payload_materialized_before_freeze": false,
+    "validation_materialized_before_freeze": false,
+    "holdout_materialized_before_freeze": false,
+    "test_truth_materialized_before_freeze": false,
+    "no_post_truth_tuning": true,
+    "external_mutation": false,
+    "token_access": false,
+    "production_rtk_spp_default_changed": false
+  },
+  "integrity": {
+    "freeze_record_sha256": "recorded in companion manifest to avoid a self-hash cycle",
+    "companion_manifest": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_carrier_compatibility_freeze_v1_manifest.json",
+    "candidate_source_or_parameter_change_after_freeze": false
+  }
+}

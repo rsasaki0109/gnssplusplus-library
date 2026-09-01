@@ -1,0 +1,60 @@
+{
+  "schema_version": "smartphone-r5-phase23-doppler-residual-screen-freeze.v1",
+  "status": "frozen-before-implementation",
+  "created_at_utc": "2026-09-01T00:00:00Z",
+  "candidate": {
+    "id": "native-raw-upstream-absolute-doppler-screen-v1",
+    "role": "development-only opt-in raw residual screening",
+    "base_lane": "native Phase12 raw PDC+IMU+TDCP+signal-bias+residual-ionosphere lane",
+    "production_default_changed": false,
+    "implementation_scope": "raw adapter field retention + pure residual gate + native FGO factor filtering + diagnostics; no estimator parameter search"
+  },
+  "source_contract": {
+    "upstream_repository": "taroz/gsdc2023",
+    "upstream_commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "exobs_residuals_source": "functions/exobs_residuals.m:14-36",
+    "gnsslog2obs_source": "functions/gnsslog2obs.m:103-118",
+    "parameters_source": "parameters.m:72-101",
+    "raw_drift_conversion": "dclk_mps = SPEED_OF_LIGHT * DriftNanosPerSecond / 1e9",
+    "residual_rule": "accept finite receiver-only D factor iff abs(residual_mps - dclk_mps / observation_interval_s) <= 3.0 m/s",
+    "observation_interval": "median positive adjacent native GPST epoch interval, matching gt.Gobs.estInterval; first/isolated epoch uses the same global interval only when finite",
+    "adjacent_gap_max_s": 1.5,
+    "missing_drift": "reject the D row for this opt-in screen; never estimate from truth, WLS, or a coordinate",
+    "status_and_pair_masks": "unchanged; this candidate only adds the residual-stage D screen",
+    "weighting": "unchanged from the selected base lane; no SNR or Huber parameter changes",
+    "forbidden": ["MAT input/output", "ground truth before seal", "device WLS/enriched coordinates", "sample/result coordinates", "base/DD factors", "post-score tuning"]
+  },
+  "preimplementation_hashes": {
+    "audit_record": "docs/use_cases/records/smartphone_r5_phase23_upstream_residual_screening_gap_audit_v1.json",
+    "audit_record_sha256": "3369deaf07ff415c2e4d8704ba54436ea91749aa4321316370ea1b664a3ab297",
+    "upstream_exobs_residuals_m": "50c954a825edbdeaf5c9884486aff56c058f51d47610a06722d4f42b33095324",
+    "upstream_gnsslog2obs_m": "665ce43d1fc3c5a9c3b3a6fd76f81539126e3ab897fbba484ab0ccd18964acff",
+    "upstream_parameters_m": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52",
+    "native_fgo_problems_cpp": "85173f6f87fc1bd45c4934abb0d889d81a49c6ba8d805549925abafacf3cba6c",
+    "native_fgo_config_hpp": "9ce8652ba845aa310c4ebe7f3a90d8c1bd61287e6ae0c007a551874306b5937d",
+    "native_observation_hpp": "b301be3447198a24e60314667b62e0e45f70b6aae5434aae6a2ce09cd0180932",
+    "native_android_raw_gnss_cpp": "790ff71c83482de0dfc9760b4d7c45d4d8adc135082d78f0b75e034bcfd645e8"
+  },
+  "evaluation_protocol": {
+    "truth_free_first": true,
+    "structural_routes": [
+      "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+      "2022-08-04-20-07-us-ca-sjc-q/mi8"
+    ],
+    "development_truth_after_seal": "same already-used Pixel7Pro development ground_truth only, one evaluator process/read if structural gates pass",
+    "fresh_validation": false,
+    "holdout": false,
+    "test": false,
+    "gate": "candidate must remain finite/deterministic/complete, improve or remain non-inferior on all four local diagnostics versus the frozen Phase12 base, preserve coverage and physical continuity; otherwise No-Go",
+    "score_tuning": false,
+    "no_post_score_changes": true
+  },
+  "commands": {
+    "implementation_build": "cmake --build build --config Release --target gnss_fgo_imu_no_base run_tests -j2",
+    "structural": "build/apps/gnss_fgo_imu_no_base --android-gnss <raw device_gnss.csv> --android-imu <raw device_imu.csv> --nav <brdc.nav> --out <candidate.csv> --summary-json <summary.json> --dataset-id <route/phone> --all-epochs --android-raw-utc-keys --native-pdc-imu-tdcp --native-signal-bias-states --native-residual-ionosphere --native-raw-upstream-absolute-doppler-screen",
+    "evaluation": "python3 apps/gnss.py smartphone-native-gnss-pdc-evaluate --candidate <sealed candidate> --run-manifest <sealed manifest> --ground-truth <already-used development ground_truth.csv> --recovery-authorization <phase23 authorization> --phone <route/phone> --output-json <score.json>"
+  },
+  "no_post_holdout_tuning": true,
+  "truth_freeze_before_truth": true,
+  "native_0_782_class_achieved": false
+}

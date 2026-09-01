@@ -1,0 +1,61 @@
+{
+  "schema_version": "smartphone-r5-phase37-pixel5-repeatability-structural-failure-manifest.v1",
+  "status": "sealed-fail-closed-before-truth",
+  "phase": 37,
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase37_pixel5_repeatability_freeze_v2.json",
+    "sha256": "61f46ac734d0c712bc317603570a0630234ee67ab642d12368eb5e3bf3962a3e"
+  },
+  "evaluator": {
+    "source": "apps/commands/benchmarks/gnss_smartphone_phase37_pixel5_repeatability.py",
+    "sha256": "a3e9e6e0ab99b37ab92aeae2709cf692065724482ec181aa6fa44d21fa3bbde4",
+    "manifest": "docs/use_cases/records/smartphone_r5_phase37_pixel5_repeatability_evaluator_manifest_v1.json",
+    "manifest_sha256": "42e17e555fd4d249721fe64ba00fe2c6d68469b30b88ef532b44f73e76d7e4c1",
+    "test": "tests/test_smartphone_phase37_pixel5_repeatability.py",
+    "test_sha256": "25dfbff3c68bcaf8322d9ca9b9024ae8f7503091170c5df9e117f8f35697a8b6"
+  },
+  "failure_result": {
+    "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/phase37_structural_failure.json",
+    "sha256": "b48afb71de727743360ba0fcea8cc4200d775c463ce7d15c17b42b3a3fab61dc",
+    "documentation_record": "docs/use_cases/records/smartphone_r5_phase37_pixel5_repeatability_structural_failure_v1.json",
+    "documentation_record_sha256": "3feb83fee1e4442b4188c825eadef1c45705b0a97d10cdfc003be2b9278d1113"
+  },
+  "raw_materialization": {
+    "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/phase37_raw_materialization.json",
+    "sha256": "4db95d2d3c6180d9855e596fd516b04644099c0c71b13eeb47af8a85cefbb6ac",
+    "truth_member_opened": false,
+    "truth_materialized": false,
+    "truth_open_count": 0,
+    "mat_read_or_generated": false
+  },
+  "gate": {
+    "status": "failed-closed",
+    "failed_route": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "reason": "native solution has non-finite or out-of-Earth ECEF position while aligning output to raw UTC keys",
+    "successful_route_repeats": [
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "truth_authorized": false,
+    "validation_authorized": false,
+    "holdout_authorized": false,
+    "kaggle_authorized": false
+  },
+  "accounting": {
+    "archive_member_payloads_materialized": [
+      "device_gnss.csv",
+      "device_imu.csv",
+      "brdc.nav"
+    ],
+    "ground_truth_payloads_materialized": 0,
+    "truth_reads": 0,
+    "validation_truth_reads": 0,
+    "future_holdout_truth_reads": 0,
+    "mat_inputs_or_outputs": 0,
+    "precomputed_result_coordinates_used_for_inference": false,
+    "solver_rerun_after_failure": false,
+    "post_truth_tuning": false,
+    "token_or_kaggle_access": false,
+    "phase31_champion_changed": false
+  }
+}

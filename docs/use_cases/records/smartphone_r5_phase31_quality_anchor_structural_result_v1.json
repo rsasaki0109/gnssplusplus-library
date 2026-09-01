@@ -1,0 +1,188 @@
+{
+  "schema_version": "smartphone-r5-phase31-quality-anchor-structural-result.v1",
+  "phase": 31,
+  "status": "sealed-truth-free-structural-pass",
+  "decision": "structural-go-development-only-pending-scoring",
+  "purpose": "Evaluate a frozen raw/nav-only SPP quality-anchor replay initializer without opening development truth.",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase31_quality_anchor_freeze_v1.json",
+    "sha256": "e650a2fbcb823d5eb306f7def58e6118d157d6b94136a48d05cc9e01db2299bb",
+    "candidate_id": "native_fgo_raw_quality_anchor_spp_replay_v1",
+    "graph_model_changed": false,
+    "production_default_changed": false
+  },
+  "truth_policy": {
+    "truth_open_count": 0,
+    "truth_used_for_inference": false,
+    "truth_used_for_selection": false,
+    "validation_opened": false,
+    "holdout_opened": false,
+    "mat_read_or_generated": false,
+    "kaggle_or_token_access": false,
+    "post_score_tuning": false
+  },
+  "candidate_contract": {
+    "flag": "--native-quality-anchor",
+    "base_flags": [
+      "--native-pdc-imu-tdcp-no-bridge",
+      "--android-raw-clock-only",
+      "--android-utc-wall-clock-fallback",
+      "--android-raw-utc-keys"
+    ],
+    "allowed_inputs": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "forbidden_inputs": [
+      "ground_truth.csv",
+      "any .mat file",
+      "device WLS or enriched coordinate columns",
+      "sample/submission/precomputed trajectory coordinates",
+      "validation/holdout/test inputs",
+      "Kaggle scores"
+    ],
+    "anchor_eligibility": "valid finite Earth-surface SPP, at least four satellites, finite GDOP, finite nonnegative pre-QC residual RMS",
+    "ranking": [
+      "satellites_desc",
+      "gdop_asc",
+      "normalized_residual_rms_asc",
+      "input_index_asc"
+    ],
+    "replay": "Reset the identical SPP processor at the selected anchor, replay forward and backward independently, then merge seeds by original chronological input index before unchanged graph construction.",
+    "fallback": "No eligible anchor uses the historical chronological SPP pass; individual invalid epochs retain the existing fail-closed seed behavior.",
+    "negative_dt_contract": "Decreasing time occurs only inside reset SPP seed collection; graph input is reconstructed in chronological order and no negative-dt graph factor is constructed."
+  },
+  "source_and_binary_hashes": {
+    "include/libgnss++/algorithms/fgo_quality_anchor.hpp": "dc8a7174534a089ba3bcfc478ece3c9307088090104cd539359fbc90ef151e44",
+    "include/libgnss++/algorithms/fgo_config.hpp": "c1bfdfec388ac6ff91112917cb33ba344d81479a9f22e38819dd9af38f052cab",
+    "include/libgnss++/algorithms/fgo.hpp": "ea4ebe964090a4f05e192e7a22550a9ac5725e0c01b08d698a0e23b936700053",
+    "src/algorithms/fgo_problems.cpp": "931f6d42a050b70d13daad2df21c689e8962a6030b1b3ce268730c1e20c43c44",
+    "apps/native/gnss_fgo_imu_no_base.cpp": "00ad0c2a155a5a4c9ddccdd2339c9ef26e0162c4f66c958ee06240f06e7c705e",
+    "tests/test_fgo.cpp": "4b0149221caf35570bc98ecb868e1c3bddf8641babb0705339f85f7585d2e9c8",
+    "apps/commands/benchmarks/gnss_smartphone_phase31_quality_anchor_structural.py": "1e2374a23ec6a8a9ad5e393d045a7ff1dc0909435c87d0342da118fe1a99d25a",
+    "tests/test_smartphone_phase31_quality_anchor_structural.py": "b4e9090620e999ba3c7fab9d3bc4aaf2fec70a9e54d2a3bcf20e383d4cb2c4cc",
+    "tests/CMakeLists.txt": "ccf48594e66991d10df6d7e52546c5c52af40a09d28e15b4cd6f74777990e4e3",
+    "build/apps/gnss_fgo_imu_no_base": "883701ef34606af4be84a44181f6b3616b2559ee4031982fff98d73dbbbbe7bd"
+  },
+  "raw_inputs": {
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "source_root": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw",
+    "routes": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "device_gnss_sha256": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863",
+        "device_imu_sha256": "afc540e7c4ce2ca66b442a1afbcd604e9f6b3d2cc4d3733183739901b5b97bd6",
+        "brdc_nav_sha256": "6adfaf7fe4452a4faeb94a7b607c15e05f578c46a028a030b94aa6f79de194cd"
+      },
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4": {
+        "device_gnss_sha256": "b7c192323455c36e76ea44831dc21a0cb661e5ca160e6072bd0d3682c907e594",
+        "device_imu_sha256": "86b31f2ac9c4e80c675c01a8c86146efd7f67d1a5960ac58723605c1c2bf33a8",
+        "brdc_nav_sha256": "cf48ab5fe78edd49a182655ed4b99f1938972c40ab95bea3c78939d3eb98b5c5"
+      },
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+        "device_gnss_sha256": "9bbc9f8d7809a0ef341796fe1276fc507de1c87ccf2598d607cd12e6b635a678",
+        "device_imu_sha256": "cb7388be335d48eb7612025bc68a4ffb198bdddd2caa9f0a1b348fc06ef29c1d",
+        "brdc_nav_sha256": "357b8d05d2e9d9c0a2e1d5d9256120b288182d51109c2a4e01edcd0920f20440"
+      }
+    }
+  },
+  "artifact_root": "output/smartphone-r5/phase31-quality-anchor-structural-v1",
+  "artifact_hashes": {
+    "result": "8e07ac37b80414dec4af32a077aa7e27df8a2a231e86d050707cd539871d10da",
+    "manifest": "8338032a0459eefc291a7b3d218cae2cc4edfb70bef004e43064f398d2e2a848"
+  },
+  "routes": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "anchor_index": 1791,
+      "eligible_candidates": 2159,
+      "anchor_satellites": 34,
+      "anchor_gdop": 0.8569660575474627,
+      "anchor_normalized_residual_rms": 1.8267792170973873,
+      "forward_valid_epochs": 368,
+      "backward_valid_epochs": 1792,
+      "fallback_epochs": 0,
+      "problem_epochs": 2159,
+      "target_epochs": 2158,
+      "exact_solution_epochs": 2158,
+      "interpolated_epochs": 0,
+      "graph_factors": 99719,
+      "graph_values": 8639,
+      "iterations": 9,
+      "converged": true,
+      "submission_sha256": "d4d7652e5d12389466e586fe2d8e85d34977a7e11036cee2f591a89293c5426c",
+      "summary_sha256": "b0ecd9c0eb931b11908a4e19ea54cb21a7a530492ac6fee245086dff93722460",
+      "repeat_byte_identical": true,
+      "max_speed_mps": 44.32917374026698,
+      "over_70_mps_count": 0
+    },
+    "2021-07-27-19-49-us-ca-mtv-b/pixel4": {
+      "anchor_index": 1371,
+      "eligible_candidates": 1678,
+      "anchor_satellites": 34,
+      "anchor_gdop": 0.8719071318352944,
+      "anchor_normalized_residual_rms": 1.555572738224354,
+      "forward_valid_epochs": 307,
+      "backward_valid_epochs": 1372,
+      "fallback_epochs": 0,
+      "problem_epochs": 1678,
+      "target_epochs": 1677,
+      "exact_solution_epochs": 1677,
+      "interpolated_epochs": 0,
+      "graph_factors": 85328,
+      "graph_values": 6715,
+      "iterations": 12,
+      "converged": true,
+      "submission_sha256": "18d90461883f9b51dc5e235ff2fda2e535d31678bb47b232a6aec12662faacdc",
+      "summary_sha256": "915f002eeb1c2f4728741d72e8225f6a36959462d4569f8a04f0ce3eb17da988",
+      "repeat_byte_identical": true,
+      "max_speed_mps": 36.31722149844467,
+      "over_70_mps_count": 0
+    },
+    "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+      "anchor_index": 1065,
+      "eligible_candidates": 613,
+      "anchor_satellites": 28,
+      "anchor_gdop": 1.109648457633523,
+      "anchor_normalized_residual_rms": 0.9181700737924808,
+      "forward_valid_epochs": 100,
+      "backward_valid_epochs": 1066,
+      "fallback_epochs": 0,
+      "problem_epochs": 1165,
+      "target_epochs": 1164,
+      "exact_solution_epochs": 1164,
+      "interpolated_epochs": 0,
+      "graph_factors": 53498,
+      "graph_values": 4663,
+      "iterations": 12,
+      "converged": true,
+      "submission_sha256": "65b44029a90e75a6b11e96b6ae9344020dee55bb8b5ea9b8bee79f2c765bca47",
+      "summary_sha256": "77beb1b59aadefcdac0394c775f5ab45eb58c10ec7af92f21990dbbc694438b8",
+      "repeat_byte_identical": true,
+      "max_speed_mps": 36.68969749237049,
+      "over_70_mps_count": 0
+    }
+  },
+  "phase28_truth_free_comparison": {
+    "comparator": "sealed Phase28 tdcp_no_bridge raw-only structural output",
+    "comparator_coordinates_used_for_inference": false,
+    "samsung_initial_30_transition_max_mps": {"phase28": 174.08365090887602, "phase31": 3.1160108028623},
+    "samsung_over_70_mps_count": {"phase28": 4, "phase31": 0},
+    "pixel_routes_over_70_mps_nonregressed": true,
+    "interpretation": "Samsung startup continuity improves in a truth-free output comparison; this does not establish accuracy or generalization."
+  },
+  "tests": {
+    "quality_anchor_cpp": "4/4 passed",
+    "quality_anchor_python": "4/4 passed",
+    "build_targets": ["gnss_run_tests", "gnss_fgo_imu_no_base"],
+    "git_diff_check": "passed"
+  },
+  "commands": {
+    "structural_seal": "python3 apps/commands/benchmarks/gnss_smartphone_phase31_quality_anchor_structural.py seal",
+    "focused_cpp": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} ./build/tests/run_tests --gtest_filter='FGOQualityAnchorTest.*'",
+    "focused_python": "python3 tests/test_smartphone_phase31_quality_anchor_structural.py"
+  },
+  "promotion": {
+    "development_only": true,
+    "truth_score_opened": false,
+    "fresh_validation_allowed": false,
+    "holdout_allowed": false,
+    "kaggle_submission": false,
+    "next_action": "If separately authorized, score only the already-opened development identities with the frozen candidate; do not call this structural pass an accuracy result."
+  }
+}

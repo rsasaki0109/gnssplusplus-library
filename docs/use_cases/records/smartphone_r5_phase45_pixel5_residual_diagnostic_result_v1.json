@@ -1,0 +1,211 @@
+{
+  "schema_version": "smartphone-r5-phase45-pixel5-residual-diagnostic-result.v1",
+  "phase": 45,
+  "status": "no-go-residual-not-identifiable",
+  "decision": "no-go-no-correction-no-validation",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase45_pixel5_residual_diagnostic_freeze_v3.json",
+    "sha256": "7dc39fb43f9761ab5bbb12fa2d9992ec02e12d026d18072a0a72b51e8e4665ed",
+    "superseded_v1": "docs/use_cases/records/smartphone_r5_phase45_pixel5_residual_diagnostic_freeze_v1.json",
+    "superseded_v1_sha256": "d99ce86eeb499d4a08746f9f913eeef7ae1b5f7bcfb0e1fe906fdc453b982d6",
+    "superseded_v2": "docs/use_cases/records/smartphone_r5_phase45_pixel5_residual_diagnostic_freeze_v2.json",
+    "superseded_v2_sha256": "2aa1c9e44b052ba2b8915d734cb930bf4fe02c6cbab53dfa6f8adaf764697f0c"
+  },
+  "evaluator_manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase45_pixel5_residual_diagnostic_evaluator_manifest_v1.json",
+    "sha256": "c833d6b6277c62c780d9b858b8526b61d43cdbcd3aae605aa3b048a70f376b7c",
+    "source_sha256": "7709c998c3aea910c8d6d75989b259591caab6f335760948205bd90de0a26857",
+    "test_sha256": "fa6762a79312d6d2064ab4ab4dc34c45132ab29e7d167fca6834e62c7b06694b"
+  },
+  "authority": {
+    "phase44_freeze_sha256": "95c0990af0015b7cb5fcf736aefbcff6fc97356093edcf03094b31b4083b28bc",
+    "phase44_result_record_sha256": "9e441c78f7c2bf8b3cf2cf9a7c9fe7e447fb2ff8eb6324fa5ef138c3b419e48a",
+    "phase44_result_output_sha256": "a191e5910315337ebd0d752f61eaddcdaa77f61fe5c691f5858981bea39cfa32",
+    "phase44_result_manifest_sha256": "5a3cd5d167063e7b1727efc67868fd6e25d26464ccc043b3969e31c9ffccb1e9",
+    "phase44_truth_materialization_sha256": "1de76b17f728e239cdf0416aafbdf59e07497c2bc00a1de88d808f7044f7a3bc",
+    "phase43_structural_seal_sha256": "fdeaf672b015cae99dfdf8351a5e7a92ca2d37bcdb0872c5c3fc5b937416b64d",
+    "phase37_freeze_sha256": "61f46ac734d0c712bc317603570a0630234ee67ab642d12368eb5e3bf3962a3e"
+  },
+  "route_order": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+  ],
+  "coverage_policy": {
+    "prediction_domain_gate": "all finite candidate keys are exact matches; no extra or duplicate candidate key",
+    "truth_row_coverage": "informational input-integrity ratio; all four pinned truth materializations read completely",
+    "warmup_exclusions": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": 1,
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": 1
+    }
+  },
+  "routes": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "candidate_rows": 2158,
+      "truth_rows": 2159,
+      "matched_rows": 2158,
+      "matched_key_coverage": 0.999536822603057,
+      "prediction_domain_coverage": 1.0,
+      "truth_row_coverage": 1.0,
+      "warmup_exclusion_observed": 1,
+      "median_enu_m": {"east": 0.4542592627258386, "north": 0.2991139519141637, "up": null},
+      "mad_enu_m": {"east": 0.8295711622983462, "north": 0.4427533202622923, "up": null},
+      "covariance_enu_m2": [[1.0334756269630312, 0.6616678682301249], [0.6616678682301249, 1.340708985498821]],
+      "prefix_tail_median_delta_m": 2.6719255724115922,
+      "time_drift_endpoint_m": {"east": 2.6706768511769887, "north": 2.303356615556495, "up": null},
+      "max_prediction_speed_mps": 44.329234970139126,
+      "over_70_mps_count": 0
+    },
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "candidate_rows": 3139,
+      "truth_rows": 3139,
+      "matched_rows": 3139,
+      "matched_key_coverage": 1.0,
+      "prediction_domain_coverage": 1.0,
+      "truth_row_coverage": 1.0,
+      "warmup_exclusion_observed": 0,
+      "median_enu_m": {"east": 1.292189011128596, "north": 0.2757177583692925, "up": null},
+      "mad_enu_m": {"east": 2.0378932406049985, "north": 0.6083056665348254, "up": null},
+      "covariance_enu_m2": [[5.060985158267026, 1.4565542151580337], [1.4565542151580337, 1.9432638887605767]],
+      "prefix_tail_median_delta_m": 4.492410898301648,
+      "time_drift_endpoint_m": {"east": -3.4730409659363874, "north": -1.1648626057991414, "up": null},
+      "max_prediction_speed_mps": 20.560726185725862,
+      "over_70_mps_count": 0
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "candidate_rows": 1465,
+      "truth_rows": 1465,
+      "matched_rows": 1465,
+      "matched_key_coverage": 1.0,
+      "prediction_domain_coverage": 1.0,
+      "truth_row_coverage": 1.0,
+      "warmup_exclusion_observed": 0,
+      "median_enu_m": {"east": -1.706456634386754, "north": 2.996320487212386, "up": null},
+      "mad_enu_m": {"east": 0.45574480369179327, "north": 0.19381527445705338, "up": null},
+      "covariance_enu_m2": [[2.391682115135175, 0.2255102972805193], [0.2255102972805193, 0.5299313929323013]],
+      "prefix_tail_median_delta_m": 1.2282980424591938,
+      "time_drift_endpoint_m": {"east": 1.9625861071644406, "north": -1.002538270867176, "up": null},
+      "max_prediction_speed_mps": 35.947915063191545,
+      "over_70_mps_count": 0
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "candidate_rows": 1101,
+      "truth_rows": 1102,
+      "matched_rows": 1101,
+      "matched_key_coverage": 0.9990925589836661,
+      "prediction_domain_coverage": 1.0,
+      "truth_row_coverage": 1.0,
+      "warmup_exclusion_observed": 1,
+      "median_enu_m": {"east": 1.1044827679345952, "north": 2.9860600831664845, "up": null},
+      "mad_enu_m": {"east": 0.5973370610542126, "north": 0.8783151068691506, "up": null},
+      "covariance_enu_m2": [[0.8914675504644396, -0.7264851324257405], [-0.7264851324257405, 1.2063817189991006]],
+      "prefix_tail_median_delta_m": 2.380509774524837,
+      "time_drift_endpoint_m": {"east": -2.4030877674240276, "north": 2.8575438830215454, "up": null},
+      "max_prediction_speed_mps": 29.183252586504874,
+      "over_70_mps_count": 0
+    }
+  },
+  "cross_route": {
+    "common_route_median_enu_m": {"east": 0.7793710153302169, "north": 1.642587017540324, "up": null},
+    "route_median_component_mad_m": {"east": 0.41896487420137873, "north": 1.348603267649111},
+    "route_median_center_distance_m": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": 1.3822508924737376,
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": 1.4599020064653077,
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": 2.8305358876028683,
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": 1.3822508924737376
+    },
+    "max_center_distance_m": 2.8305358876028683,
+    "pairwise_route_median_distance_m": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5__vs__2021-08-24-20-32-us-ca-mtv-h/pixel5": 0.8382563123118713,
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5__vs__2022-04-01-18-22-us-ca-lax-t/pixel5": 3.455953744205862,
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5__vs__2023-03-08-21-34-us-ca-mtv-u/pixel5": 2.764501784947475,
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5__vs__2022-04-01-18-22-us-ca-lax-t/pixel5": 4.048895517984708,
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5__vs__2023-03-08-21-34-us-ca-mtv-u/pixel5": 2.7168343989505606,
+      "2022-04-01-18-22-us-ca-lax-t/pixel5__vs__2023-03-08-21-34-us-ca-mtv-u/pixel5": 2.810958128363688
+    }
+  },
+  "loo_common_median": {
+    "baseline_macro_score_m": 3.533210024276838,
+    "loo_macro_score_m": 4.248509396236837,
+    "macro_improvement_m": -0.7152993719599996,
+    "max_individual_worsening_m": 2.298790806594176,
+    "per_held_route": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {"baseline_score_m": 2.119576420714088, "loo_score_m": 4.418367227308264, "improvement_m": -2.298790806594176},
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": {"baseline_score_m": 3.6090579364901547, "loo_score_m": 4.079824818619635, "improvement_m": -0.4707668821294799},
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {"baseline_score_m": 4.504097001099446, "loo_score_m": 4.89137972756869, "improvement_m": -0.38728272646924466},
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": {"baseline_score_m": 3.9001087388036635, "loo_score_m": 3.6044658114507615, "improvement_m": 0.295642927352902}
+    },
+    "diagnostic_only": true,
+    "corrected_coordinates_written": false,
+    "native_inference_consumed": false
+  },
+  "full_cohort_common_median_diagnostic": {
+    "macro_score_m": 3.229677610698722,
+    "target_route_score_m": 3.2208945843786596,
+    "maximum_m": 0.782,
+    "diagnostic_only": true,
+    "corrected_coordinates_written": false,
+    "native_inference_consumed": false
+  },
+  "gates": {
+    "exact_model_route_count": {"passed": true, "route_count": 4, "all_prediction_domain_complete": true, "truth_row_coverage_informational": true},
+    "route_median_center_dispersion": {"passed": false, "component_mad_m": {"east": 0.41896487420137873, "north": 1.348603267649111}, "max_center_distance_m": 2.8305358876028683, "failures": ["component_mad_over_0.5m", "route_center_radius_over_1m"]},
+    "prefix_tail_stability": {"passed": false, "maximum_shift_m": 4.492410898301648, "limit_m": 2.824367071985111, "failures": ["mtv_h_prefix_tail_shift_over_limit"]},
+    "orientation_independence": {"passed": false, "comparable_route_dimension_cases": {"gravity_axis_sign": 0, "tilt_compensated_magnetic_heading_octant": 4}, "max_group_median_delta_m": {"gravity_axis_sign": 0.0, "tilt_compensated_magnetic_heading_octant": 2.810525665744293}, "failures": ["gravity_axis_sign_comparable_cases_below_2", "mtv_h_heading_delta_over_0.75m"]},
+    "loo_all_route_improvement": {"passed": false, "minimum_required_m": 0.05, "route_improvements_m": {"mtv_a": -2.298790806594176, "mtv_h": -0.4707668821294799, "lax_t": -0.38728272646924466, "mtv_u": 0.295642927352902}},
+    "loo_macro_improvement": {"passed": false, "improvement_m": -0.7152993719599996, "minimum_required_m": 0.05},
+    "individual_worsening_limit": {"passed": false, "maximum_worsening_m": 2.298790806594176, "limit_m": 0.1},
+    "stretch_0_782_reachability": {"passed": false, "full_cohort_macro_score_m": 3.229677610698722, "full_cohort_target_route_score_m": 3.2208945843786596, "limit_m": 0.782}
+  },
+  "strongest_residual_structure": {
+    "name": "loo_common_median_nontransfer",
+    "description": "A common route median learned on three routes does not transfer to every held route; MTV-a, MTV-h, and LAX-t worsen.",
+    "evidence": {"mtv_a_improvement_m": -2.298790806594176, "mtv_h_improvement_m": -0.4707668821294799, "lax_t_improvement_m": -0.38728272646924466, "mtv_u_improvement_m": 0.295642927352902},
+    "selection": "largest predeclared diagnostic violation score; descriptive only"
+  },
+  "next_raw_physical_factor": {
+    "exactly_one": true,
+    "name": "raw Android GNSS receiver clock/timing residual",
+    "raw_fields": ["TimeNanos", "FullBiasNanos", "BiasNanos", "utcTimeMillis"],
+    "source_supported_by": "Phase25 raw-clock contract and the Android raw GNSS timing fields already retained by this repository",
+    "implementation_or_deployment": false
+  },
+  "truth_accounting": {
+    "single_process": true,
+    "truth_open_count": 4,
+    "truth_read_count_per_route": 1,
+    "candidate_open_count": 4,
+    "candidate_read_count_per_route": 1,
+    "raw_imu_open_count": 4,
+    "raw_imu_read_count_per_route": 1,
+    "phase44_materialized_truth_reused": true,
+    "archive_open_count": 0,
+    "archive_materialization_count": 0,
+    "truth_rematerialization_count": 0,
+    "validation_truth_open_count": 0,
+    "holdout_truth_open_count": 0,
+    "mat_read_or_generated": false,
+    "device_wls_coordinates_used": 0,
+    "precomputed_inference_coordinates_used": 0,
+    "kaggle_or_token_access": 0,
+    "solver_rerun": false,
+    "truth_derived_correction_fit": false,
+    "truth_derived_correction_application": false,
+    "post_truth_tuning": false
+  },
+  "artifacts": {
+    "result": {"path": "output/smartphone-r5/phase45-pixel5-residual-diagnostic-v1/phase45_pixel5_residual_diagnostic.json", "sha256": "99cc3bcb91353c4b91851bc357dedd094574056450772e40e085d8b5be87731"},
+    "result_manifest": {"path": "output/smartphone-r5/phase45-pixel5-residual-diagnostic-v1/phase45_pixel5_residual_diagnostic.manifest.json", "sha256": "4844ffd5d539bb53bebc305e2220f4cb51597b207ec5c928d2ca4c40f2c9e08c"}
+  },
+  "policy": {
+    "solver_rerun": false,
+    "candidate_mutated": false,
+    "corrected_coordinates_written": false,
+    "truth_used_for_inference_or_selection": false,
+    "validation_opened": false,
+    "holdout_opened": false,
+    "phase44_candidate_preserved": true,
+    "next_raw_factor_implemented": false
+  }
+}

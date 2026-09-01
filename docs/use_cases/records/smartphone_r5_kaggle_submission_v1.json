@@ -1,0 +1,183 @@
+{
+  "schema_version": "smartphone-r5-kaggle-submission.v1",
+  "status": "submitted-and-scored",
+  "observed_at_utc": "2026-08-30T09:06:30Z",
+  "scope": {
+    "competition": "smartphone-decimeter-2023",
+    "external_mutation_count": 1,
+    "submission_attempt_count": 1,
+    "resubmission_after_response": false,
+    "description": "libgnss++ truth-free WLS v2.1",
+    "truth_used": false,
+    "truth_open_count": 0,
+    "algorithm_rerun": false,
+    "candidate_or_numeric_parameter_changed": false,
+    "token_value_recorded": false,
+    "token_value_printed": false
+  },
+  "preflight": {
+    "submission": {
+      "path": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/submission.csv",
+      "sha256": "3da0009093cf0f53a4bb9919b5c5d3402a9f8c540a5eaa1300bd147ecdc2a803",
+      "bytes": 6150020,
+      "header": [
+        "tripId",
+        "UnixTimeMillis",
+        "LatitudeDegrees",
+        "LongitudeDegrees"
+      ],
+      "row_count": 71936,
+      "key_order_matches_official_sample": true,
+      "duplicate_keys": 0,
+      "missing_keys": 0,
+      "extra_keys": 0,
+      "nonfinite_coordinates": 0
+    },
+    "official_sample": {
+      "path": "data/gsdc2023/sample_submission.csv",
+      "sha256": "b0c4853076f715d6bdca46e5c8c99e575f7982d8ee4fc9c0fe417507badcb780",
+      "row_count": 71936
+    },
+    "reconciliation_manifest": {
+      "path": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/submission.manifest.json",
+      "sha256": "50624f6647919409a0d523635daad0e45699aab2e64cb869627bafb0272ffff6"
+    },
+    "preflight_checks": "hash, exact official header, row count, key order/set, duplicate keys, finite coordinates"
+  },
+  "official_protocol": {
+    "client": "Kaggle official kagglesdk CompetitionApiService protocol",
+    "authorization": "Bearer token read only from /home/sasaki/.kaggle/access_token; value never logged or persisted",
+    "start_submission_upload": {
+      "service": "competitions.CompetitionApiService",
+      "method": "StartSubmissionUpload",
+      "http_method": "POST",
+      "request_file_name": "submission.csv",
+      "content_length": 6150020,
+      "single_upload_put": true,
+      "upload_retries": false
+    },
+    "create_submission": {
+      "service": "competitions.CompetitionApiService",
+      "method": "CreateSubmission",
+      "http_method": "POST",
+      "description": "libgnss++ truth-free WLS v2.1",
+      "sandbox": false
+    },
+    "network_contract": {
+      "request_timeout_guard": true,
+      "ambiguous_response_resubmitted": false,
+      "official_competition": true
+    }
+  },
+  "submission_result": {
+    "submission_ref": 55886678,
+    "finalize_response_received": true,
+    "status": "COMPLETE",
+    "submission_date_utc": "2026-08-30T09:04:20.407000Z",
+    "public_score": "4.018",
+    "private_score": "4.873",
+    "error_description_present": false,
+    "payload": {
+      "submitted_sha256": "3da0009093cf0f53a4bb9919b5c5d3402a9f8c540a5eaa1300bd147ecdc2a803",
+      "submitted_bytes": 6150020,
+      "read_only_download_http_status": 200,
+      "read_only_download_bytes": 6150020,
+      "read_only_download_sha256": "3da0009093cf0f53a4bb9919b5c5d3402a9f8c540a5eaa1300bd147ecdc2a803",
+      "server_payload_matches_local": true
+    },
+    "status_poll": {
+      "method": "GetSubmission",
+      "poll_count": 1,
+      "poll_interval_seconds": 0,
+      "terminal_on_first_poll": true,
+      "read_only": true
+    }
+  },
+  "submission_list_verification": {
+    "method": "ListSubmissions",
+    "endpoint": "https://www.kaggle.com/api/v1/competitions/submissions/list/smartphone-decimeter-2023",
+    "http_status": 200,
+    "returned_count": 100,
+    "matching_ref_count": 1,
+    "matched_ref": 55886678,
+    "matched_status": "COMPLETE",
+    "matched_file_name": "submission.csv",
+    "matched_total_bytes": 6150020,
+    "matched_description": "libgnss++ truth-free WLS v2.1",
+    "matched_submission_date_utc": "2026-08-30T09:04:20.407000Z",
+    "metadata_matches_local_submission": true,
+    "read_only": true
+  },
+  "leaderboard_verification": {
+    "read_only": true,
+    "score_order": "ascending_lower_is_better",
+    "hypothetical_rank_policy": "1 + count(leaderboard_score < submitted_score); equal scores widen the range; never an official rank for this late submission",
+    "team_names_recorded": false,
+    "private": {
+      "method": "GetLeaderboard",
+      "pages": 2,
+      "entry_count": 280,
+      "target_team": "sasaki",
+      "target_team_present": false,
+      "rank": null,
+      "score": null,
+      "rank1_score": "0.883",
+      "top10_score_range": {
+        "min": "0.883",
+        "max": "1.832"
+      },
+      "hypothetical_insertion": {
+        "submitted_score": "4.873",
+        "rank_lower": 234,
+        "rank_upper": 234,
+        "ties_at_target": 0,
+        "official_rank": false,
+        "hypothetical_only": true,
+        "late_submission_rank_not_official": true
+      }
+    },
+    "public": {
+      "method": "GetLeaderboard",
+      "pages": 2,
+      "entry_count": 280,
+      "target_team": "sasaki",
+      "target_team_present": false,
+      "rank": null,
+      "score": null,
+      "rank1_score": "0.789",
+      "top10_score_range": {
+        "min": "0.789",
+        "max": "1.453"
+      },
+      "hypothetical_insertion": {
+        "submitted_score": "4.018",
+        "rank_lower": 238,
+        "rank_upper": 238,
+        "ties_at_target": 0,
+        "official_rank": false,
+        "hypothetical_only": true,
+        "late_submission_rank_not_official": true
+      }
+    },
+    "interpretation": "The submission received public/private scores through GetSubmission, but the authenticated public/private leaderboard responses did not contain the submitting team; no official rank is asserted. The numeric insertions above are read-only hypothetical positions only."
+  },
+  "boundary": {
+    "external_kaggle_submission": true,
+    "only_authorized_mutation": "This single submission ref 55886678; no other submit endpoint was called.",
+    "leaderboard_rank_one_achieved": false,
+    "future_algorithm_tuning_from_score": false,
+    "competition_status": "The competition deadline had passed; submission was accepted and scored by the API. Late eligibility interpretation remains account/API-specific.",
+    "token_not_in_record_or_artifacts": true
+  },
+  "provenance": {
+    "reconciliation_record": {
+      "path": "docs/use_cases/records/smartphone_r5_kaggle_official_sample_reconciliation_v2.json",
+      "sha256": "2f5350cc1746e59fc88577a141496d4e2c279493b256a63d52186f5a5f2a928a"
+    },
+    "reconciliation_run_manifest": {
+      "path": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/test_batch_reconciliation_v2_manifest.json",
+      "sha256": "9b611f1920bb48597eac518cf9f4a8e26f54f3719598ff9aaebea4839caa703a"
+    },
+    "external_submission_mutation": "one final CreateSubmission request, with one start-upload request and one signed file PUT; no retry after finalize response"
+  }
+}

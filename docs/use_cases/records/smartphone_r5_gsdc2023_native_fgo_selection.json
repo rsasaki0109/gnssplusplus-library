@@ -1,0 +1,171 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-selection.v1",
+  "status": "selection-frozen-before-truth",
+  "created_at_utc": "2026-08-30T00:00:00Z",
+  "candidate_id": "native_fgo_pseudorange_tdcp_motion_v1",
+  "purpose": "Evaluate the existing Eigen factor-graph path on Android-derived RINEX without enabling base-dependent SD/DD factors.",
+  "policy": {
+    "truth_free_generation": true,
+    "leaderboard_scores_used_for_tuning": false,
+    "kaggle_or_external_mutation": false,
+    "token_access": false,
+    "validation_or_holdout_before_train_gate": false,
+    "production_default_changed": false,
+    "old_holdout_results_used_for_selection": false
+  },
+  "selection_basis": {
+    "primary": "Existing native gnss_fgo factor construction already accepts the frozen Android-derived rover RINEX, broadcast navigation, and WLS POS seed.",
+    "physical_recipe": "Pseudorange absolute factors constrain receiver position/clock; ordinary time-differenced carrier phase factors constrain epoch-to-epoch displacement; position and clock motion factors provide bounded temporal continuity.",
+    "robustness": "Use the existing default Huber loss and explicit finite-factor/summary checks; no truth-trained thresholds or candidate search.",
+    "excluded": [
+      "single-difference Doppler factors",
+      "single-difference TDCP factors",
+      "double-difference factors (no base observation is available)",
+      "carrier-phase ambiguity factors",
+      "velocity states and velocity-motion factors"
+    ]
+  },
+  "source_hashes": {
+    "apps/native/gnss_fgo.cpp": "2d9e53485c427d1e0d43b07dd611aaf3644e2cd51d5e175c2977038ca05e3e32",
+    "include/libgnss++/algorithms/fgo.hpp": "67845f6365eb1f621afed19c52b82ad48d00ac1623e99b3bf7b96cd944263307",
+    "src/algorithms/fgo.cpp": "4805a30741e3bcc53a2a29d832429924a3cc46c0fac5aa530446cedd224af3b2",
+    "apps/commands/benchmarks/gnss_smartphone_gnss_adapter.py": "e740d42a5a3232775fef013c5f734a004f3aa4952add7415c1bcca0716ccaad0",
+    "build/apps/gnss_fgo": "5e1e22979a84b938352a2096e570bb1587d6eba7ebb0757431a8ebd9423b525f",
+    "configs/benchmarks/smartphone_r5_gsdc2023.json": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776"
+  },
+  "frozen_split": {
+    "train": [
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8",
+      "2022-08-04-20-07-us-ca-sjc-q/pixel5",
+      "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro"
+    ],
+    "fresh_validation": "2023-09-07-18-59-us-ca/pixel5",
+    "future_holdout": "2023-09-06-00-01-us-ca-routen/pixel6pro",
+    "selection_source": "docs/use_cases/records/smartphone_r5_gsdc2023_top_solution_feasibility_audit.json",
+    "selection_method": "Previously frozen route-disjoint inventory metadata; fresh validation and future holdout remain sealed.",
+    "fresh_validation_truth_open_count_before_train_gate": 0,
+    "future_holdout_truth_open_count_before_train_gate": 0
+  },
+  "recipe": {
+    "backend": "eigen",
+    "preset": "default",
+    "max_epochs": 0,
+    "skip_epochs": 0,
+    "max_iterations": 8,
+    "relative_cost_convergence_threshold": 0.0,
+    "absolute_cost_convergence_threshold": 0.0,
+    "pseudorange_sigma_m": 3.0,
+    "pseudorange_elevation_sigma_power": 1.0,
+    "motion_sigma_m": 50.0,
+    "clock_motion_sigma_m": 300.0,
+    "velocity_prior_sigma_mps": 100.0,
+    "velocity_motion_sigma_m": 0.01,
+    "position_prior_sigma_m": 0.0,
+    "clock_prior_sigma_m": 0.0,
+    "tdcp_sigma_m": 0.03,
+    "carrier_phase_sigma_m": 0.01,
+    "pseudorange_huber_threshold_sigma": 4.0,
+    "carrier_phase_huber_threshold_sigma": 4.0,
+    "tdcp_huber_threshold_sigma": 4.0,
+    "max_tdcp_gap_s": 2.0,
+    "seed_match_tolerance_s": 0.01,
+    "seed_interpolation_max_gap_s": 0.0,
+    "tdcp_slip_threshold_m": 10.0,
+    "min_elevation_deg": 10.0,
+    "min_snr_dbhz": 0.0,
+    "min_satellites_per_epoch": 4,
+    "use_spp_seed": true,
+    "use_pseudorange_factors": true,
+    "use_ordinary_tdcp_factors": true,
+    "use_position_motion_factors": true,
+    "use_clock_motion_factors": true,
+    "use_robust_loss": true,
+    "use_ionosphere_model": true,
+    "use_troposphere_model": true,
+    "use_carrier_phase_factors": false,
+    "use_single_difference_doppler_factors": false,
+    "use_single_difference_tdcp_factors": false,
+    "use_velocity_states": false,
+    "use_velocity_motion_factors": false,
+    "use_double_difference_factors": false,
+    "use_ambiguity_between_factors": false,
+    "use_ambiguity_priors": true,
+    "no_spp_seed": false,
+    "no_motion_factors": false,
+    "no_tdcp_factors": false,
+    "no_pseudorange_factors": false,
+    "no_tdcp_slip_reject": false,
+    "reject_rover_carrier_lli": false,
+    "exclude_glonass_qzss_sbas": false
+  },
+  "input_artifacts": [
+    {
+      "dataset_id": "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8",
+      "obs": "output/smartphone-r5/generalization-v6/routes/2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8/adapter/rover.obs",
+      "obs_sha256": "eb6be64686f33adb93e2ac2a4732a450323f94ae7b13a07bf46ea594bdb79154",
+      "nav": "output/smartphone-r5/generalization-v6/routes/2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8/inputs/brdc.nav",
+      "nav_sha256": "3690f08f8f1c1c0e7e20eba6f6809acd0ae4d5a09f9e90b1176512c6520ae232",
+      "seed_pos": "output/smartphone-r5/generalization-v6/routes/2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8/spp/libgnsspp_spp.pos",
+      "seed_pos_sha256": "1b13971d999bc5cc91bc55646f0a95a2701dd92d1e55d3a3cf1777304ce6f602",
+      "device_gnss": "output/smartphone-r5/generalization-v6/routes/2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8/inputs/device_gnss.csv",
+      "device_gnss_sha256": "3dcb29d9793384fd7e45930784a0b60fb909bebe4e5a83cd1924541df8880680",
+      "truth": "output/smartphone-r5/generalization-v6/routes/2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8/inputs/ground_truth.csv",
+      "truth_access": "train-scoring-only-after-all-three-truth-free-artifacts-are-sealed"
+    },
+    {
+      "dataset_id": "2022-08-04-20-07-us-ca-sjc-q/pixel5",
+      "obs": "output/smartphone-r5/generalization-v6/routes/2022-08-04-20-07-us-ca-sjc-q/pixel5/adapter/rover.obs",
+      "obs_sha256": "81eea55f2bc050cd0436bc81c9033500c57e275b24594c708b5d0c1d01605587",
+      "nav": "output/smartphone-r5/generalization-v6/routes/2022-08-04-20-07-us-ca-sjc-q/pixel5/inputs/brdc.nav",
+      "nav_sha256": "5f2e67a87eca95c77d04f72184fd615a7858ff3c948c2e5a681957791219a4c3",
+      "seed_pos": "output/smartphone-r5/generalization-v6/routes/2022-08-04-20-07-us-ca-sjc-q/pixel5/spp/libgnsspp_spp.pos",
+      "seed_pos_sha256": "e317fb682a4d755b95276a9c05e60de0bfd179befc51879146a652132b2f1c22",
+      "device_gnss": "output/smartphone-r5/generalization-v6/routes/2022-08-04-20-07-us-ca-sjc-q/pixel5/inputs/device_gnss.csv",
+      "device_gnss_sha256": "f493dda82bc6b3ee31e465c24abd8bf495a02cdb19a6b24f8f5bf5dad73ce617",
+      "truth": "output/smartphone-r5/generalization-v6/routes/2022-08-04-20-07-us-ca-sjc-q/pixel5/inputs/ground_truth.csv",
+      "truth_access": "train-scoring-only-after-all-three-truth-free-artifacts-are-sealed"
+    },
+    {
+      "dataset_id": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+      "obs": "output/smartphone-r5/development-galileo-e1-full/rover.obs",
+      "obs_sha256": "e4e1dfc9395ce409caec82f86436661b60fe64364c33818da0a1f63c87c05212",
+      "nav": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/brdc.nav",
+      "nav_sha256": "16c859f8015c874398978bae6004172c355f7d3a3b06fa81b54aac88b6b78d33",
+      "seed_pos": "output/smartphone-r5/development-galileo-e1-full/libgnsspp_spp.pos",
+      "seed_pos_sha256": "22787632b59bbdfaa774adf6d359cc71bf60b4d8a7f3553b23ca93590eb3e30a",
+      "device_gnss": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_gnss.csv",
+      "device_gnss_sha256": "c5af6cc3aeae6ab29a2a10d975d291b8fba4fab15273c0729163cd639ff10e42",
+      "truth": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv",
+      "truth_access": "train-scoring-only-after-all-three-truth-free-artifacts-are-sealed"
+    }
+  ],
+  "safety_contract": {
+    "per_route_timeout_seconds": 900,
+    "child_address_space_limit_bytes": 8589934592,
+    "maximum_published_output_bytes": 1073741824,
+    "atomic_publish": "run in a same-filesystem temporary directory; publish only after finite POS, summary, factor diagnostics, and hashes validate",
+    "fail_closed": "nonzero process, timeout, memory limit, missing/nonfinite output, missing required factor class, factor-class mismatch, or hash mismatch publishes no candidate; baseline WLS remains reference only",
+    "fallback": "there is no silent FGO-to-WLS substitution; an invalid FGO run is a recorded candidate failure and does not alter the production WLS/native lane"
+  },
+  "truth_free_output_contract": {
+    "required": ["fgo.pos", "fgo_summary.json", "fgo_epoch_debug.csv", "fgo_cost_trace.csv", "run_manifest.json", "run_manifest.sha256"],
+    "required_factor_classes": ["pseudorange_factors", "tdcp_factors", "motion_factors"],
+    "forbidden_factor_classes": ["single_difference_doppler_factors", "single_difference_tdcp_factors", "double_difference_pseudorange_factors", "double_difference_carrier_factors", "carrier_phase_factors"],
+    "truth_path_may_be_recorded_but_not_opened": true,
+    "hashes_sealed_before_truth": true
+  },
+  "gates": {
+    "route_level": "candidate H P50, H P95, V P95, availability, truth coverage, and all four official diagnostic variants must not regress versus exact WLS seed output",
+    "aggregate": "mean route metrics must not regress; mean H P95 and mean four-diagnostic score must each improve strictly",
+    "train_only_before_validation": true,
+    "fresh_validation": "open exactly once only after all train gates pass and artifacts are sealed; require the same non-regression contract and strict aggregate H P95 improvement",
+    "promotion": "development-only recommended native-FGO lane; production RTK/SPP defaults unchanged",
+    "no_post_holdout_tuning": true
+  },
+  "commands": {
+    "truth_free_one_route": "PYTHONPATH=apps/commands:apps/commands/benchmarks python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_eval.py run --selection-record docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_selection.json --route '<dataset_id>|<obs>|<nav>|<seed_pos>|<device_gnss>|<truth>' --output-root output/smartphone-r5/native-fgo-v1 --binary build/apps/gnss_fgo",
+    "train_score_after_seal": "PYTHONPATH=apps/commands:apps/commands/benchmarks python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_eval.py train-score --selection-record docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_selection.json --output-root output/smartphone-r5/native-fgo-v1",
+    "release_build": "cmake --build build --config Release -j$(nproc)",
+    "full_ctest": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} ctest --test-dir build -j1 --output-on-failure"
+  }
+}

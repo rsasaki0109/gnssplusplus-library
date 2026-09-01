@@ -1,0 +1,188 @@
+{
+  "schema_version": "smartphone-r5-phase24-route-group-split-freeze.v1",
+  "status": "frozen-before-phase24-payload-and-truth-access",
+  "created_at_utc": "2026-09-01T00:00:00Z",
+  "purpose": "Route-grouped calibration/validation protocol for reproducing the already frozen native smartphone lanes on a small, device-diverse train cohort.",
+  "scope": {
+    "competition": "smartphone-decimeter-2023",
+    "archive": "data/gsdc2023/cache/dataset_2023.zip",
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "archive_size_bytes": 2761355999,
+    "central_member_count": 1048,
+    "central_inventory": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+    "central_inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+    "central_metadata_canonical_sha256": "5f619be94a00c33c3067f13b1cd3351d96f2804f07fa04eda8fb027739fb0992",
+    "inspection_before_freeze": "ZIP central-directory names, sizes, CRC32, existing JSON/path metadata only; no archive member content was opened and no ground_truth.csv was read by Phase24 freeze.",
+    "mat_policy": "No .mat member is fetched, opened, generated, or used. MATLAB source is out of scope for this phase."
+  },
+  "prior_truth_use_audit": {
+    "authoritative_inventory": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_convergence_selector_truth_use_inventory_v2.json",
+    "authoritative_inventory_sha256": "fc90e3a6e4182276cbfebc635085d367c18fe10d3f0c982ee8d2cfcc9eb1f3d4",
+    "secondary_inventory": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_optimizer_truth_use_inventory_v1.json",
+    "secondary_inventory_sha256": "da10a5122f68e1ac4bd015949bdf3fa15dbb294e1938ebd6125691508e53eb1c",
+    "classification": "A prior positive truth counter, scored artifact, or materialized ground_truth path excludes that exact identity from the never-opened set. Existing development-train truth may be reused only as historical calibration evidence and is not called fresh validation.",
+    "positive_truth_exact_identity_count_at_audit": 33,
+    "prior_holdout_or_leaderboard_not_used_for_phase24_selection": true,
+    "current_phase24_truth_open_count_before_freeze": 0,
+    "current_phase24_truth_materialized_before_freeze": false,
+    "current_phase24_archive_member_content_read_before_freeze": false,
+    "notes": [
+      "The repository contains historical materializations and records from prior phases; these are evidence for exclusion/history only.",
+      "The validation identity below was previously declared as a validation candidate but its ground truth was not materialized or opened in the current workspace inventory; it is treated as new validation for this frozen protocol.",
+      "The future holdout identity below was previously reserved and remains sealed; its ground truth will not be materialized in Phase24 calibration or validation."
+    ]
+  },
+  "frozen_split": {
+    "route_disjoint_across_roles": true,
+    "train_calibration": [
+      {
+        "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+        "route": "2021-03-16-18-59-us-ca-mtv-a",
+        "phone": "pixel5",
+        "calendar_year": 2021,
+        "route_region": "mtv",
+        "history": "prior development-train truth; calibration reuse, not fresh evidence"
+      },
+      {
+        "dataset_id": "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+        "route": "2021-07-27-19-49-us-ca-mtv-b",
+        "phone": "pixel4",
+        "calendar_year": 2021,
+        "route_region": "mtv",
+        "history": "prior development-train truth; calibration reuse, not fresh evidence"
+      },
+      {
+        "dataset_id": "2021-07-14-20-50-us-ca-mtv-e/sm-g988b",
+        "route": "2021-07-14-20-50-us-ca-mtv-e",
+        "phone": "sm-g988b",
+        "calendar_year": 2021,
+        "route_region": "mtv",
+        "history": "prior development route/device evidence; calibration only"
+      }
+    ],
+    "fresh_validation": {
+      "dataset_id": "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+      "route": "2023-05-09-21-32-us-ca-mtv-pe1",
+      "phone": "pixel5",
+      "calendar_year": 2023,
+      "route_region": "mtv",
+      "truth_access": "not materialized/opened before this freeze; only permitted after the unchanged train gate passes"
+    },
+    "future_holdout": {
+      "dataset_id": "2023-05-16-19-54-us-ca-mtv-xe1/pixel5",
+      "route": "2023-05-16-19-54-us-ca-mtv-xe1",
+      "phone": "pixel5",
+      "calendar_year": 2023,
+      "route_region": "mtv",
+      "truth_access": "sealed; never materialize/open in Phase24"
+    },
+    "selection_basis": "Metadata-only required raw files and route broadcast navigation, route/year/device diversity, and role separation. No metric, truth residual, leaderboard score, sample coordinate, or precomputed trajectory ranked the split.",
+    "excluded_candidate_without_nav": "2021-12-07-19-22-us-ca-lax-d/mi8 has complete GNSS/IMU/truth central members but no route broadcast nav member, so it is not a native FGO candidate.",
+    "historical_route_overlap_warning": "The three calibration identities are historical development evidence. No calibration route is reused by the fresh validation or future holdout roles; any prior phone on a selected route is recorded rather than silently treated as never-used."
+  },
+  "selected_central_directory_metadata": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "broadcast_nav": {"name": "dataset_2023/train/2021-03-16-18-59-us-ca-mtv-a/brdc.nav", "file_size": 9955040, "compressed_size": 994505, "crc32_hex": "75656383"},
+      "device_gnss": {"name": "dataset_2023/train/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv", "file_size": 57715495, "compressed_size": 13575292, "crc32_hex": "6e27b3b6"},
+      "device_imu": {"name": "dataset_2023/train/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_imu.csv", "file_size": 34393802, "compressed_size": 5687776, "crc32_hex": "1c1a0a81"},
+      "ground_truth": {"name": "dataset_2023/train/2021-03-16-18-59-us-ca-mtv-a/pixel5/ground_truth.csv", "file_size": 210009, "compressed_size": 58247, "crc32_hex": "9f60a62f"}
+    },
+    "2021-07-27-19-49-us-ca-mtv-b/pixel4": {
+      "broadcast_nav": {"name": "dataset_2023/train/2021-07-27-19-49-us-ca-mtv-b/brdc.nav", "file_size": 10567898, "compressed_size": 1038357, "crc32_hex": "a802d362"},
+      "device_gnss": {"name": "dataset_2023/train/2021-07-27-19-49-us-ca-mtv-b/pixel4/device_gnss.csv", "file_size": 49195998, "compressed_size": 11537864, "crc32_hex": "6ead4a40"},
+      "device_imu": {"name": "dataset_2023/train/2021-07-27-19-49-us-ca-mtv-b/pixel4/device_imu.csv", "file_size": 26595970, "compressed_size": 4731810, "crc32_hex": "f1d8f3f5"},
+      "ground_truth": {"name": "dataset_2023/train/2021-07-27-19-49-us-ca-mtv-b/pixel4/ground_truth.csv", "file_size": 164681, "compressed_size": 46201, "crc32_hex": "58b5d164"}
+    },
+    "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+      "broadcast_nav": {"name": "dataset_2023/train/2021-07-14-20-50-us-ca-mtv-e/brdc.nav", "file_size": 10577666, "compressed_size": 1041649, "crc32_hex": "7b4a5707"},
+      "device_gnss": {"name": "dataset_2023/train/2021-07-14-20-50-us-ca-mtv-e/sm-g988b/device_gnss.csv", "file_size": 28421893, "compressed_size": 6939884, "crc32_hex": "05b8b5ab"},
+      "device_imu": {"name": "dataset_2023/train/2021-07-14-20-50-us-ca-mtv-e/sm-g988b/device_imu.csv", "file_size": 16733408, "compressed_size": 2836350, "crc32_hex": "89203bf8"},
+      "ground_truth": {"name": "dataset_2023/train/2021-07-14-20-50-us-ca-mtv-e/sm-g988b/ground_truth.csv", "file_size": 113328, "compressed_size": 34040, "crc32_hex": "944179f8"}
+    },
+    "2023-05-09-21-32-us-ca-mtv-pe1/pixel5": {
+      "broadcast_nav": {"name": "dataset_2023/train/2023-05-09-21-32-us-ca-mtv-pe1/brdc.nav", "file_size": 11083341, "compressed_size": 1069563, "crc32_hex": "26fc8565"},
+      "device_gnss": {"name": "dataset_2023/train/2023-05-09-21-32-us-ca-mtv-pe1/pixel5/device_gnss.csv", "file_size": 45632470, "compressed_size": 10517233, "crc32_hex": "8ad53587"},
+      "device_imu": {"name": "dataset_2023/train/2023-05-09-21-32-us-ca-mtv-pe1/pixel5/device_imu.csv", "file_size": 48760450, "compressed_size": 10519466, "crc32_hex": "f3a38083"},
+      "ground_truth": {"name": "dataset_2023/train/2023-05-09-21-32-us-ca-mtv-pe1/pixel5/ground_truth.csv", "file_size": 206062, "compressed_size": 58798, "crc32_hex": "015842bb"}
+    },
+    "2023-05-16-19-54-us-ca-mtv-xe1/pixel5": {
+      "broadcast_nav": {"name": "dataset_2023/train/2023-05-16-19-54-us-ca-mtv-xe1/brdc.nav", "file_size": 11749347, "compressed_size": 1123176, "crc32_hex": "6e096015"},
+      "device_gnss": {"name": "dataset_2023/train/2023-05-16-19-54-us-ca-mtv-xe1/pixel5/device_gnss.csv", "file_size": 41846960, "compressed_size": 9628100, "crc32_hex": "24fb11a8"},
+      "device_imu": {"name": "dataset_2023/train/2023-05-16-19-54-us-ca-mtv-xe1/pixel5/device_imu.csv", "file_size": 52562062, "compressed_size": 11194627, "crc32_hex": "6e67671b"},
+      "ground_truth": {"name": "dataset_2023/train/2023-05-16-19-54-us-ca-mtv-xe1/pixel5/ground_truth.csv", "file_size": 224769, "compressed_size": 63280, "crc32_hex": "67186663"}
+    }
+  },
+  "fixed_candidate_matrix": {
+    "control_phase12": {
+      "record": "docs/use_cases/records/smartphone_r5_phase12_residual_ionosphere_freeze_v1.json",
+      "record_sha256": "416b56c7bc13fa969a4f2397fe70bc01ecb78198612c341e41ecee731ff908fd",
+      "flags": ["--native-pdc-imu-tdcp", "--native-signal-bias-states", "--native-residual-ionosphere"],
+      "parameters": "Frozen Phase12 recipe; no changes in Phase24."
+    },
+    "development_go_e1_e5a": {
+      "record": "docs/use_cases/records/smartphone_r5_phase19_gal_e1_e5a_freeze_v1.json",
+      "record_sha256": "05c152f8be89c44204c54f2875ed24aec4dbe4f76fdc9ed112aa0808f2c7e6a1",
+      "flags": ["--native-pdc-imu-tdcp", "--native-signal-bias-states", "--native-residual-ionosphere", "--native-carrier-code-leveling", "--native-carrier-code-innovation-reset", "--native-carrier-code-gal-e1-e5a"],
+      "parameters": "Frozen Phase19 E1+E5a safe-Hatch contract; no changes in Phase24."
+    },
+    "development_go_stop": {
+      "record": "docs/use_cases/records/smartphone_r5_phase20_upstream_stop_constraints_freeze_v1.json",
+      "record_sha256": "3d571e8ac669e23580906cca429f11d984b3d53f3315caef51792f73c24b3d66",
+      "flags": ["--native-pdc-imu-tdcp", "--native-signal-bias-states", "--native-residual-ionosphere", "--native-carrier-code-leveling", "--native-carrier-code-innovation-reset", "--native-carrier-code-gal-e1-e5a", "--native-upstream-stop-constraints"],
+      "parameters": "Frozen Phase20 stop-constraint contract; no changes in Phase24."
+    },
+    "development_go_position_offset": {
+      "record": "docs/use_cases/records/smartphone_r5_phase21_position_offset_manifest_v1.json",
+      "record_sha256": "b0a01002b4414660e991f8958b044a2713bf4a430b63202a97850418541672b7",
+      "flags": ["--native-pdc-imu-tdcp", "--native-signal-bias-states", "--native-residual-ionosphere", "--native-upstream-position-offset"],
+      "parameters": "Frozen Phase21 position-offset contract; no changes in Phase24."
+    }
+  },
+  "evaluation_protocol_frozen_before_truth": {
+    "inference_inputs": ["device_gnss.csv raw timing/pseudorange/rate/ADR/CN0/state fields", "device_imu.csv raw sensors", "route brdc.nav"],
+    "forbidden_inference_inputs": ["any .mat", "ground_truth.csv", "sample_submission.csv", "result/precomputed trajectory", "device-provided WLS coordinates", "enriched SvPosition* or SvElevationDegrees columns", "leaderboard score"],
+    "truth_policy": "Generate and seal raw-only artifacts for every candidate before opening the corresponding development truth. Truth is scoring-only and never enters the solver or candidate selection.",
+    "route_grouping": "All metrics are computed independently per route; no timestamps, state, residual, truth, or calibration crosses route boundaries.",
+    "metrics": [
+      "WGS84 Vincenty distance, linear percentile (n-1)",
+      "WGS84 Vincenty distance, nearest-rank ceiling",
+      "Haversine spherical distance, linear percentile (n-1)",
+      "Haversine spherical distance, nearest-rank ceiling",
+      "horizontal P50/P95, vertical P95, availability, truth coverage"
+    ],
+    "aggregation": "Arithmetic mean of route-level metrics, with route count and matched-key counts shown; no micro-average substitution.",
+    "candidate_selection": "No score-derived parameter fitting. Existing frozen lanes are compared as named recipes only; any failed lane is fail-closed and retained in the matrix.",
+    "train_gate": "Every candidate must be finite, deterministic, complete, and physically continuous, then non-regress all four diagnostics and horizontal/vertical/coverage metrics against Phase12 per route and in aggregate. A strict aggregate improvement in at least one primary metric is required for a train pass.",
+    "validation_gate": "Open the frozen validation truth once only if all unchanged train gates pass; require all four diagnostics and aggregate improvement, availability/coverage non-regression, and vertical/continuity safety.",
+    "holdout_gate": "The future holdout remains sealed regardless of train/validation outcome; no Phase24 holdout access is authorized.",
+    "post_score": "No candidate, parameter, split, or evaluator change after any truth score."
+  },
+  "commands_planned": {
+    "metadata_audit": "python3 <Phase24 metadata-only inventory command>; use ZIP central directory and JSON/path metadata only",
+    "raw_materialization": "python3 <Phase24 allowlisted extractor> --archive data/gsdc2023/cache/dataset_2023.zip --split docs/use_cases/records/smartphone_r5_phase24_route_group_split_freeze_v1.json --role train",
+    "truth_free_run": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:$LD_LIBRARY_PATH build/apps/gnss_fgo_imu_no_base --android-gnss <raw/device_gnss.csv> --android-imu <raw/device_imu.csv> --nav <raw/brdc.nav> --out <candidate/submission.csv> --summary-json <candidate/summary.json> --dataset-id <route/phone> --all-epochs --android-raw-utc-keys <frozen candidate flags>",
+    "score": "Only after raw artifacts and manifests are hash-sealed: one route-group evaluator process reads the declared train truth files and scores all frozen candidates together.",
+    "validation": "Not permitted until the unchanged train gate passes; one process/open maximum for the frozen validation truth.",
+    "holdout": "Forbidden in Phase24."
+  },
+  "source_and_binary_pins_at_freeze": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "54036a55b6b0b9b9789e065c131920f517ff9b376f3ee19663e2259a0798d877",
+    "include/libgnss++/algorithms/fgo_config.hpp": "f16840eada7147081d5b8dabed989dd9e7f10cc8d243bc1ead864968e94eacab",
+    "src/algorithms/fgo.cpp": "be5d6710a32bbb5037a93f20d14c6ba1c2f1a318eb859c865a7b027fe717ef38",
+    "apps/commands/benchmarks/gnss_smartphone_native_fgo_eval.py": "0fbceddcb958b43d2f1f12b0470c8732a82eb2d59a45fb89a478f1a831b660c5",
+    "configs/benchmarks/smartphone_r5_gsdc2023.json": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776",
+    "build/apps/gnss_fgo_imu_no_base": "dec00aff10864f8c3a575fb5e4af1e82102577cce8f0d0a1253c2078a1bbb00e"
+  },
+  "integrity": {
+    "freeze_record_hash": "computed after this JSON is committed; stored only in the companion manifest",
+    "companion_manifest": "docs/use_cases/records/smartphone_r5_phase24_route_group_split_freeze_v1_manifest.json",
+    "atomic_outputs_required": true,
+    "raw_materialization_allowlist": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "truth_materialization_allowlist_after_seal": ["ground_truth.csv"],
+    "path_traversal_rejected": true,
+    "nonfinite_duplicate_missing_extra_rejected": true,
+    "credential_access": false,
+    "external_mutation": false,
+    "production_default_changed": false
+  }
+}

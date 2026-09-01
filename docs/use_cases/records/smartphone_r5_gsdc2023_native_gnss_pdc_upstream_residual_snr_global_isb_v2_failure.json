@@ -1,0 +1,35 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-gnss-pdc-upstream-residual-snr-failure.v1",
+  "status": "truth-free-no-go-corrected-before-score",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "candidate": "native-gnss-pdc-upstream-residual-snr-global-isb-v2",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_upstream_residual_snr_freeze_v2.json",
+  "freeze_record_sha256": "3a36135615b4a535e60a88c0e784e2c6a3d9d5a1928f68d92bd73045975e1964",
+  "truth_access": {
+    "truth_free": true,
+    "ground_truth_read": false,
+    "mat_inputs_used": false,
+    "validation_opened": false,
+    "holdout_opened": false,
+    "test_opened": false
+  },
+  "artifact": {
+    "run_manifest": "output/smartphone-r5/native-gnss-pdc-upstream-residual-snr-global-isb-v2/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/run_manifest.json",
+    "run_manifest_sha256": "e7dc2c0f356f6a8def4a05404365796b8ad91c58fdec3ee96b36cdba2bf25118",
+    "summary_sha256": "0cd60d45347645ffa0a5f7ddc0b06b9133496622f7606c3c21bd77d46dbfa33",
+    "keyed_sha256": "d43c9e787c6771416856fd68fc63816fcec2a6860e3f101f1ec18dd2784dac36"
+  },
+  "observed_failure": {
+    "pseudorange_candidates": 39317,
+    "pseudorange_factors": 166,
+    "pseudorange_residual_rejected": 39151,
+    "root_cause": "The first global-pass implementation centered raw factor residuals without subtracting the Android receiver clock estimate clk(t). It therefore compared epoch clock bias against a 20 m ISB gate.",
+    "correction": "Use factor.residual_m - epoch.receiver_clock_bias_seconds*SPEED_OF_LIGHT for the global ISB median and gate, while retaining the original residual in the graph clock state.",
+    "solver_rerun_after_failure": false,
+    "truth_score_attempted": false,
+    "parameter_search": false,
+    "candidate_source_change": "correctness-only receiver-clock subtraction; no numeric parameter change"
+  },
+  "current_corrected_source_sha256": "cc9c3cb18a9014b71bcc966a32049fc1a1416b951426e1380c481258fc0e74f3",
+  "current_corrected_binary_sha256": "506d44f432f21adbc37bca007e9773afd90de2d38d99cf8459399aae37f77c88"
+}

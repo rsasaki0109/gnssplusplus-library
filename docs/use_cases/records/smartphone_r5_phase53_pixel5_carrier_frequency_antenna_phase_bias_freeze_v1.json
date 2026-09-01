@@ -1,0 +1,279 @@
+{
+  "schema_version": "smartphone-r5-phase53-pixel5-carrier-frequency-antenna-phase-bias-freeze.v1",
+  "phase": 53,
+  "execution_label": "Luna Max",
+  "status": "frozen-before-phase53-raw-read",
+  "purpose": "Truth-free identification audit of the single raw factor selected by Phase52: Android per-satellite carrier-frequency/antenna phase-bias residual. A native correction is authorized only if every frozen identifiability gate passes.",
+  "objective": {
+    "factor": "raw Android per-satellite carrier-phase ADR carrier-frequency/antenna phase-bias residual",
+    "route_count_required": 4,
+    "phone_model": "pixel5",
+    "truth_free": true,
+    "audit_only_until_all_gates_pass": true,
+    "solver_rerun": false,
+    "correction_fit_or_application_before_gate": false,
+    "past_truth_payload_reuse": false,
+    "phase52_metric_payload_reuse": false,
+    "zero_point_782_evaluation": false
+  },
+  "authority_pins": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "phase52_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase52_android_sv_time_uncertainty_integrity_recovery_result_v1.json",
+      "sha256": "ba0dc505ccfacf2595d9cee72086cb31b6fa764caebbe1dbf0abfa170f5a1ff6",
+      "use": "factor-selection and policy metadata only; no Phase52 metric payload is an audit input"
+    },
+    "phase52_commit": "2005b95",
+    "phase50_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase50_pixel5_adr_half_cycle_result_v1.json",
+      "sha256": "44c6421aba637d38ffc26cb7e1954a1942444dfc5fa7196a8f7fc53145cf5b90",
+      "use": "historical factor-policy metadata only; no Phase50 metric payload is an audit input"
+    },
+    "phase49_source_policy": {
+      "path": "docs/use_cases/records/smartphone_r5_phase49_pixel5_adr_cycle_slip_lock_loss_result_v1.json",
+      "sha256": "120e339bcfd60c892a643787b2ab8edb2ef070e153bd6c3983580ea6d925c9dc",
+      "use": "ADR sign/temporal contract metadata only; no Phase49 metric payload is an audit input"
+    },
+    "phase41_sign_unit_audit": {
+      "freeze_path": "docs/use_cases/records/smartphone_r5_phase41_doppler_measurement_contract_audit_freeze_v1.json",
+      "freeze_sha256": "5622099a9d7d37ee1e4de43385369e70c342acb515f8f83cf301964fc3c64758",
+      "result_path": "docs/use_cases/records/smartphone_r5_phase41_doppler_measurement_contract_audit_result_v2.json",
+      "result_sha256": "2061e8608b42da263fe992b2a36a4b42235cd2425c864a8aa465c23bc5e9d05b",
+      "contract": "Android PseudorangeRateMetersPerSecond is direct range-rate m/s; RINEX Doppler is -rate/wavelength"
+    },
+    "phase25_raw_contract": {
+      "description": "Use the existing Phase25 integer/Decimal raw-clock pseudorange contract only for raw eligibility; no coordinates, truth, or navigation are consumed.",
+      "segment_base_full_bias": true,
+      "long_double_or_integer_clock_arithmetic": true,
+      "raw_pseudorange_range_m": [10000000.0, 40000000.0]
+    },
+    "source_contracts": {
+      "android_raw_gnss_cpp": {
+        "path": "src/io/android_raw_gnss.cpp",
+        "sha256": "1bb9369e7db651e53fddab2a92c2f217512667bb349f70aa52934aeb80cbf387"
+      },
+      "android_raw_gnss_header": {
+        "path": "include/libgnss++/io/android_raw_gnss.hpp",
+        "sha256": "e833570103a521b9e051086b6ea75192ae3a575b83eee33d978143eaf279c52c"
+      },
+      "observation_header": {
+        "path": "include/libgnss++/core/observation.hpp",
+        "sha256": "9ba79a44fd1f8c4f4f7b7f8707a119c350174bf850b226ff89e587c55f8abd2c"
+      },
+      "fgo_problems_cpp": {
+        "path": "src/algorithms/fgo_problems.cpp",
+        "sha256": "41c0fa5db6a745562342061c9cd6bcf08f74e02038580869a09294a325f05ca1"
+      },
+      "tdcp_contract_header": {
+        "path": "include/libgnss++/algorithms/tdcp_contract.hpp",
+        "sha256": "1d56692d93f216703e2283b206b7bd0bca9c6593d51524d843fc6e385d96cbcf"
+      },
+      "carrier_code_leveling_header": {
+        "path": "include/libgnss++/algorithms/carrier_code_leveling.hpp",
+        "sha256": "31f97f7c6a96a5e6064ddaad9cc3b3e3f76c1dde40a14dcbb58025d3d1d817a4"
+      },
+      "fgo_config_header": {
+        "path": "include/libgnss++/algorithms/fgo_config.hpp",
+        "sha256": "627fbc8585d6f6a384d9ea10b2670e4a9889dc20ba89a3427ed735eb61a6a358"
+      },
+      "fgo_header": {
+        "path": "include/libgnss++/algorithms/fgo.hpp",
+        "sha256": "c732c6b3e5396da6753e547ef8c49c5f14ddc32bae52e4634f7facb8e6b6a221"
+      },
+      "observable_upstream_header": {
+        "path": "include/libgnss++/algorithms/observable_upstream_preprocessing.hpp",
+        "sha256": "5d85cfd82519b6aa3492af8cffb8b895935db7eb50f3a4c6001ab72d8ce13f54"
+      }
+    }
+  },
+  "cohort": {
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "route_disjoint": true,
+    "same_pixel5_model": true
+  },
+  "exact_raw_inputs": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv",
+      "member": "dataset_2023/train/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv",
+      "file_size": 57715495,
+      "sha256": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863"
+    },
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+      "member": "dataset_2023/train/2021-08-24-20-32-us-ca-mtv-h/pixel5/device_gnss.csv",
+      "file_size": 74299283,
+      "sha256": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7"
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_gnss.csv",
+      "member": "dataset_2023/train/2022-04-01-18-22-us-ca-lax-t/pixel5/device_gnss.csv",
+      "file_size": 33837317,
+      "sha256": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1"
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2023-03-08-21-34-us-ca-mtv-u/pixel5/inputs/device_gnss.csv",
+      "member": "dataset_2023/train/2023-03-08-21-34-us-ca-mtv-u/pixel5/device_gnss.csv",
+      "file_size": 23385520,
+      "sha256": "a0fc8e71bdfc03be61b99efcd7d41fbba8ffec126df78b55243f681fd211f204"
+    }
+  },
+  "raw_schema_contract": {
+    "required_columns": [
+      "MessageType",
+      "utcTimeMillis",
+      "TimeNanos",
+      "FullBiasNanos",
+      "BiasNanos",
+      "ReceivedSvTimeNanos",
+      "Svid",
+      "ConstellationType",
+      "SignalType",
+      "CarrierFrequencyHz",
+      "PseudorangeRateMetersPerSecond",
+      "AccumulatedDeltaRangeState",
+      "AccumulatedDeltaRangeMeters"
+    ],
+    "optional_phase_fields_detected_by_header_only": [
+      "CarrierCycles",
+      "CarrierPhase",
+      "CarrierPhaseUncertainty"
+    ],
+    "optional_antenna_fields_detected_by_header_only": [
+      "AntennaPhaseCenterOffsetMeters",
+      "AntennaPhaseBiasMeters",
+      "ReceiverAntennaPhaseCenterMeters",
+      "ReceiverAntennaPhaseBiasMeters"
+    ],
+    "optional_quality_fields": [
+      "HardwareClockDiscontinuityCount",
+      "State",
+      "MultipathIndicator",
+      "Cn0DbHz",
+      "PseudorangeRateUncertaintyMetersPerSecond",
+      "BiasUncertaintyNanos",
+      "TimeUncertaintyNanos",
+      "DriftNanosPerSecond",
+      "TimeOffsetNanos"
+    ],
+    "header_presence_is_reported_per_route": true,
+    "unknown_or_nonfinite_optional_values": "reported and excluded from the affected relation; never imputed"
+  },
+  "fixed_physical_contract": {
+    "raw_frequency_hz": "CarrierFrequencyHz as reported by Android; no nominal replacement in the primary relation",
+    "nominal_frequency_hz": "source constants for the parsed system/signal; frequency offset ppm=(CarrierFrequencyHz-f_nominal)/f_nominal*1e6",
+    "signed_adr_m": "-AccumulatedDeltaRangeMeters only for the five published Samsung sign-correction models; Pixel5 preserves adapter ADR sign",
+    "adr_phase_cycles": "phi_k = signed_ADR_k * CarrierFrequencyHz_k / c in the positive range-phase convention used for the ADR/rate relation; Android's RF CarrierPhase has the opposite sign (ADR = -k*carrier phase)",
+    "pair_eligibility": "same system/SVID/signal adjacent Raw rows, 0<dt<=1.5 s, unchanged HardwareClockDiscontinuityCount, finite in-range Phase25 raw P, existing code/CN0/multipath masks clear, ADR valid with reset/cycle-slip bits clear",
+    "frequency_aware_phase_rate_residual_m": "r_freq=(phi_k-phi_prev)*c/f_ref - 0.5*(PseudorangeRate_prev+PseudorangeRate_k)*dt, where f_ref=0.5*(f_prev+f_k)",
+    "constant_frequency_control_residual_m": "r_control=(signed_ADR_k-signed_ADR_prev)-0.5*(PseudorangeRate_prev+PseudorangeRate_k)*dt",
+    "frequency_leakage_m": "r_leak=(phi_k-phi_prev)*c/f_ref-(signed_ADR_k-signed_ADR_prev); this is the row-frequency-dependent component only",
+    "direct_phase_bias_residual_cycles": "when CarrierPhase or CarrierCycles is present and finite, report the source-sign-consistent direct-vs-ADR phase relation (direct_phase_k + phi_k) after per-satellite/signal arc centering; CarrierPhase is fractional per Android and is never promoted to a full ambiguity",
+    "antenna_phase_bias": "a direct antenna phase-center/bias field is required for an antenna interpretation; absence is a hard no-implementation finding, not a zero",
+    "clock_center": "subtract the median signed residual in each endpoint utcTimeMillis+HardwareClockDiscontinuityCount group for robust non-common-mode reporting; retain raw and centered values",
+    "normalization": "report cycles and metres using the observed pair f_ref; no coordinates, satellite geometry, truth, nav, or WLS",
+    "sign_source": "Phase41 direct Android range-rate and existing Pixel5 ADR sign contract; Android GnssMeasurement defines accumulated delta range = -k*carrier phase; synthetic sign fixture is mandatory",
+    "android_source_reference": "https://developer.android.com/reference/android/location/GnssMeasurement#getAccumulatedDeltaRangeMeters()"
+  },
+  "controls_and_repeats": {
+    "primary": "frequency-aware ADR phase-rate residual",
+    "control": "constant-frequency ADR/rate residual computed from the same in-memory eligible pairs",
+    "control_is_not_a_solver_or_correction": true,
+    "repeat_policy": "no second raw read; deterministic arithmetic and aggregate invariants are recomputed from the one in-memory parse",
+    "route_leave_one_out": "recompute fixed aggregate effect after omitting each route without opening raw input again",
+    "implementation_policy": "if all gates pass, authorize one opt-in native C++ FGO/TDCP correction concept only after a separate implementation seal; otherwise implement nothing"
+  },
+  "numeric_gates": {
+    "route_count": {"required": 4},
+    "raw_input_integrity": {
+      "exact_sha256_and_bytes": true,
+      "all_core_fields_finite": true,
+      "nonmonotonic_epochs": 0,
+      "duplicate_epoch_keys": 0
+    },
+    "ordinary_pair_coverage": {
+      "min_eligible_pairs_per_route": 3000,
+      "min_satellites_per_route": 5,
+      "valid_unflagged_coverage_required": true,
+      "current_tdcp_used_pair_overlap_min_per_route": 100
+    },
+    "frequency_group_coverage": {
+      "min_distinct_system_signal_frequency_groups_per_route": 2,
+      "min_satellite_groups_per_route": 5,
+      "within_signal_direction_min_groups_per_route": 2
+    },
+    "direct_source_availability": {
+      "antenna_phase_center_or_bias_field_required_for_native_antenna_correction": true,
+      "direct_phase_field_pair_min_per_route_if_present": 100,
+      "missing_direct_fields_is_reported_not_imputed": true
+    },
+    "frequency_materiality": {
+      "abs_frequency_offset_p95_min_ppm": 1.0,
+      "frequency_leakage_p95_min_m": 0.03,
+      "frequency_aware_vs_control_p95_excess_min_m": 0.02,
+      "non_common_satellite_median_mad_min_m": 0.01,
+      "routewise_same_direction": true
+    },
+    "relation_identifiability": {
+      "abs_frequency_offset_vs_abs_centered_residual_spearman_min": 0.35,
+      "routewise_spearman_required": true,
+      "loo_effect_excess_min_m": 0.02,
+      "loo_fixed_rule_direction_stable": true,
+      "signal_within_family_direction_required": true,
+      "not_pure_common_mode": true
+    },
+    "retention_and_integrity": {
+      "clean_retention_min_fraction": 0.80,
+      "all_residuals_finite": true,
+      "pair_reason_counts_sum": true,
+      "state_group_counts_sum": true,
+      "signal_frequency_group_counts_sum": true,
+      "satellite_group_counts_sum": true,
+      "four_route_medians_retained": true,
+      "aggregate_recomputed_exact": true,
+      "loo_route_count_exact": true,
+      "header_field_presence_route_map_exact": true
+    },
+    "logic": "AND; thresholds, formulas, controls, and source-availability policy are immutable after this freeze and before the first Phase53 raw read"
+  },
+  "input_policy": {
+    "single_process": true,
+    "raw_device_gnss_read_count_per_route": 1,
+    "raw_device_imu_read_count": 0,
+    "truth_read_count": 0,
+    "past_truth_payload_reads": 0,
+    "phase52_metric_payload_reads": 0,
+    "brdc_nav_reads": 0,
+    "solver_reruns": 0,
+    "trajectory_reruns": 0,
+    "correction_fit_or_application": false,
+    "validation_holdout_access": false,
+    "archive_reopens": 0,
+    "rematerialization_count": 0,
+    "kaggle_or_token_access": false,
+    "mat_reads_or_generated": false,
+    "device_wls_or_precomputed_coordinates": false,
+    "SvPosition_or_SvElevation": false,
+    "atomic_output_publish": true
+  },
+  "pre_read_assertions": {
+    "phase53_raw_reads_before_freeze": false,
+    "phase53_truth_reads_before_freeze": false,
+    "phase53_solver_invocations_before_freeze": false,
+    "phase53_correction_implementation_before_gate": false,
+    "phase52_metric_payload_used_as_input": false,
+    "raw_header_inspected_before_freeze": false
+  },
+  "source_decision_policy": {
+    "all_pass": "Authorize only one separately sealed opt-in native C++ FGO/TDCP correction design; do not read truth or run accuracy in Phase53.",
+    "any_fail": "No correction, mask, weighting, solver rerun, or truth read. Record the strongest raw-only structure and exactly one next source-supported factor.",
+    "antenna_field_absent": "Do not invent an antenna phase-center/bias term. Report the exact per-route header absence and evaluate only raw CarrierFrequencyHz/ADR relationships; native correction remains unauthorized.",
+    "phase52_champion": "Preserve Phase43 champion and Phase51 experimental option regardless of Phase53 outcome.",
+    "zero_point_782": "not evaluated without truth",
+    "next_single_raw_physical_factor_if_no_go": "raw Android per-satellite accumulated-delta-range uncertainty (AccumulatedDeltaRangeUncertaintyMeters)"
+  }
+}

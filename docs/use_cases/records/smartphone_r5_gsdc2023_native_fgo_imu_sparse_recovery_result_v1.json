@@ -1,0 +1,70 @@
+{
+  "schema_version": "smartphone-r5-native-fgo-imu-sparse-recovery-result.v1",
+  "status": "no-go-development-route",
+  "candidate": "fgo_imu_sparse_recovery",
+  "classification": "coverage-recovery-candidate",
+  "decision": {
+    "promotion": "no-go",
+    "reason": "The raw-only graph covered every selected raw UTC key and converged without fallback, but the fixed development score was substantially worse than the prior native lanes and did not meet the frozen gate. This candidate is not a dedicated gnss_pos_vel_pdc state bridge.",
+    "fresh_validation_authorized": false,
+    "holdout_authorized": false,
+    "kaggle_or_token_access": false,
+    "production_default_changed": false,
+    "score_used_for_tuning": false
+  },
+  "freeze": {
+    "record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_imu_sparse_recovery_freeze_v1.json",
+    "record_sha256": "b852c28124e397c1a9a5f303e2d5655ba85e463a1fceb35528004c7b6ff80879",
+    "manifest": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_imu_sparse_recovery_freeze_v1.manifest.json"
+  },
+  "artifact": {
+    "record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_imu_sparse_recovery_artifact_v1.json",
+    "record_sha256": "5d87f1011b2312c87f32d6ad189d73b24f965b0990d94642167231c7d1a405af",
+    "manifest": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_imu_sparse_recovery_artifact_v1.manifest.json",
+    "manifest_sha256": "a917b0d27528ae7fcd9d69e2a0841519b438629af0c4d219ee1e5149f248662d"
+  },
+  "evaluation": {
+    "truth_read_count": 1,
+    "truth_access_type": "single-development-score-read-after-artifact-seal",
+    "ground_truth_sha256": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a",
+    "evaluation_json": "output/smartphone-r5/phase9-fgo-imu-sparse-recovery-v1/evaluation.json",
+    "evaluation_json_sha256": "14a22ad63bbb7d999032e4e2c554c179378d1a0b5189fa39de60180114f23ad5",
+    "phone": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "truth_rows": 1383,
+    "prediction_rows_scored": 1383,
+    "missing_keys": 0,
+    "extra_keys": 0,
+    "coverage_ratio": 1.0,
+    "diagnostic_scores_m": {
+      "haversine_sphere__linear_n_minus_1": 924.1824979761618,
+      "haversine_sphere__nearest_rank_ceiling": 924.1965963273581,
+      "wgs84_vincenty__linear_n_minus_1": 926.2576516413416,
+      "wgs84_vincenty__nearest_rank_ceiling": 926.2766004320982
+    },
+    "primary_score": null,
+    "primary_score_status": "undetermined-from-public-primary-sources"
+  },
+  "comparison": {
+    "native_raw_direct_pdc_wgs84_m": 93.505101,
+    "previous_native_fgo_raw_utc_haversine_linear_m": 248.98641429394468,
+    "fixed_gate_wgs84_linear_m": 68.0475838937948,
+    "candidate_wgs84_linear_m": 926.2576516413416,
+    "candidate_vs_gate": "fail",
+    "candidate_vs_previous_raw_utc_lane": "regression"
+  },
+  "observed_failure": {
+    "fallback": false,
+    "converged": true,
+    "max_adjacent_horizontal_speed_mps": 183.46771107830838,
+    "interpolated_epochs": 0,
+    "edge_hold_epochs": 0,
+    "note": "Coverage recovery alone does not control the PDC/FGO tail; no post-truth repair or parameter change was attempted."
+  },
+  "runtime": {
+    "generation_wall_seconds": 80.0,
+    "generation_maximum_rss_kb": 121996,
+    "evaluation_wall_seconds": 0.19,
+    "evaluation_maximum_rss_kb": 21412
+  },
+  "policy": "No validation, holdout, Kaggle, token, or external mutation was used. This result is sealed historical evidence; future PDC state-bridge work must be a separately frozen candidate."
+}

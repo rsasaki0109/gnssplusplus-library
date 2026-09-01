@@ -1,0 +1,228 @@
+{
+  "schema_version": "smartphone-r5-phase28-native-fgo-no-bridge-structural-result.v1",
+  "phase": "28",
+  "status": "sealed-structural-no-go",
+  "decision": "No-Go",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_phase28_native_fgo_no_bridge_freeze_v1.json",
+    "sha256": "a932782df2d65e45730d107420183692b0990ba814b0850eb242d2f4086c9e80"
+  },
+  "truth_policy": {
+    "truth_open_count": 0,
+    "train_truth_opened": false,
+    "validation_opened": false,
+    "holdout_opened": false,
+    "phase24_matrix_opened": false,
+    "mat_read_or_generated": false,
+    "kaggle_or_token_access": false,
+    "post_score_tuning": false
+  },
+  "input_policy": {
+    "raw_archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "inference_inputs": [
+      "device_gnss.csv raw timing/status/measurement fields",
+      "device_imu.csv",
+      "brdc.nav"
+    ],
+    "forbidden_inputs": [
+      "ground_truth.csv",
+      "any .mat file",
+      "device WLS or enriched SvPosition/SvElevation fields",
+      "sample/submission/precomputed trajectory coordinates",
+      "Phase25/Phase27 output CSVs or summaries"
+    ],
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b"
+    ]
+  },
+  "candidate_contract": {
+    "new_flag": "--native-pdc-imu-tdcp-no-bridge",
+    "tdcp_imu_fgo_enabled": true,
+    "pdc_state_bridge_enabled": false,
+    "pdc_initializer_built_or_solved": false,
+    "numeric_model_change": false,
+    "production_default_changed": false,
+    "summary_nonfinite_diagnostic_fix": "Disabled bridge diagnostic fields now serialize zero instead of IEEE infinity; estimator behavior is unchanged.",
+    "legacy_flag_preserved": "--native-pdc-imu-tdcp still enables the historical bridge-backed recipe."
+  },
+  "source_and_binary_hashes_after_implementation": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "04866823b3b70243a08199216a6c61316eaad2922fd105f3c3d22baa2b025ee6",
+    "tests/test_smartphone_native_gnss_pdc_bridge.py": "42bcbda278f7401c542c1183a921a759500b41a474007dbc2528aa5a15b1990b",
+    "build/apps/gnss_fgo_imu_no_base": "3d261b18d43ddb6556986e20c3fe64abea047b7615a763e1237cba3b7e9bdc5a",
+    "focused_test_log": "de065f864bbdaa2136ba772faae5cecddc18d282080d5dd368c8842056641e10"
+  },
+  "structural_gate": {
+    "all_routes_required": true,
+    "finite_converged_output": true,
+    "raw_utc_key_contract": true,
+    "solver_fallback_forbidden": true,
+    "tdcp_factors_required": true,
+    "no_isolated_transition_above_70_mps": true,
+    "deterministic_repeat_required": true,
+    "truth_score_authorized_only_after_all_probes_pass": true
+  },
+  "control": {
+    "id": "phase25_raw_clock_no_bridge_control",
+    "artifact_root": "output/smartphone-r5/phase25-raw-clock-eval-v1/no_bridge",
+    "route_results": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "summary_sha256": "98139a1138d8bc3084ad66f008266adece7dc5ed6c58a58f1ae32b002fbd4e38",
+        "submission_sha256": "00f52a2578d99fa301f32e545f77c4bc7dcce04bbcd776db5ee494c7fb8a0320",
+        "epochs": 2159,
+        "converged": true
+      },
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4": {
+        "summary_sha256": "a47b66286a1814358cefee1645cb8a50e31104706e1ca98f699572e19603d14f",
+        "submission_sha256": "c6d7545fd30f8ff28b1469ff4b40d2a48966fedd152b0abd50d7dc569e008059",
+        "epochs": 1678,
+        "converged": true
+      },
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+        "summary_sha256": "1c1a1be54b325ded505ff54740aa0ab5d516c89ea05eae54f7cb12d451e98ed3",
+        "submission_sha256": "d5df038f18978be78e1b03d07bf32c4643923baf0dafa4778709f15801bb76e2",
+        "epochs": 1130,
+        "converged": true
+      }
+    }
+  },
+  "probe_results": {
+    "tdcp_no_bridge": {
+      "artifact_root": "output/smartphone-r5/phase28-native-fgo-no-bridge-structural-v1/tdcp_no_bridge",
+      "routes_passed": 3,
+      "routes_total": 3,
+      "repeat_routes_byte_identical": 3,
+      "route_results": {
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+          "summary_sha256": "a607d7908cf4c55a9701801508ee928d8bbb8ae97213d51cbadaa038b2edc90b",
+          "submission_sha256": "c199f9efc57c5318830f529ae8ebc33996ec916bb03e57e4bfdccfe775978e8c",
+          "log_sha256": "67fc4fe986a1ab61f38212163aa35fdb24caf78d9256a02774aa3c76f81d8c28",
+          "epochs": 2159,
+          "target_epochs": 2158,
+          "exact_solution_epochs": 2158,
+          "interpolated_epochs": 0,
+          "pseudorange_factors": 61754,
+          "tdcp_factors": 31488,
+          "graph_factors": 99719,
+          "graph_values": 8639,
+          "imu_intervals": 2158,
+          "iterations": 9,
+          "converged": true,
+          "fallback": false
+        },
+        "2021-07-27-19-49-us-ca-mtv-b/pixel4": {
+          "summary_sha256": "13d22531d1c06312fb2fc9e983682fa02a6a0c9e43180e640d25549d8a9931c1",
+          "submission_sha256": "e7f8ade3b2ccc52ad169730b3f91d3a08fe720377c13e753cdee3dc2c116d643",
+          "log_sha256": "04ef8607af6361aaf8db0b8fb95b4c530e0e842a8b2afad351be52f6b8f615d6",
+          "epochs": 1678,
+          "target_epochs": 1677,
+          "exact_solution_epochs": 1677,
+          "interpolated_epochs": 0,
+          "pseudorange_factors": 53214,
+          "tdcp_factors": 27080,
+          "graph_factors": 85328,
+          "graph_values": 6715,
+          "imu_intervals": 1677,
+          "iterations": 12,
+          "converged": true,
+          "fallback": false
+        },
+        "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+          "summary_sha256": "28a0ffd472e68f79e59fd9032acc5b70a7bdec4afe1b8fcf5b60f1da8cd60f81",
+          "submission_sha256": "1cfb9f3204934499fa9edf9e8073564897cf3660818e9a14afa5ddcb9c65f507",
+          "log_sha256": "e35f75b225fa02c5bb94de7fee24dd1416e6f269997a77e713986720ebfb7136",
+          "epochs": 1130,
+          "target_epochs": 1164,
+          "exact_solution_epochs": 1129,
+          "interpolated_epochs": 35,
+          "max_interpolation_gap_ms": 4000,
+          "pseudorange_factors": 17620,
+          "tdcp_factors": 12357,
+          "graph_factors": 33367,
+          "graph_values": 4523,
+          "imu_intervals": 1129,
+          "iterations": 12,
+          "converged": true,
+          "fallback": false
+        }
+      },
+      "interpretation": "The new explicit spelling reaches the existing TDCP/IMU/FGO graph without constructing the PDC initializer. Samsung's 35 four-second key interpolations are the existing raw-UTC output contract and are recorded, not repaired in this phase."
+    },
+    "gal_e1_e5a_hatch": {
+      "artifact_root": "output/smartphone-r5/phase28-native-fgo-no-bridge-structural-v1/e1e5a",
+      "routes_passed": 2,
+      "routes_total": 3,
+      "route_results": {
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+          "summary_sha256": "14b47f39681577da6898806faebb8d21e2269bbbaa04b9fbf7f57c15ed6ae4b7",
+          "submission_sha256": "10bd2fd53169deae6851d6b9e8ec6bda6cd2240f701bfc715aa0e31e0085e344",
+          "log_sha256": "a38a3e150a7141ce16f0d54d2814e5db0773e68a62e6333e1c1330de0c5e17c2",
+          "hatch_updates": 16401,
+          "hatch_resets": 0,
+          "tdcp_factors": 46734,
+          "graph_factors": 138984,
+          "converged": true,
+          "fallback": false
+        },
+        "2021-07-27-19-49-us-ca-mtv-b/pixel4": {
+          "summary_sha256": "da41a259cc47176ae62c7d766c7f95cfe075264cf0374a302b610f0c9cac44e9",
+          "submission_sha256": "fb71f43c6fae57310d073d71ad19055f623246a802efe0eaa48f2a7e18218c1c",
+          "log_sha256": "bcfe98bfa3ff93fe4d781ddf8b4fafd7f72ab8f786315366f5c36e6aafc139cc",
+          "hatch_updates": 11429,
+          "hatch_resets": 2,
+          "tdcp_factors": 34675,
+          "graph_factors": 113102,
+          "converged": true,
+          "fallback": false
+        },
+        "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+          "log_sha256": "c7081422b3f9aaf5f96e8a3be3b794a7b889cb97263d3490602765a4a5ba8b18",
+          "exit_reason": "residual-ionosphere structural contract failed closed: fallback=true",
+          "summary_or_submission_published": false,
+          "converged_output": false
+        }
+      }
+    },
+    "gal_e1_e5a_stop": {
+      "artifact_root": "output/smartphone-r5/phase28-native-fgo-no-bridge-structural-v1/e1e5a_stop",
+      "routes_passed": 2,
+      "routes_total": 3,
+      "pixel5_stop_velocity_factors": 200,
+      "pixel5_stop_pose_factors": 193,
+      "pixel4_stop_velocity_factors": 119,
+      "pixel4_stop_pose_factors": 114,
+      "mi8_exit_reason": "residual-ionosphere structural contract failed closed: fallback=true",
+      "mi8_log_sha256": "c7081422b3f9aaf5f96e8a3be3b794a7b889cb97263d3490602765a4a5ba8b18",
+      "summary_or_submission_published_for_mi8": false
+    },
+    "gal_e1_e5a_position_offset": {
+      "artifact_root": "output/smartphone-r5/phase28-native-fgo-no-bridge-structural-v1/e1e5a_offset",
+      "routes_passed": 2,
+      "routes_total": 3,
+      "pixel5_corrected_epochs": 2159,
+      "pixel5_max_offset_enu_m": 0.31622776601683805,
+      "pixel4_corrected_epochs": 1678,
+      "pixel4_max_offset_enu_m": 0.15000000000000002,
+      "mi8_exit_reason": "residual-ionosphere structural contract failed closed: fallback=true",
+      "mi8_log_sha256": "c7081422b3f9aaf5f96e8a3be3b794a7b889cb97263d3490602765a4a5ba8b18",
+      "summary_or_submission_published_for_mi8": false
+    }
+  },
+  "tests": {
+    "focused_cpp": {
+      "result": "23/23 passed",
+      "log_sha256": "de065f864bbdaa2136ba772faae5cecddc18d282080d5dd368c8842056641e10"
+    },
+    "new_cli_contract": "passed: new spelling accepted through raw open; explicit bridge conflict rejected before input open",
+    "full_serial_ctest": "132/132 passed",
+    "full_serial_ctest_log_sha256": "81fdc8b1328e45597efa7b63e64883e5ddac16c3a856d4e37ca029e592d82b3a"
+  },
+  "decision_basis": {
+    "pass_condition": "All fixed probes must pass on all three routes before any train truth read.",
+    "result": "The bridge-free TDCP/IMU/FGO base passes 3/3 and repeats byte-identically, but every feature probe requiring the full E1/E5a recipe fails on the Samsung route because the existing IMU solution falls back and the candidate contract rejects fallback.",
+    "truth_score": "skipped by the predeclared structural gate",
+    "validation_and_holdout": "remain sealed",
+    "next_action": "Retain the bridge-free split as an explicit development structural lane; do not open truth or tune Phase28. Any Samsung-compatible feature recipe requires a separately frozen candidate."
+  }
+}

@@ -1,0 +1,234 @@
+{
+  "schema_version": "smartphone-r5-phase61-pixel5-cn0-pseudorange-calibration-result.v1",
+  "phase": 61,
+  "execution_label": "Luna Max",
+  "status": "no-go-cn0-pseudorange-calibration-not-identifiable",
+  "operation": "truth-free raw Android Cn0DbHz pseudorange code-tracking/multipath CMC residual calibration audit",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase61_pixel5_cn0_pseudorange_calibration_freeze_v1.json",
+    "sha256": "d80122d87f2f6e4529483e0f319951ea1f199e46120bd0e785a2adb5eac9685d",
+    "seal_commit": "65a8fb9"
+  },
+  "evaluator_manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase61_pixel5_cn0_pseudorange_calibration_evaluator_manifest_v1.json",
+    "sha256": "8d4a704d88b6c310e09f541c94f2b820b8c3250809a0ab3c9738f9d7a3818520",
+    "seal_commit": "8d0a449"
+  },
+  "evaluator": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase61_pixel5_cn0_pseudorange_calibration.py",
+    "sha256": "02b67220c940568228e45e1f43ba94d8f6735beccffbd75d62ec4753e2b3d995",
+    "test_path": "tests/test_smartphone_phase61_pixel5_cn0_pseudorange_calibration.py",
+    "test_sha256": "41a96381ef1fce1d62734e90ceab3798edee1614ee299da12cd9a7f3724c523d",
+    "cmake_path": "tests/CMakeLists.txt",
+    "cmake_sha256": "f6a37e3eb31458269d0127899ee2546d111f8dfa741d8eb9cc58c04c980cdcfc",
+    "single_process": true,
+    "raw_parser": "Phase55 ADR-rich raw parser; Phase48 raw-clock source hash pinned; no Phase47 metric payload",
+    "one_shot": true
+  },
+  "cohort": {
+    "phone_model": "pixel5",
+    "route_disjoint": true,
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "raw_device_gnss_reads_per_route": 1
+  },
+  "fixed_observable": {
+    "raw_pseudorange": "Phase25 integer/Decimal Android-clock reconstruction only",
+    "cmc": "cmc_m = P_raw_m - AccumulatedDeltaRangeMeters_signed_m",
+    "arc_centering": "Subtract the median CMC in each continuous (system,SVID,signal) ADR arc; arcs require at least two valid rows; singleton rows are reported and excluded",
+    "residual": "abs(cmc_m - median_arc_cmc_m)",
+    "cn0_shape": "10^(-(Cn0DbHz-40.0)/20.0)",
+    "alpha_fit": "median(abs(centered CMC_m)/shape(Cn0DbHz)) on the three training routes in each leave-one-route-out fold",
+    "candidate_model": "sigma_model_m = alpha_m * 10^(-(Cn0DbHz-40.0)/20.0)",
+    "impact_proxy": "compare sigma_model_m with frozen Phase43 configured base sigma 3.0 m; this is not an elevation-scaled effective-factor claim",
+    "scope_if_implemented": "FGO undifferenced pseudorange sigma floor only; coefficient one, no cap, no SPP/TDCP/Doppler; no implementation authorized"
+  },
+  "route_summary": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "raw_rows": 87705,
+      "cmc_rows": 8111,
+      "singleton_arc_rows_excluded": 286,
+      "distinct_satellites": 7,
+      "signal_families": ["GALILEO:GAL_E1"],
+      "unsupported_signal_rows_informational": 266,
+      "finite_cn0_fraction": 1.0,
+      "cn0_spearman": -0.22334235784745976,
+      "median_abs_centered_cmc_m": 0.8861643597483635,
+      "p95_abs_centered_cmc_m": 3.467413816601038,
+      "max_abs_centered_cmc_m": 10.070594038814306,
+      "same_epoch_noncommon_p50_m": 0.6653883848339319,
+      "cn0_bin_counts": {"20_to_25": 0, "25_to_30": 7, "30_to_35": 2020, "35_to_40": 4494, ">=40": 1590}
+    },
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "raw_rows": 112833,
+      "cmc_rows": 9337,
+      "singleton_arc_rows_excluded": 257,
+      "distinct_satellites": 6,
+      "signal_families": ["GALILEO:GAL_E1"],
+      "unsupported_signal_rows_informational": 435,
+      "finite_cn0_fraction": 1.0,
+      "cn0_spearman": -0.2037470971995154,
+      "median_abs_centered_cmc_m": 0.9677528291940689,
+      "p95_abs_centered_cmc_m": 3.937635242938988,
+      "max_abs_centered_cmc_m": 10.811426062136889,
+      "same_epoch_noncommon_p50_m": 0.673111092299223,
+      "cn0_bin_counts": {"20_to_25": 0, "25_to_30": 1, "30_to_35": 2482, "35_to_40": 4080, ">=40": 2774}
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "raw_rows": 51243,
+      "cmc_rows": 4695,
+      "singleton_arc_rows_excluded": 320,
+      "distinct_satellites": 10,
+      "signal_families": ["GALILEO:GAL_E1"],
+      "unsupported_signal_rows_informational": 247,
+      "finite_cn0_fraction": 1.0,
+      "cn0_spearman": -0.25680795293534325,
+      "median_abs_centered_cmc_m": 0.7526177577674389,
+      "p95_abs_centered_cmc_m": 3.099244299530983,
+      "max_abs_centered_cmc_m": 12.409790091216564,
+      "same_epoch_noncommon_p50_m": 0.5652979090809822,
+      "cn0_bin_counts": {"20_to_25": 0, "25_to_30": 1, "30_to_35": 1266, "35_to_40": 2357, ">=40": 1071}
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "raw_rows": 35810,
+      "cmc_rows": 4169,
+      "singleton_arc_rows_excluded": 249,
+      "distinct_satellites": 11,
+      "signal_families": ["GALILEO:GAL_E1"],
+      "unsupported_signal_rows_informational": 137,
+      "finite_cn0_fraction": 1.0,
+      "cn0_spearman": -0.16837903157577683,
+      "median_abs_centered_cmc_m": 0.752587653696537,
+      "p95_abs_centered_cmc_m": 3.261636678874492,
+      "max_abs_centered_cmc_m": 14.499508164823055,
+      "same_epoch_noncommon_p50_m": 0.5935686072334647,
+      "cn0_bin_counts": {"20_to_25": 0, "25_to_30": 2, "30_to_35": 1052, "35_to_40": 1893, ">=40": 1222}
+    }
+  },
+  "aggregate": {
+    "route_median_abs_centered_cmc_m": [0.8861643597483635, 0.9677528291940689, 0.7526177577674389, 0.752587653696537],
+    "aggregate_median_m": 0.8193910587579012,
+    "route_median_mad_m": 0.06678835302591324,
+    "pairwise_route_median_distances_m": [0.08158846944570541, 0.1335466019809246, 0.13357670605182648, 0.21513507142663002, 0.2151651754975319, 3.0104070901870728e-05]
+  },
+  "loo": {
+    "alpha_m_at_40_dbhz": [0.6529064295847831, 0.6267756232741026, 0.6713813497099195, 0.664979768901133],
+    "alpha_max_over_min": 1.0711669771118553,
+    "alpha_cv": 0.026094766343710624,
+    "heldout_cn0_spearman": [-0.22334235784745976, -0.2037470971995154, -0.25680795293534325, -0.16837903157577683],
+    "heldout_normalized_median": [1.009504555412909, 1.1483322848077069, 0.882722588754236, 0.9009189015739291],
+    "heldout_normalized_le_one_fraction": [0.4958698064357046, 0.45335760951054943, 0.5516506922257721, 0.5380187095226673],
+    "direction_stable": false
+  },
+  "candidate_impact_loo": {
+    "candidate_above_configured_base_fraction": [0.0, 0.0, 0.0, 0.0],
+    "candidate_sigma_excess_p95_m": [0.0, 0.0, 0.0, 0.0],
+    "note": "The fitted C/N0 model remains below the configured 3.0 m pseudorange base sigma in every route; this is a conservative raw-only lower-bound impact proxy."
+  },
+  "gates": {
+    "all_passed": false,
+    "observed": {
+      "route_count": true,
+      "raw_input_integrity": true,
+      "source_contract": true,
+      "coverage": false,
+      "routewise_monotonicity": false,
+      "loo_calibration": false,
+      "per_satellite_non_common_mode": false,
+      "per_signal_composition": false,
+      "same_epoch_non_common_mode": true,
+      "current_factor_impact_proxy": false,
+      "presentation_integrity": true
+    },
+    "failed_reasons": [
+      "LAX-t and MTV-u CMC row counts are below the frozen 5000-per-route minimum",
+      "all four routes expose only one supported signal family (GALILEO:GAL_E1), below the frozen two-family composition gate",
+      "routewise Cn0 Spearman is above the required -0.25 threshold for MTV-a, MTV-h, and MTV-u; fixed-bin monotonicity also fails in MTV-a, MTV-h, LAX-t, and MTV-u",
+      "satellite-group and signal-composition stability cannot pass with the one-family cohort",
+      "the fitted model is below the configured 3.0 m base sigma in every route, so the minimum raw-only impact proxy is zero",
+      "LOO direction stability fails in three of four folds"
+    ],
+    "coverage_observed": {
+      "min_cmc_rows": 4169,
+      "min_satellites": 6,
+      "min_cn0_fraction": 1.0,
+      "min_populated_cn0_bins": 4,
+      "min_populated_bin_rows": 1,
+      "min_signal_families": 1,
+      "min_arc_rows": 2
+    }
+  },
+  "source_contract": {
+    "adapter_parses_cn0_and_existing_masks": true,
+    "observation_retains_cn0_as_snr": true,
+    "fgo_uses_legacy_pseudorange_sigma_and_optional_p85_only_when_enabled": true,
+    "phase43_p85_path_disabled": true,
+    "candidate_cn0_pseudorange_model_present_before_phase61": false,
+    "source_hashes": {
+      "src/io/android_raw_gnss.cpp": "1bb9369e7db651e53fddab2a92c2f217512667bb349f70aa52934aeb80cbf387",
+      "include/libgnss++/io/android_raw_gnss.hpp": "e833570103a521b9e051086b6ea75192ae3a575b83eee33d978143eaf279c52c",
+      "include/libgnss++/core/observation.hpp": "9ba79a44fd1f8c4f4f7b7f8707a119c350174bf850b226ff89e587c55f8abd2c",
+      "src/algorithms/fgo_problems.cpp": "725167ccc21a62e61c4da9852726ed5cafbfc05ab794eaa76c4641676f576245",
+      "include/libgnss++/algorithms/fgo_config.hpp": "e7a72c89475d0edf1da3a767ea7d1702d76b8b52dc90a4bd5db225826875ffbe",
+      "include/libgnss++/algorithms/observable_upstream_preprocessing.hpp": "5d85cfd82519b6aa3492af8cffb8b895935db7eb50f3a4c6001ab72d8ce13f54",
+      "apps/native/gnss_fgo_imu_no_base.cpp": "2a924ddd681ce43e1bf08fc4155b3fa62569a9c7694a1550c28f153af4db5218",
+      "apps/commands/benchmarks/gnss_smartphone_phase48_pixel5_raw_code_rate_uncertainty_audit.py": "31ce6b4c342373bed95e4977523ace7e7df7e7f59b1469c78dd12ea5c504aaaf"
+    }
+  },
+  "decision": {
+    "audit_only": true,
+    "native_correction_authorized": false,
+    "implementation_stage_authorized": false,
+    "strongest_finding": "There is a modest repeatable high-C/N0 reduction in arc-centered CMC residual in LAX-t, but it is not route-stable at the frozen threshold, has only one supported GALILEO:GAL_E1 signal family across all routes, and never exceeds the configured 3.0 m pseudorange base sigma. The evidence is therefore insufficient to identify a deployable C/N0 calibration mechanism.",
+    "next_single_raw_physical_factor_if_no_go": "none selected in Phase61; preserve Phase43 champion and do not select a second factor",
+    "phase43_champion_preserved": true,
+    "phase51_experimental_preserved": true,
+    "phase47_metric_payload_used": false,
+    "phase60_metric_payload_used": false,
+    "truth_or_metric_payload_used": false,
+    "zero_point_782": "not evaluated without truth"
+  },
+  "read_accounting": {
+    "single_process": true,
+    "raw_device_gnss_read_count_total": 4,
+    "raw_device_gnss_reads": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": 1,
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": 1,
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": 1,
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": 1
+    },
+    "truth_reads": 0,
+    "navigation_reads": 0,
+    "solver_or_trajectory_reruns": 0,
+    "raw_device_imu_reads": 0,
+    "coordinate_or_wls_inputs": 0,
+    "SvPosition_or_SvElevation": 0,
+    "enriched_RawPseudorange_inputs": 0,
+    "mat_reads_or_generated": 0,
+    "validation_holdout_reads": 0,
+    "archive_reopens": 0,
+    "rematerializations": 0,
+    "kaggle_or_token_access": 0,
+    "phase47_metric_payload_reads": 0,
+    "phase60_metric_payload_reads": 0,
+    "phase43_metric_payload_reads": 0,
+    "correction_fit_or_application": 0
+  },
+  "output_artifacts": {
+    "result": {"path": "output/smartphone-r5/phase61-pixel5-cn0-pseudorange-calibration-v1/phase61_pixel5_cn0_pseudorange_calibration.json", "bytes": 84200, "sha256": "d37d883ed148a831c9482094e929da986429eb9acbf76f83a29a4dc6a4947587"},
+    "routes": {"path": "output/smartphone-r5/phase61-pixel5-cn0-pseudorange-calibration-v1/phase61_pixel5_cn0_pseudorange_calibration.routes.json", "bytes": 71276, "sha256": "fa3258e0b171492c59ab038177f79a7675a2b1ea509407193640b7f53e8d1694"},
+    "events": {"path": "output/smartphone-r5/phase61-pixel5-cn0-pseudorange-calibration-v1/phase61_pixel5_cn0_pseudorange_calibration.events.json", "bytes": 29164429, "sha256": "eb83c126142998358a66be10f59747d800499aebbbf15a67bfacda2a277e8dad"},
+    "manifest": {"path": "output/smartphone-r5/phase61-pixel5-cn0-pseudorange-calibration-v1/phase61_pixel5_cn0_pseudorange_calibration.manifest.json", "bytes": 460, "sha256": "090cce32cad3e6c4557d7244fa890fa0dc49b1cda00b5168d2111d6df32b7a81"}
+  },
+  "tests": {
+    "focused_python": "5 passed",
+    "py_compile": true,
+    "verify_freeze_before_raw": true,
+    "verify_manifest_before_raw": true,
+    "registered_ctest": "python_smartphone_phase61_pixel5_cn0_pseudorange_calibration_tests"
+  }
+}

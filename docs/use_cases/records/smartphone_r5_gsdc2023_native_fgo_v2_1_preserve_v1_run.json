@@ -1,0 +1,183 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-v2-1-preserve-v1-run.v1",
+  "status": "train-short-window-no-go-h-p50-regression",
+  "candidate_id": "native-fgo-v2-1-preserve-v1-tdcp-motion-combined-imu",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_1_preserve_v1_freeze.json",
+    "sha256": "6c33400e97345cc7f966c3ff5ff7a946b4fb6f89bb4c35cf56bc95654f663eae"
+  },
+  "truth_policy": {
+    "truth_free_generation_completed_before_score": true,
+    "validation_materialized": false,
+    "validation_truth_opened": false,
+    "holdout_materialized": false,
+    "holdout_truth_opened": false,
+    "kaggle_or_external_mutation": false,
+    "token_access": false,
+    "leaderboard_scores_used_for_tuning": false,
+    "post_score_parameter_or_code_change": false
+  },
+  "source_hashes": {
+    "apps/native/gnss_fgo_imu_v21.cpp": "c158cdd2fc6cfba37b7bb300b52c2c5b9cf760482ac46206895f0462da835883",
+    "src/algorithms/fgo_gtsam_internal.hpp": "aad937849b4ba1c9b9bec0cdaaaf270a66cb71b7d789e682d5ff571bb7f66621",
+    "src/algorithms/fgo_gtsam_backend.cpp": "08c7b82e9395fc3645fc75785849576f982ec6e6e91432e3a58d85bb396ec191",
+    "apps/CMakeLists.txt": "7db14842b85c363c88e93ad1fbd6f719a502b21bc2fd8ed28af3c96b6c1ae81f",
+    "tests/test_smartphone_native_fgo_v2_1_contract.py": "551ed2961d079d2c6612ee9bed37b2493edbd74fbab241b4f00ac2544518efef",
+    "tests/CMakeLists.txt": "46c02359ba264ef406142629cd831e8eff06326443cfb06456ba62310c5754ff"
+  },
+  "release_binary": {
+    "path": "build/apps/gnss_fgo_imu_v21",
+    "sha256": "8b978458735996ea571baa9975be70c37287f84fec029ced187b9f30fbb6d483"
+  },
+  "inputs": {
+    "smoke": {
+      "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "obs": {
+        "path": "output/smartphone-r5/native-fgo-v2-mat-no-base-v1/smoke/route-2021/rover.obs",
+        "sha256": "50fc974321b19e99f7080e63faa859a4ee0dd951d7f5d0f943f8a1318216fe38"
+      },
+      "nav": {
+        "path": "output/smartphone-r5/native-fgo-v2-mat-no-base-v1/smoke/route-2021/brdc.nav",
+        "sha256": "6adfaf7fe4452a4faeb94a7b607c15e05f578c46a028a030b94aa6f79de194cd"
+      },
+      "imu": {
+        "path": "output/smartphone-r5/native-fgo-v2-mat-no-base-v1/smoke/route-2021/imu_processed.csv",
+        "sha256": "f05abb6f649a3640a237fca2f5c552d1904ab82f865d54538d7c7b577e5b7633"
+      }
+    },
+    "train": {
+      "dataset_id": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+      "obs": {
+        "path": "output/smartphone-r5/native-fgo-v2-mat-no-base-v1/train/route-2023/rover.obs",
+        "sha256": "b0a60b43157f570d324ebf6fc12add2d0d0525a3e0feba441e0f1e485c34e51a"
+      },
+      "nav": {
+        "path": "output/smartphone-r5/native-fgo-v2-mat-no-base-v1/train/route-2023/brdc.nav",
+        "sha256": "16c859f8015c874398978bae6004172c355f7d3a3b06fa81b54aac88b6b78d33"
+      },
+      "imu": {
+        "path": "output/smartphone-r5/native-fgo-v2-mat-no-base-v1/train/route-2023/imu_processed.csv",
+        "sha256": "01501ba1271a2fac31f77238486b8c36a916ad6c757b462781d52af190270042"
+      },
+      "device_imu_source": {
+        "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_imu.csv",
+        "sha256": "8f1c582bdad545d11e68349b221001b69e2a9d43f9257e60038c193276fa1804"
+      },
+      "device_gnss_reference": {
+        "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_gnss.csv",
+        "sha256": "c5af6cc3aeae6ab29a2a10d975d291b8fba4fab15273c0729163cd639ff10e42"
+      }
+    }
+  },
+  "truth_free_artifacts": {
+    "smoke": {
+      "submission": {
+        "path": "output/smartphone-r5/native-fgo-v2-1-preserve-v1/smoke/route-2021/submission.csv",
+        "sha256": "68ac64943115058f63c7a906ba4386ccf0d5b127d736f1db30e0e601686e5fb5"
+      },
+      "summary": {
+        "path": "output/smartphone-r5/native-fgo-v2-1-preserve-v1/smoke/route-2021/run_summary.json",
+        "sha256": "7b39d23ee07d641886052848d3ac91c8807f1611e7092d0f869067cc05487326"
+      },
+      "stdout": {
+        "path": "output/smartphone-r5/native-fgo-v2-1-preserve-v1/smoke/route-2021/stdout.log",
+        "sha256": "008e9df166df12d962b9206d0c7d747f1183286901755143241a45754e415dcd"
+      }
+    },
+    "train": {
+      "submission": {
+        "path": "output/smartphone-r5/native-fgo-v2-1-preserve-v1/train/route-2023/submission.csv",
+        "sha256": "81399c6fcff364d7cf668c4b455d9588356490681c205b1d861d78a78d107df6"
+      },
+      "summary": {
+        "path": "output/smartphone-r5/native-fgo-v2-1-preserve-v1/train/route-2023/run_summary.json",
+        "sha256": "495e38514b05755d5bf48c0d94dbe9358e461d5aad359704ea5b9ae7fcd99da6"
+      },
+      "stdout": {
+        "path": "output/smartphone-r5/native-fgo-v2-1-preserve-v1/train/route-2023/stdout.log",
+        "sha256": "442927dafc437829ff4e181fa88a18f650a30f69516f89d1a8f02381aea1bafd"
+      }
+    },
+    "sealed_before_truth_scoring": true
+  },
+  "structural_gate": {
+    "smoke_epochs": 30,
+    "smoke_pseudorange_factors": 452,
+    "smoke_ordinary_tdcp_built": 249,
+    "smoke_ordinary_tdcp_inserted": 249,
+    "smoke_motion_pairs": 29,
+    "smoke_combined_imu_factors": 29,
+    "smoke_forbidden_double_difference_factors": 0,
+    "smoke_forbidden_single_difference_factors": 0,
+    "smoke_converged": true,
+    "train_epochs": 30,
+    "train_pseudorange_factors": 444,
+    "train_ordinary_tdcp_built": 206,
+    "train_ordinary_tdcp_inserted": 206,
+    "train_motion_pairs": 29,
+    "train_combined_imu_factors": 29,
+    "train_forbidden_factor_count": 0,
+    "train_converged": true
+  },
+  "comparison_reference": {
+    "source": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_mat_no_base_smoke.json",
+    "v1_same_window": {
+      "rows": 30,
+      "matched_truth": 30,
+      "availability": 1.0,
+      "horizontal_median_m": 1.4609035197361018,
+      "horizontal_p95_m": 2.0009204942713765
+    },
+    "reference_is_prior_sealed_artifact": true,
+    "v1_binary_was_not_rerun": true
+  },
+  "train_truth_evaluation": {
+    "status": "opened-once-after-truth-free-seal",
+    "truth_path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv",
+    "truth_sha256": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a",
+    "truth_score_read_count": 1,
+    "candidate_metrics": {
+      "truth_rows": 1383,
+      "candidate_rows": 30,
+      "matched_truth": 30,
+      "availability": 1.0,
+      "truth_coverage": 1.0,
+      "horizontal_wgs84_m": {
+        "p50_m": 1.5491171035815947,
+        "p95_m": 1.7039025051753798
+      },
+      "horizontal_haversine_m": {
+        "p50_m": 1.5463636108391603,
+        "p95_m": 1.7000924081534663
+      },
+      "kaggle_diagnostic_score_variants_m": {
+        "wgs84_vincenty__linear_n_minus_1": 1.6265098043784874,
+        "wgs84_vincenty__nearest_rank_ceiling": 1.6251640676775438,
+        "haversine_sphere__linear_n_minus_1": 1.6232280094963132,
+        "haversine_sphere__nearest_rank_ceiling": 1.6218638933677627
+      },
+      "kaggle_diagnostic_mean_m": 1.6241914437300267,
+      "vertical_metric": "not available in the four-column candidate output",
+      "wall_time_s": 0.32,
+      "peak_rss_kb": 35000,
+      "evaluation_contract": "single read-only metric pass; no rerun, code change, or parameter change after truth access"
+    },
+    "gate": {
+      "candidate_h_p50_m": 1.5491171035815947,
+      "candidate_h_p95_m": 1.7039025051753798,
+      "v1_same_window_h_p50_m": 1.4609035197361018,
+      "v1_same_window_h_p95_m": 2.0009204942713765,
+      "h_p95_strict_improvement": true,
+      "h_p50_non_regression": false,
+      "availability_non_regression": true,
+      "vertical_non_regression": "not assessable from four-column output",
+      "decision": "No-Go; H P50 regression violates the frozen all-metrics non-regression gate; do not expand to other routes or open validation/holdout"
+    }
+  },
+  "commands": {
+    "smoke": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:$LD_LIBRARY_PATH build/apps/gnss_fgo_imu_v21 --obs output/smartphone-r5/native-fgo-v2-mat-no-base-v1/smoke/route-2021/rover.obs --nav output/smartphone-r5/native-fgo-v2-mat-no-base-v1/smoke/route-2021/brdc.nav --imu output/smartphone-r5/native-fgo-v2-mat-no-base-v1/smoke/route-2021/imu_processed.csv --out output/smartphone-r5/native-fgo-v2-1-preserve-v1/smoke/route-2021/submission.csv --summary-json output/smartphone-r5/native-fgo-v2-1-preserve-v1/smoke/route-2021/run_summary.json --dataset-id 2021-03-16-18-59-us-ca-mtv-a/pixel5 --skip-epochs 200 --max-epochs 30",
+    "train": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:$LD_LIBRARY_PATH build/apps/gnss_fgo_imu_v21 --obs output/smartphone-r5/native-fgo-v2-mat-no-base-v1/train/route-2023/rover.obs --nav output/smartphone-r5/native-fgo-v2-mat-no-base-v1/train/route-2023/brdc.nav --imu output/smartphone-r5/native-fgo-v2-mat-no-base-v1/train/route-2023/imu_processed.csv --out output/smartphone-r5/native-fgo-v2-1-preserve-v1/train/route-2023/submission.csv --summary-json output/smartphone-r5/native-fgo-v2-1-preserve-v1/train/route-2023/run_summary.json --dataset-id 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro --skip-epochs 200 --max-epochs 30",
+    "truth_score": "one read-only pass over the already permitted train ground_truth.csv after this record's truth-free artifacts and hashes were sealed; no rerun or tuning"
+  },
+  "manifest": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_1_preserve_v1_run_manifest.json"
+}

@@ -408,6 +408,15 @@ class ObservableNativeCliContractsTest(unittest.TestCase):
                     "tdcp_sigma_zenith_m": 0.05,
                 }
             )
+        if variant.binary_name == "gnss_pos_vel_pdc":
+            expected.update(
+                {
+                    "state_backend_contract": "legacy-ecef-unit-interval",
+                    "temporal_dt_source": "fixed_unit_interval",
+                    "temporal_dt_threshold_seconds": 1.5,
+                    "temporal_transitions_enabled": 1,
+                }
+            )
         return expected
 
     @staticmethod
@@ -451,6 +460,10 @@ class ObservableNativeCliContractsTest(unittest.TestCase):
         if variant.has_tdcp:
             option_lines.append(
                 "  --tdcp-sigma-zenith M          TDCP zenith sigma in meters."
+            )
+        if variant.binary_name == "gnss_pos_vel_pdc":
+            option_lines.append(
+                "  --upstream-state-contract     Use raw epoch dt in temporal factors (opt-in)."
             )
         option_lines.extend(
             [

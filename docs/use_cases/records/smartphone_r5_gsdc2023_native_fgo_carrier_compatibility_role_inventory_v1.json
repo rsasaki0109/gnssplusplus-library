@@ -1,0 +1,220 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-carrier-compatibility-role-inventory.v1",
+  "status": "frozen-metadata-only-before-carrier-compatibility-truth",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "purpose": "Authoritative role audit for a development-only carrier compatibility selector. Every identity previously labelled validation, holdout, or test is excluded before this phase; leaderboard values are not roles or features.",
+  "scope": {
+    "archive": "data/gsdc2023/cache/dataset_2023.zip",
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_inventory": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+    "central_inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+    "central_metadata_canonical_sha256": "5f619be94a00c33c3067f13b1cd3351d96f2804f07fa04eda8fb027739fb0992",
+    "inspection": "record metadata, existing output manifests, and ZIP central-directory metadata only; this phase opened no new truth or payload member before the inventory was written"
+  },
+  "evidence_sources": [
+    {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_optimizer_truth_use_inventory_v1.json",
+      "sha256": "da10a5122f68e1ac4bd015949bdf3fa15dbb294e1938ebd6125691508e53eb1c"
+    },
+    {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_convergence_selector_truth_use_inventory_v2.json",
+      "sha256": "aa57c85d9befdceb088c6eba75f23560e33d5cdde76bdbfa48a32eadbdbd3c30"
+    },
+    {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_optimizer_stop_result.json",
+      "sha256": "13c4e0611af74e1f12d8feac14f5deb85c6574683df32efe65306dc2d7531ce8"
+    },
+    {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_convergence_selector_result.json",
+      "sha256": "35ac9beabf9607c5fb9bd35a52ccd71076110ce7588a9f26cbfcfe4d48a2c335"
+    },
+    {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_split_inventory_freeze.json",
+      "sha256": "7e7c8d29bc385cefef947e56a653c8a19e76ac4df36eb3999bf154899187a2a9"
+    },
+    {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_test_batch_freeze.json",
+      "sha256": "9632dc0ce74a0cc90360dda22bd418a7b829231efc1d47aeecc69011d126da58"
+    }
+  ],
+  "prior_truth_opened_or_used_route_devices": [
+    "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8",
+    "2021-01-04-22-40-us-ca-mtv-a/mi8",
+    "2021-01-04-22-40-us-ca-mtv-a/pixel5",
+    "2021-01-05-21-12-us-ca-mtv-d/mi8",
+    "2021-03-10-23-13-us-ca-mtv-h/pixel5",
+    "2021-03-16-20-40-us-ca-mtv-b/pixel4xl",
+    "2021-07-14-20-50-us-ca-mtv-e/pixel4",
+    "2021-07-19-20-49-us-ca-mtv-a/pixel5",
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "2022-01-26-20-02-us-ca-mtv-pe1/mi8",
+    "2022-01-26-20-02-us-ca-mtv-pe1/pixel5",
+    "2022-05-13-20-57-us-ca-mtv-pe1/pixel6pro",
+    "2022-05-13-20-57-us-ca-mtv-pe1/sm-g988b",
+    "2022-07-26-21-01-us-ca-sjc-s/samsunga325g",
+    "2022-08-04-20-07-us-ca-sjc-q/pixel5",
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a205u",
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a217m",
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a325f",
+    "2022-11-15-00-53-us-ca-mtv-a/pixel7pro",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel6pro",
+    "2023-05-16-19-55-us-ca-mtv-xe1/pixel7pro",
+    "2023-05-23-19-56-us-ca-mtv-ie2/sm-a505g",
+    "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "2023-05-25-19-10-us-ca-sjc-be2/sm-s908b",
+    "2023-05-25-20-11-us-ca-sjc-he2/pixel7pro",
+    "2023-09-05-23-07-us-ca-routen/pixel5",
+    "2023-09-06-00-01-us-ca-routen/pixel6pro",
+    "2023-09-06-22-49-us-ca-routebb1/pixel7pro",
+    "2023-09-07-18-59-us-ca/pixel5"
+  ],
+  "prior_truth_free_development_route_devices": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+    "2022-02-24-18-29-us-ca-lax-o/pixel5"
+  ],
+  "excluded_roles": {
+    "validation_or_fresh_validation": [
+      "2022-08-04-20-07-us-ca-sjc-q/sm-a325f",
+      "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+      "2023-09-07-18-59-us-ca/pixel5"
+    ],
+    "holdout_or_future_holdout": [
+      "2022-10-06-21-51-us-ca-mtv-n/sm-a205u",
+      "2022-10-06-21-51-us-ca-mtv-n/sm-a217m",
+      "2022-10-06-21-51-us-ca-mtv-n/sm-a325f",
+      "2023-05-16-19-54-us-ca-mtv-xe1/pixel5",
+      "2023-05-25-19-10-us-ca-sjc-be2/sm-s908b",
+      "2023-09-06-00-01-us-ca-routen/pixel6pro",
+      "2023-09-06-22-49-us-ca-routebb1/pixel7pro"
+    ],
+    "test_allowlist": [
+      "2020-12-11-19-30-us-ca-mtv-e/pixel4xl",
+      "2021-08-17-20-37-us-ca-mtv-g/pixel5",
+      "2021-08-31-20-37-us-ca-mtv-e/sm-g988b",
+      "2021-09-14-20-32-us-ca-mtv-k/pixel4",
+      "2021-09-20-19-03-us-ca-mtv-l/pixel4",
+      "2021-09-28-21-56-us-ca-mtv-a/mi8",
+      "2021-11-05-18-28-us-ca-mtv-m/pixel6pro",
+      "2021-11-30-20-59-us-ca-mtv-m/mi8",
+      "2022-02-08-22-04-us-ca-sjc-r/pixel5",
+      "2022-02-23-17-46-us-ca-lax-n/pixel5",
+      "2022-02-23-22-35-us-ca-lax-m/pixel5",
+      "2022-02-24-15-10-us-ca-lax-p/pixel5",
+      "2022-02-24-22-14-us-ca-lax-i/pixel5",
+      "2022-03-14-19-57-us-ca-mtv-pe1/xiaomimi8",
+      "2022-03-17-20-16-us-ca-sjc-q/sm-g988b",
+      "2022-03-22-18-44-us-ca-mtv-pe1/pixel5",
+      "2022-04-04-16-31-us-ca-lax-x/pixel5",
+      "2022-04-22-20-11-us-ca-ebf-y/pixel5",
+      "2022-04-25-21-04-us-ca-ebf-x/mi8",
+      "2022-04-25-22-36-us-ca-ebf-z/mi8",
+      "2022-04-27-18-16-us-ca-ebf-zz/pixel5",
+      "2022-04-27-19-23-us-ca-ebf-xx/pixel5",
+      "2022-04-27-21-55-us-ca-ebf-ww/mi8",
+      "2022-05-12-20-19-us-ca-mtv-pe1/samsunga325g",
+      "2022-06-22-20-12-us-ca-lax-hh/samsunga325g",
+      "2022-06-28-20-56-us-ca-sjc-r/samsunga32",
+      "2022-07-12-18-37-us-ca-mtv-b/sm-a325f",
+      "2022-10-06-20-46-us-ca-sjc-r/sm-a205u",
+      "2023-04-27-19-25-us-ca-mtv-pe1/pixel5",
+      "2023-04-27-20-55-us-ca-sjc-q/pixel5",
+      "2023-05-02-19-24-us-ca-sjc-we1/pixel7pro",
+      "2023-05-02-20-33-us-ca-mtv-xe1/pixel7pro",
+      "2023-05-09-23-10-us-ca-sjc-r/sm-a505u",
+      "2023-05-23-21-06-us-ca-mtv-de1/pixel5",
+      "2023-05-23-22-16-us-ca-mtv-ie2/pixel6pro",
+      "2023-05-25-17-32-us-ca-pao-j/pixel6pro",
+      "2023-05-25-21-50-us-ca-sjc-ke2/sm-s908b",
+      "2023-05-26-21-23-us-ca-sjc-be2/pixel5",
+      "2023-06-06-22-43-us-ca-sjc-he2/pixel5",
+      "2023-06-15-18-49-us-ca-sjc-ce1/pixel7pro"
+    ]
+  },
+  "development_cv_cohort": [
+    {
+      "dataset_id": "2021-03-10-23-13-us-ca-mtv-h/pixel5",
+      "role": "development_train_optimizer_stop",
+      "phone_family": "pixel5",
+      "prior_truth_opened": true,
+      "route_group": "mtv-h"
+    },
+    {
+      "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "role": "development_train_optimizer_stop",
+      "phone_family": "pixel5",
+      "prior_truth_opened": true,
+      "route_group": "mtv-h"
+    },
+    {
+      "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "role": "development_train_optimizer_stop",
+      "phone_family": "pixel5",
+      "prior_truth_opened": true,
+      "route_group": "lax-t"
+    },
+    {
+      "dataset_id": "2021-01-04-21-50-us-ca-e1highway280driveroutea/pixel5",
+      "role": "development_train_convergence_selector",
+      "phone_family": "pixel5",
+      "prior_truth_opened": true,
+      "route_group": "e1highway"
+    },
+    {
+      "dataset_id": "2021-07-14-20-50-us-ca-mtv-e/sm-g988b",
+      "role": "development_train_convergence_selector",
+      "phone_family": "sm-g988b",
+      "prior_truth_opened": true,
+      "route_group": "mtv-e"
+    },
+    {
+      "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "role": "development_train_structural_smoke",
+      "phone_family": "pixel5",
+      "prior_truth_opened": false,
+      "route_group": "mtv-a"
+    },
+    {
+      "dataset_id": "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "role": "development_train_structural_smoke",
+      "phone_family": "pixel4",
+      "prior_truth_opened": false,
+      "route_group": "mtv-b"
+    },
+    {
+      "dataset_id": "2022-02-24-18-29-us-ca-lax-o/pixel5",
+      "role": "development_train_structural_smoke",
+      "phone_family": "pixel5",
+      "prior_truth_opened": false,
+      "route_group": "lax-o"
+    }
+  ],
+  "cv_protocol": {
+    "folds": "leave-one-route-group-out and leave-one-phone-family-out summaries over the eight frozen identities",
+    "minimum_route_groups": 6,
+    "phone_families": ["pixel4", "pixel5", "sm-g988b"],
+    "truth_score_policy": "truth-free artifacts and selector decisions are sealed first; only the eight development identities may be scored; no validation, holdout, or test truth is materialized or read",
+    "ranking_features": "none; no route/device truth, leaderboard score, or post-truth residual is available to the selector",
+    "promotion": "all four official diagnostic variants and their mean must improve routewise and per fold/aggregate, with availability/coverage/vertical/continuity non-regression; otherwise final No-Go",
+    "fresh_validation_after_pass": "not authorized in this phase; a genuinely new validation asset would be required"
+  },
+  "audit_result": {
+    "archive_train_route_phone_count": 41,
+    "prior_truth_opened_or_used_count": 30,
+    "explicit_validation_holdout_test_exclusion_count": 50,
+    "cohort_count": 8,
+    "cohort_route_group_count": 8,
+    "cohort_phone_family_count": 3,
+    "truth_open_count_this_phase_before_freeze": 0,
+    "truth_free_materialization_before_freeze": false,
+    "old_holdout_or_public_score_used_for_selection": false,
+    "all_device_float_carrier_no_go_reinterpreted": false
+  },
+  "safety": {
+    "validation_or_holdout_materialized_by_this_audit": false,
+    "test_truth_materialized_by_this_audit": false,
+    "external_mutation": false,
+    "token_access": false,
+    "production_rtk_spp_defaults_changed": false
+  }
+}

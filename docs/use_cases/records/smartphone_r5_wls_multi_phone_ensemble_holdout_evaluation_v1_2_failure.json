@@ -1,0 +1,238 @@
+{
+  "schema_version": "smartphone-r5-wls-multi-phone-ensemble-holdout-evaluation-record.v1.2",
+  "status": "sealed-failed-one-shot-after-sparse-wls-before-median-and-truth",
+  "sealed_at": "2026-08-30",
+  "scope": "single sealed multi-phone WLS ensemble holdout evaluation with authorized sparse WLS recovery",
+  "freeze": {
+    "record": {
+      "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_holdout_freeze_v1_2.json",
+      "sha256": "7541b2483f44e1a8e7a9c95b252d842d917934b66470fee6a7a95b56a4145953"
+    },
+    "manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_holdout_freeze_v1_2_manifest.json",
+      "sha256": "94434131bec8067963a2a7f3d5f42f08eda7023deb8a180360fa80f7b087de7c"
+    },
+    "algorithm_parameter_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb",
+    "algorithm_core_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb",
+    "candidate_coordinate_median_tolerance_fallback_unchanged": true,
+    "sparse_input_contract_only_change": true,
+    "no_post_holdout_tuning": true
+  },
+  "selection": {
+    "record": {
+      "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_selection.json",
+      "sha256": "374d652f6f772a2bc929cfeb22403e00b3abc0794445cc7880a070ad590e21c6"
+    },
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+    "route": "2022-10-06-21-51-us-ca-mtv-n",
+    "phones": [
+      "sm-a205u",
+      "sm-a217m",
+      "sm-a325f"
+    ]
+  },
+  "preflight": {
+    "sparse_boundary_fixture_passed": true,
+    "authorization_fixture_passed": true,
+    "central_metadata_verified": true,
+    "archive_payload_reextracted_by_this_run": false,
+    "reused_device_materialization_hashes_verified": true,
+    "holdout_truth_opened_before_run": false,
+    "truth_open_count_before_run": 0,
+    "previous_v1_1_failure_truth_open_count": 0
+  },
+  "holdout_access": {
+    "device_materialization": "reused-existing-sealed-device-only-files",
+    "device_materialized_count": 3,
+    "device_artifacts": {
+      "sm-a205u": {
+        "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1/2022-10-06-21-51-us-ca-mtv-n/inputs/sm-a205u/device_gnss.csv",
+        "sha256": "a158d7c9327c6a039816ccb156820bc0785244d6a12011428d85f5262725a46e"
+      },
+      "sm-a217m": {
+        "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1/2022-10-06-21-51-us-ca-mtv-n/inputs/sm-a217m/device_gnss.csv",
+        "sha256": "ee6f9645d0af045e9b4270405700c377b650e62c4b4b9214c86df3323e4756e5"
+      },
+      "sm-a325f": {
+        "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1/2022-10-06-21-51-us-ca-mtv-n/inputs/sm-a325f/device_gnss.csv",
+        "sha256": "376e2d0dd3dc62e568e89706a8cd9bab5a14fa4366555d63ba33c0e08917f557"
+      }
+    },
+    "truth_materialized": false,
+    "truth_open_count": 0,
+    "evaluation_pass_count": 0
+  },
+  "truth_free_wls_artifacts": {
+    "generated_for_all_three_phones": true,
+    "median_generated": false,
+    "submission_generated": false,
+    "artifacts": {
+      "sm-a205u": {
+        "wls_pos": {
+          "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.2/2022-10-06-21-51-us-ca-mtv-n/wls/sm-a205u/wls.pos",
+          "sha256": "11d1f74edc72ad94e9ddbcf04c2bd6a88f939c8eb9daf4c1d602b47fd345f136",
+          "bytes": 158495
+        },
+        "receiver_wls_csv": {
+          "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.2/2022-10-06-21-51-us-ca-mtv-n/wls/sm-a205u/receiver_wls.csv",
+          "sha256": "0722e43458613d8a23b044fe70ac4cb682843990f74f70be4ea180ab4ad209e9",
+          "bytes": 187367
+        },
+        "summary": {
+          "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.2/2022-10-06-21-51-us-ca-mtv-n/wls/sm-a205u/wls_summary.json",
+          "sha256": "410f2d5581809f4d064c48c4587e631ed167c3675a66d20c35e60c8c44bbfae2",
+          "bytes": 29921
+        },
+        "manifest": {
+          "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.2/2022-10-06-21-51-us-ca-mtv-n/wls/sm-a205u/wls_manifest.json",
+          "sha256": "fed6a9a0bd632030559f0e090ff40fbbe66701079c1adae7163bd6d9fcdaf3e0",
+          "bytes": 2775
+        }
+      },
+      "sm-a217m": {
+        "wls_pos": {
+          "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.2/2022-10-06-21-51-us-ca-mtv-n/wls/sm-a217m/wls.pos",
+          "sha256": "c18edf7dce718176fca81c733cf85a6791a07f2b2cd09ead9ec124bdb2737dde",
+          "bytes": 159886
+        },
+        "receiver_wls_csv": {
+          "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.2/2022-10-06-21-51-us-ca-mtv-n/wls/sm-a217m/receiver_wls.csv",
+          "sha256": "5d3d9c8006926a3ee0aa79df9ee7628b84fd2ecb8c82096843d2b3be6ec53c9d",
+          "bytes": 189022
+        },
+        "summary": {
+          "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.2/2022-10-06-21-51-us-ca-mtv-n/wls/sm-a217m/wls_summary.json",
+          "sha256": "108d756de74813dbef3ab0660946f3ad45fe0733a2c2de5f29ad04db825406a2",
+          "bytes": 29510
+        },
+        "manifest": {
+          "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.2/2022-10-06-21-51-us-ca-mtv-n/wls/sm-a217m/wls_manifest.json",
+          "sha256": "e1a900e4d389d3478dc98ff8d99f6197c8089bebe2900fdea05594b21292d67e",
+          "bytes": 2476
+        }
+      },
+      "sm-a325f": {
+        "wls_pos": {
+          "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.2/2022-10-06-21-51-us-ca-mtv-n/wls/sm-a325f/wls.pos",
+          "sha256": "c5968f3f9c88637664be09e3afc0efee79d1b2d64a531ab87b242b9acf259b3d",
+          "bytes": 161095
+        },
+        "receiver_wls_csv": {
+          "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.2/2022-10-06-21-51-us-ca-mtv-n/wls/sm-a325f/receiver_wls.csv",
+          "sha256": "9cf8cfe2e743c669f1661d57e0c5a562d1630def5dcbe3e6fa50f999a6d901fe",
+          "bytes": 190447
+        },
+        "summary": {
+          "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.2/2022-10-06-21-51-us-ca-mtv-n/wls/sm-a325f/wls_summary.json",
+          "sha256": "dbdff4cc7d5d01e199b43674c572d749fd39477d46abf8b9896363321f52cfd3",
+          "bytes": 29205
+        },
+        "manifest": {
+          "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.2/2022-10-06-21-51-us-ca-mtv-n/wls/sm-a325f/wls_manifest.json",
+          "sha256": "6d8f5de4c3e82e44ba460b8cbe1c8222c3cedb759f4c37f32c94357de8db5660",
+          "bytes": 2171
+        }
+      }
+    }
+  },
+  "phone_sparse_statistics": {
+    "sm-a205u": {
+      "input_epochs": 1213,
+      "selected_epochs": 1209,
+      "blank_wls_row_count": 128,
+      "sparse_omitted_epoch_count": 4,
+      "selected_sparse_omitted_epoch_count": 3,
+      "timestamp_gap_count_gt_1500ms": 1,
+      "max_timestamp_gap_s": 2.001,
+      "classification_counts": {
+        "blank_wls_row": 128,
+        "sparse_omitted_epoch": 4,
+        "timestamp_gap": 1,
+        "partial_wls_epoch": 0,
+        "nonfinite_wls_ecef": 0,
+        "inconsistent_epoch_wls": 0
+      },
+      "wls_wall_s": 0.034947934007504955
+    },
+    "sm-a217m": {
+      "input_epochs": 1222,
+      "selected_epochs": 1220,
+      "blank_wls_row_count": 42,
+      "sparse_omitted_epoch_count": 2,
+      "selected_sparse_omitted_epoch_count": 1,
+      "timestamp_gap_count_gt_1500ms": 0,
+      "max_timestamp_gap_s": 1.014,
+      "classification_counts": {
+        "blank_wls_row": 42,
+        "sparse_omitted_epoch": 2,
+        "timestamp_gap": 0,
+        "partial_wls_epoch": 0,
+        "nonfinite_wls_ecef": 0,
+        "inconsistent_epoch_wls": 0
+      },
+      "wls_wall_s": 0.030949439998948947
+    },
+    "sm-a325f": {
+      "input_epochs": 1230,
+      "selected_epochs": 1229,
+      "blank_wls_row_count": 0,
+      "sparse_omitted_epoch_count": 0,
+      "selected_sparse_omitted_epoch_count": 0,
+      "timestamp_gap_count_gt_1500ms": 0,
+      "max_timestamp_gap_s": 1.499,
+      "classification_counts": {
+        "blank_wls_row": 0,
+        "sparse_omitted_epoch": 0,
+        "timestamp_gap": 0,
+        "partial_wls_epoch": 0,
+        "nonfinite_wls_ecef": 0,
+        "inconsistent_epoch_wls": 0
+      },
+      "wls_wall_s": 0.025016264989972115
+    }
+  },
+  "failure": {
+    "artifact": {
+      "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.2/wls_multi_phone_ensemble_holdout_failure.json",
+      "sha256": "3c5c41d2e054508a08786aa540955fa38df4dcfd7d95baffdb268f92fe53173f"
+    },
+    "stage": "WLS integrity gate before median/submission",
+    "error": "WLS integrity failed closed for sm-a205u",
+    "reason": "sm-a205u has one elapsed timestamp gap over the frozen 1500 ms threshold",
+    "truth_open_count": 0,
+    "post_holdout_tuning": false,
+    "rerun_permitted": false
+  },
+  "metrics": {
+    "horizontal_p50_m": null,
+    "horizontal_p95_m": null,
+    "vertical_p95_m": null,
+    "availability": null,
+    "coverage": null,
+    "official_diagnostics": null,
+    "selected_lane": null,
+    "single_wls_comparison": null,
+    "phone_count_and_spread": null,
+    "wall_s": null,
+    "process_peak_rss_kb": null,
+    "unavailable_reason": "one-shot evaluator failed before lane/submission/truth scoring and success timing seal"
+  },
+  "promotion": {
+    "decision": "no-go-holdout-wls-integrity-gap",
+    "full_submission_integration_candidate": false,
+    "production_rtk_spp_default_changed": false,
+    "development_validation_lane_preserved": true,
+    "post_holdout_tuning": false,
+    "holdout_run_reexecuted": false
+  },
+  "source_binary_archive_profile_hashes": {
+    "wls_source_sha256": "37d686cb18932304ad9538eb4d6f407a2ee19f4c1ab479ab98f8dbd534e904fa",
+    "holdout_evaluator_source_sha256": "848302708590f72c9baccb83edf3c364e8616daedfb9c0113c2d9f4dc6211791",
+    "ensemble_source_sha256": "217044d40e32edd027ba2bcf60731468edeef1caf25b15db7dc21758d1cc1548",
+    "release_gnss_spp_sha256": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12",
+    "release_gnss_solve_sha256": "7140d077213ef528b7366aa8c1b925dcea6096ec6e0711748cf4cf9428392eb0",
+    "profile_sha256": "d5add376f875f9b3f7b765c18e5946dfba6aae69f71869612b8ab757fbe4fce7"
+  },
+  "source_of_truth": "sealed v1.2 failure artifact and hashed truth-free WLS outputs; no ground-truth payload was opened by this one-shot"
+}

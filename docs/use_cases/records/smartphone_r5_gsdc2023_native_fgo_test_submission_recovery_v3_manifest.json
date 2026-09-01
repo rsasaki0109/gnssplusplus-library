@@ -1,0 +1,71 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-test-submission-recovery-manifest.v3",
+  "status": "sealed-truth-free-recovery",
+  "record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_test_submission_recovery_v3.json",
+    "sha256": "d1ae3b9c0713b4351954810003d0821cd92ca4593cfc2eac7c2d804a5434ed9b"
+  },
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_test_submission_recovery_freeze_v3.json",
+    "sha256": "d5da44973b264c720141b1978a033fba930c03492501fa0c88eefe2bf745bad2"
+  },
+  "artifacts": {
+    "submission": {
+      "path": "output/smartphone-r5/native-fgo-test-v3-recovered/submission.csv",
+      "sha256": "8581cf40a4e8ae81448df4e87b381431dce4c290b6b738fc5e6b9c03c3c41a29"
+    },
+    "submission_manifest": {
+      "path": "output/smartphone-r5/native-fgo-test-v3-recovered/submission.manifest.json",
+      "sha256": "4f68714fd8783b9c2a588c8a1b7097fac872bf09ae5f13a17dc4d6eeb17c2778"
+    },
+    "position_manifest": {
+      "path": "output/smartphone-r5/native-fgo-test-v3-recovered/position_recovery_manifest.json",
+      "sha256": "716a2c331cf588983182c098b3bed26e3a9cdab9929f196ec39b9b1ee3ae28dd"
+    },
+    "run_manifest": {
+      "path": "output/smartphone-r5/native-fgo-test-v3-recovered/recovery_run_manifest.json",
+      "sha256": "635569e5b978d96f3f20df7fb8e06b9dee326dc9dbf3bca42b812e4a62e7c5ed"
+    }
+  },
+  "source_hashes": {
+    "recovery_script": "f7e5499d2bf7e18c833fb181d7b57ebfee5a9b71b0e8c15ad1aa36cd2e8b6329",
+    "release_binary": "5e1e22979a84b938352a2096e570bb1587d6eba7ebb0757431a8ebd9423b525f",
+    "profile": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776",
+    "archive": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "inventory": "dbf89222e6860d4fb31f12c9c46402033ed31e905f8fe3f6615e5131cb9e9495",
+    "official_sample_key_order": "b0c4853076f715d6bdca46e5c8c99e575f7982d8ee4fc9c0fe417507badcb780",
+    "v2_run": "0808082ed8c81d24e5b5403812cca50651d493f39ea2c70ff6a91b6df556518c",
+    "prior_wls_run": "a89c5c3ac816289b6c6e5958d77fbc034f601869c3e64bd5191d87808fe74822",
+    "prior_reconciliation": "9b611f1920bb48597eac518cf9f4a8e26f54f3719598ff9aaebea4839caa703a"
+  },
+  "verification": {
+    "row_count": 71936,
+    "header_exact": true,
+    "key_order_exact": true,
+    "duplicate_keys": 0,
+    "missing_keys": 0,
+    "extra_keys": 0,
+    "nonfinite_coordinates": 0,
+    "sample_coordinate_fallback_rows": 0,
+    "known_dummy_rows": 0,
+    "out_of_earth_source_rows": 0,
+    "truth_open_count": 0,
+    "atomic_publish": true
+  },
+  "source_counts": {
+    "native_fgo_exact": 61261,
+    "wls_exact": 8587,
+    "prior_wls_exact": 2062,
+    "same_trip_ecef_interpolation": 1,
+    "same_trip_edge_hold": 25
+  },
+  "official_sample_coordinates": {
+    "read": false,
+    "used": false,
+    "key_order_only": true
+  },
+  "external_mutation": {
+    "kaggle_submission": false,
+    "token_access": false
+  }
+}
