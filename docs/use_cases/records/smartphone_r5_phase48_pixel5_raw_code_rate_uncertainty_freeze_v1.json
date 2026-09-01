@@ -1,0 +1,206 @@
+{
+  "schema_version": "smartphone-r5-phase48-pixel5-raw-code-rate-uncertainty-freeze.v1",
+  "status": "frozen-before-phase48-raw-read",
+  "phase": 48,
+  "execution_label": "Luna Max",
+  "purpose": "Truth-free audit of the single raw physical factor named by Phase47: per-satellite ReceivedSvTimeUncertaintyNanos/code-tracking residual. Phase47 metric output is integrity-no-go and is pinned only as policy/bug metadata, never used as an observation or threshold source.",
+  "objective": {
+    "factor": "raw Android per-satellite ReceivedSvTimeUncertaintyNanos/code-tracking residual",
+    "route_count_required": 4,
+    "truth_free": true,
+    "audit_only": true,
+    "solver_rerun": false,
+    "correction_fit_or_application": false,
+    "zero_point_782_evaluation": false,
+    "phase47_metric_reuse": false
+  },
+  "authority_pins": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "phase44_commit": "a323eb6",
+    "phase47_policy_bug_record": {
+      "path": "docs/use_cases/records/smartphone_r5_phase47_pixel5_raw_code_multipath_result_v1.json",
+      "sha256": "ce205dec44b776013b681be04e2ffd6a4f22a511359526e68d33147f730c62da",
+      "use": "policy/bug metadata only; Phase47 metrics and output payload are not Phase48 inputs"
+    },
+    "phase25_raw_clock_contract": {
+      "path": "docs/use_cases/records/smartphone_r5_phase25_raw_clock_contract_freeze_v1.json",
+      "sha256": "a65b22ed348067d2787f0369d6139708572679fbe49cd943d2eb7677d4675889",
+      "use": "raw P reconstruction only"
+    },
+    "phase41_rate_contract": {
+      "freeze_path": "docs/use_cases/records/smartphone_r5_phase41_doppler_measurement_contract_audit_freeze_v1.json",
+      "freeze_sha256": "5622099a9d7d37ee1e4de43385369e70c342acb515f8f83cf301964fc3c64758",
+      "result_path": "docs/use_cases/records/smartphone_r5_phase41_doppler_measurement_contract_audit_result_v2.json",
+      "result_sha256": "2061e8608b42da263fe992b2a36a4b42235cd2425c864a8aa465c23bc5e9d05b",
+      "sign_contract": "Android PseudorangeRateMetersPerSecond is range-rate m/s; adapter D=-raw_rate/wavelength, so raw rate is used directly in the trapezoidal P increment"
+    },
+    "phase13_upstream_quality_policy": {
+      "freeze_path": "docs/use_cases/records/smartphone_r5_phase13_upstream_quality_freeze_v1.json",
+      "freeze_sha256": "a7891d8cec1b34372de9501e65683888eaed1994e84d1ea2b75492a3be9fa85f",
+      "result_path": "docs/use_cases/records/smartphone_r5_phase13_upstream_quality_score_result_v1.json",
+      "result_sha256": "9b216ea542aef39fc769682ef9e615a9af911863a71a72edc7a3b67a638406d7",
+      "policy": "do not reproduce fixed upstream residual thresholds or truth-tuned selection"
+    },
+    "source_contracts": {
+      "android_raw_gnss_cpp": {
+        "path": "src/io/android_raw_gnss.cpp",
+        "sha256": "84b6864475c3d86c34c6740ec28ef7a54846aecf5c6c297d644e6deb1dad4390"
+      },
+      "android_raw_gnss_header": {
+        "path": "include/libgnss++/io/android_raw_gnss.hpp",
+        "sha256": "e833570103a521b9e051086b6ea75192ae3a575b83eee33d978143eaf279c52c"
+      },
+      "observation_header": {
+        "path": "include/libgnss++/core/observation.hpp",
+        "sha256": "d95f2bedca553b6474a4bc4e4600c91152d45fcaf350e31fce20fbfa65714419"
+      },
+      "fgo_problems_cpp": {
+        "path": "src/algorithms/fgo_problems.cpp",
+        "sha256": "5fb1dec8e7f23652eefecc9d8684586a66fecac07e109489792c8590aac76a03"
+      }
+    }
+  },
+  "cohort": {
+    "phone_model": "pixel5",
+    "route_disjoint": true,
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ]
+  },
+  "exact_raw_inputs": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv",
+      "member": "dataset_2023/train/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv",
+      "file_size": 57715495,
+      "compressed_size": 13575292,
+      "crc32_hex": "6e27b3b6",
+      "sha256": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863"
+    },
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+      "member": "dataset_2023/train/2021-08-24-20-32-us-ca-mtv-h/pixel5/device_gnss.csv",
+      "file_size": 74299283,
+      "compressed_size": 17074167,
+      "crc32_hex": "660121c3",
+      "sha256": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7"
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_gnss.csv",
+      "member": "dataset_2023/train/2022-04-01-18-22-us-ca-lax-t/pixel5/device_gnss.csv",
+      "file_size": 33837317,
+      "compressed_size": 7801965,
+      "crc32_hex": "e7b2f43c",
+      "sha256": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1"
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2023-03-08-21-34-us-ca-mtv-u/pixel5/inputs/device_gnss.csv",
+      "member": "dataset_2023/train/2023-03-08-21-34-us-ca-mtv-u/pixel5/device_gnss.csv",
+      "file_size": 23385520,
+      "compressed_size": 5457833,
+      "crc32_hex": "17dffb4e",
+      "sha256": "a0fc8e71bdfc03be61b99efcd7d41fbba8ffec126df78b55243f681fd211f204"
+    }
+  },
+  "input_policy": {
+    "single_process": true,
+    "raw_device_gnss_read_count_per_route": 1,
+    "truth_read_count": 0,
+    "phase45_payload_reads": 0,
+    "phase47_metric_payload_reads": 0,
+    "brdc_nav_reads": 0,
+    "solver_reruns": 0,
+    "trajectory_reruns": 0,
+    "correction_fit_or_application": false,
+    "validation_holdout_access": false,
+    "archive_reopens": 0,
+    "rematerialization_count": 0,
+    "kaggle_or_token_access": false,
+    "mat_reads_or_generated": false,
+    "device_wls_or_precomputed_coordinates": false,
+    "SvPosition_or_SvElevation": false,
+    "atomic_output_publish": true
+  },
+  "raw_schema": {
+    "required_columns": [
+      "MessageType",
+      "utcTimeMillis",
+      "TimeNanos",
+      "FullBiasNanos",
+      "BiasNanos",
+      "ReceivedSvTimeNanos",
+      "Svid",
+      "ConstellationType",
+      "SignalType",
+      "CarrierFrequencyHz",
+      "PseudorangeRateMetersPerSecond"
+    ],
+    "required_for_transition": ["State", "HardwareClockDiscontinuityCount"],
+    "optional_if_present": [
+      "TimeOffsetNanos",
+      "MultipathIndicator",
+      "Cn0DbHz",
+      "ReceivedSvTimeUncertaintyNanos",
+      "PseudorangeRateUncertaintyMetersPerSecond",
+      "AccumulatedDeltaRangeState",
+      "AccumulatedDeltaRangeMeters",
+      "DriftNanosPerSecond",
+      "BiasUncertaintyNanos",
+      "TimeUncertaintyNanos"
+    ],
+    "row_filter": "Only MessageType=Raw rows are parsed; all non-Raw rows are counted and excluded. Coordinate/enriched columns are never parsed."
+  },
+  "fixed_equations": {
+    "raw_pseudorange": "Phase25 long-double-equivalent P=(tow_rx-tow_tx)*c using integer/Decimal segment-base receiver TOW, BiasNanos, TimeOffsetNanos, constellation mapping, and nearest-week unwrap.",
+    "transition_domain": "Same SVID+signal consecutive Raw epochs with dt strictly >0 and <=1.5 s, unchanged HCDC, valid Android code/transmit state, finite PseudorangeRateMetersPerSecond, finite in-range P, and after existing MultipathIndicator/CN0 masks.",
+    "raw_code_rate_residual": "e_k=(P_k-P_prev)-0.5*(PseudorangeRateMetersPerSecond_prev+PseudorangeRateMetersPerSecond_k)*dt_seconds; raw rate is used directly per Phase41 sign/unit contract.",
+    "clock_center": "For each endpoint utcTimeMillis and HCDC clock group, subtract the median e_k across comparable satellites/signals; retain raw and centered values. Absolute centered residual is the uncertainty association metric.",
+    "uncertainty_to_metres": "sigma_code_m=c*ReceivedSvTimeUncertaintyNanos/1e9; report raw PseudorangeRateUncertaintyMetersPerSecond separately and normalized abs centered residual/sigma_code_m when sigma>0.",
+    "bucket_order": "<=10 ns, 10_to_100 ns, >100 ns; equality belongs to the lower closed bucket. Also report fixed log bins <1, 1_to_3, 3_to_10, 10_to_30, 30_to_100, >100 ns and quartiles.",
+    "spearman": "Tie-averaged rank correlation between uncertainty nanos and abs centered residual, finite positive uncertainty only; no truth or route metric input.",
+    "loo": "Recompute pooled bucket/Spearman direction after omitting each route; no correction or inference output is produced."
+  },
+  "existing_masks": {
+    "source": "src/io/android_raw_gnss.cpp",
+    "source_sha256": "84b6864475c3d86c34c6740ec28ef7a54846aecf5c6c297d644e6deb1dad4390",
+    "multipath": "MultipathIndicator == 1",
+    "low_cnr": "Cn0DbHz present and <20 dB-Hz",
+    "invalid_state": "missing code-lock or transmit-time state bits",
+    "code_range": "P <1e7 m or P >4e7 m",
+    "new_mask_or_weighting": false
+  },
+  "numeric_gates": {
+    "route_count": {"required": 4},
+    "residual_coverage": {"min_residuals_per_route": 1000, "min_satellites_per_route": 3},
+    "uncertainty_population": {"min_populated_ordered_buckets_per_route": 3, "quartiles_required_if_buckets_sparse": true},
+    "spearman": {"min_each_route": 0.35, "direction": "non-negative positive association; signed rho >=0.35"},
+    "bucket_monotonicity": {"median_non_decreasing": true, "p95_non_decreasing": true, "allow_exact_equality": true},
+    "high_vs_low": {"high_bucket": ">10ns", "p95_excess_min_m": 2.0, "p95_ratio_min": 1.5, "all_routes": true},
+    "low_base_retention": {"minimum_low_or_base_population_fraction": 0.30},
+    "current_fgo_used_rows_impacted": {"required": true, "adapter_parses_and_fgo_sigma_consumes_field": true},
+    "loo_mapping_stability": {"all_leave_one_route_out_direction_stable": true},
+    "composition_independence": {"within_signal_families_min_per_route": 2, "within_signal_spearman_min": 0.20},
+    "presentation_integrity": {"group_counts_sum": true, "four_route_medians_retained": true, "aggregate_recomputed_exact": true},
+    "logic": "AND; all thresholds and gate roles are immutable after freeze and before raw reads"
+  },
+  "source_decision_policy": {
+    "if_all_pass": "Authorize only the concept of an opt-in sigma floor max(existing_sigma,c*ReceivedSvTimeUncertaintyNanos); do not implement it in Phase48.",
+    "if_any_fail": "No correction/weighting. Name exactly one next raw physical factor supported by source and observed raw-only structure.",
+    "zero_point_782": "not evaluated without truth",
+    "phase47_reuse": "Phase47 metric output remains integrity-no-go policy metadata only."
+  },
+  "pre_read_assertions": {
+    "raw_payload_opened": false,
+    "truth_opened": false,
+    "phase45_payload_opened": false,
+    "phase47_metric_payload_opened": false,
+    "solver_rerun": false,
+    "trajectory_rerun": false,
+    "correction_implemented": false,
+    "nav_opened": false,
+    "archive_reopened": false,
+    "output_published": false
+  }
+}
