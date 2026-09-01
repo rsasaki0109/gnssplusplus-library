@@ -1,0 +1,119 @@
+{
+  "schema_version": "smartphone-r5-phase42-doppler-row-attrition-evaluator.v2",
+  "phase": 42,
+  "status": "evaluator-frozen-before-raw-audit",
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "freeze_path": "docs/use_cases/records/smartphone_r5_phase42_doppler_row_attrition_freeze_v1.json",
+    "freeze_sha256": "f80865dc9db3d87c310e064df1afe687833225a1b0d1b6027dac6435492f8123",
+    "freeze_commit": "ba7a501",
+    "source_commit": "0f6225715b5dab69c023cc83db5d07326c2953ba",
+    "freeze_is_immutable": true
+  },
+  "evaluator": {
+    "binary_path": "build/apps/gnss_doppler_row_attrition_audit",
+    "source_path": "apps/native/gnss_doppler_row_attrition_audit.cpp",
+    "source_sha256": "6325815b67451844dfbc6d23e16af29516d54f0f3b298c8ccc3892448afc54f4",
+    "binary_sha256": "fdcf2ed9a18a5aa399f0ec2b4f1262990649cf316585b2dfa22190bc67dc45b4",
+    "command": "gnss_doppler_row_attrition_audit --android-gnss <device_gnss.csv> --nav <brdc.nav> --rows-csv <audit_rows.csv> --summary-json <audit.json> --dataset-id <route/phone>",
+    "raw_loader_call": "loadAndroidRawGnssCsv exactly once per process with verify_enriched_pseudorange=false",
+    "nav_loader_call": "RINEXReader::open/readNavigationData exactly once per process",
+    "process_model": "one process per route; no subprocess, shell pipeline, estimator output, truth, validation, holdout, MAT, or coordinate input"
+  },
+  "source_hashes": {
+    "apps/native/gnss_doppler_row_attrition_audit.cpp": "6325815b67451844dfbc6d23e16af29516d54f0f3b298c8ccc3892448afc54f4",
+    "include/libgnss++/algorithms/fgo.hpp": "bd494a66f9479fa7a4358581b3af6c43a34a70114e0d0a502cb83b54ea3e7b2c",
+    "src/algorithms/fgo_problems.cpp": "cdec196c1122646dd6b8f79f9e4504eb3683e39e53890645d54e6b3440fcb2c0",
+    "include/libgnss++/core/observation.hpp": "d95f2bedca553b6474a4bc4e4600c91152d45fcaf350e31fce20fbfa65714419",
+    "include/libgnss++/io/android_raw_gnss.hpp": "e833570103a521b9e051086b6ea75192ae3a575b83eee33d978143eaf279c52c",
+    "src/io/android_raw_gnss.cpp": "84b6864475c3d86c34c6740ec28ef7a54846aecf5c6c297d644e6deb1dad4390",
+    "apps/CMakeLists.txt": "2e212c7f71ba96bd7e4ce513df1a0f7ddd7032583e77ffbd743486d424784921",
+    "tests/CMakeLists.txt": "9503a57cb76d59c9b9853f7b281ccc88c3fece5be14aa9c8e43483e3b36e5019",
+    "tests/test_smartphone_phase42_doppler_row_attrition.py": "6babea9144b97e5047bb20001cc5a80c75174812bfa22cbd039ad18f46cc7549"
+  },
+  "row_contract": {
+    "raw_row_provenance": "AndroidRawGnssResult::raw_row_diagnostics retains every parsed MessageType=Raw row, including loader-rejected rows",
+    "row_identity": [
+      "dataset_id",
+      "raw_row_index",
+      "input_row_index",
+      "utc_time_millis",
+      "raw_epoch_index",
+      "problem_epoch_index",
+      "satellite",
+      "signal"
+    ],
+    "first_reason_is_exclusive": true,
+    "finite_zero_doppler_is_present": true,
+    "corrected_doppler_dt_gate": "dt_s > 0 only; max_tdcp_gap_s remains the unchanged Phase41 default",
+    "stages": [
+      "raw_row",
+      "valid_and_doppler_mask",
+      "raw_snr_and_multipath_mask",
+      "supported_constellation_signal_frequency",
+      "raw_pseudorange_validity",
+      "transmit_time",
+      "nav_state_call1",
+      "nav_state_call2",
+      "ephemeris_present_health",
+      "geometry",
+      "snr_elevation_masks",
+      "clock_jump_dt",
+      "includes_receiver_clock_drift",
+      "final_corrected_undifferenced_doppler_factor"
+    ],
+    "fgo_factor_definition": "Unchanged FGOProblem::undifferenced_doppler_factors with corrected Earth-rotation state and includes_receiver_clock_drift=true",
+    "first_solvable_definition": "First unchanged FGO problem epoch containing at least four corrected undifferenced Doppler factors"
+  },
+  "summary_diagnostics": {
+    "quality_anchor": ["selected", "index", "satellites", "gdop"],
+    "first_problem_epoch_seed": [
+      "raw_observation_pseudorange_plus_broadcast_nav_spp",
+      "earth_norm_m",
+      "latitude_deg",
+      "longitude_deg",
+      "height_m",
+      "fresh_spp_solution",
+      "last_valid_spp_hold"
+    ],
+    "first_problem_epoch_elevation": [
+      "geometry_valid_rows",
+      "min_deg",
+      "median_deg",
+      "max_deg",
+      "below_zero_rows"
+    ],
+    "selected_first_reason_counts": true
+  },
+  "read_accounting": {
+    "one_process_per_route": true,
+    "raw_gnss_open_count_per_route": 1,
+    "broadcast_nav_open_count_per_route": 1,
+    "imu_open_count_per_route": 0,
+    "truth_open_count_per_route": 0,
+    "validation_open_count_per_route": 0,
+    "holdout_open_count_per_route": 0,
+    "mat_read_count_per_route": 0,
+    "precomputed_coordinate_read_count_per_route": 0,
+    "device_wls_coordinate_read_count_per_route": 0,
+    "result_or_submission_coordinate_read_count_per_route": 0,
+    "kaggle_or_token_access": false
+  },
+  "route_order": [
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+    "2021-07-14-20-50-us-ca-mtv-e/sm-g988b",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+  ],
+  "verdict_policy": {
+    "generalizable_source_bug_required_for_go": true,
+    "implausible_velocity_is_not_bug_evidence": true,
+    "threshold_relaxation_forbidden": true,
+    "sign_flip_forbidden_without_identity_mismatch": true,
+    "missing_or_unhealthy_broadcast_nav_is_no_go": true,
+    "production_default_unchanged": true,
+    "phase41_freeze_and_result_retained": true
+  }
+}
