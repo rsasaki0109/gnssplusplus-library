@@ -254,6 +254,10 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase57_pixel5_rate_uncertainty_audit.py
     )
     add_test(
+        NAME python_smartphone_phase58_pixel5_cn0_doppler_calibration_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase58_pixel5_cn0_doppler_calibration.py
+    )
+    add_test(
         NAME python_smartphone_native_fgo_v2_1_confirmation_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_fgo_v2_1_confirmation.py
     )
