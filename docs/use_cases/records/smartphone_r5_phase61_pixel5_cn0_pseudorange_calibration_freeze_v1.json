@@ -159,6 +159,8 @@
     "carrier_sign": "For Pixel5, preserve the signed AccumulatedDeltaRangeMeters because the adapter's published device sign-negation list does not include pixel5",
     "cmc": "cmc_m = P_raw_m - AccumulatedDeltaRangeMeters_signed_m",
     "arc_centering": "For each (system,SVID,signal,continuous ADR arc), subtract the finite arc median from CMC. This removes carrier ambiguity and persistent arc offset; no fitted geometry or receiver coordinate is used.",
+    "minimum_arc_length": 2,
+    "singleton_arc_policy": "A continuous valid arc must contain at least two rows for CMC residual eligibility; singleton rows are reported as warm-up/coverage exclusions and are not imputed.",
     "residual": "abs(cmc_m - median_arc_cmc_m)",
     "same_epoch_common_mode_diagnostic": "Within each endpoint utcTimeMillis/HCDC group, report the median and centered CMC residuals separately; no common-mode estimate is applied as a correction.",
     "cn0_shape": "shape(Cn0DbHz) = 10^(-(Cn0DbHz-40.0)/20.0)",
@@ -182,6 +184,7 @@
       "min_finite_positive_cn0_fraction": 0.80,
       "min_populated_cn0_bins_per_route": 4,
       "min_rows_per_populated_cn0_bin": 100,
+      "min_valid_rows_per_adr_arc": 2,
       "min_signal_families_per_route": 2,
       "raw_domain_coverage_required": 1.0
     },
