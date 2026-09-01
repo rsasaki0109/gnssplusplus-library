@@ -7,6 +7,7 @@
     "starting_source_commit": "7ac6d25",
     "candidate_source_commit": "9b00c65",
     "runner_commit": "3e63613",
+    "focused_test_commit": "e71d3e1",
     "freeze": {
       "path": "docs/use_cases/records/smartphone_r5_phase43_native_fallback_seed_quality_anchor_recovery_freeze_v1.json",
       "sha256": "9278a835a21e3a19027aefd3675aba45d8f1f9e19183cbc5590850b776722400"
@@ -37,7 +38,7 @@
     },
     "focused_test": {
       "path": "tests/test_smartphone_phase43_fallback_seed_quality_anchor_recovery.py",
-      "sha256": "0e620ab1e503420c2ae173b092b99baa8b1c0d16171803ec063b5747f7b1d85e"
+      "sha256": "4e0612c83409d2abb284bbdbda38eebc190fd5834145bb53b654dc254469c278"
     },
     "build_configuration": "cmake build tree, gnss_fgo_imu_no_base, LD_LIBRARY_PATH=/home/sasaki/.local/lib",
     "raw_inputs_only": [
