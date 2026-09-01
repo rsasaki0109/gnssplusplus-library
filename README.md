@@ -905,6 +905,23 @@ remains `AccumulatedDeltaRangeUncertaintyMeters`.  See the [Phase54 contract](do
 [evaluator manifest](docs/use_cases/records/smartphone_r5_phase54_phase53_integrity_recovery_manifest_v1.json),
 and [result](docs/use_cases/records/smartphone_r5_phase54_phase53_integrity_recovery_result_v1.json).
 
+Phase55 audited the next raw-only factor, Android per-satellite
+`AccumulatedDeltaRangeUncertaintyMeters`, against the existing TDCP closure
+residual.  The field was present and finite on all four frozen Pixel5 routes,
+with ordinary/uncertainty pair counts **7,508 / 7,508**, **8,763 / 8,763**,
+**4,176 / 4,176**, and **3,728 / 3,728**.  However, every route populated
+only two of the four predeclared uncertainty bins, and routewise Spearman was
+only **0.06425 / 0.11604 / 0.05734 / 0.15949**; LAX-t also failed bin-median
+monotonicity.  The frozen identifiability gates therefore produce
+**no-go-adr-uncertainty-not-identifiable**.  No native TDCP sigma floor,
+solver, truth read, or accuracy claim was made; Phase43 remains champion and
+Phase51 remains experimental.  The `0.782` target was not evaluated.  The
+next single raw factor is `BiasUncertaintyNanos` / receiver-clock uncertainty
+relationship.  See the [Phase55 contract](docs/use_cases/smartphone_native_fgo_phase55_pixel5_adr_uncertainty.md),
+[freeze](docs/use_cases/records/smartphone_r5_phase55_pixel5_adr_uncertainty_freeze_v1.json),
+[evaluator manifest](docs/use_cases/records/smartphone_r5_phase55_pixel5_adr_uncertainty_evaluator_manifest_v1.json),
+and [result](docs/use_cases/records/smartphone_r5_phase55_pixel5_adr_uncertainty_result_v1.json).
+
 ## Docs
 
 - <https://rsasaki0109.github.io/gnssplusplus-library/>
