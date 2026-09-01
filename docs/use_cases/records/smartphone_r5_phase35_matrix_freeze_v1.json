@@ -1,0 +1,197 @@
+{
+  "schema_version": "smartphone-r5-phase35-matrix-freeze.v1",
+  "phase": 35,
+  "status": "frozen-before-phase35-structural-runs",
+  "purpose": "Compare only already implemented, separately frozen smartphone elements on a route-grouped raw-only cohort; no new numeric parameter or estimator is introduced.",
+  "base_control": {
+    "id": "quality_anchor_base_control",
+    "flags": [
+      "--native-pdc-imu-tdcp-no-bridge",
+      "--android-raw-clock-only",
+      "--android-utc-wall-clock-fallback",
+      "--android-raw-utc-keys",
+      "--native-quality-anchor"
+    ],
+    "description": "Phase31 quality-anchor replay over the bridge-free native PDC/IMU/TDCP graph; no signal bias, residual-ionosphere, Hatch, stop, or position-offset extension."
+  },
+  "matrix": {
+    "A_anchor_signal_iono_hatch": {
+      "flags": [
+        "--native-pdc-imu-tdcp-no-bridge",
+        "--android-raw-clock-only",
+        "--android-utc-wall-clock-fallback",
+        "--android-raw-utc-keys",
+        "--native-quality-anchor",
+        "--native-signal-bias-states",
+        "--native-residual-ionosphere",
+        "--native-carrier-code-leveling",
+        "--native-carrier-code-innovation-reset",
+        "--native-carrier-code-gal-e1-e5a"
+      ],
+      "fixed_elements": [
+        "quality-anchor",
+        "signal-bias-states",
+        "residual-ionosphere",
+        "carrier-code-leveling",
+        "carrier-code-innovation-reset",
+        "Galileo E1/E5a"
+      ]
+    },
+    "B_A_plus_stop": {
+      "flags": [
+        "--native-pdc-imu-tdcp-no-bridge",
+        "--android-raw-clock-only",
+        "--android-utc-wall-clock-fallback",
+        "--android-raw-utc-keys",
+        "--native-quality-anchor",
+        "--native-signal-bias-states",
+        "--native-residual-ionosphere",
+        "--native-carrier-code-leveling",
+        "--native-carrier-code-innovation-reset",
+        "--native-carrier-code-gal-e1-e5a",
+        "--native-upstream-stop-constraints"
+      ],
+      "fixed_elements": ["A", "upstream stop constraints"]
+    },
+    "C_A_plus_position_offset": {
+      "flags": [
+        "--native-pdc-imu-tdcp-no-bridge",
+        "--android-raw-clock-only",
+        "--android-utc-wall-clock-fallback",
+        "--android-raw-utc-keys",
+        "--native-quality-anchor",
+        "--native-signal-bias-states",
+        "--native-residual-ionosphere",
+        "--native-carrier-code-leveling",
+        "--native-carrier-code-innovation-reset",
+        "--native-carrier-code-gal-e1-e5a",
+        "--native-upstream-position-offset"
+      ],
+      "fixed_elements": ["A", "upstream position offset"]
+    }
+  },
+  "cohort": {
+    "train_development_reuse": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b"
+    ],
+    "validation_reuse_after_train_gate": "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+    "future_holdout": "2023-05-16-19-54-us-ca-mtv-xe1/pixel5",
+    "route_disjoint": true,
+    "selection_policy": "select one A/B/C lane only from unchanged train route-wise and macro results; then compare that selected lane with the quality-anchor base control on the already-opened validation route",
+    "truth_before_structural_runs": 0,
+    "truth_used_for_matrix_selection": false
+  },
+  "raw_inputs": {
+    "archive": {
+      "path": "data/gsdc2023/cache/dataset_2023.zip",
+      "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408"
+    },
+    "train_materialization": {
+      "path": "output/smartphone-r5/phase24-route-group-eval-v1/train_materialization_summary.json",
+      "sha256": "1d97d373f3569094574e375d0249a2b52e508a9522151cbb55341946902fd724"
+    },
+    "validation_materialization": {
+      "path": "output/smartphone-r5/phase33-quality-anchor-validation-v1/raw_materialization.json",
+      "sha256": "24ebc000ae8f266a799ea4f354f1b3cac3b591fd98914ab8bdc3cb5d27dd4fb9"
+    },
+    "allowed_members": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "forbidden_inference_inputs": ["ground_truth.csv", "*.mat", "sample_submission.csv", "result_gnss.mat", "result_gnss_imu.mat", "device WLS", "previous trajectory output"],
+    "route_inputs": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "device_gnss_sha256": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863",
+        "device_imu_sha256": "afc540e7c4ce2ca66b442a1afbcd604e9f6b3d2cc4d3733183739901b5b97bd6",
+        "brdc_nav_sha256": "6adfaf7fe4452a4faeb94a7b607c15e05f578c46a028a030b94aa6f79de194cd"
+      },
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4": {
+        "device_gnss_sha256": "b7c192323455c36e76ea44831dc21a0cb661e5ca160e6072bd0d3682c907e594",
+        "device_imu_sha256": "86b31f2ac9c4e80c675c01a8c86146efd7f67d1a5960ac58723605c1c2bf33a8",
+        "brdc_nav_sha256": "cf48ab5fe78edd49a182655ed4b99f1938972c40ab95bea3c78939d3eb98b5c5"
+      },
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+        "device_gnss_sha256": "9bbc9f8d7809a0ef341796fe1276fc507de1c87ccf2598d607cd12e6b635a678",
+        "device_imu_sha256": "cb7388be335d48eb7612025bc68a4ffb198bdddd2caa9f0a1b348fc06ef29c1d",
+        "brdc_nav_sha256": "357b8d05d2e9d9c0a2e1d5d9256120b288182d51109c2a4e01edcd0920f20440"
+      },
+      "2023-05-09-21-32-us-ca-mtv-pe1/pixel5": {
+        "device_gnss_sha256": "aedcf32a4c9402a5c970aa800c6191048b1998370932378fa51eca1d5155a95",
+        "device_imu_sha256": "17a33dca49fae9fe8688fa5b3c47efdb013a09ac8467abe0d66a37f93ccecd57",
+        "brdc_nav_sha256": "5cd8f6bfba4ac02ebfa0cc276a4a49d1601d3c7749637d9dae71263423d355cc"
+      }
+    }
+  },
+  "source_and_binary_pins_before_structural_run": {
+    "build/apps/gnss_fgo_imu_no_base": "883701ef34606af4be84a44181f6b3616b2559ee4031982fff98d73dbbbbe7bd",
+    "apps/native/gnss_fgo_imu_no_base.cpp": "00ad0c2a155a5a4c9ddccdd2339c9ef26e0162c4f66c958ee06240f06e7c705e",
+    "include/libgnss++/algorithms/fgo_config.hpp": "c1bfdfec388ac6ff91112917cb33ba344d81479a9f22e38819dd9af38f052cab",
+    "src/algorithms/fgo_problems.cpp": "931f6d42a050b70d13daad2df21c689e8962a6030b1b3ce268730c1e20c43c44",
+    "apps/commands/benchmarks/gnss_smartphone_phase24_route_group.py": "cc857c845aa8a162906146266cc6f52b7390a57fdf720c10d252a7940df27309",
+    "apps/commands/benchmarks/gnss_smartphone_phase33_quality_anchor_validation.py": "4f5b467bdd74b6164b63beee39d40fdc981483d15beec88f675943555d360d6c",
+    "apps/commands/benchmarks/gnss_smartphone_phase29_train_eval.py": "b3890989a870c2c0db7ffd63e336d9c253d488c3e2d54e6859069eb105573337",
+    "docs/use_cases/records/smartphone_r5_phase19_gal_e1_e5a_freeze_v1.json": "05c152f8be89c44204c54f2875ed24aec4dbe4f76fdc9ed112aa0808f2c7e6a1",
+    "docs/use_cases/records/smartphone_r5_phase20_upstream_stop_constraints_freeze_v1.json": "3d571e8ac669e23580906cca429f11d984b3d53f3315caef51792f73c24b3d66",
+    "docs/use_cases/records/smartphone_r5_phase21_position_offset_freeze_v1.json": "aeff90b9ddda713ab4cce9f4564f0418c3f1d269bf9d0c32aea0e78d622c4928",
+    "docs/use_cases/records/smartphone_r5_phase34_quality_anchor_validation_result_v1.json": "d4026273094b67ddc02fe30c5c6f9107e9fd39ba0d9ddc36cbdf5173204160ee"
+  },
+  "structural_gate": {
+    "every_route_and_lane_finite": true,
+    "every_route_and_lane_converged": true,
+    "exact_raw_target_key_coverage": true,
+    "repeat_byte_identical": true,
+    "continuity_over_70_mps_zero_for_every_lane": true,
+    "no_fallback_or_unresolved_epoch": true,
+    "truth_opened": false,
+    "solver_parameters_changed": false,
+    "production_default_changed": false
+  },
+  "accuracy_gate_after_structural_pass": {
+    "train_truth_read_processes": 1,
+    "train_truth_read_count_per_route": 1,
+    "routewise_all_four_horizontal_diagnostics_non_regression": true,
+    "routewise_horizontal_p50_p95_non_regression": true,
+    "routewise_coverage_and_availability_non_regression": true,
+    "routewise_continuity_non_regression": true,
+    "macro_all_four_diagnostics_strict_improvement_for_selected_lane": true,
+    "validation_truth_reuse_read_processes": 1,
+    "validation_truth_reuse_read_count": 1,
+    "selected_lane_vs_anchor_control_all_four_diagnostics_strict_improvement": true,
+    "validation_horizontal_p50_p95_and_coverage_non_regression": true,
+    "vertical": "informational-unavailable-four-column-prediction",
+    "post_score_tuning": false,
+    "future_holdout_remains_sealed": true
+  },
+  "prior_evidence": {
+    "phase34_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase34_quality_anchor_validation_freeze_v1.json",
+      "sha256": "18fd075f30699d0213a1cca3a9eac25d24d3765d75df8d770380dfa7fbeeb43b"
+    },
+    "phase34_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase34_quality_anchor_validation_result_v1.json",
+      "sha256": "d4026273094b67ddc02fe30c5c6f9107e9fd39ba0d9ddc36cbdf5173204160ee"
+    },
+    "phase32_train_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase32_quality_anchor_train_eval_result_v1.json",
+      "sha256": "e79109441a7643ab8bb4399678d950102b943608a302ca00e2a2deb03cb45124"
+    }
+  },
+  "truth_policy": {
+    "phase35_truth_open_count_before_structural": 0,
+    "phase34_validation_truth_historical_read_count": 1,
+    "phase35_train_truth_reads": 0,
+    "phase35_validation_reuse_reads": 0,
+    "future_holdout_truth_open_count": 0,
+    "mat_read_or_generated": false,
+    "token_or_kaggle_access": false,
+    "ground_truth_used_for_inference_or_matrix_selection": false
+  },
+  "authorization": {
+    "freeze_before_structural_runs": true,
+    "structural_runs_reuse_raw_only_inputs": true,
+    "truth_after_structural_gate_only": true,
+    "one_batch_evaluator_for_train_truth": true,
+    "one_process_validation_truth_reuse": true,
+    "no_holdout": true,
+    "no_kaggle_submission": true
+  }
+}
