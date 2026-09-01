@@ -1277,6 +1277,26 @@ result](docs/use_cases/smartphone_native_fgo_phase78_phase77_structural_reclassi
 [freeze](docs/use_cases/records/smartphone_r5_phase78_phase77_structural_reclassification_freeze_v1.json),
 and [manifest](docs/use_cases/records/smartphone_r5_phase78_phase77_structural_reclassification_manifest_v1.json).
 
+Phase79 then evaluated the immutable Phase78 holistic multi-frequency plus
+static signal-bias candidate against exact Phase43 control and separately
+against the Phase73 no-bias candidate. The corrected scorer resolved Phase43
+paths from the SHA-pinned structural seal, read each development truth once,
+and used no native/raw/nav/MAT/validation/Kaggle inputs. The candidate macro
+was `2.7404307830545833` versus Phase43 `3.536446745838451` (improvement
+`0.7960159627838679`) and versus Phase73 `3.392183792762136` (improvement
+`0.6517530097075528`), but frozen promotion gates failed: MTV-a improvement
+was only `0.016861660062385653` m, MTV-h regressed by `0.27976395493017714` m
+and scored `3.886729662333128` m, the candidate macro remained above 2 m, and
+MTV-u scored `3.712194858995004` m. LAX improved by `3.2520022083907887` m.
+The `0.782` target was not met and remains report-only. Phase43 remains
+champion; no validation/Kaggle action is authorized. The next single
+source-supported candidate is official raw-IMU stop velocity/pose graph
+constraints, requiring a new pre-truth freeze. See the [Phase79 result](docs/
+use_cases/smartphone_native_fgo_phase79_phase78_signal_bias_accuracy_result.md),
+[result record](docs/use_cases/records/smartphone_r5_phase79_phase78_signal_bias_accuracy_result_v1.json),
+[freeze](docs/use_cases/records/smartphone_r5_phase79_phase78_signal_bias_accuracy_freeze_v1.json),
+and [manifest](docs/use_cases/records/smartphone_r5_phase79_phase78_signal_bias_accuracy_manifest_v1.json).
+
 ## Docs
 
 - <https://rsasaki0109.github.io/gnssplusplus-library/>
