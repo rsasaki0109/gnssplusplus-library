@@ -89,35 +89,97 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
     bool use_quality_anchor_spp_solutions = false;
     if (config_.use_quality_anchor_initialization) {
         problem.diagnostics.quality_anchor_initialization_enabled = true;
+        problem.diagnostics.quality_anchor_recovery_enabled =
+            config_.use_fallback_seed_quality_anchor_recovery;
         std::vector<PositionSolution> reconnaissance(input_epochs.size());
         for (std::size_t i = 0; i < input_epochs.size(); ++i) {
             reconnaissance[i] = spp_processor.processEpoch(input_epochs[i], nav);
         }
 
-        std::vector<fgo_quality_anchor::Candidate> candidates;
-        candidates.reserve(reconnaissance.size());
         const double residual_sigma = std::max(1e-6, config_.pseudorange_sigma_m);
-        for (std::size_t i = 0; i < reconnaissance.size(); ++i) {
-            const auto& solution = reconnaissance[i];
-            const double residual_rms =
-                std::isfinite(solution.spp_pre_qc_residual_rms_m)
-                    ? solution.spp_pre_qc_residual_rms_m
-                    : solution.residual_rms;
-            if (!fgo_quality_anchor::eligible(
-                    solution.isValid(), solution.position_ecef.allFinite(),
-                    solution.position_ecef.norm(), solution.num_satellites,
-                    solution.gdop, residual_rms / residual_sigma)) {
-                continue;
+        auto collect_candidates = [&](
+                const std::vector<PositionSolution>& solutions,
+                std::vector<fgo_quality_anchor::Candidate>& candidates) {
+            candidates.clear();
+            candidates.reserve(solutions.size());
+            for (std::size_t i = 0; i < solutions.size(); ++i) {
+                const auto& solution = solutions[i];
+                const double residual_rms =
+                    std::isfinite(solution.spp_pre_qc_residual_rms_m)
+                        ? solution.spp_pre_qc_residual_rms_m
+                        : solution.residual_rms;
+                if (!fgo_quality_anchor::eligible(
+                        solution.isValid(), solution.position_ecef.allFinite(),
+                        solution.position_ecef.norm(), solution.num_satellites,
+                        solution.gdop, residual_rms / residual_sigma)) {
+                    continue;
+                }
+                fgo_quality_anchor::Candidate quality;
+                quality.index = i;
+                quality.satellites = solution.num_satellites;
+                quality.gdop = solution.gdop;
+                quality.normalized_residual = residual_rms / residual_sigma;
+                candidates.push_back(quality);
             }
-            fgo_quality_anchor::Candidate quality;
-            quality.index = i;
-            quality.satellites = solution.num_satellites;
-            quality.gdop = solution.gdop;
-            quality.normalized_residual = residual_rms / residual_sigma;
-            candidates.push_back(quality);
-        }
+        };
+
+        std::vector<fgo_quality_anchor::Candidate> candidates;
+        collect_candidates(reconnaissance, candidates);
+        problem.diagnostics.quality_anchor_normal_candidates = candidates.size();
         problem.diagnostics.quality_anchor_candidates = candidates.size();
-        if (const auto* anchor = fgo_quality_anchor::choose(candidates)) {
+        const fgo_quality_anchor::Candidate* anchor =
+            fgo_quality_anchor::choose(candidates);
+        const std::vector<PositionSolution>* anchor_reconnaissance =
+            &reconnaissance;
+        std::vector<PositionSolution> recovery_reconnaissance;
+        std::vector<fgo_quality_anchor::Candidate> recovery_candidates;
+        bool anchor_from_recovery = false;
+
+        // Phase43 recovery is deliberately a second, exclusive stage.  The
+        // normal quality-anchor reconnaissance above must fully complete
+        // before this retry can run.  Only its elevation gate changes; SNR,
+        // health, navigation, geometry, pseudorange, GDOP, and residual gates
+        // all remain the same SPP implementation and candidate ranking.
+        if (anchor == nullptr &&
+            config_.use_fallback_seed_quality_anchor_recovery) {
+            problem.diagnostics.quality_anchor_recovery_triggered = true;
+            spp_processor.reset();
+            ProcessorConfig recovery_processor_config = spp_processor_config;
+            recovery_processor_config.elevation_mask = -90.0;
+            SPPProcessor recovery_processor(spp_config);
+            recovery_processor.initialize(recovery_processor_config);
+            recovery_reconnaissance.resize(input_epochs.size());
+            for (std::size_t i = 0; i < input_epochs.size(); ++i) {
+                recovery_reconnaissance[i] =
+                    recovery_processor.processEpoch(input_epochs[i], nav);
+            }
+            collect_candidates(recovery_reconnaissance, recovery_candidates);
+            problem.diagnostics.quality_anchor_recovery_candidates =
+                recovery_candidates.size();
+            anchor = fgo_quality_anchor::choose(recovery_candidates);
+            if (anchor != nullptr) {
+                anchor_reconnaissance = &recovery_reconnaissance;
+                anchor_from_recovery = true;
+                problem.diagnostics.quality_anchor_recovery_selected = true;
+                problem.diagnostics.quality_anchor_recovery_anchor_index =
+                    anchor->index;
+                problem.diagnostics.quality_anchor_recovery_anchor_satellites =
+                    anchor->satellites;
+                problem.diagnostics.quality_anchor_recovery_anchor_gdop =
+                    anchor->gdop;
+                problem.diagnostics
+                    .quality_anchor_recovery_anchor_normalized_residual_rms =
+                    anchor->normalized_residual;
+                // The common quality-anchor summary describes the selected
+                // anchor, while the separate normal/recovery counts preserve
+                // the stage that produced it.
+                problem.diagnostics.quality_anchor_candidates =
+                    recovery_candidates.size();
+            }
+        }
+
+        if (anchor != nullptr) {
+            const auto& selected_reconnaissance = *anchor_reconnaissance;
             const std::size_t anchor_index = anchor->index;
             problem.diagnostics.quality_anchor_selected = true;
             problem.diagnostics.quality_anchor_index = anchor_index;
@@ -142,7 +204,7 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                         // The anchor itself is a raw/nav-derived SPP result;
                         // use it as the first numerical state for this replay.
                         replay_epoch.receiver_position =
-                            reconnaissance[anchor_index].position_ecef;
+                            selected_reconnaissance[anchor_index].position_ecef;
                     }
                     output[index] = replay_processor.processEpoch(replay_epoch, nav);
                     assigned[index] = true;
@@ -168,8 +230,18 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                 quality_anchor_spp_solutions[i] =
                     i < anchor_index ? backward[i] : forward[i];
                 if (!assigned) {
-                    quality_anchor_spp_solutions[i] = reconnaissance[i];
+                    quality_anchor_spp_solutions[i] = selected_reconnaissance[i];
                     ++problem.diagnostics.quality_anchor_fallback_epochs;
+                }
+                if (anchor_from_recovery) {
+                    const auto& replay_solution = quality_anchor_spp_solutions[i];
+                    if (replay_solution.isValid() &&
+                        replay_solution.position_ecef.allFinite() &&
+                        replay_solution.position_ecef.norm() > 1e6) {
+                        ++problem.diagnostics.quality_anchor_recovery_replay_valid_epochs;
+                    } else {
+                        ++problem.diagnostics.quality_anchor_recovery_replay_invalid_epochs;
+                    }
                 }
             }
             problem.diagnostics.quality_anchor_forward_valid_epochs = forward_valid;

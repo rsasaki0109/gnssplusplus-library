@@ -94,6 +94,11 @@ struct Options {
     bool native_upstream_position_offset = false;
     bool native_signal_specific_galileo_tgd = false;
     bool native_quality_anchor = false;
+    // Phase43 candidate: when the normal quality-anchor reconnaissance has no
+    // eligible raw/nav solution, retry that same SPP reconnaissance with an
+    // explicit -90 degree elevation gate and replay the selected anchor via
+    // the ordinary factor-builder path.
+    bool native_fallback_seed_quality_anchor_recovery = false;
     // Phase39 candidate: use the GNSS-first pass only for its independently
     // optimized Doppler velocity/heading seeds.  Position and receiver-clock
     // states remain the original raw SPP seeds.
@@ -135,6 +140,7 @@ void usage(const char* program) {
                  " [--native-upstream-position-offset]"
                  " [--native-signal-specific-galileo-tgd]"
                  " [--native-quality-anchor]"
+                 " [--native-fallback-seed-quality-anchor-recovery]"
                  " [--native-gnss-first-velocity-only-handoff]"
                  " [--native-direct-doppler-wls-handoff]\n";
 }
@@ -252,6 +258,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
             options.native_signal_specific_galileo_tgd = true;
         } else if (arg == "--native-quality-anchor") {
             options.native_quality_anchor = true;
+        } else if (arg == "--native-fallback-seed-quality-anchor-recovery") {
+            options.native_fallback_seed_quality_anchor_recovery = true;
         } else if (arg == "--native-gnss-first-velocity-only-handoff") {
             options.native_gnss_first_velocity_only_handoff = true;
         } else if (arg == "--native-direct-doppler-wls-handoff") {
@@ -343,6 +351,21 @@ bool parseArguments(int argc, char** argv, Options& options) {
     if (options.native_pdc_imu_tdcp_no_bridge && options.native_upstream_quality) {
         std::cerr << "--native-pdc-imu-tdcp-no-bridge is incompatible with "
                      "--native-upstream-quality, which requires the PDC bridge\n";
+        return false;
+    }
+    if (options.native_fallback_seed_quality_anchor_recovery &&
+        (!android_raw || !options.android_raw_utc_key_contract ||
+         !options.all_epochs || options.skip_epochs != 0)) {
+        std::cerr << "--native-fallback-seed-quality-anchor-recovery requires "
+                     "Android raw input, --android-raw-utc-keys, --all-epochs, "
+                     "and no skipped epochs\n";
+        return false;
+    }
+    if (options.native_fallback_seed_quality_anchor_recovery &&
+        options.native_pdc_state_bridge) {
+        std::cerr << "--native-fallback-seed-quality-anchor-recovery is "
+                     "incompatible with --native-pdc-state-bridge; the raw/nav "
+                     "anchor must remain the initial position/clock seed\n";
         return false;
     }
     if (options.native_signal_bias_states && !android_raw) {
@@ -1888,6 +1911,9 @@ std::string makeSummary(const Options& options,
         << "  \"native_quality_anchor\": "
         << (options.native_quality_anchor ? "true" : "false") << ",\n"
         ;
+    if (options.native_fallback_seed_quality_anchor_recovery) {
+        out << "  \"native_fallback_seed_quality_anchor_recovery\": true,\n";
+    }
     if (options.native_direct_doppler_wls_handoff) {
         out << "  \"native_direct_doppler_wls_handoff\": true,\n";
     }
@@ -2326,8 +2352,66 @@ std::string makeSummary(const Options& options,
     } else {
         out << "null";
     }
-    out << ",\n"
-        << "    \"ranking\": [\"satellites_desc\", \"gdop_asc\", "
+    out << ",\n";
+    if (options.native_fallback_seed_quality_anchor_recovery) {
+        out << "    \"recovery_enabled\": "
+            << (problem.diagnostics.quality_anchor_recovery_enabled
+                    ? "true"
+                    : "false") << ",\n"
+            << "    \"normal_quality_anchor_candidates\": "
+            << problem.diagnostics.quality_anchor_normal_candidates << ",\n"
+            << "    \"recovery_quality_anchor_candidates\": "
+            << problem.diagnostics.quality_anchor_recovery_candidates << ",\n"
+            << "    \"recovery_trigger\": "
+            << (problem.diagnostics.quality_anchor_recovery_triggered
+                    ? "true"
+                    : "false") << ",\n"
+            << "    \"recovery_triggered\": "
+            << (problem.diagnostics.quality_anchor_recovery_triggered
+                    ? "true"
+                    : "false") << ",\n"
+            << "    \"recovery_anchor_selected\": "
+            << (problem.diagnostics.quality_anchor_recovery_selected
+                    ? "true"
+                    : "false") << ",\n"
+            << "    \"recovery_anchor_index\": ";
+        if (problem.diagnostics.quality_anchor_recovery_selected) {
+            out << problem.diagnostics.quality_anchor_recovery_anchor_index;
+        } else {
+            out << "null";
+        }
+        out << ",\n"
+            << "    \"recovery_anchor_satellites\": "
+            << problem.diagnostics.quality_anchor_recovery_anchor_satellites
+            << ",\n"
+            << "    \"recovery_anchor_gdop\": ";
+        if (std::isfinite(problem.diagnostics.quality_anchor_recovery_anchor_gdop)) {
+            out << problem.diagnostics.quality_anchor_recovery_anchor_gdop;
+        } else {
+            out << "null";
+        }
+        out << ",\n"
+            << "    \"recovery_anchor_normalized_residual_rms\": ";
+        if (std::isfinite(
+                problem.diagnostics
+                    .quality_anchor_recovery_anchor_normalized_residual_rms)) {
+            out << problem.diagnostics
+                       .quality_anchor_recovery_anchor_normalized_residual_rms;
+        } else {
+            out << "null";
+        }
+        out << ",\n"
+            << "    \"recovery_replay_valid_epochs\": "
+            << problem.diagnostics.quality_anchor_recovery_replay_valid_epochs
+            << ",\n"
+            << "    \"recovery_replay_invalid_epochs\": "
+            << problem.diagnostics.quality_anchor_recovery_replay_invalid_epochs
+            << ",\n"
+            << "    \"sentinel_factor_bypass\": "
+            << (problem.diagnostics.sentinel_factor_bypass ? "true" : "false")
+            << ",\n";
+    }
+    out << "    \"ranking\": [\"satellites_desc\", \"gdop_asc\", "
            "\"normalized_residual_rms_asc\", \"input_index_asc\"],\n"
         << "    \"truth_free\": true,\n"
         << "    \"graph_model_changed\": false\n"
@@ -2973,7 +3057,11 @@ int main(int argc, char** argv) {
     config.pose3_lever_arm_body_m = libgnss::Vector3d::Zero();
     config.use_signal_specific_galileo_group_delay =
         options.native_signal_specific_galileo_tgd;
-    config.use_quality_anchor_initialization = options.native_quality_anchor;
+    config.use_quality_anchor_initialization =
+        options.native_quality_anchor ||
+        options.native_fallback_seed_quality_anchor_recovery;
+    config.use_fallback_seed_quality_anchor_recovery =
+        options.native_fallback_seed_quality_anchor_recovery;
     if (android_raw) {
         // The raw path starts SPP from the route-independent Earth-surface
         // initializer above.  Applying a nonzero elevation mask at that
@@ -3022,6 +3110,19 @@ int main(int argc, char** argv) {
         pdc_bridge_prepopulated = true;
     } else {
         problem = processor.buildPseudorangeProblem(epochs, nav);
+    }
+    if (options.native_fallback_seed_quality_anchor_recovery &&
+        problem.diagnostics.quality_anchor_recovery_triggered &&
+        !problem.diagnostics.quality_anchor_recovery_selected) {
+        std::cerr << "fallback-seed quality-anchor recovery found no eligible "
+                     "raw/nav anchor; candidate failed closed\n";
+        return 1;
+    }
+    if (options.native_fallback_seed_quality_anchor_recovery &&
+        problem.diagnostics.sentinel_factor_bypass) {
+        std::cerr << "fallback-seed quality-anchor recovery forbids sentinel "
+                     "factor-level bypass\n";
+        return 1;
     }
     if (problem.epochs.size() < 2 || problem.pseudorange_factors.empty()) {
         std::cerr << "no-base problem has insufficient seeded pseudorange factors\n";

@@ -58,6 +58,14 @@ struct Config {
         // from that anchor.  The default remains the historical chronological
         // pass so production and existing callers remain byte-compatible.
         bool use_quality_anchor_initialization = false;
+        // Research-only extension of the quality-anchor initializer.  The
+        // normal elevation-gated reconnaissance always runs first.  Only
+        // when it has no eligible candidate does the builder retry the same
+        // raw pseudorange/broadcast-navigation SPP solve with an explicit
+        // -90 degree elevation gate, then replay the selected raw/nav anchor
+        // through the ordinary elevation-gated path.  This flag never
+        // changes factor-builder masks or enables a sentinel bypass.
+        bool use_fallback_seed_quality_anchor_recovery = false;
         // Raw no-base research paths may use the dedicated receiver-only SPP
         // seed contract. The historical default keeps inter-system clock
         // states enabled for compatibility.

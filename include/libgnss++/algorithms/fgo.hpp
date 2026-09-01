@@ -283,6 +283,27 @@ public:
         double quality_anchor_gdop = std::numeric_limits<double>::quiet_NaN();
         double quality_anchor_normalized_residual_rms =
             std::numeric_limits<double>::quiet_NaN();
+        // Truth-free fallback-seed quality-anchor recovery diagnostics.  The
+        // normal quality-anchor reconnaissance is authoritative and always
+        // precedes this opt-in retry; these fields are zero/false when the
+        // recovery flag is disabled or not triggered.
+        bool quality_anchor_recovery_enabled = false;
+        bool quality_anchor_recovery_triggered = false;
+        bool quality_anchor_recovery_selected = false;
+        std::size_t quality_anchor_normal_candidates = 0;
+        std::size_t quality_anchor_recovery_candidates = 0;
+        std::size_t quality_anchor_recovery_anchor_index =
+            std::numeric_limits<std::size_t>::max();
+        int quality_anchor_recovery_anchor_satellites = 0;
+        double quality_anchor_recovery_anchor_gdop =
+            std::numeric_limits<double>::quiet_NaN();
+        double quality_anchor_recovery_anchor_normalized_residual_rms =
+            std::numeric_limits<double>::quiet_NaN();
+        std::size_t quality_anchor_recovery_replay_valid_epochs = 0;
+        std::size_t quality_anchor_recovery_replay_invalid_epochs = 0;
+        // Deliberately fixed false: recovery is an initializer only and does
+        // not bypass factor-level elevation/geometry selection globally.
+        bool sentinel_factor_bypass = false;
         std::size_t sparse_epochs_retained = 0;
         std::size_t sparse_empty_epochs_retained = 0;
         std::size_t double_difference_matched_base_epochs = 0;

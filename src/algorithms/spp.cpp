@@ -392,9 +392,16 @@ double ionosphereDelayMetersFromTecu(SignalType signal,
 }
 
 double elevationMaskRadians(double configured_mask) {
-    if (!std::isfinite(configured_mask) || configured_mask <= 0.0) {
+    if (!std::isfinite(configured_mask)) {
         return 0.0;
     }
+    // Phase43 uses an explicit -90 degree mask for raw/nav reconnaissance so
+    // below-horizon rows can recover an SPP anchor.  Other non-positive masks
+    // retain the historical no-mask meaning.
+    if (configured_mask <= -90.0) {
+        return -M_PI / 2.0;
+    }
+    if (configured_mask <= 0.0) return 0.0;
     // ProcessorConfig documents degrees, but some older examples passed
     // radians. Accept both to avoid surprising existing callers.
     return configured_mask > M_PI / 2.0 ? configured_mask * M_PI / 180.0 : configured_mask;
