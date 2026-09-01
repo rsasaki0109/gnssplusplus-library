@@ -1166,6 +1166,21 @@ is drawn, and a new Phase72 freeze/output root is required. See the
 [manifest](docs/use_cases/records/smartphone_r5_phase71_base_additional_frequency_bands_manifest_v1.json),
 and [integrity failure record](docs/use_cases/records/smartphone_r5_phase71_base_additional_frequency_bands_structural_failure_v1.json).
 
+Phase72 separately recovered the Phase71 evaluator shape with a new output
+root and fresh reads. It preserved the exact global-domain=1.0, matched/all
+>=0.80, and finite/matched>=0.99 gates. The first MTV-a candidate reached
+48,195/61,754 exact-stream matched adopted factors (`0.7804352754477443`) and
+46,556/48,195 finite in-domain corrections (`0.965992322855068`), so the
+structural coverage gate failed closed; all-band selected 69 streams including
+five GPS_L5 streams. Control identity remained exact, candidate repeat and
+the other routes were not run, and native reads were raw/IMU/nav 2 each,
+base 1, truth/MAT/validation/archive 0. No accuracy or `0.782` conclusion is
+made; Phase43 remains champion and the option remains experimental. See the
+[Phase72 recovery contract](docs/use_cases/smartphone_native_fgo_phase72_base_additional_frequency_bands_recovery.md),
+[freeze](docs/use_cases/records/smartphone_r5_phase72_base_additional_frequency_bands_recovery_freeze_v1.json),
+[manifest](docs/use_cases/records/smartphone_r5_phase72_base_additional_frequency_bands_recovery_manifest_v1.json),
+and [sealed result](docs/use_cases/records/smartphone_r5_phase72_base_additional_frequency_bands_recovery_structural_failure_v1.json).
+
 ## Docs
 
 - <https://rsasaki0109.github.io/gnssplusplus-library/>

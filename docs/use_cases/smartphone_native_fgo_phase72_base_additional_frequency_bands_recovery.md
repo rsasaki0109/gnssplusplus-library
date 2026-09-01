@@ -21,3 +21,17 @@ Unexpected evaluator exceptions are captured in a fail-closed failure artifact.
 Prediction-domain coverage remains exactly 1.0, matched/all remains at least
 0.80, and finite/matched remains at least 0.99. No truth, MATLAB, validation,
 archive, post-truth solver, or `0.782` evaluation is allowed.
+
+## Sealed recovery result
+
+The fresh recovery reached the first MTV-a control and candidate run. The
+control remained byte-identical to Phase43. The all-band candidate emitted
+167,020 selected base rows across 69 streams (including five GPS_L5 streams),
+but only 48,195/61,754 adopted factors had an exact finite-model stream
+(`0.7804352754477443`, below `0.80`). Of those, 46,556 had finite in-domain
+corrections (`0.965992322855068`, below `0.99`); 15,198 adopted rows were
+outside the in-domain interpolation range. The candidate repeat and remaining
+routes were not run after this hard gate failure. No denominator was relaxed,
+no truth was read, and no accuracy or `0.782` conclusion is made. Phase43
+remains champion and the all-band option remains experimental. See the
+[sealed failure record](records/smartphone_r5_phase72_base_additional_frequency_bands_recovery_structural_failure_v1.json).
