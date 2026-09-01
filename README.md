@@ -447,6 +447,23 @@ this phase.  See the [Phase 45 contract](docs/use_cases/smartphone_native_fgo_ph
 [evaluator manifest](docs/use_cases/records/smartphone_r5_phase45_pixel5_residual_diagnostic_evaluator_manifest_v1.json),
 and [result](docs/use_cases/records/smartphone_r5_phase45_pixel5_residual_diagnostic_result_v1.json).
 
+Phase 46 audited that next factor using only the same four Pixel5 raw
+`device_gnss.csv` files.  Each raw file was read once in one evaluator process;
+truth, Phase45 residual payload, solver, archive, validation/holdout, MAT,
+WLS, precomputed coordinates, and Kaggle/token inputs remained sealed.  The
+UTC/GPS clock residual and drift gates passed (maximum detrended residual
+**0.012085 ms**, maximum drift **0.047444 ppm**), but `FullBiasNanos` changed
+on **7,578** subsequent epochs without a HCDC change or a strict >1 s segment
+boundary.  Segment-base versus per-row TOW differences reached **29,421.032
+m** c-scaled on MTV-a, while same-epoch clock and constellation/signal
+differences were zero.  This is a common receiver-clock gauge, so Phase 46 is
+`no-go-clock-correction-common-mode-only`; no correction was implemented.  The
+single next raw physical factor is satellite-specific code
+propagation/multipath residual.  See the [Phase 46 contract](docs/use_cases/smartphone_native_fgo_phase46_pixel5_raw_clock_timing.md),
+[freeze](docs/use_cases/records/smartphone_r5_phase46_pixel5_raw_clock_timing_freeze_v1.json),
+[evaluator manifest](docs/use_cases/records/smartphone_r5_phase46_pixel5_raw_clock_timing_evaluator_manifest_v1.json),
+and [result](docs/use_cases/records/smartphone_r5_phase46_pixel5_raw_clock_timing_result_v1.json).
+
 ### PPC 2024 goal matrix vs Kaiyodai and gici-open
 
 The audited KF/FGO selected profile clears the distance-weighted PPC public
