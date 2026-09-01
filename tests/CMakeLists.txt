@@ -270,6 +270,10 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase60_pixel5_intersignal_bias_audit.py
     )
     add_test(
+        NAME python_smartphone_phase61_pixel5_cn0_pseudorange_calibration_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase61_pixel5_cn0_pseudorange_calibration.py
+    )
+    add_test(
         NAME python_smartphone_native_fgo_v2_1_confirmation_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_fgo_v2_1_confirmation.py
     )
@@ -908,6 +912,7 @@ if(GTest_FOUND)
         python_smartphone_phase48_pixel5_raw_code_rate_uncertainty_audit_tests
         python_smartphone_phase49_pixel5_adr_cycle_slip_lock_loss_audit_tests
         python_smartphone_phase50_pixel5_adr_half_cycle_audit_tests
+        python_smartphone_phase61_pixel5_cn0_pseudorange_calibration_tests
         python_smartphone_phase59_native_cn0_doppler_calibration_accuracy_tests
         python_smartphone_kaggle_tests
         python_smartphone_trajectory_smoother_tests
