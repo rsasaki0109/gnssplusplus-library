@@ -280,7 +280,7 @@ def _prepare_parser() -> Any:
 def _source_contract(freeze: dict[str, Any]) -> dict[str, Any]:
     contents: dict[str, str] = {}
     hashes: dict[str, str] = {}
-    for name, pin in freeze["authority"]["source_contracts"].items():
+    for name, pin in freeze["authority_pins"]["source_contracts"].items():
         payload, digest = _read_bytes_once(ROOT / pin["path"], f"Phase61 static source {name}", pin["sha256"])
         try:
             contents[name] = payload.decode("utf-8")

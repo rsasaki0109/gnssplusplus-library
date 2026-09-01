@@ -21,7 +21,7 @@
   "evaluator": {
     "source": {
       "path": "apps/commands/benchmarks/gnss_smartphone_phase61_pixel5_cn0_pseudorange_calibration.py",
-      "sha256": "dd4fb2ab77fa718ade936a5ff7ffd07e5abaa146207b8d1e80ebfeb9b1caa1ba"
+      "sha256": "02b67220c940568228e45e1f43ba94d8f6735beccffbd75d62ec4753e2b3d995"
     },
     "test": {
       "path": "tests/test_smartphone_phase61_pixel5_cn0_pseudorange_calibration.py",
