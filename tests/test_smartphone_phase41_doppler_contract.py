@@ -15,9 +15,12 @@ def test_android_rate_is_retained_as_diagnostic_source_value():
     loader = _read("src/io/android_raw_gnss.cpp")
 
     assert "double pseudorange_rate_mps = 0.0" in observation
+    assert "double source_carrier_frequency_hz = 0.0" in observation
     assert "bool has_pseudorange_rate_mps = false" in observation
+    assert "bool has_source_carrier_frequency_hz = false" in observation
     assert "observation.pseudorange_rate_mps = raw.pseudorange_rate_mps" in loader
     assert "observation.has_pseudorange_rate_mps =" in loader
+    assert "observation.source_carrier_frequency_hz = raw.carrier_frequency_hz" in loader
     assert "observation.doppler = -raw.pseudorange_rate_mps / wavelength" in loader
 
 
@@ -30,6 +33,8 @@ def test_estimators_do_not_consume_the_diagnostic_raw_rate_field():
     # field so this audit cannot silently change estimator semantics.
     assert "pseudorange_rate_mps" not in spp_velocity
     assert "pseudorange_rate_mps" not in fgo
+    assert "source_carrier_frequency_hz" not in spp_velocity
+    assert "source_carrier_frequency_hz" not in fgo
 
 
 def test_audit_is_raw_only_and_keeps_contract_equations_explicit():

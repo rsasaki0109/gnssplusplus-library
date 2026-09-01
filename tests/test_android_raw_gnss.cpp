@@ -104,6 +104,9 @@ TEST(AndroidRawGnssTest, ReconstructsRawClockAndObservableSigns) {
     EXPECT_NEAR(observation.pseudorange, pseudorange, 1e-5);
     EXPECT_TRUE(observation.has_pseudorange_rate_mps);
     EXPECT_DOUBLE_EQ(observation.pseudorange_rate_mps, 25.0);
+    EXPECT_TRUE(observation.has_source_carrier_frequency_hz);
+    EXPECT_DOUBLE_EQ(observation.source_carrier_frequency_hz,
+                     constants::GPS_L1_FREQ);
     EXPECT_NEAR(observation.doppler, -25.0 / wavelength, 1e-12);
     EXPECT_NEAR(observation.pseudorange_rate_mps,
                 -observation.doppler * wavelength, 1e-12);

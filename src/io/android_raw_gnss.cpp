@@ -872,6 +872,10 @@ bool loadAndroidRawGnssCsv(const std::string& path,
         observation.pseudorange_rate_mps = raw.pseudorange_rate_mps;
         observation.has_pseudorange_rate_mps =
             std::isfinite(raw.pseudorange_rate_mps);
+        observation.source_carrier_frequency_hz = raw.carrier_frequency_hz;
+        observation.has_source_carrier_frequency_hz =
+            std::isfinite(raw.carrier_frequency_hz) &&
+            raw.carrier_frequency_hz > 0.0;
         observation.doppler = -raw.pseudorange_rate_mps / wavelength;
         observation.has_doppler = !doppler_masked &&
                                   std::isfinite(observation.doppler);

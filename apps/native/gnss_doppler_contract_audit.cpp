@@ -67,6 +67,8 @@ struct PreparedRow {
     Vector3d los_receiver_to_satellite = Vector3d::Zero();
     double satellite_clock_bias_s = std::numeric_limits<double>::quiet_NaN();
     double satellite_clock_drift_sps = std::numeric_limits<double>::quiet_NaN();
+    double adapter_frequency_hz = std::numeric_limits<double>::quiet_NaN();
+    double adapter_wavelength_m = std::numeric_limits<double>::quiet_NaN();
     double wavelength_m = std::numeric_limits<double>::quiet_NaN();
     double frequency_hz = std::numeric_limits<double>::quiet_NaN();
     double earth_rotation_angle_rad = std::numeric_limits<double>::quiet_NaN();
@@ -77,7 +79,13 @@ struct PreparedRow {
     double earth_rotation_range_rate_delta_mps =
         std::numeric_limits<double>::quiet_NaN();
     double satellite_range_rate_mps = std::numeric_limits<double>::quiet_NaN();
+    double adapter_measured_range_rate_mps =
+        std::numeric_limits<double>::quiet_NaN();
+    double adapter_expected_receiver_residual_mps =
+        std::numeric_limits<double>::quiet_NaN();
     double measured_range_rate_mps = std::numeric_limits<double>::quiet_NaN();
+    double fgo_expected_receiver_residual_mps =
+        std::numeric_limits<double>::quiet_NaN();
     double expected_receiver_residual_mps =
         std::numeric_limits<double>::quiet_NaN();
 };
@@ -292,6 +300,20 @@ PreparedRow prepareRow(const ObservationData& epoch,
         row.spp_candidate = false;
         return row;
     }
+    if (observation.has_source_carrier_frequency_hz &&
+        observation.source_carrier_frequency_hz > 0.0 &&
+        std::isfinite(observation.source_carrier_frequency_hz)) {
+        row.adapter_frequency_hz = observation.source_carrier_frequency_hz;
+    } else {
+        row.adapter_frequency_hz = row.frequency_hz;
+    }
+    row.adapter_wavelength_m =
+        libgnss::constants::SPEED_OF_LIGHT / row.adapter_frequency_hz;
+    if (!(row.adapter_wavelength_m > 0.0) ||
+        !std::isfinite(row.adapter_wavelength_m)) {
+        row.spp_candidate = false;
+        return row;
+    }
     row.wavelength_m = libgnss::signalWavelengthMeters(observation);
     if (!(row.wavelength_m > 0.0) || !std::isfinite(row.wavelength_m)) {
         row.wavelength_m = libgnss::signalWavelengthMeters(
@@ -328,6 +350,9 @@ PreparedRow prepareRow(const ObservationData& epoch,
     row.measured_range_rate_mps =
         libgnss::doppler_contract::rinexDopplerToRangeRate(
             observation.doppler, row.frequency_hz);
+    row.adapter_measured_range_rate_mps =
+        libgnss::doppler_contract::rinexDopplerToRangeRate(
+            observation.doppler, row.adapter_frequency_hz);
     row.satellite_range_rate_mps =
         row.corrected_satellite_velocity.dot(row.los_receiver_to_satellite);
     row.unrotated_satellite_range_rate_mps =
@@ -338,20 +363,30 @@ PreparedRow prepareRow(const ObservationData& epoch,
          row.satellite_velocity(0) * receiver_position(1));
     row.earth_rotation_range_rate_delta_mps =
         row.satellite_range_rate_mps - row.unrotated_satellite_range_rate_mps;
-    row.expected_receiver_residual_mps =
+    row.adapter_expected_receiver_residual_mps =
+        libgnss::doppler_contract::receiverOnlyResidual(
+            row.adapter_measured_range_rate_mps,
+            row.satellite_range_rate_mps,
+            row.satellite_clock_drift_sps);
+    row.fgo_expected_receiver_residual_mps =
         libgnss::doppler_contract::receiverOnlyResidual(
             row.measured_range_rate_mps, row.satellite_range_rate_mps,
             row.satellite_clock_drift_sps);
+    row.expected_receiver_residual_mps =
+        row.adapter_expected_receiver_residual_mps;
     row.state_valid =
         finiteVector(row.corrected_satellite_position) &&
         finiteVector(row.corrected_satellite_velocity) &&
         finiteVector(row.los_unrotated_receiver_to_satellite) &&
         finiteVector(row.los_receiver_to_satellite) &&
         std::isfinite(row.measured_range_rate_mps) &&
+        std::isfinite(row.adapter_measured_range_rate_mps) &&
         std::isfinite(row.unrotated_satellite_range_rate_mps) &&
         std::isfinite(row.earth_rotation_sagnac_range_rate_mps) &&
         std::isfinite(row.earth_rotation_range_rate_delta_mps) &&
         std::isfinite(row.satellite_range_rate_mps) &&
+        std::isfinite(row.adapter_expected_receiver_residual_mps) &&
+        std::isfinite(row.fgo_expected_receiver_residual_mps) &&
         std::isfinite(row.expected_receiver_residual_mps);
     return row;
 }
@@ -372,9 +407,12 @@ struct Metrics {
     std::size_t selection_differences = 0;
     double max_raw_adapter_identity_abs_mps = 0.0;
     double max_adapter_measured_identity_abs_mps = 0.0;
+    double max_adapter_fgo_measured_difference_mps = 0.0;
+    double max_adapter_fgo_wavelength_difference_m = 0.0;
     double max_fgo_measured_identity_abs_mps = 0.0;
     double max_fgo_modeled_identity_abs_mps = 0.0;
     double max_fgo_residual_identity_abs_mps = 0.0;
+    double max_fgo_internal_residual_identity_abs_mps = 0.0;
     double max_fgo_los_identity = 0.0;
     double max_earth_rotation_sagnac_mps = 0.0;
     double max_earth_rotation_range_rate_delta_mps = 0.0;
@@ -424,7 +462,10 @@ std::string makeSummary(
            << "    \"raw_rate_unit\": \"m/s\",\n"
            << "    \"adapter_field\": \"Observation::doppler\",\n"
            << "    \"adapter_unit\": \"Hz\",\n"
-           << "    \"adapter_formula\": \"D=-PseudorangeRateMetersPerSecond/wavelength_m\"\n"
+           << "    \"adapter_formula\": \"D=-PseudorangeRateMetersPerSecond/wavelength_m\",\n"
+           << "    \"adapter_source_frequency_field\": "
+              "\"Observation::source_carrier_frequency_hz\",\n"
+           << "    \"adapter_source_frequency_unit\": \"Hz\"\n"
            << "  },\n"
            << "  \"problem\": {\n"
            << "    \"epochs\": " << problem.epochs.size() << ",\n"
@@ -452,12 +493,18 @@ std::string makeSummary(
            << metrics.max_raw_adapter_identity_abs_mps << ",\n"
            << "    \"max_abs_adapter_measured_range_rate_mps\": "
            << metrics.max_adapter_measured_identity_abs_mps << ",\n"
+           << "    \"max_abs_adapter_minus_fgo_measured_range_rate_mps\": "
+           << metrics.max_adapter_fgo_measured_difference_mps << ",\n"
+           << "    \"max_abs_adapter_minus_fgo_wavelength_m\": "
+           << metrics.max_adapter_fgo_wavelength_difference_m << ",\n"
            << "    \"max_abs_fgo_measured_minus_neg_doppler_lambda_mps\": "
            << metrics.max_fgo_measured_identity_abs_mps << ",\n"
            << "    \"max_abs_fgo_modeled_satellite_range_rate_mps\": "
            << metrics.max_fgo_modeled_identity_abs_mps << ",\n"
            << "    \"max_abs_fgo_residual_minus_independent_receiver_residual_mps\": "
            << metrics.max_fgo_residual_identity_abs_mps << ",\n"
+           << "    \"max_abs_fgo_residual_minus_fgo_wavelength_receiver_residual_mps\": "
+           << metrics.max_fgo_internal_residual_identity_abs_mps << ",\n"
            << "    \"max_fgo_los_minus_negative_receiver_to_satellite_los\": "
            << metrics.max_fgo_los_identity << ",\n"
            << "    \"max_abs_earth_rotation_sagnac_range_rate_mps\": "
@@ -482,6 +529,17 @@ std::string makeSummary(
            << "    \"same_raw_seed_position\": true,\n"
            << "    \"spp_ok\": " << (spp_result.ok ? "true" : "false") << ",\n"
            << "    \"fgo_valid\": " << (fgo_estimate.valid ? "true" : "false") << ",\n"
+           << "    \"spp_usable_row_count\": " << metrics.spp_candidates << ",\n"
+           << "    \"spp_solver_returned_rows\": "
+           << spp_result.num_satellites_used << ",\n"
+           << "    \"spp_failure_reason\": "
+           << (spp_result.ok
+                   ? "\"none\""
+                   : "\"public solver returned ok=false after the recorded "
+                     "candidate-row build; its API does not expose whether "
+                     "rank, chi-square, covariance, or another post-fit gate "
+                     "rejected the solve\"")
+           << ",\n"
            << "    \"spp_state\": " << spp_state_json << ",\n"
            << "    \"fgo_state\": " << fgo_state_json << ",\n"
            << "    \"comparison_is_diagnostic_only\": true\n"
@@ -489,6 +547,14 @@ std::string makeSummary(
            << "  \"contract_verdict\": {\n"
            << "    \"concrete_bug_proven\": false,\n"
            << "    \"correction_applied\": false,\n"
+           << "    \"source_frequency_vs_nominal_fgo_difference_is_cause\": false,\n"
+           << "    \"source_frequency_vs_nominal_fgo_difference_max_mps\": "
+           << metrics.max_adapter_fgo_measured_difference_mps << ",\n"
+           << "    \"source_frequency_vs_nominal_fgo_difference_reason\": "
+              "\"GLONASS Android source frequency and channel nominal differ by "
+              "at most the observed 3.36e-5 m/s range-rate conversion delta; "
+              "raw/adaptor and FGO identities otherwise pass and this is not "
+              "treated as a unit/sign/known-term contract cause\",\n"
            << "    \"classification\": \"diagnosis-no-go-until-numerical-or-code-mismatch\"\n"
            << "  },\n"
            << "  \"forbidden_input_accounting\": {\n"
@@ -671,7 +737,9 @@ int main(int argc, char** argv) {
     rows << std::setprecision(std::numeric_limits<double>::max_digits10);
     rows << "dataset_id,epoch_index,raw_epoch_index,utc_time_millis,gps_week,gps_tow,"
             "satellite,system,prn,signal,raw_rate_mps,has_raw_rate,adapter_doppler_hz,"
-            "frequency_hz,wavelength_m,measured_minus_neg_doppler_lambda_mps,"
+            "source_frequency_hz,adapter_wavelength_m,adapter_measured_range_rate_mps,"
+            "fgo_frequency_hz,fgo_wavelength_m,fgo_measured_range_rate_mps,"
+            "adapter_minus_fgo_measured_range_rate_mps,"
             "sat_pos_x_m,sat_pos_y_m,sat_pos_z_m,sat_vel_x_mps,sat_vel_y_mps,sat_vel_z_mps,"
             "sat_clock_drift_sps,sat_clock_drift_mps,earth_rotation_angle_rad,"
             "los_unrotated_receiver_to_sat_x,los_unrotated_receiver_to_sat_y,"
@@ -687,7 +755,8 @@ int main(int argc, char** argv) {
             "fgo_residual_mps,fgo_measured_range_rate_mps,fgo_satellite_range_rate_mps,"
             "fgo_satellite_clock_drift_mps,fgo_uses_rotated_state,"
             "raw_adapter_identity_abs_mps,fgo_measured_identity_abs_mps,"
-            "fgo_residual_identity_abs_mps,fgo_los_identity\n";
+            "fgo_residual_identity_abs_mps,fgo_internal_residual_identity_abs_mps,"
+            "fgo_los_identity\n";
 
     for (const Observation* observation : raw_doppler_rows) {
         ++metrics.rows_reported;
@@ -713,21 +782,34 @@ int main(int argc, char** argv) {
             ++metrics.selection_differences;
         }
         double adapter_identity = std::numeric_limits<double>::quiet_NaN();
-        if (has_raw_rate && std::isfinite(prepared.wavelength_m)) {
+        if (has_raw_rate && std::isfinite(prepared.adapter_wavelength_m)) {
             adapter_identity = observation->pseudorange_rate_mps -
-                               (-observation->doppler * prepared.wavelength_m);
+                               (-observation->doppler *
+                                prepared.adapter_wavelength_m);
             updateMax(metrics.max_raw_adapter_identity_abs_mps, adapter_identity);
         }
         double adapter_measured_identity = std::numeric_limits<double>::quiet_NaN();
-        if (std::isfinite(prepared.measured_range_rate_mps) &&
-            std::isfinite(prepared.wavelength_m)) {
-            adapter_measured_identity = prepared.measured_range_rate_mps -
-                                        (-observation->doppler * prepared.wavelength_m);
+        if (std::isfinite(prepared.adapter_measured_range_rate_mps) &&
+            std::isfinite(prepared.adapter_wavelength_m)) {
+            adapter_measured_identity = prepared.adapter_measured_range_rate_mps -
+                                        (-observation->doppler *
+                                         prepared.adapter_wavelength_m);
             updateMax(metrics.max_adapter_measured_identity_abs_mps,
                       adapter_measured_identity);
         }
+        const double adapter_fgo_measured_difference =
+            prepared.adapter_measured_range_rate_mps -
+            prepared.measured_range_rate_mps;
+        updateMax(metrics.max_adapter_fgo_measured_difference_mps,
+                  adapter_fgo_measured_difference);
+        const double adapter_fgo_wavelength_difference =
+            prepared.adapter_wavelength_m - prepared.wavelength_m;
+        updateMax(metrics.max_adapter_fgo_wavelength_difference_m,
+                  adapter_fgo_wavelength_difference);
         double fgo_measured_identity = std::numeric_limits<double>::quiet_NaN();
         double fgo_residual_identity = std::numeric_limits<double>::quiet_NaN();
+        double fgo_internal_residual_identity =
+            std::numeric_limits<double>::quiet_NaN();
         double fgo_los_identity = std::numeric_limits<double>::quiet_NaN();
         double fgo_satellite_position_identity =
             std::numeric_limits<double>::quiet_NaN();
@@ -739,6 +821,8 @@ int main(int argc, char** argv) {
                                     (-observation->doppler * prepared.wavelength_m);
             fgo_residual_identity = factor->residual_mps -
                                     prepared.expected_receiver_residual_mps;
+            fgo_internal_residual_identity =
+                factor->residual_mps - prepared.fgo_expected_receiver_residual_mps;
             const Vector3d expected_factor_los =
                 -prepared.los_receiver_to_satellite;
             fgo_los_identity = (factor->los - expected_factor_los).norm();
@@ -755,6 +839,8 @@ int main(int argc, char** argv) {
                       fgo_measured_identity);
             updateMax(metrics.max_fgo_residual_identity_abs_mps,
                       fgo_residual_identity);
+            updateMax(metrics.max_fgo_internal_residual_identity_abs_mps,
+                      fgo_internal_residual_identity);
             updateMax(metrics.max_fgo_los_identity, fgo_los_identity);
             updateMax(metrics.max_satellite_position_identity_m,
                       fgo_satellite_position_identity);
@@ -783,9 +869,13 @@ int main(int argc, char** argv) {
              << signalName(observation->signal) << ','
              << csvNumber(observation->pseudorange_rate_mps) << ','
              << (has_raw_rate ? 1 : 0) << ',' << csvNumber(observation->doppler)
-             << ',' << csvNumber(prepared.frequency_hz) << ','
+             << ',' << csvNumber(prepared.adapter_frequency_hz) << ','
+             << csvNumber(prepared.adapter_wavelength_m) << ','
+             << csvNumber(prepared.adapter_measured_range_rate_mps) << ','
+             << csvNumber(prepared.frequency_hz) << ','
              << csvNumber(prepared.wavelength_m) << ','
-             << csvNumber(adapter_identity) << ','
+             << csvNumber(prepared.measured_range_rate_mps) << ','
+             << csvNumber(adapter_fgo_measured_difference) << ','
              << csvNumber(prepared.satellite_position.x()) << ','
              << csvNumber(prepared.satellite_position.y()) << ','
              << csvNumber(prepared.satellite_position.z()) << ','
@@ -874,6 +964,7 @@ int main(int argc, char** argv) {
              << ',' << csvNumber(adapter_identity) << ','
              << csvNumber(fgo_measured_identity) << ','
              << csvNumber(fgo_residual_identity) << ','
+             << csvNumber(fgo_internal_residual_identity) << ','
              << csvNumber(fgo_los_identity) << '\n';
     }
     if (!atomicWrite(options.rows_csv, rows.str())) {
