@@ -80,6 +80,8 @@
   },
   "gates": {
     "all_four_routes": true,
+    "prediction_domain_coverage_exact": 1.0,
+    "prediction_domain_contract": "every declared prediction key is present exactly once in the submission; no extras, duplicates, interpolation, or endpoint hold",
     "base_hash_and_bytes_exact": true,
     "candidate_matched_factor_fraction_each_route_min": 0.8,
     "candidate_finite_correction_fraction_among_matched_each_route_min": 0.99,

@@ -18,6 +18,11 @@ repeats per each of four Pixel5 routes in a new output root, with no truth,
 MAT, validation, archive, solver-after-truth, or post-score tuning. Candidate
 telemetry must report exact selected-band row/stream counts and distinguish:
 
+The global prediction-domain gate is fixed at exactly 1.0: every declared
+`(phone,UnixTimeMillis)` key must occur once, with no extras, duplicates,
+interpolation, or endpoint hold. This is independent of the base matching
+fractions below.
+
 * `matched_factor_fraction`: exact base stream-present adopted FGO factors / all
   adopted FGO pseudorange factors (minimum 0.80 per route);
 * `finite_correction_fraction_among_matched`: finite in-domain correction rows /
