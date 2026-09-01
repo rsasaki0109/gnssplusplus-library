@@ -3685,3 +3685,54 @@ The Phase 34 Release rebuild completed with native binary SHA256
 The focused Phase 32/33/34 CTest set passed 3/3 (the Phase 34 Python unit
 suite is 5/5), and the full serial CTest run passed 136/136.  These checks did
 not reopen truth or rerun either sealed lane.
+
+### Phase 35 raw-only native FGO feature matrix (train No-Go)
+
+Phase 35 froze four unchanged native lanes over three development routes and
+one route-disjoint validation-reuse route: the quality-anchor base control,
+Galileo E1/E5a signal/iono/Hatch lane (A), and A plus one existing upstream
+stop (B) or position-offset (C) extension.  Every lane used only
+`device_gnss.csv`, `device_imu.csv`, and `brdc.nav`; the runner never opened
+truth, MAT, sample coordinates, or a previous trajectory.
+
+The first matrix process was interrupted after six run1 directories.  The
+resume command validates complete directories without rerunning them and
+uses private staging plus byte comparison/atomic completion for partial
+directories.  The recovery record preserves the six pre-interruption hashes.
+The resumed matrix completed all 4 routes × 4 lanes × 2 repeats (32 runs):
+every output was finite, converged, exactly keyed to raw GNSS epochs, free of
+transitions above 70 m/s, and byte-identical to its repeat.  The resumed
+structural seal and v2 evaluator manifest were committed before truth access.
+
+Run or inspect the truth-free stage with:
+
+```text
+python3 apps/commands/benchmarks/gnss_smartphone_phase35_matrix.py resume \
+  --output-root output/smartphone-r5/phase35-matrix-v1
+python3 apps/commands/benchmarks/gnss_smartphone_phase35_matrix.py seal \
+  --output-root output/smartphone-r5/phase35-matrix-v1
+```
+
+The one-shot evaluator then read each of the three already-materialized
+development truth CSVs once in one process and scored all A/B/C lanes on the
+same matched keys.  A and B failed route-wise H P50 non-regression on the
+first route.  C had the best macro diagnostic mean, `1.606136485 m` versus
+the control's `1.810870989 m`, and passed the macro strict-four-variant gate,
+but regressed all four diagnostics plus H P50/P95 on the Samsung route.
+Consequently no lane passed the route-wise plus macro selection gate;
+validation truth was not reopened, the future holdout remained sealed, and
+no Kaggle submission was made.  This does not establish the native
+0.782-class target.
+
+The evaluator (which does not rerun the native solver) is:
+
+```text
+python3 apps/commands/benchmarks/gnss_smartphone_phase35_matrix_eval.py score \
+  --output-root output/smartphone-r5/phase35-matrix-eval-v1
+```
+
+The command is one-shot after truth access.  The machine-readable records are
+`docs/use_cases/records/smartphone_r5_phase35_matrix_freeze_v1.json`,
+`docs/use_cases/records/smartphone_r5_phase35_interruption_recovery_v1.json`,
+`docs/use_cases/records/smartphone_r5_phase35_matrix_evaluator_manifest_v2.json`,
+and `docs/use_cases/records/smartphone_r5_phase35_matrix_evaluation_result_v1.json`.

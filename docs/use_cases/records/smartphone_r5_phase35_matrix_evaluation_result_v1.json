@@ -1,0 +1,102 @@
+{
+  "schema_version": "smartphone-r5-phase35-matrix-evaluation-result.v1",
+  "phase": 35,
+  "status": "no-go-train-or-validation-gate",
+  "decision": "no-go-no-kaggle",
+  "purpose": "Record the one-process truth evaluation of the structurally sealed raw-only matrix; no lane qualified for validation reuse.",
+  "evaluator": {
+    "source": "apps/commands/benchmarks/gnss_smartphone_phase35_matrix_eval.py",
+    "successful_process_truth_open_count": 3,
+    "pretruth_failed_attempts": 1,
+    "pretruth_failed_attempt_reason": "CoordinateRow adapter mismatch during structural verification; no truth was opened",
+    "post_score_solver_rerun": false,
+    "post_score_tuning": false
+  },
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase35_matrix_freeze_v1.json",
+    "sha256": "9be22fd18dd3f818a8c902dafde2aa7b5828ded13df98b138682863e8f14a92a"
+  },
+  "evaluator_manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase35_matrix_evaluator_manifest_v2.json",
+    "sha256": "1c72af0f616231241978c447a296c3bb67e57e19b220de680cd72ace0a91bc86"
+  },
+  "structural_seal": {
+    "path": "output/smartphone-r5/phase35-matrix-v1/truth_free_seal.json",
+    "sha256": "ba6f20c713408f94ffda9f0f6efa99d32ad93f4b364daf8b0c2c17fa5e351946",
+    "status": "sealed-truth-free-structural-pass",
+    "route_count": 4,
+    "lane_count": 4,
+    "repeat_byte_identical": true,
+    "truth_open_count_before_evaluation": 0,
+    "mat_read_or_generated": false
+  },
+  "result_artifact": {
+    "path": "output/smartphone-r5/phase35-matrix-eval-v1/phase35_matrix_evaluation.json",
+    "sha256": "caf2d4508dc424c32e87971ce65115d6dcb02b72b12bf0f783c9409c2559ac54",
+    "manifest_path": "output/smartphone-r5/phase35-matrix-eval-v1/phase35_matrix_evaluation.manifest.json",
+    "manifest_sha256": "7301d9ce861bf20c88ef67b1e02ccc2ada406853f5edf11ed31f0bec4da72e62"
+  },
+  "train_evaluation": {
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b"
+    ],
+    "truth_open_count": 3,
+    "truth_read_count_per_route": 1,
+    "matched_key_set_equal_all_lanes": true,
+    "candidate_selection_gate_passed": false,
+    "selected_lane": null,
+    "route_gates": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "A_anchor_signal_iono_hatch": ["horizontal_wgs84_m_p50_m_regression", "horizontal_haversine_m_p50_m_regression"],
+        "B_A_plus_stop": ["horizontal_wgs84_m_p50_m_regression", "horizontal_haversine_m_p50_m_regression"],
+        "C_A_plus_position_offset": ["horizontal_wgs84_m_p50_m_regression", "horizontal_haversine_m_p50_m_regression"]
+      },
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4": {
+        "A_anchor_signal_iono_hatch": [],
+        "B_A_plus_stop": [],
+        "C_A_plus_position_offset": []
+      },
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+        "A_anchor_signal_iono_hatch": ["wgs84_vincenty__linear_n_minus_1_regression", "wgs84_vincenty__nearest_rank_ceiling_regression", "haversine_sphere__linear_n_minus_1_regression", "haversine_sphere__nearest_rank_ceiling_regression", "horizontal_wgs84_m_p50_m_regression", "horizontal_wgs84_m_p95_m_regression", "horizontal_haversine_m_p50_m_regression", "horizontal_haversine_m_p95_m_regression"],
+        "B_A_plus_stop": ["wgs84_vincenty__linear_n_minus_1_regression", "wgs84_vincenty__nearest_rank_ceiling_regression", "haversine_sphere__linear_n_minus_1_regression", "haversine_sphere__nearest_rank_ceiling_regression", "horizontal_wgs84_m_p50_m_regression", "horizontal_wgs84_m_p95_m_regression", "horizontal_haversine_m_p50_m_regression", "horizontal_haversine_m_p95_m_regression"],
+        "C_A_plus_position_offset": ["wgs84_vincenty__linear_n_minus_1_regression", "wgs84_vincenty__nearest_rank_ceiling_regression", "haversine_sphere__linear_n_minus_1_regression", "haversine_sphere__nearest_rank_ceiling_regression", "horizontal_wgs84_m_p50_m_regression", "horizontal_wgs84_m_p95_m_regression", "horizontal_haversine_m_p50_m_regression", "horizontal_haversine_m_p95_m_regression"]
+      }
+    },
+    "macro_gate": {
+      "A_anchor_signal_iono_hatch": {
+        "passed": false,
+        "failures": ["mean_horizontal_wgs84_p50_m_regression", "mean_horizontal_haversine_p50_m_regression"],
+        "mean_kaggle_diagnostic_mean_m": 1.70059440105541
+      },
+      "B_A_plus_stop": {
+        "passed": false,
+        "failures": ["mean_horizontal_wgs84_p50_m_regression", "mean_horizontal_haversine_p50_m_regression"],
+        "mean_kaggle_diagnostic_mean_m": 1.697695126419025
+      },
+      "C_A_plus_position_offset": {
+        "passed": true,
+        "failures": [],
+        "mean_kaggle_diagnostic_mean_m": 1.6061364845920156
+      },
+      "control_mean_kaggle_diagnostic_mean_m": 1.8108709894846597
+    },
+    "macro_coverage_ratio": 0.9995594845014483,
+    "macro_availability_ratio": 0.9995594845014483
+  },
+  "validation_evaluation": {
+    "opened": false,
+    "truth_open_count": 0,
+    "reason": "No A/B/C lane passed every train route-wise and macro gate; Phase34 validation truth remained unopened in this process",
+    "future_holdout_truth_open_count": 0
+  },
+  "raw_only_policy": {
+    "inference_inputs": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "mat_read_or_generated": false,
+    "ground_truth_used_for_inference_or_selection": false,
+    "kaggle_or_token_access": false,
+    "native_solver_rerun_after_truth": false
+  },
+  "next_action": "Freeze a new source-supported candidate before any further truth access; do not promote or submit this matrix."
+}

@@ -250,6 +250,21 @@ structural evidence only—no new truth was opened and native 0.782-class
 accuracy remains unachieved.  See the [Phase 31 freeze](docs/use_cases/records/smartphone_r5_phase31_quality_anchor_freeze_v1.json)
 and [structural result](docs/use_cases/records/smartphone_r5_phase31_quality_anchor_structural_result_v1.json).
 
+Phase 35 froze a route-disjoint raw-only matrix containing the unchanged
+quality-anchor control and three opt-in native variants (Galileo E1/E5a
+Hatch, plus upstream stop or position-offset extensions).  An interrupted
+truth-free runner was resumed byte-safely: all 32 route/lane/repeat runs
+passed finite/converged, exact raw-key, continuity, and repeat-identity gates.
+The three development truth files were then read once each in one process.
+No candidate passed every route-wise gate: A and B regressed H P50 on the
+first route, while C had a Samsung route regression despite a lower macro
+diagnostic mean (1.6061 m versus control 1.8109 m).  Validation truth,
+holdout, MAT, token, and Kaggle were not opened; no lane was promoted and no
+submission was made.  See the [Phase 35 freeze](docs/use_cases/records/smartphone_r5_phase35_matrix_freeze_v1.json),
+[resume recovery record](docs/use_cases/records/smartphone_r5_phase35_interruption_recovery_v1.json),
+[structural seal manifest](docs/use_cases/records/smartphone_r5_phase35_matrix_evaluator_manifest_v2.json),
+and [train No-Go result](docs/use_cases/records/smartphone_r5_phase35_matrix_evaluation_result_v1.json).
+
 ### PPC 2024 goal matrix vs Kaiyodai and gici-open
 
 The audited KF/FGO selected profile clears the distance-weighted PPC public
