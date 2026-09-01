@@ -80,3 +80,38 @@ Machine-readable hashes and complete per-route accounting are in the
 [native structural result record](records/smartphone_r5_phase58_native_cn0_doppler_calibration_structural_result_v1.json),
 [native implementation freeze](records/smartphone_r5_phase58_native_cn0_doppler_calibration_freeze_v1.json),
 and [native evaluator manifest](records/smartphone_r5_phase58_native_cn0_doppler_calibration_evaluator_manifest_v1.json).
+
+## Phase59 immutable accuracy evaluation
+
+Phase59 scored only the sealed Phase58 candidate run 1 and control run 1, using
+the exact Phase44 Haversine/percentile contract.  Each prediction key matched
+the truth domain exactly (`prediction_domain_coverage = 1.0`); the single
+leading warm-up truth row on MTV-a and MTV-u remained unmatched and is reported
+separately as truth-row coverage.  Each of the four development truth files
+was opened once in one scorer process.  No solver/native process, raw GNSS/IMU,
+navigation, archive, validation/holdout, MAT, WLS, precomputed coordinate, or
+Kaggle/token input was used.
+
+| Route | candidate score (m) | control score (m) | improvement (m) | candidate P50/P95 (m) |
+|---|---:|---:|---:|---:|
+| MTV-a | 2.1200092363239786 | 2.1200062765249656 | -0.0000029597990130 | 1.2928714594079849 / 2.947147013239972 |
+| MTV-h | 3.6069568184393780 | 3.6069657083098825 | 0.0000088898705046 | 2.4288494968087693 / 4.785064140069987 |
+| LAX-t | 4.5116227356432660 | 4.5116562020153950 | 0.0000334663721286 | 3.4051076585670574 / 5.618137812719475 |
+| MTV-u | 3.9071640240689350 | 3.9071587965102856 | -0.0000052275586495 | 3.3995962638253920 / 4.414731784312478 |
+
+The candidate macro is **3.5364382036188893 m** versus the exact control
+macro **3.536446745840132 m**, an improvement of only
+**0.0000085422212428 m**.  All route-wise improvement gates (minimum 0.05 m),
+the MTV-h improvement gate (minimum 0.10 m), and the macro improvement gate
+(minimum 0.10 m) fail.  The candidate macro limit (2.0 m) and route-score
+limit (3.0 m for MTV-h/LAX-t/MTV-u) also fail; therefore the result is
+**no-go-development-accuracy-gates**.  The 0.782 m value is report-only and
+was not reached.  Phase43 remains champion and Phase58 C/N0 calibration stays
+experimental; no validation or Kaggle action follows.  The next single
+source-supported factor is a raw Android `FullInterSignalBiasNanos` +
+`SatelliteInterSignalBiasNanos` consumption/sign audit, not a combination with
+Phase51.
+
+See the [Phase59 freeze](records/smartphone_r5_phase59_native_cn0_doppler_calibration_accuracy_freeze_v1.json),
+[evaluator manifest](records/smartphone_r5_phase59_native_cn0_doppler_calibration_accuracy_evaluator_manifest_v1.json),
+and [sealed accuracy result](records/smartphone_r5_phase59_native_cn0_doppler_calibration_accuracy_result_v1.json).

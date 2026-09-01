@@ -993,6 +993,25 @@ Phase51 remains experimental.  See the [native structural result](docs/use_cases
 [native freeze](docs/use_cases/records/smartphone_r5_phase58_native_cn0_doppler_calibration_freeze_v1.json),
 and [native evaluator manifest](docs/use_cases/records/smartphone_r5_phase58_native_cn0_doppler_calibration_evaluator_manifest_v1.json).
 
+Phase59 then performed the separately frozen development accuracy score using
+only the immutable Phase58 candidate/control run1 artifacts and the four
+Phase44 truths (one truth read per route, one scorer process, no solver/native
+rerun).  Prediction-domain coverage was **1.0** on all routes; the known
+leading warm-up truth rows on MTV-a and MTV-u were reported separately.  The
+candidate route scores were **2.1200092363 / 3.6069568184 / 4.5116227356 /
+3.9071640241 m** versus exact Phase43-control scores **2.1200062765 /
+3.6069657083 / 4.5116562020 / 3.9071587965 m** (MTV-a / MTV-h / LAX-t /
+MTV-u).  Macro was **3.5364382036 m** versus **3.5364467458 m**, an improvement
+of only **0.0000085422 m**.  Route, MTV-h, macro-improvement, macro-absolute,
+and route-absolute gates therefore fail: **no-go**, no validation/Kaggle, and
+no `0.782` claim.  Phase43 remains champion and Phase58 C/N0 remains
+experimental; Phase51 metrics are pinned as historical reference only, never
+scoring input.  The next single factor is the raw Android
+`FullInterSignalBiasNanos` + `SatelliteInterSignalBiasNanos` current
+consumption/sign audit.  See the [Phase59 accuracy result](docs/use_cases/records/smartphone_r5_phase59_native_cn0_doppler_calibration_accuracy_result_v1.json),
+[freeze](docs/use_cases/records/smartphone_r5_phase59_native_cn0_doppler_calibration_accuracy_freeze_v1.json),
+and [evaluator manifest](docs/use_cases/records/smartphone_r5_phase59_native_cn0_doppler_calibration_accuracy_evaluator_manifest_v1.json).
+
 ## Docs
 
 - <https://rsasaki0109.github.io/gnssplusplus-library/>
