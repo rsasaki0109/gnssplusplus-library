@@ -115,6 +115,7 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
     last_fixed_ambiguities_ = 0;
     last_clas_constrained_fixed_state_valid_ = false;
     last_clas_post_reset_floor_failed_ = false;
+    clas_ar_attempt_used_reduced_dd_floor_ = false;
     clas_wlnl_candidate_hold_constraints_.clear();
 
     auto wlnl_preparation = ppp_ar::prepareWlnlCandidates(
@@ -231,8 +232,25 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
         has_clas_last_full_state_reset_time_ &&
         (obs.time - clas_last_full_state_reset_time_) >= 0.0 &&
         (obs.time - clas_last_full_state_reset_time_) <= 1.0;
+    PPPConfig ar_config = ppp_config_;
+    // A historical hold can remain active across FLOAT epochs. Restrict the
+    // reduced floor to a bounded, consecutive continuation of a full-row FIX
+    // so it cannot be reused later as an unbounded reduced-geometry recovery
+    // path. The epoch driver publishes every validated reduced-row state
+    // without feeding its constraints back into this hold or changing the
+    // baseline FLOAT lifecycle.
+    const bool prior_publication_authorizes_reduced_floor =
+        clas_full_dd_fix_last_epoch_ || clas_reduced_dd_fix_last_epoch_;
+    const bool prior_hold_is_active_and_valid =
+        direct_state_dd_path &&
+        prior_publication_authorizes_reduced_floor &&
+        ppp_ar::wlnlHoldStillValid(clas_wlnl_hold_, ambiguity_states_);
+    ar_config.clas_ar_minimum_dd_rows =
+        ppp_ar::clasArMinimumDdRowsForEpoch(
+            ppp_config_, prior_hold_is_active_and_valid,
+            clas_reduced_dd_publication_streak_);
     const ppp_ar::WlnlFixAttempt attempt = ppp_ar::resolveWlnlFix(
-        ppp_config_,
+        ar_config,
         filter_state_,
         pre_anchor_covariance_,
         ambiguity_states_,
@@ -253,6 +271,8 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
         return false;
     }
 
+    clas_ar_attempt_used_reduced_dd_floor_ =
+        attempt.nb < 6;
     last_ar_ratio_ = attempt.ratio;
     last_fixed_ambiguities_ = attempt.nb;
     if (attempt.has_constrained_state) {
