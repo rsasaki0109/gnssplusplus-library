@@ -462,6 +462,10 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase43_fallback_seed_quality_anchor_recovery.py
     )
     add_test(
+        NAME python_smartphone_phase44_pixel5_development_accuracy_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase44_pixel5_development_accuracy.py
+    )
+    add_test(
         NAME python_smartphone_phase32_quality_anchor_eval_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase32_quality_anchor_eval.py
     )
@@ -825,6 +829,7 @@ if(GTest_FOUND)
         python_smartphone_phase39_velocity_only_handoff_tests
         python_smartphone_phase40_direct_doppler_wls_handoff_tests
         python_smartphone_phase41_doppler_contract_tests
+        python_smartphone_phase44_pixel5_development_accuracy_tests
         python_smartphone_kaggle_tests
         python_smartphone_trajectory_smoother_tests
         python_smartphone_trajectory_imu_tests

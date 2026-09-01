@@ -403,6 +403,23 @@ validation/holdout/Kaggle reads were zero.  See the [Phase 43 contract](docs/use
 [evaluator manifest](docs/use_cases/records/smartphone_r5_phase43_native_fallback_seed_quality_anchor_recovery_evaluator_manifest_v1.json),
 and [structural result](docs/use_cases/records/smartphone_r5_phase43_native_fallback_seed_quality_anchor_recovery_result_v1.json).
 
+Phase 44 then scored the sealed Phase 43 candidate on four route-disjoint
+Pixel 5 development identities, with no native rerun.  The evaluator fixed
+exact `(phone, UnixTimeMillis)` matching (no interpolation or edge hold),
+per-row Haversine distance, and `Kaggle=(P50+P95)/2` before opening truth.
+It read the existing truth once and materialized/opened/read each added
+archive truth member once (four reads total); MTV-h's flag-off control remained
+the Phase 43 fail-closed run.  The candidate rows were finite and had zero
+transitions over 70 m/s, but MTV-a and MTV-u each lacked their leading raw-UTC
+warm-up key, while MTV-h scored 3.606966 m and LAX-t 4.511656 m.  The
+four-route Pixel 5 macro score was 3.536447 m (absolute limit 2.0 m), and the
+0.782 m target was not met.  This is a development No-Go; validation, holdout,
+Kaggle, MAT, WLS, and precomputed-coordinate inputs remained sealed.  See the
+[Phase 44 contract](docs/use_cases/smartphone_native_fgo_phase44_pixel5_development_accuracy.md),
+[freeze](docs/use_cases/records/smartphone_r5_phase44_pixel5_development_accuracy_freeze_v1.json),
+[evaluator manifest](docs/use_cases/records/smartphone_r5_phase44_pixel5_development_accuracy_evaluator_manifest_v1.json),
+and [result](docs/use_cases/records/smartphone_r5_phase44_pixel5_development_accuracy_result_v1.json).
+
 ### PPC 2024 goal matrix vs Kaiyodai and gici-open
 
 The audited KF/FGO selected profile clears the distance-weighted PPC public
