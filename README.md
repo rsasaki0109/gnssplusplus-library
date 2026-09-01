@@ -1152,6 +1152,20 @@ reader, preserving exact keys. See the [Phase68 failure record](docs/use_cases/r
 [Phase70 manifest](docs/use_cases/records/smartphone_r5_phase70_base_matching_taxonomy_sbas_recovery_manifest_v1.json),
 and [sealed result](docs/use_cases/records/smartphone_r5_phase70_base_matching_taxonomy_sbas_recovery_result_v1.json).
 
+Phase71 froze an opt-in `RINEXReader::setPreserveAdditionalFrequencyBands(true)`
+for the base pseudorange compensation reader only, with exact prediction-domain
+coverage 1.0 and separate matched/all (minimum 0.80) and finite/matched
+(minimum 0.99) gates. Its one-shot runner stopped after the MTV-a flag-off
+control because a known summary artifact/payload key collision raised
+`KeyError: sha256`; that control's submission and summary exactly matched
+Phase43, candidate runs were 0, and no accuracy truth was read. The failure is
+sealed as evaluator-integrity only; no Phase71 coverage or accuracy conclusion
+is drawn, and a new Phase72 freeze/output root is required. See the
+[Phase71 contract](docs/use_cases/smartphone_native_fgo_phase71_base_additional_frequency_bands.md),
+[freeze](docs/use_cases/records/smartphone_r5_phase71_base_additional_frequency_bands_freeze_v1.json),
+[manifest](docs/use_cases/records/smartphone_r5_phase71_base_additional_frequency_bands_manifest_v1.json),
+and [integrity failure record](docs/use_cases/records/smartphone_r5_phase71_base_additional_frequency_bands_structural_failure_v1.json).
+
 ## Docs
 
 - <https://rsasaki0109.github.io/gnssplusplus-library/>

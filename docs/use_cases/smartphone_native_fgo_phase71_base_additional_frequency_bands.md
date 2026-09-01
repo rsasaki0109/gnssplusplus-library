@@ -31,3 +31,16 @@ fractions below.
 These denominators are fixed before execution and do not relax the Phase62/
 Phase67 coverage policy. The candidate is not an accuracy evaluation and does
 not claim `0.782` reachability. See the [machine-readable freeze](records/smartphone_r5_phase71_base_additional_frequency_bands_freeze_v1.json).
+
+## Phase71 one-shot integrity record
+
+The sealed Phase71 runner stopped after the new MTV-a flag-off control. Its
+submission and summary were byte-identical to the pinned Phase43 control, but
+the runner's `artifact_report` expanded parsed diagnostics over the summary
+artifact metadata and then raised `KeyError: sha256` before launching any
+candidate. Candidate runs and accuracy truth were therefore zero. This is an
+evaluator-integrity failure, not a coverage or physical finding; the partial
+output is not reused. The actual native process read raw GNSS/IMU/nav once
+each, base RINEX zero times, and truth/MAT/validation/archive zero times. A
+separately frozen Phase72 recovery must use distinct summary artifact/payload
+keys and a new output root.
