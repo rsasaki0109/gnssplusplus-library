@@ -242,6 +242,10 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase54_phase53_integrity_recovery.py
     )
     add_test(
+        NAME python_smartphone_phase55_pixel5_adr_uncertainty_audit_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase55_pixel5_adr_uncertainty_audit.py
+    )
+    add_test(
         NAME python_smartphone_native_fgo_v2_1_confirmation_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_fgo_v2_1_confirmation.py
     )
