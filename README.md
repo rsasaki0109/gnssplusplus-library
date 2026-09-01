@@ -1242,6 +1242,27 @@ record](docs/use_cases/records/smartphone_r5_phase76_phase75_accuracy_integrity_
 [freeze](docs/use_cases/records/smartphone_r5_phase76_phase75_accuracy_integrity_recovery_freeze_v1.json),
 and [manifest](docs/use_cases/records/smartphone_r5_phase76_phase75_accuracy_integrity_recovery_manifest_v1.json).
 
+Phase77 then evaluated the official signal-bias composition as a separate
+truth-free structural candidate: the sealed Phase73 finite-base-pc miss mask
+plus the existing `--native-signal-bias-states` option.  The four Pixel5 routes
+ran one fresh Phase73 control and two candidate repetitions each (12 native
+invocations, truth/MAT/validation/holdout/Kaggle/archive reads zero).  All
+candidate repeats converged, were byte-identical, retained exact prediction
+keys, exposed finite signal-bias states/factors, and passed finite/TDCP/IMU/
+speed checks.  The candidate nevertheless failed the frozen Phase73 miss-mask
+telemetry identity on every route because enabling the existing signal-bias
+path also enables multi-frequency signal eligibility: adopted pseudorange
+populations changed from 61,754/46,556 to 83,612/59,915 (MTV-a),
+73,286/51,890 to 108,722/66,769 (MTV-h), 34,319/33,552 to 50,706/45,095
+(LAX-t), and 24,395/22,369 to 35,391/29,881 (MTV-u).  This is a structural
+composition no-go, not a coverage-threshold relaxation.  No C++ source or
+accuracy truth was used; Phase43 remains champion and no validation/Kaggle
+action is authorized.  The next separately frozen official factor is raw-IMU
+stop velocity/pose constraints.  See the [Phase77 structural result](docs/use_cases/smartphone_native_fgo_phase77_phase73_signal_bias_composition_structural_result.md),
+[result record](docs/use_cases/records/smartphone_r5_phase77_phase73_signal_bias_composition_structural_result_v1.json),
+[freeze](docs/use_cases/records/smartphone_r5_phase77_phase73_signal_bias_composition_structural_freeze_v1.json),
+and [manifest](docs/use_cases/records/smartphone_r5_phase77_phase73_signal_bias_composition_structural_manifest_v1.json).
+
 ## Docs
 
 - <https://rsasaki0109.github.io/gnssplusplus-library/>
