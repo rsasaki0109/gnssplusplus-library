@@ -1221,6 +1221,14 @@ route.  See the [Phase74 failure record](docs/use_cases/records/smartphone_r5_ph
 [accuracy freeze](docs/use_cases/records/smartphone_r5_phase74_phase73_miss_mask_accuracy_freeze_v1.json),
 and [manifest](docs/use_cases/records/smartphone_r5_phase74_phase73_miss_mask_accuracy_manifest_v1.json).
 
+Phase75's scorer-only recovery then failed closed after one MTV-a truth read
+because it referenced a nonexistent Phase74 helper control constant.  No
+accuracy score or native process was produced; the initial evaluator/manifest
+hashes and truth/artifact read accounting are preserved in the [Phase75 failure
+record](docs/use_cases/records/smartphone_r5_phase75_phase74_accuracy_integrity_recovery_failure_v1.json).
+Phase76 must use a new freeze/output root and direct control pins from the
+sealed Phase74 freeze.
+
 ## Docs
 
 - <https://rsasaki0109.github.io/gnssplusplus-library/>
