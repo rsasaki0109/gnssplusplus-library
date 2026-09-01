@@ -5,6 +5,7 @@
   "authority": {
     "branch": "feat/rtk-smartphone-performance-pr",
     "base_commit": "4727c665171f1082a2dfc5b21f433f1ea9128cc2",
+    "evaluator_commit": "3b94994",
     "freeze_path": "docs/use_cases/records/smartphone_r5_phase41_doppler_measurement_contract_audit_freeze_v1.json",
     "freeze_sha256": "5622099a9d7d37ee1e4de43385369e70c342acb515f8f83cf301964fc3c64758",
     "freeze_is_immutable": true
