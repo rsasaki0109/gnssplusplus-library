@@ -43,6 +43,47 @@ class Phase79SignalBiasAccuracyTests(unittest.TestCase):
                 self.assertEqual(len(pin["submission_sha256"]), 64)
                 self.assertEqual(len(pin["summary_sha256"]), 64)
 
+    def test_phase43_resolver_uses_sealed_run1_path_and_checks_metadata(self) -> None:
+        route = RUNNER.ROUTES[0]
+        submission_sha = "a" * 64
+        summary_sha = "b" * 64
+        freeze = {
+            "artifact_sources": {
+                "phase43_control": {
+                    "routes": {
+                        route: {
+                            "submission_path": "historical/wrong/path/submission.csv",
+                            "submission_sha256": submission_sha,
+                            "submission_bytes": 7,
+                            "summary_path": "historical/wrong/path/summary.json",
+                            "summary_sha256": summary_sha,
+                            "rows": 2,
+                        }
+                    }
+                }
+            }
+        }
+        seal = {
+            "candidate_runs": {
+                route: {
+                    "dataset_id": route,
+                    "run1": {
+                        "candidate": True,
+                        "submission": {"path": "sealed/submission.csv", "sha256": submission_sha, "bytes": 7, "rows": 2},
+                        "summary": {"path": "sealed/summary.json", "sha256": summary_sha, "bytes": 9},
+                    },
+                }
+            }
+        }
+        resolved = RUNNER._resolve_phase43_control(freeze, seal, route)
+        self.assertEqual(resolved["submission_path"], "sealed/submission.csv")
+        self.assertEqual(resolved["summary_path"], "sealed/summary.json")
+        self.assertEqual(resolved["submission_rows"], 2)
+        bad = json.loads(json.dumps(seal))
+        bad["candidate_runs"][route]["run1"]["submission"]["rows"] = 3
+        with self.assertRaises(RUNNER.Phase79AccuracyError):
+            RUNNER._resolve_phase43_control(freeze, bad, route)
+
     def test_manifest_seals_evaluator_before_truth(self) -> None:
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
         self.assertEqual(manifest["freeze"]["sha256"], EXPECTED_FREEZE_SHA256)
@@ -51,6 +92,7 @@ class Phase79SignalBiasAccuracyTests(unittest.TestCase):
         self.assertEqual(manifest["read_policy"]["truth_reads_before_manifest"], 0)
         self.assertEqual(manifest["read_policy"]["truth_reads"], 4)
         self.assertEqual(manifest["read_policy"]["truth_reads_after_manifest"], 4)
+        self.assertEqual(manifest["phase43_baseline_resolver"]["route_source"], "candidate_runs[route].run1.submission/summary")
 
     def test_corrected_dictreader_accepts_optional_columns_and_phone(self) -> None:
         route = RUNNER.ROUTES[0]

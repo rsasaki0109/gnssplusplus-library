@@ -36,9 +36,15 @@ FREEZE = ROOT / "docs/use_cases/records/smartphone_r5_phase79_phase78_signal_bia
 FREEZE_SHA256 = "f57b064405cc8e591f03bd1f76c208b364e8fcc4a06c59106a117911d992b166"
 MANIFEST = ROOT / "docs/use_cases/records/smartphone_r5_phase79_phase78_signal_bias_accuracy_manifest_v1.json"
 EVALUATOR = Path(__file__).resolve()
-DEFAULT_OUTPUT = ROOT / "output/smartphone-r5/phase79-phase78-signal-bias-accuracy-v1"
+DEFAULT_OUTPUT = ROOT / "output/smartphone-r5/phase79-phase78-signal-bias-accuracy-v2"
 OUTPUT_SCHEMA = "smartphone-r5-phase79-phase78-signal-bias-accuracy-result.v1"
 OUTPUT_MANIFEST_SCHEMA = "smartphone-r5-phase79-phase78-signal-bias-accuracy-output-manifest.v1"
+PHASE43_SEAL_RESULT = ROOT / "output/smartphone-r5/phase43-native-fallback-seed-quality-anchor-recovery-v1/phase43_structural_seal.json"
+PHASE43_SEAL_RESULT_SHA256 = "fdeaf672b015cae99dfdf8351a5e7a92ca2d37bcdb0872c5c3fc5b937416b64d"
+PHASE43_SEAL_RESULT_BYTES = 567854
+PHASE43_SEAL_MANIFEST = ROOT / "output/smartphone-r5/phase43-native-fallback-seed-quality-anchor-recovery-v1/phase43_structural_seal.manifest.json"
+PHASE43_SEAL_MANIFEST_SHA256 = "c116fe122399dafb516b9d76eeab6ea4fb77bcad5aeb9b552f08550d351a26ce"
+PHASE43_SEAL_MANIFEST_BYTES = 1075
 EARTH_RADIUS_M = 6_371_008.8
 ROUTES = (
     "2021-03-16-18-59-us-ca-mtv-a/pixel5",
@@ -172,6 +178,77 @@ def _require_route_maps(freeze: dict[str, Any]) -> None:
                     raise fail(f"Phase79 {source} pin missing {key}: {route}")
 
 
+def _load_phase43_seal() -> tuple[dict[str, Any], dict[str, Any]]:
+    """Read the sealed Phase43 structural metadata once and validate its pin.
+
+    The Phase79 freeze contains the expected SHA/row pins, but its historical
+    control path strings omitted the ``candidate/`` component.  The Phase43
+    structural seal is the authoritative path resolver: a route is accepted
+    only when its recorded run-1 submission/summary path, SHA, byte count, and
+    row count are all present and later agree with the Phase79 pins.
+    """
+    seal_payload = _read_once(PHASE43_SEAL_RESULT, PHASE43_SEAL_RESULT_SHA256, PHASE43_SEAL_RESULT_BYTES, "Phase43 structural seal")
+    manifest_payload = _read_once(PHASE43_SEAL_MANIFEST, PHASE43_SEAL_MANIFEST_SHA256, PHASE43_SEAL_MANIFEST_BYTES, "Phase43 structural seal manifest")
+    try:
+        seal = json.loads(seal_payload.decode("utf-8"))
+        seal_manifest = json.loads(manifest_payload.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise fail("Phase43 structural seal metadata is invalid") from exc
+    if not isinstance(seal, dict) or not isinstance(seal_manifest, dict):
+        raise fail("Phase43 structural seal metadata is not an object")
+    if seal_manifest.get("phase") != 43 or seal_manifest.get("truth_open_count") != 0 or seal_manifest.get("mat_read_or_generated") is not False:
+        raise fail("Phase43 structural seal manifest policy changed")
+    result_pin = seal_manifest.get("result", {})
+    if result_pin.get("path") != relative(PHASE43_SEAL_RESULT) or result_pin.get("sha256") != PHASE43_SEAL_RESULT_SHA256:
+        raise fail("Phase43 structural seal manifest result pin changed")
+    if not isinstance(seal.get("candidate_runs"), dict):
+        raise fail("Phase43 structural seal candidate_runs missing")
+    return seal, seal_manifest
+
+
+def _safe_root_path(relative_path: Any, label: str) -> Path:
+    if not isinstance(relative_path, str) or not relative_path or Path(relative_path).is_absolute():
+        raise fail(f"{label} path is not a repository-relative path")
+    path = (ROOT / relative_path).resolve()
+    try:
+        path.relative_to(ROOT)
+    except ValueError as exc:
+        raise fail(f"{label} path escapes repository: {relative_path}") from exc
+    return path
+
+
+def _resolve_phase43_control(freeze: dict[str, Any], seal: dict[str, Any], route: str) -> dict[str, Any]:
+    """Resolve one control only from the pinned Phase43 run-1 seal record."""
+    try:
+        frozen_pin = freeze["artifact_sources"]["phase43_control"]["routes"][route]
+        route_seal = seal["candidate_runs"][route]
+        run = route_seal["run1"]
+        submission = run["submission"]
+        summary = run["summary"]
+    except (KeyError, TypeError) as exc:
+        raise fail(f"Phase43 sealed run-1 control pin missing: {route}") from exc
+    if route_seal.get("dataset_id") != route or run.get("candidate") is not True:
+        raise fail(f"Phase43 sealed run-1 dataset identity changed: {route}")
+    required_submission = ("path", "sha256", "bytes", "rows")
+    required_summary = ("path", "sha256", "bytes")
+    if any(key not in submission for key in required_submission) or any(key not in summary for key in required_summary):
+        raise fail(f"Phase43 sealed run-1 artifact metadata incomplete: {route}")
+    if frozen_pin.get("submission_sha256") != submission["sha256"] or frozen_pin.get("submission_bytes") != submission["bytes"] or frozen_pin.get("rows") != submission["rows"] or frozen_pin.get("summary_sha256") != summary["sha256"]:
+        raise fail(f"Phase43 sealed run-1 artifact metadata disagrees with Phase79 freeze: {route}")
+    submission_path = _safe_root_path(submission["path"], f"Phase43 submission {route}")
+    summary_path = _safe_root_path(summary["path"], f"Phase43 summary {route}")
+    return {
+        "submission_path": relative(submission_path),
+        "submission_sha256": submission["sha256"],
+        "submission_bytes": int(submission["bytes"]),
+        "submission_rows": int(submission["rows"]),
+        "summary_path": relative(summary_path),
+        "summary_sha256": summary["sha256"],
+        "summary_bytes": int(summary["bytes"]),
+        "resolver": "Phase43 phase43_structural_seal.json candidate_runs[route].run1",
+    }
+
+
 def verify_freeze() -> dict[str, Any]:
     if sha256_file(FREEZE) != FREEZE_SHA256:
         raise fail("Phase79 freeze hash changed")
@@ -256,8 +333,13 @@ def _validate_summary(payload: bytes, route: str, label: str) -> dict[str, Any]:
     return summary
 
 
-def _artifact(freeze: dict[str, Any], source: str, route: str, accounting: dict[str, int]) -> tuple[bytes, bytes, dict[str, Any]]:
-    pin = freeze["artifact_sources"][source]["routes"][route]
+def _artifact(freeze: dict[str, Any], source: str, route: str, accounting: dict[str, int], phase43_seal: dict[str, Any] | None = None) -> tuple[bytes, bytes, dict[str, Any]]:
+    if source == "phase43_control":
+        if phase43_seal is None:
+            raise fail("Phase43 resolver metadata was not loaded")
+        pin = _resolve_phase43_control(freeze, phase43_seal, route)
+    else:
+        pin = freeze["artifact_sources"][source]["routes"][route]
     submission_path = ROOT / pin["submission_path"]
     summary_path = ROOT / pin["summary_path"]
     counter = {
@@ -273,8 +355,9 @@ def _artifact(freeze: dict[str, Any], source: str, route: str, accounting: dict[
 
 
 def score_route(freeze: dict[str, Any], route: str, accounting: dict[str, int]) -> dict[str, Any]:
+    phase43_seal = accounting.get("_phase43_seal")
     candidate_submission, candidate_summary_payload, candidate_pin = _artifact(freeze, "phase78_candidate_run1", route, accounting)
-    control_submission, control_summary_payload, control_pin = _artifact(freeze, "phase43_control", route, accounting)
+    control_submission, control_summary_payload, control_pin = _artifact(freeze, "phase43_control", route, accounting, phase43_seal)
     phase73_submission, phase73_summary_payload, phase73_pin = _artifact(freeze, "phase73_no_bias", route, accounting)
     candidate_summary = _validate_summary(candidate_summary_payload, route, "Phase78 candidate")
     _validate_summary(control_summary_payload, route, "Phase43 control")
@@ -331,8 +414,9 @@ def run_score(output_root: Path = DEFAULT_OUTPUT) -> dict[str, Any]:
     manifest = load_json(MANIFEST, "Phase79 accuracy evaluator manifest")
     if manifest.get("freeze", {}).get("sha256") != FREEZE_SHA256 or manifest.get("evaluator", {}).get("path") != relative(EVALUATOR) or manifest.get("evaluator", {}).get("sha256") != sha256_file(EVALUATOR):
         raise fail("Phase79 evaluator manifest pin changed")
-    if manifest.get("read_policy", {}).get("truth_reads") != 4 or manifest.get("read_policy", {}).get("truth_reads_per_route") != 1 or manifest.get("read_policy", {}).get("native_or_solver_subprocess") is not False:
+    if manifest.get("read_policy", {}).get("truth_reads") != 4 or manifest.get("read_policy", {}).get("truth_reads_per_route") != 1 or manifest.get("read_policy", {}).get("native_or_solver_subprocess") is not False or manifest.get("phase43_baseline_resolver", {}).get("result_sha256") != PHASE43_SEAL_RESULT_SHA256 or manifest.get("phase43_baseline_resolver", {}).get("manifest_sha256") != PHASE43_SEAL_MANIFEST_SHA256:
         raise fail("Phase79 manifest read contract changed")
+    phase43_seal, phase43_seal_manifest = _load_phase43_seal()
     output_root = output_root.resolve()
     reject_forbidden(output_root)
     if output_root.exists() and any(output_root.iterdir()):
@@ -344,6 +428,7 @@ def run_score(output_root: Path = DEFAULT_OUTPUT) -> dict[str, Any]:
         "phase73_artifact_reads": 0,
         "truth_reads": 0,
     }
+    accounting["_phase43_seal"] = phase43_seal
     routes: dict[str, Any] = {}
     try:
         for route in ROUTES:
@@ -395,7 +480,8 @@ def run_score(output_root: Path = DEFAULT_OUTPUT) -> dict[str, Any]:
             "aggregate": {"candidate_macro_score_m": candidate_macro, "control_phase43_macro_score_m": control_macro, "phase73_no_bias_macro_score_m": phase73_macro, "macro_improvement_vs_phase43_m": macro_improvement, "candidate_delta_vs_phase73_m": phase73_macro - candidate_macro, "candidate_route_count": len(candidate_scores), "control_route_count": len(control_scores), "phase73_route_count": len(phase73_scores)},
             "accuracy_gates": gates | {"all_passed": all_passed},
             "stretch_0_782": {"target_score_m": 0.782, "candidate_macro_score_m": candidate_macro, "met": candidate_macro <= 0.782, "report_only": True, "validation_or_kaggle": False},
-            "read_accounting": {"single_scorer_process": True, "phase78_candidate_artifact_reads": accounting["phase78_candidate_artifact_reads"], "phase43_control_artifact_reads": accounting["phase43_control_artifact_reads"], "phase73_artifact_reads": accounting["phase73_artifact_reads"], "truth_reads": accounting["truth_reads"], "truth_reads_per_route": 1, "raw_gnss_reads": 0, "raw_imu_reads": 0, "navigation_reads": 0, "native_or_solver_subprocess": 0, "validation_holdout_reads": 0, "mat_reads_or_generated": 0, "device_wls_or_precomputed_coordinates": 0, "kaggle_or_token_access": 0, "archive_reopen_or_rematerialize": False, "post_truth_tuning": False},
+            "phase43_baseline_resolver": {"result_path": relative(PHASE43_SEAL_RESULT), "result_sha256": PHASE43_SEAL_RESULT_SHA256, "result_bytes": PHASE43_SEAL_RESULT_BYTES, "manifest_path": relative(PHASE43_SEAL_MANIFEST), "manifest_sha256": PHASE43_SEAL_MANIFEST_SHA256, "manifest_bytes": PHASE43_SEAL_MANIFEST_BYTES, "route_source": "candidate_runs[route].run1.submission/summary", "metadata_reads": 2, "summary": "Phase43 seal is the deterministic path authority; every recorded SHA/bytes/rows must agree with the Phase79 freeze before a baseline artifact is opened"},
+            "read_accounting": {"single_scorer_process": True, "phase78_candidate_artifact_reads": accounting["phase78_candidate_artifact_reads"], "phase43_control_artifact_reads": accounting["phase43_control_artifact_reads"], "phase73_artifact_reads": accounting["phase73_artifact_reads"], "phase43_seal_metadata_reads": 2, "truth_reads": accounting["truth_reads"], "truth_reads_per_route": 1, "raw_gnss_reads": 0, "raw_imu_reads": 0, "navigation_reads": 0, "native_or_solver_subprocess": 0, "validation_holdout_reads": 0, "mat_reads_or_generated": 0, "device_wls_or_precomputed_coordinates": 0, "kaggle_or_token_access": 0, "archive_reopen_or_rematerialize": False, "post_truth_tuning": False},
             "phase43_champion_preserved": True,
             "phase51_experimental_preserved": True,
             "phase73_experimental_preserved": True,
@@ -409,7 +495,7 @@ def run_score(output_root: Path = DEFAULT_OUTPUT) -> dict[str, Any]:
         atomic_json(output_root / "phase79_phase78_signal_bias_accuracy_manifest.json", output_manifest)
         return result
     except Exception as exc:
-        failure = {"schema_version": "smartphone-r5-phase79-phase78-signal-bias-accuracy-failure.v1", "status": "fail-closed", "exception_type": type(exc).__name__, "error": str(exc), "truth_reads": accounting["truth_reads"], "truth_reads_per_route": 1, "phase78_candidate_artifact_reads": accounting["phase78_candidate_artifact_reads"], "phase43_control_artifact_reads": accounting["phase43_control_artifact_reads"], "phase73_artifact_reads": accounting["phase73_artifact_reads"], "routes_completed": sorted(routes), "native_or_solver_subprocess": 0, "post_truth_tuning": False}
+        failure = {"schema_version": "smartphone-r5-phase79-phase78-signal-bias-accuracy-failure.v1", "status": "fail-closed", "exception_type": type(exc).__name__, "error": str(exc), "truth_reads": accounting["truth_reads"], "truth_reads_per_route": 1, "phase78_candidate_artifact_reads": accounting["phase78_candidate_artifact_reads"], "phase43_control_artifact_reads": accounting["phase43_control_artifact_reads"], "phase73_artifact_reads": accounting["phase73_artifact_reads"], "phase43_seal_metadata_reads": 2, "routes_completed": sorted(routes), "native_or_solver_subprocess": 0, "post_truth_tuning": False}
         atomic_json(output_root / "phase79_phase78_signal_bias_accuracy_failure.json", failure)
         if isinstance(exc, Phase79AccuracyError):
             raise

@@ -8,16 +8,26 @@
   },
   "evaluator": {
     "path": "apps/commands/benchmarks/gnss_smartphone_phase79_phase78_signal_bias_accuracy.py",
-    "sha256": "4356ebe264a3f8c9c61edeec2fed3d9d35d387f238ee3969dab64a0f60665711"
+    "sha256": "2d2fa791fab93fb2b0e458e73055518bd46b0a85a1267c2ef29e1ee33f1b621c"
   },
   "focused_tests": {
     "path": "tests/test_smartphone_phase79_phase78_signal_bias_accuracy.py",
-    "sha256": "da4bd5910354c927312efcb51aa44cc42820efa3d522aa5d5e83d5383679654e",
+    "sha256": "9cf3bc0206a2bfdf7c3f325e2d06529c703d688615c5a5ba2cd675ab4016cc8f",
     "passed": 6
   },
   "cmake": {
     "path": "tests/CMakeLists.txt",
     "sha256": "ac99ff55e4145cc943d609e7ea89301ef0e0452c7e8684ea7038a57d1e3d244e"
+  },
+  "phase43_baseline_resolver": {
+    "result_path": "output/smartphone-r5/phase43-native-fallback-seed-quality-anchor-recovery-v1/phase43_structural_seal.json",
+    "result_sha256": "fdeaf672b015cae99dfdf8351a5e7a92ca2d37bcdb0872c5c3fc5b937416b64d",
+    "result_bytes": 567854,
+    "manifest_path": "output/smartphone-r5/phase43-native-fallback-seed-quality-anchor-recovery-v1/phase43_structural_seal.manifest.json",
+    "manifest_sha256": "c116fe122399dafb516b9d76eeab6ea4fb77bcad5aeb9b552f08550d351a26ce",
+    "manifest_bytes": 1075,
+    "route_source": "candidate_runs[route].run1.submission/summary",
+    "path_policy": "only repository-relative paths recorded by the pinned Phase43 seal are accepted"
   },
   "routes": [
     "2021-03-16-18-59-us-ca-mtv-a/pixel5",
@@ -53,7 +63,7 @@
     "archive_reopen_or_rematerialize": false
   },
   "artifact_contract": {
-    "new_output_root": "output/smartphone-r5/phase79-phase78-signal-bias-accuracy-v1",
+    "new_output_root": "output/smartphone-r5/phase79-phase78-signal-bias-accuracy-v2",
     "candidate_run1_only": true,
     "phase78_repeat_identity_already_sealed": true,
     "exact_prediction_domain_required": true,
