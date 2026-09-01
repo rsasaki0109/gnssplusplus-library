@@ -123,6 +123,7 @@ struct Counts {
     std::size_t receiver_clock_drift_rows = 0;
     std::size_t fgo_factor_rows = 0;
     std::map<std::string, std::size_t> first_reason;
+    std::map<std::string, std::size_t> selected_first_reason;
 };
 
 void usage(const char* program) {
@@ -363,6 +364,9 @@ void addCounts(Counts& counts, const RowAudit& row) {
                                    ? "unclassified"
                                    : row.first_reason;
     ++counts.first_reason[reason];
+    if (row.raw != nullptr && row.raw->selected) {
+        ++counts.selected_first_reason[reason];
+    }
 }
 
 void emitJsonCounts(std::ostringstream& output, const Counts& counts,
@@ -409,6 +413,14 @@ void emitJsonCounts(std::ostringstream& output, const Counts& counts,
     for (const auto& [reason, count] : counts.first_reason) {
         output << indent << "  \"" << jsonEscape(reason) << "\": " << count;
         if (++emitted != counts.first_reason.size()) output << ',';
+        output << '\n';
+    }
+    output << indent << "},\n"
+           << indent << "\"selected_first_reason_counts\": {\n";
+    emitted = 0;
+    for (const auto& [reason, count] : counts.selected_first_reason) {
+        output << indent << "  \"" << jsonEscape(reason) << "\": " << count;
+        if (++emitted != counts.selected_first_reason.size()) output << ',';
         output << '\n';
     }
     output << indent << "}\n";
