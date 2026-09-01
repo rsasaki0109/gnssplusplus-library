@@ -849,15 +849,16 @@ int main(int argc, char** argv) {
                                         !std::isfinite(wavelength) || wavelength <= 0.0 ||
                                         !std::isfinite(residual)) {
                                         setReason(row, "doppler_geometry_or_residual_invalid");
-                                    } else if (p == 0U) {
-                                        // The corrected Phase41 FGO branch
-                                        // intentionally cannot identify receiver
-                                        // clock drift from one graph epoch.
-                                        setReason(row, "clock_drift_unavailable_first_epoch");
                                     } else {
                                         row.clock_jump = p < problem.clock_jumps.size()
                                                               ? problem.clock_jumps[p]
                                                               : false;
+                                        if (p == 0U) {
+                                        // The corrected Phase41 FGO branch
+                                        // intentionally cannot identify receiver
+                                        // clock drift from one graph epoch.
+                                            setReason(row, "clock_drift_unavailable_first_epoch");
+                                        } else {
                                         row.dt_s = problem.epochs[p].time -
                                                    problem.epochs[p - 1U].time;
                                         row.dt_valid = std::isfinite(row.dt_s) &&
@@ -882,6 +883,7 @@ int main(int argc, char** argv) {
                                             }
                                         }
                                     }
+                                        }
                                 }
                             }
                         }
