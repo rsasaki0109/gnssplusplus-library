@@ -922,6 +922,27 @@ relationship.  See the [Phase55 contract](docs/use_cases/smartphone_native_fgo_p
 [evaluator manifest](docs/use_cases/records/smartphone_r5_phase55_pixel5_adr_uncertainty_evaluator_manifest_v1.json),
 and [result](docs/use_cases/records/smartphone_r5_phase55_pixel5_adr_uncertainty_result_v1.json).
 
+Phase56 deduplicated the Phase55 `BiasUncertaintyNanos` proposal using only
+the sealed Phase46 receiver-clock evidence and current source contracts.  The
+field is an Android `GnssClock` receiver-clock bias uncertainty, not a
+per-satellite observable.  Phase46 already showed zero same-epoch receiver
+clock/signal spread and zero geometry-changing non-common TOW effect on all
+four routes; its output does not separately serialize BiasUncertainty
+same-epoch dispersion, so the dedup is explicitly source-semantic plus that
+sealed clock evidence.  Phase56 therefore records
+**phase56-no-go-bias-uncertainty-duplicate-common-mode** without a new raw read
+or correction.  The loader parses `BiasUncertaintyNanos` and ordinary
+`PseudorangeRateMetersPerSecond`, but does not parse or retain
+`PseudorangeRateUncertaintyMetersPerSecond`; FGO does not consume raw rate
+uncertainty and uses fixed/configured Doppler sigma paths.  The exactly one
+next source-supported factor is `PseudorangeRateUncertaintyMetersPerSecond`
+as a future opt-in Doppler sigma-floor candidate; no Phase56 implementation or
+truth/accuracy score was made.  Phase43 remains champion and Phase51 remains
+experimental.  See the [Phase56 contract](docs/use_cases/smartphone_native_fgo_phase56_bias_uncertainty_dedup.md),
+[freeze](docs/use_cases/records/smartphone_r5_phase56_pixel5_bias_uncertainty_dedup_freeze_v1.json),
+[evaluator manifest](docs/use_cases/records/smartphone_r5_phase56_bias_uncertainty_dedup_manifest_v1.json),
+and [result](docs/use_cases/records/smartphone_r5_phase56_bias_uncertainty_dedup_result_v1.json).
+
 ## Docs
 
 - <https://rsasaki0109.github.io/gnssplusplus-library/>
