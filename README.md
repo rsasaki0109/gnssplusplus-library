@@ -530,6 +530,28 @@ ambiguity/resolution residual.  See the [Phase 49 contract](docs/use_cases/smart
 [evaluator manifest](docs/use_cases/records/smartphone_r5_phase49_pixel5_adr_cycle_slip_lock_loss_evaluator_manifest_v1.json),
 and [result](docs/use_cases/records/smartphone_r5_phase49_pixel5_adr_cycle_slip_lock_loss_result_v1.json).
 
+Phase 50 audited the one raw factor selected by Phase 49: Android
+per-satellite carrier-phase ADR half-cycle ambiguity/resolution transitions.
+The same four Pixel5 raw files were each read once in one process; truth,
+Phase49 metric payload, navigation, solver/trajectory, coordinates,
+validation/holdout, archive, MAT, WLS, and correction paths remained sealed.
+The source-pinned bits were VALID=1, RESET=2, CYCLE_SLIP=4,
+HALF_CYCLE_RESOLVED=8, and HALF_CYCLE_REPORTED=16.  Ordinary pairs met the
+frozen minimum (**3,728–8,763** per route; **6–11** satellites), but every
+ordinary pair was `resolved_to_resolved`: unresolved/toggle and implicated
+populations were **zero** in all routes, with no half-cycle cluster to test.
+The one-shot output is therefore **no-go-evaluator-integrity-failure** because
+the hard presentation check found that excluded transitions were included in
+the emitted state-class total before comparison with ordinary pairs.  Pair
+reason, signal/satellite groups, four route medians, aggregate median/MAD, and
+event count passed; no raw input was reopened or evaluator rerun.  No arc
+reset, mask, weighting, or correction was implemented, and `0.782` was not
+evaluated without truth.  The exactly one next source-supported raw factor is
+carrier-frequency/antenna phase-bias residual.  See the [Phase 50 contract](docs/use_cases/smartphone_native_fgo_phase50_pixel5_adr_half_cycle.md),
+[freeze](docs/use_cases/records/smartphone_r5_phase50_pixel5_adr_half_cycle_freeze_v1.json),
+[evaluator manifest](docs/use_cases/records/smartphone_r5_phase50_pixel5_adr_half_cycle_evaluator_manifest_v1.json),
+and [result](docs/use_cases/records/smartphone_r5_phase50_pixel5_adr_half_cycle_result_v1.json).
+
 ### PPC 2024 goal matrix vs Kaiyodai and gici-open
 
 The audited KF/FGO selected profile clears the distance-weighted PPC public
