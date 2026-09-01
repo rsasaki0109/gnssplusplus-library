@@ -666,6 +666,13 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                     continue;
                 }
                 factor.elevation_rad = carrier.elevation_rad;
+                // Preserve the exact broadcast state (or its paired
+                // Earth-rotation-corrected form) and wavelength used to
+                // prepare this factor.  These provenance fields are
+                // diagnostic-only and do not alter the factor equation.
+                factor.wavelength_m = wavelength;
+                factor.satellite_position_ecef = satellite_position;
+                factor.satellite_velocity_ecef = satellite_velocity;
                 factor.measured_range_rate_mps =
                     model_debug.doppler_measured_range_rate_mps;
                 factor.satellite_range_rate_mps =
@@ -674,6 +681,18 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                     model_debug.doppler_satellite_clock_drift_mps;
                 factor.uses_rotated_satellite_state =
                     model_debug.doppler_uses_rotated_satellite_state;
+                if (factor.uses_rotated_satellite_state) {
+                    Vector3d corrected_position = Vector3d::Zero();
+                    Vector3d corrected_velocity = Vector3d::Zero();
+                    if (!doppler_contract::earthRotationCorrectedSatelliteState(
+                            satellite_position, satellite_velocity,
+                            seed.position_ecef, corrected_position,
+                            corrected_velocity)) {
+                        continue;
+                    }
+                    factor.satellite_position_ecef = corrected_position;
+                    factor.satellite_velocity_ecef = corrected_velocity;
+                }
                 epoch_doppler_factors.push_back(factor);
             }
             if (passes_dd_reference_snr_mask && !upstream_carrier_masked) {

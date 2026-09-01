@@ -102,7 +102,11 @@ TEST(AndroidRawGnssTest, ReconstructsRawClockAndObservableSigns) {
     EXPECT_EQ(observation.satellite.prn, 3);
     EXPECT_NEAR(result.observations.epochs.front().time.tow, tow, 1e-9);
     EXPECT_NEAR(observation.pseudorange, pseudorange, 1e-5);
+    EXPECT_TRUE(observation.has_pseudorange_rate_mps);
+    EXPECT_DOUBLE_EQ(observation.pseudorange_rate_mps, 25.0);
     EXPECT_NEAR(observation.doppler, -25.0 / wavelength, 1e-12);
+    EXPECT_NEAR(observation.pseudorange_rate_mps,
+                -observation.doppler * wavelength, 1e-12);
     EXPECT_TRUE(observation.has_carrier_phase);
     EXPECT_NEAR(observation.carrier_phase, -42.0 / wavelength, 1e-12);
     EXPECT_EQ(result.diagnostics.enriched_pseudorange_checks, 1u);

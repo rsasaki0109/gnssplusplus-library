@@ -145,6 +145,13 @@ public:
         double sigma_mps = 0.2;
         double elevation_rad = 0.0;
         double dt_s = 0.0;
+        // Broadcast satellite state and carrier wavelength used to prepare
+        // this row.  These fields are diagnostic provenance for the raw
+        // measurement-contract audit; the factor equation continues to use
+        // only LOS, residual, and the known range-rate/clock terms below.
+        Vector3d satellite_position_ecef = Vector3d::Zero();
+        Vector3d satellite_velocity_ecef = Vector3d::Zero();
+        double wavelength_m = 0.0;
         double measured_range_rate_mps = 0.0;
         double satellite_range_rate_mps = 0.0;
         double satellite_clock_drift_mps = 0.0;

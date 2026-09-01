@@ -866,6 +866,12 @@ bool loadAndroidRawGnssCsv(const std::string& path,
         }
         observation.signal_strength =
             static_cast<int>(std::clamp(std::round(observation.snr / 6.0), 0.0, 9.0));
+        // Keep the Android source-domain rate alongside the converted RINEX
+        // Doppler for the Phase41 contract audit.  This is diagnostic-only:
+        // every estimator still consumes `observation.doppler` below.
+        observation.pseudorange_rate_mps = raw.pseudorange_rate_mps;
+        observation.has_pseudorange_rate_mps =
+            std::isfinite(raw.pseudorange_rate_mps);
         observation.doppler = -raw.pseudorange_rate_mps / wavelength;
         observation.has_doppler = !doppler_masked &&
                                   std::isfinite(observation.doppler);

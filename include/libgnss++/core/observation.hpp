@@ -19,6 +19,11 @@ struct Observation {
     double pseudorange = 0.0;       ///< Pseudorange in meters
     double carrier_phase = 0.0;     ///< Carrier phase in cycles
     double doppler = 0.0;           ///< Doppler frequency in Hz
+    // Optional source-domain Android raw measurement retained for
+    // truth-free contract audits.  Estimators continue to consume only
+    // `doppler` (the RINEX-convention Hz value) and never this diagnostic
+    // field; non-Android/RINEX observations leave it unset.
+    double pseudorange_rate_mps = 0.0; ///< Android PseudorangeRate [m/s]
     double snr = 0.0;               ///< Signal-to-noise ratio in dB-Hz
     std::string pseudorange_observation_type;   ///< RINEX code observation type, e.g. C1C
     std::string carrier_phase_observation_type; ///< RINEX carrier observation type, e.g. L1C
@@ -27,6 +32,7 @@ struct Observation {
     bool has_pseudorange = false;   ///< Pseudorange data available
     bool has_carrier_phase = false; ///< Carrier phase data available
     bool has_doppler = false;       ///< Doppler data available
+    bool has_pseudorange_rate_mps = false; ///< Source raw-rate diagnostic
 
     // Quality indicators
     uint8_t lli = 0;                ///< Loss of lock indicator

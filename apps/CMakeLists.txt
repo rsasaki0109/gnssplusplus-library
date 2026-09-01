@@ -1,6 +1,7 @@
 set(GNSS_APP_TARGETS
     gnss_spp
     gnss_fgo
+    gnss_doppler_contract_audit
     gnss_smartphone_fgo
     gnss_fuse
     gnss_vel_d
@@ -31,6 +32,13 @@ if(GTSAM_FOUND)
     target_compile_definitions(gnss_fgo PRIVATE GNSS_WITH_GTSAM=1)
     target_link_libraries(gnss_fgo PRIVATE gtsam)
 endif()
+
+# Raw-only Phase41 Doppler measurement-contract audit.  This is a
+# diagnostic executable and does not alter any production/default path.
+add_executable(gnss_doppler_contract_audit
+               ${GNSS_NATIVE_DIR}/gnss_doppler_contract_audit.cpp)
+target_link_libraries(gnss_doppler_contract_audit PRIVATE
+    gnss_lib gnss_lib_solvers Threads::Threads)
 
 # Opt-in native-only smartphone entry point.  The raw Android CSV conversion
 # is reusable in gnss_lib; this executable wires it directly to the existing

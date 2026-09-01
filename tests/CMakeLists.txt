@@ -147,6 +147,7 @@ if(GTest_FOUND)
         gnss_rinex_info
         gnss_solve
         gnss_smartphone_fgo
+        gnss_doppler_contract_audit
         gnss_stream
         gnss_ubx_info
         gnss_vel_d
@@ -446,6 +447,10 @@ if(GTest_FOUND)
     add_test(
         NAME python_smartphone_phase40_direct_doppler_wls_handoff_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase40_direct_doppler_wls_handoff.py
+    )
+    add_test(
+        NAME python_smartphone_phase41_doppler_contract_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase41_doppler_contract.py
     )
     add_test(
         NAME python_smartphone_phase32_quality_anchor_eval_tests
@@ -810,6 +815,7 @@ if(GTest_FOUND)
         python_smartphone_raw_quality_control_eval_tests
         python_smartphone_phase39_velocity_only_handoff_tests
         python_smartphone_phase40_direct_doppler_wls_handoff_tests
+        python_smartphone_phase41_doppler_contract_tests
         python_smartphone_kaggle_tests
         python_smartphone_trajectory_smoother_tests
         python_smartphone_trajectory_imu_tests
