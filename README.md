@@ -1209,6 +1209,18 @@ See the [Phase73 structural result](docs/use_cases/smartphone_native_fgo_phase73
 [manifest](docs/use_cases/records/smartphone_r5_phase73_source_exact_pseudorange_miss_mask_structural_manifest_v1.json),
 and [sealed result record](docs/use_cases/records/smartphone_r5_phase73_source_exact_pseudorange_miss_mask_structural_result_v1.json).
 
+The separately frozen Phase74 accuracy scorer then failed closed on its first
+truth read because it required an exact three-column truth header, whereas the
+sealed Phase44/59 DictReader contract allows the required coordinate fields
+with optional `phone`/additional columns.  This is evaluator-integrity only:
+no accuracy score was observed, no native process ran, and no validation or
+Kaggle action is authorized.  The Phase74 freeze/evaluator remain immutable;
+any recovery requires a new freeze/output root and one disclosed truth read per
+route.  See the [Phase74 failure record](docs/use_cases/records/smartphone_r5_phase74_phase73_miss_mask_accuracy_failure_v1.json),
+[failure documentation](docs/use_cases/smartphone_native_fgo_phase74_phase73_miss_mask_accuracy_failure.md),
+[accuracy freeze](docs/use_cases/records/smartphone_r5_phase74_phase73_miss_mask_accuracy_freeze_v1.json),
+and [manifest](docs/use_cases/records/smartphone_r5_phase74_phase73_miss_mask_accuracy_manifest_v1.json).
+
 ## Docs
 
 - <https://rsasaki0109.github.io/gnssplusplus-library/>

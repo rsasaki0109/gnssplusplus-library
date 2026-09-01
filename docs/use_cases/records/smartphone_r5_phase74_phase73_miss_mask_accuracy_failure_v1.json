@@ -1,0 +1,54 @@
+{
+  "schema_version": "smartphone-r5-phase74-phase73-source-exact-miss-mask-accuracy-failure.v1",
+  "phase": 74,
+  "execution_label": "Luna Max",
+  "status": "evaluator-integrity-failure-fail-closed",
+  "decision": "no accuracy conclusion; no validation or Kaggle; preserve Phase43 champion",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase74_phase73_miss_mask_accuracy_freeze_v1.json",
+    "sha256": "8308f15a491d1ef1daae0542efd1d7ac96562738e51e6c90ea04fd9f81aba8d9"
+  },
+  "evaluator_manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase74_phase73_miss_mask_accuracy_manifest_v1.json",
+    "sha256": "6a80232cf380ab85eee531d07654563173d8dfb7808f457870c9464e7ed91373"
+  },
+  "evaluator": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase74_phase73_miss_mask_accuracy.py",
+    "sha256": "bf07ff7ccb9f9efce5a759f2fabe57b7dc0c24ac5acdaf57c6ad9fc88a3fd761"
+  },
+  "failure": {
+    "exception_type": "Phase74AccuracyError",
+    "error": "truth header mismatch: 2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "route": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "cause": "The scorer required the truth header to equal exactly [UnixTimeMillis,LatitudeDegrees,LongitudeDegrees]. The sealed Phase44/59 parser contract instead accepts those required fields through CSV DictReader with optional phone and/or additional columns.",
+    "truth_payload_retained": false,
+    "accuracy_observed": false,
+    "candidate_runs": 0,
+    "native_or_solver_subprocess": 0
+  },
+  "read_accounting": {
+    "candidate_artifact_reads": 2,
+    "control_artifact_reads": 2,
+    "truth_reads": 1,
+    "truth_reads_per_route": {"2021-03-16-18-59-us-ca-mtv-a/pixel5": 1},
+    "raw_gnss_reads": 0,
+    "raw_imu_reads": 0,
+    "navigation_reads": 0,
+    "native_or_solver_subprocess": 0,
+    "validation_holdout_reads": 0,
+    "mat_reads_or_generated": 0,
+    "device_wls_or_precomputed_coordinates": 0,
+    "kaggle_or_token_access": 0,
+    "archive_reopen_or_rematerialize": false,
+    "post_truth_tuning": false,
+    "solver_rerun_after_truth": false
+  },
+  "integrity_policy": {
+    "phase74_freeze_modified_after_read": false,
+    "phase74_evaluator_modified_after_read": false,
+    "second_truth_read_in_phase74": false,
+    "failure_artifact_written": true,
+    "no_accuracy_score_published": true,
+    "next_recovery": "A separately frozen scorer-only recovery must parse required truth fields with the sealed DictReader semantics, use a new output root, and read each truth exactly once in that new process."
+  }
+}
