@@ -280,6 +280,22 @@ or truth access.  See the [Phase 36 freeze](docs/use_cases/records/smartphone_r5
 [evaluator manifest](docs/use_cases/records/smartphone_r5_phase36_phone_bias_audit_evaluator_manifest_v1.json),
 and [No-Go result](docs/use_cases/records/smartphone_r5_phase36_phone_bias_audit_result_v1.json).
 
+Phase 37 froze the repeated-model Pixel5 experiment with the numeric
+identifiability gates in the [v2 freeze](docs/use_cases/records/smartphone_r5_phase37_pixel5_repeatability_freeze_v2.json)
+and committed the [evaluator source manifest](docs/use_cases/records/smartphone_r5_phase37_pixel5_repeatability_evaluator_manifest_v1.json)
+before materializing any new payload.  Only the three added routes' raw
+`device_gnss.csv`, `device_imu.csv`, and broadcast `brdc.nav` were
+materialized.  The unchanged Phase 31 native binary and flags were used:
+the MTV-h route failed closed on run 1 because its solution contained a
+non-finite or out-of-Earth ECEF position, so run 2 and all truth access were
+forbidden.  The LAX-t and MTV-u routes passed repeat-byte-identity,
+raw-key, convergence, factor, and <=70 m/s structural checks, but the
+experiment remains a structural No-Go because all four identities did not
+pass.  No ground truth, MAT, validation, holdout, token, or Kaggle access
+occurred; no common/body-frame fit was made and the Phase 31 champion is
+unchanged.  See the [fail-closed record](docs/use_cases/records/smartphone_r5_phase37_pixel5_repeatability_structural_failure_v1.json)
+and [failure manifest](docs/use_cases/records/smartphone_r5_phase37_pixel5_repeatability_structural_failure_manifest_v1.json).
+
 ### PPC 2024 goal matrix vs Kaiyodai and gici-open
 
 The audited KF/FGO selected profile clears the distance-weighted PPC public
