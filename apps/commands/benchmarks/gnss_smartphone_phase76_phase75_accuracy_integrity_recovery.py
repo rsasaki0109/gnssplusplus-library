@@ -372,7 +372,7 @@ def run_score(output_root: Path = DEFAULT_OUTPUT) -> dict[str, Any]:
     if not MANIFEST.is_file():
         raise fail("Phase76 recovery manifest is missing")
     manifest = load_json(MANIFEST, "Phase76 recovery manifest")
-    if manifest.get("freeze", {}).get("sha256") != FREEZE_SHA256 or manifest.get("evaluator", {}).get("path") != relative(EVALUATOR) or manifest.get("evaluator", {}).get("sha256") != sha256_file(EVALUATOR) or manifest.get("read_policy", {}).get("truth_reads") != 4 or manifest.get("read_policy", {}).get("native_or_solver_subprocess") is not False:
+    if manifest.get("freeze", {}).get("sha256") != FREEZE_SHA256 or manifest.get("evaluator", {}).get("path") != relative(EVALUATOR) or manifest.get("evaluator", {}).get("sha256") != sha256_file(EVALUATOR) or manifest.get("read_policy", {}).get("truth_reads_after_manifest") != 4 or manifest.get("read_policy", {}).get("native_or_solver_subprocess") is not False:
         raise fail("Phase76 manifest pin/read contract changed")
     output_root = output_root.resolve()
     reject_forbidden(output_root)

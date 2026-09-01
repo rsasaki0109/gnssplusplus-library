@@ -8,7 +8,7 @@
   },
   "evaluator": {
     "path": "apps/commands/benchmarks/gnss_smartphone_phase76_phase75_accuracy_integrity_recovery.py",
-    "sha256": "caa68168dd5524a95ab4d0e308c8ef54a2dd60e632f744448a67e48e2cdec090",
+    "sha256": "513e5970ee58846963f077b9960944e5fbf5f3535e5be24ca6e72493785f7761",
     "single_process": true,
     "native_or_solver_subprocess": false,
     "post_truth_tuning": false
