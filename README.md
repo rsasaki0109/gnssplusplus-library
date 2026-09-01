@@ -1193,6 +1193,22 @@ relax any prior gate.  No raw/truth/accuracy read has occurred and no `0.782`
 claim is made.  See the [Phase73 contract](docs/use_cases/smartphone_native_fgo_phase73_source_exact_pseudorange_miss_mask.md)
 and [freeze](docs/use_cases/records/smartphone_r5_phase73_source_exact_pseudorange_miss_mask_freeze_v1.json).
 
+Phase73's source-exact candidate then passed a separate truth-free structural
+matrix: one flag-off Phase43 control and two candidate repetitions on each of
+four Pixel5 routes, with 12 native invocations and zero truth/MAT/validation/
+holdout/Kaggle/archive reads.  Exact prediction-domain keys, raw/base hashes,
+finite retained corrections, factor accounting, candidate repeat identity,
+Phase43 control identity, TDCP/Doppler/IMU/SPP invariants, and speed gates all
+passed.  Retained finite-`pc` fractions were 0.7538944845678013 (MTV-a),
+0.7080479218404606 (MTV-h), 0.9776508639529123 (LAX-t), and
+0.9169501947120312 (MTV-u); these are miss-mask retention diagnostics, not
+prediction or truth-row coverage, and do not relax prior coverage gates.  No
+accuracy or `0.782` claim is made; a separate accuracy freeze is required.
+See the [Phase73 structural result](docs/use_cases/smartphone_native_fgo_phase73_source_exact_pseudorange_miss_mask_structural.md),
+[structural freeze](docs/use_cases/records/smartphone_r5_phase73_source_exact_pseudorange_miss_mask_structural_freeze_v1.json),
+[manifest](docs/use_cases/records/smartphone_r5_phase73_source_exact_pseudorange_miss_mask_structural_manifest_v1.json),
+and [sealed result record](docs/use_cases/records/smartphone_r5_phase73_source_exact_pseudorange_miss_mask_structural_result_v1.json).
+
 ## Docs
 
 - <https://rsasaki0109.github.io/gnssplusplus-library/>
