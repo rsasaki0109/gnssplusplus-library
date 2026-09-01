@@ -354,7 +354,9 @@ def native_command(paths: dict[str, Path], dataset_id: str, run_dir: Path, candi
     flags = list(BASE_FLAGS)
     if candidate:
         flags.append(CANDIDATE_FLAG)
-    command = [str(BINARY), "--android-gnss", str(paths["device_gnss"]), "--android-imu", str(paths["device_imu"]), "--nav", str(paths["broadcast_nav"]), "--out", str(run_dir / "submission.csv"), "--summary-json", str(run_dir / "summary.json"), "--dataset-id", dataset_id, *flags]
+    # Keep repository-relative input spellings so the existing flag-off summary
+    # bytes remain comparable with the frozen Phase31/39 artifacts.
+    command = [str(BINARY), "--android-gnss", relative(paths["device_gnss"]), "--android-imu", relative(paths["device_imu"]), "--nav", relative(paths["broadcast_nav"]), "--out", str(run_dir / "submission.csv"), "--summary-json", str(run_dir / "summary.json"), "--dataset-id", dataset_id, *flags]
     for token in command:
         _reject_forbidden(token)
     return command
