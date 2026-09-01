@@ -3736,3 +3736,53 @@ The command is one-shot after truth access.  The machine-readable records are
 `docs/use_cases/records/smartphone_r5_phase35_interruption_recovery_v1.json`,
 `docs/use_cases/records/smartphone_r5_phase35_matrix_evaluator_manifest_v2.json`,
 and `docs/use_cases/records/smartphone_r5_phase35_matrix_evaluation_result_v1.json`.
+
+### Phase 36 phone/model bias identifiability audit (No-Go)
+
+Phase 36 audited the sealed Phase 31 quality-anchor + TDCP/no-bridge native
+champion against the three already materialized Phase 29 development truths.
+The freeze and evaluator manifest were committed before the one-process audit;
+each route's candidate submission, development truth, and raw
+`device_imu.csv` were opened once.  No archive member was rematerialized, no
+solver was rerun, and validation (`2023-05-09-21-32-us-ca-mtv-pe1/pixel5`) and
+future holdout (`2023-05-16-19-54-us-ca-mtv-xe1/pixel5`) remained sealed.
+
+The audit computes prediction-minus-truth residuals in a fixed local ENU frame
+using only the submission's observable latitude/longitude.  Up is explicitly
+unavailable because the sealed four-column submission contains no altitude;
+it is never filled from a result artifact.  For each route it records the
+component median, unscaled MAD, ordinary and component-3-MAD-inlier
+covariance, first/last chronological 25% stability, and coarse
+raw-accelerometer/magnetometer orientation groups.  The route medians were
+`(E,N)=(0.454,0.299) m` for Pixel5, `(0.564,-0.443) m` for Pixel4, and
+`(0.807,0.624) m` for sm-g988b; prefix-to-tail median shifts were 2.672,
+1.257, and 0.604 m respectively.  The exact model route count is one for
+each model (and Pixel5 contributes only one identity), so these observations
+cannot identify a deployable phone-family constant.  Raw UncalAccel/UncalMag
+labels also lack a calibrated device-to-antenna pose; heading-group shifts are
+diagnostic and may be route/motion confounding, not a lever-arm estimate.
+
+Therefore Phase 36 is a development-only No-Go: no per-route/per-timestamp
+fit, native correction, validation read, holdout read, or Kaggle submission was
+performed, and the Phase 31 champion is preserved.  A metadata-only proposal
+records three additional complete Pixel5 identities
+(`2021-08-24-20-32-us-ca-mtv-h`, `2022-04-01-18-22-us-ca-lax-t`, and
+`2023-03-08-21-34-us-ca-mtv-u`) for a future repeated-model development
+cohort.  That proposal does not materialize raw/truth members and requires a
+new freeze before any solver or truth operation.  The machine-readable records
+are:
+
+- `docs/use_cases/records/smartphone_r5_phase36_phone_bias_audit_freeze_v1.json`;
+- `docs/use_cases/records/smartphone_r5_phase36_phone_bias_audit_evaluator_manifest_v1.json`;
+- `docs/use_cases/records/smartphone_r5_phase36_phone_bias_audit_result_v1.json`;
+- `output/smartphone-r5/phase36-phone-bias-audit-v1/phone_bias_audit.json`.
+
+Reproduce the sealed audit only as a development diagnostic with:
+
+```text
+python3 apps/commands/benchmarks/gnss_smartphone_phase36_phone_bias_audit.py audit
+```
+
+The native 0.782-class target remains unachieved; the next raw physical
+experiment must be separately frozen and must preserve the current validation
+and holdout seals.

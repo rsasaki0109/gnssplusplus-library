@@ -265,6 +265,21 @@ submission was made.  See the [Phase 35 freeze](docs/use_cases/records/smartphon
 [structural seal manifest](docs/use_cases/records/smartphone_r5_phase35_matrix_evaluator_manifest_v2.json),
 and [train No-Go result](docs/use_cases/records/smartphone_r5_phase35_matrix_evaluation_result_v1.json).
 
+Phase 36 audited the sealed native Phase 31 champion for phone/model-specific
+systematic bias using one process over the three already-opened Phase 29
+development truths.  It reports fixed-ENU median/MAD/covariance,
+prefix/tail stability, and coarse raw-IMU orientation groups.  Each exact
+model has only one route (Pixel5 only one identity), and no calibrated
+device-to-antenna pose is available, so a constant or body-frame lever-arm
+calibration is not identifiable.  This is a recorded development-only
+No-Go: no fit, native correction, validation/holdout read, or Kaggle mutation
+was made, and the Phase 31 champion is unchanged.  A metadata-only proposal
+selects three additional complete Pixel5 identities for a future repeated-
+model experiment; that proposal requires a new freeze before materialization
+or truth access.  See the [Phase 36 freeze](docs/use_cases/records/smartphone_r5_phase36_phone_bias_audit_freeze_v1.json),
+[evaluator manifest](docs/use_cases/records/smartphone_r5_phase36_phone_bias_audit_evaluator_manifest_v1.json),
+and [No-Go result](docs/use_cases/records/smartphone_r5_phase36_phone_bias_audit_result_v1.json).
+
 ### PPC 2024 goal matrix vs Kaiyodai and gici-open
 
 The audited KF/FGO selected profile clears the distance-weighted PPC public
