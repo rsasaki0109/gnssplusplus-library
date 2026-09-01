@@ -1129,6 +1129,29 @@ the matching misses. See the
 [freeze](docs/use_cases/records/smartphone_r5_phase67_phase66_structural_integrity_recovery_freeze_v1.json),
 and [manifest](docs/use_cases/records/smartphone_r5_phase67_phase66_structural_integrity_recovery_manifest_v1.json).
 
+Phase68's first one-shot matching taxonomy failed closed on an RINEX3 physical
+record-boundary bug; that failure and its one raw/base read are preserved. A
+separately frozen Phase69 recovery then exposed a missing native `S` (SBAS)
+system mapping and also failed closed after three routes. Phase70 recovered
+both contracts with source-faithful long-line/continuation framing and native
+`G/R/E/C/J/S/I` recognition. Its truth-free audit read each pinned raw GNSS
+and base RINEX exactly once (4/4), with truth/MAT/nav/IMU/solver/archive reads
+zero. Among 278,431 diagnostic raw adopted proxy rows, exact in-domain
+matching was 201,660 (72.4273%), same-frequency variants were 0, out-of-domain
+was 7,896, missing-frequency was 34,592, and missing-satellite was 34,283;
+50,417 duplicate canonical-frequency events were report-only. Raw/base proxy
+populations are explicitly not claimed equal to native adopted FGO factors,
+the Phase67 coverage gate was not relaxed, no native correction or accuracy
+truth was authorized, and `0.782` was not evaluated. The next source-supported
+candidate is a separately frozen audit of enabling
+`preserve_additional_frequency_bands=true` only in the base compensation
+reader, preserving exact keys. See the [Phase68 failure record](docs/use_cases/records/smartphone_r5_phase68_base_matching_taxonomy_failure_v1.json),
+[Phase69 recovery record](docs/use_cases/records/smartphone_r5_phase69_base_matching_taxonomy_recovery_failure_v1.json),
+[Phase70 contract](docs/use_cases/smartphone_native_fgo_phase70_base_matching_taxonomy_sbas_recovery.md),
+[Phase70 freeze](docs/use_cases/records/smartphone_r5_phase70_base_matching_taxonomy_sbas_recovery_freeze_v1.json),
+[Phase70 manifest](docs/use_cases/records/smartphone_r5_phase70_base_matching_taxonomy_sbas_recovery_manifest_v1.json),
+and [sealed result](docs/use_cases/records/smartphone_r5_phase70_base_matching_taxonomy_sbas_recovery_result_v1.json).
+
 ## Docs
 
 - <https://rsasaki0109.github.io/gnssplusplus-library/>
