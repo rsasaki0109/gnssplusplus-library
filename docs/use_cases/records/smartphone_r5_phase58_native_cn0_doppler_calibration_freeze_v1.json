@@ -45,6 +45,17 @@
       "tests/CMakeLists.txt": "3eff18d0758d255636c46299d7b1f8fb05b5057cc8b29a310969334a7cedd523"
     }
   },
+  "amendment": {
+    "kind": "pre-matrix-reseal",
+    "reason": "Phase43 champion run1 summaries use the existing fallback seed quality-anchor recovery flag; the structural base recipe is corrected to include that already-sealed flag so the flag-off control is the exact champion recipe.",
+    "supersedes_previous_freeze_sha256": "b2d420b660a2c0e3fd040776354bc0490013eb47d7d6da9ed28db2a2c8d2d89d",
+    "formula_and_thresholds_unchanged": true,
+    "native_source_commit_already_sealed": "c47a67d",
+    "new_structural_raw_reads_before_reseal": 0,
+    "new_truth_reads_before_reseal": 0,
+    "structural_runs_before_reseal": 0,
+    "note": "This is an explicit pre-matrix contract reseal. The prior Phase58 raw-only audit had its separately recorded four raw reads; no new raw/truth read or structural process occurred before this correction, and the native formula, alpha, gates, and thresholds were not changed."
+  },
   "objective": {
     "factor": "raw Android per-satellite Cn0DbHz/Doppler residual calibration",
     "stage": "native opt-in implementation after all Phase58 truth-free audit gates passed",
@@ -118,7 +129,7 @@
     }
   },
   "structural_matrix": {
-    "base_flags": ["--all-epochs", "--android-raw-utc-keys", "--android-raw-clock-only", "--android-utc-wall-clock-fallback", "--native-pdc-imu-tdcp-no-bridge", "--native-quality-anchor"],
+    "base_flags": ["--all-epochs", "--android-raw-utc-keys", "--android-raw-clock-only", "--android-utc-wall-clock-fallback", "--native-pdc-imu-tdcp-no-bridge", "--native-quality-anchor", "--native-fallback-seed-quality-anchor-recovery"],
     "control": "base_flags only; candidate flag absent",
     "candidate": "base_flags plus --native-cn0-doppler-calibration",
     "candidate_runs_per_route": 2,
