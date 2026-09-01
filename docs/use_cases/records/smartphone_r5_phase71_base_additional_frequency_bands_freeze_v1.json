@@ -1,0 +1,113 @@
+{
+  "schema_version": "smartphone-r5-phase71-base-additional-frequency-bands-freeze.v1",
+  "phase": 71,
+  "execution_label": "Luna Max",
+  "status": "frozen-before-phase71-native-structural-runs",
+  "purpose": "Truth-free structural evaluation of a source-existing base-reader option that preserves additional frequency bands for the Phase65 base pseudorange model. It addresses Phase70 GPS-L5 missing-frequency evidence without changing exact rover keys, interpolation, or native coverage gates.",
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "base_commit": "97e5096",
+    "phase70_result_record": "docs/use_cases/records/smartphone_r5_phase70_base_matching_taxonomy_sbas_recovery_result_v1.json",
+    "phase70_result_record_sha256": "43bd23e7f7276a5a776eacfb9dfbc2b8a9f66c3fc34234c97629fdeac5aa5f5b",
+    "phase70_result_sha256": "d2b9ec262fae3b3705a4c2debb844ac5270452c267e1c682a277d328a6270b17",
+    "phase70_output_manifest_sha256": "4ece6fcb11fcf0d27ea628f61d0ff60fa48a92b92197f480bf9f874e103132ae",
+    "phase65_runner_sha256": "6be7dd346a1ff219c15036fcf194861ebeda700678d52e3d93b2f3c2b96a16ae",
+    "phase65_manifest_sha256": "1306480f6b7fb839e55309e9c2c77b41f2ac0a1baf9f6971949612fd485d2255",
+    "phase70_partial_output_reuse": false
+  },
+  "source_contract_before_change": {
+    "fgo_entrypoint": "apps/native/gnss_fgo_imu_no_base.cpp",
+    "fgo_entrypoint_sha256": "bad544d64dee176e4e38ed13c595ea10fba515cb2dd7dbd87a3bb2d2cab11f31",
+    "rinex_header_sha256": "571ac4e0e3e301e6a8b865ea89caaae3acd40dc8b25f4f1bdb3ede751e9e6e5d",
+    "rinex_source_sha256": "92f683e34b4052f8d105f69fc4bf4397ca990be3b5a6b220181a56423f465533",
+    "base_model_source_sha256": "55b7a1fbb96b5e3d6599c311c229870d7c319163d43322c01a3881d85dcb25aa",
+    "preserve_option_source": "RINEXReader::setPreserveAdditionalFrequencyBands(bool), default false",
+    "current_usage": "Phase65 base compensation reader does not enable the option; rover and nav readers remain unchanged",
+    "candidate_scope": "set true only on the RINEXReader instance inside native base pseudorange compensation; no SPP/rover/nav/TDCP/Doppler change"
+  },
+  "candidate": {
+    "flag": "--native-base-pseudorange-preserve-additional-frequency-bands",
+    "requires": [
+      "--native-base-pseudorange-compensation",
+      "--native-base-rinex",
+      "--native-base-rinex-sha256"
+    ],
+    "option_source_semantics": "RINEXReader preserves one selected observation per supported frequency band when enabled; existing primary/secondary policy remains unchanged when disabled",
+    "selection_scope": "base compensation RINEX reader only",
+    "matching_key": "exact (satellite,SignalType) as before",
+    "formula": "pc=source-corrected base residual moving mean; P_rover_corrected=P_rover_raw-pc",
+    "coefficient": 1.0,
+    "no_canonicalization": true,
+    "no_interpolation_change": true,
+    "no_extrapolation_or_endpoint_hold": true,
+    "no_new_rows_or_factors": true,
+    "spp_applied": false,
+    "tdcp_applied": false,
+    "doppler_applied": false,
+    "default_flag_off_byte_identity": true
+  },
+  "telemetry_contract": {
+    "required_summary_block": "native_base_pseudorange_compensation",
+    "required_fields": [
+      "preserve_additional_frequency_bands",
+      "selected_band_observation_rows",
+      "selected_band_streams",
+      "selected_band_observation_rows_by_signal",
+      "selected_band_streams_by_signal",
+      "matched_factor_rows",
+      "finite_correction_rows_among_matched",
+      "matched_factor_fraction",
+      "finite_correction_fraction_among_matched"
+    ],
+    "band_stream_definition": "unique (base satellite, selected SignalType) streams present after RINEXReader band policy and before navigation residual filtering",
+    "matched_factor_definition": "adopted native FGO pseudorange factors whose exact (satellite,SignalType) stream exists in the base model",
+    "finite_among_matched_definition": "finite in-domain correction rows divided by matched adopted factors; report separately from matched/all",
+    "proxy_equality_claim": false
+  },
+  "structural_matrix": {
+    "new_output_root": "output/smartphone-r5/phase71-base-additional-frequency-bands-structural-v1",
+    "routes": 4,
+    "control_runs_per_route": 1,
+    "candidate_runs_per_route": 2,
+    "native_solver_invocations": 12,
+    "candidate_repeat_identity": true,
+    "control_phase43_identity": true,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "validation_holdout_reads": 0,
+    "archive_reopens": 0,
+    "phase70_partial_output_reuse": false
+  },
+  "gates": {
+    "all_four_routes": true,
+    "base_hash_and_bytes_exact": true,
+    "candidate_matched_factor_fraction_each_route_min": 0.8,
+    "candidate_finite_correction_fraction_among_matched_each_route_min": 0.99,
+    "candidate_selected_band_telemetry_finite_and_exact": true,
+    "candidate_repeat_byte_identity": true,
+    "control_phase43_byte_identity": true,
+    "finite_output_and_earth_valid": true,
+    "converged": true,
+    "tdcp_built_equals_inserted": true,
+    "over_70_mps": 0,
+    "no_new_graph_state": true,
+    "no_truth_or_solver_after_truth": true,
+    "fail_closed": true
+  },
+  "read_contract": {
+    "single_process_per_native_case": true,
+    "raw_device_gnss_process_reads": 12,
+    "raw_device_imu_process_reads": 12,
+    "broadcast_nav_process_reads": 12,
+    "base_rinex_process_reads": 12,
+    "hash_verification_reads_per_input": 4,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_token_reads": 0,
+    "archive_reopens": 0,
+    "phase70_partial_output_reuse": false,
+    "post_truth_tuning": false
+  },
+  "decision_policy": "This is structural coverage only. Do not read development truth or claim 0.782 in Phase71. If any gate fails, preserve Phase43 and do not perform accuracy scoring. A later accuracy phase would require a new freeze and must compare the candidate against exact Phase43 control; no coverage denominator may be changed after observing results."
+}
