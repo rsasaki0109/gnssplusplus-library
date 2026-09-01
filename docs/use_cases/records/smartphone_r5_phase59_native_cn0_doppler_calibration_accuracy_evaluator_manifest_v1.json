@@ -1,0 +1,98 @@
+{
+  "schema_version": "smartphone-r5-phase59-native-cn0-doppler-calibration-accuracy-evaluator-manifest.v1",
+  "phase": 59,
+  "execution_label": "Luna Max",
+  "status": "evaluator-sealed-before-phase59-truth",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase59_native_cn0_doppler_calibration_accuracy_freeze_v1.json",
+    "sha256": "fbd1a3076da1b5283b08d746d334837fce6eb17cdb45f3d484248e6b6f09bec6"
+  },
+  "evaluator": {
+    "source": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase59_native_cn0_doppler_calibration_accuracy.py",
+      "sha256": "40aee0c50626c9e512f3c14a78e16e3f573febb4d840fd5cc94be0c0446fe4a0"
+    },
+    "focused_test": {
+      "path": "tests/test_smartphone_phase59_native_cn0_doppler_calibration_accuracy.py",
+      "sha256": "68fc8a0e5d5028014f9d44ab789c6a1b5f60ac385982b1e16817a4f49224f4cd"
+    },
+    "cmake": {
+      "path": "tests/CMakeLists.txt",
+      "sha256": "ce4f88b5ecfecac0e3210246ff6a3c330a66e8c6c8d5ff282fd651e30a599e65"
+    }
+  },
+  "operation": {
+    "command": "PYTHONHASHSEED=0 python3 apps/commands/benchmarks/gnss_smartphone_phase59_native_cn0_doppler_calibration_accuracy.py score",
+    "output_root": "output/smartphone-r5/phase59-native-cn0-doppler-calibration-accuracy-v1",
+    "single_process": true,
+    "native_solver_invoked": false,
+    "raw_or_navigation_opened": false,
+    "archive_reopened_or_rematerialized": false,
+    "post_truth_tuning": false
+  },
+  "sealed_inputs": {
+    "phase58_candidate_and_control": "only run1 submission.csv and summary.json per route from the Phase58 structural output pinned by the freeze",
+    "phase44_development_truth": "only the four already-materialized ground_truth.csv files pinned by the freeze; each opened exactly once",
+    "phase51_historical_reference_scoring_input": false,
+    "phase52_historical_reference_scoring_input": false
+  },
+  "truth_policy": {
+    "truth_reads_before_manifest": 0,
+    "truth_reads_after_manifest": 4,
+    "truth_read_count_per_route": 1,
+    "solver_or_native_subprocess": false,
+    "archive_reopen_or_rematerialize": false,
+    "candidate_submission_reads_per_route": 1,
+    "candidate_summary_reads_per_route": 1,
+    "control_submission_reads_per_route": 1,
+    "control_summary_reads_per_route": 1,
+    "truth_row_coverage": "informational only",
+    "prediction_domain_coverage_required": 1.0,
+    "validation_truth_open_count": 0,
+    "holdout_truth_open_count": 0,
+    "solver_rerun_after_truth": false,
+    "mat_read_or_generated": false,
+    "device_wls_or_precomputed_coordinates": 0,
+    "kaggle_or_token_access": 0
+  },
+  "metric": {
+    "key": "(phone, UnixTimeMillis)",
+    "matching": "exact integer intersection only",
+    "duplicates": 0,
+    "extras": 0,
+    "interpolation": false,
+    "nearest_or_edge_hold": false,
+    "distance": "spherical Haversine",
+    "earth_radius_m": 6371008.8,
+    "percentile": "linear interpolation at rank (n - 1) * q",
+    "score": "(P50 + P95) / 2",
+    "continuity_over_70_mps": 0
+  },
+  "accuracy_gates": {
+    "candidate_improvement_each_route_min_m": 0.05,
+    "candidate_no_route_regression": true,
+    "candidate_macro_improvement_min_m": 0.1,
+    "candidate_mtv_h_improvement_min_m": 0.1,
+    "candidate_prediction_domain_coverage": 1.0,
+    "candidate_macro_score_max_m": 2.0,
+    "candidate_route_score_max_m": 3.0,
+    "candidate_mtv_h_p95_max_m": 5.0,
+    "candidate_all_finite": true,
+    "candidate_over_70_mps_count": 0,
+    "stretch_0_782": "report only; no gate relaxation",
+    "logic": "all candidate route, macro, domain, finite, and continuity conditions ANDed",
+    "fresh_validation": "not authorized in Phase59; consider only in separately frozen phase after all absolute gates pass"
+  },
+  "fail_closed": {
+    "freeze_or_manifest_hash_mismatch": true,
+    "sealed_artifact_hash_byte_or_row_mismatch": true,
+    "truth_hash_byte_or_row_mismatch": true,
+    "duplicate_or_extra_prediction_key": true,
+    "unexpected_missing_truth_key": true,
+    "prediction_domain_coverage_not_one": true,
+    "any_native_or_solver_subprocess": true,
+    "any_second_truth_read": true,
+    "validation_or_holdout_access": true,
+    "post_truth_gate_mutation": true
+  }
+}
