@@ -3679,3 +3679,9 @@ python3 apps/commands/benchmarks/gnss_smartphone_phase34_quality_anchor_validati
 The `score` operation is a one-shot historical operation and must not be
 rerun.  Result and manifest hashes, the single truth read, and the I/O
 recovery are retained in the machine-readable records above.
+
+The Phase 34 Release rebuild completed with native binary SHA256
+`883701ef34606af4be84a44181f6b3616b2559ee4031982fff98d73dbbbbe7bd`.
+The focused Phase 32/33/34 CTest set passed 3/3 (the Phase 34 Python unit
+suite is 5/5), and the full serial CTest run passed 136/136.  These checks did
+not reopen truth or rerun either sealed lane.
