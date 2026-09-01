@@ -345,18 +345,42 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
 
             Vector3d vel = problem.imu.init_velocity_nav;
             const auto* pdc_seed = nativePdcSeedFor(i);
+            bool have_velocity_seed = false;
             if (pdc_seed != nullptr && pdc_seed->has_velocity &&
                 pdc_seed->velocity_ecef_mps.allFinite()) {
                 const Vector3d seed_velocity_nav = ecef2enu(
                     pdc_seed->velocity_ecef_mps,
                     problem.imu.nav_origin_lat_rad,
                     problem.imu.nav_origin_lon_rad);
-                if (seed_velocity_nav.allFinite()) vel = seed_velocity_nav;
+                if (seed_velocity_nav.allFinite()) {
+                    vel = seed_velocity_nav;
+                    have_velocity_seed = true;
+                }
+            }
+            if (!have_velocity_seed && !config.use_native_pdc_state_bridge &&
+                config.use_doppler_velocity_wls_initialization &&
+                i < problem.doppler_velocity_wls_estimates.size()) {
+                const auto& estimate =
+                    problem.doppler_velocity_wls_estimates[i];
+                if (estimate.valid && estimate.velocity_ecef_mps.allFinite()) {
+                    const Vector3d seed_velocity_nav = ecef2enu(
+                        estimate.velocity_ecef_mps,
+                        problem.imu.nav_origin_lat_rad,
+                        problem.imu.nav_origin_lon_rad);
+                    if (seed_velocity_nav.allFinite()) {
+                        // Phase40 direct handoff: use the bounded raw WLS
+                        // estimate for every IMU velocity state, preserving
+                        // velocity-only semantics (clock/position states are
+                        // still initialized by their ordinary path).
+                        vel = seed_velocity_nav;
+                        have_velocity_seed = true;
+                    }
+                }
             }
             if (num_epochs >= 2) {
                 const std::size_t a = (i + 1 < num_epochs) ? i : i - 1;
                 const double dt = problem.epochs[a + 1].time - problem.epochs[a].time;
-                if (pdc_seed == nullptr || !pdc_seed->has_velocity) {
+                if (!have_velocity_seed) {
                   if (dt > 1e-3) {
                     vel = (antenna_nav[a + 1] - antenna_nav[a]) / dt;
                   }

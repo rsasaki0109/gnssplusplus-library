@@ -98,6 +98,9 @@ struct Options {
     // optimized Doppler velocity/heading seeds.  Position and receiver-clock
     // states remain the original raw SPP seeds.
     bool native_gnss_first_velocity_only_handoff = false;
+    // Phase40 candidate: consume the existing raw-observable Doppler WLS
+    // estimates directly.  No GNSS-first optimizer is run in this mode.
+    bool native_direct_doppler_wls_handoff = false;
 };
 
 const char* carrierSignalName(libgnss::SignalType signal) {
@@ -132,7 +135,8 @@ void usage(const char* program) {
                  " [--native-upstream-position-offset]"
                  " [--native-signal-specific-galileo-tgd]"
                  " [--native-quality-anchor]"
-                 " [--native-gnss-first-velocity-only-handoff]\n";
+                 " [--native-gnss-first-velocity-only-handoff]"
+                 " [--native-direct-doppler-wls-handoff]\n";
 }
 
 bool requireValue(int argc, char** argv, int& index, std::string& value) {
@@ -250,6 +254,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
             options.native_quality_anchor = true;
         } else if (arg == "--native-gnss-first-velocity-only-handoff") {
             options.native_gnss_first_velocity_only_handoff = true;
+        } else if (arg == "--native-direct-doppler-wls-handoff") {
+            options.native_direct_doppler_wls_handoff = true;
         } else {
             std::cerr << "Unknown argument: " << arg << "\n";
             return false;
@@ -449,6 +455,28 @@ bool parseArguments(int argc, char** argv, Options& options) {
                      "remain the original raw SPP seeds\n";
         return false;
     }
+    if (options.native_direct_doppler_wls_handoff &&
+        (!android_raw || !options.android_raw_utc_key_contract ||
+         !options.all_epochs || options.skip_epochs != 0)) {
+        std::cerr << "--native-direct-doppler-wls-handoff requires Android "
+                     "raw input, --android-raw-utc-keys, --all-epochs, and no "
+                     "skipped epochs\n";
+        return false;
+    }
+    if (options.native_direct_doppler_wls_handoff &&
+        options.native_pdc_state_bridge) {
+        std::cerr << "--native-direct-doppler-wls-handoff is incompatible "
+                     "with --native-pdc-state-bridge; position/clock seeds "
+                     "must remain the original raw SPP seeds\n";
+        return false;
+    }
+    if (options.native_direct_doppler_wls_handoff &&
+        options.native_gnss_first_velocity_only_handoff) {
+        std::cerr << "--native-direct-doppler-wls-handoff and "
+                     "--native-gnss-first-velocity-only-handoff are mutually "
+                     "exclusive\n";
+        return false;
+    }
     return true;
 }
 
@@ -579,6 +607,21 @@ struct ImuBuildReport {
     std::size_t original_raw_seed_position_invalid_count = 0;
     std::size_t gnss_first_positions_clocks_copied = 0;
     bool gnss_first_velocity_only_handoff = false;
+    bool direct_doppler_wls_handoff = false;
+    std::size_t direct_doppler_wls_epochs = 0;
+    std::size_t direct_doppler_wls_direct_valid_count = 0;
+    std::size_t direct_doppler_wls_propagated_valid_count = 0;
+    std::size_t direct_doppler_wls_rejected_count = 0;
+    std::size_t direct_doppler_wls_nonfinite_count = 0;
+    std::size_t direct_doppler_wls_over_bound_count = 0;
+    std::size_t direct_doppler_wls_clock_rate_over_bound_count = 0;
+    std::size_t direct_doppler_wls_edge_hold_count = 0;
+    double direct_doppler_wls_edge_hold_max_s = 1.0;
+    double direct_doppler_wls_max_velocity_norm_mps = 0.0;
+    double direct_doppler_wls_max_clock_rate_abs_mps = 0.0;
+    std::size_t direct_doppler_wls_original_raw_seed_position_count = 0;
+    std::size_t direct_doppler_wls_original_raw_seed_position_invalid_count = 0;
+    std::size_t direct_doppler_wls_positions_clocks_copied = 0;
     int gnss_first_iterations = 0;
     double gnss_first_initial_cost = 0.0;
     double gnss_first_final_cost = 0.0;
@@ -706,6 +749,144 @@ bool validateGnssFirstVelocityOnlyHandoff(
     // This helper is deliberately the only candidate handoff boundary.  The
     // caller does not copy GNSS-first position or clock values in this mode.
     report.gnss_first_positions_clocks_copied = 0U;
+    return true;
+}
+
+bool validateDirectDopplerWlsHandoff(
+    const libgnss::FGOProcessor::FGOProblem& problem,
+    std::vector<libgnss::Vector3d>& velocities_enu,
+    ImuBuildReport& report,
+    std::string& error) {
+    report.direct_doppler_wls_handoff = true;
+    report.direct_doppler_wls_epochs = problem.epochs.size();
+    report.direct_doppler_wls_edge_hold_max_s = 1.0;
+    report.direct_doppler_wls_original_raw_seed_position_count =
+        problem.epochs.size();
+    for (const auto& epoch : problem.epochs) {
+        if (!earthValidEcef(epoch.position_ecef)) {
+            ++report.direct_doppler_wls_original_raw_seed_position_invalid_count;
+        }
+    }
+    if (report.direct_doppler_wls_original_raw_seed_position_invalid_count != 0U) {
+        error = "original raw SPP seed positions are not all Earth-valid";
+        return false;
+    }
+    if (problem.doppler_velocity_wls_estimates.size() != problem.epochs.size()) {
+        error = "direct Doppler WLS estimate count does not match observation epochs";
+        return false;
+    }
+
+    velocities_enu.clear();
+    velocities_enu.resize(problem.epochs.size());
+    for (std::size_t index = 0; index < problem.epochs.size(); ++index) {
+        const auto& estimate = problem.doppler_velocity_wls_estimates[index];
+        if (!estimate.valid) {
+            ++report.direct_doppler_wls_rejected_count;
+            const bool finite_velocity = estimate.velocity_ecef_mps.allFinite() &&
+                                         std::isfinite(estimate.velocity_ecef_mps.norm());
+            const bool finite_clock = std::isfinite(estimate.clock_rate_mps);
+            if (!finite_velocity || !finite_clock) {
+                ++report.direct_doppler_wls_nonfinite_count;
+            } else {
+                const double velocity_norm = estimate.velocity_ecef_mps.norm();
+                report.direct_doppler_wls_max_velocity_norm_mps = std::max(
+                    report.direct_doppler_wls_max_velocity_norm_mps, velocity_norm);
+                report.direct_doppler_wls_max_clock_rate_abs_mps = std::max(
+                    report.direct_doppler_wls_max_clock_rate_abs_mps,
+                    std::abs(estimate.clock_rate_mps));
+                if (velocity_norm > 70.0) {
+                    ++report.direct_doppler_wls_over_bound_count;
+                }
+                if (std::abs(estimate.clock_rate_mps) > 2000.0) {
+                    ++report.direct_doppler_wls_clock_rate_over_bound_count;
+                }
+            }
+            continue;
+        }
+        const bool finite_velocity = estimate.velocity_ecef_mps.allFinite() &&
+                                     std::isfinite(estimate.velocity_ecef_mps.norm());
+        const bool finite_clock = std::isfinite(estimate.clock_rate_mps);
+        const double velocity_norm = finite_velocity
+                                         ? estimate.velocity_ecef_mps.norm()
+                                         : std::numeric_limits<double>::quiet_NaN();
+        const bool velocity_in_bound = finite_velocity && velocity_norm <= 70.0;
+        const bool clock_in_bound = finite_clock &&
+                                    std::abs(estimate.clock_rate_mps) <= 2000.0;
+        if (!finite_velocity || !finite_clock || !velocity_in_bound ||
+            !clock_in_bound) {
+            ++report.direct_doppler_wls_rejected_count;
+            if (!finite_velocity || !finite_clock) {
+                ++report.direct_doppler_wls_nonfinite_count;
+            }
+            if (!velocity_in_bound && finite_velocity) {
+                ++report.direct_doppler_wls_over_bound_count;
+            }
+            if (!clock_in_bound && finite_clock) {
+                ++report.direct_doppler_wls_clock_rate_over_bound_count;
+            }
+            continue;
+        }
+        report.direct_doppler_wls_max_velocity_norm_mps = std::max(
+            report.direct_doppler_wls_max_velocity_norm_mps, velocity_norm);
+        report.direct_doppler_wls_max_clock_rate_abs_mps = std::max(
+            report.direct_doppler_wls_max_clock_rate_abs_mps,
+            std::abs(estimate.clock_rate_mps));
+        if (estimate.propagated) {
+            ++report.direct_doppler_wls_propagated_valid_count;
+            if (estimate.reason == "bounded-edge-hold") {
+                ++report.direct_doppler_wls_edge_hold_count;
+            }
+        } else {
+            ++report.direct_doppler_wls_direct_valid_count;
+        }
+    }
+
+    const libgnss::Vector3d raw_origin = problem.epochs.front().position_ecef;
+    double raw_lat = 0.0;
+    double raw_lon = 0.0;
+    double raw_height = 0.0;
+    libgnss::ecef2geodetic(raw_origin, raw_lat, raw_lon, raw_height);
+    if (!earthValidEcef(raw_origin) || !std::isfinite(raw_lat) ||
+        !std::isfinite(raw_lon) || !std::isfinite(raw_height)) {
+        error = "original raw SPP seed has invalid ENU origin";
+        return false;
+    }
+    for (std::size_t index = 0; index < problem.epochs.size(); ++index) {
+        const auto& estimate = problem.doppler_velocity_wls_estimates[index];
+        if (!estimate.valid || !estimate.velocity_ecef_mps.allFinite() ||
+            !std::isfinite(estimate.velocity_ecef_mps.norm()) ||
+            estimate.velocity_ecef_mps.norm() > 70.0 ||
+            !std::isfinite(estimate.clock_rate_mps) ||
+            std::abs(estimate.clock_rate_mps) > 2000.0) {
+            continue;
+        }
+        velocities_enu[index] = libgnss::ecef2enu(
+            estimate.velocity_ecef_mps, raw_lat, raw_lon);
+        if (!velocities_enu[index].allFinite() ||
+            !std::isfinite(velocities_enu[index].norm()) ||
+            velocities_enu[index].norm() > 70.0) {
+            ++report.direct_doppler_wls_rejected_count;
+            ++report.direct_doppler_wls_nonfinite_count;
+        }
+    }
+
+    const std::size_t covered = report.direct_doppler_wls_direct_valid_count +
+                                report.direct_doppler_wls_propagated_valid_count;
+    if (report.direct_doppler_wls_rejected_count != 0U ||
+        covered != problem.epochs.size()) {
+        std::ostringstream detail;
+        detail << "direct Doppler WLS coverage gate failed: count=" << covered
+               << "/" << problem.epochs.size()
+               << " direct=" << report.direct_doppler_wls_direct_valid_count
+               << " propagated=" << report.direct_doppler_wls_propagated_valid_count
+               << " rejected=" << report.direct_doppler_wls_rejected_count
+               << " nonfinite=" << report.direct_doppler_wls_nonfinite_count
+               << " over_70_mps=" << report.direct_doppler_wls_over_bound_count
+               << " max_mps=" << report.direct_doppler_wls_max_velocity_norm_mps;
+        error = detail.str();
+        return false;
+    }
+    report.direct_doppler_wls_positions_clocks_copied = 0U;
     return true;
 }
 
@@ -1666,6 +1847,9 @@ std::string makeSummary(const Options& options,
         << "  \"native_quality_anchor\": "
         << (options.native_quality_anchor ? "true" : "false") << ",\n"
         ;
+    if (options.native_direct_doppler_wls_handoff) {
+        out << "  \"native_direct_doppler_wls_handoff\": true,\n";
+    }
     if (options.native_carrier_code_primary_l1_e1) {
         out << "  \"native_carrier_code_primary_l1_e1\": true,\n";
     }
@@ -2289,6 +2473,49 @@ std::string makeSummary(const Options& options,
             << imu_report.original_raw_seed_position_invalid_count << ",\n"
             << "    \"positions_clocks_copied\": "
             << imu_report.gnss_first_positions_clocks_copied << "\n";
+    } else if (options.native_direct_doppler_wls_handoff) {
+        const std::size_t direct_valid =
+            imu_report.direct_doppler_wls_direct_valid_count;
+        const std::size_t propagated_valid =
+            imu_report.direct_doppler_wls_propagated_valid_count;
+        const std::size_t valid = direct_valid + propagated_valid;
+        out << ",\n"
+            << "    \"handoff_mode\": \"direct-doppler-wls\",\n"
+            << "    \"velocity_handoff_source\": \"raw-doppler-wls-estimates\",\n"
+            << "    \"velocity_initializer\": \"raw-doppler-wls\",\n"
+            << "    \"direct_valid_count\": " << direct_valid << ",\n"
+            << "    \"propagated_valid_count\": " << propagated_valid << ",\n"
+            << "    \"rejected_count\": "
+            << imu_report.direct_doppler_wls_rejected_count << ",\n"
+            << "    \"valid_count\": " << valid << ",\n"
+            << "    \"nonfinite_count\": "
+            << imu_report.direct_doppler_wls_nonfinite_count << ",\n"
+            << "    \"over_70_mps_count\": "
+            << imu_report.direct_doppler_wls_over_bound_count << ",\n"
+            << "    \"clock_rate_over_2000_mps_count\": "
+            << imu_report.direct_doppler_wls_clock_rate_over_bound_count << ",\n"
+            << "    \"max_velocity_norm_mps\": "
+            << imu_report.direct_doppler_wls_max_velocity_norm_mps << ",\n"
+            << "    \"max_clock_rate_abs_mps\": "
+            << imu_report.direct_doppler_wls_max_clock_rate_abs_mps << ",\n"
+            << "    \"edge_hold_count\": "
+            << imu_report.direct_doppler_wls_edge_hold_count << ",\n"
+            << "    \"edge_hold_max_s\": "
+            << imu_report.direct_doppler_wls_edge_hold_max_s << ",\n"
+            << "    \"coverage_epochs\": "
+            << imu_report.direct_doppler_wls_epochs << ",\n"
+            << "    \"coverage_all_epochs\": "
+            << ((valid == imu_report.direct_doppler_wls_epochs &&
+                 imu_report.direct_doppler_wls_rejected_count == 0U)
+                    ? "true"
+                    : "false") << ",\n"
+            << "    \"original_raw_seed_position_count\": "
+            << imu_report.direct_doppler_wls_original_raw_seed_position_count
+            << ",\n"
+            << "    \"original_raw_seed_position_invalid_count\": "
+            << imu_report.direct_doppler_wls_original_raw_seed_position_invalid_count
+            << ",\n"
+            << "    \"positions_clocks_copied\": 0\n";
     }
     out << "\n  },\n"
         << "  \"imu_initialization\": {\n"
@@ -2607,6 +2834,15 @@ int main(int argc, char** argv) {
         config.spp_model_intersystem_bias = false;
         config.use_native_pdc_state_bridge = true;
     }
+    if (options.native_direct_doppler_wls_handoff) {
+        // Phase40 consumes the existing raw-observable WLS sequence directly
+        // as the IMU velocity/heading seed.  Keep the bounded temporal
+        // completion enabled at its frozen 1.0 s edge limit; the candidate
+        // validates whether every completed estimate is physically usable
+        // before constructing the IMU graph.
+        config.use_doppler_velocity_wls_initialization = true;
+        config.doppler_velocity_wls_edge_hold_max_s = 1.0;
+    }
     if (options.native_pdc_imu_tdcp) {
         // Freeze the ordinary TDCP contract explicitly instead of inheriting
         // mutable library defaults: 30 ms ADR-difference noise, a 2 s
@@ -2753,8 +2989,27 @@ int main(int argc, char** argv) {
         imu_report.android_gnss_diagnostics = android_gnss.diagnostics;
     }
     std::vector<libgnss::Vector3d> gnss_first_velocities_enu;
+    std::vector<libgnss::Vector3d> direct_doppler_wls_velocities_enu;
     bool gnss_first_ok = !android_raw;
-    if (android_raw) {
+    bool direct_doppler_wls_ok = !android_raw;
+    if (android_raw && options.native_direct_doppler_wls_handoff) {
+        // Phase40 deliberately bypasses the GNSS-first optimizer.  The
+        // problem builder has already solved the raw-Doppler WLS estimates
+        // from the same satellite state and raw SPP seed used by the graph.
+        std::string direct_wls_error;
+        direct_doppler_wls_ok = validateDirectDopplerWlsHandoff(
+            problem, direct_doppler_wls_velocities_enu, imu_report,
+            direct_wls_error);
+        imu_report.gnss_first_positions_clocks_copied = 0U;
+        if (!direct_doppler_wls_ok) {
+            imu_report.failure = direct_wls_error.empty()
+                                     ? "direct Doppler WLS handoff failed"
+                                     : direct_wls_error;
+            std::cerr << "direct Doppler WLS handoff failed closed: "
+                      << imu_report.failure << "\n";
+            return 1;
+        }
+    } else if (android_raw) {
         // Upstream run_fgo.m performs a GNSS-only pass before the IMU pass.
         // Keep that handoff in memory: no device-WLS, result file, or truth
         // position can enter the Android initialization path.
@@ -2889,21 +3144,34 @@ int main(int argc, char** argv) {
             }
         }
     }
+    const std::vector<libgnss::Vector3d>* velocity_handoff = nullptr;
+    if (android_raw) {
+        if (options.native_direct_doppler_wls_handoff) {
+            velocity_handoff = direct_doppler_wls_ok
+                                   ? &direct_doppler_wls_velocities_enu
+                                   : nullptr;
+        } else if (gnss_first_ok) {
+            velocity_handoff = &gnss_first_velocities_enu;
+        }
+    }
     bool use_imu = buildImuInput(imu_path, problem, imu_report, android_raw,
-                                 gnss_time_anchors,
-                                 android_raw && gnss_first_ok
-                                     ? &gnss_first_velocities_enu
-                                     : nullptr,
+                                 gnss_time_anchors, velocity_handoff,
                                  options.android_utc_wall_clock_fallback
                                      ? &android_utc_gps_mapping
                                      : nullptr);
     bool fallback = false;
     libgnss::FGOProcessor::FGOResult result;
+    if (!use_imu && options.native_direct_doppler_wls_handoff) {
+        std::cerr << "direct Doppler WLS candidate IMU initialization failed "
+                     "closed; fallback is forbidden\n";
+        return 1;
+    }
     if (use_imu) {
         result = processor.optimizeProblem(problem);
         if (result.solution.isEmpty() || !result.diagnostics.converged ||
             result.diagnostics.imu_intervals == 0) {
-            if (options.native_upstream_stop_constraints) {
+            if (options.native_upstream_stop_constraints ||
+                options.native_direct_doppler_wls_handoff) {
                 std::cerr << "upstream stop-constraint candidate failed closed; "
                              "fallback is forbidden for candidate evaluation\n";
                 return 1;
