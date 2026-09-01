@@ -35,3 +35,15 @@ champion; Phase 62 does not score accuracy or claim 0.782 reachability.
 
 The machine-readable freeze is
 [`smartphone_r5_phase62_raw_base_pseudorange_compensation_freeze_v1.json`](records/smartphone_r5_phase62_raw_base_pseudorange_compensation_freeze_v1.json).
+
+## Preflight result
+
+The sealed preflight opened the archive once and read `settings_train.csv`
+once, but failed closed because the observed settings SHA-256 was
+`3e6ae65388b2809088b16732b87744e673f860c24a1fe0f709ef903a87397f39`, not the
+predeclared `cb868652632a90919d9b21decaa9b77627d75d16d75287a5430a92b6cf29e080`.
+No base observation member was opened or materialized, so base availability,
+station identity, header coordinate, and time overlap are deliberately
+unknown rather than inferred. The archive was not reopened. No native
+correction or accuracy evaluation is authorized. See the
+[`preflight result`](records/smartphone_r5_phase62_raw_base_preflight_result_v1.json).
