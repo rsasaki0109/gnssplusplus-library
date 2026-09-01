@@ -1065,6 +1065,27 @@ evaluated without truth.  See the [Phase61 contract](docs/use_cases/smartphone_n
 [evaluator manifest](docs/use_cases/records/smartphone_r5_phase61_pixel5_cn0_pseudorange_calibration_evaluator_manifest_v1.json),
 and [result](docs/use_cases/records/smartphone_r5_phase61_pixel5_cn0_pseudorange_calibration_result_v1.json).
 
+Phase64 recovered the base-RINEX preflight policy from the sealed Phase63
+record without reopening the archive or any base file.  Under the official
+`taroz/gsdc2023` source contract, `settings_train.csv` `Base1` selects the
+declared `*_rnx2.obs` member and `correct_pseudorange.m` uses observed
+`obsb.dt` (151 samples at 1 Hz, 11 at 15 s), not header `INTERVAL`;
+`MARKER NAME` is informational.  The v4 scorer adapted the sealed record's
+top-level `routes[route]` schema and passed all four route gates: fixed
+settings/archive/materialized hashes, finite station `APPROX POSITION XYZ`,
+and observed intervals **1 / 1 / 15 / 1 s** (MTV-a / MTV-h / LAX-t / MTV-u).
+The blank station IDs, missing header intervals, and `3.03` payload version
+versus legacy `V2` remain informational and were not used to infer identity or
+timing.  Phase64 read the sealed Phase63 result once in v4 (cumulative result
+JSON reads including disclosed v1/v2/v3 failed attempts: **4**); archive,
+base reread, raw handset, truth, MAT, navigation, solver, and accuracy reads
+were **0**.  This authorizes only a separately frozen native implementation
+stage; no correction, accuracy, validation, Kaggle, or `0.782` claim was made.
+See the [Phase64 policy recovery](docs/use_cases/smartphone_native_fgo_phase64_base_preflight_policy_recovery.md),
+[freeze](docs/use_cases/records/smartphone_r5_phase64_base_preflight_policy_recovery_freeze_v1.json),
+[v4 manifest](docs/use_cases/records/smartphone_r5_phase64_base_preflight_policy_recovery_manifest_v4.json),
+and [sealed result](docs/use_cases/records/smartphone_r5_phase64_base_preflight_policy_recovery_result_v4.json).
+
 ## Docs
 
 - <https://rsasaki0109.github.io/gnssplusplus-library/>

@@ -1,0 +1,64 @@
+{
+  "schema_version": "smartphone-r5-phase64-base-preflight-policy-recovery-result-v4.v1",
+  "status": "pass-policy-recovery-v4",
+  "created_at_utc": "2026-09-02T00:00:00Z",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_phase64_base_preflight_policy_recovery_freeze_v1.json",
+  "freeze_record_sha256": "94487186338d85d289c64d04805254f95568020664e37d4402f1f9b238aee993",
+  "manifest": "docs/use_cases/records/smartphone_r5_phase64_base_preflight_policy_recovery_manifest_v4.json",
+  "manifest_sha256": "744aa253056a012ad96ff92a01a41bd68e901084371038098b199d0f3daa36ab",
+  "evaluator_source": "apps/commands/benchmarks/gnss_smartphone_phase64_base_preflight_policy_recovery_v4.py",
+  "evaluator_source_sha256": "2e6e40e318bc0da46028451d027be68de1562bdc3be4d29b13156508713ee183",
+  "phase63_result": "docs/use_cases/records/smartphone_r5_phase63_settings_integrity_recovery_result_v1.json",
+  "phase63_result_sha256": "d6dc56c00c89ddd4e38624bbfe36567a76632aecae3f3f87f529ab0c8f93799b",
+  "output": "output/smartphone-r5/phase64-base-preflight-policy-recovery-v4/phase64_base_preflight_policy_recovery_v4.json",
+  "output_sha256": "7032ac36905eade97b611078b0c7ea8a1be15305843648782c22cfeb9497a549",
+  "policy": {
+    "source_repository": "https://github.com/taroz/gsdc2023",
+    "source_commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "Base1_filename_selection": "settings Base1 selects ${Base1}_rnx2.obs",
+    "dt_selection": "correct_pseudorange uses obsb.dt == 1.0 or 15.0, not header INTERVAL",
+    "marker_name": "informational only; correct_pseudorange does not read MARKER NAME",
+    "station_provenance": "Base1 + unique member basename + finite APPROX POSITION XYZ",
+    "settings_sha256_expected": "3e6ae65388b2809088b16732b87744e673f860c24a1fe0f709ef903a87397f39",
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408"
+  },
+  "gates": {
+    "four_routes": true,
+    "all_route_gates": true,
+    "settings_hash": true,
+    "archive_hash_pinned": true,
+    "result_materialized_hashes_only": true,
+    "no_archive_or_base_reread": true
+  },
+  "route_gate_summary": [
+    {"route": "2021-03-16-18-59-us-ca-mtv-a/pixel5", "passed": true, "observed_dt_s": 1.0, "rinex_version_informational": "3.03", "header_station_id_informational": null, "header_interval_informational": null},
+    {"route": "2021-08-24-20-32-us-ca-mtv-h/pixel5", "passed": true, "observed_dt_s": 1.0, "rinex_version_informational": "3.03", "header_station_id_informational": null, "header_interval_informational": null},
+    {"route": "2022-04-01-18-22-us-ca-lax-t/pixel5", "passed": true, "observed_dt_s": 15.0, "rinex_version_informational": "3.03", "header_station_id_informational": null, "header_interval_informational": null},
+    {"route": "2023-03-08-21-34-us-ca-mtv-u/pixel5", "passed": true, "observed_dt_s": 1.0, "rinex_version_informational": "3.03", "header_station_id_informational": null, "header_interval_informational": null}
+  ],
+  "read_accounting": {
+    "phase64_result_json_read_count": 1,
+    "phase64_total_result_json_reads_including_v1_v2_v3_attempts": 4,
+    "phase64_v1_failed_attempt_result_read_count": 1,
+    "phase64_v2_failed_attempt_result_read_count": 1,
+    "phase64_v3_failed_attempt_result_read_count": 1,
+    "phase64_archive_open_count": 0,
+    "phase64_base_file_reread_count": 0,
+    "phase64_raw_device_read_count": 0,
+    "phase64_truth_read_count": 0,
+    "phase64_mat_read_count": 0,
+    "phase64_nav_read_count": 0,
+    "phase64_solver_invocation_count": 0
+  },
+  "prior_failed_attempts": {
+    "v1": "KeyError: freeze['prior_phase62'] (correct key is prior_phase62_phase63)",
+    "v2": "Phase63 route summaries are flat; nested base helper reported missing summaries",
+    "v3": "all route gates passed, but evaluator looked up absent prior_phase62_phase63.observed_settings_sha256; fail-closed integrity error; output SHA f3d2c6e6421302714e6e5f703a4ebf4804b793b5747063c0cb846bb2084bde06"
+  },
+  "decision": {
+    "native_correction_authorized": true,
+    "accuracy_evaluated": false,
+    "zero_point_782_claim": false,
+    "meaning": "The sealed base-RINEX provenance/time preflight passes under the source-defined observed-dt policy. This authorizes only a separately frozen native implementation stage; it is not an accuracy or deployment claim."
+  }
+}
