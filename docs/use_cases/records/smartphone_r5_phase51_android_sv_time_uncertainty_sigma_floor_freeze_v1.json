@@ -1,0 +1,199 @@
+{
+  "schema_version": "smartphone-r5-phase51-android-sv-time-uncertainty-sigma-floor-freeze.v1",
+  "phase": 51,
+  "status": "frozen-before-code-and-truth",
+  "execution_label": "Luna Max",
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "base_commit": "7c4bbfa",
+    "phase44_commit": "a323eb6",
+    "phase44_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase44_pixel5_development_accuracy_freeze_v1.json",
+      "sha256": "95c0990af0015b7cb5fcf736aefbcff6fc97356093edcf03094b31b4083b28bc"
+    },
+    "phase44_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase44_pixel5_development_accuracy_result_v1.json",
+      "sha256": "9e441c78f7c2bf8b3cf2cf9a7c9fe7e447fb2ff8eb6324fa5ef138c3b419e48a",
+      "artifact_result_sha256": "a191e5910315337ebd0d752f61eaddcdaa77f61fe5c691f5858981bea39cfa32"
+    },
+    "phase44_evaluator_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase44_pixel5_development_accuracy_evaluator_manifest_v1.json",
+      "sha256": "9b63607a9c8a7581cbe94868aabb21f235698e6f54cd8a879268245e327a6f1e"
+    },
+    "phase43_structural_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase43_native_fallback_seed_quality_anchor_recovery_result_v1.json",
+      "sha256": "441c65ed8630ca2c48c329f440e8b54a772c0c062329cc5d89b297180bce2a22"
+    },
+    "phase43_evaluator_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase43_native_fallback_seed_quality_anchor_recovery_evaluator_manifest_v1.json",
+      "sha256": "1433249a9ddd1809a00535b33fc67e3267a8cab29e28f773dd148f0962c44d1a"
+    },
+    "phase48_raw_evidence_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase48_pixel5_raw_code_rate_uncertainty_result_v1.json",
+      "sha256": "9c28ef2bae97e444a5f75d1e7eaa3ece420f30c45515652ae8a597cde55ae50c",
+      "metric_input": false,
+      "policy_input_only": true
+    },
+    "phase48_evaluator_manifest_sha256": "93f68d54fba0288e2ff358e496bc2e2d300343548a74e5ab0e468d0ab12df053"
+  },
+  "objective": {
+    "candidate_id": "native_android_sv_time_uncertainty_sigma_floor_v1",
+    "factor": "raw Android per-satellite ReceivedSvTimeUncertaintyNanos",
+    "hypothesis": "Use the source-reported per-satellite code-tracking uncertainty as a continuous measurement-variance floor in the existing raw pseudorange factor.",
+    "distinct_from_phase48": "Phase48 was an audit of threshold/bucket exclusion and was no-go because the field was not adopted by the current adapter/FGO. Phase51 evaluates a continuous sigma floor and does not reuse Phase48 metrics as accuracy input.",
+    "formula": "sigma_m = max(existing_sigma_m, 299792458.0 * ReceivedSvTimeUncertaintyNanos * 1e-9)",
+    "coefficient": 1.0,
+    "clip": false,
+    "tuning": false,
+    "missing_nonfinite_nonpositive": "retain existing_sigma_m",
+    "opt_in_flag": "--native-android-sv-time-uncertainty-sigma-floor",
+    "default_byte_identical": true,
+    "scope": "Every Android raw signal that survives the existing adapter masks and is adopted by a current FGO pseudorange factor.",
+    "spp_scope": "Audit SPP sigma plumbing after this freeze. Add the same model to SPP only if the existing observation/sigma path is demonstrably safe and byte-identical when disabled; otherwise freeze and report FGO-only. No seed-coordinate or solver model change is authorized by this record."
+  },
+  "cohort": {
+    "phone_model": "pixel5",
+    "route_disjoint": true,
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "target_route": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "target_anchor_recovery_required": true,
+    "target_anchor_recovery_contract": "Phase43 raw/nav-only fallback-seed quality-anchor recovery remains enabled and required for MTV-h; no truth-derived seed is permitted."
+  },
+  "raw_inputs": {
+    "source_contract": "Phase43/44 four-route Pixel5 raw Android input contract; paths and hashes are pinned here without opening Phase51 inputs before this freeze.",
+    "routes": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "device_gnss": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv",
+        "device_gnss_sha256": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863",
+        "device_gnss_bytes": 57715495,
+        "device_imu": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_imu.csv",
+        "brdc_nav": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/brdc.nav"
+      },
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+        "device_gnss": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+        "device_gnss_sha256": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7",
+        "device_gnss_bytes": 74299283,
+        "device_imu": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_imu.csv",
+        "brdc_nav": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/brdc.nav"
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "device_gnss": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_gnss.csv",
+        "device_gnss_sha256": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1",
+        "device_gnss_bytes": 33837317,
+        "device_imu": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_imu.csv",
+        "brdc_nav": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/brdc.nav"
+      },
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+        "device_gnss": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2023-03-08-21-34-us-ca-mtv-u/pixel5/inputs/device_gnss.csv",
+        "device_gnss_sha256": "a0fc8e71bdfc03be61b99efcd7d41fbba8ffec126df78b55243f681fd211f204",
+        "device_gnss_bytes": 23385520,
+        "device_imu": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2023-03-08-21-34-us-ca-mtv-u/pixel5/inputs/device_imu.csv",
+        "brdc_nav": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2023-03-08-21-34-us-ca-mtv-u/pixel5/inputs/brdc.nav"
+      }
+    },
+    "raw_read_policy": "Phase51 candidate/control structural runs may each read their declared raw inputs; no archive reopen/rematerialization. Each evaluator process records exact read counts."
+  },
+  "baseline_pins": {
+    "phase44_metric_contract": "Exact integer (phone, UnixTimeMillis) key intersection; no interpolation/edge hold; Haversine sphere radius 6371008.8 m; linear percentile rank (n-1)q; score=(P50+P95)/2.",
+    "phase44_route_baseline_score_m": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": 2.1200062765249656,
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": 3.6069657083098825,
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": 4.511656202015395,
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": 3.9071587965102856
+    },
+    "phase44_pixel5_macro_score_m": 3.536446745840132,
+    "phase43_anchor_recovery_required_for": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "phase43_champion_preserved": true
+  },
+  "commands": {
+    "base_flags": [
+      "--all-epochs",
+      "--android-raw-utc-keys",
+      "--android-raw-clock-only",
+      "--android-utc-wall-clock-fallback",
+      "--native-pdc-imu-tdcp-no-bridge",
+      "--native-quality-anchor",
+      "--native-fallback-seed-quality-anchor-recovery"
+    ],
+    "control": "gnss_fgo_imu_no_base <base_flags> --android-gnss <route/device_gnss.csv> --android-imu <route/device_imu.csv> --nav <route/brdc.nav> --out <control_submission.csv> --summary-json <control_summary.json>",
+    "candidate": "gnss_fgo_imu_no_base <base_flags> --native-android-sv-time-uncertainty-sigma-floor --android-gnss <route/device_gnss.csv> --android-imu <route/device_imu.csv> --nav <route/brdc.nav> --out <candidate_submission.csv> --summary-json <candidate_summary.json>",
+    "truth_free_structural": "candidate repeat=2 and control=1 over all four routes before any Phase51 truth read; no solver rerun after truth.",
+    "truth_score": "Only after structural pass, one evaluator process reads each already-materialized Phase44 development truth route once and scores candidate/control outputs in memory."
+  },
+  "structural_gates": {
+    "candidate_repeat_count": 2,
+    "control_repeat_count": 1,
+    "truth_reads_before_structural_seal": 0,
+    "full_prediction_domain_coverage": true,
+    "all_finite": true,
+    "converged": true,
+    "tdcp_built_equals_inserted": true,
+    "over_70_mps_count": 0,
+    "candidate_repeat_byte_identical": true,
+    "flag_off_default_byte_identical": true,
+    "phase43_mtv_h_anchor_recovery": true,
+    "forbidden_inputs": [
+      "ground_truth before structural pass",
+      "MAT",
+      "WLS/device coordinates",
+      "precomputed coordinates",
+      "validation",
+      "holdout",
+      "Kaggle/token",
+      "archive reopen/rematerialization"
+    ]
+  },
+  "accuracy_gates": {
+    "declared_before_code_and_truth": true,
+    "route_improvement_min_m": 0.05,
+    "every_route_improves": true,
+    "no_route_regression": true,
+    "macro_improvement_min_m": 0.10,
+    "target_mtv_h_improvement_min_m": 0.10,
+    "full_prediction_domain_coverage": true,
+    "over_70_mps_count": 0,
+    "absolute_promotion": {
+      "macro_score_max_m": 2.0,
+      "individual_route_score_max_m": 3.0,
+      "target_p95_max_m": 5.0,
+      "all_finite": true
+    },
+    "fresh_validation": "permitted only if every absolute gate passes",
+    "stretch_target_m": 0.782,
+    "stretch_target_policy": "report honestly; no Kaggle/token path unless the 0.782 class is actually reached",
+    "post_truth_tuning": false,
+    "gate_mutation_after_read": false
+  },
+  "truth_policy": {
+    "phase51_truth_reads_before_freeze": 0,
+    "phase51_truth_reads_before_evaluator_manifest_seal": 0,
+    "structural_pass_required_before_truth": true,
+    "development_truth": "reuse only the already-materialized Phase44 development truth; exact route keys and hash pins are copied into the result after structural seal",
+    "read_once_per_route_single_process": true,
+    "candidate_and_control_scored_in_memory": true,
+    "solver_rerun_after_truth": false,
+    "truth_used_for_inference": false,
+    "truth_used_for_candidate_tuning": false,
+    "validation_opened": false,
+    "holdout_opened": false,
+    "mat_read_or_generated": false,
+    "device_wls_or_precomputed_coordinates": false,
+    "kaggle_or_token_access": false
+  },
+  "source_hashes_at_freeze": {
+    "include/libgnss++/core/observation.hpp": "d95f2bedca553b6474a4bc4e4600c91152d45fcaf350e31fce20fbfa65714419",
+    "include/libgnss++/algorithms/fgo_config.hpp": "c95229caf21cd9f1325791fa8b8ac8e17300fb0c9af05fee0e12bca1e9703072",
+    "include/libgnss++/algorithms/fgo.hpp": "092e228a03800d1dc3e7b1c5c0b6cf4c7b18b8f4485ee99dfe27e3484ba2bdfc",
+    "src/algorithms/fgo_problems.cpp": "5fb1dec8e7f23652eefecc9d8684586a66fecac07e109489792c8590aac76a03",
+    "src/io/android_raw_gnss.cpp": "84b6864475c3d86c34c6740ec28ef7a54846aecf5c6c297d644e6deb1dad4390",
+    "include/libgnss++/io/android_raw_gnss.hpp": "e833570103a521b9e051086b6ea75192ae3a575b83eee33d978143eaf279c52c",
+    "apps/native/gnss_fgo_imu_no_base.cpp": "6963a7dc6da18fe772722a64268875bd5a5a1be868840670c335865182f09e59",
+    "tests/CMakeLists.txt": "5f5a2c083e736cb1548b8467d7467e984ca43105f62a2798ede459233fcadfdf"
+  },
+  "decision_rule": "If structural gates fail, or the candidate fails any predeclared accuracy gate, stop with no post-truth tuning, preserve the Phase43 champion, and report exactly one next raw physical factor. If all pass, report promotion eligibility and do not implement an additional correction in Phase51."
+}
