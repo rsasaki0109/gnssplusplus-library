@@ -12,7 +12,7 @@
   },
   "focused_tests": {
     "path": "tests/test_smartphone_phase79_phase78_signal_bias_accuracy.py",
-    "sha256": "68909281d20af142056634b8adbf97651b987ed85c48a30fae36a0678e9c4e00",
+    "sha256": "da4bd5910354c927312efcb51aa44cc42820efa3d522aa5d5e83d5383679654e",
     "passed": 6
   },
   "cmake": {
@@ -34,6 +34,7 @@
   "read_policy": {
     "truth_reads_before_freeze": 0,
     "truth_reads_before_manifest": 0,
+    "truth_reads": 4,
     "truth_reads_after_manifest": 4,
     "truth_reads_per_route": 1,
     "phase78_candidate_artifact_reads": 8,

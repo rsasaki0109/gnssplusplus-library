@@ -49,6 +49,7 @@ class Phase79SignalBiasAccuracyTests(unittest.TestCase):
         self.assertEqual(manifest["evaluator"]["sha256"], hashlib.sha256(RUNNER_PATH.read_bytes()).hexdigest())
         self.assertEqual(manifest["focused_tests"]["sha256"], hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
         self.assertEqual(manifest["read_policy"]["truth_reads_before_manifest"], 0)
+        self.assertEqual(manifest["read_policy"]["truth_reads"], 4)
         self.assertEqual(manifest["read_policy"]["truth_reads_after_manifest"], 4)
 
     def test_corrected_dictreader_accepts_optional_columns_and_phone(self) -> None:
