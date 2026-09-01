@@ -689,6 +689,23 @@ bool loadAndroidRawGnssCsv(const std::string& path,
                     ": " + error;
             return false;
         }
+        AndroidRawGnssRowDiagnostic raw_diagnostic;
+        raw_diagnostic.raw_row_index = result.raw_row_diagnostics.size();
+        raw_diagnostic.input_row_index = result.diagnostics.input_rows;
+        raw_diagnostic.utc_time_millis = raw.utc_millis;
+        raw_diagnostic.svid = raw.svid;
+        raw_diagnostic.constellation = raw.constellation;
+        raw_diagnostic.signal_token = raw.signal;
+        raw_diagnostic.carrier_frequency_hz = raw.carrier_frequency_hz;
+        raw_diagnostic.pseudorange_rate_mps = raw.pseudorange_rate_mps;
+        raw_diagnostic.cn0_dbhz = raw.cn0_dbhz;
+        raw_diagnostic.state = raw.state;
+        raw_diagnostic.has_state = raw.has_state;
+        raw_diagnostic.multipath_indicator = raw.multipath_indicator;
+        raw_diagnostic.has_multipath_indicator = raw.has_multipath_indicator;
+        const auto publishRawDiagnostic = [&]() {
+            result.raw_row_diagnostics.push_back(raw_diagnostic);
+        };
         if (!config.verify_enriched_pseudorange &&
             columns.has("rawpseudorangemeters")) {
             ++result.diagnostics.enriched_pseudorange_ignored_rows;
@@ -699,6 +716,9 @@ bool loadAndroidRawGnssCsv(const std::string& path,
         // retaining them would create a false week-boundary pseudorange.
         if (raw.time_nanos == 0 || raw.received_sv_time_nanos < 10'000'000'000LL) {
             ++result.diagnostics.skipped_invalid_timing_rows;
+            raw_diagnostic.parsed_timing = false;
+            raw_diagnostic.loader_reason = "invalid_raw_timing";
+            publishRawDiagnostic();
             continue;
         }
         // This is the same quality gate as gnsslog2obs.m: rows with an
@@ -708,6 +728,9 @@ bool loadAndroidRawGnssCsv(const std::string& path,
         if (std::isfinite(raw.bias_uncertainty_nanos) &&
             raw.bias_uncertainty_nanos > 1.0e4) {
             ++result.diagnostics.skipped_invalid_quality_rows;
+            raw_diagnostic.parsed_quality = false;
+            raw_diagnostic.loader_reason = "invalid_raw_quality";
+            publishRawDiagnostic();
             continue;
         }
         if (raw.utc_millis < 0 ||
@@ -767,8 +790,14 @@ bool loadAndroidRawGnssCsv(const std::string& path,
                          config.include_galileo_e1, config.include_l5, signal,
                          system, glonass_frequency_channel)) {
             ++result.diagnostics.skipped_unsupported_signal_rows;
+            raw_diagnostic.loader_reason = "unsupported_constellation_signal_frequency";
+            publishRawDiagnostic();
             continue;
         }
+        raw_diagnostic.system = system;
+        raw_diagnostic.signal = signal;
+        raw_diagnostic.has_parsed_signal = true;
+        raw_diagnostic.supported_signal = true;
         // gnsslog2obs.m drops QZSS/SBAS/IRNSS and unknown GLONASS SVIDs.
         // parseSignal already rejects the former; retain the GLONASS bound
         // here instead of accidentally accepting a synthetic PRN.
@@ -779,6 +808,9 @@ bool loadAndroidRawGnssCsv(const std::string& path,
         if (raw.svid < 1 || raw.svid > prn_max) {
             if (system == GNSSSystem::GLONASS) {
                 ++result.diagnostics.skipped_unsupported_signal_rows;
+                raw_diagnostic.supported_signal = false;
+                raw_diagnostic.loader_reason = "unsupported_constellation_signal_frequency";
+                publishRawDiagnostic();
                 continue;
             }
             error = "supported raw Android row has an invalid SVID";
@@ -792,8 +824,12 @@ bool loadAndroidRawGnssCsv(const std::string& path,
             // drop only this row so a bad satellite cannot discard an entire
             // route.  No carrier/coordinate is synthesized for it.
             ++result.diagnostics.skipped_invalid_quality_rows;
+            raw_diagnostic.raw_pseudorange_valid = false;
+            raw_diagnostic.loader_reason = "raw_pseudorange_invalid";
+            publishRawDiagnostic();
             continue;
         }
+        raw_diagnostic.raw_pseudorange_valid = true;
         if (std::isfinite(raw.raw_pseudorange_m)) {
             ++result.diagnostics.enriched_pseudorange_checks;
             if (!closeEnough(pseudorange_m, raw.raw_pseudorange_m,
@@ -832,6 +868,10 @@ bool loadAndroidRawGnssCsv(const std::string& path,
             (raw.adr_state & (1 << 0)) == 0 ||
             (system == GNSSSystem::GLONASS &&
              publishedGlonassCarrierExcluded(config.device_model));
+        raw_diagnostic.snr_masked = low_snr;
+        raw_diagnostic.multipath_masked = multipath;
+        raw_diagnostic.code_masked = code_masked;
+        raw_diagnostic.doppler_masked = doppler_masked;
         if (code_masked) ++result.diagnostics.masked_code_rows;
         if (doppler_masked) ++result.diagnostics.masked_doppler_rows;
         if (carrier_masked) ++result.diagnostics.masked_carrier_rows;
@@ -881,6 +921,11 @@ bool loadAndroidRawGnssCsv(const std::string& path,
                                   std::isfinite(observation.doppler);
         if (observation.has_doppler) ++result.diagnostics.doppler_rows;
         observation.has_pseudorange = !code_masked;
+        observation.raw_row_index = raw_diagnostic.raw_row_index;
+        observation.raw_snr_masked = low_snr;
+        observation.raw_multipath_masked = multipath;
+        observation.raw_code_masked = code_masked;
+        observation.raw_doppler_masked = doppler_masked;
         if (std::isfinite(raw.adr_m) && raw.adr_m != 0.0 &&
             std::abs(raw.adr_m) < 1.0e9 && !carrier_masked) {
             double carrier_m = raw.adr_m;
@@ -908,6 +953,9 @@ bool loadAndroidRawGnssCsv(const std::string& path,
                 // repeated blocks.  At the per-epoch boundary an identical
                 // key is equivalent; drop the duplicate deterministically.
                 ++result.diagnostics.deduplicated_rows;
+                raw_diagnostic.deduplicated = true;
+                raw_diagnostic.loader_reason = "duplicate_satellite_signal";
+                publishRawDiagnostic();
                 continue;
             }
             error = "duplicate supported satellite/signal row in one raw epoch";
@@ -924,6 +972,9 @@ bool loadAndroidRawGnssCsv(const std::string& path,
             accumulator.receiver_position = receiver_position;
             accumulator.have_receiver_position = true;
         }
+        raw_diagnostic.selected = true;
+        raw_diagnostic.selected_epoch_index = result.diagnostics.selected_epochs;
+        publishRawDiagnostic();
         ++result.diagnostics.selected_rows;
         switch (signal) {
             case SignalType::GPS_L1CA:

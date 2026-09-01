@@ -13,6 +13,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <vector>
 #include <string>
 
@@ -79,9 +80,51 @@ struct AndroidRawGnssDiagnostics {
     std::string adr_sign_policy;
 };
 
+/**
+ * @brief Parsed raw Android row provenance for truth-free attrition audits.
+ *
+ * The loader keeps one entry for every parsed ``MessageType=Raw`` row,
+ * including rows rejected before an Observation is constructed.  This is
+ * deliberately diagnostic metadata: it does not add an estimator input and
+ * does not retain any enriched coordinate field.
+ */
+struct AndroidRawGnssRowDiagnostic {
+    std::size_t raw_row_index = std::numeric_limits<std::size_t>::max();
+    std::size_t input_row_index = std::numeric_limits<std::size_t>::max();
+    std::int64_t utc_time_millis = 0;
+    int svid = 0;
+    int constellation = 0;
+    std::string signal_token;
+    GNSSSystem system = GNSSSystem::UNKNOWN;
+    SignalType signal = SignalType::GPS_L1CA;
+    bool has_parsed_signal = false;
+    double carrier_frequency_hz = std::numeric_limits<double>::quiet_NaN();
+    double pseudorange_rate_mps = std::numeric_limits<double>::quiet_NaN();
+    double cn0_dbhz = std::numeric_limits<double>::quiet_NaN();
+    int state = 0;
+    bool has_state = false;
+    int multipath_indicator = 0;
+    bool has_multipath_indicator = false;
+    bool parsed_timing = true;
+    bool parsed_quality = true;
+    bool supported_signal = false;
+    bool raw_pseudorange_valid = false;
+    bool snr_masked = false;
+    bool multipath_masked = false;
+    bool code_masked = false;
+    bool doppler_masked = false;
+    bool selected = false;
+    bool deduplicated = false;
+    std::size_t selected_epoch_index = std::numeric_limits<std::size_t>::max();
+    std::string loader_reason;
+};
+
 struct AndroidRawGnssResult {
     ObservationSeries observations;
     AndroidRawGnssDiagnostics diagnostics;
+    // One parsed-row entry per raw Android measurement, including rows
+    // rejected before the policy-selected ObservationSeries boundary.
+    std::vector<AndroidRawGnssRowDiagnostic> raw_row_diagnostics;
     // The integer UTC key belongs to the same selected-epoch position as
     // observations.epochs.  Keeping it beside (rather than reconstructing it
     // from) GNSSTime prevents a GPST/UTC floating-point round trip from

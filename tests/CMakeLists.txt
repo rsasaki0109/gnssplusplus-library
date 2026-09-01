@@ -148,6 +148,7 @@ if(GTest_FOUND)
         gnss_solve
         gnss_smartphone_fgo
         gnss_doppler_contract_audit
+        gnss_doppler_row_attrition_audit
         gnss_stream
         gnss_ubx_info
         gnss_vel_d
@@ -451,6 +452,10 @@ if(GTest_FOUND)
     add_test(
         NAME python_smartphone_phase41_doppler_contract_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase41_doppler_contract.py
+    )
+    add_test(
+        NAME python_smartphone_phase42_doppler_row_attrition_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase42_doppler_row_attrition.py
     )
     add_test(
         NAME python_smartphone_phase32_quality_anchor_eval_tests

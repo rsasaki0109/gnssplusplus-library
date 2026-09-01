@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <cstddef>
 #include <map>
 #include <memory>
 #include <string>
@@ -35,6 +36,15 @@ struct Observation {
     bool has_doppler = false;       ///< Doppler data available
     bool has_pseudorange_rate_mps = false; ///< Source raw-rate diagnostic
     bool has_source_carrier_frequency_hz = false; ///< Source frequency diagnostic
+
+    // Raw Android quality provenance retained for truth-free row-attrition
+    // audits.  These fields are metadata only; estimator code continues to
+    // consume the existing valid/has_* fields above.
+    std::size_t raw_row_index = std::numeric_limits<std::size_t>::max();
+    bool raw_snr_masked = false;
+    bool raw_multipath_masked = false;
+    bool raw_code_masked = false;
+    bool raw_doppler_masked = false;
 
     // Quality indicators
     uint8_t lli = 0;                ///< Loss of lock indicator
