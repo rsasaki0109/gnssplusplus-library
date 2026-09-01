@@ -1,0 +1,187 @@
+{
+  "schema_version": "smartphone-r5-phase42-doppler-row-attrition-result.v1",
+  "phase": 42,
+  "status": "sealed-raw-only-diagnostic",
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "freeze_record": "docs/use_cases/records/smartphone_r5_phase42_doppler_row_attrition_freeze_v1.json",
+    "freeze_commit": "ba7a501",
+    "freeze_sha256": "f80865dc9db3d87c310e064df1afe687833225a1b0d1b6027dac6435492f8123",
+    "evaluator_manifest": "docs/use_cases/records/smartphone_r5_phase42_doppler_row_attrition_audit_evaluator_manifest_v2.json",
+    "evaluator_manifest_commit": "ab91295",
+    "source_commit": "0f6225715b5dab69c023cc83db5d07326c2953ba",
+    "audit_binary": "build/apps/gnss_doppler_row_attrition_audit",
+    "audit_binary_sha256": "fdcf2ed9a18a5aa399f0ec2b4f1262990649cf316585b2dfa22190bc67dc45b4"
+  },
+  "input_contract": {
+    "raw_only": true,
+    "route_order_fixed": true,
+    "opened_per_route": [
+      "device_gnss.csv exactly once",
+      "brdc.nav exactly once"
+    ],
+    "not_opened": [
+      "device_imu.csv",
+      "ground_truth.csv",
+      "validation truth",
+      "holdout truth",
+      "MAT files",
+      "precomputed coordinates",
+      "device WLS coordinates",
+      "result/submission coordinates",
+      "Kaggle or tokens"
+    ],
+    "input_bytes": "GNSS/nav paths and SHA256 values are frozen in the Phase42 freeze record and were not changed."
+  },
+  "method": {
+    "first_reason_is_exclusive": true,
+    "row_identity": [
+      "dataset_id",
+      "raw_row_index",
+      "input_row_index",
+      "utc_time_millis",
+      "gps_week",
+      "gps_tow",
+      "raw_epoch_index",
+      "problem_epoch_index",
+      "satellite",
+      "signal"
+    ],
+    "stage_order": [
+      "raw_row",
+      "valid_and_doppler_mask",
+      "raw_snr_and_multipath_mask",
+      "supported_constellation_signal_frequency",
+      "raw_pseudorange_validity",
+      "transmit_time",
+      "nav_state_call1",
+      "nav_state_call2",
+      "ephemeris_present_health",
+      "geometry",
+      "snr_elevation_masks",
+      "clock_jump_dt",
+      "includes_receiver_clock_drift",
+      "final_corrected_undifferenced_doppler_factor"
+    ],
+    "factor_definition": "The unchanged Phase41 corrected undifferenced FGO Doppler factor with includes_receiver_clock_drift=true.",
+    "zero_doppler_rule": "A finite zero Doppler is present; only the loader's doppler mask or non-finite value rejects it.",
+    "dt_rule": "The unchanged corrected-factor gate requires dt_s > 0; Phase41 max_tdcp_gap_s remains its default.",
+    "utc_gps_check": "For every emitted row, recompute UTC milliseconds as round((315964800 + gps_week*604800 + gps_tow - 18)*1000); all route rows matched within 1 ms."
+  },
+  "route_results": [
+    {
+      "route": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "inputs": {
+        "gnss": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+        "nav": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/brdc.nav"
+      },
+      "artifacts": {
+        "summary_json": "output/smartphone-r5/phase42-doppler-row-attrition-v1/2021-08-24-20-32-us-ca-mtv-h_pixel5/audit.json",
+        "summary_sha256": "252995aee7fc2ec2843d52649fba350b8e06eca69479d5d8134a8a11c30109bb",
+        "rows_csv": "output/smartphone-r5/phase42-doppler-row-attrition-v1/2021-08-24-20-32-us-ca-mtv-h_pixel5/rows.csv",
+        "rows_sha256": "f7aff59ca1f36dae87a60d1aabc54e564d97107d4ac44dc15d079e86aee47157"
+      },
+      "raw_input": {"selected_epochs": 3140, "parsed_raw_rows": 112833, "loader_selected_rows": 109747, "loader_doppler_rows": 108722, "loader_unsupported_rows": 3051, "loader_invalid_timing_rows": 35, "loader_invalid_quality_rows": 0},
+      "first_solvable_epoch": {
+        "problem_epoch_index": 1,
+        "raw_epoch_index": 33,
+        "utc_time_millis": 1629837193437,
+        "gps_week": 2172,
+        "gps_tow": 246811.4372994703,
+        "utc_gps_mapping_mismatch_rows": 0,
+        "raw_rows": 35,
+        "selected_rows": 33,
+        "selected_to_factor_difference_rows": 29,
+        "raw_to_factor_difference_rows": 31,
+        "factor_rows": 4,
+        "stage_counts": {"valid_rows": 33, "doppler_rows": 33, "raw_snr_masked_rows": 0, "raw_multipath_masked_rows": 0, "supported_signal_rows": 24, "frequency_rows": 24, "raw_pseudorange_rows": 33, "transmit_time_rows": 24, "nav_state_call1_rows": 24, "nav_state_call2_rows": 24, "ephemeris_present_rows": 24, "ephemeris_healthy_rows": 24, "geometry_rows": 24, "snr_mask_pass_rows": 24, "elevation_mask_pass_rows": 4, "clock_jump_rows": 0, "dt_valid_rows": 4, "receiver_clock_drift_rows": 4, "fgo_factor_rows": 4},
+        "first_reason_counts": {"accepted_final_factor": 4, "elevation_mask": 20, "unsupported_constellation_signal_frequency": 11},
+        "selected_first_reason_counts": {"accepted_final_factor": 4, "elevation_mask": 20, "unsupported_constellation_signal_frequency": 9},
+        "quality_anchor": {"initialization_enabled": true, "selected": false, "index": null, "satellites": 0, "gdop": null},
+        "spp_seed": {"coordinate_source": "raw_observation_pseudorange_plus_broadcast_nav_spp", "device_wls_used": false, "source": "raw_receiver_seed_fallback", "fresh_spp_solution": false, "last_valid_spp_hold": false, "position_ecef_m": [6378137, 0, 0], "earth_norm_m": 6378137, "latitude_deg": 0, "longitude_deg": 0, "height_m": 0},
+        "elevation_diagnostics": {"geometry_valid_rows": 24, "min_deg": -86.990279568839426, "median_deg": -40.162301791426493, "max_deg": 21.671860317743239, "below_zero_rows": 20}
+      },
+      "route_aggregate": {"problem_epochs": 1325, "raw_rows": 112833, "selected_rows": 109747, "final_factor_rows": 4724, "selected_first_reason_counts": {"accepted_final_factor": 4724, "clock_drift_unavailable_first_epoch": 4, "elevation_mask": 27143, "final_factor_missing": 572, "problem_epoch_unavailable": 40843, "raw_snr_mask": 1025, "unsupported_constellation_signal_frequency": 35436}}
+    },
+    {
+      "route": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "inputs": {"gnss": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv", "nav": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/brdc.nav"},
+      "artifacts": {"summary_json": "output/smartphone-r5/phase42-doppler-row-attrition-v1/2021-03-16-18-59-us-ca-mtv-a_pixel5/audit.json", "summary_sha256": "a2e44aaddd2a702df7bcb2d0dd5d4d21f9a60d6c5bfeef6dddfae768065e080d", "rows_csv": "output/smartphone-r5/phase42-doppler-row-attrition-v1/2021-03-16-18-59-us-ca-mtv-a_pixel5/rows.csv", "rows_sha256": "7c436c9478560398ebeca6d94453ceaf11fbfbe7cae226cdc7d509e718b90c09"},
+      "raw_input": {"selected_epochs": 2159, "parsed_raw_rows": 87705, "loader_selected_rows": 84268, "loader_doppler_rows": 83612, "loader_unsupported_rows": 3437, "loader_invalid_timing_rows": 0, "loader_invalid_quality_rows": 0},
+      "first_solvable_epoch": {"problem_epoch_index": 1, "raw_epoch_index": 1, "utc_time_millis": 1615921154434, "gps_week": 2149, "gps_tow": 241172.43421527429, "utc_gps_mapping_mismatch_rows": 0, "raw_rows": 39, "selected_rows": 38, "selected_to_factor_difference_rows": 11, "raw_to_factor_difference_rows": 12, "factor_rows": 27, "stage_counts": {"valid_rows": 38, "doppler_rows": 38, "raw_snr_masked_rows": 0, "raw_multipath_masked_rows": 0, "supported_signal_rows": 27, "frequency_rows": 27, "raw_pseudorange_rows": 38, "transmit_time_rows": 27, "nav_state_call1_rows": 27, "nav_state_call2_rows": 27, "ephemeris_present_rows": 27, "ephemeris_healthy_rows": 27, "geometry_rows": 27, "snr_mask_pass_rows": 27, "elevation_mask_pass_rows": 27, "clock_jump_rows": 0, "dt_valid_rows": 27, "receiver_clock_drift_rows": 27, "fgo_factor_rows": 27}, "selected_first_reason_counts": {"accepted_final_factor": 27, "unsupported_constellation_signal_frequency": 11}, "quality_anchor": {"initialization_enabled": true, "selected": true, "index": 1791, "satellites": 34, "gdop": 0.85696605754746269}, "spp_seed": {"coordinate_source": "raw_observation_pseudorange_plus_broadcast_nav_spp", "device_wls_used": false, "source": "fresh_spp", "fresh_spp_solution": true, "last_valid_spp_hold": false, "earth_norm_m": 6370298.0077830357, "latitude_deg": 37.444493351072822, "longitude_deg": -122.23230720280759, "height_m": 24.174301402643323}, "elevation_diagnostics": {"geometry_valid_rows": 27, "min_deg": 6.5949347695092735, "median_deg": 32.343772379004122, "max_deg": 70.483305369086565, "below_zero_rows": 0}},
+      "route_aggregate": {"problem_epochs": 2159, "raw_rows": 87705, "selected_rows": 84268, "final_factor_rows": 61726, "selected_first_reason_counts": {"accepted_final_factor": 61726, "clock_drift_unavailable_first_epoch": 28, "raw_snr_mask": 656, "unsupported_constellation_signal_frequency": 21858}}
+    },
+    {
+      "route": "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "inputs": {"gnss": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-07-27-19-49-us-ca-mtv-b/pixel4/device_gnss.csv", "nav": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-07-27-19-49-us-ca-mtv-b/pixel4/brdc.nav"},
+      "artifacts": {"summary_json": "output/smartphone-r5/phase42-doppler-row-attrition-v1/2021-07-27-19-49-us-ca-mtv-b_pixel4/audit.json", "summary_sha256": "100da95eea3c6d1213626ae35108c9d68e8c6abbd6778c197808079f23a2144f", "rows_csv": "output/smartphone-r5/phase42-doppler-row-attrition-v1/2021-07-27-19-49-us-ca-mtv-b_pixel4/rows.csv", "rows_sha256": "a5790961a259e61a238c59867e92b5bb95a270f2d526f1e627412cb42604a028"},
+      "raw_input": {"selected_epochs": 1678, "parsed_raw_rows": 74387, "loader_selected_rows": 72154, "loader_doppler_rows": 71713, "loader_unsupported_rows": 2233, "loader_invalid_timing_rows": 0, "loader_invalid_quality_rows": 0},
+      "first_solvable_epoch": {"problem_epoch_index": 1, "raw_epoch_index": 1, "utc_time_millis": 1627415397439, "gps_week": 2168, "gps_tow": 244215.43907292618, "utc_gps_mapping_mismatch_rows": 0, "raw_rows": 40, "selected_rows": 39, "selected_to_factor_difference_rows": 10, "raw_to_factor_difference_rows": 11, "factor_rows": 29, "stage_counts": {"valid_rows": 39, "doppler_rows": 39, "raw_snr_masked_rows": 0, "raw_multipath_masked_rows": 0, "supported_signal_rows": 29, "frequency_rows": 29, "raw_pseudorange_rows": 39, "transmit_time_rows": 29, "nav_state_call1_rows": 29, "nav_state_call2_rows": 29, "ephemeris_present_rows": 29, "ephemeris_healthy_rows": 29, "geometry_rows": 29, "snr_mask_pass_rows": 29, "elevation_mask_pass_rows": 29, "clock_jump_rows": 0, "dt_valid_rows": 29, "receiver_clock_drift_rows": 29, "fgo_factor_rows": 29}, "selected_first_reason_counts": {"accepted_final_factor": 29, "unsupported_constellation_signal_frequency": 10}, "quality_anchor": {"initialization_enabled": true, "selected": true, "index": 1371, "satellites": 34, "gdop": 0.87190713183529445}, "spp_seed": {"coordinate_source": "raw_observation_pseudorange_plus_broadcast_nav_spp", "device_wls_used": false, "source": "fresh_spp", "fresh_spp_solution": true, "last_valid_spp_hold": false, "earth_norm_m": 6370252.5156410998, "latitude_deg": 37.484269368803183, "longitude_deg": -122.1771310888285, "height_m": -7.0144246835261583}, "elevation_diagnostics": {"geometry_valid_rows": 29, "min_deg": 7.3927226750892441, "median_deg": 32.474182048754244, "max_deg": 69.693474311775375, "below_zero_rows": 0}},
+      "route_aggregate": {"problem_epochs": 1678, "raw_rows": 74387, "selected_rows": 72154, "final_factor_rows": 53184, "selected_first_reason_counts": {"accepted_final_factor": 53184, "clock_drift_unavailable_first_epoch": 30, "raw_snr_mask": 441, "unsupported_constellation_signal_frequency": 18499}}
+    },
+    {
+      "route": "2021-07-14-20-50-us-ca-mtv-e/sm-g988b",
+      "inputs": {"gnss": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-07-14-20-50-us-ca-mtv-e/sm-g988b/device_gnss.csv", "nav": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-07-14-20-50-us-ca-mtv-e/sm-g988b/brdc.nav"},
+      "artifacts": {"summary_json": "output/smartphone-r5/phase42-doppler-row-attrition-v1/2021-07-14-20-50-us-ca-mtv-e_sm-g988b/audit.json", "summary_sha256": "c6f199bdaae3247af09def5ff6e33be9cd263f9ea1039bbb5c55f7b9acb288eb", "rows_csv": "output/smartphone-r5/phase42-doppler-row-attrition-v1/2021-07-14-20-50-us-ca-mtv-e_sm-g988b/rows.csv", "rows_sha256": "74dba45f07435f53717e702ac22d85fa8972f43d61af775559851249c56b2e14"},
+      "raw_input": {"selected_epochs": 1165, "parsed_raw_rows": 50201, "loader_selected_rows": 48163, "loader_doppler_rows": 40544, "loader_unsupported_rows": 1998, "loader_invalid_timing_rows": 40, "loader_invalid_quality_rows": 0},
+      "first_solvable_epoch": {"problem_epoch_index": 1, "raw_epoch_index": 1, "utc_time_millis": 1626295842999, "gps_week": 2166, "gps_tow": 334260.99965513602, "utc_gps_mapping_mismatch_rows": 0, "raw_rows": 44, "selected_rows": 42, "selected_to_factor_difference_rows": 15, "raw_to_factor_difference_rows": 17, "factor_rows": 27, "stage_counts": {"valid_rows": 42, "doppler_rows": 37, "raw_snr_masked_rows": 4, "raw_multipath_masked_rows": 2, "supported_signal_rows": 33, "frequency_rows": 33, "raw_pseudorange_rows": 33, "transmit_time_rows": 27, "nav_state_call1_rows": 27, "nav_state_call2_rows": 27, "ephemeris_present_rows": 27, "ephemeris_healthy_rows": 27, "geometry_rows": 27, "snr_mask_pass_rows": 27, "elevation_mask_pass_rows": 27, "clock_jump_rows": 0, "dt_valid_rows": 27, "receiver_clock_drift_rows": 27, "fgo_factor_rows": 27}, "selected_first_reason_counts": {"accepted_final_factor": 27, "raw_multipath_mask": 1, "raw_pseudorange_invalid": 4, "raw_snr_mask": 4, "unsupported_constellation_signal_frequency": 6}, "quality_anchor": {"initialization_enabled": true, "selected": true, "index": 1065, "satellites": 28, "gdop": 1.109648457633523}, "spp_seed": {"coordinate_source": "raw_observation_pseudorange_plus_broadcast_nav_spp", "device_wls_used": false, "source": "fresh_spp", "fresh_spp_solution": true, "last_valid_spp_hold": false, "earth_norm_m": 6370399.8383127395, "latitude_deg": 37.523975419700569, "longitude_deg": -122.34990502576356, "height_m": 154.59299589786679}, "elevation_diagnostics": {"geometry_valid_rows": 27, "min_deg": 5.5914787467915552, "median_deg": 34.309818057213441, "max_deg": 73.849100739705577, "below_zero_rows": 0}},
+      "route_aggregate": {"problem_epochs": 1165, "raw_rows": 50201, "selected_rows": 48163, "final_factor_rows": 29130, "selected_first_reason_counts": {"accepted_final_factor": 29130, "clock_drift_unavailable_first_epoch": 27, "raw_multipath_mask": 2744, "raw_pseudorange_invalid": 3792, "raw_snr_mask": 4875, "unsupported_constellation_signal_frequency": 7595}}
+    },
+    {
+      "route": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "inputs": {"gnss": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_gnss.csv", "nav": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/brdc.nav"},
+      "artifacts": {"summary_json": "output/smartphone-r5/phase42-doppler-row-attrition-v1/2022-04-01-18-22-us-ca-lax-t_pixel5/audit.json", "summary_sha256": "13f8152b5eaf3befeabe58085a1366bb031f010e2313710cf901665b2357bd4b", "rows_csv": "output/smartphone-r5/phase42-doppler-row-attrition-v1/2022-04-01-18-22-us-ca-lax-t_pixel5/rows.csv", "rows_sha256": "33102fa2795fe6dfa3a193f9b06af8328d19e605e4d5bcf9ced54e9c2e6e828d"},
+      "raw_input": {"selected_epochs": 1466, "parsed_raw_rows": 51243, "loader_selected_rows": 51243, "loader_doppler_rows": 50706, "loader_unsupported_rows": 0, "loader_invalid_timing_rows": 0, "loader_invalid_quality_rows": 0},
+      "first_solvable_epoch": {"problem_epoch_index": 1, "raw_epoch_index": 1, "utc_time_millis": 1648837347447, "gps_week": 2203, "gps_tow": 498165.44726698432, "utc_gps_mapping_mismatch_rows": 0, "raw_rows": 36, "selected_rows": 36, "selected_to_factor_difference_rows": 10, "raw_to_factor_difference_rows": 10, "factor_rows": 26, "stage_counts": {"valid_rows": 36, "doppler_rows": 36, "raw_snr_masked_rows": 0, "raw_multipath_masked_rows": 0, "supported_signal_rows": 26, "frequency_rows": 26, "raw_pseudorange_rows": 36, "transmit_time_rows": 26, "nav_state_call1_rows": 26, "nav_state_call2_rows": 26, "ephemeris_present_rows": 26, "ephemeris_healthy_rows": 26, "geometry_rows": 26, "snr_mask_pass_rows": 26, "elevation_mask_pass_rows": 26, "clock_jump_rows": 0, "dt_valid_rows": 26, "receiver_clock_drift_rows": 26, "fgo_factor_rows": 26}, "selected_first_reason_counts": {"accepted_final_factor": 26, "unsupported_constellation_signal_frequency": 10}, "quality_anchor": {"initialization_enabled": true, "selected": true, "index": 740, "satellites": 26, "gdop": 1.0343925240775136}, "spp_seed": {"coordinate_source": "raw_observation_pseudorange_plus_broadcast_nav_spp", "device_wls_used": false, "source": "fresh_spp", "fresh_spp_solution": true, "last_valid_spp_hold": false, "earth_norm_m": 6371503.9462061943, "latitude_deg": 33.868042526625814, "longitude_deg": -118.05779617996544, "height_m": -30.135185834951699}, "elevation_diagnostics": {"geometry_valid_rows": 26, "min_deg": 2.1930609516865802, "median_deg": 30.506486793722292, "max_deg": 67.284939134006933, "below_zero_rows": 0}},
+      "route_aggregate": {"problem_epochs": 1466, "raw_rows": 51243, "selected_rows": 51243, "final_factor_rows": 34293, "selected_first_reason_counts": {"accepted_final_factor": 34293, "clock_drift_unavailable_first_epoch": 26, "raw_snr_mask": 537, "unsupported_constellation_signal_frequency": 16387}}
+    },
+    {
+      "route": "2023-03-08-21-34-us-ca-mtv-u/pixel5",
+      "inputs": {"gnss": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2023-03-08-21-34-us-ca-mtv-u/pixel5/inputs/device_gnss.csv", "nav": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2023-03-08-21-34-us-ca-mtv-u/pixel5/inputs/brdc.nav"},
+      "artifacts": {"summary_json": "output/smartphone-r5/phase42-doppler-row-attrition-v1/2023-03-08-21-34-us-ca-mtv-u_pixel5/audit.json", "summary_sha256": "d186202960646b04167eb96dc1e93585e61101c29acb8459f90096c6560cb295", "rows_csv": "output/smartphone-r5/phase42-doppler-row-attrition-v1/2023-03-08-21-34-us-ca-mtv-u_pixel5/rows.csv", "rows_sha256": "4c31f74790ea9ef9b4fe541e77456f0fb168e8b01f98a23f717d50fff1d65dcb"},
+      "raw_input": {"selected_epochs": 1102, "parsed_raw_rows": 35810, "loader_selected_rows": 35810, "loader_doppler_rows": 35391, "loader_unsupported_rows": 0, "loader_invalid_timing_rows": 0, "loader_invalid_quality_rows": 0},
+      "first_solvable_epoch": {"problem_epoch_index": 1, "raw_epoch_index": 1, "utc_time_millis": 1678311291448, "gps_week": 2252, "gps_tow": 336909.44892074709, "utc_gps_mapping_mismatch_rows": 0, "raw_rows": 32, "selected_rows": 32, "selected_to_factor_difference_rows": 10, "raw_to_factor_difference_rows": 10, "factor_rows": 22, "stage_counts": {"valid_rows": 32, "doppler_rows": 32, "raw_snr_masked_rows": 0, "raw_multipath_masked_rows": 0, "supported_signal_rows": 22, "frequency_rows": 22, "raw_pseudorange_rows": 32, "transmit_time_rows": 22, "nav_state_call1_rows": 22, "nav_state_call2_rows": 22, "ephemeris_present_rows": 22, "ephemeris_healthy_rows": 22, "geometry_rows": 22, "snr_mask_pass_rows": 22, "elevation_mask_pass_rows": 22, "clock_jump_rows": 0, "dt_valid_rows": 22, "receiver_clock_drift_rows": 22, "fgo_factor_rows": 22}, "selected_first_reason_counts": {"accepted_final_factor": 22, "unsupported_constellation_signal_frequency": 10}, "quality_anchor": {"initialization_enabled": true, "selected": true, "index": 701, "satellites": 25, "gdop": 1.0240778195024836}, "spp_seed": {"coordinate_source": "raw_observation_pseudorange_plus_broadcast_nav_spp", "device_wls_used": false, "source": "fresh_spp", "fresh_spp_solution": true, "last_valid_spp_hold": false, "earth_norm_m": 6370292.7298300089, "latitude_deg": 37.382996801997564, "longitude_deg": -122.03841982473664, "height_m": -3.2072663707658648}, "elevation_diagnostics": {"geometry_valid_rows": 22, "min_deg": 4.0194392089906064, "median_deg": 33.139987926142169, "max_deg": 81.097500000250946, "below_zero_rows": 0}},
+      "route_aggregate": {"problem_epochs": 1102, "raw_rows": 35810, "selected_rows": 35810, "final_factor_rows": 24373, "selected_first_reason_counts": {"accepted_final_factor": 24373, "clock_drift_unavailable_first_epoch": 22, "raw_snr_mask": 419, "unsupported_constellation_signal_frequency": 10996}}
+    }
+  ],
+  "target_proof": {
+    "route": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "equation": "35 raw rows - 2 loader-rejected QZSS rows = 33 selected rows; 33 selected rows - 4 final factors = 29 selected-row rejections.",
+    "selected_rejection_partition": {"unsupported_constellation_signal_frequency": 9, "elevation_mask": 20, "total": 29},
+    "factor_satellites_first_solvable_epoch": ["G15/GPS_L1CA", "G24/GPS_L1CA", "C19/BDS_B1I", "E05/GAL_E1"],
+    "nav_and_health": {"supported_rows": 24, "transmit_time_rows": 24, "nav_state_call1_rows": 24, "nav_state_call2_rows": 24, "ephemeris_present_rows": 24, "ephemeris_healthy_rows": 24},
+    "clock_and_factor": {"dt_valid_rows": 4, "receiver_clock_drift_rows": 4, "final_factor_rows": 4},
+    "mapping_identity": {"first_epoch_mismatch_rows": 0, "all_route_csv_rows_checked": 412179, "all_route_mismatch_rows": 0}
+  },
+  "decision": {
+    "concrete_generalizable_bug_proven": true,
+    "correction_applied": false,
+    "production_default_unchanged": true,
+    "threshold_or_sign_change": false,
+    "classification": "fallback-seed-elevation-mask-bug",
+    "statement": "When the quality-anchor reconnaissance selects no raw/nav SPP solution and no last-valid SPP hold exists, the frozen path falls back to the route-independent sentinel seed (6378137,0,0). It then applies a location-dependent elevation mask; on MTV-h this makes 20 of 24 otherwise supported/nav-healthy rows below horizon and leaves 4 factors. A/B/E/L/U select fresh raw/nav SPP anchors and have zero below-horizon first-epoch rows, proving the behavior is a generalizable fallback-seed selection bug rather than missing or unhealthy broadcast navigation.",
+    "proposed_next_opt_in": {
+      "enabled_by_default": false,
+      "rule": "Only when fresh_spp_solution=false, last_valid_spp_hold=false, and the seed is the sentinel raw receiver fallback, bypass the elevation gate for Doppler-factor candidacy.",
+      "gates_retained": ["raw validity", "Doppler/mask validity", "supported constellation/signal/frequency", "raw pseudorange validity", "transmit time", "both nav state calls", "ephemeris presence and health", "finite physical geometry", "SNR", "clock jump/dt", "receiver clock drift inclusion"],
+      "candidate_status": "proposed for a separate opt-in structural matrix; no Phase42 numeric or production change"
+    }
+  },
+  "verification": {
+    "focused_python_test_command": "ctest --test-dir build -R python_smartphone_phase42_doppler_row_attrition_tests --output-on-failure",
+    "focused_python_test_passed": true,
+    "focused_python_test_count": 4,
+    "cmake_build_target": "cmake --build build -j4 --target gnss_doppler_row_attrition_audit",
+    "cmake_build_passed": true,
+    "all_summaries_json_valid": true,
+    "all_route_factor_counts_match_unchanged_fgo": true,
+    "all_route_raw_provenance_counts_match_loader": true,
+    "all_route_nav_missing_or_unhealthy_counts": 0,
+    "truth_open_count": 0,
+    "mat_read_or_generated": false,
+    "precomputed_coordinates_used": false,
+    "device_wls_coordinates_used": false,
+    "imu_open_count": 0,
+    "kaggle_or_token_access": false
+  }
+}

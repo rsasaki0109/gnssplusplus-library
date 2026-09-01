@@ -364,6 +364,26 @@ masks, and geometry.  See the [Phase 41 contract](docs/use_cases/smartphone_nati
 [result](docs/use_cases/records/smartphone_r5_phase41_doppler_measurement_contract_audit_result_v2.json),
 and [six-route structural manifest](docs/use_cases/records/smartphone_r5_phase41_doppler_measurement_contract_audit_structural_manifest_v2.json).
 
+Phase 42 follows that No-Go with a truth-free raw-row attrition audit.  The
+frozen MTV-h first solvable epoch contains 35 parsed Raw rows, 33 selected
+rows, and 4 unchanged corrected-undifferenced FGO factors: the 29 selected
+row losses partition into 9 unsupported constellation/signal/frequency rows
+and 20 below-horizon rows.  The 24 supported rows all have valid transmit
+time, both broadcast-navigation state calls, present/healthy ephemerides,
+and finite SNR/geometry; UTC-to-GPS week/TOW identity mismatches are zero.
+MTV-h has no quality-anchor SPP solution and uses the sentinel ECEF seed
+`(6378137,0,0)`, whose first-epoch geometry has median elevation `-40.1623°`
+and 20/24 rows below zero.  The other five frozen routes select fresh raw/nav
+SPP anchors and have no below-horizon first-epoch rows.  This proves a
+generalizable fallback-seed elevation-mask selection bug, but Phase 42 makes
+no production or numeric correction.  A separate opt-in may bypass only the
+elevation gate for the sentinel fallback while retaining navigation, health,
+SNR, physical-geometry, clock, and receiver-drift gates.  See the [Phase 42
+audit](docs/use_cases/smartphone_native_fgo_phase42_doppler_row_attrition.md),
+[freeze](docs/use_cases/records/smartphone_r5_phase42_doppler_row_attrition_freeze_v1.json),
+[evaluator manifest v2](docs/use_cases/records/smartphone_r5_phase42_doppler_row_attrition_audit_evaluator_manifest_v2.json),
+and [sealed result](docs/use_cases/records/smartphone_r5_phase42_doppler_row_attrition_result_v1.json).
+
 ### PPC 2024 goal matrix vs Kaiyodai and gici-open
 
 The audited KF/FGO selected profile clears the distance-weighted PPC public
