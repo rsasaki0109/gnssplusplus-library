@@ -1012,6 +1012,28 @@ consumption/sign audit.  See the [Phase59 accuracy result](docs/use_cases/record
 [freeze](docs/use_cases/records/smartphone_r5_phase59_native_cn0_doppler_calibration_accuracy_freeze_v1.json),
 and [evaluator manifest](docs/use_cases/records/smartphone_r5_phase59_native_cn0_doppler_calibration_accuracy_evaluator_manifest_v1.json).
 
+Phase60 audited Android `FullInterSignalBiasNanos` and
+`SatelliteInterSignalBiasNanos` consumption/sign using raw-only, same-epoch
+same-satellite multi-signal observables on the four route-disjoint Pixel5
+recordings.  All four CSV headers were present, but finite Full and Satellite
+values were **0** in every adopted proxy row and every paired row (adopted
+rows **83,612 / 108,722 / 50,706 / 35,391**; same-epoch/SVID pairs
+**20,864 / 34,383 / 15,602 / 10,783** for MTV-a / MTV-h / LAX-t / MTV-u).
+Finite coverage, signed materiality, and temporal-stability gates therefore
+failed: **no-go**, no native correction, no solver/truth/accuracy read, and no
+`0.782` claim.  Headers, raw input integrity, pair coverage, signal
+composition, source-sign/decomposition, and presentation gates passed;
+unsupported signal rows were informational only and no ISB values were
+imputed.  The current adapter/Observation/FGO path does not parse, retain, or
+consume either raw Android field; `Full - Satellite` remains the documented
+receiver-side decomposition and `Full + Satellite` was prohibited.  Phase43
+remains champion and Phase51 remains experimental.  The exactly one next
+factor is raw Android pseudorange code-tracking/multipath residual calibration
+not already masked by the current adapter.  See the [Phase60 contract](docs/use_cases/smartphone_native_fgo_phase60_pixel5_intersignal_bias.md),
+[freeze](docs/use_cases/records/smartphone_r5_phase60_pixel5_intersignal_bias_freeze_v1.json),
+[evaluator manifest](docs/use_cases/records/smartphone_r5_phase60_pixel5_intersignal_bias_evaluator_manifest_v1.json),
+and [result](docs/use_cases/records/smartphone_r5_phase60_pixel5_intersignal_bias_result_v1.json).
+
 ## Docs
 
 - <https://rsasaki0109.github.io/gnssplusplus-library/>
