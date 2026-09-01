@@ -874,8 +874,7 @@ int main(int argc, char** argv) {
                                         row.dt_s = problem.epochs[p].time -
                                                    problem.epochs[p - 1U].time;
                                         row.dt_valid = std::isfinite(row.dt_s) &&
-                                                        row.dt_s > 0.0 &&
-                                                        row.dt_s <= 1.0;
+                                                        row.dt_s > 0.0;
                                         if (!row.dt_valid) {
                                             setReason(row, "clock_dt_invalid_or_gap");
                                         } else {
