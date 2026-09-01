@@ -1,0 +1,101 @@
+{
+  "schema_version": "smartphone-r5-phase51-android-sv-time-uncertainty-sigma-floor-manifest.v2",
+  "phase": 51,
+  "status": "evaluator-resealed-before-phase51-structural-resume-and-truth",
+  "reason_for_v2": {
+    "v1_manifest": "docs/use_cases/records/smartphone_r5_phase51_android_sv_time_uncertainty_sigma_floor_evaluator_manifest_v1.json",
+    "v1_failure_artifact": "output/smartphone-r5/phase51-android-sv-time-uncertainty-sigma-floor-v1/phase51_structural_failure.json",
+    "v1_failure": "presentation-only false failure: Phase37 input paths were passed absolute, changing only three summary input strings; MTV-h submission was exactly the frozen Phase43 candidate",
+    "v2_action": "all raw input command paths are repository-relative, preserving the frozen flag-off summary bytes; no gate or threshold is relaxed"
+  },
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase51_android_sv_time_uncertainty_sigma_floor_freeze_v1.json",
+    "sha256": "829b993d293ea8d55c999b6672ae9b60cc92d3f5bc2afa4942531d20337e10f0"
+  },
+  "evaluator": {
+    "source": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase51_android_sv_time_uncertainty_sigma_floor.py",
+      "sha256": "3af0fdf8aa51ff4f6b108a23939cfce89400eda8fb9e4ce2f88ad9156b9623cc"
+    },
+    "focused_tests": [
+      {
+        "path": "tests/test_smartphone_phase51_android_sv_time_uncertainty.py",
+        "sha256": "3cbe1b70a6ed80ba922ef15657fe884c595e35d6f4f27e48fde4e608bee73605"
+      },
+      {
+        "path": "tests/test_smartphone_phase51_android_sv_time_uncertainty_evaluator.py",
+        "sha256": "8b8b53cc89a207af2234b16cc0897ad9ca813ef2bda73773fb5b76f461bef0fc"
+      }
+    ],
+    "cmake": {
+      "path": "tests/CMakeLists.txt",
+      "sha256": "9473adaa838d607ede1fcf808ebe03656b91b7e4fe64de17fa96356a7d288852"
+    }
+  },
+  "binary": {
+    "path": "build/apps/gnss_fgo_imu_no_base",
+    "sha256": "6a4abc539f48bfedbece10743683d6dfa337f10d3b3d5e53de95d940ec4f870f"
+  },
+  "route_order": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+  ],
+  "candidate_repeat_count": 2,
+  "control_count": 1,
+  "commands": {
+    "base_flags": [
+      "--all-epochs",
+      "--android-raw-utc-keys",
+      "--android-raw-clock-only",
+      "--android-utc-wall-clock-fallback",
+      "--native-pdc-imu-tdcp-no-bridge",
+      "--native-quality-anchor",
+      "--native-fallback-seed-quality-anchor-recovery"
+    ],
+    "candidate_addition": "--native-android-sv-time-uncertainty-sigma-floor",
+    "input_path_spelling": "repository-relative for every route",
+    "candidate_runs_per_route": 2,
+    "control_runs_per_route": 1,
+    "truth_score_after_structural_only": true
+  },
+  "truth_policy": {
+    "truth_reads_before_manifest_seal": 0,
+    "truth_reads_before_structural_pass": 0,
+    "development_truth_reads_after_structural_pass": 4,
+    "development_truth_read_count_per_route": 1,
+    "single_evaluator_process_for_truth": true,
+    "candidate_and_control_scored_in_memory": true,
+    "solver_rerun_after_truth": false,
+    "truth_used_for_inference": false,
+    "truth_used_for_tuning": false,
+    "validation_reads": 0,
+    "holdout_reads": 0,
+    "mat_read_or_generated": false,
+    "device_wls_or_precomputed_coordinates": false,
+    "kaggle_or_token_access": 0
+  },
+  "raw_policy": {
+    "source": "Phase44 materialized raw Android GNSS/IMU and broadcast navigation files",
+    "hash_read_before_route_runs": true,
+    "epoch_key_csv_read_per_route": 1,
+    "native_process_raw_reads_per_route": {
+      "candidate": 2,
+      "control": 1
+    },
+    "archive_reopen_or_rematerialize": false,
+    "truth_derived_native_input": false
+  },
+  "forbidden": [
+    "ground truth before structural pass",
+    "solver rerun after truth",
+    "validation",
+    "holdout",
+    "MAT",
+    "WLS/device coordinates",
+    "precomputed coordinates",
+    "archive reopen/rematerialization",
+    "Kaggle/token"
+  ]
+}

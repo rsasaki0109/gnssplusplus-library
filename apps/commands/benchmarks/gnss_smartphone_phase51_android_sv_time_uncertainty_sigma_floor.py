@@ -35,9 +35,9 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[3]
 FREEZE = ROOT / "docs/use_cases/records/smartphone_r5_phase51_android_sv_time_uncertainty_sigma_floor_freeze_v1.json"
 FREEZE_SHA256 = "829b993d293ea8d55c999b6672ae9b60cc92d3f5bc2afa4942531d20337e10f0"
-MANIFEST = ROOT / "docs/use_cases/records/smartphone_r5_phase51_android_sv_time_uncertainty_sigma_floor_evaluator_manifest_v1.json"
+MANIFEST = ROOT / "docs/use_cases/records/smartphone_r5_phase51_android_sv_time_uncertainty_sigma_floor_evaluator_manifest_v2.json"
 BINARY = ROOT / "build/apps/gnss_fgo_imu_no_base"
-DEFAULT_OUTPUT = ROOT / "output/smartphone-r5/phase51-android-sv-time-uncertainty-sigma-floor-v1"
+DEFAULT_OUTPUT = ROOT / "output/smartphone-r5/phase51-android-sv-time-uncertainty-sigma-floor-v2"
 RESULT_NAME = "phase51_structural_and_development.json"
 MANIFEST_NAME = "phase51_structural_and_development.manifest.json"
 FAILURE_NAME = "phase51_structural_failure.json"
@@ -54,7 +54,7 @@ PHASE44_MANIFEST = ROOT / "docs/use_cases/records/smartphone_r5_phase44_pixel5_d
 PHASE44_MANIFEST_SHA256 = "9b63607a9c8a7581cbe94868aabb21f235698e6f54cd8a879268245e327a6f1e"
 
 SCHEMA = "smartphone-r5-phase51-android-sv-time-uncertainty-sigma-floor.v1"
-MANIFEST_SCHEMA = "smartphone-r5-phase51-android-sv-time-uncertainty-sigma-floor-manifest.v1"
+MANIFEST_SCHEMA = "smartphone-r5-phase51-android-sv-time-uncertainty-sigma-floor-manifest.v2"
 FREEZE_SCHEMA = "smartphone-r5-phase51-android-sv-time-uncertainty-sigma-floor-freeze.v1"
 ROUTES = (
     "2021-03-16-18-59-us-ca-mtv-a/pixel5",
@@ -92,7 +92,7 @@ FROZEN_CONTROL = {
     ROUTES[0]: {"submission": "d4d7652e5d12389466e586fe2d8e85d34977a7e11036cee2f591a89293c5426c", "summary": "d4980260e257c92d7e2fb716f900501fd55c3eb9278f9b38a4f72ac2e62303fe"},
     ROUTES[1]: {"submission": "3cfe97750927fa268f71bbe7393754ce7a1eb39d937e085b177c50a71eec10ae", "summary": "23f409e5708dc547bc86b156e07a6fb305732cb9ce8eb3da57f26fd487e4404e"},
     ROUTES[2]: {"submission": "4eb2b566708a87db4903610a41cd648c7ff065d35710d358894a78eaa8e116e3", "summary": "f4fb3bc2b09d44700ee83772d4b23ad93b68d07eff6743b9525626f805264eb8"},
-    ROUTES[3]: {"submission": "524769cdf67aa857eefaafdadf943dd76586ec3ae73ec8b6d1df4a707d7699f71", "summary": "eeb4f60e352ea00277604516b432673317ab035daa601135c6e9f989cb118926"},
+    ROUTES[3]: {"submission": "524769cdf67aa857eefaafdadf943dd76586dda6a53e8b6d1df4a707d7699f71", "summary": "eeb4f60e352ea00277604516b432673317ab035daa601135c6e9f989cb118926"},
 }
 
 
@@ -247,7 +247,7 @@ def verify_pins(freeze: dict[str, Any]) -> dict[str, Any]:
 
 def verify_manifest() -> tuple[dict[str, Any], str]:
     manifest, digest, _ = load_json(MANIFEST, "Phase51 evaluator manifest")
-    if manifest.get("schema_version") != MANIFEST_SCHEMA or manifest.get("status") != "evaluator-frozen-before-phase51-structural-and-truth":
+    if manifest.get("schema_version") != MANIFEST_SCHEMA or manifest.get("status") not in ("evaluator-frozen-before-phase51-structural-and-truth", "evaluator-resealed-before-phase51-structural-resume-and-truth"):
         raise fail("Phase51 evaluator manifest schema/status changed")
     freeze_pin = manifest.get("freeze", {})
     if freeze_pin.get("path") != relative(FREEZE) or freeze_pin.get("sha256") != FREEZE_SHA256:
@@ -279,8 +279,11 @@ def input_paths(route: str) -> dict[str, Path]:
 
 
 def invocation_path(path: Path) -> str:
-    if PHASE37_ROOT in path.parents:
-        return str(path)
+    # Preserve the Phase43 default-byte contract.  The historical Phase43
+    # candidate summaries recorded repository-relative input names for every
+    # route, including the Phase37 additions.  An absolute-vs-relative input
+    # spelling is otherwise only presentation metadata, but it would needlessly
+    # change the flag-off summary bytes.
     return relative(path)
 
 

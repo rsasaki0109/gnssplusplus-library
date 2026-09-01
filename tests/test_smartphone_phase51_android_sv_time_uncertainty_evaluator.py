@@ -55,6 +55,15 @@ class Phase51EvaluatorTest(unittest.TestCase):
         self.assertEqual(len(phase51.ROUTES), 4)
         self.assertEqual(set(phase51.FROZEN_CONTROL), set(phase51.ROUTES))
         self.assertEqual(phase51.CANDIDATE_FLAG, "--native-android-sv-time-uncertainty-sigma-floor")
+        self.assertEqual(
+            phase51.FROZEN_CONTROL[phase51.ROUTES[3]]["submission"],
+            "524769cdf67aa857eefaafdadf943dd76586dda6a53e8b6d1df4a707d7699f71",
+        )
+
+    def test_phase37_invocations_remain_repository_relative(self) -> None:
+        path = ROOT / "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv"
+        self.assertFalse(phase51.invocation_path(path).startswith("/"))
+        self.assertEqual(phase51.invocation_path(path), str(path.relative_to(ROOT)))
 
 
 if __name__ == "__main__":
