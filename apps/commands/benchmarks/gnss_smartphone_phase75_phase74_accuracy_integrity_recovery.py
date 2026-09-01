@@ -55,6 +55,24 @@ ROUTES = (
 )
 EARTH_RADIUS_M = 6_371_008.8
 MAX_SPEED_MPS = 70.0
+PHASE43_CONTROL = {
+    ROUTES[0]: {
+        "submission": "d4d7652e5d12389466e586fe2d8e85d34977a7e11036cee2f591a89293c5426c",
+        "summary": "d4980260e257c92d7e2fb716f900501fd55c3eb9278f9b38a4f72ac2e62303fe",
+    },
+    ROUTES[1]: {
+        "submission": "3cfe97750927fa268f71bbe7393754ce7a1eb39d937e085b177c50a71eec10ae",
+        "summary": "23f409e5708dc547bc86b156e07a6fb305732cb9ce8eb3da57f26fd487e4404e",
+    },
+    ROUTES[2]: {
+        "submission": "4eb2b566708a87db4903610a41cd648c7ff065d35710d358894a78eaa8e116e3",
+        "summary": "f4fb3bc2b09d44700ee83772d4b23ad93b68d07eff6743b9525626f805264eb8",
+    },
+    ROUTES[3]: {
+        "submission": "524769cdf67aa857eefaafdadf943dd76586dda6a53e8b6d1df4a707d7699f71",
+        "summary": "eeb4f60e352ea00277604516b432673317ab035daa601135c6e9f989cb118926",
+    },
+}
 
 
 class Phase75RecoveryError(ValueError):
@@ -242,7 +260,7 @@ def _artifact_pin(freeze74: dict[str, Any], route: str) -> tuple[dict[str, Any],
 
 
 def _phase43_control_identity(route: str, control_pin: dict[str, Any]) -> bool:
-    expected = P74.PHASE43_CONTROL[route]
+    expected = PHASE43_CONTROL[route]
     return control_pin["submission_sha256"] == expected["submission"] and control_pin["summary_sha256"] == expected["summary"]
 
 
