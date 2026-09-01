@@ -1,0 +1,36 @@
+{
+  "schema_version": "smartphone-r5-phase64-base-preflight-policy-recovery-manifest-v2.v1",
+  "status": "sealed-before-phase64-result-read",
+  "created_at_utc": "2026-09-02T00:00:00Z",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_phase64_base_preflight_policy_recovery_freeze_v1.json",
+  "freeze_record_sha256": "94487186338d85d289c64d04805254f95568020664e37d4402f1f9b238aee993",
+  "evaluator_source": "apps/commands/benchmarks/gnss_smartphone_phase64_base_preflight_policy_recovery_v2.py",
+  "evaluator_source_sha256": "49ec013aac3bc42476847e2bf363714222b2988084fe5ba5fa29928780013eef",
+  "supersedes_manifest": "docs/use_cases/records/smartphone_r5_phase64_base_preflight_policy_recovery_manifest_v1.json",
+  "v1_manifest_sha256": "97cb6b7f24b32f7bf63ed6f4947f9101be84509490e0ce971b6aeab2c5f032b9",
+  "v1_evaluator_sha256": "6dc9681b878dcf23c3f56950b6ed12aa291270772936bcd88848aac230094f0f",
+  "phase63_result": "docs/use_cases/records/smartphone_r5_phase63_settings_integrity_recovery_result_v1.json",
+  "phase63_result_sha256": "d6dc56c00c89ddd4e38624bbfe36567a76632aecae3f3f87f529ab0c8f93799b",
+  "archive_reopen_count": 0,
+  "base_file_reread_count": 0,
+  "read_contract": {
+    "phase64_result_json_read_count": 1,
+    "phase64_archive_open_count": 0,
+    "phase64_base_file_reread_count": 0,
+    "phase64_raw_device_read_count": 0,
+    "phase64_truth_read_count": 0,
+    "phase64_mat_read_count": 0,
+    "phase64_nav_read_count": 0,
+    "phase64_solver_invocation_count": 0,
+    "phase64_v1_failed_attempt_result_read_count": 1,
+    "phase64_total_result_json_reads_including_v1_attempt": 2
+  },
+  "recovery_scope": {
+    "input": "immutable Phase63 result JSON and its recorded hashes/metrics only",
+    "base_file_reread": false,
+    "archive_reopen": false,
+    "accuracy": false,
+    "native_algorithm_change": false,
+    "v1_failure_disclosed": true
+  }
+}
