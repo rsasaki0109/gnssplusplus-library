@@ -1,0 +1,104 @@
+{
+  "schema_version": "smartphone-r5-phase71-base-additional-frequency-bands-manifest.v1",
+  "phase": 71,
+  "status": "sealed-before-structural-matrix",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase71_base_additional_frequency_bands_freeze_v1.json",
+    "sha256": "c5a6b4499b6178db439479a18cc0668e14a1868369f35679a0d557846bc0e49a"
+  },
+  "source_commit": "1ee721ebb6d8adfd5ab65fa8f2243ad2926ac982",
+  "source_scope": {
+    "target": "base RINEX reader used by adopted native FGO undifferenced pseudorange compensation",
+    "candidate_flag": "--native-base-pseudorange-preserve-additional-frequency-bands",
+    "base_compensation_flag": "--native-base-pseudorange-compensation",
+    "matching_key": "exact (satellite,SignalType)",
+    "selected_band_telemetry": "selected emitted base observations and unique satellite/signal streams after reader band policy, before navigation residual filtering",
+    "matched_factor_fraction": "exact-stream-matched adopted factors / all adopted pseudorange factors",
+    "finite_correction_fraction_among_matched": "finite in-domain correction rows / exact-stream-matched adopted factors",
+    "prediction_domain_coverage": "all declared output keys exactly once; no extras, duplicates, interpolation, or endpoint hold",
+    "coefficient": 1.0,
+    "no_canonicalization": true,
+    "no_new_rows_or_factors": true,
+    "no_extrapolation_or_endpoint_hold": true,
+    "spp_applied": false,
+    "tdcp_applied": false,
+    "doppler_applied": false
+  },
+  "source_files": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "444d2b7523f8d8f67163b0239f0fef0b7af2ccfd4921c9f72f0048416c807d45",
+    "include/libgnss++/algorithms/base_pseudorange_compensation.hpp": "a182091ef47af8692e3f4dfb0d714cf365f5b24bc6927a8204d05648248e026b",
+    "src/algorithms/base_pseudorange_compensation.cpp": "f3c3c859793c4bed9c7ae93825d32565f20eab0badb09412a4fab2a5930c9817",
+    "tests/test_base_pseudorange_compensation.cpp": "0e15ae2d464c1a5a048f619412b5c26854220f7b7d6576e622e210de317da769"
+  },
+  "binary": {
+    "path": "build/apps/gnss_fgo_imu_no_base",
+    "sha256": "04543eda588739ac3d3c22296e2bef8ed712b177fa4e47474eebd6eb84b4377a"
+  },
+  "evaluator": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase71_base_additional_frequency_bands.py",
+    "sha256": "7800541e3341b50718c6308ac3ef5262d916cefe7a050a3e3660da227c465485",
+    "single_process_per_native_case": true,
+    "truth_free": true,
+    "no_solver_after_truth": true,
+    "phase70_partial_output_reuse": false
+  },
+  "route_order": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+  ],
+  "routes": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+  ],
+  "structural_matrix": {
+    "output_root": "output/smartphone-r5/phase71-base-additional-frequency-bands-structural-v1",
+    "control_runs_per_route": 1,
+    "candidate_runs_per_route": 2,
+    "route_count": 4,
+    "native_solver_invocations": 12,
+    "prediction_domain_coverage_exact": 1.0,
+    "matched_factor_fraction_each_route_min": 0.8,
+    "finite_correction_fraction_among_matched_each_route_min": 0.99,
+    "candidate_repeat_identity": true,
+    "control_phase43_identity": true,
+    "flag_off_default_identity": true,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_token_reads": 0,
+    "archive_reopens": 0,
+    "phase70_partial_output_reuse": false,
+    "fail_closed": true
+  },
+  "read_accounting": {
+    "native_solver_invocations": 12,
+    "raw_device_gnss_process_reads": 12,
+    "raw_device_imu_process_reads": 12,
+    "broadcast_nav_process_reads": 12,
+    "base_rinex_process_reads": 12,
+    "hash_verification_reads_per_input": 4,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_token_reads": 0,
+    "archive_reopens": 0,
+    "post_truth_tuning": false
+  },
+  "forbidden_inputs": [
+    "ground_truth.csv",
+    "MAT/MATLAB products",
+    "base_position.csv",
+    "base_offset.csv",
+    "WLS/SvPosition/SvElevation/precomputed coordinates",
+    "validation/holdout/test truth",
+    "Kaggle/token data",
+    "solver rerun after truth"
+  ],
+  "result": null,
+  "truth_reads": 0,
+  "all_gates_passed": null
+}
