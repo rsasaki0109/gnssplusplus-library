@@ -1,0 +1,54 @@
+{
+  "schema_version": "smartphone-r5-phase73-source-exact-pseudorange-miss-mask-structural-manifest.v1",
+  "phase": 73,
+  "status": "sealed-before-truth-free-structural-matrix",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase73_source_exact_pseudorange_miss_mask_structural_freeze_v1.json",
+    "sha256": "9d97f1a97bb8559f5f0ede55fcecd109c590b8afb2cf10938b2884d8ffd6d1a0"
+  },
+  "source_freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase73_source_exact_pseudorange_miss_mask_freeze_v1.json",
+    "sha256": "cd38928123f75e0ff71a42c1486e5bb5998bd506f0ccee3b830aa60c2d696b33"
+  },
+  "source_commit": "fda746f79a7bb88d9c24c7637d75b228350af838",
+  "binary": {
+    "path": "build/apps/gnss_fgo_imu_no_base",
+    "sha256": "941eec7044775dbc0b0c1f512a3afbc6821f1997ef299a56f3018ce0747c279d"
+  },
+  "evaluator": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase73_source_exact_pseudorange_miss_mask_structural.py",
+    "sha256": "9fb8f99a70afa7d4988bd9f6e1696a2ea0df89b7fb4e65d35fcff59ba8879a6e"
+  },
+  "focused_tests": {
+    "path": "tests/test_smartphone_phase73_source_exact_pseudorange_miss_mask_structural.py",
+    "sha256": "afb25faf4021197d0946821c36f9f8839afa0ad96f2bf13e91bdbf8ea33033db"
+  },
+  "routes": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+  ],
+  "matrix": {
+    "control_runs_per_route": 1,
+    "candidate_runs_per_route": 2,
+    "native_solver_invocations": 12,
+    "raw_device_gnss_process_reads": 12,
+    "raw_device_imu_process_reads": 12,
+    "broadcast_nav_process_reads": 12,
+    "base_rinex_process_reads": 12,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_token_reads": 0,
+    "archive_reopens": 0,
+    "new_output_root": "output/smartphone-r5/phase73-source-exact-pseudorange-miss-mask-structural-v1"
+  },
+  "artifact_contract": {
+    "summary_artifact_key": "summary_artifact",
+    "summary_payload_key": "summary_payload",
+    "summary_key_collision_forbidden": true,
+    "unexpected_exception_failure_artifact": true,
+    "partial_output_reuse": false
+  }
+}
