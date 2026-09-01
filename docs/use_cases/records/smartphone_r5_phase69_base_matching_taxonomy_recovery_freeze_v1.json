@@ -1,0 +1,100 @@
+{
+  "schema_version": "smartphone-r5-phase69-base-matching-taxonomy-recovery-freeze.v1",
+  "phase": 69,
+  "execution_label": "Luna Max",
+  "status": "frozen-before-phase69-raw-base-reread",
+  "purpose": "Recover the Phase68 evaluator-integrity failure with source-faithful RINEX3 physical-record framing while preserving the Phase68 taxonomy and the Phase67 native coverage gates.",
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "base_commit": "b2ed9ac",
+    "phase68_freeze": "docs/use_cases/records/smartphone_r5_phase68_base_matching_taxonomy_freeze_v1.json",
+    "phase68_freeze_sha256": "f409f7038add71cd0a41df9278fc99651d637dd3697c10913c9da1fbb8c53b43",
+    "phase68_evaluator_sha256": "1374bc1bd2863b99b4488121c240d74fea541dae623ecb73cb982cff582755c5",
+    "phase68_manifest_sha256": "045886c2a9b231248866c478fca95d4a8146e837c8a3001cf9d03c1b9829d053",
+    "phase68_failure_record": "docs/use_cases/records/smartphone_r5_phase68_base_matching_taxonomy_failure_v1.json",
+    "phase68_failure_record_sha256": "f7f7edec127751c24fef3dc4dfa714d15edc7849a9c794e0a76a9ad9709d8957",
+    "phase68_failure_output_sha256": "8217027f0aa6bd7e809f9b93cd5d2080ebdfe231ff989c7b68be5ced62514a14",
+    "phase68_failure_reread": false,
+    "phase68_partial_output_reuse": false
+  },
+  "route_order": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+  ],
+  "raw_inputs": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "device_gnss.csv": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv",
+      "sha256": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863"
+    },
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "device_gnss.csv": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+      "sha256": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7"
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "device_gnss.csv": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_gnss.csv",
+      "sha256": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1"
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "device_gnss.csv": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2023-03-08-21-34-us-ca-mtv-u/pixel5/inputs/device_gnss.csv",
+      "sha256": "a0fc8e71bdfc03be61b99efcd7d41fbba8ffec126df78b55243f681fd211f204"
+    }
+  },
+  "base_inputs": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2021-03-16-18-59-us-ca-mtv-a__pixel5/base.obs",
+      "sha256": "380b8ff9091344fb756697e27f0983d9a0ba2cf0c201b96849bfc1ecc1af0e52",
+      "bytes": 10708536,
+      "observed_interval_s": 1.0
+    },
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2021-08-24-20-32-us-ca-mtv-h__pixel5/base.obs",
+      "sha256": "4d3e37cbe0347fa56216db54ede9e0f30731885f337f1653ab5a86afb2bb2150",
+      "bytes": 11854125,
+      "observed_interval_s": 1.0
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2022-04-01-18-22-us-ca-lax-t__pixel5/base.obs",
+      "sha256": "d731e0e8a7ba4396d62340c85b6238e66c50c6a349621f9dcea0ea6885fd4cfe",
+      "bytes": 719969,
+      "observed_interval_s": 15.0
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2023-03-08-21-34-us-ca-mtv-u__pixel5/base.obs",
+      "sha256": "aedb7a39e7b6612ea97964b363c74cd2c10318255b7f2287f4720d18e71803e6",
+      "bytes": 5950275,
+      "observed_interval_s": 1.0
+    }
+  },
+  "recovery_contract": {
+    "failure_cause": "RINEX3 satellite records can be one long physical line; fixed ceil(observation_count/5) consumption is invalid for these pinned members.",
+    "long_record_rule": "If a satellite record's first physical line exceeds 80 columns, consume that line only; do not consume a following epoch marker.",
+    "standard_record_rule": "For a first line at most 80 columns, consume exactly ceil(observation_type_count/5) physical lines, rejecting a premature epoch marker or satellite record.",
+    "epoch_marker": "RINEX3 epoch lines begin with '>' and are never valid satellite records.",
+    "fixture_required": true,
+    "taxonomy_preserved": true,
+    "proxy_disclaimer": "source-filtered raw adopted and base selected counts are diagnostic proxies and are not asserted equal to native adopted FGO factor populations",
+    "no_canonicalization_or_interpolation": true,
+    "phase67_coverage_gate_unchanged": true
+  },
+  "read_contract": {
+    "single_process": true,
+    "raw_device_gnss_reads": 4,
+    "base_rinex_reads": 4,
+    "nav_reads": 0,
+    "imu_reads": 0,
+    "solver_invocations": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "validation_holdout_reads": 0,
+    "archive_reopens": 0,
+    "phase68_partial_output_reuse": false,
+    "new_output_root_required": true
+  },
+  "output": {
+    "root": "output/smartphone-r5/phase69-base-matching-taxonomy-recovery-v1",
+    "reuse_prior_output": false
+  },
+  "decision_policy": "Any malformed record, hash mismatch, parser ambiguity, nonfinite accounting, or read-contract violation fails closed. This recovery does not authorize native correction, canonicalization, interpolation, solver execution, or accuracy-truth reads."
+}
