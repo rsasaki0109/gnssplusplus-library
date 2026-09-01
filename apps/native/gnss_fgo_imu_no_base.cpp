@@ -9,6 +9,7 @@
 // stream alignment.
 
 #include <libgnss++/algorithms/fgo.hpp>
+#include <libgnss++/algorithms/base_pseudorange_compensation.hpp>
 #include <libgnss++/algorithms/carrier_code_leveling.hpp>
 #include <libgnss++/algorithms/cn0_doppler_calibration.hpp>
 #include <libgnss++/algorithms/pdc_state_bridge.hpp>
@@ -70,6 +71,8 @@ struct Options {
     std::string imu_path;
     std::string android_imu_path;
     std::string android_gnss_path;
+    std::string native_base_rinex_path;
+    std::string native_base_rinex_sha256;
     std::string out_path;
     std::string summary_path;
     std::string dataset_id = "native-fgo-v2-imu-no-base";
@@ -102,6 +105,9 @@ struct Options {
     // sigma with the fixed C/N0 closure-residual model.  This is deliberately
     // separate from the existing p85/12 upstream quality path.
     bool native_cn0_doppler_calibration = false;
+    // Phase65 opt-in: subtract source-compatible, smoothed base-station
+    // pseudorange residuals from adopted undifferenced pseudorange factors.
+    bool native_base_pseudorange_compensation = false;
     // Phase43 candidate: when the normal quality-anchor reconnaissance has no
     // eligible raw/nav solution, retry that same SPP reconnaissance with an
     // explicit -90 degree elevation gate and replay the selected anchor via
@@ -151,6 +157,8 @@ void usage(const char* program) {
                  " [--native-fallback-seed-quality-anchor-recovery]"
                  " [--native-android-sv-time-uncertainty-sigma-floor]"
                  " [--native-cn0-doppler-calibration]"
+                 " [--native-base-pseudorange-compensation --native-base-rinex <base.obs>"
+                 " --native-base-rinex-sha256 <sha256>]"
                  " [--native-gnss-first-velocity-only-handoff]"
                  " [--native-direct-doppler-wls-handoff]\n";
 }
@@ -197,6 +205,10 @@ bool parseArguments(int argc, char** argv, Options& options) {
             if (!requireValue(argc, argv, i, options.android_imu_path)) return false;
         } else if (arg == "--android-gnss") {
             if (!requireValue(argc, argv, i, options.android_gnss_path)) return false;
+        } else if (arg == "--native-base-rinex") {
+            if (!requireValue(argc, argv, i, options.native_base_rinex_path)) return false;
+        } else if (arg == "--native-base-rinex-sha256") {
+            if (!requireValue(argc, argv, i, options.native_base_rinex_sha256)) return false;
         } else if (arg == "--out") {
             if (!requireValue(argc, argv, i, options.out_path)) return false;
         } else if (arg == "--summary-json") {
@@ -274,6 +286,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
             options.native_android_sv_time_uncertainty_sigma_floor = true;
         } else if (arg == "--native-cn0-doppler-calibration") {
             options.native_cn0_doppler_calibration = true;
+        } else if (arg == "--native-base-pseudorange-compensation") {
+            options.native_base_pseudorange_compensation = true;
         } else if (arg == "--native-gnss-first-velocity-only-handoff") {
             options.native_gnss_first_velocity_only_handoff = true;
         } else if (arg == "--native-direct-doppler-wls-handoff") {
@@ -293,9 +307,10 @@ bool parseArguments(int argc, char** argv, Options& options) {
         usage(argv[0]);
         return false;
     }
-    const std::array<const std::string*, 6> file_paths = {
+    const std::array<const std::string*, 7> file_paths = {
         &options.obs_path, &options.nav_path, &options.imu_path,
-        &options.android_imu_path, &options.android_gnss_path, &options.out_path};
+        &options.android_imu_path, &options.android_gnss_path, &options.out_path,
+        &options.native_base_rinex_path};
     for (const std::string* path : file_paths) {
         if (path != nullptr && !path->empty() && hasMatExtension(*path)) {
             std::cerr << "MATLAB .mat paths are forbidden by the native/raw contract\n";
@@ -333,6 +348,42 @@ bool parseArguments(int argc, char** argv, Options& options) {
     if (options.native_cn0_doppler_calibration && !android_raw) {
         std::cerr << "--native-cn0-doppler-calibration requires Android raw "
                      "GNSS/IMU input\n";
+        return false;
+    }
+    if (options.native_base_pseudorange_compensation && !android_raw) {
+        std::cerr << "--native-base-pseudorange-compensation requires Android raw "
+                     "GNSS/IMU input\n";
+        return false;
+    }
+    if (options.native_base_pseudorange_compensation &&
+        options.native_base_rinex_path.empty()) {
+        std::cerr << "--native-base-pseudorange-compensation requires "
+                     "--native-base-rinex\n";
+        return false;
+    }
+    if (options.native_base_pseudorange_compensation &&
+        options.native_base_rinex_sha256.size() != 64U) {
+        std::cerr << "--native-base-pseudorange-compensation requires the "
+                     "64-character manifest-verified base SHA-256\n";
+        return false;
+    }
+    if (options.native_base_pseudorange_compensation &&
+        !std::all_of(options.native_base_rinex_sha256.begin(),
+                     options.native_base_rinex_sha256.end(),
+                     [](unsigned char ch) { return std::isxdigit(ch) != 0; })) {
+        std::cerr << "--native-base-rinex-sha256 must contain only hexadecimal digits\n";
+        return false;
+    }
+    if (!options.native_base_pseudorange_compensation &&
+        !options.native_base_rinex_path.empty()) {
+        std::cerr << "--native-base-rinex requires "
+                     "--native-base-pseudorange-compensation\n";
+        return false;
+    }
+    if (!options.native_base_pseudorange_compensation &&
+        !options.native_base_rinex_sha256.empty()) {
+        std::cerr << "--native-base-rinex-sha256 requires "
+                     "--native-base-pseudorange-compensation\n";
         return false;
     }
     if (options.android_raw_utc_key_contract &&
@@ -1093,6 +1144,103 @@ struct UpstreamPositionOffsetReport {
     double max_offset_enu_m = 0.0;
     std::string failure;
 };
+
+struct BasePseudorangeCompensationReport {
+    bool enabled = false;
+    bool built = false;
+    bool applied = false;
+    std::string base_rinex_path;
+    std::string base_rinex_sha256;
+    std::string failure;
+    double header_version = std::numeric_limits<double>::quiet_NaN();
+    double header_interval_s = std::numeric_limits<double>::quiet_NaN();
+    double base_interval_s = std::numeric_limits<double>::quiet_NaN();
+    double expected_interval_s = std::numeric_limits<double>::quiet_NaN();
+    libgnss::Vector3d base_position_ecef = libgnss::Vector3d::Zero();
+    std::uintmax_t base_rinex_bytes = 0U;
+    std::size_t moving_mean_samples = 0U;
+    std::size_t base_epochs = 0U;
+    std::size_t base_observation_rows = 0U;
+    std::size_t matching_streams = 0U;
+    std::size_t matched_base_rows = 0U;
+    std::size_t finite_base_residual_rows = 0U;
+    std::size_t smoothed_rows = 0U;
+    std::size_t interpolated_rows = 0U;
+    std::size_t interpolation_misses = 0U;
+    std::size_t adopted_pseudorange_rows = 0U;
+    std::size_t adopted_rows_corrected = 0U;
+    double correction_abs_p50_m = std::numeric_limits<double>::quiet_NaN();
+    double correction_abs_p95_m = std::numeric_limits<double>::quiet_NaN();
+    double correction_abs_max_m = std::numeric_limits<double>::quiet_NaN();
+};
+
+double finiteMedian(std::vector<double> values) {
+    values.erase(std::remove_if(values.begin(), values.end(),
+                                [](double value) {
+                                    return !std::isfinite(value);
+                                }),
+                  values.end());
+    if (values.empty()) return std::numeric_limits<double>::quiet_NaN();
+    std::sort(values.begin(), values.end());
+    const std::size_t middle = values.size() / 2U;
+    return values.size() % 2U == 0U
+               ? 0.5 * (values[middle - 1U] + values[middle])
+               : values[middle];
+}
+
+double finitePercentile(std::vector<double> values, double percentile) {
+    values.erase(std::remove_if(values.begin(), values.end(),
+                                [](double value) {
+                                    return !std::isfinite(value);
+                                }),
+                  values.end());
+    if (values.empty()) return std::numeric_limits<double>::quiet_NaN();
+    std::sort(values.begin(), values.end());
+    if (values.size() == 1U) return values.front();
+    const double rank = 0.5 + percentile / 100.0 *
+                                      static_cast<double>(values.size());
+    if (rank <= 1.0) return values.front();
+    if (rank >= static_cast<double>(values.size())) return values.back();
+    const double lower_rank = std::floor(rank);
+    const std::size_t lower = static_cast<std::size_t>(lower_rank - 1.0);
+    const std::size_t upper = lower + 1U;
+    return values[lower] + (rank - lower_rank) *
+                             (values[upper] - values[lower]);
+}
+
+bool selectBaseSampling(const libgnss::ObservationSeries& base_series,
+                        double& interval_s,
+                        std::size_t& moving_mean_samples,
+                        std::string& failure) {
+    std::vector<double> intervals;
+    intervals.reserve(base_series.epochs.size());
+    for (std::size_t index = 1U; index < base_series.epochs.size(); ++index) {
+        const double dt = base_series.epochs[index].time -
+                          base_series.epochs[index - 1U].time;
+        if (!std::isfinite(dt) || !(dt > 0.0)) {
+            failure = "base epoch times are not strictly increasing";
+            return false;
+        }
+        intervals.push_back(dt);
+    }
+    interval_s = finiteMedian(intervals);
+    if (!std::isfinite(interval_s)) {
+        failure = "base observation series has no observed interval";
+        return false;
+    }
+    if (std::abs(interval_s - 1.0) <= 1.0e-6) {
+        interval_s = 1.0;
+        moving_mean_samples = 151U;
+        return true;
+    }
+    if (std::abs(interval_s - 15.0) <= 1.0e-6) {
+        interval_s = 15.0;
+        moving_mean_samples = 11U;
+        return true;
+    }
+    failure = "observed base interval is neither frozen 1 s nor 15 s";
+    return false;
+}
 
 TdcpRuntimeReport evaluateTdcpRuntime(
     const libgnss::FGOProcessor::FGOProblem& problem,
@@ -1888,7 +2036,9 @@ std::string makeSummary(const Options& options,
                             carrier_code_leveling_report =
                                 libgnss::carrier_code_leveling::Diagnostics{},
                         const UpstreamPositionOffsetReport& position_offset_report =
-                            UpstreamPositionOffsetReport{}) {
+                            UpstreamPositionOffsetReport{},
+                        const BasePseudorangeCompensationReport& base_report =
+                            BasePseudorangeCompensationReport{}) {
     std::ostringstream out;
     out << std::setprecision(17);
     out << "{\n"
@@ -1998,6 +2148,118 @@ std::string makeSummary(const Options& options,
             << "    \"model_sigma_max_mps\": "
             << calibration.native_cn0_doppler_calibration_model_sigma_max_mps << "\n"
             << "  },\n";
+    }
+    if (options.native_base_pseudorange_compensation) {
+        out << "  \"native_base_pseudorange_compensation\": {\n"
+            << "    \"enabled\": true,\n"
+            << "    \"built\": " << (base_report.built ? "true" : "false")
+            << ",\n"
+            << "    \"applied\": " << (base_report.applied ? "true" : "false")
+            << ",\n"
+            << "    \"source_repository\": \"https://github.com/taroz/gsdc2023\",\n"
+            << "    \"source_commit\": \"29923f9f370f09ebc00f96d8cca375007a18e7d5\",\n"
+            << "    \"source_function\": \"functions/correct_pseudorange.m\",\n"
+            << "    \"base_rinex\": ";
+        writeJsonString(out, base_report.base_rinex_path);
+        out << ",\n"
+            << "    \"base_rinex_bytes\": " << base_report.base_rinex_bytes << ",\n"
+            << "    \"base_rinex_sha256\": ";
+        writeJsonString(out, base_report.base_rinex_sha256);
+        out << ",\n"
+            << "    \"base_member_sha256\": ";
+        writeJsonString(out, base_report.base_rinex_sha256);
+        out << ",\n"
+            << "    \"sha256_verification\": \"structural runner hashes the file before launch and asserts this declared digest\",\n"
+            << "    \"base_rinex_read_count\": 1,\n"
+            << "    \"base_coordinate_provenance\": \"RINEX header APPROX POSITION XYZ\",\n"
+            << "    \"base_coordinate_xyz_m\": ["
+            << base_report.base_position_ecef.x() << ", "
+            << base_report.base_position_ecef.y() << ", "
+            << base_report.base_position_ecef.z() << "],\n"
+            << "    \"header_version\": ";
+        if (std::isfinite(base_report.header_version)) {
+            out << base_report.header_version;
+        } else {
+            out << "null";
+        }
+        out << ",\n"
+            << "    \"header_interval_s\": ";
+        if (std::isfinite(base_report.header_interval_s)) {
+            out << base_report.header_interval_s;
+        } else {
+            out << "null";
+        }
+        out << ",\n"
+            << "    \"observed_interval_s\": ";
+        if (std::isfinite(base_report.base_interval_s)) {
+            out << base_report.base_interval_s;
+        } else {
+            out << "null";
+        }
+        out << ",\n"
+            << "    \"expected_interval_s\": ";
+        if (std::isfinite(base_report.expected_interval_s)) {
+            out << base_report.expected_interval_s;
+        } else {
+            out << "null";
+        }
+        out << ",\n"
+            << "    \"moving_mean_samples\": " << base_report.moving_mean_samples << ",\n"
+            << "    \"moving_mean_edge_policy\": \"centered finite window shrinks at edges\",\n"
+            << "    \"matching_key\": \"(satellite,signal)\",\n"
+            << "    \"same_satellite_signal_only\": true,\n"
+            << "    \"base_epochs\": " << base_report.base_epochs << ",\n"
+            << "    \"base_observation_rows\": " << base_report.base_observation_rows << ",\n"
+            << "    \"matching_streams\": " << base_report.matching_streams << ",\n"
+            << "    \"matched_base_rows\": " << base_report.matched_base_rows << ",\n"
+            << "    \"finite_base_residual_rows\": "
+            << base_report.finite_base_residual_rows << ",\n"
+            << "    \"smoothed_rows\": " << base_report.smoothed_rows << ",\n"
+            << "    \"in_domain_rows\": " << base_report.interpolated_rows << ",\n"
+            << "    \"interpolation_misses\": " << base_report.interpolation_misses << ",\n"
+            << "    \"adopted_pseudorange_rows\": "
+            << base_report.adopted_pseudorange_rows << ",\n"
+            << "    \"adopted_rows_corrected\": "
+            << base_report.adopted_rows_corrected << ",\n"
+            << "    \"finite_correction_fraction\": ";
+        if (base_report.adopted_pseudorange_rows > 0U) {
+            out << static_cast<double>(base_report.adopted_rows_corrected) /
+                         static_cast<double>(base_report.adopted_pseudorange_rows);
+        } else {
+            out << "null";
+        }
+        out << ",\n"
+            << "    \"correction_abs_p50_m\": ";
+        if (std::isfinite(base_report.correction_abs_p50_m)) {
+            out << base_report.correction_abs_p50_m;
+        } else {
+            out << "null";
+        }
+        out << ",\n    \"correction_abs_p95_m\": ";
+        if (std::isfinite(base_report.correction_abs_p95_m)) {
+            out << base_report.correction_abs_p95_m;
+        } else {
+            out << "null";
+        }
+        out << ",\n    \"correction_abs_max_m\": ";
+        if (std::isfinite(base_report.correction_abs_max_m)) {
+            out << base_report.correction_abs_max_m;
+        } else {
+            out << "null";
+        }
+        out << ",\n"
+            << "    \"formula\": \"P_rover_corrected_m=P_rover_raw_m-pc_m\",\n"
+            << "    \"base_residual_formula\": \"pc_raw=P_base+satellite_clock_m-ionosphere_m-troposphere_m-group_delay_m-geometric_range_m; pc=movmean(pc_raw)\",\n"
+            << "    \"interpolation\": \"linear in-domain at rover epoch; no extrapolation, endpoint hold, or nearest fill\",\n"
+            << "    \"moving_mean_selection\": \"observed median interval 1 s=>151 samples, 15 s=>11 samples\",\n"
+            << "    \"scope\": \"adopted undifferenced FGO pseudorange factors only\",\n"
+            << "    \"spp_applied\": false,\n"
+            << "    \"tdcp_applied\": false,\n"
+            << "    \"doppler_applied\": false,\n"
+            << "    \"no_extrapolation_or_endpoint_hold\": true,\n"
+            << "    \"failure\": ";
+        writeJsonString(out, base_report.failure);
+        out << "\n  },\n";
     }
     if (options.native_fallback_seed_quality_anchor_recovery) {
         out << "  \"native_fallback_seed_quality_anchor_recovery\": true,\n";
@@ -2950,6 +3212,88 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    libgnss::base_pseudorange_compensation::Model base_pseudorange_model;
+    BasePseudorangeCompensationReport base_pseudorange_report;
+    base_pseudorange_report.enabled =
+        options.native_base_pseudorange_compensation;
+    base_pseudorange_report.base_rinex_path = options.native_base_rinex_path;
+    base_pseudorange_report.base_rinex_sha256 =
+        options.native_base_rinex_sha256;
+    if (options.native_base_pseudorange_compensation) {
+        libgnss::io::RINEXReader base_reader;
+        libgnss::io::RINEXReader::RINEXHeader base_header;
+        if (!base_reader.open(options.native_base_rinex_path) ||
+            !base_reader.readHeader(base_header)) {
+            std::cerr << "failed to read frozen base RINEX header\n";
+            return 1;
+        }
+        libgnss::ObservationSeries base_series;
+        if (!base_reader.readAllObservations(base_series)) {
+            std::cerr << "failed to read frozen base RINEX observations\n";
+            return 1;
+        }
+        base_reader.close();
+        base_pseudorange_report.header_version = base_header.version;
+        base_pseudorange_report.header_interval_s = base_header.interval;
+        base_pseudorange_report.base_position_ecef =
+            base_header.approximate_position;
+        std::error_code file_size_error;
+        base_pseudorange_report.base_rinex_bytes =
+            std::filesystem::file_size(options.native_base_rinex_path,
+                                        file_size_error);
+        if (file_size_error) {
+            std::cerr << "failed to stat frozen base RINEX\n";
+            return 1;
+        }
+        std::size_t moving_mean_samples = 0U;
+        std::string sampling_error;
+        if (!selectBaseSampling(base_series,
+                                base_pseudorange_report.expected_interval_s,
+                                moving_mean_samples, sampling_error)) {
+            base_pseudorange_report.failure = sampling_error;
+            std::cerr << "base RINEX sampling contract failed closed: "
+                      << sampling_error << "\n";
+            return 1;
+        }
+        base_pseudorange_report.moving_mean_samples = moving_mean_samples;
+        libgnss::base_pseudorange_compensation::Config base_config;
+        base_config.base_position_ecef = base_header.approximate_position;
+        base_config.expected_interval_s =
+            base_pseudorange_report.expected_interval_s;
+        base_config.moving_mean_samples = moving_mean_samples;
+        // The Phase43/native recipe leaves the ordinary broadcast atmosphere
+        // model enabled.  Keep these explicit in the base model rather than
+        // inheriting mutable global/default state.
+        base_config.use_ionosphere_model = true;
+        base_config.use_troposphere_model = true;
+        base_config.use_signal_specific_galileo_group_delay =
+            options.native_signal_specific_galileo_tgd;
+        if (!base_pseudorange_model.build(base_series, nav, base_config)) {
+            base_pseudorange_report.failure =
+                base_pseudorange_model.diagnostics().failure;
+            std::cerr << "base pseudorange model failed closed: "
+                      << base_pseudorange_report.failure << "\n";
+            return 1;
+        }
+        const auto& diagnostics = base_pseudorange_model.diagnostics();
+        base_pseudorange_report.built = diagnostics.built;
+        base_pseudorange_report.base_interval_s = diagnostics.base_interval_s;
+        base_pseudorange_report.base_epochs = diagnostics.base_epochs;
+        base_pseudorange_report.base_observation_rows =
+            diagnostics.base_observation_rows;
+        base_pseudorange_report.matching_streams = diagnostics.matching_streams;
+        base_pseudorange_report.matched_base_rows = diagnostics.matched_base_rows;
+        base_pseudorange_report.finite_base_residual_rows =
+            diagnostics.finite_base_residual_rows;
+        base_pseudorange_report.smoothed_rows = diagnostics.smoothed_rows;
+        base_pseudorange_report.correction_abs_p50_m =
+            diagnostics.correction_abs_p50_m;
+        base_pseudorange_report.correction_abs_p95_m =
+            diagnostics.correction_abs_p95_m;
+        base_pseudorange_report.correction_abs_max_m =
+            diagnostics.correction_abs_max_m;
+    }
+
     std::vector<libgnss::ObservationData> epochs;
     libgnss::ObservationData epoch;
     int observation_index = 0;
@@ -3202,6 +3546,55 @@ int main(int argc, char** argv) {
         pdc_bridge_prepopulated = true;
     } else {
         problem = processor.buildPseudorangeProblem(epochs, nav);
+    }
+    if (options.native_base_pseudorange_compensation) {
+        std::vector<double> absolute_corrections;
+        absolute_corrections.reserve(problem.pseudorange_factors.size());
+        base_pseudorange_report.adopted_pseudorange_rows =
+            problem.pseudorange_factors.size();
+        for (auto& factor : problem.pseudorange_factors) {
+            if (factor.epoch_index >= problem.epochs.size()) {
+                ++base_pseudorange_report.interpolation_misses;
+                continue;
+            }
+            double correction_m = std::numeric_limits<double>::quiet_NaN();
+            if (!base_pseudorange_model.correctionAt(
+                    problem.epochs[factor.epoch_index].time, factor.satellite,
+                    factor.signal, correction_m)) {
+                ++base_pseudorange_report.interpolation_misses;
+                continue;
+            }
+            const double corrected =
+                libgnss::base_pseudorange_compensation::subtractCorrection(
+                    factor.corrected_pseudorange_m, correction_m);
+            if (!std::isfinite(corrected)) {
+                ++base_pseudorange_report.interpolation_misses;
+                continue;
+            }
+            factor.corrected_pseudorange_m = corrected;
+            ++base_pseudorange_report.adopted_rows_corrected;
+            ++base_pseudorange_report.interpolated_rows;
+            absolute_corrections.push_back(std::abs(correction_m));
+        }
+        base_pseudorange_report.correction_abs_p50_m =
+            finiteMedian(absolute_corrections);
+        base_pseudorange_report.correction_abs_p95_m =
+            finitePercentile(absolute_corrections, 95.0);
+        base_pseudorange_report.correction_abs_max_m =
+            absolute_corrections.empty()
+                ? std::numeric_limits<double>::quiet_NaN()
+                : *std::max_element(absolute_corrections.begin(),
+                                    absolute_corrections.end());
+        base_pseudorange_report.applied =
+            base_pseudorange_report.adopted_pseudorange_rows > 0U &&
+            base_pseudorange_report.adopted_rows_corrected > 0U;
+        if (!base_pseudorange_report.applied) {
+            base_pseudorange_report.failure =
+                "no adopted pseudorange factor had an in-domain base correction";
+            std::cerr << "base pseudorange compensation failed closed: "
+                      << base_pseudorange_report.failure << "\n";
+            return 1;
+        }
     }
     if (options.native_fallback_seed_quality_anchor_recovery &&
         problem.diagnostics.quality_anchor_recovery_triggered &&
@@ -3695,7 +4088,8 @@ int main(int argc, char** argv) {
                                             fallback, pdc_bridge_report,
                                             raw_utc_report, tdcp_report,
                                             carrier_code_leveling_report,
-                                            position_offset_report);
+                                            position_offset_report,
+                                            base_pseudorange_report);
     if (!atomicWrite(options.summary_path, summary)) {
         std::cerr << "failed to atomically publish summary\n";
         return 1;

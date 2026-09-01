@@ -63,6 +63,7 @@ if(GTest_FOUND)
         test_rtk_validation.cpp
         test_integrity_consensus.cpp
         test_fgo.cpp
+        test_base_pseudorange_compensation.cpp
         test_signal_policy.cpp
         test_types.cpp
         test_observation.cpp
