@@ -230,6 +230,10 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase51_android_sv_time_uncertainty_evaluator.py
     )
     add_test(
+        NAME python_smartphone_phase52_android_sv_time_uncertainty_integrity_recovery_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_phase52_android_sv_time_uncertainty_integrity_recovery.py
+    )
+    add_test(
         NAME python_smartphone_native_fgo_v2_1_confirmation_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_fgo_v2_1_confirmation.py
     )
