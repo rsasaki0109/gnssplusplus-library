@@ -1,0 +1,160 @@
+{
+  "schema_version": "smartphone-r5-phase73-source-exact-pseudorange-miss-mask-freeze.v1",
+  "status": "source-only-frozen-before-raw-read",
+  "created_at_utc": "2026-09-02T00:00:00Z",
+  "phase": 73,
+  "execution_label": "Luna Max",
+  "purpose": "Freeze one source-exact, non-overlapping native candidate: preserve the published graph's finite-base-correction miss mask by retaining/inserting only pseudorange factors with a finite in-domain pc.",
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "parent_commit": "307e885",
+    "phase72_result": "docs/use_cases/records/smartphone_r5_phase72_base_additional_frequency_bands_recovery_structural_failure_v1.json",
+    "phase72_result_sha256": "6ae74389e21ea9690122662bbe991cedef6385620b0d9fef7a7b349f87bb29a3",
+    "phase72_status": "fail-closed-coverage-gates",
+    "phase72_candidate_submission_sha256": "1171f72e53200dc2736aabff2a92f0dd6c80a7f61d62df1e6f373942767cfb57",
+    "phase72_candidate_submission_bytes": 172694,
+    "phase72_candidate_observation": "The additional-frequency-band option added selected base streams but the first candidate remained structurally below the frozen matched/all and finite/matched gates; this phase does not tune or reinterpret those gates."
+  },
+  "official_source": {
+    "repository_url": "https://github.com/taroz/gsdc2023",
+    "repository_commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "correct_pseudorange_m": {
+      "path": "functions/correct_pseudorange.m",
+      "sha256": "b0536ccff478b0aff253448ffb7a203c715b8064dd8dc85898e38f1f05d0441e",
+      "contract": "pc=interp1(obsb.time.t,pc_,obsr.time.t,\"linear\") with MATLAB's default out-of-domain NaN result; obsr.(f).resPc=obsr.(f).resPc-pc"
+    },
+    "fgo_gnss_imu_m": {
+      "path": "fgo_gnss_imu.m",
+      "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+      "contract": "the pseudorange graph add is guarded by ~isnan(obsr.(f).resPc(i,j)); Doppler and TDCP guards are separate"
+    },
+    "local_native_reference": {
+      "base_model_source": "src/algorithms/base_pseudorange_compensation.cpp",
+      "base_model_sha256": "f3c3c859793c4bed9c7ae93825d32565f20eab0badb09412a4fab2a5930c9817",
+      "native_driver_source": "apps/native/gnss_fgo_imu_no_base.cpp",
+      "native_driver_sha256": "444d2b7523f8d8f67163b0239f0fef0b7af2ccfd4921c9f72f0048416c807d45",
+      "observed_mismatch": "correctionAt() returns false for a missing exact stream or out-of-domain timestamp, while the current opt-in driver continues with the uncorrected factor; this freeze authorizes auditing/implementing only the source-exact finite-pc mask."
+    }
+  },
+  "candidate": {
+    "new_opt_in_flag": "--native-base-pseudorange-source-miss-mask",
+    "required_existing_flag": "--native-base-pseudorange-compensation",
+    "required_base_argument": "--native-base-rinex <exact Phase64-pinned member>",
+    "preserve_additional_frequency_bands": false,
+    "scope": "adopted undifferenced FGO pseudorange factors only",
+    "operation": "Build the already frozen same-satellite/same-signal base pc stream. For each adopted pseudorange factor, retain and subtract pc only when correctionAt() returns one finite in-domain value; otherwise do not insert/retain that pseudorange factor.",
+    "finite_rule": "retained factor corrected_pseudorange_m must be finite; retained_finite_pc_fraction is exactly 1.0 by construction",
+    "drop_reasons": [
+      "missing_exact_satellite_signal_stream",
+      "out_of_domain_or_interpolation_failure",
+      "nonfinite_correction_or_corrected_pseudorange"
+    ],
+    "no_fill": [
+      "no extrapolation",
+      "no endpoint hold",
+      "no nearest-time fill",
+      "no cross-satellite/cross-constellation/cross-signal fill",
+      "no additional factors or synthetic rows"
+    ],
+    "unchanged_paths": [
+      "TDCP/carrier factors",
+      "Doppler factors",
+      "IMU factors",
+      "SPP seed and epoch indexing",
+      "broadcast-navigation and rover correction models",
+      "Phase43 flag-off behavior"
+    ],
+    "source_sign_and_units": "pc and pseudorange are metres; positive pc is subtracted from rover P exactly as the source operation; timestamps use the native GNSS seconds contract"
+  },
+  "telemetry_required": {
+    "enabled_only_when_new_flag": true,
+    "fields": [
+      "original_adopted_pseudorange_rows",
+      "retained_finite_pc_pseudorange_rows",
+      "dropped_missing_exact_stream_rows",
+      "dropped_out_of_domain_rows",
+      "dropped_nonfinite_correction_rows",
+      "retained_finite_pc_fraction",
+      "retained_over_original_fraction",
+      "pseudorange_factors_inserted",
+      "pseudorange_factor_count_consistent",
+      "correction_abs_p50_m",
+      "correction_abs_p95_m",
+      "correction_abs_max_m"
+    ],
+    "invariants": [
+      "original = retained + each mutually exclusive drop reason",
+      "retained_finite_pc_fraction = 1.0",
+      "pseudorange_factors_inserted = retained_finite_pc_pseudorange_rows",
+      "no drop reason is silently folded into another",
+      "raw/base/nav hashes and read counts are recorded independently"
+    ]
+  },
+  "routes_and_inputs": {
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "input_policy": "Use only the exact Phase64-pinned raw Android device_gnss.csv, device_imu.csv, broadcast brdc.nav, and base RINEX member for each route in a later structural stage. Existing base hashes/bytes and finite header coordinates are metadata pins, not new inputs here.",
+    "pinned_base_artifacts": "Phase65/72 route base-member hashes and bytes; no additional-frequency-band selection is combined in the first Phase73 candidate",
+    "forbidden": [
+      "ground_truth.csv and any Phase45 truth-derived residual",
+      "MAT/MATLAB products",
+      "base_position.csv or base_offset.csv",
+      "WLS/SvPosition/SvElevation/precomputed coordinates",
+      "validation/holdout/Kaggle/token data",
+      "nav/solver/trajectory rerun after any truth read"
+    ]
+  },
+  "fixed_structural_gates_before_any_read": {
+    "route_count": 4,
+    "raw_and_base_hash_bytes_exact": true,
+    "all_core_values_finite": true,
+    "prediction_domain_coverage": 1.0,
+    "exact_key_duplicates_and_extras": 0,
+    "same_satellite_signal_only": true,
+    "retained_finite_pc_fraction_per_route": 1.0,
+    "factor_count_consistency": "retained finite-pc rows equal inserted undifferenced pseudorange factors; TDCP/Doppler/IMU counts are unchanged relative to the same control",
+    "retention_reporting": "retained/original is descriptive and must not be relabeled as full prediction-domain or truth-row coverage; no threshold is lowered or retroactively applied to Phase62/65/72 gates",
+    "candidate_repeat_identity": "candidate run1/run2 retained/drop telemetry, factor counts, canonical summary, and prediction rows byte-identical except explicitly excluded timing fields",
+    "control_identity": "flag-off control remains byte-identical to Phase43 after canonical path normalization and does not open a base file",
+    "no_solver_after_truth": true,
+    "truth_free": true,
+    "fail_closed": "any source/hash mismatch, nonfinite retained correction, accounting mismatch, new factor, changed non-pseudorange factor population, unexpected evaluator exception, or artifact-integrity failure stops before truth/accuracy"
+  },
+  "planned_matrix": {
+    "control_runs_per_route": 1,
+    "candidate_runs_per_route": 2,
+    "native_solver_invocations": 12,
+    "raw_device_gnss_reads": 12,
+    "raw_device_imu_reads": 12,
+    "broadcast_nav_reads": 12,
+    "base_rinex_reads": 12,
+    "truth_reads": 0,
+    "mat_reads": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_token_reads": 0,
+    "archive_reopens": 0
+  },
+  "read_accounting_at_freeze": {
+    "raw_device_gnss": 0,
+    "raw_device_imu": 0,
+    "base_rinex": 0,
+    "broadcast_nav": 0,
+    "truth": 0,
+    "mat": 0,
+    "archive_reopen": 0,
+    "solver_invocation": 0
+  },
+  "non_overlap_and_decision": {
+    "phase43": "preserve exact no-base champion and flag-off bytes",
+    "phase51": "do not combine Android SV-time uncertainty sigma floor",
+    "phase58": "do not combine Cn0 Doppler sigma calibration",
+    "phase61": "do not combine Cn0 pseudorange residual calibration",
+    "phase72": "do not combine preserve-additional-frequency-bands; this candidate tests only finite-pc graph masking",
+    "accuracy": "no truth or 0.782 evaluation is authorized by this freeze; a separate accuracy freeze requires a passed truth-free structural matrix",
+    "next_factor_if_no_go": "after a failed Phase73 structural matrix, return to official-source inventory and select exactly one new non-overlapping raw factor; do not tune the miss mask or relax its gates"
+  }
+}

@@ -1181,6 +1181,18 @@ made; Phase43 remains champion and the option remains experimental. See the
 [manifest](docs/use_cases/records/smartphone_r5_phase72_base_additional_frequency_bands_recovery_manifest_v1.json),
 and [sealed result](docs/use_cases/records/smartphone_r5_phase72_base_additional_frequency_bands_recovery_structural_failure_v1.json).
 
+Phase73 freezes the official source-exact pseudorange miss mask as a separate
+candidate.  In `correct_pseudorange.m`, linear interpolation returns NaN
+outside the base stream domain; `fgo_gnss_imu.m` inserts a pseudorange factor
+only when the corrected `resPc` is finite.  The new opt-in will therefore keep
+and subtract only finite in-domain base corrections, dropping missing-stream,
+out-of-domain, or nonfinite pseudorange factors while leaving TDCP, Doppler,
+IMU, SPP, and the Phase43 flag-off path unchanged.  The retained/original
+fraction is reported separately from prediction-domain coverage and does not
+relax any prior gate.  No raw/truth/accuracy read has occurred and no `0.782`
+claim is made.  See the [Phase73 contract](docs/use_cases/smartphone_native_fgo_phase73_source_exact_pseudorange_miss_mask.md)
+and [freeze](docs/use_cases/records/smartphone_r5_phase73_source_exact_pseudorange_miss_mask_freeze_v1.json).
+
 ## Docs
 
 - <https://rsasaki0109.github.io/gnssplusplus-library/>
