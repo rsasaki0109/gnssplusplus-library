@@ -167,16 +167,17 @@
     "raw_frequency_hz": "CarrierFrequencyHz as reported by Android; no nominal replacement in the primary relation",
     "nominal_frequency_hz": "source constants for the parsed system/signal; frequency offset ppm=(CarrierFrequencyHz-f_nominal)/f_nominal*1e6",
     "signed_adr_m": "-AccumulatedDeltaRangeMeters only for the five published Samsung sign-correction models; Pixel5 preserves adapter ADR sign",
-    "adr_phase_cycles": "phi_k = signed_ADR_k * CarrierFrequencyHz_k / c",
+    "adr_phase_cycles": "phi_k = signed_ADR_k * CarrierFrequencyHz_k / c in the positive range-phase convention used for the ADR/rate relation; Android's RF CarrierPhase has the opposite sign (ADR = -k*carrier phase)",
     "pair_eligibility": "same system/SVID/signal adjacent Raw rows, 0<dt<=1.5 s, unchanged HardwareClockDiscontinuityCount, finite in-range Phase25 raw P, existing code/CN0/multipath masks clear, ADR valid with reset/cycle-slip bits clear",
     "frequency_aware_phase_rate_residual_m": "r_freq=(phi_k-phi_prev)*c/f_ref - 0.5*(PseudorangeRate_prev+PseudorangeRate_k)*dt, where f_ref=0.5*(f_prev+f_k)",
     "constant_frequency_control_residual_m": "r_control=(signed_ADR_k-signed_ADR_prev)-0.5*(PseudorangeRate_prev+PseudorangeRate_k)*dt",
     "frequency_leakage_m": "r_leak=(phi_k-phi_prev)*c/f_ref-(signed_ADR_k-signed_ADR_prev); this is the row-frequency-dependent component only",
-    "direct_phase_bias_residual_cycles": "when CarrierPhase or CarrierCycles is present and finite, b_k=direct_phase_k-phi_k; report b_k minus the per-satellite/signal arc median, never invent a phase or antenna field",
+    "direct_phase_bias_residual_cycles": "when CarrierPhase or CarrierCycles is present and finite, report the source-sign-consistent direct-vs-ADR phase relation (direct_phase_k + phi_k) after per-satellite/signal arc centering; CarrierPhase is fractional per Android and is never promoted to a full ambiguity",
     "antenna_phase_bias": "a direct antenna phase-center/bias field is required for an antenna interpretation; absence is a hard no-implementation finding, not a zero",
     "clock_center": "subtract the median signed residual in each endpoint utcTimeMillis+HardwareClockDiscontinuityCount group for robust non-common-mode reporting; retain raw and centered values",
     "normalization": "report cycles and metres using the observed pair f_ref; no coordinates, satellite geometry, truth, nav, or WLS",
-    "sign_source": "Phase41 direct Android range-rate and existing Pixel5 ADR sign contract; synthetic sign fixture is mandatory"
+    "sign_source": "Phase41 direct Android range-rate and existing Pixel5 ADR sign contract; Android GnssMeasurement defines accumulated delta range = -k*carrier phase; synthetic sign fixture is mandatory",
+    "android_source_reference": "https://developer.android.com/reference/android/location/GnssMeasurement#getAccumulatedDeltaRangeMeters()"
   },
   "controls_and_repeats": {
     "primary": "frequency-aware ADR phase-rate residual",
