@@ -6,7 +6,7 @@
     "branch": "feat/rtk-smartphone-performance-pr",
     "starting_source_commit": "7ac6d25",
     "candidate_source_commit": "9b00c65",
-    "runner_commit": "c48f8f8",
+    "runner_commit": "3f562f3",
     "freeze": {
       "path": "docs/use_cases/records/smartphone_r5_phase43_native_fallback_seed_quality_anchor_recovery_freeze_v1.json",
       "sha256": "9278a835a21e3a19027aefd3675aba45d8f1f9e19183cbc5590850b776722400"
@@ -33,7 +33,7 @@
     },
     "matrix_runner": {
       "path": "apps/commands/benchmarks/gnss_smartphone_phase43_fallback_seed_quality_anchor_recovery.py",
-      "sha256": "1ff1e98007c0cb7b0cd9be1b1ce11dea0149d10eaeb07448e026a0702663791f"
+      "sha256": "e7169898c44111ec9d3311be81078d9e53cc029d43509e4fbbea458f46fbecd4"
     },
     "focused_test": {
       "path": "tests/test_smartphone_phase43_fallback_seed_quality_anchor_recovery.py",
