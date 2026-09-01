@@ -849,6 +849,20 @@ no tuning or solver rerun occurred, and the Phase43 champion remains preserved.
 See the [Phase51 result record](docs/use_cases/records/smartphone_r5_phase51_android_sv_time_uncertainty_sigma_floor_result_v1.json)
 and [evaluator manifest v2](docs/use_cases/records/smartphone_r5_phase51_android_sv_time_uncertainty_sigma_floor_evaluator_manifest_v2.json).
 
+Phase52 performs the sealed integrity recovery using only the immutable Phase51
+candidate/control run1 outputs; it fixes the warm-up accounting by requiring
+full prediction-domain coverage while keeping truth-row coverage informational.
+Each of the four Phase44 development truths was read once in one scorer process,
+with no solver rerun or tuning.  The candidate scores are 1.590625 m (MTV-a),
+2.518514 m (MTV-h), 4.320207 m (LAX-t), and 3.945431 m (MTV-u), for a
+3.093694 m macro score versus the 3.536447 m control (0.442752 m improvement).
+The result is no-go: LAX exceeds the 3 m route gate, MTV-u regresses by
+0.038273 m, and the candidate macro/route absolute gates fail.  Phase43 remains
+the champion and the Phase51 option remains experimental; fresh validation and
+the 0.782 target were not pursued.  See the [Phase52 result record](docs/use_cases/records/smartphone_r5_phase52_android_sv_time_uncertainty_integrity_recovery_result_v1.json),
+[freeze](docs/use_cases/records/smartphone_r5_phase52_android_sv_time_uncertainty_integrity_recovery_freeze_v1.json),
+and [evaluator manifest v2](docs/use_cases/records/smartphone_r5_phase52_android_sv_time_uncertainty_integrity_recovery_evaluator_manifest_v2.json).
+
 ## Docs
 
 - <https://rsasaki0109.github.io/gnssplusplus-library/>
