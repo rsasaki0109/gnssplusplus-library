@@ -1,0 +1,94 @@
+{
+  "schema_version": "smartphone-r5-phase66-phase65-structural-integrity-recovery-failure.v1",
+  "phase": 66,
+  "execution_label": "Luna Max",
+  "status": "fail-closed-evaluator-integrity",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase66_phase65_structural_integrity_recovery_freeze_v1.json",
+    "sha256": "39aa2edc84d03301a49f2b23f060efdd055d90fbd7a8b08c7558d48e2ede808e"
+  },
+  "manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase66_phase65_structural_integrity_recovery_manifest_v1.json",
+    "sha256": "41b27dcbe3015e36d4f20c7a4dbeec4058d30fa2e5f3ad6cac47d31c2e657160"
+  },
+  "evaluator": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase66_phase65_structural_integrity_recovery.py",
+    "sha256": "837c0ffce5e386d26cbc792adcfdbde831b7b3256234d89e3cb35ccd5bdabe2f",
+    "commit": "c3da74f"
+  },
+  "source_commit": "f8cdf3b",
+  "prior_phase65_failure_preserved": {
+    "path": "docs/use_cases/records/smartphone_r5_phase65_native_base_pseudorange_compensation_structural_failure_v1.json",
+    "sha256": "fd346e1289a3dca726f45da001972c37d4f54c4808af50d44dce6c9a94f2d669",
+    "partial_output_reused": false
+  },
+  "failure": {
+    "class": "phase66_run_case_report_schema_mismatch",
+    "error": "The new matrix stopped after the first MTV-a control process: P65.run_case() returns artifact_report(), whose diagnostics merge overwrites the artifact metadata summary object with the parsed summary JSON. Therefore control['summary'] has no sha256 key, while Phase66 compare_control_reference() expected a nested artifact hash object. The frozen Phase43 reference and the newly generated summary are nevertheless byte-identical (summary SHA d4980260e257c92d7e2fb716f900501fd55c3eb9278f9b38a4f72ac2e62303fe).",
+    "root_cause": "P65.artifact_report constructs summary metadata and then expands validate_summary diagnostics; validate_summary returns {'summary': parsed_summary}, causing a key collision. The Phase66 fixture covered the reference nesting but did not cover this run_case report shape.",
+    "candidate_runs_completed": 0,
+    "remaining_native_invocations_not_run": 11,
+    "structural_gate": "not-evaluable; fail closed",
+    "no_runner_repair_or_rerun_in_phase66": true,
+    "no_accuracy_or_truth_evaluation": true
+  },
+  "new_phase66_output": {
+    "failure_record": {
+      "path": "output/smartphone-r5/phase66-phase65-structural-integrity-recovery-v1/phase66_phase65_structural_integrity_recovery_failure.json",
+      "bytes": 342,
+      "sha256": "8e0ee6451bb29f7336da26d48cccb4f7726af65e14427dcdbbade79abae07005"
+    },
+    "partial_control_artifact": {
+      "route": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "variant": "control",
+      "run": 1,
+      "submission": {
+        "path": "output/smartphone-r5/phase66-phase65-structural-integrity-recovery-v1/2021-03-16-18-59-us-ca-mtv-a/pixel5/control/run1/submission.csv",
+        "bytes": 172694,
+        "sha256": "d4d7652e5d12389466e586fe2d8e85d34977a7e11036cee2f591a89293c5426c",
+        "phase43_identity": true
+      },
+      "summary": {
+        "path": "output/smartphone-r5/phase66-phase65-structural-integrity-recovery-v1/2021-03-16-18-59-us-ca-mtv-a/pixel5/control/run1/summary.json",
+        "bytes": 14534,
+        "sha256": "d4980260e257c92d7e2fb716f900501fd55c3eb9278f9b38a4f72ac2e62303fe",
+        "phase43_identity": true
+      },
+      "run_log": {
+        "path": "output/smartphone-r5/phase66-phase65-structural-integrity-recovery-v1/2021-03-16-18-59-us-ca-mtv-a/pixel5/control/run1/run.log",
+        "bytes": 113,
+        "sha256": "67fc4fe986a1ab61f38212163aa35fdb24caf78d9256a02774aa3c76f81d8c28"
+      }
+    }
+  },
+  "read_accounting": {
+    "hash_verification_reads": {
+      "device_gnss": 4,
+      "device_imu": 4,
+      "broadcast_nav": 4,
+      "base_rinex": 4
+    },
+    "native_solver_invocations_started": 1,
+    "native_solver_invocations_completed": 1,
+    "raw_device_gnss_process_reads": 1,
+    "raw_device_imu_process_reads": 1,
+    "broadcast_nav_process_reads": 1,
+    "base_rinex_process_reads": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_token_reads": 0,
+    "archive_reopens": 0,
+    "partial_phase65_output_reuse": false,
+    "post_truth_tuning": false
+  },
+  "decision": {
+    "phase66_structural_gate": "not-evaluable; fail closed",
+    "native_base_correction_authorized_for_accuracy": false,
+    "phase43_champion_preserved": true,
+    "phase51_experimental_preserved": true,
+    "phase58_experimental_preserved": true,
+    "next_action": "A separately frozen Phase67 evaluator-integrity recovery must normalize the P65 run_case artifact report schema or compare the emitted artifact files directly, add a fixture for the collision, and run a fresh full 12-invocation matrix. It must not reuse this partial Phase66 output.",
+    "zero_point_782": "not evaluated"
+  }
+}

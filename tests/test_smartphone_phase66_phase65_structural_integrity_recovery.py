@@ -67,6 +67,18 @@ class Phase66NestedHashSchemaTest(unittest.TestCase):
         self.assertIn("P65_FAILURE", source)
         self.assertNotIn("phase65-native-base-pseudorange-compensation-v1/candidate", source)
 
+    def test_phase65_report_collision_is_explicitly_fail_closed(self):
+        # P65.artifact_report() returns the parsed summary under this key after
+        # its diagnostics merge, rather than the artifact hash metadata. This
+        # fixture documents the exact shape that stopped the one-shot matrix.
+        control_report = {
+            "submission": {"sha256": "submission-digest"},
+            "summary": {"schema_version": "smartphone-r5-native-fgo-android-imu-no-base-run.v3"},
+        }
+        reference = self.runner.flat_reference_fixture()
+        with self.assertRaises(self.runner.Phase66Error):
+            self.runner.compare_control_reference(control_report, reference, "collision-fixture")
+
 
 if __name__ == "__main__":
     unittest.main()

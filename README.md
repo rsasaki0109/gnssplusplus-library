@@ -1102,6 +1102,19 @@ with Phase43 preserved as champion and no `0.782` claim.  See the
 [manifest](docs/use_cases/records/smartphone_r5_phase65_native_base_pseudorange_compensation_manifest_v1.json),
 and [integrity result](docs/use_cases/records/smartphone_r5_phase65_native_base_pseudorange_compensation_structural_failure_v1.json).
 
+Phase66 started a fresh integrity recovery with the corrected nested
+`phase43_control()` fixture, but stopped after one MTV-a control invocation.
+The newly generated control files are byte-identical to Phase43; the remaining
+failure is a report-schema collision in `P65.artifact_report()`, where parsed
+summary diagnostics overwrite the summary hash metadata expected by the
+recovery comparison. No candidate, accuracy truth, MAT, validation, or Kaggle
+read occurred. This is sealed fail-closed and requires a new Phase67 freeze;
+Phase43 remains champion and no `0.782` claim is made. See the
+[Phase66 recovery record](docs/use_cases/records/smartphone_r5_phase66_phase65_structural_integrity_recovery_failure_v1.json),
+[contract](docs/use_cases/smartphone_native_fgo_phase66_phase65_structural_integrity_recovery.md),
+[freeze](docs/use_cases/records/smartphone_r5_phase66_phase65_structural_integrity_recovery_freeze_v1.json),
+and [manifest](docs/use_cases/records/smartphone_r5_phase66_phase65_structural_integrity_recovery_manifest_v1.json).
+
 ## Docs
 
 - <https://rsasaki0109.github.io/gnssplusplus-library/>
