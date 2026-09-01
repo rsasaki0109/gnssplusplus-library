@@ -7,6 +7,14 @@ continuation line per five observation types. The pinned base members contain
 long single-line satellite records, so that assumption consumed the next `>`
 epoch marker as a satellite record.
 
+The first Phase69 recovery also encountered an integrity failure after three
+routes: the native RINEX system mapping recognizes SBAS (`S`), while the
+Python helper did not. That failure is preserved in the
+[Phase69 failure record](records/smartphone_r5_phase69_base_matching_taxonomy_recovery_failure_v1.json);
+no physical matching result was produced and no input is reread by that
+phase. Phase70 is a separately frozen recovery for this source-system
+mapping contract.
+
 The Phase69 parser uses physical record framing: a first satellite line longer
 than 80 columns is consumed alone; a standard line at most 80 columns consumes
 the declared `ceil(observation_type_count/5)` lines and rejects a premature
