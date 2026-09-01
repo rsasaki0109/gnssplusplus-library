@@ -176,11 +176,12 @@ def _relative(path: Path) -> str:
 
 
 def _route_phone(route: str) -> str:
-    try:
-        _, phone = route.split("/", 1)
-    except ValueError as exc:
-        raise _fail(f"invalid route identity: {route}") from exc
-    return phone
+    # Native submissions use the complete dataset identity in their ``phone``
+    # column (for example ``2021-08-24-.../pixel5``), while the archive member
+    # path separately carries the phone model.
+    if "/" not in route or route.endswith("/"):
+        raise _fail(f"invalid route identity: {route}")
+    return route
 
 
 def _route_member(route: str) -> str:

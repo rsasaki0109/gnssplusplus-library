@@ -20,7 +20,7 @@
   "evaluator": {
     "source": {
       "path": "apps/commands/benchmarks/gnss_smartphone_phase44_pixel5_development_accuracy.py",
-      "sha256": "3207e63ee44455e29689019aa55fc181de23a22cb1679bc482bbaa5ecf1c996f"
+      "sha256": "7caa4019a12ab89c87dc940d9e1f2d07664178f23fb0a9b045bebbf56e24ea49"
     },
     "test": {
       "path": "tests/test_smartphone_phase44_pixel5_development_accuracy.py",
