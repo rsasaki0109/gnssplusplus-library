@@ -40,6 +40,11 @@ struct Config {
         double relative_cost_convergence_threshold = 0.0;
         double absolute_cost_convergence_threshold = 0.0;
         double pseudorange_sigma_m = 3.0;
+        // Opt-in native Android measurement-variance model.  A valid
+        // ReceivedSvTimeUncertaintyNanos value is converted to metres at the
+        // input boundary and floors the existing raw pseudorange sigma;
+        // disabled by default for byte-identical legacy behaviour.
+        bool use_native_android_sv_time_uncertainty_sigma_floor = false;
         double pseudorange_elevation_sigma_power = 1.0;
         double min_elevation_deg = 10.0;
         double min_snr_dbhz = 0.0;

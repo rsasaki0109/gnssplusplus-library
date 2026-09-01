@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <libgnss++/algorithms/doppler_contract.hpp>
+#include <libgnss++/algorithms/android_sv_time_uncertainty.hpp>
 #include <libgnss++/algorithms/doppler_velocity_wls.hpp>
 #include <libgnss++/algorithms/fgo.hpp>
 #include <libgnss++/algorithms/fgo_quality_anchor.hpp>
@@ -75,6 +76,32 @@ TEST(FGOQualityAnchorTest, ReplayOrdersAreAnchorOutwardAndGraphChronological) {
 TEST(FGOQualityAnchorTest, ConfigIsOptInOnly) {
     FGOProcessor::FGOConfig config;
     EXPECT_FALSE(config.use_quality_anchor_initialization);
+    EXPECT_FALSE(config.use_native_android_sv_time_uncertainty_sigma_floor);
+}
+
+TEST(AndroidSvTimeUncertaintyTest, ConvertsNanosecondsWithoutScaleOrClip) {
+    using namespace android_sv_time_uncertainty;
+    EXPECT_NEAR(metersFromNanoseconds(10.0),
+                10.0e-9 * constants::SPEED_OF_LIGHT, 1e-12);
+    EXPECT_TRUE(std::isnan(metersFromNanoseconds(0.0)));
+    EXPECT_TRUE(std::isnan(metersFromNanoseconds(-1.0)));
+    EXPECT_TRUE(std::isnan(metersFromNanoseconds(
+        std::numeric_limits<double>::quiet_NaN())));
+    EXPECT_TRUE(std::isnan(metersFromNanoseconds(
+        std::numeric_limits<double>::infinity())));
+}
+
+TEST(AndroidSvTimeUncertaintyTest, FloorsOnlyWhenEnabledAndNeverClips) {
+    using namespace android_sv_time_uncertainty;
+    EXPECT_DOUBLE_EQ(sigmaWithFloor(3.0, 1.0, true), 3.0);
+    EXPECT_DOUBLE_EQ(sigmaWithFloor(3.0, 10.0, true), 10.0);
+    EXPECT_DOUBLE_EQ(sigmaWithFloor(3.0, 10.0, false), 3.0);
+    EXPECT_DOUBLE_EQ(sigmaWithFloor(3.0, 0.0, true), 3.0);
+    EXPECT_DOUBLE_EQ(sigmaWithFloor(3.0, std::numeric_limits<double>::quiet_NaN(), true),
+                     3.0);
+    // There is no upper clip: an intentionally large source uncertainty is
+    // retained exactly as the source-derived floor.
+    EXPECT_DOUBLE_EQ(sigmaWithFloor(3.0, 1.0e9, true), 1.0e9);
 }
 
 TEST(ResidualIonosphereContractTest, UsesFiniteThinShellAndFrequencyScale) {

@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
+#include <limits>
 #include <string>
 #include <unistd.h>
 
@@ -19,7 +20,8 @@ constexpr const char* kHeader =
     "BiasUncertaintyNanos,TimeOffsetNanos,HardwareClockDiscontinuityCount,Svid,ConstellationType,"
     "ReceivedSvTimeNanos,PseudorangeRateMetersPerSecond,"
     "AccumulatedDeltaRangeState,AccumulatedDeltaRangeMeters,"
-    "CarrierFrequencyHz,Cn0DbHz,SignalType,RawPseudorangeMeters\n";
+    "CarrierFrequencyHz,Cn0DbHz,SignalType,ReceivedSvTimeUncertaintyNanos,"
+    "RawPseudorangeMeters\n";
 
 std::filesystem::path fixturePath(const char* stem) {
     return std::filesystem::temp_directory_path() /
@@ -43,7 +45,9 @@ void writeRow(std::ostream& output,
               double raw_pseudorange = 0.0,
               bool include_raw_pseudorange = false,
               double time_offset_nanos = 0.0,
-              double bias_uncertainty_nanos = 0.0) {
+              double bias_uncertainty_nanos = 0.0,
+              double received_sv_time_uncertainty_nanos =
+                  std::numeric_limits<double>::quiet_NaN()) {
     output << std::setprecision(17)
            << "Raw," << utc_millis << ',' << time_nanos << ',' << full_bias_nanos
            << ",0," << bias_uncertainty_nanos << ',' << time_offset_nanos
@@ -51,6 +55,10 @@ void writeRow(std::ostream& output,
            << received_sv_time_nanos << ',' << pseudorange_rate << ','
            << adr_state << ',' << adr_m << ',' << frequency_hz << ',' << cn0 << ','
            << signal;
+    output << ',';
+    if (std::isfinite(received_sv_time_uncertainty_nanos)) {
+        output << received_sv_time_uncertainty_nanos;
+    }
     output << ',';
     if (include_raw_pseudorange) output << raw_pseudorange;
     output << '\n';
@@ -114,6 +122,57 @@ TEST(AndroidRawGnssTest, ReconstructsRawClockAndObservableSigns) {
     EXPECT_NEAR(observation.carrier_phase, -42.0 / wavelength, 1e-12);
     EXPECT_EQ(result.diagnostics.enriched_pseudorange_checks, 1u);
     EXPECT_EQ(result.diagnostics.enriched_pseudorange_mismatches, 0u);
+    std::filesystem::remove(path);
+}
+
+TEST(AndroidRawGnssTest, ConvertsReceivedSvTimeUncertaintyToMetresAndFailsClosed) {
+    const auto path = fixturePath("sv_time_uncertainty");
+    constexpr std::int64_t full_bias = -1'300'000'000'000'000'000LL;
+    constexpr int week = 2200;
+    constexpr double tow = 100'000.123;
+    const auto time_nanos = static_cast<std::int64_t>(
+        static_cast<long double>(full_bias) +
+        (static_cast<long double>(week) * 604'800.0L + tow) * 1.0e9L);
+    const auto transmit_nanos = static_cast<std::int64_t>((tow - 0.070) * 1.0e9);
+    {
+        std::ofstream output(path);
+        ASSERT_TRUE(output.is_open());
+        output << kHeader;
+        writeRow(output, 1'700'000'000'000LL, time_nanos, full_bias,
+                 transmit_nanos, 3, 1, 0.0, 1, 42.0,
+                 constants::GPS_L1_FREQ, 40.0, "GPS_L1_CA", 0.0, false,
+                 0.0, 0.0, 10.0);
+        writeRow(output, 1'700'000'001'000LL, time_nanos + 1'000'000LL,
+                 full_bias, transmit_nanos + 1'000'000LL, 4, 1, 0.0, 1,
+                 42.0, constants::GPS_L1_FREQ, 40.0, "GPS_L1_CA", 0.0,
+                 false, 0.0, 0.0, 0.0);
+        writeRow(output, 1'700'000'002'000LL, time_nanos + 2'000'000LL,
+                 full_bias, transmit_nanos + 2'000'000LL, 5, 1, 0.0, 1,
+                 42.0, constants::GPS_L1_FREQ, 40.0, "GPS_L1_CA", 0.0,
+                 false, 0.0, 0.0, -1.0);
+        // A textual non-finite value is accepted as unavailable and must not
+        // make the complete raw row fail.
+        output << std::setprecision(17)
+               << "Raw," << 1'700'000'003'000LL << ',' << time_nanos + 3'000'000LL
+               << ',' << full_bias << ",0,0,0,7,6,1,"
+               << transmit_nanos + 3'000'000LL << ",0,1,42,"
+               << constants::GPS_L1_FREQ << ",40,GPS_L1_CA,nan,\n";
+    }
+    AndroidRawGnssResult result;
+    std::string error;
+    ASSERT_TRUE(loadAndroidRawGnssCsv(path.string(), AndroidRawGnssConfig{},
+                                      result, error))
+        << error;
+    ASSERT_EQ(result.observations.epochs.size(), 4U);
+    const auto& valid = result.observations.epochs[0].observations.front();
+    EXPECT_TRUE(valid.has_received_sv_time_uncertainty_m);
+    EXPECT_NEAR(valid.received_sv_time_uncertainty_m,
+                10.0e-9 * constants::SPEED_OF_LIGHT, 1e-12);
+    for (std::size_t i = 1; i < result.observations.epochs.size(); ++i) {
+        const auto& unavailable = result.observations.epochs[i].observations.front();
+        EXPECT_FALSE(unavailable.has_received_sv_time_uncertainty_m);
+        EXPECT_DOUBLE_EQ(unavailable.received_sv_time_uncertainty_m, 0.0);
+    }
     std::filesystem::remove(path);
 }
 

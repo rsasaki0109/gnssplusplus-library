@@ -1,5 +1,6 @@
 #include <libgnss++/algorithms/fgo.hpp>
 #include <libgnss++/algorithms/fgo_quality_anchor.hpp>
+#include <libgnss++/algorithms/android_sv_time_uncertainty.hpp>
 
 #include <libgnss++/algorithms/lambda.hpp>
 #include <libgnss++/algorithms/doppler_contract.hpp>
@@ -571,6 +572,22 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                                            config_.pseudorange_sigma_m /
                                                std::max(1e-6,
                                                         pseudorange_elevation_scale));
+                factor.android_sv_time_uncertainty_available =
+                    observation.has_received_sv_time_uncertainty_m &&
+                    std::isfinite(observation.received_sv_time_uncertainty_m) &&
+                    observation.received_sv_time_uncertainty_m > 0.0;
+                if (factor.android_sv_time_uncertainty_available) {
+                    factor.android_sv_time_uncertainty_floor_m =
+                        observation.received_sv_time_uncertainty_m;
+                    const double existing_sigma = factor.sigma_m;
+                    factor.sigma_m = android_sv_time_uncertainty::sigmaWithFloor(
+                        existing_sigma,
+                        factor.android_sv_time_uncertainty_floor_m,
+                        config_.use_native_android_sv_time_uncertainty_sigma_floor);
+                    factor.android_sv_time_uncertainty_floor_applied =
+                        config_.use_native_android_sv_time_uncertainty_sigma_floor &&
+                        factor.sigma_m > existing_sigma;
+                }
                 if (!upstream::finitePositive(factor.sigma_m)) {
                     continue;
                 }
@@ -983,6 +1000,48 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
         problem.pseudorange_factors.swap(filtered_pseudorange);
         problem.diagnostics.upstream_pseudorange_factors =
             problem.pseudorange_factors.size();
+    }
+
+    if (config_.use_native_android_sv_time_uncertainty_sigma_floor) {
+        problem.diagnostics
+            .native_android_sv_time_uncertainty_sigma_floor_enabled = true;
+        std::vector<double> floors;
+        floors.reserve(problem.pseudorange_factors.size());
+        for (const auto& factor : problem.pseudorange_factors) {
+            if (!factor.android_sv_time_uncertainty_available ||
+                !std::isfinite(factor.android_sv_time_uncertainty_floor_m) ||
+                factor.android_sv_time_uncertainty_floor_m <= 0.0) {
+                ++problem.diagnostics
+                    .native_android_sv_time_uncertainty_rows_fallback;
+                continue;
+            }
+            ++problem.diagnostics.native_android_sv_time_uncertainty_rows_applied;
+            if (factor.android_sv_time_uncertainty_floor_applied) {
+                ++problem.diagnostics
+                    .native_android_sv_time_uncertainty_factors_affected;
+            }
+            floors.push_back(factor.android_sv_time_uncertainty_floor_m);
+        }
+        if (!floors.empty()) {
+            std::sort(floors.begin(), floors.end());
+            const auto percentile = [&](double q) {
+                const double index =
+                    q * static_cast<double>(floors.size() - 1U);
+                const std::size_t lower = static_cast<std::size_t>(index);
+                const std::size_t upper =
+                    std::min(floors.size() - 1U, lower + 1U);
+                const double alpha = index - static_cast<double>(lower);
+                return floors[lower] * (1.0 - alpha) + floors[upper] * alpha;
+            };
+            problem.diagnostics
+                .native_android_sv_time_uncertainty_floor_min_m = floors.front();
+            problem.diagnostics
+                .native_android_sv_time_uncertainty_floor_median_m = percentile(0.5);
+            problem.diagnostics
+                .native_android_sv_time_uncertainty_floor_p95_m = percentile(0.95);
+            problem.diagnostics
+                .native_android_sv_time_uncertainty_floor_max_m = floors.back();
+        }
     }
 
     if (config_.use_doppler_velocity_wls_initialization) {

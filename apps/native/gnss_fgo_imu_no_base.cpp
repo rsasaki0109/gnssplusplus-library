@@ -94,6 +94,9 @@ struct Options {
     bool native_upstream_position_offset = false;
     bool native_signal_specific_galileo_tgd = false;
     bool native_quality_anchor = false;
+    // Phase51 opt-in: floor each adopted raw Android pseudorange sigma with
+    // the source ReceivedSvTimeUncertaintyNanos converted to metres.
+    bool native_android_sv_time_uncertainty_sigma_floor = false;
     // Phase43 candidate: when the normal quality-anchor reconnaissance has no
     // eligible raw/nav solution, retry that same SPP reconnaissance with an
     // explicit -90 degree elevation gate and replay the selected anchor via
@@ -141,6 +144,7 @@ void usage(const char* program) {
                  " [--native-signal-specific-galileo-tgd]"
                  " [--native-quality-anchor]"
                  " [--native-fallback-seed-quality-anchor-recovery]"
+                 " [--native-android-sv-time-uncertainty-sigma-floor]"
                  " [--native-gnss-first-velocity-only-handoff]"
                  " [--native-direct-doppler-wls-handoff]\n";
 }
@@ -260,6 +264,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
             options.native_quality_anchor = true;
         } else if (arg == "--native-fallback-seed-quality-anchor-recovery") {
             options.native_fallback_seed_quality_anchor_recovery = true;
+        } else if (arg == "--native-android-sv-time-uncertainty-sigma-floor") {
+            options.native_android_sv_time_uncertainty_sigma_floor = true;
         } else if (arg == "--native-gnss-first-velocity-only-handoff") {
             options.native_gnss_first_velocity_only_handoff = true;
         } else if (arg == "--native-direct-doppler-wls-handoff") {
@@ -309,6 +315,11 @@ bool parseArguments(int argc, char** argv, Options& options) {
     }
     if (options.android_raw_clock_only && !android_raw) {
         std::cerr << "--android-raw-clock-only requires Android raw GNSS/IMU input\n";
+        return false;
+    }
+    if (options.native_android_sv_time_uncertainty_sigma_floor && !android_raw) {
+        std::cerr << "--native-android-sv-time-uncertainty-sigma-floor requires "
+                     "Android raw GNSS/IMU input\n";
         return false;
     }
     if (options.android_raw_utc_key_contract &&
@@ -1911,6 +1922,34 @@ std::string makeSummary(const Options& options,
         << "  \"native_quality_anchor\": "
         << (options.native_quality_anchor ? "true" : "false") << ",\n"
         ;
+    if (options.native_android_sv_time_uncertainty_sigma_floor) {
+        const auto& uncertainty = problem.diagnostics;
+        out << "  \"native_android_sv_time_uncertainty_sigma_floor\": {\n"
+            << "    \"enabled\": true,\n"
+            << "    \"source_field\": \"ReceivedSvTimeUncertaintyNanos\",\n"
+            << "    \"sigma_formula\": \"max(existing_sigma_m, c*uncertainty_nanos*1e-9)\",\n"
+            << "    \"speed_of_light_mps\": "
+            << libgnss::constants::SPEED_OF_LIGHT << ",\n"
+            << "    \"coefficient\": 1.0,\n"
+            << "    \"upper_clip\": false,\n"
+            << "    \"spp_applied\": false,\n"
+            << "    \"scope\": \"adopted raw Android FGO pseudorange factors\",\n"
+            << "    \"rows_applied\": "
+            << uncertainty.native_android_sv_time_uncertainty_rows_applied << ",\n"
+            << "    \"rows_fallback_existing_sigma\": "
+            << uncertainty.native_android_sv_time_uncertainty_rows_fallback << ",\n"
+            << "    \"factors_affected\": "
+            << uncertainty.native_android_sv_time_uncertainty_factors_affected << ",\n"
+            << "    \"floor_min_m\": "
+            << uncertainty.native_android_sv_time_uncertainty_floor_min_m << ",\n"
+            << "    \"floor_median_m\": "
+            << uncertainty.native_android_sv_time_uncertainty_floor_median_m << ",\n"
+            << "    \"floor_p95_m\": "
+            << uncertainty.native_android_sv_time_uncertainty_floor_p95_m << ",\n"
+            << "    \"floor_max_m\": "
+            << uncertainty.native_android_sv_time_uncertainty_floor_max_m << "\n"
+            << "  },\n";
+    }
     if (options.native_fallback_seed_quality_anchor_recovery) {
         out << "  \"native_fallback_seed_quality_anchor_recovery\": true,\n";
     }
@@ -3062,6 +3101,8 @@ int main(int argc, char** argv) {
         options.native_fallback_seed_quality_anchor_recovery;
     config.use_fallback_seed_quality_anchor_recovery =
         options.native_fallback_seed_quality_anchor_recovery;
+    config.use_native_android_sv_time_uncertainty_sigma_floor =
+        options.native_android_sv_time_uncertainty_sigma_floor;
     if (android_raw) {
         // The raw path starts SPP from the route-independent Earth-surface
         // initializer above.  Applying a nonzero elevation mask at that

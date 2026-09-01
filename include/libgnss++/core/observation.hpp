@@ -26,6 +26,10 @@ struct Observation {
     // field; non-Android/RINEX observations leave it unset.
     double pseudorange_rate_mps = 0.0; ///< Android PseudorangeRate [m/s]
     double source_carrier_frequency_hz = 0.0; ///< Android CarrierFrequencyHz
+    // Optional Android ReceivedSvTimeUncertaintyNanos converted to a
+    // source-exact one-sigma range uncertainty [m].  Non-Android/RINEX rows
+    // and missing/non-finite/non-positive source values leave this unset.
+    double received_sv_time_uncertainty_m = 0.0;
     double snr = 0.0;               ///< Signal-to-noise ratio in dB-Hz
     std::string pseudorange_observation_type;   ///< RINEX code observation type, e.g. C1C
     std::string carrier_phase_observation_type; ///< RINEX carrier observation type, e.g. L1C
@@ -36,6 +40,7 @@ struct Observation {
     bool has_doppler = false;       ///< Doppler data available
     bool has_pseudorange_rate_mps = false; ///< Source raw-rate diagnostic
     bool has_source_carrier_frequency_hz = false; ///< Source frequency diagnostic
+    bool has_received_sv_time_uncertainty_m = false;
 
     // Raw Android quality provenance retained for truth-free row-attrition
     // audits.  These fields are metadata only; estimator code continues to

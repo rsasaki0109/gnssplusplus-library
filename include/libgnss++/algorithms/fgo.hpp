@@ -104,6 +104,12 @@ public:
         // opt-in candidate.  The field is diagnostic-only when the candidate
         // is disabled.
         double residual_ionosphere_coefficient = 0.0;
+        // Source-exact Android ReceivedSvTimeUncertaintyNanos provenance.
+        // The floor is applied only when the corresponding opt-in config is
+        // enabled; these fields are never populated from truth or WLS data.
+        double android_sv_time_uncertainty_floor_m = 0.0;
+        bool android_sv_time_uncertainty_available = false;
+        bool android_sv_time_uncertainty_floor_applied = false;
     };
 
     struct TimeDifferencedCarrierFactor {
@@ -350,6 +356,17 @@ public:
         std::size_t galileo_e1_inav_group_delay_rows = 0;
         std::size_t galileo_e1_group_delay_source_fallback_rows = 0;
         std::size_t galileo_e1_group_delay_invalid_rows = 0;
+        // Native Android ReceivedSvTimeUncertaintyNanos sigma-floor telemetry
+        // over the final FGO pseudorange-factor population after existing
+        // masks.  These remain zero/false when the option is disabled.
+        bool native_android_sv_time_uncertainty_sigma_floor_enabled = false;
+        std::size_t native_android_sv_time_uncertainty_rows_applied = 0;
+        std::size_t native_android_sv_time_uncertainty_rows_fallback = 0;
+        std::size_t native_android_sv_time_uncertainty_factors_affected = 0;
+        double native_android_sv_time_uncertainty_floor_min_m = 0.0;
+        double native_android_sv_time_uncertainty_floor_median_m = 0.0;
+        double native_android_sv_time_uncertainty_floor_p95_m = 0.0;
+        double native_android_sv_time_uncertainty_floor_max_m = 0.0;
     };
 
     // --- Phase 2 milestone 2b: IMU preintegration inputs ---

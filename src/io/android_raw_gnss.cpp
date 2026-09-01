@@ -1,5 +1,6 @@
 #include <libgnss++/io/android_raw_gnss.hpp>
 
+#include <libgnss++/algorithms/android_sv_time_uncertainty.hpp>
 #include <libgnss++/core/constants.hpp>
 
 #include <algorithm>
@@ -321,6 +322,9 @@ struct RawRow {
     double drift_nanos_per_second = std::numeric_limits<double>::quiet_NaN();
     bool has_drift_nanos_per_second = false;
     double bias_uncertainty_nanos = std::numeric_limits<double>::quiet_NaN();
+    double received_sv_time_uncertainty_nanos =
+        std::numeric_limits<double>::quiet_NaN();
+    bool has_received_sv_time_uncertainty_nanos = false;
     std::int64_t received_sv_time_nanos = 0;
     double time_offset_nanos = 0.0;
     int hardware_clock_discontinuity_count = 0;
@@ -383,6 +387,29 @@ bool parseRawRow(const std::vector<std::string>& row,
                            output.bias_uncertainty_nanos, true)) {
         error = "invalid BiasUncertaintyNanos";
         return false;
+    }
+    if (columns.has("receivedsvtimeuncertaintynanos")) {
+        // This optional field is allowed to be blank, NaN, or infinity: the
+        // native sigma-floor contract treats all of those, as well as zero or
+        // negative values, as an unavailable source uncertainty and retains
+        // the existing factor sigma.  Other malformed text remains a strict
+        // input error.
+        const std::string token = trim(
+            columns.value(row, "receivedsvtimeuncertaintynanos"));
+        if (token.empty()) {
+            output.received_sv_time_uncertainty_nanos =
+                std::numeric_limits<double>::quiet_NaN();
+        } else {
+            char* end = nullptr;
+            const double parsed = std::strtod(token.c_str(), &end);
+            if (end == token.c_str() || *end != '\0') {
+                error = "invalid ReceivedSvTimeUncertaintyNanos";
+                return false;
+            }
+            output.received_sv_time_uncertainty_nanos = parsed;
+        }
+        output.has_received_sv_time_uncertainty_nanos =
+            std::isfinite(output.received_sv_time_uncertainty_nanos);
     }
     if (columns.has("driftnanospersecond")) {
         if (!parseFiniteDouble(columns.value(row, "driftnanospersecond"),
@@ -916,6 +943,13 @@ bool loadAndroidRawGnssCsv(const std::string& path,
         observation.has_source_carrier_frequency_hz =
             std::isfinite(raw.carrier_frequency_hz) &&
             raw.carrier_frequency_hz > 0.0;
+        const double uncertainty_m =
+            android_sv_time_uncertainty::metersFromNanoseconds(
+                raw.received_sv_time_uncertainty_nanos);
+        observation.has_received_sv_time_uncertainty_m =
+            std::isfinite(uncertainty_m) && uncertainty_m > 0.0;
+        observation.received_sv_time_uncertainty_m =
+            observation.has_received_sv_time_uncertainty_m ? uncertainty_m : 0.0;
         observation.doppler = -raw.pseudorange_rate_mps / wavelength;
         observation.has_doppler = !doppler_masked &&
                                   std::isfinite(observation.doppler);
