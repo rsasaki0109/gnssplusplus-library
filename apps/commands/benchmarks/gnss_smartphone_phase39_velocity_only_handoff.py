@@ -287,7 +287,7 @@ def read_prediction(path: Path, dataset_id: str) -> list[tuple[int, float, float
             if tuple(reader.fieldnames or ()) != expected_header:
                 raise _fail(f"prediction header mismatch: {path}")
             for row_number, row in enumerate(reader, start=2):
-                if row.get("phone") != dataset_id.split("/", 1)[1]:
+                if row.get("phone") != dataset_id:
                     raise _fail(f"prediction phone mismatch: {path}")
                 timestamp = _parse_int(row.get("UnixTimeMillis"), "UnixTimeMillis", row_number)
                 if previous is not None and timestamp <= previous:
@@ -378,8 +378,8 @@ def validate_candidate_summary(path: Path, dataset_id: str, raw_epoch_count: int
         raise _fail(f"candidate handoff is not the final GNSS-first optimizer result: {dataset_id}")
     if gnss.get("velocity_initializer") != "raw-doppler-wls":
         raise _fail(f"candidate raw-Doppler initializer marker missing: {dataset_id}")
-    if int(gnss.get("velocity_initializer_propagated_count", -1)) != 0:
-        raise _fail(f"candidate velocity initializer used propagation/edge hold: {dataset_id}")
+    if int(gnss.get("velocity_initializer_edge_hold_count", -1)) != 0:
+        raise _fail(f"candidate velocity initializer used edge hold: {dataset_id}")
     if _finite_number(
         gnss.get("velocity_initializer_edge_hold_max_s"),
         "candidate velocity initializer edge-hold bound",

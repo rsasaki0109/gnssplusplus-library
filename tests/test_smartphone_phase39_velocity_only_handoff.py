@@ -101,6 +101,7 @@ class SmartphonePhase39VelocityOnlyHandoffTest(unittest.TestCase):
                 "velocity_handoff_source": "gnss-first-optimizer-result",
                 "velocity_initializer": "raw-doppler-wls",
                 "velocity_initializer_propagated_count": 0,
+                "velocity_initializer_edge_hold_count": 0,
                 "velocity_initializer_edge_hold_max_s": 0.0,
                 "original_raw_seed_position_count": 2,
                 "original_raw_seed_position_invalid_count": 0,

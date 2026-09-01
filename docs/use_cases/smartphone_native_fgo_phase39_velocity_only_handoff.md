@@ -14,8 +14,9 @@ that optimizer, but it is only an initializer: the handed-off values are the
 final GNSS-first optimizer result, never WLS values or a position-difference
 proxy.  The candidate converts those final ECEF velocity states to ENU at the
 first original raw SPP position.  It requires one finite state for every raw
-observation epoch and a velocity norm no greater than 70 m/s.  WLS propagation
-and edge hold are disabled and recorded as zero.  The original raw SPP
+observation epoch and a velocity norm no greater than 70 m/s.  WLS edge hold
+is disabled and recorded as zero; any bounded interpolation remains an
+initializer diagnostic and is never handed off directly.  The original raw SPP
 positions and receiver clocks remain in the IMU problem; zero GNSS-first
 position/clock copies is an explicit diagnostic.
 GNSS-first position-invalid counts (including out-of-Earth states) are shown

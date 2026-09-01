@@ -570,6 +570,7 @@ struct ImuBuildReport {
     std::size_t gnss_first_velocity_valid_count = 0;
     std::size_t gnss_first_velocity_initializer_direct_count = 0;
     std::size_t gnss_first_velocity_initializer_propagated_count = 0;
+    std::size_t gnss_first_velocity_initializer_edge_hold_count = 0;
     double gnss_first_velocity_initializer_edge_hold_max_s = 0.0;
     double gnss_first_max_velocity_norm_mps = 0.0;
     double gnss_first_first_invalid_position_norm_m =
@@ -2278,6 +2279,8 @@ std::string makeSummary(const Options& options,
             << imu_report.gnss_first_velocity_initializer_direct_count << ",\n"
             << "    \"velocity_initializer_propagated_count\": "
             << imu_report.gnss_first_velocity_initializer_propagated_count << ",\n"
+            << "    \"velocity_initializer_edge_hold_count\": "
+            << imu_report.gnss_first_velocity_initializer_edge_hold_count << ",\n"
             << "    \"velocity_initializer_edge_hold_max_s\": "
             << imu_report.gnss_first_velocity_initializer_edge_hold_max_s << ",\n"
             << "    \"original_raw_seed_position_count\": "
@@ -2766,8 +2769,9 @@ int main(int argc, char** argv) {
         if (options.native_gnss_first_velocity_only_handoff) {
             // The candidate's GNSS-first velocity states are initialized from
             // the same raw receiver-only Doppler rows with the existing
-            // truth-free bounded WLS physical gate.  Disable propagation so
-            // every handed-off epoch must have a direct raw estimate.
+            // truth-free bounded WLS physical gate.  Disable edge holds: any
+            // permitted bounded interpolation remains diagnostics-only, and
+            // the handed-off values are still the final optimizer states.
             gnss_first_config.use_doppler_velocity_wls_initialization = true;
             gnss_first_config.doppler_velocity_wls_edge_hold_max_s = 0.0;
         }
@@ -2786,6 +2790,9 @@ int main(int argc, char** argv) {
                 if (estimate.valid) {
                     if (estimate.propagated) {
                         ++imu_report.gnss_first_velocity_initializer_propagated_count;
+                        if (estimate.reason == "bounded-edge-hold") {
+                            ++imu_report.gnss_first_velocity_initializer_edge_hold_count;
+                        }
                     } else {
                         ++imu_report.gnss_first_velocity_initializer_direct_count;
                     }
