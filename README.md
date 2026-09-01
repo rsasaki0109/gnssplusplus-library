@@ -420,6 +420,33 @@ Kaggle, MAT, WLS, and precomputed-coordinate inputs remained sealed.  See the
 [evaluator manifest](docs/use_cases/records/smartphone_r5_phase44_pixel5_development_accuracy_evaluator_manifest_v1.json),
 and [result](docs/use_cases/records/smartphone_r5_phase44_pixel5_development_accuracy_result_v1.json).
 
+Phase 45 then audited whether the sealed four-route Pixel 5 residual is
+identifiable as a common raw-only factor.  The v3 freeze corrected the
+prediction-domain coverage wording while retaining the v1/v2 records and all
+numeric thresholds.  A single evaluator process reused the Phase44
+materialized truths and read each candidate, truth, and raw `device_imu.csv`
+once; it performed no archive access, solver rerun, corrected-coordinate
+write, validation/holdout read, MAT/WLS/precomputed inference, or Kaggle/token
+access.  The fixed local ENU diagnostics report route medians/MAD/covariance,
+prefix/tail and quartile/time drift, prediction-only speed bins, and raw
+UncalAccel/UncalMag orientation/heading groups.  Leave-one-route-out common
+median scores are diagnostic only.
+
+Phase 45 is `no-go-residual-not-identifiable`: route-center dispersion,
+prefix/tail stability, orientation independence, all-route LOO improvement,
+LOO macro improvement, and the 0.782 m reachability check fail.  The LOO
+macro moves from **3.533210 m** to **4.248509 m** (−0.715299 m), with maximum
+individual worsening **2.298791 m**; the full-cohort common-median diagnostic
+is **3.229678 m** macro and **3.220895 m** on MTV-h.  Known MTV-a/u warm-up
+rows remain unmatched while truth-row coverage is reported separately from
+the complete prediction-domain key coverage.  The strongest structure is
+common-median non-transfer; the one next source-supported raw factor is an
+Android raw GNSS receiver clock/timing residual, which is not implemented in
+this phase.  See the [Phase 45 contract](docs/use_cases/smartphone_native_fgo_phase45_pixel5_residual_diagnostic.md),
+[v3 freeze](docs/use_cases/records/smartphone_r5_phase45_pixel5_residual_diagnostic_freeze_v3.json),
+[evaluator manifest](docs/use_cases/records/smartphone_r5_phase45_pixel5_residual_diagnostic_evaluator_manifest_v1.json),
+and [result](docs/use_cases/records/smartphone_r5_phase45_pixel5_residual_diagnostic_result_v1.json).
+
 ### PPC 2024 goal matrix vs Kaiyodai and gici-open
 
 The audited KF/FGO selected profile clears the distance-weighted PPC public
