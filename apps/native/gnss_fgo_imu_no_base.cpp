@@ -568,6 +568,9 @@ struct ImuBuildReport {
     std::size_t gnss_first_velocity_nonfinite_count = 0;
     std::size_t gnss_first_velocity_over_bound_count = 0;
     std::size_t gnss_first_velocity_valid_count = 0;
+    std::size_t gnss_first_velocity_initializer_direct_count = 0;
+    std::size_t gnss_first_velocity_initializer_propagated_count = 0;
+    double gnss_first_velocity_initializer_edge_hold_max_s = 0.0;
     double gnss_first_max_velocity_norm_mps = 0.0;
     double gnss_first_first_invalid_position_norm_m =
         std::numeric_limits<double>::quiet_NaN();
@@ -2269,6 +2272,14 @@ std::string makeSummary(const Options& options,
             << imu_report.gnss_first_velocity_over_bound_count << ",\n"
             << "    \"max_velocity_norm_mps\": "
             << imu_report.gnss_first_max_velocity_norm_mps << ",\n"
+            << "    \"velocity_handoff_source\": \"gnss-first-optimizer-result\",\n"
+            << "    \"velocity_initializer\": \"raw-doppler-wls\",\n"
+            << "    \"velocity_initializer_direct_count\": "
+            << imu_report.gnss_first_velocity_initializer_direct_count << ",\n"
+            << "    \"velocity_initializer_propagated_count\": "
+            << imu_report.gnss_first_velocity_initializer_propagated_count << ",\n"
+            << "    \"velocity_initializer_edge_hold_max_s\": "
+            << imu_report.gnss_first_velocity_initializer_edge_hold_max_s << ",\n"
             << "    \"original_raw_seed_position_count\": "
             << imu_report.original_raw_seed_position_count << ",\n"
             << "    \"original_raw_seed_position_invalid_count\": "
@@ -2752,17 +2763,41 @@ int main(int argc, char** argv) {
         gnss_first_config.use_velocity_states = true;
         gnss_first_config.use_velocity_motion_factors = false;
         gnss_first_config.use_doppler_velocity_wls_initialization = false;
+        if (options.native_gnss_first_velocity_only_handoff) {
+            // The candidate's GNSS-first velocity states are initialized from
+            // the same raw receiver-only Doppler rows with the existing
+            // truth-free bounded WLS physical gate.  Disable propagation so
+            // every handed-off epoch must have a direct raw estimate.
+            gnss_first_config.use_doppler_velocity_wls_initialization = true;
+            gnss_first_config.doppler_velocity_wls_edge_hold_max_s = 0.0;
+        }
         // Upstream fgo_gnss.m permits up to 1000 LM iterations.  The raw
         // GNSS-first pass is a separate initializer, so use that published
         // bound without changing the frozen 12-iteration IMU pass.
         gnss_first_config.max_iterations = 1000;
         const libgnss::FGOProcessor gnss_first_processor(gnss_first_config);
+        libgnss::FGOProcessor::FGOProblem gnss_first_problem = problem;
+        if (options.native_gnss_first_velocity_only_handoff) {
+            gnss_first_problem =
+                gnss_first_processor.buildPseudorangeProblem(epochs, nav);
+            imu_report.gnss_first_velocity_initializer_edge_hold_max_s =
+                gnss_first_config.doppler_velocity_wls_edge_hold_max_s;
+            for (const auto& estimate : gnss_first_problem.doppler_velocity_wls_estimates) {
+                if (estimate.valid) {
+                    if (estimate.propagated) {
+                        ++imu_report.gnss_first_velocity_initializer_propagated_count;
+                    } else {
+                        ++imu_report.gnss_first_velocity_initializer_direct_count;
+                    }
+                }
+            }
+        }
         const libgnss::FGOProcessor::FGOResult gnss_first_result =
-            gnss_first_processor.optimizeProblem(problem);
+            gnss_first_processor.optimizeProblem(gnss_first_problem);
         imu_report.gnss_first_converged = gnss_first_result.diagnostics.converged;
         imu_report.gnss_first_epochs = gnss_first_result.solution.solutions.size();
         imu_report.gnss_first_doppler_factors =
-            problem.undifferenced_doppler_factors.size();
+            gnss_first_problem.undifferenced_doppler_factors.size();
         imu_report.gnss_first_velocity_states =
             gnss_first_result.epoch_velocities_ecef_mps.size();
         imu_report.gnss_first_iterations = gnss_first_result.diagnostics.iterations;

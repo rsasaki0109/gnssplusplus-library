@@ -75,6 +75,11 @@ class SmartphonePhase39VelocityOnlyHandoffTest(unittest.TestCase):
         self.assertIn("velocities_enu[index] = libgnss::ecef2enu(", helper)
         self.assertIn("report.gnss_first_positions_clocks_copied = 0U;", helper)
         self.assertIn("gnss_first_position_out_of_earth_count", helper)
+        self.assertIn("velocity_handoff_source", self.source)
+        self.assertIn("gnss-first-optimizer-result", self.source)
+        self.assertIn("velocity_initializer", self.source)
+        self.assertIn("raw-doppler-wls", self.source)
+        self.assertIn("doppler_velocity_wls_edge_hold_max_s = 0.0", self.source)
 
     def test_summary_validator_rejects_position_clock_copy(self) -> None:
         summary = {
@@ -93,6 +98,10 @@ class SmartphonePhase39VelocityOnlyHandoffTest(unittest.TestCase):
                 "velocity_nonfinite_count": 0,
                 "velocity_over_70_mps_count": 0,
                 "max_velocity_norm_mps": 10.0,
+                "velocity_handoff_source": "gnss-first-optimizer-result",
+                "velocity_initializer": "raw-doppler-wls",
+                "velocity_initializer_propagated_count": 0,
+                "velocity_initializer_edge_hold_max_s": 0.0,
                 "original_raw_seed_position_count": 2,
                 "original_raw_seed_position_invalid_count": 0,
                 "positions_clocks_copied": 1,

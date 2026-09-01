@@ -315,7 +315,8 @@ and [No-Go result](docs/use_cases/records/smartphone_r5_phase38_mtvh_failure_dia
 
 Phase 39 adds a truth-free, native opt-in candidate that hands off only the
 GNSS-first optimizer's independently optimized Doppler velocity/heading
-sequence.  Its ECEF-to-ENU origin is the first original raw SPP seed, while
+sequence.  A raw-Doppler WLS result is initialization only; the handed-off
+sequence is the final GNSS-first optimizer result.  Its ECEF-to-ENU origin is the first original raw SPP seed, while
 GNSS-first position and receiver-clock states are never copied.  Every epoch
 must have a finite velocity with norm <=70 m/s; the summary exposes GNSS-first
 out-of-Earth/invalid-position counts and the position/clock copy count.  The

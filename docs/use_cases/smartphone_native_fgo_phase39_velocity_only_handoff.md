@@ -9,11 +9,15 @@ GNSS-first position as an output or as an initialization coordinate:
 ```
 
 The GNSS-first P+D optimizer is retained only as an independent source of
-Doppler velocity states and heading seeds.  The candidate converts those ECEF
-velocity states to ENU at the first original raw SPP position.  It requires one
-finite state for every raw observation epoch and a velocity norm no greater
-than 70 m/s.  The original raw SPP positions and receiver clocks remain in the
-IMU problem; zero GNSS-first position/clock copies is an explicit diagnostic.
+Doppler velocity states and heading seeds.  A raw-Doppler WLS solve may seed
+that optimizer, but it is only an initializer: the handed-off values are the
+final GNSS-first optimizer result, never WLS values or a position-difference
+proxy.  The candidate converts those final ECEF velocity states to ENU at the
+first original raw SPP position.  It requires one finite state for every raw
+observation epoch and a velocity norm no greater than 70 m/s.  WLS propagation
+and edge hold are disabled and recorded as zero.  The original raw SPP
+positions and receiver clocks remain in the IMU problem; zero GNSS-first
+position/clock copies is an explicit diagnostic.
 GNSS-first position-invalid counts (including out-of-Earth states) are shown
 in the candidate summary and do not get hidden by a coordinate substitution.
 

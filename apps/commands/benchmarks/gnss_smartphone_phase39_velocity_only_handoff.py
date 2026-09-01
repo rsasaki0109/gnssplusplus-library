@@ -374,6 +374,17 @@ def validate_candidate_summary(path: Path, dataset_id: str, raw_epoch_count: int
         raise _fail(f"candidate GNSS-first velocity validity failed: {dataset_id}")
     if _finite_number(gnss.get("max_velocity_norm_mps"), "candidate max velocity") > MAX_SPEED_MPS:
         raise _fail(f"candidate GNSS-first velocity exceeds 70 m/s: {dataset_id}")
+    if gnss.get("velocity_handoff_source") != "gnss-first-optimizer-result":
+        raise _fail(f"candidate handoff is not the final GNSS-first optimizer result: {dataset_id}")
+    if gnss.get("velocity_initializer") != "raw-doppler-wls":
+        raise _fail(f"candidate raw-Doppler initializer marker missing: {dataset_id}")
+    if int(gnss.get("velocity_initializer_propagated_count", -1)) != 0:
+        raise _fail(f"candidate velocity initializer used propagation/edge hold: {dataset_id}")
+    if _finite_number(
+        gnss.get("velocity_initializer_edge_hold_max_s"),
+        "candidate velocity initializer edge-hold bound",
+    ) != 0.0:
+        raise _fail(f"candidate velocity initializer edge-hold gate changed: {dataset_id}")
     if int(gnss.get("original_raw_seed_position_count", -1)) != raw_epoch_count or int(gnss.get("original_raw_seed_position_invalid_count", -1)) != 0:
         raise _fail(f"candidate original raw SPP position gate failed: {dataset_id}")
     if int(gnss.get("positions_clocks_copied", -1)) != 0:
