@@ -82,6 +82,16 @@ public:
                       SignalType signal,
                       double& correction_m) const;
 
+    /**
+     * @brief Return whether a finite base residual stream was built for an
+     * exact satellite/signal key.
+     *
+     * This is deliberately separate from correctionAt(): callers use it to
+     * account for exact source-key matching before the in-domain interpolation
+     * and finiteness gates.  It does not perform any extrapolation or I/O.
+     */
+    bool hasStream(const SatelliteId& satellite, SignalType signal) const;
+
     const Diagnostics& diagnostics() const { return diagnostics_; }
 
 private:

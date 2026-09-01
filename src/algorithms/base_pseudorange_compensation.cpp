@@ -339,4 +339,9 @@ bool Model::correctionAt(const GNSSTime& time,
     return std::isfinite(correction_m);
 }
 
+bool Model::hasStream(const SatelliteId& satellite, SignalType signal) const {
+    const auto it = streams_.find({satellite, signal});
+    return it != streams_.end() && !it->second.empty();
+}
+
 }  // namespace libgnss::base_pseudorange_compensation

@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <libgnss++/algorithms/base_pseudorange_compensation.hpp>
+#include <libgnss++/io/rinex.hpp>
 
 #include <cmath>
 #include <limits>
@@ -45,3 +46,11 @@ TEST(BasePseudorangeCompensationTest, InvalidBuildFailsClosedWithoutPayloadIo) {
     EXPECT_FALSE(model.diagnostics().failure.empty());
 }
 
+TEST(BasePseudorangeCompensationTest, AdditionalBandsAreExplicitlyOptIn) {
+    io::RINEXReader reader;
+    EXPECT_FALSE(reader.preservesAdditionalFrequencyBands());
+    reader.setPreserveAdditionalFrequencyBands(true);
+    EXPECT_TRUE(reader.preservesAdditionalFrequencyBands());
+    reader.setPreserveAdditionalFrequencyBands(false);
+    EXPECT_FALSE(reader.preservesAdditionalFrequencyBands());
+}

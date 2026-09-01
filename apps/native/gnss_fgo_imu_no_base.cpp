@@ -35,6 +35,7 @@
 #include <iostream>
 #include <limits>
 #include <map>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -108,6 +109,11 @@ struct Options {
     // Phase65 opt-in: subtract source-compatible, smoothed base-station
     // pseudorange residuals from adopted undifferenced pseudorange factors.
     bool native_base_pseudorange_compensation = false;
+    // Phase71 opt-in: preserve one selected base observation per supported
+    // frequency band before building the Phase65 correction model.  This is
+    // deliberately scoped to the base reader and does not alter rover/nav
+    // observation selection or any factor population.
+    bool native_base_pseudorange_preserve_additional_frequency_bands = false;
     // Phase43 candidate: when the normal quality-anchor reconnaissance has no
     // eligible raw/nav solution, retry that same SPP reconnaissance with an
     // explicit -90 degree elevation gate and replay the selected anchor via
@@ -127,6 +133,33 @@ const char* carrierSignalName(libgnss::SignalType signal) {
         case libgnss::SignalType::GPS_L1CA: return "GPS_L1CA";
         case libgnss::SignalType::GAL_E1: return "GAL_E1";
         case libgnss::SignalType::GAL_E5A: return "GAL_E5A";
+        default: return "UNSUPPORTED";
+    }
+}
+
+const char* baseTelemetrySignalName(libgnss::SignalType signal) {
+    switch (signal) {
+        case libgnss::SignalType::GPS_L1CA: return "GPS_L1CA";
+        case libgnss::SignalType::GPS_L1P: return "GPS_L1P";
+        case libgnss::SignalType::GPS_L2P: return "GPS_L2P";
+        case libgnss::SignalType::GPS_L2C: return "GPS_L2C";
+        case libgnss::SignalType::GPS_L5: return "GPS_L5";
+        case libgnss::SignalType::GLO_L1CA: return "GLO_L1CA";
+        case libgnss::SignalType::GLO_L1P: return "GLO_L1P";
+        case libgnss::SignalType::GLO_L2CA: return "GLO_L2CA";
+        case libgnss::SignalType::GLO_L2P: return "GLO_L2P";
+        case libgnss::SignalType::GAL_E1: return "GAL_E1";
+        case libgnss::SignalType::GAL_E5A: return "GAL_E5A";
+        case libgnss::SignalType::GAL_E5B: return "GAL_E5B";
+        case libgnss::SignalType::GAL_E6: return "GAL_E6";
+        case libgnss::SignalType::BDS_B1I: return "BDS_B1I";
+        case libgnss::SignalType::BDS_B2I: return "BDS_B2I";
+        case libgnss::SignalType::BDS_B3I: return "BDS_B3I";
+        case libgnss::SignalType::BDS_B1C: return "BDS_B1C";
+        case libgnss::SignalType::BDS_B2A: return "BDS_B2A";
+        case libgnss::SignalType::QZS_L1CA: return "QZS_L1CA";
+        case libgnss::SignalType::QZS_L2C: return "QZS_L2C";
+        case libgnss::SignalType::QZS_L5: return "QZS_L5";
         default: return "UNSUPPORTED";
     }
 }
@@ -159,6 +192,7 @@ void usage(const char* program) {
                  " [--native-cn0-doppler-calibration]"
                  " [--native-base-pseudorange-compensation --native-base-rinex <base.obs>"
                  " --native-base-rinex-sha256 <sha256>]"
+                 " [--native-base-pseudorange-preserve-additional-frequency-bands]"
                  " [--native-gnss-first-velocity-only-handoff]"
                  " [--native-direct-doppler-wls-handoff]\n";
 }
@@ -288,6 +322,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
             options.native_cn0_doppler_calibration = true;
         } else if (arg == "--native-base-pseudorange-compensation") {
             options.native_base_pseudorange_compensation = true;
+        } else if (arg == "--native-base-pseudorange-preserve-additional-frequency-bands") {
+            options.native_base_pseudorange_preserve_additional_frequency_bands = true;
         } else if (arg == "--native-gnss-first-velocity-only-handoff") {
             options.native_gnss_first_velocity_only_handoff = true;
         } else if (arg == "--native-direct-doppler-wls-handoff") {
@@ -353,6 +389,12 @@ bool parseArguments(int argc, char** argv, Options& options) {
     if (options.native_base_pseudorange_compensation && !android_raw) {
         std::cerr << "--native-base-pseudorange-compensation requires Android raw "
                      "GNSS/IMU input\n";
+        return false;
+    }
+    if (options.native_base_pseudorange_preserve_additional_frequency_bands &&
+        !options.native_base_pseudorange_compensation) {
+        std::cerr << "--native-base-pseudorange-preserve-additional-frequency-bands "
+                     "requires --native-base-pseudorange-compensation\n";
         return false;
     }
     if (options.native_base_pseudorange_compensation &&
@@ -1149,6 +1191,7 @@ struct BasePseudorangeCompensationReport {
     bool enabled = false;
     bool built = false;
     bool applied = false;
+    bool preserve_additional_frequency_bands = false;
     std::string base_rinex_path;
     std::string base_rinex_sha256;
     std::string failure;
@@ -1169,6 +1212,16 @@ struct BasePseudorangeCompensationReport {
     std::size_t interpolation_misses = 0U;
     std::size_t adopted_pseudorange_rows = 0U;
     std::size_t adopted_rows_corrected = 0U;
+    // Phase71 exact denominator accounting.  A matched row has an exact
+    // (satellite,SignalType) stream in the finite base model; finite rows are
+    // the in-domain, finite correction subset of those matched rows.
+    std::size_t selected_band_observation_rows = 0U;
+    std::size_t selected_band_streams = 0U;
+    std::map<std::string, std::size_t>
+        selected_band_observation_rows_by_signal;
+    std::map<std::string, std::size_t> selected_band_streams_by_signal;
+    std::size_t matched_factor_rows = 0U;
+    std::size_t finite_correction_rows_among_matched = 0U;
     double correction_abs_p50_m = std::numeric_limits<double>::quiet_NaN();
     double correction_abs_p95_m = std::numeric_limits<double>::quiet_NaN();
     double correction_abs_max_m = std::numeric_limits<double>::quiet_NaN();
@@ -2023,6 +2076,19 @@ void writeJsonString(std::ostringstream& out, const std::string& value) {
     out << '"';
 }
 
+void writeJsonSizeMap(std::ostringstream& out,
+                      const std::map<std::string, std::size_t>& values) {
+    out << "{";
+    bool first = true;
+    for (const auto& [key, value] : values) {
+        if (!first) out << ", ";
+        first = false;
+        writeJsonString(out, key);
+        out << ": " << value;
+    }
+    out << "}";
+}
+
 std::string makeSummary(const Options& options,
                         const libgnss::FGOProcessor::FGOProblem& problem,
                         const libgnss::FGOProcessor::FGOResult& result,
@@ -2156,6 +2222,9 @@ std::string makeSummary(const Options& options,
             << ",\n"
             << "    \"applied\": " << (base_report.applied ? "true" : "false")
             << ",\n"
+            << "    \"preserve_additional_frequency_bands\": "
+            << (base_report.preserve_additional_frequency_bands ? "true" : "false")
+            << ",\n"
             << "    \"source_repository\": \"https://github.com/taroz/gsdc2023\",\n"
             << "    \"source_commit\": \"29923f9f370f09ebc00f96d8cca375007a18e7d5\",\n"
             << "    \"source_function\": \"functions/correct_pseudorange.m\",\n"
@@ -2210,6 +2279,16 @@ std::string makeSummary(const Options& options,
             << "    \"same_satellite_signal_only\": true,\n"
             << "    \"base_epochs\": " << base_report.base_epochs << ",\n"
             << "    \"base_observation_rows\": " << base_report.base_observation_rows << ",\n"
+            << "    \"selected_band_observation_rows\": "
+            << base_report.selected_band_observation_rows << ",\n"
+            << "    \"selected_band_streams\": "
+            << base_report.selected_band_streams << ",\n"
+            << "    \"selected_band_observation_rows_by_signal\": ";
+        writeJsonSizeMap(out, base_report.selected_band_observation_rows_by_signal);
+        out << ",\n"
+            << "    \"selected_band_streams_by_signal\": ";
+        writeJsonSizeMap(out, base_report.selected_band_streams_by_signal);
+        out << ",\n"
             << "    \"matching_streams\": " << base_report.matching_streams << ",\n"
             << "    \"matched_base_rows\": " << base_report.matched_base_rows << ",\n"
             << "    \"finite_base_residual_rows\": "
@@ -2221,6 +2300,26 @@ std::string makeSummary(const Options& options,
             << base_report.adopted_pseudorange_rows << ",\n"
             << "    \"adopted_rows_corrected\": "
             << base_report.adopted_rows_corrected << ",\n"
+            << "    \"matched_factor_rows\": "
+            << base_report.matched_factor_rows << ",\n"
+            << "    \"finite_correction_rows_among_matched\": "
+            << base_report.finite_correction_rows_among_matched << ",\n"
+            << "    \"matched_factor_fraction\": ";
+        if (base_report.adopted_pseudorange_rows > 0U) {
+            out << static_cast<double>(base_report.matched_factor_rows) /
+                         static_cast<double>(base_report.adopted_pseudorange_rows);
+        } else {
+            out << "null";
+        }
+        out << ",\n"
+            << "    \"finite_correction_fraction_among_matched\": ";
+        if (base_report.matched_factor_rows > 0U) {
+            out << static_cast<double>(base_report.finite_correction_rows_among_matched) /
+                         static_cast<double>(base_report.matched_factor_rows);
+        } else {
+            out << "null";
+        }
+        out << ",\n"
             << "    \"finite_correction_fraction\": ";
         if (base_report.adopted_pseudorange_rows > 0U) {
             out << static_cast<double>(base_report.adopted_rows_corrected) /
@@ -3219,9 +3318,13 @@ int main(int argc, char** argv) {
     base_pseudorange_report.base_rinex_path = options.native_base_rinex_path;
     base_pseudorange_report.base_rinex_sha256 =
         options.native_base_rinex_sha256;
+    base_pseudorange_report.preserve_additional_frequency_bands =
+        options.native_base_pseudorange_preserve_additional_frequency_bands;
     if (options.native_base_pseudorange_compensation) {
         libgnss::io::RINEXReader base_reader;
         libgnss::io::RINEXReader::RINEXHeader base_header;
+        base_reader.setPreserveAdditionalFrequencyBands(
+            options.native_base_pseudorange_preserve_additional_frequency_bands);
         if (!base_reader.open(options.native_base_rinex_path) ||
             !base_reader.readHeader(base_header)) {
             std::cerr << "failed to read frozen base RINEX header\n";
@@ -3231,6 +3334,25 @@ int main(int argc, char** argv) {
         if (!base_reader.readAllObservations(base_series)) {
             std::cerr << "failed to read frozen base RINEX observations\n";
             return 1;
+        }
+        std::set<std::string> selected_band_stream_keys;
+        for (const auto& epoch : base_series.epochs) {
+            for (const auto& observation : epoch.observations) {
+                ++base_pseudorange_report.selected_band_observation_rows;
+                const std::string signal_name =
+                    baseTelemetrySignalName(observation.signal);
+                ++base_pseudorange_report
+                          .selected_band_observation_rows_by_signal[signal_name];
+                const std::string stream_key =
+                    std::to_string(static_cast<int>(observation.satellite.system)) +
+                    ":" + std::to_string(static_cast<int>(observation.satellite.prn)) +
+                    ":" + signal_name;
+                if (selected_band_stream_keys.insert(stream_key).second) {
+                    ++base_pseudorange_report.selected_band_streams;
+                    ++base_pseudorange_report
+                              .selected_band_streams_by_signal[signal_name];
+                }
+            }
         }
         base_reader.close();
         base_pseudorange_report.header_version = base_header.version;
@@ -3553,6 +3675,11 @@ int main(int argc, char** argv) {
         base_pseudorange_report.adopted_pseudorange_rows =
             problem.pseudorange_factors.size();
         for (auto& factor : problem.pseudorange_factors) {
+            const bool exact_stream_matched = base_pseudorange_model.hasStream(
+                factor.satellite, factor.signal);
+            if (exact_stream_matched) {
+                ++base_pseudorange_report.matched_factor_rows;
+            }
             if (factor.epoch_index >= problem.epochs.size()) {
                 ++base_pseudorange_report.interpolation_misses;
                 continue;
@@ -3570,6 +3697,9 @@ int main(int argc, char** argv) {
             if (!std::isfinite(corrected)) {
                 ++base_pseudorange_report.interpolation_misses;
                 continue;
+            }
+            if (exact_stream_matched) {
+                ++base_pseudorange_report.finite_correction_rows_among_matched;
             }
             factor.corrected_pseudorange_m = corrected;
             ++base_pseudorange_report.adopted_rows_corrected;
