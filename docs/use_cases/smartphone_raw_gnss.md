@@ -3636,3 +3636,46 @@ The freeze, truth-free structural result, and evaluator-manifest v2 are:
 Do not repair or retune this frozen phase after its structural failure.  The
 future holdout remains sealed and no validation accuracy/generalization claim
 is made.
+
+### Phase 34 fresh-validation protocol recovery (development-only pass)
+
+Phase 34 preserved the byte-sealed Phase 33 control and quality-anchor
+candidate; it did not rerun the solver or change any candidate parameter.  The
+new protocol treats the control's three initial transitions above 70 m/s as a
+baseline diagnostic, while requiring the candidate itself to be finite,
+converged, exact-key, repeat-byte-identical, and free of >70 m/s transitions.
+The freeze and evaluator manifest were committed before validation truth was
+accessed:
+
+- `docs/use_cases/records/smartphone_r5_phase34_quality_anchor_validation_freeze_v1.json`;
+- `docs/use_cases/records/smartphone_r5_phase34_quality_anchor_validation_evaluator_manifest_v1.json`.
+
+The first score invocation materialized the declared truth member but hit a
+path-normalization I/O error before parsing it.  This is recorded explicitly
+in `docs/use_cases/records/smartphone_r5_phase34_quality_anchor_validation_io_failure_v1.json`.
+The existing materialized member was reused without a second archive
+materialization; one evaluator process then parsed that same truth file once.
+The sealed result is
+`docs/use_cases/records/smartphone_r5_phase34_quality_anchor_validation_result_v1.json`.
+
+On the 2131 shared keys (truth contained 2132 rows), candidate H WGS84 P50/P95
+was 1.577/2.950 m versus control 1.783/5.349 m.  Availability and truth
+coverage were identical at 0.999531.  All four local horizontal diagnostic
+variants strictly improved (candidate 2.2626, 2.2631, 2.2638, 2.2663 m;
+control 3.5662, 3.5687, 3.5656, 3.5669 m), and candidate continuity had zero
+over-70 m/s transitions (maximum 32.909 m/s).  The control maximum was
+145.344 m/s with three such transitions, retained only as a diagnostic.  The
+four-column submission has no vertical prediction, so V is informational and
+not fabricated.  This is a development-only validation pass; the future
+holdout remains sealed, 0.782-class native performance is not achieved, and
+no post-score tuning or Kaggle submission occurred.
+
+The truth-free check is safe to repeat only before a score operation:
+
+```text
+python3 apps/commands/benchmarks/gnss_smartphone_phase34_quality_anchor_validation_eval.py verify-truth-free --output-root output/smartphone-r5/phase34-quality-anchor-validation-v1
+```
+
+The `score` operation is a one-shot historical operation and must not be
+rerun.  Result and manifest hashes, the single truth read, and the I/O
+recovery are retained in the machine-readable records above.
