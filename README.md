@@ -1226,8 +1226,21 @@ because it referenced a nonexistent Phase74 helper control constant.  No
 accuracy score or native process was produced; the initial evaluator/manifest
 hashes and truth/artifact read accounting are preserved in the [Phase75 failure
 record](docs/use_cases/records/smartphone_r5_phase75_phase74_accuracy_integrity_recovery_failure_v1.json).
-Phase76 must use a new freeze/output root and direct control pins from the
-sealed Phase74 freeze.
+Phase76 used a new freeze/output root and direct control pins from the sealed
+Phase74 freeze.  The scorer accepted the required truth fields by name and
+completed one truth read per route, with eight candidate and eight control
+artifact reads and zero native/raw/nav/validation/MAT/Kaggle reads.  Control
+identity passed for all routes and prediction-domain coverage was exactly 1.0.
+The candidate macro was `3.392183792762136` versus the exact Phase43 control
+`3.536446745838451` (improvement `0.1442629530763151`), but MTV-a, MTV-h, and
+MTV-u regressed; the macro `<=2 m`, route `<=3 m`, and MTV-h P95 `<=5 m` gates
+also failed.  The unchanged policy therefore preserves Phase43 as champion,
+keeps Phase73 experimental, and authorizes no validation/Kaggle action.  The
+`0.782` target was not met and remains report-only.  See the [Phase76 result
+record](docs/use_cases/records/smartphone_r5_phase76_phase75_accuracy_integrity_recovery_result_v1.json),
+[result documentation](docs/use_cases/smartphone_native_fgo_phase76_phase75_accuracy_integrity_recovery_result.md),
+[freeze](docs/use_cases/records/smartphone_r5_phase76_phase75_accuracy_integrity_recovery_freeze_v1.json),
+and [manifest](docs/use_cases/records/smartphone_r5_phase76_phase75_accuracy_integrity_recovery_manifest_v1.json).
 
 ## Docs
 
