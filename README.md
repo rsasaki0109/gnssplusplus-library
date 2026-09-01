@@ -1034,6 +1034,37 @@ not already masked by the current adapter.  See the [Phase60 contract](docs/use_
 [evaluator manifest](docs/use_cases/records/smartphone_r5_phase60_pixel5_intersignal_bias_evaluator_manifest_v1.json),
 and [result](docs/use_cases/records/smartphone_r5_phase60_pixel5_intersignal_bias_result_v1.json).
 
+Phase61 audited the sole frozen C/N0 pseudorange factor: raw Android
+`Cn0DbHz` code-tracking/multipath residual calibration.  The audit used the
+Phase25 Android-clock pseudorange and signed ADR CMC (`P-ADR`) on continuous
+arcs of at least two rows, retaining the current code/C/N0/multipath/state
+masks and excluding singleton arcs without imputation.  It read each of the
+four route-disjoint Pixel5 raw GNSS files exactly once in one process, with no
+truth, navigation, solver, trajectory, IMU, coordinate/WLS, enriched
+pseudorange, MAT, validation/holdout, archive, Kaggle/token, or prior metric
+payload access.  Phase43's configured pseudorange sigma is 3.0 m with the
+elevation power path; its optional p85 SNR path is disabled and was not
+reimplemented.
+
+The frozen result is **no-go**
+(`no-go-cn0-pseudorange-calibration-not-identifiable`).  Eligible CMC rows
+were **8,111 / 9,337 / 4,695 / 4,169** and route medians of absolute centered
+CMC were **0.886164 / 0.967753 / 0.752618 / 0.752588 m** (MTV-a / MTV-h /
+LAX-t / MTV-u).  All rows had finite C/N0, but LAX-t and MTV-u missed the
+5,000-row gate, every route had only one supported signal family
+(`GALILEO:GAL_E1`) versus the required two, and C/N0 Spearman values were
+**-0.223342 / -0.203747 / -0.256808 / -0.168379**, failing route stability in
+three routes.  Fixed-bin monotonicity and LOO direction also failed.  The
+fitted model stayed below the configured 3.0 m base sigma in every route, so
+the conservative raw-only impact proxy was 0% throughout.  No native C++
+correction or implementation stage is authorized; Phase43 remains champion
+and Phase51 remains experimental.  Phase61 selects no second factor; a future
+factor requires a separately frozen source audit.  The `0.782` target was not
+evaluated without truth.  See the [Phase61 contract](docs/use_cases/smartphone_native_fgo_phase61_pixel5_cn0_pseudorange_calibration.md),
+[freeze](docs/use_cases/records/smartphone_r5_phase61_pixel5_cn0_pseudorange_calibration_freeze_v1.json),
+[evaluator manifest](docs/use_cases/records/smartphone_r5_phase61_pixel5_cn0_pseudorange_calibration_evaluator_manifest_v1.json),
+and [result](docs/use_cases/records/smartphone_r5_phase61_pixel5_cn0_pseudorange_calibration_result_v1.json).
+
 ## Docs
 
 - <https://rsasaki0109.github.io/gnssplusplus-library/>
