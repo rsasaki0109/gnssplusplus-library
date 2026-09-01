@@ -619,6 +619,10 @@ struct ImuBuildReport {
     double direct_doppler_wls_edge_hold_max_s = 1.0;
     double direct_doppler_wls_max_velocity_norm_mps = 0.0;
     double direct_doppler_wls_max_clock_rate_abs_mps = 0.0;
+    std::size_t direct_doppler_wls_first_solved_rows = 0;
+    double direct_doppler_wls_first_solved_velocity_norm_mps = 0.0;
+    double direct_doppler_wls_first_solved_clock_rate_abs_mps = 0.0;
+    std::string direct_doppler_wls_first_solved_reason;
     std::size_t direct_doppler_wls_original_raw_seed_position_count = 0;
     std::size_t direct_doppler_wls_original_raw_seed_position_invalid_count = 0;
     std::size_t direct_doppler_wls_positions_clocks_copied = 0;
@@ -780,6 +784,28 @@ bool validateDirectDopplerWlsHandoff(
     velocities_enu.resize(problem.epochs.size());
     for (std::size_t index = 0; index < problem.epochs.size(); ++index) {
         const auto& estimate = problem.doppler_velocity_wls_estimates[index];
+        // A rejected solve still carries the state produced immediately
+        // before its final gate.  Preserve the first such diagnostic so a
+        // fail-closed run explains whether rows reached a physical gate
+        // without treating that state as a handoff candidate.
+        if (estimate.rows >= 4 &&
+            estimate.reason != "insufficient-rows" &&
+            estimate.reason != "nonfinite-or-invalid-row" &&
+            estimate.reason != "clock-discontinuity-reset" &&
+            report.direct_doppler_wls_first_solved_reason.empty()) {
+            report.direct_doppler_wls_first_solved_rows =
+                static_cast<std::size_t>(estimate.rows);
+            report.direct_doppler_wls_first_solved_reason = estimate.reason;
+            if (estimate.velocity_ecef_mps.allFinite() &&
+                std::isfinite(estimate.velocity_ecef_mps.norm())) {
+                report.direct_doppler_wls_first_solved_velocity_norm_mps =
+                    estimate.velocity_ecef_mps.norm();
+            }
+            if (std::isfinite(estimate.clock_rate_mps)) {
+                report.direct_doppler_wls_first_solved_clock_rate_abs_mps =
+                    std::abs(estimate.clock_rate_mps);
+            }
+        }
         if (!estimate.valid) {
             ++report.direct_doppler_wls_rejected_count;
             const bool finite_velocity = estimate.velocity_ecef_mps.allFinite() &&
@@ -875,6 +901,7 @@ bool validateDirectDopplerWlsHandoff(
     if (report.direct_doppler_wls_rejected_count != 0U ||
         covered != problem.epochs.size()) {
         std::ostringstream detail;
+        detail << std::setprecision(17);
         detail << "direct Doppler WLS coverage gate failed: count=" << covered
                << "/" << problem.epochs.size()
                << " direct=" << report.direct_doppler_wls_direct_valid_count
@@ -882,7 +909,21 @@ bool validateDirectDopplerWlsHandoff(
                << " rejected=" << report.direct_doppler_wls_rejected_count
                << " nonfinite=" << report.direct_doppler_wls_nonfinite_count
                << " over_70_mps=" << report.direct_doppler_wls_over_bound_count
-               << " max_mps=" << report.direct_doppler_wls_max_velocity_norm_mps;
+               << " clock_over_2000_mps="
+               << report.direct_doppler_wls_clock_rate_over_bound_count
+               << " max_mps=" << report.direct_doppler_wls_max_velocity_norm_mps
+               << " max_clock_rate_abs_mps="
+               << report.direct_doppler_wls_max_clock_rate_abs_mps
+               << " first_solved_rows="
+               << report.direct_doppler_wls_first_solved_rows
+               << " first_solved_reason="
+               << (report.direct_doppler_wls_first_solved_reason.empty()
+                       ? "none"
+                       : report.direct_doppler_wls_first_solved_reason)
+               << " first_solved_velocity_norm_mps="
+               << report.direct_doppler_wls_first_solved_velocity_norm_mps
+               << " first_solved_clock_rate_abs_mps="
+               << report.direct_doppler_wls_first_solved_clock_rate_abs_mps;
         error = detail.str();
         return false;
     }
@@ -2498,6 +2539,17 @@ std::string makeSummary(const Options& options,
             << imu_report.direct_doppler_wls_max_velocity_norm_mps << ",\n"
             << "    \"max_clock_rate_abs_mps\": "
             << imu_report.direct_doppler_wls_max_clock_rate_abs_mps << ",\n"
+            << "    \"first_solved_rows\": "
+            << imu_report.direct_doppler_wls_first_solved_rows << ",\n"
+            << "    \"first_solved_velocity_norm_mps\": "
+            << imu_report.direct_doppler_wls_first_solved_velocity_norm_mps
+            << ",\n"
+            << "    \"first_solved_clock_rate_abs_mps\": "
+            << imu_report.direct_doppler_wls_first_solved_clock_rate_abs_mps
+            << ",\n"
+            << "    \"first_solved_reason\": ";
+        writeJsonString(out, imu_report.direct_doppler_wls_first_solved_reason);
+        out << ",\n"
             << "    \"edge_hold_count\": "
             << imu_report.direct_doppler_wls_edge_hold_count << ",\n"
             << "    \"edge_hold_max_s\": "

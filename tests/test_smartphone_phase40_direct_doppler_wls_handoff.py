@@ -65,6 +65,8 @@ class SmartphonePhase40DirectDopplerWlsTest(unittest.TestCase):
         direct_block = self.source[direct_start:gnss_start]
         self.assertNotIn("gnss_first_processor", direct_block)
         self.assertIn("validateDirectDopplerWlsHandoff", direct_block)
+        self.assertIn("first_solved_velocity_norm_mps", self.source)
+        self.assertIn("first_solved_clock_rate_abs_mps", self.source)
 
     def test_candidate_summary_rejects_partial_wls_coverage(self) -> None:
         summary = {
