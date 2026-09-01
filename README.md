@@ -837,6 +837,18 @@ docker run --rm -it -p 8085:8085 -v "$PWD:/workspace" \
 - [PPC reproduction commands](docs/ppc_reproduction.md)
 - [SPP accuracy notes](docs/references/spp-accuracy-improvement.md)
 
+Phase51 adds the opt-in native Android `ReceivedSvTimeUncertaintyNanos`
+measurement-sigma floor (`sigma_m = max(existing_sigma_m, c * ns * 1e-9)`) to
+adopted raw FGO pseudorange factors; missing/non-finite/non-positive values
+fall back to the existing sigma and the default remains byte-identical.  The
+four-route structural matrix completed (12 deterministic solver runs), but its
+sealed evaluator stopped after reading each development truth once because it
+mistakenly treated the known Phase44 warm-up truth-row exclusion as a coverage
+failure.  Accuracy is therefore deliberately unscored; no truth was reread,
+no tuning or solver rerun occurred, and the Phase43 champion remains preserved.
+See the [Phase51 result record](docs/use_cases/records/smartphone_r5_phase51_android_sv_time_uncertainty_sigma_floor_result_v1.json)
+and [evaluator manifest v2](docs/use_cases/records/smartphone_r5_phase51_android_sv_time_uncertainty_sigma_floor_evaluator_manifest_v2.json).
+
 ## Docs
 
 - <https://rsasaki0109.github.io/gnssplusplus-library/>

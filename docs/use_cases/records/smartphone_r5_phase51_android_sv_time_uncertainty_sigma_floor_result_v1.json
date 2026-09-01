@@ -1,0 +1,121 @@
+{
+  "schema_version": "smartphone-r5-phase51-android-sv-time-uncertainty-sigma-floor-result.v1",
+  "phase": 51,
+  "execution_label": "Luna Max",
+  "status": "evaluator-integrity-no-go",
+  "decision": "preserve-phase43-champion; accuracy-unscored",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase51_android_sv_time_uncertainty_sigma_floor_freeze_v1.json",
+    "sha256": "829b993d293ea8d55c999b6672ae9b60cc92d3f5bc2afa4942531d20337e10f0"
+  },
+  "implementation": {
+    "commit": "8695005",
+    "option": "--native-android-sv-time-uncertainty-sigma-floor",
+    "formula": "sigma_m = max(existing_sigma_m, 299792458.0 * ReceivedSvTimeUncertaintyNanos * 1e-9)",
+    "coefficient": 1.0,
+    "upper_clip": false,
+    "tuning": false,
+    "missing_nonfinite_nonpositive": "retain existing sigma",
+    "scope": "all adopted Android raw FGO pseudorange factors",
+    "spp_applied": false,
+    "default_byte_identical": true
+  },
+  "evaluator": {
+    "manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase51_android_sv_time_uncertainty_sigma_floor_evaluator_manifest_v2.json",
+      "sha256": "f2b84912a7bfeeb737476ea8e092a0b9be90cde4e9bf03c3d312f874f2d88e01"
+    },
+    "commit": "ab6b2f1",
+    "source_sha256": "3af0fdf8aa51ff4f6b108a23939cfce89400eda8fb9e4ce2f88ad9156b9623cc",
+    "binary_sha256": "6a4abc539f48bfedbece1074363d6dfa337f10d3b3d5e53de95d940ec4f870f",
+    "output": {
+      "path": "output/smartphone-r5/phase51-android-sv-time-uncertainty-sigma-floor-v2/phase51_structural_and_development.json",
+      "sha256": "7b46d77e98ddf66bf41a06c7345849e5fdea000b6b263790a9acdd5a4ec921b0"
+    },
+    "failure": {
+      "path": "output/smartphone-r5/phase51-android-sv-time-uncertainty-sigma-floor-v2/phase51_structural_failure.json",
+      "sha256": "fdc32acf221f34b8b504c901aea04f8db93ed29f4aad43b22011f6d41141cc45"
+    },
+    "v1_failure_preserved": {
+      "path": "output/smartphone-r5/phase51-android-sv-time-uncertainty-sigma-floor-v1/phase51_structural_failure.json",
+      "sha256": "de6ccfc00c8b65f4a1b794bc473322add2d33cc824e4e7daa959cc9dc9bb1c33"
+    },
+    "structural_pass": true,
+    "solver_runs": 12,
+    "candidate_runs_per_route": 2,
+    "control_runs_per_route": 1,
+    "candidate_repeat_byte_identical": true,
+    "flag_off_default_byte_identical": true,
+    "tdcp_built_equals_inserted": true,
+    "converged": true,
+    "over_70_mps_count": 0
+  },
+  "truth_accounting": {
+    "truth_reads_before_structural_pass": 0,
+    "truth_reads_after_structural_pass": 4,
+    "truth_read_count_per_route": 1,
+    "single_process": true,
+    "solver_rerun_after_truth": false,
+    "post_truth_tuning": false,
+    "accuracy_scored": false,
+    "accuracy_unscored_reason": "score function incorrectly required zero missing truth rows; Phase44 frozen contract permits one warm-up truth row outside the prediction domain",
+    "validation_reads": 0,
+    "holdout_reads": 0,
+    "mat_read_or_generated": false,
+    "device_wls_or_precomputed_coordinates": false,
+    "kaggle_or_token_access": 0
+  },
+  "truth_pins": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "path": "output/smartphone-r5/phase29-no-bridge-train-eval-v1/truth/2021-03-16-18-59-us-ca-mtv-a/pixel5/ground_truth.csv",
+      "sha256": "7c84ed6a80b1bbb08c0ffad57493513833b9d5474e22a43c5a44da82824ee22d",
+      "bytes": 210009,
+      "read_count": 1
+    },
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2021-08-24-20-32-us-ca-mtv-h/pixel5/ground_truth.csv",
+      "sha256": "a55f452e611426693677fbeacde227fc80e5f03f6040d04aef9d6a2baf08d249",
+      "bytes": 305432,
+      "read_count": 1
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2022-04-01-18-22-us-ca-lax-t/pixel5/ground_truth.csv",
+      "sha256": "29e0861dd1ecb8865c10adab69396d98ed96618e8877b09d04aa8d671edf79e8",
+      "bytes": 143441,
+      "read_count": 1
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2023-03-08-21-34-us-ca-mtv-u/pixel5/ground_truth.csv",
+      "sha256": "7f27caff1f87f4e43821b8efdbbbc87b75b95c0820291cc906a21ea5aee4f080",
+      "bytes": 108045,
+      "read_count": 1
+    }
+  },
+  "truth_free_displacement_diagnostic": {
+    "description": "candidate-control local coordinate displacement; not a truth accuracy metric and not a promotion input",
+    "route_p50_m": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": 0.380,
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": 0.682,
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": 0.427,
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": 0.523
+    },
+    "route_p95_m": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": 1.052,
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": 1.916,
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": 0.750,
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": 1.115
+    }
+  },
+  "promotion_gates": {
+    "route_improvement_min_m": 0.05,
+    "macro_improvement_min_m": 0.10,
+    "target_mtv_h_improvement_min_m": 0.10,
+    "absolute_macro_max_m": 2.0,
+    "absolute_route_max_m": 3.0,
+    "target_p95_max_m": 5.0,
+    "status": "not evaluated; no post-truth tuning or truth reread"
+  },
+  "next_factor_if_no_go": "raw Android per-satellite carrier-phase ADR carrier-frequency/antenna phase-bias residual",
+  "phase44_metric_input_not_used": true,
+  "phase48_metric_input_not_used": true
+}
