@@ -1086,6 +1086,22 @@ See the [Phase64 policy recovery](docs/use_cases/smartphone_native_fgo_phase64_b
 [v4 manifest](docs/use_cases/records/smartphone_r5_phase64_base_preflight_policy_recovery_manifest_v4.json),
 and [sealed result](docs/use_cases/records/smartphone_r5_phase64_base_preflight_policy_recovery_result_v4.json).
 
+Phase65 added the source-supported base-RINEX pseudorange compensation as an
+opt-in native implementation.  It applies only to adopted undifferenced FGO
+pseudorange factors, with same-satellite/same-signal matching, native
+clock/atmosphere/group-delay modeling, observed-interval moving means (151 at
+1 Hz and 11 at 15 s), in-domain linear interpolation, and the frozen
+`P_rover_corrected=P_rover-pc` sign.  The source/tests and structural manifest
+were sealed at `f8cdf3b`/`b3a02ef`, but the one-shot structural runner stopped
+after the first MTV-a control invocation on a nested-hash presentation bug.
+That control submission and summary were byte-identical to Phase43; no
+candidate run or accuracy truth was read.  Phase65 is therefore fail-closed,
+with Phase43 preserved as champion and no `0.782` claim.  See the
+[Phase65 contract](docs/use_cases/smartphone_native_fgo_phase65_base_pseudorange_compensation.md),
+[freeze](docs/use_cases/records/smartphone_r5_phase65_native_base_pseudorange_compensation_freeze_v1.json),
+[manifest](docs/use_cases/records/smartphone_r5_phase65_native_base_pseudorange_compensation_manifest_v1.json),
+and [integrity result](docs/use_cases/records/smartphone_r5_phase65_native_base_pseudorange_compensation_structural_failure_v1.json).
+
 ## Docs
 
 - <https://rsasaki0109.github.io/gnssplusplus-library/>
