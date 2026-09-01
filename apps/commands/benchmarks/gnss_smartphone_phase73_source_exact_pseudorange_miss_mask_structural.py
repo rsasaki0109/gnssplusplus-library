@@ -461,7 +461,8 @@ def run_matrix(output_root: Path = DEFAULT_OUTPUT) -> dict[str, Any]:
     manifest = load_json(MANIFEST, "Phase73 structural manifest")
     if manifest.get("freeze", {}).get("sha256") != FREEZE_SHA256 or manifest.get("binary", {}).get("sha256") != BINARY_SHA256 or manifest.get("source_commit") != SOURCE_COMMIT or manifest.get("routes") != list(ROUTES):
         raise fail("Phase73 structural manifest pin changed")
-    if manifest.get("read_accounting", {}).get("truth_reads") != 0 or manifest.get("read_accounting", {}).get("native_solver_invocations") != 12:
+    manifest_matrix = manifest.get("matrix", {})
+    if manifest_matrix.get("truth_reads") != 0 or manifest_matrix.get("native_solver_invocations") != 12:
         raise fail("Phase73 manifest read contract changed")
     if manifest.get("evaluator", {}).get("path") != relative(EVALUATOR) or manifest.get("evaluator", {}).get("sha256") != sha256(EVALUATOR):
         raise fail("Phase73 evaluator manifest pin changed")

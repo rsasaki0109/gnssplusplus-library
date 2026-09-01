@@ -31,6 +31,10 @@ class Phase73StructuralRunnerTests(unittest.TestCase):
         self.assertEqual(freeze["matrix"]["truth_reads"], 0)
         self.assertEqual(freeze["matrix"]["native_solver_invocations"], 12)
         self.assertEqual(freeze["candidate"]["flag"], "--native-base-pseudorange-source-miss-mask")
+        manifest_path = ROOT / "docs/use_cases/records/smartphone_r5_phase73_source_exact_pseudorange_miss_mask_structural_manifest_v1.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        self.assertEqual(manifest["matrix"]["truth_reads"], 0)
+        self.assertEqual(manifest["matrix"]["native_solver_invocations"], 12)
 
     def test_artifact_report_keeps_summary_metadata_and_payload_separate(self) -> None:
         with tempfile.TemporaryDirectory(prefix="phase73-fixture-") as directory:
