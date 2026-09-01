@@ -943,6 +943,25 @@ experimental.  See the [Phase56 contract](docs/use_cases/smartphone_native_fgo_p
 [evaluator manifest](docs/use_cases/records/smartphone_r5_phase56_bias_uncertainty_dedup_manifest_v1.json),
 and [result](docs/use_cases/records/smartphone_r5_phase56_bias_uncertainty_dedup_result_v1.json).
 
+Phase57 audited the sole Phase56 next factor,
+`PseudorangeRateUncertaintyMetersPerSecond`, using Phase25 raw P and the
+Phase41 Android rate sign, with same-epoch/HCDC receiver common-mode centering.
+All four Pixel5 routes had 100% finite positive uncertainty among 9,612–15,630
+eligible transitions, four fixed bins, routewise Spearman
+**0.412972 / 0.437863 / 0.465283 / 0.496254**, and fixed-sigma affected-factor
+fractions **0.225151 / 0.245617 / 0.349472 / 0.312526**.  However, normalized
+residual medians were **19.7973 / 15.4834 / 16.0525 / 15.5422**, outside the
+frozen calibration range, and every route contained only one supported signal
+family (`GALILEO:GAL_E1`), failing composition independence.  The result is
+**no-go-rate-uncertainty-not-stable-or-material**: no C++ change, native sigma
+floor, truth read, or `0.782` claim.  Phase43 remains champion and Phase51
+remains experimental.  The exactly one next source-supported raw factor is
+`Cn0DbHz`/Doppler residual calibration; no C/N0 rule is implemented here.  See
+the [Phase57 contract](docs/use_cases/smartphone_native_fgo_phase57_pixel5_rate_uncertainty.md),
+[freeze](docs/use_cases/records/smartphone_r5_phase57_pixel5_rate_uncertainty_freeze_v1.json),
+[evaluator manifest](docs/use_cases/records/smartphone_r5_phase57_pixel5_rate_uncertainty_evaluator_manifest_v1.json),
+and [result](docs/use_cases/records/smartphone_r5_phase57_pixel5_rate_uncertainty_result_v1.json).
+
 ## Docs
 
 - <https://rsasaki0109.github.io/gnssplusplus-library/>
