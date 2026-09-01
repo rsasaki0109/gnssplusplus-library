@@ -742,8 +742,7 @@ int main(int argc, char** argv) {
         const Observation& observation = *row.observation;
         row.valid = observation.valid;
         row.doppler = observation.has_doppler &&
-                      std::isfinite(observation.doppler) &&
-                      observation.doppler != 0.0;
+                      std::isfinite(observation.doppler);
         row.raw_snr_masked = raw.snr_masked;
         row.raw_multipath_masked = raw.multipath_masked;
         if (!row.valid) {
