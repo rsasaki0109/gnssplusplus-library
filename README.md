@@ -332,6 +332,20 @@ candidate output or flag-off control was promoted.  See the [Phase 39 No-Go
 result](docs/use_cases/records/smartphone_r5_phase39_gnss_first_velocity_only_handoff_result_v1.json)
 and [failure manifest](docs/use_cases/records/smartphone_r5_phase39_gnss_first_velocity_only_handoff_structural_failure_manifest_v1.json).
 
+Phase 40 tests a separate truth-free opt-in that consumes the existing raw
+Doppler WLS estimates directly as the IMU velocity/heading seed, with no
+GNSS-first optimizer handoff:
+`--native-direct-doppler-wls-handoff`.  It requires complete finite coverage,
+the unchanged <=70 m/s velocity and <=2000 m/s clock-rate gates, and only the
+existing <=1.0 s propagation bound; raw SPP positions remain authoritative and
+position/clock copy count is zero.  The candidate failed closed on MTV-h:
+0/1,325 WLS estimates were valid, 1,181 four-row solves hit `physical-gate`,
+and the first solved velocity/clock norms were 8,919.7537472980548 m/s and
+7,314.3850372387406 m/s.  Production/default behavior and the Phase 31
+champion are unchanged.  See the [Phase 40 contract](docs/use_cases/smartphone_native_fgo_phase40_direct_doppler_wls_handoff.md),
+[freeze](docs/use_cases/records/smartphone_r5_phase40_direct_doppler_wls_handoff_freeze_v1.json),
+and [No-Go result](docs/use_cases/records/smartphone_r5_phase40_direct_doppler_wls_handoff_result_v1.json).
+
 ### PPC 2024 goal matrix vs Kaiyodai and gici-open
 
 The audited KF/FGO selected profile clears the distance-weighted PPC public
