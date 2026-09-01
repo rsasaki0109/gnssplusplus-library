@@ -141,8 +141,19 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     const bool allow_hybrid_fallback =
         ppp_config_.clas_epoch_policy ==
         PPPConfig::ClasEpochPolicy::HYBRID_STANDARD_PPP_FALLBACK;
+    const auto clear_clas_ar_continuation = [&]() {
+        had_fixed_last_epoch_ = false;
+        clas_ar_attempt_used_reduced_dd_floor_ = false;
+        clas_reduced_dd_fix_last_epoch_ = false;
+        clas_full_dd_fix_last_epoch_ = false;
+        clas_reduced_dd_publication_streak_ = 0;
+    };
     const auto fallback_to_standard = [&](const char* reason) {
         restore_clas_snapshot();
+        // A standard-PPP publication cannot authorize a later reduced-row
+        // CLAS continuation, even if the historical CLAS hold survived the
+        // snapshot restore.
+        clear_clas_ar_continuation();
         return processEpochStandard(obs, nav, reason);
     };
 
@@ -647,8 +658,10 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             // lifecycle. Advancing time/counters here changes the dt seen by
             // the next genuinely accepted seed and suppresses later FIX
             // recovery, even though no filter epoch was processed now.
+            clear_clas_ar_continuation();
             return solution;
         }
+        clear_clas_ar_continuation();
         return solution;
     }
 
@@ -804,6 +817,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         solution = has_clas_continuity_output
             ? clas_continuity_output
             : seed;
+        clear_clas_ar_continuation();
         return solution;
     }
 
@@ -924,6 +938,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             last_processed_time_ = obs.time;
             clas_update_seed_anchor();
             ++total_epochs_processed_;
+            clear_clas_ar_continuation();
             return solution;
         }
         // MRTKLIB keeps publishing the predicted FLOAT state when all
@@ -936,7 +951,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
                 filter_state_, obs.time, false, 0.0, 0,
                 static_cast<int>(epoch_context.osr_corrections.size()));
             ++clas_mrtklib_float_count_;
-            had_fixed_last_epoch_ = false;
+            clear_clas_ar_continuation();
             applyOptionalSolutionEpochMetadata(solution, obs.time, ppp_config_);
             has_last_processed_time_ = true;
             last_processed_time_ = obs.time;
@@ -958,6 +973,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         solution = has_clas_continuity_output
             ? clas_continuity_output
             : seed;
+        clear_clas_ar_continuation();
         return solution;
     }
     dumpClasFloatPosition(obs.time, filter_state_, epoch_update, osr_corrections.size());
@@ -993,6 +1009,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         last_processed_time_ = obs.time;
         clas_update_seed_anchor();
         ++total_epochs_processed_;
+        clear_clas_ar_continuation();
         return solution;
     }
 
@@ -1224,6 +1241,29 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             if (!std::isfinite(phase_chisq) ||
                 phase_chisq >= clasKinematicChiSquareGateM()) {
                 clas_kinematic_chisq_rejected = true;
+            } else if (clas_ar_attempt_used_reduced_dd_floor_) {
+                // A reduced-row candidate is a publication-only bridge over
+                // a bounded run of degraded geometry. The ordinary minamb=6
+                // path would have remained FLOAT here, resetting rtk->nfix
+                // and leaving both the prior hold constraints and float x/P
+                // untouched.  Mirror that internal lifecycle even though the
+                // validated constrained state is published as FIX.  In
+                // particular, never replace a full-row hold with the thinner
+                // reduced-row constraint set or feed it back through
+                // holdamb().
+                //
+                // Direct state-DD resolution also marks its accepted
+                // participants fixed for downstream/non-direct diagnostics.
+                // Restore those metadata flags from the pre-AR snapshot too;
+                // the constrained publication does not require them and the
+                // minamb=6 baseline would not have changed them.
+                ambiguity_states_ = clas_float_ambiguity_states;
+                clas_wlnl_hold_.consecutive_fix_count = 0;
+                if (pppDebugEnabled()) {
+                    std::cerr << "[CLAS-WLNL-HOLD] publication-only reduced-dd"
+                              << " rows=" << last_fixed_ambiguities_
+                              << " chisq=" << phase_chisq << "\n";
+                }
             } else if (phase_chisq < kMrtklibHoldChiSquareGate) {
                 std::map<SatelliteId, double> clas_satellite_elevations_rad;
                 for (const auto& osr : osr_corrections) {
@@ -1274,6 +1314,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     }
 
     if (ambiguity_resolution.accepted &&
+        !clas_ar_attempt_used_reduced_dd_floor_ &&
         last_clas_post_reset_floor_failed_) {
         const int max_nfix =
             env_overrides_.clas_post_reset_quarantine_max_nfix;
@@ -1283,6 +1324,12 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         if (nfix_within_limit) {
             clas_post_reset_fix_quarantine_ = true;
         }
+    }
+    if (clas_ar_attempt_used_reduced_dd_floor_) {
+        // This per-attempt diagnostic is part of the quarantine lifecycle.
+        // The baseline minamb rejection cannot produce it, so do not carry a
+        // speculative reduced-row result into a later early-return epoch.
+        last_clas_post_reset_floor_failed_ = false;
     }
     const bool clas_post_reset_quarantined_fix_this_epoch =
         ambiguity_resolution.accepted &&
@@ -1302,7 +1349,14 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         last_ar_ratio_ = 0.0;
         last_fixed_ambiguities_ = 0;
         ambiguity_states_ = clas_float_ambiguity_states;
-        ppp_ar::clearWlnlHoldState(clas_wlnl_hold_);
+        if (clas_ar_attempt_used_reduced_dd_floor_) {
+            // The minamb=6 baseline would simply report a non-FIX epoch and
+            // retain the historical hold constraints for slip bookkeeping.
+            // A failed speculative publication must not tear that hold down.
+            clas_wlnl_hold_.consecutive_fix_count = 0;
+        } else {
+            ppp_ar::clearWlnlHoldState(clas_wlnl_hold_);
+        }
         if (pppDebugEnabled()) {
             std::cerr << "[CLAS-KIN-CHISQ] reject fix (chisq >= "
                       << clasKinematicChiSquareGateM() << ")\n";
@@ -1647,9 +1701,26 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
 
     had_fixed_last_epoch_ =
         solution.status == SolutionStatus::PPP_FIXED && !clas_kinematic_fix_rejected;
+    clas_reduced_dd_fix_last_epoch_ =
+        had_fixed_last_epoch_ && clas_ar_attempt_used_reduced_dd_floor_;
+    clas_full_dd_fix_last_epoch_ =
+        had_fixed_last_epoch_ &&
+        !clas_ar_attempt_used_reduced_dd_floor_ &&
+        last_fixed_ambiguities_ >= 6;
+    if (clas_reduced_dd_fix_last_epoch_) {
+        ++clas_reduced_dd_publication_streak_;
+    } else {
+        clas_reduced_dd_publication_streak_ = 0;
+    }
 
     if (clas_mrtklib_parity) {
-        if (solution.status == SolutionStatus::PPP_FIXED ||
+        if (clas_reduced_dd_fix_last_epoch_) {
+            // The reduced-row FIX is output-only.  Count it as the FLOAT that
+            // the minamb=6 baseline would have produced so the 15-epoch
+            // reinitialization cadence, and therefore all later filter state,
+            // remains unchanged.
+            ++clas_mrtklib_float_count_;
+        } else if (solution.status == SolutionStatus::PPP_FIXED ||
             clas_post_reset_quarantined_fix_this_epoch) {
             // Publication-only quarantine must not count as an internal FLOAT
             // or trigger a lifecycle reset earlier than the accepted AR/hold

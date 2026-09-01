@@ -10,14 +10,77 @@ import numpy as np
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = ROOT_DIR / "scripts"
-if str(SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS_DIR))
+PPC_SCRIPTS_DIR = SCRIPTS_DIR / "experiments" / "ppc"
+for script_dir in (SCRIPTS_DIR, PPC_SCRIPTS_DIR):
+    if str(script_dir) not in sys.path:
+        sys.path.insert(0, str(script_dir))
 
 import generate_ppc_clas_scorecard as scorecard  # noqa: E402
 import generate_ppc_clas_full_comparison as full_comparison  # noqa: E402
+import run_ppc_clas_candidate as candidate_runner  # noqa: E402
 
 
 class PpcClasLeverArmTest(unittest.TestCase):
+    def test_candidate_artifact_hash_is_reproducible(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            artifact = Path(temp_dir) / "artifact.bin"
+            artifact.write_bytes(b"abc")
+            expected = (
+                "BA7816BF8F01CFEA414140DE5DAE2223"
+                "B00361A396177A9CB410FF61F20015AD"
+            )
+            self.assertEqual(candidate_runner.sha256_file(artifact), expected)
+            self.assertEqual(full_comparison.sha256_file(artifact), expected)
+
+    def test_candidate_manifest_environment_is_merged_into_full_report(self) -> None:
+        manifest = {
+            "parity_environment": {
+                "GNSS_PPP_CLAS_AR_HELD_MIN_DD_ROWS": "4",
+                "GNSS_PPP_CLAS_AR_HELD_MAX_PUBLICATION_STREAK": "5",
+            }
+        }
+        merged = full_comparison.merged_parity_environment(manifest)
+        self.assertEqual(
+            merged["GNSS_PPP_CLAS_BASE_CLOCK_PARITY"],
+            scorecard.PARITY_ENV["GNSS_PPP_CLAS_BASE_CLOCK_PARITY"],
+        )
+        self.assertEqual(merged["GNSS_PPP_CLAS_AR_HELD_MIN_DD_ROWS"], "4")
+        self.assertEqual(
+            merged["GNSS_PPP_CLAS_AR_HELD_MAX_PUBLICATION_STREAK"], "5"
+        )
+
+    def test_candidate_manifest_provenance_omits_machine_local_paths(self) -> None:
+        manifest = {
+            "dataset_root": r"E:\private\PPC-Dataset",
+            "ssr_root": r"E:\private\ssr",
+            "gnss_ppp": r"C:\Users\person\build\gnss_ppp.exe",
+            "gnss_ppp_sha256": "ABC123",
+            "source": {"revision": "deadbeef", "worktree_dirty": True},
+            "held_min_dd_rows": 4,
+            "held_max_publication_streak": 5,
+            "parity_environment": {"GNSS_PPP_CLAS_AR_HELD_MIN_DD_ROWS": "4"},
+            "runs": {
+                "tokyo_run1": {
+                    "command": [r"C:\Users\person\build\gnss_ppp.exe"],
+                    "pos": r"E:\private\tokyo_run1.pos",
+                    "log": r"E:\private\tokyo_run1.log",
+                    "pos_size_bytes": 1234,
+                    "pos_sha256": "DEF456",
+                }
+            },
+        }
+
+        portable = full_comparison.portable_candidate_manifest(manifest)
+
+        self.assertEqual(portable["gnss_ppp_sha256"], "ABC123")
+        self.assertEqual(
+            portable["runs"]["tokyo_run1"],
+            {"pos_size_bytes": 1234, "pos_sha256": "DEF456"},
+        )
+        serialized = str(portable)
+        self.assertNotIn(r"C:\Users", serialized)
+        self.assertNotIn(r"E:\private", serialized)
+
     def test_level_north_facing_body_axes_map_from_frd_to_enu(self) -> None:
         rotation = scorecard.body_to_enu_rotation_matrix(0.0, 0.0, 0.0)
         np.testing.assert_allclose(rotation @ np.array([1.0, 0.0, 0.0]), [0.0, 1.0, 0.0])
@@ -76,6 +139,7 @@ class PpcClasLeverArmTest(unittest.TestCase):
         for key, _label in full_comparison.RUNS:
             runs.append(
                 {
+                    "key": key,
                     "metrics": {
                         "interval_coverage_pct": 100.0,
                         "epoch_coverage_pct": 99.9,
@@ -102,13 +166,16 @@ class PpcClasLeverArmTest(unittest.TestCase):
             "max_fixed_m": None,
             "fixed_over_3m": 0,
         }
+        signoff = full_comparison.evaluate_mrtklib_signoff(runs)
         with tempfile.TemporaryDirectory() as temp_dir:
             output = Path(temp_dir) / "table.md"
-            full_comparison.write_markdown_table(runs, aggregate, output)
+            full_comparison.write_markdown_table(
+                runs, aggregate, signoff, output
+            )
             markdown = output.read_text(encoding="utf-8")
 
-        self.assertEqual(markdown.count("| Tokyo "), 3)
-        self.assertEqual(markdown.count("| Nagoya "), 3)
+        self.assertEqual(markdown.count("| Tokyo "), 6)
+        self.assertEqual(markdown.count("| Nagoya "), 6)
         self.assertIn("100.000% / 99.900%", markdown)
         self.assertIn("raw PPC reference point", markdown)
         self.assertIn("directly comparable", markdown)
@@ -120,15 +187,97 @@ class PpcClasLeverArmTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             output = Path(temp_dir) / "table.md"
             full_comparison.write_markdown_table(
-                runs, aggregate, output, apply_lever_arm=True
+                runs, aggregate, signoff, output, apply_lever_arm=True
             )
             markdown = output.read_text(encoding="utf-8")
 
         self.assertIn("vehicle truth transformed to the antenna phase center", markdown)
         self.assertIn("unmodified PPC reference point", markdown)
-        rows = [line for line in markdown.splitlines() if line.startswith("|")]
-        expected_columns = rows[0].count("|")
-        self.assertTrue(all(line.count("|") == expected_columns for line in rows))
+        table_sections = markdown.split("## MRTKLIB v0.4.2 sign-off", 1)
+        self.assertEqual(len(table_sections), 2)
+        for section in table_sections:
+            rows = [
+                line for line in section.splitlines() if line.startswith("|")
+            ]
+            expected_columns = rows[0].count("|")
+            self.assertTrue(
+                all(line.count("|") == expected_columns for line in rows)
+            )
+
+    def test_mrtklib_signoff_requires_full_coverage(self) -> None:
+        metrics = {
+            "interval_coverage_pct": 100.0,
+            "epoch_coverage_pct": 99.0,
+            "fix_pct": 10.0,
+            "rms2d_fixed_m": 0.2,
+            "fixed_over_3m": 0,
+            "p68_fixed_m": 0.2,
+            "ttff_30_s": 1.0,
+        }
+        target = {
+            "fix_pct": 9.0,
+            "rms2d_m": 0.3,
+            "sigma2d_m": 0.3,
+            "ttff_s": 2.0,
+        }
+        run = {
+            "key": "probe",
+            "metrics": metrics,
+            "mrtklib_v0_4_2": target,
+        }
+
+        verdict = full_comparison.evaluate_mrtklib_signoff([run])
+        self.assertTrue(verdict["hard_pass"])
+
+        metrics["epoch_coverage_pct"] = 98.999
+        verdict = full_comparison.evaluate_mrtklib_signoff([run])
+        self.assertFalse(verdict["hard_pass"])
+        self.assertFalse(
+            verdict["runs"]["probe"]["hard_gates"][
+                "epoch_coverage_at_least_99pct"
+            ]
+        )
+
+        hard_failures = {
+            "interval_coverage_at_least_99pct": (
+                "interval_coverage_pct", 98.999
+            ),
+            "fix_rate_at_least_mrtklib": ("fix_pct", 8.999),
+            "fix_rms2d_at_most_mrtklib": ("rms2d_fixed_m", 0.301),
+            "fixed_over_3m_is_zero": ("fixed_over_3m", 1),
+        }
+        for gate, (field, failing_value) in hard_failures.items():
+            with self.subTest(gate=gate):
+                probe_metrics = {
+                    **metrics,
+                    "interval_coverage_pct": 100.0,
+                    "epoch_coverage_pct": 100.0,
+                    field: failing_value,
+                }
+                run["metrics"] = probe_metrics
+                verdict = full_comparison.evaluate_mrtklib_signoff([run])
+                self.assertFalse(verdict["hard_pass"])
+                self.assertFalse(
+                    verdict["runs"]["probe"]["hard_gates"][gate]
+                )
+
+        for gate, field, failing_value in (
+            ("fix_p68_at_most_mrtklib", "p68_fixed_m", 0.301),
+            ("ttff_at_most_mrtklib", "ttff_30_s", 2.001),
+        ):
+            with self.subTest(gate=gate):
+                run["metrics"] = {
+                    **metrics,
+                    "interval_coverage_pct": 100.0,
+                    "epoch_coverage_pct": 100.0,
+                    field: failing_value,
+                }
+                verdict = full_comparison.evaluate_mrtklib_signoff([run])
+                self.assertTrue(verdict["hard_pass"])
+                self.assertFalse(verdict["soft_pass"])
+                self.assertFalse(
+                    verdict["runs"]["probe"]["soft_gates"][gate]
+                )
 
     def test_write_report_with_only_parity_config_does_not_raise(self) -> None:
         run_key = "tokyo_run2"

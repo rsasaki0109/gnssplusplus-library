@@ -289,6 +289,15 @@ struct PPPConfig {
     // clas_code_variance_scale weighting. White-noise kinematic, static
     // and all non-CLAS paths ignore this flag entirely.
     bool clas_mrtklib_float_parity = false;
+    // Direct state-DD minimum-row policy. The ordinary path always uses the
+    // MRTKLIB minamb=6 floor. An already-active, still-valid ambiguity hold
+    // may use the separate held floor to publish across a bounded satellite
+    // dropout without originating a new hold or changing the FLOAT filter
+    // lifecycle from reduced geometry. The publication streak counts the
+    // initial reduced-row bridge as one epoch.
+    int clas_ar_minimum_dd_rows = 6;
+    int clas_ar_held_minimum_dd_rows = 4;
+    int clas_ar_held_maximum_publication_streak = 5;
 
     bool apply_ocean_loading = false;
     bool apply_solid_earth_tides = true;
