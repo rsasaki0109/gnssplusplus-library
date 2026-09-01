@@ -384,6 +384,25 @@ audit](docs/use_cases/smartphone_native_fgo_phase42_doppler_row_attrition.md),
 [evaluator manifest v2](docs/use_cases/records/smartphone_r5_phase42_doppler_row_attrition_audit_evaluator_manifest_v2.json),
 and [sealed result](docs/use_cases/records/smartphone_r5_phase42_doppler_row_attrition_result_v1.json).
 
+Phase 43 adds a truth-free, opt-in recovery for that no-anchor case:
+`--native-fallback-seed-quality-anchor-recovery`.  The existing normal
+quality-anchor reconnaissance runs to completion first; only when it has no
+eligible candidate does the same raw-pseudorange/broadcast-navigation SPP
+reconnaissance retry at an elevation gate of −90°.  SNR, health, navigation,
+geometry, GDOP, residual, satellite-count, and deterministic ranking gates are
+unchanged.  A selected raw/nav-derived anchor seeds ordinary 0° forward and
+backward replay; the factor builder remains at 0°, and recovery failure stays
+fail-closed without a sentinel factor bypass.  The fixed six-route, two-run
+matrix selected anchor index 904 on MTV-h (27 satellites, GDOP
+0.9928008873297592, normalized residual RMS 2.3663773350268436), replayed all
+3,140 epochs, built and inserted 41,383 TDCP factors, converged, and produced
+no >70 m/s transitions.  The other five routes did not trigger recovery, and
+their flag-on projected artifacts matched flag-off controls; all truth/MAT/
+validation/holdout/Kaggle reads were zero.  See the [Phase 43 contract](docs/use_cases/smartphone_native_fgo_phase43_fallback_seed_quality_anchor_recovery.md),
+[freeze](docs/use_cases/records/smartphone_r5_phase43_native_fallback_seed_quality_anchor_recovery_freeze_v1.json),
+[evaluator manifest](docs/use_cases/records/smartphone_r5_phase43_native_fallback_seed_quality_anchor_recovery_evaluator_manifest_v1.json),
+and [structural result](docs/use_cases/records/smartphone_r5_phase43_native_fallback_seed_quality_anchor_recovery_result_v1.json).
+
 ### PPC 2024 goal matrix vs Kaiyodai and gici-open
 
 The audited KF/FGO selected profile clears the distance-weighted PPC public
