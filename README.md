@@ -1263,6 +1263,20 @@ stop velocity/pose constraints.  See the [Phase77 structural result](docs/use_ca
 [freeze](docs/use_cases/records/smartphone_r5_phase77_phase73_signal_bias_composition_structural_freeze_v1.json),
 and [manifest](docs/use_cases/records/smartphone_r5_phase77_phase73_signal_bias_composition_structural_manifest_v1.json).
 
+Phase78 performed a sealed-artifact-only reclassification of the Phase77
+signal-bias/base-pc composition.  It verified all four immutable Pixel5
+candidate run-1/run-2 artifacts without native rerun or raw/truth reads:
+hashes/repeats, exact prediction keys, finite-`pc` factor accounting, TDCP
+built=inserted, finite material signal-bias states/factors, valid coordinates,
+zero over-70-m/s rows, and epoch/IMU repeat invariants all passed.  No
+route-specific selection was used.  This authorizes only a separately frozen
+development-accuracy score; it is not an accuracy result or a `0.782` claim.
+Phase43 remains champion and Phase77 remains experimental.  See the [Phase78
+result](docs/use_cases/smartphone_native_fgo_phase78_phase77_structural_reclassification_result.md),
+[result record](docs/use_cases/records/smartphone_r5_phase78_phase77_structural_reclassification_result_v1.json),
+[freeze](docs/use_cases/records/smartphone_r5_phase78_phase77_structural_reclassification_freeze_v1.json),
+and [manifest](docs/use_cases/records/smartphone_r5_phase78_phase77_structural_reclassification_manifest_v1.json).
+
 ## Docs
 
 - <https://rsasaki0109.github.io/gnssplusplus-library/>
